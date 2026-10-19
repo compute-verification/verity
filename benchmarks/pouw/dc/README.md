@@ -25,6 +25,7 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `probes/uniform.cuh`, `probes/sm90_uniform.cu`, `probes/sm100_uniform.cu`, `probes/sm90_issue.cu`, `probes/sm100_issue.cu`, `probes/sm90_sat.cu`, `probes/sm100_sat.cu` | The uniform datapath: 8 warp-uniform chains of UIMAD + ULOP3, ULOP3, UIADD3 + ULOP3, USHF (funnel shift), UPRMT and ULEA/USHF alone (`uz_`), and beside the honest step (8 IMMA m16n8k32 + duo reading the accumulators: `uh_`), beside it with 64 FFMA (`ug_`) or 32 LOP3 (`ul_`), beside 32 IMMA a fold (`um_`), beside it with 256 FFMA (`ub_`, the `issue` tables), and beside issue-saturated streams (the `sat` tables: the honest step with FFMA or FADD, IADD3 and LOP3 on independent accumulators, `us_`, `uv_`, `uw_`, `ux_`, at 16 to 128 uniform instructions an iteration); each family's table pins every loop's opcodes as the gate saw them, since ptxas keeps the chains uniform only beside an MMA whose accumulators the lanes read (FACET-BREAK) |
 | `probes/sm100_ldtm.cu`, `ldtm.py` | TMEM-EXTRACT's price: tcgen05.ld.32x32b.x128 (LDTM.x128, 4096 words a warp instruction) at 1 to 16 an iteration beside uniform.cuh's issue-saturated streams (`l`: the honest step and UVec, K ≤ 2; `n`: UVec alone, 8 stream warps of 288 threads) and beside a saturated tcgen05.mma (`m`: `n` with warp 8 issuing UTCIMMA 128x256x32 until the stream ends); `ldtm.py analyze` prices the load as the least slowdown it adds to a stream that issues at least 0.95, less 2%, with every other added instruction (the wait's NOP, the next address's R2UR and LOP3) charged a slot first, and `tables` rewrites the probe table from the gate's JSON; `uni.sh` runs it under `UNI_TABLES=ldtm` |
 | `probes/uchain.cuh`, `probes/sm90_async.cu`, `probes/sm100_async.cu` | The same 8 warp-uniform chains (now in `uchain.cuh`, shared with `uniform.cuh`) beside a *saturated async* tensor op (RT-ISA round 2 WATCH): on sm_90a, 4 wgmma s8 m64n256k32 a group, bare (`uwg_`), with an in-loop accumulator fold (`uwgf_`), and with the honest mma.sync step (`uwgh_`); on sm_100a, 4 tcgen05.mma i8 128×256×32 a group from one warp, bare (`utc_`) and with the honest step (`utch_`). K sweeps 0, 32, 64, 128; each loop's full SASS is pinned, so a chain that moves off its datapath refuses (`UNI_TABLES=async`) |
+| `probes/sm100_a2u.cu`, `a2u.py` | A2u where `utc_` can't test it: warps 1–31 (8 a SMSP, as `scalar.cu`'s saturating streams) saturate every SMSP's issue with `L_MIX` (OP_UNTIL) while warp 0 keeps 4 tcgen05.mma i8 128×256×32 a group in flight and adds K uniform chain instructions (`a2_tc_i0`–`i96`, `x96`; `a2_mix` the lanes alone). `a2u.py` counts both loops in full from the SASS and the per-block trips and stop cycles: warp instructions an SMSP-cycle above 1 (NOP excluded) falsify A2u, and `uniform_price` is what each added uniform instruction cost the lanes in issue slots (`UNI_TABLES=a2u`) |
 | `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
 | `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
 | `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The machine model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
@@ -52,6 +53,7 @@ research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/un
 research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
 research run --on vy-dc-b200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
 research run --on vy-dc-b200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
+research run --on vy-dc-b200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
 python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
 research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
 ~~~
@@ -144,7 +146,8 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   read) reaches 0.974; FFMA streams stop at 0.92–0.93, where the chains slow them by −0.13 to 0.85. Beside `ux_` each
   uniform instruction costs 1.00 to 1.12 (least 1.003, `ux_128x`). Every count is the loop's full SASS, not the table's
   eight opcodes. The joint issue rows scale the price as they scale the ALU's slot (JI100_0 0.906, JI90_0 0.965).
-- **Beside a saturated async tensor op a co-located chain is essentially free** (RT-ISA round 2 WATCH,
+- **Beside a saturated async tensor op a co-located chain fills idle issue slots; with the port saturated it takes one**
+  (RT-ISA round 2 WATCH,
   note:20261017T1834Z-draft-rt-isa). The placement is pinned (`probes/sm90_async.cu`, `sm100_async.cu`,
   `UNI_TABLES=async`): ptxas 13.0 keeps a uniform chain on the uniform datapath beside a saturated **tcgen05.mma** (the
   honest kernel issues the whole 128×256 tile from one warp, a uniform context, so even the bare `utc` is uniform beside
@@ -153,13 +156,19 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   silicon (H200 `r20261017-204843-4803`, B200 `r20261017-205856-aae0`), the bare chain's K-sweep is flat: the async
   group's cycles a iteration don't grow with the chain (H200 `uwg` 0.0002, B200 `utc` 0.0009 SMSP-cycles a instruction),
   because the chain fills the async op's idle issue slots (the 4 wgmma / 4 tcgen05 hold the SMSP ~1024 / ~512 cycles,
-  far more than the K ≤ 128 the sweep adds; a realistic word adds only a handful). So the dual-issue the WATCH feared is
-  real: the true uniform-beside-async price is near zero, and the census joint rows (JI90_0 0.965, JI100_0 0.906) are
-  *optimistic* — the conservative treatment prices the uniform-beside-async route free. That treatment moves no headline
-  (`eps`, `credit floor`, `operands free`, q* 1.22, `dither-2s-li-l32`): H200 rises 0.131% → 0.198%, and the B200 stays
-  0.905% (its headline binds the issue row, which sits above the async joint row, so the async price can't move it); the
-  B200 breaches 1% only if the issue ceiling *itself* is discounted below ~0.012 of a slot, an >80× discount decision 84
-  precludes.
+  far more than the K ≤ 128 the sweep adds; a realistic word adds only a handful). That flat slope is idle slots filled,
+  not dual-issue: one warp's 4 tensor ops leave its SMSP issuing ≤ 0.27 a cycle. With every SMSP's issue saturated by
+  lanes beside the chain and a saturated tcgen05.mma (`probes/sm100_a2u.cu`, `UNI_TABLES=a2u`, `a2u.py`), the B200 shows
+  none. The block issues at most one warp instruction an SMSP-cycle at every K (0.9996 at K = 32 to 135; the lanes alone
+  1.00004), and each added uniform instruction costs the lanes 0.95 to 1.10 of a slot. The tensor starves as K grows
+  (1.00 to 0.34) because the chain takes SMSP 0's slots (B200 `r20261019-055605-6cc2`). So A2u holds beside async on
+  the B200, and its joint row JI100_0 0.906 is below the measured ≈ 1, the conservative side. sm_90 is MEASURED near
+  saturation, no dual-issue (`dc/probes/sm90_emp.cu` `emp_pack3`, `r20261019-064443-0ae6`: the chain uniform beside 4
+  wgmma s8 n128 a group, issue 0.87, each uniform instruction 1.08-1.19 SMSP-cycles). Pricing the H200's
+  uniform-beside-async route free anyway moves no headline (`eps`, `credit floor`, `operands free`, q* 1.22,
+  `dither-2s-li-l32`): the H200 rises 0.131% → 0.198%. The B200 stays 0.905% either way (its headline binds the issue
+  row, which sits above the async joint row). It breaches 1% only if the issue ceiling *itself* is discounted below
+  ~0.012 of a slot, an >80× discount that decision 84 precludes and `a2u` measures absent.
 - **The IMAD form of duo's LEA.HI is slower on both.** IMAD.HI.U32 costs 4.19 (B200) and 4.18 (H200) SMSP-cycles,
   twice an IMAD, so rotl(u, r) + y′ as IMAD.HI + IMAD costs about 6 cycles of the IMAD pipe against LEA.HI's 2 of
   the ALU's. Duo with 29% (B200) and 33% (H200) of its LEA.HI in that form takes 17% and 21% longer a word than duo.
