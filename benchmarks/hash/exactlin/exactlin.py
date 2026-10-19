@@ -221,7 +221,9 @@ def ptx_check(compiled) -> dict:
            "div_approx_or_full": ptx.count("div.approx") + ptx.count("div.full"), "cvt_rni_s32_f32": ptx.count("cvt.rni.s32.f32"),
            "fma_f32": sum(ptx.count(f) for f in ("fma.rn.f32", "fma.rn.ftz.f32", "mad.f32", "mad.rn.f32")),
            "cvt_rn_f32_s32": ptx.count("cvt.rn.f32.s32"), "cvt_rn_bf16": ptx.count("cvt.rn.bf16"),
-           "mma_s8": ptx.count(".s8.s8.s32"), "global_scratch": int(getattr(compiled.metadata, "global_scratch_size", 0) or 0),
+           # mma.sync's .s32.s8.s8.s32 (sm_80, sm_120), wgmma's .s32.s8.s8 (sm_90), tcgen05's kind::i8 (sm_100)
+           "mma_s8": ptx.count(".s8.s8") + ptx.count("kind::i8"),
+           "global_scratch": int(getattr(compiled.metadata, "global_scratch_size", 0) or 0),
            "atom_global": ptx.count("atom.global"), "membar_gl": ptx.count("membar.gl")}
     if name.startswith("exactlin_quant_rows"):
         doc["ok"] = (doc["ftz"] == 0 and doc["div_rn_f32"] >= 2 and doc["div_approx_or_full"] == 0

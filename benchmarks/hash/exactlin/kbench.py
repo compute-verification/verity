@@ -34,7 +34,8 @@ import kgate  # noqa: E402
 
 ITEM_MS = 10.0
 ARMS = ("exact", "stock", "fused")
-PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant", "fused_mm", "fused_vllm_tiles")
+PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant", "fused_mm", "fused_vllm_tiles",
+         "stock_cutlass")
 WORK = X.Workspace("cuda") if torch.cuda.is_available() else None
 
 
@@ -66,6 +67,13 @@ def arm_fn(arm: str, x, ws, xq, s, y):
             for w, sw in ws:
                 q, sa, _ = ops.scaled_int8_quant(x)
                 triton_scaled_mm(q, w.t(), sa, sw, torch.bfloat16)
+    elif arm == "stock_cutlass":
+        from vllm import _custom_ops as ops
+
+        def f():
+            for w, sw in ws:
+                q, sa, _ = ops.scaled_int8_quant(x)
+                ops.cutlass_scaled_mm(q, w.t(), scale_a=sa, scale_b=sw, out_dtype=torch.bfloat16)
     elif arm in ("fused", "fused_vllm_tiles"):
         m, k = x.shape
         cfg = X.pick(m, ws[0][0].shape[0], k) if arm == "fused" else X.default_cfg(m, ws[0][0].shape[0], k)

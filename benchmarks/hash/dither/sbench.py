@@ -16,6 +16,8 @@ Arms:
                  call ("Int8 not supported on SM120"), so the arm disables it (VLLM_DISABLED_KERNELS) and vLLM's selector takes
                  its next, TritonInt8ScaledMMLinearKernel (scaled_int8_quant + triton_scaled_mm)
     stock-humming  the same with Triton disabled too: vLLM's third choice, HummingInt8ScaledMMLinearKernel
+    stock-cutlass  the same with nothing disabled: CutlassInt8ScaledMMLinearKernel where it serves int8 (sm_90, vLLM's
+                 default there; it applies the weight scale first, so it is not the exact epilogue's order)
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
                  as SERVE-H1 runs it (eager, batch-invariant)
     exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
@@ -148,7 +150,9 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
-    if arm in ("stock", "stock-humming"):
+    if arm == "stock-cutlass":
+        os.environ.pop("VLLM_DISABLED_KERNELS", None)
+    if arm in ("stock", "stock-humming", "stock-cutlass"):
         return LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
     if arm == "exact-eager":
         vllm_dir = ROOT / "integrations" / "vllm"
