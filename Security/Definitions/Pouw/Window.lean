@@ -310,7 +310,7 @@ registration and the state `τ` the prover brings to the session, `Pr[accept ∧
 most `κ_c + g_c(τ)`. The bound depends on the state: a compiled table bounds it pointwise in the state. Main's window
 proves each drawn unit in its own `--zk` session over hm96 hiding leaves, whose analysis is `analysisZC`
 (`Proofs/Flock/Soundness/Discharge/ZkLink/Analysis.lean`); its joint inequality `jointZC_ksBound` gives `κ_c = 0` and
-`g_c(τ) = ⨆_j ksBoundAccZ_j(τ)/(1 − rateZ_j)`, `ksBoundAccZ = ε_SZ + √(k·adv₀SZ)` the state's collision finders'
+`g_c(τ) = ⨆_j ksBoundAccZ_j(τ)/(1 − rateZ_j)`, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` the state's collision finders'
 advantages (`Pouw.Window.flockKnowledgeSound_analysisZC`). No constant bounds it for every state of a hashed session: a
 state that holds a hash collision passes with extraction failing, `ks ≈ 1`, so a constant holds only at the oracle
 layer. In the window the state is the one the calls before and the whole draw left, and the window's collision term
@@ -385,7 +385,8 @@ def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fi
 * `inputs X v`, `outputs X v`: a transcript `X`'s values at unit `v`'s input and output wires; `rootOf X`, the `-h3`
   root the window's entries hold in `X`.
 The positions are the units' statements' (`UnitStmts.Pos`), so a unit reads the anchors and the leaf at its own place in
-the transcript. -/
+the transcript. A reading of `ServedTie` names its instance: the window's wires and the pass's `-h3` tree. An instance
+whose readings forget the words (`In`, `Out` and `Root` with one element) makes every transcript anchored and served. -/
 structure ServedPass (Tr : Type) {C : ℕ} (n : Fin C → ℕ) (Pos : Type) where
   In : Type
   Out : Type
