@@ -12,9 +12,9 @@
 Every document was first published on or after ``DATE`` (each source's own date field; a source without one is not used).
 ``assemble`` keeps a document only if it has at least ``MIN_BYTES`` (one window), cuts it to ``CAP_BYTES``, drops exact
 and near duplicates inside the corpus (13-word shingles), and drops a document when ``PROBES`` evenly spaced 13-word
-spans hit OLMo 2's pretraining mix or Dolma 1.7 (which holds a Stack subset) in the infini-gram index at least
-``HIT_LIMIT`` times. FineWeb and the Stack v2 have no public n-gram index, so the check covers them only through those
-mixes' overlap. TREE holds ``corpus.jsonl`` (the broad set, equal bytes per stratum), ``calibration.jsonl`` (B1's
+spans hit OLMo 2's pretraining mix (which holds DCLM and StarCoder's Stack subset) in the infini-gram index at least
+``HIT_LIMIT`` times. FineWeb and the Stack v2 have no public n-gram index, so the check covers them only through that
+mix's overlap. TREE holds ``corpus.jsonl`` (the broad set, equal bytes per stratum), ``calibration.jsonl`` (B1's
 codebook split, disjoint documents), ``mixed.jsonl`` (windows that join two strata, reported apart: stratum
 ``mixed:A+B``), ``b2-docs.txt`` (B2's 2M-token subset of the broad documents), ``build.json`` (sources, counts, every
 dropped document and why) and ``MANIFEST.sha512``.
@@ -58,7 +58,7 @@ SHINGLE = 13
 NEAR_DUP = 0.2
 PROBES = 8
 HIT_LIMIT = 2
-INDEXES = ["v4_olmo-mix-1124_llama", "v4_dolma-v1_7_llama"]
+INDEXES = ["v4_olmo-mix-1124_llama"]
 UA = "verity-research-corpus/0.1 (compute-verification; evaluation corpus, not training)"
 CC_CRAWL = "CC-MAIN-2026-39"
 CC = "https://data.commoncrawl.org"
@@ -932,27 +932,33 @@ def shingles(text: str) -> set[int]:
     return {hash(" ".join(w[i:i + SHINGLE])) for i in range(0, max(0, len(w) - SHINGLE + 1))}
 
 
+#: what the API's firewall refuses (403) in a query: quotes, SQL operators and comments
+UNSAFE = re.compile(r"['\"\u2018\u2019\u201c\u201d`=;<>#]|--|/\*|\*/")
+
+
 def probes(text: str, n: int = PROBES) -> list[str]:
-    """``n`` evenly spaced 13-word spans, each moved past the words the query language reads as operators."""
+    """Up to ``n`` 13-word spans, one from each of ``n`` equal stretches of the text: the first in its stretch that
+    has nothing the firewall refuses and no word the query language reads as an operator (code has fewer)."""
     w = words(text)
     if len(w) < SHINGLE * 2:
         return []
     step = (len(w) - SHINGLE) / n
     out = []
     for i in range(n):
-        s = int(i * step)
-        while s + SHINGLE < len(w) and {"AND", "OR"} & set(w[s:s + SHINGLE]):
+        s, end = int(i * step), int((i + 1) * step) if i < n - 1 else len(w) - SHINGLE
+        while s <= end and (UNSAFE.search(" ".join(w[s:s + SHINGLE])) or {"AND", "OR"} & set(w[s:s + SHINGLE])):
             s += 1
-        if not {"AND", "OR"} & set(w[s:s + SHINGLE]):
+        if s <= end:
             out.append(" ".join(w[s:s + SHINGLE]))
     return out
 
 
 #: the API refuses (403) bursts of concurrent queries but serves a few a second
-_ig_lock, _ig_last, IG_INTERVAL = threading.Lock(), [0.0], 0.25
+_ig_lock, _ig_last, IG_INTERVAL = threading.Lock(), [0.0], 0.3
 
 
 def infinigram(query: str, index: str) -> int | None:
+    refused = 0
     for i in range(6):
         with _ig_lock:
             time.sleep(max(0.0, _ig_last[0] + IG_INTERVAL - time.monotonic()))
@@ -963,9 +969,12 @@ def infinigram(query: str, index: str) -> int | None:
             d = r.json()
             if "count" in d:
                 return int(d["count"])
+            refused += r.status_code == 403
+            if refused == 2:
+                return None
         except (requests.RequestException, ValueError):
             pass
-        time.sleep(5 * 2 ** i)
+        time.sleep(min(20, 3 * 2 ** i))
     return None
 
 
@@ -1030,7 +1039,7 @@ def assemble(work: Path, out: Path, seed: int) -> None:
             clean_docs, have, i = [], 0, 0
             while i < len(ds) and (stratum == "mixed" or have < need):
                 batch, i = ds[i:i + 64], i + 64
-                todo = [d for d in batch if d["id"] not in cache]
+                todo = [d for d in batch if d["id"] not in cache or cache[d["id"]]["failed"]]
                 for d, c in zip(todo, ex.map(lambda d: contamination(d["text"]), todo)):
                     cache[d["id"]] = c
                 cache_path.write_text(json.dumps(cache))
