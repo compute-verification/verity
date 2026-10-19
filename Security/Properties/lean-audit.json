@@ -57,6 +57,7 @@
   "Properties.Pouw.Check",
   "PouwWindow.Json",
   "PouwCheck.Json",
+  "PouwCheck.Tile",
   "PouwCheck.Inputs",
   "PouwCheck.Check",
   "PouwCheck.Protocol",
@@ -5752,7 +5753,7 @@
    ]
   },
   "PouwCheck.Inputs": {
-   "digest": "4f6e2342bc2c6248425de61cf74e08900e49a5d3c5823bbfeaa37172e3f29c72",
+   "digest": "7a7961ca49febe6d476253e31fd5dcb53842dae63539cdc4f0e9fb2fedffdf80",
    "definitions": {
     "PouwCheck.CheckItem": "9384ef0ba0c61cdfc46e1ff5f90926b1aaca1e4c4edb074b5811f24947bf9360",
     "PouwCheck.CheckItem.entries": "365e8e5800b4923474c9bba5cc3cf33f8f27451d35271fd7f0debb854fadb0e3",
@@ -5826,12 +5827,12 @@
     "PouwCheck.keysAre": "cb93ff04a951880d60b405350432cf4af10b762f9d98db0fb1e76c1c5d14d044",
     "PouwCheck.natsOf": "8b06720885c182b44f9fcfe3dbf1ff3b95437357a2e672169bb2275cb912a731",
     "PouwCheck.paramsKeys": "73e3985c6f8c6abec7298fe9f5f8fc79bf182f93fb49f68c327e54a349eeb444",
-    "PouwCheck.paramsOf": "f4be3826c410d37544b151d98f26edcb7b97c198d599fcb8bdcb1c9d1d59dd17",
+    "PouwCheck.paramsOf": "c47a6aca63c7892711d5a91bd31514758e5983a6ca7ff6c2f4a9f8487d4518e8",
     "PouwCheck.paramsOf._sparseCasesOn_1": "f300954bd7b905bd5470f869f61601141446465b36703e5b824ec718f029c1f4",
     "PouwCheck.rangeOf": "8eac1d5ece15a51be7970a3093d973f145955f81adf716202fa76f0c8bff74fc",
     "PouwCheck.ratioField": "fbe08744ccfadc8920d70bae2d203c1892927538c395ea279081c209ec005acc",
     "PouwCheck.ratioField._sparseCasesOn_1": "6b14fb22bf6a44b230e8ca60b8a77910dcba107a7e80cad48f643b1fb18c2e86",
-    "PouwCheck.registrationOf": "282e5be1ad4cb8c1a29d46d8a0efb4c23e7e43b5fb500dc3ca103bdc8e26d0aa",
+    "PouwCheck.registrationOf": "dad460b542e94757b69ae1bd6147978e19de20f32f64253e223311dd5ad72876",
     "PouwCheck.rootOf?": "7b0cddacb4a5f93ab1971d436fe5e52b097baeb015a1be59b5ef1fa782fb8c2a",
     "PouwCheck.scheme": "c21179b23322516caea0dbb602dda5df958eee98fa9739db17e2961e11e0d4ab",
     "PouwCheck.strataOf": "25d1c61b52a2b4d495e007ef0e12e1abbd6524b7f64f46818eee95ce5db733e9",
@@ -5875,6 +5876,27 @@
    "digest": "7846a3105fd2f3e8741ab74d912727a749bcefbe4c4f9c4f1127260f7aced9c4",
    "definitions": {
     "PouwCheck.protocol": "961c984bdfe303e63ea917e4070736c65a07c1eb0988d939985c5745847cf547"
+   },
+   "guarantees": [
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.undecidedOnlyFromService"
+   ]
+  },
+  "PouwCheck.Tile": {
+   "digest": "f3ad3e26ef9e9654307f2bbd97cd90bf8ce9f19ec84e11ffe87f34fc3d641e36",
+   "definitions": {
+    "PouwCheck.Tile": "63ddb45e0a5b6167e9eba20c11ee69f4d34793c4d83c918133198dd0c354b63f",
+    "PouwCheck.Tile.query": "9e7cc212c1f09b62b988232275fff987afb19b85469d03449f7dea5c856d2bbc",
+    "PouwCheck.Tile.template": "b35f58137cb716855cc1af929588a076259c3f569f2326b84a8d766a930d8450",
+    "PouwCheck.Tile.tileWork": "0719814c00d50e497e860a5a47f7a0282d5424290f5eab958c3f8fc61f5c06b8",
+    "PouwCheck.tile?": "cccc8ac759fae955e6438c878027014451dc4af7224933648047477ebda08ead",
+    "PouwCheck.tiles": "a43ec886398d07e55eb4264284fb6c8c5b17ec6d02da40d64882891301cfd8df"
    },
    "guarantees": [
     "Properties.Pouw.Check.acceptMeans",
