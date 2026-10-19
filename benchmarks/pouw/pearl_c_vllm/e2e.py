@@ -1118,12 +1118,15 @@ def finish(args, out: dict, records: list[dict], ready: dict, tokens: dict, veri
     args.out.write_text(json.dumps(out, indent=1))
     print(json.dumps(summary), flush=True)
     import run_result
+    passes = [v for k, v in summary["verify_pass"].items() if not k.startswith("control")]
     ok = (not out.get("error") and all(m in results for m in MODES) and summary["gates"]["arm"]
-          and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False
-                  for k, v in summary["verify_pass"].items() if not k.startswith("control")))
+          and (bool(passes) or not args.retain)
+          and all(v["same_commitment_as_timed"] and v.get("same_commitment_eager") is not False for v in passes))
     ms = [(f"{m}.{k}", v, "s") for m, r in results.items() for k, v in r["timing"].items()]
-    run_result.write(args.out, ok, "pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and each verify pass repeats "
-                     "its timed commitment", json.dumps(summary), ms)
+    what = ("each of its verify passes repeats its timed commitment" if args.retain
+            else "no verify pass (no --retain), so nothing replayed its commitment")
+    run_result.write(args.out, ok, f"pearl-c vLLM e2e: gated, fp8 interleaved with the Pearl-C engine, and {what}",
+                     json.dumps(summary), ms)
 
 
 if __name__ == "__main__":
