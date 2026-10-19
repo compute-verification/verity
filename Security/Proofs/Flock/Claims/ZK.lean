@@ -308,8 +308,8 @@ import Proofs.Flock.Claims.ZK.Stop
   `Masked.InnerBatched`, `Masked.InnerTauVal`, `Masked.InnerTauLeaf`, `Masked.InnerY`), and `SimInner` from them
   (`Masked.simInner_of_split`).
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from the
-  hybrids `SimPiop` and `SimLig`, `SplitInner`'s statements, `CausalExe` and `FinExe`: `hstep` from
-  `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit` and the hybrids
+  hybrid `SimLig`, `SplitInner`'s statements, `CausalExe` and `FinExe`: `hstep` from `Masked.prefixLive` and
+  `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop` and the other hybrids
   (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
