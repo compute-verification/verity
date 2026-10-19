@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Claims.ZK.PiopSrcSv
+import Proofs.Flock.Claims.ZK.HiSalts
 
 /-!
 # A rep's Ligerito opening from the cut (`SimLig`)
@@ -18,6 +19,10 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 * **At the deployed rep's coins** (`ligSrcE_of`, `ligHypE_of`): `LigSrcE` from the source's values at round
   `repSlot … 0` and the basis at the coins (`LigHypE`), and that from the schedule's facts and six value statements
   (`LigOodE`, `LigMsgE`, `LigSumsE`, `LigY1E`, `LigYbarE`, `LigSaltE`; `simLig_of_fields`).
+* **The six values** (`ligOodE`, `ligYbarE`, `ligY1E`, `ligSaltE`, `ligMsgE`, `ligSumsE`): the cut's source holds the
+  cut's view's values, which at the coins are the executable's: the packed table's extension, the lane pads and folds,
+  the tape's salts (HiSalts' `hiSalt_exe`), and the lane rounds' tables, whose basis is the PIOP's switched vectors'
+  (`openB_basis`); so `simLig`.
 -/
 
 namespace Claims.ZKMal.Masked
@@ -1576,12 +1581,14 @@ scheme's salts are 192 bytes (`ligSaltE`). -/
 
 section Salt
 
-/-- **Levels ≥ 1's salts at the executable's layout** (HiSalts' `hiSalt_exe` at `PE`, whose closure this file doesn't
-import): rep `r`'s levels ≥ 1 salt that `hiSalt` reads at a level `l ≥ 1` and position `p` of the schedule is the masked
-prover's tape's. -/
+/-- **Levels ≥ 1's salts at the executable's layout**: rep `r`'s levels ≥ 1 salt that `hiSalt` reads at a level `l ≥ 1`
+and position `p` of the schedule is the masked prover's tape's. -/
 def HiSaltE : Prop :=
   ∀ (x : Msg) (t : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (l p : ℕ), HiAt (zkTab x j).table.sch.levels l p →
     hiSalt (zkTab x j).table.sch.levels (((UE.tape x t).1 j).2.2.2.2.2.2.2.2.2 r) l p = (exeTape t).salt j.val r.val l p
+
+/-- HiSalts' `hiSalt_exe` at `PE`. -/
+theorem hiSaltE : HiSaltE := fun x t j r _ _ h => hiSalt_exe PE x t j r h
 
 private theorem fitBytes_fit192 (b : ByteArray) :
     FlockComplete.fitBytes 192 (fit192 b) = FlockComplete.fitBytes 192 b := by
@@ -2161,10 +2168,9 @@ theorem ligSumsE : LigSumsE := by
 
 end Lane
 
-/-- **`SimLig` from HiSalts' salts**: the six value statements (`ligOodE`, `ligMsgE`, `ligSumsE`, `ligY1E`,
-`ligYbarE`, and `ligSaltE` at `HiSaltE`, HiSalts' `hiSalt_exe` at `PE`). -/
-theorem simLig_of_salt (hhi : HiSaltE) : SimLig :=
-  simLig_of_fields ligOodE ligMsgE ligSumsE ligY1E ligYbarE (ligSaltE hhi)
+/-- **Hybrid step 1** (`SimLig`): the six value statements, `ligSaltE` at HiSalts' salts (`hiSaltE`). -/
+theorem simLig : SimLig :=
+  simLig_of_fields ligOodE ligMsgE ligSumsE ligY1E ligYbarE (ligSaltE hiSaltE)
 
 end Masked
 
