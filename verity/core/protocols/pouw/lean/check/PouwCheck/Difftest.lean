@@ -72,7 +72,8 @@ def passOf (j : Json) : Except String Json := do
     | _ => throw "the input's raw is malformed"
   let .str context ← get j "context" | throw "the input's context is not a string"
   refusal (fun how => Json.mkObj [("how", how)])
-    (passEpoch (← get j "coins") raw context (← flag j "recorded") (← hexOrNull j "reveal") (← hexOrNull j "weights"))
+    (passEpoch (← get j "coins") raw context (← flag j "recorded") (← hexOrNull j "reveal") (← hexOrNull j "committed")
+      (← hexOrNull j "stream") (← hexOrNull j "prover"))
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j

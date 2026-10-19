@@ -10,7 +10,8 @@ commitment, and the window's context names the pass by its SHA-512. A pass salte
 carries the epoch's commitment, which must be the challenger's, and its salt coin's opening, opened after the weights'
 root (`coinReasonAt`); a pass recorded before epoch coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon.
 Either way the manifest's salt must be the epoch's. A certified window's verifier holds the network certifier's salt for
-the PoUW window its context names (`windowOf`), and passes only a pass salted by it (`MANIFEST_CERTIFIED`, the salt
+the PoUW window its context names (`windowOf`), the window's stream and prover, and what PoUW recorded with the certifier
+before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salted by them (`MANIFEST_CERTIFIED`, the salt
 `pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's
 `DomainError`) or `manifest` (a manifest it can't read, or not the window's pass), with Python's words.
 
@@ -35,7 +36,10 @@ def MANIFEST_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
 def WINDOW_SEGMENT : String := "pouw-window"
 def SALT_BYTES : Nat := 64
 def SALT_TAG : ByteArray := "verity/pouw-salt/v1".toUTF8
+def RECORD_TAG : ByteArray := "verity/pouw-record/v1".toUTF8
 def WEIGHTS_ROOT_BYTES : Nat := 64
+def STREAM_BYTES : Nat := 64
+def PROVER_BYTES : Nat := 64
 def COINS_RECORDED : String := "verity/pouw/epoch-coins/v2"
 def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
 def U64 : Int := 2 ^ 64
@@ -189,13 +193,20 @@ def windowOf (context : String) : Option Nat :=
   let d := parts.getD (n - 2) ""
   if 3 ≤ n && parts.getD (n - 3) "" == WINDOW_SEGMENT && isDecimal d && d.toNat! < 2 ^ 64 then some d.toNat! else none
 
-/-- `salt.pouw_salt`: the salt PoUW applies in window `p`, SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(p)). -/
-def pouwSalt (reveal : ByteArray) (p : Nat) : ByteArray := Flock.Sha512.hash (SALT_TAG ++ reveal ++ PouwCommit.be8 p)
+/-- `salt.pouw_salt`: the salt PoUW applies in window `p` for the registration of `stream` and `prover`,
+SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part fixed-width (64, 8, 64 and 64 bytes). -/
+def pouwSalt (reveal : ByteArray) (p : Nat) (stream prover : ByteArray) : ByteArray :=
+  Flock.Sha512.hash (SALT_TAG ++ reveal ++ PouwCommit.be8 p ++ stream ++ prover)
 
-/-- `_certified_salt`: a certified window's pass, whose weights' root is `weights`, the one the certifier recorded before
-it drew the window's salt, and whose salt is `pouwSalt` of the certifier's reveal for the PoUW window the window's
-context names. -/
-def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (weights : Option ByteArray) :
+/-- `salt.pouw_record`: what PoUW records with the certifier for a window before its salt,
+SHA-512(`RECORD_TAG` ‖ weights' root ‖ stream ‖ prover), every part 64 bytes. -/
+def pouwRecord (weights stream prover : ByteArray) : ByteArray :=
+  Flock.Sha512.hash (RECORD_TAG ++ weights ++ stream ++ prover)
+
+/-- `_certified_salt`: a certified window's pass under the window's `stream` and `prover`: `committed`, what the
+certifier recorded before it drew the window's salt, is `pouwRecord` of the pass's weights' root, the stream and the
+prover, and the pass's salt is `pouwSalt` of the certifier's reveal for the PoUW window the window's context names. -/
+def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed stream prover : Option ByteArray) :
     R (ByteArray × String) := do
   let schema := at? m "schema"
   if schema != .str MANIFEST_CERTIFIED then
@@ -205,18 +216,21 @@ def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (weights : 
   if reveal.size != SALT_BYTES then coin s!"the verifier's reveal is not a {SALT_BYTES}-byte salt"
   let some p := windowOf context | coin "the window's context names no PoUW window, whose certifier salt the pass's is"
   checkWorkload us roots
-  let some w := weights.filter (·.size == WEIGHTS_ROOT_BYTES)
-    | coin "the verifier holds no weights' root the certifier recorded before it drew the window's salt"
-  if weightsRootAt 64 "verity/pouw/weights/v1" roots != w then
-    coin "the pass's weights are not those the certifier recorded before it drew the window's salt"
-  let salt := pouwSalt reveal p
-  if at? m "salt" != .str (Flock.hexOf salt) then coin "the pass's salt is not the certifier's for its window"
+  let (some s, some v) := (stream.filter (·.size == STREAM_BYTES), prover.filter (·.size == PROVER_BYTES))
+    | coin s!"the verifier holds no {STREAM_BYTES}-byte stream digest and {PROVER_BYTES}-byte prover id for the window"
+  let some c := committed.filter (·.size == WEIGHTS_ROOT_BYTES)
+    | coin "the verifier holds no record the certifier made before it drew the window's salt"
+  if pouwRecord (weightsRootAt 64 "verity/pouw/weights/v1" roots) s v != c then
+    coin "the pass's weights, stream and prover are not those the certifier recorded before it drew the window's salt"
+  let salt := pouwSalt reveal p s v
+  if at? m "salt" != .str (Flock.hexOf salt) then
+    coin "the pass's salt is not the certifier's for its window, stream and prover"
   pure (salt, "certifier")
 
 /-- `_epoch_salt`: the pass's salt re-started from its manifest, and how it was had. -/
 def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteArray) (context : String)
-    (weights : Option ByteArray) : R (ByteArray × String) := do
-  if let some r := reveal then return (← certifiedSalt m r context weights)
+    (committed stream prover : Option ByteArray) : R (ByteArray × String) := do
+  if let some r := reveal then return (← certifiedSalt m r context committed stream prover)
   let schema := at? m "schema"
   if schema == .str MANIFEST_CERTIFIED then
     coin (s!"the pass's manifest is {MANIFEST_CERTIFIED}, salted by the network certifier: only a certified window's " ++
@@ -252,17 +266,17 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
   if at? m "salt" != .str (Flock.hexOf salt) then coin s!"the pass's salt is not its {how}'s and the weights'"
   pure (salt, how)
 
-/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A certified window's verifier holds `reveal`
-and `weights`, the weights' root the certifier recorded before it drew that salt. -/
+/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A certified window's verifier holds `reveal`,
+`committed`, what PoUW recorded with the certifier before it drew that salt, and the window's `stream` and `prover`. -/
 def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool)
-    (reveal : Option ByteArray) (weights : Option ByteArray) : R String := do
+    (reveal committed stream prover : Option ByteArray) : R String := do
   let some raw := raw | coin "the window names no pass, whose epoch the challenger re-starts from its manifest"
   let m ← match String.fromUTF8? raw with
     | some s => match Json.parse s with
       | .ok j@(.obj _) => pure j
       | _ => manifest "the pass's manifest is not a JSON object"
     | none => manifest "the pass's manifest is not a JSON object"
-  let (_, how) ← epochSalt m coins recorded reveal context weights
+  let (_, how) ← epochSalt m coins recorded reveal context committed stream prover
   if Flock.hexOf (Flock.Sha512.hash raw) != ((context.splitOn "/").getLast?.getD "") then
     manifest "the pass is not the one the window's parameters name"
   pure how

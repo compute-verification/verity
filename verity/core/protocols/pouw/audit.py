@@ -194,13 +194,13 @@ class Epoch:
 
     @classmethod
     def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
-                  reveal: bytes, coins: CoinCommitment | None = None) -> Epoch:
+                  reveal: bytes, stream: bytes, prover: bytes, coins: CoinCommitment | None = None) -> Epoch:
         """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
-        refused unless whole and aligned at 0: `salt.pouw_window`), whose salt is `salt.pouw_salt(reveal, p)`, 64 bytes:
-        `reveal` is p's certifier salt as `salt.revealed` read it. `coins`, when given, is the commitment the epoch's draw
-        coin opens against."""
+        refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
+        `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
+        `coins`, when given, is the commitment the epoch's draw coin opens against."""
         _check_weights(workload, weight_roots)
-        return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k)), coins)
+        return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 
 
 def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> None:

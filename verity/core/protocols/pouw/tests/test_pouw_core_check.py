@@ -326,13 +326,16 @@ PASS_EXPECT = {
     "uncertified-pass": ("coin", "schema 'verity-vllm/pouw-pearl-c-run/v"),
     "reveal-size": ("coin", "the verifier's reveal is not a 64-byte salt"),
     "no-window": ("coin", "the window's context names no PoUW window"),
-    "other-window": ("coin", "the pass's salt is not the certifier's for its window"),
-    "other-reveal": ("coin", "the pass's salt is not the certifier's for its window"),
-    "raw-reveal": ("coin", "the pass's salt is not the certifier's for its window"),
-    "weights-unrecorded": ("coin", "the verifier holds no weights' root the certifier recorded before it drew the window's "
-                                   "salt"),
-    "weights-after-salt": ("coin", "the pass's weights are not those the certifier recorded before it drew the window's "
-                                   "salt"),
+    "other-window": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "other-reveal": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "raw-reveal": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "weights-unrecorded": ("coin", "the verifier holds no record the certifier made before it drew the window's salt"),
+    "weights-after-salt": ("coin", "the pass's weights, stream and prover are not those the certifier recorded before it "
+                                   "drew the window's salt"),
+    "binding-form": ("coin", "the verifier holds no 64-byte stream digest and 64-byte prover id for the window"),
+    "stream-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
+    "prover-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
+    "salted-apart": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
 }
 
 DRAW_EXPECT = {
@@ -364,12 +367,13 @@ def test_every_pass_mutation_hits_its_refusal():
 
 def test_each_honest_pass_is_had_as_it_was_salted():
     """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
-    recorded replay's beacon, or the network certifier's reveal over the weights it recorded before it."""
+    recorded replay's beacon, or the network certifier's reveal over the weights, stream and prover it recorded before
+    it."""
     want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier"}
     for kind, how in want.items():
         for seed in range(6):
             case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
-            assert (case["reveal"] is not None) == (case["weights"] is not None) == (kind == "certified")
+            assert {case[k] is not None for k in passes.CERTIFIED} == {kind == "certified"}
             assert CC.pass_epoch(*passes.pass_args(case)) == (how, None), (kind, seed)
 
 

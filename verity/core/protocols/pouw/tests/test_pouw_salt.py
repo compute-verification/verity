@@ -1,10 +1,12 @@
 """PoUW's read of the network certifier's salt (`verity.core.protocols.pouw.salt`) against the certifier itself
-(`certifier.active.Proxy`, driven tick by tick): the salt's form is pinned; a context names its PoUW window; `revealed`
-gives PoUW window p's salt on p's registration once p is published, and fails closed when it is unregistered, early or
-missing; `pouw_window` takes one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies
-`pouw_salt` of the reveal, 64 bytes, which the seeds and the identifier take, with the challenger's draw coin; and
+(`certifier.active.Proxy`, driven tick by tick): the salt's form and the record's are pinned; a context names its PoUW
+window; `revealed` gives PoUW window p's salt on p's registration once p is published, and fails closed when it is
+unregistered, early or missing; `pouw_window` takes one whole PoUW window aligned at 0 and nothing else;
+`Epoch.certified` applies `pouw_salt` of the reveal, the window, the stream and the prover, 64 bytes, which the seeds
+and the identifier take, with the challenger's draw coin; two registrations of one window are salted apart;
 `core_check.pass_epoch` passes a certified window's pass only when its salt is that of the certifier's reveal and its
-weights those the certifier recorded before it drew that salt (`Proxy.commit_weights`, read back by `committed`)."""
+weights, stream and prover those PoUW recorded with the certifier before it drew that salt (`Proxy.commit_weights`,
+read back by `committed`); and `Credits` credits a window once per stream and prover."""
 
 from __future__ import annotations
 
@@ -36,6 +38,8 @@ INGRESS = GridParams(buckets=6, allocation=2, frame_bytes=512)
 SYNC_SET = SyncSet((0, 1), (1, 2))
 SYNCS = [ClockSync(0, 1)] * 4
 MANIFEST = hashlib.sha512(b"the pass's manifest").hexdigest()
+STREAM = hashlib.sha512(b"a stream").digest()
+PROVER = hashlib.sha512(b"a prover").digest()
 
 
 def registration(p: int, ctx: str | None = None, window: dict | None = None) -> Registration:
@@ -46,9 +50,9 @@ def registration(p: int, ctx: str | None = None, window: dict | None = None) -> 
     return Registration(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
 
 
-def certifier(windows: int, weights: dict[int, bytes] | None = None, **kwargs) -> tuple[Proxy, dict[int, bytes]]:
-    """The certifier with PoUW's reader, handed `weights` by PoUW window before its first tick (`commit_weights`),
-    after `windows` certifier windows of ingress ticks, and the salts it drew by PoUW window."""
+def certifier(windows: int, records: dict[int, bytes] | None = None, **kwargs) -> tuple[Proxy, dict[int, bytes]]:
+    """The certifier with PoUW's reader, handed `records` by PoUW window before its first tick (`commit_weights`), after
+    `windows` certifier windows of ingress ticks, and the salts it drew by PoUW window."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -57,28 +61,41 @@ def certifier(windows: int, weights: dict[int, bytes] | None = None, **kwargs) -
 
     c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0,
               **{"salt": source, "registered": PS.registered, **kwargs})
-    for p, root in (weights or {}).items():
-        c.commit_weights(p, root)
+    for p, record in (records or {}).items():
+        c.commit_weights(p, record)
     for _ in range(windows * INGRESS.buckets):
         c.bucketer.tick()
     return c, drawn
 
 
 def test_pouw_salt_form():
-    """The salt PoUW applies in window p is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p)), pinned on one vector; a
-    reveal that isn't 64 bytes and a window that isn't a u64 are refused."""
-    reveal = bytes(range(64))
-    assert PS.pouw_salt(reveal, 3).hex() == (
-        "284640f46fa004edc083e70781de725866d541643a6e4d3d6c5e970c6792872c"
-        "01bf359e56beb32a9d954d00692468716b819c3d9348e673924f91d2f0cffd50")
-    assert PS.pouw_salt(reveal, 3) == hashlib.sha512(b"verity/pouw-salt/v1" + reveal + (3).to_bytes(8, "big")).digest()
-    assert PS.pouw_salt(reveal, 4) != PS.pouw_salt(reveal, 3)
+    """The salt PoUW applies in window p for a registration of a stream and a prover is SHA-512(b"verity/pouw-salt/v1" ‖
+    reveal ‖ u64be(p) ‖ stream ‖ prover), and what PoUW records for p before it SHA-512(b"verity/pouw-record/v1" ‖
+    weights' root ‖ stream ‖ prover), each pinned on one vector, every part fixed-width: a reveal, a stream, a prover or
+    a weights' root that isn't 64 bytes, and a window that isn't a u64, are refused."""
+    reveal, stream, prover, root = (bytes(range(i, i + 64)) for i in (0, 64, 128, 192))
+    assert PS.pouw_salt(reveal, 3, stream, prover).hex() == (
+        "7c43e79ad05bb29ccb777671767a31fac039bf1cd89279318d8232b97c3094cd"
+        "ad0f7eed8b3a29b773d37c0bc8d73da3e7bf2d35452ebe3befa0e8f4fef167ac")
+    assert PS.pouw_salt(reveal, 3, stream, prover) == hashlib.sha512(
+        b"verity/pouw-salt/v1" + reveal + (3).to_bytes(8, "big") + stream + prover).digest()
+    assert PS.pouw_record(root, stream, prover).hex() == (
+        "43e12ade4369d0f34e766035df309f57b880fb3d4281983184e52778ff847c56"
+        "cad7f390714e34a523be4f1a7a3f2df59c51d37cdfd650fc5f49d24623b3f6c6")
+    assert PS.pouw_record(root, stream, prover) == hashlib.sha512(b"verity/pouw-record/v1" + root + stream + prover).digest()
+    assert PS.pouw_salt(reveal, 4, stream, prover) != PS.pouw_salt(reveal, 3, stream, prover)
     for bad in (reveal[:32], reveal + b"\0", bytearray(reveal), reveal.hex()):
         with pytest.raises(DomainError, match="64 bytes"):
-            PS.pouw_salt(bad, 3)
+            PS.pouw_salt(bad, 3, stream, prover)
+        with pytest.raises(DomainError, match="64 bytes"):
+            PS.pouw_record(bad, stream, prover)
+        with pytest.raises(DomainError, match="stream is a 64-byte digest"):
+            PS.pouw_salt(reveal, 3, bad, prover)
+        with pytest.raises(DomainError, match="prover is a 64-byte id"):
+            PS.pouw_record(root, stream, bad)
     for bad in (-1, 1 << 64, True, 3.0):
         with pytest.raises(DomainError, match="u64"):
-            PS.pouw_salt(reveal, bad)
+            PS.pouw_salt(reveal, bad, stream, prover)
 
 
 def test_a_context_names_its_pouw_window():
@@ -187,17 +204,17 @@ def setup():
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
-    """`Epoch.certified` of PoUW window 1's certifier windows (2 and 3, k = 2) has salt `pouw_salt(reveal, 1)`, 64
-    bytes: the seeds take it and Epoch.start's 32 bytes they refuse, the identifier names it whole, and the challenger's
-    draw coin opens against its coins. Misaligned windows, a reveal of another width and weights that aren't the
-    workload's are refused."""
+    """`Epoch.certified` of PoUW window 1's certifier windows (2 and 3, k = 2) under a stream and a prover has salt
+    `pouw_salt(reveal, 1, stream, prover)`, 64 bytes: the seeds take it and Epoch.start's 32 bytes they refuse, the
+    identifier names it whole, and the challenger's draw coin opens against its coins. Misaligned windows, a reveal,
+    stream or prover of another width and weights that aren't the workload's are refused."""
     work, roots = setup()
     c, drawn = certifier(4, pouw_window=2)
     reveal = PS.revealed(c, 1, registration(1))
     ch = E.challenger()
-    epoch = Epoch.certified(work, roots, [2, 3], 2, reveal, coins=ch.commitment)
-    assert epoch.salt == PS.pouw_salt(drawn[1], 1) and len(epoch.salt) == 64 and epoch.coins == ch.commitment
-    assert epoch.salt != Epoch.certified(work, roots, [0, 1], 2, reveal).salt
+    epoch = Epoch.certified(work, roots, [2, 3], 2, reveal, STREAM, PROVER, coins=ch.commitment)
+    assert epoch.salt == PS.pouw_salt(drawn[1], 1, STREAM, PROVER) and len(epoch.salt) == 64 and epoch.coins == ch.commitment
+    assert epoch.salt != Epoch.certified(work, roots, [0, 1], 2, reveal, STREAM, PROVER).salt
 
     root = hashlib.sha512(b"root").digest()
     assert SD.seed(epoch.salt, 0, root, root) != SD.receipt_seed(epoch.salt, 0, root, root)
@@ -212,97 +229,165 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
 
     for ws in ([1, 2], [2], [2, 3, 4]):
         with pytest.raises(DomainError, match="not one PoUW window"):
-            Epoch.certified(work, roots, ws, 2, reveal)
+            Epoch.certified(work, roots, ws, 2, reveal, STREAM, PROVER)
     with pytest.raises(DomainError, match="64 bytes"):
-        Epoch.certified(work, roots, [2, 3], 2, reveal[:32])
+        Epoch.certified(work, roots, [2, 3], 2, reveal[:32], STREAM, PROVER)
+    with pytest.raises(DomainError, match="stream"):
+        Epoch.certified(work, roots, [2, 3], 2, reveal, STREAM[:32], PROVER)
+    with pytest.raises(DomainError, match="prover"):
+        Epoch.certified(work, roots, [2, 3], 2, reveal, STREAM, PROVER.hex())
     with pytest.raises(DomainError, match="every weight"):
-        Epoch.certified(work, {**roots, 8: root}, [2, 3], 2, reveal)
+        Epoch.certified(work, {**roots, 8: root}, [2, 3], 2, reveal, STREAM, PROVER)
 
 
-def manifest(work: Workload, roots: dict[int, bytes], p: int, salt: bytes) -> tuple[bytes, str]:
+def manifest(work: Workload, roots: dict[int, bytes], p: int, salt: bytes, run: str = "r") -> tuple[bytes, str]:
     """A certified pass's manifest over `work` and its weights' `roots`, salted `salt`, and its window's context, which
     names PoUW window p and the manifest."""
-    man = {"schema": CC.MANIFEST_CERTIFIED, "salt": salt.hex(), "run": "r",
+    man = {"schema": CC.MANIFEST_CERTIFIED, "salt": salt.hex(), "run": run,
            "matmuls": [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight}
                        for u in work.matmuls],
            "weights": {str(w): {"root": r.hex()} for w, r in roots.items()}}
     raw = json.dumps(man).encode()
-    return raw, PS.context("served-zk/r", p, hashlib.sha512(raw).hexdigest())
+    return raw, PS.context(f"served-zk/{run}", p, hashlib.sha512(raw).hexdigest())
 
 
 def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal():
     """`core_check.pass_epoch` in a certified window, its context naming PoUW window 1 and the pass, with the reveal
-    `revealed` and the weights' root `committed` read from the certifier on that registration: the pass salted by
-    `Epoch.certified` of windows 2 and 3 passes (``certifier``). Salted by window 0's epoch, by the raw reveal, or
-    checked against window 0's reveal, it doesn't, nor does it pass at a verifier without the reveal."""
+    `revealed` and the record `committed` read from the certifier on that registration, and the window's stream and
+    prover: the pass salted by `Epoch.certified` of windows 2 and 3 passes (``certifier``). Salted by window 0's epoch,
+    by the raw reveal, or checked against window 0's reveal, it doesn't, nor does it pass at a verifier without the
+    reveal."""
     work, roots = setup()
-    c, _ = certifier(4, {1: weights_root(roots)}, pouw_window=2)
+    c, _ = certifier(4, {1: PS.pouw_record(weights_root(roots), STREAM, PROVER)}, pouw_window=2)
 
     reveal = PS.revealed(c, 1, registration(1))
-    raw, ctx = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, reveal).salt)
+    raw, ctx = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, reveal, STREAM, PROVER).salt)
     assert PS.revealed(c, 1, registration(1, ctx=ctx)) == reveal
-    weights = PS.committed(c, 1, registration(1, ctx=ctx))
-    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, weights=weights) == ("certifier", None)
+    record = PS.committed(c, 1, registration(1, ctx=ctx))
+    bound = {"committed": record, "stream": STREAM, "prover": PROVER}
+    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, **bound) == ("certifier", None)
 
-    mismatch = ("coin", "the pass's salt is not the certifier's for its window")
-    for salt in (Epoch.certified(work, roots, [0, 1], 2, reveal).salt, reveal):
-        assert CC.pass_epoch(None, *manifest(work, roots, 1, salt), reveal=reveal, weights=weights) == (None, mismatch)
-    assert CC.pass_epoch(None, raw, ctx, reveal=PS.revealed(c, 0, registration(0)), weights=weights) == (None, mismatch)
+    mismatch = ("coin", "the pass's salt is not the certifier's for its window, stream and prover")
+    for salt in (Epoch.certified(work, roots, [0, 1], 2, reveal, STREAM, PROVER).salt, reveal):
+        assert CC.pass_epoch(None, *manifest(work, roots, 1, salt), reveal=reveal, **bound) == (None, mismatch)
+    assert CC.pass_epoch(None, raw, ctx, reveal=PS.revealed(c, 0, registration(0)), **bound) == (None, mismatch)
     how, refused = CC.pass_epoch(None, raw, ctx)
     assert how is None and refused[0] == "coin" and refused[1].startswith(f"the pass's manifest is {CC.MANIFEST_CERTIFIED}")
 
 
-def test_a_certified_window_passes_only_weights_recorded_before_its_salt():
-    """The certifier's salt binds no weights, so a certified window passes only the weights' root the certifier recorded
-    before it drew the window's salt (`Proxy.commit_weights`), which `committed` reads on `reveal`'s conditions. End to
-    end against the certifier, PoUW windows of two certifier windows: window 0's root, committed before its draw, is
-    read back and its pass passes, and a second root for it is refused; window 1's, committed after its draw, is
-    refused, so `committed` refuses window 1 and its pass, salted by its own reveal, is refused. A pass over other
-    weights, salted the same since the salt doesn't read them, is refused, as are a registration that isn't the
-    window's and a certifier that gives anything but a 64-byte root."""
+def test_two_registrations_of_one_window_are_salted_apart():
+    """Two registrations of PoUW window 1 behind one certifier, of the same weights and the same operands, differing only
+    in their stream or only in their prover, get different salts, and so a different seed and receipt seed at every
+    matmul index: a tile computed once is no other registration's. Each one's pass is refused at the other's verifier,
+    whichever the certifier recorded. The window is global, so the salts of two certifiers (two proxies' lifetimes,
+    each drawing fresh) differ too, with no epoch bound."""
     work, roots = setup()
     root = weights_root(roots)
-    c, _ = certifier(0, {0: root}, pouw_window=2)
-    with pytest.raises(RuntimeError, match="PoUW window 0's weights are already recorded"):
-        c.commit_weights(0, hashlib.sha512(root).digest())
+    other_stream, other_prover = hashlib.sha512(b"another stream").digest(), hashlib.sha512(b"another prover").digest()
+    bindings = [(STREAM, PROVER), (other_stream, PROVER), (STREAM, other_prover)]
+    c, _ = certifier(4, pouw_window=2)
+    reveal = PS.revealed(c, 1, registration(1))
+    salts = [Epoch.certified(work, roots, [2, 3], 2, reveal, *b).salt for b in bindings]
+    assert len(set(salts)) == 3
+    operands = [hashlib.sha512(b"A %d" % j).digest() for j in range(4)]
+    for f in (SD.seed, SD.receipt_seed):
+        assert all(len({f(s, j, operands[j], root) for s in salts}) == 3 for j in range(4))
+
+    for (stream, prover), salt in zip(bindings, salts):
+        raw, ctx = manifest(work, roots, 1, salt)
+        for (s2, v2) in bindings:
+            got = CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, s2, v2), stream=s2, prover=v2)
+            assert got == (("certifier", None) if (s2, v2) == (stream, prover) else
+                           (None, ("coin", "the pass's salt is not the certifier's for its window, stream and prover")))
+            if (s2, v2) != (stream, prover):
+                assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, stream, prover),
+                                     stream=s2, prover=v2)[1][1].startswith("the pass's weights, stream and prover are not")
+
+    lives = [certifier(4, pouw_window=2, salt=active.fresh_salt)[0] for _ in range(2)]
+    assert PS.pouw_salt(PS.revealed(lives[0], 1, registration(1)), 1, STREAM, PROVER) != \
+        PS.pouw_salt(PS.revealed(lives[1], 1, registration(1)), 1, STREAM, PROVER)
+
+
+def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_its_salt():
+    """The certifier's salt binds no weights, so a certified window passes only weights, a stream and a prover PoUW
+    recorded with the certifier before it drew the window's salt (`pouw_record`, through `Proxy.commit_weights`), which
+    `committed` reads on `reveal`'s conditions. End to end against the certifier, PoUW windows of two certifier
+    windows: window 0's record, made before its draw, is read back and its pass passes, and a second record for it is
+    refused; window 1's, made after its draw, is refused, so `committed` refuses window 1 and its pass, salted by its
+    own reveal, is refused. A pass over other weights, salted the same since the salt doesn't read them, is refused, as
+    are a stream or prover other than those recorded, a registration that isn't the window's and a certifier that gives
+    anything but 64 bytes. The certifier's refusals are matched by type and PoUW's by its own words, so neither's
+    wording is pinned to the other's."""
+    work, roots = setup()
+    root = weights_root(roots)
+    record = PS.pouw_record(root, STREAM, PROVER)
+    c, _ = certifier(0, {0: record}, pouw_window=2)
+    with pytest.raises(RuntimeError):
+        c.commit_weights(0, PS.pouw_record(root, STREAM, hashlib.sha512(PROVER).digest()))
     for _ in range(2 * INGRESS.buckets + 1):   # windows 0 and 1, then window 2's first tick: PoUW window 1's salt
         c.bucketer.tick()
-    with pytest.raises(RuntimeError, match="PoUW window 1's salt is drawn"):
-        c.commit_weights(1, root)
+    with pytest.raises(RuntimeError):
+        c.commit_weights(1, record)
     for _ in range(2 * INGRESS.buckets - 1):
         c.bucketer.tick()
 
     reveal = PS.revealed(c, 0, registration(0))
-    raw, ctx = manifest(work, roots, 0, Epoch.certified(work, roots, [0, 1], 2, reveal).salt)
-    weights = PS.committed(c, 0, registration(0, ctx=ctx))
-    assert weights == root and CC.pass_epoch(None, raw, ctx, reveal=reveal, weights=weights) == ("certifier", None)
+    raw, ctx = manifest(work, roots, 0, Epoch.certified(work, roots, [0, 1], 2, reveal, STREAM, PROVER).salt)
+    got = PS.committed(c, 0, registration(0, ctx=ctx))
+    assert got == record
+    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=STREAM, prover=PROVER) == ("certifier", None)
 
     late = PS.revealed(c, 1, registration(1))
-    raw1, ctx1 = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, late).salt)
-    with pytest.raises(PS.Unrevealed, match="no weights were recorded before PoUW window 1's salt"):
+    raw1, ctx1 = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, late, STREAM, PROVER).salt)
+    with pytest.raises(PS.Unrevealed, match="the certifier doesn't give what PoUW recorded for window 1"):
         PS.committed(c, 1, registration(1, ctx=ctx1))
-    assert CC.pass_epoch(None, raw1, ctx1, reveal=late, weights=None) == \
-        (None, ("coin", "the verifier holds no weights' root the certifier recorded before it drew the window's salt"))
+    unrecorded = (None, ("coin", "the verifier holds no record the certifier made before it drew the window's salt"))
+    assert CC.pass_epoch(None, raw1, ctx1, reveal=late, committed=None, stream=STREAM, prover=PROVER) == unrecorded
     with pytest.raises(PS.Unrevealed, match="unregistered"):
         PS.committed(c, 0, registration(1))
 
     @dataclasses.dataclass
     class Gives:
-        root: object
+        record: object
 
         def committed(self, window, registration):
-            return self.root
+            return self.record
 
-    for bad in (root[:32], root.hex(), bytearray(root), None):
+    for bad in (record[:32], record.hex(), bytearray(record), None):
         with pytest.raises(PS.Unrevealed, match="is not 64 bytes"):
             PS.committed(Gives(bad), 0, registration(0))
-    assert PS.committed(Gives(root), 0, registration(0)) == root
+    assert PS.committed(Gives(record), 0, registration(0)) == record
 
     later = {w: hashlib.sha512(r).digest() for w, r in roots.items()}
-    assert Epoch.certified(work, later, [0, 1], 2, reveal).salt == Epoch.certified(work, roots, [0, 1], 2, reveal).salt
-    assert CC.pass_epoch(None, *manifest(work, later, 0, Epoch.certified(work, later, [0, 1], 2, reveal).salt),
-                         reveal=reveal, weights=weights) == \
-        (None, ("coin", "the pass's weights are not those the certifier recorded before it drew the window's salt"))
-    for none in (None, root[:32]):
-        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, weights=none) == \
-            (None, ("coin", "the verifier holds no weights' root the certifier recorded before it drew the window's salt"))
+    assert Epoch.certified(work, later, [0, 1], 2, reveal, STREAM, PROVER).salt == \
+        Epoch.certified(work, roots, [0, 1], 2, reveal, STREAM, PROVER).salt
+    other = (None, ("coin", "the pass's weights, stream and prover are not those the certifier recorded before it drew "
+                            "the window's salt"))
+    assert CC.pass_epoch(None, *manifest(work, later, 0, Epoch.certified(work, later, [0, 1], 2, reveal, STREAM, PROVER).salt),
+                         reveal=reveal, committed=got, stream=STREAM, prover=PROVER) == other
+    for stream, prover in ((hashlib.sha512(STREAM).digest(), PROVER), (STREAM, hashlib.sha512(PROVER).digest())):
+        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == other
+    for none in (None, record[:32]):
+        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=none, stream=STREAM, prover=PROVER) == unrecorded
+    for stream, prover in ((None, PROVER), (STREAM, None), (STREAM[:32], PROVER), (STREAM, PROVER + b"\0")):
+        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == \
+            (None, ("coin", "the verifier holds no 64-byte stream digest and 64-byte prover id for the window"))
+
+
+def test_a_certified_window_is_credited_once_per_stream_and_prover():
+    """`Credits` credits PoUW window p once per stream and prover: a second registration of p under them, which has
+    their salt and so their seeds, is refused (`Credited`), naming the first; p under another stream or prover, and
+    another window under them, are credited. A window that isn't a u64, or a stream or prover that isn't 64 bytes, is
+    refused."""
+    other = hashlib.sha512(b"another").digest()
+    credits = PS.Credits()
+    credits.credit(1, STREAM, PROVER, "aa" * 64)
+    with pytest.raises(PS.Credited, match="PoUW window 1 is already credited to registration aaaaaaaaaaaaaaaa"):
+        credits.credit(1, STREAM, PROVER, "bb" * 64)
+    for window, stream, prover in ((1, other, PROVER), (1, STREAM, other), (2, STREAM, PROVER)):
+        credits.credit(window, stream, prover, "cc" * 64)
+    with pytest.raises(PS.Credited):
+        credits.credit(2, STREAM, PROVER, "dd" * 64)
+    for window, stream, prover in ((-1, STREAM, PROVER), (1, STREAM[:32], PROVER), (1, STREAM, None)):
+        with pytest.raises(DomainError):
+            credits.credit(window, stream, prover, "ee" * 64)

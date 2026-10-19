@@ -1,11 +1,12 @@
 """The pass and draw difftest's cases: `core_check.pass_epoch`'s arguments, ``{"coins", "raw": hex | null, "context",
-"recorded", "reveal": hex | null, "weights": hex | null}``, and `core_check.draw`'s, ``{"coins", "recorded", "opening",
-"stream", "registration", "receipt", "k", "population", "units"}``.
+"recorded", "reveal", "committed", "stream", "prover"}`` (the last four hex or null), and `core_check.draw`'s,
+``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k", "population", "units"}``.
 
 A pass case is an honest pass (a small workload, its weights' roots, an epoch's coins committed under one of
 `core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, or a
-certified pass salted by the network certifier's reveal for the PoUW window its context names, over the weights' root
-the certifier recorded before it drew that salt), then one mutation
+certified pass under a stream and a prover, salted by the network certifier's reveal for the PoUW window its context
+names, over the weights' root the certifier recorded with the stream and the prover before it drew that salt), then one
+mutation
 (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin opened
 after a registration's digest, the units `stream_subset` of its key's stream), then one mutation (`DRAW_MUTATIONS`).
 `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
@@ -24,6 +25,9 @@ from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import tagged
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.randomness import derive
+
+#: a certified window's verifier's inputs, in `pass_epoch`'s order
+CERTIFIED = ("reveal", "committed", "stream", "prover")
 
 
 class Coins:
@@ -72,11 +76,12 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
     us, weights = _workload(rng)
     man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": us, "weights": weights, "run": f"r-{rng.randrange(1 << 30):x}"}
     roots = _roots(man)
-    reveal = window = weights = None
+    reveal = window = committed = stream = prover = None
     if kind == "certified":
         reveal, window = rng.randbytes(PS.SALT_BYTES), rng.choice([0, 1, rng.randrange(1 << 64), (1 << 64) - 1])
-        weights = CC.weights_root(Co.SCHEME, roots)
-        man.update(schema=CC.MANIFEST_CERTIFIED, salt=PS.pouw_salt(reveal, window).hex())
+        stream, prover = rng.randbytes(PS.STREAM_BYTES), rng.randbytes(PS.PROVER_BYTES)
+        committed = PS.pouw_record(CC.weights_root(Co.SCHEME, roots), stream, prover)
+        man.update(schema=CC.MANIFEST_CERTIFIED, salt=PS.pouw_salt(reveal, window, stream, prover).hex())
         ch = Coins(rng, rng.randrange(4))
     elif kind == "beacon":
         beacon = rng.randbytes(32)
@@ -91,8 +96,8 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
                                                                           "weights": root}).stream("salt", 32)
         man.update(coins=ch.commitment, salt_opening=opening, salt=salt.hex())
     case = {"coins": ch.commitment, "recorded": kind not in ("coin", "certified") or rng.random() < 0.3, "run": man["run"],
-            "prefix": f"served-zk/{man['run']}", "window": window, "reveal": None if reveal is None else reveal.hex(),
-            "weights": None if weights is None else weights.hex()}
+            "prefix": f"served-zk/{man['run']}", "window": window,
+            **{k: None if v is None else v.hex() for k, v in zip(CERTIFIED, (reveal, committed, stream, prover))}}
     return {"case": case, "man": man, "ch": ch, "kind": kind}
 
 
@@ -242,12 +247,22 @@ def _mutate_pass(h: dict, name: str, rng: random.Random) -> bytes | None:
         case "raw-reveal":
             man["salt"] = case["reveal"]
         case "weights-unrecorded":
-            case["weights"] = rng.choice([None, rng.randbytes(rng.choice([0, 32, 63, 65])).hex()])
+            case["committed"] = rng.choice([None, rng.randbytes(rng.choice([0, 32, 63, 65])).hex()])
         case "weights-after-salt":
             if rng.random() < 0.5:
-                case["weights"] = rng.randbytes(PS.WEIGHTS_ROOT_BYTES).hex()
+                case["committed"] = rng.randbytes(PS.WEIGHTS_ROOT_BYTES).hex()
             else:
                 man["weights"][rng.choice(list(man["weights"]))]["root"] = rng.randbytes(64).hex()
+        case "binding-form":
+            case[rng.choice(["stream", "prover"])] = rng.choice([None, rng.randbytes(rng.choice([0, 32, 63, 65])).hex()])
+        case "stream-other" | "prover-other":
+            case[name.split("-")[0]] = rng.randbytes(64).hex()
+        case "salted-apart":
+            k = rng.choice(["stream", "prover"])
+            bound = {"stream": bytes.fromhex(case["stream"]), "prover": bytes.fromhex(case["prover"]), k: rng.randbytes(64)}
+            case[k] = bound[k].hex()
+            case["committed"] = PS.pouw_record(CC.weights_root(Co.SCHEME, _roots(man)), bound["stream"],
+                                               bound["prover"]).hex()
         case "spaced-hex":
             w = rng.choice(list(man["weights"]))
             r = man["weights"][w]["root"]
@@ -275,7 +290,8 @@ PASS_MUTATIONS = {
     "certified-unread": ("certified",), "uncertified-pass": ("coin", "recorded-coin", "beacon"),
     "reveal-size": ("certified",), "no-window": ("certified",), "other-window": ("certified",),
     "other-reveal": ("certified",), "raw-reveal": ("certified",), "weights-unrecorded": ("certified",),
-    "weights-after-salt": ("certified",),
+    "weights-after-salt": ("certified",), "binding-form": ("certified",), "stream-other": ("certified",),
+    "prover-other": ("certified",), "salted-apart": ("certified",),
 }
 PASS_NAMES = list(PASS_MUTATIONS)
 
@@ -292,15 +308,14 @@ def pass_instance(rng: random.Random, name: str = "honest", kind: str | None = N
     else:
         context = case.get("context") or _context(case, hashlib.sha512(raw).hexdigest())
     return {"coins": case["coins"], "raw": None if raw is None else raw.hex(), "context": context,
-            "recorded": case["recorded"], "reveal": case["reveal"], "weights": case["weights"]}
+            "recorded": case["recorded"], **{k: case[k] for k in CERTIFIED}}
 
 
 def pass_args(case: dict) -> tuple:
     def hex_or_none(k: str) -> bytes | None:
         return None if case.get(k) is None else bytes.fromhex(case[k])
 
-    return (case["coins"], hex_or_none("raw"), case["context"], case["recorded"], hex_or_none("reveal"),
-            hex_or_none("weights"))
+    return (case["coins"], hex_or_none("raw"), case["context"], case["recorded"], *map(hex_or_none, CERTIFIED))
 
 
 def _receipt(rng: random.Random, reg: str) -> dict:
