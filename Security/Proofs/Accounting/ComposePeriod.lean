@@ -782,8 +782,9 @@ theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
   have hfix0 : ∀ x, Pl.accepts x → 0 ≤ (Pl.run x).fixed := by
     intro x hx
     refine le_trans ?_ (hFix x hx).1
-    exact div_nonneg (Finset.sum_nonneg fun w _ => Finset.sum_nonneg fun t _ => ite_nonneg (Nat.cast_nonneg _) le_rfl)
-      (Nat.cast_nonneg _)
+    exact div_nonneg (Finset.sum_nonneg fun w _ => Finset.sum_nonneg fun t _ => by
+      split_ifs
+      exacts [Nat.cast_nonneg _, le_rfl]) (Nat.cast_nonneg _)
   have hsub : ∀ x, (Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) →
       Pl.accepts x ∧ ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
@@ -792,7 +793,9 @@ theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
     refine ⟨hacc, fun hw => (not_lt.mpr ?_) hlt⟩
     have hNl : 0 ≤ creditedLive Sc Cd Wp pr x := by
       unfold creditedLive
-      exact Finset.sum_nonneg fun w _ => ite_nonneg (Finset.sum_nonneg fun t _ => Nat.cast_nonneg _) le_rfl
+      exact Finset.sum_nonneg fun w _ => by
+        split_ifs
+        exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
     exact creditPrefix_le Sc Cd Np _ ha hb hNl (mul_nonneg (Nat.cast_nonneg _) (hfix0 x hacc)) hw
   exact (prob_mono hsub).trans hW
 
