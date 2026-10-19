@@ -1,6 +1,7 @@
 """fold_xor_search.py: its menu is the sheet's, its forms compute what they model, and its CEGIS proves and finds."""
 from __future__ import annotations
 
+import itertools
 import struct
 import sys
 from pathlib import Path
@@ -61,6 +62,63 @@ def test_forms_compute_what_they_model():
             r = np.float32(fx + fy)
         want = 0x7FFFFFFF if np.isnan(r) else struct.unpack("<I", r.tobytes())[0]
         assert _val(S.lane(S.bv(x), one, S.bv(y), m, "0")) == want
+
+
+def test_an_fp_lane_on_nan_inputs_is_its_constants():
+    """reduce_nan's premise: with x and y binary32 NaN patterns, an FFMA lane whose operands are x, y or constants (an
+    earlier FP result is one, by induction) computes the same word on any two such pairs, under every modifier."""
+    m = S.modifiers("FFMA2", "t")
+    X1, X2, Y1, Y2 = (z3.BitVec(n, 32) for n in ("X1", "X2", "Y1", "Y2"))
+    nan = z3.And(*(S.nan_bits(v) for v in (X1, X2, Y1, Y2)))
+    ks = [z3.BitVec(f"k{i}", 32) for i in range(3)]
+    for picks in itertools.product("xyc", repeat=3):
+        o1 = [{"x": X1, "y": Y1, "c": k}[p] for p, k in zip(picks, ks)]
+        o2 = [{"x": X2, "y": Y2, "c": k}[p] for p, k in zip(picks, ks)]
+        s = z3.Solver()
+        s.add(nan, S.lane(*o1, m, "0") != S.lane(*o2, m, "0"))
+        assert s.check() == z3.unsat, picks
+
+
+def test_reduce_nan_makes_fp_results_constants():
+    """An FP-first sequence becomes its integer suffix, each FP result read as that instruction's constant and the
+    later results renumbered; an FP form after an integer one doesn't reduce."""
+    assert S.reduce_nan(("FFMA2", ("IMAD", (0, 2)))) == (("IMAD", (0, 2)),)
+    assert S.reduce_nan(("FFMA2", ("IMAD", (3, 4)))) == (("IMAD", (2, 2)),)
+    assert S.reduce_nan(("FFMA2", ("IMAD.HI", (1, 4)), ("IMAD", (4, 5)))) == (("IMAD.HI", (1, 2)), ("IMAD", (2, 3)))
+    assert S.reduce_nan(("FFMA2", ("IMAD.HI", (1, 4)), ("IMAD", (2, 6)))) == (("IMAD.HI", (1, 2)), ("IMAD", (4, 4)))
+    assert S.reduce_nan(("FFMA2", ("IDP.2A", (4, 0)))) == (("IDP.2A", (2, 0)),)
+    assert S.reduce_nan((("IMAD", (0, 1)), "FFMA2", ("IMAD", (2, 3)))) is None
+
+
+def test_splits_are_every_program():
+    """A sequence's `splits` set its first instruction's addend slots to every source, and `mod_splits` its modifiers
+    to every assignment but inv and cx both set, which computes what neither does."""
+    seq = (("IMAD.HI", (0, 1)), ("IMAD", (2, 3)))
+    cases = S.splits(seq)
+    assert sorted((f[0][2], f[0][3]) for f in cases) == sorted(itertools.product(range(3), repeat=2))
+    assert len({S.fix_label(f) for f in cases}) == 9 and S.splits(("FFMA2", ("IMAD", (0, 2)))) == [()]
+    for op, n in (("IMAD", 12), ("IMAD.HI", 192)):
+        sub = S.mod_splits(((op, (0, 1)),), ({2: 0},))
+        assert len(sub) == n == len({S.fix_label(f) for f in sub})
+        assert all(f[0][2] == 0 and not (f[0]["inv"] and f[0]["cx"]) for f in sub)
+        assert {S.fix_label(f, mods=False) for f in sub} == {"s2=x"}
+    off = {n: z3.BoolVal(False) for n in ("sa", "sb", "na", "nb", "np", "nc", "inv", "cx")}
+    both = {**off, "inv": z3.BoolVal(True), "cx": z3.BoolVal(True)}
+    rng = np.random.default_rng(11)
+    for a, b, c, h in rng.integers(0, 2**32, size=(16, 4), dtype=np.uint64).tolist():
+        o = [S.bv(a), S.bv(b), S.bv(c), S.bv(h)]
+        for nc in (False, True):
+            m0, m1 = {**off, "nc": z3.BoolVal(nc)}, {**both, "nc": z3.BoolVal(nc)}
+            assert _val(S.imad(o, m0)[0]) == _val(S.imad(o, m1)[0])
+            assert [_val(v) for v in S.imad_hi(o, m0)] == [_val(v) for v in S.imad_hi(o, m1)]
+
+
+@pytest.mark.slow
+def test_a_modifier_case_is_unsat():
+    """A case that is unknown at 600 s unsplit (the first IMAD's addend y) is unsat once its modifiers are set."""
+    seq = (("IMAD", (0, 0)), ("IMAD.HI", (2, 3)))
+    fix = ({2: 1, "np": False, "nc": True, "inv": False, "cx": False},)
+    assert S.cegis(seq, fix=fix)["result"] == "unsat"
 
 
 @pytest.mark.slow
