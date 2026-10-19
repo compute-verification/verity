@@ -13,7 +13,8 @@ A row id with ``__tp<N>__``, N >= 2, runs the tensor-parallel stages (``row_tp``
 ``sweep.tp``), any other the single-GPU stages (``row_stages``).  The stage flags are the fields of ``BuildConfig``,
 ``MatchConfig``, ``CommitConfig`` and ``RunEnv``; each also reads the environment variable it names.  ``--protocols``
 (``PROTOCOLS``) runs the row with protocol options beside sampled proofs (`verity_vllm.protocol_options`): a set it cannot
-run is refused here, before any stage, for single-GPU and TP rows alike (exit 3).
+run is refused here, before any stage, for single-GPU and TP rows alike (exit 3), and so is a row of record that is not done only at
+its public cap (``PRECHECK_FAIL_DONE_SOURCE``, ``config.done_source_refusal``).
 
 The row's config is its file (``config.RowConfig``); the flags and variables change how its stages run, never it.  Every run first
 writes what it used, ``<row dir>/effective_config.json`` (``effective_config``), which the row's config record carries.
@@ -29,8 +30,8 @@ from importlib import metadata
 from typing import Any
 
 from verity_vllm import protocol_options as PO
-from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError, group, option,
-                                row_world)
+from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, MatchConfig, RowConfig, RunEnv, UsageError,
+                                done_source_refusal, group, option, row_world)
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
 
@@ -162,15 +163,18 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
 
 def run_row(o: Run | Stage, stages: str) -> int:
     wl = WORKLOADS / f"{o.row}.json"
+    doc = json.loads(wl.read_text()) if wl.is_file() else {}
     try:
-        protocols = PO.at_row(o.protocols, json.loads(wl.read_text()) if wl.is_file() else {},
-                              world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
+        protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
     except PO.Refused as e:
         print(f"[row] REFUSE (fail-closed): {e}", flush=True)
         return 3
     if o.env.verity_tree and os.path.realpath(o.env.verity_tree) != os.path.realpath(ROOT):   # refuse before writing anything
         print(f"PRECHECK_FAIL_SOURCE_IDENTITY: row at {os.path.realpath(ROOT)} but $VERITY_TREE={o.env.verity_tree} names another tree",
               file=sys.stderr)
+        return 3
+    if why := done_source_refusal(doc):
+        print(f"PRECHECK_FAIL_DONE_SOURCE: {why}", file=sys.stderr)
         return 3
     d = os.path.join(o.env.sweep_dir, o.row)
     os.makedirs(d, exist_ok=True)

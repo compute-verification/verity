@@ -34,7 +34,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowConfig, RowId, UsageError
+from verity_vllm.config import RECORDS, WORKLOADS, RowConfig, RowId, UsageError
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
 
@@ -43,7 +43,7 @@ NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
 MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
-INDEX = MANIFESTS / "records.json"
+INDEX = RECORDS
 INDEX_SCHEMA = "verity-vllm/records-index/v1"
 #: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
 TIERS = ("fast", "heavy")
