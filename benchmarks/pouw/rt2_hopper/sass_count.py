@@ -7,7 +7,8 @@ has one (ALU, IMAD, SHFL and so on), else the opcode's first word.
 The gate (`--gate`): no local-memory access (LDL, STL) in any kernel; each `clk<...>` kernel's loop holds the IGMMA its
 load issues (4 a trip for the three wgmma loads, none for li_alone); each `li_exact<...>` loop holds li's 64 LOP3 and 64
 IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set; for CP_RED, 4 RED
-and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint). Exit 1 when a check fails.
+and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
+poll's LDS, and its lane loop exactly R of the lane's op (IMAD for X = 1, LOP3 for X = 2). Exit 1 when a check fails.
 
 Run: `python sass_count.py SASS [--json OUT] [--gate]`.
 """
@@ -39,29 +40,28 @@ def kernels(text: str) -> dict[str, list[tuple[int, str, str]]]:
     return out
 
 
-def loop(ins: list[tuple[int, str, str]]) -> list[tuple[int, str, str]]:
-    """The kernel's timed loop: of its backward branches' bodies, the one with the most IGMMA, then the longest (a wgmma
-    loop is shorter than the tile fill's)."""
-    best: list[tuple[int, str, str]] = []
-    rank = (-1, -1)
+def bodies(ins: list[tuple[int, str, str]]) -> list[list[tuple[int, str, str]]]:
+    """Every backward branch's body, from its target to the branch."""
+    out = []
     for addr, op, rest in ins:
         if op.split(".")[0] != "BRA":
             continue
         m = BRA.search(op + rest)
-        if not m:
-            continue
-        tgt = int(m.group(1), 16)
-        if tgt < addr:
-            body = [x for x in ins if tgt <= x[0] <= addr]
-            r = (sum(1 for _, o, _ in body if o.startswith("IGMMA")), len(body))
-            if r > rank:
-                best, rank = body, r
-    return best
+        if m and int(m.group(1), 16) < addr:
+            out.append([x for x in ins if int(m.group(1), 16) <= x[0] <= addr])
+    return out
+
+
+def loop(ins: list[tuple[int, str, str]]) -> list[tuple[int, str, str]]:
+    """The kernel's timed loop: of its backward branches' bodies, the one with the most IGMMA, then the longest (a wgmma
+    loop is shorter than the tile fill's)."""
+    rank = lambda b: (sum(1 for _, o, _ in b if o.startswith("IGMMA")), len(b))
+    return max(bodies(ins), key=rank, default=[])
 
 
 def demangle_tag(name: str) -> str:
-    m = re.match(r"_Z\d+(\w+?)ILi(\d+)E", name)
-    return f"{m.group(1)}<{m.group(2)}>" if m else name
+    m = re.match(r"_Z\d+([A-Za-z_]\w*?)I((?:Li\d+E)+)E", name)
+    return f"{m.group(1)}<{','.join(re.findall(r'Li(\d+)E', m.group(2)))}>" if m else name
 
 
 def main() -> int:
@@ -81,10 +81,21 @@ def main() -> int:
         local = sum(1 for _, op, _ in ins if op.split(".")[0] in ("LDL", "STL"))
         rows[tag] = {"mangled": name, "instructions": len(ins), "loop": len(body), "local": local,
                      "loop_ops": dict(sorted(ops.items())), "loop_base": dict(sorted(base.items()))}
-        if not (tag.startswith("clk<") or tag.startswith("li_exact<")):
+        if not tag.startswith(("clk<", "li_exact<", "roles<")):
             continue
         if local:
             fails.append(f"{tag}: {local} local-memory accesses (a spill)")
+        if tag.startswith("roles<"):
+            x, r = (int(v) for v in tag[len("roles<"):-1].split(","))
+            lane_op = {1: "IMAD", 2: "LOP3.LUT"}[x]
+            got = sum(n for op, n in ops.items() if op.startswith("IGMMA"))
+            if got != 4 or base["LDS"] < 1:
+                fails.append(f"{tag}: {got} IGMMA and {base['LDS']} LDS in the MMA loop, want 4 and the poll's LDS")
+            lane = max((sum(1 for _, o, _ in b if o == lane_op) for b in bodies(ins)
+                        if not any(o.startswith("IGMMA") for _, o, _ in b)), default=0)
+            rows[tag]["lane_loop_ops"] = lane
+            if lane != r:
+                fails.append(f"{tag}: {lane} {lane_op} in the lane loop, want {r}")
         if tag.startswith("clk<"):
             want = 0 if tag == "clk<3>" else 4
             got = sum(n for op, n in ops.items() if op.startswith("IGMMA"))
@@ -103,8 +114,9 @@ def main() -> int:
             if imad < 256:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")
     for tag, r in rows.items():
-        if tag.startswith(("clk<", "li_exact<")):
-            print(f"{tag}: {r['instructions']} instructions, loop {r['loop']}: {r['loop_ops']}")
+        if tag.startswith(("clk<", "li_exact<", "roles<")):
+            extra = f", lane loop {r['lane_loop_ops']}" if "lane_loop_ops" in r else ""
+            print(f"{tag}: {r['instructions']} instructions, loop {r['loop']}: {r['loop_ops']}{extra}")
     for f in fails:
         print(f"REFUSED {f}")
     if args.json:

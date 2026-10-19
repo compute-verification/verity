@@ -14,6 +14,10 @@
 // event clock, RT-H200-EMP-4), and each MMA's MACs over its cycles give the tensor's MACs a clock beside it. The loads
 // are sm90_wgmma.cu's own loops: wg_s8_n256_a1's wgmma alone, wgli_redux (wgmma with LI and the redux checkpoint),
 // wgli_fill (that and ffill's filler: the design's mixed load), and the LI loop with no wgmma.
+//
+// `roles`: sm90_wgmma.cu's wg_spec (the JP*90 rows' block-timed points) with each role's own time (RT-BLACKWELL-16's
+// test on the H200): every warp records the cycle its fixed loop ends, and each MMA warp the iterations it had done when
+// the first lane warp ended (one LDS an iteration), so the joint phase's tensor and lane rates are both exact.
 #define main sm90_wgmma_main
 #include "../dc/probes/sm90_wgmma.cu"
 #undef main
@@ -264,12 +268,105 @@ static int run_clock(int load, int iters, int launches) {
   return bad;
 }
 
+// ---- roles ---------------------------------------------------------------------------------------------------------
+
+// wg_spec<X, R> (warps 0-7 the two wgmma warpgroups, warps 8-11 one lane warp a SMSP), each warp's loop end recorded in
+// ends[block][warp], and in at_lane[block][mma warp] the MMA iterations done when the first lane warp ended (-1: none
+// ended first).
+template <int X, int R>
+__global__ void __launch_bounds__(384, 1) roles(OpArgs a, long long* ends, int* at_lane) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  __shared__ int lane_done;
+  if (threadIdx.x == 0) lane_done = 0;
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  int seen = -1;
+  OP_BEGIN
+  if (mma_role) {
+    OP_LOOP(it) {
+      group4<F_s8_n256>(d, t);
+      wgmma_wait<1>();
+      if (seen < 0 && *(volatile int*)&lane_done) seen = it;
+    }
+    wgmma_wait<0>();
+    wgmma_hold(d);
+  } else {
+    OP_LOOP(it) { lane_ops<X, R>(l); }
+    if ((threadIdx.x & 31) == 0) atomicExch(&lane_done, 1);
+  }
+  const long long end = clock64() - op_t0_;
+  if ((threadIdx.x & 31) == 0) {
+    ends[blockIdx.x * 12 + (threadIdx.x >> 5)] = end;
+    if (mma_role) at_lane[blockIdx.x * 8 + (threadIdx.x >> 5)] = seen;
+  }
+  OP_END
+  OP_SINK((mma_role ? fold_acc(d) : l.fold()) ^ threadIdx.x)
+}
+
+template <int X, int R>
+static int run_roles(const char* name, int iters, int reps) {
+  int dev = 0, sms = 0;
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  OpArgs a{};
+  cudaMalloc(&a.rec, sms * sizeof(OpClk));
+  cudaMalloc(&a.sink, (size_t)sms * 384 * sizeof(unsigned));
+  a.iters = iters;
+  long long* dends;
+  int* dat;
+  cudaMalloc(&dends, sms * 12 * sizeof(long long));
+  cudaMalloc(&dat, sms * 8 * sizeof(int));
+  std::vector<long long> ends(sms * 12);
+  std::vector<int> at(sms * 8);
+  std::vector<OpClk> rec(sms);
+  int bad = 0;
+  for (int r = 0; r < reps; r++) {
+    roles<X, R><<<sms, 384>>>(a, dends, dat);
+    cudaError_t e = cudaDeviceSynchronize();
+    cudaMemcpy(ends.data(), dends, ends.size() * sizeof(long long), cudaMemcpyDeviceToHost);
+    cudaMemcpy(at.data(), dat, at.size() * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(rec.data(), a.rec, sms * sizeof(OpClk), cudaMemcpyDeviceToHost);
+    printf("{\"probe\": \"roles\", \"name\": \"%s\", \"lane_ops_iter\": %d, \"rep\": %d, \"iters\": %d, \"blocks\": %d, "
+           "\"cuda\": \"%s\", \"block_cyc\": [",
+           name, R, r, iters, sms, cudaGetErrorString(e));
+    for (int b = 0; b < sms; b++) printf("%s%lld", b ? ", " : "", rec[b].cyc);
+    printf("], \"ends\": [");
+    for (int i = 0; i < sms * 12; i++) printf("%s%lld", i ? ", " : "", ends[i]);
+    printf("], \"mma_iters_at_lane_end\": [");
+    for (int i = 0; i < sms * 8; i++) printf("%s%d", i ? ", " : "", at[i]);
+    printf("]}\n");
+    fflush(stdout);
+    bad += e != cudaSuccess;
+  }
+  cudaFree(dends);
+  cudaFree(dat);
+  cudaFree(a.rec);
+  cudaFree(a.sink);
+  return bad;
+}
+
+static int run_all_roles(int iters, int reps) {
+  int bad = 0;
+  bad += run_roles<L_LOP3, 64>("roles_lop3_r64", iters, reps);
+  bad += run_roles<L_LOP3, 128>("roles_lop3_r128", iters, reps);
+  bad += run_roles<L_LOP3, 192>("roles_lop3_r192", iters, reps);
+  bad += run_roles<L_LOP3, 256>("roles_lop3_r256", iters, reps);
+  bad += run_roles<L_IMAD, 64>("roles_imad_r64", iters, reps);
+  bad += run_roles<L_IMAD, 128>("roles_imad_r128", iters, reps);
+  bad += run_roles<L_IMAD, 192>("roles_imad_r192", iters, reps);
+  bad += run_roles<L_IMAD, 256>("roles_imad_r256", iters, reps);
+  return bad;
+}
+
 int main(int argc, char** argv) {
   if (argc >= 2 && !strcmp(argv[1], "exact")) return run_exact(argc >= 3 ? atoi(argv[2]) : 64) ? 1 : 0;
+  if (argc >= 2 && !strcmp(argv[1], "roles"))
+    return run_all_roles(argc >= 3 ? atoi(argv[2]) : 4096, argc >= 4 ? atoi(argv[3]) : 3) ? 1 : 0;
   if (argc >= 5 && !strcmp(argv[1], "clock")) return run_clock(atoi(argv[2]), atoi(argv[3]), atoi(argv[4])) ? 1 : 0;
   // sm90_wgmma.cu's own probes by name (its op_main: --time NAME... [--reps R]), e.g. wgspec_lop3_r256 beside wgU_lop3
   if (argc >= 2 && !strcmp(argv[1], "probe")) return sm90_wgmma_main(argc - 1, argv + 1);
-  fprintf(stderr, "usage: sm90_clock exact [U] | clock LOAD(0 wgmma, 1 wgli, 2 wgli_fill, 3 li) ITERS LAUNCHES | probe "
-                  "--time NAME...\n");
+  fprintf(stderr, "usage: sm90_clock exact [U] | clock LOAD(0 wgmma, 1 wgli, 2 wgli_fill, 3 li) ITERS LAUNCHES | roles "
+                  "[ITERS [REPS]] | probe --time NAME...\n");
   return 2;
 }

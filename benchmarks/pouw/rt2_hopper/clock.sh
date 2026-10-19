@@ -10,7 +10,8 @@
 #       under one gpu-lease: li's fold bit for bit against the host's reference (exact.jsonl), msp90's mma.sp
 #       timings for (M′) (msp90.jsonl), then each load's SM clock
 #       read in the kernel and its MACs a clock (clock.jsonl), with NVML sampled every 100 ms (smi.csv) and its clock,
-#       performance and power reports before and after (smi-{before,after}.txt).
+#       performance and power reports before and after (smi-{before,after}.txt), and wg_spec with each role's own time
+#       (roles.jsonl). STEPS (default "exact msp joint roles clock") picks which of them run.
 # Exit: 0 done, 1 build, gate or a probe failed, 2 no nvcc, no inputs or wrong device.
 set -uo pipefail
 MODE=${1:?usage: clock.sh build | time}
@@ -59,21 +60,25 @@ time)
     --format=csv -lms 100 >"$OUT/smi.csv" 2>&1 &
   smi=$!
   rc=0
-  "$B" exact 64 >"$OUT/exact.jsonl" 2>&1 || rc=1
-  [ -x "$WORK/msp90" ] && { "$WORK/msp90" >"$OUT/msp90.jsonl" 2>&1 || rc=1; }
+  STEPS=" ${STEPS:-exact msp joint roles clock} "
+  [[ $STEPS == *" exact "* ]] && { "$B" exact 64 >"$OUT/exact.jsonl" 2>&1 || rc=1; }
+  [[ $STEPS == *" msp "* ]] && [ -x "$WORK/msp90" ] && { "$WORK/msp90" >"$OUT/msp90.jsonl" 2>&1 || rc=1; }
   # the JP*90 rows' block-timed points beside their exact (until) twins and the tensor alone (RT-BLACKWELL-16's test)
-  "$B" probe --time wg_s8_n256_a1 wgspec_lop3_r256 wgU_lop3 wgspec_imad_r256 wgU_imad wgspec_lop3_r64 wgspec_imad_r64 \
-    wgmix_lop3_r256 wgmix_imad_r256 --reps 5 >"$OUT/joint.jsonl" 2>&1 || rc=1
-  : >"$OUT/clock.jsonl"
-  # ~0.4 s a launch, 30 launches a load: the light loop first, then the wgmma alone, the design's mixed load, the honest
-  # loop without filler, and the mixed load again (the clock at the end of a minute's saturation)
-  for L in 3 0 2 1 2; do
-    "$B" clock "$L" 600000 30 >>"$OUT/clock.jsonl" 2>&1 || rc=1
-  done
+  [[ $STEPS == *" joint "* ]] && { "$B" probe --time wg_s8_n256_a1 wgspec_lop3_r256 wgU_lop3 wgspec_imad_r256 wgU_imad \
+    wgspec_lop3_r64 wgspec_imad_r64 wgmix_lop3_r256 wgmix_imad_r256 --reps 5 >"$OUT/joint.jsonl" 2>&1 || rc=1; }
+  [[ $STEPS == *" roles "* ]] && { "$B" roles 4096 3 >"$OUT/roles.jsonl" 2>&1 || rc=1; }
+  if [[ $STEPS == *" clock "* ]]; then
+    : >"$OUT/clock.jsonl"
+    # ~0.4 s a launch, 30 launches a load: the light loop first, then the wgmma alone, the design's mixed load, the
+    # honest loop without filler, and the mixed load again (the clock at the end of a minute's saturation)
+    for L in 3 0 2 1 2; do
+      "$B" clock "$L" 600000 30 >>"$OUT/clock.jsonl" 2>&1 || rc=1
+    done
+  fi
   kill "$smi" 2>/dev/null
   wait "$smi" 2>/dev/null
   nvidia-smi -q -d CLOCK,PERFORMANCE,POWER,TEMPERATURE >"$OUT/smi-after.txt" 2>&1
-  python3 - "$OUT" <<'EOF'
+  [ -f "$OUT/clock.jsonl" ] && python3 - "$OUT" <<'EOF'
 import json, statistics, sys
 out = sys.argv[1]
 rows = [json.loads(l) for l in open(f"{out}/clock.jsonl") if l.startswith("{")]
@@ -91,7 +96,7 @@ for k, rs in summ.items():
 json.dump(res, open(f"{out}/clock-summary.json", "w"), indent=1)
 print(json.dumps(res, indent=1))
 EOF
-  cat "$OUT/exact.jsonl"
+  [ -f "$OUT/exact.jsonl" ] && cat "$OUT/exact.jsonl"
   exit $rc
   ;;
 esac
