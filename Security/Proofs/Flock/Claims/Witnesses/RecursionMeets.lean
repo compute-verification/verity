@@ -18,8 +18,8 @@ read:
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
 * `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdDeployed`, whose element-level
-  Flock is the deployed plain record with only its verifier's steps, columns and weight replaced), the inner radius
-  decoder meets the spec, and so does the outer one at the deployed `--zk` record;
+  Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
+  replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
   inner protocol `Inner.ofFlock` reads there;
 * `KSFlock_meets_trim`, `Inner.KS_meets_trim`, `Inner.KSAbort_meets_trim`: the same at the trimmed records
@@ -124,7 +124,7 @@ theorem BitsFlock_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   ⟨FlockDeploy.listWithin_plain rel, FlockDeploy.listWithin_zk rel⟩
 
 /-- `KSBound`'s antecedents at the deployment: the inner radius decoder meets the spec at the deployed bound record's
-element-level Flock (`RecDeploy.deE`, which keeps `deployPlain`'s code), and the outer one at the deployed `--zk`
+element-level Flock (`RecDeploy.deE`, which keeps `deployPlainTrim`'s code), and the outer one at the deployed `--zk`
 record. -/
 theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
@@ -133,7 +133,7 @@ theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
     (w : Msg → ℝ) :
     decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD ∧
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
-  ⟨FlockDeploy.listWithin_plain rel, FlockDeploy.listWithin_zk rel⟩
+  ⟨FlockDeploy.listWithin_plainTrim rel, FlockDeploy.listWithin_zk rel⟩
 
 /-- `KSPrivBound`'s antecedents at the deployment, as `KSBound_meets`. -/
 theorem KSPrivBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
