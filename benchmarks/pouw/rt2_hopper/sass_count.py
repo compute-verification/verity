@@ -6,8 +6,8 @@ has one (ALU, IMAD, SHFL and so on), else the opcode's first word.
 
 The gate (`--gate`): no local-memory access (LDL, STL) in any kernel; each `clk<...>` kernel's loop holds the IGMMA its
 load issues (4 a trip for the three wgmma loads, none for li_alone); each `li_exact<...>` loop holds li's 64 LOP3 and 64
-IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set) and its per-lane
-XOR (4 LOP3 a checkpoint). Exit 1 when a check fails.
+IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set; for CP_RED, 4 RED
+and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint). Exit 1 when a check fails.
 
 Run: `python sass_count.py SASS [--json OUT] [--gate]`.
 """
@@ -92,11 +92,12 @@ def main() -> int:
                 fails.append(f"{tag}: {got} IGMMA in the loop, want {want}")
         if tag.startswith("li_exact<"):
             cp = int(tag[len("li_exact<"):-1])
-            redux = 16 if cp == 2 else 4
-            if base["REDUX"] != redux:
-                fails.append(f"{tag}: {base['REDUX']} REDUX a trip, want {redux}")
-            if base["LOP3"] < 256 + 4 * redux:
-                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + 4 * redux}")
+            ncp = 16 if cp == 2 else 4
+            redux, red = (0, ncp) if cp == 3 else (ncp, 0)
+            if base["REDUX"] != redux or base["RED"] != red:
+                fails.append(f"{tag}: {base['REDUX']} REDUX and {base['RED']} RED a trip, want {redux} and {red}")
+            if base["LOP3"] < 256 + 4 * ncp:
+                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + 4 * ncp}")
             imad = sum(n for op, n in ops.items() if op == "IMAD")
             if imad < 256:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")

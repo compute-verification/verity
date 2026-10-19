@@ -1,12 +1,13 @@
 // RT2-HOPPER (note:20261019T1140Z-draft-rt2-hopper) on the H200 (sm_90a), two probes in one binary.
 //
 // `exact`: li's fold (segment._li_absorb: y <- (y ^ d0 ^ LK[c][h]) * LA[c][h] + d1, 8 chains a lane, li_entries) over U
-// units of 128 words a lane, with the warp checkpoint (the XOR of the warp's 8·32 chain states, redux.sync.xor) in three
+// units of 128 words a lane, with the warp checkpoint (the XOR of the warp's 8·32 chain states, redux.sync.xor) in four
 // placements: CP_SEG one a 128-word segment, lane 0 storing it (the design's LI-CP-W); CP_SEG4 the same, four
-// segments' words in one st.global.v4 (the cheapest store); CP_SET one a 32-word set (PouwWarpCheck_v1's spacing). Each
-// kernel's output is checked word for word against the host's reference (the same formulas), and clock.sh counts the
-// SASS of each kernel's unit loop (LOP3, IMAD, REDUX, the uniform-to-vector move, STG), which is the cheapest
-// bit-exact program found, a unit.
+// segments' words in one st.global.v4; CP_SET one a 32-word set (PouwWarpCheck_v1's spacing); CP_RED CP_SEG's word
+// reduced in memory (red.global.xor, no REDUX). Each kernel's output is checked word for word against the host's
+// reference (the same formulas; the run prints the reference's words, which ref_check.py recomputes through
+// segment.py), and clock.sh counts the SASS of each kernel's unit loop (LOP3, IMAD, REDUX, RED, the uniform-to-vector
+// move, STG), which is the cheapest bit-exact program found, a unit.
 //
 // `clock`: the SM clock under the honest mixed load, read inside the kernel: each block's clock64 and %globaltimer at
 // its start and end, so the clock is the block's cycles over its own nanoseconds (no launch or tail in it, unlike the
@@ -21,6 +22,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <vector>
 
 // ---- exact ---------------------------------------------------------------------------------------------------------
@@ -49,10 +51,12 @@ __host__ __device__ inline uint32_t xor8(const uint32_t (&y)[8]) {
   return y[0] ^ y[1] ^ y[2] ^ y[3] ^ y[4] ^ y[5] ^ y[6] ^ y[7];
 }
 
-enum { CP_SEG, CP_SEG4, CP_SET };
+// CP_RED: CP_SEG's word with the warp's XOR done by the memory system: every lane's red.global.xor.b32 of its 8 chains'
+// XOR into a zeroed word, one warp instruction (RED) where the others take REDUX, the uniform-to-vector move and a store.
+enum { CP_SEG, CP_SEG4, CP_SET, CP_RED };
 
 // One warp a block. words: U units x 32 lanes x 128 words (lane-major in a unit), st: 32 lanes x 8 starting states.
-// out: the checkpoints (CP_SEG, CP_SEG4: U; CP_SET: 4U), then each lane's final 8 states.
+// out (zeroed): the checkpoints (CP_SEG, CP_SEG4, CP_RED: U; CP_SET: 4U), then each lane's final 8 states.
 template <int CP>
 __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ words, const uint32_t* st, uint32_t* out,
                                                  int U) {
@@ -87,6 +91,7 @@ __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ word
         if (lane == 0) out[u] = r;
       }
       if constexpr (CP == CP_SEG4) keep[j] = __reduce_xor_sync(0xffffffffu, xor8(y));
+      if constexpr (CP == CP_RED) atomicXor(&out[u], xor8(y));
     }
     if constexpr (CP == CP_SEG4)
       if (lane == 0) reinterpret_cast<uint4*>(out)[u4] = make_uint4(keep[0], keep[1], keep[2], keep[3]);
@@ -131,13 +136,22 @@ static int run_exact(int U) {
   cudaMalloc(&dout, (4 * U + 256) * 4);
   cudaMemcpy(dw, w.data(), nw * 4, cudaMemcpyHostToDevice);
   cudaMemcpy(dst, st.data(), 256 * 4, cudaMemcpyHostToDevice);
+  // the reference's words, for ref_check.py to recompute through segment.py's own _li_absorb and warp_checkpoint
+  auto list = [](const std::vector<uint32_t>& v) {
+    std::string s = "[";
+    for (size_t i = 0; i < v.size(); i++) s += (i ? "," : "") + std::to_string(v[i]);
+    return s + "]";
+  };
+  printf("{\"probe\": \"ref\", \"units\": %d, \"seed\": %llu, \"cp_seg\": %s, \"cp_set\": %s, \"final\": %s}\n", U,
+         0x5EED2026ull, list(cp_seg).c_str(), list(cp_set).c_str(), list(y).c_str());
   int bad = 0;
-  const char* names[3] = {"li_exact<CP_SEG>", "li_exact<CP_SEG4>", "li_exact<CP_SET>"};
-  for (int cp = 0; cp < 3; cp++) {
+  const char* names[4] = {"li_exact<CP_SEG>", "li_exact<CP_SEG4>", "li_exact<CP_SET>", "li_exact<CP_RED>"};
+  for (int cp = 0; cp < 4; cp++) {
     cudaMemset(dout, 0, (4 * U + 256) * 4);
     if (cp == 0) li_exact<CP_SEG><<<1, 32>>>((const uint4*)dw, dst, dout, U);
     if (cp == 1) li_exact<CP_SEG4><<<1, 32>>>((const uint4*)dw, dst, dout, U);
     if (cp == 2) li_exact<CP_SET><<<1, 32>>>((const uint4*)dw, dst, dout, U);
+    if (cp == 3) li_exact<CP_RED><<<1, 32>>>((const uint4*)dw, dst, dout, U);
     cudaError_t e = cudaDeviceSynchronize();
     const int ncp = cp == 2 ? 4 * U : U;
     std::vector<uint32_t> got(ncp + 256);
