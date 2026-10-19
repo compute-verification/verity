@@ -2,10 +2,11 @@
 # session.cu before and after libvc's device functions (`../lib/vc_device.cuh`) on one leased GPU (cwd = the source tree):
 # both, and libvc, built for this node's GPU outside the lease (the before's text shipped as inputs/session_base.cu,
 # origin/main's), then under one lease libvc's conformance (`../lib/conformance.py`), memory accounting's pass gate on the
-# after (`inplace_gate.py --no-timing`: every receipt, root,
-# kept level and opening against the driver's reference), the in-place pass of both interleaved at 8B (`ab_pass.py`), and
-# the served pass (`pass_bench.py`: rs_pass and the chained passes, each root against reader.cu's unfused tree) after,
-# before, after. A gate that fails ends the lease before anything is timed. STEPS=prof: `profile_pass.py`'s timings of
+# after (`inplace_gate.py --no-timing`: every receipt, root, kept level and opening of its small passes against the
+# driver's reference), the in-place pass of both interleaved at 8B (`ab_pass.py`), and the serving path's pass kernels
+# over a synthetic 16 GiB store, not a served run (`pass_bench.py`: rs_pass and the chained passes, each root against
+# reader.cu's unfused tree) after, before, after. A gate that fails ends the lease before anything is timed. STEPS=prof:
+# `profile_pass.py`'s timings of
 # both builds, then one launch of each kernel under ncu (kernel replay, clocks as they run). Results go to $OUT.
 #
 #   git show origin/main:benchmarks/remote_session/session.cu > /tmp/session_base.cu
