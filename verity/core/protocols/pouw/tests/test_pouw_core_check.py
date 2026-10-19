@@ -289,7 +289,7 @@ def test_canonical_json_is_leans():
 #: the refusal each pass mutation aims at: (code, the reason's start), or the honest pass's ``how`` (a reading both sides
 #: share)
 PASS_EXPECT = {
-    "honest": {"coin", "recorded beacon"}, "spaced-hex": {"coin", "recorded beacon"},
+    "honest": {"coin", "recorded beacon", "certifier"}, "spaced-hex": {"coin", "recorded beacon", "certifier"},
     "no-pass": ("coin", "the window names no pass"), "not-utf8": ("manifest", "the pass's manifest is not a JSON object"),
     "not-json": ("manifest", "the pass's manifest is not a JSON object"),
     "not-object": ("manifest", "the pass's manifest is not a JSON object"),
@@ -314,10 +314,17 @@ PASS_EXPECT = {
     "coin-tampered": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
     "coin-path": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
     "coin-early": ("coin", "the salt's coin was not opened after what the verifier recorded"),
-    "resalted": ("coin", "the pass's salt is not its"), "salt-missing": ("coin", "the pass's salt is not its"),
+    "resalted": ("coin", "the pass's salt is not "), "salt-missing": ("coin", "the pass's salt is not "),
     "beacon-empty": ("manifest", "the recorded pass's beacon is not nonempty hex"),
     "no-beacon": ("coin", "the recorded pass has no beacon"),
     "not-named": ("manifest", "the pass is not the one the window's parameters name"),
+    "certified-unread": ("coin", f"the pass's manifest is {CC.MANIFEST_CERTIFIED}, salted by the network certifier"),
+    "uncertified-pass": ("coin", "schema 'verity-vllm/pouw-pearl-c-run/v"),
+    "reveal-size": ("coin", "the verifier's reveal is not a 64-byte salt"),
+    "no-window": ("coin", "the window's context names no PoUW window"),
+    "other-window": ("coin", "the pass's salt is not the certifier's for its window"),
+    "other-reveal": ("coin", "the pass's salt is not the certifier's for its window"),
+    "raw-reveal": ("coin", "the pass's salt is not the certifier's for its window"),
 }
 
 DRAW_EXPECT = {
@@ -345,6 +352,17 @@ def test_every_pass_mutation_hits_its_refusal():
                 assert refused is None and how in want, (name, seed, refused)
             else:
                 assert refused is not None and refused[0] == want[0] and refused[1].startswith(want[1]), (name, seed, refused)
+
+
+def test_each_honest_pass_is_had_as_it_was_salted():
+    """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
+    recorded replay's beacon, or the network certifier's reveal."""
+    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier"}
+    for kind, how in want.items():
+        for seed in range(6):
+            case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
+            assert (case["reveal"] is not None) == (kind == "certified")
+            assert CC.pass_epoch(*passes.pass_args(case)) == (how, None), (kind, seed)
 
 
 def test_every_draw_mutation_hits_its_refusal():

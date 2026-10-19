@@ -12,8 +12,9 @@ generates (honest openings of a call's tile or the filler's, and one mutation ea
 both sides share), compared output for output: null, or the same reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
-`pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
-mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
+`pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's and a certified window's, and
+honest draws, then one mutation each aimed at every refusal), compared output for output: how the salt was had, or the
+same refusal.
 """
 from __future__ import annotations
 
@@ -189,7 +190,7 @@ def test_pass_and_draw(pass_server):
                      for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
     print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
-    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon"}
+    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier"}
     assert "draw accept" in PASSED and len(PASSED) > 40
     for seed in range(4):   # `COIN_EARLY`'s draws: accepted only as a replay of a recorded run, by both sides
         early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)

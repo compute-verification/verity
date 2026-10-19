@@ -1,10 +1,11 @@
 """The pass and draw difftest's cases: `core_check.pass_epoch`'s arguments, ``{"coins", "raw": hex | null, "context",
-"recorded"}``, and `core_check.draw`'s, ``{"coins", "recorded", "opening", "stream", "registration", "receipt", "k",
-"population", "units"}``.
+"recorded", "reveal": hex | null}``, and `core_check.draw`'s, ``{"coins", "recorded", "opening", "stream",
+"registration", "receipt", "k", "population", "units"}``.
 
 A pass case is an honest pass (a small workload, its weights' roots, an epoch's coins committed under one of
-`core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, or a recorded pass salted by a beacon), then
-one mutation (`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin opened
+`core_check.COIN_VERSIONS` and its salt coin opened after the weights' root, a recorded pass salted by a beacon, or a
+certified pass salted by the network certifier's reveal for the PoUW window its context names), then one mutation
+(`PASS_MUTATIONS`) aimed at one refusal of `pass_epoch`.  A draw case is an honest draw (the draw coin opened
 after a registration's digest, the units `stream_subset` of its key's stream), then one mutation (`DRAW_MUTATIONS`).
 `tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
@@ -17,6 +18,7 @@ import random
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import tagged
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
@@ -62,13 +64,19 @@ def _raw(man: dict, rng: random.Random) -> bytes:
 
 
 def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
-    """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay) or
-    ``beacon`` (a recorded pass's), as a case with its manifest and the challenger beside it."""
-    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon"])
+    """An honest pass: ``coin`` (the current coins), ``recorded-coin`` (the e2e-service passes' coins, in a replay),
+    ``beacon`` (a recorded pass's) or ``certified`` (salted by the network certifier's reveal for its PoUW window, which
+    the verifier holds), as a case with its manifest and the challenger beside it."""
+    kind = kind or rng.choice(["coin", "coin", "recorded-coin", "beacon", "certified"])
     us, weights = _workload(rng)
     man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": us, "weights": weights, "run": f"r-{rng.randrange(1 << 30):x}"}
     roots = _roots(man)
-    if kind == "beacon":
+    reveal = window = None
+    if kind == "certified":
+        reveal, window = rng.randbytes(PS.SALT_BYTES), rng.choice([0, 1, rng.randrange(1 << 64), (1 << 64) - 1])
+        man.update(schema=CC.MANIFEST_CERTIFIED, salt=PS.pouw_salt(reveal, window).hex())
+        ch = Coins(rng, rng.randrange(4))
+    elif kind == "beacon":
         beacon = rng.randbytes(32)
         salt = derive(beacon, SALT_DOMAIN, {"weights": CC.weights_root(Co.SCHEME, roots)}).stream("salt", 32)
         man.update(schema=CC.MANIFEST_RECORDED, beacon=beacon.hex(), salt=salt.hex())
@@ -80,8 +88,15 @@ def honest_pass(rng: random.Random, kind: str | None = None) -> dict:
         salt = derive(bytes.fromhex(opening["coin"]), EPOCH_SALT_DOMAIN, {"epoch": ch.epoch, "coins": ch.tree.commitment.root,
                                                                           "weights": root}).stream("salt", 32)
         man.update(coins=ch.commitment, salt_opening=opening, salt=salt.hex())
-    case = {"coins": ch.commitment, "recorded": kind != "coin" or rng.random() < 0.3, "run": man["run"]}
+    case = {"coins": ch.commitment, "recorded": kind not in ("coin", "certified") or rng.random() < 0.3, "run": man["run"],
+            "prefix": f"served-zk/{man['run']}", "window": window, "reveal": None if reveal is None else reveal.hex()}
     return {"case": case, "man": man, "ch": ch, "kind": kind}
+
+
+def _context(case: dict, digest: str) -> str:
+    """The window's context: the pass's prefix, a certified window's PoUW window (`salt.context`), and the digest."""
+    w = case["window"]
+    return f"{case['prefix']}/{digest}" if w is None else f"{case['prefix']}/{PS.WINDOW_SEGMENT}/{w}/{digest}"
 
 
 def _flip(h: str) -> str:
@@ -207,8 +222,22 @@ def _mutate_pass(h: dict, name: str, rng: random.Random) -> bytes | None:
             man.pop("beacon")
         case "not-named":
             raw = _raw(man, rng)
-            case["context"] = f"served-zk/{case['run']}/{hashlib.sha512(raw + b' ').hexdigest()}"
+            case["context"] = _context(case, hashlib.sha512(raw + b' ').hexdigest())
             return raw
+        case "certified-unread":
+            case["reveal"] = None
+        case "uncertified-pass":
+            case["reveal"] = rng.randbytes(PS.SALT_BYTES).hex()
+        case "reveal-size":
+            case["reveal"] = rng.randbytes(rng.choice([0, 32, 63, 65, 128])).hex()
+        case "no-window":
+            case["window"] = None if rng.random() < 0.5 else rng.choice([f"0{case['window']}", "-1", "x", "", str(1 << 64)])
+        case "other-window":
+            case["window"] = (case["window"] + rng.choice([1, -1, 1 << 32])) % (1 << 64)
+        case "other-reveal":
+            case["reveal"] = rng.randbytes(PS.SALT_BYTES).hex()
+        case "raw-reveal":
+            man["salt"] = case["reveal"]
         case "spaced-hex":
             w = rng.choice(list(man["weights"]))
             r = man["weights"][w]["root"]
@@ -233,26 +262,31 @@ PASS_MUTATIONS = {
     "coin-foreign": ("coin", "recorded-coin"), "coin-tampered": ("coin", "recorded-coin"),
     "coin-path": ("coin", "recorded-coin"), "coin-early": ("coin", "recorded-coin"), "resalted": None, "salt-missing": None,
     "beacon-empty": ("beacon",), "no-beacon": ("beacon",), "not-named": None, "spaced-hex": None,
+    "certified-unread": ("certified",), "uncertified-pass": ("coin", "recorded-coin", "beacon"),
+    "reveal-size": ("certified",), "no-window": ("certified",), "other-window": ("certified",),
+    "other-reveal": ("certified",), "raw-reveal": ("certified",),
 }
 PASS_NAMES = list(PASS_MUTATIONS)
 
 
-def pass_instance(rng: random.Random, name: str = "honest") -> dict:
-    """One `pass_epoch` case: an honest pass, then mutation `name` (on a pass of a kind it applies to)."""
+def pass_instance(rng: random.Random, name: str = "honest", kind: str | None = None) -> dict:
+    """One `pass_epoch` case: an honest pass (of `kind`, by default any), then mutation `name` (on a pass of a kind it
+    applies to)."""
     kinds = PASS_MUTATIONS.get(name)
-    h = honest_pass(rng, rng.choice(kinds) if kinds else None)
+    h = honest_pass(rng, kind or (rng.choice(kinds) if kinds else None))
     case = h["case"]
     raw = _raw(h["man"], rng) if name == "honest" else _mutate_pass(h, name, rng)
     if raw is None:
-        context = f"served-zk/{case['run']}/{'0' * 128}"
+        context = _context(case, "0" * 128)
     else:
-        context = case.get("context") or f"served-zk/{case['run']}/{hashlib.sha512(raw).hexdigest()}"
+        context = case.get("context") or _context(case, hashlib.sha512(raw).hexdigest())
     return {"coins": case["coins"], "raw": None if raw is None else raw.hex(), "context": context,
-            "recorded": case["recorded"]}
+            "recorded": case["recorded"], "reveal": case["reveal"]}
 
 
 def pass_args(case: dict) -> tuple:
-    return (case["coins"], None if case["raw"] is None else bytes.fromhex(case["raw"]), case["context"], case["recorded"])
+    return (case["coins"], None if case["raw"] is None else bytes.fromhex(case["raw"]), case["context"], case["recorded"],
+            None if case.get("reveal") is None else bytes.fromhex(case["reveal"]))
 
 
 def _receipt(rng: random.Random, reg: str) -> dict:
