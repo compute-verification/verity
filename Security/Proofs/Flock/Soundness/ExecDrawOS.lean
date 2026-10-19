@@ -401,6 +401,13 @@ def runOS {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 2
   | some (some d, _) => some d
   | _ => none
 
+/-- **The draw's escape test at `B`**: on the bytes `f`, the live draw runs and draws no unit of `B`. The soundness
+bounds read the verifier's bytes only through it (`execOS_escape_le_of`), so A3 per test
+(`Assumptions.UniformRandomBytesTest`) is taken at it, at every `B`. -/
+def escapeTest {L : Fin m → ℕ} (law : Flock.Draw.Law) (pop : ℕ) (B : Finset (Fin n))
+    (f : (i : Fin m) → Fin (L i) → Fin 256) : Prop :=
+  ∃ d, runOS f law pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units
+
 theorem runOS_strata {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 256) (strata : Array Flock.Draw.Stratum)
     (law : Flock.Draw.Law) (pop : ℕ) (d : Flock.Draw.UnitDraw)
     (hlaw : ∀ (get : ℕ → ℕ → StateT (ℕ → ℕ) Option ByteArray) (s : ℕ → ℕ), ∃ g : Array ℕ → Flock.Draw.UnitDraw,
