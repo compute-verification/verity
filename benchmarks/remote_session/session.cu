@@ -16,7 +16,9 @@
 //                    a shard under the pass's constants (`rs_subtrees`)
 //   in place         a store where its tensors hold it (vLLM's weights and KV pages, `device.InPlace`): a plan's
 //                    positions mapped to their blocks' device addresses and store indices (`rs_map`), then their
-//                    receipts read through the map (`rs_mapped_receipts`), whose leaves and levels are reader.cu's
+//                    receipts read through the map and the receipt tree hashed behind them as `rs_pass` hashes it, the
+//                    last leaf short and the padding to the tree's width included (`rs_mapped_pass`); an opening's
+//                    subtree is its receipts (`rs_mapped_receipts`) and reader.cu's leaves and levels
 //
 // A store spans the visible GPUs, a contiguous shard of whole chunks on each, and the receipt tree is the one over the
 // whole store in block order (`receipts.tree`): every position, leaf and node index is the store's. One library serves
@@ -26,64 +28,61 @@
 //
 // rb_set takes the payload tree's constants as it takes a pass's: row_prefix = sha512_row_v2_prefix(32768), the
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
+//
+// The SHA-512 compressions, the row/v2 digests of the receipt tree's leaves, the hm96 leaf after its salt and the
+// frame-v3 leaf, pad and node of these kernels are libvc's device functions (`../hash/lib/vc_device.cuh`), from
+// constants beside kC: kVL (libvc's LeafK: the frame leaf's and pad's templates under the pass's domain, the salt and
+// leaf prefixes' midstates, the fixed padding blocks scheduled), kNodeTpl (a node's last two blocks) and gNib (M_key's
+// nibble table). rb_set, rb_chain_set and rb_chain here are reader.cu's (renamed *_reader) that also set them, rb_chain
+// completing a chained pass's kVL on the device from the domain id it made. reader.cu's own kernels (rb_leaves, rb_pads,
+// rb_tree and level_kernel) keep its code: the unfused tree they hash is the fused one's cross-check.
+#include "../hash/lib/vc_device.cuh"
+#define rb_set rb_set_reader
+#define rb_chain_set rb_chain_set_reader
+#define rb_chain rb_chain_reader
 #include "../codec_tensor/reader.cu"
+#undef rb_set
+#undef rb_chain_set
+#undef rb_chain
 
 namespace rb {
 
-// The hm96 leaf over x (a row's sha512/row/v2 digest) at position c, salted by salt_of(c): reader.cu's leaves_kernel
-// after its row hash, for a row of any length.
+__constant__ vc::LeafK kVL;
+__constant__ u64 kNodeTpl[vc::MAX_NB][32];
+__device__ __align__(16) uint8_t gNib[vc::TN_BYTES];
+__device__ vc::LeafK gVL;   // a chained pass's kVL, completed by vl_chain_kernel and copied into kVL
+
+// The hm96 leaf over x (a row's sha512/row/v2 digest) at position c, salted by salt_of(c), and its frame-v3 leaf:
+// reader.cu's leaves_kernel after its row hash, for a row of any length. Positions are below 2^32 (rb_set).
 __device__ __forceinline__ void hm96_leaf(u64 c, const u64 (&x)[8], u64 (&d)[8]) {
-  u64 S[24], w[16];
-  salt_of(c, S);
-  u32 Ys[48];
+  u64 Y[24], my[8], cd[8];
+  salt_of(c, Y);
 #pragma unroll
-  for (int i = 0; i < 24; ++i) Ys[2 * i] = (u32)S[i], Ys[2 * i + 1] = (u32)(S[i] >> 32);
-  u32 M[16];
-#pragma unroll
-  for (int o = 0; o < 16; ++o) M[o] = 0;
-#pragma unroll 1
-  for (int b = 0; b < 32; ++b) {
-    u32 kb[63];
-#pragma unroll
-    for (int u = 0; u < 63; ++u) kb[u] = __funnelshift_r(kC.key[u], kC.key[u + 1], b);
-#pragma unroll
-    for (int o = 0; o < 16; ++o) {
-      u32 acc = 0;
-#pragma unroll
-      for (int v = 0; v < 48; ++v) acc ^= kb[o + v] & Ys[v];
-      M[o] |= (u32)(__popc(acc) & 1) << b;
-    }
-  }
-  u64 cd[8], val[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) cd[i] = kC.salt_mid[i];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = bswap64(S[i]);
-  sha512_compress(cd, w);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = i < 8 ? bswap64(S[16 + i]) : 0;
-  w[8] = 0x80ULL << 56, w[15] = (u64)(128 + SALT) * 8;
-  sha512_compress(cd, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) val[i] = kC.leaf_mid[i];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) w[i] = x[i] ^ bswap64(((u64)M[2 * i + 1] << 32) | M[2 * i]), w[8 + i] = cd[i];
-  sha512_compress(val, w);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = 0;
-  w[0] = 0x80ULL << 56, w[15] = 256 * 8;
-  sha512_compress(val, w);
-  Msg<32> msg;
-  int done = 0;
-#pragma unroll
-  for (int i = 0; i < 8; ++i) d[i] = kSha512Iv[i];
-  put_head(msg, HEAD_LEAF);
-  put_uint(msg, c);
-  put_uint(msg, c);
-  flush_block(msg, d, done);
-  put_schema(msg);
-  put_digest(msg, val);
-  sha512_finish(msg, d, done);
+  for (int i = 0; i < 24; ++i) Y[i] = bswap64(Y[i]);
+  u32 m[16];
+  vc::mask_nib(gNib, Y, m);
+  vc::mask_words(m, my);
+  vc::salt_digest(kVL, Y, cd);
+  vc::frame_first_rt(kVL, c, d);
+  vc::finish_leaf<0, true>(kVL, c, x, my, cd, d, nullptr, nullptr);
+}
+
+// node(h, i, L, R) under the pass's domain (reader.cu's node_digest)
+__device__ __forceinline__ void node_of(int h, u64 i, const u64 *L, const u64 *R, u64 (&d)[8]) {
+  vc::node_rt_from<false>(kNodeTpl, kC.node_mid[h], i, L, R, d);
+}
+
+// A chained pass's kVL from the domain id and schema chain_kernel left in g_stage: thread t < MAX_NB the frame leaf's
+// template for len(uint(pos)) = t + 1 (thread 0 then fl_m15 from its own), thread MAX_NB + t the pad's; gVL's other
+// fields are rb_chain_set's.
+__global__ void __launch_bounds__(2 * vc::MAX_NB) vl_chain_kernel() {
+  uint8_t did[64], schema[32];
+  const int at = g_stage.head_len[HEAD_LEAF] - 64, nb = threadIdx.x % vc::MAX_NB + 1;
+  for (int i = 0; i < 64; ++i) did[i] = (uint8_t)(g_stage.head[HEAD_LEAF][(at + i) >> 3] >> (56 - 8 * ((at + i) & 7)));
+  for (int i = 0; i < 32; ++i) schema[i] = (uint8_t)(g_stage.schema[i >> 3] >> (56 - 8 * (i & 7)));
+  if (threadIdx.x < vc::MAX_NB) vc::leaf_frame_nb(did, schema, g_stage.schema_len, nb, gVL);
+  else vc::pad_tpl_nb(did, nb, gVL);
+  if (!threadIdx.x) vc::leaf_m15(gVL);
 }
 
 // Payload leaves [c0, c0 + n) from their blocks (data, leaf c0's first), into dig.
@@ -193,7 +192,7 @@ __device__ __forceinline__ void sk16_tile_of(Load load, Index index, u64 n, u64 
     w[9] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK_ROWS) * 8;
 #pragma unroll
     for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
-    sha512_compress(s, w);
+    sha::compress(s, w);
 #pragma unroll
     for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
   }
@@ -468,19 +467,8 @@ __global__ void wait_kernel(const unsigned *flag, unsigned want) {
 // Y is read through the non-coherent cache: the consumer reads a group's receipts only once the group is counted, and
 // a tile's receipts are whole cache lines, so no line of them is cached before it is written.
 __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 (&d)[8]) {
-  u64 x[8], w[16];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
-#pragma unroll 1
-  for (int blk = 0; blk < 9; ++blk) {
-#pragma unroll
-    for (int i = 0; i < 16; ++i) {
-      const int q = 16 * blk + i;
-      w[i] = q < 8 * PER_LEAF ? __ldg(Y + q) : q == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
-    }
-    if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
-    sha512_compress(x, w);
-  }
+  u64 x[8];
+  vc::hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kVL.kw_xpad);
   hm96_leaf(c, x, d);
 }
 
@@ -568,7 +556,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
       const u64 m = leaves >> (h + 1), i0 = (base_leaf + c0 + first) >> (h + 1);
       for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
         u64 d[8];
-        node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
+        node_of(h, i0 + j, in + 16 * j, in + 16 * j + 8, d);
 #pragma unroll
         for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
       }
@@ -593,11 +581,164 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
         u64 *level_out = kept + 8 * (pass_kept_at(nl, h0, h + 1) + (c0 >> (h + 1)));
         for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
           u64 d[8];
-          node_digest(kC.node_mid[h], i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
+          node_of(h, i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
 #pragma unroll
           for (int x = 0; x < 8; ++x) level_out[8 * j + x] = d[x];
         }
         __syncthreads();
+      }
+    }
+    __syncthreads();   // before the next claim rewrites `claimed` and the staging
+  }
+}
+
+// The in-place pass (`rs_mapped_pass`) counts its tiles in groups of CONSUMER_READY_BLOCKS positions, the last group
+// what is left; mapped_pass_tile is pass_tile through the map.
+constexpr unsigned MAPPED_READY_TILES = CONSUMER_READY_BLOCKS / 32;
+
+__device__ __forceinline__ void mapped_pass_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                 const u32 *sg, int *S, u64 *ys, unsigned *ready, unsigned tile,
+                                                 int lane) {
+  sk16_mapped_tile(addrs, js, n, (u64)tile * 32, sg, S, ys, lane);
+  __threadfence();
+  __syncwarp();
+  if (!lane) atomicAdd(ready + tile / MAPPED_READY_TILES, 1u);
+}
+
+// sketch16_pass_kernel through the map.
+__global__ void __launch_bounds__(32 * SK16_WARPS, 2) mapped16_pass_kernel(const u64 *__restrict__ addrs,
+                                                                           const u64 *__restrict__ js, u64 n,
+                                                                           const u32 *__restrict__ pk,
+                                                                           u64 *__restrict__ ys, unsigned *ctr,
+                                                                           unsigned *started) {
+  __shared__ u32 sg[SK16_PACK];
+  __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
+  if (!threadIdx.x) atomicExch(started, 1u);
+  sk16_prologue(sg, pk);
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  const u64 tiles = (n + 31) / 32;
+  for (;;) {
+    unsigned tile = 0;
+    if (!lane) tile = atomicAdd(ctr, 1u);
+    tile = __shfl_sync(~0u, tile, 0);
+    if (tile >= tiles) break;
+    mapped_pass_tile(addrs, js, n, sg, st[warp], ys, ctr + 1, tile, lane);
+  }
+}
+
+// help_tile through the map, out of line for the same reason.
+__device__ __noinline__ void mapped_help_tile(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                              const u32 *pk, int *S, u64 *ys, unsigned *ctr, int lane) {
+  unsigned tile = 0;
+  if (!lane) tile = atomicAdd(ctr, 1u);
+  tile = __shfl_sync(~0u, tile, 0);
+  if (tile < (n + 31) / 32) mapped_pass_tile(addrs, js, n, pk, S, ys, ctr + 1, tile, lane);
+}
+
+// Leaf c of a pass of n positions from its receipts at Y (leaves_kernel's digest, the last leaf short), or past the
+// last leaf the padding leaf c (pads_kernel's). Y is read through the non-coherent cache, as pass_leaf reads it.
+__device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u64 n, u64 (&d)[8]) {
+  const u64 leaves = (n + PER_LEAF - 1) / PER_LEAF;
+  if (c >= leaves) {
+    vc::pad_rt(kVL, c, d);
+    return;
+  }
+  const int m = c + 1 < leaves ? PER_LEAF : (int)(n - PER_LEAF * c);
+  u64 x[8];
+  if (m == PER_LEAF) vc::hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kVL.kw_xpad);
+  else vc::hash_words(kC.row_mid_last, 128, Y, 8 * m, x, nullptr);
+  hm96_leaf(c, x, d);
+}
+
+// The in-place pass's receipt tree behind its receipts (`rs_mapped_pass`), pass_consumer_kernel's protocol over a
+// pass of n positions, its ⌈n / 16⌉ leaves padded to 2^H. ctr holds the next tile, each group's counted tiles, the next
+// subtree to claim, the receipt grid's started flag and, for each node above level h0, its children done. A CTA claims
+// the next 2^h0-leaf subtree, the padding's first (they wait on nothing), waits as pass_consumer_kernel does until the
+// group holding it is counted, hashes its leaves (`mapped_leaf`) and its levels below h0 in shared memory and keeps
+// its root; then one thread climbs, hashing each node whose other child is done, up to the root. kept is level h at
+// the sum of 2^(H − g) over h0 <= g < h, the root last.
+__global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const u64 *__restrict__ addrs,
+                                                                           const u64 *__restrict__ js, u64 n,
+                                                                           const u32 *__restrict__ pk, u64 *ys,
+                                                                           unsigned *ctr, u64 *kept, int h0, int H) {
+  extern __shared__ __align__(16) u64 scratch[];
+  __shared__ unsigned claimed;
+  const u64 leaves = 1ULL << h0, nl = (n + PER_LEAF - 1) / PER_LEAF, width = 1ULL << H;
+  const u64 subtrees = width >> h0, real = (nl + leaves - 1) >> h0, tiles = (n + 31) / 32;
+  unsigned *ready = ctr + 1, *claim = ready + (n + CONSUMER_READY_BLOCKS - 1) / CONSUMER_READY_BLOCKS;
+  const unsigned *started = claim + 1;
+  unsigned *arrived = claim + 2;
+  const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
+  bool live = false;   // a receipt CTA has started (lane 0's; it stays set for the pass)
+  for (;;) {
+    if (!threadIdx.x) claimed = atomicAdd(claim, 1u);
+    __syncthreads();
+    const u64 k = claimed;
+    if (k >= subtrees) return;
+    const u64 q = k < subtrees - real ? real + k : k - (subtrees - real), first = q << h0;
+    if (q < real) {
+      const u64 g = first * PER_LEAF / CONSUMER_READY_BLOCKS, left = tiles - g * MAPPED_READY_TILES;
+      const unsigned want = left < MAPPED_READY_TILES ? (unsigned)left : MAPPED_READY_TILES;
+      for (;;) {
+        int act = 0;   // 0: the group is counted, 1: take a tile, 2: wait
+        if (!lane && *(volatile const unsigned *)(ready + g) < want) {
+          live = live || *(volatile const unsigned *)started;
+          act = !live && *(volatile const unsigned *)ctr < tiles ? 1 : 2;
+        }
+        act = __shfl_sync(~0u, act, 0);
+        if (!act) break;
+        if (act == 2) {
+          __nanosleep(256);
+          continue;
+        }
+        mapped_help_tile(addrs, js, n, pk, reinterpret_cast<int *>(scratch) + warp * 32 * SK_ROWS, ys, ctr, lane);
+      }
+    }
+    __threadfence();
+    __syncthreads();   // the staging the warps computed tiles in is the leaves' buffer
+    u64 *in = scratch, *out = scratch + 8 * leaves;
+    for (u64 j = threadIdx.x; j < leaves; j += blockDim.x) {
+      u64 d[8];
+      mapped_leaf(ys + 8 * PER_LEAF * (first + j), first + j, n, d);
+#pragma unroll
+      for (int x = 0; x < 8; ++x) in[8 * j + x] = d[x];
+    }
+    __syncthreads();
+    for (int h = 0; h < h0; ++h) {
+      const u64 m = leaves >> (h + 1), i0 = first >> (h + 1);
+      for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
+        u64 d[8];
+        node_of(h, i0 + j, in + 16 * j, in + 16 * j + 8, d);
+#pragma unroll
+        for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
+      }
+      __syncthreads();
+      u64 *tmp = in;
+      in = out;
+      out = tmp;
+    }
+    if (!threadIdx.x) {
+      u64 at = q, d[8];
+#pragma unroll
+      for (int x = 0; x < 8; ++x) d[x] = in[x];
+      for (int h = h0;; ++h) {
+        u64 *node = kept + 8 * (pass_kept_at(width, h0, h) + at);
+#pragma unroll
+        for (int x = 0; x < 8; ++x) node[x] = d[x];
+        if (h == H) break;
+        __threadfence();
+        if (!atomicAdd(arrived + pass_kept_at(width, h0 + 1, h + 1) + (at >> 1), 1u)) break;
+        __threadfence();
+        const u64 *sib = kept + 8 * (pass_kept_at(width, h0, h) + (at ^ 1));
+        u64 L[8], R[8];
+#pragma unroll
+        for (int x = 0; x < 8; ++x) {
+          const u64 o = __ldcg(sib + x);
+          L[x] = at & 1 ? o : d[x];
+          R[x] = at & 1 ? d[x] : o;
+        }
+        at >>= 1;
+        node_of(h, at, L, R, d);
       }
     }
     __syncthreads();   // before the next claim rewrites `claimed` and the staging
@@ -632,7 +773,7 @@ __global__ void __launch_bounds__(TOP_THREADS) top_kernel(const TopSegs s, u64 *
   for (int h = hc; h < H; ++h) {
     for (u64 j = threadIdx.x; j < m / 2; j += blockDim.x) {
       u64 d[8];
-      node_digest(kC.node_mid[h], j, top + 8 * (in_at + 2 * j), top + 8 * (in_at + 2 * j + 1), d);
+      node_of(h, j, top + 8 * (in_at + 2 * j), top + 8 * (in_at + 2 * j + 1), d);
 #pragma unroll
       for (int x = 0; x < 8; ++x) top[8 * (in_at + m + j) + x] = d[x];
     }
@@ -669,22 +810,8 @@ __global__ void __launch_bounds__(128) subtree_leaves_kernel(const u64 *__restri
                                                              int h0, u64 n, u64 *__restrict__ nodes) {
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
   const u64 q = t >> h0, l = t & ((1ULL << h0) - 1), per = (2ULL << h0) - 2;
-  const u64 *Y = ys + t * PER_LEAF * 8;
-  u64 x[8], w[16];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
-#pragma unroll 1
-  for (int blk = 0; blk < 9; ++blk) {
-#pragma unroll
-    for (int i = 0; i < 16; ++i) {
-      const int k = 16 * blk + i;
-      w[i] = k < 8 * PER_LEAF ? Y[k] : k == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
-    }
-    if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
-    sha512_compress(x, w);
-  }
   u64 d[8];
-  hm96_leaf(c[q] + l, x, d);
+  pass_leaf(ys + t * PER_LEAF * 8, c[q] + l, d);
   if (tid < n)
 #pragma unroll
     for (int i = 0; i < 8; ++i) nodes[(q * per + l) * 8 + i] = d[i];
@@ -701,7 +828,7 @@ __global__ void __launch_bounds__(128) subtree_level_kernel(u64 *__restrict__ no
   u64 *nd = nodes + q * per * 8;
   const u64 *in = nd + 8 * (at + 2 * i);
   u64 d[8];
-  node_digest(kC.node_mid[h], (c[q] >> (h + 1)) + i, in, in + 8, d);
+  node_of(h, (c[q] >> (h + 1)) + i, in, in + 8, d);
 #pragma unroll
   for (int k = 0; k < 8; ++k) nd[8 * (at + (1ULL << (h0 - h)) + i) + k] = d[k];
 }
@@ -717,7 +844,72 @@ __global__ void __launch_bounds__(128) gather64_kernel(const u64 *__restrict__ a
 
 }  // namespace rb
 
+// libvc's constants beside reader.cu's: kVL's fixed fields (and with domain_id its frame templates), M_key's nibble
+// table and the node template, on stream s. The frame needs an 18-byte schema (hm96-sha512/row/v2) and positions
+// below 2^36, so every leaf, pad and node index is below 2^32.
+static int vl_set(vc::LeafK &K, const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key,
+                  const uint8_t *domain_id, const uint8_t *schema, int schema_len, uint64_t positions, cudaStream_t s) {
+  static uint8_t tab[vc::TN_BYTES];
+  static u64 tpl[vc::MAX_NB][32];
+  if (!salt_prefix || !leaf_prefix || !key || !schema || schema_len != 18 || positions > (1ULL << 36)) return 1;
+  memset(&K, 0, sizeof K);
+  vc::midstate(salt_prefix, K.mid_salt);
+  vc::midstate(leaf_prefix, K.mid_leaf);
+  vc::pad_schedule(256, K.kw_leafpad);
+  vc::pad_schedule(128 + 64 * PER_LEAF, K.kw_xpad);
+  K.lb = 64 * PER_LEAF, K.xpad = 1;
+  if (domain_id) {
+    if (vc::leaf_frame(domain_id, schema, schema_len, K)) return 1;
+    vc::pad_tpls(domain_id, K);
+  }
+  for (u32 t = 0; t < 512; ++t) vc::nib_entry(key, t, tab);
+  if (vc::node_tpls(tpl)) return 1;
+  return cudaMemcpyToSymbolAsync(gNib, tab, sizeof tab, 0, cudaMemcpyHostToDevice, s) ||
+                 cudaMemcpyToSymbolAsync(kNodeTpl, tpl, sizeof tpl, 0, cudaMemcpyHostToDevice, s)
+             ? 4
+             : 0;
+}
+
 extern "C" {
+
+// reader.cu's rb_set, and kVL, gNib and kNodeTpl under the same constants.
+int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
+           const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
+           const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions,
+           cudaStream_t s) {
+  static vc::LeafK K;
+  if (!domain_id) return 1;
+  if (int e = vl_set(K, salt_prefix, leaf_prefix, key, domain_id, schema, schema_len, positions, s)) return e;
+  if (int e = rb_set_reader(receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, key, domain_id,
+                            schema, schema_len, salt_in, salt_in_len, positions, s))
+    return e;
+  return cudaMemcpyToSymbolAsync(kVL, &K, sizeof K, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
+}
+
+// reader.cu's rb_chain_set, and gVL's seed-free fields, gNib and kNodeTpl; rs_chain_prepare completes kVL from the
+// pass's seed.
+int rb_chain_set(const uint8_t *receipt_prefix, int receipt_at, const uint8_t *row_prefix,
+                 const uint8_t *row_prefix_last, const uint8_t *salt_prefix, const uint8_t *leaf_prefix,
+                 const uint8_t *key, const uint8_t *binding, int binding_len, int binding_at, const uint8_t *domain,
+                 int domain_len, int domain_at, const uint8_t *schema, int schema_len, const uint8_t *salt_in,
+                 int salt_in_len, int salt_at, uint64_t positions, cudaStream_t s) {
+  static vc::LeafK K;
+  if (int e = vl_set(K, salt_prefix, leaf_prefix, key, nullptr, schema, schema_len, positions, s)) return e;
+  if (int e = rb_chain_set_reader(receipt_prefix, receipt_at, row_prefix, row_prefix_last, salt_prefix, leaf_prefix,
+                                  key, binding, binding_len, binding_at, domain, domain_len, domain_at, schema,
+                                  schema_len, salt_in, salt_in_len, salt_at, positions, s))
+    return e;
+  return cudaMemcpyToSymbolAsync(gVL, &K, sizeof K, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
+}
+
+// reader.cu's rb_chain, then kVL completed from the domain id it made (`vl_chain_kernel`), on stream s.
+int rb_chain(const uint8_t *seed, cudaStream_t s) {
+  if (int e = rb_chain_reader(seed, s)) return e;
+  vl_chain_kernel<<<1, 2 * vc::MAX_NB, 0, s>>>();
+  void *vl = nullptr;
+  if (cudaGetLastError() || cudaGetSymbolAddress(&vl, gVL)) return 4;
+  return cudaMemcpyToSymbolAsync(kVL, vl, sizeof(vc::LeafK), 0, cudaMemcpyDeviceToDevice, s) ? 4 : 0;
+}
 
 int rs_payload_leaves(const void *data, uint64_t c0, uint64_t n, uint64_t *dig, cudaStream_t s) {
   if (!data || !dig || n < 1) return 1;
@@ -909,14 +1101,16 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 }
 
 // The consumer CTAs of a pass beside a receipt grid of ctas CTAs, by both kernels' occupancy (an SM holds occ_p receipt
-// CTAs or occ_c consumer CTAs): `side` as many as fit in what the receipt grid leaves of the device, at least one an SM,
-// and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends. Neither count bounds
-// progress (`pass_consumer_kernel`); together they are what the device holds once the reads are done.
-static int pass_consumers(int ctas, size_t shared, uint64_t subtrees, uint64_t *side, uint64_t *tail) {
+// CTAs of `producer` or occ_c CTAs of `consumer`): `side` as many as fit in what the receipt grid leaves of the device,
+// at least one an SM, and `tail` the rest of a full device, which take the slots the receipt grid frees when it ends.
+// Neither count bounds progress (`pass_consumer_kernel`); together they are what the device holds once the reads are
+// done.
+static int pass_consumers(const void *producer, const void *consumer, int ctas, size_t shared, uint64_t subtrees,
+                          uint64_t *side, uint64_t *tail) {
   int dev, sms, occ_p, occ_c;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, sketch16_pass_kernel, 32 * SK16_WARPS, 0) ||
-      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, pass_consumer_kernel, CONSUMER_THREADS, shared) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, producer, 32 * SK16_WARPS, 0) ||
+      cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_c, consumer, CONSUMER_THREADS, shared) ||
       occ_p < 1 || occ_c < 1)
     return 4;
   const int64_t all = (int64_t)sms * occ_c, fit = all - ((int64_t)ctas * occ_c + occ_p - 1) / occ_p;
@@ -977,7 +1171,8 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   if (fused) {
     if (consumers)
       side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
-    else if ((rc = pass_consumers(ctas, shared, groups, &side, &tail)))
+    else if ((rc = pass_consumers((const void *)sketch16_pass_kernel, (const void *)pass_consumer_kernel, ctas, shared,
+                                  groups, &side, &tail)))
       return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
@@ -1030,6 +1225,57 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   }
   if (cudaEventRecord(end[dev], sb) || cudaStreamWaitEvent(sa, end[dev], 0)) return 4;
   return cudaGetLastError() ? 4 : 0;
+}
+
+// The in-place pass (`InPlace.run_pass`) as rs_pass runs a shard's: positions 0 … n − 1, each read where rs_map's
+// addrs puts it and hashed at its js, their receipts into ys (n × 8 words) by one persistent grid of ctas CTAs on sa
+// (`mapped16_pass_kernel`; 0: one an SM), and the receipt tree behind them by persistent consumer grids
+// (`mapped_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and one behind it on sa, so the tree
+// follows the reads with no kernel boundary. The tree is `receipts.tree`'s under the pass's constants set: ⌈n / 16⌉
+// leaves, the last short, padded to 2^H leaves (H the least that holds them). Its levels h0 … H (h0 <= min(H, 8)) go
+// to kept, 2^(H − h0 + 1) − 1 digests, level h at the sum of 2^(H − g) over h0 <= g < h, the root last; levels below
+// h0 are not kept. ctr is scratch of ctr_words >= 2 + ⌈n / CONSUMER_READY_BLOCKS⌉ + 2^(H − h0) words. sa waits for the
+// whole pass before anything queued on it after.
+int rs_mapped_pass(const uint64_t *addrs, const uint64_t *js, uint64_t n, const uint32_t *pk, unsigned *ctr,
+                   uint64_t ctr_words, uint64_t *ys, uint64_t *kept, int h0, int ctas, cudaStream_t sb,
+                   cudaStream_t sa) {
+  constexpr int DEVICES = 64;
+  static cudaEvent_t go[DEVICES], end[DEVICES];
+  static bool made[DEVICES];
+  int dev;
+  if (cudaGetDevice(&dev) || dev < 0 || dev >= DEVICES) return 4;
+  if (!made[dev]) {
+    if (cudaEventCreateWithFlags(&go[dev], cudaEventDisableTiming) ||
+        cudaEventCreateWithFlags(&end[dev], cudaEventDisableTiming))
+      return 4;
+    made[dev] = true;
+  }
+  if (!addrs || !js || !pk || !ctr || !ys || !kept || n < 1 || n >= (1ULL << 36) || h0 < 0 || h0 > 8 || ctas < 0)
+    return 1;
+  const uint64_t nl = (n + PER_LEAF - 1) / PER_LEAF;
+  int H = 0;
+  while ((1ULL << H) < nl) ++H;
+  if (h0 > H) return 1;
+  const uint64_t groups = (n + CONSUMER_READY_BLOCKS - 1) / CONSUMER_READY_BLOCKS, subtrees = 1ULL << (H - h0);
+  const uint64_t words = 2 + groups + subtrees;
+  if (ctr_words < words) return 1;
+  if (!ctas && cudaDeviceGetAttribute(&ctas, cudaDevAttrMultiProcessorCount, dev)) return 4;
+  const size_t tree_shared = 2 * (1ULL << h0) * 8 * sizeof(uint64_t);
+  const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
+  uint64_t side, tail;
+  int rc;
+  if ((rc = pass_consumers((const void *)mapped16_pass_kernel, (const void *)mapped_consumer_kernel, ctas, shared,
+                           subtrees, &side, &tail)))
+    return rc;
+  unsigned *started = ctr + 2 + groups;
+  if (cudaMemsetAsync(ctr, 0, 4 * words, sa) || cudaEventRecord(go[dev], sa) || cudaStreamWaitEvent(sb, go[dev], 0))
+    return 4;
+  mapped16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>(addrs, js, n, pk, ys, ctr, started);
+  mapped_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
+  if (tail)
+    mapped_consumer_kernel<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
+  if (cudaGetLastError() || cudaEventRecord(end[dev], sb) || cudaStreamWaitEvent(sa, end[dev], 0)) return 4;
+  return 0;
 }
 
 // The receipt tree's levels hc … H on this GPU (`top_kernel`, one CTA on s): level hc is the nsegs segments in order,

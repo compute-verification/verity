@@ -1,5 +1,6 @@
 """`paged.cu`'s launchers over torch tensors: a layer of vLLM's paged KV cache, plain or in kv.cu's codec, its decode
-attention, the append of a step's new tokens and the gather of whole pages.
+attention, the append of a step's new tokens, the gather of whole pages and a decode step's windows (`window`, what an
+attention that reads each request's window whole takes: the exact-int8 attention's).
 
 A layer's cache is vLLM's tensor ([blocks][KV heads][slots][K ‖ V] bf16, or the inner three in any order); `Layout`
 reads its physical strides. Codec indices use the registered store instead: after `store_base`, physical slot u and
@@ -8,7 +9,9 @@ layer l are the `store-order/v0` token-layer block u · layers + l.
 An encoded cache may hold plaintext slots (deferred residency, remote_bandwidth's PROTOCOL.md §4): a token-layer the
 remote audit appends is written as it is until its append coin arrives, then encoded in place. Its layer's flags, a
 uint8 a physical slot on the device (nonzero: plaintext), go to `attn` and `gather` as `plain`, which read such a slot as
-it is and give it no receipt; `append` and `table` set them, `encode` encodes the listed plaintext slots and clears them."""
+it is and give it no receipt; `append` and `table` set them, `encode` encodes the listed plaintext slots and clears them.
+A token-layer kept past the lifetime cap is re-keyed in its slot (§4): `rekey` moves listed slots from their bound offsets
+to new ones in place."""
 from __future__ import annotations
 
 import ctypes
@@ -39,7 +42,12 @@ class PagedLib(KB.Lib):
         so.pg_append_multi.argtypes = [v, i, i, i, i, i, i, i, i, v]
         so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, i, i, v, v, v]
         so.pg_encode.argtypes = [v, i, i, i, i, i, i, i, v]
+        so.pg_rekey.argtypes = [v, i, i, i, i, i, i, i, i, v]
+        so.pg_rekey_ctas.argtypes = []
         so.pg_gather.argtypes = [v, v, i, i, i, i, i, i, v, u, i, i, i, i, v, v, v, v, v, v]
+        so.pg_window_offsets.argtypes = [v, i, v, v]
+        so.pg_window.argtypes = [v, i, i, v, v, i, i, i, i, i, u, i, i, i, v, v, v, v, z, z, v, v, i, u, v, v, u, u, i, v]
+        so.pg_window_ctas.argtypes = [i]
         so.pg_receipts_sparse.argtypes = [v, v, v, v, u, i, i, u, v]
         so.pg_rc_gate_pass.argtypes = [v, v, v]
         so.kv_rc_pass.argtypes = [v, v, v]
@@ -169,6 +177,27 @@ def encode(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: in
              stream(torch) if s is None else s)
 
 
+def rekey_table(torch, entries):
+    """pg_rekey's host table: (slots, rows, cache, store base, layer count, layer index, bound offsets, new offsets[,
+    flags]) each, slots int64 (distinct; < 0 skipped), the bound offsets the layer's `offsets` (one a physical slot,
+    a listed slot's the old), the new ones `offsets` one a row (b_j'(c_a') of the slot's fresh index j' and coin), the
+    flags as `append`'s plain (absent or None: none)."""
+    rows = [[slots.data_ptr(), n, cache.data_ptr(), store_base, layers, layer, bj.data_ptr(), new.data_ptr(),
+             *_optional(rest, 1)]
+            for slots, n, cache, store_base, layers, layer, bj, new, *rest in entries]
+    return torch.tensor(rows, dtype=torch.int64).reshape(-1)
+
+
+def rekey(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, k: int, ctas: int = 0, s=None) -> None:
+    """The lifetime cap's re-key on stream s (default current): every layer's listed slots of tab (a device int64
+    tensor of `rekey_table`'s) decoded under their offsets and encoded under their new ones in place, a flagged
+    (plaintext) slot left as it is, then the new offsets written into the layer's. Nothing may read the listed slots
+    meanwhile. ctas: the grid (0: a word a thread; a count: that many CTAs striding over the words). Stream priority
+    preempts nothing, so beside serving a caller caps the grid (`pg_rekey`)."""
+    lib.call("pg_rekey", tab.data_ptr(), layers, rows, lay.bs, lay.sb, lay.sh, lay.ss, k, ctas,
+             stream(torch) if s is None else s)
+
+
 def append_multi(lib: PagedLib, torch, tab, layers: int, rows: int, lay: Layout, encoded: int, k: int, s=None) -> None:
     """Every layer's appends of tab (a device int64 tensor of `table`'s) in one launch on stream s (default current)."""
     lib.call("pg_append_multi", tab.data_ptr(), layers, rows, lay.bs, lay.sb, lay.sh, lay.ss, encoded, k,
@@ -184,6 +213,32 @@ def gather(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: in
              out.data_ptr(), store_base, layers, layer, encoded, k, 0 if rc_sk is None else rc_sk.data_ptr(),
              0 if used is None else used.data_ptr(), 0 if epoch is None else epoch.data_ptr(), _ptr(bj), _ptr(plain),
              stream(torch))
+
+
+def window_offsets(lib: PagedLib, torch, lens, batch: int, wo) -> None:
+    """wo [≥ batch + 1] int32: 0, then the running sums of lens [≥ batch] (negative counted 0), on the device: request r's
+    window is rows wo[r] … wo[r + 1] − 1 of `window`'s buffer. One a step: its layers share it."""
+    lib.call("pg_window_offsets", lens.data_ptr(), batch, wo.data_ptr(), stream(torch))
+
+
+def window(lib: PagedLib, torch, cache, lay: Layout, store_base: int, layers: int, layer: int, encoded: int, k: int,
+           lens, bt, wo, batch: int, outk, outv, order: int = 0, bj=None, plain=None, ck=None, cv=None, qrow=None,
+           ctas: int = 0) -> None:
+    """One layer's decode windows (no receipts): request i's tokens 0 … lens[i] − 1 under its block-table row bt[i], K into
+    outk and V into outv ([rows][KV heads][head_dim] bf16 views, any row and head strides, the last contiguous) at rows
+    wo[i] + t (`window_offsets`), rows past outk's not written. Decoded (encoded, under bj and plain as `attn` takes them)
+    or copied, the codec's word order `order` (0: K of every head then V of every head; 1: each head's K ‖ V). ck, cv:
+    each sequence's last token's K and V at its row (qrow[i] or i), as `attn` takes them. ctas: the fixed grid (0: every
+    SM's resident CTAs)."""
+    if (ck is None) != (cv is None):
+        raise ValueError("ck and cv go together")
+    if outk.shape != outv.shape or outk.dim() != 3 or outk.stride(2) != 1 or outv.stride() != outk.stride():
+        raise ValueError(f"outk and outv are [rows][KV heads][head_dim] views alike: {outk.shape} {outk.stride()}, "
+                         f"{outv.shape} {outv.stride()}")
+    lib.call("pg_window", cache.data_ptr(), encoded, order, lens.data_ptr(), bt.data_ptr(), bt.stride(0), lay.bs,
+             lay.sb, lay.sh, lay.ss, store_base, layers, layer, k, _ptr(bj), _ptr(plain), _ptr(ck), _ptr(cv),
+             0 if ck is None else ck.stride(0), 0 if cv is None else cv.stride(0), _ptr(qrow), wo.data_ptr(), batch,
+             outk.shape[0], outk.data_ptr(), outv.data_ptr(), outk.stride(0), outk.stride(1), ctas, stream(torch))
 
 
 def receipts_sparse(lib: PagedLib, torch, rc_sk, tags, used, epoch, slots: int, layers: int, layer: int,

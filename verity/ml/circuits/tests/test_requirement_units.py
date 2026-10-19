@@ -165,8 +165,9 @@ def test_each_step_s_honest_memory_map_is_accepted(case) -> None:
 
 def test_a_plan_with_a_wrong_block_is_refused(case) -> None:
     """A plan holding a block the step doesn't read (a paused request's, a table block no gather selects, a registered block
-    past its last read), missing one it reads, out of order, or past its count returns 0, as `plan_matches` refuses it, and so
-    does a gather outside the table."""
+    past its last read), missing one it reads, out of order, or past its count returns 0, and so does a gather outside the
+    table. The unit asks for exactly the blocks the step reads, which implies `plan_matches`: that one-sided link refuses
+    the plans missing a block the step reads and allows the extra blocks as filler."""
     req, (layout, _store) = case.req, case.layouts["spread"]
     t = 2
     honest = sorted(R.read_blocks(req, layout, t))
@@ -177,7 +178,7 @@ def test_a_plan_with_a_wrong_block_is_refused(case) -> None:
              "missing": honest[:-1]}
     batch = []
     for name, plan in plans.items():
-        assert not R.plan_matches(req, layout, plan, R.BLOCK_BITS, t), name
+        assert R.plan_matches(req, layout, plan, R.BLOCK_BITS, t) == (name not in ("swapped", "missing")), name
         batch.append(plan_args(case, layout, t, plan))
     a = plan_args(case, layout, t, honest)
     batch.append({**a, "plan": [a["plan"][1], a["plan"][0]] + a["plan"][2:]})
@@ -202,7 +203,8 @@ def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
     """A payload that doesn't carry its value, a free after its values' last read (late) or before it (early), of a written
     block or of a registered one (weight block 7, whose last read is step 1), a write at another step, a block written empty,
     nonzero bits in an empty slot, two values in one slot, a value outside the step's blocks: each returns 0 as the reference
-    does; the late and early frees and the mismatch each break `store_matches` at a step."""
+    does. The early frees and the mismatch each break `store_matches` at a step, and the late frees don't: the one-sided
+    link allows a block resident past its values' last read."""
     req = case.req
     layout, store = case.layouts["spread"]
     t = 0
@@ -244,8 +246,8 @@ def test_each_memory_map_clause_s_negative_is_refused(case) -> None:
             return dataclasses.replace(s, freed=freed)
         return f
 
-    assert broken(refree(jk, lastk + 1)) and broken(refree(jk, lastk - 1))
-    assert broken(refree(7, 2)) and broken(refree(7, 0))
+    assert not broken(refree(jk, lastk + 1)) and broken(refree(jk, lastk - 1))
+    assert not broken(refree(7, 2)) and broken(refree(7, 0))
     assert broken(lambda s: dataclasses.replace(s, payload={**s.payload, j0: s.payload[j0] ^ (1 << 77)}))
 
 

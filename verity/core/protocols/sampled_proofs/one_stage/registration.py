@@ -12,6 +12,22 @@
 * **Rule.** Everything a drawn unit's statement can depend on is fixed by the record, or by objects the verifier already
   holds, before the draw. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then draws.
+* **The checks** (`check`): the record has exactly these keys, and
+  - R1: the format and protocol are these, the law is the verifier's own expanded over its program and query
+    (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
+  - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
+    object must be over the verifier's program);
+  - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
+  - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
+  - R5: the anchors are the verifier's;
+  - R6: `previous` is the digest of this prover's last record (null for the first), and no earlier record has the same
+    window.
+* **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
+  %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
+* **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
+  to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
+  the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
 * **`window`** is provenance only. `kind` says whether the roots are what serving committed (`served`) or a fresh
   commitment to values captured from serving (`stand-in`, whose link to the served root is provenance, not proof).
 * **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the

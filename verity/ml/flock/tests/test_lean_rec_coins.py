@@ -46,6 +46,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 UNIT = "rec-open/l16-h4"
+#: the population programs' version the recorded levels were staged at (`TemplateInstances_v0`, before v1), which every
+#: staging here restages them at, so that they read the recorded `pub.bin` and `registered.json`
+VERSION = 0
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
@@ -83,7 +86,8 @@ def forged(built, once) -> Path:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(S, "coefficients", coefficients)
             res = S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
-                          algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+                          algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin",
+                          version=VERSION)
         assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
 
     out = once("rec-coins-forged", make, _KEY) / f"L{LEVEL}"
@@ -270,7 +274,7 @@ def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, 
 
 def _stage(d: Path, **kw) -> dict:
     return S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d,
-                   pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", **kw)
+                   pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", version=VERSION, **kw)
 
 
 @pytest.fixture(scope="module")
@@ -684,7 +688,8 @@ def bit_rows(built, once) -> Path:
                 low, sub, port_bits=[16 * w for w, _ in low.leaves["in_ports"]], **kw))
             mp.setattr(FC, "write", lambda *a, registered=None, **kw: write(*a, **kw))
             S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
-                    algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+                    algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin",
+                    version=VERSION)
 
     out = once("rec-coins-bit-rows", make, _KEY) / f"L{LEVEL}"
     assert '"row_schemas":[["hm96-sha512/row/v2",' in (out / "circuit.txt").open().readlines()[1]

@@ -1,6 +1,6 @@
 """One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
-outcome, the public-items rule on the registration, and each way a link-window fails closed, on injected coins and an
-injected clock."""
+outcome, the public-items rule on the registration, the count check against the occupancy profile, and each way a
+link-window fails closed, on injected coins and an injected clock."""
 
 import json
 from dataclasses import replace
@@ -10,10 +10,14 @@ import pytest
 from verity.ml.circuits.program import Program
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.core.protocols.certifier.grid import Certifier, Record
+from verity.core.protocols.certifier.grid import Certifier, Record, occupancy
 from verity.core.protocols.certifier.schedule import SyncSet, run_shaper
-from verity.core.protocols.certifier.service import (OUTPUTS, PUBLIC, UNIT, VALUE, LinkWindows,
-                                                                      encode)
+from verity.ml.commitments import hm96
+from verity.ml.commitments.gates.frame_v3 import root_ref
+from verity.ml.commitments.merkle import tree_levels
+from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, UNIT, VALUE, LinkWindows,
+                                                                      encode, rows)
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 
@@ -23,7 +27,7 @@ import signers
 LINK = "responses"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 DELTA = 2.0 ** -40
-SALTS = [(bytes([2 * w + 1]) * 192, bytes([2 * w + 2]) * 192) for w in range(3)]
+SALTS = [tuple(bytes([4 * w + k + 1]) * 192 for k in range(4)) for w in range(3)]
 
 
 class Clock:
@@ -38,18 +42,23 @@ def egress_records():
     return run_shaper(FRAMES, honest_ready(), SYNCS, Certifier(LINK, PARAMS))
 
 
-def ingress_records():
-    return [replace(r, link=LINK) for r in ingress_run([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])]
+def ingress_records(arrivals=([1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0])):
+    return [replace(r, link=LINK) for r in ingress_run([list(a) for a in arrivals])]
+
+
+def honest_occupancy():
+    """Each end's counts in each window of the honest run: the profile the placement declares."""
+    return tuple(tuple(occupancy(r.grid) for r in records) for records in (egress_records(), ingress_records()))
 
 
 class Run:
     """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's stream."""
 
-    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07") -> None:
+    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=(None, None)) -> None:
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
-                              proof_deadline=proof_deadline)
+                              proof_deadline=proof_deadline, occupancy=occupancy)
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
                                      clock=self.clock)
@@ -108,20 +117,62 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
     assert {p.item: p.kind for p in lw.spec.public} == {
         "population": "structure", "window": "structure", f"leaves:{VALUE}": "structure",
         f"domain:{VALUE}": "structure", VALUE: "commitment", "parameters": "structure", "charge": "structure",
-        "verdict": "output", "deadline": "output"}
+        "occupancy": "structure", "verdict": "output", "deadline": "output"}
     assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
     assert lw.spec.check.program == P.program_sha512(Program(UNIT))
     assert replace(lw, sync_set=SyncSet(tuple(range(16)), tuple(range(1, 9)))).charge == 7.0
     assert lw.spec.digest() != replace(lw, sync_set=SyncSet((0, 1), (1, 2))).spec.digest()
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
     assert lw.spec.digest() != replace(lw, certifier_session=signers.OTHER_SESSION).spec.digest()
+    declared = replace(lw, occupancy=honest_occupancy())
+    assert lw.spec.digest() != declared.spec.digest() != replace(lw, occupancy=(None, honest_occupancy()[1])).spec.digest()
+
+
+def test_each_heads_counts_are_the_declared_occupancy(tmp_path):
+    """Under the honest run's profile every window is accepted. An ingress window holding a frame fewer than the profile
+    (a port that stopped short) or a frame more is rejected, though its certificate verifies and the audit compares no
+    ingress grid; with no profile the same records are accepted."""
+    (tmp_path / "declared").mkdir()
+    (tmp_path / "bare").mkdir()
+    declared, bare = Run(tmp_path / "declared", occupancy=honest_occupancy()), Run(tmp_path / "bare")
+    short = ingress_records(([1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0]))[1]
+    extra = ingress_records(([1, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0]))[2]
+    for run in (declared, bare):
+        assert run.round(run.honest(0)).accepted
+        for w, ingress in ((1, short), (2, extra)):
+            assert occupancy(ingress.grid) != honest_occupancy()[1][w]
+            out = run.round(run.lw.commit(w, run.egress(egress_records()[w]), run.ingress(ingress), SALTS[w]))
+            assert reject(out) if run is declared else out.accepted
+    assert declared.stream.symbols == ("accept", "reject", "reject") and bare.stream.symbols == ("accept",) * 3
+
+
+def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
+    """An egress profile other than the Program's grid rejects the honest records the audit accepts, and a window past
+    the profile is rejected."""
+    eg, ig = honest_occupancy()
+    row = eg[1]
+    moved = ((row[0] + 1) % (PARAMS.allocation + 1),) + row[1:]
+    run = Run(tmp_path, occupancy=((eg[0], moved), ig))
+    assert [run.round(run.honest(w)).accepted for w in range(3)] == [True, False, False]
+    assert run.lw.declares(0, 0, eg[0]) and not run.lw.declares(0, 1, row) and not run.lw.declares(0, 2, eg[2])
+    assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
+
+
+def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
+    lw = Run(tmp_path).lw
+    four = (0,) * PARAMS.buckets
+    for bad in ((None,), (((0,) * (PARAMS.buckets - 1),), None), (None, (four, (PARAMS.allocation + 1,) + four[1:])),
+                ((four, (True,) + four[1:]), None)):
+        with pytest.raises(ValueError, match="occupancy"):
+            replace(lw, occupancy=bad)
+    assert replace(lw, occupancy=((four,), (four, four))).declares(1, 1, four)
 
 
 def test_the_domain_is_one_stages_served_domain(tmp_path):
     lw = Run(tmp_path).lw
     part = P.partition(P.population_program(UNIT, 1), lw.spec.check.query)
     for w in range(3):
-        want = R.served_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 2, f"r-network-test/{LINK}/{w}")
+        want = R.served_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
         assert lw.ports(w)[VALUE]["domain"] == want
     assert lw.ports(0) != lw.ports(1)
 
@@ -272,7 +323,7 @@ def test_the_outcome_binds_the_registered_root(tmp_path):
     and the outcome is a reject. Accepted outcomes under two salts are two records."""
     run = Run(tmp_path)
     registered = run.honest(0)
-    other = replace(registered, salts=(SALTS[2][0], SALTS[2][1]))
+    other = replace(registered, salts=SALTS[2])
     assert run.lw.root(other) != run.lw.root(registered)
     out = run.round(registered, delivered=other)
     assert reject(out)
@@ -305,5 +356,41 @@ def test_the_opening_must_be_the_registered_link_windows(tmp_path):
     draw = run.stream.select(run.register(opening))
     with pytest.raises(ValueError, match="link-window"):
         run.lw.verify(run.honest(1), draw, FRAMES, SYNCS)
-    with pytest.raises(ValueError, match="salts"):
-        run.lw.commit(0, *opening.records, salts=(SALTS[0][0], SALTS[0][0]))
+    for salts in ((SALTS[0][0],) * 4, SALTS[0][:2]):
+        with pytest.raises(ValueError, match="salts"):
+            run.lw.commit(0, *opening.records, salts=salts)
+
+
+def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
+    """Leaves 2 and 3 are the heads' hiding leaves: a proof that holds a head, its salt and two siblings reaches the
+    root without the certificate, hashing the head in at most three compressions after the row prefix's block."""
+    run = Run(tmp_path)
+    opening = run.honest(0)
+    dom, key = run.lw.domain(0), hm96.SHA512.default_key
+    levels = tree_levels(dom, run.lw.leaves(opening))
+    assert rows(opening.records)[:2] == [encode(r) for r in opening.records]
+    for i, rec in enumerate(opening.records):
+        head, salt = rec.head.encode(), opening.salts[HEADS + i]
+        assert -(-(len(head) + 17) // 128) <= 3
+        bc = hm96.SHA512.commit_string(key, sha512_row_v2_digest(head, 8 * len(head)), salt)
+        leaf = hm96.SHA512.tree_leaf(key, bc)
+        path = [level[((HEADS + i) >> k) ^ 1] for k, level in enumerate(levels[:-1])]
+        assert root_ref(dom.domain_id, SCHEMA, leaf, HEADS + i, path).hex() == run.lw.root(opening)
+
+
+def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
+    """A root whose egress head leaf holds another window's head: no opening of the records reproduces it, so the
+    link-window is rejected though both certificates verify."""
+    run = Run(tmp_path)
+    opening = run.honest(0)
+    other = run.honest(1).records[0].head.encode()
+    leaves = run.lw.leaves(opening)
+    dom, key = run.lw.domain(0), hm96.SHA512.default_key
+    bc = hm96.SHA512.commit_string(key, sha512_row_v2_digest(other, 8 * len(other)), opening.salts[HEADS])
+    leaves[HEADS] = row_leaf(dom, HEADS, hm96.SHA512.tree_leaf(key, bc), SCHEMA)
+    rec = run.lw.registration(opening)
+    rec = {**rec, "roots": [{**rec["roots"][0], "root": tree_levels(dom, leaves)[-1][0].hex()}]}
+    reg = run.lw.register(run.stream, rec)
+    draw = run.stream.select(reg)
+    assert run.stream.deliver(draw, [run.lw.session(opening, draw)]) is None
+    assert reject(run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS))

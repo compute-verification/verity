@@ -1,7 +1,8 @@
 """[R17 tp D90, COORD R17-4] The PER-RANK FOLD MATCH of a tensor-parallel row: each rank's observer log folded with the rank profile (the
 received collective value = an input of a rank-local component, `TpCollective`), compared to THAT rank's Program exactly as `row_pod.sh`
-compares a TP1 row (cb_a.compare at B1 / batch_decomp X-09 at B>1, GM-01 global_match over the rank's GP-01 workload Program), then the
-CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows of the SAME engine run + the rank Programs' `tp_links.json`
+compares a TP1 row (cb_a.compare at B1 / batch_decomp X-09 at B>1, under --shared-x09 the X-09 GM-01 computes; GM-01 global_match over
+the rank's GP-01 workload Program), then the CROSS-RANK leg (`tp.rank_match`) over both folds + the collective recorder rows of the SAME
+engine run + the rank Programs' `tp_links.json`
 + tp2_match's stored-step provenance.  CPU only.  The rank-local legs of the ranks run CONCURRENTLY (one subprocess chain per rank,
 --rank-workers, default all): they are independent until the cross-rank leg; the record is assembled in rank order.
 
@@ -46,8 +47,9 @@ def _run(cmd: list[str], log: Path, timeout: int | None = None) -> int:
 
 
 def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int | None) -> int:
-    """`_run`, except under --reuse-legs a leg whose document `out` is already written is kept (rc 0)."""
-    return 0 if reuse and out.is_file() and out.stat().st_size else _run(cmd, log, timeout)
+    """`_run`, except under --reuse-legs a leg whose document `out` is already written is kept (rc 0); one a killed leg cut short,
+    which does not load, runs again."""
+    return 0 if reuse and _load(out) is not None else _run(cmd, log, timeout)
 
 
 def _load(p: Path) -> dict | None:
@@ -90,19 +92,26 @@ def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, 
             "max_rss_gb": fs.get("max_rss_gb")}
 
 
-def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], within: str, timeout: int | None, reuse: bool = False) -> dict:
-    """The TP1 verdict rule of row_pod.sh: B1 cb_a.compare (canonical-equal, same steps, no differing operand); B>1 batch_decomp X-09."""
+def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], within: str, timeout: int | None, reuse: bool = False,
+                 shared: bool = False) -> dict:
+    """The TP1 verdict rule of row_pod.sh: B1 cb_a.compare (canonical-equal, same steps, no differing operand); B>1 batch_decomp X-09,
+    under `shared` the document GM-01 wrote (`global_match_rank`'s --decomp-out) read as row_pod's shared pipeline reads it."""
     t0 = time.time()
     if derived:
-        cmd = [py, "-m", "verity_vllm.pipeline.cli", "batch-decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
-               "--within-step", within]
-        for d in [str(build)] + list(derived):
-            cmd += ["--derived", d]
-        rc = _run(cmd, rank_dir / "match_compare.log", timeout)
+        if shared:
+            from verity_vllm.pipeline.row_records import decomp_rc
+            rc = decomp_rc(str(rank_dir))
+        else:
+            cmd = [py, "-m", "verity_vllm.pipeline.cli", "batch-decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
+                   "--within-step", within]
+            for d in [str(build)] + list(derived):
+                cmd += ["--derived", d]
+            rc = _run_unless(reuse, rank_dir / "match_decomp.json", cmd, rank_dir / "match_compare.log", timeout)
         dec = _load(rank_dir / "match_decomp.json") or {}
         reqs = dec.get("requests") or []
         verdict = "PASS" if dec.get("verdict") == "PASS" and rc == 0 else f"FAIL batch_decomp {dec.get('verdict')} rc={rc}: {'; '.join(dec.get('reasons') or [])[:300]}"
-        return {"comparator": "cb_a.batch_decomp (X-09)", "rc": rc, "verdict": verdict, "seconds": round(time.time() - t0, 1),
+        return {"comparator": "cb_a.global_match --decomp-out (X-09)" if shared else "cb_a.batch_decomp (X-09)", "rc": rc, "verdict": verdict,
+                "seconds": round(time.time() - t0, 1),
                 "requests": len(reqs), "canonical_equal_all": all(r.get("canonical_equal") is True for r in reqs) and bool(reqs),
                 "operands_different": sum(int((r.get("totals") or {}).get("operands_different", 0) or 0) for r in reqs),
                 "unattributed": (dec.get("attribution") or {}).get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
@@ -128,10 +137,15 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
             "dag_multiset": dag_doc, "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(doc.get("histogram_diff_T_normalised") or {}), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
 
 
-def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None, reuse: bool = False) -> dict:
+def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None, reuse: bool = False,
+                      x09: list[str] | None = None) -> dict:
+    """GM-01 over the rank's GP-01 Program; with `x09` (the rank's request Program dirs) it also writes the X-09 document it computes
+    (--decomp-out match_decomp.json, those dirs as --derived), so a B>1 rank decomposes its fold once (row_pod's shared pipeline)."""
     t0 = time.time()
-    rc = _run_unless(reuse, rank_dir / "global_match.json", [py, "-m", "verity_vllm.pipeline.cli", "global-match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
-               "--out", str(rank_dir / "global_match.json"), "--within-step", within], rank_dir / "global_match.log", timeout)
+    shared = [] if x09 is None else ["--decomp-out", str(rank_dir / "match_decomp.json"), *(a for d in x09 for a in ("--derived", d))]
+    keep = reuse and (x09 is None or _load(rank_dir / "match_decomp.json") is not None)
+    rc = _run_unless(keep, rank_dir / "global_match.json", [py, "-m", "verity_vllm.pipeline.cli", "global-match", "--gprog", str(gprog), "--workload", str(workload), "--oracle", str(rank_dir),
+               "--out", str(rank_dir / "global_match.json"), "--within-step", within, *shared], rank_dir / "global_match.log", timeout)
     G = _load(rank_dir / "global_match.json") or {}
     return {"rc": rc, "seconds": round(time.time() - t0, 1), "verdict": G.get("verdict") if G else {124: "TIMEOUT"}.get(rc, f"rc={rc}"),
             "ok": G.get("verdict") == "PASS" and rc == 0, "failed_checks": G.get("failed_checks"),
@@ -192,7 +206,11 @@ class Options:
     reuse_fold: bool = option("--reuse-fold", action="store_true", default=False,
                               help="keep a rank's persisted fold (fold_summary.json, program.json, instances.jsonl under --out) and run only its compare and GM-01 legs")
     reuse_legs: bool = option("--reuse-legs", action="store_true", default=False,
-                              help="also keep a rank's written compare / DAG / GM-01 documents under --out, so only the missing legs and the cross-rank leg run")
+                              help="also keep a rank's written compare (X-09 at B>1) / DAG / GM-01 documents under --out, so only the missing legs and the cross-rank leg run")
+    shared_x09: bool = option("--shared-x09", action="store_true", default=False,
+                              help="B>1: a rank's X-09 is the one its GM-01 computes and writes (global-match --decomp-out, row_pod's MATCH_PIPELINE=shared), "
+                                   "not a second batch-decomp process over the same fold under the audit checker's operations (past 800 GB on a "
+                                   "GLM-5.3 B8 rank)")
 
 
 def main(a: Options) -> int:
@@ -252,7 +270,15 @@ def main(a: Options) -> int:
         tp = pr["fold"].get("tp") or {}
         if int(tp.get("rank", -1)) != r or int(tp.get("world", 0)) != a.world:
             problems.append(f"rank {r}: the log's RunHeader.notes.tp2 states rank {tp.get('rank')} / world {tp.get('world')} (swapped or mislabelled rank)")
-        pr["compare"] = compare_rank(a.python, rd, builds[r], derived[r], a.within_step, a.timeout, a.reuse_legs)
+        def gm01(x09: list[str] | None = None) -> dict:
+            g = global_match_rank(a.python, rd, Path(gprog[r]), Path(a.workload), a.within_step, a.timeout, a.reuse_legs, x09)
+            print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)
+            return g
+
+        shared = a.shared_x09 and bool(derived[r]) and bool(gprog[r]) and bool(a.workload)
+        if shared:     # GM-01 first: its X-09 document is the compare's
+            pr["global_match"] = gm01([str(builds[r]), *derived[r]])
+        pr["compare"] = compare_rank(a.python, rd, builds[r], derived[r], a.within_step, a.timeout, a.reuse_legs, shared)
         print(f"[tp2foldmatch] rank {r} compare ({pr['compare']['comparator']}): {pr['compare']['verdict']} {pr['compare']['seconds']}s", flush=True)
         if pr["compare"]["verdict"] != "PASS":
             problems.append(f"rank {r}: compare {pr['compare']['verdict']}")
@@ -263,9 +289,8 @@ def main(a: Options) -> int:
             if not a.workload:
                 problems.append("--gprog given without --workload")
             else:
-                pr["global_match"] = global_match_rank(a.python, rd, Path(gprog[r]), Path(a.workload), a.within_step, a.timeout, a.reuse_legs)
-                print(f"[tp2foldmatch] rank {r} GM-01: {pr['global_match']['verdict']} failed={pr['global_match']['failed_checks']} "
-                      f"concurrency={pr['global_match']['achieved_concurrency']} {pr['global_match']['seconds']}s", flush=True)
+                if not shared:
+                    pr["global_match"] = gm01()
                 if not pr["global_match"]["ok"]:
                     problems.append(f"rank {r}: GM-01 {pr['global_match']['verdict']} {pr['global_match']['failed_checks']}")
         return pr, problems

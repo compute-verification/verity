@@ -227,6 +227,18 @@ def test_a_message_is_only_its_agents_and_a_secret_refusal_keeps_it_queued(tmp_p
     assert "hello" in hook("ls", "bc-worker", tmp_path)["user_message"]
 
 
+def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
+    queue("bc-worker", "first", tmp_path)
+    queue("bc-worker", "second", tmp_path)
+    queue("bc-done", "delivered", tmp_path)
+    hook("ls", "bc-done", tmp_path)
+    listed = subprocess.run([sys.executable, INBOX_TOOL, "list"], env={**os.environ, "AGENT_INBOX": str(tmp_path)},
+                            check=True, capture_output=True, text=True).stdout.splitlines()
+    stamp = (tmp_path / "bc-worker.md").read_text().splitlines()[0].strip("[]")
+    assert any(x.startswith("pending   bc-worker ") and x.endswith(f"bytes  since {stamp}") for x in listed)
+    assert any(x.startswith("delivered bc-done ") and "since" not in x for x in listed)
+
+
 def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):
     inbox = tmp_path / "not-a-dir"
     inbox.write_text("")
@@ -274,3 +286,44 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
                    capture_output=True, env={**os.environ, **env})
     assert ask("git push origin coord", "bc-worker")["permission"] == "allow"
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
+
+
+def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
+    """INF-110: at 07:49Z 19 Oct a worker whose VM came back from a snapshot with /workspace on main pushed straight onto it,
+    and drive rebuilt every queued PR. INF-105: printing git config values showed part of a GitHub installation token."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    ws, origin = tmp_path / "ws", tmp_path / "origin.git"
+    for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", "a"], cwd=ws, check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent="bc-w"):
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "command": command,
+                                                                         "conversation_id": agent, "cwd": str(ws)}),
+                             capture_output=True, text=True, env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    for command in ("git push", "git push origin", "git push origin main", "git push -u origin HEAD:main", "git push origin +main",
+                    "git push origin HEAD:refs/heads/main", "git push --all origin", "git push --mirror origin",
+                    "git push origin --delete main", "git push origin :main", f"git -C {ws} push origin main",
+                    "git push origin next", "git push origin HEAD:refs/heads/next", "git push --force origin +HEAD:next"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "HEAD:refs/heads/<your-branch>" in out["agent_message"], command
+    assert ask("git push origin main", "")["permission"] == "deny", "whoever runs it"
+    for command in ("git push origin HEAD:refs/heads/cursor/mine", "git push -u origin cursor/mine", "git log -1"):
+        assert ask(command)["permission"] == "allow", command
+    repair = "AGENT_GUARD_PUSH_NEXT_OK='restore next to abc under the queue lock' git push --force-with-lease=next:bad origin abc:next"
+    assert ask(repair)["permission"] == "allow"
+    assert json.loads((tmp_path / "state" / "push-next-ok.jsonl").read_text())["reason"] == "restore next to abc under the queue lock"
+    for command in ("AGENT_GUARD_PUSH_NEXT_OK=x git push origin main", "AGENT_GUARD_PUSH_NEXT_OK=x git push origin next main",
+                    "AGENT_GUARD_PUSH_NEXT_OK=x git push --all origin", "AGENT_GUARD_PUSH_NEXT_OK= git push origin next",
+                    "AGENT_GUARD_PUSH_NEXT_OK=x true; git push origin next", "export AGENT_GUARD_PUSH_NEXT_OK=x; git push origin next"):
+        assert ask(command)["permission"] == "deny", command
+    for command in ("git config --list", "git config -l", "git config --get-regexp http", "git config --show-origin --list",
+                    "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "--name-only --list" in out["agent_message"], command
+    for command in ("git config --name-only --list", "git config user.name", "git config user.name t",
+                    "git config --get remote.origin.fetch"):
+        assert ask(command)["permission"] == "allow", command

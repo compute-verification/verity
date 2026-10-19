@@ -23,6 +23,7 @@ from typing import Any
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, add, and_reduce, compress_columns, const_bits, mux, or_reduce
 from verity.ml.circuits.boolean.trace import definition, word_of
+from verity.ml.circuits.census import FAMILY_COUNTS
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, broadcast
 from verity.ml.circuits.types import Array
@@ -79,6 +80,7 @@ def _word(b: dict) -> Any:
 
 S8Dot.word = _word  # type: ignore[attr-defined]
 S8Dot.counts = S8.counts  # type: ignore[attr-defined]
+FAMILY_COUNTS["S8Dot_v2"] = S8.counts
 
 
 # -- limb splits ---------------------------------------------------------------------------------------------------------

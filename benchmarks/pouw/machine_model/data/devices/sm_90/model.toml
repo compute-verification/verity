@@ -12,5 +12,11 @@ epochs = ["DC-90", "DC-90-ri"]
 # UP and the issue rows) is measured but is not a lane class: it opens the uniform route.
 cuda = ["FFMA", "IMAD", "ALU", "SHFL"]
 
+# The lane classes with a uniform-datapath form, so a filler of them may move there (one uniform instruction a lane
+# instruction): UIMAD for IMAD, and ULOP3, UIADD3, USHF and ULEA for ALU's classes. The sm_90 uniform datapath is integer
+# only (the Hopper SASS uniform opcodes: no UFFMA, UFADD or UFMUL, and no USHFL), so a filler with FFMA in its mix stays
+# on lanes: a bit-exact fma.rn.f32 emulated in uniform integer instructions takes tens of them.
+uniform_forms = ["IMAD", "ALU"]
+
 [constants]
 cycle_u = 300.08          # u in one SMSP-cycle: a unit, the same as data/'s (eps divides it out)

@@ -12,9 +12,9 @@ whose receipt is.
 
 namespace Accounting.TS
 
-/-- A straight-line program over the fresh inputs `ι`, values in `W` (a node's value is every word it writes): node
-`i` of `n`, in program order, reads the nodes `src i` (fresh inputs and earlier nodes) and computes its value from
-theirs alone. -/
+/-- A straight-line program over the fresh inputs `ι`, values in `W` (a node's value is everything it writes: its
+words, its predicates and, for a store, the memory): node `i` of `n`, in program order, reads the nodes `src i` (fresh
+inputs and earlier nodes) and computes its value from theirs alone. -/
 structure Dataflow (ι W : Type) where
   n : ℕ
   src : Fin n → Finset (ι ⊕ Fin n)

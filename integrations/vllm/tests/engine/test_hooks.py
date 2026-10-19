@@ -265,6 +265,44 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
     assert layer.quant_method.moe_kernel.fused_experts.w2_scale is layer.w2_weight_scale_inv
 
 
+def test_a_routers_parameters_are_exported_from_their_registered_owner() -> None:
+    """A plain router keeps the gate's correction bias and DeepSeek-V4's hash table; the shim reads both from the gate."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import _router_params_through_owner
+
+    class Router:
+        def __init__(self, bias, table) -> None:
+            self.e_score_correction_bias, self._hash_indices_table, self.top_k = bias, table, 2
+
+        def select_experts(self, logits, ids):
+            return logits + self.e_score_correction_bias, self._hash_indices_table[ids]
+
+    class Moe(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.gate = torch.nn.Module()
+            self.gate.e_score_correction_bias = torch.nn.Parameter(torch.ones(4), requires_grad=False)
+            self.gate.tid2eid = torch.nn.Parameter(torch.zeros(8, 2, dtype=torch.int32), requires_grad=False)
+            self.router = Router(self.gate.e_score_correction_bias, self.gate.tid2eid)
+
+        def forward(self, logits, ids):
+            return self.router.select_experts(logits, ids)
+
+    moe = Moe()
+    inputs = (torch.ones(3, 4), torch.zeros(3, dtype=torch.int64))
+    unshimmed = torch.export.export(moe, inputs, strict=False)
+    assert len(unshimmed.graph_signature.inputs_to_lifted_tensor_constants) == 2
+
+    h = hooks.Hooks()
+    _router_params_through_owner(moe, h)
+    with h:
+        shimmed = torch.export.export(moe, inputs, strict=False)
+        assert not shimmed.graph_signature.inputs_to_lifted_tensor_constants
+        assert set(shimmed.graph_signature.inputs_to_parameters.values()) == {"gate.e_score_correction_bias", "gate.tid2eid"}
+    assert moe.router.e_score_correction_bias is moe.gate.e_score_correction_bias
+    assert moe.router._hash_indices_table is moe.gate.tid2eid
+
+
 def test_tp_group_override_restores_the_group() -> None:
     pytest.importorskip("vllm")
     from vllm.distributed import parallel_state as ps

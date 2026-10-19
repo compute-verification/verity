@@ -1,9 +1,9 @@
-"""The sampling family's split into Definitions, twins and vocabulary (`tools/migrate/split_sampling.py`) changes no Definition.
+"""The sampling family's split into Definitions, twins and vocabulary changes no Definition.
 
 * Every Definition id and canonical descriptor digest (`query.word.definition_digest`: the descriptor entry and its callees'
   digests) is the one `data/sampling_split_digests.json` pins, at every statics a circuit-check target or pin, a kept record or
   manifest, or a served vocabulary uses, and each of the family's Definitions is still constructed by the module that
-  constructed it.  The pins were written on the unsplit tree (`split_sampling.py snapshot`); a change to a Definition of the
+  constructed it.  The pins were written on the unsplit tree; a change to a Definition of the
   family rewrites them (`python tests/program/test_sampling_split.py --write`, from `integrations/vllm`).
 * The family's Definition modules import only the stdlib, numpy, `verity`, one another, and the two other families' modules
   they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `verity/ml/circuits/`, which
@@ -214,7 +214,7 @@ def _imports(path: Path) -> list[tuple[str, int, str | None]]:
 def test_a_definition_module_imports_only_verity_and_definition_modules(module):
     allowed = {f"{PKG}.{m}" for m in DEFINITION_MODULES + tuple(OTHER_DEFINITION_MODULES)}
     path = REG / f"{module}.py"
-    assert path.exists(), f"{module}: no such module (has the split been applied? tools/migrate/split_sampling.py)"
+    assert path.exists(), f"{module}: no such module (moved? update DEFINITION_MODULES)"
     bad = sorted({f"{module}.py:{line}: imports {mod}" for mod, line, fn in _imports(path)
                   if not (_is_stdlib(mod) or mod.split(".")[0] in ("numpy", "verity") or mod in allowed or mod == CATALOG
                           or mod.startswith(CATALOG + ".") or (module, fn, mod) in EXCEPTIONS)})

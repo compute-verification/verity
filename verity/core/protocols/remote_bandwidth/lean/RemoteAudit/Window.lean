@@ -69,6 +69,22 @@ def Registration.make? (node : ByteArray) (blocks : Nat) (payloadRoot codecSeed 
   if !receipt.rowsOk rows then throw "the sketch rows are not the receipt kind's"
   pure { node, blocks, payloadRoot, codecSeed, codec, receipt, rows, key := Codec.key codecSeed codec }
 
+def CODEC_DOMAIN : String := "verity/remote-bandwidth/codec/v0"
+def NONCE_BYTES : Nat := 32
+
+/-- `audit.register`: the codec seed the verifier draws from its secret `source` and a fresh 32-byte `nonce` once the
+payload root has arrived, `derive(source, CODEC_DOMAIN, {blocks, codec, node, nonce, payload}).stream("codec", 32)`,
+and the registration under it (`Registration.make?`). The receipt kind, `bind`, the layout and the rows are not in
+the seed's context: the store depends on none of them. -/
+def Registration.register (source node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec)
+    (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) : Except String Registration := do
+  if source.size = 0 then throw "the source is a key holder's secret: nonempty bytes"
+  if nonce.size ≠ NONCE_BYTES then throw "a registration's nonce is 32 bytes"
+  let key := FlockSoundness.Randomness.derive source CODEC_DOMAIN [("blocks", .int blocks), ("codec", .str codec.name),
+    ("node", .bytes node), ("nonce", .bytes nonce), ("payload", .bytes payloadRoot)]
+  Registration.make? node blocks payloadRoot (FlockSoundness.Randomness.stream key [.str "codec"] Codec.SEED_BYTES)
+    codec receipt bind layout rows
+
 /-- `Registration.digest`: SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖
 frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(layout) ‖ u32be rows), bind 0. -/
 def Registration.digest (r : Registration) : ByteArray :=
@@ -196,6 +212,23 @@ def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Appen
       | none => receipter reg.receipt (w.seedOf i) reg.rows
     receipters := receipters.insert i r
     if let some f := checkOpening reg digest appends w r i p openings[k]! then return .reject f (some (i, p))
+  return .accept
+
+/-- `checkWindow` over contiguous chunks of `size` draws, each chunk on a thread of its own: the first chunk's rejection
+in draw order, or accept. A chunk's verdict is `checkWindow`'s on its draws and their openings, so a rejection names
+the draw and failure `checkWindow` on the whole window would (its earlier chunks accept, and its first failing opening
+is the window's first), and an acceptance is every chunk's, each chunk's openings passing `checkOpening` under the
+receipter of their pass's seed (`checkWindow_accept`). -/
+def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append)
+    (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
+  if openings.size ≠ drawn.size then return .reject .malformed none
+  let size := max 1 size
+  let tasks := (List.range ((drawn.size + size - 1) / size)).map fun c =>
+    Task.spawn (prio := .dedicated) fun _ =>
+      checkWindow reg digest appends w (drawn.extract (c * size) ((c + 1) * size))
+        (openings.extract (c * size) ((c + 1) * size))
+  for t in tasks do
+    if let .reject f at? := t.get then return .reject f at?
   return .accept
 
 /-- Window t's verdict: its draws from the openings coin, then each opening checked in the order drawn. `none` only if

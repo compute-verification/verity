@@ -5,11 +5,13 @@ each weight as its module runs.
 ~~~text
 arena      at load (`GPUModelRunner.load_model`, after), every parameter of two or more dimensions copied into one uint8
            buffer of --arena-gib, each from a block boundary in module order, and the parameter pointed at its copy;
-           the rest of the buffer zeros. The buffer is exported over CUDA IPC (`engine.<g>.json` in --dir: the GPU's
-           UUID, the handle, the offset and size, the weights' blocks), so the prover's pass reads these bytes as
-           they are served. Norms and other one-dimensional parameters stay outside it
+           the rest of the buffer zeros (through host memory, one engine at a time, when the GPU can't hold the buffer
+           beside the loaded weights: `Arena`). The buffer is exported over CUDA IPC (`engine.<g>.json` in --dir: the
+           GPU's UUID, the handle, the offset and size, the weights' blocks), so the prover's pass reads these bytes
+           as they are served. Norms and other one-dimensional parameters stay outside it
 plain      a greedy probe alone in the batch (`probe`), then the arena's SHA-256 a GiB at a time, then the steady load
-           (`Load`) at --step-hz: `status.<g>.json` says ready, then baseline once --plain-s of it has run
+           (`Load`) at --step-hz, with --align-steps at the host clock's multiples of 1/hz so the node's engines
+           step together: `status.<g>.json` says ready, then baseline once --plain-s of it has run
 encode     the prover's ctl.json sets pause: the engine aborts what it serves, waits for its GPU, says paused and
            steps no more while the prover encodes the arena in place (`device.DeviceStore.encode`)
 decode     ctl.json brings the registration's key and the arena's first block in the store: the engine sets the key
@@ -30,7 +32,9 @@ served bytes, bit for bit, before anything is timed.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ctypes
+import fcntl
 import hashlib
 import json
 import os
@@ -108,10 +112,23 @@ class Decoder:
             raise RuntimeError(f"kv_decode: {rc}")
 
 
-class Arena:
-    """The engine's weights in one buffer (`pack`): `entries`, each (offset, bytes, parameter, its modules)."""
+@contextlib.contextmanager
+def one_at_a_time(path: Path):
+    """An exclusive lock on `path` (made if absent) while the block runs, released when the process ends."""
+    with path.open("a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
-    def __init__(self, torch, model, capacity: int) -> None:
+
+class Arena:
+    """The engine's weights in one buffer (`pack`): `entries`, each (offset, bytes, parameter, its modules). When the
+    GPU can't hold the buffer beside the loaded weights (a 32B model's 61 GiB on a 96 GB GPU), the weights go to host
+    memory first and come back into the buffer, under `lock` so that one engine of the node does it at a time."""
+
+    def __init__(self, torch, model, capacity: int, lock: Path | None = None) -> None:
         self.torch, seen, params = torch, {}, []
         for mname, mod in model.named_modules():
             for pname, p in mod._parameters.items():
@@ -125,15 +142,25 @@ class Arena:
         sizes = [seen[k][0].numel() * seen[k][0].element_size() for k in params]
         offsets = pack(sizes, capacity)
         device = seen[params[0]][0].device
-        self.buf = torch.zeros(capacity, dtype=torch.uint8, device=device)
-        self.entries = []
-        for k, off, n in zip(params, offsets, sizes):
-            p, owners = seen[k]
-            self.buf[off:off + n].copy_(p.data.reshape(-1).view(torch.uint8))
-            p.data = self.buf[off:off + n].view(p.dtype).view(p.shape)
-            self.entries.append((off, n, p, owners))
-        torch.cuda.synchronize()
+        t0 = time.monotonic()
+        self.staged = torch.cuda.mem_get_info(device)[0] < capacity + GIB
+        if self.staged and lock is None:
+            raise ValueError("the arena needs the weights staged through host memory, and a lock to take turns")
+        with one_at_a_time(lock) if self.staged else contextlib.nullcontext():
+            if self.staged:
+                for k in params:
+                    seen[k][0].data = seen[k][0].data.cpu()
+                torch.cuda.empty_cache()
+            self.buf = torch.zeros(capacity, dtype=torch.uint8, device=device)
+            self.entries = []
+            for k, off, n in zip(params, offsets, sizes):
+                p, owners = seen[k]
+                self.buf[off:off + n].copy_(p.data.reshape(-1).view(torch.uint8))
+                p.data = self.buf[off:off + n].view(p.dtype).view(p.shape)
+                self.entries.append((off, n, p, owners))
+            torch.cuda.synchronize()
         torch.cuda.empty_cache()
+        self.pack_s = time.monotonic() - t0
         self.weights_bytes = sum(sizes)
         self.weights_blocks = (offsets[-1] + -(-sizes[-1] // BLOCK) * BLOCK) // BLOCK
         self.outside_bytes = sum(p.numel() * p.element_size() for p in model.parameters()) - self.weights_bytes
@@ -193,15 +220,24 @@ class Hooks:
             p.data = self.arena.view(off, n, p)
 
 
+def aligned(perf: float, clock: float, interval: float) -> float:
+    """The perf counter's reading at the host clock's next multiple of `interval`, given both read at one moment."""
+    return perf + interval - clock % interval
+
+
 class Load:
     """The steady load: `concurrency` requests in flight, each `prompt` random tokens and `tokens` greedy ones (the
-    end of sequence ignored), new ones added as others finish, one engine step every 1/`hz` seconds."""
+    end of sequence ignored), new ones added as others finish, one engine step every 1/`hz` seconds. With `align`,
+    each step starts at the next multiple of 1/`hz` of the host's clock, so the node's engines step together: a pass
+    reads every GPU's shard, and steps at independent times slow it whenever any one GPU is in a step."""
 
-    def __init__(self, engine, concurrency: int, prompt: int, tokens: int, hz: float, seed: int) -> None:
+    def __init__(self, engine, concurrency: int, prompt: int, tokens: int, hz: float, seed: int,
+                 align: bool = False) -> None:
         from vllm import SamplingParams
         from vllm.sampling_params import RequestOutputKind
 
         self.engine, self.concurrency, self.prompt, self.interval = engine, concurrency, prompt, 1.0 / hz
+        self.align = align
         self.params = SamplingParams(temperature=0.0, max_tokens=tokens, ignore_eos=True, detokenize=False,
                                      output_kind=RequestOutputKind.DELTA)
         self.rng, self.live, self.n, self.next_at = random.Random(seed), set(), 0, time.perf_counter()
@@ -220,8 +256,12 @@ class Load:
             tokens += sum(len(c.token_ids) for c in o.outputs)
             if o.finished:
                 self.live.discard(o.request_id)
-        self.next_at = max(self.next_at + self.interval, t1)
-        return {"t": time.time(), "ms": (t1 - t0) * 1e3, "tokens": tokens, "running": len(self.live)}
+        now = time.time()
+        if self.align:
+            self.next_at = aligned(time.perf_counter(), now, self.interval)
+        else:
+            self.next_at = max(self.next_at + self.interval, t1)
+        return {"t": now, "ms": (t1 - t0) * 1e3, "tokens": tokens, "running": len(self.live)}
 
     def wait(self) -> float:
         """Seconds until the next step is due."""
@@ -281,6 +321,8 @@ def main() -> int:
     ap.add_argument("--prompt-tokens", type=int, default=256)
     ap.add_argument("--max-tokens", type=int, default=256)
     ap.add_argument("--step-hz", type=float, default=2.0, help="engine steps a second, at most")
+    ap.add_argument("--align-steps", action="store_true",
+                    help="step at the host clock's multiples of 1/hz, every engine of the node together")
     ap.add_argument("--plain-s", type=float, default=60.0, help="the plain baseline's seconds")
     ap.add_argument("--probe-tokens", type=int, default=24)
     ap.add_argument("--seed", type=int, default=20261018)
@@ -307,7 +349,7 @@ def main() -> int:
             while hasattr(model, "runnable"):
                 model = model.runnable
             made["model"] = model
-            made["arena"] = Arena(torch, model, a.arena_gib * GIB)
+            made["arena"] = Arena(torch, model, a.arena_gib * GIB, d / "arena.lock")
 
         cls.load_model = load_model
 
@@ -324,7 +366,8 @@ def main() -> int:
     uuid = str(torch.cuda.get_device_properties(0).uuid)
     info = {"gpu": g, "uuid": uuid, "bytes": arena.buf.numel(), "weights_bytes": arena.weights_bytes,
             "weights_blocks": arena.weights_blocks, "outside_bytes": arena.outside_bytes,
-            "params": len(arena.entries), "model": a.model, **export(arena.buf.data_ptr())}
+            "params": len(arena.entries), "model": a.model, "staged": arena.staged, "pack_s": arena.pack_s,
+            **export(arena.buf.data_ptr())}
     write_json(d / f"engine.{g}.json", info)
     rng = random.Random(a.seed)
     prompts = [[rng.randrange(1000, 120000) for _ in range(32 + 16 * k)] for k in range(4)]
@@ -333,7 +376,7 @@ def main() -> int:
     scratch = torch.empty(max(GIB, largest), dtype=torch.uint8, device="cuda:0")
     plain_hash = arena.hashes(scratch)
     status("ready", **info)
-    load = Load(engine, a.concurrency, a.prompt_tokens, a.max_tokens, a.step_hz, a.seed + 1 + g)
+    load = Load(engine, a.concurrency, a.prompt_tokens, a.max_tokens, a.step_hz, a.seed + 1 + g, align=a.align_steps)
     log = (a.out / f"engine.{g}.steps.jsonl").open("w")
     steps, ctl, seq, started, baseline = [], {}, -1, time.time(), False
     paused, hooks, checks = False, None, None

@@ -16,6 +16,9 @@
 // the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
 // which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each
 // slot; pg_encode encodes listed plaintext slots in place under their bound offsets b_j(c_a) and clears their flags.
+// A token-layer kept past the lifetime cap L is re-keyed in its slot (§4: appended again at a fresh index j' under a fresh
+// coin): pg_rekey decodes listed slots under their old offsets and encodes them under their new ones b_j'(c_a') in place,
+// then writes the new offsets over the old.
 //
 // pg_attn is kv.cu's warp-specialized tensor-core form (attn_mma_ws_kernel) over pages: MDW decoder warps, a lane a
 // word of every tile, load the tile's words of one KV head from the pages (the block table), decode them (encoded) or
@@ -30,6 +33,16 @@
 //
 // pg_append_multi is pg_append over many layers in one launch (the codec's encode is a long chain a word: one wave for all
 // of a step's layers instead of one a layer), each layer's rows, slots, cache and first index in a table on the device.
+//
+// pg_window is a decode step's windows for an attention that reads each one whole (the exact-int8 attention's
+// Int8KvQuant and Int8LutAttentionRow, `verity_vllm.engine.int8_attention`'s window_of): request r's tokens 0 … lens[r] − 1,
+// K and V as bf16, into a working buffer at rows wo[r] + t (pg_window_offsets writes wo, the prefix sums of lens), head g
+// of row R at R ots + g ogs elements, each word decoded (encoded; a plaintext slot as it is) or copied, and the last token
+// from ck, cv as pg_attn takes it. It gives no receipts. Its grid is fixed (every SM's resident CTAs, each striding over
+// the rows) and every length, offset and table is read on the device, so a CUDA graph replays it at any lengths. order is
+// the codec's word order in a token-layer: 0 pg_wi's, K of every head then V of every head; 1 each head's K ‖ V, the
+// physical order of a [pages][slots][heads][K ‖ V] cache, which registered a layer to a region (layers 1, store_base the
+// region's first word) has codec index store_base plus its physical word.
 //
 // pg_reduce is the stack's linear epilogue: wt.cu's chunk partial sums [nch][M][N] summed in chunk order and scaled
 // (bf16(sum * xs[row or 0] * ws)), so a plain and an encoded linear over the same weight give the same bits.
@@ -281,12 +294,13 @@ __global__ void __launch_bounds__(32 * CW) pg_combine(const float *__restrict__ 
 
 // A warp's words, one a lane (dst nullptr: none), stored through shared memory a whole word to Q = NL/4 lanes, so a store
 // instruction writes whole 32-byte sectors (a lane's own 16-byte stores at a word's stride would each write half of one).
-// Every lane of the warp calls it; blocks are 128 threads.
+// Every lane of the warp calls it; blocks are at most 32 NW threads.
 constexpr int SQ = NL / 4;
 static_assert(NL % 4 == 0 && 32 % SQ == 0, "a word is whole 16-byte chunks, a whole number of them to a warp");
 
+template <int NW = 8>
 __device__ __forceinline__ void store_warp(u32 *dst, const u32 (&x)[NL]) {
-  __shared__ uint4 sw[8][32][SQ + 1];
+  __shared__ uint4 sw[NW][32][SQ + 1];
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
 #pragma unroll
   for (int q = 0; q < SQ; ++q) sw[w][lane][q] = make_uint4(x[4 * q], x[4 * q + 1], x[4 * q + 2], x[4 * q + 3]);
@@ -399,6 +413,53 @@ __global__ void __launch_bounds__(128) pg_settle_kernel(const u64 *__restrict__ 
   if (e[7] && slot >= 0) reinterpret_cast<uint8_t *>(e[7])[slot] = 0;
 }
 
+// The lifetime cap's re-key in place: layer l's row i of rows at u = (l rows + i) KV_HEADS HW + g HW + j; its table
+// entry (PG_REKEY words): slots, rows used, cache, store base, layer count, layer index, the layer's bound offsets
+// ([physical slot][NL], a listed slot's its old b_j; 0: the layer is under the seed's key and left as it is), the new
+// offsets b_j'(c_a') ([row][NL]) and the plaintext flags (0: none). A listed slot's words are decoded under the old
+// offset and encoded under the new one in place unless its flag is set (plaintext, left as it is with its flag). The
+// CTAs stride over the words, so a grid of fewer than every SM's resident CTAs leaves the rest of each SM to serving;
+// pg_rekey_settle_kernel writes the new offsets over the old after.
+constexpr int PG_REKEY = 9;
+__global__ void __launch_bounds__(128) pg_rekey_kernel(const u64 *__restrict__ tab, int layers, int rows, int bs, int sb,
+                                                       int sh, int ss, int k) {
+  const u64 per = (u64)rows * KV_HEADS * HW, words = (u64)layers * per;
+  for (u64 u0 = (u64)blockIdx.x * 128; u0 < words; u0 += (u64)gridDim.x * 128) {
+    const u64 u = u0 + threadIdx.x;
+    u32 x[NL] = {};
+    u32 *dst = nullptr;
+    if (u < words) {
+      const u64 *e = tab + PG_REKEY * (u / per);
+      const u64 r = u % per;
+      const int j = (int)(r % HW), g = (int)(r / HW % KV_HEADS), i = (int)(r / ((u64)HW * KV_HEADS));
+      const long long slot = i < (int)e[1] ? reinterpret_cast<const long long *>(e[0])[i] : -1;
+      const u32 *bj = reinterpret_cast<const u32 *>(e[6]);
+      if (slot >= 0 && bj && !pg_plain(reinterpret_cast<const uint8_t *>(e[8]), slot)) {
+        u32 *w = reinterpret_cast<u32 *>(e[2]) + ((u64)(slot / bs) * sb + (u64)g * sh + (u64)(slot % bs) * ss + j) * NL;
+        load(w, x);
+        const u64 at = e[3] + ((u64)slot * e[4] + e[5]) * TLW + pg_wi(g, j);
+        decode_word(x, at, k, bj + slot * NL);
+        encode_word(x, at, k, reinterpret_cast<const u32 *>(e[7]) + (u64)i * NL);
+        dst = w;
+      }
+    }
+    store_warp<4>(dst, x);
+  }
+}
+
+// Each listed slot's new offset into the layer's bound offsets, its flag set or not, so a plaintext slot's later
+// pg_encode takes its slot's current key. A thread a (layer, row, 16 bytes).
+__global__ void __launch_bounds__(128) pg_rekey_settle_kernel(const u64 *__restrict__ tab, int layers, int rows) {
+  constexpr int Q = NL / 4;
+  const u64 u = (u64)blockIdx.x * 128 + threadIdx.x;
+  if (u >= (u64)layers * rows * Q) return;
+  const u64 *e = tab + PG_REKEY * (u / ((u64)rows * Q));
+  const int i = (int)(u / Q % rows), q = (int)(u % Q);
+  const long long slot = i < (int)e[1] ? reinterpret_cast<const long long *>(e[0])[i] : -1;
+  if (e[6] && slot >= 0)
+    reinterpret_cast<uint4 *>(e[6])[slot * Q + q] = reinterpret_cast<const uint4 *>(e[7])[(u64)i * Q + q];
+}
+
 // nb whole blocks (blocks[b], bw words each, contiguous) of a layer's cache into out, block b at word b bw: decoded
 // (ENC, under each slot's bound offset in bj, nullptr: the seed's key; a plaintext slot copied) or copied. A thread a
 // word.
@@ -467,6 +528,89 @@ __global__ void __launch_bounds__(32 * KV_HEADS) pg_gather_rc_kernel(
     dst = out + ow * NL;
   }
   store_warp(dst, x);
+}
+
+// wo[0] = 0 and wo[r + 1] = wo[r] + lens[r] (a negative length counted 0): one CTA of 1024 threads, 1024 requests a pass.
+__global__ void __launch_bounds__(1024) pg_window_offsets_kernel(const int *__restrict__ lens, int batch,
+                                                                 int *__restrict__ wo) {
+  __shared__ int ws[32];
+  __shared__ int carry;
+  const int w = threadIdx.x >> 5, lane = threadIdx.x & 31;
+  if (threadIdx.x == 0) carry = 0;
+  for (int b0 = 0; b0 < batch; b0 += 1024) {
+    const int i = b0 + threadIdx.x;
+    int x = i < batch ? max(lens[i], 0) : 0;
+#pragma unroll
+    for (int o = 1; o < 32; o <<= 1) {
+      const int y = __shfl_up_sync(0xffffffffu, x, o);
+      if (lane >= o) x += y;
+    }
+    if (lane == 31) ws[w] = x;
+    __syncthreads();
+    if (w == 0) {
+      int v = ws[lane];
+#pragma unroll
+      for (int o = 1; o < 32; o <<= 1) {
+        const int y = __shfl_up_sync(0xffffffffu, v, o);
+        if (lane >= o) v += y;
+      }
+      ws[lane] = v;
+    }
+    __syncthreads();
+    const int at = carry + x + (w ? ws[w - 1] : 0);
+    if (i < batch) wo[i + 1] = at;
+    __syncthreads();
+    if (threadIdx.x == 1023) carry = at;
+    __syncthreads();
+  }
+  if (threadIdx.x == 0) wo[0] = 0;
+}
+
+// pg_window's words, a thread a word and the CTAs striding over the rows: row R's head g, word j (K's HW/2 then V's) of
+// request r, the last r with wo[r] <= R, at token t = R − wo[r] when t < lens[r].
+template <bool ENC>
+__global__ void __launch_bounds__(128) pg_window_kernel(const u32 *__restrict__ cache, Pg pg, int order,
+                                                        const int *__restrict__ wo, int batch, u64 cap,
+                                                        uint16_t *__restrict__ outk, uint16_t *__restrict__ outv,
+                                                        u64 ots, u64 ogs, int k) {
+  constexpr int RW = KV_HEADS * HW;
+  const u64 words = min((u64)max(wo[batch], 0), cap) * RW;
+  for (u64 u0 = (u64)blockIdx.x * 128; u0 < words; u0 += (u64)gridDim.x * 128) {
+    const u64 u = u0 + threadIdx.x;
+    u32 x[NL] = {};
+    u32 *dst = nullptr;
+    if (u < words) {
+      const u64 R = u / RW;
+      const int g = (int)(u / HW % KV_HEADS), j = (int)(u % HW);
+      int lo = 0, hi = batch;
+      while (hi - lo > 1) {
+        const int mid = (lo + hi) >> 1;
+        if ((u64)wo[mid] <= R) lo = mid;
+        else hi = mid;
+      }
+      const long long t = (long long)R - wo[lo];
+      const int len = pg.lens[lo];
+      if (t >= 0 && t < len) {
+        if (pg.ck && t == len - 1) {
+          const size_t crow = pg.qrow ? (size_t)pg.qrow[lo] : (size_t)lo;
+          load(reinterpret_cast<const u32 *>((j < HW / 2 ? pg.ck + crow * pg.cks : pg.cv + crow * pg.cvs) +
+                                             (size_t)g * HEAD_DIM + (size_t)(j % (HW / 2)) * (WB / 2)), x);
+        } else {
+          const int *btr = pg.bt + (size_t)lo * pg.bstride;
+          load(cache + pg_word(pg, btr, (int)t, g, j) * NL, x);
+          if constexpr (ENC) {
+            const u64 slot = pg_slot(pg, btr, (int)t);
+            if (!pg_plain(pg.plain, slot))
+              decode_word(x, pg.store_base + (slot * pg.layers + pg.layer) * TLW + (order ? g * HW + j : pg_wi(g, j)),
+                          k, pg.bj ? pg.bj + slot * NL : nullptr);
+          }
+        }
+        dst = reinterpret_cast<u32 *>((j < HW / 2 ? outk : outv) + R * ots + (u64)g * ogs +
+                                      (u64)(j % (HW / 2)) * (WB / 2));
+      }
+    }
+    store_warp<4>(dst, x);
+  }
 }
 
 __global__ void __launch_bounds__(256) pg_reduce_kernel(const float *__restrict__ part, int nch, int n, int mn,
@@ -602,6 +746,39 @@ int pg_encode(const unsigned long long *tab, int layers, int rows, int bs, int s
   return launched();
 }
 
+// Every SM's resident CTAs of pg_rekey_kernel.
+int pg_rekey_ctas() {
+  int dev = 0, sms = 0, per = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, kv::pg_rekey_kernel, 128, 0);
+  return std::max(1, sms * per);
+}
+
+// The lifetime cap's re-key (remote_bandwidth's PROTOCOL.md §4: a block kept past L windows is appended again at a
+// fresh index under a fresh coin, in its slot), in place: layers layers' listed slots decoded under their old bound
+// offsets and encoded under their new ones at k rounds, then the new offsets written over the old; a plaintext slot's
+// words and flag are left as they are, its offset moved too. tab (device) holds each layer's PG_REKEY words
+// (pg_rekey_kernel), rows its most rows; every layer's cache in one layout. A layer's listed slots are distinct, and
+// nothing reads them until it is done: the caller orders it after their last read under the old offsets and before
+// their first under the new. It reads and writes nothing else. ctas is the grid: 0 a word a thread (CTAs that end after
+// one word each), a count that many CTAs striding over the words. A low-priority stream preempts no CTA, and the room a
+// finished CTA frees seldom fits a serving kernel's, so beside serving a caller caps the grid and serving keeps the
+// room the cap leaves (pg_rekey_ctas(), every SM's resident CTAs, leaves none).
+int pg_rekey(const unsigned long long *tab, int layers, int rows, int bs, int sb, int sh, int ss, int k, int ctas,
+             cudaStream_t s) {
+  if (layers < 0 || rows < 0 || bs < 1 || k < 1 || k > kv::KMAX || ctas < 0 || !kv::MMA_OK || (layers && rows && !tab))
+    return -1;
+  if (!layers || !rows) return 0;
+  const auto *t = reinterpret_cast<const kv::u64 *>(tab);
+  const unsigned long long words = (unsigned long long)layers * rows * kv::KV_HEADS * kv::HW;
+  const unsigned grid = ctas ? (unsigned)ctas : (unsigned)((words + 127) / 128);
+  kv::pg_rekey_kernel<<<grid, 128, 0, s>>>(t, layers, rows, bs, sb, sh, ss, k);
+  const unsigned long long limbs = (unsigned long long)layers * rows * (kv::NL / 4);
+  kv::pg_rekey_settle_kernel<<<(unsigned)((limbs + 127) / 128), 128, 0, s>>>(t, layers, rows);
+  return launched();
+}
+
 // bj (encoded only): [physical slot][NL] the layer's bound offsets (null: the seed's key). plain (encoded only):
 // [physical slot] the layer's plaintext flags (null: every slot encoded).
 int pg_gather(const void *cache, const int *blocks, int nb, int bw, int bs, int sb, int sh, int ss, void *out,
@@ -627,6 +804,56 @@ int pg_gather(const void *cache, const int *blocks, int nb, int bw, int bs, int 
           static_cast<const uint32_t *>(cache), blocks, nb, bw, bs, sh, ss, static_cast<uint32_t *>(out), store_base,
           layers, layer, k, nullptr, nullptr);
   }
+  return launched();
+}
+
+// pg_window's offsets on the device: wo[0] = 0 and wo[r + 1] = wo[r] + lens[r] (a negative length counted 0), so
+// request r's window is rows wo[r] … wo[r + 1] − 1 of the working buffer and wo[batch] its rows. A step's layers share it.
+int pg_window_offsets(const int *lens, int batch, int *wo, cudaStream_t s) {
+  if (batch < 0 || !wo || (batch && !lens)) return -1;
+  kv::pg_window_offsets_kernel<<<1, 1024, 0, s>>>(lens, batch, wo);
+  return launched();
+}
+
+// pg_window's default grid: every SM's resident CTAs of the copy (encoded 0) or the decode (1).
+int pg_window_ctas(int encoded) {
+  int dev = 0, sms = 0, per = 0;
+  cudaGetDevice(&dev);
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, encoded ? kv::pg_window_kernel<true> : kv::pg_window_kernel<false>,
+                                                128, 0);
+  return std::max(1, sms * per);
+}
+
+// One layer's decode windows for batch requests (lens, block table bt of row stride bstride) into outk and outv (bf16):
+// request r's token t at row wo[r] + t, wo nondecreasing from 0 with wo[r + 1] − wo[r] >= lens[r] (pg_window_offsets'
+// or with gaps, left as they are), rows from cap on not written; head g of row R at R ots + g ogs elements, 16-byte
+// aligned. encoded 0 copies; 1 decodes at k rounds under bj ([physical slot][NL], null: the seed's key), a slot that
+// plain ([physical slot], null: none) flags read as it is. order: the codec's word order (the header). ck, cv (row strides
+// cks, cvs; null: from the pages): each request's last token, at row qrow[r] (null: r). ctas: the grid (0: every SM's
+// resident CTAs), fixed, so a CUDA graph replays the launch at any lengths.
+int pg_window(const void *cache, int encoded, int order, const int *lens, const int *bt, int bstride, int bs, int sb,
+              int sh, int ss, unsigned long long store_base, int layers, int layer, int k, const uint32_t *bj,
+              const uint8_t *plain, const uint16_t *ck, const uint16_t *cv, size_t cks, size_t cvs, const int *qrow,
+              const int *wo, int batch, unsigned long long cap, uint16_t *outk, uint16_t *outv,
+              unsigned long long ots, unsigned long long ogs, int ctas, cudaStream_t s) {
+  const auto misaligned = [](const void *p) { return (reinterpret_cast<uintptr_t>(p) & 15) != 0; };
+  if (batch < 0 || bs < 1 || layers < 1 || layer < 0 || layer >= layers || encoded < 0 || encoded > 1 || order < 0 ||
+      order > 1 || (encoded && (k < 1 || k > kv::KMAX)) || ((bj || plain) && !encoded) || (!ck != !cv) || ctas < 0 ||
+      !kv::MMA_OK || (batch && (!cache || !lens || !bt || !wo || !outk || !outv)) || misaligned(cache) ||
+      misaligned(outk) || misaligned(outv) || ots % 8 || ogs % 8 || misaligned(bj) ||
+      (ck && (misaligned(ck) || misaligned(cv) || cks % 8 || cvs % 8)))
+    return -1;
+  if (!batch) return 0;
+  static int resident[2] = {0, 0};
+  if (!ctas) {
+    if (!resident[encoded]) resident[encoded] = pg_window_ctas(encoded);
+    ctas = resident[encoded];
+  }
+  const kv::Pg pg{lens, bt, qrow, bstride, bs, sb, sh, ss, store_base, layers, layer, ck, cv, cks, cvs,
+                  nullptr, nullptr, nullptr, bj, plain};
+  (encoded ? kv::pg_window_kernel<true> : kv::pg_window_kernel<false>)<<<ctas, 128, 0, s>>>(
+      static_cast<const uint32_t *>(cache), pg, order, wo, batch, cap, outk, outv, ots, ogs, k);
   return launched();
 }
 

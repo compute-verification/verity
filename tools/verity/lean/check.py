@@ -243,9 +243,16 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
+#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
+SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
+ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
+                "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -298,21 +305,42 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
+#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
+#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
+#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+REPLAY_GIB_PER_THREAD = 4
+_HEAVY_REPLAY = threading.Semaphore(1)
+
+
+def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
+    `REPLAY_GIB_PER_THREAD`); else None."""
+    if build_threads(pkg, env, have_gib=1) is None:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+
+
 def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
-    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor."""
-    try:
-        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", MEM_FLOOR_GIB))
-    except ValueError:
-        floor = MEM_FLOOR_GIB
+    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
+    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves)."""
     heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
              and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
+    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
+    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+    try:
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+    except ValueError:
+        floor = need
     if not heavy or have_gib >= floor:
         return None
     rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
-    return (f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB, and this machine has "
-            f"{have_gib:.0f} GiB (memory and swap, within its cgroup): run it on a node, "
-            f"`{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set VERITY_LEAN_MEM_FLOOR_GIB=0 to "
-            f"try here anyway")
+    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
+            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
+    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
+            f"GiB floor: run it on a node, `{(ON_NODE_SPEC if heavy and spec else ON_NODE).format(pkg=rel(pkgs[0]))}` "
+            f"(add --update for the record), or set "
+            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
@@ -1073,7 +1101,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                          f"`escapes` with the reason, or remove it")
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(f"escape: {n} is listed under `escapes` but is not one; remove the entry")
-    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"))
+    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
     fails += claim_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
@@ -1185,35 +1213,57 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out["guarantees"], out["reads"] = kept, now_reads
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
+    if update and policy.get("verifier") and facts.get("verifier") is not None:
+        out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     return fails, out
 
 
-def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
+def compiled(found: dict) -> list[tuple[str, dict]]:
+    """(kind, constant) for each `@[implemented_by]` and `@[extern]` constant on the verifier's path (`Facts.lean`)."""
+    return [(kind, e) for kind in ("implemented_by", "extern") for e in found.get(kind, [])]
+
+
+def allowed_by(allow: list[str], e: dict) -> str | None:
+    """The `verifier.allow` entry that admits the constant ``e``: its name, a name prefix, or `module:M` for every constant
+    of a module under `M`."""
+    n = e["name"]
+    return next((a for a in allow if (under([a[len("module:"):]], e.get("module") or "") if a.startswith("module:")
+                                      else n == a or n.startswith(a + "."))), None)
+
+
+def verifier_allow(rule: dict, found: dict) -> list[str]:
+    """The `verifier.allow` that `--update` writes: the `module:` entries as they are, and by name each compiled constant on
+    the path that none of them admits, so the record lists it and the landing DM shows one added."""
+    modules = [a for a in rule.get("allow", []) if a.startswith("module:")]
+    return modules + sorted({e["name"] for _, e in compiled(found) if not allowed_by(modules, e)})
+
+
+def verifier_failures(rule: dict | None, found: dict | None, update: bool = False) -> list[str]:
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
-    no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
-    under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
-    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
+    no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
+    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
+    that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
+    constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
         return ["verifier: `Facts.lean` reported no verifier path; is the audit tool older than the policy?"]
     allow = rule.get("allow", [])
-    names = [a for a in allow if not a.startswith("module:")]
-    modules = [a[len("module:"):] for a in allow if a.startswith("module:")]
-
-    def allowed(e: dict) -> bool:
-        n = e["name"]
-        return any(n == a or n.startswith(a + ".") for a in names) or under(modules, e.get("module") or "")
-
     entries = ", ".join(rule.get("entries", []))
     fails = [f"verifier: entry {m} is not a constant of the build; fix `verifier.entries`" for m in found.get("missing", [])]
-    for kind in ("implemented_by", "extern"):
-        for e in found.get(kind, []):
-            if not allowed(e):
+    if not update:
+        used = set()
+        for kind, e in compiled(found):
+            if a := allowed_by(allow, e):
+                used.add(a)
+            else:
                 fails.append(f"verifier: {e['name']} (@[{kind}], in {e.get('module')}) is on the path from {entries}: compiled "
-                             f"code no proof sees; add it to `verifier.allow` only if it is a core primitive")
+                             f"code no proof sees; if it is a core primitive, run `check.py --update`, which lists it under "
+                             f"`verifier.allow` (the landing DM shows it), else take it off the path")
+        fails += [f"verifier: `verifier.allow` lists {a}, which admits nothing on the path from {entries}; run `check.py "
+                  f"--update`" for a in allow if not a.startswith("module:") and a not in used]
     for h in found.get("hash", []):
         fails.append(f"verifier: {entries} reach {h['name']} outside the hash parameter, by {' -> '.join(h['path'])}; route "
                      f"it through the parameter, or add the public constant it serves to `verifier.stop`")
@@ -1233,7 +1283,12 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
-    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM."""
+    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
+    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
+    a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
+    of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
+    `HEq a a`) nor one of its hypotheses (split at `∧`), and no hypothesis is `False`. Read as written, nothing unfolded."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1281,7 +1336,31 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                 fails.append(f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} itself: a `meets` witness states the "
                              f"claim's checkable antecedents at a deployed record (a decoder meeting its bound, a non-empty "
                              f"scope), not the claim")
+            elif role == "meets" and (why := vacuous_meets(body, c)):
+                fails.append(f"claims: {n}, {c}'s `meets` witness, {why}: each conjunct of a `meets` witness's conclusion "
+                             f"applies a definition of the spec (the deployed record, a predicate or a field of it)")
     return fails
+
+
+def vacuous_meets(body: dict, claim: str) -> str | None:
+    """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
+    if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
+        return "has no conclusion `Facts.lean` reported; is the audit tool older than the policy?"
+    if body.get("absurd"):
+        return "takes `False` as a hypothesis, so it proves anything"
+    for k in body["conclusion"]:
+        head = k.get("head")
+        if head is None:
+            return "has a conjunct that applies a bound variable, not a constant"
+        if head == claim:
+            return f"has a conjunct that states {claim} itself"
+        if k.get("refl"):
+            return f"has a conjunct that is a reflexivity ({head} of two equal sides)"
+        if k.get("assumed"):
+            return f"has a conjunct ({head} …) that is one of its own hypotheses"
+        if not k.get("defs"):
+            return f"has a conjunct ({head} …) that applies no definition under `meaning` (`True`, or a fact of Init or Mathlib alone)"
+    return None
 
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
@@ -1825,7 +1904,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record."""
+    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -1917,6 +1997,11 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
+    before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
+    where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
+    out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
+            for a in after if a not in before]
+    out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
     return out
 
 
@@ -2062,8 +2147,11 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     keys = replay_keys(facts, toolchain) if replay_cache else {}
     reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
     checked = [m for m in facts["modules"] if m not in reused]
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
-                    *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
+    n = replay_threads(pkg)
+    with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
+                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else [])],
+                       pkg, work / "replay.log")
     fails = []
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
@@ -2255,8 +2343,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 return rep
     built()
     files = lean_modules(pkg)
-    background = ThreadPoolExecutor(max_workers=2)
+    background = ThreadPoolExecutor(max_workers=5)
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
+    # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
+    # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
+    # their place: started together, their Python contends for the GIL with the audits on the critical path.
+    early = "proved_in" in policy and not lifts
+    upstream = background.submit(timed, sibling("upstream").pinned, pkg, policy["upstream"]) \
+        if early and "upstream" in policy else None
     current = policy
     if moved:
         renames = {}
@@ -2265,18 +2359,24 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 renames[renamed(n, moved)] = r
         current = policy | {"guarantees": renames}
     s = time.monotonic()
+    replayed = scanned = digested = None
     try:
         facts = facts_of(pkg, current, work, moved)
+        if early:
+            replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
+                if replay else None
+            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
+            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
         cross: list[str] = []
         if "proved_in" in policy:
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, ready)
     except RuntimeError as e:
         rep["failures"].append(f"lean: {e}")
-        background.shutdown()
+        background.shutdown(cancel_futures=True)
         return rep
     rep["seconds"]["audit"] = round(time.monotonic() - s, 1)
-    replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache) \
-        if replay and not lifts else None
+    if replay and not lifts and not early:
+        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
@@ -2287,9 +2387,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + spec_reads(current, facts, reads_home(pkg, current)) + \
         shape(current, facts)
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
-    s = time.monotonic()
-    missed, rep["dependency_sources"] = dependency_scans(pkg, facts["oleans"], policy)
-    rep["seconds"]["dependency-sources"] = round(time.monotonic() - s, 1)
+    (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
+        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
@@ -2305,13 +2404,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
               f"with it every record whose definitions use it. Write `instance {i['id']}` there (`check.py --name-instances` "
               f"writes each one)" for i in anonymous]
     if "upstream" in policy:
-        s = time.monotonic()
-        rep["upstream"], missed = sibling("upstream").pinned(pkg, policy["upstream"])
+        (rep["upstream"], missed), rep["seconds"]["upstream"] = \
+            upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
         fails += missed
-        rep["seconds"]["upstream"] = round(time.monotonic() - s, 1)
-    s = time.monotonic()
-    deps = dependency_digests(pkg, rep["toolchain"], facts["oleans"])
-    rep["seconds"]["dependencies"] = round(time.monotonic() - s, 1)
+    deps, rep["seconds"]["dependencies"] = \
+        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"])
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:

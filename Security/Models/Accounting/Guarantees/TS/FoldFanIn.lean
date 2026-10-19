@@ -14,9 +14,14 @@ reading at most `f` sources, each `def G : Prop` proved as `Accounting.SecurityP
 * `DuoFoldFanIn`, `Fx1FoldFanIn`: the same for duo's and fx1's runs (`c = 2`), with odd multipliers.
 
 `f` counts every value a node's value depends on: its registers, predicates and carry-ins, and for a guarded
-instruction its guard and the old destination it keeps when the guard is false. Three registers give `f = 3`, ½ a
-node a word. A guarded three-register instruction gives `f = 5`, ¼ a word, and a guarded IADD3.X (three registers and
-two carry-ins) `f = 7`, ⅙ a word.
+instruction its guard and everything it writes, which it keeps when the guard is false (its destination, carry-outs and
+predicate destinations). Three registers give `f = 3`, ½ a node a word. A guarded three-register instruction gives
+`f = 5`, ¼ a word; a guarded IADD3.X (three registers, two carry-ins, the guard, the destination and two carry-outs)
+`f = 9`, ⅛ a word, and `f = 10` on sm_80, sm_89 and sm_90, whose `cx[UR][imm]` operand reads a uniform register and a
+constant bank where a register was; the widest lane forms, a guarded P2R with that operand there and sm_120's IMNMX.U64
+(three pairs, two predicate operands, the guard and two predicate destinations), `f = 11`, ⅒ a word. A warp-wide
+node counts its lanes together, so its `f` is far larger: SHFL's 192, IMMA.16832's 481, and sm_100's LDTM.32x32b.x128,
+which keeps its 128 registers on 32 lanes under one uniform guard, 4099 (`Accounting.Assumptions.TS.FanIn`).
 
 No count of this kind gives more than `1/(f − 1)` a word. A tree of `f`-input XORs sees `N` words with
 `⌈(N − 1)/(f − 1)⌉` nodes. A duo run is a dataflow of two 3-source nodes a word, since `y′` and `z′` are each a

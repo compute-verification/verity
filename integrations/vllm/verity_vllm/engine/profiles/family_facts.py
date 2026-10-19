@@ -14,8 +14,9 @@ Every fact cites the vLLM source that hard-codes it (`provenance`: file:line @ d
   * `derive` -- a value computed from the configuration the way vLLM computes it (Gemma-2's `normalizer = sqrt(H)`; Pythia's rotary width).
 `rules` are the `analytic.config_of` family rules (QKV bias, default rope theta, per-head q/k norm); for the families `analytic.FAMILY_RULES`
 already lists they MUST agree (`tests/test_profiles_generic.py` pins that), the others (`gpt_neox`, `qwen3_moe`) are passed as `family_rules`.
-`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`, `dsa-moe`); `params` are the architecture's vLLM parameter
-names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`) does not know, per weights-Record field.
+`arch` selects the constructor class in `profiles.generic` (`dense`, `dense-ln`, `moe`, `dsa-moe`; `mhc-moe` has no κ constructor and only
+`predict.dsv4` reads it); `params` are the architecture's vLLM parameter names that the base Llama map (`vllm_d9105ea80_sm89_eager._LAYER_FIELDS`)
+does not know, per weights-Record field.
 """
 from __future__ import annotations
 
@@ -34,6 +35,8 @@ _Q3MOE = "vllm/model_executor/models/qwen3_moe.py"
 _DSV2 = "vllm/model_executor/models/deepseek_v2.py"
 _DSA = "vllm/models/deepseek_v32/nvidia/model.py"
 _DSA_ATTN = "vllm/models/deepseek_v32/attention.py"
+_DSV4 = "vllm/models/deepseek_v4/nvidia/model.py"
+_DSV4_ATTN = "vllm/models/deepseek_v4/attention.py"
 _FMOE = "vllm/model_executor/layers/fused_moe/layer.py"
 _LN = "vllm/model_executor/layers/layernorm.py"
 
@@ -222,6 +225,8 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
             "INDEX_SKIP_TOPK_OFFSET": {"key": "index_skip_topk_offset", "default": 2, "provenance": f"{_DSA_ATTN}:164-168"},
             "INDEX_ROPE_INTERLEAVE": {"key": "indexer_rope_interleave", "default": False,
                                       "provenance": f"{_DSA_ATTN}:236,270-276 indexer_rope_emb = get_rope(..., is_neox_style=not indexer_rope_interleave)"},
+            "INDEX_K_EPS": {"const": 1e-6, "provenance": f"{_DSA_ATTN}:84 DeepseekV32Indexer.k_norm = LayerNorm(head_dim, eps=1e-6); :312 its eps "
+                                                         f"is the fused norm-rope kernel's index_k_eps"},
             "FIRST_DENSE": {"key": "first_k_dense_replace",
                             "provenance": f"{_DSA}:85-108 layers from first_k_dense_replace on are DeepseekV2MoE, the ones below DeepseekV2MLP(intermediate_size)"},
             "NUM_EXPERTS": {"key": "n_routed_experts", "provenance": f"{_DSV2}:317-321,373 GateLinear(hidden, n_routed_experts), FusedMoE num_experts"},
@@ -278,11 +283,120 @@ FAMILY_FACTS: dict[str, dict[str, Any]] = {
                           f"(kv_b_proj), :68-84 DeepseekV32Indexer (wq_b, wk_weights_proj with quant_config=None, k_norm = LayerNorm with bias); "
                           f"{_DSV2}:257-265 DeepseekV2MLP (gate_up_proj, down_proj), :317-328 (gate, e_score_correction_bias), :360-368 "
                           f"(shared_experts), :370-373 FusedMoEFactory -> {_FMOE}:369 routed_experts (w13_weight, w2_weight); "
-                          f"vllm/model_executor/layers/quantization/fp8.py:354-355 a block-FP8 linear's scales are its weight_scale_inv",
+                          f"vllm/model_executor/layers/quantization/fp8.py:354-355 a block-FP8 linear's scales are its weight_scale_inv. "
+                          f"order / buffers: vllm_meta.py:242-264 (W_UK_T, W_UV registered on the attention module itself); {_DSA_ATTN}:176-217 "
+                          f"kv_b_proj and the indexer built before MLAAttention.__init__ (which sets the four scale buffers, "
+                          f"vllm/model_executor/layers/attention/attention.py:127-135), :239-264 the remaining projections, then rotary_emb (one "
+                          f"cos_sin_cache shared by every layer and the indexer's rope); {_DSA}:85-113 mlp, then the two layer norms; {_FMOE}:369 "
+                          f"routed_experts' w13 / w2 weights, then their scales",
+            # a decoder layer's parameters and buffers in `named_parameters` / `named_buffers` order (a module's own, then its children's in
+            # registration order); a name the layer does not hold (the map above gives it no field there) is skipped
+            "order": (
+                "self_attn.W_UK_T", "self_attn.W_UV", "self_attn.kv_b_proj.weight", "self_attn.kv_b_proj.weight_scale_inv",
+                "self_attn.indexer.wq_b.weight", "self_attn.indexer.wq_b.weight_scale_inv", "self_attn.indexer.wk_weights_proj.weight",
+                "self_attn.indexer.k_norm.weight", "self_attn.indexer.k_norm.bias",
+                "self_attn.fused_qkv_a_proj.weight", "self_attn.fused_qkv_a_proj.weight_scale_inv", "self_attn.q_a_layernorm.weight",
+                "self_attn.q_b_proj.weight", "self_attn.q_b_proj.weight_scale_inv", "self_attn.kv_a_layernorm.weight",
+                "self_attn.o_proj.weight", "self_attn.o_proj.weight_scale_inv",
+                "mlp.gate_up_proj.weight", "mlp.gate_up_proj.weight_scale_inv", "mlp.down_proj.weight", "mlp.down_proj.weight_scale_inv",
+                "mlp.gate.weight", "mlp.gate.e_score_correction_bias", "mlp.shared_experts.gate_up_proj.weight",
+                "mlp.shared_experts.gate_up_proj.weight_scale_inv", "mlp.shared_experts.down_proj.weight",
+                "mlp.shared_experts.down_proj.weight_scale_inv", "mlp.experts.routed_experts.w13_weight",
+                "mlp.experts.routed_experts.w2_weight", "mlp.experts.routed_experts.w13_weight_scale_inv",
+                "mlp.experts.routed_experts.w2_weight_scale_inv",
+                "input_layernorm.weight", "post_attention_layernorm.weight",
+            ),
+            "buffers": ("self_attn._k_scale", "self_attn._v_scale", "self_attn._q_scale", "self_attn._prob_scale",
+                        "self_attn.rotary_emb.cos_sin_cache"),
         },
         "moe_width_key": "moe_intermediate_size",
         "moe_width_provenance": f"{_DSV2}:376 FusedMoE(intermediate_size=config.moe_intermediate_size); intermediate_size is the dense layers' width "
                                 f"({_DSA}:101-108)",
+    },
+    # --------------------------------------------------------------------------------------------------------------------------- mhc-moe
+    # Manifold-constrained hyper-connections (HC_MULT residual streams mixed around each sublayer), compressed sparse MLA (a sliding window
+    # plus per-layer compressed rows) and a sqrtsoftplus MoE whose first HASH_LAYERS layers route by a token -> experts table.
+    "deepseek_v4": {
+        "arch": "mhc-moe", "vllm_class": "DeepseekV4ForCausalLM",
+        "rules": {"qkv_bias_key": "attention_bias"},
+        "rules_provenance": f"{_DSV4_ATTN}:239-275 fused_wqa_wkv, wq_b, wo_a, wo_b all bias=False (attention_bias False in the checkpoint); "
+                            f"{_DSV4}:1750 DeepseekV4ForCausalLM",
+        "facts": {
+            "Q_LORA": {"key": "q_lora_rank", "provenance": f"{_DSV4_ATTN}:205,239-247 fused_wqa_wkv = [q_lora_rank, head_dim] outputs, q_norm"},
+            "HEAD_DIM": {"key": "head_dim", "provenance": f"{_DSV4_ATTN}:207-209,248-257 wq_b = heads * head_dim, kv_norm = RMSNorm(head_dim); "
+                                                          f"nope = head_dim - qk_rope_head_dim"},
+            "QK_ROPE": {"key": "qk_rope_head_dim", "provenance": f"{_DSV4_ATTN}:208,277-284 build_deepseek_v4_rope(rope_head_dim=...)"},
+            "O_GROUPS": {"key": "o_groups", "provenance": f"{_DSV4_ATTN}:210-211,258-267 wo_a = a bmm over n_groups // tp groups of heads"},
+            "O_LORA": {"key": "o_lora_rank", "provenance": f"{_DSV4_ATTN}:206,258-275 wo_a's width per group, wo_b = RowParallelLinear(n_groups * "
+                                                          f"o_lora_rank, hidden)"},
+            "WINDOW": {"key": "sliding_window", "provenance": f"{_DSV4_ATTN}:212 window_size = config.sliding_window"},
+            "COMPRESS_RATIOS": {"key": "compress_ratios",
+                                "provenance": f"{_DSV4_ATTN}:220-226 compress_ratio = max(1, compress_ratios[layer_id]) below num_hidden_layers (the "
+                                              f"last entry is the MTP layer's); :288-308 an indexer only at ratio 4"},
+            "ATTN_SCALE": {"derive": lambda cfg, C: float(cfg["head_dim"]) ** -0.5, "provenance": f"{_DSV4_ATTN}:228 scale = head_dim**-0.5"},
+            "PADDED_HEADS": {"derive": lambda cfg, C: 64 if int(cfg["num_attention_heads"]) <= 64 else 128,
+                             "provenance": f"vllm/models/deepseek_v4/nvidia/flashmla.py:78-85 get_padded_num_q_heads: 64 or 128 (over 128 "
+                                           f"refuses); {_DSV4_ATTN}:231-237 attn_sink [padded_heads]"},
+            "O_QUANT_GROUP": {"const": 128, "provenance": "vllm/models/deepseek_v4/nvidia/ops/o_proj.py:48-57 fused_inv_rope_fp8_quant(...) without "
+                                                          "quant_group_size: vllm/models/deepseek_v4/common/ops/fused_inv_rope_fp8_quant.py:159 "
+                                                          "its default 128"},
+            "INDEX_HEADS": {"key": "index_n_heads", "provenance": f"{_DSV4_ATTN}:886,905-911 DeepseekV4Indexer weights_proj [index_n_heads, hidden]"},
+            "INDEX_HEAD_DIM": {"key": "index_head_dim", "provenance": f"{_DSV4_ATTN}:887,898-904 the indexer's wq_b [n_head * head_dim, q_lora_rank]"},
+            "INDEX_TOPK": {"key": "index_topk", "provenance": f"{_DSV4_ATTN}:885 topk_tokens = config.index_topk"},
+            "NUM_EXPERTS": {"key": "n_routed_experts", "provenance": f"{_DSV4}:777,794-800 GateLinear(hidden, n_routed_experts, out_dtype=f32)"},
+            "TOPK": {"key": "num_experts_per_tok", "provenance": f"{_DSV4}:778,816-824 (tid2eid [vocab_size, num_experts_per_tok])"},
+            "HASH_LAYERS": {"key": "num_hash_layers", "provenance": f"{_DSV4}:810-824 a layer below num_hash_layers routes by gate.tid2eid"},
+            "SCORING": {"key": "scoring_func", "default": "sqrtsoftplus", "provenance": f"{_DSV4}:782 getattr(config, 'scoring_func', 'sqrtsoftplus')"},
+            "RENORMALIZE": {"key": "norm_topk_prob", "provenance": f"{_DSV4}:781 renormalize = config.norm_topk_prob"},
+            "ROUTED_SCALING_FACTOR": {"key": "routed_scaling_factor", "default": 1.0,
+                                      "provenance": f"{_DSV4}:774 getattr(config, 'routed_scaling_factor', 1.0)"},
+            "SCORE_BIAS": {"key": "topk_method", "default": None,
+                           "provenance": f"{_DSV4}:825-833 gate.e_score_correction_bias (f32 [n_routed_experts]) on the non-hash layers when "
+                                         f"topk_method == 'noaux_tc'"},
+            "SWIGLU_LIMIT": {"key": "swiglu_limit", "provenance": f"{_DSV4}:780,849-858 the shared and routed experts' clamped SwiGLU"},
+            "SHARED_EXPERTS": {"key": "n_shared_experts", "default": None, "provenance": f"{_DSV4}:844-858 no shared expert when n_shared_experts is None"},
+            "SHARED_I": {"derive": lambda cfg, C: int(cfg["moe_intermediate_size"]) * int(cfg.get("n_shared_experts") or 0),
+                         "provenance": f"{_DSV4}:847 intermediate_size = moe_intermediate_size * n_shared_experts (a rank's)"},
+            "EXPERT_DTYPE": {"key": "expert_dtype", "default": "fp4",
+                             "provenance": f"{_DSV4}:1777-1779 getattr(config, 'expert_dtype', 'fp4'); :217-251 fp4 experts are u8 e2m1x2 "
+                                           f"weights with e8m0 scales"},
+            "HC_MULT": {"key": "hc_mult", "provenance": f"{_DSV4}:1127,1131-1175 hc_{{attn,ffn}}_fn [(2 + hc_mult) * hc_mult, hc_mult * hidden]"},
+            "HC_REPEAT": {"key": "hc_sinkhorn_iters", "provenance": f"{_DSV4}:1128 the Sinkhorn iterations of the mixing matrix"},
+            "HC_EPS": {"key": "hc_eps", "provenance": f"{_DSV4}:1129,1293 the pre / Sinkhorn / head epsilon"},
+        },
+        # the weights record in `named_parameters` / `named_buffers` order: `top`, every layer's `order` below `model.layers.<L>.`, `tail`, then
+        # the `buffers` below `model.layers.<L>.`; a name a layer does not hold (no indexer below ratio 4, tid2eid only on the hash layers,
+        # one shared rotary cache) is skipped
+        "params": {
+            "top": ("model.hc_head_fn", "model.hc_head_base", "model.hc_head_scale", "model.embed_tokens.weight"),
+            "order": (
+                "hc_attn_fn", "hc_ffn_fn", "hc_attn_base", "hc_ffn_base", "hc_attn_scale", "hc_ffn_scale", "hc_attn_fn_broadcast",
+                "attn.attn_sink", "attn.fused_wqa_wkv.weight", "attn.fused_wqa_wkv.weight_scale_inv", "attn.q_norm.weight",
+                "attn.wq_b.weight", "attn.wq_b.weight_scale_inv", "attn.kv_norm.weight", "attn.wo_a.weight", "attn.wo_a.weight_scale_inv",
+                "attn.wo_b.weight", "attn.wo_b.weight_scale_inv",
+                "attn.indexer.wq_b.weight", "attn.indexer.wq_b.weight_scale_inv", "attn.indexer.weights_proj.weight",
+                "attn.indexer.compressor.ape", "attn.indexer.compressor.fused_wkv_wgate.weight", "attn.indexer.compressor.norm.weight",
+                "attn.compressor.ape", "attn.compressor.fused_wkv_wgate.weight", "attn.compressor.norm.weight",
+                "ffn.gate.weight", "ffn.gate.tid2eid", "ffn.gate.e_score_correction_bias",
+                "ffn.shared_experts.gate_up_proj.weight", "ffn.shared_experts.gate_up_proj.weight_scale_inv",
+                "ffn.shared_experts.down_proj.weight", "ffn.shared_experts.down_proj.weight_scale_inv",
+                "ffn.experts.routed_experts.w13_weight", "ffn.experts.routed_experts.w13_weight_scale",
+                "ffn.experts.routed_experts.w2_weight", "ffn.experts.routed_experts.w2_weight_scale",
+                "attn_norm.weight", "ffn_norm.weight",
+            ),
+            "tail": ("model.norm.weight", "lm_head.weight"),
+            "buffers": ("attn.rotary_emb.cos_sin_cache",),
+            "provenance": f"{_DSV4}:1337-1355 DeepseekV4Model's own hc_head_fn / base / scale (own parameters before its children's), :1312, "
+                          f":1321, :1333 embed_tokens, layers, norm; :1785 lm_head; :1111-1175 a layer's six hc_ parameters, then attn, ffn, "
+                          f"attn_norm, ffn_norm; vllm_meta.post_load_tensors_as_the_loader_does registers layer 0's hc_attn_fn_broadcast "
+                          f"({_DSV4}:1651-1664 finalize_mhc_broadcast_weights) after them; {_DSV4_ATTN}:233-308 attn_sink, fused_wqa_wkv, "
+                          f"q_norm, wq_b, kv_norm, wo_a, wo_b, rotary_emb, the indexer, then the compressor; {_DSV4}:794-858 gate, tid2eid / "
+                          f"e_score_correction_bias, shared_experts, then the experts (:217-251 w13 / w2 and their e8m0 scales); "
+                          f"vllm/models/deepseek_v4/common/rope.py:9-52 get_rope's cache, one tensor while every layer has a ratio above 1 "
+                          f"(named_buffers keeps its first name)",
+        },
+        "moe_width_key": "moe_intermediate_size",
+        "moe_width_provenance": f"{_DSV4}:779,847,925-927 the experts' and the shared expert's width is moe_intermediate_size",
     },
 }
 

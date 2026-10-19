@@ -18,6 +18,7 @@
 #include "../dc.cuh"
 #include "lanes.cuh"
 #include "../wgmma.cuh"
+#include "../ffill.cuh"
 
 constexpr int KB = 32;  // every form's K tile is 32 bytes of a row: s8/e4m3 k32, bf16 k16, tf32 k8
 constexpr int AROWS = 64, BROWS = 256;
@@ -185,8 +186,9 @@ DC_DEV void wg_mix(const OpArgs& a) {
 // OP_UNTIL loop the gate refuses, DC EPS1 r9): each warpgroup issues its 4 wgmma, then folds the four segments' 512
 // committed words with LI (LOP3 to absorb a word, IMAD to multiply by an odd a) and, for CP > 0, LI-CP-W's per-segment
 // checkpoint (4 LOP3 to XOR a lane's 8 chains, then the warp reduces once by `redux.sync.xor.b32` (CP 1) or the 5-shuffle
-// butterfly fallback (CP 2)), then waits. No filler (that is the design's): this is the honest profile's own loop, and
-// its tensor fraction (the wgmma's rate beside it over its rate alone) is dc90-licpw-redux-l32's measured cycles a MMA.
+// butterfly fallback (CP 2)), then waits. No filler (that is the design's). The fold reads the Lane's registers, not
+// the wgmma's accumulators, so it overlaps its own wgmma, which the receipt can't: dc90-licpw-redux-l32 is timed from
+// RT-HOPPER's wgli_db_w2, which folds the accumulators (RT-HOPPER-8, r20261019-070001-df11).
 template <int CP>
 DC_DEV void li_fold(Lane& l) {
 #pragma unroll
@@ -221,6 +223,32 @@ DC_DEV void wg_li(const OpArgs& a) {
   wgmma_hold(d);
   OP_END
   OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
+}
+// wgli_fill: wgli_redux with ffill's filler beside it (../ffill.cuh, dither-2s-licpw-redux-l32's [filler]): three steps a
+// segment on three of its words, an IMAD and two FFMA a step, so 12 IMAD and 24 FFMA an iteration. Its tensor fraction
+// over wgli_redux's is what the filler costs the GEMM. The words are the fold's own lane state (ptxas can't hoist them),
+// the coins come from the block and thread, and `one` is 1 at run time (mode 0 or 1), so the IMAD stays an IMAD.
+DC_DEV void wg_li_fill(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  uint32_t c[4];
+  ff_coins(blockIdx.x, threadIdx.x, a.iters, c);
+  FfChain ff(c, 1u | (uint32_t)a.mode);
+  OP_BEGIN
+  OP_LOOP(it) {
+    group4<F_s8_n256>(d, t);
+    li_fold<1>(l);
+    ff.mma<0>(l.r[0], l.r[1], l.r[2]);
+    ff.mma<1>(l.r[3], l.r[4], l.r[5]);
+    ff.mma<0>(l.r[6], l.r[7], l.r[0]);
+    ff.mma<1>(l.r[1], l.r[2], l.r[3]);
+    wgmma_wait<0>();
+  }
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ l.fold() ^ __float_as_uint(ff.x) ^ __float_as_uint(ff.y) ^ threadIdx.x)
 }
 
 // TMA bulk-async copies beside the saturated wgmma (DC EPS1 r10): one side warp's lane 0 issues cp.async.bulk (SASS
@@ -443,6 +471,7 @@ OP_KERNEL(wgmix_reduce_r8, 256) { wg_mix<L_REDUCE, 8>(a); }
 OP_KERNEL(wgli_base, 256) { wg_li<0>(a); }
 OP_KERNEL(wgli_redux, 256) { wg_li<1>(a); }
 OP_KERNEL(wgli_reduce, 256) { wg_li<2>(a); }
+OP_KERNEL(wgli_fill, 256) { wg_li_fill(a); }
 OP_KERNEL(wgbulk_cp, 384) { wg_bulk<BULK_CP>(a); }
 OP_KERNEL(wgbulk_red, 384) { wg_bulk<BULK_RED>(a); }
 OP_KERNEL(bulkcp, 32) { bulk_solo<BULK_CP>(a); }
@@ -518,6 +547,8 @@ static const OpProbe PROBES[] = {
      .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=272,IMAD=256,REDUX*=4", .iters = 4096},
     {.name = "wgli_reduce", .kernel = (const void*)wgli_reduce, .tpb = 256,
      .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=292,IMAD=256,SHFL.BFLY=20", .iters = 4096},
+    {.name = "wgli_fill", .kernel = (const void*)wgli_fill, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=272,IMAD*=268,FFMA=24,REDUX*=4", .iters = 4096},
     P_JOINT(duo, 96, "LOP3.LUT=32,IMAD=32"),
     P_JOINT(duo, 384, "LOP3.LUT=128,IMAD=128"),
 #undef P_JOINT
