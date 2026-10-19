@@ -5,17 +5,21 @@
 #   research run --on vy-dc-b200 --project verity --campaign dither-loop --source . --cwd source --timeout 90m \
 #     -- bash benchmarks/hash/dither/native.sh [ARM ...]
 #
-# Default arms: served-row, vllm-int8, and vllm-int8-triton on a B200. Env: NATIVE_ARGS (extra native.py flags), LEASE
-# (gpu-lease flags, default "--max-min 14"), VERITY_BENCH_VENV.
+# Default arms: vllm-int8, and vllm-int8-triton on a B200 (served-row only when named: served_h1's eager engine, whose
+# receipts are a side computation, not a served number). Every arm samples without FlashInfer's JIT sampler, as
+# served_h1 does. Env: NATIVE_ARGS (extra native.py flags), LEASE (gpu-lease flags, default "--max-min 14"),
+# VERITY_BENCH_VENV.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 mkdir -p "$OUT"
+# the venv's bin holds ninja, which any JIT build vLLM or FlashInfer starts needs
+export PATH=$(dirname "$PY"):$PATH VLLM_USE_FLASHINFER_SAMPLER=0
 export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH} VLLM_ENABLE_V1_MULTIPROCESSING=0 HF_HOME=${HF_HOME:-/workspace/hf}
 export VLLM_CACHE_ROOT=$(mktemp -d) TORCHINDUCTOR_CACHE_DIR=$(mktemp -d)
 if [ $# -gt 0 ]; then arms=("$@"); else
-  arms=(served-row vllm-int8)
+  arms=(vllm-int8)
   nvidia-smi --query-gpu=name --format=csv,noheader | head -1 | grep -q B200 && arms+=(vllm-int8-triton)
 fi
 read -r -a lease <<< "${LEASE:---max-min 14}"

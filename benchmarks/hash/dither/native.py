@@ -90,7 +90,8 @@ def build(arm: str, a, scratch: Path):
     vc = llm.llm_engine.vllm_config
     return llm, {"enforce_eager": vc.model_config.enforce_eager, "compilation": str(vc.compilation_config.mode),
                  "cudagraph_mode": str(vc.compilation_config.cudagraph_mode),
-                 "disabled_kernels": os.environ.get("VLLM_DISABLED_KERNELS")}
+                 "disabled_kernels": os.environ.get("VLLM_DISABLED_KERNELS"),
+                 "flashinfer_sampler": os.environ.get("VLLM_USE_FLASHINFER_SAMPLER")}
 
 
 def prompts(rng: random.Random, n: int, length: int) -> list[dict]:
