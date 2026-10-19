@@ -18,7 +18,7 @@ only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s ses
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
   finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackIf` where the session's
   knowledge finders satisfy `cr/sha-512`, else `1`);
-* `execOS_subset_full_mem`, `vCovers_full`: V*'s live law, the full draw, draws every unit, so every unit's wires are
+* `vCovers_full`: V*'s live law, the full draw, draws every unit (`execOS_subset_full_mem`), so every unit's wires are
   covered;
 * `sessions_stage_le`: at V*'s sessions in a row, a layer that disagrees on a wire of a session's commit strings with
   the values `wv` is at most the sessions' expected slack plus each commit string's weight times its trial's chance of
@@ -125,50 +125,6 @@ theorem prob_auditLive_mono {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (F
   refine avg_mono fun ω => ?_
   rw [prob_map, prob_map]
   exact prob_mono (fun t => h τ.1 ω t) _ _
-
-/-- **A live subset draw that succeeds is `Flock.Draw.subset` on the source's one stream.** -/
-theorem runOS_subset {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) (k n : ℕ) {d : Flock.Draw.UnitDraw}
-    (hd : Law.runOS f (.subset k) n = some d) : Flock.Draw.subset k n (Law.streamOf (f 0)) = some d.units := by
-  unfold Law.runOS at hd
-  rw [Law.drawWith_subset_run] at hd
-  cases ho : (Flock.Draw.onWith (Law.tapeGet (Law.tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
-      (Flock.Draw.subset k n)).run (fun _ => 0) with
-  | none => rw [ho] at hd; exact absurd hd (by simp)
-  | some p =>
-    obtain ⟨u, pos'⟩ := p
-    rw [ho] at hd
-    cases u with
-    | none => exact absurd hd (by simp)
-    | some D =>
-      have hD : D = d.units := by rw [← Option.some.inj hd]
-      have h1 := (Law.onWith_tape (Law.tapesOf f) 0 _ (by omega) _ (fun a b u h => Law.subset_append _ _ a b u h) _
-        pos' _ rfl ho).2 D rfl
-      have h2 : Law.tapesOf f 0 = Law.streamOf (f 0) := by simp [Law.tapesOf, Array.getD_eq_getD_getElem?]
-      rw [h2] at h1
-      rw [← hD]; exact h1
-
-/-- **The full draw draws every unit**: a run of `subset n` over `[0, n)` that succeeds is a permutation's values on
-all of `[0, n)`, and a run that reads past the source's bytes draws every unit. -/
-theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
-    (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) (u : Fin n) :
-    u ∈ (Law.execOS (n := n) t (.subset n) n).draw ω := by
-  show u ∈ (match Law.runOS (t ω) (.subset n) n with
-    | some d => Finset.univ.filter fun u : Fin n => u.val ∈ d.units
-    | none => Finset.univ)
-  cases h : Law.runOS (t ω) (.subset n) n with
-  | none => exact Finset.mem_univ _
-  | some d =>
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and]
-    obtain ⟨π, -, hπ, hmem⟩ := FlockSoundness.Discharge.Exec.subset_spec (runOS_subset (t ω) n n h)
-    have himg : (Finset.range n).image π = Finset.range n :=
-      Finset.eq_of_subset_of_card_le
-        (fun x hx => by
-          obtain ⟨i, hi, rfl⟩ := Finset.mem_image.1 hx
-          exact Finset.mem_range.2 (hπ i (Finset.mem_range.1 hi)))
-        (Finset.card_image_of_injective _ π.injective).ge
-    obtain ⟨i, hi, hiu⟩ :=
-      Finset.mem_image.1 (by rw [himg]; exact Finset.mem_range.2 u.isLt : u.val ∈ (Finset.range n).image π)
-    exact (hmem u.val).2 ⟨i, Finset.mem_range.1 hi, hiu⟩
 
 namespace ZkOuter
 
@@ -590,8 +546,6 @@ from V*'s sessions**: `zk_sessions_recursive_upto` at V*'s tagged openings `obS`
 commit string `trialV`, its slack the sessions' expected `slackIf` and its weights `weightS` on `Sk i`, the transfer
 from `outerV_stage_le` on `VCommits`, `VDecodes` and `VFull`. -/
 theorem zk_sessions_recursive_full
-    -- V*'s laws: A3
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     -- V*'s sessions at each history and registration
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -627,7 +581,7 @@ theorem zk_sessions_recursive_full
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
             (∑ pos, weightS Vs Sk ρ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
-  refine zk_sessions_recursive_upto hA3 zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
+  refine zk_sessions_recursive_upto zs dg N hk hRw hM hρ hr ht' qF qS qW qR σ x wmsg hbr same hsame
     (obS Vs) (cmtS cmt) (msgS msg) (fun _ R ω t s => trialV (zs R ω t) dg N k Rw s)
     (fun _ R ω t s => sumV (zs R ω t) dg N (fun R₂ j τ => (zs R ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s)
     (weightS Vs Sk ρ) q (fun i hi ω => AllLeaves.of_forall (fun t s' v e he => ?_) _) hCR hin
@@ -665,7 +619,6 @@ times their expected stage slack (`ZkOuter.slackCR`), and the inner error. `zk_s
 budgets and no SHA-512 evaluations to count: with no fork, every finder satisfies `cr/sha-512` at budget `0` and every
 link finder `ecr/sha-512` at cost `0`. -/
 theorem zk_sessions_recursive_fork
-    (hA3 : ∀ j, Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -710,7 +663,7 @@ theorem zk_sessions_recursive_fork
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
       ZkOuter.slackIf_le _ _ _ _ fun hf => hs ⟨rs, hrs, j, hf⟩
-  refine (zk_sessions_recursive_full hA3 zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
+  refine (zk_sessions_recursive_full zs dg N hk hRw hM hρ hr le_rfl 0 0 0 0 σ x wmsg hbr same hsame Sk cmt msg
     hcmt hdec hfull (fun _ => 0) (fun i hi ω pos => Finder.cr_of_not_finds (fun hf => h1 ⟨i, hi, ω, pos, hf⟩) 0)
     hin).trans (add_le_add (add_le_add hB ?_) le_rfl)
   simp only [ne_eq, OfNat.ofNat_ne_zero, not_false_eq_true, zero_pow, zero_div, Real.sqrt_zero, ENNReal.ofReal_zero,

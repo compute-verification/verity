@@ -158,6 +158,37 @@ def RecursiveSoundPerTest : Prop :=
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
+/-- **`RecursiveSound` with no A3**: `RecursiveSound` without its A3 premise, at the same bound. V*'s laws are the full
+draw (`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+(`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
+def RecursiveSoundNoA3 : Prop :=
+  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    -- V*'s sessions at each history and registration `R₂`
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the count curve's parameters
+    {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    -- the recursive prover
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
+    -- commitments and the messages they open to, and V*'s bridge
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
+    -- the inner protocol
+    {εin : ℝ≥0∞} (_hin : InnerSound I εin),
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
+
 /-- **The firewall's commitment** to one message `msg` (an inner round message or a Merkle tree top) under the salt `y`:
 the hm96-sha512 leaf of the message's SHA-512 digest, `H(SHA-512(msg) ⊕ M·y, c(y))` (`ZkView.leafH`, `ZkView.My`,
 `ZkView.saltHash` at the pinned key; `ZkView.leafSplit` states that this is the executable's `Hm96.Default512.leaf`). An
@@ -503,6 +534,45 @@ def RecursiveRanRegisteredPerTest : Prop :=
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ + η) s) +
+          (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
+
+/-- **`RecursiveRanRegistered` with no A3**: `RecursiveRanRegistered` without its A3 premise, at the same bound. V*'s
+laws are the full draw (`--draw subset:<units>`), which draws every unit at every value of the operating system's bytes
+(`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
+def RecursiveRanRegisteredNoA3 : Prop :=
+  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
+    (_hr : ∀ R ω t R₂ j S' R' i,
+      rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
+    (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N))
+    (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
+    (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
+    (cmt : (j : Fin S) → Cm → PosK (Vs j).c (Vs j).hU (Vs j).nv → (obK (Vs j).c (Vs j).hU (Vs j).nv).Dg)
+    (msg : ℕ → ((j : Fin S) → PosK (Vs j).c (Vs j).hU (Vs j).nv → ValK (Vs j).c) → I.Msg)
+    (_hbr : Flock.Assumptions.VBridge zs dg N k Rw x wmsg Sk cmt msg)
+    {εin : ℝ≥0∞} (_hin : InnerSound I εin)
+    -- the registration's commitment at each row position, the registered private circuit, and the developer's openings
+    {Root Pos Row Op : Type} (com : Pos → PrivateCircuit.Commit Root Row Op) (_hbind : ∀ i, (com i).Binding)
+    (rt : Root) (p : Pos → Row) (op₀ : Pos → Op) (_hreg : ∀ i, (com i).Opens rt (p i) (op₀ i))
+    -- a private circuit's statement at a draw; the rows an accepted run read, and the rows and openings of `rt` it carries
+    (stmt : (Pos → Row) → L.Ω → I.Stmt)
+    (reads : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Prop)
+    (row : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Row)
+    (op : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) → Pos → Op)
+    (_hop : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ i, reads o i → (com i).Opens rt (row o i) (op o i))
+    (_hx : ∀ o, AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 → ∀ q : Pos → Row, (∀ i, reads o i → q i = row o i) →
+      x o.1 o.2.1 = stmt q o.2.1),
+    (regFinder zs dg N σ).Finds H512 ∨ RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
+      (∃ o, FlockSoundness.Game.Outcome (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ o ∧
+        AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
+        ∃ i, reads o i ∧ row o i ≠ p i ∧ FlockSoundness.Binding.Collides ((com i).ext (op o i) (op₀ i))) ∨
+      prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
+          (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
+        expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 

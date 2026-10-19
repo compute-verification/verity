@@ -247,10 +247,10 @@ theorem RanRegisteredRun : Flock.Guarantees.RanRegisteredRun := by
     rintro b hr ⟨ha, hq⟩
     exact ⟨ha, hq.resolve_right fun hne => hb ⟨b, hr, ha, hne, hbind rt _ _ _ _ (hacc b ha) h₀ hne⟩⟩
 
-theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
-  intro n L Reg I Cm S Vs Reg' Reg₂ hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
+theorem RecursiveRanRegisteredNoA3 : Flock.Guarantees.RecursiveRanRegisteredNoA3 := by
+  intro n L Reg I Cm S Vs Reg' Reg₂ zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
     Root Pos Row Op com hbind rt p op₀ hreg stmt reads row op hop hx
-  rcases RecursiveSound hA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hf | hb
+  rcases RecursiveSoundNoA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin with hf | hf | hf | hb
   · exact Or.inl hf
   · exact Or.inr (Or.inl hf)
   · exact Or.inr (Or.inr (Or.inl hf))
@@ -270,6 +270,12 @@ theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
         rw [hx o h.1 p hagree] at hh
         exact h.2 hh
       exact Or.inr (Or.inr (Or.inr (Or.inr (hmono.trans hb))))
+
+theorem RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered := by
+  intro n L Reg I Cm S Vs Reg' Reg₂ _hA3 zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr εin hin
+    Root Pos Row Op com hbind rt p op₀ hreg stmt reads row op hop hx
+  exact RecursiveRanRegisteredNoA3 zs dg N hk hRw hM hρ hr σ x wmsg Sk cmt msg hbr hin com hbind rt p op₀ hreg stmt
+    reads row op hop hx
 
 section Rows
 

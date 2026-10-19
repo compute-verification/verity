@@ -23,7 +23,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of
   bytes `L` the model reads. The live verifier reads as many as its reruns need, and its acceptance probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
-  uniform streams as their probability space, the same assumption.
+  uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
+  it: their law is the full draw, which draws every unit at every byte string (`execOS_subset_full_mem`,
+  `execOS_subset_full_escape`), so `RecursiveSound`, `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3`
+  are proved from their forms with no A3 premise (`…NoA3`).
 - **The salts** (Daniel, 9 Oct, decisions 4(a) and 4(c)). C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
   from the operating system (`getrandom`, the kernel's `getrandom(2)`, which `/dev/urandom` also reads; under the
   firewall, from its tap), and the recursive audit's firewall and a registrant read theirs the same way (`os.urandom`).
