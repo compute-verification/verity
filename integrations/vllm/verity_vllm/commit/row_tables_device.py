@@ -38,7 +38,8 @@ from verity.ml.commitments.merkle import _digest, domain_message
 from . import row_tables as RTB
 from . import serving_rows as CS
 
-__all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "launch", "plan", "record_ready"]
+__all__ = ["Pending", "Plan", "device_lib", "host_lib", "host_step", "launch", "plan", "record_ready", "side_stream",
+           "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocol_options" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
@@ -232,14 +233,29 @@ class _Device:
 _DEVICES: dict[int, _Device] = {}
 
 
+def _device(torch: Any, device: Any) -> _Device:
+    if device.index not in _DEVICES:
+        _DEVICES[device.index] = _Device(torch, device)
+    return _DEVICES[device.index]
+
+
+def side_stream(device: Any = None) -> Any:
+    """The side stream steps on ``device`` (default: the current CUDA device) hash on."""
+    import torch
+
+    return _device(torch, torch.device("cuda", torch.cuda.current_device() if device is None else torch.device(device).index)).stream
+
+
 @dataclass
 class Pending:
     """A step launched on the side stream: ``ready()`` without blocking, ``result()`` the step's `row_tables.StepRoots`; it holds
-    the step's buffers (and its inputs' place in the allocator) until then."""
+    the step's buffers (and its inputs' place in the allocator) until then.  ``marks``: timing events around the kernels, when
+    launched with ``timing``."""
     plan: Plan
     done: Any
     host: Any
     held: tuple[Any, ...]
+    marks: tuple[Any, Any] | None = None
 
     @property
     def engine_step(self) -> int:
@@ -252,9 +268,16 @@ class Pending:
         self.done.synchronize()
         return _roots(self.plan, self.host.numpy())
 
+    def kernel_ms(self) -> float:
+        """The kernels' time on the device, once ready (``timing`` launches only)."""
+        if self.marks is None:
+            raise ValueError("launched without timing")
+        self.done.synchronize()
+        return float(self.marks[0].elapsed_time(self.marks[1]))
+
 
 def launch(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequence[tuple[str, int]], Any, Any]], key: bytes, *,
-           stream: Any = None) -> Pending:
+           stream: Any = None, timing: bool = False) -> Pending:
     """Hash engine step ``engine_step``'s tables (``outputs[op_path] = (rows, codes, scales)``, ``codes`` (B, K) int8 and ``scales``
     (B,) float32 CUDA tensors on one device) on ``stream`` (default: the device's side stream), after everything the current
     stream has enqueued so far; nothing waits on the host."""
@@ -267,9 +290,7 @@ def launch(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequenc
                 or s.shape != (c.shape[0],) or not c.is_contiguous() or not s.is_contiguous():
             raise ValueError(f"{op}: codes and scales are contiguous (B, K) int8 and (B,) float32 tensors on {dev}")
     p = plan(context, engine_step, {op: (ids, int(c.shape[0]), int(c.shape[1])) for op, (ids, c, _s) in outputs.items()}, key)
-    if dev.index not in _DEVICES:
-        _DEVICES[dev.index] = _Device(torch, dev)
-    d = _DEVICES[dev.index]
+    d = _device(torch, dev)
     side = stream or d.stream
     for i, op in enumerate(p.order):
         p.tabs[i, 0], p.tabs[i, 1] = outputs[op][1].data_ptr(), outputs[op][2].data_ptr()
@@ -282,11 +303,16 @@ def launch(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequenc
         meta = staged.to(dev, non_blocking=True)
         dig, leaves, tree, step, out = (torch.empty(8 * n, dtype=torch.int64, device=dev)
                                         for n in (p.S, p.N, p.tree, p.step_scratch, t + 1))
+        marks = (torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)) if timing else None
+        if marks:
+            marks[0].record(side)
         rc = d.lib.rt_step(side.cuda_stream, meta.data_ptr(), meta.data_ptr() + 8 * TAB_WORDS * t, p.S, p.N, d.hm.data_ptr(),
                            d.ms.data_ptr(), ctypes.byref(p.args), dig.data_ptr(), leaves.data_ptr(), tree.data_ptr(),
                            step.data_ptr(), out.data_ptr())
         if rc:
             raise RuntimeError(f"rt_step: CUDA error {rc}")
+        if marks:
+            marks[1].record(side)
         host = torch.empty(8 * (t + 1), dtype=torch.int64, pin_memory=True)
         host.copy_(out, non_blocking=True)
         done = torch.cuda.Event()
@@ -294,7 +320,7 @@ def launch(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Sequenc
     for _ids, c, s in outputs.values():
         c.record_stream(side)
         s.record_stream(side)
-    return Pending(p, done, host, (staged, meta, dig, leaves, tree, step, out))
+    return Pending(p, done, host, (staged, meta, dig, leaves, tree, step, out), marks)
 
 
 def record_ready(pending: deque[Pending], record: Callable[[RTB.StepRoots], Any]) -> int:
