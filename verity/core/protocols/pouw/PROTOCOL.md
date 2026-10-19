@@ -1303,9 +1303,25 @@ block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                              
 
 j is the unit's position and (root(A_j), root(B_j)) its seed group's roots. ``⊕ u64(j)*`` XORs every message word after the
 first with the position, an injective encoding that makes every gate of a seed read its own position, so no two units compute
-a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
-bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
-positions, so each (salt, position) seeds one unit.
+a common value.
+
+**The verifier fills the seed inputs** (CMP-38: one-stage's supplied values, `registered.supplied_root`, Lean
+`SampledProofs.Supplied`), so the prover chooses none of them:
+
+- `pouw.roots`: each seed group's (root(A_j), root(B_j)), from the roots the record names for its operands (a served
+  port's, AROW's row tables among them, and B's registered weights, which the verifier pins to the root recorded before
+  the salt: `pinned`);
+- `pouw.positions`: unit u's is slot u after every unit of the log's earlier records (`log_base`,
+  `Compiled.positions(base)`), so no two records of one log share a position, and each (salt, position) seeds one unit;
+- `pouw.salt`: SHA-512 of `verity/one-stage/window-salt/v0`, the verifier's coin and the record's canonical window
+  (`window_salt`); R6 takes one record a window, so it is one salt a window.
+
+A registration that names any other commitment of them is refused (`R7-supplied`;
+`tests/test_pouw_supplied_inputs.py`, where the red team's zero-roots and replay witnesses fail). The served audit window
+(`benchmarks/pouw/served_zk`) reads none of them: its unit, `Pc8TileSide` over a template population, registers no
+value, and its noise is Pearl-C's under the pass's epoch salt, which `pass_epoch` holds to the challenger's salt coin. Its
+challenger passes `Stream.register` no supplied or pinned value, and refuses a registration that brings a seed of its
+own (`keys`).
 
 A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
 whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two
