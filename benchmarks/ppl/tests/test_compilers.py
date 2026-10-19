@@ -17,6 +17,7 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", "fpx-g1-e4m3i120", "fpx-g1-nvfp4x2-nv9",
           "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq", "fpx-g1-nvfp4x2-nvi-gptq",
           "fpx-g1s-e4m3i120", "fpx-g1s-nvfp4x2-nvi10", "fpx-g1s-nvfp4x2-nvi10-gptq",
+          "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq",
           *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
@@ -133,6 +134,26 @@ def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, coin, 
 
     assert torch.allclose(y.double(), served(x).double() @ served(w).double().T, rtol=1e-6, atol=1e-5)
     assert gates.passed
+
+
+@pytest.mark.parametrize("coin", [0.0, 1.0])
+def test_g1_weights_beside_int8_activations_centre_only_the_weights(coin, monkeypatch):
+    import types
+    import gates as G
+    g = torch.Generator().manual_seed(6)
+    x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
+    step = spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act": "dither",
+                                   "weight": "g1", "act_grid": "int8"}]}, "x").linear[0]
+    gates = G.Gates()
+    run = matmul.Run(types.SimpleNamespace(name="t"), 0, 0, types.SimpleNamespace(li=0), gates, {}, {}, None)
+    mm = matmul.MM("linear", "mlp.up_proj", run, x, w).enter(step)
+    monkeypatch.setattr(matmul.MM, "coins", lambda self, shape, levels=2: torch.full(tuple(shape), coin))
+    y = step.defn.fn(mm, matmul.terminal, **step.kw)
+    xq, sa = steps.act_quant(x, "dither", torch.full(x.shape, coin), 127)
+    v, s, m = steps.native_parts(w, "e2m1x2", "nvi10", coined=False)
+    wq = (steps.with_blocks(steps.to_grid(v, "e2m1x2", "round", None), m) + coin - 0.5) * s
+    assert torch.allclose(y.double(), (xq * sa[:, None]).double() @ wq.double().T, rtol=1e-6, atol=1e-5)
+    assert gates.passed and gates.log["int8_range"]["checked"] > 0
 
 
 def test_c1_emulation_is_dither_2s_bit_for_bit(llama, ids, calib):

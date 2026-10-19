@@ -1128,7 +1128,8 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         return nxt(mm.replace(x=xq, w=wq))
     sw = sw if sw.dim() == 0 else sw[:, 0]
     cx, cw = (0.5 if act == "g1" else 0.0), (0.5 if weight == "g1" else 0.0)
-    top = max(xtop, LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)) + int(cx or cw)
+    wtop = LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
+    top = max(xtop + int(cx > 0), wtop + int(cw > 0))
     wide = {"top": top} if top > 127 else {}
     acc = nxt(mm.integer(xq, wq.to(torch.int8) if top <= 127 else wq, **wide))
     if cx or cw:
