@@ -84,6 +84,11 @@ def Rule.ofJson (j : Json) : V Rule := do
   | _ => pure ()
   throw "a selection rule the stream runs is {rule: all}, {rule: law, law} or {rule: two-stage, replay, check: all}"
 
+/-- `service.selection_law`, after `Rule.over`: the law a rule names over `n` units, before `Draw.derive` expands it. -/
+def Rule.lawOver : Rule → Nat → V Json
+  | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
+  | .law t, _ | .twoStage t, _ => parseLaw t
+
 /-- A law text over `n` units: a rate law is `subset:k` at `k = Rate.count NUM DEN T n`, none unless `1 ≤ k ≤ n`; any
 other text is itself. -/
 def textOver (t : String) (n : Nat) : Option String :=
@@ -94,16 +99,12 @@ def textOver (t : String) (n : Nat) : Option String :=
   | none => some t
 
 /-- `service.selection_law`'s first step: the rule over `n` units, its rate law `subset:k` (`textOver`); none where
-`selection_law` refuses (`rate`). -/
+`selection_law` refuses (`rate`). It follows `lawOver`, whose matcher it shares, so that `lawOver` stays the definition
+the Properties lock records. -/
 def Rule.over : Rule → Nat → Option Rule
   | .all, _ => some .all
   | .law t, n => (textOver t n).map .law
   | .twoStage t, n => (textOver t n).map .twoStage
-
-/-- `service.selection_law`, after `Rule.over`: the law a rule names over `n` units, before `Draw.derive` expands it. -/
-def Rule.lawOver : Rule → Nat → V Json
-  | .all, n => return Json.mkObj [("law", "subset"), ("k", Lean.toJson n)]
-  | .law t, _ | .twoStage t, _ => parseLaw t
 
 /-- The challenger's closure map as `[[unit, [units]], ...]`, integers, each unit named once. -/
 def closureMap? (j : Json) : V (Array (Int × Array Int)) := do
