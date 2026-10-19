@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The census's unpriced classes timed on one GPU: unpriced.cu on a B200 (ARCH=sm_100a, the default) or unpriced90.cu on
-# an H200 (ARCH=sm_90a). From a pushed commit:
+# an H200 (ARCH=sm_90a); SRC=unpriced_fp4.cu times the B200's fp4 tensor kinds. From a pushed commit:
 #
 #   research run --on vy-dc-b200 --project verity --campaign eps1 --source <tree> --cwd source --timeout 30m \
 #     --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/sass_census/rates.sh
@@ -18,8 +18,8 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
 ARCH=${ARCH:-sm_100a}
 case $ARCH in
-  sm_100a) SRC=unpriced.cu CC=10 ;;
-  sm_90a) SRC=unpriced90.cu CC=9 ;;
+  sm_100a) SRC=${SRC:-unpriced.cu} CC=10 ;;
+  sm_90a) SRC=${SRC:-unpriced90.cu} CC=9 ;;
   *) echo "rates.sh: ARCH is sm_100a or sm_90a, not $ARCH" >&2; exit 2 ;;
 esac
 export PYTHONDONTWRITEBYTECODE=1
@@ -59,7 +59,8 @@ out = Path(sys.argv[1])
 # results a warp instruction: FP32 results (lanes x results a lane) or MACs (m n k, a wgmma's over its 4 warps)
 TC, WG, WG256 = 128 * 256 * 32, 64 * 128 * 32 // 4, 64 * 256 * 32 // 4
 PER = {"s_ffma": 32, "s_ffma2": 64, "s_ffma2c": 64, "s_fmul": 32, "s_fmul2": 64, "s_dmma": 256, "s_imma": 4096,
-       "s_dmma_w8": 256, "s_dmma16": 2048, "s_dmma16_w8": 2048, "tc_i8": TC, "wg_i8": WG, "wg256": WG256}
+       "s_dmma_w8": 256, "s_dmma16": 2048, "s_dmma16_w8": 2048, "tc_i8": TC, "wg_i8": WG, "wg256": WG256,
+       "k_i8": TC, "k_f8e4m3": TC, "k_f8e2m1": TC, "k_mxf4": 2 * TC, "k_nvf4": 2 * TC}
 # each joint: the tensor form's alone probe, its pattern and MACs, and the DMMA shape's alone probe and MACs
 JOINTS = {"dmmaU_tc": ("tc_i8", "UTCIMMA*", TC, "s_dmma_w8", 256), "tcU_dmma": ("tc_i8", "UTCIMMA*", TC, "s_dmma_w8", 256),
           "dmmaU_wg": ("wg_i8", "IGMMA*", WG, "s_dmma_w8", 256), "wgU_dmma": ("wg_i8", "IGMMA*", WG, "s_dmma_w8", 256),
@@ -96,7 +97,8 @@ summary = {"probes": per, "ffma2_over_ffma": ratio(best2, "s_ffma") if best2 els
            "dmma16_over_imma_macs": ratio("s_dmma16", "s_imma"), "tensor_form": tensor,
            "dmma_over_tensor_macs": ratio("s_dmma", tensor) if tensor else None,
            "dmma16_over_tensor_macs": ratio("s_dmma16", tensor) if tensor else None,
-           "wg_i8_over_wg256_macs": ratio("wg_i8", "wg256"), "dmma_beside_tensor": joints, "pairs": pairs}
+           "wg_i8_over_wg256_macs": ratio("wg_i8", "wg256"), "dmma_beside_tensor": joints, "pairs": pairs,
+           "fp4_over_i8_macs": {k: ratio(k, "k_i8") for k in ("k_f8e4m3", "k_f8e2m1", "k_mxf4", "k_nvf4") if k in per}}
 (out / "rates.json").write_text(json.dumps(summary, indent=1) + "\n")
 print(json.dumps({k: v for k, v in summary.items() if k != "probes"}, indent=1))
 EOF
