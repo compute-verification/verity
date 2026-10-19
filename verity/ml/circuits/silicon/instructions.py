@@ -199,6 +199,14 @@ _B200_TCGEN05_BF16 = (
     "(art:f5719a55353078221c982e34d08906e3a3eb5595a72dd0613490cef5da7781e4); Ampere's pipeline misses 5,045,809 / 986,377 / "
     "1,365,596 / 512,378 of them"
 )
+_B200_MMA_BF16 = (
+    "lane circuits 2026-10-19, benchmarks/tc_probe run r20261019-001149-cc3d on vy-dc-b200 (the same B200, driver and nvcc as "
+    "r20261018-234914-864e; seed 20261019): one mma.sync.m16n8k16 per tile, SASS 1x HMMA.16816.F32.BF16. The full canonical family "
+    "set, 25,833,472 asserted elements, 0 mismatches against HOPPER_BF16_M16N8K16 (tc-evidence art:a064d5875a659edd6fae154a3a379e8bb6ecbda29914d71bbb58f7eacc6ccbe3); "
+    "the 6,144 specials, outside that model's domain, are 0 mismatches under HOPPER_BF16_WGMMA_K16's total semantics; Ampere's "
+    "pipeline misses 3,152,004. This is the k16 step of vllm-flash-attn's FA2 on the B200, which the driver JITs from the wheel's "
+    "compute_80 PTX"
+)
 
 _PIN_FP4 = (
     "lane fp4-proof (2026-09-22): fresh-seed tc_probe_fp4 sweeps on a second RTX 5090 die (GPU-1257f022-5d0f-1ea9-7922-bc7bc7959672, "
@@ -470,7 +478,20 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "census r20261015-062626-f65b: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
                       "per warp MMA, dependent latency 27.2 cycles"),
         ),
-        # --- Blackwell datacenter (sm_100, tcgen05) ---------------------------------------------------------------
+        # --- Blackwell datacenter (sm_100) ------------------------------------------------------------------------
+        _i(
+            # The datacenter Blackwell keeps Hopper's BF16 datapath for legacy mma.sync, as the consumer one does.
+            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-19 before this flip.
+            id="sm100.mma.m16n8k16.bf16",
+            sm="sm_100",
+            ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
+            shape=(16, 8, 16),
+            a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
+            model=HOPPER_BF16_M16N8K16,
+            status="pinned",
+            dossier="art:9f8188ab6585d976056623b31baa21dcfdbb3a9c7842aa28a5cd341bc0ba0626",
+            evidence=(_B200_MMA_BF16,),
+        ),
         _i(
             id="sm100.tcgen05.mma.e2m1.nvf4",
             sm="sm_100",
