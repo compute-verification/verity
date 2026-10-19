@@ -9,6 +9,8 @@ DeepSeek-V4-Pro's gate statics (K 6144, 7168) agree with the models; `dispatch_s
 count and program digest."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 from types import SimpleNamespace
 
 import numpy as np

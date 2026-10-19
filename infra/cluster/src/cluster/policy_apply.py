@@ -20,8 +20,10 @@ a key that is unknown (never applied: unread is not as declared) or undeclared (
 Every file is read exactly (`exact`) before it is planned, and the write (`script`) runs as one command on the node: under the
 override log's lock it checks that each file and the log are byte for byte what was planned from (else it writes nothing),
 writes each file, and appends one `apply` record per key to the node's hash-chained log (`policy.OVERRIDES`: key, value,
-was, by, reason, path, the file's sha256 before and after). On node 2 the command starts with node 2's gate, so nothing is read
-or written while a timed window is on or near. After it, the node is read again, and each applied key must read as in force.
+was, by, reason, path, the file's sha256 before and after). On node 2 every command starts with node 2's gate, so nothing is
+read or written while a timed window is on or near; a plan may read a node whose fill runner isn't running (`policy.N2_GATE`'s
+stale form, said so in the output), but a write needs the runner's fresh quiet status (`policy.N2_WRITE_GATE`). After it,
+the node is read again, and each applied key must read as in force.
 """
 from __future__ import annotations
 
@@ -83,6 +85,8 @@ class Plan:
     then: list[str] = field(default_factory=list)
     by_hand: dict[str, tuple[bytes | None, bytes]] = field(default_factory=dict)
     refused: str | None = None
+    #: why node 2 was read as quiet with no fresh status from its fill runner (`policy.N2_GATE`'s stale form)
+    quiet: str | None = None
 
 
 class Skip(Exception):
@@ -169,8 +173,10 @@ def stamp(t: int) -> str:
     return datetime.fromtimestamp(t, timezone.utc).strftime(policy.UNTIL_FORMAT)
 
 
-def _gate(node: str) -> str:
-    return policy._N2_GATE if node == nebius2.NODE else "set -f\n"
+def _gate(node: str, write: bool = False) -> str:
+    if node != nebius2.NODE:
+        return "set -f\n"
+    return policy.N2_WRITE_GATE if write else policy.N2_GATE
 
 
 def exact(node: str, paths: list[str]) -> str:
@@ -185,7 +191,7 @@ def read_exact(out: str) -> tuple[str | None, dict[str, bytes | None]]:
     first, _, rest = out.partition("\n")
     if first.startswith("refused "):
         return first[len("refused "):], {}
-    body = rest if first.startswith("status ") else out
+    body = rest if first.startswith(("status ", "stale ")) else out
     files: dict[str, bytes | None] = {}
     lines = body.splitlines()
     for i, line in enumerate(lines):
@@ -270,7 +276,7 @@ def script(p: Plan) -> str:
     q = shlex.quote
     # a failure prints why and exits 0, so what was written before it still reaches the caller (ssh's runner drops stdout
     # on a nonzero exit)
-    out = [_gate(p.node),
+    out = [_gate(p.node, write=True),
            'fail() { echo "failed $1"; exit 0; }\n',
            f"mkdir -p {q(str(Path(log).parent))} || fail 'to make the log directory'\n",
            f"exec 9>>{q(log + '.lock')} || fail 'to open the log lock'\nflock -x 9 || fail 'to lock the log'\n",
@@ -322,7 +328,7 @@ def node_plan(keys: dict[str, policy.Key], node: str, run: Callable[[str], str],
     todo = steps(node, [r for r in rows if _under(r["key"], prefix)])
     paths = sorted({s.path for s in todo if s.action in ("change", "by-hand") and s.path})
     if not paths:
-        return Plan(node, todo)
+        return Plan(node, todo, quiet=lv.quiet)
     try:
         refused, files = read_exact(run(exact(node, [*paths, policy.OVERRIDES])))
         if refused is None:
@@ -337,8 +343,10 @@ def node_plan(keys: dict[str, policy.Key], node: str, run: Callable[[str], str],
         for s in todo:
             if s.action in ("change", "by-hand"):
                 s.action, s.why = "unknown", f"never applied while unread: {refused}"
-        return Plan(node, todo, refused=refused)
-    return plan(node, todo, files, records, now, by, reason)
+        return Plan(node, todo, refused=refused, quiet=lv.quiet)
+    p = plan(node, todo, files, records, now, by, reason)
+    p.quiet = lv.quiet
+    return p
 
 
 def apply(p: Plan, keys: dict[str, policy.Key], run: Callable[[str], str], now: int, prefix: str | None) -> dict[str, Any]:
@@ -371,6 +379,10 @@ def render(plans: list[Plan], results: dict[str, dict[str, Any]], applying: bool
     for p in plans:
         n = {a: sum(1 for s in p.steps if s.action == a) for a in ("change", "by-hand", "skip", "unknown")}
         out.append(f"{p.node}: {n['change']} to change, {n['by-hand']} by hand, {n['skip']} skipped, {n['unknown']} unknown")
+        if p.quiet:
+            out.append(f"  read as quiet: {p.quiet}")
+            if p.files:
+                out.append("  (--apply writes nothing here until the fill runner's status.txt is fresh and quiet again)")
         for s in p.steps:
             what = (f"live {policy._fmt(s.live)} -> {policy._fmt(s.value)}" if s.action in ("change", "by-hand")
                     else f"declared {policy._fmt(s.value)}  live {policy._fmt(s.live)}")
@@ -418,7 +430,7 @@ def main_apply(description: str | Path, which: str, prefix: str | None, applying
         return 2
     if as_json:
         print(json.dumps({"schema": "cluster/policy-apply/v1", "t": now, "description": str(description), "applied": applying,
-                          "nodes": [{"node": p.node, "steps": [asdict(s) for s in p.steps], "refused": p.refused,
+                          "nodes": [{"node": p.node, "steps": [asdict(s) for s in p.steps], "refused": p.refused, "quiet": p.quiet,
                                      **{name: {f: {"before": sha(b), "after": sha(a), "diff": _diff(f, b, a)}
                                                for f, (b, a) in edits.items()}
                                         for name, edits in (("files", p.files), ("by_hand", p.by_hand))},

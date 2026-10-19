@@ -35,8 +35,9 @@ at least `b_w` bits for each weight entry it uses and `b_a` bits for each input 
 linked to an entry whole in `R`, which `R` can compute from its own products alone:
 `b_w · #(weight entries R uses) + b_a · #(input entries R uses, not linked to an entry whole in R) ≤ width(in(R) \ θ)`.
 "Uses" means that `R` holds a product of the entry. `b_w` is the width of a weight entry and `b_a` that of an activation
-entry; at FP4 both are 4 bits. An entry's share of its block scale is not counted, since an IU can use an entry without
-reading its scale and leave the scaling to another.
+entry; at FP4 both widths are 4 bits. These are widths, not support: in the support form below an E2M1 product takes
+only 37 values, so there `b_w + b_a ≤ log₂ 37 ≈ 5.2` at FP4. An entry's share of its block scale is not counted, since
+an IU can use an entry without reading its scale and leave the scaling to another.
 
 The draft's rationale (Lemma 1's proof): `R` must read each input entry it uses, its linked output entry, or a partial
 sum of that output entry; these are distinct for distinct input entries, since the links are injective, and each is at

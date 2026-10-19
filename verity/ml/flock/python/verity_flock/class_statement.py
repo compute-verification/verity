@@ -896,7 +896,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
                 flat = flat[w:]
     flat_in = [lf for n, _t in params for key in sorted(k for k in leaves if k[0] == n) for lf in leaves[key]]
     outs = IL.lower(C, definition, flat_in)
-    fields = ret.fields if hasattr(ret, "fields") else (ret,)
+    fields = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else (ret,)
     out_words, out_bits, at = [], [], 0
     for f in fields:
         bits = []
@@ -1002,8 +1002,9 @@ class UnitStager:
 
     def reference_check(self, rows: dict[str, np.ndarray], outs: dict[str, np.ndarray]) -> None:
         """``outs`` (``{o{j}: (n, words)}``) are the IR reference's on every instance's ``rows``, leaf by leaf, from one call of
-        `verity.ml.circuits.evaluation.evaluate_batch` (bit-sliced for a Boolean Definition, else its registered kernel or the
-        reference), whose exceptions (rows outside the Definition's domain) propagate."""
+        `verity.ml.circuits.evaluation.evaluate_batch` (its registered kernel, or a Boolean Definition's word Definition's,
+        where one is; else bit-sliced for a Boolean Definition and the reference for the rest), whose exceptions (rows outside
+        the Definition's domain) propagate."""
         from verity.ml.circuits.evaluation import evaluate_batch
 
         params, ret = self.definition.signature()

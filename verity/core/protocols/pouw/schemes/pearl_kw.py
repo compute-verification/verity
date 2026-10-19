@@ -21,7 +21,7 @@ checked    the tile's FP32 accumulator of X̃_A·X̃_Bᵀ, exact for the device
 digest     16 lanes, lane <- rotl32(lane·0x9E3779B1 + bits(x), 13) over the committed lane layout; J = H_"jackpot"(z; seed_A)
 policy     liveness: dead entries (|X| >= 8δ·l2) <= 1/64 of each side; noise floor: δ·α·l2 >= 1 on every row;
            unpredictable summands: at most ⌊k·h·w/20⌋ skippable (λ_A + λ_B below the device grid of the cell's magnitude)
-lottery    uint256LE(J) <= τ·h·w·k   (`verity.core.protocols.pouw.audit.Lottery`)
+lottery    uint256LE(J) <= τ·h·w·k   (`Lottery`, ``benchmarks/pouw/clear/clear_audit.py``)
 ~~~
 
 **Devices.**  ``b200`` (Pearl's: accumulation groups of 32 exact products plus the FP32 carry, 25 fractional bits below

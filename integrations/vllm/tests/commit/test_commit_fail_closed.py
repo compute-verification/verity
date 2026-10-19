@@ -132,7 +132,7 @@ def test_x05_missing_declaration_fails_when_required():
 def test_e2e_tiny_arena_forces_commit_fail(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--arena-mb", "1", "--arena-unchecked",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "0", "--arena-mb", "1", "--arena-unchecked",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -152,7 +152,7 @@ def test_e2e_windowed_stall_forces_commit_fail(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -175,7 +175,7 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_FAULT="release_before_keep")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--open-after-release", "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]   # row_pod.sh's P0 defaults
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -200,7 +200,7 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
 _WATCHDOG_PROG = r"""
 import os, sys, time, threading
 import torch
-from verity_vllm.acquire import native_collect as nc
+from verity_vllm.commit.committer import native_collect as nc
 c = nc.ext().Collector()
 marker = sys.argv[1]; grace = float(sys.argv[2]); mode = sys.argv[3]
 c.set_watchdog(marker, grace)
@@ -246,7 +246,7 @@ def test_e2e_collector_dead_hang_exits_rc3_within_grace(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000", VERITY_FAULT="hang_after_dead", VERITY_COLLECT_DEAD_GRACE_S="20")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]

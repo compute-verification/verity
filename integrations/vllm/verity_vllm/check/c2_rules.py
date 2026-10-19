@@ -19,7 +19,6 @@ _POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06
 # complete (B); a PLANE-FED VU (MAN-06f) is not -- its committed members are the moe/ block-stream planes, and oracle_compare has NO oracle
 # family for `moe/` (NO_ORACLE_FAMILY_PREFIXES: counted 'no oracle family', excluded from compared).  Neither form value-checks those planes
 # (form (A) has no row->plane mapping in this replay), so a plane-fed gap FAILs by name whatever form (B) says; C1 + C3 still hold on them.
-_FORM_B_COVERABLE_CLASSES = ("no-evaluator", "state-linked", "interior-composed-v2")
 _PLANE_FED_NEITHER_FORM = ("have committed moe/ plane members value-checked by NEITHER form (form (B) has no oracle family for moe/ planes "
                            "[oracle_compare.NO_ORACLE_FAMILY_PREFIXES]; form (A) has no row->plane mapping in this replay [MAN-06f, v2])")
 
@@ -73,10 +72,6 @@ def _no_evaluator_gaps(not_ev: dict, codes: dict[str, dict] | None = None) -> tu
         d = sel if is_token_select(fam) else other
         d[fam] = d.get(fam, 0) + n
     return sel, other
-
-
-def _selector_no_evaluator_gaps(not_ev: dict) -> dict[str, int]:
-    return _no_evaluator_gaps(not_ev)[0]
 
 
 def _form_b_selector_coverage(oc: dict | None, n_sel: int) -> tuple[str | None, str]:
@@ -391,7 +386,7 @@ def _replay_scope(sr: dict | None) -> dict[str, Any]:
             "positions": positions, "requests": len(picks) if picks else (len(pop.get("requests") or []) if isinstance(pop.get("requests"), (list, dict)) else None),
             "strata": len(sr.get("strata") or []) or sr.get("strata_n") or pop.get("strata_n"), "strata_unevaluated": len(sr.get("strata_unevaluated") or []),
             "population_vus": pop.get("vus"), "population_by_family": pop.get("by_family"), "not_evaluable": pop.get("not_evaluable") or None,
-            "query_total": qt.get("total") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": _d(pop.get("query_checks")).get("ok")}
+            "query_total": qt.get("identities") if qt else None, "query_id": qt.get("query_id") if qt else None, "query_checks_ok": _d(pop.get("query_checks")).get("ok")}
 
 
 def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:

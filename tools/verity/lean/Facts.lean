@@ -597,8 +597,12 @@ unsafe def main (args : List String) : IO UInt32 := do
     | some new, some old => m.insert new old
     | _, _ => m
   let rn := renameName back
+  let t0 ← IO.monoMsNow
+  let lap (what : String) (n : Nat) : IO Unit := do
+    IO.eprintln s!"facts: {what} ({n}) at {(← IO.monoMsNow) - t0} ms"
   let env ← importModules (roots.map fun r => { module := r }) {} (loadExts := false)
   let mnames := env.header.moduleNames
+  lap "import" mnames.size
   let mut modules := #[]
   let mut imports := #[]
   let mut spans := #[]
@@ -617,7 +621,9 @@ unsafe def main (args : List String) : IO UInt32 := do
       #[r.range.pos.line, r.range.endPos.line]))
     audited := audited.push (m, data)
   let decls := audited.foldl (fun acc (_, data) => acc ++ data.constNames) #[]
+  lap "modules" decls.size
   let axioms := axiomsOf env (decls ++ pins)
+  lap "axioms" axioms.size
   let mut counts : Std.HashMap String Nat := {}
   let mut used : NameSet := {}
   let mut offenders := #[]
@@ -655,6 +661,7 @@ unsafe def main (args : List String) : IO UInt32 := do
         (if impl.contains n then #["implemented_by"] else #[]) ++ (if ext.contains n then #["extern"] else #[])
       if !why.isEmpty then
         escapes := escapes.push <| Json.mkObj [("name", toJson n.toString), ("module", toJson m.toString), ("why", toJson why)]
+  lap "declarations" offenders.size
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := Id.run do
@@ -666,36 +673,53 @@ unsafe def main (args : List String) : IO UInt32 := do
         memo := memo'
         acc := acc.insert p rs
     return acc
-  let (pinned, _) ← (MetaM.run' (pins.mapM fun p => do
-    return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+  lap "reads" readsOf.size
+  -- each pin's facts are a function of the environment and the maps above, so chunks run as tasks, joined in order
+  let chunks := (List.range ((pins.size + 7) / 8)).toArray.map fun i => pins.extract (8 * i) (8 * i + 8)
+  let tasks ← chunks.mapM fun ch => IO.asTask do
+    let (out, _) ← (MetaM.run' (ch.mapM fun p => do
+      return (p.toString, ← pinInfo env meaning axioms ranges (readsOf.getD p (#[], #[])) p))).toIO ctx { env }
+    return out
+  let pinned ← tasks.foldlM (init := #[]) fun acc t => return acc ++ (← IO.ofExcept t.get)
+  lap "pins" pinned.size
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
-    let h ← IO.FS.Handle.mk path .write
+    -- each line's text is computed in a task (`Task.spawn` takes the closure, so the text is not built here) and the
+    -- lines are written in this order
+    let mut lines : Array (Task String) := #[]
     let mut done : NameSet := {}
     let mut named : NameSet := {}
     for p in pins do
       let some ci := env.find? p | continue
-      h.putStrLn (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
+      lines := lines.push <| Task.spawn fun _ =>
+        (Json.mkObj [("id", toJson s!"pin:{p}"), ("canon", toJson (canonText ci.type))]).compress
       let head := liftOf env meaning ci.type
       if let some (g, s) := head then
         let m := (env.getModuleIdxFor? g).map fun i => (moduleName env i).toString
-        h.putStrLn (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
-          ("canon", toJson (canonText s))]).compress
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"lift:{p}"), ("head", toJson g.toString), ("module", toJson m),
+            ("canon", toJson (canonText s))]).compress
       if !back.isEmpty then
         named := (ci.type.getUsedConstants ++ ((head.map (·.2.getUsedConstants)).getD #[])).foldl (·.insert ·) (named.insert p)
-        let unfolded := match head with
-          | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
-          | none => []
-        h.putStrLn (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
-          ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
+        lines := lines.push <| Task.spawn fun _ =>
+          let unfolded := match head with
+            | some (g, s) => [("head", toJson g.toString), ("unfolded", toJson (canonText s rn))]
+            | none => []
+          (Json.mkObj ([("id", toJson s!"moved-pin:{p}"), ("as", toJson (rn p).toString),
+            ("canon", toJson (canonText ci.type rn))] ++ unfolded)).compress
       for (c, _, rci) in (readsOf.getD p (#[], #[])).1 do
         if done.contains c then continue
         done := done.insert c
-        h.putStrLn (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
         if !back.isEmpty then
           named := (uses rci).foldl (·.insert ·) (named.insert c)
-          h.putStrLn (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
-            ("canon", toJson (readCanon rci rn))]).compress
+          lines := lines.push <| Task.spawn fun _ =>
+            (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
+              ("canon", toJson (readCanon rci rn))]).compress
+    let h ← IO.FS.Handle.mk path .write
+    for l in lines do
+      h.putStrLn l.get
     let (kept, renamed) := (named.toArray.qsort Name.lt).partition fun c => rn c == c
     let mut took : Std.HashMap Name Name := kept.foldl (fun m c => m.insert c c) {}
     for c in renamed do
@@ -704,6 +728,7 @@ unsafe def main (args : List String) : IO UInt32 := do
           ("with", toJson d.toString)]
       else
         took := took.insert (rn c) c
+  lap "canon" conflicts.size
   let mut oleans := #[]
   let mut graph := #[]
   for h : i in [0:mnames.size] do
@@ -722,5 +747,9 @@ unsafe def main (args : List String) : IO UInt32 := do
   let doc := if (names vcfg "entries").isEmpty then doc else
     doc.setObjVal! "verifier" (verifierInfo env (names vcfg "entries") (names vcfg "stop")
       (((vcfg.getObjValD "hash").getStr?.toOption.getD "").toName))
-  IO.FS.writeFile out doc.compress
+  lap "graph" oleans.size
+  let text := doc.compress
+  lap "render" text.length
+  IO.FS.writeFile out text
+  lap "write" 0
   return 0
