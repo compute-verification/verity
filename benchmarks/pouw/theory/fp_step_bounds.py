@@ -191,7 +191,7 @@ ROUTES = {r.name: r for r in [
     *(Route(f"e4r-s{s}", f"fpx.cu e4r grid {i} (v / {s}, |v| <= 16)", grid_planes, e4m3_grid(s),
             (Acc(((0, 0),), 0),), ("fold", ((0, s * s),)), unit=Q(1, s * s)) for i, s in enumerate((1, 2, 4))),
 ]}
-SERVED = {
+ISSUED = {  # each device's routes, as the kernels above issue them there
     "sm_120": ("k3", "k4"),
     "sm_100a": ("k3", "k4", "k3z", "k4z", "k4s-L32", "k4s-L64", "k4t-L32", "k4t-L64", "e4r-s1", "e4r-s2", "e4r-s4"),
     "sm_90a": ("k3h", "e4r-s1", "e4r-s2", "e4r-s4"),
@@ -408,8 +408,8 @@ def constants_cancel(route: Route) -> bool:
     return sum(w * a.start for w, a in zip(route.read[1], route.accs)) % 2 ** 32 == route.read[2] % 2 ** 32
 
 
-def check_served(checks: Checks, route: Route, dev: str, p: int) -> list[float]:
-    """The served (route, device)'s checks; returns each accumulator's max |c| + sum |t| over 2^(g+p)."""
+def check_route(checks: Checks, route: Route, dev: str, p: int) -> list[float]:
+    """The checks of a route on a device that issues it; returns each accumulator's max |c| + sum |t| over 2^(g+p)."""
     r, ratios = route, []
     for i, acc in enumerate(r.accs):
         w = worst(r, i, p)
@@ -456,13 +456,13 @@ def main() -> int:
                          constants_cancel(r), f"{sum(w * a.start for w, a in zip(r.read[1], r.accs)) % 2 ** 32:#x}")
 
     ratios = {}
-    for dev, names in SERVED.items():
+    for dev, names in ISSUED.items():
         for name in names:
-            ratios[dev, name] = max(check_served(checks, ROUTES[name], dev, P[dev]))
+            ratios[dev, name] = max(check_route(checks, ROUTES[name], dev, P[dev]))
             checks.check(f"{dev} {name}: the word replayed in premise (a)'s model is the dot product",
                          replay_word(ROUTES[name], replay_inputs(ROUTES[name], rng)))
     order = sorted(ratios, key=lambda k: -ratios[k])
-    checks.check("the tightest served routes: k3 (its acc1 starts at C1 = 16493420, 283796 below 2^24), then B200's k4t "
+    checks.check("the tightest routes: k3 (its acc1 starts at C1 = 16493420, 283796 below 2^24), then B200's k4t "
                  "(its accumulator carries 7 words at L = 32)",
                  {n for _, n in order[:2]} == {"k3"} and order[2] == ("sm_100a", "k4t-L32"),
                  "; ".join(f"{d} {n} {ratios[d, n]:.4f}" for d, n in order[:5]))
@@ -492,7 +492,7 @@ def main() -> int:
                         not inside(replace(ROUTES["k4t-L64"], words=4), 24))
         checks.mutation("k3's acc1 started at 0x4B7FF000, near the top of its binade, leaves the regime",
                         not inside(replace(k3, accs=(Acc(k3.accs[0].mmas, 0x4B7FF000), k3.accs[1])), 24))
-        checks.mutation("k3z served on H200 leaves the regime: (-l)(l') terms land on sum (4h)(4h') up to 2^15",
+        checks.mutation("k3z issued on H200 leaves the regime: (-l)(l') terms land on sum (4h)(4h') up to 2^15",
                         not inside(k3z, 14))
         checks.mutation("k3h's m m' accumulator started at a binade constant, as k3b's, leaves H200's regime",
                         not inside(replace(ROUTES["k3h"], accs=(ROUTES["k3h"].accs[0], Acc(((1, 1),), C2_BITS),

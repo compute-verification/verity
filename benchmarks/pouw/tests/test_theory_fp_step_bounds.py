@@ -1,4 +1,4 @@
-"""fp_step_bounds.py, run as written: every served route's MMAs inside premise (a)'s regime on every input and order, the
+"""fp_step_bounds.py, run as written: every route's MMAs inside premise (a)'s regime on every input and order, the
 words' reads and folds exact, the H200 and rebase controls outside, and every mutation caught. Its transcription of the
 routes (planes, chains, starts, restarts, folds) is held here to the kernels and emu8.py, which the stdlib script can't
 read."""
