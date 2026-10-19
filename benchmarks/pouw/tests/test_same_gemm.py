@@ -1,14 +1,15 @@
 """served_h1's same-GEMM gate (`served_h1/same_gemm.py`) on small CPU windows: two steps of two K = N = 64 linears over a
-64-slot batch with 20 served rows, each call's y feeding the next call's A rows, under a real live challenger
-(`pouw.window.live_challenger`, `LiveRecord`, an injected clock).
+64-slot batch with 20 served rows, each call's y feeding the next call's A rows, under the live challenger's code
+(`pouw.window.live_challenger`, `LiveRecord`) with injected entropy and clock.  The fused launch is a CPU stand-in:
+numpy writes into the launch's buffers inside its range, where a CUDA kernel would.
 
 A beside-path window, today's served_h1 (y from `torch._int_mm` in the call, receipts in a separate pass after the step's
 round), is refused: the trace names the served y's GEMM, and the order refuses every call but a step's last.  The same
 beside path under a round per call keeps the order, so only the trace refuses it.  A fused window (one launch per call
 writes y, z and the H1 receipts, which are `receipts.gated_receipts`' bit for bit; a round per call, z committed after its
 coin) is accepted.  A fused window that runs a second GEMM in the call, inside the fused launch, or outside every call, a
-GEMM as elementwise ops inside the launch, a write after it, a returned y that isn't the launch's buffer, or receipts from
-a separate pass is refused, each with its reason.  Seeded coins, a non-live commitment, a release log out of order and a
+GEMM as elementwise ops inside the launch, a write after it, a returned y that isn't the launch's buffer, receipts from
+a separate pass, or a kernel the window doesn't pin is refused, each with its reason.  Seeded coins, a non-live commitment, a release log out of order and a
 round tree that doesn't recompute refuse the window.  A drawn unit's z rows open against its z table, its cells are the
 unit's reference z, and its served rows are dequant(z); a moved served row or z cell is refused."""
 from __future__ import annotations
@@ -227,9 +228,9 @@ class _Window:
         self.prev = (table.root.hex(), root_r.hex())
         return out
 
-    def verdict(self, coins: dict | None = None, ledger: dict | None | str = "own") -> dict:
+    def verdict(self, coins: dict | None = None, ledger: dict | None | str = "own", pinned=(KERNEL,)) -> dict:
         return SG.verdict(WINDOW, self.calls, [c["selected"] for c in self.calls], self.coins if coins is None else coins,
-                          self.ledger if ledger == "own" else ledger, keys=list(range(len(self.calls))))
+                          self.ledger if ledger == "own" else ledger, keys=list(range(len(self.calls))), pinned=pinned)
 
 
 @pytest.fixture(scope="module")
@@ -297,6 +298,15 @@ def test_fused_window_with_a_cheat_is_refused(secret, why):
     assert not v["ok"] and v["gated_counts"] == [0] * STEPS * LINEARS
     assert v["by_check"]["order"] == 0 and v["window"] == []
     assert v["first"].startswith("credit.same_gemm: linear 0 (l0) step 0: ") and why in v["first"], v["first"]
+
+
+@pytest.mark.parametrize("pinned,why", [
+    ((), f"declares kernel {KERNEL}, not one of the window's pinned fused kernels (none pinned)"),
+    (("verity_h1_fused_v2",), f"declares kernel {KERNEL}, not one of the window's pinned fused kernels (verity_h1_fused_v2)"),
+])
+def test_fused_launch_of_a_kernel_the_window_does_not_pin_is_refused(fused, pinned, why):
+    v = fused.verdict(pinned=pinned)
+    assert not v["ok"] and v["by_check"] == {"order": 0, "trace": STEPS * LINEARS} and why in v["first"], v["first"]
 
 
 def test_fused_window_with_a_gemm_outside_every_call_is_refused():

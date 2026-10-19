@@ -5,7 +5,9 @@ reads ``credit.same_gemm: linear L step s: ...``.
 
 The gate reads three kinds of evidence, each catching what the others miss:
 
-  order  the challenger's log (auditor-trusted, `order_refusals`).  Call (s, w)'s receipts take their noise from a round coin.
+  order  the challenger's log (`order_refusals`), auditor-trusted only when the challenger runs off the prover's node
+         (`trusted-nebius-host`); serve.py runs it in its own process, so that log can refuse a window, not vouch for one.
+         Call (s, w)'s receipts take their noise from a round coin.
          The next linear's A rows are computed from (s, w)'s served y, and they are committed in a round root.  If that
          root was recorded before the coin was released, the served y existed before its own noise, and no noised GEMM
          produced it.  It needs a round per call (`ROUND_FORM_CALL`): with a round per step, it refuses every call but the
@@ -13,7 +15,8 @@ The gate reads three kinds of evidence, each catching what the others miss:
          It misses a beside path that keeps the order: a round per call, with y from a second GEMM.
   trace  the hook's launch ledger (`Recorder`, in process, `trace_refusals`).  The profiler records every op and kernel
          in each call's range.  The call must have exactly one GEMM, its declared fused launch, a raw launch in whose range
-         only its declared kernels, views and allocations run.  That launch wrote the returned y (same storage, version
+         only its declared kernels, views and allocations run, each one of the window's pinned fused kernels (none pinned
+         refuses every fused launch).  That launch wrote the returned y (same storage, version
          and rows), and the committed receipts and z are its buffers.  Only views may run after it.  A GEMM of a linear's
          (K, N) outside every call refuses the window (`window_refusals`).  It misses what the fused kernel itself
          computes (a GEMM inside it, or a y copied from an input it was handed: the kernel's SASS gate), a GEMM written
@@ -275,8 +278,9 @@ def _same_buffer(a: Mapping[str, Any] | None, b: Mapping[str, Any] | None) -> bo
             and (a["storage"], a["ptr"], a["nbytes"], a["version"]) == (b["storage"], b["ptr"], b["nbytes"], b["version"]))
 
 
-def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None) -> str | None:
-    """Why call `c`'s ledger entry `e` doesn't show its served y as its receipt kernel's own output; None when it does."""
+def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None, pinned: Sequence[str] = ()) -> str | None:
+    """Why call `c`'s ledger entry `e` doesn't show its served y as its receipt kernel's own output; None when it does.
+    `pinned`: the window's fused kernels, the only ones a fused launch may declare."""
     if e is None:
         return _why(c, f"the record has no launch ledger entry ({LEDGER}): what produced the served y is not recorded")
     evs = e["events"]
@@ -290,6 +294,10 @@ def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None) -> str | Non
         kern = f", kernels {', '.join(g['kernels'])}" if g.get("kernels") else ""
         more = f" (and {len(gemms) - 1} more GEMM launches)" if len(gemms) > 1 else ""
         return _why(c, f"served y from {g['name']} call #{g['seq']}{kern}{more}, receipts from a separate pass")
+    unpinned = [k for k in f["kernels"] if k not in pinned]
+    if unpinned or not f["kernels"]:
+        return _why(c, f"the fused launch declares kernel {unpinned[0] if unpinned else 'none'}, not one of the window's "
+                       f"pinned fused kernels ({', '.join(pinned) or 'none pinned'})")
     inner = [x for x in evs if x["fused"] and x["gemm"] and not (x["kind"] == "kernel" and x["name"] in f["kernels"])]
     if inner:
         return _why(c, f"{inner[0]['name']} call #{inner[0]['seq']} inside the fused launch: the fused kernel is one raw "
@@ -327,12 +335,13 @@ def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None) -> str | Non
     return None
 
 
-def trace_refusals(calls: Sequence[Mapping[str, Any]], ledger: Mapping[str, Any] | None, keys: Sequence[Any]) -> dict[int, str]:
+def trace_refusals(calls: Sequence[Mapping[str, Any]], ledger: Mapping[str, Any] | None, keys: Sequence[Any],
+                   pinned: Sequence[str] = ()) -> dict[int, str]:
     """Each call's refusal from the ledger (`call_refusal`); call i's entry is the one whose key is ``keys[i]``."""
     by_key = {json.dumps(e.get("key")): e for e in (ledger or {}).get("calls", [])}
     out = {}
     for i, c in enumerate(calls):
-        why = call_refusal(c, by_key.get(json.dumps(keys[i])) if ledger else None)
+        why = call_refusal(c, by_key.get(json.dumps(keys[i])) if ledger else None, pinned)
         if why:
             out[i] = why
     return out
@@ -513,12 +522,13 @@ def tie_refusal(c: Mapping[str, Any], u: int, opening, z_rows_: Mapping[int, byt
 # -- the verdict --------------------------------------------------------------------------------------------------------
 
 def verdict(window: str, calls: Sequence[Mapping[str, Any]], counts: Sequence[int], coins: Mapping[str, Any] | None,
-            ledger: Mapping[str, Any] | None, keys: Sequence[Any] | None = None, tie: Sequence[str] = ()) -> dict[str, Any]:
+            ledger: Mapping[str, Any] | None, keys: Sequence[Any] | None = None, tie: Sequence[str] = (),
+            pinned: Sequence[str] = ()) -> dict[str, Any]:
     """The gate over a window: per call, the order and trace refusals; the window's own (order, unattributed GEMMs, and
-    `tie`, the drawn units' tie refusals).  A refused call credits nothing; a window refusal refuses every call.  Only calls
-    with admitted rows are reported."""
+    `tie`, the drawn units' tie refusals).  `pinned` names the window's fused kernels.  A refused call credits nothing; a
+    window refusal refuses every call.  Only calls with admitted rows are reported."""
     order, w_order = order_refusals(window, calls, coins)
-    trace = trace_refusals(calls, ledger, list(keys) if keys is not None else [None] * len(calls))
+    trace = trace_refusals(calls, ledger, list(keys) if keys is not None else [None] * len(calls), pinned)
     shapes = sorted({(int(c["k"]), int(c["n"])) for c in calls})
     win = [*w_order, *window_refusals(ledger, shapes), *tie]
     credited = [i for i, k in enumerate(counts) if k]
@@ -543,9 +553,11 @@ def main(argv: list[str] | None = None) -> int:
     m = json.loads(Path(a.manifest).read_text())
     ledger = json.loads(Path(a.ledger).read_text()) if a.ledger else None
     keys = [c.get("tap") for c in m["calls"]]
-    v = verdict(m["window"], m["calls"], [int(c.get("selected", 0)) for c in m["calls"]], m.get("coins"), ledger, keys)
+    v = verdict(m["window"], m["calls"], [int(c.get("selected", 0)) for c in m["calls"]], m.get("coins"), ledger, keys,
+                pinned=m.get("fused_kernels", ()))
     v.pop("gated_counts")
     v["record"] = {"manifest": a.manifest, "window": m["window"], "calls": len(m["calls"]), "framing": m.get("framing"),
+                   "fused_kernels": m.get("fused_kernels"),
                    "coins": (m.get("coins") or {}).get("mode"), "rounds": len((m.get("coins") or {}).get("rounds", [])),
                    "ledger": a.ledger}
     text = json.dumps(v, indent=1) + "\n"
