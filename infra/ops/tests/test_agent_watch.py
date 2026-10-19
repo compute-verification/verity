@@ -2,6 +2,7 @@
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
 import json
 import re
+import uuid
 
 import pytest
 
@@ -1615,7 +1616,10 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
     clock.t += 5 * 60
     w.sweep(lambda r: None)
     got = {r["run"]: {k: r.get(k) for k in ("agent", "name", "handle", "role", "node", "what", "rc", "state", "after", "lane")}
-           for r in ended(tmp_path)}
+           for r in ended(tmp_path) if r["role"] != "unknown"}
+    (unsent,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert (unsent["handle"], unsent["count"], [(u["run"], u["sender"]) for u in unsent["runs"]]) == (
+        None, 1, [("r20261018-195500-0005", "https://cursor.com/agents/bc-unknown")]), "the run nobody's handle owns, for @infra"
     assert got == {
         "r20261018-195000-0002": {"agent": CO, "name": "verity: circuits", "handle": "circuits", "role": "coordinator",
                                   "node": "vy-nebius-1", "what": "sweep-a", "rc": 0, "state": "done", "after": "1 h 06 min",
@@ -1624,8 +1628,7 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                                   "what": "python bench/run.py --n 8", "rc": 3, "state": "failed", "after": "12 min",
                                   "lane": "zk-port"},
         "r20261018-195500-0004": {"agent": "", "name": "", "handle": "vllm", "role": "lane", "node": "vy-nebius-2",
-                                  "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}, \
-        "the run nobody's handle owns is skipped"
+                                  "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}
     assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
     for _ in range(3):
         clock.t += 5 * 60
@@ -1633,7 +1636,45 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
     restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
                         notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
     restarted.sweep(lambda r: None)
-    assert len(ended(tmp_path)) == 3, "each run rings once, across restarts"
+    assert len(ended(tmp_path)) == 4, "each run rings once, across restarts"
+
+
+def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
+    """The pod's watch log, 19 Oct: 847 run ends "which no handle owns: not rung" since 05:28Z. Among them, vy-nebius-2's
+    r20261019-043737-f6de (05:28:58Z) sent by CENSUSAND (bc-fe356a9d), a worker learned from a Task call of circuits' generation
+    3 (bc-21f3d3de); r20261019-132935-493f (13:29:54Z) sent by compute-accounting's generation 2 (bc-ebc09a9a) after its
+    handover; and runs of workers the watch never learned: r20261019-052718-24a9 (bc-aede327f) and vy-nebius-cpu-2's
+    r20261019-192229-3606 (bc-df15df07, here on vy-nebius-1). The first two now ring their handle; the rest of a read are one
+    record, rung to @infra. A `submitted_by` that names a lane ($RESEARCH_AGENT_URL is free text) rings that lane."""
+    url = "https://cursor.com/agents/{}".format
+    censusand, circuits3, ca2 = ("bc-fe356a9d-81e7-54a8-a5da-fbf425245da5", "bc-21f3d3de-28db-5e5d-964b-d357187449aa",
+                                 "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac")
+    aede, df15 = "bc-aede327f-c2cf-5f24-a40a-309e7bb815f4", "bc-df15df07-8eff-531b-97bc-f5cbbdeda23e"
+    assert (W.generation("circuits", circuits3), W.generation("compute-accounting", ca2)) == (3, 2)
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    reg = json.loads((tmp_path / "registry.json").read_text())
+    reg["handles"].append({"handle": "compute-accounting", "holder": f"the compute-accounting coordinator ({LANE})"})
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    w.sweep(lambda r: None)
+    w.child(circuits3, {"args": {"agentId": censusand, "description": "CENSUSAND: merge #2765 fix into #2738"}}, clock.t)
+    api.workers[censusand] = worker("ACTIVE", W.iso(clock.t), "CENSUSAND: merge #2765 fix into #2738")
+    clock.t += 60
+    node_run(roots["vy-nebius-2"], "r20261019-043737-f6de", clock.t, by=url(censusand), state="failed", rc=130, wall_s=3068.6)
+    node_run(roots["vy-nebius-2"], "r20261019-132935-493f", clock.t, by=url(ca2), state="failed", rc=127, wall_s=0.47)
+    node_run(roots["vy-nebius-2"], "r20261019-052718-24a9", clock.t, by=url(aede), state="failed", rc=8, wall_s=6.8)
+    node_run(roots["vy-nebius-1"], "r20261019-192229-3606", clock.t, by=url(df15), state="failed", rc=143, wall_s=1200)
+    node_run(roots["vy-nebius-1"], "r20261019-195000-0001", clock.t, by="circuits lane, Daniel's laptop")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["run"]: (r["agent"], r["name"], r["handle"], r["role"]) for r in ended(tmp_path) if r["role"] != "unknown"}
+    assert got == {"r20261019-043737-f6de": (censusand, "CENSUSAND: merge #2765 fix into #2738", "circuits", "worker"),
+                   "r20261019-132935-493f": (ca2, "", "compute-accounting", "coordinator"),
+                   "r20261019-195000-0001": ("", "", "circuits", "lane")}
+    (unsent,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert (unsent["handle"], unsent["count"], unsent["senders"]) == (None, 2, sorted([url(aede), url(df15)]))
+    assert sorted((u["run"], u["node"], u["rc"]) for u in unsent["runs"]) == [
+        ("r20261019-052718-24a9", "vy-nebius-2", 8), ("r20261019-192229-3606", "vy-nebius-1", 143)]
+    assert censusand in w.awaiting, "the worker's end starts its clock, for its coordinator to resume it"
 
 
 def test_a_quiet_handles_runs_are_not_rung(tmp_path):
@@ -1836,8 +1877,10 @@ KEY = "dummy-" "launch-key-ff"
 
 
 def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaunched_only_with_the_key(tmp_path, capsys):
-    """A Task worker can't be started (400 legacy workflow): its coordinator is rung at 10 min, and if it stays idle 20 min more
-    a fresh agent takes its place, told its branch and given its newest note, with the launch key; without one, recorded."""
+    """A Task worker can't be started (400 legacy workflow): its coordinator is rung at 10 min, and if it stays idle 20 min more,
+    stopped mid-step, a fresh agent takes its place with the launch key (without one, recorded): named as its lane's worker,
+    told its branch, how to report to its coordinator's inbox and that the watch wakes it after its runs, given its newest
+    note, and written to workers.d as the lane's worker."""
     for keyed in (False, True):
         d = tmp_path / str(keyed)
         (d / "workers.d").mkdir(parents=True)
@@ -1846,7 +1889,9 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         launch_api = FakeLaunchApi()
         api, clock, w, sh, roots = nodes_setup(d, launch_api=launch_api)
         note(d / "notes", "zk-port", "20261018T1950Z-report-w1.md", f"zk-port worker ({W1_}); code cursor/zk-w1-c7a9")
-        api.workers[W1_] = worker("IDLE", W.iso(T0 - 600))
+        api.workers[W1_] = worker("IDLE", W.iso(T0 - 600), "ZKS10: frame the openings")
+        api.convs[W1_] = [("user_message", "You're ZKS10, a worker for the vllm lane."),
+                          ("assistant_message", "The lock didn't change. Committing the fix and rerunning the check on cpu-3.")]
         if keyed:
             (d / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
         ended = run_end_for(d, roots, clock, w, W1_)
@@ -1857,7 +1902,8 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         assert {k: rec[k] for k in ("kind", "role", "handle", "owner", "lane", "ended_run")} == {
             "kind": "idle_after_run", "role": "worker", "handle": "vllm", "owner": "vllm", "lane": "zk-port",
             "ended_run": "r20261018-200100-0002"}
-        assert rec["action"] == "rang @vllm to resume it with Task; relaunched fresh in 20 min if it stays idle"
+        assert rec["action"] == ("rang @vllm to resume it with Task; relaunched fresh in 20 min if it stays idle with its task "
+                                 "unfinished and its coordinator isn't ACTIVE")
         for _ in range(W.WORKER_RELAUNCH_S // 60 + 5):
             clock.t += 60
             w.sweep(lambda r: None)
@@ -1868,13 +1914,233 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
             continue
         ((path, body),) = launch_api.posts
         assert launch_api.keys == [KEY] and path == "/v1/agents" and body["env"] == {"type": "cloud", "name": W.ENV_NAME}
-        assert "cursor/zk-w1-c7a9" in body["prompt"]["text"] and "20261018T1950Z-report-w1.md" in body["prompt"]["text"]
+        text = body["prompt"]["text"]
+        assert "cursor/zk-w1-c7a9" in text and "20261018T1950Z-report-w1.md" in text
+        assert body["name"] == "vllm worker ZKS10 (relaunch of 1111)", "a worker's name, never a coordinator's `verity: LANE`"
+        assert "You are a worker, not a coordinator" in text and "`research msg send --as vllm --thread " in text
+        assert "stopped mid-step (its last message: \u201cThe lock didn't change. Committing the fix" in text
+        assert "the agent watch rings your coordinator's inbox (`research msg ring-run`)" in text
         assert relaunches[0]["new_agent"] == "bc-77777777-7777-7777-7777-777777777777"
-        new = json.loads((d / "workers.d" / "zk-port-bc-77777777-7777-7777-7777-777777777777.json").read_text())
-        assert new == {"agent_id": "bc-77777777-7777-7777-7777-777777777777", "lane": "zk-port", "launched_by": NEW,
-                       "relaunch_of": W1_, "branch": "cursor/zk-w1-c7a9"}
+        new = json.loads((d / "workers.d" / "vllm-bc-77777777-7777-7777-7777-777777777777.json").read_text())
+        assert new == {"agent_id": "bc-77777777-7777-7777-7777-777777777777", "lane": "vllm", "launched_by": NEW,
+                       "role": "worker", "name": "vllm worker ZKS10 (relaunch of 1111)", "relaunch_of": W1_,
+                       "branch": "cursor/zk-w1-c7a9"}
         written = "".join(p.read_text() for p in d.rglob("*") if p.is_file() and p.name != "launch.env")
         assert KEY not in written and KEY not in "".join(capsys.readouterr()), "the key is never written or printed"
+
+
+def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_newest_note_names(tmp_path):
+    """SALT-WIRE's relaunch (20:43Z 19 Oct): its workers.d entry named no branch, and its fresh launch read "Your branches: none
+    recorded", though its note opened with "Branch `cursor/ca-salt-wire-ea24`, stacked on #2817 (`cursor/net45-...`)". 17 of 18
+    workers.d entries name no branch, so the note's branches are named, the first written as the new worker's."""
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
+    launch_api = FakeLaunchApi()
+    api, clock, w, _, roots = nodes_setup(tmp_path, launch_api=launch_api)
+    p = note(tmp_path / "notes", "zk-port", "20261019T1400Z-draft-salt-wire.md", W1_)
+    p.write_text(p.read_text() + "Branch `cursor/ca-salt-wire-ea24`, stacked on #2817 (`cursor/net45-reveal-deadline-061a` @\n"
+                 "77a862af94); rebased on `cursor/ca-salt-wire-ea24`'s base.\n")
+    W.os.utime(p, (T0 - 60, T0 - 60))
+    api.workers[W1_] = worker("IDLE", W.iso(T0 - 600))
+    api.convs[W1_] = [("user_message", "brief"), ("assistant_message", "Now I'll rebase on #2817:")]
+    (tmp_path / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
+    ended = run_end_for(tmp_path, roots, clock, w, W1_)
+    while clock.t < ended + W.RESUME_S + W.BURST_QUIET_S + W.WORKER_RELAUNCH_S + 300:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    ((_, body),) = launch_api.posts
+    assert ("Your branches: none recorded; its newest note names cursor/ca-salt-wire-ea24, cursor/net45-reveal-deadline-061a; "
+            "fetch the one you work on") in body["prompt"]["text"]
+    new = json.loads((tmp_path / "workers.d" / "vllm-bc-77777777-7777-7777-7777-777777777777.json").read_text())
+    assert new["branch"] == "cursor/ca-salt-wire-ea24"
+
+
+def vllm_workers(d, *agents):
+    """workers.d entries for `agents`, launched by NEW (@vllm's coordinator), as a coordinator registers its workers."""
+    (d / "workers.d").mkdir(parents=True, exist_ok=True)
+    for a in agents:
+        (d / "workers.d" / f"{a[3:7]}.json").write_text(json.dumps({"agent_id": a, "lane": "vllm", "launched_by": NEW}))
+
+
+def test_a_worker_is_relaunched_only_unfinished_never_while_its_coordinator_is_active_and_once_per_idle(tmp_path):
+    """20:43-20:56Z 19 Oct, INF-141: the watch relaunched SALT-WIRE, STRAND and DSV4LAND fresh within a minute of launch.env
+    appearing, though each had finished and was waiting on its coordinator (STRAND's original was resumed at 21:00Z, and its
+    copy could have pushed over #2822). Now a worker whose last message reads as a report back (STRAND's "Nothing changed: ...",
+    DSV4LAND's paragraphs ending "or you can file it"), or whose run passed and that didn't stop mid-step, is recorded quietly
+    as not relaunched; one whose run failed is relaunched, but never while its coordinator is ACTIVE, never on a conversation
+    the API won't read, and never twice for one idle."""
+    strand, dsv4, failed = W1_, W2_, W3_
+    vllm_workers(tmp_path, strand, dsv4, failed)
+    launch_api = FakeLaunchApi()
+    api, clock, w, _, roots = nodes_setup(tmp_path, launch_api=launch_api)
+    api._agents.append({"id": NEW, "name": "verity: vllm", "status": "ACTIVE", "latestRunId": "run-v",
+                        "updatedAt": W.iso(T0)})
+    api._runs["run-v"] = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": W.iso(T0 - 600), "updatedAt": W.iso(T0)}
+    for a, name in ((strand, "STRAND: land #2822 per proofs' review"), (dsv4, "DSV4LAND: CIR-54 indexer partition fix"),
+                    (failed, "ZKS10: frame the openings")):
+        api.workers[a] = worker("IDLE", W.iso(T0 - 600), name)
+    api.convs[strand] = [("user_message", "brief"), ("assistant_message", (
+        "Nothing changed: #2822's head stays at 1cac8bff78 and quick tier r20261019-201010-338e stands."))]
+    api.convs[dsv4] = [("user_message", "brief"), ("assistant_message", (
+        "The body is updated.\n\nI left the catalogue entries out of #2765. I can add them in a one-line PR once that commit "
+        "lands, or you can file it."))]
+    (tmp_path / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
+    w.sweep(lambda r: None)
+    clock.t += 60
+    url = "https://cursor.com/agents/{}".format
+    node_run(roots["vy-nebius-1"], "r20261019-191151-c1ad", clock.t, by=url(strand))
+    node_run(roots["vy-nebius-1"], "r20261019-191719-8c94", clock.t, by=url(dsv4))
+    node_run(roots["vy-nebius-2"], "r20261019-192229-3606", clock.t, by=url(failed), state="failed", rc=3)
+    ended = clock.t
+    while clock.t < ended + W.RESUME_S + W.BURST_QUIET_S + W.WORKER_RELAUNCH_S + 600:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert launch_api.posts == [] and set(w.awaiting) == {strand, dsv4, failed}, "its coordinator is ACTIVE: it may resume them"
+    assert not [r for r in records(tmp_path) if r["kind"] in ("relaunch", "not_relaunched")]
+    api._agents[-1]["status"] = "IDLE"
+    clock.t += 60
+    w.sweep(lambda r: None)
+    declined = {r["agent"]: r for r in records(tmp_path) if r["kind"] == "not_relaunched"}
+    assert set(declined) == {strand, dsv4} and all(r["quiet"] and r["handle"] == "vllm" for r in declined.values())
+    assert "its last message reads as a report back" in declined[strand]["why"] and "Nothing changed" in declined[strand]["why"]
+    assert "or you can file it" in declined[dsv4]["why"]
+    assert launch_api.posts == [] and set(w.awaiting) == {failed}, "a conversation the API won't read is never a relaunch"
+    api.convs[failed] = [("user_message", "brief"), ("assistant_message", "Rerunning the suites on cpu-3.")]
+    clock.t += 60
+    w.sweep(lambda r: None)
+    ((_, body),) = launch_api.posts
+    (rec,) = [r for r in records(tmp_path) if r["kind"] == "relaunch"]
+    assert rec["agent"] == failed and "its run r20261019-192229-3606 ended failed rc=3" in rec["reason"]
+    assert "its run r20261019-192229-3606 ended failed rc=3 and its last message reports nothing" in body["prompt"]["text"]
+    node_run(roots["vy-nebius-2"], "r20261019-200000-0009", clock.t, by=url(failed), state="failed", rc=1)
+    for _ in range(50):
+        clock.t += 10 * 60
+        w.sweep(lambda r: None)
+    assert len(launch_api.posts) == 1 and len([r for r in records(tmp_path) if r["kind"] == "relaunch"]) == 1, \
+        "never relaunched twice for one idle"
+    assert [r["agent"] for r in records(tmp_path) if r["kind"] == "not_relaunched"] == [strand, dsv4], "each judged once"
+
+
+@pytest.mark.parametrize("said, relaunch", [
+    ("Nothing changed: the head stays at 1cac8bff78.", False),
+    ("The report is `lanes/proofs/x.md`, status final, and it's synced.", False),
+    ("Should I take items 1 to 4 next?", False),
+    ("Head pushed.\n\n- tests pass", False),
+    ("DONE", False),
+    ("I set one wake-up, int7-verdict-2205, for 22:05Z. Then I'll read d798.", False),
+    ("The lock didn't change. Committing the fix and rerunning the check on cpu-3.", True),
+    ("One more direct query of the node:", True),
+    ("Let me check the queue.", True),
+    ("Everything passes on the node.", False),
+])
+def test_a_workers_last_message_reads_as_a_report_a_stop_mid_step_or_neither(said, relaunch):
+    """From the last messages of 19 Oct's idle workers (`GET /v0/agents/{id}/conversation`): a report back runs to paragraphs,
+    asks, or says final/report/nothing changed; a stop mid-step announces its next step; a wait it set itself is neither."""
+    assert (not W.reported(said) and W.mid_step(said)) is relaunch
+
+
+def cancelled(root, rid, reason):
+    """The cancel_intent `research cancel` appends to a run's events.jsonl (remote.py's "(research cancel by BY)")."""
+    with open(root / "runs" / rid / "events.jsonl", "a") as f:
+        f.write(json.dumps({"kind": "sampler.tick", "pad": "x" * 200}) + "\n")
+        f.write(json.dumps({"kind": "cancel_intent", "actor": "manual", "reason": reason, "signal": 15}) + "\n")
+
+
+def test_a_run_its_own_lane_cancelled_is_posted_quietly_and_starts_no_clock(tmp_path):
+    """INF-141 (b): SALT-WIRE's r20261019-182846-7d10 ended rc=143 after "superseded by r20261019-194802-65ae at SALT-WIRE's
+    final head ... (research cancel by ubuntu)" (no --by: the user's name), and the watch rang its coordinator to resume it,
+    then relaunched it. A cancel whose reason or BY names the sender, or whose BY names its handle or an agent of it, is the
+    lane's own: recorded quietly (no ring) with nothing to resume. Another lane's cancel is a failure like any."""
+    salt, mine, other = W1_, W2_, W3_
+    vllm_workers(tmp_path, salt, mine, other)
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[salt] = worker("IDLE", W.iso(T0 - 600), "SALT-WIRE: salt tag, Proxy order, PR")
+    api.workers[mine] = worker("IDLE", W.iso(T0 - 600), "STRAND: land #2822")
+    api.workers[other] = worker("IDLE", W.iso(T0 - 600), "WIDTHS: template widths")
+    w.sweep(lambda r: None)
+    clock.t += 60
+    url, root = "https://cursor.com/agents/{}".format, roots["vy-nebius-2"]
+    for rid, a, why in (("r20261019-182846-7d10", salt, ("superseded by r20261019-194802-65ae at SALT-WIRE's final head "
+                                                         "5ea25a5ae5; frees 64 GB (research cancel by ubuntu)")),
+                        ("r20261019-182846-0002", mine, "rerun at the new head (research cancel by vllm)"),
+                        ("r20261019-182846-0003", other, f"frees the node for {NEW[:11]}'s train (research cancel by circuits)")):
+        node_run(root, rid, clock.t, by=url(a), state="failed", rc=143)
+        cancelled(root, rid, why)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["agent"]: r for r in ended(tmp_path)}
+    assert got[salt]["quiet"] and got[salt]["cancelled_by"] == "ubuntu" and "SALT-WIRE's final head" in got[salt]["cancel_reason"]
+    assert got[mine]["quiet"] and got[mine]["cancelled_by"] == "vllm"
+    assert "quiet" not in got[other] and got[other]["role"] == "worker", "circuits cancelled vllm's run: a failure, rung"
+    assert set(w.awaiting) == {other}, "a run its own lane cancelled starts no clock"
+
+
+def test_a_sender_no_route_knows_is_learned_from_its_brief(tmp_path):
+    """INF-141 (4): circuits' WIDTHS (bc-c8838f5a, "a cloud worker of the circuits coordinator (agent bc-21f3d3de-...)") and
+    proofs' ZKS10 (bc-5f0b2ba2, "a worker for the proofs lane (@proofs)") ran under nobody's route: their Task calls were before
+    the watch followed their coordinators, and a learned worker was forgotten 2 days on. A sender no route knows is read for its
+    brief (at most `LEARN_PER_READ` a node read, again only `LEARN_RETRY_S` later), and kept while it sends runs."""
+    widths, zks10 = "bc-c8838f5a-e10e-54ad-be4f-bbad4534f555", "bc-5f0b2ba2-1013-5ed2-af26-b6fac7d3bc65"
+    strangers = [f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "789a0f"]
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[widths] = worker("IDLE", W.iso(T0 - 600), "WIDTHS: served-row template width inventory")
+    api.workers[zks10] = worker("ACTIVE", W.iso(T0 - 600), "ZKS10: OpeningsRefused restatement")
+    api.convs[widths] = [("user_message", (f"You are WIDTHS, a cloud worker of the circuits coordinator (agent {CO}, Slack "
+                                           "@circuits, Linear team CIR). First reread AGENTS.md."))]
+    api.convs[zks10] = [("user_message", "You're ZKS10, a worker for the vllm lane (@vllm) of Verity; ask @infra for nodes.")]
+    w.sweep(lambda r: None)
+    clock.t += 60
+    url = "https://cursor.com/agents/{}".format
+    node_run(roots["vy-nebius-1"], "r20261019-200004-8870", clock.t, by=url(widths), state="failed", rc=1)
+    node_run(roots["vy-nebius-1"], "r20261019-213533-32a6", clock.t, by=url(zks10), command=["x", "--by", "vllm"])
+    for i, s in enumerate(strangers):
+        node_run(roots["vy-nebius-2"], f"r20261019-21000{i}-000{i}", clock.t, by=url(s))
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["agent"]: (r["handle"], r["role"], r["name"], r.get("parent")) for r in ended(tmp_path) if r["role"] != "unknown"}
+    assert got == {widths: ("circuits", "worker", "WIDTHS: served-row template width inventory", CO),
+                   zks10: ("vllm", "worker", "ZKS10: OpeningsRefused restatement", NEW)}
+    assert widths in w.awaiting, "a worker's run end starts its clock, not its coordinator's"
+    def briefs():
+        return [g for g in api.gets if g.endswith("/conversation") and g.split("/")[-2] in strangers]
+    assert len(briefs()) == W.LEARN_PER_READ, "at most LEARN_PER_READ briefs a node read"
+    clock.t += 3600
+    for i, s in enumerate(strangers[:W.LEARN_PER_READ]):
+        node_run(roots["vy-nebius-2"], f"r20261019-23000{i}-001{i}", clock.t, by=url(s))
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    assert len(briefs()) == W.LEARN_PER_READ, "a brief that named no coordinator is not read again soon"
+    clock.t += W.WORKER_KEEP_S - 2 * 3600
+    node_run(roots["vy-nebius-1"], "r20261021-190000-0001", clock.t, by=url(widths))
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    clock.t += 2 * 3600
+    w.sweep(lambda r: None)
+    assert widths in w.children, "a worker still sending runs is kept past WORKER_KEEP_S from its learning"
+
+
+def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
+    """INF-143: a relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
+    resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to
+    the lane's handle as a worker's, and, being listed, the watch resumes it with the result."""
+    new = "bc-77777777-7777-7777-7777-777777777777"
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / f"vllm-{new}.json").write_text(json.dumps({
+        "agent_id": new, "lane": "vllm", "launched_by": NEW, "role": "worker", "name": "vllm worker ZKS10 (relaunch of 1111)",
+        "relaunch_of": W1_}))
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api._agents.append({"id": new, "name": "vllm worker ZKS10 (relaunch of 1111)", "status": "IDLE", "latestRunId": "run-n",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-n"] = dict(FINISHED)
+    ended_t = run_end_for(tmp_path, roots, clock, w, new)
+    while clock.t < ended_t + W.RESUME_S + 300:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    (rec,) = ended(tmp_path)
+    assert (rec["handle"], rec["role"], rec["name"], rec.get("listed")) == (
+        "vllm", "worker", "vllm worker ZKS10 (relaunch of 1111)", True)
+    resumed = [p for p, _ in api.posts if p == f"/v1/agents/{new}/runs"]
+    assert resumed and [r["kind"] for r in records(tmp_path)][-1] == "idle_after_run"
 
 
 def test_a_coordinator_past_its_restarts_is_relaunched_from_its_handover_note_with_the_key(tmp_path, capsys):
@@ -2019,3 +2285,30 @@ def test_a_burst_held_when_the_watch_restarts_is_still_posted_once(tmp_path):
         clock.t += W.BURST_QUIET_S
         again.sweep(lambda r: None)
     assert [(r["kind"], r["count"]) for r in records(tmp_path)] == [("workers_failed", 2)]
+
+
+def test_a_worker_learned_from_a_former_coordinators_task_call_inherits_that_coordinators_handle(tmp_path):
+    """#agent-alerts 1792438328.270299 (19 Oct): G2-1 was learned from a Task call of proofs' generation 3 after generation 4
+    took the inbox (routes.d), so `holders` no longer named its parent, and it was recorded with lane '' and no handle. Its
+    parent's handle is the registry holder's, or the handle `launch_coordinator.py` made the parent a generation of."""
+    reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
+    api, clock, w = coordinators(tmp_path, [{"id": OLD, "name": "verity: vllm", "status": "ACTIVE", "latestRunId": "run-old",
+                                             "updatedAt": W.iso(T0)}], {"run-old": {"status": "RUNNING"}}, timers=None)
+    coords = W.holders(reg, routes)
+    gen3 = f"bc-{uuid.uuid5(W.COORDINATORS, 'circuits/3')}"
+    assert OLD not in coords and W.lineage(reg, coords, OLD) == "vllm" and W.lineage(reg, coords, NEW) == "vllm"
+    assert W.lineage(reg, coords, gen3) == "circuits" and W.lineage(reg, coords, KIDS["REC1"]) is None
+    w.sweep(lambda r: None)
+    g2 = KIDS["G2-1"]
+    task_call(w, "run-old", "t1", g2, "G2-1 → LiveEnd for FinExe")
+    api.workers[g2] = worker("ACTIVE", W.iso(T0), "G2-1 → LiveEnd for FinExe")
+    w.workers[g2] = {"heard": 0.0, "parent": OLD, "lane": "", "handle": None}    # what the deployed watch had learned
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert (w.workers[g2]["lane"], w.workers[g2]["handle"]) == ("vllm", "vllm")
+    api.workers[g2] = worker("IDLE", W.iso(clock.t), "G2-1 → LiveEnd for FinExe")
+    for _ in range(3):
+        clock.t += W.BURST_QUIET_S
+        w.sweep(lambda r: None)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["agent"], rec["lane"], rec["handle"]) == ("worker_idle", g2, "vllm", "vllm")
