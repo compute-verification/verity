@@ -184,8 +184,8 @@ pass_server = D.server_fixture(PASS)
 
 
 def test_pass_and_draw(pass_server):
-    """Generated passes and draws, then each mutation over a few seeds (`replay`), so every refusal is reached whatever
-    the draw."""
+    """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
+    every refusal is reached whatever the draw."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
     swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -194,7 +194,7 @@ def test_pass_and_draw(pass_server):
                      for name in ["honest", *passes.DRAW_NAMES] for seed in range(3))
     print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
-    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon"}
+    assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier"}
     assert "draw accept" in PASSED and len(PASSED) > 40
     for seed in range(4):   # `COIN_EARLY`'s draws: accepted only as a replay of a recorded run, by both sides
         early, _ = passes.honest_draw(random.Random(f"early/{seed}"), CC.COIN_EARLY, early=True)

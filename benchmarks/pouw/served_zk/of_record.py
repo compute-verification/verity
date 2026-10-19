@@ -126,7 +126,8 @@ def py_opening(x: dict) -> str | None:
 
 def py_pass(x: dict) -> dict:
     raw = None if x["raw"] is None else bytes.fromhex(x["raw"])
-    how, refused = CC.pass_epoch(x["coins"], raw, x["context"], x["recorded"])
+    reveal, weights = (None if x.get(k) is None else bytes.fromhex(x[k]) for k in ("reveal", "weights"))
+    how, refused = CC.pass_epoch(x["coins"], raw, x["context"], x["recorded"], reveal, weights)
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
