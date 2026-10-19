@@ -14,8 +14,9 @@ residue sums. This prices co32c both ways on Llama-3.1 8B and 70B (linears at TS
 unless the committed case reproduces TS_EPS, and gives sm_120's ε_skip (`design_skip`) and ε (`verity_machine_model`'s
 eps of the design, floor credit, operands free, its skip moved by ε_skip's change, so `core` is exact) at the sheet
 (DS-120, q 1/2), the measured reading (VF3r-16, 1.22), the measured vector at 1/2, and the Lean measured instance's
-(VF3s-16, 9/8). With --lean-headline it runs that file's `instance()` and `measured()` on each pricing (its headline
-checks lifted) and gives the literal each guarantee would need.
+(VF3s-16, 9/8). With --lean-headline it runs that file's `instance()` and `measured()` (its headline checks lifted) on
+TS_EPS as written, which must reproduce 0.656% and 0.591%, and on each pricing, and gives the literal each guarantee
+would need.
 
 g1 on H1 serves 4 O - 2 sum X - 2 sum P^ + k (`g1h_eps.py`), so its correction is free beside O. The fix commits that
 centred word S as one more receipted word beside O' and the D_d: the cheater then computes S, through the recombination
@@ -188,7 +189,7 @@ def main(out: Path, lean_path: Path | None) -> int:
     d = E.design(DESIGN)
     record = {r: E.eps(d, E.machine(vec), qr, operands="free", credit="floor") for r, vec, qr in readings}
 
-    cases, pricings = [], {}
+    cases, pricings = [], {"the record (eps_budget's TS_EPS as written)": saved}
     for title, case, per_cell, g_cheat in CASES:
         ts = {m: {c: ts_eps(sh, case, per_cell, g_cheat) for c, sh in comps.items()} for m, comps in SHAPES.items()}
         eb.TS_EPS["co32c"] = ts
@@ -251,9 +252,9 @@ def main(out: Path, lean_path: Path | None) -> int:
                          f"({100 * sh['folded']:.5f}%, {100 * sh['unfolded']:.5f}%) | {sh['literal']} | "
                          f"{100 * me['eps_skip']:.6f}% | **{100 * me['bound']:.5f}%** ({100 * me['folded']:.5f}%, "
                          f"{100 * me['unfolded']:.5f}%) | {me['literal']} |")
-        rec = lean_out.get(CASES[0][0], {})
+        rec = next(iter(lean_out.values()))
         if "sheet" in rec and not (rec["sheet"]["bound"] <= 656e-5 and rec["measured"]["bound"] < 591e-5):
-            print("the O-committed pricing doesn't reproduce the Lean headlines' 0.656% and 0.591%", file=sys.stderr)
+            print("TS_EPS as written doesn't reproduce the Lean headlines' 0.656% and 0.591%", file=sys.stderr)
             rc = 1
 
     dc = {}
