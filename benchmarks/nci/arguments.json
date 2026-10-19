@@ -156,11 +156,10 @@
    "id": "p-threading",
    "kind": "assumption",
    "status": "false-as-instantiated",
-   "statement": "The reference circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives (d0 - E, e + E e_lk)-threading at S < (E + 1) b for keyed reference circuits, with d0 the narrowest root's legs, e_lk the products keyed to an embedding lookup and b an embedding column's bits (Kimi K2 (505, 37248) and dense 100B (12279, 49152) at S = 2e7, leaving layer 0's attention-input projections and the unembedding's forward uncounted; note:training-20261019T0446Z-threading-layered); with every product counted the dense 100B's (d, 49152) is false, a piece holding embedding columns doing 1.3e5 products per thread read. With a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
+   "statement": "The reference circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
    "refs": {
     "lean": [
-     "Nci.SecurityProofs.ThreadedReads",
-     "Nci.SecurityProofs.ThreadedOfLayered"
+     "Nci.SecurityProofs.ThreadedReads"
     ]
    }
   },
@@ -376,7 +375,7 @@
   {
    "id": "a-threading-unproven",
    "severity": "major",
-   "status": "repair-proposed",
+   "status": "open",
    "targets": [
     "c2-one-declaration"
    ],
@@ -386,13 +385,8 @@
    "title": "Threading is unproven for any transformer and false as instantiated",
    "mechanism": "Layer 1 needs no thread reads when the corpus is committed; the unembedding needs e >= vocabulary.",
    "effect": "the blue line is a conditional estimate; repaired, within about 1.1x at 1e28",
-   "repair": "Derive threading from the circuit; drop products computable from theta. Lean derives it for keyed reference circuits (ThreadedOfLayered), uncounting the products keyed to the embedding lookup and the unembedding's forward; a transformer block is checked against the class on paper only.",
-   "refs": {
-    "lean": [
-     "Nci.SecurityProofs.ThreadedOfLayered",
-     "Nci.SecurityProofs.LayeredTraining"
-    ]
-   }
+   "repair": "Derive threading from the circuit; drop products computable from theta.",
+   "refs": {}
   },
   {
    "id": "a-theorem-slack",
