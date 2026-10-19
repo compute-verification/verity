@@ -186,8 +186,9 @@ DC_DEV void wg_mix(const OpArgs& a) {
 // OP_UNTIL loop the gate refuses, DC EPS1 r9): each warpgroup issues its 4 wgmma, then folds the four segments' 512
 // committed words with LI (LOP3 to absorb a word, IMAD to multiply by an odd a) and, for CP > 0, LI-CP-W's per-segment
 // checkpoint (4 LOP3 to XOR a lane's 8 chains, then the warp reduces once by `redux.sync.xor.b32` (CP 1) or the 5-shuffle
-// butterfly fallback (CP 2)), then waits. No filler (that is the design's): this is the honest profile's own loop, and
-// its tensor fraction (the wgmma's rate beside it over its rate alone) is dc90-licpw-redux-l32's measured cycles a MMA.
+// butterfly fallback (CP 2)), then waits. No filler (that is the design's). The fold reads the Lane's registers, not
+// the wgmma's accumulators, so it overlaps its own wgmma, which the receipt can't: dc90-licpw-redux-l32 is timed from
+// RT-HOPPER's wgli_db_w2, which folds the accumulators (RT-HOPPER-8, r20261019-070001-df11).
 template <int CP>
 DC_DEV void li_fold(Lane& l) {
 #pragma unroll
