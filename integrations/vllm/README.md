@@ -223,6 +223,9 @@ Supported keyword options:
 | `dtype` | the profile's | served dtype override |
 | `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
 | `compilation_config` | vLLM's | compilation and CUDA-graph settings |
+| `attention_backend` | vLLM's choice | the attention backend, such as `"FLASH_ATTN"` |
+| `attention_config` | vLLM's | attention settings, such as `{"flash_attn_version": 2}` |
+| `moe_backend` | vLLM's `"auto"` | the MoE backend, such as `"triton"` |
 | `seed` | 0 | the engine seed |
 | `protocols` | none | protocol options installed on the engine: `"pouw:<scheme>,pous:<scheme>"` or `{name: scheme}` |
 | `protocols_config` | none | each enabled protocol's settings, `{name: {...}}`; never hashed |
