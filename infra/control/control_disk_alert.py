@@ -6,10 +6,6 @@ The same pass reads the steward's notes clone, whose sync (and the budgets guard
 9 Oct to 13 Oct on a detached HEAD and a stale index.lock. One alert when the clone's HEAD is detached, its index.lock is older than
 10 minutes, or a change has waited unpushed for an hour (a local commit or an uncommitted file), and one note when it clears.
 
-It also reads comms' router's heartbeat (`research msg router`, started by router.sh, INF-123): one alert when
-/data/router/heartbeat is older than 5 minutes, or absent 5 minutes after the router's code was deployed (/data/router/src/COMMIT),
-and one note when it is fresh again. Before the code is deployed it says nothing.
-
 Since 13 Oct it runs on the pod itself (control_disk.sh, CONTROL_POD_LOCAL=1, reading with `sh -c`); without that it reads the pod
 over ssh from a machine with the RunPod key.
 
@@ -41,11 +37,6 @@ SYNC = (f"cd {NOTES} && b=$(git symbolic-ref -q --short HEAD || echo -) && "
         "d=$(git status --porcelain=v1 -z --untracked-files=all | tr '\\0' '\\n' | cut -c4- | grep -vx steward-state.json "
         "| xargs -r -d '\\n' stat -c %Y 2>/dev/null | sort -n | head -1) && "
         "echo \"$(date +%s) $b $l ${u:-0} ${d:-0}\"")
-ROUTER = "/data/router"
-HEARTBEAT_S = 5 * 60
-# now, the heartbeat's mtime (0: none), the deployed code's COMMIT mtime (0: not deployed)
-BEAT = (f"echo \"$(date +%s) $(stat -c %Y {ROUTER}/heartbeat 2>/dev/null || echo 0) "
-        f"$(stat -c %Y {ROUTER}/src/COMMIT 2>/dev/null || echo 0)\"")
 DRY = "--dry-run" in sys.argv
 
 
@@ -87,17 +78,6 @@ def sync_stall(line: str) -> list[str]:
     return why
 
 
-def router_stale(line: str) -> str | None:
-    """Why the router's heartbeat is stale, from one line of BEAT's output; None while it is fresh or the router isn't deployed."""
-    now, beat, deployed = (int(x) for x in line.split())
-    if not deployed:
-        return None
-    if not beat:
-        return (f"no heartbeat file `{ROUTER}/heartbeat` {(now - deployed) / 60:.0f} min after its code was deployed"
-                if now - deployed > HEARTBEAT_S else None)
-    return f"its heartbeat `{ROUTER}/heartbeat` is {(now - beat) / 60:.0f} min old" if now - beat > HEARTBEAT_S else None
-
-
 def main() -> None:
     seen = json.loads(SEEN.read_text()) if SEEN.exists() else {"level": 0, "last_read": time.time(), "unread": False}
     while True:
@@ -114,17 +94,6 @@ def main() -> None:
             log("steward sync: " + ("; ".join(why) or "ok"))
         except Exception as e:  # noqa: BLE001
             log(f"steward sync read failed: {type(e).__name__}: {e}")
-        try:
-            stale = router_stale(pod(BEAT).strip().splitlines()[-1])
-            if stale and not seen.get("router_stale"):
-                seen["router_stale"] = post(f"*Router down* on `vy-control-verity`: {stale}, so #chat-* posts go unrouted. "
-                                            f"It is `research msg router`, run and restarted by `/data/infra/router.sh`; log "
-                                            f"`{ROUTER}/router.log`, its code `{ROUTER}/src` (comms owns it).")
-            elif not stale and seen.get("router_stale"):
-                seen["router_stale"] = not post("*Router heartbeat fresh again* on `vy-control-verity`.")
-            log("router: " + (stale or "ok or not deployed"))
-        except Exception as e:  # noqa: BLE001
-            log(f"router heartbeat read failed: {type(e).__name__}: {e}")
         try:
             size, used, avail, pct = (int(x.rstrip("%")) for x in pod("df -Pk / | tail -1").split()[1:5])
             seen["last_read"] = time.time()

@@ -1,6 +1,6 @@
 #!/bin/sh
-# The control disk relay (control_disk_alert.py) on the pod itself, restarted when it exits: the root disk, the steward's notes sync
-# and the router's heartbeat, posted in #agent-alerts. relay.env (GH_TOKEN, SLACK_BOT_TOKEN) goes only into its environment.
+# The control disk relay (control_disk_alert.py) on the pod itself, restarted when it exits: the root disk and the steward's notes
+# sync, posted in #agent-alerts. relay.env (GH_TOKEN, SLACK_BOT_TOKEN) goes only into its environment.
 # Code: /data/infra/control-disk/control_disk_alert.py, run with /data/infra/control-disk/research-src (main's tools/research; COMMIT
 # names it) and the registry copied beside it. Deployed as /data/infra/control-disk/run.sh. With arguments it runs once in the
 # foreground, without the lock: `run.sh --once --dry-run`. Log: /data/infra/control-disk/relay.log
