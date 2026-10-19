@@ -9,7 +9,7 @@ import pytest
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
 from verity_machine_model.model import DEVICES
-from verity_machine_model.sheet import ROOT, differences, figures, lean, reading, sheet
+from verity_machine_model.sheet import ROOT, differences, figures, lean, moves, reading, sheet
 
 SHEETS = ["sm_90", "sm_100"]
 
@@ -36,6 +36,17 @@ def test_sheet_prices_the_headline(name):
     assert r.sheet == r.headline
     assert r.fmax == r.sheet, (f"{name}: the sheet's ε now depends on reading A3 per clock (the H200's tensor clock, "
                                "the B200's measured peak: B200-PEAK-PER-CLOCK) rather than per second at f_max")
+
+
+@pytest.mark.parametrize("name", SHEETS)
+def test_tensor_lines_have_slack(name):
+    """The headline's sheet ε doesn't move until every tensor line is 10% slower than the sheet's, so an A3 error under
+    10% leaves it as it is. On DS-90 that slack is the li fold's margin: the cheater's 145 SMSP-cycles a MMA on
+    DS_issue against DS_tensor's 128 (RT-HOPPER-2)."""
+    s = sheet(DEVICES / name)
+    m = moves(s, DEVICES / name, steps=10)
+    assert m is None or m >= 1.10, (f"{name}: ε moves with every tensor line {m:.3f}× the sheet's, so A3's error now "
+                                    "moves the headline (RT-HOPPER-2)")
 
 
 @pytest.mark.parametrize("name", SHEETS)
