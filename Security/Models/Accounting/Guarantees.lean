@@ -11,6 +11,7 @@ import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.Gates
+import Models.Accounting.Guarantees.Headline
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
@@ -40,8 +41,8 @@ import Models.Accounting.Guarantees.TS.FoldFanIn
 import Models.Accounting.Guarantees.TS.LowBit
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
-audit's guarantees as a joint run's compute and bandwidth guarantees, the filler's per-check luck, a state-bounded
-game's soundness as its capacity
+audit's guarantees as a joint run's compute and bandwidth guarantees, each family's headline `ε` on its exact data,
+the filler's per-check luck, a state-bounded game's soundness as its capacity
 guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild
 charged as compute, with partial completion and with a sketch-then-hash tag, the remote rate audit's conservation over
 tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one

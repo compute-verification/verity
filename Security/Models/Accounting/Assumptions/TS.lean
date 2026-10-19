@@ -14,13 +14,14 @@ Which form each takes:
   checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet falsifies it.
 * (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
   is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
-* (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`, which QSTAR's joint statement gives from class P
-  and a per-instruction cap `κ` (every sm_120 ALU instruction creates at most `κ` incidences): `q = 2.03` for
-  `κ < 27.2` a slot, `q_T = 1.22` for `κ ≤ 128`, and `b_T = 32(28 − 1.03κ)/(c_L − κ)` bytes a word (`c_L = 216` in
-  any format, 128 single-field), 3.0 at `κ = 8`. The floors are the model's parameters, so every statement here holds
-  at every `κ`. ISA-CAP (`κ = 32/7`, which gave 3.5) is false (REFEREE Q4: an IDP.4A writes 5 incidences into one
-  word, a signed IMAD.WIDE 8) and is no premise. No cap is proved yet and class P is a modeling restriction, so it
-  stays an assumption.
+* (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
+  class P and a per-instruction cap `κ` (`q = 2.03`, `q_T = 1.22`, `b_T` from `κ`), rests on Theorem C, which is
+  false as stated (FLOORS r3). The proved count is FLOORS' `Pouw.Guarantees.Eps1.ClassPSlots` (#2436): a class-P
+  program whose writers each create at most `w` incidences costs at least `1 + (32 − w)/(65·d)` issue slots a word,
+  `d` words a slot (`1.185` at `w = 8`, `d = 2`). No cap on `w` is proved, class P is a modeling restriction, and a
+  table route lies outside `ClassPSlots`, so the floors stay an assumption; they are the model's parameters, so every
+  statement here holds at every floor. ISA-CAP (`κ = 32/7`) is false (REFEREE Q4: an IDP.4A writes 5 incidences into
+  one word, a signed IMAD.WIDE 8) and is no premise.
 * (I5) `SideUnits` (measured per-word vectors, P11) and `NoSum` (NOSUM, P13), a measured statement: no unit outside
   the menu heads a fresh word.
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
@@ -29,8 +30,17 @@ Which form each takes:
   below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
   (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
   `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
-  least the menu's routes of `a_k/m_k` a word.
-* (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round.
+  least the menu's routes of `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded (ASK-6 = A): the fold priced
+  at the words the run folds, `FoldOpt` its case at `N_w`. The headlines take it, so a run that skips folds is charged
+  through `WholeLuckAt`.
+* (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
+  (`Accounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
+  * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words (decision 110), through Lemma B at
+    fibre 1;
+  * `ReceiptLuckAt`, the receipt luck, which is HMU's B′ case.
+  `WholeLuckAt` is B′ at a unit whose fold the run skips, the whole-unit luck at `p₀` (ASK-9 = A: `½`, B′'s value).
+  `OperandLuckCube` proves the operand luck at ¾ for degree-2 operands on cube bits. Its hypothesis restricts the
+  cheater to affine-operand runs (RT-HEADLINE), so it is a proved route, not a premise.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
@@ -98,6 +108,12 @@ the run's fold is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
 def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * Z.Nw * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
+/-- `accounting-ts-fold-opt` (assumed; FOLD-OPT per word folded, ASK-6 = A). **FOLD-OPT_μ per word folded**: at every
+certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, `folded` the words it folds a unit. `FoldOpt`
+is its case at `N_w`. -/
+def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
+  ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
+
 /-- `accounting-ts-fill-opt` (assumed). **FILL-OPT_μ**: at every certificate, the run's filler is priced at least
 `(1 − μ_x)·χ*(π)`. -/
 def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
@@ -137,6 +153,54 @@ def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n →
 `p`, with freshness (F1)–(F2)**: the ideal game is one bet a round, a deficient round passing with probability at most
 `p` given the past. -/
 def LuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p : ℝ) (g : RoundGame Ω S) : Prop := RoundGame.LuckAt p g
+
+/-- `accounting-ts-operand-h-mu` ((H-μ), decision 110, the claim Compose's `HMu` states per template; the headlines'
+first luck premise). **A cheater's deficient words are unpredictable from its view**: in the ideal game split at the
+receipt, at every round, whatever the past, the values of the round's deficient words have point mass at most `μ`
+given everything the cheater's skip and its values for them are functions of (`ReceiptGame.OperandPointMass`, HMU's
+`SkipRound.PointMass` at word level). The headlines take it at `¾`. Lemma B at fibre 1 (`Accounting.Guarantees.HMu.LemmaB`) turns it into the operand luck at
+`μ`. Where it holds:
+* the coins give it for a fresh-bit skipped value (`Accounting.Guarantees.HMu.CoinPointMass`: `½` at one bit);
+* for degree-2 operands on cube bits `OperandLuckCube` gives the operand luck at `¾` directly, on affine-operand runs
+  only;
+* where the cheater computes a word that shares the skipped value's coins, it is computational: the cheater hasn't
+  computed the product (`Models.Accounting.Guarantees.HMu`'s module doc).
+A cheater whose view pins the skipped value, one that reads a coin and skips exactly when it is right, falsifies it.
+The game names no view, so the premise is that some view that decides the share has the point mass.
+Implied by (H-μ) (decision 110) at the cheater's real view, and weaker: the view and the skipped value are existential.
+It implies the operand luck at `μ` on each positive level of the share, and that implies it on levels of at least
+`1/μ` outcomes, with the share itself as the view. -/
+def OperandHMu {Ω : Type} [Fintype Ω] {S : ℕ} (μ : ℝ) (G : ReceiptGame Ω S) : Prop := G.OperandPointMass μ
+
+/-- `accounting-ts-receipt-luck` (HMU's B′ case; the headlines' second luck premise, beside `OperandHMu`; ASK-9 = A,
+card 8b00536a: named and conjectured). **The receipt luck at `pr`**: in the ideal game split at the receipt, at every round, whatever the past, a
+deficient round whose deficient words are not all right keeps the honest committed value with probability at most
+`pr` (`ReceiptGame.ReceiptLuck`). The headlines take it at `½`: LEDGER §1.3's case (b), two or more wrong places a set
+(note:20261017T1723Z-draft-ledger), for DUO-CP-W and FX1-CP-W at `KS = 4`. Every real skip is in this case at
+`KS = 4`, because one skipped MMA puts a wrong word into each of 4 chains of a set (PROJ r4,
+note:20261018T0515Z-draft-proj-r4).
+
+(H-μ) doesn't imply it. `Accounting.Guarantees.HMu.ReceiptLuckOfCoins` needs a fibre bound at the start state the
+cheater knows, and for two or more places a set that bound fails (PROJ r5, note:20261018T1026Z-draft-proj-r5): two
+words of a chain at the served keys, three or more at every key. Case (a), one deficient word a unit, gives 0
+(`Accounting.Guarantees.TS.ReceiptLuckCaseA`), but it restricts the cheater, so it is no premise.
+
+The evidence (PROJ r5): no sure-win cancellation at the served keys when the wrong words sit in a set's last two
+places (`Pouw.SecurityProofs.Receipt.DuoPairXorNoKernel` and `Fx1PairXorNoKernel`), and a sweep at places 1–2 with no
+counterexample. A per-state fibre bound for two or more places would retire it. -/
+def ReceiptLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (pr : ℝ) (G : ReceiptGame Ω S) : Prop := G.ReceiptLuck pr
+
+/-- `accounting-ts-receipt-luck` (HMU's B′ at a unit whose fold the run skips; ASK-9 = A at `p₀ = ½`, B′'s value, for
+live coins only). **The whole-unit luck at `p₀`**: in the ideal game split at the receipt, every round's unfolded share
+(the share of its words whose fold the run skips, fixed before the round's coins) lies in `[0, 1]`, and at every
+round, whatever the past, a round with a positive unfolded share keeps the honest committed value with probability at
+most `p₀` (`ReceiptGame.WholeLuck`). A unit whose fold is skipped commits a value for its receipt that no word it
+folded determines, so its check passes only on a guess. The headlines take it at `½`. The whole-unit guess bound
+`2^-64` for a 64-bit fold state was proposed and isn't granted: no red team has attacked its value (ASK-9's condition).
+It fails if the cheater's view pins the fold state without the fold: a state that a computed word, or a coin read
+before the skip, determines. -/
+def WholeLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) (Uf : Unfolded Ω S) : Prop :=
+  G.WholeLuck p0 Uf
 
 /-- `accounting-ts-proofs-sound` (binding H-μ⁺, proof soundness, the protocol's order, Lemma E1(c)). **The proofs are
 sound up to `S·(δ_bind + n_π·δ_ZK)`**: outside an event of that probability, an accepted window is accepted by the

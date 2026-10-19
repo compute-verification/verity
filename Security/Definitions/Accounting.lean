@@ -13,6 +13,7 @@ import Definitions.Accounting.Device
 import Definitions.Accounting.Filler
 import Definitions.Accounting.HMu
 import Definitions.Accounting.Gates
+import Definitions.Accounting.Headline
 import Definitions.Accounting.Joint
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory
@@ -54,5 +55,6 @@ the ring's oracle locations, its provers' cost model, the tags and sketches the 
 and the coin rounds that give (H-μ⁺), a Program's coin flow under the Build's two coin rules, the generic-mix game of
 receipts bound to the matmul on two locations, the deployed bound receipt's sketch as a two-party protocol, what a
 run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, a declared circuit's
-requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are its, and
-the gate model the lower bounds on a declared circuit are proved over (`Gates`). -/
+requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are its,
+the gate model the lower bounds on a declared circuit are proved over (`Gates`), and the families' headline
+instances as exact data (a device's sheet, a design's TS model and its floor program). -/
