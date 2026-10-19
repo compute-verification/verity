@@ -36,8 +36,8 @@ owned registered read a bit other than the registrant's row's, has probability a
 def RowsLinkLe : Prop :=
   ∀ (n : ℕ) (Reg : Type) (own : Array Flock.Registered.Port)
     (I : Inputs) (ht : I.tags.typed = false)
-    (c : Flock.Circuit) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
-    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
+    (c : Flock.Circuit) (hc : Flock.HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    (pub : Flock.Public) (hpub : Flock.HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH c = true)
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -116,7 +116,10 @@ theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.
     obtain ⟨hOwn, g, hg, hrd, hne⟩ : own' o ∧
         ∃ g ∈ P.io u, rd.isRead (vb.pos g) ∧ Xv g ≠ vb.bit (vb.val (wo (vb.pos g))) g := by
       by_contra hno
-      refine hR fun g hg => ⟨fun ⟨hOwn, hrd⟩ => ?_, heval g hg⟩
+      apply hR
+      intro g hg
+      refine ⟨fun hrg => ?_, heval g hg⟩
+      obtain ⟨hOwn, hrd⟩ := hrg
       by_contra hne
       exact hno ⟨hOwn, g, hg, hrd, hne⟩
     by_cases hoff : rd.Off o.1
