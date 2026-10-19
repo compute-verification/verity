@@ -50,12 +50,12 @@ theorem sm90_fold : ∀ i < 2, phi90 ≤ dot (sheetCoef Sm90.ds90 .issue) 28 (Sm
   decide +kernel
 
 theorem sm90_folded_q :
-    (1 - 931 / 100000 : ℚ) ≤ (4096 * (1 / 4096) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
-      4096 * phi90) / B90 := by
+    (1 - 931 / 100000 : ℚ) * B90 ≤ 4096 * (1 / 4096) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+      4096 * phi90 := by
   decide +kernel
 
 theorem sm90_unfolded_q :
-    (1 - 931 / 100000 : ℚ) ≤ (4096 * (1 / 4096) + 4096 * phi90) / B90 * (1 - 41 / 48000) := by
+    (1 - 931 / 100000 : ℚ) * B90 ≤ (4096 * (1 / 4096) + 4096 * phi90) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm90_hG : ∀ r k, Sm90.model.G.a r k = (sheetCoef Sm90.ds90 r k.val : ℝ) := sheet_a Sm90.ds90 28
@@ -183,8 +183,11 @@ theorem sm90_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
       Sm90.model.epsJl Sm90.flat Sm90.lamStar (7 / 8) δ' Sm90.checks := by
   refine folded_of_lower Sm90.model Sm90.flat Sm90.lamStar sm90_isCert sm90_wf rfl rfl Sm90.checks sm90_S
     δ' hδ' _ _ _ sm90_wStar sm90_phiStar ?_
-  rw [sm90_Nw, sm90_bnd]
-  exact_mod_cast sm90_folded_q
+  have hB : (0 : ℝ) < (B90 : ℝ) := by exact_mod_cast sm90_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm90_folded_q
+  push_cast at h
+  rw [sm90_Nw, sm90_bnd, le_div_iff₀ hB]
+  linarith
 
 /-- The unfolded branch's floor at π* is at least `1 − 931/100000`. -/
 theorem sm90_unfolded :
@@ -192,8 +195,11 @@ theorem sm90_unfolded :
       (1 - Sm90.model.muF) * Sm90.model.Nw * Sm90.model.phiStar Sm90.lamStar) /
         Sm90.model.bnd Sm90.flat * (1 - 41 / 48000) := by
   refine unfolded_of_lower Sm90.model Sm90.flat Sm90.lamStar sm90_wf rfl _ _ _ sm90_wStar sm90_phiStar ?_
-  rw [sm90_Nw, sm90_bnd]
-  exact_mod_cast sm90_unfolded_q
+  have hB : (0 : ℝ) < (B90 : ℝ) := by exact_mod_cast sm90_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm90_unfolded_q
+  push_cast at h
+  rw [sm90_Nw, sm90_bnd, div_mul_eq_mul_div, le_div_iff₀ hB]
+  linarith
 
 end Accounting.SecurityProofs.TS.HeadlineDc
 

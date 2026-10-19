@@ -55,12 +55,12 @@ theorem sm100m_fold :
   decide +kernel
 
 theorem sm100m_folded_q :
-    (1 - 888 / 100000 : ℚ) ≤ (32768 * (1 / 32768) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
-      32768 * phi100M) / B100M := by
+    (1 - 888 / 100000 : ℚ) * B100M ≤ 32768 * (1 / 32768) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+      32768 * phi100M := by
   decide +kernel
 
 theorem sm100m_unfolded_q :
-    (1 - 888 / 100000 : ℚ) ≤ (32768 * (1 / 32768) + 32768 * phi100M) / B100M * (1 - 41 / 48000) := by
+    (1 - 888 / 100000 : ℚ) * B100M ≤ (32768 * (1 / 32768) + 32768 * phi100M) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm100m_one : Sparse.coeff [(0, 1, 1)] 0 = 1 := by decide +kernel
@@ -180,7 +180,7 @@ theorem sm100m_phiStar : (phi100M : ℝ) ≤ Sm100Measured.model.phiStar Sm100Me
   show (phi100M : ℝ) ≤
     Sm100Measured.model.G.load (Sparse.counts (Sm100Measured.d2s.folds.getD φ.val [])) 0
   rw [load_counts _ vfRow100 sm100m_hG]
-  exact_mod_cast sm100m_fold φ.val φ.isLt
+  exact Rat.cast_le.mpr (sm100m_fold φ.val φ.isLt)
 
 theorem sm100m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 13) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100Measured.model (Pl.run x) := fun x =>
@@ -195,8 +195,11 @@ theorem sm100m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
       Sm100Measured.model.epsJl Sm100Measured.flat Sm100Measured.lamStar (7 / 8) δ' Sm100.checks := by
   refine folded_of_lower Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf rfl
     rfl Sm100.checks sm100_S δ' hδ' _ _ _ sm100m_wStar sm100m_phiStar ?_
-  rw [sm100m_Nw, sm100m_bnd]
-  exact_mod_cast sm100m_folded_q
+  have hB : (0 : ℝ) < (B100M : ℝ) := by exact_mod_cast sm100m_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm100m_folded_q
+  push_cast at h
+  rw [sm100m_Nw, sm100m_bnd, le_div_iff₀ hB]
+  linarith
 
 /-- The unfolded branch's floor at π* is at least `1 − 888/100000`. -/
 theorem sm100m_unfolded :
@@ -206,8 +209,11 @@ theorem sm100m_unfolded :
         Sm100Measured.model.bnd Sm100Measured.flat * (1 - 41 / 48000) := by
   refine unfolded_of_lower Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_wf rfl _ _ _
     sm100m_wStar sm100m_phiStar ?_
-  rw [sm100m_Nw, sm100m_bnd]
-  exact_mod_cast sm100m_unfolded_q
+  have hB : (0 : ℝ) < (B100M : ℝ) := by exact_mod_cast sm100m_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm100m_unfolded_q
+  push_cast at h
+  rw [sm100m_Nw, sm100m_bnd, div_mul_eq_mul_div, le_div_iff₀ hB]
+  linarith
 
 end Accounting.SecurityProofs.TS.HeadlineDc
 

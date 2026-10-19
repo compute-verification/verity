@@ -61,12 +61,12 @@ theorem sm100_fold : ∀ i < 2, phi100 ≤
 theorem sm100_lam_q : 0 ≤ li100 ∧ 0 ≤ la100 ∧ li100 + la100 = 1 := by decide +kernel
 
 theorem sm100_folded_q :
-    (1 - 790 / 100000 : ℚ) ≤ (32768 * (li100 * (1 / 32768)) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
-      32768 * phi100) / B100 := by
+    (1 - 790 / 100000 : ℚ) * B100 ≤ 32768 * (li100 * (1 / 32768)) * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+      32768 * phi100 := by
   decide +kernel
 
 theorem sm100_unfolded_q :
-    (1 - 790 / 100000 : ℚ) ≤ (32768 * (li100 * (1 / 32768)) + 32768 * phi100) / B100 * (1 - 41 / 48000) := by
+    (1 - 790 / 100000 : ℚ) * B100 ≤ (32768 * (li100 * (1 / 32768)) + 32768 * phi100) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm100_hG : ∀ r k, Sm100.model.G.a r k = (sheetCoef Sm100.ds100 r k.val : ℝ) := sheet_a Sm100.ds100 26
@@ -195,7 +195,9 @@ theorem sm100_phiStar : (phi100 : ℝ) ≤ Sm100.model.phiStar Sm100.lamStar := 
       Sm100.lamStar (.pipe .alu) * Sm100.model.G.load (Sparse.counts (Sm100.d2s.folds.getD φ.val [])) (.pipe .alu)
   rw [load_counts _ (sheetCoef Sm100.ds100) sm100_hG, load_counts _ (sheetCoef Sm100.ds100) sm100_hG, sm100_li,
     sm100_la]
-  exact_mod_cast sm100_fold φ.val φ.isLt
+  have h := (Rat.cast_le (K := ℝ)).mpr (sm100_fold φ.val φ.isLt)
+  push_cast at h
+  linarith
 
 theorem sm100_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 13) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm100.model (Pl.run x) := fun x =>
@@ -209,8 +211,11 @@ theorem sm100_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
       Sm100.model.epsJl Sm100.flat Sm100.lamStar (7 / 8) δ' Sm100.checks := by
   refine folded_of_lower Sm100.model Sm100.flat Sm100.lamStar sm100_isCert sm100_wf rfl rfl Sm100.checks sm100_S
     δ' hδ' _ _ _ sm100_wStar sm100_phiStar ?_
-  rw [sm100_Nw, sm100_bnd]
-  exact_mod_cast sm100_folded_q
+  have hB : (0 : ℝ) < (B100 : ℝ) := by exact_mod_cast sm100_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm100_folded_q
+  push_cast at h
+  rw [sm100_Nw, sm100_bnd, le_div_iff₀ hB]
+  linarith
 
 /-- The unfolded branch's floor at π* is at least `1 − 790/100000`. -/
 theorem sm100_unfolded :
@@ -218,8 +223,11 @@ theorem sm100_unfolded :
       (1 - Sm100.model.muF) * Sm100.model.Nw * Sm100.model.phiStar Sm100.lamStar) /
         Sm100.model.bnd Sm100.flat * (1 - 41 / 48000) := by
   refine unfolded_of_lower Sm100.model Sm100.flat Sm100.lamStar sm100_wf rfl _ _ _ sm100_wStar sm100_phiStar ?_
-  rw [sm100_Nw, sm100_bnd]
-  exact_mod_cast sm100_unfolded_q
+  have hB : (0 : ℝ) < (B100 : ℝ) := by exact_mod_cast sm100_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm100_unfolded_q
+  push_cast at h
+  rw [sm100_Nw, sm100_bnd, div_mul_eq_mul_div, le_div_iff₀ hB]
+  linarith
 
 end Accounting.SecurityProofs.TS.HeadlineDc
 

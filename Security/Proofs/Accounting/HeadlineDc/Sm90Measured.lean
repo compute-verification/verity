@@ -85,12 +85,12 @@ theorem sm90m_fold : ∀ i < 2, phi90M ≤
   decide +kernel
 
 theorem sm90m_folded_q :
-    (1 - 2419 / 100000 : ℚ) ≤ (4096 * w90M * (1 - 41 * (6931471808 / 10000000000) / 6000) +
-      4096 * phi90M) / B90M := by
+    (1 - 2419 / 100000 : ℚ) * B90M ≤ 4096 * w90M * (1 - 41 * (6931471808 / 10000000000) / 6000) +
+      4096 * phi90M := by
   decide +kernel
 
 theorem sm90m_unfolded_q :
-    (1 - 2419 / 100000 : ℚ) ≤ (4096 * w90M + 4096 * phi90M) / B90M * (1 - 41 / 48000) := by
+    (1 - 2419 / 100000 : ℚ) * B90M ≤ (4096 * w90M + 4096 * phi90M) * (1 - 41 / 48000) := by
   decide +kernel
 
 theorem sm90m_hG : ∀ r k, Sm90Measured.model.G.a r k = (vfRow90 r k.val : ℝ) := fun _ _ => rfl
@@ -191,7 +191,9 @@ theorem sm90m_wStar : (w90M : ℝ) ≤ Sm90Measured.model.wStar Sm90Measured.lam
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)) +
       (lam90 6 : ℝ) * ((vfRow90 6 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 28) : ℝ) /
         ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ))
-    exact_mod_cast hw.2
+    first
+      | exact_mod_cast hw.2
+      | (have h := (Rat.cast_le (K := ℝ)).mpr hw.2; push_cast at h; linarith)
   | vector =>
     show (w90M : ℝ) ≤ (lam90 0 : ℝ) * (Sm90Measured.model.q / 32 * Sm90Measured.model.vecMin 0) +
       (lam90 5 : ℝ) * (Sm90Measured.model.q / 32 * Sm90Measured.model.vecMin 5) +
@@ -223,7 +225,9 @@ theorem sm90m_phiStar : (phi90M : ℝ) ≤ Sm90Measured.model.phiStar Sm90Measur
       (lam90 5 : ℝ) * Sm90Measured.model.G.load (Sparse.counts (Sm90Measured.d2s.folds.getD φ.val [])) 5 +
       (lam90 6 : ℝ) * Sm90Measured.model.G.load (Sparse.counts (Sm90Measured.d2s.folds.getD φ.val [])) 6
   rw [load_counts _ vfRow90 sm90m_hG, load_counts _ vfRow90 sm90m_hG, load_counts _ vfRow90 sm90m_hG]
-  exact_mod_cast sm90m_fold φ.val φ.isLt
+  have h := (Rat.cast_le (K := ℝ)).mpr (sm90m_fold φ.val φ.isLt)
+  push_cast at h
+  linarith
 
 theorem sm90m_fillOpt {Ω : Type} [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 2) Unit Empty)
     (hSplit : ∀ x, (Pl.run x).Split) : ∀ x, FillOpt Sm90Measured.model (Pl.run x) := fun x =>
@@ -238,8 +242,11 @@ theorem sm90m_folded (δ' : ℝ) (hδ' : (1 / 2 : ℝ) ^ 41 ≤ δ') :
       Sm90Measured.model.epsJl Sm90Measured.flat Sm90Measured.lamStar (7 / 8) δ' Sm90.checks := by
   refine folded_of_lower Sm90Measured.model Sm90Measured.flat Sm90Measured.lamStar sm90m_isCert sm90m_wf rfl
     rfl Sm90.checks sm90_S δ' hδ' _ _ _ sm90m_wStar sm90m_phiStar ?_
-  rw [sm90m_Nw, sm90m_bnd]
-  exact_mod_cast sm90m_folded_q
+  have hB : (0 : ℝ) < (B90M : ℝ) := by exact_mod_cast sm90m_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm90m_folded_q
+  push_cast at h
+  rw [sm90m_Nw, sm90m_bnd, le_div_iff₀ hB]
+  linarith
 
 /-- The unfolded branch's floor at π* is at least `1 − 2419/100000`. -/
 theorem sm90m_unfolded :
@@ -249,8 +256,11 @@ theorem sm90m_unfolded :
         Sm90Measured.model.bnd Sm90Measured.flat * (1 - 41 / 48000) := by
   refine unfolded_of_lower Sm90Measured.model Sm90Measured.flat Sm90Measured.lamStar sm90m_wf rfl _ _ _
     sm90m_wStar sm90m_phiStar ?_
-  rw [sm90m_Nw, sm90m_bnd]
-  exact_mod_cast sm90m_unfolded_q
+  have hB : (0 : ℝ) < (B90M : ℝ) := by exact_mod_cast sm90m_Bpos
+  have h := (Rat.cast_le (K := ℝ)).mpr sm90m_unfolded_q
+  push_cast at h
+  rw [sm90m_Nw, sm90m_bnd, div_mul_eq_mul_div, le_div_iff₀ hB]
+  linarith
 
 end Accounting.SecurityProofs.TS.HeadlineDc
 

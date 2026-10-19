@@ -30,17 +30,21 @@ theorem price_ge_facet {R : Type} [Fintype R] (lam d : R → ℝ) (hlam : ∀ r,
 theorem price_ge_pair {R : Type} [Fintype R] [DecidableEq R] (lam d : R → ℝ) (hlam : ∀ r, 0 ≤ lam r)
     (hd : ∀ r, 0 ≤ d r) (a b : R) (hab : a ≠ b) : lam a * d a + lam b * d b ≤ demandPrice lam d := by
   unfold demandPrice
-  calc lam a * d a + lam b * d b = ∑ r ∈ ({a, b} : Finset R), lam r * d r := (Finset.sum_pair hab).symm
-    _ ≤ ∑ r, lam r * d r := Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
+  have e : ∑ r ∈ ({a, b} : Finset R), lam r * d r = lam a * d a + lam b * d b := Finset.sum_pair hab
+  rw [← e]
+  exact Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
 
 theorem price_ge_triple {R : Type} [Fintype R] [DecidableEq R] (lam d : R → ℝ) (hlam : ∀ r, 0 ≤ lam r)
     (hd : ∀ r, 0 ≤ d r) (a b c : R) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) :
     lam a * d a + lam b * d b + lam c * d c ≤ demandPrice lam d := by
   unfold demandPrice
-  calc lam a * d a + lam b * d b + lam c * d c = ∑ r ∈ ({a, b, c} : Finset R), lam r * d r := by
-        rw [Finset.sum_insert (by simp [hab, hac]), Finset.sum_pair hbc]
-        ring
-    _ ≤ ∑ r, lam r * d r := Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
+  have hm : a ∉ ({b, c} : Finset R) := by simp [hab, hac]
+  have e2 : ∑ r ∈ ({b, c} : Finset R), lam r * d r = lam b * d b + lam c * d c := Finset.sum_pair hbc
+  have e : ∑ r ∈ ({a, b, c} : Finset R), lam r * d r = lam a * d a + lam b * d b + lam c * d c := by
+    rw [Finset.sum_insert hm, e2]
+    ring
+  rw [← e]
+  exact Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
 
 /-- `w* ≥ λ_{r₀}·w₀` when every word route's demand on facet `r₀` is at least `w₀`. -/
 theorem wStar_ge {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F]
