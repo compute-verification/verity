@@ -98,9 +98,20 @@ def forms_gap() -> None:
                 print(line(f"{vector} q*={q} + IGMMA_S8_N256_RS", eps(rs, vector, q)))
 
 
+def set_census(data: Path, kind: str, row: str, u: float) -> None:
+    """Set the one census line of `kind` on `row`, in census.csv or an epoch's census/*.csv (DS-90's, on MM-SHEETS)."""
+    hits = 0
+    for p in [data / "census.csv", *sorted((data / "census").glob("*.csv"))]:
+        if p.is_file():
+            t, n = re.subn(rf"^{kind},{row},,,[^,]*,", f"{kind},{row},,,{u},", p.read_text(), flags=re.M)
+            if n:
+                p.write_text(t)
+            hits += n
+    assert hits == 1, (kind, row, hits)
+
+
 def set_uni_issue(data: Path, cost: float) -> None:
-    p = data / "census.csv"
-    p.write_text(re.sub(r"^UNI,DS_issue,,,[^,]*,", f"UNI,DS_issue,,,{cost},", p.read_text(), flags=re.M))
+    set_census(data, "UNI", "DS_issue", cost)
 
 
 def sheet() -> None:
@@ -135,11 +146,7 @@ FIT = {
 }
 
 
-def set_line(data: Path, kind: str, row: str, u: float) -> None:
-    p = data / "census.csv"
-    t, n = re.subn(rf"^{kind},{row},,,[^,]*,", f"{kind},{row},,,{u},", p.read_text(), flags=re.M)
-    assert n == 1, (kind, row, n)
-    p.write_text(t)
+set_line = set_census
 
 
 def form_toml(kind: str, shape: list[int], split: int) -> str:
