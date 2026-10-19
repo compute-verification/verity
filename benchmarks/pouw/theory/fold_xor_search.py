@@ -373,6 +373,37 @@ def shared_axis(ops: tuple, fix: tuple, by_mult: bool = False):
     return min(mult) if mult in ({0}, {1}) else None
 
 
+def collision_inputs(ops: tuple, fix: tuple, rng: random.Random, n: int = 12) -> list[tuple[int, int]]:
+    """Pairs of inputs whose x ⊕ y differ while the first instruction's results agree at two random values of its
+    constants: when those results don't depend on the constants (x·x + {y:C} at x and −x, or at x with its top bit
+    flipped and y shifted to make up the difference), a program's
+    outputs at the pair differ only through the second instruction's reads of x and y, and the products by those
+    results are equal. Each of n random inputs comes with its partner when z3 finds one (3 s each)."""
+    prog, _ = skeleton(ops[:1], fix)
+    name, slots, m = prog[0]
+    X, Y = z3.BitVec("X2", 32), z3.BitVec("Y2", 32)
+    consts = [c for _, c in slots]
+
+    def results(x, y, cv):
+        vals = [z3.substitute(mux(s, [x, y, c]), *zip(consts, map(bv, cv))) for s, c in slots]
+        return FORMS[name](vals, m)
+
+    out = []
+    for _ in range(n):
+        x, y = rng.getrandbits(32), rng.getrandbits(32)
+        sol = z3.Solver()
+        sol.set("timeout", 3000)
+        for _ in range(2):
+            cv = [rng.getrandbits(32) for _ in consts]
+            sol.add(*[a == b for a, b in zip(results(bv(x), bv(y), cv), results(X, Y, cv))])
+        sol.add(bv(x ^ y) != X ^ Y)
+        out.append((x, y))
+        if sol.check() == z3.sat:
+            md = sol.model()
+            out.append((md.eval(X, model_completion=True).as_long(), md.eval(Y, model_completion=True).as_long()))
+    return out
+
+
 def shared_inputs(rng: random.Random, axis: int) -> list[tuple[int, int]]:
     """4 values of the shared word (`shared_axis`) against 6 of the other: the first instruction's results are then
     few terms, each shared by several inputs, so z3 bit-blasts few products by them rather than one per input."""
@@ -382,12 +413,13 @@ def shared_inputs(rng: random.Random, axis: int) -> list[tuple[int, int]]:
 
 
 def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED,
-          edge_only: bool = False, domain: str = "all", fix: tuple = (), by_mult: bool = False) -> dict:
+          edge_only: bool = False, domain: str = "all", fix: tuple = (), by_mult: bool = False,
+          collide: bool = False) -> dict:
     """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
     unknown (a timeout), with the seconds it took. On the nan domain both inputs range over the NaN patterns only
     (`reduce_nan`). With `fix` (one of `splits`), only the programs whose addend sources it names; when that gives a
     `shared_axis` (under `by_mult`), CEGIS starts from `shared_inputs` and looks for counterexamples at those words
-    first."""
+    first; with `collide` it starts from `collision_inputs` instead."""
     name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
     t0 = time.monotonic()
     rng = random.Random(f"{seed}:{name}:{tname}")
@@ -403,8 +435,10 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
         inputs.append((x, y))
         syn.add(evaluate(prog, bv(x), bv(y)) == target(tname, bv(x), bv(y), K))
 
-    axis = shared_axis(ops, fix, by_mult) if fix and domain == "all" else None
-    for x, y in (shared_inputs(rng, axis) if axis is not None else initial_inputs(rng, edge_only, domain)):
+    axis = shared_axis(ops, fix, by_mult) if fix and domain == "all" and not collide else None
+    start = (collision_inputs(ops, fix, rng) if collide and fix and domain == "all" else
+             shared_inputs(rng, axis) if axis is not None else initial_inputs(rng, edge_only, domain))
+    for x, y in start:
         add(x, y)
 
     def end(result: str, **more) -> dict:
@@ -498,7 +532,8 @@ def reduce_nan(ops: tuple):
 def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
            part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
            edge_only: bool = False, via_nan: bool = False, split: bool = False,
-           cases: set | None = None, split_mods: bool = False, by_mult: bool = False) -> dict:
+           cases: set | None = None, split_mods: bool = False, by_mult: bool = False,
+           collide: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
     suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown. With `split`,
@@ -544,13 +579,13 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
 
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
-            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult): (c, f)
+            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide): (c, f)
                     for c, f in todo}
             for fut in as_completed(futs):
                 got(*futs[fut], fut.result())
     else:
         for c, f in todo:
-            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult))
+            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide))
     if split:
         for name, c in cover.items():
             rs = [found[c, fix_label(f)] for f in parts(c)]
@@ -589,6 +624,8 @@ def main() -> int:
                     help="with --split, search each case as its first instruction's modifier assignments")
     ap.add_argument("--by-mult", action="store_true",
                     help="share the word both of the first instruction's multiplicands read (`shared_axis`)")
+    ap.add_argument("--collide", action="store_true",
+                    help="start CEGIS from input pairs the first instruction can't tell apart (`collision_inputs`)")
     ap.add_argument("--merge", nargs="+", metavar="JSONL",
                     help="search nothing: k's verdict from these runs' records, through x <-> y (`merge`)")
     a = ap.parse_args()
@@ -611,7 +648,7 @@ def main() -> int:
         cases = set(open(a.cases, encoding="utf-8").read().splitlines()) - {""} if a.cases else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
                    tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, cases,
-                   a.split_mods, a.by_mult)
+                   a.split_mods, a.by_mult, a.collide)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)

@@ -167,6 +167,22 @@ def test_shared_axis_is_the_word_the_products_read():
     assert S.shared_axis(hi((1, 1)), ({2: 0, 3: 2},), True) == 1
 
 
+def test_collision_inputs_agree_on_the_first_results():
+    """On x·x + {y:C}, `collision_inputs` pairs inputs whose first results agree at other constants too and whose
+    x ⊕ y differ."""
+    import random
+    seq = (("IMAD.HI", (0, 0)), ("IMAD.HI", (2, 3)))
+    fix = ({2: 2, 3: 1, **dict.fromkeys(("cx", "inv", "na", "nb", "nc", "np", "sa", "sb"), False)},)
+    got = S.collision_inputs(seq, fix, random.Random(5), n=2)
+    assert len(got) == 4
+    mods = {k: z3.BoolVal(v) for k, v in fix[0].items() if isinstance(k, str)}
+    for (x1, y1), (x2, y2) in zip(got[::2], got[1::2]):
+        assert x1 ^ y1 != x2 ^ y2
+        for c in (0, 7, S.M32):
+            first = lambda x, y: [_val(v) for v in S.imad_hi([S.bv(x), S.bv(x), S.bv(c), S.bv(y)], mods)]
+            assert first(x1, y1) == first(x2, y2)
+
+
 @pytest.mark.slow
 def test_a_modifier_case_is_unsat():
     """A case that is unknown at 600 s unsplit (the first IMAD's addend y) is unsat once its modifiers are set; and one
@@ -178,6 +194,9 @@ def test_a_modifier_case_is_unsat():
     fix = ({2: 1, 3: 2, **dict.fromkeys(("cx", "inv", "na", "nb", "nc", "np", "sa"), False), "sb": True},)
     # z3 takes another path once any timeout is set, as every run sets one: 3 s here against 47 s with none
     assert S.cegis(seq, timeout_ms=10**9, fix=fix, by_mult=True)["result"] == "unsat"
+    seq = (("IMAD.HI", (0, 0)), ("IMAD.HI", (2, 3)))
+    fix = ({2: 2, 3: 1, **dict.fromkeys(("cx", "inv", "na", "nb", "nc", "np", "sa", "sb"), False)},)
+    assert S.cegis(seq, timeout_ms=10**9, fix=fix, collide=True)["result"] == "unsat"
 
 
 @pytest.mark.slow
