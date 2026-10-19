@@ -1,12 +1,15 @@
 """The requirement's two proof units (I4): the plan unit, which holds a pass's plan to the blocks the declared circuit reads at
 the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the blocks a step writes to the
 circuit's values and every free, of a written block or a registered one, to its values' last read (`StoreMatches`' L1, L2 and
-L4). Both are
-Boolean Definitions, one instance per step, each returning one ok word: bit 0 the clause's verdict, bits 1-15 zero in gates.
+L4). The plan unit is PlanMatch, or PlanShard for a store past PlanMatch's 16-bit indices. Each is a Boolean Definition, one
+instance per step (PlanShard's one per shard of the store), each returning one ok word: bit 0 the clause's verdict, bits 1-15
+zero in gates.
 
     PlanMatch_v1{P, NR, V, G, TB, RPB}
         (count: U16, regmask: Array<NR / 16, U16>, kvmask: Array<V / 16, U16>, gmask: U16, lam: Array<2 V, U16>,
          plan: Array<P, U16>, tok: Array<G, U16>) -> U16
+    PlanShard_v1{S, GAPS}
+        (count: U16, size: U16, regmask: Array<S / 16, U16>, plan: Array<S, U16>) -> U16
     MemoryMapStep_v2{K, C, V, M, N, SLOTS}
         (t: U16, first: U16, count: U16, present: U16, pos: Array<K, U16>, last: Array<K, U16>, rfree: Array<⌈N / 16⌉, U16>,
          lam: Array<2 V, U16>, phi: Array<N + 2 M, U16>, val: Array<K, Array<VW / 16, U16>>,
@@ -53,6 +56,18 @@ increasing, zero after; the unit's ok is that it is exactly that set: `PlanMatch
 receipted block one the circuit reads at t (a gather's unselected rows and a paused request's pages are in no plan) and every
 block it reads planned. ``count`` is at most P, and a gathered row is one of the table's.
 
+**PlanShard**, at step t, for a store of registered blocks only (no step writes one) too large for one PlanMatch: the store's
+N blocks are cut into public shards, shard k the ``size`` blocks from k S (`plan_shards`; S for every shard but the last), and
+each pass has one instance per shard, its plan entries in the shard less k S. Its plan is ``plan[0 .. count)``, strictly
+increasing below ``size``, zero after, missing at most GAPS of the shard's blocks (``size - count`` at most GAPS, so entry p
+is one of blocks p .. p + GAPS), and holding every block ``regmask`` names (bit j block k S + j): the registered blocks the
+step reads, a gathered table counted whole, since its rows are the circuit's values. So the shards' plans, in shard order,
+are one strictly increasing plan of the store's blocks, and its instances' oks are `PlanMatches`' ``blocks (creditedReads
+s) ⊆ plan``, the clause the Lean link reads; a planned block the step doesn't read (filler, a table's unselected rows) is
+allowed, unlike PlanMatch's ``plan = readBlocks t``, so a planned block may carry no value's bits. Each instance's
+``count`` is public, the pass's plan length their sum. Every word is below 2^16 at any N: no index past a shard's reaches
+a unit.
+
 **MemoryMapStep**, at step t: the step wrote blocks ``first .. first + count`` (at most C). Each value it produced that a
 later step reads is present (``present``'s bit k, its position ``pos[k]`` and its last read ``last[k]``) and its committed
 value is ``val[k]``. Its ok is that, for every present k: ``lam`` puts it in a block the step wrote, in a slot below SLOTS,
@@ -65,16 +80,19 @@ the registered layout) is freed at t, ``phi[j] = t``: each registered block's fr
 read. ``first`` is at least N, and ``first - N + count`` at most M.
 
 **Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
-P (NR + G + V) 16 ANDs. MemoryMapStep: each present value against each slot of each written block, K C SLOTS VW ANDs, and the
-empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot selection, and a 16-bit comparison a registered block, 16 N. A
-statement adds each row's hm96 commitment.
+P (NR + G + V) 16 ANDs. PlanShard: each entry's order, range and tail checks and its count comparison, and each named
+block's search over GAPS + 1 entries, about S (66 + 17 (GAPS + 1)) ANDs. MemoryMapStep: each present value against each
+slot of each written block, K C SLOTS VW ANDs, and the empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot
+selection, and a 16-bit comparison a registered block, 16 N. A statement adds each row's hm96 commitment.
 
-`plan_match` and `memory_map` are the references, over plain ints; `plan_rows` and `memory_map_rows` name each instance's
-rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments from a `requirement.Requirement`, its
-`Layout` and `Store` (`layout_words` and `map_words` the shared rows), and `row_words` an instance's rows from them.
+`plan_match`, `plan_shard` and `memory_map` are the references, over plain ints; `plan_rows`, `plan_shard_rows` and
+`memory_map_rows` name each instance's rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
+from a `requirement.Requirement`, its `Layout` and `Store` (`layout_words` and `map_words` the shared rows), `shard_inputs` a
+shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from them.
 """
 from __future__ import annotations
 
+from bisect import bisect_left
 from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
@@ -86,9 +104,9 @@ from .defs import CompositeDefinition
 from .requirement import BLOCK_BITS, Layout, Requirement, Store
 from .types import Array
 
-__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "U16", "layout_words", "map_inputs", "map_value_leaves", "map_words",
-           "memory_map", "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "registered_frees", "row_words",
-           "value_bits"]
+__all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "PlanShard", "U16", "layout_words", "map_inputs", "map_value_leaves",
+           "map_words", "memory_map", "memory_map_rows", "plan_inputs", "plan_match", "plan_rows", "plan_shard",
+           "plan_shard_rows", "plan_shards", "registered_frees", "row_words", "shard_inputs", "value_bits"]
 
 U16 = Array(16, BL.BIT)
 #: a block's payload in u16 words
@@ -120,6 +138,14 @@ def _check_plan(S) -> None:
         raise ValueError(f"TB, the gathered table's first block, is a registered block below NR = {S.NR}, not {S.TB!r}")
 
 
+def _check_shard(S) -> None:
+    _pos_int("S", S.S)
+    if S.S % 16 or S.S >= WORD:
+        raise ValueError(f"S is whole u16 words of mask bits below 2^16, not {S.S}")
+    if isinstance(S.GAPS, bool) or not isinstance(S.GAPS, int) or not 0 <= S.GAPS < S.S:
+        raise ValueError(f"GAPS, the most blocks a shard's plan leaves out, is an int in [0, S), not {S.GAPS!r}")
+
+
 def _check_map(S) -> None:
     for k in ("K", "C", "V", "M", "N", "SLOTS"):
         _pos_int(k, getattr(S, k))
@@ -148,6 +174,18 @@ def plan_match(S, count: int, regmask: Sequence[int], kvmask: Sequence[int], gma
     need |= {lam[2 * i] for i, b in enumerate(_bits(kvmask, S.V)) if b}
     head, tail = list(plan[:count]), list(plan[count:])
     return int(all(a < b for a, b in zip(head, head[1:])) and not any(tail) and set(head) == need)
+
+
+def plan_shard(S, count: int, size: int, regmask: Sequence[int], plan: Sequence[int]) -> int:
+    """`PlanShard`'s reference: 1 iff ``plan[0 .. count)`` is strictly increasing below ``size`` (at most S), zero after,
+    leaves out at most GAPS of the shard's blocks, and holds every block ``regmask`` names."""
+    _check_shard(S)
+    if size > S.S or count > size or size - count > S.GAPS:
+        return 0
+    head, tail = list(plan[:count]), list(plan[count:])
+    if any(a >= b for a, b in zip(head, head[1:])) or any(tail) or any(j >= size for j in head):
+        return 0
+    return int({j for j, b in enumerate(_bits(regmask, S.S)) if b} <= set(head))
 
 
 def memory_map(S, t: int, first: int, count: int, present: int, pos: Sequence[int], last: Sequence[int],
@@ -260,6 +298,24 @@ def _plan_build(C, S, *e):
     return _ok(C, oks)
 
 
+def _shard_build(C, S, *e):
+    count, size = e[0], e[1]
+    regm = [b for w in e[2:2 + S.S // 16] for b in w]
+    plan = e[2 + S.S // 16:]
+    oks = [_ltc(C, size, S.S + 1), _lt(C, size, count).inv(), _ltc(C, sub(C, size, count, 16)[0], S.GAPS + 1)]
+    valid = [_ltc(C, count, p + 1).inv() for p in range(S.S)]
+    for p in range(S.S - 1):
+        oks.append(_imp(C, valid[p + 1], _lt(C, plan[p], plan[p + 1])))
+    for p in range(S.S):
+        oks.append(_imp(C, valid[p], _lt(C, plan[p], size)))
+        oks.append(_imp(C, valid[p].inv(), or_reduce(C, plan[p]).inv()))
+    # in order, below size and missing at most GAPS blocks, entry p is one of blocks p .. p + GAPS
+    for j in range(S.S):
+        held = [C.AND(valid[p], _eqc(C, plan[p], j)) for p in range(max(0, j - S.GAPS), j + 1)]
+        oks.append(_imp(C, regm[j], or_reduce(C, held)))
+    return _ok(C, oks)
+
+
 def _map_build(C, S, *e):
     vw, vww = value_bits(S.SLOTS), value_bits(S.SLOTS) // 16
     t, first, count, present = e[:4]
@@ -319,6 +375,11 @@ def _plan_signature(S):
              ("lam", Array(2 * S.V, U16)), ("plan", Array(S.P, U16)), ("tok", Array(S.G, U16))), U16)
 
 
+def _shard_signature(S):
+    _check_shard(S)
+    return (("count", U16), ("size", U16), ("regmask", Array(S.S // 16, U16)), ("plan", Array(S.S, U16))), U16
+
+
 def _rwords(S) -> int:
     """``rfree``'s words: a bit a registered block."""
     return -(-S.N // 16)
@@ -351,6 +412,11 @@ PlanMatch = _unit(
     "PlanMatch", 1, ("P", "NR", "V", "G", "TB", "RPB"), _plan_signature, _plan_build,
     "1 iff plan[0 .. count) is strictly increasing, zero after, and exactly the blocks the step reads: the registered blocks "
     "regmask names, block TB + tok[g] / RPB of each gather gmask names, and block lam[2 i] of each written value kvmask names")
+PlanShard = _unit(
+    "PlanShard", 1, ("S", "GAPS"), _shard_signature, _shard_build,
+    "1 iff plan[0 .. count) is strictly increasing below size (at most S), zero after, leaves out at most GAPS of the "
+    "shard's size blocks, and holds every block regmask names: a shard of a pass's plan holds the registered blocks its "
+    "step reads")
 MemoryMapStep = _unit(
     "MemoryMapStep", 2, ("K", "C", "V", "M", "N", "SLOTS"), _map_signature, _map_build,
     "1 iff every present value k is in a slot of a block first .. first + count that carries val[k] there, no two in one "
@@ -364,6 +430,11 @@ def plan_rows(S) -> list[tuple[str, int, list[str]]]:
     """PlanMatch's rows: (row, bits, params), the public row first."""
     return [("pub", 16 * (2 + S.NR // 16 + S.V // 16), ["count", "regmask", "kvmask", "gmask"]), ("lam", 32 * S.V, ["lam"]),
             ("plan", 16 * S.P, ["plan"])] + [(f"tok{g}", 16, [f"tok[{g}]"]) for g in range(S.G)]
+
+
+def plan_shard_rows(S) -> list[tuple[str, int, list[str]]]:
+    """PlanShard's rows: (row, bits, params), the public row first."""
+    return [("pub", 32 + S.S, ["count", "size", "regmask"]), ("plan", 16 * S.S, ["plan"])]
 
 
 def memory_map_rows(S) -> list[tuple[str, int, list[str]]]:
@@ -451,6 +522,22 @@ def plan_inputs(S, req: Requirement, t: int, plan: Sequence[int], registered_blo
     return {"count": len(plan), "regmask": _mask({registered_block[v] for v in reads & (req.registered - gathered)}, S.NR),
             "kvmask": _mask({at[v] for v in reads - req.registered}, S.V), "gmask": (1 << len(gathers)) - 1, "lam": list(lam),
             "plan": sorted(plan) + [0] * (S.P - len(plan)), "tok": list(gathers) + [0] * (S.G - len(gathers))}
+
+
+def plan_shards(N: int, S: int) -> list[tuple[int, int]]:
+    """The shards of a store of ``N`` registered blocks: (first block, size), S blocks each but the last."""
+    return [(k, min(S, N - k)) for k in range(0, N, S)]
+
+
+def shard_inputs(S, first: int, size: int, plan: Sequence[int], need: Sequence[int]) -> dict:
+    """PlanShard's arguments for the shard of ``size`` blocks from ``first``: ``plan`` the pass's blocks and ``need`` the
+    registered blocks its step reads, both sorted (a ``range`` is cut without listing it)."""
+    lo, hi = bisect_left(plan, first), bisect_left(plan, first + size)
+    if hi - lo > S.S:
+        raise ValueError(f"the shard at {first} plans {hi - lo} blocks, more than S = {S.S}")
+    mine = [j - first for j in plan[lo:hi]]
+    return {"count": len(mine), "size": size, "plan": mine + [0] * (S.S - len(mine)),
+            "regmask": _mask((j - first for j in need[bisect_left(need, first):bisect_left(need, first + size)]), S.S)}
 
 
 def map_inputs(S, req: Requirement, store: Store, t: int, positions: Sequence[int], lam: Sequence[int],

@@ -1,7 +1,7 @@
 """`requirement_units`: the plan unit and the memory-map unit on a toy decoder's requirement (eight weight blocks, the last read
 only through step 1, a gathered table of two rows a block, three requests, one paused), under `requirement.pack`'s layout and a
-layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; and each clause's
-negative refused."""
+layout of one value a block, held to their references and to `requirement.plan_matches` and `store_matches`; the sharded plan
+unit on a store of weights, a gathered table and filler past one shard; and each clause's negative refused."""
 
 from __future__ import annotations
 
@@ -276,9 +276,121 @@ def test_the_value_leaves_are_the_values_each_map_row_carries(case) -> None:
             RU.map_value_leaves(MAP, bad)
 
 
+SHARD = SimpleNamespace(S=32, GAPS=2)
+#: a store past one shard: weight blocks 0 .. 19 and 28 .. 36 (36 an expert's, read only at step 0), a gathered table of
+#: two rows a block at blocks 20 .. 27, filler from 37
+STORE_N, FILLER = 100, 37
+TABLE_BLOCKS = range(20, 28)
+
+
+def shard_toy():
+    """The requirement over the sharded store, its layout, and the blocks each step's plan units name (``need``: the
+    weights the step reads and the gathered table whole)."""
+    weights = [*range(20), *range(28, FILLER)]
+    rows = [100 + r for r in range(16)]
+    width = {**{v: R.BLOCK_BITS for v in weights}, **{v: VW for v in rows}}
+    last = {**{v: 0 if v == 36 else 1 for v in weights}, **{v: 1 for v in rows}}
+    uses = {0: frozenset(weights) | {rows[3]}, 1: frozenset(set(weights) - {36}) | {rows[10]}}
+    req = R.Requirement(width, frozenset(width), {v: -1 for v in width}, last, uses, 2, {})
+    layout = R.Layout({**{v: v for v in weights}, **{v: 20 + (v - 100) // 2 for v in rows}},
+                      {**{v: 0 for v in weights}, **{v: ((v - 100) % 2) * VW for v in rows}})
+    need = {t: sorted({layout.block[v] for v in req.reads(t) if v in weights} | set(TABLE_BLOCKS)) for t in range(2)}
+    return req, layout, need
+
+
+def shards(plan, need) -> list[dict]:
+    return [RU.shard_inputs(SHARD, lo, size, plan, need) for lo, size in RU.plan_shards(STORE_N, SHARD.S)]
+
+
+def ref_shard(a) -> int:
+    return RU.plan_shard(SHARD, a["count"], a["size"], a["regmask"], a["plan"])
+
+
+@pytest.fixture(scope="module")
+def shard_unit():
+    return bind(RU.PlanShard, **vars(SHARD))
+
+
+def test_a_sharded_plan_is_one_plan_of_the_store(shard_unit) -> None:
+    """The store's shards are S blocks from 0 but the last (4 here), and a pass's plan, cut into them, is its shards'
+    plans in order. A plan of the whole store, or one missing at most GAPS filler blocks a shard (and, at step 1, the
+    expert's block it no longer reads), is accepted by every shard's unit, as its reference does, and is `plan_matches`
+    at its step; a ``range`` is cut as its list is."""
+    req, layout, need = shard_toy()
+    assert RU.plan_shards(STORE_N, SHARD.S) == [(0, 32), (32, 32), (64, 32), (96, 4)]
+    whole = range(STORE_N)
+    assert shards(whole, need[0]) == shards(list(whole), need[0])
+    plans = {0: [whole, [j for j in whole if j not in (40, 41, 70, 99)]], 1: [[j for j in whole if j not in (36, 40)]]}
+    batch = []
+    for t, ps in plans.items():
+        for plan in ps:
+            assert R.plan_matches(req, layout, plan, R.BLOCK_BITS, t)
+            cut = shards(plan, need[t])
+            joined = [j + lo for a, (lo, _) in zip(cut, RU.plan_shards(STORE_N, SHARD.S)) for j in a["plan"][:a["count"]]]
+            assert joined == list(plan)
+            batch += cut
+    assert evaluate(shard_unit, SHARD, batch) == [ref_shard(a) for a in batch] == [1] * len(batch)
+
+
+def test_a_shard_missing_a_block_its_step_reads_is_refused(shard_unit) -> None:
+    """A plan missing a weight block the step reads, or the expert's at step 0, is refused by that block's shard and is
+    not `plan_matches`. So is one missing a table block no gather selects, which `plan_matches` allows: the unit counts a
+    gathered table whole, since which rows a step gathers is the circuit's values. More than GAPS blocks missing from a
+    shard, all filler, is refused too: the unit's search is GAPS + 1 entries a block."""
+    req, layout, need = shard_toy()
+    cases = {"weight": (0, 5, False), "expert": (0, 36, False), "unselected-table-block": (0, 26, True)}
+    batch = []
+    for name, (t, j, lean) in cases.items():
+        plan = [b for b in range(STORE_N) if b != j]
+        assert R.plan_matches(req, layout, plan, R.BLOCK_BITS, t) == lean, name
+        batch.append(shards(plan, need[t])[j // SHARD.S])
+    plan = [b for b in range(STORE_N) if b not in (40, 41, 42)]
+    assert R.plan_matches(req, layout, plan, R.BLOCK_BITS, 0)
+    batch.append(shards(plan, need[0])[1])
+    assert evaluate(shard_unit, SHARD, batch) == [ref_shard(a) for a in batch] == [0] * len(batch)
+
+
+def test_each_shard_clause_s_negative_is_refused(shard_unit) -> None:
+    """Out of order, a repeated block, a block past the shard's size, a nonzero entry past the count, a count past the
+    size or a size past S, and a block named past the size: each returns 0, as the reference does."""
+    _req, _layout, need = shard_toy()
+    full, last = shards(range(STORE_N), need[0])[0], shards(range(STORE_N), need[0])[3]
+    gap = shards([b for b in range(STORE_N) if b != 99], need[0])[3]
+    p = full["plan"]
+    batch = [{**full, "plan": [p[1], p[0]] + p[2:]}, {**full, "plan": p[:5] + [p[4]] + p[6:]},
+             {**last, "plan": last["plan"][:3] + [4] + last["plan"][4:]}, {**gap, "plan": gap["plan"][:3] + [9] + gap["plan"][4:]},
+             {**last, "count": 5}, {**full, "size": SHARD.S + 1}, {**last, "regmask": [1 << 4, 0]}]
+    assert evaluate(shard_unit, SHARD, batch) == [ref_shard(a) for a in batch] == [0] * len(batch)
+
+
+def test_the_shard_s_search_covers_its_band(shard_unit) -> None:
+    """With every block named, a shard's plan missing GAPS blocks at its start, middle or end (each entry p one of blocks
+    p .. p + GAPS, its band's edges) is accepted when the missing blocks aren't named and refused when one is; seeded
+    random plans and masks agree with the reference."""
+    rng = np.random.default_rng(48)
+    batch = []
+    for missing in ((0, 1), (15, 16), (30, 31)):
+        plan = [j for j in range(SHARD.S) if j not in missing]
+        a = {"count": len(plan), "size": SHARD.S, "plan": plan + [0] * len(missing)}
+        batch.append({**a, "regmask": RU._mask(set(range(SHARD.S)) - set(missing), SHARD.S)})
+        batch.append({**a, "regmask": RU._mask(set(range(SHARD.S)) - {missing[0]}, SHARD.S)})
+    for _ in range(64):
+        size = int(rng.integers(SHARD.S - 4, SHARD.S + 1))
+        keep = sorted(rng.choice(size, size - int(rng.integers(0, 4)), replace=False).tolist())
+        named = set(rng.choice(size, int(rng.integers(0, size)), replace=False).tolist()) & set(keep)
+        if rng.random() < 0.5:
+            named.add(int(rng.integers(0, size)))
+        batch.append({"count": len(keep), "size": size, "plan": keep + [0] * (SHARD.S - len(keep)),
+                      "regmask": RU._mask(named, SHARD.S)})
+    got = evaluate(shard_unit, SHARD, batch)
+    assert got == [ref_shard(a) for a in batch]
+    assert got[:6] == [1, 0] * 3 and 0 < sum(got[6:]) < 64
+
+
 def test_the_rows_are_the_signature_s_params() -> None:
     """Each unit's rows cover its parameters once each, the public row first, in signature order."""
-    for defn, S, rows in ((RU.PlanMatch, PLAN, RU.plan_rows(PLAN)), (RU.MemoryMapStep, MAP, RU.memory_map_rows(MAP))):
+    for defn, S, rows in ((RU.PlanMatch, PLAN, RU.plan_rows(PLAN)), (RU.MemoryMapStep, MAP, RU.memory_map_rows(MAP)),
+                          (RU.PlanShard, SHARD, RU.plan_shard_rows(SHARD))):
         params, _ = bind(defn, **vars(S)).signature()
         flat = [p.partition("[")[0] for _r, _b, ps in rows for p in ps]
         assert list(dict.fromkeys(flat)) == [n for n, _ in params]
