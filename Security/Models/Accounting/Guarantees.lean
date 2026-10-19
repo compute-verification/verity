@@ -42,6 +42,7 @@ import Models.Accounting.Guarantees.TS.Stages
 import Models.Accounting.Guarantees.TS.Steer
 import Models.Accounting.Guarantees.TS.FoldFanIn
 import Models.Accounting.Guarantees.TS.LowBit
+import Models.Accounting.Guarantees.TS.Fixed
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, each family's headline `ε` on its exact data,
@@ -57,5 +58,5 @@ receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run f
 a declared circuit's live and read bits from the blocks the audit credits, PoUW's credits and help as its placed
 execution's gates, the grinding premium under hashed seeds and the deployed tile's moment, stacking's carrier lemma
 with the deployed remote audit for devices that read from carriers, also read against a declared circuit's
-requirement, and the composed guarantee for a declared circuit that passes the stacking property: its credited live
-and read bits from an accepted stacked audit. -/
+requirement, the composed guarantee for a declared circuit that passes the stacking property: its credited live
+and read bits from an accepted stacked audit, and E1(c) per unit from option A's fixed word with its additive lemma. -/

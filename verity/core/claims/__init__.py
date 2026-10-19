@@ -357,6 +357,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
+    # the two premises UnitFixed rests on under ASK-40's option A (Security/Models/Accounting/Assumptions/TS/Fixed.lean)
+    Entry("accounting-ts-modes-run", "assumption",
+          "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
+          "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
+          "its words", "TS modes run", "standard"),
+    Entry("accounting-ts-counts-fixed", "assumption",
+          "The labelling counts fixed words as fixed: on an accepted window the owned right fixed words per round are at "
+          "least the words of the units that are fixed under option A, computed, and with every unit steering them "
+          "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
+          "folds", "TS counts fixed", "standard"),
 )}
 
 
