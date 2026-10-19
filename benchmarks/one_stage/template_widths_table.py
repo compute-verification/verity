@@ -1,6 +1,7 @@
 """CIR-57 (measurement only, scratch): the table of `template_widths.py`'s and `pouw_template_widths.py`'s outputs.
 
-    python benchmarks/one_stage/template_widths_table.py OUT.md ROW.json... [--pouw POUW.json] [--json OUT.json]
+    python benchmarks/one_stage/template_widths_table.py OUT.md ROW.json... [--pouw POUW.json] [--known KNOWN.json...] \\
+      [--json OUT.json]
 
 One line per (Definition family, route) over 16 bits, its specs folded (the statics that vary across them
 shown as ranges, e.g. an attention head's T): the committed bits (the held rule's count), the rows that offer it, its
@@ -25,6 +26,24 @@ SHORT = {"glm53__fp8__h200__tp8__b1__": "GLM B1", "glm53__fp8__h200__tp8__b8__i2
 ROUTE = {"row": "row", "cut": "cut", "a11-chain": "a11"}
 #: not a template: a workload Program's root (the whole request) and a root constant (`Q_template_instances` admits none)
 NOT_ROWS = re.compile(r"^(Workload|Const)")
+#: what offers a ``--known`` Definition, the Programs of record not building it
+OFFERED = {
+    "MoeSum_v2": "`MoeSum_v1`'s Boolean form (`boolean_moe`); the records build `MoeSum_v1`",
+    "MoeSumCoordinate_v2": "`MoeSum_v2`'s member",
+    "ArgmaxLeaf_v1": "Boolean `TokenSelect_v2`'s stage members (`sampling_boolean`); the records build `TokenSelect_v1`",
+    "ArgmaxMerge_v1": "Boolean `TokenSelect_v2`'s stage members (`sampling_boolean`); the records build `TokenSelect_v1`",
+    "F32ArgmaxLeaf_v1": "`F32ArgmaxStage_v1`, `gumbel_boolean`'s select",
+    "F32ArgmaxMerge_v1": "`F32ArgmaxStage_v1`, `gumbel_boolean`'s select",
+    "GatherE4m3x": "the static pair form's weight gather, one per weight (`a9.cut`, `a11.LAZY`)",
+    "GatherF32x": "the static pair form's scale gather, one per scale of `MoeExpertFp8ScaleRow_v2` (`a11.LAZY`)",
+    "RoPEHead_v1": "Llama's `RoPE_v1` cut (also in the vLLM table)",
+    "AllReduceMultimemVector_v2": "`AllReduceMultimem_v1`'s body on `cursor/multimem-batch-21f3` (no PR), one per 16-byte vector",
+    "AllReduceMultimemCoordinate_v2": "`AllReduceMultimemVector_v2`'s member",
+}
+
+
+def offered(family: str) -> str:
+    return next((v for k, v in OFFERED.items() if family.startswith(k)), "")
 
 
 def short(row: str) -> str:
@@ -116,6 +135,7 @@ def main() -> int:
     ap.add_argument("out", type=Path)
     ap.add_argument("rows", nargs="*", type=Path)
     ap.add_argument("--pouw", type=Path)
+    ap.add_argument("--known", type=Path, nargs="*", default=[])
     ap.add_argument("--json", type=Path)
     a = ap.parse_args()
     recs: dict[str, dict] = {}
@@ -184,6 +204,22 @@ def main() -> int:
            f"roots left out (not templates).", "",
            "Programs read: " + "; ".join(f"{row}: {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match records.json)"
                                          for row, ps in sorted(progs.items())), ""]
+    kj = []
+    if a.known:
+        kl = ["| Definition | committed bits | rule | offered by | measured at | re-cut: 16-bit units per instance | "
+              "ANDs per instance, today → re-cut | class under A | owner |", "|---|---|---|---|---|---|---|---|---|"]
+        for p in a.known:
+            d = json.loads(p.read_text())
+            for r in sorted(d["templates"].values(), key=lambda r: (-(r.get("bits") or 0), r["id"])):
+                verdict = (r.get("verdict") or "descriptor count only").split(":")[0]
+                u, measured = units16(r) if (r.get("bits") or 0) > 16 else (1, True)
+                kl.append(f"| `{r['id']}` | {r.get('bits') or 0:,} | {verdict} | {offered(r['family'])} | {d['where']} | "
+                          f"{'' if measured else '≥'}{u:,} | {ands(r) if (r.get('bits') or 0) > 16 else '—'} | "
+                          f"{klass(r.get('bits') or 0)} | @circuits |")
+                kj.append({"definition": r["id"], "bits": r.get("bits"), "verdict": r.get("verdict"), "offered_by": offered(r["family"]),
+                           "where": d["where"], "tree": d["tree"], "units16_per_instance": u, "recut": r.get("recut"),
+                           "class_A": klass(r.get("bits") or 0), "owner": "@circuits"})
+        out += ["## Named Definitions outside the Programs of record", "", *kl, ""]
     pj = []
     if a.pouw:
         d = json.loads(a.pouw.read_text())
@@ -206,7 +242,7 @@ def main() -> int:
                 *pl, ""]
     a.out.write_text("\n".join(out))
     if a.json:
-        a.json.write_text(json.dumps({"vllm": jl, "pouw": pj}, indent=1))
+        a.json.write_text(json.dumps({"vllm": jl, "known": kj, "pouw": pj}, indent=1))
     print("\n".join(out))
     return 0
 
