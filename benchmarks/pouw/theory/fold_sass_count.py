@@ -36,7 +36,7 @@ def parse(path: str) -> dict[tuple[str, str], tuple[list[str], dict[str, int], l
     for line in open(path, encoding="utf-8"):
         m = re.match(r"\s*arch = (sm_\w+)", line)
         if m:
-            arch = m.group(1)
+            arch, kernel = m.group(1), None
             continue
         m = re.search(r"Function : (\S+)", line)
         if m:
