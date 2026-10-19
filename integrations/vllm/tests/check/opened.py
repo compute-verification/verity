@@ -19,16 +19,8 @@ import os
 from typing import Any
 
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
-from verity_vllm.check import oracle_compare as OC
 
 PLACEHOLDER = ("placeholder", b"\0" * 4)
-
-
-def raw_bytes(host: Any) -> bytes:
-    """A test double's retained copy (numpy array, an object with `.numpy()`, memoryview or bytes) as its bytes in C order."""
-    if hasattr(host, "numpy"):
-        host = host.numpy()
-    return host.tobytes() if hasattr(host, "tobytes") else bytes(host)
 
 
 def _spec(t: tuple, i: int) -> tuple[str, Any, int, str, tuple | None]:
@@ -82,22 +74,12 @@ def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-te
     return com, com.commit_offline(stream)
 
 
-def commit_layouts(layouts: dict[int, list], *, host: bool = False, **kw):
-    """A committer double's layouts (metas with `.name`, optional `.ordinal`, retained `.host`) committed -> (committer, run commitment)."""
-    steps = {int(s): [(m.name, raw_bytes(m.host), getattr(m, "ordinal", i)) for i, m in enumerate(ms)] for s, ms in layouts.items()}
-    return commit_host_steps(steps, **kw) if host else commit_steps(steps, **kw)
-
-
 def commit_members(members: dict[tuple[int, str], bytes], **kw):
     """{(step, member name): bytes} committed in insertion order per step -> (committer, run commitment)."""
     steps: dict[int, list] = {}
     for (s, name), raw in members.items():
         steps.setdefault(int(s), []).append((name, raw))
     return commit_steps(steps, **kw)
-
-
-def opened_reader(layouts: dict[int, list], **kw) -> OC.OpenedReader:
-    return OC.OpenedReader(*commit_layouts(layouts, **kw))
 
 
 def retained_block(com: NativeHostCommitter, step: int) -> Any:

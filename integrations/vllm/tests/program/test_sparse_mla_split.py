@@ -5,6 +5,8 @@ twins are the word Definitions word for word; a split head is softmax attention 
 with their word views."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import hashlib
 import re
 

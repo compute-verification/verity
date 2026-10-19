@@ -16,7 +16,7 @@ namespace Flock.Guarantees
 `Complete`, `ScopeMatches`, `ZK`, `Nontrivial`), the private variant's (`KSPriv`, `ZKPriv`), the claims at Flock as the
 inner protocol (`KSFlock`, `BitsFlock`), the inner protocol's KS and its KS against provers that may abort
 (`Inner.KS`, `Inner.KSAbort`), which the proof reads, the readable scope (`Scope`, `InScope`) and the decoders the
-claims quantify over (`decOK`); the shared claims they instantiate (`Claims.KS`, `ZKmalR`, `Flock.ListWithin`,
+claims quantify over (`decOK`); the shared claims they instantiate (`Claims.KS`, `ZKmalRx`, `Flock.ListWithin`,
 `Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions
 (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to itself. -/
 def RecursionClaimsStated : Prop :=
@@ -25,7 +25,7 @@ def RecursionClaimsStated : Prop :=
     @Claims.Recursion.KSPriv, @Claims.Recursion.ZKPriv, @Claims.Recursion.KSFlock, @Claims.Recursion.BitsFlock,
     @Claims.Recursion.Inner.KS, @Claims.Recursion.Inner.KSAbort,
     @Claims.Recursion.Scope, Claims.Recursion.InScope, @Claims.Recursion.decOK,
-    @Claims.KS, @Claims.ZKmalR, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
+    @Claims.KS, @Claims.ZKmalRx, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.Nontrivial,
     @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, Claims.trustedBase)
   claims = claims

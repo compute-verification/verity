@@ -190,7 +190,7 @@ theorem zk_rep_lig {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T 
   refine exQ_recv (toDig zp.inner.root) ?_
   refine pq_bindQ hM (fun x hx => ?_) hmsgs hcoins
   obtain ⟨v, hv⟩ := hIP Hs T.dom T.np T.nP T.pos x.1 T.tr (toDig zp.inner.root)
-  exact ⟨⟨x.2, v⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, hx⟩
+  exact ⟨⟨x.2, v.1, v.2⟩, Plays.bind' hv (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm, hx⟩
 
 theorem zk_lig_accepts : ZkLigAccepts := by
   intro mPts T pts r st sch tPad extras bytes zp rounds dom tr cap₀ os hsch _ hseam hlay _ hlen hext _ hwf hrun hk _

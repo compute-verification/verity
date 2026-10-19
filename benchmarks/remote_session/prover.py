@@ -703,7 +703,7 @@ class ProverSide:
         if self.defer_openings:
             self.open_enabled.clear()
         self.conn.send({"type": "armed", "k": k})
-        head, _, first = self.expect("coin")
+        coin0, _, first = self.expect("coin")
         t = 0
 
         def take(coin) -> bytes:
@@ -746,7 +746,7 @@ class ProverSide:
                          step=step_of(ticket) if step_of is not None and ahead is None else n, plan=plan,
                          upto=(len(trace.appends), len(trace.released), len(getattr(trace, "withdrawn", ()))))
 
-        backend.begin_window(take(wire.coin_of(head["coin"])), self.registration.digest)
+        backend.begin_window(take(wire.coin_of(coin0["coin"])), self.registration.digest)
         pending: deque = deque()
         passes, last, nxt, stopping, ended, discarded = [], None, 1, False, None, 0
         depth = 1 if ahead is not None else 2
@@ -922,15 +922,6 @@ class ProverSide:
                 if kind == "end":
                     return item[0]
 
-    def _boundary(self):
-        """The next boundary message, waited for."""
-        while True:
-            item = self.inbox.get()
-            if item[0]["type"] in ("lost", "bye"):
-                raise wire.Closed(item[0].get("why", "bye"))
-            if item[0]["type"] in BOUNDARIES:
-                return item
-
     def _drain(self, pending: deque) -> None:
         """Move the boundary messages that have arrived into `pending`, in order."""
         while True:
@@ -943,6 +934,15 @@ class ProverSide:
                 raise wire.Closed(item[0].get("why", "bye"))
             if kind in BOUNDARIES:
                 pending.append(item)
+
+    def _boundary(self):
+        """The next boundary message, waited for."""
+        while True:
+            item = self.inbox.get()
+            if item[0]["type"] in ("lost", "bye"):
+                raise wire.Closed(item[0].get("why", "bye"))
+            if item[0]["type"] in BOUNDARIES:
+                return item
 
 
 def main() -> int:

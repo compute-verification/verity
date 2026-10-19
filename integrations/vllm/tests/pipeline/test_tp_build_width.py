@@ -1,6 +1,6 @@
 """A TP row's Build sizes its derive pool and its per-rank compose pool from memory, as the single-GPU Build sizes its derives
 (`row_records.build_jobs_auto` under ``--build-ram-budget-gb``), starts the request derives first, keeps an explicit
-``--build-jobs``, and writes the same Build at any width.
+``--build-jobs``, and writes the same Build at any width.  A switched row's Build derives with ``predict emit`` over its trace.
 
 The Build runs for real with its children faked (`_FakeChildren`): each derive and compose writes outputs named by its own command
 line, so a width that changed what any child was asked to do would change the bytes compared."""
@@ -43,9 +43,10 @@ class _FakeChildren:
         try:
             Path(lf).write_text("$ " + " ".join(args) + "\n")
             out = cmd[cmd.index("--out") + 1] if "--out" in cmd else ""
-            if args[0] == "build":
+            if args[0] == "build" or args[:2] == ["predict", "emit"]:
                 os.makedirs(out)
-                Path(out, "result.json").write_text(json.dumps({"ok": True, "program": {"digest": _digest(args)}}))
+                aot = {"aot": json.loads(args[args.index("--aot") + 1])} if args[0] == "predict" else {}
+                Path(out, "result.json").write_text(json.dumps({"ok": True, "program": {"digest": _digest(args)}, **aot}))
             elif args[0] == "global-program":
                 parts = [json.loads(Path(cmd[i + 1], "result.json").read_text())["program"]["digest"] for i, a in enumerate(cmd) if a == "--derived"]
                 os.makedirs(out, exist_ok=True)
@@ -152,6 +153,28 @@ def test_the_width_changes_nothing_the_build_writes(tmp_path, monkeypatch):
     assert _tree(one.bdir) == built and len(built) == 8 * (3 * 3 + 2)    # per rank 3 derives (dir, .log, .rc), the compose's .log and output
     for f in ("build_summary.json", "manifest.json"):
         assert Path(one.d, f).read_bytes() == Path(full.d, f).read_bytes()
+
+
+def test_a_switched_rows_build_is_predict_emit_over_its_trace_and_the_trace_construction_traces(tmp_path, monkeypatch):
+    aot = {"comparison": "r20261018-001500-aaaa", "trace": "art:" + "5" * 64}
+    monkeypatch.setattr(row_tp.CR, "aot_of", lambda row: aot if row == ROW else None)
+    t, fake, _pools = _tp_row(tmp_path / "aot", monkeypatch, world=2, environ={"AOT_TRACE": str(tmp_path / "trace"), "BUILD_RELABEL": "on"})
+    t.build()
+    derives = [a for a in fake.cmds if a[0] in ("build", "predict")]
+    assert len(derives) == 4 and all(a[:2] == ["predict", "emit"] and json.loads(a[a.index("--aot") + 1]) == aot for a in derives)
+    assert sorted(a[a.index("--trace") + 1] for a in derives) == [f"{tmp_path}/trace/build/rank{r}/{p}" for r in "01"
+                                                                  for p in ("build_request_LP256_T31", "build_step")]
+    req = next(a for a in derives if "request" in a)
+    assert req[req.index("--wrapper"):] == ["--wrapper", "request", "--LP", "256", "--T", "31"], "predict computes the launch batch"
+    summary = json.loads(Path(t.d, "build_summary.json").read_text())
+    assert {v["construction"] for rk in summary["ranks"].values() for p, v in rk.items() if p.startswith("build_")} == {"aot"}
+    assert "construction=aot" in Path(t.d, "stages.txt").read_text()
+    (mark,) = _marks(t, "build.construction")
+    assert (mark["construction"], mark["comparison"], mark["trace"]) == ("aot", aot["comparison"], aot["trace"])
+    traced, fake, _pools = _tp_row(tmp_path / "trace-construction", monkeypatch, world=2, environ={"BUILD_CONSTRUCTION": "trace"})
+    traced.build()
+    assert [a[0] for a in fake.cmds if a[0] in ("build", "predict")] == ["build"] * 4
+    assert _marks(traced, "build.construction")[0]["construction"] == "trace"
 
 
 def test_auto_counts_the_derives_it_is_given_and_scales_each_ones_peak():
