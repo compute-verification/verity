@@ -14,10 +14,6 @@ struct GatherDesc {
   int64_t skip;         // P0 windowed staging: logical byte offset of this segment inside the (pitched) tensor; 0 for whole tensors
 };
 
-// 16-byte words a thread loads before it stores any (the 16-byte paths): a block beside SHA blocks, whose SM has few slots for it,
-// keeps U loads in flight a thread rather than one, since a store may alias a later load and the compiler would not reorder them
-constexpr int U = 4;
-
 __global__ void gather_copy_kernel(const GatherDesc* __restrict__ d, int n) {
   __shared__ GatherDesc gs;                // one read of the descriptor a block, not one a warp
   if (threadIdx.x == 0) gs = d[blockIdx.y];
@@ -40,15 +36,7 @@ __global__ void gather_copy_kernel(const GatherDesc* __restrict__ d, int n) {
     if (tid < head) g.dst[tid] = g.src[tid];
     const uint4* s = reinterpret_cast<const uint4*>(g.src + head);
     uint4* t = reinterpret_cast<uint4*>(g.dst + head);
-    int64_t i = tid;
-    for (; i + (U - 1) * nthr < n16; i += U * nthr) {
-      uint4 v[U];
-#pragma unroll
-      for (int u = 0; u < U; ++u) v[u] = s[i + u * nthr];
-#pragma unroll
-      for (int u = 0; u < U; ++u) t[i + u * nthr] = v[u];
-    }
-    for (; i < n16; i += nthr) t[i] = s[i];
+    for (int64_t i = tid; i < n16; i += nthr) t[i] = s[i];
     for (int64_t i = head + n16 * 16 + tid; i < nb; i += nthr) g.dst[i] = g.src[i];
     return;
   }
@@ -62,18 +50,13 @@ __global__ void gather_copy_kernel(const GatherDesc* __restrict__ d, int n) {
     const int r = static_cast<int>(((sa + head) & 15) >> 2);
     const uint4* s = reinterpret_cast<const uint4*>(g.src + head - 4 * r);
     uint4* t = reinterpret_cast<uint4*>(g.dst + head);
-    const auto join = [r](const uint4 a, const uint4 b) {
-      return r == 1 ? make_uint4(a.y, a.z, a.w, b.x) : r == 2 ? make_uint4(a.z, a.w, b.x, b.y) : make_uint4(a.w, b.x, b.y, b.z);
-    };
-    int64_t i = tid;
-    for (; i + (U - 1) * nthr < n16; i += U * nthr) {
-      uint4 a[U], b[U];
-#pragma unroll
-      for (int u = 0; u < U; ++u) { a[u] = s[i + u * nthr]; b[u] = s[i + u * nthr + 1]; }
-#pragma unroll
-      for (int u = 0; u < U; ++u) t[i + u * nthr] = join(a[u], b[u]);
+    if (r == 1) {
+      for (int64_t i = tid; i < n16; i += nthr) { const uint4 a = s[i], b = s[i + 1]; t[i] = make_uint4(a.y, a.z, a.w, b.x); }
+    } else if (r == 2) {
+      for (int64_t i = tid; i < n16; i += nthr) { const uint4 a = s[i], b = s[i + 1]; t[i] = make_uint4(a.z, a.w, b.x, b.y); }
+    } else {
+      for (int64_t i = tid; i < n16; i += nthr) { const uint4 a = s[i], b = s[i + 1]; t[i] = make_uint4(a.w, b.x, b.y, b.z); }
     }
-    for (; i < n16; i += nthr) t[i] = join(s[i], s[i + 1]);
     for (int64_t i = head + n16 * 16 + tid; i < nb; i += nthr) g.dst[i] = g.src[i];
     return;
   }
@@ -85,21 +68,12 @@ __global__ void gather_copy_kernel(const GatherDesc* __restrict__ d, int n) {
   const bool row16 = (g.skip % 16 == 0) && (g.width % 16 == 0) && (g.pitch % 16 == 0) && sa == 0 && da == 0 && (nb % 16 == 0);
   const bool row4 = (g.skip % 4 == 0) && (g.width % 4 == 0) && (g.pitch % 4 == 0) && ((sa | da) & 3) == 0 && (nb % 4 == 0);
   if (row16) {
-    const int64_t wv = g.width / 16, sv = g.skip / 16, n16 = nb / 16;
-    const auto at = [&](int64_t v) {
-      const int64_t j = v + sv, row = j / wv;
-      return reinterpret_cast<const uint4*>(g.src + row * g.pitch + (j - row * wv) * 16);
-    };
-    uint4* t = reinterpret_cast<uint4*>(g.dst);
-    int64_t v = tid;
-    for (; v + (U - 1) * nthr < n16; v += U * nthr) {
-      uint4 x[U];
-#pragma unroll
-      for (int u = 0; u < U; ++u) x[u] = *at(v + u * nthr);
-#pragma unroll
-      for (int u = 0; u < U; ++u) t[v + u * nthr] = x[u];
+    const int64_t wv = g.width / 16, sv = g.skip / 16;
+    for (int64_t v = tid; v < nb / 16; v += nthr) {
+      const int64_t j = v + sv;
+      const int64_t row = j / wv, col = j - row * wv;
+      *reinterpret_cast<uint4*>(g.dst + v * 16) = *reinterpret_cast<const uint4*>(g.src + row * g.pitch + col * 16);
     }
-    for (; v < n16; v += nthr) t[v] = *at(v);
   } else if (row4) {
     const int64_t wv = g.width / 4, sv = g.skip / 4;
     for (int64_t v = tid; v < nb / 4; v += nthr) {
