@@ -293,9 +293,11 @@ theorem callsLogColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd 
     intro e he
     rw [innerRun_C] at he
     apply h
-    rw [innerRun_bound H Bd decI ivScope b x r ws,
-      ← (Bd.run_nfC H hCF (xIOf x) (b.rd.msgs x ws) fun i => coinSeq r i.val).2.1]
-    exact he
+    have hv : (run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).vLog =
+        (Claims.Recursion.innerRun H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x r ws).vLog :=
+      (Bd.run_nfC H hCF (xIOf x) (b.rd.msgs x ws) fun i => coinSeq r i.val).2.1.trans
+        (congrArg Claims.Trace.vLog (innerRun_bound H Bd decI ivScope b x r ws)).symm
+    exact (congrArg (fun l => e ∈ l) hv).mp he
   · exact Or.inr h
 
 theorem innerAcceptsColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
