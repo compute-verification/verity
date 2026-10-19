@@ -77,6 +77,23 @@ VARIANTS = [
     dict(device="sm_100", name="fpx-2sp-e4m3i-duo", base="dither-2s-l32", plain=1.0, fold_add={"IMAD": 1.0},
          title="FP8 peel (2SP) on e4m3i to ±352, duo fold",
          summary="as fpx-2sp-e4m3i on the duo fold"),
+    # the extraction is one integer add, which issues as IADD3 (ALU) or IMAD (FMA pipe): half on each
+    dict(device="sm_120", name="fpx-c1-k4-h1-split", base="dither-c-peel-fx1", plain=3.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5},
+         title="C1 k4 on H1, the extraction split across ALU and IMAD", summary="as fpx-c1-k4-h1"),
+    dict(device="sm_120", name="fpx-2sp-e4m3i-fx1-split", base="dither-c-peel-fx1", plain=1.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5}, noise=TWO_SIDED,
+         title="FP8 peel (2SP), fx1 fold, the extraction split across ALU and IMAD", summary="as fpx-2sp-e4m3i-fx1"),
+    dict(device="sm_100", name="fpx-c1-k4t-split", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5},
+         title="C1 k4t on the B200 record, the extraction split across ALU and IMAD", summary="as fpx-c1-k4t"),
+    dict(device="sm_100", name="fpx-2sp-e4m3i-split", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5},
+         title="FP8 peel (2SP), LI-CP-W redux fold, the extraction split across ALU and IMAD",
+         summary="as fpx-2sp-e4m3i"),
+    dict(device="sm_100", name="fpx-2sp-e4m3i-alu", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
+         fold_add={"ALU": 1.0},
+         title="FP8 peel (2SP), LI-CP-W redux fold, the extraction on ALU", summary="as fpx-2sp-e4m3i"),
 ]
 
 
