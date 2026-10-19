@@ -10,6 +10,8 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
   ``r RB + [j CB, (j + 1) CB)``, its coin bits c (K) then U's 32 bytes (`PouwU129`: -64 + byte mod 129, H1's keyed word in
   ±64). Lane l's fold keys (duo's y_0..7, z_0..7), its chain's start, are block l of σ_R's stream (decision 121): no key
   is a function of seed_j. A kernel derives any row's or column's noise from seed_j alone, and any lane's keys from σ_R.
+  In a live window the salt is round r's, `live_salt` (`window.round_key` of round r's coin and root, its stream's first
+  64 bytes), and every unit computes its own noise from it in its own proof: no noise is a step that several units read.
 * **Lanes.** The tile is G × Q lanes, G = r / 4 and Q = c / 8 (at 32 × 32 a warp of cgemm.cu, lane 4 g + q): lane
   (g, q) holds rows ``g + G s`` (row slot s < 4) and columns ``2 q + 2 Q (s >> 1) + (s & 1)`` (column slot s < 8), and its
   entry e at row slot `segment.row_slot`(e) and column slot `segment.col_slot`(e), so the lanes' entries are the tile's
@@ -20,6 +22,10 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
   the XOR over lanes and chains of y, and word 2 s + 1 of z (`PouwXinFinal_v2` on each half of the state, `PouwXor32_v2`
   across lanes): 2 (KS + m) words.
 * **z** is each cell's exact product, the served Call's own Definition on the cell's rows of A and B, which no noise reaches.
+* **A dead tile** (`_live`): a tile whose r rows of A are all zero bytes, every row the canonical empty row, has the
+  canonical empty receipt, zero words: each receipt word is masked by the tile's live bit (`PouwAnyByte_v2` on each 32-byte
+  segment of A, OR-ed by `PouwOrBit_v2`; `PouwMask32_v2`).  A live tile's receipt is unchanged, and a dead tile's proof has
+  the live tile's shape, so a drawn unit shows nothing of the live/dead partition; serving skips a dead tile's noise.
 
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
@@ -32,9 +38,9 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, add, or_reduce
+from verity.ml.circuits.boolean.forms import NOT, OR, add, or_reduce
 from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Value
 
@@ -63,6 +69,8 @@ M32 = (1 << 32) - 1
 U_BITS = 256
 #: a lane's fold keys: duo's y_0..7, z_0..7, one block
 KEY_BITS = 512
+#: the salt port's bytes, a SHA-512 digest
+SALT_BYTES = 64
 
 
 @dataclass(frozen=True)
@@ -154,6 +162,34 @@ PouwU129 = definition("PouwU129", 2, _u129_bits, (("x", I8),), I8, word=PouwU129
                       doc="-64 + x mod 129 on bits (x + 192, or x + 63 where x >= 129): PouwU129_v1")
 
 
+# -- a dead tile -------------------------------------------------------------------------------------------------------------
+
+@primitive("PouwAnyByte", 1, [("x", Array(32, Value(8)))], Value(1), conformance="protocol-defined")
+def PouwAnyByteWord(*x: int) -> int:
+    """1 iff one of the 32 bytes is nonzero."""
+    return int(any(v & 0xFF for v in x))
+
+
+@primitive("PouwOrBit", 1, [("a", Value(1)), ("b", Value(1))], Value(1), conformance="protocol-defined")
+def PouwOrBitWord(a: int, b: int) -> int:
+    return (a | b) & 1
+
+
+@primitive("PouwMask32", 1, [("w", Value(32)), ("live", Value(1))], Value(32), conformance="protocol-defined")
+def PouwMask32Word(w: int, live: int) -> int:
+    """w where live is 1, else 0."""
+    return w & M32 if live & 1 else 0
+
+
+PouwAnyByte = definition("PouwAnyByte", 2, lambda C_, *x: [or_reduce(C_, [v for byte in x for v in byte])],
+                         (("x", Array(32, I8)),), BIT, word=PouwAnyByteWord, conformance="protocol-defined",
+                         doc="1 iff one of 32 bytes is nonzero, on bits: PouwAnyByte_v1")
+PouwOrBit = definition("PouwOrBit", 2, lambda C_, a, b: [OR(C_, a[0], b[0])], (("a", BIT), ("b", BIT)), BIT,
+                       word=PouwOrBitWord, conformance="protocol-defined", doc="a OR b on bits: PouwOrBit_v1")
+PouwMask32 = definition("PouwMask32", 2, lambda C_, w, live: [C_.AND(v, live[0]) for v in w], (("w", U32), ("live", BIT)),
+                        U32, word=PouwMask32Word, conformance="protocol-defined", doc="w AND live, on bits: PouwMask32_v1")
+
+
 # -- the reference -----------------------------------------------------------------------------------------------------------
 
 def _stream(seed_j: bytes, block: int, n: int) -> list[int]:
@@ -191,11 +227,25 @@ def fold_keys(sigma_r: bytes, lay: Layout) -> list[list[int]]:
     return keys
 
 
+def live_salt(commitment, coin: bytes, r: int, root: bytes) -> bytes:
+    """A live window's unit salt in round r (`window`, "Live windows"): the first `SALT_BYTES` of `window.round_key`'s
+    stream from round r's opened coin and the round's root.  It is the unit's salt port; each unit derives its own seed_j,
+    σ_R and noise from it, its public position and its roots inside the unit, so no unit reads noise another computed."""
+    from .. import window as Wd
+    return Wd.round_key(commitment, coin, r, root).stream(0, SALT_BYTES)
+
+
 def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
-              roots: tuple[bytes, bytes], pairs: Sequence[tuple[int, int]] | None = None) -> tuple[list[int], list[int]]:
+              roots: tuple[bytes, bytes], pairs: Sequence[tuple[int, int]] | None = None,
+              gated: bool = True) -> tuple[list[int], list[int]]:
     """The unit on words: (z, receipt) for A's r rows and B's c rows (int8 encodings), its salt, position and roots, z at
-    `pairs` (the full grid in row-major order by default)."""
+    `pairs` (the full grid in row-major order by default).  A dead tile (every A byte zero) has the zero receipt, its noise
+    never derived; `gated=False` is the receipt its noise would give."""
     lay = Layout(len(a), len(b), len(a[0]))
+    if pairs is None:
+        pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
+    if gated and not any(v & 0xFF for row in a for v in row):
+        return [SG.seg_dot(0, a[i], b[j]) for i, j in pairs], [0] * (2 * lay.sets)
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     ks, m = lay.ks, lay.m
@@ -214,8 +264,6 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
             for h in range(2):
                 for v in st[8 * h:8 * h + 8]:
                     cp[s][h] ^= v
-    if pairs is None:
-        pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
     return [SG.seg_dot(0, a[i], b[j]) for i, j in pairs], [w & M32 for s in cp for w in s]
 
 
@@ -251,6 +299,14 @@ def _xor(B: Any, words: list[Coll]) -> Coll:
         words = [B.call(PouwXor32, words[i], words[i + 1]) if i + 1 < len(words) else words[i]
                  for i in range(0, len(words), 2)]
     return words[0]
+
+
+def _live(B: Any, a: Coll, lay: Layout) -> Coll:
+    """The tile's live bit: 1 iff one of its A bytes is nonzero."""
+    bits = [B.call(PouwAnyByte, a[i][32 * s:32 * s + 32]) for i in range(lay.r) for s in range(lay.ks)]
+    while len(bits) > 1:
+        bits = [B.call(PouwOrBit, bits[i], bits[i + 1]) if i + 1 < len(bits) else bits[i] for i in range(0, len(bits), 2)]
+    return bits[0]
 
 
 def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
@@ -292,7 +348,8 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
         for s, p in enumerate([*T, op, *D]):
             state = B.call(SG.PouwFx1Absorb, state, array_of(p))
             cps[s].append((B.call(SG.PouwXinFinal, state[0:256]), B.call(SG.PouwXinFinal, state[256:512])))
-    receipt = [_xor(B, [w[h] for w in words]).refs for words in cps for h in range(2)]
+    live = _live(B, a, lay)
+    receipt = [B.call(PouwMask32, _xor(B, [w[h] for w in words]), live).refs for words in cps for h in range(2)]
     z = [B.call(S.EXACT, a[i], b[j]).refs for i, j in S.PAIRS]
     return Coll(_signature(S)[1], concat(z + receipt))
 
@@ -303,10 +360,11 @@ def _unit_ports(S: Any) -> Any:
 
 
 PouwH1Tile = CompositeDefinition(
-    "PouwH1Tile", 1, ("EXACT", "R", "C", "PAIRS"), _signature, _body, conformance="protocol-defined",
+    "PouwH1Tile", 2, ("EXACT", "R", "C", "PAIRS"), _signature, _body, conformance="protocol-defined",
     register=SG is not None,
     doc="One r × c tile of H1 + fx1 under CP-W (`circuit.h1tile`): A's R rows and B's C rows, the salt, the unit's position "
-        "and its seed group's roots, to {z: EXACT on each cell of PAIRS, receipt: per set the lanes' XOR of y, then of z}.",
+        "and its seed group's roots, to {z: EXACT on each cell of PAIRS, receipt: per set the lanes' XOR of y, then of z, "
+        "each word zero where every A byte is zero (a dead tile)}.",
     **({"ports": _unit_ports} if _ports is not None else {}))
 
 
@@ -338,5 +396,6 @@ def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
 if SG is not None:
     C.register(scheme())
 
-__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise", "reference",
-           "scheme", "u129"]
+__all__ = ["FOLD", "KINDS", "Layout", "PouwAnyByte", "PouwAnyByteWord", "PouwH1Tile", "PouwMask32", "PouwMask32Word",
+           "PouwOrBit", "PouwOrBitWord", "PouwU129", "PouwU129Word", "SALT_BYTES", "SCHEME", "fold_keys", "live_salt", "noise",
+           "reference", "scheme", "u129"]
