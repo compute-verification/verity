@@ -35,9 +35,10 @@ Arms:
                  `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
     dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
     dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
-    dither-1s-peel  dither-1s peeled (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z): z = A B^T, so y is today's served y and
-                 its tokens must equal exact's; the receipts are dither-1s's
-    dither-1s-split-peel  dither-1s-peel in the split form (`h1o_unitssp`)
+    dither-1s-cpeel  dither-1s with the credited peel (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z and 12:16Z, H1V3's
+                 PouwPeelSeg): z = O + 256 X wbᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ from the receipted stream's own O, so y is
+                 today's served y and its tokens must equal exact's; the receipts are dither-1s's
+    dither-1s-split-cpeel  dither-1s-cpeel in the split form (`h1o_unitssp`)
     dither-1s-percall0  dither-1s with ASK-64's per-call round between each call's A table and its units (`h1o_percall`:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
@@ -46,7 +47,7 @@ Arms:
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
 its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's (dither-1s:
-`dither_one.check` on its gate, control, fault and fault_wb steps, tokens reported), under a CUDA
+`dither_one.check` on its gate, control, fault and fault_wb steps, and peeled fault_xa, tokens reported), under a CUDA
 profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
 kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm); a dither arm's are a second GATE_TOKENS
@@ -168,13 +169,13 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             llm.dither_win = win
         return llm
     if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0",
-               "dither-1s-percall-rtt", "dither-1s-peel", "dither-1s-split-peel"):
+               "dither-1s-percall-rtt", "dither-1s-cpeel", "dither-1s-split-cpeel"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         import dither_one as DO
-        if arm in ("dither-1s-warp", "dither-1s-split", "dither-1s-split-peel"):
+        if arm in ("dither-1s-warp", "dither-1s-split", "dither-1s-split-cpeel"):
             os.environ[DO.UNITS_ENV] = arm.split("-")[2]
-        if arm in ("dither-1s-peel", "dither-1s-split-peel"):
+        if arm in ("dither-1s-cpeel", "dither-1s-split-cpeel"):
             os.environ[DO.PEEL_ENV] = "1"
         if arm == "dither-1s-percall0":
             os.environ[DO.PERCALL_ENV] = "0"
@@ -197,7 +198,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
-          "dither-1s-percall-rtt": "exact", "dither-1s-peel": "exact", "dither-1s-split-peel": "exact"}
+          "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact"}
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
@@ -246,7 +247,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     win.arm(B)
                     win.price_y = True
                 else:
-                    win.arm(B, mod.CAPTURES)
+                    win.arm(B)
             prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
             if prof:
                 torch.cuda.synchronize()
@@ -269,10 +270,10 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 else:
                     lib = os.environ[mod.LIB_ENV]
                     with torch.inference_mode():
-                        caps = {n: mod.check(win, lib, n) for n in mod.CAPTURES}
+                        caps = {n: mod.check(win, lib, n) for n in win.captures}
                     res["check"] = caps.pop("gate")
                     res.update(caps)
-                    res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in mod.CAPTURES[1:]))
+                    res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in win.captures[1:]))
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
                 res["check_s"] = round(time.perf_counter() - t0, 1)

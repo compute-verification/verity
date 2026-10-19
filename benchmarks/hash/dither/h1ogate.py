@@ -1,20 +1,20 @@
 """`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitss` (a unit
 a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
-`h1r_unit<2>`), and the first two peeled (`split-peel`, `block-peel`: z = A B^T, DITHER_PEEL=1), each gated through
-`dither_one.check`, then timed against each other.
+`h1r_unit<2>`), and the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
+stream's O, DITHER_PEEL=1), each gated through `dither_one.check`, then timed against each other.
 
     gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range
-          int8 weights and positive scales; four decode steps of m = 32 random rows captured (gate, control, fault,
-          fault_wb; every buffer 0xA5 first) and `dither_one.check` on each: the A, admit and z roots and the round =
-          commit.py's, every receipt = h1r v1's, every z = h1o_ref's (peeled: = A B^T, and y = today's scaled_mm on
-          every call), y = dequant(z), 3 units = CA's H1V3 on the CPU (and H1V3's own code where DITHER_H1V3_TREE names
-          its tree; peeled, its z peeled on the CPU); the control refused and both faults conforming (`gate_verdict`);
-          wb's density as the run reads it
+          int8 weights and positive scales; a decode step of m = 32 random rows captured per `Window.captures` (gate,
+          control, fault, fault_wb, and peeled fault_xa; every buffer 0xA5 first) and `dither_one.check` on each: the A,
+          admit and z roots and the round = commit.py's, every receipt = h1r v1's, every z = h1o_ref's (peeled: = A B^T,
+          and y = today's scaled_mm on every call), y = dequant(z), 3 units = CA's H1V3 on the CPU (and H1V3's own code
+          where DITHER_H1V3_TREE names its tree); the control refused and every fault conforming (`gate_verdict`; the
+          perturbed noised word must move z and y in its cell, peeled too); wb's density as the run reads it
     time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
           launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved;
           each over block's (else the first form's) as time_over_base
 
-    python h1ogate.py --out OUT [--nl 8] [--reps 15] [--forms split-peel,...]
+    python h1ogate.py --out OUT [--nl 8] [--reps 15] [--forms split-cpeel,...]
         (DITHER_H1C, DITHER_H1O: the libraries; sbench.sh's SBENCH_SCRIPT=h1ogate.py builds them and sets the environment)
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ import dither_one as DO  # noqa: E402
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
-FORMS = ("split", "block", "warp", "split-peel", "block-peel")
+FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel")
 
 
 def model(nl: int, dev) -> None:
@@ -68,16 +68,16 @@ def step(win: DO.Window, xs: list, outs: list) -> None:
 
 def gate(form: str, dev) -> tuple:
     os.environ[DO.UNITS_ENV] = form.split("-")[0]
-    os.environ[DO.PEEL_ENV] = "1" if form.endswith("-peel") else "0"
+    os.environ[DO.PEEL_ENV] = "1" if form.endswith("-cpeel") else "0"
     win = DO.Window(T, os.urandom(64), os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV], True, dev)
     outs = [(torch.empty(M, n, dtype=torch.bfloat16, device=dev), torch.empty(M, n, dtype=torch.int32, device=dev))
             for n, _ in win.nk]
     step(win, operands(win, 7), outs)
-    win.arm(M, DO.CAPTURES)
-    for i in range(len(DO.CAPTURES)):
+    win.arm(M)
+    for i in range(len(win.captures)):
         step(win, operands(win, 100 + i), outs)
-    caps = {n: DO.check(win, os.environ[DO.LIB_ENV], n) for n in DO.CAPTURES}
-    return win, outs, caps, DO.gate_verdict(caps["gate"], caps["control"], caps["fault"], caps["fault_wb"])
+    caps = {n: DO.check(win, os.environ[DO.LIB_ENV], n) for n in win.captures}
+    return win, outs, caps, DO.gate_verdict(caps["gate"], *(caps[n] for n in win.captures[1:]))
 
 
 def graphs(win: DO.Window, outs: list) -> dict:

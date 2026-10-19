@@ -30,8 +30,9 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
-# CA's H1V3 (cursor/h1-v3-1172, with the wrap correction) at its pinned head: dither_one's gate runs its h1tile.reference
-H1V3_SHA=${H1V3_SHA:-bd702a2c46}
+# CA's H1V3 (cursor/h1-v3-1172, with the wrap correction and the peel, z = A B^T) at its pinned head: dither_one's gate
+# runs its h1tile.reference
+H1V3_SHA=${H1V3_SHA:-ec5df3ec49}
 mkdir -p "$S/h1v3" && git archive "$H1V3_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3" && [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
   && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "sbench: no H1V3 tree at $H1V3_SHA"
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm

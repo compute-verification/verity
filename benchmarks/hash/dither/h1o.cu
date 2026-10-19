@@ -14,9 +14,10 @@
 //                writes zero receipts and zero z and y.  `h1o_unitsb` is the same in the block form (`h1b_unit<OutEpi>`,
 //                a unit a block of five warps), for decode, where a call's units would leave most SMs idle, and
 //                `h1o_unitss` in the split form (`h1s_unit<OutEpi>`, six warps: the hashing a chunk ahead of the
-//                building, the fold in two halves).  `h1o_unitsbp` and `h1o_unitssp` are those two peeled (CA, 11:02Z):
-//                z = A Bᵀ, today's product, so y = dequant(A Bᵀ) serves the registered model; the receipts are the same
-//                words, and the A Bᵀ MMA (raw B, and X's fragment less b) takes the wrap MMA's place
+//                building, the fold in two halves).  `h1o_unitsbp` and `h1o_unitssp` are those two peeled (CA, 11:02Z
+//                and 12:16Z; H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
+//                product from the same O, so y = dequant(A Bᵀ) serves the registered model; the receipts are the same
+//                words, and the peel adds binary-by-int8 MMAs beside the wrap MMA (no product of A itself)
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
 // and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
@@ -39,11 +40,11 @@ struct H1O {
 
 // flags: F_DUMP copies y rows < m to ydump; F_NW_TILES (no A slot, scale or z write) and F_NW_UNITS (no receipt write) are
 // the gate's no-write control, y still written; F_FAULT adds 2^FAULT_SHIFT to unit 0's accumulator of cell (0, 0) after
-// segment 0, before that segment's words are absorbed (the conformance test: the receipt and the served z and y must move;
-// peeled, the receipt alone, as z = A Bᵀ reads no noised word); F_FAULT_WB flips unit 0's wb⁺ bit at column 0, entry 0
-// (only column 0's z and y may move, by 256 (1 - 2 wb⁺) X[:, 0]), peeled bit 0 of B's byte there in A Bᵀ's operand (only
-// column 0's z and y may move, by (1 - 2 (B[0, 0] & 1)) A[:, 0], no receipt)
-enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8, F_FAULT_WB = 16 };
+// segment 0, before that segment's words are absorbed (the conformance test, peeled or not: the receipt and the served z
+// and y must move, z in that cell alone); F_FAULT_WB flips unit 0's wb⁺ bit at column 0, entry 0 (only column 0's z and y
+// may move, by 256 (1 - 2 wb⁺) X[:, 0]); F_FAULT_XA, peeled, flips unit 0's xa bit at row 0, entry 0 (only row 0's z and
+// y in unit 0's columns may move, by 256 (1 - 2 xa) B[:, 0]; neither wb nor xa is receipted)
+enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8, F_FAULT_WB = 16, F_FAULT_XA = 32 };
 constexpr int FAULT_SHIFT = 24;
 
 struct H1OStep {
@@ -53,7 +54,7 @@ struct H1OStep {
 template <bool PL>
 struct OutEpiT {
   static constexpr bool ON = true;
-  static constexpr bool PEEL = PL;  // z = A Bᵀ (h1r.cu's E::PEEL)
+  static constexpr bool PEEL = PL;  // z = A Bᵀ from O (h1r.cu's E::PEEL)
   static constexpr bool SEEDS = true;
   int* z;
   int* zo;  // [M, N] s32: the op's z output (rows < M of the slot's z), what the credit gate reads beside y
@@ -77,8 +78,9 @@ struct OutEpiT {
   __device__ void wb_fault(int u, int lane, int s, u32 (&P)[8]) const {
     if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && s == 0) P[0] ^= 0x80u;
   }
-  __device__ void b_fault(int u, int lane, int s, u32 (&B)[8]) const {
-    if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && s == 0) B[0] ^= 1u;
+  // xa's fragment (row half mi); lane 0's word 0 of mi = 0 is row 0, entries 0 .. 3
+  __device__ void xa_fault(int u, int lane, int s, int mi, u32 (&xa)[4]) const {
+    if ((flags & F_FAULT_XA) && u == 0 && lane == 0 && s == 0 && mi == 0) xa[0] ^= 1u;
   }
   __device__ void dead(int ri, int cj, int lane) const {
     const int row = 32 * ri + lane;
@@ -162,7 +164,7 @@ __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict_
                       (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
-// the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's (PL: peeled, z = A Bᵀ)
+// the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's (PL: peeled, z = A Bᵀ from O)
 template <bool PL>
 __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
@@ -326,7 +328,7 @@ static int unitss(const H1O* F, const H1OStep* S, int units, int n, int k, const
   return (int)cudaGetLastError();
 }
 
-// h1o_units_launch's call in the block form, and peeled (z = A Bᵀ)
+// h1o_units_launch's call in the block form, and peeled (z = A Bᵀ from O)
 extern "C" int h1o_unitsb_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
                                  int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
                                  cudaStream_t stream) {

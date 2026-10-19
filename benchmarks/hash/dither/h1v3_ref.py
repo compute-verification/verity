@@ -5,8 +5,9 @@ own code, not only to this lane's CPU twin.
     PYTHONPATH=TREE python h1v3_ref.py IN.json OUT.json
 
 IN: a list of units {a, b (32 rows of K int8 encodings each), salt (hex), position, roots ([hex root_a, hex root_b])};
-OUT: {"h1tile": the module's file, "units": [{z (32 x 32 row-major, s32), receipt}]}.  IN {"wrap_table": true}: OUT
-{"h1tile", "wrap": `wrap_bits(b, c, u)` at index (256 c + u) * 256 + b for every byte b, u and bit c}.
+OUT: {"h1tile": the module's file, "peeled": whether its z is A B^T (its `peel_seg`, 4733b9ab0c on) rather than
+X (B + c)^T, "units": [{z (32 x 32 row-major, s32), receipt}]}.  IN {"wrap_table": true}: OUT {"h1tile", "peeled",
+"wrap": `wrap_bits(b, c, u)` at index (256 c + u) * 256 + b for every byte b, u and bit c}.
 """
 from __future__ import annotations
 
@@ -18,9 +19,10 @@ from verity.core.protocols.pouw.circuit import h1tile as HT
 
 def main() -> int:
     units = json.loads(open(sys.argv[1]).read())
+    peeled = hasattr(HT, "peel_seg")
     if isinstance(units, dict) and units.get("wrap_table"):
         tab = [HT.wrap_bits(b, c, u) for c in range(2) for u in range(256) for b in range(256)]
-        open(sys.argv[2], "w").write(json.dumps({"h1tile": HT.__file__, "wrap": tab}))
+        open(sys.argv[2], "w").write(json.dumps({"h1tile": HT.__file__, "peeled": peeled, "wrap": tab}))
         return 0
     out = []
     for u in units:
@@ -29,7 +31,7 @@ def main() -> int:
         c = len(u["b"])
         out.append({"z": [[(v - (1 << 32)) if v >> 31 else v for v in z[i * c:(i + 1) * c]] for i in range(len(u["a"]))],
                     "receipt": rc})
-    open(sys.argv[2], "w").write(json.dumps({"h1tile": HT.__file__, "units": out}))
+    open(sys.argv[2], "w").write(json.dumps({"h1tile": HT.__file__, "peeled": peeled, "units": out}))
     return 0
 
 

@@ -22,9 +22,10 @@ admit-step and z-step trees, the round over them, and the receipt trees, then th
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
 arm's.  The gate records wb's density on the run's weights, and how many cells differ from (A + b)(B + c)^T and A B^T.
-Peeled (DITHER_PEEL=1, CA's 11:02Z decision; the block and split forms) z = A B^T, today's product, which is CA's peel
-z - b B^T - A c^T - b c^T plus the term X's wrap needs, 256 xw (B + c)^T with xw = [A = 127 and b = 1]: y is today's
-served y and the tokens are exact's (both gated); the receipts are the same words.
+Peeled (DITHER_PEEL=1, CA's 11:02Z and 12:16Z decisions, H1V3's PouwPeelSeg; the block and split forms) z is A B^T, today's
+product, taken from the same O: z = O + 256 X (wb⁺ - wb⁻)^T - X c^T - (b - 256 xa) B^T with xa = [A = 127 and b = 1],
+the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is today's served y and the tokens are exact's
+(both gated); the receipts are the same words, and a perturbed noised word moves z.
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
 engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
@@ -43,12 +44,12 @@ import dither_fused as DF
 from dither_fused import CM, CR, SV, H1C, Dom, Tab, unwords, words, H1R, Call
 import h1c as H1CM
 
-F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB = 1, 2, 4, 8, 16     # h1o.cu's H1OStep.flags
-CAPTURES = ("gate", "control", "fault", "fault_wb")
+F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
+CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
 LIB_ENV = "DITHER_H1O"
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch"}   # h1o.cu's forms of the same units
-# "1": z = A B^T (CA's peel of b and c, 11:02Z: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
+# "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
@@ -121,6 +122,7 @@ class Window:
         self.peel = os.environ.get(PEEL_ENV) == "1"
         if self.peel and self.units_form == "warp":
             raise RuntimeError(f"{PEEL_ENV}=1: the warp form serves the dithered product only")
+        self.captures = CAPTURES + (("fault_xa",) if self.peel else ())
         fn = UNITS_FORMS[self.units_form]
         self.units_fn = getattr(self.o, fn.replace("_launch", "p_launch") if self.peel else fn)
         self.units_fn.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
@@ -183,12 +185,14 @@ class Window:
         self.salt_bytes = HT.live_salt(self.lch.commitment, opening.coin, 0, self.epoch_root)
         self.salt.copy_(torch.from_numpy(words(self.salt_bytes)))
 
-    def arm(self, m: int, names: tuple = CAPTURES) -> None:
-        """Capture `names` at the next steps of m tokens, one a step: each step's A, scale and z slots, y dump, receipts,
-        seeds and step roots poisoned with 0xA5 before its forward; "control" with the no-write flags (its kernels write
-        none of them, so `check` must refuse it); "fault" with F_FAULT (`check` wants that one word to reach z, y and the
-        receipt; peeled, the receipt alone); "fault_wb" with F_FAULT_WB (`check` wants only column 0 of unit 0's z and y
-        moved, by 256 (1 - 2 wb⁺) X; peeled, by (1 - 2 (B[0, 0] & 1)) A, B's bit 0 flipped in A B^T's operand)."""
+    def arm(self, m: int, names: tuple | None = None) -> None:
+        """Capture `names` (`captures` by default) at the next steps of m tokens, one a step: each step's A, scale and z
+        slots, y dump, receipts, seeds and step roots poisoned with 0xA5 before its forward; "control" with the no-write
+        flags (its kernels write none of them, so `check` must refuse it); "fault" with F_FAULT (`check` wants that one
+        word to reach z, y and the receipt, peeled too); "fault_wb" with F_FAULT_WB (`check` wants only column 0 of unit
+        0's z and y moved, by 256 (1 - 2 wb⁺) X); "fault_xa", peeled, with F_FAULT_XA (only row 0 of unit 0's z and y,
+        by 256 (1 - 2 xa) B[:, 0])."""
+        names = self.captures if names is None else names
         self.arms, self.arm_m = list(names), m
         self.caps = {n: {} for n in names}
 
@@ -253,7 +257,7 @@ class Window:
         if self.arms and m == self.arm_m:
             self.cap = name = self.arms.pop(0)
             self.flags = (F_DUMP | ((F_NW_TILES | F_NW_UNITS) if name == "control" else 0) | (F_FAULT if name == "fault" else 0)
-                          | (F_FAULT_WB if name == "fault_wb" else 0))
+                          | (F_FAULT_WB if name == "fault_wb" else 0) | (F_FAULT_XA if name == "fault_xa" else 0))
             self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
                          + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
             self.caps[name] = {"s": self.s, "m": m}
@@ -465,7 +469,8 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
     wb⁻ = [B + c + U < -128] on the integers, the receipt, and the products to hold z to: X (B + c)^T with X the int8
     A + b (z must equal it), (A + b)(B + c)^T and today's A B^T.  And CA's peel of b and c (11:02Z), as written,
     z - b B^T - A c^T - b c^T, and with the term the s8 X's wrap needs, + 256 xw (B + c)^T, xw = [A = 127 and b = 1]
-    (X = -128 there): A B^T, as a peeled kernel's z must be."""
+    (X = -128 there): A B^T, as a peeled kernel's z must be; and the peeled kernel's own form of it (H1V3's PouwPeelSeg),
+    z + 256 xw B^T - X c^T - b B^T."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import seeds as SD
     from verity.core.protocols.pouw.circuit import segment as SG
@@ -506,11 +511,13 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
     peel = bits_a @ b32.astype(np.int64).T + a64 @ bits_b.T + bits_a @ bits_b.T
     xwb = ((a64 == 127) & (bits_a == 1)).astype(np.int64)
     xw_term = 256 * (xwb @ wc.T)
+    b64 = b32.astype(np.int64)
     return {"z": z, "receipt": [w & M32 for s in cp for w in s], "xw": x @ wc.T,
-            "dithered": (a64 + bits_a) @ wc.T, "today": a64 @ b32.astype(np.int64).T,
+            "dithered": (a64 + bits_a) @ wc.T, "today": a64 @ b64.T,
             "wb_plus": int(wbp.sum()), "wb_minus": int(wbn.sum()), "entries": int(wbp.size),
             "peel": peel, "xw_term": xw_term, "x_wraps": int(xwb.sum()),
-            "peel_ca": _s32(z - peel), "peel_xw": _s32(z - peel + xw_term)}
+            "peel_ca": _s32(z - peel), "peel_xw": _s32(z - peel + xw_term),
+            "peel_kernel": _s32(z + 256 * (xwb @ b64.T) - x @ bits_b.T - bits_a @ b64.T)}
 
 
 def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
@@ -522,6 +529,16 @@ def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     s = int(b[0, 0]) + int(cols[0][0][0]) + int(_sx(np.array(cols[0][1][0])))
     d = 1 - 2 * int(s > 127)
     return [(256 * d * int(_sx(np.array(int(a[i, 0]) + int(rows[i][0][0]))))) & M32 for i in range(32)]
+
+
+def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
+    """F_FAULT_XA's move of unit 0's z row 0 (as `wb_fault_expected`), mod 2^32: its xa bit at entry 0 flipped changes
+    xa there by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0]."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.core.protocols.pouw.circuit import seeds as SD
+    rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
+    d = 1 - 2 * int(int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1)
+    return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 
 
 def h1v3_itself(units: list[dict]) -> dict:
@@ -561,9 +578,10 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     perturbed MMA word reached what serves).  "fault_wb" wants every receipt unmoved (wb is not receipted), z moved only in
     column 0 of unit 0, by `wb_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, and y = dequant of that z.
     Peeled (`Window.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
-    an integer below 2^53) and y must be today's served y (`int8_ops.scaled_mm`) on every call; "fault" wants unit 0's
-    receipt alone moved (z = A B^T reads no noised word) and "fault_wb" (B's bit 0 at unit 0's (0, 0) flipped in A B^T's
-    operand) z's column 0 of unit 0 moved by exactly (1 - 2 (B[0, 0] & 1)) A[:, 0] on every call, no receipt."""
+    an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`) on every call, the CPU units' z the kernel's
+    peel of their z, and each fault wants what it wants unpeeled against A B^T: so a z that reads no noised word (one
+    computed beside the receipted MMAs) is refused at "fault".  "fault_xa" (peeled) wants every receipt unmoved, z moved
+    only in row 0 of unit 0, by `xa_fault_expected` on CPU_CALLS and by ±256 B[:32, 0] elsewhere, and y = dequant of it."""
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
     g = win.caps.get(which, {})
@@ -633,32 +651,34 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
         return got[o_:o_ + units * nw].view(units, nw)
 
     delta = torch.zeros(1, dtype=torch.int64, device=win.dev) + (1 << shift)
+    zbase = zab if win.peel else zref
     rc_bad, z_bad, y_bad, fault_bad, fault_moved = [], [], [], [], []
     for w in range(L):
         n, k = win.nk[w]
         rdiff = (plan.receipts(w) != got_of(w)).any(dim=1).nonzero().flatten().tolist()
-        dz = (g["z"][w].to(torch.int64) - (zab[w] if win.peel else zref[w]).to(torch.int64)) & M32
+        dz = (g["z"][w].to(torch.int64) - zbase[w].to(torch.int64)) & M32
         cells = dz.nonzero().tolist()
         if g["y"] is not None:
             yk = g["y"][w]
             if not torch.equal(E.dequantize(g["z"][w][:m], g["sa"][w][:m], win.sw[w]).view(torch.int16), yk.view(torch.int16)):
                 y_bad.append(w)
-        if which == "fault" and win.peel:
-            if not (rdiff == [0] and not cells):
-                fault_bad.append({"call": w, "receipt_units_off": rdiff[:4], "z_cells_off": cells[:4]})
-        elif which == "fault_wb" and win.peel:
-            a0 = g["a"][w][:32, 0].to(torch.int64).cpu()
-            a0[m:] = 0
-            d = 1 - 2 * (int(win.wt[w][0, 0]) & 1)
-            exp = ((d * a0) & M32).tolist()
-            col = dz[:32, 0].tolist()
-            if not (not rdiff and all(c == 0 and i < 32 for i, c in cells) and col == exp):
-                fault_bad.append({"call": w, "receipt_units_off": rdiff[:4], "z_cells_off": cells[:4], "dz_col0": col[:4],
-                                  "want_col0": exp[:4]})
+        if which == "fault_xa":
+            row = dz[0, :32].tolist()
+            if w in cpu_calls:
+                exp = xa_fault_expected(g["a"][w][:32].cpu().numpy(), win.wt[w][:32].cpu().numpy(),
+                                        g["salt"] if "salt" in g else win.salt_bytes, s * win.u_step + win.offs[w],
+                                        (a_cpu[w], g["b_roots"][w]))
+                exact = row == exp
+            else:
+                b0 = win.wt[w][:32, 0].to(torch.int64).cpu()
+                exact = row in (((256 * b0) & M32).tolist(), ((-256 * b0) & M32).tolist())
+            if not (not rdiff and all(i == 0 and c < 32 for i, c in cells) and exact):
+                fault_bad.append({"call": w, "receipt_units_off": rdiff[:4], "z_cells_off": cells[:4],
+                                  "dz_row0": row[:4], "exact_checked": w in cpu_calls})
             fault_moved.append(len(cells))
         elif which == "fault":
             moved = g["y"] is not None and float(g["sa"][w][0]) != 0.0 and not torch.equal(
-                E.dequantize(zref[w][:1, :1], g["sa"][w][:1], win.sw[w][:1]).view(torch.int16), g["y"][w][:1, :1].view(torch.int16))
+                E.dequantize(zbase[w][:1, :1], g["sa"][w][:1], win.sw[w][:1]).view(torch.int16), g["y"][w][:1, :1].view(torch.int16))
             if not (rdiff == [0] and cells == [[0, 0]] and int(dz[0, 0]) == int(delta) and moved):
                 fault_bad.append({"call": w, "receipt_units_off": rdiff[:4], "z_cells_off": cells[:4],
                                   "dz00": int(dz[0, 0]), "y_moved": bool(moved)})
@@ -688,10 +708,10 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     doc["wb"] = {"plus": int(cnt[:, 0].sum()), "minus": int(cnt[:, 1].sum()), "entries": int(ent.sum()),
                  "density": float(cnt.sum() / ent.sum()),
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
-    if which in ("fault", "fault_wb"):
+    if which in ("fault", "fault_wb", "fault_xa"):
         doc["fault_shift"] = shift
         doc["fault_bad"] = fault_bad
-        if which == "fault_wb":
+        if which != "fault":
             doc["z_cells_moved"] = {"min": min(fault_moved), "max": max(fault_moved)}
         doc["conforming"] = (not fault_bad and not y_bad and not doc["a_roots_bad"] and all(doc["round"].values())
                              and not doc["z_roots_bad"])
@@ -726,6 +746,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
                               "x_wraps": ref["x_wraps"],
                               "cells_peel_ca_ne_today": int((ref["peel_ca"] != ref["today"]).sum()),
                               "cells_peel_xw_ne_today": int((ref["peel_xw"] != ref["today"]).sum()),
+                              "cells_peel_kernel_ne_today": int((ref["peel_kernel"] != ref["today"]).sum()),
                               "cells_z_ne_x_bc": int((ref["z"] != ref["xw"]).sum()),
                               "cells_z_ne_ab_bc": int((ref["z"] != ref["dithered"]).sum()),
                               "cells_z_ne_today": int((ref["z"] != ref["today"]).sum()),
@@ -738,7 +759,10 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
         if "units" in hv:
             for x, (zk, rk, ref), hu in zip(units_doc, kernel_out, hv["units"]):
                 hz = np.array(hu["z"], dtype=np.int64)
-                if win.peel:     # H1V3's own z, peeled on the CPU (H1V3 has no peel yet)
+                if hv.get("peeled"):    # H1V3's z is A B^T (its PouwPeelSeg): unpeeled, X (B + c)^T on the CPU from it
+                    if not win.peel:
+                        hz = _s32(hz - ref["today"] + ref["xw"])
+                elif win.peel:          # an H1V3 without the peel: its z peeled on the CPU
                     x["h1v3_peel_ca_cells_ne_today"] = int((_s32(hz - ref["peel"]) != ref["today"]).sum())
                     hz = _s32(hz - ref["peel"] + ref["xw_term"])
                 x["h1v3_z_equal"] = bool((zk == hz).all())
@@ -750,20 +774,25 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     today_ok = not (win.peel and which == "gate") or doc.get("y_vs_today", {}).get("calls_equal") == L
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and today_ok
                  and all(x["z_equal"] and x["receipt_equal"] and x["cells_z_ne_x_bc"] == 0
-                         and (not win.peel or x["cells_peel_xw_ne_today"] == 0) for x in units_doc)
+                         and (not win.peel or x["cells_peel_xw_ne_today"] == x["cells_peel_kernel_ne_today"] == 0)
+                         for x in units_doc)
                  and h1v3_ok and not doc["a_roots_bad"] and not doc["admit_roots_bad"] and not doc["z_roots_bad"]
                  and all(doc["round"].values()))
     return doc
 
 
-def gate_verdict(gate: dict, control: dict, fault: dict, fault_wb: dict) -> dict:
+def gate_verdict(gate: dict, control: dict, fault: dict, fault_wb: dict, fault_xa: dict | None = None) -> dict:
     """The poisoned gate passes, its no-write control (complete) is refused on z and on the receipts, the fault step
     conforms (the one perturbed noised word moved that cell's z and y and that unit's receipt, and nothing else) and so
-    does the flipped wb⁺ bit (only column 0 of unit 0's z and y moved, by 256 (1 - 2 wb⁺) X, no receipt)."""
+    does the flipped wb⁺ bit (only column 0 of unit 0's z and y moved, by 256 (1 - 2 wb⁺) X, no receipt); peeled, so does
+    the flipped xa bit (only row 0 of unit 0's z and y, by 256 (1 - 2 xa) B[:, 0], no receipt), which a peeled gate needs."""
     refused = (control.get("complete") and not control.get("ok") and bool(control.get("z_vs_ref_bad"))
                and bool(control.get("receipts_vs_h1r_bad")))
-    ok = bool(gate.get("ok")) and bool(refused) and bool(fault.get("conforming")) and bool(fault_wb.get("conforming"))
+    xa_ok = bool(fault_xa.get("conforming")) if fault_xa is not None else not gate.get("peel")
+    ok = (bool(gate.get("ok")) and bool(refused) and bool(fault.get("conforming")) and bool(fault_wb.get("conforming"))
+          and xa_ok)
     return {"ok": ok, "gate_ok": bool(gate.get("ok")), "control_refused": bool(refused),
             "fault_conforming": bool(fault.get("conforming")), "fault_wb_conforming": bool(fault_wb.get("conforming")),
+            "fault_xa_conforming": None if fault_xa is None else bool(fault_xa.get("conforming")),
             "control_bad": {k: len(control.get(k) or []) for k in ("z_vs_ref_bad", "y_vs_dequant_z_bad", "receipts_vs_h1r_bad",
                                                                     "z_roots_bad")}}

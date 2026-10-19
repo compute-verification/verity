@@ -2,7 +2,8 @@
 per arm against the row, read from the runs themselves: a run's `row` label (`research data labels RUN --json`) and its
 out/summary.json (sbench.py's; a run cut before it, its reps.jsonl), fetched into ~/.research/runs/RUN when it isn't
 there.  An arm that serves the dithered
-product is drawn hollow, a peeled arm and the references filled.
+product is drawn hollow, a peeled arm and the references filled, and the beside peel (z a fresh A B^T, rows 15-16: not
+credit) with crosses.
 
     uv run --with matplotlib python3 benchmarks/hash/dither/plot.py --out DIR RUN [RUN ...]
 
@@ -19,6 +20,7 @@ from pathlib import Path
 RUNS = Path.home() / ".research" / "runs"
 DITHERED = ("dither-1s", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0", "dither-1s-percall-rtt",
             "dither-1s-credit", "dither", "dither-side")
+BESIDE = ("dither-1s-peel", "dither-1s-split-peel")
 MEASURES = (("tpot_b32_ms", "decode B32 TPOT (ms)"), ("tokens_per_s", "saturation throughput (tok/s)"))
 
 
@@ -61,7 +63,8 @@ def main() -> int:
         for arm, p in s["per_arm"].items():
             points.append({"run": run, "row": row, "arm": arm, **{m: p.get(m) for m, _ in MEASURES},
                            "tpot_all": p.get("tpot_all"), "tokens_per_s_all": p.get("tokens_per_s_all"),
-                           "serves": "the dithered product" if arm in DITHERED else "today's y"})
+                           "serves": "the dithered product" if arm in DITHERED else
+                           "today's y, z computed beside (fresh A B^T); not credit" if arm in BESIDE else "today's y"})
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -73,14 +76,15 @@ def main() -> int:
             if not xs:
                 continue
             c = f"C{i % 10}"
-            ax.plot([x for x, _ in xs], [y for _, y in xs], "-o", color=c, label=arm,
+            ax.plot([x for x, _ in xs], [y for _, y in xs], "-x" if arm in BESIDE else "-o", color=c,
+                    label=arm + (" (beside, not credit)" if arm in BESIDE else ""),
                     markerfacecolor="none" if arm in DITHERED else c)
         ax.set_yscale("log")
         ax.set_xlabel("row (iteration)")
         ax.set_title(title)
         ax.grid(True, which="both", alpha=0.3)
     axes[0].legend(fontsize=8)
-    fig.suptitle("Dither one-stream on the RTX PRO 6000, int8 Llama-3.1-8B, T = 64 (hollow: serves the dithered product)")
+    fig.suptitle("Dither one-stream on the RTX PRO 6000, int8 Llama-3.1-8B, T = 64 (hollow: serves the dithered product; x: not credit)")
     fig.tight_layout()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
