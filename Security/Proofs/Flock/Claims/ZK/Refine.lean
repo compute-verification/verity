@@ -9,8 +9,8 @@ the deferred release releases a frame, it is that prover's message. That prover 
 coins they open (`RefSession.swMsgAt`: `enc` before the last coin, then `fin` or `off`), and `abort` from the first
 opening that fails (`strat_eval_cons`).
 
-* **The coin stops** (`stopRefine_of_sessionStops`): `StopRefine` holds once the session's `abort` is the frame's stop and
-  its message is the stop after every history whose openings pass and whose last coins the frame refuses
+* **The coin stops** (`stopRefine_of_sessionStops`): `StopRefine` holds once the session's `abort` is the frame's stop
+  and its message is the stop after every history whose openings pass and whose last coins the frame refuses
   (`SessionStops`). A session whose messages are the frame's releases (`SessionFrames`) has the second, by
   `LeanRelease.release_of_refusesCoins` (`sessionStops_of_frames`). At the empty history the frame refuses no coins
   (`refusesCoins_nil`), and the prover's message there is its `Hello`.
@@ -21,14 +21,14 @@ opening that fails (`strat_eval_cons`).
   So `LiveRefine` and `FillRefine` hold only for a transport whose coins the frame refuses after any opening that check
   refuses, with `abort` the stop.
 * **The coin stops read no tape** (`LeanRelease.refusesCoins_tape`): the frame's refusal of the coins (`Masker.answer`)
-  reads its configuration's layout and absorbed order alone (`answer_congr`), never the pads or the root, so it is the
-  same on every tape. A session, whose round encoding sees the coins and the cut view but not the tape, can stop where
-  the frame does.
+  reads its configuration's layout and absorbed order alone (`answer_congr`), never the pads or the root, and a rep's
+  configuration takes both from its layout (`answer_ofDraws`), so it is the same on every tape. A session, whose round
+  encoding sees the coins and the cut view but not the tape, can stop where the frame does.
 * **The session with the frame's stops** (`RefSession.withStops`): `S` with every message `stop` at the coins and round
   where `Rf` says, and its `abort` the stop. It keeps `S`'s tables, witnesses, dummy and tape, so `Tables`, `Complete`,
-  `DummyReg` and `TapeOK` carry over as they are, and `Causal` and `SwCausal` where `Rf` reads the coins before its round
-  only (`StopsCausal`). Where its stops are the frame's refusals (`StopsAt`: on every history whose openings pass, `Rf`
-  at the coins they open is `refusesCoins`), `StopRefine` holds at its switched prover
+  `DummyReg` and `TapeOK` carry over as they are, and `Causal` and `SwCausal` where `Rf` reads the coins before its
+  round only (`StopsCausal`). Where its stops are the frame's refusals (`StopsAt`: on every history whose openings pass,
+  `Rf` at the coins they open is `refusesCoins`), `StopRefine` holds at its switched prover
   (`LeanRelease.stopRefine_withStops`). `LiveRefine` and `FillRefine` hold there from two more each
   (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`): the transport makes the frame refuse after any opening
   that fails (`OpeningsRefused`, today Rust's), and the frame's release of each worker round that passed
@@ -84,7 +84,8 @@ theorem withStops_swCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) �
   exact congrArg (fun m => if Rf x c' i = true then stop else m) (hc x w ν ω p c c' i h)
 
 open Classical in
-/-- **Where the rule stops the coins, the session's switched message is the stop**, before the last coin and after it. -/
+/-- **Where the rule stops the coins, the session's switched message is the stop**, before the last coin and after
+it. -/
 theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
     (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
@@ -92,15 +93,15 @@ theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
   by_cases h : cs.length < refK x
   · rw [Nat.min_eq_left h.le] at hR
     show (if cs.length < refK x then (if Rf x (S.pad cs) cs.length = true then stop else _) else _) = stop
-    rw [if_pos h, if_pos hR]
+    rw [ite_eq_left h, ite_eq_left hR]
   · rw [Nat.min_eq_right (Nat.le_of_not_lt h)] at hR
     show (if cs.length < refK x then _ else if S.Admits x (S.pad cs) then
         (if Rf x (S.pad cs) (refK x) = true then stop else _) else
         (if Rf x (S.pad cs) (refK x) = true then stop else _)) = stop
-    rw [if_neg h]
+    rw [ite_eq_right h]
     by_cases hA : S.Admits x (S.pad cs)
-    · rw [if_pos hA, if_pos hR]
-    · rw [if_neg hA, if_pos hR]
+    · rw [ite_eq_left hA, ite_eq_left hR]
+    · rw [ite_eq_right hA, ite_eq_left hR]
 
 open Classical in
 /-- **Where the rule doesn't stop the coins, the session's switched message is `S`'s.** -/
@@ -115,7 +116,7 @@ theorem swMsgAt_withStops_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
         (if Rf x (S.pad cs) cs.length = true then stop
           else S.enc x (S.pad cs) cs.length (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t)) else _) =
       (if cs.length < refK x then S.enc x (S.pad cs) cs.length (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t) else _)
-    rw [if_pos h, if_pos h, hR, if_neg Bool.false_ne_true]
+    rw [ite_eq_left h, ite_eq_left h, hR, ite_eq_right Bool.false_ne_true]
   · rw [Nat.min_eq_right (Nat.le_of_not_lt h)] at hR
     show (if cs.length < refK x then _ else if S.Admits x (S.pad cs) then
         (if Rf x (S.pad cs) (refK x) = true then stop
@@ -125,20 +126,25 @@ theorem swMsgAt_withStops_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
       (if cs.length < refK x then _ else if S.Admits x (S.pad cs) then
         S.fin x (S.pad cs) (S.swViewsAt x (S.pad cs) wt (v (S.pad cs)) t)
         else S.off x (S.pad cs) (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t))
-    rw [if_neg h, if_neg h, hR, if_neg Bool.false_ne_true, if_neg Bool.false_ne_true]
+    rw [ite_eq_right h, ite_eq_right h, hR, ite_eq_right Bool.false_ne_true, ite_eq_right Bool.false_ne_true]
 
 end Claims.ZKMal.RefSession
 
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-open _root_.Flock.Firewall.Frame (Cfg Masker)
+open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot)
 
 /-- **The frame's coin refusal reads its configuration's layout and absorbed order alone**, never its pads or root. -/
 theorem answer_congr {c c' : Cfg} (s : Masker) (cs : Array _root_.Flock.F128) (hl : c.lay = c'.lay)
     (ho : c.order = c'.order) : s.answer c cs = s.answer c' cs := by
   unfold Masker.answer
   rw [hl, ho]
+
+/-- **At a rep's configuration the frame's coin refusal reads its layout alone**, whatever its draws and mask slot. -/
+theorem answer_ofDraws (s : Masker) (cs : Array _root_.Flock.F128) (l : _root_.Flock.Zk.PadLayout) (d d' : Draws)
+    (m m' : Option MaskSlot) : s.answer (Cfg.ofDraws l d m) cs = s.answer (Cfg.ofDraws l d' m') cs :=
+  answer_congr s cs rfl rfl
 
 namespace LeanRelease
 
@@ -217,7 +223,8 @@ theorem release_eq_abort_of_liveRefine (S : RefSession) (vs : S.SwVals)
   have he := hL (ν, t) κ ((m₀, ρ₀) :: ops) v hl hr hv
   have hm : ((strat ((S.swP vs).hello x ν) (S.swP vs).abort (S.swP vs).dec ((S.swP vs).chk x ν)
       ((S.swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = S.abort := by
-    rw [strat_eval_cons, hok] <;> rfl
+    rw [strat_eval_cons, hok]
+    rfl
   exact he.symm.trans hm
 
 /-- The frame's taking of the coins is the same on every tape. -/
@@ -228,7 +235,7 @@ theorem answered_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) 
   | none => rfl
   | some p =>
     obtain ⟨_, cs⟩ := p
-    exact answer_congr _ _ (by rfl) (by rfl)
+    exact answer_ofDraws _ _ _ _ _ _ _
 
 /-- **The coin stops read no tape**: the frame refuses the coins after `h` on every tape or on none. -/
 theorem refusesCoins_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg)) :
@@ -300,7 +307,7 @@ theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
       exact (S.swMsgAt_withStops_go Rf L.stop x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
         ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans (hE.2 ν t κ m₀ ρ₀ ops v hl hok hr hv).symm
     next hok =>
-      have h1 := hO ν t m₀ ρ₀ ops (by simpa using hok)
+      have h1 := hO ν t m₀ ρ₀ ops (eq_false_of_ne_true hok)
       cases h1.symm.trans hr
 
 /-- **The stand-in rounds' bytes**, the per-round byte equality at the firewall's scheduled rounds: below the last round
@@ -341,7 +348,7 @@ theorem fillRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
       exact (S.swMsgAt_withStops_go Rf L.stop x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
         ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans (hE.2 ν t κ m₀ ρ₀ ops hlt hl hok hr).symm
     next hok =>
-      have h1 := hO ν t m₀ ρ₀ ops (by simpa using hok)
+      have h1 := hO ν t m₀ ρ₀ ops (eq_false_of_ne_true hok)
       cases h1.symm.trans hr
 
 end LeanRelease
