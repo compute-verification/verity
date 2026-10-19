@@ -44,6 +44,7 @@ import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.Claims.ZK.Round1Enc
 import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
+import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -242,6 +243,9 @@ import Proofs.Flock.Claims.ZK.Stop
   `64 + i` are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace whose bits are the
   model's tables (`Composed.honestAt_r1ab`, `Composed.honestAt_r1c`, from `Replay.Zc.r1ab_eq`); a rep's outer coin is
   read at the round after its first (`Masked.outerAt_eq`).
+* `SimZerocheck`: `SimPiop`'s zerocheck: two runs in lockstep (`FlockComplete.GoAlike`), `asksCut`'s squeezes, and the
+  cut's zerocheck against the session's where the cut's masked values are the plain prover's plus their pads
+  (`FlockComplete.zerocheckCut_alike`).
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
