@@ -20,10 +20,12 @@ and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1
   integer UE4M3 block scale `m`, a doubled E2M1 level `q` and a coin), or the record's Dither int8 activation (`⌊v⌋`
   and its coin, served uncentred). `Entry.int` is what the int8 MMA reads, `Entry.offset` the centring (`½`, `½`,
   `0`) and `Entry.served = Entry.int − Entry.offset` the value the served model multiplies.
-* `Grids`, `Grids.On`: a device's g1 grids (sm_120 on H1: activations to 120, weights to 60, block scales to 5; B200
-  and H200 on Dither-2S: 120, 120 and 10) and an entry on them at its side. `Grids.On` is the public property of a
-  proof unit's Program that "the work was an FP8 model's" (or an FP4-weight model's): every operand entry is a level
-  of its format's grid plus a coin.
+* `Grids`, `Grids.On`: a device's g1 grids (sm_120: activations to 120, weights to 60, block scales to 5; B200 and
+  H200 on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin.
+  sm_120's 60 and 5 are FPX-DESIGN's, derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1
+  (co32c-u16, weights to ±110), so on H1 they are conservative; g1's values fit both (RT2-FP-2,
+  note:20261019T1100Z-draft-rt2-fp). No Program checks `Grids.On` and no guarantee reads it: it describes what an
+  honest g1 prover commits.
 -/
 
 namespace Pouw.FpG1
@@ -109,8 +111,9 @@ structure Grids where
 
 namespace Grids
 
-/-- **sm_120 (RTX PRO 6000) on H1**: activations on E4M3's integers to 120, weights to 60 and W4A8-g1's block scales to
-5, so that a weight moved by its coin stays in H1's 7-bit weights (`steps.py`'s `e4m3i60` and `nvi5`). -/
+/-- **sm_120 (RTX PRO 6000)**: activations on E4M3's integers to 120, weights to 60 and W4A8-g1's block scales to 5
+(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. FPX-DESIGN
+derived these for Dither-C's co32c; on H1 (co32c-u16, weights to ±110) they are conservative (RT2-FP-2). -/
 def sm120 : Grids := ⟨120, 60, 5⟩
 
 /-- **B200 and H200 on Dither-2S**: both sides on E4M3's integers to 120 and W4A8-g1's block scales to 10, so that an

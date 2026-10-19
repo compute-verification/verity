@@ -11,14 +11,30 @@ The arithmetic behind `Definitions.Pouw.FpG1`:
   even (`e4m3Nat_even`), so above 16 an FP8-g1 entry's low bit is its coin (`fp8_int_emod_two`); the RN encoder lands
   on its grid (`rn_mem`, `fp8_on`);
 * the ranges: an entry on a device's g1 grids, its coin added, is an s8 value, an activation in `[−126, 127]` and a
-  weight in `[−60, 61]` on sm_120 (inside H1's 7-bit weights) and `[−120, 121]` on B200 and H200 (`sm120_act_int`,
-  `sm120_wt_int`, `dc_act_int`, `dc_wt_int`);
+  weight in `[−60, 61]` on sm_120 (inside co32c's 7-bit weights `[−63, 63]`, and so inside H1's, to ±110) and
+  `[−120, 121]` on B200 and H200 (`sm120_act_int`, `sm120_wt_int`, `sm120_wt_noise`, `dc_act_int`, `dc_wt_int`);
 * the GEMM: the centred product is the integer GEMM's exact product less the coin's two rank-one terms
   (`centred_eq`), so the served model's exact product is the scales times that (`model_eq`), and four times the
   centred product is the epilogue's integer (`epilogue_eq`, `model_eq_epilogue`);
 * int32: for `k ≤ 32,768` and operands in `[−127, 127]` and `[−121, 121]` the s32 accumulator and the int32 epilogue
   never wrap (`epilogueW_eq`), so on a device's g1 grids the kernel's int32 epilogue, times `s_a(i)·s_w(j)/4`, is the
   served model's exact product (`model_eq_epilogueW`, `sm120_exact`, `dc_exact`).
+
+No guarantee is stated for g1, because g1's windows are the record's. The record's headlines
+(`Models.Accounting.Guarantees.Headline`) quantify over every value type and every proof layer, and their conclusion
+reads neither, so they cover every window a g1 prover commits by their own quantifier over committed values. What
+these lemmas add is that g1's transcript is the record's: every entry plus its coin is an s8 value inside the record's
+operand ranges, and the int8 GEMM the record's MMA computes is the served model's exact product up to the coin's two
+rank-one terms. The record's premises read at g1's values as they do at any other (RT2-FP-13,
+note:20261019T1100Z-draft-rt2-fp):
+
+* the luck premises (`OperandHMu`, `ReceiptLuckAt`, `WholeLuckAt`) are Props of the receipt game over every level a
+  prover commits, and nothing checks g1's grids, so a g1 prover is one of the record's provers;
+* the machine premises read no operand values: A3 (`SheetTensor`) and A6 (`SheetWords`) price every MMA form, QMMA
+  included, per instruction and for any data, as the measured headline's `FacetCeilings` does at its measured rates,
+  and A7's verdicts on the units outside that menu read no alphabet. That is why they hold at g1's values, not
+  that `isa_escape.py`'s dense alphabets contain g1's entries: its decomposition verdicts are worst cases over an
+  alphabet, which don't carry to a subset of it.
 -/
 
 namespace Pouw.FpG1
@@ -137,7 +153,8 @@ theorem wt_int_of_on {g : Grids} {W : ℕ} (hw : g.wt ≤ W) (hs : 12 * g.scale 
 theorem sm120_act_int {e : Entry} (h : Grids.sm120.On .act e) : -126 ≤ e.int ∧ e.int ≤ 127 :=
   act_int_of_on (by decide) h
 
-/-- On sm_120 a g1 weight, its coin added, is in `[−60, 61]`, inside H1's 7-bit weights `[−63, 63]`. -/
+/-- On sm_120 a g1 weight, its coin added, is in `[−60, 61]`: inside co32c's 7-bit weights `[−63, 63]`
+(`sm120_wt_noise`), and so inside H1's (co32c-u16, to ±110). -/
 theorem sm120_wt_int {e : Entry} (h : Grids.sm120.On .wt e) : -60 ≤ e.int ∧ e.int ≤ 61 := by
   obtain ⟨h1, h2⟩ := wt_int_of_on (W := 60) (by decide) (by decide) h
   exact ⟨by omega, by omega⟩
