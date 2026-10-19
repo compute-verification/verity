@@ -136,6 +136,18 @@ def test_launch_request_admits_reserves_refuses_by_name_and_the_runner_releases(
     _wait(machine["root"] / "runs" / "after")
 
 
+def test_the_workload_reads_its_reservation_as_RESEARCH_RUN_MEM_GB(machine, tmp_path):
+    """A reservation sets no memory.max, so suites.py sizing its workers from the cgroup saw the whole node (CI-99, 19 Oct)."""
+    seen = tmp_path / "seen"
+    p = _request(machine, "sized", 12.5)
+    req = json.loads(p.read_text())
+    req["command"] = [PY, "-c", f"import os; open({str(seen)!r}, 'w').write(os.environ.get('RESEARCH_RUN_MEM_GB', 'unset'))"]
+    p.write_text(json.dumps(req))
+    assert remote.launch_request(p)["started"]
+    assert _wait(machine["root"] / "runs" / "sized")["state"] == "done"
+    assert seen.read_text() == "12.5"
+
+
 def test_mem_wait_admits_when_memory_frees_up_within_the_wait(machine, monkeypatch):
     clock = FakeClock()
     monkeypatch.setattr(M, "time", clock.module)
