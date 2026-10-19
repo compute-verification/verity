@@ -94,22 +94,24 @@ end Walk
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The masked scope at a good case**: one to `Tags.MAX_TABLES` tables, the spec names one per statement, and every
+/-- **The masked scope at a statement in scope that sets up**: one to `Tags.MAX_TABLES` tables, the spec names one per
+statement, and every
 table is of `25 ≤ m ≤ 35` (the `--zk` scope's `mMin`, table 0's bound, and every table at table 0's `m`) and commits
 with `hm96-sha512/v1` (the scope check's leaf scheme). -/
-theorem Case.tables (c : Case H rel) :
-    0 < c.sts.size ∧ c.sts.size ≤ Tags.MAX_TABLES ∧ c.spec.tables.size = c.sts.size ∧
-      ∀ j (hj : j < c.sts.size), 25 ≤ c.sts[j].m ∧ c.sts[j].m ≤ 35 ∧ c.sts[j].merkle = MerkleScheme.hm96Sha512 := by
+theorem tables_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hscope : Claims.Flock.Scope (deployZk rel) x) (hsetup : setupOf true x = some (s, spec, sts)) :
+    0 < sts.size ∧ sts.size ≤ Tags.MAX_TABLES ∧ spec.tables.size = sts.size ∧
+      ∀ j (hj : j < sts.size), 25 ≤ sts[j].m ∧ sts[j].m ≤ 35 ∧ sts[j].merkle = MerkleScheme.hm96Sha512 := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk rel) rel (readOf true) rfl
-    (fun _ _ h => readOf_zk h) c.x).1 c.scope
-  have hi := (setupOf_some c.setup).1
-  have hzk : p.zk = true := readOf_zk (x := c.x) (by
+    (fun _ _ h => readOf_zk h) x).1 hscope
+  have hi := (setupOf_some hsetup).1
+  have hzk : p.zk = true := readOf_zk (x := x) (by
     unfold Readable.parseBytes at hp
     obtain ⟨r, hr, hrp⟩ := Option.bind_eq_some_iff.1 hp
     rw [hr, ← Readable.toRead_of_parse hrp])
   unfold Readable.parseBytes readOf at hp
   rw [hi] at hp
-  have ht := Readable.toRead_of_parse (r := c.s.read) hp
+  have ht := Readable.toRead_of_parse (r := s.read) hp
   have htab := Readable.tablesOf_of_parses (Readable.parses_of_parse hp)
   obtain ⟨hc, hsz⟩ := (Readable.scope_ok_iff p).1 hsc
   have hR := ((Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hc).1
@@ -125,9 +127,9 @@ theorem Case.tables (c : Case H rel) :
     · exact h
     · cases hzk.symm.trans h.1
   obtain ⟨spec', hset'⟩ := Readable.setup_of_tablesOf htab
-  have hset := Ins.setup_read (setupOf_some c.setup).2
+  have hset := Ins.setup_read (setupOf_some hsetup).2
   rw [ht] at hset'
-  have hpe : p.sts = c.sts := by
+  have hpe : p.sts = sts := by
     have := hset'.symm.trans hset
     simp only [Except.ok.injEq, Prod.mk.injEq] at this
     exact this.2
@@ -139,21 +141,27 @@ theorem Case.tables (c : Case H rel) :
   obtain ⟨hpos, hmax, hnames⟩ := setupTables_size hset2
   obtain ⟨-, hall⟩ := HiddenExec.setupTables_setupOne hset2
   obtain ⟨st0, h0, -, -, -, -, -, hm35, -⟩ := Readable.table0 htab hR.2.1 hpi
-  have h0' : c.sts[0] = st0 := by
+  have h0' : sts[0] = st0 := by
     rw [Array.getElem?_eq_getElem hpos] at h0
     exact Option.some.inj h0
   refine ⟨hpos, hmax, hnames, fun j hj => ⟨?_, ?_, ?_⟩⟩
-  · have := (Readable.sizesOk_iff _ _).1 hsz c.sts[j].m (by
+  · have := (Readable.sizesOk_iff _ _).1 hsz sts[j].m (by
       simp only [Array.map_map, Array.mem_map]
-      exact ⟨c.sts[j], Array.getElem_mem hj, rfl⟩)
+      exact ⟨sts[j], Array.getElem_mem hj, rfl⟩)
     rw [hzk] at this
     simpa [ProvedScope.mMin] using this
   · have hf := (Readable.tables_fit htab hR.2.1 hpi hj).1
-    have : c.sts[j].m = c.sts[0].m := hf
+    have : sts[j].m = sts[0].m := hf
     rw [this, h0']
     exact hm35
   · obtain ⟨d, hd, -⟩ := hall j hj
     exact HiddenExec.setupOne_tagsAt_hm96 hl hd
+
+/-- **The masked scope at a good case** (`tables_of_setup`). -/
+theorem Case.tables (c : Case H rel) :
+    0 < c.sts.size ∧ c.sts.size ≤ Tags.MAX_TABLES ∧ c.spec.tables.size = c.sts.size ∧
+      ∀ j (hj : j < c.sts.size), 25 ≤ c.sts[j].m ∧ c.sts[j].m ≤ 35 ∧ c.sts[j].merkle = MerkleScheme.hm96Sha512 :=
+  tables_of_setup c.scope c.setup
 
 /-- **Every table a masked session sets up has `N = 2^D ≥ 1024` mask words** (`MaskRank.maskWords_ge`): `verify --zk`'s
 setup passes every table's `Zk.shapeOk` (`setup_shapeOk`), which refuses a mask slot of fewer than `576` words. -/
