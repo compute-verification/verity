@@ -14,13 +14,18 @@ the Lean floor has this work. Its cost a set-warp on DS-120 (every class 1 on DS
 - merged by issued instructions: each lane's 16 state words leave its registers, and no merging class takes more than 2
   a lane a slot (LOP3: 3 inputs to 1; REDG.E.XOR.64: a word pair into memory; REDUX: 1 a lane), so at least 8 slots,
   which 6 LOP3 (each part 8 to 2 a lane) and 2 REDG.E.XOR.64 into one zeroed pair reach;
-- moved out of the registers and merged off the issue path (STSM_X4 is issue only on DS-120, as are the TMA reductions
-  UTMA*/TMAred512): no class takes more than 4 words a lane out of the registers, so at least 4 slots.
+- moved out of the registers and merged off the issue path (stores are issue only on DS-120, as are the TMA reductions
+  UTMA*/TMAred512, which a batch of sets can share): no class takes more than 8 words a lane out of the registers
+  (STG.E.ENL2.256), so at least 2 slots.
 
 On sm_120a (`cpw_sass.cu`, r20261019-115006-35c0) fx1 is 2 IMAD, 1 LOP3 and 1 LEA.HI a word, REDG.E.XOR.64 and
 STSM.16.M88.4 are one instruction each, and a 64-bit XOR into shared memory is a CAS loop (ATOMS.CAST.SPIN.64), so the
 shared-atomic route is no cheaper. cpw_sass's pair2 (mode 6, r20261019-121345-6849) is the issue-merged route, 6 LOP3
-and 2 REDG.E.XOR.64 a set-warp, bit-exact.
+and 2 REDG.E.XOR.64 a set-warp, bit-exact. st256 (mode 7, r20261019-123310-288b) takes a lane's 16 words out in two
+STG.E.ENL2.256, and pair64 (mode 8) shows ptxas has no 64-bit logic op: its 64-bit XORs are LOP3s.
+
+`priced` is the unfolded branch with the checkpoint in both the floor and ♭: it moves the bound only when ♭'s route
+costs what the floor's bound does.
 
 `main` prints the bound, the routes' slot counts and the floor each implies, and checks on `segment` that the 64-bit
 route (each lane's y XOR and z XOR as one word pair, XORed over lanes) is `warp_checkpoint` set by set.
@@ -55,8 +60,8 @@ LANES = 32
 #: state words a lane a slot a merging class takes out of the registers: LOP3 (3 inputs to 1), REDG.E.XOR.64 (a word
 #: pair into memory), REDUX.XOR (its lane's word)
 MERGES = {"LOP3": 2, "REDG.E.XOR.64": 2, "REDUX.XOR": 1}
-#: and a storing class (STSM_X4, STS.128: 4 words a lane)
-EGRESS = 4
+#: and a storing class (STG.E.ENL2.256: 8 words a lane; STSM_X4, STS.128: 4)
+EGRESS = 8
 
 
 def bound() -> dict:
@@ -81,7 +86,8 @@ def checkpoint() -> dict:
         "redux (8 LOP3, 2 REDUX, 1 STG)": to_one + 2 + 1,
         "shfl butterfly (8 LOP3, 10 SHFL, 10 LOP3, 1 STG)": to_one + 10 + 10 + 1,
         "pair2 (6 LOP3, 2 REDG.E.XOR.64 into one pair)": 6 + 2,
-        "egress (4 STSM_X4; TMA XOR tree amortized)": lane_words // EGRESS,
+        "egress (4 STSM_X4; TMA XOR tree amortized)": lane_words // 4,
+        "st256 (2 STG.E.ENL2.256; TMA XOR tree amortized)": lane_words // EGRESS,
     }
     lb_issue = -(-lane_words // max(MERGES.values()))
     lb_egress = -(-lane_words // EGRESS)
@@ -95,7 +101,20 @@ def checkpoint() -> dict:
         out[f"floor_{name}"] = f
         out[f"time_over_credit_{name}"] = f / b["B_flat"]
         out[f"fx1_must_save_{name}"] = (f - b["break_line"]) / float(NW * PHI_STAR)
+    pair2 = Fraction(routes["pair2 (6 LOP3, 2 REDG.E.XOR.64 into one pair)"], UNITS_A_SET)
+    out["eps_priced"] = {
+        "floor issue-merged, flat pair2": float(priced(Fraction(lb_issue, UNITS_A_SET), pair2)),
+        "floor egress, flat pair2": float(priced(Fraction(lb_egress, UNITS_A_SET), pair2)),
+        "floor egress, flat egress": float(priced(Fraction(lb_egress, UNITS_A_SET), Fraction(lb_egress, UNITS_A_SET))),
+    }
     return out
+
+
+def priced(floor_add: Fraction, flat_add: Fraction) -> Fraction:
+    """The unfolded branch with `floor_add` slots a unit on the floor and `flat_add` on ♭."""
+    B = sum(FLAT_WORDS.values()) + sum(FLAT_FOLD.values()) + sum(FLAT_SKIP.values()) + flat_add
+    Y = (NW * (W_STAR + PHI_STAR) + floor_add) / B
+    return 1 - Y * (1 - Fraction(41, CHECKS))
 
 
 def pair_route_is_warp_checkpoint(sets: int = 4, seed: int = 120) -> bool:
