@@ -6,7 +6,8 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
     python forms_gap.py --b1       RT-HOPPER-1/2: BGMMA_B1_N256 offered at split 8 (the least: t binary products separate
                                    at most 2^t values of an s8 operand) and 64 (bit planes); DS-90 prices it on issue alone
     python forms_gap.py --rs-fit   RT-HOPPER-1: RS offered at SS's joint coefficients times the H200's matched-pair ratio
-    python forms_gap.py --honest-true  RT-HOPPER-8: γ with honest timed by the loop that folds the wgmma's accumulators
+    python forms_gap.py --honest-true  RT-HOPPER-8: γ with honest timed by the loop that folds the wgmma's accumulators,
+                                   and RT-HOPPER-10: each loop at the toml's 122.41 / f and on the clock, 128.01 / f
     python forms_gap.py --fan-in   RT-HOPPER-2: ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
@@ -143,19 +144,26 @@ def rs_fit() -> None:
 # The loops that fold the wgmma's own accumulators, the plain GEMM's 122.41 over their tensor fraction: wgli_true_w2 in
 # r20261019-055823-616f (0.42158), and the fastest, wgli_db_w2 in r20261019-070001-df11 (0.45574)
 TRUE_LOOPS = (290.36, 268.60)
+# The toml's 122.41 is the model's plain GEMM on DC-90 (lanes beside the tensor, JI90_2), not a time on the clock: a MMA
+# alone takes 4 / 0.0312468 = 128.01 SMSP-cycles (census IGMMA_S8_N256 M), so a loop at fraction f takes 128.01 / f
+# (RT-HOPPER-10).
+PLAIN, ALONE = 122.41, 4 / 0.0312468
 
 
 def honest_true() -> None:
-    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators (RT-HOPPER-8)."""
+    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators (RT-HOPPER-8), each loop
+    at the toml's convention (122.41 / f) and on the clock (128.01 / f, RT-HOPPER-10)."""
     with tempfile.TemporaryDirectory() as t:
         d = scratch(Path(t), rs=False)
-        for cyc in (None, *TRUE_LOOPS):
-            if cyc:
-                p = d / "honest" / "dc90-licpw-redux-l32.toml"
-                p.write_text(re.sub(r"^cycles_per_mma = [0-9.]+", f"cycles_per_mma = {cyc}", p.read_text(), flags=re.M))
-            for vector, q in (("DS-90", 0.5), ("DC-90-ri", 1.22)):
-                r = eps(d, vector, q)
-                print(line(f"{vector} q*={q} honest {cyc or 204.25}", r) + f"  γ {r['gamma']:.4f}  honest {r['honest_cycles_per_mma']:.2f} ({r['honest_time']})")
+        p = d / "honest" / "dc90-licpw-redux-l32.toml"
+        src = p.read_text()
+        for plain in (204.25, *TRUE_LOOPS):
+            for label, cyc in (("122.41/f", plain), ("on the clock", ALONE * plain / PLAIN)):
+                p.write_text(re.sub(r"^cycles_per_mma = [0-9.]+", f"cycles_per_mma = {cyc:.4f}", src, flags=re.M))
+                for vector, q in (("DS-90", 0.5), ("DC-90-ri", 1.22)):
+                    r = eps(d, vector, q)
+                    print(line(f"{vector} q*={q} honest {cyc:.2f} ({label})", r)
+                          + f"  γ {r['gamma']:.4f}  honest {r['honest_cycles_per_mma']:.2f} ({r['honest_time']})")
 
 
 def b1_gap() -> None:
