@@ -41,12 +41,13 @@ whose `Pc8TileSide` K = 4096 circuit was c7aaeee4…).
 salted by epoch coins carries the challenger's commitment and its salt coin, opened after the weights' root; a pass
 recorded before epoch coins (read only in a replay) carries a beacon; either way the manifest's salt is the epoch's, and
 the window's context names the pass by its SHA-512. A certified window's verifier holds the network certifier's salt for
-the PoUW window its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`), and passes only a pass whose salt
-is `pouwSalt` of it (`salt.pouw_salt`), a v3 manifest; no other verifier passes a v3 manifest. The difftest's pass cases
-(below) hold honest certified windows and a mutation per certified refusal too. `drawCheck` holds the window's drawn
-units to the epoch's draw coin, opened after the registration: `Flock.Draw.subset` of the key it derives under the
-stream, the registration and its receipt. Both read the current coin version and, only in a replay of a recorded pass,
-the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the first 32 bytes of `tagged`).
+the PoUW window its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`) and the weights' root the certifier
+recorded before it drew that salt, and passes only a pass whose salt is `pouwSalt` of it (`salt.pouw_salt`) over those
+weights, a v3 manifest; no other verifier passes a v3 manifest. The difftest's pass cases (below) hold honest certified
+windows and a mutation per certified refusal too. `drawCheck` holds the window's drawn units to the epoch's draw coin,
+opened after the registration: `Flock.Draw.subset` of the key it derives under the stream, the registration and its
+receipt. Both read the current coin version and, only in a replay of a recorded pass, the e2e-service passes'
+(`epoch-coins/v2`, whose binding and weights' root keep the first 32 bytes of `tagged`).
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.

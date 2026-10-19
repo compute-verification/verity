@@ -43,7 +43,10 @@ Everything else is the protocol's (`audit`), the same for every scheme.
    64 bytes, from the certifier's 512-bit salt for p. The verifier reads that salt with `salt.revealed`: the certifier's
    `reveal(p, registration)`, which fails closed unless the proof service registered p (PoUW's reader, `salt.registered`,
    reads p off the served window's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
-   published. The form of `pouw_salt`, SHA-512(reveal ‖ u64be(p)), isn't settled.
+   published. The form of `pouw_salt`, SHA-512(reveal ‖ u64be(p)), isn't settled. That salt binds no weights, so a
+   certified window passes only a pass over the weights' root the certifier recorded before it drew p's salt, which the
+   verifier reads with `salt.committed`, on `reveal`'s conditions. Today's certifier records no weights, so every
+   certified window is refused until it does.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.
