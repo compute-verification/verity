@@ -367,7 +367,9 @@ import Proofs.Flock.Claims.ZK.Stop
 * `FrameMask`: what the frame releases of such a round. The frames come out with domains dropped and each value of a
   masked phase as `v + h_i` (`maskFrames`, `maskVal`; `roundFree_on`, `roundFree_off`), the pads' label and root
   following the zerocheck's label (`roundFree_zc`). The pads are taken in the absorbed order: every pad below `h_ab` but
-  `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under.
+  `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under. A device that sends
+  the masked prover's round with each pad added back, its plain values, has that round released (`roundFree_honest`),
+  under the masked prover's pads (`padAt_ofDraws_absPos`).
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).

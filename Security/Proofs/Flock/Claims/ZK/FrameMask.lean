@@ -19,13 +19,19 @@ folds over:
   inside a masked phase, or outside one, leaves as its masked frames and its squeeze. **The zerocheck's first round**
   (`roundFree_zc`, `label_zc`): its label starts the algebraic phase and is followed by the pads' label and their root,
   as `zerocheckPZk` absorbs them.
+* **An honest device's round** (`roundFree_honest`): the masked prover sends each value as `v' = v + h_i`, so the
+  device's plain value is `v' + h_i` (`unmaskFrames`), and the frame's release of the device's round is the masked
+  prover's round itself (`maskFrames_unmask`, characteristic 2). Its pads are the masked prover's: the frame's pad at
+  pad `j`'s absorbed position (`absPos`) is the draws' pad `j` (`padAt_ofDraws_absPos`), which on `tapeOfDraws` is the
+  masked prover's (`padsOf_tapeOfDraws`).
 -/
 
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
 open _root_.Flock.Transcript (header padded)
-open _root_.Flock.Firewall.Frame (Cfg Masker absorbed nLig isLabel labelFrame bytesFrame roundFree LABEL_PCS LABEL_ZC SKIP)
+open _root_.Flock.Firewall.Frame
+  (Cfg Masker absorbed nLig isLabel labelFrame bytesFrame roundFree LABEL_PCS LABEL_ZC SKIP)
 open FlockSoundness.Refine (Frame encs colBytes)
 
 /-! ## The absorbed order -/
@@ -105,16 +111,16 @@ theorem absorbed_piop (l : _root_.Flock.Zk.PadLayout) (R : List ℕ) :
   omega
 
 /-- **The frame's absorbed order is every pad below `h_ab` but `final_c`'s, ascending**: the zerocheck's `64 + 64`
-skip values, its multilinear rounds and `final_a`, `final_b` (pads `0, …, fb`), then the lincheck's rounds, `z_partial`
-and, with a masked level 0, its OOD values, lane-round messages and the pair's sums (pads `fc + 1, …`). -/
+skip values, its multilinear rounds and `final_a`, `final_b` (pads `0, …, fb`), then the lincheck's rounds,
+`z_partial` and, with a masked level 0, its OOD values, lane-round messages and the pair's sums (pads `fc + 1, …`). -/
 theorem absorbed_toList (l : _root_.Flock.Zk.PadLayout) :
     (absorbed l).toList = List.range (l.fa + 2) ++ List.range' (l.fa + 3) (2 * l.nLc + 64 + nLig l) := by
   unfold absorbed
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.forIn_pure_yield_eq_foldl,
     SKIP, pure_bind, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
   by_cases hk : l.k0 > 0
-  · simp only [hk, ↓reduceIte, Id.run_pure, Array.toList_append, foldl_push_toList, foldl_push2_toList, foldl_nest_toList,
-      Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
+  · simp only [hk, ↓reduceIte, Id.run_pure, Array.toList_append, foldl_push_toList, foldl_push2_toList,
+      foldl_nest_toList, Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
     have hz : l.zp 64 = l.fa + 3 + (2 * l.nLc + 64) := by
       simp only [_root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc, _root_.Flock.Zk.PadLayout.fc]; omega
     have h7 : List.map l.lgOod (List.range' 0 l.nOod0) = List.range' (l.zp 64) l.nOod0 :=
@@ -172,7 +178,8 @@ theorem ofBytes_h_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) :
   simp [_root_.Flock.Firewall.Frame.Draws.ofBytes, _root_.Flock.Firewall.Frame.words]
 
 /-- **A rep's configuration masks under its draws' pads**: each pad of its order is among its draws'. -/
-theorem ofDraws_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
+theorem ofDraws_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
+    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) :
     ∀ p, p < (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).order.size →
       (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).order[p]! <
         (Cfg.ofDraws l (_root_.Flock.Firewall.Frame.Draws.ofBytes l b) m).h.size := by
@@ -186,7 +193,8 @@ theorem ofDraws_order (l : _root_.Flock.Zk.PadLayout) (b : ByteArray) (m : Optio
 /-- The pad of absorbed value `p`. -/
 def padAt (c : Cfg) (p : ℕ) : F128 := c.h[c.order[p]!]!
 
-/-- Absorbed value `p`, `v`, as the frame releases it: `v + h_i`, or the pad alone in a stopped rep's algebraic phase. -/
+/-- Absorbed value `p`, `v`, as the frame releases it: `v + h_i`, or the pad alone in a stopped rep's algebraic
+phase. -/
 def maskVal (c : Cfg) (st : Bool) (p : ℕ) (v : F128) : F128 :=
   (if (st && decide (p < c.nPiop)) = true then 0 else v) + padAt c p
 
@@ -201,7 +209,8 @@ def maskVals (g : ℕ → F128 → F128) : ℕ → List F128 → List F128
   | _, [] => []
   | p, v :: vs => g p v :: maskVals g (p + 1) vs
 
-theorem maskVals_length (g : ℕ → F128 → F128) : ∀ (p : ℕ) (vs : List F128), (maskVals g p vs).length = vs.length
+theorem maskVals_length (g : ℕ → F128 → F128) :
+    ∀ (p : ℕ) (vs : List F128), (maskVals g p vs).length = vs.length
   | _, [] => rfl
   | p, _ :: vs => by simp [maskVals, maskVals_length g (p + 1) vs]
 
@@ -286,7 +295,8 @@ theorem foldlM_absorb1_on (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]
       rw [absorb_on c s v hon (by omega) (hc _ (by omega))]
       rfl
     rw [ha]
-    obtain ⟨r, hr, h1, h2⟩ := foldlM_absorb1_on c hc vs { s with pos := s.pos + 1 } _ _ (q + 16) hon (by simp; omega)
+    obtain ⟨r, hr, h1, h2⟩ :=
+      foldlM_absorb1_on c hc vs { s with pos := s.pos + 1 } _ _ (q + 16) hon (by simp; omega)
     refine ⟨r, hr, ?_, ?_⟩
     · rw [h1]; simp only [List.length_cons]; congr 1; omega
     · rw [h2, pushBytes_data]
@@ -294,7 +304,8 @@ theorem foldlM_absorb1_on (c : Cfg) (hc : ∀ p, p < c.order.size → c.order[p]
 
 theorem foldlM_absorb1_off (c : Cfg) :
     ∀ (vs : List F128) (s : Masker) (o : ByteArray) (fr : Array ℕ) (q : ℕ), s.on = false →
-      ∃ r, vs.foldlM (absorb1 c) (s, o, fr, q) = .ok r ∧ r.1 = s ∧ r.2.1.data.toList = o.data.toList ++ colBytes vs
+      ∃ r, vs.foldlM (absorb1 c) (s, o, fr, q) = .ok r ∧ r.1 = s ∧
+        r.2.1.data.toList = o.data.toList ++ colBytes vs
   | [], s, o, fr, q, _ => ⟨(s, o, fr, q), rfl, rfl, by simp [colBytes]⟩
   | v :: vs, s, o, fr, q, hon => by
     rw [List.foldlM_cons]
@@ -530,5 +541,162 @@ theorem roundFree_zc (c : Cfg) (s : Masker) (pre post : List Frame) (k : UInt8) 
     rfl
   · rw [data_append', h2₂, sq_enc, data_append', h2₁]
     simp [labelFrame_data, bytesFrame_data, encs]
+
+/-! ## An honest device's round -/
+
+/-- **A pad added twice cancels** (GF(2^128) has characteristic 2). -/
+theorem add_pad_pad (v x : F128) : v + x + x = v := by
+  obtain ⟨a, b⟩ := v
+  obtain ⟨c, d⟩ := x
+  show F128.mk (a ^^^ c ^^^ c) (b ^^^ d ^^^ d) = F128.mk a b
+  rw [UInt64.xor_assoc, UInt64.xor_self, UInt64.xor_zero, UInt64.xor_assoc, UInt64.xor_self, UInt64.xor_zero]
+
+/-- A frame other than a domain. -/
+def noDom : Frame → Prop
+  | .dom _ => False
+  | _ => True
+
+/-- **The device's frames of a released round** `F`: each value of the masked phase with its pad added back, the
+plain value the masked prover padded (`zerocheckPZk`'s `v' = v + h_i`, so `v = v' + h_i`). -/
+def unmaskFrames (c : Cfg) (p : ℕ) (F : List Frame) : List Frame := maskFrames (fun q v => v + padAt c q) p F
+
+theorem maskVals_unmask (c : Cfg) : ∀ (p : ℕ) (vs : List F128),
+    maskVals (maskVal c false) p (maskVals (fun q v => v + padAt c q) p vs) = vs
+  | _, [] => rfl
+  | p, v :: vs => by
+    simp only [maskVals, maskVal, Bool.false_and, Bool.false_eq_true, ↓reduceIte, add_pad_pad,
+      maskVals_unmask c (p + 1) vs]
+
+theorem maskFrames_unmask (c : Cfg) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, noDom f) →
+    maskFrames (maskVal c false) p (unmaskFrames c p F) = F
+  | _, [], _ => rfl
+  | p, f :: F, hd => by
+    have hd' : ∀ g ∈ F, noDom g := fun g hg => hd g (List.mem_cons_of_mem _ hg)
+    cases f with
+    | dom b => exact absurd (hd _ List.mem_cons_self) id
+    | label b => exact congrArg (List.cons _) (maskFrames_unmask c p F hd')
+    | bytes b => exact congrArg (List.cons _) (maskFrames_unmask c p F hd')
+    | one v =>
+      simp only [unmaskFrames, maskFrames, maskVal, Bool.false_and, Bool.false_eq_true, ↓reduceIte, add_pad_pad]
+      exact congrArg (List.cons _) (maskFrames_unmask c (p + 1) F hd')
+    | vec vs =>
+      simp only [unmaskFrames, maskFrames, maskVals_length]
+      rw [maskVals_unmask]
+      exact congrArg (List.cons _) (maskFrames_unmask c (p + vs.length) F hd')
+    | sq k n => exact congrArg (List.cons _) (maskFrames_unmask c p F hd')
+
+theorem nAbs_maskFrames (g : ℕ → F128 → F128) : ∀ (p : ℕ) (F : List Frame), nAbs (maskFrames g p F) = nAbs F
+  | _, [] => rfl
+  | p, f :: F => by
+    cases f <;> simp only [maskFrames, nAbs, maskVals_length, nAbs_maskFrames g _ F]
+
+theorem maskFrames_mid (g : ℕ → F128 → F128) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, midFrame f) →
+    ∀ f ∈ maskFrames g p F, midFrame f
+  | _, [], _ => by simp [maskFrames]
+  | p, f :: F, hm => by
+    have hm' : ∀ g ∈ F, midFrame g := fun g hg => hm g (List.mem_cons_of_mem _ hg)
+    have h0 := hm f List.mem_cons_self
+    cases f with
+    | dom b => exact maskFrames_mid g p F hm'
+    | label b =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact h0
+      · exact maskFrames_mid g p F hm' x hx
+    | bytes b =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact h0
+      · exact maskFrames_mid g p F hm' x hx
+    | one v =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact trivial
+      · exact maskFrames_mid g _ F hm' x hx
+    | vec vs =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · show (maskVals g p vs).length < 2 ^ 64; rw [maskVals_length]; exact h0
+      · exact maskFrames_mid g _ F hm' x hx
+    | sq k n =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact h0
+      · exact maskFrames_mid g p F hm' x hx
+
+theorem maskFrames_plain (g : ℕ → F128 → F128) : ∀ (p : ℕ) (F : List Frame), (∀ f ∈ F, plainFrame f) →
+    ∀ f ∈ maskFrames g p F, plainFrame f
+  | _, [], _ => by simp [maskFrames]
+  | p, f :: F, hm => by
+    have hm' : ∀ g ∈ F, plainFrame g := fun g hg => hm g (List.mem_cons_of_mem _ hg)
+    have h0 := hm f List.mem_cons_self
+    cases f with
+    | dom b => exact maskFrames_plain g p F hm'
+    | label b =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact h0
+      · exact maskFrames_plain g p F hm' x hx
+    | bytes b =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact trivial
+      · exact maskFrames_plain g p F hm' x hx
+    | one v =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact trivial
+      · exact maskFrames_plain g _ F hm' x hx
+    | vec vs =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact trivial
+      · exact maskFrames_plain g _ F hm' x hx
+    | sq k n =>
+      intro x hx; simp only [maskFrames, List.mem_cons] at hx
+      rcases hx with rfl | hx
+      · exact h0
+      · exact maskFrames_plain g p F hm' x hx
+
+/-- **An honest device's round inside the algebraic phase leaves as the masked prover's**: where the device sends the
+frames `F` of the masked prover's round with each value's pad added back (`unmaskFrames`, the plain values), a rep that
+has not stopped releases `F` itself, then the squeeze. -/
+theorem roundFree_honest (c : Cfg) (s : Masker) (F : List Frame) (k : UInt8) (n : ℕ)
+    (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size) (hon : s.on = true) (hst : s.stopped = false)
+    (hi : s.inner = none) (hm : ∀ f ∈ F, midFrame f) (hp : ∀ f ∈ F, plainFrame f) (hd : ∀ f ∈ F, noDom f)
+    (hk : k = 2 ∨ (k = 1 ∧ n = 1)) (h0 : ¬ (n = 0 ∧ k = 2)) (hn : n < 2 ^ 64)
+    (hb : s.pos + nAbs F ≤ c.order.size) :
+    ∃ out fr, roundFree c s (ByteArray.mk (encs (unmaskFrames c s.pos F) ++ (Frame.sq k n).enc).toArray) n =
+        .ok (out, { s with pos := s.pos + nAbs F, owed := some n }, fr) ∧
+      out.data.toList = encs F ++ (Frame.sq k n).enc := by
+  have hN : nAbs (unmaskFrames c s.pos F) = nAbs F := nAbs_maskFrames _ _ F
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_on c s (unmaskFrames c s.pos F) k n hc hon hi
+    (maskFrames_mid _ _ F hm) (maskFrames_plain _ _ F hp) hk h0 hn (by rw [hN]; exact hb)
+  rw [hN] at hr
+  refine ⟨out, fr, hr, ?_⟩
+  rw [ho, hst, maskFrames_unmask c s.pos F hd]
+
+/-! ## The masked prover's pads in the frame's order -/
+
+/-- The absorbed position of pad `j`: `j` up to `final_b`'s, then `j − 1` (`final_c`'s is never absorbed). -/
+def absPos (l : _root_.Flock.Zk.PadLayout) (j : ℕ) : ℕ := if j < l.fa + 2 then j else j - 1
+
+/-- **The frame's pad at pad `j`'s absorbed position is the draws' pad `j`**, for each pad the frame absorbs under:
+any below `h_ab` but `final_c`'s. So the pad the masked prover adds to a sent value at its layout index (`h[lay.r1ab
+i]`, `h[lay.lc j t]`, …) is the one the frame adds at that value's place in the absorbed order. -/
+theorem padAt_ofDraws_absPos (l : _root_.Flock.Zk.PadLayout) (d : _root_.Flock.Firewall.Frame.Draws)
+    (m : Option _root_.Flock.Firewall.Frame.MaskSlot) {j : ℕ} (hj : j ≠ l.fc)
+    (hlt : j < l.fa + 3 + (2 * l.nLc + 64 + nLig l)) :
+    absPos l j < (absorbed l).size ∧ padAt (Cfg.ofDraws l d m) (absPos l j) = d.h[j]! := by
+  have hfc : l.fc = l.fa + 2 := rfl
+  have hs : absPos l j < (absorbed l).size := by
+    rw [absorbed_size]; unfold absPos; split <;> omega
+  refine ⟨hs, ?_⟩
+  rw [padAt_ofDraws l d m hs]
+  unfold absPos
+  by_cases h : j < l.fa + 2
+  · simp [h]
+  · rw [ite_eq_right h, ite_eq_right (show ¬ j - 1 < l.fa + 2 by omega)]
+    congr 1; omega
 
 end Claims.ZKServer
