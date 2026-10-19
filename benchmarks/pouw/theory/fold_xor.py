@@ -51,13 +51,17 @@ What is shown, and how:
 - Not shown: any bound N ≥ 63, or N ≥ 4, over all programs.
 
 Run: `python fold_xor.py [--mutations] [--verdict PATH]`. Stdlib, numpy, exact_kit, `facet_break.loads` (the class
-map) and the machine model.
+map) and the machine model. The device check is `fold_xor.sh` (fold_xor.cu on sm_100a), and
+`python fold_xor.py --sass FILE` counts one XOR's SASS in its build by census class.
 """
 from __future__ import annotations
 
 import itertools
+import json
 import random
+import re
 import sys
+from collections import Counter
 from dataclasses import replace
 from math import comb, factorial, gcd
 from pathlib import Path
@@ -231,9 +235,37 @@ def combine_search(W: int, depth: int) -> int:
     return sum(finals(base + [r1, r2], 3) for r1 in step(base) for r2 in step(base + [r1]))
 
 
+# ---- the device build's SASS ---------------------------------------------------------------------------------------
+
+CHAINS = {8: "_Z5chainILi8EEvPKjS1_Pji", 16: "_Z5chainILi16EEvPKjS1_Pji"}
+_FUNC = re.compile(r"Function : (\S+)")
+_INSN = re.compile(r"^\s*/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)")
+
+
+def sass_mix(text: str) -> dict:
+    """One XOR's SASS mix in `fold_xor.sh`'s build: chain<16>'s opcodes less chain<8>'s, over 8, by census class and by
+    opcode (the chains' loads, store and exit cancel)."""
+    per, func = {}, None
+    for line in text.splitlines():
+        if (m := _FUNC.search(line)):
+            func = m.group(1)
+            per[func] = Counter()
+        elif func and (m := _INSN.match(line)):
+            per[func][m.group(1)] += 1
+    lo, hi = per[CHAINS[8]], per[CHAINS[16]]
+    ops = {op: (hi[op] - lo[op]) / 8 for op in sorted(set(lo) | set(hi)) if hi[op] != lo[op]}
+    classes = Counter()
+    for op, n in ops.items():
+        classes[class_of(op) or "unclassed"] += n
+    return {"per_xor_by_class": dict(classes), "per_xor_by_opcode": ops, "per_xor": sum(ops.values())}
+
+
 # ---- the checks ------------------------------------------------------------------------------------------------------
 
 def main() -> int:
+    if "--sass" in sys.argv:
+        print(json.dumps(sass_mix(Path(sys.argv[sys.argv.index("--sass") + 1]).read_text()), indent=1))
+        return 0
     ck = Checks()
     rng = random.Random(SEED)
 
