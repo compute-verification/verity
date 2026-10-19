@@ -318,7 +318,9 @@ every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epo
 `PouwCheck.epochSalt`), and a call's noise key reads that salt and its call index only, so a later window's noise can
 be computed once the salt is out; that work is spent after `release`, inside the interval, so it is counted work. A
 window timed from its own start after `release` under the same salt would leave what it spends from `release` to that
-start uncounted (`Properties.Served.spentIn_split`), and that reopens the precompute. -/
+start uncounted (`Properties.Served.spentIn_split`), and that reopens the precompute. For an actual circuit's run
+(`Accounting.Actual.timedRun`, whose `ts` is `CM_A`'s `tₛ`), `salted` says every window of the salt is costed in
+`CM_A` at the one `tₛ`. -/
 structure EpochTie {ι Q R S : Type} (L : Layout) (F : Form) (W : ℕ) (Cd : ℕ → Declared ι) (cls : ℕ → ℕ → Cls)
     (release : ℝ) (run : ℕ → Pouw.TimedRun Q R S) : Prop where
   tie : ∀ w, w < W → Tie L F (Cd w) (cls w)
