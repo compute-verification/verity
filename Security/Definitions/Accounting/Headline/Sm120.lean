@@ -14,8 +14,9 @@ file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
   Its machine reproduces every DS-120 coefficient.
 * `h1fx1`, `model`: H1 + fx1 (`dither-c-peel-fx1`) as a TS model on the sheet's machine: writer kinds the census's MMA
   classes (ω = m·n), the generic MMA (128) and the uniform `UNI` (1) and `UNI64` (2); the vector classes CUDA's lane
-  classes; fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word);
-  A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit of honest work (an IMMA.16832 at L = 32).
+  classes and the 64-bit ones (ALU64, CVT64, DMUL, IMADW, MOV64); fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions
+  a word) and alone on the uniform datapath (4 a word); A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit
+  of honest work (an IMMA.16832 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
   ε_skip's skippable work at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
 * `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½.
@@ -112,7 +113,8 @@ def h1fx1 : DesignData where
     (105, 1),  -- UNI
     (106, 2)  -- UNI64
   ]
-  vec := [13, 119, 18, 24, 0, 12, 121, 78, 65, 77]  -- FFMA, VIMNMX, HFMA2, IMAD, ALU, F2FS, XU, SHFL, NOROW, SEL
+  -- FFMA, VIMNMX, HFMA2, IMAD, ALU, F2FS, XU, SHFL, NOROW, SEL, ALU64, CVT64, DMUL, IMADW, MOV64
+  vec := [13, 119, 18, 24, 0, 12, 121, 78, 65, 77, 1, 9, 10, 25, 64]
   folds := [
     [(0, 1, 16), (24, 1, 16)],
     [(105, 4, 1)]]

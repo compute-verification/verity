@@ -12,14 +12,21 @@ exact: a census value or a TOML value read as its decimal, and eps_budget's ε_s
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most
 the family's headline. That bound is the larger of two branches (`Whole.headline_of_branches`): the folded one at w* and
-φ* at π*, p = 7/8, ln 2 < 0.6931471808 and ln(8/7) ≥ 1/8, and the unfolded one, a run that skips folds charged at the
-whole-unit luck ½ (`WholeLuckAt`), `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/S)`.
+φ* at π*, p = 7/8, ln 2 < 0.6931471808 and ln(8/7) ≥ 1/8 (`LN_P`), and the unfolded one, a run that skips folds charged
+at the whole-unit luck ½ (`WholeLuckAt`), `1 − (N_w w* + N_w φ*)/B_♭ · (1 − 41/S)`.
+
+The vector classes (`vec`, which A6's `SheetWords` and SCALAR-ROUTE sum over) are model.toml's `cuda` lane classes and
+the 64-bit lane classes it leaves out, ALU64, CVT64, DMUL, IMADW and MOV64 (`VEC_64`, RT2-120-6): a run that heads
+vector words with IMAD.WIDE meets A6 then. Each of the five costs what IMAD does at both π*, so ε doesn't move.
 
 sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
-`Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (VF3r-16, its rows
-sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar routes
-at `q = q_T = 9/8`, ♭'s skippable work at VF3r-16's ε_skip, and π* at q* = 9/8. `measured()` checks it the same way,
-against 0.591%.
+`Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (`VECTOR`, VF3s-16, its
+rows sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar
+routes at `q = q_T = 9/8`, ♭'s skippable work at the vector's ε_skip, and π* at q* = 9/8. `measured()` checks it the
+same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of `Real.hasSum_log_one_add_inv` at
+7). The vector is VF3s-16, RT-FACET's refit of VF3r-16's joint issue rows, and not model.toml's `current` (VF3r-16):
+measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in honest's IMMA16832; RT2-LOGIC-9),
+and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
 """
 from __future__ import annotations
 
@@ -44,7 +51,9 @@ Q = Fraction(1, 2)                 # A6's floors: two words a lane, so q = q_T =
 LN2 = Fraction(6931471808, 10**10)  # Mathlib's Real.log_two_lt_d9
 P_OPERAND = Fraction(3, 4)         # the operand luck (OperandHMu at ¾, through Lemma B): eps_budget's p
 P = P_OPERAND + (1 - P_OPERAND) / 2  # (I7): the receipt luck ½ on the rest (ReceiptLuckAt, LuckOfReceipt), 7/8
-LN_P = 1 - P                       # 1 − p ≤ ln(1/p) (Real.one_sub_inv_le_log_of_pos)
+LN_P = 1 - P                       # 1 − p ≤ ln(1/p) (Real.one_sub_inv_le_log_of_pos), the sheet's
+LN_P_M = Fraction(2, 15)           # 2/(2·7 + 1) ≤ ln(1 + 1/7) = ln(1/p) (Real.hasSum_log_one_add_inv), the measured's
+VEC_64 = ("ALU64", "CVT64", "DMUL", "IMADW", "MOV64")  # the lane classes model.toml's `cuda` leaves out
 TENSOR = re.compile(r"([HIBDQO])MMA(?:SP|SF)?(16|8)8(\d+)")   # a census MMA class: its type letter and m (n = 8), k
 SPARSE = re.compile(r"[HIBDQO]MMASP")
 
@@ -89,7 +98,7 @@ FAMILIES = (SM120,)
 
 DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps
-VECTOR = "VF3r-16"                 # the measured reading's vector
+VECTOR = "VF3s-16"                 # the measured reading's vector
 Q_M = Fraction(9, 8)               # scalar floors: q*₀ 1.120 (operands free), ClassPSlots' lane floor ≥ 9/8 at w ≤ 15
 EPS_M = Fraction(591, 100000)      # the measured reading: 0.591%
 OFF_MENU = ("MMA", "UNI64")        # census lines no writer kind is: the forms' fallback line, and UNI64 (on UP alone)
@@ -131,12 +140,20 @@ class Instance:
     bound: Fraction
     folded: Fraction = Fraction(0)
     unfolded: Fraction = Fraction(0)
+    ln_p: Fraction = LN_P
 
 
-def branches(Nw: int, w: Fraction, phi: Fraction, B: Fraction, checks: int) -> tuple[Fraction, Fraction]:
-    """The Lean bound's two branches: folded (ε_jl at p = 7/8) and unfolded (the whole-unit luck ½, ln(1/δ′)/ln 2 = 41)."""
+def branches(Nw: int, w: Fraction, phi: Fraction, B: Fraction, checks: int,
+             ln_p: Fraction) -> tuple[Fraction, Fraction]:
+    """The Lean bound's two branches: folded (ε_jl at p = 7/8, `ln_p ≤ ln(1/p)`) and unfolded (the whole-unit luck ½,
+    ln(1/δ′)/ln 2 = 41)."""
     Y = (Nw * w + Nw * phi) / B
-    return 1 - Y + Nw * w / B * 41 * LN2 / (LN_P * checks), 1 - Y * (1 - Fraction(41, checks))
+    return 1 - Y + Nw * w / B * 41 * LN2 / (ln_p * checks), 1 - Y * (1 - Fraction(41, checks))
+
+
+def vector_classes(cuda: tuple[str, ...] | list[str], classes: list[str]) -> list[str]:
+    """The model's vector classes: the census's CUDA lane classes, then the 64-bit lane classes among `classes`."""
+    return list(cuda) + [k for k in VEC_64 if k in classes and k not in cuda]
 
 
 def coef(i: Instance, row: str, k: str) -> Fraction:
@@ -219,7 +236,8 @@ def instance(fam: Family = SM120) -> Instance:
     nw = {k: exact(v) for k, v in h.tensor("floor", d.floor).items()}
     nf = {k: exact(v) * Nw / E.LANES for k, v in d.fold.items()}
     eps_skip = exact(B_.design_skip(d, data=fam.data, vector=fam.device).eps_time)
-    i = Instance(fam, classes, macs, peak, pipe, smem, writers, list(pi.cuda), folds, nw, nf, {}, Nw, int(d.checks),
+    vec = vector_classes(pi.cuda, classes)
+    i = Instance(fam, classes, macs, peak, pipe, smem, writers, vec, folds, nw, nf, {}, Nw, int(d.checks),
                  "", eps_skip, Fraction(0), Fraction(0), Fraction(0))
     for k in classes:
         for r in pi.rows:
@@ -248,7 +266,7 @@ def instance(fam: Family = SM120) -> Instance:
     w = min([coef(i, pistar, k) / om for k, om in writers] + [Q / E.LANES * vmin])
     phi = min(load(i, pistar, f) for f in folds)
     kappa = Nw * w / B
-    folded, unfolded = branches(Nw, w, phi, B, i.checks)
+    folded, unfolded = branches(Nw, w, phi, B, i.checks, LN_P)
     bound = max(folded, unfolded)
     if bound > fam.eps:
         raise SystemExit(f"{fam.design} on {fam.device}: the Lean bound {float(bound):.6%} is above "
@@ -256,14 +274,14 @@ def instance(fam: Family = SM120) -> Instance:
     if abs(float(1 - (Nw * w + Nw * phi) / B) - (e.machine_eps * (1 - float(eps_skip)) + float(eps_skip))) > 1e-9:
         raise SystemExit(f"{fam.design} on {fam.device}: the terms at π* are not ε_machine and ε_skip over ♭ with its "
                          f"skip")
-    return Instance(fam, classes, macs, peak, pipe, smem, writers, list(pi.cuda), folds, nw, nf, ns, Nw, i.checks,
-                    pistar, eps_skip, B, kappa, bound, folded, unfolded)
+    return Instance(fam, classes, macs, peak, pipe, smem, writers, vec, folds, nw, nf, ns, Nw, i.checks,
+                    pistar, eps_skip, B, kappa, bound, folded, unfolded, LN_P)
 
 
 @dataclass(frozen=True)
 class Measured:
     rows: list[str]
-    c: dict[str, dict[str, Fraction]]       # VF3r-16's coefficients, class by row
+    c: dict[str, dict[str, Fraction]]       # the vector's coefficients, class by row
     writers: list[tuple[str, int]]
     ns: dict[str, Fraction]
     eps_skip: Fraction
@@ -275,6 +293,7 @@ class Measured:
     checks: int
     folded: Fraction = Fraction(0)
     unfolded: Fraction = Fraction(0)
+    ln_p: Fraction = LN_P_M
 
 
 def mload(m: Measured, row: str, n: dict[str, Fraction]) -> Fraction:
@@ -282,13 +301,13 @@ def mload(m: Measured, row: str, n: dict[str, Fraction]) -> Fraction:
 
 
 def measured(i: Instance | None = None) -> Measured:
-    """sm_120's measured instance: H1 + fx1 and ♭ (`i`'s word and fold counts) on VF3r-16 at q = q_T = 9/8."""
+    """sm_120's measured instance: H1 + fx1 and ♭ (`i`'s word and fold counts) on `VECTOR` at q = q_T = 9/8."""
     i = i or instance()
     B_ = _eps_budget()
     pi = E.machine(VECTOR)
     d = E.design(DESIGN)
     h = E.honest(d.honest)
-    if sorted(pi.c) != i.classes or list(pi.cuda) != i.vec:
+    if sorted(pi.c) != i.classes or vector_classes(pi.cuda, i.classes) != i.vec:
         raise SystemExit(f"{VECTOR}: its classes or CUDA lane classes are not {DEVICE}'s, which ♭'s counts index")
     c = {k: {r: exact(v) for r, v in pi.c[k].items() if v} for k in i.classes}
     writers = []
@@ -325,7 +344,7 @@ def measured(i: Instance | None = None) -> Measured:
     w = demand[wk]
     phi = min(mload(m, pistar, f) for f in i.folds)
     kappa = i.Nw * w / B
-    folded, unfolded = branches(i.Nw, w, phi, B, i.checks)
+    folded, unfolded = branches(i.Nw, w, phi, B, i.checks, LN_P_M)
     bound = max(folded, unfolded)
     if bound >= EPS_M:
         raise SystemExit(f"{DESIGN} on {VECTOR}: the Lean bound {float(bound):.6%} is not below {float(EPS_M):.4%}")
@@ -336,7 +355,7 @@ def measured(i: Instance | None = None) -> Measured:
 
 def exact_logs(i: Instance | Measured) -> float:
     """The bound with ln 2 and ln(1/p) exact, for the record (the unfolded branch reads no rational log bound)."""
-    folded = float(i.folded) - float(i.kappa * 41) * (float(LN2) / (float(LN_P) * i.checks)
+    folded = float(i.folded) - float(i.kappa * 41) * (float(LN2) / (float(i.ln_p) * i.checks)
                                                       - math.log(2) / (math.log(1 / float(P)) * i.checks))
     return max(folded, float(i.unfolded))
 
@@ -398,7 +417,8 @@ def render(i: Instance) -> str:
         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming Guide widths; 128 B "
         f"for every shared-memory class. Its machine reproduces every {f.device} coefficient.",
         f"`{f.dvar}`, `model`: {f.title} (`{f.design}`) as a TS model on the sheet's machine: writer kinds {menu}; "
-        f"the vector classes CUDA's lane classes; {f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
+        f"the vector classes CUDA's lane classes and the 64-bit ones ({', '.join(k for k in i.vec if k in VEC_64)}); "
+        f"{f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
         f"words a unit of honest work ({f.honest}).",
         f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
         f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
@@ -462,7 +482,8 @@ def {f.dvar} : DesignData where
   writers := [
 {writer_lines}
   ]
-  vec := [{", ".join(str(ix(k)) for k in i.vec)}]  -- {", ".join(i.vec)}
+  -- {", ".join(i.vec)}
+  vec := [{", ".join(str(ix(k)) for k in i.vec)}]
   folds := [
 {fold_lines}]
   bytes := {ix(f.bytes)}  -- {f.bytes}
@@ -506,6 +527,7 @@ def render_measured(i: Instance, m: Measured) -> str:
     writer_lines = "\n".join(f"    ({ix(k)}, {om}){',' if j + 1 < len(m.writers) else ''}  -- {k}"
                              for j, (k, om) in enumerate(m.writers))
     nt = len(m.writers)
+    vf = VECTOR.replace("-", "").lower()
     return f'''import Definitions.Accounting.Headline.Sm120
 
 /-!
@@ -515,8 +537,9 @@ Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`be
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
-* `rowNames`, `vf3r16`, `machine`: the measured vector {VECTOR}, {len(m.rows)} rows of SMSP-cycles a warp
-  instruction at its epoch's census, each sparse over `Sm120.classes`; every facet SM-clocked, f_max {FMAX} MHz.
+* `rowNames`, `{vf}`, `machine`: the measured vector {VECTOR} (the exporter's `VECTOR`, named there, not model.toml's
+  `current`), {len(m.rows)} rows of SMSP-cycles a warp instruction at its epoch's census, each sparse over `Sm120.classes`;
+  every facet SM-clocked, f_max {FMAX} MHz.
 * `h1fx1`, `model`: H1 + fx1 (`{DESIGN}`) on that machine. Its writer kinds are the census's MMA forms, each at
   the committed words an instruction of it writes (forms.toml: `m·n·k_dense/(L·split)` at L = {E.design(DESIGN).L},
   rounded up), and the uniform `UNI` (1); `MMA` (the forms' fallback line) and `UNI64` ({VECTOR} prices it on the
@@ -536,12 +559,12 @@ open Accounting.TS
 def rowNames : List String := {_list([f'"{r}"' for r in m.rows], "  ")}
 
 /-- {VECTOR}'s coefficients, row by row: `(class index, numerator, denominator)`. -/
-def vf3r16 : List Sparse := [
+def {vf} : List Sparse := [
 {chr(10).join(rows)}]
 
 /-- The measured machine: {VECTOR}'s rows over `Sm120.classes`. -/
 noncomputable def machine : Machine (Fin {len(i.classes)}) (Fin {len(m.rows)}) :=
-  rowsMachine {len(i.classes)} {len(m.rows)} vf3r16 {FMAX}
+  rowsMachine {len(i.classes)} {len(m.rows)} {vf} {FMAX}
 
 /-- H1 + fx1's design data on {VECTOR}: writer kinds as (class, ω), and `Sm120.h1fx1`'s routes. -/
 def h1fx1 : DesignData where
