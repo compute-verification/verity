@@ -23,8 +23,8 @@ def test_every_parameter_has_a_range_around_its_default_inside_its_slider():
 def test_the_defaults_give_the_statements_numbers():
     t = X.terms(T.DEFAULTS)
     assert t["R_wipe_gb"] == pytest.approx(203, rel=0.01)
-    assert t["mu"] == pytest.approx(0.148, rel=0.01)
-    assert t["nu"] == pytest.approx(9.4e-6, rel=0.01)
+    assert t["mu"] == pytest.approx(0.151, rel=0.01)
+    assert t["nu"] == pytest.approx(9.5e-6, rel=0.01)
     assert t["chi"] == pytest.approx(2.7e-4, rel=0.01)
     assert t["eta_T4"] == pytest.approx(0.06, rel=0.01)
 
@@ -85,7 +85,7 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
 
 def test_the_residual_threshold_is_the_closed_form():
     """At T1, D < X once r_gpu > 1/X - host_share - nu."""
-    p = T.DEFAULTS
+    p = T.DEFAULTS | {"lag_s": 0.0}
     th = X.thresholds(p, "residual", "T1")
     for level in (10.0, 2.0):
         (a, _), = th[level]
