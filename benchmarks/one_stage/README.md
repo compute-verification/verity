@@ -34,6 +34,12 @@ negatives.
   its word and Boolean forms, cuts an up/gate coordinate whose rows overflow M0's block into its gather and
   block-coordinate units, and saves the units for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
   saved directory without the values stage.
+- `a10.sh`: run A10's entry point, on the same builds. A10 is A11's kinds and A9's launches on rank 0's committed values
+  in place of the capture's: `a10.py values` opens rank 0's replay bundle from the Commit (`--replay-deferred`,
+  `retain=host`) against its run root of record, reads each Call's operands and returns through its Program row as the
+  deferred replay does, and runs `a11.py`'s and `a9.py`'s staging on them, writing every word where the committed value
+  and the capture's differ to `compare.json`; `a10.py audit` is `a11.py --load-values` on a saved directory, with the
+  registration window naming the committed values.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
