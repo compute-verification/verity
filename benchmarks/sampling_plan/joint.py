@@ -20,9 +20,10 @@ claims hold together at δ split evenly by the union bound:
   served rows, so a share `fill` of the MACs is credited): skipped credited work at most ε of the credited work, pooled
   over the horizon.  k = A ln(m/δ) / (ε fill), A = F / (1 - p), split over the strata by MAC share, whatever the unit's
   size;
-- exfiltration (WX-THM's T1, slots changed through the first detection): a unit's harm is its cone egress, `R` requests'
-  outputs for a tile and one request's for a coordinate, each request `outputs` slots; a draw rate a_s gives κ =
-  min_s a_s / E_s and a budget of ℓ + ln(m/δ) / κ slots.  An absolute budget, so its draws grow with the served volume;
+- exfiltration (WX-THM's T1, what leaves through the first detection), in two models of a unit's harm: `slots`, its
+  cone egress (WX's leak: `R` requests' outputs for a tile and one request's for a coordinate, `OUTPUTS` slots each),
+  and `bits`, OPT5's control cost (its outputs' bits and its place among the round's units).  A draw rate a_s gives
+  κ = min_s a_s / E_s and a budget of ℓ + ln(m/δ) / κ.  An absolute budget, so its draws grow with the served volume;
 - memory: an audit window of `openings` draws certifies the store's unheld share at ln(m/δ) / openings.
 
 B is GPU-seconds a serving GPU-second (BUDGET's unit).  Serve time is the Commit and H1's rows (`inputs.serve_rows`, at
@@ -37,7 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from math import ceil, log
+from math import ceil, log, log2
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -60,8 +61,9 @@ MEMSAT = ((0.0, 0.0), (15.0, 0.058), (30.0, 0.184), (65.8, 0.389))
 NODE_GPUS, AUDIT_WINDOW_S, WHOLE_WINDOW = 8, 60.0, 33_273
 #: the claims the union bound splits δ over: work, exfiltration, memory
 CLAIMS = 3
-#: one request (OPT5's): 2,048 prompt and 256 generated tokens; a generated token's value bits; int8 weights' bits
-OUTPUTS, CONTEXT, VALUE_BITS = 256, 2048, 17
+#: one request (OPT5's): 2,048 prompt and 256 generated tokens; a generated token's value bits; a unit output's bits
+#: (the width rule's 16, which a tile's 32 outputs break: decision 107)
+OUTPUTS, CONTEXT, VALUE_BITS, OUT_BITS = 256, 2048, 17, 16
 HORIZONS = {"1 GPU-week": (1, 7 * 86_400), "1 day, 1e5 GPUs": (1e5, 86_400), "30 days, 1e5 GPUs": (1e5, 30 * 86_400)}
 EPS_WORK = (1e-2, 1e-5, 1e-8)
 EXFIL_SHARES = (1.0, 0.1, 0.01)
@@ -87,18 +89,27 @@ def per_draw(costs: CostModel, ands: float, mode: str) -> float:
     return (a0 + a1 * size) / size + b
 
 
-def tile_strata(m: Model, rows: bool) -> list[dict]:
-    """One stratum of H1 tiles per K: tiles a token, MACs a tile and ANDs a tile."""
+def harms(per_token: float, requests: int, cells: int, round_units: float) -> dict:
+    """A unit's exfiltration harm in each model: `slots`, its cone egress (WX-THM's leak: `requests` requests' outputs);
+    `bits`, OPT5's control cost (its `cells` outputs at OUT_BITS each, and its place among the round's units on a
+    GPU)."""
+    return {"slots": requests * OUTPUTS, "bits": cells * OUT_BITS + log2(per_token * round_units + 1)}
+
+
+def tile_strata(m: Model, rows: bool, round_tokens: float) -> list[dict]:
+    """One stratum of H1 tiles per K: tiles a token, MACs a tile and ANDs a tile, and its harms."""
     out = []
     for k, cells in sorted(m.linears.items()):
         ands = H1_ANDS * k / H1_K + (row_ands(k) * (H1_R + H1_C) if rows else 0)
-        out.append({"K": k, "per_token": m.layers * cells / (H1_R * H1_C), "macs": H1_R * H1_C * k, "ands": ands})
+        per = m.layers * cells / (H1_R * H1_C)
+        out.append({"K": k, "per_token": per, "macs": H1_R * H1_C * k, "ands": ands,
+                    **harms(per, H1_R, H1_R * H1_C, round_tokens)})
     return out
 
 
-def coord_strata(m: Model) -> list[dict]:
-    return [{"K": k, "per_token": m.layers * cells, "macs": k, "ands": s8_coord_ands(k)}
-            for k, cells in sorted(m.linears.items())]
+def coord_strata(m: Model, round_tokens: float) -> list[dict]:
+    return [{"K": k, "per_token": m.layers * cells, "macs": k, "ands": s8_coord_ands(k),
+             **harms(m.layers * cells, 1, 1, round_tokens)} for k, cells in sorted(m.linears.items())]
 
 
 def work_plan(strata: list[dict], costs: CostModel, mode: str, eps: float, *, luck: float, fill: float,
@@ -112,21 +123,19 @@ def work_plan(strata: list[dict], costs: CostModel, mode: str, eps: float, *, lu
     return {"eps": eps, "draws": k, "by_K": draws, "B": cost / gpu_s}
 
 
-def exfil_level(strata: list[dict], draws: dict, tokens: float, rows_per_unit: int, ell: float) -> dict:
-    """WX's T1 at the draw's rates: κ = min_s a_s / E_s, E_s = rows_per_unit requests' outputs, and the slots that leave
-    through the first detection at ln(m/δ), with their value bits."""
-    kappa = min(draws[s["K"]] / (s["per_token"] * tokens) / (rows_per_unit * OUTPUTS) for s in strata)
-    slots = ell + log(CLAIMS / DELTA) / kappa
-    return {"kappa": kappa, "slots": slots, "value_bits": slots * VALUE_BITS}
+def exfil_level(strata: list[dict], draws: dict, tokens: float, harm: str, ell: float) -> float:
+    """WX's T1 at the draw's rates: κ = min_s a_s / E_s, E_s a unit's `harm` (`slots` or `bits`), and what leaves
+    through the first detection at ln(m/δ), in that unit."""
+    kappa = min(draws[s["K"]] / (s["per_token"] * tokens) / s[harm] for s in strata)
+    return ell + log(CLAIMS / DELTA) / kappa
 
 
-def exfil_cost(strata: list[dict], costs: CostModel, mode: str, rows_per_unit: int, slots: float, ell: float,
+def exfil_cost(strata: list[dict], costs: CostModel, mode: str, harm: str, budget: float, ell: float,
                tokens_per_s: float) -> float:
-    """B for a budget of `slots` through the first detection: each stratum at a_s = κ E_s, its draws a_s N_s a
-    second."""
-    kappa = log(CLAIMS / DELTA) / max(slots - ell, 1.0)
-    return sum(kappa * rows_per_unit * OUTPUTS * s["per_token"] * tokens_per_s * per_draw(costs, s["ands"], mode)
-               for s in strata)
+    """B for a budget through the first detection, in the unit of `harm`: each stratum at a_s = κ E_s, its draws
+    a_s N_s a second."""
+    kappa = log(CLAIMS / DELTA) / max(budget - ell, 1.0)
+    return sum(kappa * s[harm] * s["per_token"] * tokens_per_s * per_draw(costs, s["ands"], mode) for s in strata)
 
 
 def memsat_B(passes: float) -> float:
@@ -169,9 +178,10 @@ def run(v: dict, model_name: str, *, rows: bool, fill: float, luck: float, passe
     w = workload(v, WINDOWS["week"], m)
     costs = model(v, fit_, w["replay_units"], commitments=serve(v, m, "h1", w))
     floors = zero_work_cost(costs, v)
-    tiles, coords = tile_strata(m, rows), coord_strata(m)
     tps = v["tokens_per_s"]
+    tiles, coords = tile_strata(m, rows, tps * v["round"]), coord_strata(m, tps * v["round"])
     ell = tps * v["round"] * OUTPUTS / (CONTEXT + OUTPUTS)
+    ells = {"slots": ell, "bits": ell * VALUE_BITS}
     serve_ = serve_list(v, m, w)
     serve_commit = sum(s["B"] for s in serve_ if s["B"] is not None)
     unit_costs = {f"{name} K={s['K']}": {mode: per_draw(costs, s["ands"], mode) for mode in ("single", "gathered")}
@@ -186,17 +196,18 @@ def run(v: dict, model_name: str, *, rows: bool, fill: float, luck: float, passe
         for eps in EPS_WORK:
             for mode in ("single", "gathered"):
                 wp = work_plan(tiles, costs, mode, eps, luck=luck, fill=fill, gpu_s=gpu_s)
-                ex = exfil_level(tiles, wp["by_K"], tokens, H1_R, ell)
+                ex = {h: exfil_level(tiles, wp["by_K"], tokens, h, ells[h]) for h in ells}
                 plans.append({"horizon": horizon, "mode": mode, **wp, "exfil": ex})
 
     model_bits = params(m) * 8
     exfil = []
     for share in EXFIL_SHARES:
-        slots = share * model_bits / VALUE_BITS
-        row = {"share": share, "slots": slots}
-        for name, strata, per in (("tiles", tiles, H1_R), ("coords", coords, 1)):
-            for mode in ("single", "gathered"):
-                row[f"{name} {mode}"] = exfil_cost(strata, costs, mode, per, slots, ell, tps)
+        budget = {"slots": share * model_bits / VALUE_BITS, "bits": share * model_bits}
+        row = {"share": share, "slots": budget["slots"]}
+        for h in ells:
+            for name, strata in (("tiles", tiles), ("coords", coords)):
+                for mode in ("single", "gathered"):
+                    row[f"{h} {name} {mode}"] = exfil_cost(strata, costs, mode, h, budget[h], ells[h], tps)
         exfil.append(row)
 
     memory = [{"passes": r, "B_serve": memsat_B(r)} for r in PASSES]
@@ -211,7 +222,7 @@ def run(v: dict, model_name: str, *, rows: bool, fill: float, luck: float, passe
         parts = {"commit": serve_commit, "passes": memsat_B(passes), "work": p["B"], "floors": floors_B,
                  "openings": mem["B"]}
         picks.append({"horizon": p["horizon"], "eps": p["eps"], "mode": p["mode"], **parts,
-                      "total": sum(parts.values()), "exfil_slots": p["exfil"]["slots"]})
+                      "total": sum(parts.values()), "exfil": p["exfil"]})
 
     return {"model": model_name, "rows": rows, "fill": fill, "luck": luck, "delta": DELTA, "claims": CLAIMS,
             "rates": {"statement_fixed": costs.statement_fixed, "statement_per_and": costs.statement_per_and,
@@ -239,18 +250,20 @@ def render(out: dict) -> str:
     L += ["", "## Per-draw cost (GPU-s)", "", "| unit | ANDs | single | gathered (cap) |", "|---|---|---|---|"]
     for name, c in out["unit_costs"].items():
         L.append(f"| {name} | {c['ands']:.3g} | {c['single']:.3g} | {c['gathered']:.3g} ({c['cap']}) |")
+    mb = out["model_bits"]
     L += ["", "## Work on H1 tiles, and the exfiltration it gives for free (tiles counted for both)", "",
-          "| horizon | ε work | statements | draws | proving B | exfil slots through the first detection | "
-          "value bits / model bits |", "|---|---|---|---|---|---|---|"]
+          "What leaves through the first detection, as a share of the int8 weights' bits: `slots`, WX-THM's cone "
+          "egress at 17 bits a slot; `bits`, OPT5's control cost (a unit's output bits and its place).", "",
+          "| horizon | ε work | statements | draws | proving B | exfil (slots) / model | exfil (bits) / model |",
+          "|---|---|---|---|---|---|---|"]
     for p in out["plans"]:
         L.append(f"| {p['horizon']} | {p['eps']:g} | {p['mode']} | {p['draws']:.3g} | {p['B']:.3g} | "
-                 f"{p['exfil']['slots']:.3g} | {p['exfil']['value_bits'] / out['model_bits']:.3g} |")
-    L += ["", "## B for an exfiltration budget (a share of the int8 weights' bits, in 17-bit slots)", "",
-          "| share | slots | tiles single | tiles gathered | coords single | coords gathered |",
-          "|---|---|---|---|---|---|"]
+                 f"{p['exfil']['slots'] * VALUE_BITS / mb:.3g} | {p['exfil']['bits'] / mb:.3g} |")
+    cols = [f"{h} {n} {s}" for h in ("slots", "bits") for n in ("tiles", "coords") for s in ("single", "gathered")]
+    L += ["", "## B for an exfiltration budget (a share of the int8 weights' bits) through the first detection", "",
+          "| share | " + " | ".join(cols) + " |", "|---" * (len(cols) + 1) + "|"]
     for r in out["exfil_cost"]:
-        L.append(f"| {r['share']:g} | {r['slots']:.3g} | {r['tiles single']:.3g} | {r['tiles gathered']:.3g} | "
-                 f"{r['coords single']:.3g} | {r['coords gathered']:.3g} |")
+        L.append(f"| {r['share']:g} | " + " | ".join(f"{r[c]:.3g}" for c in cols) + " |")
     L += ["", f"## Memory: openings a {AUDIT_WINDOW_S:g}-s audit window on a {NODE_GPUS}-GPU node", "",
           "| ε_mem | pooled over | openings a window | proving B |", "|---|---|---|---|"]
     L += [f"| {o['eps']:g} | {o['pool']} | {o['openings']} | {o['B']:.3g} |" for o in out["openings"]]
