@@ -1445,6 +1445,8 @@ theorem coinedOf_rep (k) : ((coinedOf P Tz st).T c).rep k = if k.val < 2 then 0 
 
 theorem coinedOf_embed : ((coinedOf P Tz st).T c).tab.embed = FlockLevel3.embed := rfl
 
+theorem coined_embed : ((coinedOf P Tz st).T c).embed = FlockLevel3.embed := rfl
+
 variable (c' : CoinsZK (RestOf Tz st))
 
 theorem claimsOf_congr (r : Fin 2) (h1 : c.rest.zc r = c'.rest.zc r) (h2 : c.rest.rho r = c'.rest.rho r)
@@ -1516,6 +1518,44 @@ theorem wr_congr (r : Fin 2) (h : c.rho r = c'.rho r) :
 theorem beta_congr (r : Fin 2) (h : c.beta r = c'.beta r) :
     ((coinedOf P Tz st).T c).tab.β r ≠ 0 ↔ ((coinedOf P Tz st).T c').tab.β r ≠ 0 := by
   rw [coinedOf_beta, coinedOf_beta, h]
+
+theorem rbar_congr (r : Fin 2) (h : c.rest.lane r = c'.rest.lane r) :
+    ((coinedOf P Tz st).T c).rbar r = ((coinedOf P Tz st).T c').rbar r := by
+  funext l
+  show eqLane (c.rest.lane r) l.val = eqLane (c'.rest.lane r) l.val
+  rw [h]
+
+theorem ρ_congr (r : Fin 2) (h : c.rho r = c'.rho r) :
+    ((coinedOf P Tz st).T c).ρ r = ((coinedOf P Tz st).T c').ρ r := by
+  funext i
+  show (if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2) =
+    if i = 0 then FlockLevel3.GF256.of (c'.rho r).1 else FlockLevel3.GF256.of (c'.rho r).2
+  rw [h]
+
+theorem embed_congr : ((coinedOf P Tz st).T c).embed = ((coinedOf P Tz st).T c').embed :=
+  (coined_embed P Tz st c).trans (coined_embed P Tz st c').symm
+
+theorem lanes_congr : ((coinedOf P Tz st).T c).lanes = ((coinedOf P Tz st).T c').lanes := by
+  funext w u l col
+  show wordOf (zWith st w u) (l.val + (coinedOf P Tz st).z.nL * col.val) =
+    wordOf (zWith st w u) (l.val + (coinedOf P Tz st).z.nL * col.val)
+  rfl
+
+theorem β_congr (r : Fin 2) (h : c.beta r = c'.beta r) :
+    ((coinedOf P Tz st).T c).β r = ((coinedOf P Tz st).T c').β r := by
+  show fOf (c.beta r) = fOf (c'.beta r)
+  rw [h]
+
+theorem ζ_congr (r : Fin 2) (h : c.rest.zeta r = c'.rest.zeta r) :
+    ((coinedOf P Tz st).T c).ζ r = ((coinedOf P Tz st).T c').ζ r := by
+  show fOf (c.rest.zeta r) = fOf (c'.rest.zeta r)
+  rw [h]
+
+theorem ia_congr : ((coinedOf P Tz st).T c).ia = ((coinedOf P Tz st).T c').ia :=
+  Fin.ext (show (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa = (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fa from rfl)
+
+theorem ib_congr : ((coinedOf P Tz st).T c).ib = ((coinedOf P Tz st).T c').ib :=
+  Fin.ext (show (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb = (Zk.PadLayout.new st.m st.c.kLog Tz.sch.k0).fb from rfl)
 
 end Fields
 
@@ -1818,6 +1858,16 @@ end Layout
 
 /-! ## The cut's fields -/
 
+/-- A rep's sent `y₁` (`repSrcCut`'s `y1`). -/
+def y1Arr {L : ℕ} : Option (Fin L → 𝕂) → Array _root_.Flock.F256
+  | some f => Array.ofFn fun c => kVal (f c)
+  | none => #[]
+
+/-- A rep's sent `Y` (`repSrcCut`'s `y`). -/
+def yArr {nE nPad : ℕ} (Y2 : Fin nPad → 𝔽) : Option (PadIdx nE → 𝔽) → Array _root_.Flock.F128
+  | some Y1 => Array.ofFn (yAt Y1 Y2)
+  | none => #[]
+
 section CutFields
 
 variable {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
@@ -1831,12 +1881,13 @@ theorem cutAt_sReg : (cutAt C cz wt ω lv j).sReg = ((C j).T (cz j)).tab.sReg (w
 
 open Classical in
 theorem cutAt_Y1 : (cutAt C cz wt ω lv j).Y1 r =
-    if (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).fin r then
-      some (fun i => ((C j).T (cz j)).tab.hFull ((ω j).2.2.1 r) i + ((C j).T (cz j)).β r * (ω j).2.2.2.2.2.1 r i)
-    else none := rfl
+    ((if (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j).fin r then
+      some (fun i : PadIdx (C j).z.nE =>
+        ((C j).T (cz j)).tab.hFull ((ω j).2.2.1 r) i + ((C j).T (cz j)).β r * (ω j).2.2.2.2.2.1 r i)
+    else none) : Option (PadIdx (C j).z.nE → 𝔽)) := rfl
 
 theorem cutAt_Y2 : (cutAt C cz wt ω lv j).Y2 r =
-    fun i => (ω j).2.2.2.1 r i + ((C j).T (cz j)).β r * (ω j).2.2.2.2.1 r i := rfl
+    fun i : Fin (C j).z.nPad => (ω j).2.2.2.1 r i + ((C j).T (cz j)).β r * (ω j).2.2.2.2.1 r i := rfl
 
 open Classical in
 theorem cutAt_y1 : (cutAt C cz wt ω lv j).y1 r =
@@ -1879,17 +1930,13 @@ theorem cutAt_y_congr
       (famSent (fun j => ((C j).T (cz' j)).tab) (fun j => ((C j).T (cz' j)).rep) j).fin r)
     (hβ : ((C j).T (cz j)).β r = ((C j).T (cz' j)).β r)
     (ha : ((C j).T (cz j)).ia = ((C j).T (cz' j)).ia) (hb : ((C j).T (cz j)).ib = ((C j).T (cz' j)).ib) :
-    (match (cutAt C cz wt ω lv j).Y1 r with
-      | some Y1 => Array.ofFn (yAt Y1 ((cutAt C cz wt ω lv j).Y2 r))
-      | none => #[]) =
-    (match (cutAt C cz' wt ω lv' j).Y1 r with
-      | some Y1 => Array.ofFn (yAt Y1 ((cutAt C cz' wt ω lv' j).Y2 r))
-      | none => #[]) := by
+    yArr (nE := (C j).z.nE) (nPad := (C j).z.nPad) ((cutAt C cz wt ω lv j).Y2 r) ((cutAt C cz wt ω lv j).Y1 r) =
+      yArr (nE := (C j).z.nE) (nPad := (C j).z.nPad) ((cutAt C cz' wt ω lv' j).Y2 r)
+        ((cutAt C cz' wt ω lv' j).Y1 r) := by
   rw [cutAt_Y1, cutAt_Y1, cutAt_Y2, cutAt_Y2]
+  simp only [hβ]
   split_ifs with h1 h2 h2
-  · simp only [hβ]
-    rw [hFull_congr (C := C) (cz := cz) (cz' := cz') (j := j) ha hb]
-    rfl
+  · rw [hFull_congr (C := C) (cz := cz) (cz' := cz') (j := j) ha hb]
   · exact absurd (hfin.1 h1) h2
   · exact absurd (hfin.2 h2) h1
   · rfl
@@ -1913,12 +1960,7 @@ theorem cutAt_y1_congr
     (hrbar : ((C j).T (cz j)).rbar r = ((C j).T (cz' j)).rbar r)
     (hρ : ((C j).T (cz j)).ρ r = ((C j).T (cz' j)).ρ r) (he : ((C j).T (cz j)).embed = ((C j).T (cz' j)).embed)
     (hl : ((C j).T (cz j)).lanes = ((C j).T (cz' j)).lanes) :
-    (match (cutAt C cz wt ω lv j).y1 r with
-      | some f => Array.ofFn fun c => kVal (f c)
-      | none => #[]) =
-    (match (cutAt C cz' wt ω lv' j).y1 r with
-      | some f => Array.ofFn fun c => kVal (f c)
-      | none => #[]) := by
+    y1Arr (L := (C j).z.L) ((cutAt C cz wt ω lv j).y1 r) = y1Arr (L := (C j).z.L) ((cutAt C cz' wt ω lv' j).y1 r) := by
   rw [cutAt_y1, cutAt_y1]
   split_ifs with h1 h2 h2
   · rw [y1'_congr C cz wt ω j r cz' hrbar hρ he hl]
@@ -2002,6 +2044,84 @@ theorem sv_congr (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) (cut' : ∀ j, 
         dite_eq_left (show k - 2 < ((tabC PE x j).T (cz' j)).tab.nR from hc), h2 hk hc]
     · rw [dite_eq_right (show ¬ k - 2 < ((tabC PE x j).T (cz j)).tab.nR from hc),
         dite_eq_right (show ¬ k - 2 < ((tabC PE x j).T (cz' j)).tab.nR from hc)]
+
+theorem tabC_lig_snd (c : Composed.CoinsZK (tabC PE x j).Rest) (y hi) :
+    (((tabC PE x j).T c).tab.lig r y hi : Composed.VLOf).2 =
+      saltBlob (zkTab x j).table.sch.levels (hiSalt (zkTab x j).table.sch.levels hi) := rfl
+
+theorem hiSalt_congr (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) (cut' : ∀ j, ((tabC PE x j).T (cz' j)).tab.Cut)
+    (h : (((cut j).lig r : Option Composed.VLOf)).map Prod.snd = (((cut' j).lig r : Option Composed.VLOf)).map Prod.snd) :
+    (repSrcCut PE x cz cut j r).hiSalt = (repSrcCut PE x cz' cut' j r).hiSalt := by
+  show blobSalt (zkTab x j).table.sch.levels
+      ((((cut j).lig r : Option Composed.VLOf)).map Prod.snd |>.getD ByteArray.empty) =
+    blobSalt (zkTab x j).table.sch.levels ((((cut' j).lig r : Option Composed.VLOf)).map Prod.snd |>.getD ByteArray.empty)
+  rw [h]
+
+theorem cutTab_lig_congr
+    (hy : (famSent (fun j => ((tabC PE x j).T (cz j)).tab) (fun j => ((tabC PE x j).T (cz j)).rep) j).y1 r ↔
+      (famSent (fun j => ((tabC PE x j).T (cz' j)).tab) (fun j => ((tabC PE x j).T (cz' j)).rep) j).y1 r) :
+    (((cutAt (tabC PE x) cz wt ω lv j).lig r : Option Composed.VLOf)).map Prod.snd =
+      (((cutAt (tabC PE x) cz' wt ω lv' j).lig r : Option Composed.VLOf)).map Prod.snd := by
+  rw [cutAt_lig, cutAt_lig]
+  split_ifs with h1 h2 h2
+  · exact congrArg some ((tabC_lig_snd x j r _ _ _).trans (tabC_lig_snd x j r _ _ _).symm)
+  · exact absurd (hy.1 h1) h2
+  · exact absurd (hy.2 h2) h1
+  · rfl
+
+theorem repSrcCut_tau (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) :
+    (repSrcCut PE x cz cut j r).tau = 0 ∧ (repSrcCut PE x cz cut j r).tauSalt = ByteArray.empty := ⟨rfl, rfl⟩
+
+theorem repSrcCut_y1 (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) :
+    (repSrcCut PE x cz cut j r).y1 = y1Arr (L := (tabC PE x j).z.L) ((cut j).y1 r) := by
+  simp only [repSrcCut]
+  cases (cut j).y1 r <;> rfl
+
+theorem repSrcCut_y (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) :
+    (repSrcCut PE x cz cut j r).y =
+      yArr (nE := (tabC PE x j).z.nE) (nPad := (tabC PE x j).z.nPad) ((cut j).Y2 r) ((cut j).Y1 r) := by
+  simp only [repSrcCut]
+  cases (cut j).Y1 r <;> rfl
+
+theorem rep_y1_congr
+    (hy : (famSent (fun j => ((tabC PE x j).T (cz j)).tab) (fun j => ((tabC PE x j).T (cz j)).rep) j).y1 r ↔
+      (famSent (fun j => ((tabC PE x j).T (cz' j)).tab) (fun j => ((tabC PE x j).T (cz' j)).rep) j).y1 r)
+    (hrbar : ((tabC PE x j).T (cz j)).rbar r = ((tabC PE x j).T (cz' j)).rbar r)
+    (hρ : ((tabC PE x j).T (cz j)).ρ r = ((tabC PE x j).T (cz' j)).ρ r)
+    (he : ((tabC PE x j).T (cz j)).embed = ((tabC PE x j).T (cz' j)).embed)
+    (hl : ((tabC PE x j).T (cz j)).lanes = ((tabC PE x j).T (cz' j)).lanes) :
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).y1 =
+      (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).y1 :=
+  (repSrcCut_y1 x cz j r _).trans
+    ((cutAt_y1_congr (tabC PE x) cz wt ω lv j r cz' lv' hy hrbar hρ he hl).trans (repSrcCut_y1 x cz' j r _).symm)
+
+theorem rep_ybar_congr (hrbar : ((tabC PE x j).T (cz j)).rbar r = ((tabC PE x j).T (cz' j)).rbar r)
+    (hρ : ((tabC PE x j).T (cz j)).ρ r = ((tabC PE x j).T (cz' j)).ρ r)
+    (he : ((tabC PE x j).T (cz j)).embed = ((tabC PE x j).T (cz' j)).embed) :
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).ybar =
+      (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).ybar :=
+  cutAt_ybar_congr (tabC PE x) cz wt ω lv j r cz' lv' hrbar hρ he
+
+theorem rep_inner_congr (hζ : ((tabC PE x j).T (cz j)).ζ r = ((tabC PE x j).T (cz' j)).ζ r)
+    (ha : ((tabC PE x j).T (cz j)).ia = ((tabC PE x j).T (cz' j)).ia)
+    (hb : ((tabC PE x j).T (cz j)).ib = ((tabC PE x j).T (cz' j)).ib) :
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).rhoIn =
+        (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).rhoIn ∧
+      (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).sigmaIn =
+        (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).sigmaIn := by
+  have h := cutAt_inner_congr (tabC PE x) cz wt ω lv j r cz' lv' hζ ha hb
+  constructor <;> (simp only [repSrcCut]; rw [h])
+
+theorem rep_y_congr
+    (hfin : (famSent (fun j => ((tabC PE x j).T (cz j)).tab) (fun j => ((tabC PE x j).T (cz j)).rep) j).fin r ↔
+      (famSent (fun j => ((tabC PE x j).T (cz' j)).tab) (fun j => ((tabC PE x j).T (cz' j)).rep) j).fin r)
+    (hβ : ((tabC PE x j).T (cz j)).β r = ((tabC PE x j).T (cz' j)).β r)
+    (ha : ((tabC PE x j).T (cz j)).ia = ((tabC PE x j).T (cz' j)).ia)
+    (hb : ((tabC PE x j).T (cz j)).ib = ((tabC PE x j).T (cz' j)).ib) :
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).y =
+      (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).y :=
+  (repSrcCut_y x cz j r _).trans
+    ((cutAt_y_congr (tabC PE x) cz wt ω lv j r cz' lv' hfin hβ ha hb).trans (repSrcCut_y x cz' j r _).symm)
 
 end Masked
 
