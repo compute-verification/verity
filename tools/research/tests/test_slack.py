@@ -2880,7 +2880,8 @@ def test_notion_page_id_reads_each_url_shape_and_nothing_else():
 def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fake, registry, routes_dirs, notion, capsys, monkeypatch):
     """An ask lives in one record, and answered is that record's state: a handle's linked ask by its Linear issue, whatever its
     thread shows; Daniel's card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
-    for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unanswered."""
+    for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unchecked,
+    neither answered nor unanswered: a missing key is one finding, not a false alert per ask (INF-150)."""
     from research import linear
     inbox(fake, routes_dirs, "proofs")
     linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
@@ -2906,7 +2907,7 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     rc, out, _ = run(capsys, "traffic", "--hours", "48", "--now", now, "--json")
     rep = json.loads(out)
     un, ans = {x["ts"]: x for x in rep["unanswered"]}, {x["ts"]: x for x in rep["answered"]}
-    assert rc == 0 and set(un) == {backlog["ts"], silent["ts"], waiting["ts"], lost["ts"]}
+    assert rc == 0 and set(un) == {backlog["ts"], silent["ts"], waiting["ts"]} and [x["ts"] for x in rep["unchecked"]] == [lost["ts"]]
     assert set(ans) == {moved["ts"], reacted["ts"], approved["ts"], revising["ts"]}
     assert [un[backlog["ts"]][k] for k in ("record", "ref", "state")] == ["linear", "PRF-1", "in Backlog, no comment but the asker's"]
     assert [ans[moved["ts"]][k] for k in ("record", "ref", "state")] == ["linear", "PRF-2", "left Backlog (started)"]
@@ -2916,12 +2917,17 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
                                  "state": "Status Waiting on Daniel"}
     assert (ans[approved["ts"]]["ref"], ans[approved["ts"]]["state"]) == (URL_B, "Status Approved")
     assert (ans[revising["ts"]]["ref"], ans[revising["ts"]]["by"], ans[revising["ts"]]["state"]) == (URL_C, "proofs", "Status Revising")
-    assert un[lost["ts"]]["state"].startswith(f"unreadable (GET {slack.NOTION_API}/pages/{PAGE_D}: Notion can't see it")
+    assert rep["unchecked"][0]["state"].startswith(f"unreadable (GET {slack.NOTION_API}/pages/{PAGE_D}: Notion can't see it")
     rc, out, _ = run(capsys, "traffic", "--hours", "48", "--now", now)
     assert rc == 0 and "answered: 4 ask(s), by their record: 1 on Linear, 2 on Notion, 1 on Slack (no record)" in out
     assert f"UNANSWERED {backlog['ts']} by @infra to @proofs" in out and "): Linear PRF-1 in Backlog, no comment but the asker's" in out
     assert f"UNANSWERED {waiting['ts']} by @memory-accounting to @daniel" in out and f"): Notion page {URL_A} Status Waiting on Daniel" in out
     assert f"UNANSWERED {silent['ts']} by @infra to @proofs" in out and "): Slack, no record: no reply or reaction" in out
+    assert "UNCHECKED: 1 ask(s) whose record can't be read: unreadable (GET" in out
+    monkeypatch.delenv("LINEAR_API_KEY")
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    assert backlog["ts"] not in {x["ts"] for x in rep["unanswered"]}, "a Linear issue nobody can read is not a false unanswered"
+    assert {backlog["ts"], moved["ts"], lost["ts"]} <= {x["ts"] for x in rep["unchecked"]}
 
 
 def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_alone(fake, registry, routes_dirs, notion,
