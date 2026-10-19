@@ -61,7 +61,7 @@
    "Flock.RecOpen.ivW"
   ],
   "hash": "Flock.Sha512",
-  "allow": ["module:Init"]
+  "allow": []
  },
  "compile_time": {
   "Flock.With.ReturnsWalk": {

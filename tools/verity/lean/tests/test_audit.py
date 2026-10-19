@@ -1112,13 +1112,42 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert fails == [
         "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
         "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
-        "add it to `verifier.allow` only if it is a core primitive",
+        "if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing DM shows "
+        "it), else take it off the path",
         "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
         "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
     assert A.verifier_failures(None, path) == []
     assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
     f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
     assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
+def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
+    """LEAN-33: `verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
+    `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
+    admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
+    path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
+            "implemented_by": [{"name": "Array.foldlM", "module": "Init.Data.Array.Basic", "by": "Array.foldlMUnsafe"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray.Basic"}]}
+    rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Array.foldlM", "Nat.add"]}
+    assert A.verifier_failures(rule, path) == [
+        "verifier: ByteArray.push (@[extern], in Init.Data.ByteArray.Basic) is on the path from P.verify: compiled code no "
+        "proof sees; if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing "
+        "DM shows it), else take it off the path"]
+    assert A.verifier_failures({**rule, "allow": [*rule["allow"], "ByteArray.push", "UInt64.add"]}, path) == [
+        "verifier: `verifier.allow` lists UInt64.add, which admits nothing on the path from P.verify; run `check.py --update`"]
+    assert A.verifier_failures({**rule, "allow": ["module:Init"]}, path) == []
+    assert A.verifier_failures({**rule, "allow": ["module:Init.Data"]}, path)[0].startswith("verifier: Nat.add (@[extern]")
+    f = facts(); f["verifier"] = path
+    fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
+    assert fails == [] and pol["verifier"] == {**rule, "allow": ["Array.foldlM", "ByteArray.push", "Nat.add"]}
+    assert A.verifier_failures(pol["verifier"], path) == []
+    kept = A.judge({**POLICY, "verifier": {**rule, "allow": ["module:Init.Data"]}}, f, FILES, update=True)[1]["verifier"]
+    assert kept["allow"] == ["module:Init.Data", "Nat.add"]
+    notes = A.review({"verifier": rule}, {"verifier": pol["verifier"]}, {"pins": {}, "verifier": path}, {})
+    assert notes == ["verifier: allowed ByteArray.push (@[extern], in Init.Data.ByteArray.Basic): compiled code no proof "
+                     "sees, now on the verifier's path"]
+    assert A.statement_changes(notes) == notes
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():

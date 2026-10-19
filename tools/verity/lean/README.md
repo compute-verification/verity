@@ -70,7 +70,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
 - the guarantees say what their records say, and each names its owner (below);
 - with a `verifier` section, nothing the verifier's `entries` reach is `@[implemented_by]` or `@[extern]` outside `allow`,
-  and they reach the `hash` namespace only through `stop` (`verifier_failures`). The walk follows definitions' values,
+  and they reach the `hash` namespace only through `stop` (`verifier_failures`). `allow` is a record: `--update` writes
+  each such constant on the path into it by name, so the review and the landing DM show one added, and a name that admits
+  nothing on the path fails; a `module:M` entry, which admits every constant of the modules under `M`, is kept as
+  written (Flock's lock lists names only). The walk follows definitions' values,
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
   is a theorem the replay checks, so it is listed (`csimp` in the facts) and not refused;
 - with a `claims` section, every predicate the spec declares under `claims.modules` (a named assumption aside) has its
