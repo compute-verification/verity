@@ -14,19 +14,22 @@ from verity_machine_model.model import DATA, device
 PINS = {
     "sheet": {
         "sm_120": (0.004207, 0.001506, 0.000139, 0.005852, 2.2831, "half", None),
-        "sm_90": (0.006427, 0.0, 0.000037, 0.006464, 1.7701, "half", 0.006850),
-        "sm_100": (0.004064, 0.000093, 0.000026, 0.004182, 4.1719, "half", None),
+        "sm_90": (0.006849, 0.0, 0.000001, 0.006850, 2.4063, "half", None),
+        "sm_100": (0.006849, 0.000137, 0.000065, 0.007052, 2.6251, "half", None),
         "sm_89": (0.001463, 0.006652, 0.000336, 0.008451, 2.9795, "half", None),
         "sm_80": (0.001463, 0.0, 0.0, 0.001463, 5.9347, "half", None),
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.004660, 0.000517, 0.000971, 0.006147, 1.7174, "issue", 0.011618),
-        "sm_100": (0.004707, 0.0, 0.000001, 0.004708, 4.0704, "half", None),
+        "sm_90": (0.004800, 0.005828, 0.000990, 0.011618, 2.3435, "issue", None),
+        "sm_100": (0.008025, 0.0, 0.000002, 0.008027, 2.5611, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
     },
 }
+#: rows at or over 1%, each with its reason
+OVER_ONE = {("measured", "sm_90"): "ffill is credited at p = 1, since no check reads its chains (RT-LOGIC-12); only a "
+                                   "check that reads ffill brings DC-90-ri under 1% (RT-HB-HEAD-1)"}
 
 
 @pytest.mark.parametrize("reading", H.READINGS)
@@ -42,24 +45,25 @@ def test_each_familys_row_is_pinned(reading):
         assert x.mand == 0 and x.core == pytest.approx(x.skip + x.mand + x.machine + x.luck, abs=1e-12), fam
         assert x.gamma == pytest.approx(gamma, abs=2e-4) and x.floor == floor, fam
         assert (x.p1["core"] if x.p1 else None) == (None if p1 is None else pytest.approx(p1, abs=2e-6)), fam
-        assert x.core < 0.01 and x.q == H.spec()["reading"][reading]["q"], fam
+        assert (x.core < 0.01) == ((reading, fam) not in OVER_ONE), fam
+        assert x.q == H.spec()["reading"][reading]["q"], fam
 
 
-def test_conditions_name_the_floor_the_fillers_credit_and_the_p1_reading():
+def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     """Decision 89's reading needs the 1.22-slot issue floor where ε_machine is above its floor at q* = ½, and states it
-    as unproved in Lean; a filler's credit is the theorem its check meets (decision 99), and the H200's p = 1 reading
-    stands beside it."""
+    as unproved in Lean; a filler's credit is the theorem its check meets (decision 99), so the H200's ffill, which no
+    check reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads (RT-LOGIC-12)."""
     t = H.spec()
     m = {x.family: x for x in H.rows("measured")}
     assert m["sm_120"].conditions[0] == t["floor"]["issue"] and "Theorem C, unproved in Lean" in t["floor"]["issue"]
     assert m["sm_100"].conditions[0] == t["floor"]["half"] and m["sm_100"].threshold <= 0.5
     h = m["sm_90"]
-    assert h.fillers == ("0.0703125 FFMA+IMAD a word credited at p = 0 "
-                         "(Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit)",)
-    assert "at p = 1 (dither-2s-licpw-redux-p1-l32): ε 1.162%" in h.conditions
-    assert any("ffill_ref.receipt" in c and "has not run" in c for c in h.conditions)
+    assert h.design == "dither-2s-licpw-redux-p1-l32" and h.p1 is None
+    assert h.fillers == ("0.0703125 FFMA+IMAD a word uncredited, p = 1 (decision 99)",)
+    assert any("RT-LOGIC-12" in c for c in h.conditions) and any("RT-LOGIC-12" in c for c in m["sm_100"].conditions)
     s = {x.family: x for x in H.rows("sheet")}
-    assert all(x.floor == "half" for x in s.values()) and any(c.startswith("A2u") for c in s["sm_89"].conditions)
+    assert all(x.floor == "half" for x in s.values())
+    assert all(any(c.startswith("A2u") for c in s[f].conditions) for f in ("sm_89", "sm_90", "sm_100"))
 
 
 def test_cli(capsys):
@@ -68,7 +72,7 @@ def test_cli(capsys):
     assert out[0] == "## decision 89's measured reading (`measured`): q* = 1.22, operands free, credit ♭"
     head = next(x for x in out if x.startswith("| GPU"))
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
-    assert any(x.startswith("| H200 | dither-2s-licpw-redux-l32 | DC-90-ri | 0.466% |") for x in out)
+    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.480% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
