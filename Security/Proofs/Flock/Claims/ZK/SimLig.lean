@@ -241,6 +241,25 @@ theorem set_bind_run {γ : Type} (s₁ : LigState) (f : PUnit → LP PS γ) (s :
     (set s₁ >>= f).run s = (f ()).run s₁ := by
   simp only [StateT.run_bind, StateT.run_set, pure_bind]
 
+theorem sendMsg_bind_run {γ : Type} (m : F256 × F256) (f : Unit → LP PS γ) (s : LigState) :
+    (sendMsg m >>= f).run s =
+      (liftT (liftTM (absorbK m.1)) >>= fun _ => liftT (liftTM (absorbK m.2)) >>= f).run
+        { s with msgs := s.msgs.push m } := by
+  simp only [sendMsg, bind_assoc, modify_bind_run]
+
+theorem sendMsg_run (m : F256 × F256) (s : LigState) :
+    (sendMsg m : LP PS Unit).run s =
+      (liftT (liftTM (absorbK m.1)) >>= fun _ => liftT (liftTM (absorbK m.2))).run
+        { s with msgs := s.msgs.push m } := by
+  simp only [sendMsg, modify_bind_run]
+
+theorem powP_bind_run {γ : Type} (f : Unit → LP PS γ) (s : LigState) :
+    (powP (fun _ _ => 0) 2 >>= f).run s = (liftT (liftTM (pow 0)) >>= f).run { s with cbn := s.cbn.push 0 } := by
+  simp only [powP, bind_assoc, get_bind_run, set_bind_run]
+
+theorem throw_go {α : Type} (e : String) (s : LigState) (t : Transcript) (l : Array Claims.Msg) :
+    ((((throw e : LP PS α)).run s).run t).go l = (.error e, l) := rfl
+
 /-- **A shared `LP` step** from one state. -/
 theorem lbind_eq {α γ δ : Type} {S : γ × LigState → δ × LigState → Array Claims.Msg → Prop} {x : LP PS α}
     {f : α → LP PS γ} {g : α → LP PS δ} {s : LigState} {t : Transcript} {l : Array Claims.Msg}
@@ -357,6 +376,132 @@ theorem sampleKP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} {t t' : Transcr
 theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Claims.Msg} {a : α}
     (h : ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l')) : l = l' :=
   congrArg Prod.snd ((liftTM_go x t l).symm.trans h)
+
+theorem alike_bind_assoc {α β γ δ ε : Type} {R : α → β → Array Claims.Msg → Prop}
+    {S : γ → ε → Array Claims.Msg → Prop} {x : TMW PS α} {y : TMW PS β} {f : α → TMW PS γ} {g : β → TMW PS δ}
+    {C : δ → TMW PS ε} {t : Transcript} {l : Array Claims.Msg}
+    (hxy : Alike R ((x.run t).go l) ((y.run t).go l))
+    (hfg : ∀ a b t' l', (x.run t).go l = (.ok (a, t'), l') → (y.run t).go l = (.ok (b, t'), l') → R a b l' →
+      Alike S (((f a).run t').go l') (((g b >>= C).run t').go l')) :
+    Alike S (((x >>= f).run t).go l) ((((y >>= g) >>= C).run t).go l) := by
+  rw [bind_assoc]
+  exact alike_bind hxy hfg
+
+theorem alike_bind_eq_assoc {α γ δ ε : Type} {S : γ → ε → Array Claims.Msg → Prop} {x : TMW PS α}
+    {f : α → TMW PS γ} {g : α → TMW PS δ} {C : δ → TMW PS ε} {t : Transcript} {l : Array Claims.Msg}
+    (hfg : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → Alike S (((f a).run t').go l') (((g a >>= C).run t').go l')) :
+    Alike S (((x >>= f).run t).go l) ((((x >>= g) >>= C).run t).go l) :=
+  alike_bind_assoc (Alike.refl _) fun a b t' l' hx _ (hab : a = b) => by subst hab; exact hfg a t' l' hx
+
+/-! ## Level 0's opening at the coins from round `p₀` -/
+
+section Vals
+
+variable (coin : ℕ → ℕ → F128) (p0 : ℕ)
+
+/-- Level 0's out-of-domain point, the reply to round `p₀`. -/
+def zS (n : ℕ) : Array F128 := (Array.range n).map (coin p0)
+
+/-- Lane round `j`'s challenge, the reply to round `p₀ + 2 + j`. -/
+def chS (j : ℕ) : F256 := ⟨coin (p0 + 2 + j) 0, coin (p0 + 2 + j) 1⟩
+
+/-- The table after the first `j` lane challenges. -/
+def tabS (t : Array F128) : ℕ → Array F256
+  | 0 => embedF t
+  | j + 1 => foldK (chS coin p0 j) (tabS t j)
+
+/-- The weight after the first `j` lane challenges: the basis plus `b₀·eq(z, ·)`, `b₀` the reply to round `p₀ + 1`. -/
+def wS (b : Array F128) (n : ℕ) : ℕ → Array F256
+  | 0 => addScaled (embedF b) (embedF (eqTable (zS coin p0 n))) (coin (p0 + 1) 0)
+  | j + 1 => foldK (chS coin p0 j) (wS b n j)
+
+/-- The pair's coins, the replies to rounds `p₀ + 2 + k₀` and `p₀ + 3 + k₀`. -/
+def rhoS (k0 : ℕ) : F256 × F256 :=
+  (⟨coin (p0 + 2 + k0) 0, coin (p0 + 2 + k0) 1⟩, ⟨coin (p0 + 3 + k0) 0, coin (p0 + 3 + k0) 1⟩)
+
+end Vals
+
+/-- Lane round `j`'s message as the source holds it, masked. -/
+def mmOf (src : RepSrc) (lay : Zk.PadLayout) (j : ℕ) : F256 × F256 :=
+  (⟨src.masked (lay.lgMsg j 0), src.masked (lay.lgMsg j 1)⟩, ⟨src.masked (lay.lgMsg j 2), src.masked (lay.lgMsg j 3)⟩)
+
+/-- **What level 0's opening reads from the source**, as the session computes it at the coins from round `p₀`: the
+out-of-domain value, each lane message, the pair's sums; where the pair's coins are answered and independent, the
+restart `y₁'`, `ȳ`, and the salts of levels ≥ 1 on the positions their commitments read. -/
+structure LigHyp (coin : ℕ → ℕ → F128) (n p0 : ℕ) (ms : MerkleScheme) (sch : Schedule) (t b : Array F128)
+    (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
+    (salt : ℕ → ℕ → ByteArray) (src : RepSrc) : Prop where
+  k0 : 1 ≤ sch.k0
+  n0 : sch.n ≠ 0
+  ood : src.masked (lay.lgOod 0) = mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!
+  msg : ∀ j < sch.k0, mmOf src lay j = maskMsg lay h j (roundPoly (tabS coin p0 t j) (wS coin p0 b sch.n j))
+  e0 : (⟨src.masked (lay.lgE 0 0), src.masked (lay.lgE 0 1)⟩ : F256) =
+    dotK (wS coin p0 b sch.n sch.k0) (embedF ((Array.range (tabS coin p0 t sch.k0).size).map (extra (2 * rep)))) +
+      ⟨h[lay.lgE 0 0]!, h[lay.lgE 0 1]!⟩
+  e1 : (⟨src.masked (lay.lgE 1 0), src.masked (lay.lgE 1 1)⟩ : F256) =
+    dotK (wS coin p0 b sch.n sch.k0) (embedF ((Array.range (tabS coin p0 t sch.k0).size).map (extra (2 * rep + 1)))) +
+      ⟨h[lay.lgE 1 0]!, h[lay.lgE 1 1]!⟩
+  y1 : p0 + 3 + sch.k0 < n → Zk.rhoIndependent (rhoS coin p0 sch.k0) = true →
+    src.y1 = (Array.range (tabS coin p0 t sch.k0).size).map fun c =>
+      (tabS coin p0 t sch.k0)[c]! + (rhoS coin p0 sch.k0).1.smul (extra (2 * rep) c) +
+        (rhoS coin p0 sch.k0).2.smul (extra (2 * rep + 1) c)
+  ybar : p0 + 3 + sch.k0 < n → Zk.rhoIndependent (rhoS coin p0 sch.k0) = true →
+    src.ybar = (Array.range tPad).map fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))
+  salt : p0 + 3 + sch.k0 < n → Zk.rhoIndependent (rhoS coin p0 sch.k0) = true →
+    ∀ i, 1 ≤ i → i < sch.levels.size → ∀ q < 2 ^ (sch.levels.getD i default).d,
+      fitBytes ms.saltBytes (src.hiSalt i q) = fitBytes ms.saltBytes (salt i q)
+
+/-- **Level 0's opening from the source, in lockstep with the session's**: answered by `asksCut` from `l`, where the
+source holds what the session computes at the coins from round `l.size` on (`LigHyp`), the source's opening of `cm0`
+erased sends what the session's sends and returns the session's proof but level 0's opened rows and salts. -/
+theorem ligeritoCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule)
+    (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ)
+    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (src : RepSrc) (tr : Transcript)
+    (l : Array Claims.Msg)
+    (H : LigHyp coin n l.size ms sch t b lay h rep tPad extra lanePad salt src) :
+    ((ligeritoCut (asksCut coin n) hs ms sch T (eraseC cm0) b lay src).run tr).go l =
+      ((do
+        let (lg, zl, rec) ← ligeritoPZk (asksCut coin n) hs ms sch T cm0 t b lay h rep tPad extra lanePad salt
+          fun _ _ => 0
+        pure (eraseL lg, zl, rec) : TMW PS (LigeritoProof × Zk.Level0Msgs × Zk.L0Rec)).run tr).go l := by
+  apply Alike.eq
+  unfold ligeritoCut ligeritoPZk
+  refine alike_bind_eq_assoc fun _ t₁ l₁ e₁ => ?_
+  obtain rfl := liftTM_inv e₁
+  refine alike_bind_eq_assoc fun _ t₂ l₂ e₂ => ?_
+  obtain rfl := liftTM_inv e₂
+  refine alike_bind_eq_assoc fun _ t₃ l₃ e₃ => ?_
+  obtain rfl := liftTM_inv e₃
+  refine alike_bind_eq_assoc fun _ t₄ l₄ e₄ => ?_
+  obtain rfl := liftTM_inv e₄
+  refine alike_bind_assoc (R := fun a b _ =>
+    a.1 = (b.1.1, b.1.2.1, b.1.2.2.1, eraseLP b.1.2.2.2.1, b.1.2.2.2.2) ∧ a.2 = b.2) ?prog ?tail
+  case tail =>
+    rintro ⟨⟨caps, rproofs, fin, op0, zl, initCh, rho, b0, y⟩, st⟩
+      ⟨⟨caps', rproofs', fin', op0', zl', initCh', rho', b0', y'⟩, st'⟩ t' l' _ _ ⟨h1, h2⟩
+    simp only [Prod.mk.injEq] at h1
+    obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩ := h1
+    subst h2
+    exact .inr ⟨_, _, _, _, rfl, rfl, rfl⟩
+  case prog =>
+    refine lliftT fun z t₅ l₅ e₅ => ?_
+    obtain ⟨hn₅, rfl, hl₅⟩ := sampleVecP_cut_inv coin H.n0 e₅
+    dsimp only
+    rw [H.ood, modify_bind_run, modify_bind_run]
+    refine lliftT fun _ t₆ l₆ e₆ => ?_
+    obtain rfl := liftTM_inv e₆
+    rw [powP_bind_run, powP_bind_run]
+    refine lliftT fun _ t₇ l₇ e₇ => ?_
+    obtain rfl := liftTM_inv e₇
+    refine lliftT fun b0 t₈ l₈ e₈ => ?_
+    obtain ⟨hn₈, rfl, hl₈⟩ := sampleP_cut_inv coin e₈
+    rw [modify_bind_run, modify_bind_run, get_bind_run]
+    dsimp only
+    sorry
 
 end LigLock
 
