@@ -17,6 +17,7 @@ are `rowsOf`'s `rowCEval`, `rowAB`, `rowLC`, `rowRsAb` and `rowRsC` by coefficie
   `zcOf`, `lcRoundsOf` and `zPartialOf` on the view.
 * **`folded_unique`**: two folds that realize one statement fold alike, so the executable's folded entries are
   `combvOf`.
+* **`innerPre_cutE`**: the inner run answered by `asksCut` that returns is the one answered by `asksS`.
 * **`tauRep`**: `TauRep`; **`innerTauVal_of_tauLig`**: `TauLig → InnerTauVal`.
 -/
 
@@ -134,7 +135,9 @@ theorem folded_unique (S : FlockSoundness.Model.Statement) (cf cf' : _root_.Floc
         (hc'.fold α lw ρ v' hlw hρ hv' ⟨i, hvsz ▸ h1⟩).symm)
   rw [hvv, hc.pin, hc'.pin]
 
-private theorem innerPre_cut' {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
+/-- **The inner run answered by `asksCut` that returns** is the one answered by `asksS` at the same coins
+(`InnerBatched`'s private `innerPre_cut`, stated here for `TauRep` and `TauLig`). -/
+theorem innerPre_cutE {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
     (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace)
     (t : Array _root_.Flock.F128) (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk)
@@ -149,7 +152,7 @@ private theorem innerPre_cut' {coin : ℕ → ℕ → _root_.Flock.F128} {n : �
   sim_walk [zerocheckPZk_cut hr, lincheckPZk_cut hr, ringSwitchP_cut hr, ligeritoPZk_cut hr, cutS_reflT, cutS_refl]
 
 /-- **`TauRep`**: at `InnerAt`, `cons`' first five rows are `rowsOf`'s, each of the layout's length. The run is the
-session's (`innerPre_cut'`), `innerPre_split` splits it into the replay and level 0, and the replay's rows
+session's (`innerPre_cutE`), `innerPre_split` splits it into the replay and level 0, and the replay's rows
 (`replay_zerocheck`, `replay_lincheck`, `replay_values`) read the masked proof (`zc_eq`, `lcRounds_eq`, `zp_eq`) under
 `czExe`'s coins (`replay_coins`), with the folded entries `combvOf` (`folded_unique`). -/
 theorem tauRep : TauRep := by
@@ -157,7 +160,7 @@ theorem tauRep : TauRep := by
   obtain ⟨hL, hw, hnr, s, spec, hsx, dom, cm0, ic, extras, hex, l, hl, o, t', l', hrun, rfl, -⟩ := hA
   have hj := lt_of_jOf j
   unfold innerPreE ioE innerPadsE innerLayE at hrun
-  have hrun' := innerPre_cut' (coinOf_respOf c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ l _ _ hrun
+  have hrun' := innerPre_cutE (coinOf_respOf c) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ l _ _ hrun
   rw [tabsOf_ofCircuit x j] at hrun' hex
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hL.1 hsx
   have hm14 : 14 ≤ (_root_.Flock.Setup.ofCircuit (stAt x j)).m := by
