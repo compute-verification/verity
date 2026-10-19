@@ -650,8 +650,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
       exact (zkTab x ⟨k / 2, hi⟩).wf.1.hk6
     have hm : 14 ≤ (stsOf x)[k / 2]!.m := by
       have := (hall (k / 2) hi').1
-      rw [hst]
-      unfold stAt
+      rw [getElem!_pos (stsOf x) (k / 2) hi']
       omega
     rw [FlockDeploy.repStreams_getElem _ hk]
     dsimp only
@@ -663,7 +662,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
     obtain ⟨hex, rfl⟩ := Prod.mk.inj e1
     refine both_bind (both_right (both_of_map_eq ((hc x hx w hw τ c ⟨k / 2, hi⟩ l).2 ⟨k % 2, hr2⟩))) ?_
     rintro _ ic l2 ⟨rfl, e2⟩
-    have hl2 := Still.go (Still.of_pureS (innerCommitP_pureS _ _ _)) e2
+    have hl2 := (Still.go (Still.of_pureS (innerCommitP_pureS _ _ _)) e2).symm
     subst hl2
     have hcms : (cms.map eraseC)[k / 2]! = eraseC cms[k / 2]! := by
       rw [getElem!_pos _ (k / 2) (by simp only [Array.size_map, hcsz, Array.size_range]; omega),
@@ -675,14 +674,14 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
     have htab : (FlockDeploy.tabsOf (stsOf x))[k / 2]! = _root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]! := by
       rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) (k / 2) (by omega), getElem!_pos (stsOf x) (k / 2) hi']
       simp [FlockDeploy.tabsOf]
-    have hpr : priorOf (FlockDeploy.tabsOf (stsOf x))[k / 2]! sP (k % 2) = priorE c (k / 2) (k % 2) := by
+    have hpr : priorOf (FlockDeploy.tabsOf (stsOf x))[k / 2]! sC (k % 2) = priorE c (k / 2) (k % 2) := by
       unfold priorOf priorE
       by_cases h1 : k % 2 = 1
       · simp only [h1, ↓reduceIte]
         rw [htab, show 2 * (k / 2) = k - 1 by omega]
         exact hback h1
       · simp only [h1, ↓reduceIte]
-    rw [hcms, htb, hpr]
+    rw [hcms, htb, hpr, show asksCut (fun k i => slotAt c k i) n = ioE c n from rfl]
     refine both_bind (both_of_nf (repCut_nf h0 h1 h2 hx hw τ c n hn hsx ⟨k / 2, hi⟩ ⟨k % 2, hr2⟩ _ cms[k / 2]! ic
       extras hex l (by rw [hl]; congr 1; show k = 2 * (k / 2) + k % 2; omega))) ?_
     rintro ⟨pfC, tC⟩ ⟨pfP, tP⟩ l3 ⟨htr, e3⟩
@@ -702,6 +701,7 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
     have e6 : (_root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]!).fold.kLog = (stsOf x)[k / 2]!.c.kLog := rfl
     have e7 : (_root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]!).m = (stsOf x)[k / 2]!.m := rfl
     have e8 : (_root_.Flock.Setup.ofCircuit (stsOf x)[k / 2]!).kLog = (stsOf x)[k / 2]!.c.kLog := rfl
+    simp only [JsonRT.go_pure]
     refine ⟨rfl, ?_⟩
     dsimp only
     refine ⟨_, _, rfl, rfl, rfl, ?_, fun hk1 => ?_⟩
@@ -709,9 +709,10 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
         hl, repBase_eq hsx]
       unfold FlockComplete.ZkTables.repRoundsT piopZk
       rw [e6, e7, hx']
+      dsimp only
       omega
     · rw [show (k + 1) / 2 = k / 2 by omega, Array.back!_push, show k + 1 - 1 = k by omega]
-      have hpts := repPZk_points (hm := hm) (hk := hk6) (h := e3') (hsz := by
+      have hpts := FlockComplete.ZkTables.repPZk_points (hm := hm) (hk := hk6) (h := e3') (hsz := by
         rw [hl3]
         unfold piopZk
         rw [e6, e7, e8]
