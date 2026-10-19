@@ -26,7 +26,8 @@ class FakeApi:
         self.workers, self.gets = workers if workers is not None else {}, []
 
     def agents(self):
-        return iter(self._agents)
+        """Each agent as the list gives it, on Verity's repository unless it says otherwise (`repos`)."""
+        return iter({"repos": [{"url": "https://github.com/compute-verification/verity"}], **a} for a in self._agents)
 
     def get(self, path, **params):
         parts = path.split("/")
@@ -1356,3 +1357,42 @@ def test_every_declared_timer_is_a_registry_handle_with_a_positive_interval():
     assert raw and set(raw) <= handles, f"not registry handles: {sorted(set(raw) - handles)}"
     assert W.timers(root / "infra/control/agent_watch_timers.json") == {h: float(v) for h, v in raw.items()}, \
         "each interval a positive number of seconds"
+
+
+def test_an_agent_not_on_veritys_repository_is_never_acted_on_or_shown(tmp_path):
+    """02:21Z 19 Oct: the watch restarted Daniel's own 'Open calendar for Calendly' (repos null): the key sees every agent on
+    the account. One on another repository, or none, is never streamed, cancelled, restarted or woken, and isn't a status row."""
+    other = [{"url": "https://github.com/someone/calendly-helper"}]
+    agents = [{"id": "bc-run", "status": "ACTIVE", "latestRunId": "run-1", "repos": other},
+              {"id": "bc-err", "status": "IDLE", "latestRunId": "run-e", "updatedAt": W.iso(T0), "repos": None},
+              {"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": "2026-10-18T19:20:00Z",
+               "repos": [{"url": "https://github.com/compute-verification/research-notes"}]},
+              {"id": "bc-ok", "status": "ACTIVE", "latestRunId": "run-2"}]
+    runs = {"run-1": {"status": "RUNNING"}, "run-e": {"status": "ERROR"}, "run-f": dict(FINISHED), "run-2": {"status": "RUNNING"}}
+    api, clock, w = coordinators(tmp_path, agents, runs, wake=True)
+    started = []
+    w.sweep(started.append)
+    for run in ("run-1", "run-2"):
+        held_tool_call(w, run)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-2"]
+    assert [p for p, _ in api.posts] == ["/v1/agents/bc-ok/runs/run-2/cancel", "/v1/agents/bc-ok/runs"], \
+        "the Verity agent alone is freed: nothing restarted, cancelled or woken on the others"
+    assert [r["agent"] for r in records(tmp_path)] == ["bc-ok"] and set(status(tmp_path)) == {"bc-ok"}
+    assert not any(g.startswith(("/v1/agents/bc-run", "/v1/agents/bc-err", f"/v1/agents/{CO}")) for g in api.gets)
+
+
+def test_a_worker_whose_repos_arent_veritys_is_never_acted_on(tmp_path):
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits workers ({W1_}, {W2_}, {W3_})")
+    listed_elsewhere = {"id": W3_, "status": "ACTIVE", "latestRunId": "run-x", "repos": None}
+    api, clock, w = coordinators(tmp_path, [listed_elsewhere], {"run-x": {"status": "RUNNING"}}, notes=notes, workers={
+        W1_: {**worker("ACTIVE", W.iso(T0 - 7 * 3600)), "repos": [{"url": "https://github.com/someone/else"}]},
+        W2_: worker("ACTIVE", W.iso(T0 - 7 * 3600))}, worker_long_s=3600)
+    for _ in range(3):
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert api.gets.count(f"/v1/agents/{W1_}") == 1 and f"/v1/agents/{W3_}" not in api.gets, \
+        "read once, then never; an agent the list has (even not Verity's) is no worker"
+    assert [(r["kind"], r["agent"]) for r in records(tmp_path)] == [("worker_long", W2_)] and set(status(tmp_path)) == {W2_}
