@@ -672,8 +672,10 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
 
 
 def _fake_run(monkeypatch, groups, pre=()):
-    """`run` over the given groups and preflight, with nothing built first and no Lean URLs."""
+    """`run` over the given groups and preflight, with nothing built first, no Lean URLs, and no plan of the real tree for
+    the reused pack (`Reused.plan` reads every file, outside the suite's inputs)."""
     monkeypatch.setattr(CHECK, "PREBUILD", "pass")
+    monkeypatch.setattr(CHECK.Reused, "plan", lambda self: {"parts": []})
     monkeypatch.setattr(CHECK, "preflight", lambda: list(pre))
     monkeypatch.setattr(CHECK, "groups", lambda out, n, cache=True, urls=None: groups)
     monkeypatch.delenv(CHECK.LEAN_DEPS_URLS_ENV, raising=False)
@@ -955,6 +957,7 @@ def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, 
     marker = tmp_path / "ran"
     touch = _py("open(__import__('sys').argv[1], 'w')", marker)
     for failing in ("preflight-lock", "preflight-lints"):
+        monkeypatch.setenv("CHECK_CACHE", str(tmp_path / f"cache-{failing}"))     # else the first's lints pass is reused
         pre = [(n, _py("raise SystemExit(1)") if n == failing else _py("pass"), tmp_path) for n in ("preflight-lock", "preflight-lints")]
         _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=pre)
         ok, done = CHECK.run(tmp_path, 2, keep_going=True)

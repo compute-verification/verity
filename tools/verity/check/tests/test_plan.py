@@ -216,7 +216,7 @@ def test_the_plan_takes_both_packs_of_each_check_of_the_commit_and_of_each_run_g
 
         def sql(self, query, params):
             assert params[0] == "c0ffee" and "source_commit" in query
-            return [("r-mine",)]
+            return [("r-mine", "check")]
 
     import research.store.local as local
 
