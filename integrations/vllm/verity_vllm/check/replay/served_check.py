@@ -9,16 +9,17 @@ reads and the served weights, by the twin of the Definition the Build bound (`ke
   * a fused-MoE block's Calls (`acquire.served_moe`): its gate a GEMM as above, its router (`moe_router_rows`) and expert GEMMs (the
     Definition the step's plan names, by the k16 chain of its step, each (token, slot) pair against its routed expert's weight) on
     the sampled rows, its SiLU-and-mul and slot sum on every row;
-  * an attention op: FA3 over the request's cached keys and values, the committed k and v rows of every step it ran so far, by the
-    Definition the plan names for each sampled query row (`Attention_v4`, or `Fa3AttentionSplit_v1` with the split count);
+  * an attention op: the device's attention kernel over the request's cached keys and values, the committed k and v rows of every
+    step it ran so far, by the Definition the plan names for each sampled query row (FA3's `Attention_v4` or `Fa3AttentionSplit_v1`,
+    FA2's `Attention_v5` or `Fa2AttentionSplit_v1`, with the split count);
   * the logits: the plan's GEMM on each request's last row of the backbone's output; the sampled id: `TokenSelect_v1` on the
     committed logits;
   * the inputs: each request's positions are its token positions (klen - tokens .. klen - 1), and a decode step's token id is the
     id the request sampled at its previous step (the step's input is the previous step's output).
 
 The step's batch must be the plan's (its requests with their token counts), its committed names exactly the Build's, each value
-of its width.  A check that cannot evaluate a value (no twin for its Definition, an operand missing) fails by name; a FA3 row
-or an expert pair whose dot read a non-finite operand is never claimed exact.
+of its width.  A check that cannot evaluate a value (no twin for its Definition, an operand missing) fails by name; an attention
+row or an expert pair whose dot read a non-finite operand is never claimed exact.
 
 With a seed (the Commit's, drawn after the values are committed) a request's sampled rows at each step are a uniform draw of
 `ROWS` from that seed's generator, one draw a request a step shared by its GEMMs and its attention ops, and the report carries
@@ -39,12 +40,15 @@ from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
 from verity_vllm.commit import challenge as CH
 from verity_vllm.program.kernels import dense_rows as DRW
 from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.kernels import fa2_split_twins as FT
 from verity_vllm.program.kernels import inductor_rows as TW
 from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
 from verity_vllm.program.kernels.moe_router_rows import moe_router_topk
 from verity_vllm.program.kernels.rows import token_select_first_max
-from verity_vllm.program.registry import act, b1, cublas_bf16
+from verity_vllm.program.registry import act, b1, cublas_bf16, cublas_gemv
 from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity_vllm.program.registry import fa2_check_inf as F2
+from verity_vllm.program.registry import fa2_split as W2
 from verity_vllm.program.registry import fa3_check_inf as F3
 from verity_vllm.program.registry import inductor as IR
 from verity_vllm.program.registry import moe as MOE
@@ -112,9 +116,14 @@ EXPERTS: dict[str, bool] = {MOE.MoeExpertGemm.id: False, MOE.MoeExpertGemmV2.id:
 GEMMS: dict[str, Callable[..., np.ndarray]] = {
     b1.GemmV2.id: lambda S, x, w: BC.linear_rows(x, w),
     cublas_bf16.CublasSplitKGemmWord.id: lambda S, x, w: BC.cublas_splitk_rows(x, w, S["SPLIT_K"], out="bf16"),
+    cublas_bf16.CublasSplitKGemmBf16PartialsWord.id: lambda S, x, w: BC.cublas_splitk_rows(x, w, S["SPLIT_K"], partial="bf16", out="bf16"),
+    cublas_bf16.CublasSerialSplitKGemmWord.id: lambda S, x, w: BC.cublas_serial_splitk_rows(x, w, S["SPLIT_K"]),
+    cublas_gemv.CublasGemvWord.id: lambda S, x, w: BC.cublas_gemv_rows(x, w, S["LANES"]),
 }
-#: each attention row Definition's split count
-SPLITS: dict[str, Callable[[dict[str, Any]], int]] = {F3.AttentionV4.id: lambda S: 1, IR.Fa3AttentionSplit.id: lambda S: S["NS"]}
+#: each attention row Definition's twin (q, kc, vc, NS, BN, masked_from, dot_prim, inv_prim) -> (out, nonfinite) and split count
+ATTENTION: dict[str, tuple[Callable[..., tuple[np.ndarray, np.ndarray]], Callable[[dict[str, Any]], int]]] = {
+    F3.AttentionV4.id: (TW.fa3_attention_rows, lambda S: 1), IR.Fa3AttentionSplit.id: (TW.fa3_attention_rows, lambda S: S["NS"]),
+    F2.AttentionV5.id: (FT.attention_rows, lambda S: 1), W2.Fa2AttentionSplit.id: (FT.attention_rows, lambda S: S["NS"])}
 
 
 def _verdict(want: np.ndarray, got: np.ndarray, **info: Any) -> dict[str, Any]:
@@ -334,12 +343,12 @@ class ServedCheck:
             for i in local[r]:
                 d = plan["attention"][i]
                 S = d["statics"]
-                ns = SPLITS.get(d["base"])
-                if ns is None:
+                if d["base"] not in ATTENTION:
                     why.append(f"no twin of {d['definition']}")
                     continue
-                o, nf = TW.fa3_attention_rows(q[lo + i].reshape(NH, D), kc[:S["T"]], vc[:S["T"]], NS=ns(S), BN=S["BN"],
-                                              masked_from=S["MASKED_FROM"], dot_prim=S["DOT"], inv_prim=S["INV"])
+                twin, ns = ATTENTION[d["base"]]
+                o, nf = twin(q[lo + i].reshape(NH, D), kc[:S["T"]], vc[:S["T"]], NS=ns(S), BN=S["BN"], masked_from=S["MASKED_FROM"],
+                             dot_prim=S["DOT"], inv_prim=S["INV"])
                 nonfinite += int(nf.any())
                 bad += int(np.count_nonzero(o.reshape(-1) != got[lo + i])) + int(nf.any())
                 rows_n += 1

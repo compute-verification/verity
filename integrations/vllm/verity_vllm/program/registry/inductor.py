@@ -3,10 +3,12 @@ Inductor's fused Triton kernels and FA3's split decode, each with its launch con
 
 Inductor's RMSNorm.  The four fused forms (`triton_red_fused_*rms_norm*`) differ only in how the row r is formed in f32: the row
 itself (after the embedding gather), x + res, or x + (r1 + r2) with no bf16 rounding of r1 + r2 (`InductorAdd2RMSNorm_v1` also
-stores bf16(r)).  The reduction is the launch's: a row has wpr = NUM_WARPS / XBLOCK warps and thread t of the row holds columns
-[VEC t, VEC t + VEC) of each R0_BLOCK chunk, VEC = R0_BLOCK / (32 wpr) of 2, 4 or 8 (one 4-, 8- or 16-byte load); across chunks
-each column's accumulator is `fma(r, r, acc)` from +0; the thread adds its VEC in order, each warp butterflies its lanes (xor
-16 .. 1, `ld.shared` after), and the row's warp sums are butterflied (xor wpr/2 .. 1) through shared memory.  Then mean =
+stores bf16(r)).  The reduction is the launch's: a row has T = 32 NUM_WARPS / XBLOCK threads, a power of two, and thread t of
+the row holds columns [VEC t, VEC t + VEC) of each R0_BLOCK chunk, VEC = R0_BLOCK / T of 2, 4 or 8 (one 4-, 8- or 16-byte
+load); across chunks each column's accumulator is `fma(r, r, acc)` from +0; the thread adds its VEC in order, each warp
+butterflies the row's lanes (xor min(T, 32)/2 .. 1), and a row of wpr = T / 32 > 1 warps butterflies its warp sums (xor
+wpr/2 .. 1) through shared memory (`ld.shared` after the lanes' butterfly).  A row of fewer than 32 lanes (several rows a warp,
+`threadsPerWarp [32/T, T]`) was read at cc 12.0: Qwen3's q/k head norm at XBLOCK 64, R0_BLOCK 64, 16 warps.  Then mean =
 `div.full.f32(sum, N)` (`F32Mul_v2(DivFullScaleA_v2, DivFullRcp)`), `mean + EPS` (add.f32, not contracted),
 `rsqrt.approx.ftz.f32` (`RsqrtApprox_v1`: its argument is at least EPS, a positive normal static, so the flush never applies),
 and out = bf16((r * rstd) * w).  Any other layout is refused: its register order is unverified.
@@ -65,24 +67,25 @@ from verity_vllm.program.registry.prims import BF16, F32
 #: bf16 columns per thread per chunk the PTX was read at: one 4-, 8- or 16-byte vector load
 VECS = (2, 4, 8)
 WARP = 32
-_CONF = ("model-untested: read from the generated Triton kernels' PTX at cc 9.0 (the module docstring); "
+_CONF = ("model-untested: read from the generated Triton kernels' PTX at cc 9.0, a norm row of fewer than 32 lanes at cc 12.0 "
+         "(the module docstring); "
          "tests/properties/served_compiled_kernels_gpu.py is its hardware check")
 
 
 # --- RMSNorm ------------------------------------------------------------------------------------------------------------------
 
 def norm_layout(N: int, EPS: float, XBLOCK: int, R0_BLOCK: int, NUM_WARPS: int) -> tuple[int, int, int]:
-    """(warps per row, chunks per row, columns per thread per chunk) of a reduction launch; refuses a layout this module has not
-    read from PTX."""
-    wpr = NUM_WARPS // XBLOCK if XBLOCK >= 1 and NUM_WARPS % XBLOCK == 0 else 0
-    vec = R0_BLOCK // (WARP * wpr) if wpr >= 1 and R0_BLOCK % (WARP * wpr) == 0 else 0
-    if wpr < 1 or wpr & (wpr - 1) or vec not in VECS or N < 1 or N % vec:
+    """(threads per row, chunks per row, columns per thread per chunk) of a reduction launch; refuses a layout this module has
+    not read from PTX."""
+    tpr = WARP * NUM_WARPS // XBLOCK if XBLOCK >= 1 and NUM_WARPS >= 1 and WARP * NUM_WARPS % XBLOCK == 0 else 0
+    vec = R0_BLOCK // tpr if tpr >= 1 and R0_BLOCK % tpr == 0 else 0
+    if tpr < 1 or tpr & (tpr - 1) or vec not in VECS or N < 1 or N % vec:
         raise ValueError(f"Inductor norm: N={N} XBLOCK={XBLOCK} R0_BLOCK={R0_BLOCK} NUM_WARPS={NUM_WARPS} is not one chunk of "
-                         f"{'/'.join(map(str, VECS))} columns per thread over a power-of-two count of warps per row")
+                         f"{'/'.join(map(str, VECS))} columns per thread over a power-of-two count of threads per row")
     e = np.float32(EPS)
     if not (np.isfinite(e) and e >= np.finfo(np.float32).tiny):
         raise ValueError(f"Inductor norm: EPS={EPS} is not a positive normal f32 (rsqrt.approx.ftz reads mean + EPS)")
-    return wpr, -(-N // R0_BLOCK), vec
+    return tpr, -(-N // R0_BLOCK), vec
 
 
 def _lane0(B, vals):
@@ -97,7 +100,7 @@ def _lane0(B, vals):
 def _rstd(B, S, r, N):
     """rstd of the row r (N f32 values, a Python list) under the launch's reduction; a column slot no chunk reaches keeps the
     kernel's +0 accumulator and is added like any other."""
-    wpr, chunks, vec = norm_layout(N, S.EPS, S.XBLOCK, S.R0_BLOCK, S.NUM_WARPS)
+    tpr, chunks, vec = norm_layout(N, S.EPS, S.XBLOCK, S.R0_BLOCK, S.NUM_WARPS)
     zero = B.call(ZERO32)
     acc = []
     for c in range(S.R0_BLOCK):
@@ -108,12 +111,13 @@ def _rstd(B, S, r, N):
                 a = B.call(P.F32FmaV2, r[j], r[j], a)
         acc.append(a)
     threads = []
-    for t in range(WARP * wpr):
+    for t in range(tpr):
         s = acc[vec * t]
         for x in acc[vec * t + 1:vec * t + vec]:
             s = B.call(P.F32AddV2, s, x)
         threads.append(s)
-    total = _lane0(B, [_lane0(B, threads[WARP * i:WARP * i + WARP]) for i in range(wpr)])
+    lanes = min(tpr, WARP)
+    total = _lane0(B, [_lane0(B, threads[i:i + lanes]) for i in range(0, tpr, lanes)])
     nf = B.call(f32c(float(N)))
     mean = B.call(P.F32MulV2, B.call(P.DivFullScaleAV2, total, nf), B.call(P.DivFullRcp, nf))
     return B.call(P.RsqrtApprox, B.call(P.F32AddV2, mean, B.call(f32c(S.EPS))))
