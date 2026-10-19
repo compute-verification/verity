@@ -15,6 +15,6 @@ p = 0.0
 luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit, once its check exists: the chain is integer arithmetic mod 2^32 on committed words and the round's coins, so a check that recomputes the drawn tile's receipt reproduces it exactly and a wrong one fails whenever its tile is drawn; no kernel or check exists for it"
 
 [skip.served]
-eps = 0.005840
-at = { "DC-90-ri" = 0.005840, "DS-90" = 0.008337 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip as dither-2s-licpw-redux-l32's, at this design's own ♭ (decision 90), 6.159 SMSP-cycles a 4096-MAC MMA on DC-90 and DC-90-ri (LI-CP-W at the fold routes' cheapest mix, cp-red2, and the IMAD filler), 4.3125 on DS-90 (cp-red; 6.220 and 4.375 at REDUX); the most is at Llama-3.1-8B 2K prefill, all P·V's peel, and with P·V's served output checked it is 0.522% (8B) / 0.213% (70B) there on DC-90"
+eps = 0.005804
+at = { "DC-90-ri" = 0.005804, "DS-90" = 0.008262 }
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip as dither-2s-licpw-redux-l32's, at this design's own ♭ (decision 90), 6.197 SMSP-cycles a 4096-MAC MMA on DC-90 and DC-90-ri (LI-CP-W at the fold routes' cheapest mix, cp-seg4, and the IMAD filler), 4.352 on DS-90 (cp-seg4; 6.220 and 4.375 at REDUX); the most is at Llama-3.1-8B 2K prefill, all P·V's peel, and with P·V's served output checked it is 0.522% (8B) / 0.213% (70B) there on DC-90"
