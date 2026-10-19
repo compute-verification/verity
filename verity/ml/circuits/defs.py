@@ -120,9 +120,9 @@ class PrimitiveDefinition(FunctionDefinition):
 @dataclass(eq=False)
 class CompositeDefinition(FunctionDefinition):
     """`signature(S)` -> (params, ret); `body(B, S, *args)` -> Coll of type ret. `S` is a namespace over the
-    statics (attribute access). Statics with default `None` must be bound before use. `ports`: its port types
-    (`ports.Ports`, PROTOCOL.md §12), or a function of `S` giving them; None when it declares none. `refuse(bindings)`,
-    given the statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None."""
+    statics (attribute access). Statics with default `None` must be bound before use. `refuse(bindings)`, given the
+    statics bound so far, says why `bind` refuses them (a binding the body does not cover), or returns None. `ports`: its
+    port types (`ports.Ports`, PROTOCOL.md §12), or a function of `S` giving them; None when it declares none."""
 
     name: str
     version: int
@@ -132,8 +132,8 @@ class CompositeDefinition(FunctionDefinition):
     doc: str = ""
     conformance: str = "not-yet-established"
     register: bool = True
-    ports: Any = field(default=None, repr=False)
     refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
+    ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         self.statics = tuple(self.statics)
@@ -805,13 +805,13 @@ def primitive(name: str, version: int, params: Sequence[tuple[str, Type]], ret: 
 
 
 def composite(name: str, version: int, statics: Sequence[str], signature, doc: str = "",
-              conformance: str = "not-yet-established", ports: Any = None,
-              refuse: Callable[[dict], str | None] | None = None):
+              conformance: str = "not-yet-established", refuse: Callable[[dict], str | None] | None = None,
+              ports: Any = None):
     """Decorator: register a composite; the decorated function is the body builder `(B, S, *args) -> Coll`."""
 
     def deco(fn: Callable[..., Coll]) -> CompositeDefinition:
         return CompositeDefinition(name, version, tuple(statics), signature, fn, doc=doc or (fn.__doc__ or ""),
-                            conformance=conformance, ports=ports, refuse=refuse)
+                            conformance=conformance, refuse=refuse, ports=ports)
 
     return deco
 
