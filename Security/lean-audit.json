@@ -134,6 +134,10 @@
    "owner": "@lean",
    "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
   },
+  "Nci.Assumptions.Fits": {
+   "owner": "@lean",
+   "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -141,6 +145,10 @@
   "Nci.Assumptions.PartialSumsSupport": {
    "owner": "@lean",
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
+  },
+  "Nci.Assumptions.Reach": {
+   "owner": "@lean",
+   "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
   },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
@@ -381,14 +389,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Nci.Assumptions.Fits": {
-   "owner": "@lean",
-   "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
-  },
-  "Nci.Assumptions.Reach": {
-   "owner": "@lean",
-   "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
   }
  },
  "meaning": [
