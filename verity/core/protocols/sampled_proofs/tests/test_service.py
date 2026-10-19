@@ -290,6 +290,44 @@ def test_a_law_whose_count_varies_is_refused_at_register():
         assert stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6)).order == 0
 
 
+def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
+    """`rate:1/3:2` draws `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
+    a registration padded tenfold (N = 60 for 6) draws K = 20 and every unit is still drawn with probability K/N ≥ 1/3,
+    where `subset:2` falls to 2/60. The draw, the Lean verifier's draw of record and the outcome's run (`verifier.run`,
+    which an accept needs) are a subset's of K; a two-stage rule's replay resolves the same way."""
+    for n, k in ((6, 2), (60, 20)):
+        stream = _stream(_spec(S.Law("rate:1/3:2")))
+        assert S.selection_law(stream.spec.selection, n) == {"law": "subset", "k": k} and 3 * k >= n and k % 2 == 0
+        draw = stream.select(stream.register(_record(n, law={"law": "subset", "k": k}), _ports(n)))
+        assert (draw.draw["law"], draw.draw["k"], draw.draw["population"], len(draw.units)) == ("subset", k, n, k)
+        assert stream.deliver(draw, [SESSION]) is None
+        assert stream.outcome(draw, _lean(), {"statement": "stub"}).accepted
+    fixed = _stream()
+    assert len(fixed.select(fixed.register(_record(60), _ports(60))).units) == 2
+    two = _stream(_two_spec("rate:1/3:2"))
+    rec, ports = _half("x", 60, {"law": "subset", "k": 20})
+    assert len(two.select(two.register(rec, ports)).units) == 20
+
+
+def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
+    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 units draws 8 (not 7) and
+    `rate:1/5:4` over 12 draws 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
+    over 6 units, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
+    tables, in ASCII digits."""
+    for text, n, k in (("rate:1/3:4", 20, 8), ("rate:1/5:4", 12, 4)):
+        stream = _stream(_spec(S.Law(text)))
+        assert "R1-law" in _refused(lambda: stream.register(_record(n, law={"law": "subset", "k": k - 1}), _ports(n)))
+        assert len(stream.select(stream.register(_record(n, law={"law": "subset", "k": k}), _ports(n))).units) == k
+    stream = _stream(_spec(S.Law("rate:9/10:4")))
+    with pytest.raises(S.Refused) as e:
+        stream.register(_record(6, law={"law": "subset", "k": 6}), _ports(6))
+    assert e.value.verdict.codes == ("rate",) and e.value.verdict.detail["rate"]["k"] == 8
+    assert stream.log == () and stream.records == ()
+    for bad in ("rate:0/3", "rate:4/3", "rate:1/0", "rate:1/2:0", "rate:1/2:", "rate:1/2:3:4", "rate:\u0661/2", "Rate:1/2"):
+        with pytest.raises(ValueError, match="rate:NUM/DEN"):
+            S.Law(bad)
+
+
 def test_no_retries_nothing_redraws_and_an_outcome_is_final():
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
