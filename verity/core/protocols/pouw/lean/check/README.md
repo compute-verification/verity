@@ -40,10 +40,13 @@ whose `Pc8TileSide` K = 4096 circuit was c7aaeee4…).
 `passEpoch` re-starts the window's pass's epoch from its manifest under the challenger's own coin commitment: a pass
 salted by epoch coins carries the challenger's commitment and its salt coin, opened after the weights' root; a pass
 recorded before epoch coins (read only in a replay) carries a beacon; either way the manifest's salt is the epoch's, and
-the window's context names the pass by its SHA-512. `drawCheck` holds the window's drawn units to the epoch's draw coin,
-opened after the registration: `Flock.Draw.subset` of the key it derives under the stream, the registration and its
-receipt. Both read the current coin version and, only in a replay of a recorded pass, the e2e-service passes'
-(`epoch-coins/v2`, whose binding and weights' root keep the first 32 bytes of `tagged`).
+the window's context names the pass by its SHA-512. A certified window's verifier holds the network certifier's salt for
+the PoUW window its context names (`<prefix>/pouw-window/<p>/<the pass's SHA-512>`), and passes only a pass whose salt
+is `pouwSalt` of it (`salt.pouw_salt`), a v3 manifest; no other verifier passes a v3 manifest. `drawCheck` holds the
+window's drawn units to the epoch's draw coin, opened after the registration: `Flock.Draw.subset` of the key it derives
+under the stream, the registration and its receipt. Both read the current coin version and, only in a replay of a
+recorded pass, the e2e-service passes' (`epoch-coins/v2`, whose binding and weights' root keep the first 32 bytes of
+`tagged`).
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
 `Security/Properties/Proofs/Pouw/Check.lean`.
@@ -56,9 +59,9 @@ undecided. The same suite puts `pouw-check-difftest`'s `opening` against `core_c
 reasons, over `tests/pouw_opening_cases.py`: honest openings and one mutation per refusal (or per reading both sides
 share: hex as `bytes.fromhex` reads it, the header's keys sorted), every mutation also replayed over a few seeds, and
 every reason reached. Its `pass` and `draw` go against `core_check.pass_epoch` and `core_check.draw` the same way, over
-`tests/pouw_pass_cases.py`: honest passes of each coin version and a recorded beacon's, honest draws, and one mutation
-per refusal. `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
-aims at.
+`tests/pouw_pass_cases.py`: honest passes of each coin version, a recorded beacon's and a certified window's, honest
+draws, and one mutation per refusal. `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every
+mutation reaches the refusal it aims at.
 
 ~~~text
 lake build                                                         the library, pouw-check and pouw-check-difftest
