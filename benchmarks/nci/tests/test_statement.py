@@ -82,12 +82,51 @@ def test_the_fit_bound_rows_are_fits_with_chi_on_top():
 
 
 def test_the_regimes_add_unmonitored_compute_at_full_efficiency():
+    """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's residual."""
     q = P | S.BEST
     monitored = (T.residual_share(q) + LAG + X.nu(q)) / P["mfu"]
+    mu = S.fit_mu(6.0) / P["mfu"]
+    assert mu < monitored
     for row in S.regimes()["rows"]:
-        s, D = row["s"], row["D"]["today's wipes"]
+        s, D, six = row["s"], row["D"]["today's wipes"], row["D"]["6 GB streamed-label wipes"]
         assert 1 / D["T3"] == pytest.approx(s + (1 - s) * monitored, rel=1e-4), row
         assert 1 / D["T5"] == pytest.approx(s + (1 - s) * (monitored + S.cheat(q) / P["mfu"]), rel=1e-4), row
+        assert 1 / six["T3"] == pytest.approx(s + (1 - s) * mu, rel=1e-4), row
+        assert 1 / six["T5"] == pytest.approx(s + (1 - s) * (mu + S.cheat(q) / P["mfu"]), rel=1e-4), row
+
+
+def test_the_ladders_fit_bound_is_fit_row_at_the_memory_rungs():
+    """At the streamed-label and power-removal rungs, D by the fit bound is ``fit.row``'s; at today's 166 GB, where the
+    fit bound doesn't hold, it is D without a memory cap (T2's)."""
+    law, target = S.FIT_TARGET
+    L = F.target_loss(law, target)
+    N = F.n_star(law, L)
+    chi = S.cheat(P)
+    rows = {r["rung"]: r for r in S.ladder()}
+    for gb, name in WIPES.items():
+        D = F.row(gb, N, L)["D_fit"]
+        assert rows[name]["D_fit"]["T3"] == pytest.approx(D, rel=1e-9), name
+        assert 1 / rows[name]["D_fit"]["T5"] == pytest.approx(1 / D + chi / P["mfu"], rel=1e-3), name
+    for name in RUNGS:
+        assert rows[name]["D_fit"]["T3"] == pytest.approx(rows[name]["D"]["T2"], rel=1e-9), name
+
+
+def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
+    """T5 never reaches 1,000: chi alone holds it to MFU_0 / chi."""
+    edges = S.fit_edges()
+    assert edges["T5"][1000.0] is None and P["mfu"] / S.cheat(P) < 1000
+    for tier, by_level in edges.items():
+        for level, gb in by_level.items():
+            if gb is not None:
+                assert S.capped(P, tier, S.fit_mu(gb * (1 - 1e-6))) >= level > S.capped(P, tier, S.fit_mu(gb * (1 + 1e-6)))
+
+
+def test_alpha_falls_only_where_k_reaches_the_level_in_its_range():
+    lo, hi = X.SPECS["K"]["min"], X.SPECS["K"]["max"]
+    assert S.alpha_falls({"below": {100.0: "always"}, "intervals": {100.0: [[lo, hi]]}}) is None
+    assert S.alpha_falls({"below": {100.0: "> 5e5"}, "intervals": {100.0: [[5e5, hi]]}}) == P["K"] / 5e5
+    assert S.alpha_falls({"below": {100.0: "never"}, "intervals": {100.0: []}}) == 1.0
+    assert S.dampener(P | {"K": lo}, "T3") < 100
 
 
 def test_the_symbols_closed_forms_are_what_evaluate_uses():
