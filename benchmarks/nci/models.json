@@ -66,8 +66,8 @@
   "n_active": 100000000000.0,
   "d_model": 12288,
   "entry_fee": 3072,
-  "fanout": 7168,
-  "note": "the thread draft's numbers, used by the dense-100b-1m-raw calibration and the dense-pretrain-thread-draft row"
+  "fanout": 49152,
+  "note": "the thread draft's numbers, used by the dense-100b-1m-raw calibration and the dense-pretrain-thread-draft row, except the fan-out: the draft's 7168 is false, since one MLP input value multiplies the 4 x 12288 weights of the up projection (86016 if one normalized value also feeds q, k and v)"
  },
  {
   "id": "dense-405b",

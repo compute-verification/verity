@@ -19,7 +19,8 @@ def test_inputs_are_the_documented_ones():
 
 
 def test_thread_bound_reproduces_the_thread_draft():
-    """The draft: N = 1e11, alpha* = 20 / (2N) = 1e-10, e = 7168, FP4: about 3e6 per counted multiplication."""
+    """The draft's arithmetic: N = 1e11, alpha* = 20 / (2N) = 1e-10, e = 7168, FP4: about 3e6 per counted
+    multiplication (the draft's e is false for its model; the row uses 49152)."""
     K, Gamma = 2e7, 2e17
     assert S.thread_lower(BASE | {"kappa": 1.0}, K, Gamma, 20) == pytest.approx(4 / (2 * 1e-10 * 7168))
 

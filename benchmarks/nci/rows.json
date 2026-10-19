@@ -433,7 +433,7 @@
    "b_w": 4,
    "b_a": 4,
    "d": 3072,
-   "e": 7168,
+   "e": 49152,
    "c": 2,
    "n_updated": 100000000000.0,
    "U_bits": 400000000000.0,
@@ -448,7 +448,7 @@
    "d": 12288,
    "path": "per layer q, o, up and down of a d_model = 12288 transformer with a 4x MLP, forward only: 10 d^2 of the layer's 12 d^2 products; kappa = 0.833 x 2 / 6."
   },
-  "notes": "Reproduces the draft's 'about 3e6 with FP4': kappa x 2.8e6. w_cut assumes d_model = 12288.",
+  "notes": "The draft's 'about 3e6 with FP4' took e = 7168, which is false: one MLP input value multiplies the up projection's 4 x 12288 = 49152 weights, so the thread bound is 6.9x weaker than the draft's. w_cut assumes d_model = 12288.",
   "sources": []
  }
 ]
