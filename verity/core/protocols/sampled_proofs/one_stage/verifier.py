@@ -17,10 +17,9 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
   passes in with everything it read on the way: compared whole;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
   reads are the verdicts' own on both sides, for the registration's own values (`audit.session_registered`), never an
-  argument. One field is Python's on both: `wrong_units.bound` under a Bernoulli law, a float relaxation
-  (`IntegrityProfile.worst_case`, through `math.log`) the Lean does not compute and leaves null. Python's `delta` is a
-  float, given to the Lean exactly (`str(Fraction(delta))`); the Lean writes it, and any float in the inputs, as Python's
-  `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two disagree.
+  argument. Python's `delta` is a float, given to the Lean exactly (`str(Fraction(delta))`); the Lean writes it, and any
+  float in the inputs, as Python's `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two
+  disagree.
 
 Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`, which `test_verifier.py` holds this one to): Lake
 builds the path requires in place, and two builds at once would rewrite one module's C under each other. This package
@@ -298,9 +297,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `check_public`'s boundary values and declared items, the receipt's challenger and place in the log, `select`'s rule,
     the bytes of the coins the draw read and the closure map, `audit_record`'s arguments with the sessions' roots whole,
     and under a two-stage rule the interior values and the interiors' registration (`{"program", "law", "ports",
-    "leaf_layer", "anchors", "log", "record", "received"}`, `register_interiors`' copies). A Bernoulli draw's
-    `wrong_units.bound` is Python's on both, as in `audit_record`. Where the two differ, or the Lean refuses a step, the
-    verdict fails with `DISAGREE` alone."""
+    "leaf_layer", "anchors", "log", "record", "received"}`, `register_interiors`' copies). Where the two differ, or the
+    Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     inner = None if interior is None else {
         "params": _params(interior["program"], query, interior["law"], scheme, interior["ports"], interior["leaf_layer"],
@@ -323,10 +321,6 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             got = {**got, "audit": json.loads(got["audit"])}
         except ValueError:
             got = {"refused": f"{EXE} answered a run whose record is not JSON: {got['audit'][:500]}"}
-        mine, wrong = python.get("audit") or {}, (got.get("audit") or {}).get("wrong_units")
-        if got.get("draw", {}).get("law") == "bernoulli" and isinstance(wrong, dict) and wrong.get("bound") is None \
-                and mine.get("wrong_units"):
-            got["audit"] = {**got["audit"], "wrong_units": {**wrong, "bound": mine["wrong_units"]["bound"]}}
     if isinstance(got.get("interior"), dict) and isinstance(got["interior"].get("audit"), str):
         try:
             got = {**got, "interior": {**got["interior"], "audit": json.loads(got["interior"]["audit"])}}
@@ -384,9 +378,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
             got = json.loads(got)
         except ValueError:
             got = {"refused": f"{EXE} answered a record that is not JSON: {got[:500]}"}
-        wrong = got.get("wrong_units") if isinstance(got, dict) else None
-        if draw.get("law") == "bernoulli" and isinstance(wrong, dict) and wrong.get("bound") is None and py["wrong_units"]:
-            got["wrong_units"] = {**wrong, "bound": py["wrong_units"]["bound"]}
     if not isinstance(got, dict) or not ("refused" in got or isinstance(got.get("checks"), dict)):
         got = {"refused": f"{EXE} answered a record that is not one: {str(got)[:500]}"}
     agree = "refused" not in got and _same(got, py)
