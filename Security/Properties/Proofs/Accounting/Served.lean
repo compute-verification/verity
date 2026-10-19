@@ -9,7 +9,7 @@ which is its first reader's, since only its own call reads it (`firstRead_cases`
 `y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut. `TieLive`: a unit with a word
 has a first gate, its round is a round of the window, and every one is live. `SeededScheduleNotLive`: `UnitsOfLayout`
 puts a read run input at the draw, `LayerCommitted` at its first reader's round, which `Wf` puts below it.
-`Llama31Shape` is a kernel computation.
+`TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses. `Llama31Shape` is a kernel computation.
 -/
 
 namespace Properties.Served
@@ -134,6 +134,11 @@ theorem tieLive : TieLive := by
     obtain ⟨h0r, _⟩ := List.mem_filter.1 h0
     show Cd.coinMode (Cd.round (Cd.call i0)) = .live
     exact T.live _ (round_lt T i0 (List.mem_range.1 h0r))
+
+theorem tieScope : TieScope := by
+  intro ι K Sc L F Cd cls δs T hWf hδ hL
+  unfold Scope
+  exact ⟨hWf, tieLive ι K Sc L F Cd cls T, hδ, hL, tieCommits ι L F Cd cls T⟩
 
 theorem seededScheduleNotLive : SeededScheduleNotLive := by
   intro ι Cd Np Kd p query l hl hU hWf ⟨ℓ, j, hb, hj, hR⟩ hLC

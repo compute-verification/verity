@@ -88,9 +88,16 @@ def SeededScheduleNotLive : Prop :=
 /-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
 units are the per-call Programs' (`ServedUnits`), and the verifier's draw over its population misses as a uniform
 subset does (`DrawMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
-(`LayerCommitted`, `Declared.Live`), and it carries `UnitsOfLayout`'s units and draw, per call. -/
+(`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and draw, per call. -/
 def IsServed {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) (prog : ℕ → SampledProofs.Program)
     (query : ℕ → Json) (start : ℕ → ℕ) : Prop :=
   Tie L F Cd cls ∧ ServedUnits L Cd prog query start ∧ DrawMissesSubset
+
+/-- **A tied circuit is in Compose's scope given the three conjuncts the tie doesn't read**: `Tie` gives `Scope`'s
+`Declared.Live` (`TieLive`) and `LayerCommitted` (`TieCommits`), so a tied circuit that is well formed, with a positive
+`δs` and its scheme's luck proved, meets `Scope`. -/
+def TieScope : Prop :=
+  ∀ (ι K : Type) (Sc : Scheme K) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) (δs : ℝ),
+    Tie L F Cd cls → Cd.Wf → 0 < δs → Sc.LuckProved → Scope Sc Cd δs
 
 end Properties.Served
