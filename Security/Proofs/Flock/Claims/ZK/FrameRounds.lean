@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.FrameMask
+import Proofs.Flock.Claims.ZK.Release
 
 /-!
 # The cut's zerocheck, round by round, and the frame's release of the device's
@@ -22,6 +23,11 @@ and matches them:
   value there plus the frame's pad, the cut's bodies from empty pending bytes are the frame's releases of the device's
   rounds at a rep that has not stopped. A rep's first round also carries its stream's domain, pending before the
   binding: the cut sends it and the frame never releases it (`dropDoms`), so the match is at empty pending bytes.
+* **Between rounds** (`answer_alg`): where the frame takes a round's coins in the algebraic phase, the rep's state is as
+  it was, the coins answered (and kept inside the masked phase), so its phase and position carry to the next round.
+* **At the release** (`LeanRelease.release_of_roundFree`, `release_zcBind`, `release_zcOuter`, `release_zcR1`,
+  `release_zcMl`): where the frame takes the coins before a round (`answered`), the Lean frame's release of the device's
+  zerocheck round is the frame's round above, so the cut's body by `zcBodies_frame`.
 -/
 
 namespace Claims.ZKServer
@@ -318,5 +324,118 @@ theorem zcBodies_frame (m : ℕ) (digest cap : ByteArray) (c : Cfg) (lay : _root
   rw [hmk (lay.ml i 0) (by unfold _root_.Flock.Zk.PadLayout.ml; omega),
     hmk (lay.ml i 1) (by unfold _root_.Flock.Zk.PadLayout.ml; omega)]
   rfl
+
+/-! ## Between rounds -/
+
+theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+/-- **The frame takes a round's coins in the algebraic phase** (`Masker.answer`, outside level 0 and the inner proof):
+where it takes them, the rep's state is as it was, the coins answered and, inside the masked phase, kept. -/
+theorem answer_alg (cfg : Cfg) (s : Masker) (c : Array F128) {s' : Masker} (hi : s.inner = none)
+    (hl : s.l0 = false) (h : s.answer cfg c = .ok s') :
+    s' = { s with owed := none, coins := if s.on then s.coins ++ c else s.coins } := by
+  unfold Masker.answer at h
+  cases ho : s.owed with
+  | none => simp [ho] at h
+  | some n =>
+    simp only [ho, hi, hl] at h
+    by_cases hc : c.size = n
+    · have hne : (c.size != n) = false := by simp [hc]
+      simp only [hne, Bool.false_eq_true, ↓reduceIte] at h
+      cases hon : s.on
+      · simp only [hon, Bool.not_false, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        cases s
+        simp only at hi hl ho hon
+        subst hi hl hon
+        rfl
+      · simp only [hon, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+        obtain ⟨_, _, h⟩ := except_bind_ok h
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        cases s
+        simp only at hi hl ho hon
+        subst hi hl hon
+        rfl
+    · have hne : (c.size != n) = true := by simp [hc]
+      simp only [hne, ↓reduceIte] at h
+      cases h
+
+/-! ## At the release -/
+
+namespace LeanRelease
+
+/-- **The release at a round the frame takes**: where the frame takes the stream's coins for `h`'s last round
+(`answered`) and then the device round, the release is the round's bytes. -/
+theorem release_of_roundFree {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (v : Msg) {m : Masker} {n : ℕ} {out : ByteArray} {s' : Masker} {fr : Array ℕ} (hA : L.answered x ρ h = .ok m)
+    (hn : L.coins x h.length = n)
+    (hr : roundFree (L.cfg x ρ h) { m with stopped := st } ⟨v.toArray⟩ n = .ok (out, s', fr)) :
+    L.release x ρ h st v = out.data.toList := by
+  have hs : L.step x ρ h st v = .ok (out, s') := by
+    unfold step
+    rw [hA]
+    show _root_.Flock.Firewall.Frame.round _ _ _ _ = _
+    unfold _root_.Flock.Firewall.Frame.round
+    rw [hn, hr]
+    rfl
+  unfold release
+  rw [hs]
+
+/-- **The release of the device's zerocheck binding**: where the frame takes the coins before it at a state outside a
+masked phase and before the opening, and the round squeezes `r_skip`'s six coins, the release is the cut's binding with
+the round's rep's pads root, then the squeeze. -/
+theorem release_zcBind {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (digest cap : ByteArray) {m : Masker} (hA : L.answered x ρ h = .ok m)
+    (hc : ∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size)
+    (hon : m.on = false) (hd : m.done = false) (hi : m.inner = none) (hdg : digest.size < 2 ^ 64)
+    (hcap : cap.size < 2 ^ 64) (hb : m.pos ≤ (L.cfg x ρ h).order.size) (hn : L.coins x h.length = 6) :
+    L.release x ρ h st
+        (encs [.label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++
+          (Frame.sq 2 6).enc) =
+      encs (zcBind digest cap (L.cfg x ρ h).root) ++ (Frame.sq 2 6).enc := by
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_zcBind (L.cfg x ρ h) { m with stopped := st } digest cap hc hon hd hi hdg
+    hcap hb
+  rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
+
+/-- **The release of `r_outer`'s round**: inside the algebraic phase, the device's squeeze alone. -/
+theorem release_zcOuter {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    {m : Masker} (hA : L.answered x ρ h = .ok m)
+    (hc : ∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size)
+    (hon : m.on = true) (hi : m.inner = none) (hk : L.coins x h.length ≠ 0) (hn : L.coins x h.length < 2 ^ 64)
+    (hb : m.pos ≤ (L.cfg x ρ h).order.size) :
+    L.release x ρ h st (encs [] ++ (Frame.sq 2 (L.coins x h.length)).enc) = (Frame.sq 2 (L.coins x h.length)).enc := by
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_zcOuter (L.cfg x ρ h) { m with stopped := st } _ hc hon hi hk hn hb
+  rw [release_of_roundFree L x ρ h st _ hA rfl hr, ho]
+
+/-- **The release of `round1`'s round**: inside the algebraic phase from absorbed position `0`, the device's values
+each through `maskVal` (plus its pad, at a rep that has not stopped), then `z`'s squeeze. -/
+theorem release_zcR1 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (dv : ℕ → F128) {m : Masker} (hA : L.answered x ρ h = .ok m)
+    (hc : ∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size)
+    (hon : m.on = true) (hi : m.inner = none) (hpos : m.pos = 0) (hb : 128 ≤ (L.cfg x ρ h).order.size)
+    (hn : L.coins x h.length = 1) :
+    L.release x ρ h st (encs (zcR1 dv) ++ (Frame.sq 1 1).enc) =
+      encs (maskFrames (maskVal (L.cfg x ρ h) st) 0 (zcR1 dv)) ++ (Frame.sq 1 1).enc := by
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_zcR1 (L.cfg x ρ h) { m with stopped := st } dv hc hon hi hpos hb
+  rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
+
+/-- **The release of residual round `i`'s round**: inside the algebraic phase from absorbed position `128 + 2i`, the
+device's two values each through `maskVal`, then the coin's squeeze. -/
+theorem release_zcMl {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (dv : ℕ → F128) (i : ℕ) {m : Masker} (hA : L.answered x ρ h = .ok m)
+    (hc : ∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size)
+    (hon : m.on = true) (hi : m.inner = none) (hpos : m.pos = 128 + 2 * i)
+    (hb : 128 + 2 * i + 2 ≤ (L.cfg x ρ h).order.size) (hn : L.coins x h.length = 1) :
+    L.release x ρ h st (encs (zcMl dv i) ++ (Frame.sq 1 1).enc) =
+      encs (maskFrames (maskVal (L.cfg x ρ h) st) (128 + 2 * i) (zcMl dv i)) ++ (Frame.sq 1 1).enc := by
+  obtain ⟨out, fr, hr, ho⟩ := roundFree_zcMl (L.cfg x ρ h) { m with stopped := st } dv i hc hon hi hpos hb
+  rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
+
+end LeanRelease
 
 end Claims.ZKServer
