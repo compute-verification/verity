@@ -1384,11 +1384,6 @@ def unpinned_uv(root: Path) -> str | None:
     return None if got == [m.group(1)] else f"uv is {got[0] if got else 'broken'}, not the {m.group(1)} pod_setup.sh pins"
 
 
-def renamed(name: str, map_path: Path = HERE / "layout_map.toml") -> str:
-    """The name module `name` has after the move (unchanged when the move didn't rename it)."""
-    return load(map_path).module(name)
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--map", type=Path, default=HERE / "layout_map.toml")

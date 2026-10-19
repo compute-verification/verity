@@ -80,8 +80,8 @@ def main(a: Options) -> None:
             problems.append(f"compilation setting differs: {k}: control {cc.get(k)!r} vs treatment {ct.get(k)!r}")
     if cc.get("enforce_eager") is not False:
         problems.append(f"control is not compiled (enforce_eager={cc.get('enforce_eager')!r})")
-    if ct.get("compiled_taps") not in ("on", "kernels"):      # kernels = the S3 path of record (P_compiled kernel buffers); on = withdrawn record ops
-        problems.append("treatment process did not run with --compiled-taps on|kernels")
+    if ct.get("compiled_taps") not in ("on", "kernels", "served"):  # kernels = the S3 path of record (P_compiled kernel buffers); on = withdrawn record ops
+        problems.append("treatment process did not run with --compiled-taps on|kernels|served")
     if cc.get("compiled_taps") not in (None, "off"):
         problems.append("control process ran with compiled taps")
     # [coord M-0178 (2a)] the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
@@ -102,6 +102,13 @@ def main(a: Options) -> None:
     # (the seam the hooks ride), which is not a launch, so it is reported, not compared.
     program_digests = None
     loaded_identity = None
+    # served: the Build of record is derived from the treatment's own Inductor artifact and rebuilt after its runs (manifest_verify); the
+    # control must have run the same generated kernels, else the record is not the served implementation
+    if ct.get("compiled_taps") == "served":
+        if not kernels_identified:
+            problems.append("served path: generated kernels not identified in both arms (inductor_kernels.json)")
+        elif not kernel_set_equal:
+            problems.append(f"served path: the treatment's generated kernel set differs from the control's: {kernel_diff}")
     if ct.get("compiled_taps") == "kernels":
         mc = json.loads(Path(a.manifest_control).read_text()) if a.manifest_control and Path(a.manifest_control).is_file() else None
         mt = json.loads(Path(a.manifest_treatment).read_text()) if a.manifest_treatment and Path(a.manifest_treatment).is_file() else None

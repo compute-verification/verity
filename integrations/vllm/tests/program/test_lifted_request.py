@@ -40,11 +40,17 @@ CAP = D_MAX + 1
 BOUNDARY = "Final_v2"  # Serve_v2's root emits `t=<T>/final` = Final_v2{…} → the token; a derived flat body has TokenSelect_v1 at root
 
 
+def tiny_component(steps: int):
+    """GP-01's component of `Serve_v2{TINY, LP, steps}` under the request wrapper's parameter names, as every pad test builds it: one
+    descriptor is one cached component (`workload._REQUEST_CACHE`, `lifted._LREQUEST_CACHE`) whatever the names, so a build under
+    other names leaves another test in the process a workload root without `shared.weights`."""
+    desc = encode_program(Program(b1.serve_v2(TINY, LP, steps)))
+    return W.request_component(desc, REGISTRY, [("prompt", repr(Array(LP, I32))), ("weights", repr(weights_type(TINY)))])
+
+
 @pytest.fixture(scope="module")
 def component():
-    sp = b1.serve_v2(TINY, LP, D_MAX)
-    desc = encode_program(Program(sp))
-    return W.request_component(desc, REGISTRY, None)
+    return tiny_component(D_MAX)
 
 
 @pytest.fixture(scope="module")
@@ -206,7 +212,7 @@ def test_a_served_shape_component_is_refused_against_the_declared_cap(component)
     """F-pad-15 (padrev M-0157, A3): a component derived at the SERVED shape (`build_request_LP<lp>_T<served>`, MOE-05's eos-truncated
     derivation) has fewer sampling events than the declared `max_tokens`; lifting it would make the served length the "fixed population".
     Refused by name; the same component under its own (wrong) count is what the refusal prevents."""
-    served = W.request_component(encode_program(Program(b1.serve_v2(TINY, LP, D_MAX - 3))), REGISTRY, None)  # served 6 of cap 9
+    served = tiny_component(D_MAX - 3)  # served 6 of cap 9
     assert len(L.request_boundaries(served.fn.body, BOUNDARY)) == CAP - 3
     with pytest.raises(ValueError, match=r"has 6 sampling events but the manifest declares max_tokens=9.*F-pad-15"):
         L.lift_request_component(served.fn, (17,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)

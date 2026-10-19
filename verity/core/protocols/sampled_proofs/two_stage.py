@@ -15,6 +15,20 @@ proof units, all of them when it holds fewer or `k` is None.  Each RU class has 
 The verifier draws every coin from its own randomness (`OwnRandomness`), with no derivation and no beacon: the RU draw
 after the boundaries are registered, the proof-unit draw after the interiors are.  A stage that checks every proof unit
 draws nothing in stage 2.  A drawn RU's outcome is final: nothing redraws.
+
+An RU with `m` wrong proof units passes with probability `1 - p + p C(n_v - m, k) / C(n_v, k)`, but that is not the
+profile's law: the prover picks `m` after the RU draw, and `m = 1` always leaves a skipped RU wrong
+(`TwoStageLaw.profile`).  RUs are addressed by their index in the committed order, and the indices are distinct.
+
+Each stage-1 stream (`draw_first`: one for `subset` and `bernoulli`, one per stratum for `stratified` and `work`) is
+`2 k · width(n) + 64` bytes (`2 n · width(den) + 64` for `bernoulli`), extended by as many again and rerun whenever it
+runs out (`OwnRandomness.stream`).  `select_replay_units` and `select_proof_units` are the sampled verifier's
+`TwoStage.selectReplayUnits` and `TwoStage.selectProofUnits`, read from the same bytes in the same order and held to the
+Python by the difftest's `replay_units` and `proof_units` pieces.  Nothing here derives a draw, the proof service's
+included: `service.Stream.select` is `draw_first` on the challenger's coins (`service.select_draw`), and its draw of
+record is Lean's `Select.select` on the bytes it read (`one_stage.verifier.select`).  vLLM's legacy replay challenge
+derives its own (`verity_vllm.commit.challenge.replay_key`, under the domain `verity/sampled-proofs/vu-sample/v1`) until
+its re-baseline.
 """
 
 from __future__ import annotations

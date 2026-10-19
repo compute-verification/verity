@@ -89,6 +89,10 @@ class CoinOpening:
 
     @classmethod
     def from_json(cls, doc: dict) -> CoinOpening:
+        if type(doc["epoch"]) is not int:
+            raise DomainError("an opening's epoch is an integer")
+        if type(doc["label"]) is not str:
+            raise DomainError("an opening's label is a string")
         return cls(doc["epoch"], doc["label"], bytes.fromhex(doc["after"]), bytes.fromhex(doc["coin"]),
                    bytes.fromhex(doc["salt"]), tuple(bytes.fromhex(p) for p in doc["path"]))
 

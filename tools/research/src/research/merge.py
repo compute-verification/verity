@@ -1322,11 +1322,13 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
     return tree
 
 
-def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
+def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen, attempt: str = "") -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
-    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  Returns
-    the argv started, None when the declaration names none."""
+    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
+    ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
+    `Check:` trailer, and one made with `--defer` has no passed attempt in the store yet (CI-81).  Returns the argv started,
+    None when the declaration names none."""
     from .store import tools_registry
 
     try:
@@ -1335,7 +1337,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
         return None
     if not argv:
         return None
-    argv.append(commit)
+    argv += [commit, "--attempt", attempt] if attempt else [commit]
     out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
     tree = _own_tree(repo, commit)
     run = argv if tree is None else ["sh", "-c", AFTER_LAND_THEN_REMOVE, str(tree), str(repo), *argv]
@@ -1376,7 +1378,8 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
               runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip (a later landing's `post_train.py` tests the ones before it too), post each landing to the merge thread
+    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), post each
+    landing to the merge thread
     (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM
     (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
     when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
@@ -1423,7 +1426,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             log(f"research merge: the steps after a landing last ran for {mark[:12]}; catching up {n} commit(s) of main to {tip[:12]}")
         if remote == "origin" and (name := mirror_name()):
             push_mirror(repo, tip, name)
-        after_land(repo, tool, tip, log=log)
+        after_land(repo, tool, tip, log=log, attempt=(runs or {}).get(tip, ""))
         if remote == "origin":
             report_landings(repo, start, tip, log=log, runs=runs)
             label_landed(repo, start, tip, log=log, runs=runs)

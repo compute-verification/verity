@@ -2,7 +2,8 @@
 `core-firewall-difftest`) against Rust's (`flock_live::release`, compiled by `tests/rust`) and Python's
 (`verity_flock.firewall`): the shared record vectors replayed by all three, then every op of the record on drawn records
 against both (results and the record each leaves, byte for byte), and the outer session against Rust's `outer_session`,
-with each step's failure and panic, the challenger's verdict and the clock drawn. The records drawn, and the domain the
+with each step's failure and panic, the challenger's verdict and the clock drawn, with and without the Lean decision
+(`core-firewall decide`) as its judge. The records drawn, and the domain the
 three are held to, are `_release`'s."""
 
 from __future__ import annotations
@@ -33,6 +34,15 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 @pytest.fixture(scope="module")
 def rust(tmp_path_factory):
     with D.Server([str(R.rust_reference()), str(tmp_path_factory.mktemp("rust-state"))]) as s:
+        yield s
+
+
+@pytest.fixture(scope="module")
+def rust_judged(tmp_path_factory):
+    """The Rust reference with the Lean decision as its judge (`core-firewall decide`, through `release::lean_judge`), as
+    `flock-circuit prove --firewall-state` runs each outer session."""
+    exe = D.build(R.PKG, "core-firewall")
+    with D.Server([str(R.rust_reference()), str(tmp_path_factory.mktemp("rust-judged-state")), str(exe)]) as s:
         yield s
 
 
@@ -135,6 +145,20 @@ def test_the_outer_session_agrees_with_rust(lean, rust):
     print(f"outer vs Rust, seed {SEED}: {stats}, {dict(sorted(tally.items()))}")
     for k in ("release", "refused", "stop", "stop:fault", "stop:send check", "stop:missed", "stop:verdict"):
         assert tally[k] >= 10, (k, tally)
+
+
+@needs_cargo
+@pytest.mark.slow
+def test_rust_judged_by_the_lean_decision_agrees_with_lean(lean, rust_judged):
+    """`outer_session` with `core-firewall decide` as its judge, one process a decision, against `outerSession`: the judge
+    decides every session as Rust does, so it changes no outcome, why, release time or record (a disagreement would be a
+    stop or a refusal naming it, which `outerSession` never gives). A release, a refusal and a stop of each kind are seen."""
+    tally: Counter = Counter()
+    ref = _tallied(R.through(rust_judged, "outer"), tally, _outcome)
+    stats = D.run(port("outer", ref, R.outer_input()), examples=400, seed=SEED + 1, server=lean)
+    print(f"outer vs Rust judged by Lean, seed {SEED + 1}: {stats}, {dict(sorted(tally.items()))}")
+    for k in ("release", "refused", "stop", "stop:fault", "stop:send check", "stop:missed", "stop:verdict"):
+        assert tally[k] >= 3, (k, tally)
 
 
 def test_the_lean_reads_only_the_firewalls_lines(lean):

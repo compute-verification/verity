@@ -326,7 +326,7 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
 
     def replay(xq, xs, y):
         store, entries = {}, []
-        for (o, m), w in (((op, "0"), xq), ((op, "1"), xs), (("model.layers.0.mlp.gate_up_proj", "0"), y)):
+        for (o, m), w in (((op, "0"), xq), ((op, "1"), xs), (("model.layers.0.mlp.gate_up_proj", "out"), y)):
             r = ident[(o, m)]
             entries.append({"identity": {k: r[k] for k in ("program_digest", "request_id", "step", "invocation", "op_path", "output_member",
                                                             "element_range", "rank")}, "name": f"{o}/{m}", "element_offset": 0,

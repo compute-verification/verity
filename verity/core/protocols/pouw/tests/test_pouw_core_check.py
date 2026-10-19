@@ -32,6 +32,9 @@ _spec.loader.exec_module(openings)
 _spec = importlib.util.spec_from_file_location("pouw_pass_cases", PKG / "tests/pouw_pass_cases.py")
 passes = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(passes)
+_spec = importlib.util.spec_from_file_location("pouw_rounds_cases", PKG / "tests/pouw_rounds_cases.py")
+rounds_cases = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rounds_cases)
 
 #: the refusal each mutation aims at: the reason's start
 EXPECT = {
@@ -46,8 +49,12 @@ EXPECT = {
     "params-eps-empty": 'params: eps: "" is not a natural', "params-grid": "params: grid_bits",
     "params-query": "params: query", "params-range": "params: range", "params-range-zero": "params: range",
     "params-eps-other": "public-value: sampling", "params-delta-other": "public-value: sampling",
-    "params-grid-other": ("public-value:", "level:"), "params-tile-other": "public-value: check, work",
-    "params-template-other": "public-value: check", "params-query-other": "query:", "params-range-low": "level:",
+    "params-grid-other": ("public-value:", "level:"),
+    "params-tile-other": "params: check.tile_work is not its pinned template's tile work",
+    "params-template-other": "public-value: check",
+    "params-template-unpinned": "params: check.template is not a tile template the verifier pins",
+    "params-query-other": "params: query is not its pinned template's query digest", "params-range-low": "level:",
+    "params-coins": "params: check.coins is not live or seeded", "record-coins": "public-value: check",
     "params-range-high": "level:", "record-format": "commitment: format", "record-program": "commitment: program",
     "record-partition": "commitment: partition", "record-population-type": "commitment: population",
     "record-law-missing": "commitment: law is missing", "record-roots": "commitment: roots",
@@ -209,6 +216,8 @@ OPENING_EXPECT = {
     **{n: _HEADER for n in ("no-newline", "header-not-json", "header-nan", "header-list", "header-utf8")},
     **{n: _COUNT for n in ("instances-missing", "instances-bool", "instances-float", "instances-string")},
     "instances-two": "…instances, not one tile",
+    **{n: "the proof's circuit is not the one the verifier pins" for n in ("circuit-other", "circuit-missing",
+                                                                          "circuit-type")},
     **{n: _ROWS for n in ("schemas-missing", "frame-type", "schemas-type", "schemas-swapped", "schemas-one",
                           "schemas-prefixed")},
     "schemas-unsorted": None, "body-short": "the proof's body holds no A row and B row",
@@ -256,6 +265,21 @@ def test_the_opening_reads_what_served_zk_writes():
     assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
         case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
         case["params"]["check"]["entries"], case["params"]["context"])
+
+
+def test_the_pinned_tiles_are_their_templates():
+    """Each pinned template the code still builds has as its query one-stage's query digest of its Definition's instance
+    query: the served window's (`pc8.side_tile`) at the served K and the test window's, with tile work K, and the hiding
+    tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded windows'. The served circuit is tied to
+    the build by benchmarks/pouw's staged-unit test."""
+    from verity.core.protocols.pouw.circuit import pc8
+    from verity.core.protocols.sampled_proofs.one_stage import partition as PT
+    built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True)["tile"]]
+    for d in built:
+        assert CC.TILES[d.id].query == R.query_digest(PT.template_instance_query(d)), d.id
+    assert set(CC.TILES) - {d.id for d in built} == {"Pc8TileLeafH3_v1{K=4096,DEV='sm120'}"}
+    for k in (4096, 128):
+        assert CC.TILES[pc8.side_tile(k).id].tile_work == k
 
 
 def test_canonical_json_is_leans():
@@ -333,6 +357,36 @@ def test_every_draw_mutation_hits_its_refusal():
         for seed in range(6):
             got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
+                (name, seed, got)
+
+
+#: the refusal each rounds mutation aims at: its code and a part of its reason
+ROUNDS_EXPECT = {
+    "honest": None, "verifier-coins": ("coin", "the verifier's coins are malformed: "),
+    "seeded-coins": ("coin", "the verifier's coins are malformed: a live coin commitment is"),
+    "not-live": ("coin", "the coin commitment's "), "roots-form": ("rounds", "the round roots are not"),
+    "openings-list": ("rounds", "the round coins are not a list"), "openings-form": ("coin", ": a live coin opening is"),
+    "twice": ("coin", "is opened twice: a retry never redraws"), "early": ("coin", "was opened before its root was recorded"),
+    "early-root": ("coin", "was opened before its root was recorded"), "never": ("coin", "was never opened"),
+    "swapped": ("coin", ": coin is the epoch's pouw/round coin 1, not its pouw/round coin 0"),
+    "after": ("coin", ": coin was not opened after what the verifier recorded"),
+    "root": ("coin", ": coin was not opened after what the verifier recorded"),
+    "foreign-epoch": ("coin", ": coin is epoch "), "foreign": ("coin", ": coin does not open against"),
+    "tampered": ("coin", ": coin does not open against"), "malformed": ("coin", ": coin opening is malformed"),
+    "too-many": ("coin", "roots recorded, more than the epoch's"),
+    "label": ("coin", "pouw/round coin 0: coin is the epoch's pouw/salt coin 0, not its pouw/round coin 0"),
+}
+
+
+def test_every_rounds_mutation_hits_its_refusal():
+    """`core_check.rounds` accepts an honest live window's round coins and refuses each mutation (a coin opened twice, one
+    opened before its round's root was recorded, a foreign epoch's, …), over a few cases each, with the refusal it aims
+    at."""
+    assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
+    for name, want in ROUNDS_EXPECT.items():
+        for seed in range(6):
+            got = CC.rounds(*rounds_cases.rounds_args(rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name)))
+            assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
                 (name, seed, got)
 
 
