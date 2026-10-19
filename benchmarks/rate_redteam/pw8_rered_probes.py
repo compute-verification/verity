@@ -10,6 +10,8 @@ cursor/pouw-window-eps-stmt2-c7a9 at 01b0e2a4c): probes against main's window, d
 4. ServedTie on main: the window's tile unit reads no -h3 leaf (no `tile_read` in any Program), ignores its index fields,
    and `window_problem` is Python only, so a window whose committed outputs aren't the served leaves is accepted.
 5. ksJoint_le's κ = 2^logLen/(e·Kr) at main's fast100 level-0 lengths, and the Kr it needs.
+6. the recheck of WindowEps at 373694a79: FlockKnowledgeSound at analysisZC (κ = 0, g over 1 − rateZ), sized at those
+   lengths.
 
 Runs on a CPU in seconds against a checkout of main: ``PYTHONPATH=MAIN uv run python benchmarks/rate_redteam/pw8_rered_probes.py``.
 """
@@ -139,9 +141,25 @@ def probe_kappa() -> None:
           "queries to be small")
 
 
+def probe_analysis_zc() -> None:
+    print("== 6. FlockKnowledgeSound at analysisZC: κ = 0, g = (ε⁻ + √(k·adv₀))/(1 − rateZ), rateZ = 2^logLen/(e·k) ==")
+    level0 = {22: 10, 25: 13, 28: 18, 31: 19, 35: 23}
+    adv = 2.0 ** -385
+    for m, ll in level0.items():
+        kmin = 2 ** ll / math.e
+        k2 = math.ceil(2 * kmin)
+        best = min((math.sqrt(k * adv) / (1 - kmin / k), k) for k in (math.ceil(kmin * 2 ** (i / 8)) for i in range(1, 400)))
+        print(f"  m = {m}: logLen = {ll}; rateZ < 1 needs k > 2^{math.log2(kmin):.1f}; at k = 2^{math.log2(k2):.1f} "
+              f"(rateZ = 1/2) g = 2·ε⁻ + 2^{math.log2(2 * math.sqrt(k2 * adv)):.1f}; min over k of the √ term "
+              f"2^{math.log2(best[0]):.1f} at k = 2^{math.log2(best[1]):.1f}")
+    print("  at adv₀ = q²/2^513, q = 2^64, the √ term is negligible and g is about ε⁻/(1 − rateZ); at a state holding a "
+          "collision of H adv₀ = 1 and g >= 1, so g is small only on average over H at counted queries (CollCounted)")
+
+
 if __name__ == "__main__":
     probe_draw()
     probe_eps()
     probe_deadline()
     probe_served_tie()
     probe_kappa()
+    probe_analysis_zc()
