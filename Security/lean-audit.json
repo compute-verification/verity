@@ -3476,11 +3476,23 @@
    "assumptions": [],
    "type_hash": "b9d4b8b6d2fdf2ba50939440b7537191f8ac4cb348eb67f895331fa42966531e"
   },
+  "Nci.SecurityProofs.ContainedMatMulOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedMatMulOn : Nci.Guarantees.ContainedMatMulOn"],
+   "assumptions": [],
+   "type_hash": "1817ee8015023fdda0b756904a5f06327d953a06ce6ce8ed12312b868477d99b"
+  },
   "Nci.SecurityProofs.ContainedTraining": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ContainedTraining : Nci.Guarantees.ContainedTraining"],
    "assumptions": [],
    "type_hash": "cc57888b57675154812ec32f76c474386b3fc204b01538efbfbb34c10c54c1e7"
+  },
+  "Nci.SecurityProofs.ContainedTrainingOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedTrainingOn : Nci.Guarantees.ContainedTrainingOn"],
+   "assumptions": [],
+   "type_hash": "18449f5ab8514c9e3daab13c9c8dec476efecfcce491858edadebcdb323403e6"
   },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
@@ -3530,11 +3542,29 @@
    "assumptions": [],
    "type_hash": "6007575d1460a22e63346ad2afc4a83bc5c4c7fff749b280a150dba09d596041"
   },
+  "Nci.SecurityProofs.ThreadedThrottledDark": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledDark : Nci.Guarantees.ThreadedThrottledDark"],
+   "assumptions": [],
+   "type_hash": "a3965e5caa03cf2e61926408d5047b84693ac61a62baafca0cca6e13d857dd2e"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledOn : Nci.Guarantees.ThreadedThrottledOn"],
+   "assumptions": [],
+   "type_hash": "a7984c474df2870454bd2dfca9bd5e9b030354d05ffbceea7b2f791e14530d65"
+  },
   "Nci.SecurityProofs.ThreadedTraining": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedTraining : Nci.Guarantees.ThreadedTraining"],
    "assumptions": [],
    "type_hash": "94a41bae5d919600ef987d2aa38945b9d18acdc52c8f6dc7e75ebfacf6d1b3e6"
+  },
+  "Nci.SecurityProofs.ThreadedTrainingOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedTrainingOn : Nci.Guarantees.ThreadedTrainingOn"],
+   "assumptions": [],
+   "type_hash": "4977ce5991e451405815af0b0df90673e907c065f11415a58cf187a4add9c118"
   },
   "Nci.SecurityProofs.Training": {
    "owner": "@lean",
@@ -5478,7 +5508,12 @@
    "Verity.Guarantees.SoundBatch": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundBind": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out"
+   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "Nci.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7474,7 +7509,9 @@
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
     "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7482,7 +7519,10 @@
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
     "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
@@ -7505,13 +7545,18 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
     "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
@@ -7594,12 +7639,17 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.OtherPositions",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ThreadedThrottled",
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
     "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
@@ -7695,7 +7745,9 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
@@ -7703,10 +7755,28 @@
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
     "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
+  },
+  "Definitions.Nci.Dark": {
+   "digest": "907f39dd7ab6bdaad74d0e357c22ec4d9fdb7eccdaa2a0d571267775897c8b48",
+   "definitions": {
+    "Nci.PartialContainment": "859bb41aaf4d11fba3d7943767deed3d075d6d8ac73a0c85aae5b025ec470858",
+    "Nci.PartialContainment.S": "3f4fadbf8acd2a98dd31215bd90a71100035bc489d75168cb43b65a8d6876086",
+    "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ContainedMatMulOn",
+    "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
   "Definitions.Nci.Reads": {
@@ -7726,7 +7796,9 @@
    },
    "guarantees": [
     "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.IuReads"
    ]
   },
@@ -7753,7 +7825,10 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
-    "Nci.SecurityProofs.ThreadedTraining"
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
@@ -17328,7 +17403,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
@@ -17345,7 +17422,10 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
-    "Nci.SecurityProofs.ThreadedTraining"
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
   "Models.Nci.Guarantees": {
@@ -17372,12 +17452,19 @@
    ]
   },
   "Models.Nci.Guarantees.Contained": {
-   "digest": "ae9b3d15fc1e2344b6109e1572d1f82f030115e30c595322c42a26baa18ee7bf",
+   "digest": "2dbeea0e928b32b747150af252d351d1d58164530d91a01c613f5e4c3d8eee4f",
    "definitions": {
     "Nci.Guarantees.ContainedMatMul": "df65fc3626a6f4021d0cb77f93195ea4fcf1a643f59a30626e494b5515053583",
-    "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f"
+    "Nci.Guarantees.ContainedMatMulOn": "ab628a935c4b9d9243a9835b21777e39abe9cd71e306194af41fe16d4a27e838",
+    "Nci.Guarantees.ContainedTraining": "d11a30af07ea918204d1d57e4f22237b0ffbca149c9bff292dab777d562c2a1f",
+    "Nci.Guarantees.ContainedTrainingOn": "5f4729e21cff9c78b6d523dca0838c53fc3efe875adff84cd3316d4fc614a7f8"
    },
-   "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
+   "guarantees": [
+    "Nci.SecurityProofs.ContainedMatMul",
+    "Nci.SecurityProofs.ContainedMatMulOn",
+    "Nci.SecurityProofs.ContainedTraining",
+    "Nci.SecurityProofs.ContainedTrainingOn"
+   ]
   },
   "Models.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
@@ -17387,16 +17474,22 @@
    "guarantees": ["Nci.SecurityProofs.UpdatedMatMulReads"]
   },
   "Models.Nci.Guarantees.Threads": {
-   "digest": "70e24c891991e57fadd4da5e646690c41dbbbd82cbdf69cfceb8148a54baf034",
+   "digest": "6e177a187a6cdf7c33b2c07fc18111bf4c60d71d25f2ba04737f662455a9d83e",
    "definitions": {
     "Nci.Guarantees.ThreadedReads": "a67a68ce475e8f51e9fc68a0c389a9b4de94d49141735c04702c4526c2ec2b98",
     "Nci.Guarantees.ThreadedThrottled": "87cba58bdc2929fbf8bc48f250f03230593193f95d7c453c263078fe0bbf8f8f",
-    "Nci.Guarantees.ThreadedTraining": "11117e631a75eb8adb64d1a09eb29eb625d5c993d8eedd0cc38a52c364d9aa66"
+    "Nci.Guarantees.ThreadedThrottledDark": "f88db3542d8bc56a016f8bec0af300a5f6730f5ed71e24e546ea69f16b745589",
+    "Nci.Guarantees.ThreadedThrottledOn": "e26fbfc13cecda19384592d02b95746602a1b3bf2392a5ddf21bca5624cad830",
+    "Nci.Guarantees.ThreadedTraining": "11117e631a75eb8adb64d1a09eb29eb625d5c993d8eedd0cc38a52c364d9aa66",
+    "Nci.Guarantees.ThreadedTrainingOn": "aa259844a49d7e1801fbf7973e60685b39dcd4a74940dd7d525ebd60d15f2c9f"
    },
    "guarantees": [
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
-    "Nci.SecurityProofs.ThreadedTraining"
+    "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedTraining",
+    "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
   "Models.NetworkCertifier.Assumptions": {

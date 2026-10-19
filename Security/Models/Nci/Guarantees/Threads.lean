@@ -1,10 +1,15 @@
 import Models.Nci.Assumptions.Threads
+import Definitions.Nci.Dark
 
 /-!
 # NCI over threads: the guarantees
 
 The thread draft's Theorems 1 and 2. Under the NCI policy an IU reads at most `α` bits per gate and has at most `Γ`
 gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
+
+Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the
+counted multiplications it computes are throttled as before, and every other one is a dark gate, computed off the books
+(`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`).
 -/
 
 namespace Nci.Guarantees
@@ -40,5 +45,36 @@ def ThreadedTraining : Prop :=
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
       κ * b_a * c.D.size c.D.computed ≤ 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
+
+/-- **Theorem 2 with dark gates**: a declaration `d` that complies at `(Γ, α)` and contains the reference circuit `c`
+partly, computing the gates `S` of `c` and leaving the rest dark (`PartialContainment`), has at least `b_a / (αΛ)` gates
+per counted multiplication of `c` in `S`, where `Λ` is Theorem 1's bound at read cap `αΓ`. Each IU of `d` computes a piece
+of `S` that reads no more than the IU, since a dark value enters `d` only as a novel input. At `S = computed` it is
+`ThreadedThrottled`. -/
+def ThreadedThrottledOn : Prop :=
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
+      b_a * (T.M ∩ M.S).card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
+
+/-- **Counted multiplications off the books are dark gates**: under `ThreadedThrottledOn`'s hypotheses, `c`'s counted
+multiplications number at most its dark gates plus `α Λ size(d) / b_a`: `M ≤ U + C / ρ` with `U` the gates computed
+off the books, `C = size(d)` and `ρ = b_a / (αΛ)` the gates per counted multiplication. -/
+def ThreadedThrottledDark : Prop :=
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
+      (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a
+
+/-- **Training is slowed, with dark gates**: when counted multiplications are a fraction `κ` of the reference circuit's
+flops, a declaration that complies at `(Γ, α)` and contains it partly is larger by a factor of at least `κ b_a / (2αΛ)`,
+less what its dark gates absorb: `κ b_a size(c) ≤ 2 b_a #dark + 2 α Λ size(d)`. -/
+def ThreadedTrainingOn : Prop :=
+  ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (T : Threading c) (dd e : ℕ) (M : PartialContainment c d),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a →
+    κ * c.D.size c.D.computed ≤ 2 * T.M.card →
+      κ * b_a * c.D.size c.D.computed ≤
+        2 * b_a * M.dark.card + 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
 
 end Nci.Guarantees
