@@ -704,7 +704,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
     rfl
   refine ⟨?_, hagree⟩
   -- an expansion exists
-  obtain ⟨-, -, -, ⟨gv, hgv, hgn⟩, ⟨a, b, hab, ha, hb⟩, hden⟩ := hi
+  obtain ⟨-, -, -, ⟨gv, hgv, hgn⟩, ⟨a, b, hab, ha, hb⟩, hden⟩ := id hi
   refine ⟨Json.mkObj [("program", .str i.program), ("theta", .arr (thetaOf P i.theta)),
       ("owner", .arr (ownerOf' P i.owner)), ("gamma", gv), ("alpha", .arr #[a, b])], i, P, hi, hdec,
     thetaOf P i.theta, ownerOf' P i.owner, ⟨rfl, rfl, rfl, ⟨gv, rfl, hgn⟩, ⟨a, b, rfl, ha, hb⟩, hden⟩, ?_, ?_, ?_⟩
