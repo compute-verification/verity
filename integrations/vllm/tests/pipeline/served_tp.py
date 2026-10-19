@@ -60,7 +60,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2") -
             weights = DRW.opened_weights(o)
             SR.model_weights_provider = lambda model, prefix, w=weights: w
             st = {"rank": r, "rc": o.run, "com": o.store, "bmap": json.loads((o.out / f"binding_map_p{o.pair}.json").read_text()),
-                  "eng": SimpleNamespace(model=None), "manifest_doc": None,
+                  "eng": SimpleNamespace(model=None), "weights": None, "manifest_doc": None,
                   "replay": {"programs": {str(r): str(root / "build" / f"rank{r}")}, "of_record": of_record, "requests": reqs}}
             got.append({"rank": r, "window": SRT.write(st, req, tp)})
     finally:
