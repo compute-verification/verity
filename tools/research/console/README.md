@@ -17,7 +17,10 @@ on a host.
 - **`--group store`** runs on the control pod every 10 minutes, from its `console-loop.sh`. It builds `verity/merge-checks`, the
   last day's `check` Attempts with the main commit each landed as (its `landed` label); the site's Results view reads every
   other store result from the store's index. It needs the `research` package. `console-loop.sh` is the loop, started at boot by the pod's
-  `/post_start.sh`; it reads the R2 credentials from `/root/.config/verity/r2.env` and the store from `/workspace/steward/store`.
+  `/post_start.sh`; it reads Neon's maintained private index with the existing URL in
+  `/root/.config/verity/store-index.env`, without relisting R2, using the indexer's deployed `research` tree at
+  `/data/infra/store-index-src/src`. The local store and its R2 configuration remain the fallback when that URL is not
+  configured (such as a development machine).
 
 Deploy to vy-nebius-1 with `research deploy` (`tools/research/src/research/pods/nebius/deploy.toml` lists the two scripts, the `cluster` tree and both
 units; it reloads systemd after a unit changes, and the timer's next pass runs the new files):

@@ -173,7 +173,18 @@ def write(out: Path, p: dict) -> None:
 
 def store_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     sys.path[:0] = [str(ns.research_src)]
+    from research.store import bucket_index as BI  # noqa: PLC0415
     from research.store.local import LocalStore  # noqa: PLC0415
+
+    if url := os.environ.get("STORE_INDEXER_DATABASE_URL", "").strip():
+        idx = BI.PostgresIndex(url, "store_private", create=False)
+        try:
+            return [check_index_panel(idx, now)], {"refresh": f"maintained index (complete through {BI.as_of(idx) or 'unknown'})"}
+        except Exception as e:  # noqa: BLE001  the previous panel stays live; never fall back to an hours-long bucket listing
+            errors.append(f"merge-checks: {type(e).__name__}: {e}")
+            return [], {"refresh": "maintained index read failed"}
+        finally:
+            idx.close()
 
     store = LocalStore(ns.store) if ns.store else LocalStore()
     info = {"refresh": "skipped (--no-refresh)"}
@@ -188,6 +199,32 @@ def store_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     except Exception as e:  # noqa: BLE001  the run line names it
         errors.append(f"merge-checks: {type(e).__name__}: {e}")
         return [], info
+
+
+def check_index_panel(idx, now: datetime) -> dict:
+    """`check_panel` from the bucket's maintained derived index rather than this machine's store catalog."""
+    since = iso(now - timedelta(hours=24))
+    landed = {}
+    for (raw,) in idx.query("SELECT doc FROM records WHERE type = 'label' AND kind = 'landed' ORDER BY time")[1]:
+        doc = json.loads(raw) if isinstance(raw, str) else raw
+        if doc.get("by") == "research-merge":
+            landed[doc["target"]] = doc["value"]
+    rows, ends = [], []
+    for run, indexed_at, raw in idx.query(
+            f"SELECT id, time, doc FROM records WHERE type = 'run' AND kind = 'check' AND time >= '{since}' ORDER BY time DESC")[1]:
+        doc = json.loads(raw) if isinstance(raw, str) else raw
+        execution, status, source = (doc.get("execution") or {}), (doc.get("status") or {}), (doc.get("source") or {})
+        start, wall, state, rc = execution.get("start_utc") or indexed_at, execution.get("wall_s"), status.get("state"), status.get("rc")
+        result = "pass" if state == "done" and rc == 0 else state if state in ("running", "cancelled") else f"fail (rc {rc})"
+        rows.append([run, isoz(start), sig(wall / 60, 3) if wall else None, result, (source.get("commit") or "")[:8] or None,
+                     (landed.get(run) or "")[:9] or None, machine_of(doc)])
+        if start and wall:
+            ends.append(datetime.fromisoformat(start.replace("Z", "+00:00")) + timedelta(seconds=wall))
+    return panel("merge-checks", "Every `check` in the last 24 hours", "table",
+                 ["Run", "Started (UTC)", "Minutes", "Result", "Commit", "Landed as", "Machine"], rows,
+                 updated_at=iso(max(ends)) if ends else iso(now), source="evidence store index: tool=check Attempts and their landed labels",
+                 note="Landed as is main's commit whose Check: trailer names the run (its `landed` label); the others are checks of "
+                      "branches or of trains that didn't land. Attempts are published when a check ends, so one in progress isn't listed.")
 
 
 def machine_of(doc: dict) -> str | None:
