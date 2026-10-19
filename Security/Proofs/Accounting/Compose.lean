@@ -6,6 +6,7 @@ import Proofs.Accounting.Compose.SplitRateMerged
 import Proofs.Accounting.Compose.BindingOfECR
 import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Accounting.Compose.WholeLuckOfEntropy
+import Proofs.Accounting.Compose.CircuitWorkSeeded
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -368,7 +369,7 @@ theorem CircuitCredit : Accounting.Guarantees.Compose.CircuitCredit := by
     (hSplit x) (hClock x) (hDisp x) (hTen x) (hPipe x) (hSmem x) (hWords x) (hSem x) (hFold x) (hFill x) hwork)⟩
 
 theorem CircuitWorkSeeded : Accounting.Guarantees.Compose.CircuitWorkSeeded := by
-  sorry
+  exact Seeded.circuitWorkSeeded
 
 theorem CircuitCreditSeeded : Accounting.Guarantees.Compose.CircuitCreditSeeded := by
   intro ι K P T L U F X B Ξ V _ _ _ _ _ _ _ _ _ _ _ _ _ Tq Sc Cd Sh Z H Np Kd hN hr hK R Pl pr folded lam sq εid
