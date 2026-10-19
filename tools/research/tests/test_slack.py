@@ -1380,6 +1380,28 @@ def test_groups_sync_never_sets_a_groups_members(fake, registry, capsys):
     calls = [(m, p) for m, p in fake.calls if m.startswith("usergroups.")]
     assert calls and not any(m.startswith("usergroups.users.") or "users" in p for m, p in calls)
 
+def test_a_retired_group_id_still_routes_and_groups_sync_never_re_enables_it_or_a_group_with_members(fake, registry, capsys):
+    """19 Oct: the seven old groups, whose only member was Daniel, were renamed aside and disabled for empty ones. Posts from
+    old checkouts still tag the old ids, so a handle's retired_usergroups still route; and sync must never re-enable a group
+    that has members (that would notify them without touching membership), nor touch a retired one at all."""
+    reg = json.loads(registry.read_text())
+    infra = next(h for h in reg["handles"] if h["handle"] == "infra")
+    infra["retired_usergroups"] = ["SOLDINFRA1"]
+    registry.write_text(json.dumps(reg))
+    r = slack.load_registry(registry)
+    assert slack.lead_names("<!subteam^SOLDINFRA1> the node?", r) == ["infra"]
+    assert slack.mentions("see <!subteam^SOLDINFRA1|@infra-old>", next(h for h in r["handles"] if h["handle"] == "infra"), r)
+    fake.groups = [{"id": "SINFRA", "name": "infra", "handle": "infra", "description": "x", "date_delete": 1700000000, "users": ["UDANIEL"]},
+                   {"id": "SOLDINFRA1", "name": "infra-old", "handle": "infra-old", "description": "", "date_delete": 1700000000, "users": ["UDANIEL"]}]
+    rc, out, _ = run(capsys, "groups", "sync", "--apply")
+    assert rc == 0 and "refuse  @infra (SINFRA): disabled with 1 member(s)" in out and "SOLDINFRA1" not in out
+    assert not any(m in ("usergroups.enable", "usergroups.update", "usergroups.disable") and p.get("usergroup") in ("SINFRA", "SOLDINFRA1")
+                   for m, p in fake.calls)
+    infra["retired_usergroups"] = ["SINFRA"]                                       # a current id can't also be retired
+    registry.write_text(json.dumps(reg))
+    with pytest.raises(slack.SlackError, match="retired_usergroups"):
+        slack.load_registry(registry)
+
 def test_groups_sync_renames_a_renamed_handles_group_in_place(fake, registry, routes_dirs, capsys):
     """The registry's group id wins over the handle: a renamed handle keeps its group (its id in old checkouts' tags and
     in its holder's subscriptions), and the old name's closed route doesn't get that group disabled."""

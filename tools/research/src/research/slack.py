@@ -239,12 +239,20 @@ def origin_registry(path: Path, fetch: bool = True) -> dict | None:
     return reg if isinstance(reg, dict) else None
 
 
+GROUP_ID_RE = re.compile(r"^S[0-9A-Z]{8,}$")
+
+
+def group_ids(h: dict) -> set[str]:
+    """A handle's user-group ids: its current group and the ones it retired (a retired group still names it in old posts)."""
+    return ({h["usergroup"]} if h.get("usergroup") else set()) | set(h.get("retired_usergroups", []))
+
+
 def origin_groups(path: Path) -> set[str]:
     """The user-group ids in origin/main's registry: an analysis checkout older than a sender's must not report the
     sender's group mentions as dropped (three false DROPPED lines on 14 Oct). Empty when git can't answer, which keeps
     `traffic`'s old behavior."""
     try:
-        return {h["usergroup"] for h in (origin_registry(path) or {}).get("handles", []) if h.get("usergroup")}
+        return {g for h in (origin_registry(path) or {}).get("handles", []) for g in group_ids(h)}
     except (AttributeError, KeyError, TypeError):
         return set()
 
@@ -321,6 +329,12 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        old = h.get("retired_usergroups", [])
+        current = {o.get("usergroup") for o in reg["handles"]}
+        if not isinstance(old, list) or any(not isinstance(g, str) or not GROUP_ID_RE.match(g) or g in current
+                                            or any(g in o.get("retired_usergroups", []) for o in reg["handles"] if o is not h) for g in old):
+            raise SlackError(f"registry {path}: @{name}'s retired_usergroups: Slack group ids (S...) that no handle has now and "
+                             f"no other handle retired; mentions of them still route to @{name}, and groups sync never re-enables them")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
@@ -851,9 +865,9 @@ def mentions(text: str, h: dict, reg: dict) -> str | None:
     """Why `text` names the registry entry `h`, or None.  A user-group mention names its id's group, which Slack shows and
     notifies whatever the label says; the label counts only for an id no handle has (`lead_names` reads it so too)."""
     for gid, label in SUBTEAM_RE.findall(text or ""):
-        if h.get("usergroup") and gid == h["usergroup"]:
+        if gid in group_ids(h):
             return f"user-group mention <!subteam^{gid}>"
-        if label.lstrip("@") == h["handle"] and not any(o.get("usergroup") == gid for o in reg["handles"]):
+        if label.lstrip("@") == h["handle"] and not any(gid in group_ids(o) for o in reg["handles"]):
             return f"user-group mention labelled @{h['handle']}"
     if re.search(rf"(?<![\w@./-])@{re.escape(h['handle'])}(?![\w-])", SUBTEAM_RE.sub(" ", text or "")):
         return f"plain-text @{h['handle']}"
@@ -948,7 +962,7 @@ def lead_names(text: str, reg: dict) -> list[str]:
         return [bare[1]]
     names: list[str] = []
     for at, gid, label in NAME_TOKEN_RE.findall(m.group(1) if m else ""):
-        known = next((h["handle"] for h in reg["handles"] if gid and h.get("usergroup") == gid), "")
+        known = next((h["handle"] for h in reg["handles"] if gid and gid in group_ids(h)), "")
         n = at.rstrip("._-") if at else known or (label or "").lstrip("@")     # Slack shows and notifies the id's group
         if n and n not in names:
             names.append(n)
@@ -2628,7 +2642,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                      "paused": sum(_from(m.get("text") or "", "router") for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    dropped, asks, groups = [], [], {h.get("usergroup") for h in reg["handles"]}
+    dropped, asks, groups = [], [], {g for h in reg["handles"] for g in group_ids(h)}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
     for m in posts:
@@ -2700,7 +2714,9 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     if bot and reg.get("bot_id") != bot:
         print(f"record  bot {bot} in {path}")
         reg["bot_id"], changed = bot, True
-    groups = api.call("usergroups.list", include_disabled="true").get("usergroups", [])
+    groups = api.call("usergroups.list", include_disabled="true", include_users="true").get("usergroups", [])
+    retired = {g for h in reg["handles"] for g in h.get("retired_usergroups", [])}
+    groups = [g for g in groups if g.get("id") not in retired]         # a retired group is never matched or touched again
     live, by_id = {g.get("handle"): g for g in groups}, {g.get("id"): g for g in groups}
     for h in reg["handles"]:
         name, desc = h["handle"], h["remit"][:250]
@@ -2710,6 +2726,10 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
             gid = (api.call("usergroups.create", name=name, handle=name, description=desc).get("usergroup") or {}).get("id") if write else None
         else:
             gid = g["id"]
+            if g.get("date_delete") and g.get("users"):                 # enabling it would notify its members again
+                print(f"refuse  @{name} ({gid}): disabled with {len(g['users'])} member(s); a tag would notify them. Create an "
+                      "empty group instead: rename this one aside and add it to the handle's retired_usergroups")
+                continue
             if g.get("date_delete"):
                 print(f"enable  @{name} ({gid})")
                 if write:
