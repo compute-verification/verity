@@ -39,9 +39,15 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   and 1 hour, 1 day, 30 days and a year of G GPUs, one certificate pooling the horizon's draws), with each scheme's
   serve-time commitments, what one draw's statement costs, and the lifetime pool ε G T with q, a unit's draw
   probability, at δ = 2^-40 and at δ = 1% with A = 1 (`opt5-eps.json`, `.md`).
+- `joint.py`: one live draw for PoUW's work under H1 + fx1, exfiltration and the remote bandwidth audit (Lean
+  `Population.Exfil.joint_of_maxRule`): H1 tiles priced from the same cost model (the optimizer refuses a tile's
+  outputs), the work draw at ε over a pooled horizon and the exfiltration level it gives (WX-THM's T1), the B an
+  exfiltration budget needs on tiles or coordinates, the audit's passes at kernels-memsat's measured loss and its
+  openings at ε_mem, H1's serve-time rows, and the total B at each horizon (`joint-MODEL.json`, `.md`).
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 uv run python benchmarks/sampling_plan/opt5.py --out DIR --label main
 uv run python benchmarks/sampling_plan/opt5_eps.py --out DIR [--gpus 100000] [--budget 0.01] [--luck 0]
+uv run python benchmarks/sampling_plan/joint.py --out DIR [--rows] [--fill 0.103] [--passes 15] [--eps-mem 0.01]
 ```
