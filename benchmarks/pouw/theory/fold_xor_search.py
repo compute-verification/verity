@@ -106,19 +106,26 @@ def _addend(c, m, width: int):
     return c - z3.If(m["inv"], one, 0) + z3.If(m["cx"], one, 0)
 
 
-def imad(o, m):
-    p = o[0] * o[1]
+def imad(o, m, p=None):
+    """`p`, when given, stands for the product a·b (`anchored_cegis`)."""
+    p = o[0] * o[1] if p is None else p
     return [z3.If(m["np"], -p, p) + _addend(o[2], m, 32)]
 
 
-def imad_hi(o, m):
-    """Both halves of the 64-bit a·b + {c_hi:c_lo}: the high one is IMAD.HI's, and the pair is IMAD.WIDE's and
-    IMUL.WIDE's (off the menu, covered anyway)."""
+def hi_factors(o, m):
+    """IMAD.HI's 64-bit multiplicands: a or −a and b or −b, each sign- or zero-extended."""
     a = z3.If(m["na"], -o[0], o[0])
     b = z3.If(m["nb"], -o[1], o[1])
-    a = z3.If(m["sa"], z3.SignExt(32, a), z3.ZeroExt(32, a))
-    b = z3.If(m["sb"], z3.SignExt(32, b), z3.ZeroExt(32, b))
-    p = a * b
+    return (z3.If(m["sa"], z3.SignExt(32, a), z3.ZeroExt(32, a)),
+            z3.If(m["sb"], z3.SignExt(32, b), z3.ZeroExt(32, b)))
+
+
+def imad_hi(o, m, p=None):
+    """Both halves of the 64-bit a·b + {c_hi:c_lo}: the high one is IMAD.HI's, and the pair is IMAD.WIDE's and
+    IMUL.WIDE's (off the menu, covered anyway). `p`, when given, stands for the product (`anchored_cegis`)."""
+    if p is None:
+        a, b = hi_factors(o, m)
+        p = a * b
     s = z3.If(m["np"], -p, p) + _addend(z3.Concat(o[3], o[2]), m, 64)
     return [z3.Extract(31, 0, s), z3.Extract(63, 32, s)]
 
@@ -313,10 +320,12 @@ def merge(k: int, records: list[dict]) -> dict:
     """k's verdict from search records (whole sequences, `splits` cases and `mod_splits` sub-cases, from any runs): a
     sequence is unsat when it or its `swap` image is, or when each of its cases is, a case when it or its image is or
     when each of its sub-cases is. -> the tally, the cases still open, and of those searched as sub-cases, the sub-cases
-    still open (`subs`)."""
+    still open (`subs`). A split run's per-sequence summary (it has "cases") is skipped: under `--cases` it is over
+    some cases only, and its cases' own records carry the verdict."""
     res: dict[str, set] = {}
     for r in records:
-        res.setdefault(r["ops"], set()).add(r["result"])
+        if "cases" not in r:
+            res.setdefault(r["ops"], set()).add(r["result"])
     ok = lambda *names: any("unsat" in res.get(n, ()) for n in names)
     seqs, unsat, still, subs = sequences(k, True), 0, [], []
     for s in seqs:
@@ -482,6 +491,228 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
         add(cx.eval(X, model_completion=True).as_long(), cx.eval(Y, model_completion=True).as_long())
 
 
+# ---- anchored products and x-slices ----------------------------------------------------------------------------------
+
+def _small(k: int, X):
+    """k·X for a small integer k, as additions: a negative constant factor would be bit-blasted as a dense one."""
+    out = z3.BitVecVal(0, X.size())
+    for _ in range(abs(k)):
+        out = out + X
+    return -out if k < 0 else out
+
+
+class ByWord:
+    """Products v·X of one symbolic word X by concrete words v. Each v is s·c + k·2^32 + t (mod 2^width) with s = ±1,
+    c a 32-bit core of fewest set bits and |k|, |t| ≤ 3, so only each distinct core is multiplied by X, and a core
+    that is a power of two is a shift."""
+
+    def __init__(self, X):
+        self.X, self.width, self.cores = X, X.size(), {}
+
+    def __call__(self, v: int):
+        w, mask = self.width, (1 << self.width) - 1
+        best = None
+        for t in range(-3, 4):
+            for s in (1, -1):
+                c = (s * (v - t)) & M32
+                k = ((v - t - s * c) & mask) >> 32 if w > 32 else 0
+                k = k - (1 << (w - 32)) if w > 32 and k >> (w - 33) else k
+                if abs(k) <= 3 and (best is None or c.bit_count() < best[1].bit_count()):
+                    best = (s, c, k, t)
+        if best is None:
+            return z3.BitVecVal(v, w) * self.X
+        s, c, k, t = best
+        if c not in self.cores:
+            self.cores[c] = z3.BitVecVal(c, w) * self.X
+        out = self.cores[c] if s == 1 else -self.cores[c]
+        if k:
+            out = out + (_small(k, self.X) << 32)
+        return out + _small(t, self.X) if t else out
+
+
+def values(cons, term, limit: int, timeout_ms: int = 0):
+    """Every value `term` takes under `cons`, by AllSAT: the list ends on an unsat check, so it is complete. None when
+    there are more than `limit` (or a check is unknown)."""
+    sol = z3.Solver()
+    if timeout_ms:
+        sol.set("timeout", timeout_ms)
+    sol.add(cons)
+    out = []
+    while len(out) <= limit:
+        r = sol.check()
+        if r == z3.unsat:
+            return out
+        if r != z3.sat:
+            return None
+        out.append(sol.model().eval(term, model_completion=True).as_long())
+        sol.add(term != out[-1])
+    return None
+
+
+def _case_of(term, table: list):
+    """table's entry for term's value: [(value, expr)], term known to take one of the values."""
+    out = table[-1][1]
+    for v, e in reversed(table[:-1]):
+        out = z3.If(term == v, e, out)
+    return out
+
+
+def anchored(A: list, B: list, cons, limit: int, by: tuple, timeout_ms: int = 0, p0=None):
+    """A[-1]·B[-1] as A[0]·B[0] + D·B[0] + A[0]·E + D·E, with D = A[-1] − A[0] and E = B[-1] − B[0]: when, under `cons`,
+    D and E each take at most `limit` values (`values`, complete), each product by D or E is a case over concrete
+    words (`ByWord`, `by` its pair for A[0] and B[0]), so z3 bit-blasts one symbolic product, A[0]·B[0], for all
+    inputs, or none when `p0` stands for it. -> the product, or None past `limit`."""
+    D, E = A[-1] - A[0], B[-1] - B[0]
+    vd, ve = values(cons, D, limit, timeout_ms), values(cons, E, limit, timeout_ms)
+    if vd is None or ve is None:
+        return None
+    w, mask = A[0].size(), (1 << A[0].size()) - 1
+    byA, byB = by
+    out = A[0] * B[0] if p0 is None else p0
+    if vd != [0]:
+        out = out + _case_of(D, [(v, byB(v)) for v in vd])
+    if ve != [0]:
+        out = out + _case_of(E, [(u, byA(u)) for u in ve])
+    if vd != [0] and ve != [0]:
+        out = out + _case_of(D, [(v, _case_of(E, [(u, z3.BitVecVal(v * u & mask, w)) for u in ve])) for v in vd])
+    return out
+
+
+#: the x-slices' constants, tried in turn: alternating bits, so that no window of carries makes y ⊕ c from y
+SLICES = (0x55555555, 0xA5A55A5A, 0x12345678)
+
+
+def anchored_cegis(ops: tuple, fix: tuple = (), c_star: int = SLICES[0], timeout_ms: int = 0, limit: int = 64,
+                   tname: str = "xor", free_anchor: bool = False, start: list | None = None) -> dict:
+    """One two-instruction sequence (or a `splits` case) on its x-slice at c*, CEGIS with the last instruction's
+    product anchored (`anchored`): unsat, slice-sat or unknown.
+
+    A program computing x ⊕ y ⊕ K computes y ⊕ c* at x0 = c* ⊕ K, for every y, so no x0 (one symbolic word), wiring,
+    modifiers and constants with that slice is no program, and unsat is the proof. In the slice the first
+    instruction's product, when its multiplicands read x and constants only, is one free word
+    (each program's product is one of its values, so unsat stays the proof), and its results then differ across the
+    inputs y only through the addends; CEGIS starts from y = 0, 1, 2, 4 and 8, at which the anchored products' cores
+    are shifts (more inputs to start from made the IMAD.HI[0, 2] IMAD.HI[2, 4] cases slower: 11 s at 5, over 60 s at
+    33). A slice that some program computes is slice-sat, which settles nothing (try another c*). The modifiers stay
+    symbolic, so a `splits` case is searched whole. With `tname` add, the slice is y + c* (x0 = c* − K).
+
+    With `free_anchor`, the anchor product A[0]·B[0] is a free word P0 too, so z3 bit-blasts no symbolic product.
+    Verification stays exact; a program whose P0 isn't A[0]·B[0] at its A[0] and B[0] (a, b) gets the lemma
+    A[0] = a ∧ B[0] = b → P0 = a·b instead, true of every program, and after `limit` lemmas P0 is tied to the product."""
+    name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
+    t0 = time.monotonic()
+    prog, cons = skeleton(ops, fix)
+    (n1, s1, m1), (n2, s2, m2) = prog
+    if len(ops) != 2 or n1 not in INT_OPS:
+        raise ValueError(f"{name}: anchored CEGIS takes two instructions, the first an integer form")
+    if 1 in ops[0][1]:
+        raise ValueError(f"{name}: an x-slice needs a first product that doesn't read y (its swap image reads x)")
+    if tname not in ("xor", "add"):
+        raise ValueError(f"{name}: an x-slice of {tname} isn't y combined with a constant")
+    X0 = z3.BitVec("X0", 32)
+    slice_target = lambda y: y ^ bv(c_star) if tname == "xor" else y + bv(c_star)
+    P1 = z3.BitVec("P1", 64 if n1 == "IMAD.HI" else 32) if n1 in ("IMAD", "IMAD.HI") else None
+
+    def last_operands(x, y):
+        pool = [x, y] + FORMS[n1]([mux(s, [x, y, c]) for s, c in s1], m1, *([P1] if P1 is not None else []))
+        return [mux(s, pool + [c]) for s, c in s2]
+
+    def factors(vals):
+        return hi_factors(vals, m2) if n2 == "IMAD.HI" else (vals[0], vals[1])
+
+    def output(vals, p=None):
+        return FORMS[n2](vals, m2, p)[-1] if n2 in ("IMAD", "IMAD.HI") else FORMS[n2](vals, m2)[-1]
+
+    syn = z3.Solver()
+    if timeout_ms:
+        syn.set("timeout", timeout_ms)
+    syn.add(cons)
+    inputs, A, B, by, P0 = [], [], [], None, None
+
+    def end(result: str, **more) -> dict:
+        return {"ops": name, "result": result, "inputs": len(inputs), "method": "slice", "c_star": f"{c_star:#010x}",
+                **more, "seconds": round(time.monotonic() - t0, 1)}
+
+    def add(inp: int) -> bool:
+        y = bv(inp)
+        want = slice_target(y)
+        vals = last_operands(X0, y)
+        inputs.append(inp)
+        if n2 not in ("IMAD", "IMAD.HI"):
+            syn.add(output(vals) == want)
+            return True
+        nonlocal by, P0
+        a, b = factors(vals)
+        A.append(a)
+        B.append(b)
+        if by is None:
+            by = (ByWord(a), ByWord(b))
+            P0 = z3.BitVec("P0", a.size()) if free_anchor else a * b
+        p = P0 if len(A) == 1 else anchored([A[0], a], [B[0], b], cons, limit, by, timeout_ms, P0)
+        if p is None:
+            return False
+        syn.add(output(vals, p) == want)
+        return True
+
+    for inp in [0, 1, 2, 4, 8] if start is None else start:
+        if not add(inp):
+            return end("unknown", stage="anchor", at=inp)
+    Y = z3.BitVec("Y", 32)
+    general = output(last_operands(X0, Y)) != slice_target(Y)
+    free = [v for _, slots, m in prog for s, c in slots for v in (s, c) if not isinstance(v, int)]
+    free += [v for _, _, m in prog for v in m.values() if not (z3.is_true(v) or z3.is_false(v))]
+    free += [X0] + ([P1] if P1 is not None else [])
+    lemmas = 0
+    while True:
+        r = syn.check()
+        if r == z3.unsat:
+            return end("unsat", lemmas=lemmas)
+        if r != z3.sat:
+            return end("unknown", stage="synthesis", lemmas=lemmas)
+        mdl = syn.model()
+        if free_anchor and P0 is not None:
+            a, b = (mdl.eval(v, model_completion=True) for v in (A[0], B[0]))
+            if mdl.eval(P0, model_completion=True).as_long() != a.as_long() * b.as_long() % (1 << a.size()):
+                lemmas += 1
+                syn.add(P0 == A[0] * B[0] if lemmas > limit else
+                        z3.Implies(z3.And(A[0] == a, B[0] == b), P0 == z3.BitVecVal(a.as_long() * b.as_long(), a.size())))
+                continue
+        sol = [(v, mdl.eval(v, model_completion=True)) for v in free]
+        ver = z3.Solver()
+        if timeout_ms:
+            ver.set("timeout", timeout_ms)
+        ver.add(z3.substitute(general, *sol))
+        rv = ver.check()
+        if rv == z3.unsat:
+            return end("slice-sat", program={str(v): str(val) for v, val in sol})
+        if rv != z3.sat:
+            return end("unknown", stage="verification")
+        nxt = ver.model().eval(Y, model_completion=True).as_long()
+        if nxt in inputs:
+            raise AssertionError(f"{name}: verification refuted a program at an input it was synthesized for")
+        if not add(nxt):
+            return end("unknown", stage="anchor", at=nxt)
+
+
+def settle(ops: tuple, tname: str, timeout_ms: int, seed: int, edge_only: bool, domain: str, fix: tuple,
+           by_mult: bool, collide: bool, pow2: bool, slices: tuple = (), free_anchor: bool = False) -> dict:
+    """One case by `cegis`, or with `slices` by `anchored_cegis` at each x-slice in turn until one is unsat (its
+    record names it), else the last one's record. A case `anchored_cegis` doesn't take is unknown."""
+    if not slices:
+        return cegis(ops, tname, timeout_ms, seed, edge_only, domain, fix, by_mult, collide, pow2)
+    name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
+    tried = []
+    for c in slices:
+        try:
+            r = anchored_cegis(ops, fix, c, timeout_ms, tname=tname, free_anchor=free_anchor)
+        except ValueError as e:
+            return {"ops": name, "result": "unknown", "stage": str(e), "seconds": 0.0}
+        tried.append(f"{c:#010x}:{r['result']}")
+        if r["result"] == "unsat":
+            break
+    return {**r, "tried": tried}
+
+
 def sequences(k: int, fp: bool) -> list[tuple]:
     """Every sequence of k opcodes, the last an integer form (an FP lane's result never is x ⊕ y ⊕ K), each integer
     form with each pair of multiplicand sources: unordered for IMAD, IMAD.HI and IDP.4A (a·b = b·a, their sign and
@@ -536,13 +767,14 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
            part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
            edge_only: bool = False, via_nan: bool = False, split: bool = False,
            cases: set | None = None, split_mods: bool = False, by_mult: bool = False,
-           collide: bool = False, pow2: bool = False) -> dict:
+           collide: bool = False, pow2: bool = False, slices: tuple = (), free_anchor: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
     suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown. With `split`,
     each sequence is searched as its `splits`, each case streamed, and it is unsat when every case is, FOUND when
     one is; `cases` (labels "SEQUENCE /CASE") keeps only those, and a sequence's verdict is then over them alone.
-    `split_mods` searches each case as its `mod_splits`, and `cases` may then name single sub-cases too."""
+    `split_mods` searches each case as its `mod_splits`, and `cases` may then name single sub-cases too. With
+    `slices`, each case is searched by `anchored_cegis` instead (`settle`)."""
     seqs = [s for s in sequences(k, fp)
             if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
     if cases is not None:
@@ -582,17 +814,18 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
 
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
-            futs = {ex.submit(cegis, c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2): (c, f)
-                    for c, f in todo}
+            futs = {ex.submit(settle, c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2, slices,
+                              free_anchor): (c, f) for c, f in todo}
             for fut in as_completed(futs):
                 got(*futs[fut], fut.result())
     else:
         for c, f in todo:
-            got(c, f, cegis(c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2))
+            got(c, f, settle(c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2, slices,
+                             free_anchor))
     if split:
         for name, c in cover.items():
             rs = [found[c, fix_label(f)] for f in parts(c)]
-            worst = next((r for want in ("FOUND", "unknown") for r in rs if r["result"] == want), rs[0])
+            worst = next((r for want in ("FOUND", "unknown", "slice-sat") for r in rs if r["result"] == want), rs[0])
             done({"ops": name, "result": worst["result"], "cases": len(rs),
                   "open": [r["ops"] for r in rs if r["result"] != "unsat"]})
     elif via_nan:
@@ -631,6 +864,10 @@ def main() -> int:
                     help="start CEGIS from input pairs the first instruction can't tell apart (`collision_inputs`)")
     ap.add_argument("--pow2", action="store_true",
                     help="share the word a first multiplicand reads, at 0 and powers of two (`shared_inputs`)")
+    ap.add_argument("--slice", action="store_true",
+                    help="settle each case by its x-slices (`anchored_cegis`, `SLICES`): two instructions, the first "
+                         "product not reading y")
+    ap.add_argument("--free-anchor", action="store_true", help="with --slice, the anchor product a free word")
     ap.add_argument("--merge", nargs="+", metavar="JSONL",
                     help="search nothing: k's verdict from these runs' records, through x <-> y (`merge`)")
     a = ap.parse_args()
@@ -653,7 +890,7 @@ def main() -> int:
         cases = set(open(a.cases, encoding="utf-8").read().splitlines()) - {""} if a.cases else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
                    tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, cases,
-                   a.split_mods, a.by_mult, a.collide, a.pow2)
+                   a.split_mods, a.by_mult, a.collide, a.pow2, SLICES if a.slice else (), a.free_anchor)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)

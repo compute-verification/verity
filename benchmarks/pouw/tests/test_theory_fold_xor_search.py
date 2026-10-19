@@ -150,6 +150,57 @@ def test_merge_reads_through_the_swap():
     assert subs[0]["ops"] in m["subs"] and len(m["subs"]) == 2
     m = S.merge(1, rest + recs + subs)
     assert m["unsat"] == 27 and not m["open"], m["open"]
+    summary = {"ops": S.label(seq), "result": "unsat", "cases": 1}
+    assert S.merge(1, rest + recs + subs[1:] + [summary])["unsat"] == 25
+
+
+@pytest.mark.slow
+def test_by_word_and_anchored_are_the_products():
+    """`ByWord`'s v·X and `anchored`'s A_i·B_i equal the products they stand for: ByWord at wraps, negatives and dense
+    words against random X, and anchored on an x-slice's last multiplicands at random programs (selectors, constants,
+    modifiers, x0 and the first product's word), against A_i·B_i itself."""
+    rng = np.random.default_rng(17)
+    for w in (32, 64):
+        X = z3.BitVec(f"X{w}", w)
+        by = S.ByWord(X)
+        vs = [0, 1, 3, 1 << 31, (1 << w) - 1, (1 << w) - (1 << 20), ((1 << w) - (1 << 32) + 5) % (1 << w)]
+        vs += rng.integers(0, 2**63, size=8, dtype=np.uint64).tolist()
+        for v in vs:
+            v %= 1 << w
+            for x in rng.integers(0, 2**63, size=4, dtype=np.uint64).tolist():
+                got = z3.substitute(by(v), (X, z3.BitVecVal(x, w)))
+                assert _val(got) == v * x % (1 << w), (w, hex(v))
+    seq = (("IMAD.HI", (0, 2)), ("IMAD.HI", (2, 3)))
+    prog, cons = S.skeleton(seq, ({2: 1, 3: 0},))
+    (_, s1, m1), (_, s2, m2) = prog
+    X0, P1 = z3.BitVec("X0", 32), z3.BitVec("P1", 64)
+
+    def factors(y):
+        pool = [X0, S.bv(y)] + S.imad_hi([S.mux(s, [X0, S.bv(y), c]) for s, c in s1], m1, P1)
+        return S.hi_factors([S.mux(s, pool + [c]) for s, c in s2], m2)
+
+    a0, b0 = factors(0)
+    by = (S.ByWord(a0), S.ByWord(b0))
+    free = [v for _, slots, _ in prog for s, c in slots for v in (s, c) if not isinstance(v, int)]
+    mods = [v for _, _, m in prog for v in m.values()]
+    for y in (1, 1 << 17, 0xDEADBEEF):
+        a, b = factors(y)
+        p = S.anchored([a0, a], [b0, b], cons, 64, by)
+        for _ in range(8):
+            sub = [(v, z3.BitVecVal(int(rng.integers(0, 5)) if v.size() == 4 else int(rng.integers(0, 2**32)),
+                                    v.size())) for v in free]
+            sub += [(v, z3.BoolVal(bool(rng.integers(0, 2)))) for v in mods]
+            sub += [(X0, S.bv(int(rng.integers(0, 2**32)))), (P1, z3.BitVecVal(int(rng.integers(0, 2**63)), 64))]
+            assert _val(z3.substitute(p, *sub)) == _val(z3.substitute(a * b, *sub)), hex(y)
+
+
+def test_values_is_every_value():
+    """`values` lists every value of a term under its constraints, and None past its limit."""
+    b, c = z3.Bools("b c")
+    t = z3.If(b, S.bv(3), S.bv(5)) + z3.If(c, S.bv(0), S.bv(10))
+    assert sorted(S.values([], t, 8)) == [3, 5, 13, 15]
+    assert sorted(S.values([b], t, 8)) == [3, 13]
+    assert S.values([], t, 3) is None
 
 
 def test_shared_axis_is_the_word_the_products_read():
@@ -205,6 +256,18 @@ def test_a_modifier_case_is_unsat():
     seq = (("IMAD.HI", (0, 2)), ("IMAD.HI", (0, 2)))
     fix = ({2: 1, 3: 1, **dict.fromkeys(("cx", "inv", "na", "nc", "np", "sa", "sb"), False), "nb": True},)
     assert S.cegis(seq, timeout_ms=10**9, fix=fix, pow2=True)["result"] == "unsat"
+
+
+@pytest.mark.slow
+def test_an_x_slice_is_unsat_and_finds_slices_that_exist():
+    """A whole case whose 192 modifier sub-cases stayed unknown at 120 s each is unsat on its x-slice at 0x55555555
+    (12 s), with the anchor product free; and the slice of x + y + K, which x·1 + y computes, is slice-sat."""
+    seq = (("IMAD.HI", (0, 2)), ("IMAD.HI", (2, 4)))
+    r = S.anchored_cegis(seq, ({2: 1, 3: 2},), 0x55555555, timeout_ms=10**9, free_anchor=True)
+    assert r["result"] == "unsat" and r["ops"] == "IMAD.HI[0, 2] IMAD.HI[2, 4] /s2=y,s3=C", r
+    seq = (("IMAD", (0, 2)), ("IMAD", (2, 3)))
+    assert S.anchored_cegis(seq, ({2: 1},), 0x55555555, timeout_ms=10**9, tname="add",
+                            free_anchor=True)["result"] == "slice-sat"
 
 
 @pytest.mark.slow
