@@ -1,0 +1,25 @@
+{
+ "definitions": {
+  "MoePairCoordinateW_v2{E=128,K=16,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 43189
+  },
+  "MoePairCoordinateW_v2{E=3,K=32,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 20885
+  },
+  "MoePairCoordinate_v2{E=128,K=16,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 40791
+  },
+  "MoePairCoordinate_v2{E=3,K=32,DOT=AmpereBF16TcDot16_v3}": {
+   "and": 19270
+  },
+  "MoePairCoordinate_v2{E=3,K=32,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 18487
+  },
+  "MoePairGemmW_v2{E=3,K=16,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 34575
+  },
+  "MoePairGemm_v2{E=3,K=16,N=3,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 27381
+  }
+ }
+}
