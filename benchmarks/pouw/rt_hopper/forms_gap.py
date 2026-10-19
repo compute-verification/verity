@@ -10,7 +10,8 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
                                    and RT-HOPPER-10: each loop at the toml's 122.41 / f and on the clock, 128.01 / f
     python forms_gap.py --fan-in   RT-HOPPER-2: ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
     python forms_gap.py --b1-fit   RT-HOPPER-1: b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
-    python forms_gap.py --menu     RT-HOPPER-1: each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it
+    python forms_gap.py --menu     RT-HOPPER-1: each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it,
+                                   then every form FIT has fitted from the H200, at once
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -119,10 +120,19 @@ def sheet() -> None:
 
 
 SS_JI = {"JI90_0": 62.7407638, "JI90_1": 66.93849, "JI90_2": 121.566}
-# RS's coefficient over SS's on each joint row, the least over the matched pairs of r20261019-055823-616f (rs.sh at
-# d6e2f80cf0): the LOP3-only mix beside the wgmma, where RS runs 1.2% faster than SS. Beside the honest's LI fold RS
-# runs 1.9% slower (ratios 1.032, 1.030, 1.019).
-RS_FIT = {"JI90_0": 0.9666, "JI90_1": 0.9686, "JI90_2": 0.9868}
+# Each census form the H200 runs has been timed against: its shape (a warp's share, m 16), its least sound split, its
+# N256-equivalents an instruction (rs.py's n256), the run rs.py's `fit` read, and the fit, each joint row's coefficient
+# over IGMMA_S8_N256's (the least over the matched pairs: alone, beside the LI fold, at the IMAD and LOP3 points), or
+# None before its run is read. RS's least pair is the LOP3 point, where it runs 1.2% faster than SS; beside the LI fold
+# it is 1.9% slower (1.031, 1.030, 1.019).
+FIT = {
+    "IGMMA_S8_N256_RS": ([16, 256, 32], 1, 1, "r20261019-070001-df11", {"JI90_0": 0.9676, "JI90_1": 0.9694, "JI90_2": 0.9868}),
+    "IGMMA_U8S8_N256": ([16, 256, 32], 1, 1, "r20261019-070001-df11", {"JI90_0": 1.0, "JI90_1": 1.0, "JI90_2": 1.0}),
+    "BGMMA_B1_N256": ([16, 256, 256], 8, 1, "r20261019-073926-b0ae", None),
+    "IGMMA_S8_N128": ([16, 128, 32], 1, 1 / 2, "r20261019-075655-d5c2", None),
+    "IGMMA_S8_N64": ([16, 64, 32], 1, 1 / 4, "r20261019-075655-d5c2", None),
+    "IMMA16832_S8": ([16, 8, 32], 1, 1 / 32, "r20261019-075655-d5c2", None),
+}
 
 
 def set_line(data: Path, kind: str, row: str, u: float) -> None:
@@ -132,55 +142,59 @@ def set_line(data: Path, kind: str, row: str, u: float) -> None:
     p.write_text(t)
 
 
+def form_toml(kind: str, shape: list[int], split: int) -> str:
+    return f'[{kind}]\nshape = {shape}\nsplit = {split}\nexact = "s8 products, {split} a product"\n\n'
+
+
+def offer(root: Path, kinds: dict[str, float | None]) -> Path:
+    """sm_90's data with the honest form and each of `kinds` offered, each at IGMMA's joint lines by its MACs times the
+    given scale, or at the census's lane default when the scale is None."""
+    honest = form_toml("IGMMA_S8_N256", [16, 256, 32], 1)
+    d = scratch(root, rs=True, forms=honest + "".join(form_toml(k, FIT[k][0], FIT[k][1]) for k in kinds))
+    for k, scale in kinds.items():
+        if scale is not None:
+            for row, u in SS_JI.items():
+                set_line(d, k, row, u * FIT[k][2] * (FIT[k][4][row] if scale == "fit" else scale))
+    return d
+
+
 def rs_fit() -> None:
     with tempfile.TemporaryDirectory() as t:
-        for scale in (1.0, None, 0.95, 0.9):
-            d = scratch(Path(t) / f"fit-{scale}", rs=True)
-            for row, u in SS_JI.items():
-                set_line(d, "IGMMA_S8_N256_RS", row, u * (RS_FIT[row] if scale is None else scale))
-            label = "the run's matched-pair ratios" if scale is None else f"{scale}× SS's"
+        for scale in (1.0, "fit", 0.95, 0.9):
+            d = offer(Path(t) / f"fit-{scale}", {"IGMMA_S8_N256_RS": scale})
+            label = f"{FIT['IGMMA_S8_N256_RS'][3]}'s fit" if scale == "fit" else f"{scale}× SS's"
             for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
                 print(line(f"{vector} q*={q} RS at {label}", eps(d, vector, q)))
 
 
-# The honest's s8-exact siblings on the census, each a warp instruction's share (m 16) and its MACs over a N256's: every
-# one carries the lane default on JI90, as RS does.
-SIBLINGS = {"IGMMA_S8_N128": ([16, 128, 32], 1 / 2), "IGMMA_S8_N64": ([16, 64, 32], 1 / 4),
-            "IMMA16832_S8": ([16, 8, 32], 1 / 32)}
-
-
 def menu() -> None:
-    """RT-HOPPER-1 beyond RS: each sibling offered beside the honest form, at the census's lane default and at IGMMA's
-    joint lines scaled by its MACs."""
+    """RT-HOPPER-1 beyond RS: each s8-exact sibling offered beside the honest form at the census's lane default, at
+    IGMMA's joint lines by its MACs, and at its fit once read; then every fitted form at once."""
     with tempfile.TemporaryDirectory() as t:
-        for kind, (shape, macs) in SIBLINGS.items():
-            forms = (f'[IGMMA_S8_N256]\nshape = [16, 256, 32]\nsplit = 1\nexact = "s8.s8 into s32"\n\n'
-                     f'[{kind}]\nshape = {shape}\nsplit = 1\nexact = "s8.s8 into s32"\n')
-            for scaled in (False, True):
-                d = scratch(Path(t) / f"{kind}-{scaled}", rs=True, forms=forms)
-                if scaled:
-                    for row, u in SS_JI.items():
-                        set_line(d, kind, row, u * macs)
-                label = "IGMMA's lines by MACs" if scaled else "the census default"
+        for kind in ("IGMMA_S8_N128", "IGMMA_S8_N64", "IMMA16832_S8"):
+            for scale in (None, 1.0, "fit"):
+                if scale == "fit" and FIT[kind][4] is None:
+                    continue
+                d = offer(Path(t) / f"{kind}-{scale}", {kind: scale})
+                label = {None: "the census default", 1.0: "IGMMA's lines by MACs"}.get(scale, f"{FIT[kind][3]}'s fit")
                 print(line(f"DC-90-ri q*=1.22 +{kind} at {label}", eps(d, "DC-90-ri", 1.22)))
-
-
-# BGMMA_B1_N256's coefficient over SS's on each joint row, the least over the matched pairs (alone, LI, IMAD, LOP3) of
-# rs.sh at c8a1b60b12 (B1_RUN); None until that run is read.
-B1_RUN, B1_FIT = None, None
+        fitted = {k: "fit" for k, f in FIT.items() if f[4] is not None}
+        d = offer(Path(t) / "all", fitted)
+        for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
+            print(line(f"{vector} q*={q} every fitted form ({len(fitted)}) at its fit", eps(d, vector, q)))
 
 
 def b1_fit() -> None:
-    """RT-HOPPER-1's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's times the H200's ratio."""
+    """RT-HOPPER-1's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's, and at its fit once read."""
     with tempfile.TemporaryDirectory() as t:
         for split in (8, 64):
-            for scale in (1.0, None):
-                if scale is None and B1_FIT is None:
+            for scale in (1.0, "fit"):
+                if scale == "fit" and FIT["BGMMA_B1_N256"][4] is None:
                     continue
                 d = scratch(Path(t) / f"b1-{split}-{scale}", rs=True, forms=b1(split))
                 for row, u in SS_JI.items():
-                    set_line(d, "BGMMA_B1_N256", row, u * (B1_FIT[row] if scale is None else scale))
-                label = f"{B1_RUN}'s matched-pair ratios" if scale is None else f"{scale}× SS's"
+                    set_line(d, "BGMMA_B1_N256", row, u * (FIT["BGMMA_B1_N256"][4][row] if scale == "fit" else scale))
+                label = f"{FIT['BGMMA_B1_N256'][3]}'s fit" if scale == "fit" else f"{scale}× SS's"
                 for vector, q in (("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
                     print(line(f"{vector} q*={q} b1 split {split} at {label}", eps(d, vector, q)))
 

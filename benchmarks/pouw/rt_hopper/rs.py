@@ -5,9 +5,10 @@ more than 2% faster than SS does; otherwise it is a model gap (the joint rows' d
 `wgli_true` loops fold the wgmma's own accumulators after each wait (RT-HOPPER-8): their cycles a MMA against
 wgli_redux's say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own:
 unordered (wgli_true), ping-pong on named barriers (wgli_pp, wgli_pp2) and double-buffered on two N128 tiles (wgli_db).
-A N128 wgmma counts as half a N256 one throughout. The b1 form (BGMMA m64n256k256) has the same loops as RS; its
-cycles over SS's on each pair is the ratio its joint coefficients take to IGMMA's. The facet check prices every loop on
-DC-90's joint rows, a BGMMA at IGMMA's line.
+A N128 wgmma counts as half a N256 one throughout. The b1 form (BGMMA m64n256k256) and sm90_forms.cu's s8-exact
+siblings (IGMMA N128 and N64, IMMA.16832) have the same loops as RS. The facet check prices every loop on DC-90's joint
+rows, each tensor instruction at IGMMA's line by its MACs, and `fit` gives each form's joint coefficients over IGMMA's,
+the least over its matched pairs, which `forms_gap.py` offers the cheater.
 
     python rs.py OUT [--json PATH]
 """
@@ -61,6 +62,23 @@ def facets(out: Path, rows: dict) -> dict:
     return res
 
 
+def fit(fac: dict) -> dict:
+    """Each form's joint coefficient over IGMMA_S8_N256's on each row, a N256-equivalent: the least over its matched
+    pairs (alone, LI, IMAD, LOP3) of the tensor share the row leaves at the form's loop over the share it leaves at
+    SS's, (cycles − b · lane) / (cycles_SS − b · lane_SS). At 1 the form takes IGMMA's lines by MACs."""
+    res = {}
+    for form, alone in zip(FORMS, ALONE[1:]):
+        pairs = {"alone": (ALONE[0], alone),
+                 **{fam: (ss, f"{ss}_{form}") for fam, ss in (("li", "wgli_redux"), ("imad", "wgmix_imad_r256"),
+                                                              ("lop3", "wgmix_lop3_r256"))}}
+        pairs = {fam: p for fam, p in pairs.items() if p[0] in fac and p[1] in fac}
+        if pairs:
+            res[form] = {r: min(((fac[f]["cycles"] - b * fac[f]["lane_a_mma"]) / (fac[s]["cycles"] - b * fac[s]["lane_a_mma"]),
+                                 fam) for fam, (s, f) in pairs.items())
+                         for r, (_, b) in JOINT.items()}
+    return res
+
+
 def gmma(row: dict) -> float:
     """The loop's wgmma rate in N256-equivalents a SM-clock."""
     return next(r * n256(k.split(":", 1)[1]) for k, r in row["rates"].items() if k.split(":", 1)[1].startswith(GMMA))
@@ -101,6 +119,9 @@ def read(out: Path) -> dict:
         res["facets"] = facets(out, rows)
         over = sorted(f"{p} {r} {f[r]:.4f}" for p, f in res["facets"].items() for r in JOINT if f[r] > 1)
         res["verdict"]["joint rows"] = ("not a lower bound at " + ", ".join(over)) if over else "a lower bound at every loop"
+        res["fit"] = fit(res["facets"])
+        for form, rows_fit in res["fit"].items():
+            res["verdict"][f"{form} fit"] = "  ".join(f"{r} {v:.4f} ({fam})" for r, (v, fam) in rows_fit.items())
     return res
 
 
