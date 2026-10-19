@@ -103,11 +103,12 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
 
 
 def test_the_table_against_the_red_teams_closed_form():
-    """The closed form gives D = 20 and 9.3 at 6 and 13 GB (kappa 0.60, the certified d = 505); at central boundary bits the fit bound is
-    stronger there, and void from 50 GB, where a server holds N* weights at b_w."""
+    """At the structural d = 1 the closed form caps nothing at any of the table's residuals, leaving the residual's
+    D = 1.25; at central boundary bits the fit bound is stronger there, and void from 50 GB, where a server holds N*
+    weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}
-    assert rows[6.0]["D_closed"] == pytest.approx(20.16, rel=0.01)
-    assert rows[13.0]["D_closed"] == pytest.approx(9.31, rel=0.01)
+    assert rows[1.0]["D_closed"] == pytest.approx(1.25, rel=0.01)
+    assert rows[6.0]["D_closed"] == rows[13.0]["D_closed"] == pytest.approx(1.25, rel=0.01)
     assert rows[6.0]["D_fit"] > rows[6.0]["D_closed"] and rows[13.0]["D_fit"] > rows[13.0]["D_closed"]
     assert rows[50.0]["periods"] == 0 and rows[166.0]["periods"] == 0
     assert rows[50.0]["visits"] < 1 and rows[50.0]["visits_train"] > 1

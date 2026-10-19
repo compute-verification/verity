@@ -75,8 +75,13 @@ BLOCK_NAME_BITS = 25
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading no further than
-#: ThreadedOfLayered certifies any for a reference circuit C1 allows, and every gate of a block countable
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; (d, e) ReferenceThreaded's for a reference circuit written in
+#: Dot16 steps, as the declarations are, in products; injected bits valued with (d, e)-threading no further than
+#: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
+#: ReferenceThreaded's (d, e) for Kimi K2 at S = 2e7 under the open conjecture ReferenceLayered, at Dot16 granularity in
+#: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
+REFERENCE_THREADED = (10.0, 37248.0)
+
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -86,7 +91,7 @@ DEFAULTS = {
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
-    "K": 2e7, "Gamma": 6.4e16, "d": 505.0, "e": 37248.0, "kappa": 0.6, "thread_bits": 2.1e8, "block_mults": 1.0,
+    "K": 2e7, "Gamma": 6.4e16, "d": 1.0, "e": 37248.0, "kappa": 0.6, "thread_bits": 4.46e7, "block_mults": 1.0,
     "kappa_chain": 0.0, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
@@ -131,10 +136,10 @@ SPEC = [
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
-    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e; ReferenceThreaded gives 505 for Kimi K2 at S = 2e7, under the open conjecture ReferenceLayered)", "unit": "", "min": 1, "max": 65536, "log": True},
-    {"key": "e", "label": "Model: fan-out e, multiplications per activation value (37,248 for Kimi K2, under the open conjecture ReferenceLayered)", "unit": "", "min": 1e3, "max": 1e6, "log": True},
+    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of novel inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 legs less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},
+    {"key": "e", "label": "Model: fan-out e, multiplications per activation value (37,248 for Kimi K2: ReferenceThreaded's 2,328 Dot16 steps of 16 products, an MoE input value's, under the open conjecture ReferenceLayered)", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies 512 - E legs below E + 1 lookup columns, none at 512: 512 x 163,840 x 2.5 bits = 2.1e8 for any reference circuit C1 allows, 1.34e9 at bf16 embeddings; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e8, "max": 1e11, "log": True},
+    {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies a Dot16 reference circuit 17 - E legs below E + 1 lookup columns, none at 17: 17 x 163,840 x 16 bits = 4.46e7 at the bf16 embeddings ReferenceLayered states; at C1's 2.5-bit floor 7.0e6, below K, so a reference circuit C1 allows may get no (d, e) at K; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e6, "max": 1e11, "log": True},
     {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695); 0 turns the partial-sum law off, as its support premises (PartialSumsSupport, ActivationsSupport) are falsified", "unit": "", "min": 0.01, "max": 1, "log": True, "zero": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
@@ -158,9 +163,11 @@ TIERS = {
 STATUS = [
     ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean (draft #2343) when the declaration "
      "contains the reference circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
-     "on WeightsIncompressible and Threaded (d, e). (505, 37248) is ThreadedOfLayered's for a reference circuit with one "
-     "wide sum per entry, under the open conjecture ReferenceLayered; no Dot16 declaration contains that circuit, so the "
-     "deployment's (d, e) is a Dot16 reference circuit's, being derived (at d = 10 the floor is 1,260; at d = 1, 320)."),
+     "on WeightsIncompressible and Threaded (d, e). (10, 37248) is ReferenceThreaded's for a reference circuit written "
+     "in Dot16 steps, as the declarations are (17 legs less 7 bf16 embedding columns; 2,328 steps of 16 products), under "
+     "the open conjecture ReferenceLayered, whose lookups need the embedding columns to be inputs: a run that trains its "
+     "embedding reads them as updated weights, so the default is the structural d = 1 until Layered's lookups may read "
+     "weight columns."),
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
     ("Monitored compute residual", "r = r-hat + eps'. PoUW's deficit epsilon_W = 0.74% (CircuitCredit, draft #2638) is "

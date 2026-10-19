@@ -15,6 +15,9 @@ import tiers as T  # noqa: E402
 ROOT = HERE.parents[2]
 
 
+#: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
+KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
     effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
     assert all(b <= a * (1 + 1e-12) for a, b in zip(effs, effs[1:]))
@@ -77,7 +80,7 @@ def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
 
 def test_the_wipe_floor_is_the_closed_form():
     """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
-    p = T.DEFAULTS | {"residual": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
+    p = KEYED | {"residual": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
     closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
@@ -86,8 +89,8 @@ def test_the_wipe_floor_is_the_closed_form():
 
 
 def test_memory_caps_the_residual_below_the_state_threshold():
-    threshold = T.state_threshold(T.DEFAULTS, T.TIERS["T3"]) / T.GB
-    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0}
+    threshold = T.state_threshold(KEYED, T.TIERS["T3"]) / T.GB
+    tight = KEYED | {"pous_rounds": 1e6, "pous_floor": 0.0}
     below = T.evaluate(tight | {"unfilled_gb": threshold / 2}, T.TIERS["T3"])
     above = T.evaluate(tight | {"unfilled_gb": threshold * 2}, T.TIERS["T3"])
     assert below["memory_caps_residual"] and not above["memory_caps_residual"]
@@ -113,7 +116,7 @@ def test_unbounded_ingress_makes_wipes_cap_nothing():
 
 def test_disks_left_in_place_count_as_state():
     """An unwiped disk is state a wipe leaves (dark-compute red team, 19 Oct: 8 TB of NVMe undoes the memory cap)."""
-    p = T.DEFAULTS | {"residual": 0.5}
+    p = KEYED | {"residual": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
     assert T.evaluate(p, T.TIERS["T3"])["memory_caps_residual"]
     assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["efficiency"] > T.evaluate(p, T.TIERS["T3"])["efficiency"]
 
@@ -171,9 +174,9 @@ def test_an_injected_bit_buys_a_full_block_at_s_1():
     """At the defaults (d, e)-threading stops at thread_bits, below S_1 = sqrt(2 b_w b_a Gamma), where (1, 0)-threading
     first lets one block hold all its gates; with (d, e) to any reads and kappa Gamma / 2 a block, the chord is the
     secant to the (d, e) bound's full reads."""
-    p = T.DEFAULTS
+    p = KEYED
     s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * p["Gamma"])
-    assert T.chord(p) == pytest.approx((p["Gamma"] - p["K"] * p["e"] / p["b_a"]) / (s_1 - p["K"]))
+    assert T.chord(p) == pytest.approx((p["Gamma"] - T.region_cap(p, p["K"])) / (s_1 - p["K"]))
     old = p | {"thread_bits": math.inf, "block_mults": p["kappa"] / 2}
     S_full = math.sqrt(p["kappa"] * p["Gamma"] * p["d"] * p["b_w"] * p["b_a"])
     assert T.chord(old) == pytest.approx((p["kappa"] * p["Gamma"] / 2 - T.region_cap(p, p["K"])) / (S_full - p["K"]))
@@ -210,26 +213,28 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = KEYED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
     assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
     assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
     assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
-    capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 29.83}
+    capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 0.83}
     assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["residual"] == pytest.approx(
         3 * T.evaluate(capped, T.TIERS["T3"])["residual"], rel=0.02)
 
 
 def test_reference_layered_at_kimi_k2():
     """The falsification test of the conjecture `Nci.Assumptions.ReferenceLayered`: the parameters it states are Kimi
-    K2's shapes', and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded` derives from them at S = K. A
-    keyed reference circuit's roots are its matrix products' entries, whose legs are their inner dimension, and its
-    values' gradients, whose legs are the value's forward reach; the most counted multiplications a value reaches are an
-    MoE input value's (the reach table of note:training-20261019T0446Z-threading-layered); a lookup's column is a bf16
-    embedding column, vocab x 16 bits; and at S = K the theorem takes the fewest E with S below E + 1 columns, giving
-    (d0 - E, e + E e_lk) with e_lk = 0, layer 0's attention-input projections uncounted. It can't find a reference
-    circuit that isn't keyed: the class is checked against a transformer block on paper."""
+    K2's shapes' in Dot16 steps, and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded` derives from them
+    at S = K. A keyed reference circuit written as the declarations are computes each matrix-product entry, forward and
+    backward, as a chain of Dot16 steps; its roots are each chain's steps after the first, whose legs are the previous
+    accumulator and the step's 16 activations, so every inner dimension is a whole number of steps, at least two. A
+    value's reach is its forward or gradient fan-out in products, a sixteenth of it in steps with the activations
+    designated round-robin, and the most is an MoE input value's; a lookup's column is a bf16 embedding column, vocab x
+    16 bits; and at S = K the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with
+    e_lk = 0, layer 0's attention-input projections uncounted. tiers.py counts products, 16 to a step. It can't find a
+    reference circuit that isn't keyed: the class is checked against a transformer block on paper."""
     m = kappa.MODELS["kimi-k2"]
     a, d, slots, ffn = m["attention"], m["d"], m["active"] + m["shared"], m["expert_ffn"]
     forward = {"attention-side xn": a["q_rank"] + a["kv_rank"] + a["rope"], "c_q": a["heads"] * (a["nope"] + a["rope"]),
@@ -237,12 +242,17 @@ def test_reference_layered_at_kimi_k2():
                "expert hidden": d, "dense xn'": 2 * m["ffn"], "dense hidden": d}
     backward = {"d gate, d up": 2 * d, "d mlp out": max(slots * ffn, m["ffn"]), "d attention mid": a["heads"] * a["v"],
                 "d v, d k": a["kv_rank"], "d q": a["q_rank"], "d c_q, d c_kv": d, "d logit": d}
-    d0 = min([inner for _, inner, _, _ in kappa.matrices(m)] + list(forward.values()))
-    e = max((forward | backward).values())
-    b, e_lk = m["vocab"] * 16, 0
+    step, bf16 = 16, 16
+    inner = [n for rows, cols, _, _ in kappa.matrices(m) for n in (rows, cols)] + [d, m["vocab"]]
+    reach = forward | backward
+    assert all(n % step == 0 and n >= 2 * step for n in inner)
+    assert all(v % step == 0 for v in reach.values())
+    d0, e = step + 1, max(reach.values()) // step
+    b, e_lk = m["vocab"] * bf16, 0
     E = int(T.DEFAULTS["K"] // b)
-    assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (512, 37248, 2621440, 7)
-    assert (T.DEFAULTS["d"], T.DEFAULTS["e"]) == (d0 - E, e + E * e_lk)
+    assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
+    assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
+    assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
     nci = ROOT / "Security" / "Models" / "Nci"
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()
     stated = (nci / "Guarantees/Layered.lean").read_text()
