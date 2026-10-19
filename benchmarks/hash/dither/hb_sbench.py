@@ -11,8 +11,8 @@
                    h1u.cu's kh_one from the .so HB_H1U names) in place of h1o_units; gated as dither-1s is
                    (`dither_one.check` with h1o.so's references on its gate, control, fault and fault_wb steps), its
                    tokens reported against exact's, not gated (it serves the dithered product).
-    dither-1s-hbp  dither-1s-hb peeled (CA's peel, 11:02Z): hb_one's kh_one_peel, whose z is today's A B^T from the same
-                   stream, so y is today's; gated by hb_peel.py (`dither_one.check` with z held to A B^T, y equal to
+    dither-1s-hbp  dither-1s-hb peeled (CA's peel, 11:02Z): hb_one's kh_one_peel (from the .so HB_H1U_PEEL names, else
+                   HB_H1U's), whose z is today's A B^T from the same stream, so y is today's; gated by hb_peel.py (`dither_one.check` with z held to A B^T, y equal to
                    today's on every call) on the same four captures, and its tokens must equal exact's.
 
 sbench's arms run in spawned worker processes, which import this file as their main module before unpickling
@@ -45,7 +45,7 @@ def build(arm: str, scratch, gpu_mem: float):
     if arm == "dither-1s-hbp":
         import hb_one
         import hb_peel
-        hb_one.patch(os.environ["HB_H1U"], peel=True)
+        hb_one.patch(os.environ.get("HB_H1U_PEEL") or os.environ["HB_H1U"], peel=True)
         llm = _build("dither-1s", scratch, gpu_mem)
         llm.dither_mod = hb_peel
         return llm

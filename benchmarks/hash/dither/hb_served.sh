@@ -24,7 +24,8 @@
 # hb_sbench.py adds four arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
 # (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); dither-1s-hb,
 # dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so); and
-# dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too). The
+# dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
+# HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one). The
 # dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), from a sent
 # h1v3-SHA.tar.gz (`git archive SHA verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
@@ -48,7 +49,9 @@ DITHER=benchmarks/hash/dither
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
-sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py "$INPUTS"/hb_peel.py ${HB_H1U:+"$HB_H1U"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+[ -n "${HB_H1U_PEEL:-}" ] && HB_H1U_PEEL=$INPUTS/$(basename "$HB_H1U_PEEL")
+sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py "$INPUTS"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
+  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -97,7 +100,10 @@ case " $* " in *dither-1s-hb*)
   export HB_H1U ;;
 esac
 case " $* " in *dither-1s-hbp*)
-  [ -f "$INPUTS/hb_peel.py" ] || { echo "hb_served.sh: dither-1s-hbp needs --send benchmarks/hash/dither/hb_peel.py too" >&2; exit 2; } ;;
+  [ -f "$INPUTS/hb_peel.py" ] && [ -f "${HB_H1U_PEEL:-${HB_H1U:-/nonexistent}}" ] || {
+    echo "hb_served.sh: dither-1s-hbp needs --send benchmarks/hash/dither/hb_peel.py too (and HB_H1U_PEEL's .so, if set)" >&2
+    exit 2; }
+  [ -n "${HB_H1U_PEEL:-}" ] && export HB_H1U_PEEL ;;
 esac
 cp "$INPUTS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$INPUTS/BUILD.txt"
