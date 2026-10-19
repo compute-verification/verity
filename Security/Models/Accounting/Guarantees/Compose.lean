@@ -9,9 +9,10 @@ THEOREM's composed statement, round 7 (note:compute-accounting/20261018T1758Z-dr
 restated after RT-COMPOSE r6 (note:compute-accounting/20261018T2010Z-draft-rt-compose-r6), RT-COMPOSE r5
 (note:compute-accounting/20261018T1725Z-draft-rt-compose-r5) and RT-DELTA r2
 (note:compute-accounting/20261018T1625Z-draft-rt-delta) under decisions 107, 109–114, 117, 119 and 122. Each
-`def G : Prop` is to be proved as `Accounting.SecurityProofs.Compose.G` in `Proofs.Accounting.Compose`, where
-each is a `sorry` stub for now. The circuit is any `Declared` one, a `Gates.Dag` with its call sites, its rounds, their
-coin modes, the service's commit coins and its proof units, its words, kinds, cuts and late cones read off the IR.
+`def G : Prop` is to be proved as `Accounting.SecurityProofs.Compose.G` in `Proofs.Accounting.Compose`, whose module
+doc says which are proved and which are still `sorry`. The circuit is any `Declared` one, a `Gates.Dag` with its call
+sites, its rounds, their coin modes, the service's commit coins and its proof units, its words, kinds, cuts and late
+cones read off the IR.
 Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in
 one round; each coin input read in its own round; one unit's words of one kind).
 
@@ -108,8 +109,8 @@ branch: B1's `max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one draw, with
 `p = 7/8`, `F = 1` and `Kρw_max = 2/r`, with whole units at `p0 = ½` (B′'s, ASK-9's value for the live line, card
 8b00536a), `b/a = 4.58` exceeds `(1 − p0)/(1 − p) = 4`, so the whole branch binds (the folded one would for
 `p0 ≤ 0.428`), and the live `ε`'s logical term is 0.173%, 0.231% and 0.346% at `r = 1, 2, 4`. At `p0 = 2^-64`
-(proposed, not granted) the folded branch binds at 0.151%, 0.201% and 0.302%. Stated, not proved, while this and
-`CircuitWork` are `sorry`. -/
+(proposed, not granted) the folded branch binds at 0.151%, 0.201% and 0.302%. Proved from `SplitRateExp`: each closed
+branch is at least the sharp one. -/
 def SplitRateClosed : Prop :=
   ∀ (K : ℕ) (ρ p p0 a b wmax : ℝ), 1 ≤ K → 0 < ρ → 0 ≤ wmax → ρ * wmax ≤ 1 → 0 ≤ p → p < 1 → 0 ≤ p0 → p0 < 1 →
     0 < a → 0 < b →
@@ -126,7 +127,7 @@ it is `Λ` at least the folded branch, with `L_F = w_max` an identity by `ν`'s 
 At `SplitRateClosed`'s parameters, `p0 = ½`, the live `ε`'s logical term is 0.110%, 0.153% and 0.263% at
 `r = 1, 2, 4`: the folded branch binds while `b/a ≤ ln(p0 + (1 − p0)e^{−Kρw_max})/ln(p + (1 − p)e^{−Kρw_max})` (4.95,
 4.62 and 4.34 there, against `b/a = 4.58`), so only `r = 4` is the whole branch's, where `p0 = 2^-64` gives 0.250%.
-Numeric (a grid check of this inequality, tight to rounding), until this is proved. -/
+Proved. -/
 def SplitRateExp : Prop :=
   ∀ (K : ℕ) (ρ p p0 a b wmax Λ : ℝ), 1 ≤ K → 0 < ρ → 0 < wmax → ρ * wmax ≤ 1 →
     0 ≤ p → p < 1 → 0 ≤ p0 → p0 < 1 → 0 < a → 0 < b →

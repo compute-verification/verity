@@ -8,31 +8,33 @@ import Proofs.Pouw.RelativeSecurity
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs (open)
 
-Every guarantee's proof here is open but `CreditOfWork`'s (step 7) and the two credits' (steps 8 and 10, proved as
-compositions, so open only through steps 6 and 9; note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the
-order), and this file
+Proved: the three rates, `ServiceBudget` and `ServiceCovers` (steps 1–5, each in its own file under
+`Proofs/Accounting/Compose/`), `CreditOfWork` (step 7), and the two credits as compositions (steps 8 and 10, so open
+only through steps 6 and 9). Open: `CircuitWork` (step 6), `CircuitWorkSeeded` (step 9), `BindingOfECR` (step 11) and
+`WholeLuckOfEntropy` (step 12). note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order, and this file
 doesn't land until none is a `sorry`. What the window's proofs' layer meets is proved: its static half is
 defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, which `Declared.atIR` meets),
 `StageCoins` (under `Declared.Wf`), `StageSlots`, `WriterReads` and `StageComplete` (under `Declared.Wf` and
 `units ≤ N_p`) are lemmas below, not premises, as are the draw cut of `Declared.atDraw`'s layer and `serviceGame`,
 `tileMode` as `jointGame`, `jointMode` at a split-stage window's joint run.
 
-1. `SplitRateClosed`: the folded branch at `W_0 = 0` (`ν = expm1(W_F·a/Λ)/((1 − p)·W_F)`, the exponent concave in
-   `W_F` so its endpoints suffice) and the whole branch at `W_F = 0` the same at `b`, `p0` (`ν₀`), then the mixed
-   point by convexity of the left side in `(W_F, W_0)` at the larger `Λ`, and `L_F, L_0 > 0` by convexity in them.
-2. `SplitRateExp` (RT-COMPOSE r4's route): `ν, ν₀ ≥ 0` as `Λ > 0`; the left side is convex in `(L_F, L_0)` for
-   `ρ·U ≤ 1` and the right affine, so `L_F ∈ {0, W_F}`, `L_0 ∈ {0, W_0}` suffice; `(1 − t)^K ≤ e^{−Kt}`; at each
-   `L`-vertex the bound is the exponential of an affine function of `(W_F, W_0)`, so the simplex's vertices suffice;
-   at `(w_max, 0)` with `L_F = 0` it is `e^{a·w_max/Λ} ≤ 1/(p + (1 − p)·e^{−Kρw_max})`, `Λ` at least the folded
-   branch, and with `L_F = w_max` an identity by `ν`'s definition; the same at `(0, w_max)` with `b`, `p0`, `ν₀`.
-3. `SplitRateMerged`: one class at cost `b` and luck `q`, the folded branch of step 1, then monotonicity in `a ≤ b`,
-   `p, p0 ≤ q`.
-4. `ServiceBudget`: given the stages' coins, a uniform `K`-subset of `N` misses the tiles whose checked values aren't
-   honest with probability at most `(1 − ρ·(their share))^K`, which factors over the stages; `SplitRate` per stage at
-   its share `≤ w_max`, its luck in expectation from `LuckAt` (`E[L_F] ≤ p·E[W_F]`, `E[L_0] ≤ p0·E[W_0]`), then
-   backward induction over the stages, as `Accounting.SecurityProofs.TS.StageBudget`.
-5. `ServiceCovers`: `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at the tiles' words (`≥ 0`), at any joint
-   run (the live statements use it at `SplitStages.joint`, by `serviceGame_eq` and `tileMode_eq`). The game's
+1. `SplitRateClosed` (proved, `Compose/SplitRateClosed.lean`), from step 2. A larger rate keeps `SplitRateAt` at the
+   same `ν, ν₀`, and each closed branch is at least the sharp one: at `c = Kρw_max` and `q = p + (1 − p)e^{−c}`,
+   `−ln q ≥ 1 − q` and `(1 + c)e^{−c} ≤ 1`. At `w_max = 0`, `ν = ν₀ = 0` do.
+2. `SplitRateExp` (proved, `Compose/SplitRateExp.lean`). `(1 − t)^K ≤ e^{−Kt}` bounds the left side by the exponential
+   of a linear form on the simplex of `(W_F − L_F, L_F, W_0 − L_0, L_0)`, and Jensen for `exp` at its vertices bounds
+   that by the right side's interpolation. At the unlucky folded vertex this is `Λ` at least the folded branch, and at
+   `L_F = w_max` an identity by `ν`'s definition; the whole vertices are the same at `b`, `p0`, `ν₀`.
+3. `SplitRateMerged` (proved, `Compose/SplitRateMerged.lean`): step 1 at `p = p0 = q`, where the whole branch is the
+   larger (`a ≤ b`), and lower lucks keep `SplitRateAt`.
+4. `ServiceBudget` (proved, `Compose/ServiceBudget.lean`): given the stages' coins, a uniform `K`-subset of `N`
+   misses the tiles whose checked values aren't honest with probability at most `(1 − ρ·(their share))^K`, which
+   factors over the stages; `SplitRate` per stage at its share `≤ w_max`, its luck in expectation from `LuckAt`
+   (`E[L_F] ≤ p·E[W_F]`, `E[L_0] ≤ p0·E[W_0]`), then backward induction over the stages, as
+   `Accounting.SecurityProofs.TS.StageBudget`.
+5. `ServiceCovers` (proved, `Compose/ServiceCovers.lean`): `Accounting.SecurityProofs.TS.DrawnLayer.covers_of_cone` at
+   the tiles' words (`≥ 0`), at any joint run (the live statements use it at `SplitStages.joint`, by `serviceGame_eq`
+   and `tileMode_eq`). The game's
    deficiency is the not-paid tiles' `tileCone` (the three modes, at `1` and `1`), so it is enough that a tile's layer
    cone is at most `N_w` times its `tileCone`: a layer edge `DrawnLayer.Late u v` at slot `k` has its position a value
    the prover writes and a gate of `u`'s unit (`layer_stageSlots`), and either one of `v`'s own gates (`u = v`) or an
