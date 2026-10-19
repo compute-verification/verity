@@ -1278,9 +1278,10 @@ DotBf16_v1 .. v3        x     w      1 × K × 1    any (bf16 linears, and atten
 ~~~
 
 A Call nested in a Definition is found through it when its operands are that Definition's parameters, at any depth; a
-Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`). Attention is credited like every A·B
-(decision 109), but P·V as `AttnBlock_v3` serves it, tensor-core steps on a P the block computes, is no Call of a registered
-family, so it is refused (`uncovered`) until it is one.
+Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`). Attention is to be credited like every A·B
+(decision 109): its QKᵀ is a `DotBf16` kind like any other, but the one registered scheme, `eps1-sm120-h1fx1`, has no unit
+for it, so its dots are refused (`scheme`) until one is plugged. P·V as `AttnBlock_v3` serves it, tensor-core steps on a P
+the block computes, is no Call of a registered family, so it is refused (`uncovered`) until it is one.
 
 **Tile and replace.** A site is a root node's dots of one kind, and its distinct A rows and B rows, first use first, are its
 operands. Its A rows go in blocks of the scheme's r, each block's B rows in chunks of c (r × c is a scheme parameter, decision
