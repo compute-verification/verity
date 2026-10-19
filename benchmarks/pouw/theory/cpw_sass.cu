@@ -140,6 +140,16 @@ __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W,
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
+// the device pass sees no host code, so each mode is instantiated here
+#define CPW_INST(M) \
+  template __global__ void cpw<M>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
+CPW_INST(0)
+CPW_INST(1)
+CPW_INST(2)
+CPW_INST(3)
+CPW_INST(4)
+CPW_INST(5)
+
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
 #include <cstring>
@@ -216,7 +226,8 @@ int main() {
     static uint32_t out[32 * 16], cpo[2 * CPS];
     cudaMemset(d_cp, 0, 2 * CPS * sizeof(uint32_t));
     e.k<<<1, 32>>>(d_st, d_W, d_out, d_cp, d_cyc, BSETS, one);
-    cudaError_t err = cudaDeviceSynchronize();
+    cudaError_t err = cudaGetLastError();
+    if (err == cudaSuccess) err = cudaDeviceSynchronize();
     cudaMemcpy(out, d_out, sizeof out, cudaMemcpyDeviceToHost);
     cudaMemcpy(cpo, d_cp, sizeof cpo, cudaMemcpyDeviceToHost);
     int bad_st = err != cudaSuccess, bad_cp = 0;
@@ -236,7 +247,8 @@ int main() {
       int blocks = sms * b;
       cudaMemset(d_cp, 0, ncp * sizeof(uint32_t));
       e.k<<<blocks, NT>>>(d_st, d_W, d_out, d_cp, d_cyc, TSETS, one);
-      err = cudaDeviceSynchronize();
+      err = cudaGetLastError();
+      if (err == cudaSuccess) err = cudaDeviceSynchronize();
       cudaMemcpy(cyc, d_cyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost);
       long long mx = 0;
       for (int i = 0; i < blocks; ++i) mx = cyc[i] > mx ? cyc[i] : mx;
