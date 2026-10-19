@@ -13,6 +13,7 @@ shift
 L=verity/core/service/flock
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
+command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 uv sync -q --all-packages --extra torch-cpu
 bins=(--bin "after=$PWD/$L/.lake/build/bin/flock-rows")
 if [ "$before" != - ]; then
