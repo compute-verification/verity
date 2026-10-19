@@ -278,6 +278,30 @@ def test_publish_cites_each_needed_property_s_newest_holding_capture_when_asked(
     assert records.record(ROW)["evidence"]["conformance"] == {PROP: old}
 
 
+def test_newest_captures_with_no_store_index_refuse_a_property_the_catalog_lacks(tmp_path, store, monkeypatch):
+    """A `research run` job's store has no index, so `research data select` there reads only its own catalog: a property missing from
+    it is refused naming the missing index and --conformance, never read as no capture.  A gap leaves nothing to resolve, and with an
+    index the miss is a property left silent."""
+    from research.store import bucket_index as BI
+    monkeypatch.delenv(BI.READER_ENV, raising=False)
+    _map(tmp_path)
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    kw = dict(tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d), newest=True)
+    with pytest.raises(UsageError, match=f"no capture of {PROP} in .*'s catalog, and there is no store index here.*--conformance PROPERTY=art:"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), **kw)
+    assert records.index() == {}
+    records.publish(d, ROW, evidence=records.evidence_of(build, gaps={PROP: "no capture of the tree's harness"}), **kw)
+
+    class Index:
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(BI, "reader", lambda root: Index())
+    with pytest.raises(UsageError, match="which the record neither cites nor names a gap"):
+        records.publish(d, ROW, evidence=records.evidence_of(build), **kw)
+
+
 def test_a_record_published_from_another_tree_is_pulled_into_this_index(tmp_path, store, monkeypatch):
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
