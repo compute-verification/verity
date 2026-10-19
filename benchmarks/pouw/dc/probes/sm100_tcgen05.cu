@@ -902,7 +902,7 @@ OP_KERNEL(tcbulk_cp, 256) { bulk_until_mma<BULK_CP>(a); }
 OP_KERNEL(tcbulk_red, 256) { bulk_until_mma<BULK_RED>(a); }
 OP_KERNEL(bulkcp, 32) { bulk_solo_tc<BULK_CP>(a); }
 OP_KERNEL(bulkred, 32) { bulk_solo_tc<BULK_RED>(a); }
-OP_KERNEL(tclaneU_lop3, 512) { lane_until_mma<L_LOP3, 64>(a); }
+OP_KERNEL(tclaneU_lop3_r64, 512) { lane_until_mma<L_LOP3, 64>(a); }
 OP_KERNEL(tclaneU_li, 512) { lane_until_mma<L_LI, 64>(a); }
 OP_KERNEL(tcliU_x32, 512) { li_until_mma<32, 12>(a); }
 OP_KERNEL(tcliU_x64, 512) { li_until_mma<64, 12>(a); }
@@ -1039,7 +1039,7 @@ static const OpProbe PROBES[] = {
     {.name = "tcliU_base", .kernel = (const void*)tcliU_base, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_redux", .kernel = (const void*)tcliU_redux, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=68,IMAD=64,REDUX*=1", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_reduce", .kernel = (const void*)tcliU_reduce, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=73,IMAD=64,SHFL.BFLY=5", .warps = "1;8", .iters = 2048, .until = 2},
-    {.name = "tclaneU_lop3", .kernel = (const void*)tclaneU_lop3, .tpb = 512, .expect = UI ";LOP3.LUT=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lop3_r64", .kernel = (const void*)tclaneU_lop3_r64, .tpb = 512, .expect = UI ";LOP3.LUT=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_li", .kernel = (const void*)tclaneU_li, .tpb = 512, .expect = UI ";LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcliU_x32", .kernel = (const void*)tcliU_x32, .tpb = 512, .expect = UI ";LDTM.x32=1,LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcliU_x64", .kernel = (const void*)tcliU_x64, .tpb = 512, .expect = UI ";LDTM.x64=1,LOP3.LUT=32,IMAD=32", .warps = "1;12", .iters = 2048, .until = 2},
