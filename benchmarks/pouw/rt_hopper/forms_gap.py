@@ -9,6 +9,7 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
     python forms_gap.py --honest-true  RT-HOPPER-8: γ with honest timed by the loop that folds the wgmma's accumulators,
                                    and RT-HOPPER-10: each loop at the toml's 122.41 / f and on the clock, 128.01 / f
     python forms_gap.py --fan-in   RT-HOPPER-2: ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
+    python forms_gap.py --b1-fit   RT-HOPPER-1: b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -141,6 +142,26 @@ def rs_fit() -> None:
                 print(line(f"{vector} q*={q} RS at {label}", eps(d, vector, q)))
 
 
+# BGMMA_B1_N256's coefficient over SS's on each joint row, the least over the matched pairs (alone, LI, IMAD, LOP3) of
+# rs.sh at c8a1b60b12 (B1_RUN); None until that run is read.
+B1_RUN, B1_FIT = None, None
+
+
+def b1_fit() -> None:
+    """RT-HOPPER-1's b1 branch: BGMMA offered at splits 8 and 64 with its joint lines at SS's times the H200's ratio."""
+    with tempfile.TemporaryDirectory() as t:
+        for split in (8, 64):
+            for scale in (1.0, None):
+                if scale is None and B1_FIT is None:
+                    continue
+                d = scratch(Path(t) / f"b1-{split}-{scale}", rs=True, forms=b1(split))
+                for row, u in SS_JI.items():
+                    set_line(d, "BGMMA_B1_N256", row, u * (B1_FIT[row] if scale is None else scale))
+                label = f"{B1_RUN}'s matched-pair ratios" if scale is None else f"{scale}× SS's"
+                for vector, q in (("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
+                    print(line(f"{vector} q*={q} b1 split {split} at {label}", eps(d, vector, q)))
+
+
 # The loops that fold the wgmma's own accumulators, the plain GEMM's 122.41 over their tensor fraction: wgli_true_w2 in
 # r20261019-055823-616f (0.42158), and the fastest, wgli_db_w2 in r20261019-070001-df11 (0.45574)
 TRUE_LOOPS = (290.36, 268.60)
@@ -200,9 +221,10 @@ def main() -> int:
     ap.add_argument("--rs-fit", action="store_true", help="ε with RS offered at SS's joint coefficients times the H200's ratio")
     ap.add_argument("--honest-true", action="store_true", help="γ with honest timed by the loop that folds the accumulators")
     ap.add_argument("--fan-in", action="store_true", help="ε at the fold costs FoldFanIn proves, without FoldOpt")
+    ap.add_argument("--b1-fit", action="store_true", help="ε with b1 offered at its joint lines fitted from the H200")
     a = ap.parse_args()
     (sheet() if a.sheet else b1_gap() if a.b1 else rs_fit() if a.rs_fit else honest_true() if a.honest_true
-     else fan_in() if a.fan_in else forms_gap())
+     else fan_in() if a.fan_in else b1_fit() if a.b1_fit else forms_gap())
     return 0
 
 
