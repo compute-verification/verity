@@ -318,7 +318,15 @@ theorem ligeritoPZk_agree (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch
     queryP_agree_lv resp coin hc nonce ms sch hq, commitP_agree h, agree_pure_st,
     oodIntroP_agree_loop resp coin hc nonce (sch.n + 1) hn,
     loopR_agree (fun s : ℕ × Commit × Array (Array ByteArray) × Array LevelProof × FinalProof => s.1 ≤ sch.n + 1)]
+  case hfg =>
+    intro i b (hb : b.1 ≤ sch.n + 1)
+    sim_walk [liftT_agree, sampleP_agree resp coin hc, sampleKP_agree resp coin hc, sendMsg_agree, powP_agree,
+      challengeP_agree resp coin hc, queryP_agree_lv resp coin hc nonce ms sch hq, commitP_agree h, agree_pure_st,
+      oodIntroP_agree_loop resp coin hc nonce (sch.n + 1) hn _ b hb]
   all_goals first
+    | exact fun _ => ((agreeS n).st Transcript).pure _
+    | (intro _ _ _
+       exact agree_still fun _ => rfl)
     | (simp (config := { zetaDelta := true }) only []
        omega)
     | (intro i b hb
@@ -331,8 +339,7 @@ theorem ligeritoPZk_agree (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch
          | (refine GrowsL.pure ?_
             simp (config := { zetaDelta := true }) only [ForInStep.value]
             omega)
-         | split)
-       all_goals sim_walk)
+         | split))
 
 omit hc in
 /-- A lifted verdict's value: what follows it is coupled at the value it returns. -/
@@ -442,11 +449,12 @@ theorem afterLinkPZk_agree (h : ByteArray → ByteArray) (spec : SessionSpec) (s
     have hx : extras.size = spec.points * sts[i].regions.size := by
       rw [FlockDeploy.extraClaims_size (st := sts[i]) he, hpts, Nat.mul_comm]
     refine (agreeS n).bind (agree_still (innerCommitP_quiet h _ _)) fun ic => ?_
-    extract_lets dom
+    extract_lets
     refine (agreeS n).bind (With.Sim.run _ (repPZk_agree resp coin hc h (Setup.ofCircuit sts[i]) schs[i]!.1 _ _ _ _ _
       _ extras _ _ _ _ _ _ _ _ (show sts[i].m - 13 ≤ 65536 by omega) (by rw [hx, hp]; omega) hn hq) _)
       fun _ => (agreeS n).pure _
-  · sim_walk [agree_still (recordJson_quietZ h _ _ _ _ _)]
+  · try extract_lets
+    exact (agreeS n).bind (agree_still (recordJson_quietZ h _ _ _ _ _)) fun _ => (agreeS n).pure _
 
 omit hc in
 /-- The session after the link reads the link coin only at the points' indices. -/
