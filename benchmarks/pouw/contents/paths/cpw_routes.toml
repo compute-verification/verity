@@ -1,0 +1,4 @@
+order = 346
+path = "`theory/cpw_routes.sh`"
+runs_on = "RTX PRO 6000"
+what = "The sm_120 unit (IMMA.16832 + fx1) with its CP-W checkpoint by the routes that merge on the memory system or the uniform datapath (`cpw_routes.cu`: none, 128-bit store egress, REDUX of each of the 16 state words, 32-bit red.global.xor and red.shared.xor after a LOP3 merge and of every word unmerged): each route's timed loop counted in SASS, bit-exact against the host and timed at 1, 2, 4 warps a SMSP and full occupancy"
