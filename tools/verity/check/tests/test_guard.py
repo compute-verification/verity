@@ -79,27 +79,30 @@ def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path
 
 def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp_path, tmp_path_factory, monkeypatch):
     """pytest keeps its last three base temps (a flock suite's is ~45 GB: vy-cpu-1 and vy-cpu-2 filled on 11 Oct); each suite gets
-    its own `--basetemp`, removed when it ends, unless the caller passed one, and a killed suites.py's are swept by the next."""
+    its own `--basetemp`, removed when it ends, unless the caller passed one. While it runs, its owner marker names this process
+    and pytest's session (which the sweep of a later suites.py checks: test_suites.py's sweep tests)."""
     import os
     import tempfile
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     tmp = tmp_path_factory.mktemp("tmp")                         # outside the suite's tree, as /tmp is
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))
-    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-{os.getpid()}-"))
+    monkeypatch.setenv("EXPECT", str(tmp / f"{S.BASETEMP}-m"))
+    monkeypatch.setenv("OWNER", str(os.getpid()))
     (tmp_path / "pkg" / "tests" / "test_reads.py").write_text(
-        "import os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
-        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n")
+        "import json, os\n\ndef test_tmp(tmp_path):\n    (tmp_path / 'big').write_bytes(b'x' * 4096)\n"
+        "    assert str(tmp_path).startswith(os.environ['EXPECT'])\n"
+        "    if os.environ['OWNER']:\n"
+        "        doc = json.loads((tmp_path.parents[1] / 'owner.json').read_text())\n"
+        "        assert [o[0] for o in doc['owners']] == [int(os.environ['OWNER'])], doc\n"
+        "        assert [s[0] for s in doc['sessions']] == [os.getpid()] == [os.getsid(0)], doc\n")
     r = S.run(suite, ["pkg"], [], tmp_path / "logs")
     assert (r.status, r.counts["passed"]) == ("passed", 1), r.log.read_text()
     assert list(tmp.iterdir()) == []
     mine = tmp_path_factory.mktemp("mine")
     monkeypatch.setenv("EXPECT", str(mine))
+    monkeypatch.setenv("OWNER", "")
     r = S.run(suite, ["pkg"], [f"--basetemp={mine}"], tmp_path / "logs")
     assert r.status == "passed" and (mine / "test_tmp0" / "big").exists() and list(tmp.iterdir()) == []
-    dead, live = tmp / f"{S.BASETEMP}-999999999-pkg-x", tmp / f"{S.BASETEMP}-{os.getppid()}-pkg-y"
-    dead.mkdir()
-    live.mkdir()
-    assert S.sweep_basetemps() == [dead] and live.exists()
 
 
 @pytest.mark.parametrize("listed", [False, True])

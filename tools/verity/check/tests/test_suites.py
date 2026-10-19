@@ -1011,6 +1011,115 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
+NOW = 2_000_000_000.0
+HOUR = 3600.0
+
+
+def _proc(root: Path, procs: dict[int, tuple[int, int]], boot: str = "boot-a", ns: str = "pid:[1]") -> Path:
+    """A /proc of this boot and pid namespace, holding ``procs`` (pid: (start time, session)) and nothing else."""
+    if root.exists():
+        shutil.rmtree(root)
+    (root / "sys" / "kernel" / "random").mkdir(parents=True)
+    (root / "sys" / "kernel" / "random" / "boot_id").write_text(boot + "\n")
+    (root / "self" / "ns").mkdir(parents=True)
+    os.symlink(ns, root / "self" / "ns" / "pid")
+    for pid, (start, sid) in {**procs, "self": procs.get(os.getpid(), (7, 7))}.items():
+        (root / str(pid)).mkdir(exist_ok=True)
+        (root / str(pid) / "stat").write_text(f"{pid} (a) b) S 1 {sid} {sid} " + "0 " * 15 + f"{start} 0 0\n")
+    return root
+
+
+def _basetemp(tmp: Path, name: str, owner: dict | None, age_h: float, newest_h: float | None = None) -> Path:
+    """A basetemp named ``name`` with ``owner`` as its marker (None: none), unchanged for ``age_h`` hours but for a file deep in
+    it changed ``newest_h`` hours ago."""
+    import json
+
+    d = tmp / name
+    (d / "b" / "popen-gw0" / "deep").mkdir(parents=True)
+    f = d / "b" / "popen-gw0" / "deep" / "file"
+    f.write_text("x")
+    if owner is not None:
+        (d / "owner.json").write_text(json.dumps(owner))
+    for p in (f, d / "b" / "popen-gw0" / "deep", d / "b" / "popen-gw0", d / "b", *([d / "owner.json"] if owner else []), d):
+        t = NOW - (newest_h if newest_h is not None and p == f else age_h) * HOUR
+        os.utime(p, (t, t))
+    return d
+
+
+def _owner(*owners: tuple[int, int], sessions=(), boot: str = "boot-a", ns: str = "pid:[1]") -> dict:
+    return {"boot": boot, "pidns": ns, "owners": [list(o) for o in owners], "sessions": [list(s) for s in sessions]}
+
+
+def test_a_basetemp_another_namespace_or_boot_owns_is_never_swept_while_anything_in_it_changes(tmp_path, monkeypatch):
+    """INF-95: a sweep that can't see a basetemp's owner (another pid namespace, another boot, a /proc that hides it) never takes
+    it as gone, whatever the owner's pid is here; it waits until nothing in it changed for a day."""
+    S = _suites(monkeypatch, tmp_path)
+    (tmp := tmp_path / "tmp").mkdir()
+    proc = _proc(tmp_path / "proc", {})
+    for age, newest in ((1, None), (48, 2), (23.9, None)):
+        _basetemp(tmp, f"verity-suite-mns{age}", _owner((42, 5), ns="pid:[2]"), age, newest)
+        _basetemp(tmp, f"verity-suite-mboot{age}", _owner((42, 5), boot="boot-b"), age, newest)
+    assert S.sweep_basetemps(tmp, proc=proc, now=NOW) == []
+    old = {_basetemp(tmp, "verity-suite-mns-old", _owner((42, 5), ns="pid:[2]"), 25),
+           _basetemp(tmp, "verity-suite-mboot-old", _owner((42, 5), boot="boot-b"), 25)}
+    assert set(S.sweep_basetemps(tmp, proc=proc, now=NOW)) == old and not any(d.exists() for d in old)
+    assert len(list(tmp.iterdir())) == 6
+
+
+def test_a_basetemp_whose_owner_died_here_is_swept_and_a_reused_pid_does_not_keep_it(tmp_path, monkeypatch):
+    """Under this boot and namespace an owner is alive only at its pid with its start time: one gone, or whose pid another process
+    took since (a different start time), leaves its basetemp to the sweep at once; one alive keeps it."""
+    S = _suites(monkeypatch, tmp_path)
+    (tmp := tmp_path / "tmp").mkdir()
+    proc = _proc(tmp_path / "proc", {42: (500, 42), 43: (999, 43)})
+    live = _basetemp(tmp, "verity-suite-mlive", _owner((42, 500)), 0)
+    dead = _basetemp(tmp, "verity-suite-mdead", _owner((44, 500)), 0)
+    reused = _basetemp(tmp, "verity-suite-mreused", _owner((43, 500)), 0)
+    assert sorted(S.sweep_basetemps(tmp, proc=proc, now=NOW)) == sorted([dead, reused])
+    assert live.exists() and not dead.exists() and not reused.exists()
+
+
+def test_a_basetemp_stays_while_its_pytest_session_runs_after_its_suites_py_is_killed(tmp_path, monkeypatch):
+    """vy-nebius-1, 18 Oct: two suites.py were killed (SIGKILL) while their pytest, in a session of its own, ran on for 8 and 37
+    minutes; the next suites.py's sweep took their basetemps from under them. A process left in pytest's session (pytest itself,
+    or an xdist worker it left) keeps the basetemp; once the session is empty it is swept."""
+    S = _suites(monkeypatch, tmp_path)
+    (tmp := tmp_path / "tmp").mkdir()
+    d = _basetemp(tmp, "verity-suite-morphan", _owner((42, 500), sessions=[(60, 510)]), 0)
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {60: (510, 60)}), now=NOW) == [] and d.exists()
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {61: (520, 60)}), now=NOW) == [] and d.exists()
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {60: (900, 900)}), now=NOW) == [d] and not d.exists()
+
+
+def test_a_basetemp_without_a_marker_is_swept_only_once_nothing_in_it_changed_for_a_day(tmp_path, monkeypatch):
+    """An older suites.py's `verity-suite-<pid>-*`, the guard's `verity-suite-host-*`, or a marker that doesn't parse: the sweep
+    can't tell who uses it, so the age of its newest entry decides, never a pid in its name."""
+    S = _suites(monkeypatch, tmp_path)
+    (tmp := tmp_path / "tmp").mkdir()
+    proc = _proc(tmp_path / "proc", {})
+    kept = [_basetemp(tmp, "verity-suite-999999-fresh", None, 1), _basetemp(tmp, "verity-suite-host-deep", None, 30, 23),
+            _basetemp(tmp, "verity-suite-mbroken", {"boot": "boot-a"}, 2)]
+    old = [_basetemp(tmp, "verity-suite-999999-old", None, 25), _basetemp(tmp, "verity-suite-host-old", None, 30),
+           _basetemp(tmp, "verity-suite-mbroken-old", {"owners": "x"}, 25)]
+    (tmp / "verity-suite-file").write_text("not a directory")
+    assert sorted(S.sweep_basetemps(tmp, proc=proc, now=NOW)) == sorted(old)
+    assert all(d.exists() for d in kept) and (tmp / "verity-suite-file").exists()
+
+
+def test_the_marker_a_run_writes_names_this_process_and_pytests_session(tmp_path, monkeypatch):
+    """`mark_basetemp` as `run` calls it, read back by the sweep: this process (by its start time) keeps the basetemp, and so
+    does pytest's session once it is named; with both gone it is swept."""
+    S = _suites(monkeypatch, tmp_path)
+    (tmp := tmp_path / "tmp").mkdir()
+    (d := tmp / "verity-suite-mrun").mkdir()
+    me = os.getpid()
+    S.mark_basetemp(d, proc=_proc(tmp_path / "proc", {me: (300, 300)}))
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {me: (300, 300)}), now=NOW) == []
+    S.mark_basetemp(d, session=80, proc=_proc(tmp_path / "proc", {me: (300, 300), 80: (310, 80)}))
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {81: (320, 80)}), now=NOW) == []
+    assert S.sweep_basetemps(tmp, proc=_proc(tmp_path / "proc", {me: (301, 1)}), now=NOW) == [d]
+
+
 @pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
@@ -1032,11 +1141,11 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
                          cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
-    assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
+    assert len(list(tmp.glob("verity-suite-m*"))) == 1
     os.killpg(p.pid, getattr(signal, stop))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
-    assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
+    assert list(tmp.glob("verity-suite-m*")) == [], out
     assert len(list((tmp_path / "cache" / "per-test" / "pkg").glob("tests~test_heavy.py--*.json"))) == 1
 
 
