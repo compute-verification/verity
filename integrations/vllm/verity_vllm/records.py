@@ -409,12 +409,12 @@ def switch(row: str, comparison: dict[str, Any], *, run: str, trace: str, tier: 
     programs = {r: {"step": ps.pop("step"), "workload": ps.pop("workload"), "requests": ps}
                 for r, ps in ((r, parts(p)) for r, p in sorted(comparison["ranks"].items(), key=lambda kv: int(kv[0])))}
     doc = CR.load_index(INDEX)
-    entry = doc["rows"].get(row)
-    if entry is not None and entry.get("programs") != programs:
+    cur = doc["rows"].get(row)
+    if cur is not None and cur.get("programs") != programs:
         raise UsageError(f"{row}: its pins are not the comparison's Programs: re-pin it first (`verity-vllm neutrality {row} --update`)")
-    if entry is None and tier not in CR.TIERS:
+    if cur is None and tier not in CR.TIERS:
         raise UsageError(f"{row}: a row new to {INDEX.name} needs --tier {'|'.join(CR.TIERS)}, the tier of its rebuild")
-    doc["rows"][row] = {**(entry or {"record": None, "tier": tier, "pinned_from": {"build": trace, "run": run}, "manifest_digest": None,
+    doc["rows"][row] = {**(cur or {"record": None, "tier": tier, "pinned_from": {"build": trace, "run": run}, "manifest_digest": None,
                                      "programs": programs}), "aot": {"comparison": run, "trace": trace}}
     CR.write_index(doc, INDEX)
     return doc["rows"][row]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
@@ -12,7 +13,7 @@ from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_int, is
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name
 from verity_vllm.observe.fold.patterns.resolutions import _fmt, _group_compute, attribution_for, hint_of, unsupported
 from verity_vllm.observe.fold.patterns.transparent import SCRATCH_INT_COPIES
-from verity_vllm.observe.fold.resolver import Compute, Gather, PerRow, Resolution, StepContext
+from verity_vllm.observe.fold.resolver import Compute, Gather, PerRow, Resolution, StepContext, Unsupported
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -36,6 +37,19 @@ def _positions_ok(view: ViewDesc, M: int, ctx: StepContext) -> str | None:
     if src is not None and src[0].alloc == pv.alloc:
         return None
     return f"positions view {view!r} is neither the step's positions buffer {pv!r} nor an integer copy of it"
+
+
+def step_positions(node: TreeNode, ctx: StepContext, pos: Any, rows: int) -> tuple[int, ...] | Unsupported:
+    """The public positions of a kernel's first `rows` rows, once `pos` is the step's positions buffer (`_positions_ok`)."""
+    if not isinstance(pos, ViewDesc):
+        return unsupported(node, "positions argument is not a tensor view", positions=repr(pos))
+    why = _positions_ok(pos, rows, ctx)
+    if why:
+        return unsupported(node, why)
+    out = tuple(int(p) for p in ctx.start.positions[:rows])
+    if len(out) != rows:
+        return unsupported(node, "StepStart positions do not cover the kernel rows", rows=rows, positions=len(out))
+    return out
 
 
 @dataclass
