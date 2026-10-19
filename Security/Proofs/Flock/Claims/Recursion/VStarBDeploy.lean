@@ -230,8 +230,12 @@ theorem heldB_layoutBOf_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : C
       rw [hK]
       exact layoutOf_rounds_pos x
     rcases (hcl 0 hpos).1 with h0 | ⟨s, -, h0⟩ | ⟨h0, -⟩
-    · simp [layoutBOf, Claims.Recursion.VStarB.LayoutB.ofLayout, layoutOf] at h0
-    · simp [layoutBOf, Claims.Recursion.VStarB.LayoutB.ofLayout, layoutOf] at h0
+    · have h' : layoutBOf.fixedAt x 0 = none := rfl
+      rw [h'] at h0
+      simp at h0
+    · have h' : layoutBOf.msgAt x s 0 = none := rfl
+      rw [h'] at h0
+      simp at h0
     · exact h0 rfl
   · intro h x st hst hf
     exact absurd hf (h x st hst)

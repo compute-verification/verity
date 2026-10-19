@@ -160,8 +160,10 @@ commit string is the bytes at those hidden values. -/
 theorem readForms_hmCommit (w : Claims.Flock.Wit) (c : Circuit) (q n : ℕ) :
     Claims.Recursion.VStarB.readForms w (hmCommit c q n) =
       Claims.Recursion.VStar.readAt w ((List.range 1024).map fun t => slotHid c n (hmBase c q n) (hmOutCol c + t)) := by
-  rw [← Claims.Recursion.VStarB.readForms_pos, List.map_map]
-  rfl
+  have h := Claims.Recursion.VStarB.readForms_pos w
+    ((List.range 1024).map fun t => slotHid c n (hmBase c q n) (hmOutCol c + t))
+  rw [List.map_map] at h
+  exact h
 
 /-- **`HeldB` at the deployed bound layout holds only where nothing of the shape parses**: the layout spans at least one
 round (`layoutOf_rounds_pos`), and round 0, the level-0 cap of `root_B`, is neither fixed nor held by any part, and
