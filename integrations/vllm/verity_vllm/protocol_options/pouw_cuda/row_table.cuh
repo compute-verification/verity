@@ -239,17 +239,28 @@ HD void tree_leaf(const uint64_t bc[16], const uint64_t ms_leaf[8], uint64_t out
 
 // ---- frame-v3-sha512 -----------------------------------------------------------------------------------------------------
 
-HD void absorb_be(Sha512& s, uint64_t v, int nbytes) {
-  for (int k = nbytes - 1; k >= 0; --k) ncp2::sha512_byte(s, (uint8_t)(v >> (8 * k)));
-}
+// A frame message, written in place as big-endian words and hashed by one loop over its blocks, so each kind of message
+// inlines SHA-512's compress once (ncp2's byte absorber inlines it at every byte it writes). The longest, a node, is
+// 33 + 4 + 4 + 72 + 2 x 16 + 2 x 72 = 289 bytes: with its padding, three blocks.
+constexpr int FRAME_WORDS = 48;
 
-HD void absorb_words(Sha512& s, const uint64_t* w, int n) {
-  for (int i = 0; i < n; ++i) absorb_be(s, w[i], 8);
+struct Frame {
+  uint64_t w[FRAME_WORDS];
+  uint32_t p;  // bytes written
+};
+
+// ``nbytes`` (1 to 8) big-endian bytes of ``v`` at the message's end.
+HD void frame_be(Frame& f, uint64_t v, int nbytes) {
+  const uint64_t x = nbytes == 8 ? v : v << (64 - 8 * nbytes);
+  const uint32_t o = f.p & 7, i = f.p >> 3;
+  f.w[i] |= x >> (8 * o);
+  if (o + nbytes > 8) f.w[i + 1] |= x << (64 - 8 * o);
+  f.p += nbytes;
 }
 
 template <int N>
-HD void absorb_str(Sha512& s, const char (&str)[N], bool nul) {
-  ncp2::sha512_bytes(s, (const uint8_t*)str, nul ? N : N - 1);
+HD void frame_str(Frame& f, const char (&s)[N], bool nul) {
+  for (int k = 0; k < (nul ? N : N - 1); ++k) frame_be(f, (uint8_t)s[k], 1);
 }
 
 // merkle._uint: big-endian, at least one byte.
@@ -259,60 +270,65 @@ HD int uint_len(uint64_t v) {
   return n;
 }
 
-HD void absorb_uint_part(Sha512& s, uint64_t v) {
+HD void frame_uint(Frame& f, uint64_t v) {
   const int n = uint_len(v);
-  absorb_be(s, (uint64_t)n, 8);
-  absorb_be(s, v, n);
+  frame_be(f, (uint64_t)n, 8);
+  frame_be(f, v, n);
+}
+
+HD void frame_digest(Frame& f, const uint64_t v[8]) {
+  frame_be(f, 64, 8);
+  for (int i = 0; i < 8; ++i) frame_be(f, v[i], 8);
 }
 
 template <int N>
-HD void frame_head(Sha512& s, const char (&tag)[N], const uint64_t did[8]) {
-  ncp2::sha512_init(s);
-  absorb_str(s, ROWTAB_FRAME, true);
-  absorb_be(s, N - 1, 4);
-  absorb_str(s, tag, false);
-  absorb_be(s, 64, 8);
-  absorb_words(s, did, 8);
+HD void frame_head(Frame& f, const char (&tag)[N], const uint64_t did[8]) {
+  for (int i = 0; i < FRAME_WORDS; ++i) f.w[i] = 0;
+  f.p = 0;
+  frame_str(f, ROWTAB_FRAME, true);
+  frame_be(f, N - 1, 4);
+  frame_str(f, tag, false);
+  frame_digest(f, did);
 }
 
-HD void finish(Sha512& s, uint64_t out[8]) {
-  uint8_t digest[64];
-  ncp2::sha512_final(s, digest);
-  for (int i = 0; i < 8; ++i) out[i] = s.h[i];
+HD void frame_hash(Frame& f, uint64_t out[8]) {
+  const uint32_t len = f.p, blocks = (len + 17 + 127) / 128;
+  frame_be(f, 0x80, 1);
+  f.w[16 * blocks - 1] = 8ull * len;
+  iv(out);
+#pragma unroll 1
+  for (uint32_t b = 0; b < blocks; ++b) sha512_compress(out, f.w + 16 * b);
 }
 
 // CommitmentDomain.leaf(rank, rank, schema, value) for a 64-byte value.
 template <int N>
 HD void frame_leaf(const uint64_t did[8], uint64_t rank, const char (&schema)[N], const uint64_t value[8], uint64_t out[8]) {
-  Sha512 s;
-  frame_head(s, "leaf", did);
-  absorb_uint_part(s, rank);
-  absorb_uint_part(s, rank);
-  absorb_be(s, N - 1, 8);
-  absorb_str(s, schema, false);
-  absorb_be(s, 64, 8);
-  absorb_words(s, value, 8);
-  finish(s, out);
+  Frame f;
+  frame_head(f, "leaf", did);
+  frame_uint(f, rank);
+  frame_uint(f, rank);
+  frame_be(f, N - 1, 8);
+  frame_str(f, schema, false);
+  frame_digest(f, value);
+  frame_hash(f, out);
 }
 
 HD void frame_node(const uint64_t did[8], uint64_t level, uint64_t index, const uint64_t* left, const uint64_t* right,
                    uint64_t out[8]) {
-  Sha512 s;
-  frame_head(s, "node", did);
-  absorb_uint_part(s, level);
-  absorb_uint_part(s, index);
-  absorb_be(s, 64, 8);
-  absorb_words(s, left, 8);
-  absorb_be(s, 64, 8);
-  absorb_words(s, right, 8);
-  finish(s, out);
+  Frame f;
+  frame_head(f, "node", did);
+  frame_uint(f, level);
+  frame_uint(f, index);
+  frame_digest(f, left);
+  frame_digest(f, right);
+  frame_hash(f, out);
 }
 
 HD void frame_pad(const uint64_t did[8], uint64_t rank, uint64_t out[8]) {
-  Sha512 s;
-  frame_head(s, "pad", did);
-  absorb_uint_part(s, rank);
-  finish(s, out);
+  Frame f;
+  frame_head(f, "pad", did);
+  frame_uint(f, rank);
+  frame_hash(f, out);
 }
 
 // ---- one row, one node ---------------------------------------------------------------------------------------------------
