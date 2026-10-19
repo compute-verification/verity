@@ -36,6 +36,7 @@ import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Round1Pads
 import Proofs.Flock.Claims.ZK.Round1Root
+import Proofs.Flock.Claims.ZK.Round1Enc
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -214,6 +215,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`FlockComplete.innerCommitP_root_layerOf`); at the executable's layout each is the executable's pads leaf of the cut's
   view at that tree position (`Masked.exeOf_pads`), so table `j`'s rep `r` pads root is `layerOf`'s of the cut's pads
   leaves by tree position (`Masked.innerRoot_exe`).
+* `Round1Enc`: round `1`'s encoding (`Masked.enc1`): that body of the cut's level-0 and pads leaves by tree position, at
+  the link points of round `0`'s coin, and `[]` where the extra claims there throw. It reads round `0`'s coin only
+  (`Masked.enc1_causal`), and at the executable's layout it is round `1`'s `hstep` (`Masked.honest_round1_exe`), so
+  `Flock.zk_deployZk_masked_exe_round1_gap` asks `hstep` after the second round only.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
