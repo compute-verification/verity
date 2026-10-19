@@ -31,6 +31,10 @@ The named assumptions:
   from `ρ`) succeeds with probability above `g`. It is what trusted training buys: a model with a trigger that makes its
   honest outputs carry weight bits fails it.
 
+`indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `escapes B` its coins that
+miss the wrong set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
+slots that differ, and their values.
+
 When a guarantee states these, they move to a `Models/Population/Assumptions` module with their records.
 -/
 
@@ -98,5 +102,20 @@ open Classical in
 egress `hon` succeeds with probability above `g`. A trigger that makes the honest model emit weight bits fails it. -/
 def TrustedModel {W H T : Type} [Fintype W] (ρ : W → ℝ) (S : W → T) (hon : W → H) (g : ℝ) : Prop :=
   ∀ γ : H → T, ∑ w, ρ w * (if γ (hon w) = S w then 1 else 0) ≤ g
+
+/-- The draw that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether a wrong
+`u` would be caught (drawn, and not lucky). -/
+def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
+
+/-- The coins of the independent draw on which the wrong set `B` escapes: none of its units is caught. -/
+def escapes {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
+  univ.filter fun c => ∀ u ∈ B, c u = false
+
+/-- **A deviation of a deployment's egress**: the slots it changes and what it writes there. -/
+abbrev Dev (Slot V : Type) : Type := Σ C : Finset Slot, (C → V)
+
+/-- The egress `e` with the deviation `d` applied: `d`'s values on its slots, `e`'s elsewhere. -/
+def Dev.apply {Slot V : Type} [DecidableEq Slot] (d : Dev Slot V) (e : Slot → V) : Slot → V :=
+  fun s => if h : s ∈ d.1 then d.2 ⟨s, h⟩ else e s
 
 end Population.Exfil
