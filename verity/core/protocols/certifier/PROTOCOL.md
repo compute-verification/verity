@@ -447,7 +447,10 @@ them.
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
     refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d), and for a PoUW window whose salt
-    was never drawn. Nothing else publishes the salt.
+    was never drawn. Nothing else publishes the salt. The receipt isn't signed, so `reveal` holds only while it is
+    called on the auditor's side: by the verifier, or by the proof service's challenger, which is the auditor's too
+    (#2573). Exposed beyond the auditor's hosts, it would need an authenticated caller or a receipt signed under LMS
+    (`lms.DEPLOYED`, n = 64), the repository's one signature scheme.
   - **The audit's read** (`check_salts(audit, link, records, windows, salts, pouw_window=k, salt_bits=…)`). PoUW
     window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
     one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing

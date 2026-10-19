@@ -653,7 +653,8 @@ class Proxy:
         """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
         it. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which `registered`
         reads `window`, while the window's last ingress record is unpublished (t_d), and for a window whose salt wasn't
-        drawn (one this proxy was down for at its start)."""
+        drawn (one this proxy was down for at its start). The receipt isn't signed, so this holds only while `reveal` is
+        called on the auditor's hosts; beyond them it needs an authenticated caller or an LMS-signed receipt."""
         if self.salt is None:
             raise ValueError("the salt is off")
         if not self._registers(window, registration):
