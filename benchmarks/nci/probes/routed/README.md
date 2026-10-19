@@ -6,7 +6,7 @@ N*/g, and `analysis.py` turns g into D through `benchmarks/nci/fit.py`. The plan
 Notion page [Settling F3: routed-mixture experiments](https://app.notion.com/p/3fe399515d9e81aa98eefdfd7774e90d).
 
 **Not launched.** The probes need a budget line: about 20 GPU-hours central and 73 worst on one 8-GPU RTX PRO 6000 node,
-USD 36–132, plus about 1 TB of downloads.
+USD 36–132, plus about 1.6 TB of downloads (OLMo 2 and FlexOlmo are stored in FP32, and are loaded in BF16).
 
 | Path | Holds |
 | --- | --- |

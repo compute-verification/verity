@@ -9,7 +9,7 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 : "${OUT:?OUT is where scores, routing files and the analysis go (research run sets it)}"
 : "${WINDOWS:?WINDOWS is the evaluation windows file, from probe.py windows}"
 : "${CALIBRATION:?CALIBRATION is the codebook calibration windows file, disjoint from WINDOWS}"
-: "${HF_HOME:?HF_HOME must be a model cache outside the run dir with about 1 TB free}"
+: "${HF_HOME:?HF_HOME must be a model cache outside the run dir with about 1.6 TB free}"
 MANIFEST=${MANIFEST:-$HERE/manifest.json}
 GPUS=${GPUS:-8}
 DEVICE=${DEVICE:-cuda}
