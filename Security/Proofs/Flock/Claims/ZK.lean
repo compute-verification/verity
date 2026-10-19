@@ -170,7 +170,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   session sends the stop where the frame refuses the coins (`LeanRelease.stopRefine_of_sessionStops`), and so wherever
   the session's message is the frame's release (`SessionFrames`, `stopRefine_of_sessionFrames`) and its abort is the
   stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
-  (`LeanRelease.release_eq_abort_of_liveRefine`).
+  (`LeanRelease.release_eq_abort_of_liveRefine`). The frame's coin refusal reads no tape (`LeanRelease.refusesCoins_tape`),
+  and `RefSession.withStops` is a session with the stop where a rule of the coins says, keeping the session's six Props;
+  where that rule is the frame's refusals (`LeanRelease.StopsAt`), its `StopRefine` is proved
+  (`LeanRelease.stopRefine_withStops`), so `Flock.zk_server_lean_stops` needs `LiveRefine` and `FillRefine` alone.
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
