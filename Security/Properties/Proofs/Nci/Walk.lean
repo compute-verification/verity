@@ -7,14 +7,14 @@ Toward `DescAgree.GatesLocated`: what `Desc.walkable` gives a walk of `Flock.Ste
 potential finishes within any fuel above the potential it starts at (`run_of_potential`), and `Desc.activations` and
 `Desc.depths`, folded callees first, are their recurrences (`activations_get`, `depths_get`). A reference of a sequence
 is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`), and a strided part's
-elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`). A composite's nodes' members
-hold fewer activations than it and nest less deep (`activations_child`, `depths_child`), which is what the walk's
-potential lowers.
+elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`), so every reference a parsed
+sequence holds names a leaf (`parsePartsIn_valid`). A composite's nodes' members hold fewer activations than it and nest
+less deep (`activations_child`, `depths_child`), which is what the walk's potential lowers.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
 
-open Flock.Program (Prog Seq Part)
+open Flock.Program (Prog Seq Part parsePartsIn)
 
 /-- **A walk that lowers a potential finishes.** If every step from a state satisfying `Inv` either ends with a result
 satisfying `Good` or moves to a state satisfying `Inv` of lower potential, a walk from such a state with more fuel than
@@ -315,13 +315,15 @@ theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht 
     let last := (c - 1) % inner
     let corners : List (ℕ × ℕ) := [(0, 0), (0, min inner c - 1), (q, 0), (q, last)] ++
       (if q > 0 then [(q - 1, inner - 1)] else [])
-    let vals := corners.map fun (x, y) => b + (x : ℤ) * os + (y : ℤ) * is
-    vals.foldl min vals.head! ≤ b + ((t / inner : ℕ) : ℤ) * os + ((t % inner : ℕ) : ℤ) * is ∧
-      b + ((t / inner : ℕ) : ℤ) * os + ((t % inner : ℕ) : ℤ) * is ≤ vals.foldl max vals.head! := by
-  intro q last corners vals
+    (∃ p ∈ corners, b + (p.1 : ℤ) * os + (p.2 : ℤ) * is ≤
+        b + ((t / inner : ℕ) : ℤ) * os + ((t % inner : ℕ) : ℤ) * is) ∧
+      ∃ p ∈ corners, b + ((t / inner : ℕ) : ℤ) * os + ((t % inner : ℕ) : ℤ) * is ≤
+        b + (p.1 : ℤ) * os + (p.2 : ℤ) * is := by
+  intro q last corners
   have hq : q = (c - 1) / inner := rfl
   have hl : last = (c - 1) % inner := rfl
   clear_value q last
+  let vals := corners.map fun (x, y) => b + (x : ℤ) * os + (y : ℤ) * is
   generalize hx : t / inner = x
   generalize hyy : t % inner = y
   have hxq : x ≤ q := by rw [← hx, hq]; exact Nat.div_le_div_right (by omega)
@@ -388,8 +390,280 @@ theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht 
       · exact ⟨u2, hu2, le_trans (by simp only [v]; rw [h] at hy1; simpa using hy1.2) hu2'⟩
       · exact ⟨u4, hu4, le_trans (by rw [eY]; rw [h] at hy1; exact hy1.2) hu4'⟩
   obtain ⟨⟨u, hu, hu'⟩, ⟨u', hu2, hu2'⟩⟩ := key
-  exact ⟨le_trans (foldl_min_le _ _ _ (Or.inl hu)) hu', le_trans hu2' (le_foldl_max _ _ _ (Or.inl hu2))⟩
+  obtain ⟨⟨x1, y1⟩, hp1, rfl⟩ := List.mem_map.1 hu
+  obtain ⟨⟨x2, y2⟩, hp2, rfl⟩ := List.mem_map.1 hu2
+  exact ⟨⟨(x1, y1), hp1, hu'⟩, ⟨(x2, y2), hp2, hu2'⟩⟩
 
+/-- Every reference of part `q` names a leaf of its collection (`leaves p i`, as `Flock.Program.parsePartsIn` takes
+it). -/
+def PartValid (leaves : Bool → ℕ → Option ℕ) (q : Part) : Prop :=
+  ∀ k < q.count, ∃ n, leaves (q.get k).p (q.get k).i = some n ∧ (q.get k).j < n
+
+theorem list_mapM_ok {α β ε : Type} (f : α → Except ε β) :
+    ∀ (l : List α) (ys : List β), l.mapM f = .ok ys → ∀ y ∈ ys, ∃ x ∈ l, f x = .ok y
+  | [], ys, h, y, hy => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h; subst h; simp at hy
+  | a :: l, ys, h, y, hy => by
+    rw [List.mapM_cons] at h
+    rcases hfa : f a with e | c <;> simp only [hfa, bind, Except.bind] at h
+    · exact absurd h (by intro h; injection h)
+    rcases hl : l.mapM f with e | cs <;> simp only [hl, pure, Except.pure] at h
+    · exact absurd h (by intro h; injection h)
+    injection h with h; subst h
+    rcases List.mem_cons.1 hy with rfl | hy
+    · exact ⟨a, List.mem_cons_self, hfa⟩
+    · obtain ⟨x, hx, hfx⟩ := list_mapM_ok f l cs hl y hy
+      exact ⟨x, List.mem_cons_of_mem _ hx, hfx⟩
+
+theorem array_mapM_ok {α β ε : Type} (f : α → Except ε β) (xs : Array α) (ys : Array β)
+    (h : xs.mapM f = .ok ys) : ∀ y ∈ ys, ∃ x ∈ xs, f x = .ok y := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  rcases hl : xs.toList.mapM f with e | l <;> simp only [hl, Functor.map, Except.map] at h
+  · exact absurd h (by intro h; injection h)
+  injection h with h; subst h
+  intro y hy
+  obtain ⟨x, hx, hfx⟩ := list_mapM_ok f _ l hl y (by simpa using hy)
+  exact ⟨x, by simpa using hx, hfx⟩
+
+theorem mem_foldl_append {α : Type} : ∀ (l : List (Array α)) (acc : Array α) (q : α),
+    q ∈ l.foldl (· ++ ·) acc → q ∈ acc ∨ ∃ y ∈ l, q ∈ y
+  | [], _, _, h => Or.inl h
+  | y :: l, acc, q, h => by
+    rcases mem_foldl_append l (acc ++ y) q h with h | ⟨z, hz, hq⟩
+    · rcases Array.mem_append.1 h with h | h
+      · exact Or.inl h
+      · exact Or.inr ⟨y, List.mem_cons_self, h⟩
+    · exact Or.inr ⟨z, List.mem_cons_of_mem _ hz, hq⟩
+
+theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β}
+    (h : x >>= f = .ok y) : ∃ a, x = .ok a ∧ f a = .ok y := by
+  rcases x with e | a
+  · exact absurd h (by intro h; injection h)
+  · exact ⟨a, rfl, h⟩
+
+/-- One unfolding of `parsePartsIn`, with the nested call `b.1` assumed to return valid parts. Lean generates no
+equation lemmas for `parsePartsIn` (its `.arr #[…]` patterns), so this unfolds by `delta` and reduces each array
+pattern by `whnf` once its list has been cased to a literal. -/
+theorem parsePartsIn_step (leaves : Bool → ℕ → Option ℕ) (args : ℕ → ℕ → Option Seq)
+    (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartValid leaves q) (n : ℕ)
+    (b : Nat.below (motive := fun _ => Lean.Json → Flock.V (Array Part)) (n + 1))
+    (hb : ∀ x ps, b.1 x = .ok ps → ∀ q ∈ ps, PartValid leaves q) (j : Lean.Json) (ps : Array Part)
+    (h : parsePartsIn._f leaves args (n + 1) b j = .ok ps) : ∀ q ∈ ps, PartValid leaves q := by
+  delta parsePartsIn._f at h
+  dsimp only at h
+  cases j with
+  | null => exact nomatch h
+  | bool _ => exact nomatch h
+  | num _ => exact nomatch h
+  | str _ => exact nomatch h
+  | arr _ => exact nomatch h
+  | obj kvs =>
+    dsimp only at h
+    split at h
+    · -- alias
+      rename_i a _
+      rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+      all_goals try (injection h; done)
+      rcases l with _ | ⟨k, _ | ⟨x, _ | ⟨y, l⟩⟩⟩
+      all_goals try (injection h; done)
+      conv at h => lhs; whnf
+      split at h
+      all_goals try (injection h; done)
+      split at h
+      all_goals try (injection h; done)
+      rename_i s hs
+      injection h with h
+      subst h
+      exact hargs _ _ s hs
+    · split at h
+      · rename_i c _
+        rcases c with _ | _ | _ | _ | cs | _
+        all_goals try (injection h; done)
+        dsimp only at h
+        rcases hm : cs.mapM (fun x => b.1 x) with e | r <;> simp only [hm, bind, Except.bind] at h
+        · exact absurd h (by intro h; injection h)
+        injection h with h; subst h
+        intro q hq
+        rw [← Array.foldl_toList] at hq
+        rcases mem_foldl_append r.toList #[] q hq with hq | ⟨y, hy, hq⟩
+        · simp at hq
+        · obtain ⟨x, -, hx⟩ := array_mapM_ok _ cs r hm y (by simpa using hy)
+          exact hb x y hx q hq
+      · split at h
+        · rename_i a _
+          rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+          all_goals try (injection h; done)
+          rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨b0, _ | ⟨c0, _ | ⟨y, l⟩⟩⟩⟩⟩
+          all_goals try (injection h; done)
+          conv at h => lhs; whnf
+          split at h
+          all_goals try (injection h; done)
+          rename_i bb cc _ _
+          split at h
+          · injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            intro k hk
+            simp [Part.count] at hk
+          · split at h
+            all_goals try (injection h; done)
+            rename_i p i hw
+            injection h with h; subst h
+            split at hw
+            all_goals try (injection hw; done)
+            split at hw
+            all_goals try (injection hw; done)
+            rename_i nn hl
+            split at hw
+            all_goals try (injection hw; done)
+            rename_i hc
+            injection hw with hw
+            injection hw with hp hi
+            subst hp hi
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            intro k hk
+            simp only [Part.count] at hk
+            refine ⟨nn, hl, ?_⟩
+            show cc.toNat + k < nn
+            omega
+        · split at h
+          · rename_i a _
+            rcases a with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+            all_goals try (injection h; done)
+            rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨b0, _ | ⟨n0, _ | ⟨o0, _ | ⟨j0, _ | ⟨c0, _ | ⟨y, l⟩⟩⟩⟩⟩⟩⟩⟩
+            all_goals try (injection h; done)
+            conv at h => lhs; whnf
+            split at h
+            all_goals try (injection h; done)
+            rename_i _ cc inn ost ist c _
+            split at h
+            all_goals try (injection h; done)
+            rename_i hinn
+            try dsimp only at h
+            split at h
+            · injection h with h; subst h
+              intro q hq
+              simp only [Array.mem_singleton] at hq
+              subst hq
+              intro k hk
+              simp [Part.count] at hk
+            try dsimp only at h
+            split at h
+            all_goals try (injection h; done)
+            rename_i p i hw
+            injection h with h; subst h
+            intro q hq
+            simp only [Array.mem_singleton] at hq
+            subst hq
+            intro k hk
+            simp only [Part.count] at hk
+            have hin : 0 < inn := by simp at hinn; omega
+            obtain ⟨⟨⟨x1, y1⟩, hp1, h1⟩, ⟨⟨x2, y2⟩, hp2, h2⟩⟩ := strided_corners cc ost ist hin hk
+            split at hw
+            all_goals try (injection hw; done)
+            split at hw
+            all_goals try (injection hw; done)
+            rename_i nn hl
+            split at hw
+            all_goals rename_i hq0
+            · rw [if_pos hq0] at hp1 hp2
+              split at hw
+              all_goals try (injection hw; done)
+              rename_i hc
+              injection hw with hw
+              injection hw with hp hi
+              subst hp hi
+              simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+              have e1 := le_trans hc.1 (foldl_min_le _ _ _ (Or.inl (List.mem_map_of_mem hp1)))
+              have e2 := lt_of_le_of_lt (le_foldl_max _ _ _ (Or.inl (List.mem_map_of_mem hp2))) hc.2
+              dsimp only at h1 h2 e1 e2
+              refine ⟨nn, hl, ?_⟩
+              show (cc + ((k / inn : ℕ) : ℤ) * ost + ((k % inn : ℕ) : ℤ) * ist).toNat < nn
+              generalize cc + ((k / inn : ℕ) : ℤ) * ost + ((k % inn : ℕ) : ℤ) * ist = E at h1 h2 ⊢
+              have hE0 : 0 ≤ E := by linarith
+              have hE1 : E < nn := by linarith
+              omega
+            · rw [if_neg hq0] at hp1 hp2
+              split at hw
+              all_goals try (injection hw; done)
+              rename_i hc
+              injection hw with hw
+              injection hw with hp hi
+              subst hp hi
+              simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+              have e1 := le_trans hc.1 (foldl_min_le _ _ _ (Or.inl (List.mem_map_of_mem hp1)))
+              have e2 := lt_of_le_of_lt (le_foldl_max _ _ _ (Or.inl (List.mem_map_of_mem hp2))) hc.2
+              dsimp only at h1 h2 e1 e2
+              refine ⟨nn, hl, ?_⟩
+              show (cc + ((k / inn : ℕ) : ℤ) * ost + ((k % inn : ℕ) : ℤ) * ist).toNat < nn
+              generalize cc + ((k / inn : ℕ) : ℤ) * ost + ((k % inn : ℕ) : ℤ) * ist = E at h1 h2 ⊢
+              have hE0 : 0 ≤ E := by linarith
+              have hE1 : E < nn := by linarith
+              omega
+          · split at h
+            · rename_i e _
+              rcases e with _ | _ | _ | _ | items | _
+              all_goals try (injection h; done)
+              dsimp only at h
+              obtain ⟨rs, hm, h⟩ := except_bind_ok h
+              injection h with h; subst h
+              intro q hq
+              simp only [Array.mem_singleton] at hq
+              subst hq
+              intro k hk
+              simp only [Part.count] at hk
+              have hr : (Part.explicit rs).get k ∈ rs := by
+                show rs[k]! ∈ rs
+                rw [getElem!_pos rs k hk]; exact Array.getElem_mem hk
+              obtain ⟨x, -, hx⟩ := array_mapM_ok _ items rs hm _ hr
+              generalize (Part.explicit rs).get k = r at hx ⊢
+              rcases x with _ | _ | _ | _ | ⟨⟨l⟩⟩ | _
+              all_goals try (injection hx; done)
+              rcases l with _ | ⟨s0, _ | ⟨i0, _ | ⟨l0, _ | ⟨y, l⟩⟩⟩⟩
+              all_goals try (injection hx; done)
+              conv at hx => lhs; whnf
+              split at hx
+              all_goals try (injection hx; done)
+              rename_i ll _
+              split at hx
+              all_goals try (injection hx; done)
+              rename_i p i hw
+              injection hx with hx; subst hx
+              split at hw
+              all_goals try (injection hw; done)
+              split at hw
+              all_goals try (injection hw; done)
+              rename_i nn hl
+              split at hw
+              all_goals try (injection hw; done)
+              rename_i hc
+              injection hw with hw
+              injection hw with hp hi
+              subst hp hi
+              simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+              exact ⟨nn, hl, by show ll.toNat < nn; omega⟩
+            · exact absurd h (by intro h; injection h)
+
+/-- **Every reference a parsed sequence holds names a leaf**, given that every argument an alias may name holds only
+such references: affine and explicit parts by `within`'s check, strided ones by their corners' (`strided_corners`), and
+concatenations by induction on the fuel. -/
+theorem parsePartsIn_valid (leaves : Bool → ℕ → Option ℕ) (args : ℕ → ℕ → Option Seq)
+    (hargs : ∀ k x s, args k x = some s → ∀ q ∈ s.parts, PartValid leaves q) :
+    ∀ fuel j ps, parsePartsIn fuel j leaves args = .ok ps → ∀ q ∈ ps, PartValid leaves q := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro j ps h
+    delta parsePartsIn at h
+    exact nomatch h
+  | succ n ih =>
+    intro j ps h
+    delta parsePartsIn at h
+    exact parsePartsIn_step leaves args hargs n _ (fun x ps hx => ih x ps (by delta parsePartsIn; exact hx)) j ps h
 
 theorem foldl_add_ge {α : Type} (f : α → ℕ) : ∀ (l : List α) (s : ℕ), s ≤ l.foldl (fun s n => s + f n) s
   | [], _ => le_refl _
