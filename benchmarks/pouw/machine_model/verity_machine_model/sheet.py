@@ -325,10 +325,15 @@ def lean(s: Sheet, data: Path) -> str:
                         "the machine model's tests hold it to that output. The grades, and where the sm_120 sheet's "
                         "structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.", "")
     out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
+    # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
+    # toolchain (r20261019-053835-0e45), so each instance lists the constructors.
     out += [*_doc(f"The classes of the `{epoch}` census (its kinds)."), "inductive Kind", *(f"  | {k}" for k in kinds),
-            "  deriving DecidableEq, Fintype", ""]
+            "  deriving DecidableEq", "", "instance : Fintype Kind :=",
+            *_wrap(f"Fintype.ofList [{', '.join(f'.{k}' for k in kinds)}]", "  ", "    "),
+            "    (by intro k; cases k <;> decide)", ""]
     out += [*_doc(f"The Nsight Compute pipes the `{epoch}` classes issue to."), "inductive Pipe",
-            *(f"  | {q}" for q in pipes), "  deriving DecidableEq, Fintype", ""]
+            *(f"  | {q}" for q in pipes), "  deriving DecidableEq", "", "instance : Fintype Pipe :=",
+            f"  Fintype.ofList [{', '.join(f'.{q}' for q in pipes)}] (by intro p; cases p <;> decide)", ""]
     out += [*_doc("The tensor operand types with a dense peak."), "inductive Ty", *(f"  | {ty}" for ty in types),
             "  deriving DecidableEq", ""]
     out += [*_doc(f"A1, f_max: {_dec(s.fmax.value)} MHz. Grade: {s.fmax.grade}. Source: {s.fmax.source}."),
@@ -374,30 +379,47 @@ def lean(s: Sheet, data: Path) -> str:
             "  width := Pipe.width",
             "  smem _ := 0",
             ""]
-    tensor = [(k, census[k][row("tensor")]) for k in kinds if row("tensor") in census.get(k, {})]
-    out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction."),
-            "def tensorLine : Kind → ℝ", *(f"  | .{k} => {_num(c)}" for k, c in tensor), "  | _ => 0", ""]
-    piped = [(q, k, census[k][row(q)]) for q in pipes for k in kinds if row(q) in census.get(k, {})]
-    out += [*_doc(f"`census/{epoch}.csv`'s pipe lines (`DS_<pipe>`), SMSP-cycles a warp instruction."),
-            "def pipeLine : Pipe → Kind → ℝ", *(f"  | .{q}, .{k} => {_num(c)}" for q, k, c in piped), "  | _, _ => 0",
-            ""]
+    # Every class has an arm and none is a wildcard, whose equation lemmas carry side conditions `simp` must discharge.
+    line = lambda r, k: _num(census.get(k, {}).get(row(r), Fraction(0)))
+    out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with "
+                  "none."), "def tensorLine : Kind → ℝ", *(f"  | .{k} => {line('tensor', k)}" for k in kinds), ""]
+    for q in pipes:
+        out += [*_doc(f"`census/{epoch}.csv`'s `DS_{q}` lines, SMSP-cycles a warp instruction; 0 for a class with "
+                      "none."), f"def {q}Line : Kind → ℝ", *(f"  | .{k} => {line(q, k)}" for k in kinds), ""]
     out += [*_doc(f"**`{s.vector}`'s census** (`census/{epoch}.csv`): SMSP-cycles a warp instruction of each class "
                   "holds each row; every class holds issue for 1, and a class with no line on a row holds it not at "
                   "all."),
             "def census : SheetRow Pipe → Kind → ℝ",
             "  | .issue, _ => 1",
             "  | .tensor, k => tensorLine k",
-            "  | .pipe p, k => pipeLine p k",
+            *(f"  | .pipe .{q}, k => {q}Line k" for q in pipes),
             "  | .smem, _ => 0",
             ""]
-    defs = ["Sheet.machine", "sheet", "census", "tensorLine", "pipeLine", "Kind.form", "Kind.pipe", "Ty.peak",
-            "Pipe.width", *peak.values(), *width.values()]
+    # One lemma a row, so that each row's case split has a declaration's heartbeats to itself: the whole census in one
+    # proof ran out of them (r20261019-053835-0e45).
+    unfold = ["Sheet.machine", "sheet", "census"]
+    out += [*_doc("The issue row: every class holds it for 1, on the sheet as in the census."),
+            "theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by",
+            "  simp [Sheet.machine, census]", ""]
+    out += [*_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),
+            "theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by",
+            *_simp("cases k <;> norm_num", [*unfold, "tensorLine", "Kind.form", "Ty.peak", *peak.values()]), ""]
+    for q in pipes:
+        out += [*_doc(f"The {q} pipe's row: 128 over its width for each class on it, and 0 for the rest."),
+                f"theorem machine_{q} (k : Kind) : sheet.machine.a (.pipe .{q}) k = census (.pipe .{q}) k := by",
+                *_simp("cases k <;> norm_num",
+                       [*unfold, f"{q}Line", "Kind.pipe", "Pipe.width", width[q]]), ""]
+    out += [*_doc("The shared-memory row: no class holds it."),
+            "theorem machine_smem (k : Kind) : sheet.machine.a .smem k = census .smem k := by",
+            "  simp [Sheet.machine, sheet, census]", ""]
     out += [*_doc(f"The sheet's machine is `{s.vector}`'s census, line for line."),
             "theorem machine_eq_census : sheet.machine.a = census := by",
             "  funext r k",
-            "  rcases r with _ | _ | p | _",
-            "  all_goals try cases p",
-            *_simp("all_goals cases k <;> norm_num", defs),
+            "  match r with",
+            "  | .issue => exact machine_issue k",
+            "  | .tensor => exact machine_tensor k",
+            *(f"  | .pipe .{q} => exact machine_{q} k" for q in pipes),
+            "  | .smem => exact machine_smem k",
             ""]
     for c in s.clocks:
         out += [*_doc(f"The `{c}` clock is under f_max."), f"theorem {clock[c]}_lt_fmaxMHz : {clock[c]} < fmaxMHz := by",

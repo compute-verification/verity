@@ -47,14 +47,25 @@ inductive Kind
   | UTCIMMA_M64_N64
   | UTCQMMA_E4M3_M128_N128
   | UTCQMMA_E4M3_M128_N256
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
+
+instance : Fintype Kind :=
+  Fintype.ofList [.ALU, .FFMA, .IMAD, .IMMA16816_S8, .IMMA16832_S8, .LDTM_16X128B_X8, .LDTM_16X256B_X4,
+    .LDTM_16X64B_X16, .LDTM_32X32B_X1, .LDTM_32X32B_X128, .LDTM_32X32B_X16, .LDTM_32X32B_X32, .LDTM_32X32B_X4,
+    .LDTM_32X32B_X64, .SHFL, .UNI, .UTCHMMA_F16_M128_N256, .UTCIMMA_M128_N128, .UTCIMMA_M128_N256, .UTCIMMA_M128_N32,
+    .UTCIMMA_M128_N64, .UTCIMMA_M64_N128, .UTCIMMA_M64_N256, .UTCIMMA_M64_N64, .UTCQMMA_E4M3_M128_N128,
+    .UTCQMMA_E4M3_M128_N256]
+    (by intro k; cases k <;> decide)
 
 /-- The Nsight Compute pipes the `DS-100` classes issue to. -/
 inductive Pipe
   | alu
   | imad
   | shfl
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
+
+instance : Fintype Pipe :=
+  Fintype.ofList [.alu, .imad, .shfl] (by intro p; cases p <;> decide)
 
 /-- The tensor operand types with a dense peak. -/
 inductive Ty
@@ -233,10 +244,24 @@ def sheet : Sheet Kind Pipe where
   width := Pipe.width
   smem _ := 0
 
-/-- `census/DS-100.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction. -/
+/-- `census/DS-100.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
 def tensorLine : Kind → ℝ
+  | .ALU => 0
+  | .FFMA => 0
+  | .IMAD => 0
   | .IMMA16816_S8 => 1
   | .IMMA16832_S8 => 2
+  | .LDTM_16X128B_X8 => 0
+  | .LDTM_16X256B_X4 => 0
+  | .LDTM_16X64B_X16 => 0
+  | .LDTM_32X32B_X1 => 0
+  | .LDTM_32X32B_X128 => 0
+  | .LDTM_32X32B_X16 => 0
+  | .LDTM_32X32B_X32 => 0
+  | .LDTM_32X32B_X4 => 0
+  | .LDTM_32X32B_X64 => 0
+  | .SHFL => 0
+  | .UNI => 0
   | .UTCHMMA_F16_M128_N256 => 512
   | .UTCIMMA_M128_N128 => 256
   | .UTCIMMA_M128_N256 => 512
@@ -247,31 +272,139 @@ def tensorLine : Kind → ℝ
   | .UTCIMMA_M64_N64 => 64
   | .UTCQMMA_E4M3_M128_N128 => 256
   | .UTCQMMA_E4M3_M128_N256 => 512
-  | _ => 0
 
-/-- `census/DS-100.csv`'s pipe lines (`DS_<pipe>`), SMSP-cycles a warp instruction. -/
-def pipeLine : Pipe → Kind → ℝ
-  | .alu, .ALU => 2
-  | .imad, .IMAD => 2
-  | .shfl, .SHFL => 4
-  | _, _ => 0
+/-- `census/DS-100.csv`'s `DS_alu` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+def aluLine : Kind → ℝ
+  | .ALU => 2
+  | .FFMA => 0
+  | .IMAD => 0
+  | .IMMA16816_S8 => 0
+  | .IMMA16832_S8 => 0
+  | .LDTM_16X128B_X8 => 0
+  | .LDTM_16X256B_X4 => 0
+  | .LDTM_16X64B_X16 => 0
+  | .LDTM_32X32B_X1 => 0
+  | .LDTM_32X32B_X128 => 0
+  | .LDTM_32X32B_X16 => 0
+  | .LDTM_32X32B_X32 => 0
+  | .LDTM_32X32B_X4 => 0
+  | .LDTM_32X32B_X64 => 0
+  | .SHFL => 0
+  | .UNI => 0
+  | .UTCHMMA_F16_M128_N256 => 0
+  | .UTCIMMA_M128_N128 => 0
+  | .UTCIMMA_M128_N256 => 0
+  | .UTCIMMA_M128_N32 => 0
+  | .UTCIMMA_M128_N64 => 0
+  | .UTCIMMA_M64_N128 => 0
+  | .UTCIMMA_M64_N256 => 0
+  | .UTCIMMA_M64_N64 => 0
+  | .UTCQMMA_E4M3_M128_N128 => 0
+  | .UTCQMMA_E4M3_M128_N256 => 0
+
+/-- `census/DS-100.csv`'s `DS_imad` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+def imadLine : Kind → ℝ
+  | .ALU => 0
+  | .FFMA => 0
+  | .IMAD => 2
+  | .IMMA16816_S8 => 0
+  | .IMMA16832_S8 => 0
+  | .LDTM_16X128B_X8 => 0
+  | .LDTM_16X256B_X4 => 0
+  | .LDTM_16X64B_X16 => 0
+  | .LDTM_32X32B_X1 => 0
+  | .LDTM_32X32B_X128 => 0
+  | .LDTM_32X32B_X16 => 0
+  | .LDTM_32X32B_X32 => 0
+  | .LDTM_32X32B_X4 => 0
+  | .LDTM_32X32B_X64 => 0
+  | .SHFL => 0
+  | .UNI => 0
+  | .UTCHMMA_F16_M128_N256 => 0
+  | .UTCIMMA_M128_N128 => 0
+  | .UTCIMMA_M128_N256 => 0
+  | .UTCIMMA_M128_N32 => 0
+  | .UTCIMMA_M128_N64 => 0
+  | .UTCIMMA_M64_N128 => 0
+  | .UTCIMMA_M64_N256 => 0
+  | .UTCIMMA_M64_N64 => 0
+  | .UTCQMMA_E4M3_M128_N128 => 0
+  | .UTCQMMA_E4M3_M128_N256 => 0
+
+/-- `census/DS-100.csv`'s `DS_shfl` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+def shflLine : Kind → ℝ
+  | .ALU => 0
+  | .FFMA => 0
+  | .IMAD => 0
+  | .IMMA16816_S8 => 0
+  | .IMMA16832_S8 => 0
+  | .LDTM_16X128B_X8 => 0
+  | .LDTM_16X256B_X4 => 0
+  | .LDTM_16X64B_X16 => 0
+  | .LDTM_32X32B_X1 => 0
+  | .LDTM_32X32B_X128 => 0
+  | .LDTM_32X32B_X16 => 0
+  | .LDTM_32X32B_X32 => 0
+  | .LDTM_32X32B_X4 => 0
+  | .LDTM_32X32B_X64 => 0
+  | .SHFL => 4
+  | .UNI => 0
+  | .UTCHMMA_F16_M128_N256 => 0
+  | .UTCIMMA_M128_N128 => 0
+  | .UTCIMMA_M128_N256 => 0
+  | .UTCIMMA_M128_N32 => 0
+  | .UTCIMMA_M128_N64 => 0
+  | .UTCIMMA_M64_N128 => 0
+  | .UTCIMMA_M64_N256 => 0
+  | .UTCIMMA_M64_N64 => 0
+  | .UTCQMMA_E4M3_M128_N128 => 0
+  | .UTCQMMA_E4M3_M128_N256 => 0
 
 /-- **`DS-100`'s census** (`census/DS-100.csv`): SMSP-cycles a warp instruction of each class holds each row; every
 class holds issue for 1, and a class with no line on a row holds it not at all. -/
 def census : SheetRow Pipe → Kind → ℝ
   | .issue, _ => 1
   | .tensor, k => tensorLine k
-  | .pipe p, k => pipeLine p k
+  | .pipe .alu, k => aluLine k
+  | .pipe .imad, k => imadLine k
+  | .pipe .shfl, k => shflLine k
   | .smem, _ => 0
+
+/-- The issue row: every class holds it for 1, on the sheet as in the census. -/
+theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
+  simp [Sheet.machine, census]
+
+/-- The tensor row: each class's MACs over a quarter of its type's peak is its census line. -/
+theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by
+  cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, Kind.form, Ty.peak, peakS8, peakE4m3, peakE5m2,
+      peakFp6, peakF16, peakBf16, peakTf32, peakFp4]
+
+/-- The alu pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
+theorem machine_alu (k : Kind) : sheet.machine.a (.pipe .alu) k = census (.pipe .alu) k := by
+  cases k <;> norm_num [Sheet.machine, sheet, census, aluLine, Kind.pipe, Pipe.width, widthAlu]
+
+/-- The imad pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
+theorem machine_imad (k : Kind) : sheet.machine.a (.pipe .imad) k = census (.pipe .imad) k := by
+  cases k <;> norm_num [Sheet.machine, sheet, census, imadLine, Kind.pipe, Pipe.width, widthImad]
+
+/-- The shfl pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
+theorem machine_shfl (k : Kind) : sheet.machine.a (.pipe .shfl) k = census (.pipe .shfl) k := by
+  cases k <;> norm_num [Sheet.machine, sheet, census, shflLine, Kind.pipe, Pipe.width, widthShfl]
+
+/-- The shared-memory row: no class holds it. -/
+theorem machine_smem (k : Kind) : sheet.machine.a .smem k = census .smem k := by
+  simp [Sheet.machine, sheet, census]
 
 /-- The sheet's machine is `DS-100`'s census, line for line. -/
 theorem machine_eq_census : sheet.machine.a = census := by
   funext r k
-  rcases r with _ | _ | p | _
-  all_goals try cases p
-  all_goals cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, pipeLine, Kind.form, Kind.pipe, Ty.peak,
-      Pipe.width, peakS8, peakE4m3, peakE5m2, peakFp6, peakF16, peakBf16, peakTf32, peakFp4, widthAlu, widthImad,
-      widthShfl]
+  match r with
+  | .issue => exact machine_issue k
+  | .tensor => exact machine_tensor k
+  | .pipe .alu => exact machine_alu k
+  | .pipe .imad => exact machine_imad k
+  | .pipe .shfl => exact machine_shfl k
+  | .smem => exact machine_smem k
 
 /-- The `implied` clock is under f_max. -/
 theorem impliedMHz_lt_fmaxMHz : impliedMHz < fmaxMHz := by
