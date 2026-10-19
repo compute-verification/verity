@@ -35,6 +35,7 @@ import Proofs.Flock.Claims.ZK.Stopped
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Round1Pads
+import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -209,6 +210,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `padColAt` at `X = p + 1`, each pad at its layout index and padding symbol `j` at `len + j`, at every coin vector
   (`Masked.colPAt_tabC`), so its digest reads no coin (`Masked.digOf_pads`); a cut's pads leaf at tree position `q`
   (`Masked.leafAtP_cutAt`).
+* `Round1Root`: and on the executable's side, `innerCommitP`'s root is `layerOf`'s of its leaves
+  (`FlockComplete.innerCommitP_root_layerOf`); at the executable's layout each is the executable's pads leaf of the cut's
+  view at that tree position (`Masked.exeOf_pads`), so table `j`'s rep `r` pads root is `layerOf`'s of the cut's pads
+  leaves by tree position (`Masked.innerRoot_exe`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
