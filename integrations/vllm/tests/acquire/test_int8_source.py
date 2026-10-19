@@ -143,6 +143,26 @@ def test_x03_holds_the_quantizer_names_to_the_steps_sites():
     assert bad == {f"{LIN}/row_quant_0/0": (1, 0), f"{LIN}/row_quant_0/1": (1, 0), f"{LIN}/row_quant_1/0": (0, 1), f"{LIN}/row_quant_1/1": (0, 1)}
 
 
+def test_a_credited_reads_window_quantization_is_committed_as_the_pages_is():
+    """Under a credited cache read the attention quantizes its window with `verity_int8::kv_quant_window`: the same `<attention>/0..3`,
+    bit for bit, two requests at one step concatenated in call order (the Commit left 4,096 of them unbound, r20261018-193305-618b)."""
+    com, model, man = _Committer(), _Model(), _manifest(steps=(0,))
+    (_kc, _vc, _b, ks), (k, v) = _kv_args()
+    model.model.layers[0].self_attn.attn.forward = lambda: [int8_ops.kv_quant_window(k[:n], v[:n], ks) for n in (S, 2)]
+    _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)
+    src.install()
+    try:
+        com._cur = types.SimpleNamespace(step=0)
+        src.on_step_begin()
+        model.model.layers[0].self_attn.attn()
+    finally:
+        src.uninstall()
+    for j, m in enumerate(I8.KV_MEMBERS):
+        want = torch.cat([A.kv_quant(k[:n], v[:n], ks)[j].reshape(-1) for n in (S, 2)])
+        assert torch.equal(com.got[f"{ATTN}/{m}"], want), m
+    assert not com.errors and src.stats["kv_tensors"] == 4
+
+
 def test_a_manifest_without_int8_sites_refuses_the_source():
     with pytest.raises(SystemExit):
         I8.attach(_Committer(), True, {"identities": []}, (), model=_Model())

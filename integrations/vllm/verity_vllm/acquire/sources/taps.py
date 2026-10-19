@@ -24,9 +24,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source, kv_slots_source,
-                                         linear_quant_source, moe_align_source, norm_scale_source, route_source, router_softmax_source,
-                                         scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
+                                         kv_slots_source, linear_quant_source, moe_align_source, norm_scale_source, route_source,
+                                         router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
