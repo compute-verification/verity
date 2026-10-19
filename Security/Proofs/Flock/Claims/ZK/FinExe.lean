@@ -1348,6 +1348,256 @@ theorem repFinal_of (h : RepOpenFinal) : RepFinal := by
     FinRep.tauSalt_of_map (FinRep.repPZk_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hq]
   exact srcV_tauSalt x c w τ hi hC.2.2.2.2.1 _
 
+/-! ## The opened coins as replies
+
+`SimSession`'s bridge from `asksCut` to `asksS` (`cutS`, `repPZk_cut`, `respOf`), restated here so that this file
+imports `Split` alone. -/
+
+namespace FinRep
+
+open FlockComplete Flock.With
+
+/-- **A run that returns** from the bodies `l` returns the same on the right. -/
+def cutS : Sim FlockComplete.PS FlockComplete.PS where
+  R x y := ∀ l a l', x.go l = (.ok a, l') → y.go l = (.ok a, l')
+  pure _ _ _ _ h := h
+  bind {α β x y f g} hxy hfg l b l'' h := by
+    obtain ⟨a, l', h1, h2⟩ := JsonRT.go_bind_ok h
+    rw [go_bind, hxy l a l' h1]
+    exact hfg a l' b l'' h2
+  throw _ _ _ _ h := by cases h
+  lift _ _ _ _ h := h
+
+theorem cutS_refl {α : Type} (x : FlockComplete.PS α) : cutS.R x x := fun _ _ _ h => h
+
+theorem cutS_reflT {α : Type} (x : _root_.Flock.TMW FlockComplete.PS α) : (cutS.st _root_.Flock.Transcript).R x x :=
+  fun _ => cutS_refl _
+
+theorem cutS_reflL {α : Type} (x : LP FlockComplete.PS α) :
+    ((cutS.st _root_.Flock.Transcript).st LigState).R x x :=
+  fun _ => cutS_reflT _
+
+theorem asksCut_round_go (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ) (c : ByteArray) (l : Array Msg) :
+    ((asksCut coin n).round c).go l =
+      (if n ≤ l.size then .error "past the openings" else .ok (coin l.size), l.push (Claims.toMsg c)) := by
+  have e : ((asksCut coin n).round c).go l =
+      ((if n ≤ l.size then throw "past the openings" else pure (coin l.size) : FlockComplete.PS _)).go
+        (l.push (Claims.toMsg c)) := rfl
+  rw [e]
+  split_ifs <;> rfl
+
+theorem cutS_round {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+    (c : ByteArray) : cutS.R ((asksCut coin n).round c) ((asksS resp).round c) := by
+  intro l v l' e
+  rw [asksCut_round_go] at e
+  by_cases hn : n ≤ l.size
+  · simp only [hn, ↓reduceIte, Prod.mk.injEq, reduceCtorEq, false_and] at e
+  · simp only [hn, ↓reduceIte, Prod.mk.injEq, Except.ok.injEq] at e
+    obtain ⟨rfl, rfl⟩ := e
+    show (Except.ok (coinOf (resp l.size)), l.push (Claims.toMsg c)) = _
+    rw [hr]
+
+section Bridge
+
+variable {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
+
+theorem squeezeP_cut (hr : ∀ k, coinOf (resp k) = coin k) (kind : UInt8) (m : ℕ) :
+    (cutS.st _root_.Flock.Transcript).R (squeezeP (asksCut coin n) kind m) (squeezeP (asksS resp) kind m) := by
+  intro t
+  unfold squeezeP
+  sim_walk [cutS_round hr]
+
+theorem sampleP_cut (hr : ∀ k, coinOf (resp k) = coin k) :
+    (cutS.st _root_.Flock.Transcript).R (sampleP (asksCut coin n)) (sampleP (asksS resp)) := by
+  unfold sampleP
+  sim_walk [squeezeP_cut hr]
+
+theorem sampleKP_cut (hr : ∀ k, coinOf (resp k) = coin k) :
+    (cutS.st _root_.Flock.Transcript).R (sampleKP (asksCut coin n)) (sampleKP (asksS resp)) := by
+  unfold sampleKP
+  sim_walk [squeezeP_cut hr]
+
+theorem liftT_cut {α : Type} {x y : _root_.Flock.TMW FlockComplete.PS α} (h : (cutS.st _root_.Flock.Transcript).R x y) :
+    ((cutS.st _root_.Flock.Transcript).st LigState).R (liftT x) (liftT y) :=
+  Sim.lift_st _ h
+
+theorem zerocheckPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (m : ℕ) (digest cap root : ByteArray)
+    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) :
+    (cutS.st _root_.Flock.Transcript).R (zerocheckPZk (asksCut coin n) m digest cap root lay h tr)
+      (zerocheckPZk (asksS resp) m digest cap root lay h tr) := by
+  unfold zerocheckPZk sampleVecP
+  sim_walk [squeezeP_cut hr, sampleP_cut hr]
+
+theorem lincheckPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (c : _root_.Flock.CircuitFold) (m : ℕ)
+    (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) (zc : _root_.Flock.ZcOut) :
+    (cutS.st _root_.Flock.Transcript).R (lincheckPZk (asksCut coin n) c m lay h tr zc)
+      (lincheckPZk (asksS resp) c m lay h tr zc) := by
+  unfold lincheckPZk
+  sim_walk [sampleP_cut hr]
+
+theorem ringSwitchP_cut (hr : ∀ k, coinOf (resp k) = coin k) (tr : FlockComplete.Trace) (claims : Array _root_.Flock.Claim) :
+    (cutS.st _root_.Flock.Transcript).R (ringSwitchP (asksCut coin n) tr claims) (ringSwitchP (asksS resp) tr claims) := by
+  unfold ringSwitchP sampleVecP
+  sim_walk [squeezeP_cut hr]
+
+theorem challengeP_cut (hr : ∀ k, coinOf (resp k) = coin k) (split : Bool) :
+    ((cutS.st _root_.Flock.Transcript).st LigState).R (challengeP (asksCut coin n) split)
+      (challengeP (asksS resp) split) := by
+  unfold challengeP
+  sim_walk [liftT_cut, sampleKP_cut hr, cutS_reflL]
+
+theorem oodIntroP_cut (hr : ∀ k, coinOf (resp k) = coin k) (nonce : ℕ → ℕ → UInt64) (g : Array _root_.Flock.F128)
+    (dim : ℕ) :
+    ((cutS.st _root_.Flock.Transcript).st LigState).R (oodIntroP (asksCut coin n) nonce g dim)
+      (oodIntroP (asksS resp) nonce g dim) := by
+  unfold oodIntroP sampleVecP
+  sim_walk [liftT_cut, squeezeP_cut hr, sampleP_cut hr, cutS_reflL]
+
+theorem queryP_cut (hr : ∀ k, coinOf (resp k) = coin k) (nonce : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme)
+    (lv : _root_.Flock.Level) (cm : Commit) :
+    ((cutS.st _root_.Flock.Transcript).st LigState).R (queryP (asksCut coin n) nonce ms lv cm)
+      (queryP (asksS resp) nonce ms lv cm) := by
+  unfold queryP sampleVecP
+  sim_walk [liftT_cut, squeezeP_cut hr, cutS_reflL]
+
+theorem ligeritoPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS)
+    (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : _root_.Flock.F128) (cm0 : Commit)
+    (t b : Array _root_.Flock.F128) (lay : _root_.Flock.Zk.PadLayout) (h : Array _root_.Flock.F128) (rep tPad : ℕ)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
+    (cutS.st _root_.Flock.Transcript).R
+      (ligeritoPZk (asksCut coin n) hs ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce)
+      (ligeritoPZk (asksS resp) hs ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce) := by
+  unfold ligeritoPZk sampleVecP
+  sim_walk [liftT_cut, squeezeP_cut hr, sampleP_cut hr, sampleKP_cut hr, challengeP_cut hr, oodIntroP_cut hr,
+    queryP_cut hr, cutS_reflL, cutS_reflT, cutS_refl]
+
+theorem innerP_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS)
+    (lay : _root_.Flock.Zk.PadLayout) (p : PadsZk) (ic : InnerCommit) (finalC : _root_.Flock.F128)
+    (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    (cutS.st _root_.Flock.Transcript).R (innerP (asksCut coin n) hs lay p ic finalC cons)
+      (innerP (asksS resp) hs lay p ic finalC cons) := by
+  unfold innerP sampleVecP
+  sim_walk [sampleP_cut hr, squeezeP_cut hr, cutS_reflT, cutS_refl]
+
+/-- **A masked rep answered by `asksCut` that returns** is the rep answered by `asksS` at the same coins. -/
+theorem repPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    (cutS.st _root_.Flock.Transcript).R
+      (repPZk (asksCut coin n) hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words)
+      (repPZk (asksS resp) hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words) := by
+  unfold repPZk rankCheckP
+  sim_walk [zerocheckPZk_cut hr, lincheckPZk_cut hr, ringSwitchP_cut hr, ligeritoPZk_cut hr, innerP_cut hr,
+    cutS_reflT, cutS_refl]
+
+end Bridge
+
+/-- **The opened coins' replies**: round `k`'s coin's bytes, the zero coin's past the pre-final rounds. -/
+def respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
+  (if h : k < refK x then c ⟨k, h⟩ else default : FlockDeploy.Coin).bytes
+
+theorem coinOf_respOf {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) :
+    coinOf (respOf c k) = fun i => slotAt c k i := by
+  funext i
+  unfold respOf slotAt
+  rw [JsonRT.coinOf_bytes]
+  split_ifs with hk
+  · rfl
+  · unfold FlockDeploy.Coin.at
+    split_ifs <;> rfl
+
+/-- **The session's rep `r` of table `i` that returns, answered by the replies** (`repPZk_cut`), with the facts about
+its table that its round count and claim points read. -/
+theorem repHE_asks {x : Msg} {w : Claims.Flock.Wit} {τ : UE.Tape} {c : Fin (refK x) → FlockDeploy.Coin}
+    {spec : _root_.Flock.SessionSpec} {i : ℕ} {hi : i < jOf x} {r : ℕ} {cm0 : Commit} {extras : Array _root_.Flock.Claim}
+    {ic : InnerCommit} {l : Array Msg} (hC : RepCtx x w τ c spec i hi r cm0 extras ic l) {p t l'}
+    (e : (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l')) :
+    ((repPZk (asksS (respOf c)) hsE (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!) (zkTab x ⟨i, hi⟩).sch
+      (zkTab x ⟨i, hi⟩).tPad r (domE spec i r) (trsE x w (UE.tapeZk τ))[i]!
+      (packed (trsE x w (UE.tapeZk τ))[i]! (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).m) cm0 extras
+      (padsOf (UE.tapeZk τ) i r (finLayE x i hi)) ic ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i)
+      ((UE.tapeZk τ).salt i r) ((UE.tapeZk τ).nonce i r) (priorE c i r)
+      (MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))).go l =
+        (.ok (p, t), l') ∧
+      _root_.Flock.Zk.schedule (stsOf x)[i]!.m = .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) ∧
+      14 ≤ (stsOf x)[i]!.m ∧ 6 ≤ (stsOf x)[i]!.c.kLog ∧
+      extras.size = spec.points * (stsOf x)[i]!.regions.size := by
+  obtain ⟨hx, -, -, ⟨s, hsx⟩, -, -, -, hex, -⟩ := hC
+  obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
+  have hst : (stsOf x)[i]! = stAt x ⟨i, hi⟩ := getElem!_pos _ _ _
+  have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi'),
+      getElem!_pos (stsOf x) i hi']
+    simp [FlockDeploy.tabsOf]
+  have e' := repPZk_cut (coin := fun k i => slotAt c k i) (n := refK x) (resp := respOf c)
+    (fun k => coinOf_respOf c k) hsE _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (_root_.Flock.Transcript.init #[] _) l _ l' e
+  rw [htab] at e' hex
+  refine ⟨e', ?_, ?_, ?_, ?_⟩
+  · rw [hst]
+    exact (zkTab x ⟨i, hi⟩).hz
+  · have := (hall i hi').1
+    rw [getElem!_pos (stsOf x) i hi']
+    omega
+  · rw [hst]
+    exact (zkTab x ⟨i, hi⟩).wf.1.hk6
+  · rw [JsonRT.extraClaims_size hex]
+    simp [Nat.mul_comm, ptsE]
+
+end FinRep
+
+/-- **A rep that returns sends its rounds** (`SimSession`'s rep count): answered by the replies (`FinRep.repHE_asks`),
+the rep sends `repRoundsT`'s rounds (`repPZk_exact`), which are `repRounds`'s (`repRoundsT_eq`), from `repBase`. -/
+theorem repExact : RepExact := by
+  intro x w τ c spec i hi r cm0 extras ic l hC p t l' e
+  obtain ⟨e', hv, hm, -, hx'⟩ := FinRep.repHE_asks hC e
+  obtain ⟨-, -, -, ⟨s, hsx⟩, hr, -, -, -, hl⟩ := hC
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
+  obtain ⟨hl3, -, -, -⟩ := FlockComplete.repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0)
+    (hL := hL2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e')
+  have e6 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).fold.kLog = (stsOf x)[i]!.c.kLog := rfl
+  have e7 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).m = (stsOf x)[i]!.m := rfl
+  rw [repBase_eq hsx, FlockComplete.ZkTables.repStart_succ, show (2 * i + r) / 2 = i by omega,
+    ← FlockComplete.ZkTables.repRoundsT_eq hv hx', hl3, hl, repBase_eq hsx]
+  unfold FlockComplete.ZkTables.repRoundsT FlockComplete.piopZk
+  rw [e6, e7, hx']
+  dsimp only
+  omega
+
+/-- **Rep `0`'s rounds hold its claim points at the opened coins** (`SimSession`'s): answered by the replies
+(`FinRep.repHE_asks`), its rounds' points are the replies' coins from `repBase` (`repPZk_points`), which are
+`ptsOpen`'s. -/
+theorem repPoints : RepPoints := by
+  intro x w τ c spec i hi cm0 extras ic l hC p t l' e
+  obtain ⟨e', hv, hm, hk6, -⟩ := FinRep.repHE_asks hC e
+  obtain ⟨-, -, -, ⟨s, hsx⟩, -, -, -, -, hl⟩ := hC
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
+  obtain ⟨hl3, -, -, -⟩ := FlockComplete.repPZk_exact (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0)
+    (hL := hL2) (hq := fun i hi => (hlv i hi).q_ne_zero) (h := e')
+  have e6 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).fold.kLog = (stsOf x)[i]!.c.kLog := rfl
+  have e7 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).m = (stsOf x)[i]!.m := rfl
+  have e8 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).kLog = (stsOf x)[i]!.c.kLog := rfl
+  have hpts := FlockComplete.ZkTables.repPZk_points (hm := hm) (hk := hk6) (h := e') (hsz := by
+    rw [hl3]
+    unfold FlockComplete.piopZk
+    rw [e6, e7, e8]
+    omega)
+  simp only [FinRep.coinOf_respOf] at hpts
+  have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
+    have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi'),
+      getElem!_pos (stsOf x) i hi']
+    simp [FlockDeploy.tabsOf]
+  rw [Nat.add_zero] at hl
+  rw [htab]
+  unfold ptsOpen
+  rw [← hl]
+  exact hpts
+
 /-- **`FinExe` from the hybrids, the live end and the per-rep facts**: `finExe_of_reps` with `RepFin` from `SimPiop`,
 `SimLig`, `SimInner` and the final-only data (`repFin_of`). -/
 theorem finExe_of_parts (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
@@ -1359,6 +1609,12 @@ theorem finExe_of_parts (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : Si
 theorem finExe_of_open (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
     (hO : RepOpenFinal) (hE : RepExact) (hP : RepPoints) : FinExe :=
   finExe_of_parts hL hSC h0 h1 h2 (repFinal_of hO) hE hP
+
+/-- **`FinExe` from the hybrids, the live end and the run-decided final-only data**: `finExe_of_open` with the rep
+count and rep `0`'s claim points proved (`repExact`, `repPoints`). -/
+theorem finExe_of_final (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
+    (hO : RepOpenFinal) : FinExe :=
+  finExe_of_open hL hSC h0 h1 h2 hO repExact repPoints
 
 end Masked
 
