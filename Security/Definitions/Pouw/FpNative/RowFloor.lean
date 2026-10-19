@@ -29,6 +29,20 @@ in art:87829468dd9aaf34ccd1aaa112c079fb4ec8026aad663e9eeaaff5352f526952, Proposi
 not these statements, rules that class out at `L = 32`, at about 2.5× the honest cost. And `c = 1` here is K's affine
 scope only: the composed floor also needs the non-affine scope's luck on even coefficients, a 2-adic parity lemma that
 is open (RT-FP-8), so no ε for design A rests on these alone.
+
+Design A's floor rests on five premises, each open:
+
+1. **Lemma R2's proof**, which is these two statements (a paper proof by tensor substitution with least-valuation
+   pivots, in FP-NATIVE's note; RT-FP read it step by step and found no gap).
+2. **`StagedFloorK` restated for design A's words**: the window theorem with `fpPrefix` in place of `dPrefix`, reading
+   `FpChainBound … AffProd … 1` where the record reads `ChainBound`.
+3. **The 2-adic parity lemma**: the luck of `KScopeOneSided`'s scope (one-sided products of any form) when every
+   coefficient is even. The record's parity luck 0.854 reads `toF2`, and design A's gap products `Δ_P Δ_X` are even on
+   98.9% of e4m3i entries, where a reading mod 2 sees no bilinear term at all.
+4. **A card for the ring-program scope** (`KScopeAffine`'s analogue for these words): a cheater's product slots are
+   AffProd and its words ring combinations of them. The card names the shift class above and rounded-MMA routes (an
+   FP accumulator's rounding is a shift), with RT-ALGO-3's pricing; the FP machine's own price for them is open.
+5. **A guarantee that reads the floor**, which is Daniel's call (RT-FP-10); until then no lock record names these.
 -/
 
 namespace Pouw.FpNative
