@@ -689,6 +689,93 @@ theorem ligeritoCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes P
       · obtain ⟨rfl, rfl⟩ := Prod.mk.inj hr
         exact lpure ⟨rfl, rfl⟩
 
+theorem go_bind_congr_l {α β : Type} {x y : TMW PS α} {f : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg}
+    (h : (x.run t).go l = (y.run t).go l) : ((x >>= f).run t).go l = ((y >>= f).run t).go l := by
+  rcases hx : (x.run t).go l with ⟨r, L⟩
+  rcases r with e | ⟨a, t'⟩
+  · rw [bind_go_err hx, bind_go_err (h ▸ hx)]
+  · rw [bind_go hx, bind_go (h ▸ hx)]
+
+/-- **Hybrids 1 and 2 differ in level 0's opening only**: both run the session's PIOP, and where it returns, an opening
+from the source that sends what the session's sends and returns its erased proof runs the same rep. -/
+theorem repMix_one_two (io : Asks PS) (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
+    (tr : Trace) (t : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List F128)) (words : List ℕ) (src : RepSrc) (t₀ : Transcript) (l : Array Claims.Msg)
+    (h : ∀ zp lp ss T sws t' l', ((piopPZk io st (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h tr (flat cm0.cap)
+        ic.root extras prior words).run t₀).go l = (.ok ((zp, lp, ss, T, sws), t'), l') →
+      ((ligeritoCut io hs st.merkle sch T (eraseC cm0) (basisVals sws (st.m - 7))
+          (Zk.PadLayout.new st.m st.kLog sch.k0) src).run t').go l' =
+        ((do
+          let (lg, zl, rec) ← ligeritoPZk io hs st.merkle sch T cm0 t (basisVals sws (st.m - 7))
+            (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt nonce
+          pure (eraseL lg, zl, rec) : TMW PS (LigeritoProof × Zk.Level0Msgs × Zk.L0Rec)).run t').go l') :
+    ((repMix 1 io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words src).run t₀).go l =
+      ((repMix 2 io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words src).run
+        t₀).go l := by
+  apply Alike.eq
+  unfold repMix
+  simp only [show ¬ (1 : ℕ) = 0 by decide, show ¬ (2 : ℕ) = 0 by decide, show (1 : ℕ) ≤ 1 by decide,
+    show ¬ (2 : ℕ) ≤ 1 by decide, show (1 : ℕ) ≤ 2 by decide, show (2 : ℕ) ≤ 2 by decide, ↓reduceIte]
+  refine alike_bind_eq fun a t' l' ha => ?_
+  rcases a with ⟨zp, lp, ss, T, sws⟩
+  dsimp only
+  rw [go_bind_congr_l (h zp lp ss T sws t' l' ha)]
+  simp only [bind_assoc]
+  refine alike_bind_eq fun b t'' l'' _ => ?_
+  rcases b with ⟨lg, zl, rec⟩
+  exact Alike.refl _
+
 end LigLock
 
 end FlockComplete
+
+namespace Claims.ZKMal.Masked
+
+open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
+
+/-- **What the deployed source carries for level 0's opening**: wherever the deployed rep's PIOP returns, the cut's
+source holds what the session's opening computes at the coins from the PIOP's last send on (`LigHyp`). -/
+def LigSrcE : Prop :=
+  ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), ¬ Refused x c n →
+    ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
+    ∀ (j : Fin (jOf x)) (r : Fin 2) (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
+      (extras : Array _root_.Flock.Claim),
+      (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras →
+    ∀ l : Array Msg, l.size = repBase x (2 * j.val + r.val) →
+    ∀ zp lp ss T sws t' l',
+      ((FlockComplete.piopPZk (ioE c n) (FlockDeploy.tabsOf (stsOf x))[j.val]!
+          (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+            (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)
+          (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+            (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+              (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)).h
+          (trsE x w (UE.tapeZk τ))[j.val]! (FlockComplete.flat cm0.cap) ic.root extras (priorE c j.val r.val)
+          (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!).run (_root_.Flock.Transcript.init #[] dom)).go l =
+        (.ok ((zp, lp, ss, T, sws), t'), l') →
+      FlockComplete.LigLock.LigHyp (fun k i => slotAt c k i) n l'.size
+        (FlockDeploy.tabsOf (stsOf x))[j.val]!.merkle (zkTab x j).sch
+        (FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (FlockDeploy.tabsOf (stsOf x))[j.val]!.m)
+        (FlockComplete.basisVals sws ((FlockDeploy.tabsOf (stsOf x))[j.val]!.m - 7))
+        (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+          (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)
+        (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+          (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+            (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)).h
+        r.val (zkTab x j).tPad ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val)
+        ((UE.tapeZk τ).salt j.val r.val) ((srcE x c w τ j.val).rep r.val)
+
+/-- **`SimLig` from what the cut carries for level 0's opening**: hybrids 1 and 2 run the session's PIOP, and where it
+returns, the source's opening sends what the session's sends and returns its erased proof (`ligeritoCut_alike`, at the
+coins from the PIOP's last send on), every nonce `0` (`exeTape`'s). -/
+theorem simLig_of (h : LigSrcE) : SimLig := by
+  intro x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl
+  unfold mixE
+  refine FlockComplete.LigLock.repMix_one_two _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    fun zp lp ss T sws t' l' hp => ?_
+  exact FlockComplete.LigLock.ligeritoCut_alike _ n _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    (h x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl zp lp ss T sws t' l' hp)
+
+end Masked
+
+end Claims.ZKMal
