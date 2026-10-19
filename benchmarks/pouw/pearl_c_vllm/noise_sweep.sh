@@ -5,7 +5,7 @@
 #     --env GPU_LEASE_WHO=<id> --env UNTIL=2026-10-06T13:58:00Z --send points.txt -- \
 #     bash benchmarks/pouw/pearl_c_vllm/noise_sweep.sh "$RESEARCH_RUN_DIR"/inputs/points.txt
 # A points file has one point a line, its name then served_profile.sh's variables (BATCH, PROMPT, SCHEME, GRAPHS, ...):
-#   eager-b32-p64 BATCH=32 PROMPT=64 SCHEME=pearl-c-sm120-v1-h2 ROWS_FORM=s
+#   eager-b32-p64 BATCH=32 PROMPT=64 SCHEME=pearl-c-sm120-v1-h3
 # GPU 1's ship is built from this tree (CPU) once per kernel directory's git tree, kept in SHIPS under that tree's hash (the
 # ship's sources are that directory; served_profile.sh checks its manifest and run.py), and reused.  Then each point's REPLICATES runs (each its own beacon, so its own seeds)
 # go PAR at a time, each in its own one-GPU preemptible lease of at most LEASE_MIN minutes that ends by UNTIL (its --max-min,
