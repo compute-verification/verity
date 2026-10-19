@@ -5,6 +5,8 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
     python forms_gap.py --sheet    RT-HOPPER-2/3: DS-90's ε against the fold's cost and against A2u's uniform issue cost
     python forms_gap.py --b1       RT-HOPPER-1/2: BGMMA_B1_N256 offered at split 8 (the least: t binary products separate
                                    at most 2^t values of an s8 operand) and 64 (bit planes); DS-90 prices it on issue alone
+    python forms_gap.py --rs-fit   RT-HOPPER-1: RS offered at SS's joint coefficients times the H200's matched-pair ratio
+    python forms_gap.py --honest-true  RT-HOPPER-8: γ with honest timed by the loop that folds the wgmma's accumulators
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -112,6 +114,47 @@ def sheet() -> None:
             print(line(f"DS-90+UP q*=0.5 UNI 0 q*_U {qu}", eps(d, "DS-90", 0.5, "--q-uniform", str(qu))))
 
 
+SS_JI = {"JI90_0": 62.7407638, "JI90_1": 66.93849, "JI90_2": 121.566}
+# RS's coefficient over SS's on each joint row, the least over the matched pairs of r20261019-055823-616f (rs.sh at
+# d6e2f80cf0): the LOP3-only mix beside the wgmma, where RS runs 1.2% faster than SS. Beside the honest's LI fold RS
+# runs 1.9% slower (ratios 1.032, 1.030, 1.019).
+RS_FIT = {"JI90_0": 0.9666, "JI90_1": 0.9686, "JI90_2": 0.9868}
+
+
+def set_line(data: Path, kind: str, row: str, u: float) -> None:
+    p = data / "census.csv"
+    t, n = re.subn(rf"^{kind},{row},,,[^,]*,", f"{kind},{row},,,{u},", p.read_text(), flags=re.M)
+    assert n == 1, (kind, row, n)
+    p.write_text(t)
+
+
+def rs_fit() -> None:
+    with tempfile.TemporaryDirectory() as t:
+        for scale in (1.0, None, 0.95, 0.9):
+            d = scratch(Path(t) / f"fit-{scale}", rs=True)
+            for row, u in SS_JI.items():
+                set_line(d, "IGMMA_S8_N256_RS", row, u * (RS_FIT[row] if scale is None else scale))
+            label = "the run's matched-pair ratios" if scale is None else f"{scale}× SS's"
+            for vector, q in (("DC-90", 1.22), ("DC-90-ri", 1.22), ("DC-90-ri", 0.5)):
+                print(line(f"{vector} q*={q} RS at {label}", eps(d, vector, q)))
+
+
+TRUE_LOOP = 290.36   # wgli_true_w2 in r20261019-055823-616f: the plain GEMM's 122.41 over its tensor fraction 0.42158
+
+
+def honest_true() -> None:
+    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators (RT-HOPPER-8)."""
+    with tempfile.TemporaryDirectory() as t:
+        d = scratch(Path(t), rs=False)
+        for cyc in (None, TRUE_LOOP):
+            if cyc:
+                p = d / "honest" / "dc90-licpw-redux-l32.toml"
+                p.write_text(re.sub(r"^cycles_per_mma = [0-9.]+", f"cycles_per_mma = {cyc}", p.read_text(), flags=re.M))
+            for vector, q in (("DS-90", 0.5), ("DC-90-ri", 1.22)):
+                r = eps(d, vector, q)
+                print(line(f"{vector} q*={q} honest {cyc or 204.25}", r) + f"  γ {r['gamma']:.4f}  honest {r['honest_cycles_per_mma']:.2f} ({r['honest_time']})")
+
+
 def b1_gap() -> None:
     with tempfile.TemporaryDirectory() as t:
         for split in (8, 64):
@@ -129,8 +172,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sheet", action="store_true", help="DS-90's cliffs in the fold's cost and in A2u")
     ap.add_argument("--b1", action="store_true", help="ε with BGMMA_B1_N256, which DS-90 prices on issue alone, offered")
+    ap.add_argument("--rs-fit", action="store_true", help="ε with RS offered at SS's joint coefficients times the H200's ratio")
+    ap.add_argument("--honest-true", action="store_true", help="γ with honest timed by the loop that folds the accumulators")
     a = ap.parse_args()
-    sheet() if a.sheet else b1_gap() if a.b1 else forms_gap()
+    (sheet() if a.sheet else b1_gap() if a.b1 else rs_fit() if a.rs_fit else honest_true() if a.honest_true
+     else forms_gap())
     return 0
 
 
