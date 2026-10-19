@@ -593,6 +593,10 @@
     "fails": "Claims.Witness.Recursion.Bits_fails",
     "meets": ["Claims.Witness.Recursion.Bits_meets"]
    },
+   "Claims.Recursion.BitsLin": {
+    "fails": "Claims.Witness.Recursion.BitsLin_fails",
+    "meets": ["Claims.Witness.Recursion.Bits_meets"]
+   },
    "Claims.Recursion.BitsFlock": {
     "fails": "Claims.Witness.Recursion.BitsFlock_fails",
     "meets": ["Claims.Witness.Recursion.BitsFlock_meets"]
@@ -615,6 +619,10 @@
    },
    "Claims.Recursion.KS": {
     "fails": "Claims.Witness.Recursion.KS_fails",
+    "meets": ["Claims.Witness.Recursion.KS_meets"]
+   },
+   "Claims.Recursion.KSLin": {
+    "fails": "Claims.Witness.Recursion.KSLin_fails",
     "meets": ["Claims.Witness.Recursion.KS_meets"]
    },
    "Claims.Recursion.KSFlock": {
@@ -710,6 +718,10 @@
     "fails": "Claims.Witness.Recursion.KSBound_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
    },
+   "Claims.Recursion.KSBoundLin": {
+    "fails": "Claims.Witness.Recursion.KSBoundLin_fails",
+    "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
    "Claims.Recursion.KSPrivBound": {
     "fails": "Claims.Witness.Recursion.KSPrivBound_fails",
     "meets": ["Claims.Witness.Recursion.KSPrivBound_meets"]
@@ -736,6 +748,7 @@
    "Claims.Recursion.InScope": "the readable scope's form, which the claims read through `Scope`, no claim",
    "Claims.Recursion.Scope": "the recursion's scope, which `ScopeMatches` and `Complete` read, no claim",
    "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim",
+   "Claims.Recursion.linkG": "`Fdev`'s loop condition (does `E_O` give witnesses at a draw), a finder's internal test that `KSLin` and `BitsLin` read through `Fdev`, no claim",
    "Claims.Rel.L": "a helper the claims read: a relation's language",
    "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
    "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
@@ -3375,6 +3388,15 @@
    ],
    "assumptions": [],
    "type_hash": "e4655e7ef0e7d660f42d55e0ba0124101fe461ff107517fe014a4d6f1302e59f"
+  },
+  "Claims.Witness.Recursion.KSLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.KSBoundLin_fails": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.Recursion.BitsLin_fails": {
+   "owner": "@proofs"
   },
   "Claims.Witness.Recursion.KS_fails": {
    "owner": "@proofs",
