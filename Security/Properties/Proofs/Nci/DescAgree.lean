@@ -393,6 +393,7 @@ theorem registered_get (P : Prog) {k : ℕ} (hk : k < nodeCount P) :
   rw [getElem!_pos (registered P) k (by simp only [registered, Array.size_map]; exact hk),
     getElem!_pos (rootBody P).nodes k (by exact hk)]
   simp only [registered, Array.getElem_map]
+  rfl
 
 /-- θ's gates: each entry's node's, in order. -/
 def thetaGates (P : Prog) (theta : Array Json) : List ℕ :=
