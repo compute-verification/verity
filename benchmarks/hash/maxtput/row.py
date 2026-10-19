@@ -170,8 +170,10 @@ def build(a: argparse.Namespace) -> int:
 
 
 def preserved(run: str, tries: int = 30) -> bool:
-    """Custody reaches the store's remote a few minutes after `research run --wait` returns; until then the attempt isn't there."""
+    """Custody reaches the store's remote a few minutes after `research run --wait` returns; until then the attempt isn't there.
+    `research data custody` reads the local run dir, which only `research fetch` makes on a VM that didn't launch the run."""
     for i in range(tries):
+        subprocess.run(["research", "fetch", run], capture_output=True, text=True)
         if subprocess.run(["research", "data", "custody", run], capture_output=True, text=True).returncode == 0:
             return True
         if i + 1 < tries:
@@ -186,7 +188,6 @@ def publish(a: argparse.Namespace) -> int:
             print(f"{run}: no custody on the store's remote yet (`research data custody {run}`): nothing published", file=sys.stderr)
             rc = 1
             continue
-        subprocess.run(["research", "fetch", run], capture_output=True, text=True)
         att = json.loads(research("data", "show", run, "--json"))
         machine = (att.get("execution") or {}).get("machine")
         commit = (att.get("source") or {}).get("commit")
