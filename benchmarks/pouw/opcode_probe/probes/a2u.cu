@@ -14,9 +14,11 @@
 //   <s>8_<K>     4 pairs: K/4 uniform instructions and 3K/4 chain instructions on lanes;
 //   <s>8_<K>p3   3 pairs: K/3 uniform and 2K/3 on lanes;
 //   <s>8_<J>p2   2 pairs: J on lanes, no uniform instruction (J = 3K/4 or 2K/3 of a probe above).
-// With A2u a probe and its control differ by its uniform count in SMSP-cycles a warp-iteration over the stream's issue
-// efficiency; without it by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle, uniform.cu's uz_*) far
-// from binding.
+// The stream issues at about 0.8 (r20261019-053415-154f), so up to a fifth of the slots are idle and 16-32 uniform
+// instructions fit there either way (they added 4-14 SMSP-cycles). The 3-pair probes at K = 192-384 put 64-128 uniform
+// instructions beside 128-256 chain instructions on lanes, more than the idle slots: with A2u a probe's time exceeds its
+// control's by most of its uniform count; without it by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle,
+// uniform.cu's uz_*) still below half the loop's time.
 // Joint points: rows.jsonl only, no census line.
 #include "../probe.cuh"
 
@@ -105,7 +107,13 @@ __device__ __forceinline__ void ai(const OpArgs& a) {
   AI(s##8_96p3, 1024, 96, 3, S)      \
   AI(s##8_32p2, 1024, 32, 2, S)      \
   AI(s##8_64p2, 1024, 64, 2, S)      \
-  AI(s##8_96p2, 1024, 96, 2, S)
+  AI(s##8_96p2, 1024, 96, 2, S)      \
+  AI(s##8_192p3, 1024, 192, 3, S)    \
+  AI(s##8_288p3, 1024, 288, 3, S)    \
+  AI(s##8_384p3, 1024, 384, 3, S)    \
+  AI(s##8_128p2, 1024, 128, 2, S)    \
+  AI(s##8_192p2, 1024, 192, 2, S)    \
+  AI(s##8_256p2, 1024, 256, 2, S)
 AIS(ai, SA)
 AIS(bi, SB)
 
@@ -116,7 +124,9 @@ AIS(bi, SB)
 
 #define P_AIS(s, F)                                                                                                   \
   P_AI(s##8_0, F U(0)), P_AI(s##8_64, F U(8)), P_AI(s##8_128, F U(16)), P_AI(s##8_48p3, F U(8)),                      \
-      P_AI(s##8_96p3, F U(16)), P_AI(s##8_32p2, F U(0)), P_AI(s##8_64p2, F U(0)), P_AI(s##8_96p2, F U(0))
+      P_AI(s##8_96p3, F U(16)), P_AI(s##8_32p2, F U(0)), P_AI(s##8_64p2, F U(0)), P_AI(s##8_96p2, F U(0)),          \
+      P_AI(s##8_192p3, F U(32)), P_AI(s##8_288p3, F U(48)), P_AI(s##8_384p3, F U(64)), P_AI(s##8_128p2, F U(0)),     \
+      P_AI(s##8_192p2, F U(0)), P_AI(s##8_256p2, F U(0))
 
 static const OpProbe PROBES[] = {P_AIS(ai, "FFMA*=64"), P_AIS(bi, "FFMA*=16")};
 
