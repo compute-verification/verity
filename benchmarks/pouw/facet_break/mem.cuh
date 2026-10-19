@@ -7,6 +7,10 @@
 // Two shared kinds aren't table reads: LDSM.16.M88.4 (ldmatrix x4, lane l gives row l's address) and STS.128 (a store of a
 // loop-invariant quad), the operand-staging traffic of a GEMM beside its MMAs.
 //
+// The kinds `loads.class_of` had no class for: STS and STS.64 into the shared table, STG.E, STG.E.64 and STG.E.128 into the
+// block's region of `a.g`, the generic ST.E.128 and LD.E.128 there, BAR.SYNC (bar.sync 0, every warp of the block at the
+// same slot) and fence.proxy.async (MEMBAR.ALL.GPU then FENCE.VIEW.ASYNC.S), a store's words loop-invariant like STS.128's.
+//
 // A block's table is a ring of 64 lines of 512 B (32 KB): its shared table, or its own region of `a.g` for LDG and TLD, so
 // a global table stays L1-resident. Load q of an iteration reads line (QL (warp + it) + q) mod 64, QL the power of two
 // at or above Q, so ptxas folds q into the instruction's immediate, can't merge two loads, and the loop is not invariant.
@@ -26,18 +30,20 @@
 namespace fb {
 
 enum Ld { D_NONE, D_LDS32, D_LDS64, D_LDS128, D_LDSU8, D_LDG32, D_LDGNC32, D_LDG64, D_LDG128, D_TLD1, D_TLD2, D_TLD4,
-          D_TLD4N, D_LDG256, D_L2G128, D_L2G128NA, D_L2G128CG, D_L2G256, D_L2G256CG, D_LDSM4, D_STS128 };
+          D_TLD4N, D_LDG256, D_L2G128, D_L2G128NA, D_L2G128CG, D_L2G256, D_L2G256CG, D_LDSM4, D_STS128, D_STS32, D_STS64,
+          D_STG32, D_STG64, D_STG128, D_ST128, D_LD128, D_BAR, D_FPA };
 enum Pat { P_LINE, P_BCAST, P_QUAD, P_SCAT };
 
 constexpr unsigned FB_LINE = 512, FB_RING = 64, FB_RINGB = FB_LINE * FB_RING, FB_L2B = 256u << 10;
 
 __host__ __device__ constexpr bool shared_ld(int d) {
-  return (d >= D_LDS32 && d <= D_LDSU8) || d == D_LDSM4 || d == D_STS128;
+  return (d >= D_LDS32 && d <= D_LDSU8) || d == D_LDSM4 || d == D_STS128 || d == D_STS32 || d == D_STS64;
 }
 // bytes between two lanes' words: the load's width, or its texel's (tex1's texel is 4 B whatever the fetch's width);
 // LDSM's lane gives one 16-byte matrix row
 __host__ __device__ constexpr unsigned lane_stride(int d) {
-  return d == D_LDS64 || d == D_LDG64 ? 8
+  return d == D_STS32 || d == D_STG32 || d == D_BAR || d == D_FPA ? 4
+         : d == D_LDS64 || d == D_LDG64 || d == D_STS64 || d == D_STG64 ? 8
          : d == D_LDG256 || d == D_L2G256 || d == D_L2G256CG ? 32
          : d == D_LDS128 || d == D_LDG128 || d == D_TLD4 || d >= D_L2G128 ? 16 : 4;
 }
@@ -101,6 +107,22 @@ __device__ __forceinline__ uint32_t ld(const OpArgs& a, uint32_t sbase, const un
   if constexpr (D == D_STS128)
     asm volatile("st.shared.v4.u32 [%0], {%1,%2,%3,%4};" ::"r"(sbase + o), "r"((uint32_t)a.mode), "r"(gel),
                  "r"((uint32_t)a.mode ^ 0x9E3779B9u), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_STS32) asm volatile("st.shared.u32 [%0], %1;" ::"r"(sbase + o), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_STS64)
+    asm volatile("st.shared.v2.u32 [%0], {%1,%2};" ::"r"(sbase + o), "r"((uint32_t)a.mode), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_STG32) asm volatile("st.global.u32 [%0], %1;" ::"l"(gb + o), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_STG64)
+    asm volatile("st.global.v2.u32 [%0], {%1,%2};" ::"l"(gb + o), "r"((uint32_t)a.mode), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_STG128)
+    asm volatile("st.global.v4.u32 [%0], {%1,%2,%3,%4};" ::"l"(gb + o), "r"((uint32_t)a.mode), "r"(gel),
+                 "r"((uint32_t)a.mode ^ 0x9E3779B9u), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_ST128)
+    asm volatile("st.v4.u32 [%0], {%1,%2,%3,%4};" ::"l"(gb + o), "r"((uint32_t)a.mode), "r"(gel),
+                 "r"((uint32_t)a.mode ^ 0x9E3779B9u), "r"(gel ^ 0x7F4A7C15u));
+  if constexpr (D == D_LD128)
+    asm volatile("ld.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "l"(gb + o));
+  if constexpr (D == D_BAR) asm volatile("bar.sync 0;" ::: "memory");
+  if constexpr (D == D_FPA) asm volatile("fence.proxy.async;" ::: "memory");
   return r0 ^ r1 ^ r2 ^ r3 ^ r4 ^ r5 ^ r6 ^ r7;
 }
 

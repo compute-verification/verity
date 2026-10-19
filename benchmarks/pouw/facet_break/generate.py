@@ -62,7 +62,8 @@ WARP_LANES = ("ffma", "sel", "imadw", "iadd64", "iadd3", "imad", "lop3")
 QMAX = 192
 
 #: load: (mem.cuh enum, SASS opcode, census class or None where the census has no kind, shared?). TLD's width is in its
-#: operands, not its opcode, so loads.py reads a TLD's class off the program's name (`_tld4_` etc).
+#: operands, not its opcode, so loads.py reads a TLD's class off the program's name (`_tld4_` etc). A kind that lowers to
+#: two instructions (fence.proxy.async) has a tuple of opcodes, one of each an access.
 LOADS = {"lds32": ("D_LDS32", "LDS", "LDS32", True), "lds64": ("D_LDS64", "LDS.64", None, True),
          "lds128": ("D_LDS128", "LDS.128", "LDS128", True), "ldsu8": ("D_LDSU8", "LDS.U8", None, True),
          "ldg32": ("D_LDG32", "LDG.E", "LDG32", False), "ldgnc32": ("D_LDGNC32", "LDG.E.CONSTANT", "LDG32", False),
@@ -70,7 +71,12 @@ LOADS = {"lds32": ("D_LDS32", "LDS", "LDS32", True), "lds64": ("D_LDS64", "LDS.6
          "tld1": ("D_TLD1", "TLD.LZ", "TLD1", False), "tld2": ("D_TLD2", "TLD.LZ", "TLD2", False),
          "tld4": ("D_TLD4", "TLD.LZ", "TLD4w", False), "tld4n": ("D_TLD4N", "TLD.LZ", "TLD4w", False),
          "ldg256": ("D_LDG256", "LDG.E.ENL2.256", None, False),
-         "ldsm4": ("D_LDSM4", "LDSM.16.M88.4", "LDSM_X4", True), "sts128": ("D_STS128", "STS.128", "STS128", True)}
+         "ldsm4": ("D_LDSM4", "LDSM.16.M88.4", "LDSM_X4", True), "sts128": ("D_STS128", "STS.128", "STS128", True),
+         "sts32": ("D_STS32", "STS", None, True), "sts64": ("D_STS64", "STS.64", None, True),
+         "stg32": ("D_STG32", "STG.E", None, False), "stg64": ("D_STG64", "STG.E.64", None, False),
+         "stg128": ("D_STG128", "STG.E.128", None, False), "st128": ("D_ST128", "ST.E.128", None, False),
+         "ld128": ("D_LD128", "LD.E.128", None, False), "bar": ("D_BAR", "BAR.SYNC.DEFER_BLOCKING", None, False),
+         "fpa": ("D_FPA", ("MEMBAR.ALL.GPU", "FENCE.VIEW.ASYNC.S"), None, False)}
 #: the loads of the mem family (its seeded grid as r20261017-063107-835c ran it)
 MEM_LOADS = ("lds32", "lds64", "lds128", "ldsu8", "ldg32", "ldgnc32", "ldg64", "ldg128", "tld1", "tld2", "tld4", "tld4n")
 PATS = {"line": "P_LINE", "bcast": "P_BCAST", "quad": "P_QUAD"}
@@ -158,7 +164,8 @@ def expect_of(g: dict) -> tuple[str, str, int]:
     if g["kind"] == "jm":
         d = add({FORMS[g["form"]][1]: 8 * g["u"]}, lane_counts(g["u"] * g["q"]))
         if g.get("d"):
-            d = add(d, {LOADS[g["d"]][1]: g["u"] * g["qd"]})
+            ops = LOADS[g["d"]][1]
+            d = add(d, {op: g["u"] * g["qd"] for op in ((ops,) if isinstance(ops, str) else ops)})
         if "uaxi" in lanes_of(g):  # where ptxas keeps the chains uniform, the loop's counter is a UIADD3 too
             d = add(d, {"UIADD3": 1})
         return fmt(d), "", 0
@@ -870,6 +877,25 @@ def targeted_rt11() -> list[dict]:
     return out
 
 
+#: the kinds `loads.class_of` left unclassed that a bit-exact fold issues (RT3-120-6: cpw_routes.cu mode 10's STG.E.128,
+#: BAR.SYNC and fence.proxy.async), and the other store widths and generic accesses a fold could move its words with
+UC_KINDS = ("stg128", "bar", "fpa", "stg32", "stg64", "sts32", "sts64", "st128", "ld128")
+
+
+def targeted_uc() -> list[dict]:
+    """The unclassed kinds against JI3t_0 (the measured headline's π*), at the schedule where FMUL beside IMMA.16832 is
+    tight (2-3 accumulators, unroll 4-20, 2 warps a SMSP): each kind at 1-8 a 8 MMAs, alone and under 112 and 120 FMUL,
+    so a kind cheaper than a vector slot there would lift the tight program past 1; and RT-FACET's tight program, three
+    copies through the batch."""
+    rest = [_jm("i16832", ls, q, 2, na=na, u=u, d=d, qd=qd) for d in UC_KINDS for na in (2, 3)
+            for u, qd in ((4, 8), (8, 2), (8, 4), (16, 2), (20, 1)) for ls, q in (((), 0), ("fmuli", 112), ("fmuli", 120))]
+    base = [g for g in targeted_rt4() if name_of(g) == RT9_BASE]
+    out: list[dict] = []
+    for k in range(3):
+        out += [g | {"rep": k + 1} for g in base] + rest[k * len(rest) // 3:(k + 1) * len(rest) // 3]
+    return out
+
+
 def sampled_ji(seed: int, n: int) -> list[dict]:
     rng = random.Random(seed)
     lanes = sorted(set(JI_NEW) | set(JI_OLD))
@@ -903,7 +929,8 @@ def grid(seed: int = 0, n: int = 0, targeted_part: bool = True, family: str = "m
               "rt4": (targeted_rt4, sampled_ji), "rt5": (targeted_rt5, sampled_ji),
               "rt6": (targeted_rt6, sampled_ji), "rt7": (targeted_rt7, sampled_ji),
               "rt8": (targeted_rt8, sampled_ji), "rt9": (targeted_rt9, sampled_ji),
-              "rt10": (targeted_rt10, sampled_ji), "rt11": (targeted_rt11, sampled_ji)}[family]
+              "rt10": (targeted_rt10, sampled_ji), "rt11": (targeted_rt11, sampled_ji),
+              "uc": (targeted_uc, sampled_ji)}[family]
     for g in (tg() if targeted_part else []) + sm(seed, n):
         nm = name_of(g)
         if nm not in seen:
@@ -991,7 +1018,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
     p.add_argument("--no-targeted", action="store_true")
     p.add_argument("--family", choices=("mix", "mem", "fine", "l2", "ji", "jifine", "jipair", "r4", "rt", "rt2", "rt3",
-                                             "rt4", "rt5", "rt6", "rt7", "rt8", "rt9", "rt10", "rt11"),
+                                             "rt4", "rt5", "rt6", "rt7", "rt8", "rt9", "rt10", "rt11", "uc"),
                    default="mix",
                    help="mix: MMA forms and lane ops (mix.cuh); mem: the table routes' loads (mem.cuh); fine: the "
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
@@ -1005,7 +1032,8 @@ def main(argv: list[str] | None = None) -> int:
                         "forms in turn in one loop, beside FMUL and alone, and the pipe pairs DS-120 prices together; "
                         "rt9: loads, LDSM, STS, SHFL and the 64-bit lanes at rt4's binding schedule (JI3t_0's pooled "
                         "classes); rt10: the ALU- and IMAD-pipe lanes there, alone and beside FMUL; rt11: the "
-                        "uniform datapath there, alone and beside the FMA-pipe lanes")
+                        "uniform datapath there, alone and beside the FMA-pipe lanes; uc: the stores, generic "
+                        "accesses, BAR.SYNC and fence.proxy.async there, which loads.class_of had no class for")
     p.add_argument("--forms", help="keep only the programs of these MMA forms (comma-separated, e.g. i16832)")
     p.add_argument("--only", type=Path, help="keep only the programs named in this file (one a line): the gate's passes")
     p.add_argument("--emit", type=Path, help="write the probe source here (default: print the programs as JSON lines)")
