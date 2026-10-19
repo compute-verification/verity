@@ -105,7 +105,9 @@ deficient words have point mass at most `¾` given the cheater's view (`OperandH
 skipped), the play is the proofs' (`Of`), binding fails with probability at most `δ_bind` a round, every proof is sound
 up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`) and E1(c) holds (`RightFixed`), then outside
 an event of probability at most `2^-40` every accepted window's time is at least `1 − 931/100000` (`1 − 0.931%`) of the
-credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: ♭ credits no filler. -/
+credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: ♭ credits no filler. A3 (`SheetTensor`) is per SM clock at
+the clock each tensor figure is stated at, the 1830 MHz tensor boost clock, not f_max's 1980 MHz: read per second at
+f_max, the machine model puts this reading at 1.942%, since its ε first moves at tensor lines 1.063× the sheet's. -/
 def Sm90SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δbind δzk : ℝ),
