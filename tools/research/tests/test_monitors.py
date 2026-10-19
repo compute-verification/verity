@@ -732,6 +732,17 @@ def test_an_unanswered_ask_goes_to_whoever_it_asked():
     assert f.key == "1791050000.000100" and f.owners == ("infra", "proofs") and "@circuits" in f.text
 
 
+def test_asks_whose_record_cant_be_read_are_one_finding_to_infra_not_an_alert_each():
+    """The control pod's relay had no Linear or Notion key: it rang every lane and Daniel for 98 asks they had answered (INF-150)."""
+    lost = [{"ts": f"17910500{i:02d}.000100", "by": "proofs", "to": ["daniel"], "record": "notion", "state": "unreadable (no key)"}
+            for i in range(30)]
+    linked = {"ts": "1791050100.000100", "by": "ci", "to": ["infra"], "record": "linear", "ref": "INF-1", "state": "in Backlog, no comment but the asker's"}
+    rep = {"inboxes": [], "dropped": [], "unanswered": [linked], "unchecked": lost}
+    ask, unchecked = M.asks(M.Ctx(now=T0, run=Run((has("traffic"), (0, json.dumps(rep), "")))))
+    assert "its Linear issue INF-1: in Backlog" in ask.text and "no 👀" not in ask.text
+    assert unchecked.key == "unchecked" and unchecked.owners == ("infra",) and "30 ask(s)" in unchecked.text and "no key" in unchecked.text
+
+
 def test_fixtures_public_names_main_s_fixtures_the_public_export_lacks(monkeypatch):
     a, b, old = ("art:" + c * 64 for c in "abc")
     doc = {a: "fixtures/a.json", b: "fixtures/b.json", "previous": {a: [old]}}
