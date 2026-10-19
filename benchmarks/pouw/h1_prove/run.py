@@ -37,8 +37,10 @@ carry a wrong witness instead:
   the unit's inputs, salt, position and roots.
 * ``in-z``: the same with its z cell 0 plus one (``--z-cell``).
 
-Each is proved like the honest statement and checked by Lean; ``summarize`` records which layer refused it (the prover,
-the in-session verifier, Lean) and with what message.
+Each is proved like the honest statement, whose prover stops on the failing witness before it sends a proof, and again as
+``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (C-Flock's negative-control prover, which sends its proofs anyway), so the
+in-session verifier and Lean judge a proof. ``summarize`` records which layer refused each (the prover, the in-session
+verifier, Lean) and with what message.
 
 ``summarize`` reads the job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving
 time and Lean verify time, and every check's verdict against its expectation.
@@ -68,6 +70,8 @@ DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = 4, 8
 #: the in-proof negatives: the tampered window's flag, and the output row whose committed words its statement carries
 IN_PROOF = {"in-receipt": ("--receipt-word", "o1"), "in-z": ("--z-cell", "o0")}
+#: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
+SKIP = "-skip"
 
 
 def log(msg: str) -> None:
@@ -268,20 +272,22 @@ def cmd_prepare(a) -> int:
     # window's, under the verifier's own file of that window, so binding holds and the witness is wrong
     for t, (_f, port) in IN_PROOF.items():
         words = np.load(work / f"open-{t}" / "rows.npz")[f"w_{port}"][0]
-        record.setdefault("forged", {})[t] = U.forge_statement(sw / "st-honest", sw / f"st-{t}", (vp / f"{t}.pub.bin").read_bytes(),
-                                                               0, port, words, sw / "circuit.txt")
+        for d in (t, f"{t}{SKIP}"):
+            record.setdefault("forged", {})[d] = U.forge_statement(sw / "st-honest", sw / f"st-{d}", (vp / f"{t}.pub.bin").read_bytes(),
+                                                                   0, port, words, sw / "circuit.txt")
         log(f"forged {t}: {record['forged'][t]}")
     st = record["staged"]
     plan = {"statements": [{"tag": "honest", "dir": stmts["honest"]["out"], "n": len(units)},
                            {"tag": "other", "dir": stmts["other"]["out"], "n": 1},
-                           *({"tag": t, "dir": str(sw / f"st-{t}"), "n": len(units)} for t in IN_PROOF)],
+                           *({"tag": d, "dir": str(sw / f"st-{d}"), "n": len(units)} for t in IN_PROOF for d in (t, f"{t}{SKIP}"))],
             "checks": [{"tag": "honest", "statement": "honest", "pub": str(vp / "honest.pub.bin"), "expect": "ACCEPT"},
                        {"tag": "flipped-z", "statement": "honest", "pub": str(vp / "flipped-z.pub.bin"), "expect": "REJECT"},
                        {"tag": "wrong-receipt", "statement": "honest", "pub": str(vp / "wrong-receipt.pub.bin"), "expect": "REJECT"},
                        {"tag": "other-window", "statement": "other", "pub": str(vp / "other-window.pub.bin"), "expect": "REJECT"},
                        {"tag": "other-window-own", "statement": "other", "pub": str(vp / "other-window-own.pub.bin"),
                         "expect": "ACCEPT"},
-                       *({"tag": t, "statement": t, "pub": str(vp / f"{t}.pub.bin"), "expect": "REFUSED"} for t in IN_PROOF)]}
+                       *({"tag": d, "statement": d, "pub": str(vp / f"{t}.pub.bin"), "expect": "REFUSED"}
+                         for t in IN_PROOF for d in (t, f"{t}{SKIP}"))]}
     (work / "plan.json").write_text(json.dumps(plan, indent=1))
     (work / "record.json").write_text(json.dumps(record, indent=1))
     with open(work / "plan.tsv", "w") as f:
@@ -314,27 +320,23 @@ def _verdict_word(v: dict | None, err: Path) -> str:
     return "ACCEPT" if v.get("accepted") else "REJECT"
 
 
-def _last_json(p: Path) -> dict | None:
+def _tagged(p: Path, tag: str) -> dict | None:
+    """The last ``TAG<tab>{json}`` line of a C-Flock output."""
     if not p.exists():
         return None
-    for line in reversed(p.read_text(errors="replace").splitlines()):
-        try:
-            v = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(v, dict):
-            return v
-    return None
+    got = [x.split("\t", 1)[1] for x in p.read_text(errors="replace").splitlines() if x.startswith(tag + "\t")]
+    return json.loads(got[-1]) if got else None
 
 
 def layers(out: Path, tag: str) -> dict:
-    """Where a statement's proof stopped: the prover's exit and its own reason, the in-session verifier's (the serve
-    side's) last SESSION verdict, and the tail of the prover's stderr."""
-    t, po, log_ = _time(out / tag / "prove.time"), _last_json(out / tag / "prove.out"), out / tag / "serve.log"
+    """Where a statement's proof stopped: the prover's exit and its own reason (its LIVE line), the in-session verifier's
+    (the serve side's) last SESSION verdict, and the tail of the prover's stderr."""
+    t, po, log_ = _time(out / tag / "prove.time"), _tagged(out / tag / "prove.out", "LIVE"), out / tag / "serve.log"
     sess = [json.loads(x.split("\t", 1)[1]) for x in log_.read_text(errors="replace").splitlines()
             if x.startswith("SESSION\t")] if log_.exists() else []
     err = out / tag / "prove.err"
-    return {"prover_exit": t and t["exit"], "prover_stopped": (po or {}).get("prover_stopped"), "prover_why": (po or {}).get("why"),
+    return {"prover_exit": t and t["exit"], "prover_stopped": (po or {}).get("prover_stopped"),
+            "prover_accepted": (po or {}).get("accepted"),
             "session": {k: sess[-1].get(k) for k in ("accepted", "aborted", "why")} if sess else None,
             "prove_err": err.read_text(errors="replace").strip().splitlines()[-3:] if err.exists() else None}
 
@@ -342,9 +344,10 @@ def layers(out: Path, tag: str) -> dict:
 def refused_by(lay: dict, lean: str, why: str) -> list[str]:
     """Each layer that refused an in-proof negative, with its message."""
     out = []
-    if lay["prover_exit"] not in (0, None) or lay["prover_stopped"]:
-        out.append(f"prover: exit {lay['prover_exit']} {lay['prover_stopped'] or ''} {lay['prover_why'] or ''} "
-                   f"{' | '.join(lay['prove_err'] or [])}".strip())
+    if lay["prover_stopped"]:
+        out.append(f"prover: {lay['prover_stopped']}")
+    elif lay["prover_exit"] not in (0, None):
+        out.append(f"prover: exit {lay['prover_exit']}: {' | '.join(lay['prove_err'] or [])}")
     s = lay["session"]
     if s and (s["accepted"] is False or s["aborted"]):
         out.append(f"in-session verifier: accepted={s['accepted']} aborted={s['aborted']} why={s['why']}")
