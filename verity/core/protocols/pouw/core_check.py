@@ -28,7 +28,11 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 file opens the unit's rows under the registered window root, through its entry and the entry's side trees.
 
 `pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
-its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
+its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.  In a
+certified window, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
+`salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
+before it drew that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
+challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
@@ -47,6 +51,7 @@ from fractions import Fraction
 from typing import Any, NamedTuple
 
 from verity.core.protocols.pouw import coins as Co
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
@@ -667,6 +672,9 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
 MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
 #: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it
 MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
+#: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
+#: verifier, which holds the reveal, reads it, and that verifier reads no other
+MANIFEST_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 #: the e2e-service passes' coin commitment (r20261006-19… to -22…), whose binding and weights' root are the first 32 bytes
 #: of `tagged`: only a replay of a recorded pass reads it
 COINS_RECORDED = "verity/pouw/epoch-coins/v2"
@@ -816,10 +824,74 @@ def _check_workload(us: list[dict], roots: dict[int, bytes]) -> None:
         raise Co.DomainError("every weight of the workload is committed, and only those")
 
 
-def _epoch_salt(m: dict, coins: Any, recorded: bool) -> tuple[bytes, str]:
+def _certified_workload(m: dict) -> tuple[list[dict], dict[int, bytes]]:
+    schema = m.get("schema")
+    if schema != MANIFEST_CERTIFIED:
+        if not _str(schema):
+            raise Refused("the pass's manifest names no schema")
+        raise Co.DomainError(f"schema {schema!r}, not {MANIFEST_CERTIFIED}: the window is certified")
+    return _workload(m)
+
+
+def _recorded(us: list[dict], roots: dict[int, bytes], committed: bytes | None, stream: bytes | None,
+              prover: bytes | None) -> None:
+    _check_workload(us, roots)
+    if not (type(stream) is bytes and len(stream) == PS.STREAM_BYTES and type(prover) is bytes
+            and len(prover) == PS.PROVER_BYTES):
+        raise Co.DomainError(f"the verifier holds no {PS.STREAM_BYTES}-byte stream digest and {PS.PROVER_BYTES}-byte "
+                             "prover id for the window")
+    if type(committed) is not bytes or len(committed) != PS.WEIGHTS_ROOT_BYTES:
+        raise Co.DomainError("the verifier holds no record the certifier made before it drew the window's salt")
+    if PS.pouw_record(weights_root(Co.SCHEME, roots), stream, prover) != committed:
+        raise Co.DomainError("the pass's weights, stream and prover are not those the certifier recorded before it drew "
+                             "the window's salt")
+
+
+def recorded_reason(raw: bytes | None, committed: bytes | None, stream: bytes | None, prover: bytes | None
+                    ) -> str | None:
+    """Why a certified window's pass `raw` is not over the weights, `stream` and `prover` that `committed` binds, what PoUW
+    recorded with the certifier before it drew the window's salt (`salt.committed`); None when it is.  `pass_epoch`'s
+    rule, with the same words, short of the reveal, which a challenger asks for only after this passes: the certifier
+    reveals a window once, so a registration whose stream or prover wasn't recorded gets no reveal."""
+    if raw is None:
+        return "the window names no pass, whose epoch the challenger re-starts from its manifest"
+    try:
+        _recorded(*_certified_workload(_manifest(raw)), committed, stream, prover)
+    except (Co.DomainError, Refused) as e:
+        return str(e)
+    return None
+
+
+def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | None, stream: bytes | None,
+                    prover: bytes | None) -> tuple[bytes, str]:
+    """A certified window's pass under the window's `stream` and `prover`: `committed`, what the certifier recorded
+    before it drew the window's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
+    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW window the
+    window's `context` names, the window, the stream and the prover."""
+    us, roots = _certified_workload(m)
+    if type(reveal) is not bytes or len(reveal) != PS.SALT_BYTES:
+        raise Co.DomainError(f"the verifier's reveal is not a {PS.SALT_BYTES}-byte salt")
+    window = PS.window_of(context)
+    if window is None:
+        raise Co.DomainError("the window's context names no PoUW window, whose certifier salt the pass's is")
+    _recorded(us, roots, committed, stream, prover)
+    salt = PS.pouw_salt(reveal, window, stream, prover)
+    if salt.hex() != m.get("salt"):
+        raise Co.DomainError("the pass's salt is not the certifier's for its window, stream and prover")
+    return salt, "certifier"
+
+
+def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None, context: str = "",
+                committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None
+                ) -> tuple[bytes, str]:
     """`manifest_epoch`: the pass's epoch salt re-started from its manifest, and how it was had.  Raises `DomainError`
     (the coin rule's) or `Refused` (a manifest it can't read)."""
+    if reveal is not None:
+        return _certified_salt(m, reveal, context, committed, stream, prover)
     schema = m.get("schema")
+    if schema == MANIFEST_CERTIFIED:
+        raise Co.DomainError(f"the pass's manifest is {MANIFEST_CERTIFIED}, salted by the network certifier: only a "
+                             "certified window's verifier, which holds the certifier's reveal, reads it")
     if schema == MANIFEST_RECORDED and not recorded:
         raise Co.DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded "
                              "pass reads it")
@@ -865,14 +937,21 @@ def _epoch_salt(m: dict, coins: Any, recorded: bool) -> tuple[bytes, str]:
     return salt, how
 
 
-def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False) -> tuple[str | None, tuple[str, str] | None]:
-    """How the pass's salt was had (``coin``, or ``recorded beacon`` in a replay of a recorded pass) and None, or None and
-    the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts its epoch under `coins`, the challenger's
-    own coin commitment (its JSON), and the window's `context` names it by its SHA-512."""
+def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False, reveal: bytes | None = None,
+               committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None
+               ) -> tuple[str | None, tuple[str, str] | None]:
+    """How the pass's salt was had (``coin``, ``recorded beacon`` in a replay of a recorded pass, or ``certifier``) and
+    None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts its epoch under
+    `coins`, the challenger's own coin commitment (its JSON), and the window's `context` names it by its SHA-512.  A
+    certified window's verifier holds `reveal`, the certifier's salt for the PoUW window the context names, as
+    `salt.revealed` read it, `committed`, what PoUW recorded with the certifier before it drew that salt, as
+    `salt.committed` read it, and the window's `stream` and `prover`; its window passes only a pass salted by it
+    (`MANIFEST_CERTIFIED`, the salt `salt.pouw_salt(reveal, p, stream, prover)`) over weights whose root
+    `salt.pouw_record` binds with the stream and the prover in `committed`, and a certified pass passes only there."""
     if raw is None:
         return None, ("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
     try:
-        _, how = _epoch_salt(_manifest(raw), coins, recorded)
+        _, how = _epoch_salt(_manifest(raw), coins, recorded, reveal, context, committed, stream, prover)
     except Co.DomainError as e:
         return None, ("coin", str(e))
     except Refused as e:
@@ -928,11 +1007,17 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     """None when `units` are the window's draw: the epoch's draw coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
-    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why)."""
+    registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why). A seeded commitment
+    (`coins_of`) has its ``draw`` coin; a live one (`window.LIVE_SCHEME`, a certified window's, whose verifier reads it
+    from the challenger's signed record, `challenger.trusted_commitment`) has its ``pouw/draw`` coin 0
+    (`challenger.live_reason`)."""
+    live = isinstance(coins, dict) and coins.get("scheme") == Wd.LIVE_SCHEME
     try:
-        c = coins_of(coins, recorded)
-    except Refused as e:
+        c = Ch.LiveCommitment.from_json(coins) if live else coins_of(coins, recorded)
+    except (Refused, Ch.CoinError) as e:
         return "coin", f"the verifier's coins are malformed: {e}"
+    if live and (why := Wd.live_epoch_reason(c)) is not None:
+        return "coin", why
     if not (_str(registration) and _DIGEST.fullmatch(registration)) or not _str(stream):
         return "draw", "the registration is not a SHA-512 digest, or the stream's digest not a string"
     if not (isinstance(receipt, dict) and all(_plain(x) and _plain(v) for x, v in receipt.items())):
@@ -940,10 +1025,13 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     if not (_nat(k) and _nat(population) and 1 <= population and k <= population):
         return "draw", "the law is not subset:k over N with k <= N and N >= 1"
     try:
-        o = opening_of(opening)
-    except Refused as e:
+        o = Ch.LiveOpening.from_json(opening) if live else opening_of(opening)
+    except (Refused, Ch.CoinError) as e:
         return "coin", f"the draw's {e}"
-    why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
+    if live:
+        why, old = Ch.live_reason(c, o, Wd.DRAW, 0, bytes.fromhex(registration)), False
+    else:
+        why, old = coin_version(c, o, "draw", bytes.fromhex(registration), early=recorded)
     if why is not None:
         return "coin", f"the draw's {why}"
     ctx, n = draw_key_context(stream, registration, receipt), 2 * k * width(population) + 64
@@ -1024,4 +1112,5 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]
+           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "unit_draw", "verify_path",
+           "window_domain"]

@@ -1,5 +1,6 @@
 import Flock.Draw
 import PouwCommit.Draws
+import PouwWindow.Rounds
 import PouwCheck.Inputs
 
 /-!
@@ -9,8 +10,11 @@ import PouwCheck.Inputs
 commitment, and the window's context names the pass by its SHA-512. A pass salted by epoch coins (`MANIFEST_SCHEMA`)
 carries the epoch's commitment, which must be the challenger's, and its salt coin's opening, opened after the weights'
 root (`coinReasonAt`); a pass recorded before epoch coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon.
-Either way the manifest's salt must be the epoch's. A refusal is `coin` (the coin rule's, Python's `DomainError`) or
-`manifest` (a manifest it can't read, or not the window's pass), with Python's words.
+Either way the manifest's salt must be the epoch's. A certified window's verifier holds the network certifier's salt for
+the PoUW window its context names (`windowOf`), the window's stream and prover, and what PoUW recorded with the certifier
+before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salted by them (`MANIFEST_CERTIFIED`, the salt
+`pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's
+`DomainError`) or `manifest` (a manifest it can't read, or not the window's pass), with Python's words.
 
 `drawCheck` is `core_check.draw`: the epoch's draw coin opens after the registration, and the drawn units are
 `Flock.Draw.subset` of the stream `"draw"` of the key the coin derives under the stream, the registration and its
@@ -26,9 +30,18 @@ namespace PouwCheck
 
 open Lean (Json)
 open PouwCommit (CoinOpening pyFromHex pyRepr tagged leafValue Domain)
+open SampledProofs.Challenger (LiveCommitment LiveOpening)
 
 def MANIFEST_SCHEMA : String := "verity-vllm/pouw-pearl-c-run/v2"
 def MANIFEST_RECORDED : String := "verity-vllm/pouw-pearl-c-run/v1"
+def MANIFEST_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
+def WINDOW_SEGMENT : String := "pouw-window"
+def SALT_BYTES : Nat := 64
+def SALT_TAG : ByteArray := "verity/pouw-salt/v1".toUTF8
+def RECORD_TAG : ByteArray := "verity/pouw-record/v1".toUTF8
+def WEIGHTS_ROOT_BYTES : Nat := 64
+def STREAM_BYTES : Nat := 64
+def PROVER_BYTES : Nat := 64
 def COINS_RECORDED : String := "verity/pouw/epoch-coins/v2"
 def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
 def U64 : Int := 2 ^ 64
@@ -175,9 +188,55 @@ def checkWorkload (us : List Matmul) (roots : List (Nat × ByteArray)) : R Unit 
   let want := (dims.map (·.1)).mergeSort (· ≤ ·)
   if held != want then coin "every weight of the workload is committed, and only those"
 
-/-- `_epoch_salt`: the pass's salt re-started from its manifest, and how it was had. -/
-def epochSalt (m : Json) (coins : Json) (recorded : Bool) : R (ByteArray × String) := do
+/-- `salt.window_of`: the PoUW window a context names, `<prefix>/pouw-window/<p>/<manifest SHA-512>`. -/
+def windowOf (context : String) : Option Nat :=
+  let parts := context.splitOn "/"
+  let n := parts.length
+  let d := parts.getD (n - 2) ""
+  if 3 ≤ n && parts.getD (n - 3) "" == WINDOW_SEGMENT && isDecimal d && d.toNat! < 2 ^ 64 then some d.toNat! else none
+
+/-- `salt.pouw_salt`: the salt PoUW applies in window `p` for the registration of `stream` and `prover`,
+SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part fixed-width (64, 8, 64 and 64 bytes). -/
+def pouwSalt (reveal : ByteArray) (p : Nat) (stream prover : ByteArray) : ByteArray :=
+  Flock.Sha512.hash (SALT_TAG ++ reveal ++ PouwCommit.be8 p ++ stream ++ prover)
+
+/-- `salt.pouw_record`: what PoUW records with the certifier for a window before its salt,
+SHA-512(`RECORD_TAG` ‖ weights' root ‖ stream ‖ prover), every part 64 bytes. -/
+def pouwRecord (weights stream prover : ByteArray) : ByteArray :=
+  Flock.Sha512.hash (RECORD_TAG ++ weights ++ stream ++ prover)
+
+/-- `_certified_salt`: a certified window's pass under the window's `stream` and `prover`: `committed`, what the
+certifier recorded before it drew the window's salt, is `pouwRecord` of the pass's weights' root, the stream and the
+prover, and the pass's salt is `pouwSalt` of the certifier's reveal for the PoUW window the window's context names. -/
+def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed stream prover : Option ByteArray) :
+    R (ByteArray × String) := do
   let schema := at? m "schema"
+  if schema != .str MANIFEST_CERTIFIED then
+    let .str s := schema | manifest "the pass's manifest names no schema"
+    coin s!"schema {pyRepr s}, not {MANIFEST_CERTIFIED}: the window is certified"
+  let (us, roots) ← workloadOf m
+  if reveal.size != SALT_BYTES then coin s!"the verifier's reveal is not a {SALT_BYTES}-byte salt"
+  let some p := windowOf context | coin "the window's context names no PoUW window, whose certifier salt the pass's is"
+  checkWorkload us roots
+  let (some s, some v) := (stream.filter (·.size == STREAM_BYTES), prover.filter (·.size == PROVER_BYTES))
+    | coin s!"the verifier holds no {STREAM_BYTES}-byte stream digest and {PROVER_BYTES}-byte prover id for the window"
+  let some c := committed.filter (·.size == WEIGHTS_ROOT_BYTES)
+    | coin "the verifier holds no record the certifier made before it drew the window's salt"
+  if pouwRecord (weightsRootAt 64 "verity/pouw/weights/v1" roots) s v != c then
+    coin "the pass's weights, stream and prover are not those the certifier recorded before it drew the window's salt"
+  let salt := pouwSalt reveal p s v
+  if at? m "salt" != .str (Flock.hexOf salt) then
+    coin "the pass's salt is not the certifier's for its window, stream and prover"
+  pure (salt, "certifier")
+
+/-- `_epoch_salt`: the pass's salt re-started from its manifest, and how it was had. -/
+def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteArray) (context : String)
+    (committed stream prover : Option ByteArray) : R (ByteArray × String) := do
+  if let some r := reveal then return (← certifiedSalt m r context committed stream prover)
+  let schema := at? m "schema"
+  if schema == .str MANIFEST_CERTIFIED then
+    coin (s!"the pass's manifest is {MANIFEST_CERTIFIED}, salted by the network certifier: only a certified window's " ++
+      "verifier, which holds the certifier's reveal, reads it")
   if schema == .str MANIFEST_RECORDED && !recorded then
     coin s!"the pass's manifest is {MANIFEST_RECORDED}, recorded before epoch coins: only a replay of a recorded pass reads it"
   if schema != .str MANIFEST_SCHEMA && schema != .str MANIFEST_RECORDED then
@@ -209,15 +268,17 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) : R (ByteArray × Stri
   if at? m "salt" != .str (Flock.hexOf salt) then coin s!"the pass's salt is not its {how}'s and the weights'"
   pure (salt, how)
 
-/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. -/
-def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool) : R String := do
+/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A certified window's verifier holds `reveal`,
+`committed`, what PoUW recorded with the certifier before it drew that salt, and the window's `stream` and `prover`. -/
+def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool)
+    (reveal committed stream prover : Option ByteArray) : R String := do
   let some raw := raw | coin "the window names no pass, whose epoch the challenger re-starts from its manifest"
   let m ← match String.fromUTF8? raw with
     | some s => match Json.parse s with
       | .ok j@(.obj _) => pure j
       | _ => manifest "the pass's manifest is not a JSON object"
     | none => manifest "the pass's manifest is not a JSON object"
-  let (_, how) ← epochSalt m coins recorded
+  let (_, how) ← epochSalt m coins recorded reveal context committed stream prover
   if Flock.hexOf (Flock.Sha512.hash raw) != ((context.splitOn "/").getLast?.getD "") then
     manifest "the pass is not the one the window's parameters name"
   pure how
@@ -230,10 +291,20 @@ def receiptDigest (kvs : List (String × String)) : String :=
   let body := "{" ++ ",".intercalate (sorted.map fun (k, v) => s!"\"{k}\":\"{v}\"") ++ "}"
   Flock.hexOf (Flock.Sha512.hash body.toUTF8)
 
-/-- `core_check.draw`: none when `units` are the window's draw, else the refusal. -/
+/-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
+`draw` coin; live ones (`PouwWindow.LIVE_SCHEME`, a certified window's, read from the challenger's signed record) their
+`pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
 def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units : Json) :
     R Unit := do
-  let c ← (coinsOf coins recorded).mapError fun e => ("coin", s!"the verifier's coins are malformed: {e}")
+  let live := match PouwWindow.field? coins "scheme" with
+    | some (.str s) => s == PouwWindow.LIVE_SCHEME
+    | _ => false
+  let malformed := fun (e : String) => ("coin", s!"the verifier's coins are malformed: {e}")
+  let c : Coins ⊕ LiveCommitment ← if live then do
+      let c ← (LiveCommitment.ofJson coins).mapError malformed
+      if let some why := PouwWindow.liveEpochReason c then coin why
+      pure (.inr c)
+    else .inl <$> (coinsOf coins recorded).mapError malformed
   let (.str reg, .str st) := (registration, stream)
     | throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")
   if !isHexDigest reg then throw ("draw", "the registration is not a SHA-512 digest, or the stream's digest not a string")
@@ -246,15 +317,22 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
   let (some k, some n) := (PouwWindow.natOf? k, PouwWindow.natOf? population)
     | throw ("draw", "the law is not subset:k over N with k <= N and N >= 1")
   if !(1 ≤ n && k ≤ n) then throw ("draw", "the law is not subset:k over N with k <= N and N >= 1")
-  let o ← (openingOf opening).mapError fun e => ("coin", s!"the draw's {e}")
+  let opened := fun (e : String) => ("coin", s!"the draw's {e}")
   let after ← port (pyFromHex reg)
-  let (why, old) ← port (coinVersionAt c o "draw" after recorded)
+  let (why, old, drawn) ← match c with
+    | .inl c => do
+        let o ← (openingOf opening).mapError opened
+        let (why, old) ← port (coinVersionAt c o "draw" after recorded)
+        pure (why, old, o.coin)
+    | .inr c => do
+        let o ← (LiveOpening.ofJson opening).mapError opened
+        pure ((← port (SampledProofs.Challenger.liveReason c o PouwWindow.DRAW 0 after)), false, o.coin)
   if let some why := why then coin s!"the draw's {why}"
   let ctx := [("stream", FlockSoundness.Randomness.Part.str st), ("registration", FlockSoundness.Randomness.Part.str reg),
     ("receipt", FlockSoundness.Randomness.Part.str (receiptDigest kvs))]
   let bytes := 2 * k * Flock.Draw.width n + 64
-  let src ← if old then pure (streamV1 (deriveV1 o.coin DRAW_DOMAIN ctx) [.str "draw"] bytes)
-    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? o.coin DRAW_DOMAIN ctx)) [.str "draw"] bytes)
+  let src ← if old then pure (streamV1 (deriveV1 drawn DRAW_DOMAIN ctx) [.str "draw"] bytes)
+    else do pure (FlockSoundness.Randomness.stream (← port (PouwCommit.key? drawn DRAW_DOMAIN ctx)) [.str "draw"] bytes)
   let some got := Flock.Draw.subset k n src
     | throw ("sampler", "the draw's stream ran out")
   let same := match units with

@@ -441,19 +441,36 @@ them.
     A placeholder in the commitment's slot was the smaller of the two changes compute accounting offered (18 Oct): the
     other, the commitment in the record published at t_d, changes the record's format, its digest and certificate,
     and N3's public input, and with the certifier trusted it binds nothing the reveal doesn't.
-  - **The sealed slot.** The certifier's record cells are its grids and one sealed slot per PoUW window, `_salts[p]`,
-    which holds the salt and which only `reveal` opens. So the record's open cells (`Accounting.Attribution.openCells`,
-    the record minus that slot, ATTRIB-R4) are the grids, and what the certifier sends into the block, the salt frame's
-    release included, is a function of its record, the sealed slot included, and its jitter, as
+  - **The sealed slots.** The certifier's record cells are its grids and two sealed slots per PoUW window:
+    `_salts[p]`, which holds the salt and which only `reveal` opens, and `_weights[p]` (next item). So the record's
+    open cells (`Accounting.Attribution.openCells`, the record minus those slots, ATTRIB-R4) are the grids, and what
+    the certifier sends into the block, the salt frame's release included, is a function of its record, the sealed
+    slots included, and its jitter, as
     `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `Security/Definitions/Accounting/Physical.lean`.
+  - **The weights before the salt.** PoUW's noise seed reads the weights' root, so a credited window needs the
+    weights fixed before its salt. A second sealed record cell per PoUW window, `_weights[p]`, holds that order: the
+    prover's registration path hands `Proxy.commit_weights(p, root, signature)` the 64-byte frame-v3-sha512 root
+    (`WEIGHTS_ROOT_BYTES`) once, signed under the prover key registered with the certifier (`Proxy(prover_key=…)`, any
+    `certificate.PublicKey`, LMS in deployment) over `weights_message(link, p, root, context)`: the tag
+    `verity-network-certifier/weights/v1`, the certifier's ingress link, p, the root and the deployment's binding of the
+    run (`prover_context`, an epoch's stream, say), so a message signed for one run is never taken in another. The
+    certifier refuses (`RuntimeError`) without a prover key, on a signature that doesn't verify, once p's first ingress
+    tick, the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for p, so
+    only the registered prover fixes p's root. Nothing the certifier sends depends on it. `Proxy.committed(p,
+    registration)` gives it to the verifier on `reveal`'s conditions (as often as asked: it is a hiding commitment), and
+    refuses a window whose weights weren't recorded. The order is the certifier's word, under `trusted-nebius-host`,
+    like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof service returned for p (`Registration`, from
     `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
     registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
-    refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d), and for a PoUW window whose salt
-    was never drawn. Nothing else publishes the salt. The receipt isn't signed, so `reveal` holds only while it is
+    refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d); once the certifier's own clock
+    is more than `reveal_deadline` past p's end (`Proxy(reveal_deadline=…)`, one PoUW window by default), so a
+    registration made after the window's work gets no salt and that work is timed; for a PoUW window whose salt was
+    never drawn; and for one whose salt it has revealed already, so a second registration naming p, by another stream
+    or epoch, gets none. Nothing else publishes the salt. The receipt isn't signed, so `reveal` holds only while it is
     called on the auditor's side: by the verifier, or by the proof service's challenger, which is the auditor's too
     (#2573). Exposed beyond the auditor's hosts, it would need an authenticated caller or a receipt signed under LMS
     (`lms.DEPLOYED`, n = 64), the repository's one signature scheme.

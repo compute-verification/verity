@@ -41,7 +41,28 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
 2. **Salt.** The challenger opens the epoch's salt coin after the verifier recorded `weights_root` ("Epoch coins"); the
    salt is `derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": coins_root, "weights": weights_root})`,
    32 bytes (`Epoch.start`). An epoch without coins (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps
-   v1, `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed.
+   v1, `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed. A certified epoch
+   (`Epoch.certified`, `salt.py`) is one PoUW window p of the network certifier's, its certifier windows p·k … p·k + k − 1
+   (k the certifier's `pouw_window`; any other run of windows is refused), registered under a stream (its 64-byte
+   digest) and a prover (its 64-byte registered id), and its salt is `pouw_salt(reveal, p, stream, prover)`, 64 bytes,
+   from the certifier's 512-bit salt for p. The verifier reads that salt with `salt.revealed`: the certifier's
+   `reveal(p, registration)`, which fails closed unless the proof service registered p (PoUW's reader, `salt.registered`,
+   reads p off the served window's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
+   published. `pouw_salt` is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part
+   fixed-width, the tag keeping its input apart from `window_salt`'s: two registrations of p under another stream or
+   prover are salted apart, so a tile computed once is credited to one of them. p is global, the certifier's window on
+   its trusted clock with a salt drawn once from fresh randomness, so no epoch is bound. That salt binds no weights, and
+   the prover holds it from p's first ingress tick, so a certified window passes only weights, a stream and a prover
+   recorded before p's salt was drawn: the prover hands the certifier `pouw_record` of them, SHA-512(b"verity/pouw-record/v1"
+   ‖ weights_root ‖ stream ‖ prover), one 64-byte record for p, signed by the key the certifier registers for it
+   (`Proxy(prover_key=…)`, whose id is `salt.prover_id`, over `weights_message` under the stream), only while p's first
+   ingress tick (the draw) is ahead (`Proxy.commit_weights`), and the verifier reads it with `salt.committed`
+   (`Proxy.committed`, on `reveal`'s conditions). A window with no record made before its draw, or under another stream
+   or prover, is refused, and the challenger checks that first (`core_check.recorded_reason`), asking for the reveal
+   only after. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
+   only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW window by
+   default), so one registration of p, made after p's work, gets it. `salt.Credits` credits p once per stream and
+   prover: its tiles are private, so that is the finest public key, and a second registration under them is refused.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.
@@ -55,7 +76,9 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
 5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
-   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`).
+   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`). A certified window's
+   draw coin is a live epoch's `pouw/draw` coin 0 (`window.live_challenger`), under the commitment its verifier reads
+   from the challenger's signed record (`challenger.trusted_commitment`): one trusted root per coin (`core_check.draw`).
    - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
      the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
      least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
@@ -204,7 +227,7 @@ W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, 
 ~~~
 
 - **The fields.** `scheme` is the scheme's registered name (`schemes.get`), which names the oracle H, so there is no seed
-  digest. A name `schemes.get` doesn't register has no identifier. `salt` is the epoch's 32 bytes. Hex is lowercase.
+  digest. A name `schemes.get` doesn't register has no identifier. `salt` is the epoch's 32 bytes, or a certified epoch's 64. Hex is lowercase.
 - **The declared workload** W (`workload_json`) is every matmul in declaration order, then the weights root, which binds
   every weight's row root (Lifecycle, step 1). The index and the weight id are 64-bit, so they are decimal strings: RFC 8785
   writes a number as an IEEE 754 double, which is exact only up to 2^53. m, k and n are numbers.
@@ -1359,8 +1382,9 @@ sit at the root, one batch per site and tile shape, ahead of the node that read 
 `PouwRest_v1{FN=F}`, F without its dots, reading their z. The compiled Program is `PouwCompiled_v1{SERVED, SCHEME, GROUPS}`:
 the served parameters, `pouw.salt`, `pouw.positions` and `pouw.roots` to `{served: the served return, receipts}`.
 
-**Seeds and noise** (decision 105, `circuit/seeds.py`). The salt is the Program's one coin (`In(kind="coin")`). A unit
-derives its seed in its own proof, and its noise from the seed:
+**Seeds and noise** (decision 105, `circuit/seeds.py`). The salt is the Program's one coin (`In(kind="coin")`), the
+epoch's 64 bytes, a certified epoch's (`Epoch.certified`); `seeds.seed`, `seeds.receipt_seed` and `Compiled.inputs` refuse
+any other width. A unit derives its seed in its own proof, and its noise from the seed:
 
 ~~~text
 seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        PouwSeed

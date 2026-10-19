@@ -28,6 +28,7 @@ import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.core.protocols.pouw.salt import pouw_salt, pouw_window
 from verity.errors import ProtocolError
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.commitments import hm96
@@ -190,6 +191,16 @@ class Epoch:
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
+
+    @classmethod
+    def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
+                  reveal: bytes, stream: bytes, prover: bytes, coins: CoinCommitment | None = None) -> Epoch:
+        """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
+        refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
+        `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
+        `coins`, when given, is the commitment the epoch's draw coin opens against."""
+        _check_weights(workload, weight_roots)
+        return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 
 
 def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> None:

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import service as S
@@ -293,7 +294,7 @@ def test_canonical_json_is_leans():
 #: the refusal each pass mutation aims at: (code, the reason's start), or the honest pass's ``how`` (a reading both sides
 #: share)
 PASS_EXPECT = {
-    "honest": {"coin", "recorded beacon"}, "spaced-hex": {"coin", "recorded beacon"},
+    "honest": {"coin", "recorded beacon", "certifier"}, "spaced-hex": {"coin", "recorded beacon", "certifier"},
     "no-pass": ("coin", "the window names no pass"), "not-utf8": ("manifest", "the pass's manifest is not a JSON object"),
     "not-json": ("manifest", "the pass's manifest is not a JSON object"),
     "not-object": ("manifest", "the pass's manifest is not a JSON object"),
@@ -318,10 +319,24 @@ PASS_EXPECT = {
     "coin-tampered": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
     "coin-path": ("coin", "the salt's coin does not open against the epoch's coin commitment"),
     "coin-early": ("coin", "the salt's coin was not opened after what the verifier recorded"),
-    "resalted": ("coin", "the pass's salt is not its"), "salt-missing": ("coin", "the pass's salt is not its"),
+    "resalted": ("coin", "the pass's salt is not "), "salt-missing": ("coin", "the pass's salt is not "),
     "beacon-empty": ("manifest", "the recorded pass's beacon is not nonempty hex"),
     "no-beacon": ("coin", "the recorded pass has no beacon"),
     "not-named": ("manifest", "the pass is not the one the window's parameters name"),
+    "certified-unread": ("coin", f"the pass's manifest is {CC.MANIFEST_CERTIFIED}, salted by the network certifier"),
+    "uncertified-pass": ("coin", "schema 'verity-vllm/pouw-pearl-c-run/v"),
+    "reveal-size": ("coin", "the verifier's reveal is not a 64-byte salt"),
+    "no-window": ("coin", "the window's context names no PoUW window"),
+    "other-window": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "other-reveal": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "raw-reveal": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
+    "weights-unrecorded": ("coin", "the verifier holds no record the certifier made before it drew the window's salt"),
+    "weights-after-salt": ("coin", "the pass's weights, stream and prover are not those the certifier recorded before it "
+                                   "drew the window's salt"),
+    "binding-form": ("coin", "the verifier holds no 64-byte stream digest and 64-byte prover id for the window"),
+    "stream-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
+    "prover-other": ("coin", "the pass's weights, stream and prover are not those the certifier recorded"),
+    "salted-apart": ("coin", "the pass's salt is not the certifier's for its window, stream and prover"),
 }
 
 DRAW_EXPECT = {
@@ -335,6 +350,15 @@ DRAW_EXPECT = {
     "early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
+    "live-coins": ("coin", "the verifier's coins are malformed: "),
+    "live-not-epoch": ("coin", "the coin commitment's coins are not a live epoch's"),
+    "live-opening-form": ("coin", "the draw's a live coin opening is"),
+    "live-label": ("coin", "the draw's coin is the epoch's pouw/salt coin 0, not its pouw/draw coin 0"),
+    "live-epoch": ("coin", "the draw's coin is epoch "),
+    "live-foreign": ("coin", "the draw's coin does not open against"),
+    "live-tampered": ("coin", "the draw's coin does not open against"),
+    "live-early": ("coin", "the draw's coin was not opened after what the verifier recorded"),
+    "live-units": ("draw", "the units are not the draw coin's subset:"),
 }
 
 
@@ -351,13 +375,36 @@ def test_every_pass_mutation_hits_its_refusal():
                 assert refused is not None and refused[0] == want[0] and refused[1].startswith(want[1]), (name, seed, refused)
 
 
+def test_each_honest_pass_is_had_as_it_was_salted():
+    """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
+    recorded replay's beacon, or the network certifier's reveal over the weights, stream and prover it recorded before
+    it."""
+    want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier"}
+    for kind, how in want.items():
+        for seed in range(6):
+            case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
+            assert {case[k] is not None for k in passes.CERTIFIED} == {kind == "certified"}
+            assert CC.pass_epoch(*passes.pass_args(case)) == (how, None), (kind, seed)
+
+
 def test_every_draw_mutation_hits_its_refusal():
+    """`core_check.draw` accepts an honest draw under seeded coins or a live epoch's (a certified window's, whose
+    commitment its verifier reads through `challenger.trusted_commitment`) and refuses each mutation with the refusal
+    it aims at. A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live coins is refused, and so is a
+    live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
         for seed in range(6):
             got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
                 (name, seed, got)
+    for seed in range(6):
+        live, _ = passes.honest_live_draw(random.Random(f"live/{seed}"))
+        seeded, _ = passes.honest_draw(random.Random(f"seeded/{seed}"), Co.SCHEME, early=False)
+        assert CC.draw(*passes.draw_args(live)) is None and CC.draw(*passes.draw_args(seeded)) is None
+        assert CC.draw(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
+            "the draw's a live coin opening is")
+        assert CC.draw(*passes.draw_args({**seeded, "opening": live["opening"]}))[0] == "coin"
 
 
 #: the refusal each rounds mutation aims at: its code and a part of its reason
