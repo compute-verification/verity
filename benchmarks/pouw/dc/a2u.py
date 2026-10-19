@@ -8,7 +8,7 @@ stops (the one that polls the stop flag, an LDS). Both are counted in full from 
 the gate recorded (gate-build.json), so a block's warp instructions are fixed x iters + until x trips, and its issue a
 SMSP-cycle is that over 4 x the stop's cycles. An until warp may finish the trip it was in when the stop rose, so
 `issue_low` drops one trip a until warp; A2u fails at a probe only when that, NOP excluded (ptxas pads with NOPs no
-warp may issue), is above 1. `uniform_price` is what each added uniform-datapath instruction (U*, the UTCIMMA aside)
+warp may issue), is above 1 + TOL. `a2_mix`, the lanes alone, is the same test of A2. `uniform_price` is what each added uniform-datapath instruction (U*, the UTCIMMA aside)
 cost the lanes, in issue slots, against a2_tc_i0: 1 where the ceiling is tight, 0 where it issued for free.
 """
 
@@ -24,6 +24,7 @@ SASS_LINE = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.
 UTC_CYCLES = 128  # SM clocks one UTCIMMA 128x256x32 holds the tensor pipe at the sheet's 8192 MACs an SM clock
 UNTIL_WARPS = 31  # sm100_a2u.cu: warps 1-31 of a 1024-thread block
 BASE = "a2_tc_i0"
+TOL = 1e-3  # a trip at the stop's boundary reads ~3e-5 over 1; a free uniform chain at K >= 32 reads >= 0.017 over
 
 
 def loops(out: Path) -> dict[str, list[dict[str, int]]]:
@@ -107,7 +108,7 @@ def analyze(out: Path) -> dict:
             r["uniform_price"] = (base["lanes"] - r["lanes"]) / added
     worst = max(res.values(), key=lambda r: r["issue_low_max"], default=None)
     return {"probes": res, "max_issue_low": worst["issue_low_max"] if worst else None,
-            "a2u_holds": all(r["issue_low_max"] <= 1 for r in res.values())}
+            "a2u_holds": all(r["issue_low_max"] <= 1 + TOL for r in res.values())}
 
 
 def text(a: dict) -> str:
@@ -118,8 +119,8 @@ def text(a: dict) -> str:
         lines.append(f"{name:<12} {r['issue']:7.4f} {r['issue_nonop']:7.4f} {r['issue_low']:7.4f} "
                      f"{r['issue_low_max']:7.4f} {r['lanes']:7.4f} {r['uniform']:8.4f} {r['tensor']:7.4f} {price:>8} "
                      f"{r['sm_mhz'] or 0:6.0f}{' THROTTLED' if r['throttled'] else ''}")
-    lines.append(f"A2u {'holds' if a['a2u_holds'] else 'FAILS'}: the most warp instructions an SMSP-cycle (NOP "
-                 f"excluded, one trip a until warp dropped) is {a['max_issue_low']:.4f}")
+    lines.append(f"A2, A2u {'hold' if a['a2u_holds'] else 'FAIL'}: the most warp instructions an SMSP-cycle (NOP "
+                 f"excluded, one trip a until warp dropped) is {a['max_issue_low']:.6f}, against 1 + {TOL:g}")
     return "\n".join(lines)
 
 

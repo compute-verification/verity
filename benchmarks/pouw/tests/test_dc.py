@@ -469,8 +469,9 @@ def _a2u_out(root: Path, i64_trips: int) -> Path:
 def test_a2u_issue_bound_and_uniform_price(tmp_path):
     """A2u's test on synthetic timings. Where each added uniform instruction takes an issue slot from the saturated lanes,
     the block issues one warp instruction an SMSP-cycle and the uniform price is 1; where the uniform datapath issues
-    beside the lanes for free, the block issues 1 + 1/32 and A2u fails at price 0. NOP is left out of `issue_low` and
-    the instruction outside the loops out of every count; the until loop is told by its stop poll in either order."""
+    beside the lanes for free, the block issues 1 + 1/32 and A2u fails at price 0. One trip over 1 at the stop's boundary
+    still holds. NOP is left out of `issue_low` and the instruction outside the loops out of every count; the until loop
+    is told by its stop poll in either order."""
     a2 = _load("a2u")
     tight = a2.analyze(_a2u_out(tmp_path / "tight", 31679))
     base, i64 = tight["probes"]["a2_tc_i0"], tight["probes"]["a2_tc_i64"]
@@ -480,3 +481,5 @@ def test_a2u_issue_bound_and_uniform_price(tmp_path):
     free = a2.analyze(_a2u_out(tmp_path / "free", 32703))
     assert not free["a2u_holds"] and abs(free["max_issue_low"] - 1.03125) < 1e-12
     assert abs(free["probes"]["a2_tc_i64"]["uniform_price"]) < 1e-12
+    edge = a2.analyze(_a2u_out(tmp_path / "edge", 31680))
+    assert edge["a2u_holds"] and 1 < edge["max_issue_low"] < 1 + a2.TOL
