@@ -142,6 +142,9 @@
    "owner": "@lean",
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
   },
+  "Nci.Assumptions.ReferenceLayered": {
+   "owner": "@lean"
+  },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
@@ -3501,7 +3504,7 @@
    "type_hash": "91f216306ca6ee0cc41e360ab97dce90f5f7b96d1d82b3f7cfd507424fd3a005"
   },
   "Nci.SecurityProofs.LayeredTraining": {
-   "owner": "@training",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.LayeredTraining : Nci.Guarantees.LayeredTraining"],
    "assumptions": [],
    "type_hash": "56b3abe4e7f1fbd8138bf65756656359819ef018ae87587a78d8e71fa127ac0c"
@@ -3524,8 +3527,14 @@
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
+  "Nci.SecurityProofs.ReferenceThreaded": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ReferenceTraining": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ThreadedOfLayered": {
-   "owner": "@training",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedOfLayered : Nci.Guarantees.ThreadedOfLayered"],
    "assumptions": [],
    "type_hash": "017ad0d2173bb30536bdc8d3867ded723d0680900af60269224798bb1dfc6b6f"
@@ -5249,6 +5258,8 @@
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedOfLayered": "frozen (no-function): It is about an arbitrary keyed reference circuit (Layered, Security/Definitions/Nci/Layered.lean) and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.LayeredTraining": "frozen (no-function): It is about an arbitrary keyed reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ReferenceThreaded": "frozen (conjecture,no-function): It rests on the open conjecture ReferenceLayered, that the reference circuit is keyed at Kimi K2's shapes (Security/Models/Nci/Assumptions/Layered.lean), and is about an arbitrary reference circuit and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ReferenceTraining": "frozen (conjecture,no-function): It rests on the open conjecture ReferenceLayered, that the reference circuit is keyed at Kimi K2's shapes (Security/Models/Nci/Assumptions/Layered.lean), and is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMul": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
@@ -5522,6 +5533,11 @@
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which Security/Proofs/Pous/P2/RoundTests.lean proves."
+   },
+   "Nci.Assumptions.ReferenceLayered": {
+    "status": "open",
+    "test": "benchmarks/nci/tests/test_tiers.py::test_reference_layered_at_kimi_k2",
+    "why": "The reference training circuit's threading has a keyed form (Layered) at Kimi K2's shapes: roots of at least 512 legs, at most 37,248 counted multiplications reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (note:training-20261019T0446Z-threading-layered), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) and that tiers.py's (d, e) = (505, 37248) is what ReferenceThreaded derives from them at S = K; it cannot find a reference circuit that is not keyed."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
