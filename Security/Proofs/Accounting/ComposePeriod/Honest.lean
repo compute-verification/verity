@@ -274,7 +274,8 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     exact h trivial
   · split_ifs <;> simp [tileWords_eq]
   · split_ifs <;> simp [tileWords_eq]
-  · unfold PeriodRun.prefixLen
+  · classical
+    unfold PeriodRun.prefixLen
     rw [Finset.filter_true_of_mem fun w _ => hc x w, Finset.card_univ, Fintype.card_fin]
   · simp [creditedLive, hc, liveAt_period, liveWords, tileWords_eq]
 
