@@ -69,20 +69,20 @@ variable {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ}
 
 /-- **A call's analysis from C-Flock's.** Call `c`'s session is C-Flock's session `fsess` read in the window's game, and
 `AF` is C-Flock's randomized-extraction analysis of it (`FlockSoundness.Audit.ExtractionAnalysis`, at any law `LF`,
-which its `ks`, `link` and `cover` don't read). `proj X` is the window transcript `X` read as C-Flock's transcript of
-the call, and `hwrong` says the window's units' statements are the session's: a unit of the call that is wrong in `X`
-(`UnitStmts.wrong`, at its seed inputs) is wrong in `proj X`. The window's `ks` and `link` are C-Flock's at the
+which its `ks`, `link` and `cover` don't read). `proj Xw` is the window transcript `Xw` read as C-Flock's transcript of
+the call, and `hwrong` says the window's units' statements are the session's: a unit of the call that is wrong in `Xw`
+(`UnitStmts.wrong`, at its seed inputs) is wrong in `proj Xw`. The window's `ks` and `link` are C-Flock's at the
 strategy the window's prover plays in the session, and `cover` is C-Flock's (`prob_ofFlock`). -/
 def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
     {fsess : Finset (Fin (n c)) → Reg → FlockSoundness.Game Bool} {LF : FlockSoundness.Audit.Law (n c)}
     (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
-    (hwrong : ∀ X u, (⟨c, u⟩ : WUnit n) ∈ U.wrong X → u ∈ AF.wrong (proj X)) :
+    (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.wrong Xw → u ∈ AF.wrong (proj Xw)) :
     CallAnalysis U c (fun S R => ofFlock (fsess S R)) where
   ks S R τ u := AF.ks S R (Strategy.toFlock _ τ) u
-  link S R τ u X := AF.link S R (Strategy.toFlock _ τ) u (proj X)
-  cover S R τ u X hS hX := by
+  link S R τ u Xw := AF.link S R (Strategy.toFlock _ τ) u (proj Xw)
+  cover S R τ u Xw hS hX := by
     rw [prob_ofFlock]
-    exact AF.cover S R _ u (proj X) hS (hwrong X u hX)
+    exact AF.cover S R _ u (proj Xw) hS (hwrong Xw u hX)
 
 /-- **C-Flock's knowledge bound, pointwise in the session's state**: from every state `τ` of the session on every draw
 `S` and registration `R`, `Pr[accept ∧ extraction of a drawn unit fails] ≤ κ + g(S, R, τ)`. At main's `--zk` sessions
@@ -98,7 +98,7 @@ strategy the window's prover plays in the session. -/
 theorem CallAnalysis.ofFlock_knowledgeSound (U : UnitStmts Tr n) (c : Fin C)
     {fsess : Finset (Fin (n c)) → Reg → FlockSoundness.Game Bool} {LF : FlockSoundness.Audit.Law (n c)}
     (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
-    (hwrong : ∀ X u, (⟨c, u⟩ : WUnit n) ∈ U.wrong X → u ∈ AF.wrong (proj X)) {κ : ℝ≥0∞}
+    (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.wrong Xw → u ∈ AF.wrong (proj Xw)) {κ : ℝ≥0∞}
     {g : (S : Finset (Fin (n c))) → (R : Reg) → FlockSoundness.Game.Strategy (fsess S R) → ℝ≥0∞}
     (h : FlockKnowledgeSound AF κ g) :
     (CallAnalysis.ofFlock U c AF proj hwrong).KnowledgeSound κ fun S R τ => g S R (Strategy.toFlock _ τ) :=
