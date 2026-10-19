@@ -13,7 +13,8 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
   steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's units,
   off(w) the units of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
-  positions comes from its tokens, batch or EOS. Credit is the served rows only; the padded work is shown beside it.
+  positions comes from its tokens, batch or EOS. Credit is the served rows of the calls the credit gate passes only; the
+  padded work is shown beside it.
 * **Groups.** A call is one site and one seed group (decision 122: a batched call over a step's batch is one site): its
   (root(A), root(B)) seeds its units. Calls are never grouped together, since a later call reads an earlier one's output.
 * **Units** are in compile's order, the order the manifest lists them in: the call, then its row block, then its column
@@ -26,8 +27,14 @@ served int8 linear call as its own Program on bits, which `verity.core.protocols
   a tile's rows are 32 consecutive leaves. What a listener returns (its roots and receipt root, as hex) is recorded with
   the call (``bound``). `Call.inputs` is `Compiled.inputs` at the call's base, with the roots it is given: root(A) is the
   table's, and root(B) is the weight's, which compute accounting commits. This module commits neither.
-* **z** is the call's exact s32 Y (`engine.int8_exact.int_mm`, the product the served `scaled_mm` dequantizes): each unit's z
-  is Y's cells of its tile, zero on empty slots and pad columns (`Call.z`). The run keeps the last ``retain`` calls' Y.
+* **z** is the call's exact s32 Y: the arm's own when its ``observe`` hands one over (a fused kernel's), else
+  `engine.int8_exact.int_mm` beside the served `scaled_mm` (computed only to retain it): each unit's z is Y's cells of its
+  tile, zero on empty slots and pad columns (`Call.z`). The run keeps the last ``retain`` calls' Y.
+* **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
+  (`traced`), and the call is credited only if the y it hands back to vLLM was written by the GEMM invocation that wrote
+  its z, the only GEMM of the call. Today's arm serves `scaled_mm`'s y with z a second ``_int_mm`` beside it, so every
+  call is refused (``credit: served-output-not-credited-kernel: ...``) and the window credits nothing; a call recorded
+  outside a traced ``apply`` is refused too (`UNTRACED`).
 * **Salt.** `pouw.salt` is a SHA-512 digest and the epoch's salt (`audit.Epoch.start`, from the challenger's salt coin, opened
   after the weights' root, `weight_root`) is 32 bytes, so the Program's salt is the epoch's under `SALT_TAG`
   (`program_salt`) until the challenger opens a 64-byte one.
@@ -52,6 +59,8 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
+
+from verity_vllm.protocol_options import credit_gate as CG
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
@@ -250,11 +259,15 @@ class H1Run:
         self.retain, self.transcript_dir = retain, transcript_dir
         self.step, self.last, self.order_ok, self.closed = -1, None, True, False
         self._weights: dict[int, tuple[Any, Any]] = {}
+        #: each served call's credit verdict (`credit_gate.verdict`), by call index, and the call `record` just made with its z
+        self.verdicts: dict[int, dict[str, Any]] = {}
+        self._recorded: tuple[Call, Any] | None = None
         self.commits: dict[str, Any] = {"scheme": SCHEME, "tile": list(TILE), "rows": self.rows, "steps": self.steps,
                                         "u_step": self.u_step, "units": self.steps * self.u_step, "calls": 0}
         self.details: dict[str, Any] = {"scheme": SCHEME, "calls": 0, "refused": self.refused,
                                         "uncovered": "attention (QK^T and P.V in Int8LutAttentionRow_v1) and lm_head",
-                                        "z": "engine.int8_exact.int_mm: the exact s32 Y, beside the served scaled_mm"}
+                                        "z": "the arm's own when its observe hands one over, else engine.int8_exact.int_mm "
+                                             "beside the served scaled_mm"}
 
     def listen(self, fn: Listener) -> None:
         """Hand every later call to `fn` (`Listener`)."""
@@ -272,8 +285,9 @@ class H1Run:
         self.details["calls"] = self.commits["calls"] = len(self.calls)
         return call
 
-    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any) -> Call | None:
-        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales."""
+    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
+        """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
+        its exact s32 Y [m, n] if the arm's kernel wrote one (else `int_mm` computes it beside, only to retain it)."""
         if self.closed:
             raise RuntimeError(f"{self.entry}: a call after the window closed")
         if w == 0:
@@ -287,10 +301,23 @@ class H1Run:
             self.refused.append({"step": self.step, "linear": w, "m": m})
             return None
         call = self._call(self.step, w, a, s_a, weight, weight_scale)
-        if self.retain:
+        if z is None and self.retain:
             from verity_vllm.engine.int8_exact import int_mm
-            self.retained.append((call.index, numpy_of(a), numpy_of(s_a), numpy_of(int_mm(a, weight))))
+            z = int_mm(a, weight)
+        if self.retain:
+            self.retained.append((call.index, numpy_of(a), numpy_of(s_a), numpy_of(z)))
+        self._recorded = (call, z)
         return call
+
+    def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
+        """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
+        back to vLLM."""
+        made, self._recorded = self._recorded, None
+        if made is None:
+            return None
+        call, z = made
+        v = self.verdicts[call.index] = CG.verdict(trace, y, z)
+        return v
 
     def close(self) -> None:
         """The steps past the last served one, each linear's call empty (m = 0), handed to the listeners like the rest."""
@@ -315,16 +342,30 @@ class H1Run:
                 for s in range(self.steps) for w, (n, k) in enumerate(self.shapes_)]
         return self.order_ok and not self.refused and [(c.step, c.layer, c.base, c.units) for c in self.calls] == want
 
+    def verdict(self, call: Call) -> dict[str, Any]:
+        """The call's credit verdict; a served call recorded outside a traced ``apply`` (`traced`) is refused."""
+        return self.verdicts.get(call.index) or {
+            "linear": call.module, "credit": False,
+            "reason": f"credit: {CG.UNTRACED[1:-1]}: {call.module} call {call.index} was recorded outside a traced apply"}
+
     def credit(self) -> dict[str, Any]:
-        """Credited: the served rows' MACs only. The padded work (empty slots and pad columns) is shown beside it, not
-        credited (Daniel, 18 Oct)."""
-        served = sum(c.m * c.n * c.k for c in self.calls)
+        """Credited: the served rows' MACs of the calls the credit gate passes (`credit_gate`), only. The padded work (empty
+        slots and pad columns) is shown beside it, not credited (Daniel, 18 Oct), and so are the refused calls' rows, with
+        each refusal's reason."""
+        served = [c for c in self.calls if c.m]
+        verdicts = {c.index: self.verdict(c) for c in served}
+        ok = [c for c in served if verdicts[c.index]["credit"]]
+        no = [c for c in served if not verdicts[c.index]["credit"]]
         computed = sum(padded(c.rows, c.n)[0] * padded(c.rows, c.n)[1] * c.k for c in self.calls)
-        return {"rule": "credit the served rows only; padded work is shown, not credited",
-                "credited": {"rows": sum(c.m for c in self.calls), "macs": served},
-                "padded": {"rows": sum(c.rows - c.m for c in self.calls), "macs": computed - served},
+        all_served = sum(c.m * c.n * c.k for c in served)
+        return {"rule": "credit the served rows of calls whose served y is the credited kernel's own output only; padded "
+                        "work and refused calls are shown, not credited",
+                "credited": {"rows": sum(c.m for c in ok), "macs": sum(c.m * c.n * c.k for c in ok)},
+                "refused": {"calls": len(no), "rows": sum(c.m for c in no), "macs": sum(c.m * c.n * c.k for c in no),
+                            "reasons": CG.reasons(verdicts[c.index] for c in no)},
+                "padded": {"rows": sum(c.rows - c.m for c in self.calls), "macs": computed - all_served},
                 "units": sum(c.units for c in self.calls),
-                "served_frac_of_macs": round(served / computed, 6) if computed else 0.0}
+                "served_frac_of_macs": round(all_served / computed, 6) if computed else 0.0}
 
     def shapes(self) -> list[tuple[int, int, int]]:
         return sorted({(c.k, c.n, c.rows) for c in self.calls})
@@ -387,13 +428,29 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
 
 
 def observer(run: H1Run, w: int, orig: Any) -> Any:
-    """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight (`H1Run.record`)."""
+    """Layer `w`'s ``observe``: the arm's own, then the call recorded with the layer's weight and the z the arm's kernel
+    wrote, if it hands one over (`H1Run.record`)."""
 
-    def observe(layer: Any, xq: Any, s_a: Any, y: Any) -> None:
-        orig(layer, xq, s_a, y)
+    def observe(layer: Any, xq: Any, s_a: Any, y: Any, z: Any = None) -> None:
+        orig(layer, xq, s_a, y) if z is None else orig(layer, xq, s_a, y, z)
         if run.commit:
-            run.record(w, xq, s_a, layer.weight, layer.weight_scale)
+            run.record(w, xq, s_a, layer.weight, layer.weight_scale, z)
     return observe
+
+
+def traced(run: H1Run, w: int, orig: Any) -> Any:
+    """Layer `w`'s ``apply``: the arm's own under the credit gate's trace (`credit_gate.Trace`), then the call `record` made
+    inside it judged against the y it returns (`H1Run.judge`)."""
+
+    def apply(layer: Any, x: Any, bias: Any = None) -> Any:
+        if not run.commit:
+            return orig(layer, x, bias)
+        run._recorded = None
+        with CG.Trace(run.modules.get(w, f"linear {w}")) as trace:
+            y = orig(layer, x, bias)
+        run.judge(trace, y)
+        return y
+    return apply
 
 
 def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> list[tuple[bytes, bytes] | None]:
@@ -407,4 +464,4 @@ def bind_all(calls: Sequence[Call], bound: Mapping[int, Mapping[str, Any]]) -> l
 
 __all__ = ["CALLS_FILE", "Call", "H1Run", "Listener", "RECORD", "SALT_TAG", "SCHEME", "TILE", "VllmInt8LinearH1", "bind_all",
            "check_tiles", "compiled", "coordinate", "layers", "layout", "numpy_of", "observer", "padded", "program", "program_salt",
-           "slots", "units", "weight_root"]
+           "slots", "traced", "units", "weight_root"]

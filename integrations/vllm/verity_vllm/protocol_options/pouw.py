@@ -703,7 +703,8 @@ def h1_run(entry: str) -> PH.H1Run | None:
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the epoch's salt from the challenger's salt coin after the weights' root, as every scheme's,
     and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners (`pouw_h1.observer`),
-    in the static layout of the settings' ``rows`` and ``steps``. The served values are the arm's, untouched."""
+    in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs under the credit gate's trace
+    (`pouw_h1.traced`). The served values are the arm's, untouched."""
     layers = PH.layers(target.model, linear_types())
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
@@ -722,6 +723,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     h = target.hooks(entry)
     for w, layer in enumerate(layers):
         h.wrap(layer.quant_method, "observe", lambda orig, w=w: PH.observer(run, w, orig))
+        h.wrap(layer.quant_method, "apply", lambda orig, w=w: PH.traced(run, w, orig))
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish)
 
 
