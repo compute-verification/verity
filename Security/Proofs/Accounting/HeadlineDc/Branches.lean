@@ -6,10 +6,12 @@ import Proofs.Accounting.Headline.Sm120Measured
 `Whole.headline_of_branches` takes the folded branch's and the unfolded branch's floors at the proof's certificate.
 On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so a lower bound on each is enough:
 
-* `price_ge_facet`, `price_ge_pair`: a certificate prices a demand `≥ 0` at least at one facet's term, or two's;
-* `wStar_ge`: `λ_{r₀}·w₀ ≤ w*` when every word route's demand on `r₀` is at least `w₀`;
-* `phiStar_ge_facet`, `phiStar_ge_pair`: `φ₀ ≤ φ*` when every fold route's price on one facet, or two (a
-  certificate on two facets, DS-100's), is at least `φ₀`;
+* `price_ge_facet`, `price_ge_pair`, `price_ge_triple`: a certificate prices a demand `≥ 0` at least at one facet's
+  term, or two's, or three's;
+* `wStar_ge`, `wStar_ge_triple`: `λ_{r₀}·w₀ ≤ w*` when every word route's demand on `r₀` is at least `w₀`, and
+  `w₀ ≤ w*` when every word route's price on three facets is (DC-90-ri's certificate);
+* `phiStar_ge_facet`, `phiStar_ge_pair`, `phiStar_ge_triple`: `φ₀ ≤ φ*` when every fold route's price on one facet,
+  two (DS-100's certificate) or three is at least `φ₀`;
 * `folded_of_lower`: the folded branch's floor at `p = 7/8` is at least
   `(N_w w (1 − 41·0.6931471808/6000) + N_w φ)/B_♭`, from `identity` at `d̄ = ā = 0`, `χ* ≥ 0` and
   `Headline.epsJl_le`;
@@ -29,6 +31,15 @@ theorem price_ge_pair {R : Type} [Fintype R] [DecidableEq R] (lam d : R → ℝ)
     (hd : ∀ r, 0 ≤ d r) (a b : R) (hab : a ≠ b) : lam a * d a + lam b * d b ≤ demandPrice lam d := by
   unfold demandPrice
   calc lam a * d a + lam b * d b = ∑ r ∈ ({a, b} : Finset R), lam r * d r := (Finset.sum_pair hab).symm
+    _ ≤ ∑ r, lam r * d r := Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
+
+theorem price_ge_triple {R : Type} [Fintype R] [DecidableEq R] (lam d : R → ℝ) (hlam : ∀ r, 0 ≤ lam r)
+    (hd : ∀ r, 0 ≤ d r) (a b c : R) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) :
+    lam a * d a + lam b * d b + lam c * d c ≤ demandPrice lam d := by
+  unfold demandPrice
+  calc lam a * d a + lam b * d b + lam c * d c = ∑ r ∈ ({a, b, c} : Finset R), lam r * d r := by
+        rw [Finset.sum_insert (by simp [hab, hac]), Finset.sum_pair hbc]
+        ring
     _ ≤ ∑ r, lam r * d r := Finset.sum_le_univ_sum_of_nonneg fun r => mul_nonneg (hlam r) (hd r)
 
 /-- `w* ≥ λ_{r₀}·w₀` when every word route's demand on facet `r₀` is at least `w₀`. -/
@@ -59,6 +70,26 @@ theorem phiStar_ge_pair {K R T L U F X : Type} [Fintype K] [Fintype R] [Decidabl
   obtain ⟨-, -, -, -, -, -, -, -, -, hfold, -⟩ := hZ
   unfold Model.phiStar
   exact le_ciInf fun φ => (hφ φ).trans (price_ge_pair lam _ h.1 (hfold φ) a b hab)
+
+/-- `w* ≥ w₀` when every word route's price on facets `a`, `b` and `c` is at least `w₀` (DC-90-ri's certificate). -/
+theorem wStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [DecidableEq R] [Fintype T] [Fintype L]
+    [Fintype U] [Fintype F] [Fintype X] [Nonempty F] [Nonempty X] (Z : Model K R T L U F X) (Fl : Labelled K)
+    (lam : R → ℝ) (h : IsCert lam) (hZ : Z.Wf Fl) (a b c : R) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) (w0 : ℝ)
+    (hw : ∀ hd, w0 ≤ lam a * Z.demand hd a + lam b * Z.demand hd b + lam c * Z.demand hd c) :
+    w0 ≤ Z.wStar lam := by
+  have : Nonempty (Head T L U) := ⟨.vector⟩
+  obtain ⟨hd0, -⟩ := stars_nonneg Z Fl lam hZ h
+  unfold Model.wStar
+  exact le_ciInf fun hd => (hw hd).trans (price_ge_triple lam _ h.1 (hd0 hd) a b c hab hac hbc)
+
+/-- `φ* ≥ φ₀` when every fold route's price on facets `a`, `b` and `c` is at least `φ₀`. -/
+theorem phiStar_ge_triple {K R T L U F X : Type} [Fintype K] [Fintype R] [DecidableEq R] [Fintype T] [Fintype L]
+    [Fintype U] [Fintype F] [Fintype X] [Nonempty F] (Z : Model K R T L U F X) (Fl : Labelled K) (lam : R → ℝ)
+    (h : IsCert lam) (hZ : Z.Wf Fl) (a b c : R) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) (φ0 : ℝ)
+    (hφ : ∀ φ, φ0 ≤ lam a * Z.fold φ a + lam b * Z.fold φ b + lam c * Z.fold φ c) : φ0 ≤ Z.phiStar lam := by
+  obtain ⟨-, -, -, -, -, -, -, -, -, hfold, -⟩ := hZ
+  unfold Model.phiStar
+  exact le_ciInf fun φ => (hφ φ).trans (price_ge_triple lam _ h.1 (hfold φ) a b c hab hac hbc)
 
 /-- The folded branch's floor at `p = 7/8`, `S = 48,000` and `δ′ ≥ 2^-41` from lower bounds `w ≤ w*`, `φ ≤ φ*` on
 a model with `μ_f = μ_x = 0`: `ε_jl ≤ κ·41·0.6931471808/6000` (`Headline.epsJl_le`), so the floor is at least

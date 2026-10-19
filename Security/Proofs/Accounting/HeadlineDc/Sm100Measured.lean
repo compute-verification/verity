@@ -167,10 +167,10 @@ theorem sm100m_demand_issue : ∀ hd, (1 : ℝ) / 32768 ≤ Sm100Measured.model.
   | side u => exact u.elim
 
 /-- `w* ≥ 1/32768` at π*. -/
-theorem sm100m_wStar : (1 : ℝ) * (1 / 32768) ≤ Sm100Measured.model.wStar Sm100Measured.lamStar := by
+theorem sm100m_wStar : (1 : ℝ) / 32768 ≤ Sm100Measured.model.wStar Sm100Measured.lamStar := by
   have h := wStar_ge Sm100Measured.model Sm100Measured.flat Sm100Measured.lamStar sm100m_isCert sm100m_wf 0 _
     sm100m_demand_issue
-  rwa [sm100m_lamStar, show onFacet (0 : Fin 12) 0 = 1 from if_pos rfl] at h
+  rwa [sm100m_lamStar, show onFacet (0 : Fin 12) 0 = 1 from if_pos rfl, one_mul] at h
 
 /-- `φ* ≥` the lane fold's load on issue. -/
 theorem sm100m_phiStar : (phi100M : ℝ) ≤ Sm100Measured.model.phiStar Sm100Measured.lamStar := by
