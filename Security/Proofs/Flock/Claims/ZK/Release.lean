@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.Blind
 import Flock.Firewall.Frame
 import Flock.Firewall.Assumptions
+import Flock.Firewall.Coins
 
 /-!
 # The ZK server's release is the Lean frame, at the Lean frame's draws
@@ -22,6 +23,10 @@ at the draws on the server's tape (`LeanRelease.draws`):
   of full rank), tagged `0` as the session sends a frame round. Every stop the coins decide is the frame's, from the
   coins alone, and where the frame refuses the coins the release is the stop whatever the round
   (`LeanRelease.release_of_refusesCoins`);
+* the coins reach the frame only past the transport's coin check (`LeanRelease.opens`): `flock-firewall coins` on the
+  server's own `Hello` at the tape's nonce, then `Hello`'s answer, then each opening at the transport's request
+  (`LeanRelease.req`), as `coin_tree::Checked` asks it. Where it refuses, the release is the stop
+  (`LeanRelease.answered`, `refusesCoins_of_not_opens`);
 * a value carries whether it is the firewall's stand-in (`Val := Msg × Bool`), and the frame of a stopped rep releases the
   algebraic phase's values as their pads alone (`Masker.stopped`). The firewall's scheduled round is a stand-in. The
   worker's values are not, and the check refuses a worker value that says it is;
@@ -234,6 +239,34 @@ theorem check_self {c : Cfg} {s : Masker} {v : ByteArray} {n : Nat} {out : ByteA
 
 end PassDecision
 
+/-! ## The transport's coin check
+
+`coin_tree::Checked` asks `flock-firewall coins` (`Flock.Firewall.Coins.cmd`) at the prover's `Hello`, at `Hello`'s
+answer and at each opening, and hands the frame no coins past its first refusal. -/
+
+/-- `flock-firewall coins`' reading of the server's `Hello` `hb`, `Req::Hello`'s frame (its tag, its `u32le` length, the
+bytes): the bytes as UTF-8, parsed (`Hello.parse`). -/
+def coinHello (hb : Msg) : Except String _root_.Flock.Firewall.Coins.Hello :=
+  match String.fromUTF8? ⟨(hb.drop 5).toArray⟩ with
+  | some s => _root_.Flock.Firewall.Coins.Hello.parse s
+  | none => .error "a Hello that is not UTF-8"
+
+/-- **`flock-firewall coins`' verdict** on a session: the `Hello` `hb`, then its answer `a` (`Session.start`), then the
+openings `os` in order (`Session.openAll`). -/
+def coinVerdict (hb a : Msg) (os : List (String × ℕ × Msg)) : Except String _root_.Flock.Firewall.Coins.Session :=
+  (coinHello hb).bind fun hl => (_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os
+
+/-- The openings `ms` as `flock-firewall coins` takes them, from the `j`-th on: each with the stream and coin count of
+its request (`req`). -/
+def reqsFrom (req : ℕ → String × ℕ) : ℕ → List Msg → List (String × ℕ × Msg)
+  | _, [] => []
+  | j, m :: ms => ((req j).1, (req j).2, m) :: reqsFrom req (j + 1) ms
+
+theorem reqsFrom_map (req : ℕ → String × ℕ) :
+    ∀ (j : ℕ) (ms : List Msg), (reqsFrom req j ms).map (fun o => o.2.2) = ms
+  | _, [] => rfl
+  | j, m :: ms => congrArg (m :: ·) (reqsFrom_map req (j + 1) ms)
+
 /-- **The deployed release**, for witnesses `W` on the server's tape `R`: at statement `x`, after the history `h`, round
 `h.length` leaves as its rep's Lean frame's release of the device round, at the rep's draws on the tape. -/
 structure LeanRelease (W R : Type) where
@@ -272,6 +305,9 @@ structure LeanRelease (W R : Type) where
   stop : Msg
   /-- round `0`, the server's own `Hello` at the tape's nonce (`CoinLayer.helloD` at the deployed coin layer) -/
   hello : Msg → R → Msg
+  /-- the transport: the stream and coin count it requests the `j`-th opening at, by the statement's schedule
+  (`coin_tree::Checked`'s request at `Req::Commit` and `Req::Round`) -/
+  req : Msg → ℕ → String × ℕ
   /-- round `1`, the link, the firewall's own: level 0's roots as its recheck commits them, from the leaves under the
   salts on its tape (`Firewall::root`, `Firewall::new` in `flock-circuit`), never the worker's -/
   link : Msg → W → R → List (Msg × Msg) → Msg
@@ -301,12 +337,56 @@ theorem cfg_root {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
     (L.cfg x ρ h).root = padsRoot (L.lay x (L.rep x h.length)) (L.drawsAt x ρ (L.rep x h.length)) :=
   rfl
 
+/-- **Whether the transport's coin check passes the history `h`** at the tape `ρ`: `flock-firewall coins` on the server's
+own `Hello` at the tape (`hello`, at the tape's nonce), then `Hello`'s answer, then each later answer as the opening of
+the transport's request (`coinVerdict`). A history with no opening passes. The deployed transport checks `Hello`'s
+answer as it arrives (`coin_tree::Checked`) and stops before the link where it is malformed; the committed-coin
+prover's link (`strat` at no opening) reads nothing of the answer, so a release that stopped there could not be its
+message (`OwnRefine`), and here the stop comes at the first opening instead, which a malformed answer fails
+(`CoinOpen.verdict_isOk`). On such a history the deployed release is this one's cut after the answer, with the stop in
+the link's place: a function of the verifier's own answer, which is the coin layer's and not the witness's, so it adds
+nothing for the stop-leak bound to charge. -/
+def opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) : List (Msg × Msg) → Bool
+  | (_, a) :: o :: ops => (coinVerdict (L.hello x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk
+  | _ => true
+
 /-- **The frame takes the stream's coins** for the last round of `h`, at the round's rep's configuration
 (`Masker.answer`): the rep's state after them, or the frame's refusal of them. -/
-def answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
+def frameAnswer {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
   match h.getLast? with
   | some (_, cs) => (L.prog x h).answer (L.cfg x ρ h) (L.coinsOf cs)
   | none => pure (L.prog x h)
+
+/-- The transport's stop where its coin check refuses. -/
+def coinRefused : String := _root_.Flock.Firewall.Coins.STOP ++ "the coin check refused an opening"
+
+/-- **The coins the frame is handed and takes** after `h`: where the transport's coin check passes the history
+(`opens`), the frame's taking of the stream's last coins (`frameAnswer`); else the transport's stop, as the transport
+hands the frame no coins past the check's refusal. -/
+def answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
+  if L.opens x ρ h then L.frameAnswer x ρ h else .error coinRefused
+
+theorem answered_of_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (ho : L.opens x ρ h = true) : L.answered x ρ h = L.frameAnswer x ρ h := by
+  unfold answered
+  exact if_pos ho
+
+theorem answered_of_not_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (ho : L.opens x ρ h = false) : L.answered x ρ h = .error coinRefused := by
+  unfold answered
+  exact if_neg (by rw [ho]; exact Bool.false_ne_true)
+
+/-- Past `Hello`'s answer and one opening, where `flock-firewall coins` reads the server's `Hello` as `hl`, the check is
+`Session.start` at the answer, then `Session.openAll` over the openings. -/
+theorem opens_of_hello {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (m₀ a : Msg) (o : Msg × Msg)
+    (ops : List (Msg × Msg)) {hl : _root_.Flock.Firewall.Coins.Hello} (hp : coinHello (L.hello x ρ) = .ok hl) :
+    L.opens x ρ ((m₀, a) :: o :: ops) =
+      ((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S =>
+        S.openAll (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk := by
+  show (coinVerdict (L.hello x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk = _
+  unfold coinVerdict
+  rw [hp]
+  try rfl
 
 /-- **The frame's step** after `h` on the device round `v`, of a stopped rep (`st`) or not: at the rep's configuration,
 it takes the stream's coins for the last round (`answered`), then the round (`Frame.round`), in the order
@@ -323,12 +403,22 @@ def release {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg
   | .ok (out, _) => 0 :: out.data.toList
   | .error _ => L.stop
 
-/-- **Whether the frame refuses the stream's coins** for the last round of `h` (`Masker.answer`): a zerocheck outer coin
-`1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`, or coins for no round or of another count. -/
+/-- **Whether the frame refuses the stream's coins** for the last round of `h`: the transport's coin check refuses the
+history (`opens`), or the frame refuses the coins (`Masker.answer`: a zerocheck outer coin `1`, level 0's `ρ_0, ρ_1`
+dependent over F128, the inner proof's `β = 0`, or coins for no round or of another count). -/
 def refusesCoins {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Bool :=
   match L.answered x ρ h with
   | .ok _ => false
   | .error _ => true
+
+/-- **Where the transport's coin check refuses the history, so does the release.** -/
+theorem refusesCoins_of_not_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (ho : L.opens x ρ h = false) : L.refusesCoins x ρ h = true := by
+  have ha := L.answered_of_not_opens x ρ h ho
+  unfold refusesCoins
+  cases hb : L.answered x ρ h with
+  | ok m => rw [ha] at hb; cases hb
+  | error e => rfl
 
 /-- **Where the frame refuses the coins, the release is the stop**, whatever the round and whether the rep is stopped:
 the coin stops are the frame's, from the coins alone. -/
