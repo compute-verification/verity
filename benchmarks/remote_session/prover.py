@@ -8,9 +8,7 @@ from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), s
 passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
 after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
 message arrived, and dropped otherwise, and the pass queued behind it is dropped too; the next window's first pass
-chains from the last root sent. In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at
-most k passes under a coin, then waits for the next, and a window's first pass starts at its coin's arrival. Each
-session runs under a mode of the prover's plan, which the verifier never sees:
+chains from the last root sent. Each session runs under a mode of the prover's plan, which the verifier never sees:
 
 ~~~text
 honest          every block held and read
@@ -31,6 +29,9 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
                 a slot whose block a pass still has to read, that pass's receipt of it is of the new bytes, and an
                 opening of it carries the true block
 ~~~
+
+In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
+waits for the next, and a window's first pass starts at its coin's arrival.
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
