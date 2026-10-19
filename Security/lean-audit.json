@@ -3510,6 +3510,24 @@
    "assumptions": [],
    "type_hash": "18449f5ab8514c9e3daab13c9c8dec476efecfcce491858edadebcdb323403e6"
   },
+  "Nci.SecurityProofs.Dampener": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.Dampener : Nci.Guarantees.Dampener"],
+   "assumptions": [],
+   "type_hash": "1edf01c475351d5490d257570d1a73c214ddb9b6375f903838bbe27787147056"
+  },
+  "Nci.SecurityProofs.DampenerThreaded": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.DampenerThreaded : Nci.Guarantees.DampenerThreaded"],
+   "assumptions": [],
+   "type_hash": "4fd21ded7cc9bd15239bbcd454dc5f3d7d590c1923912e1d440f0f531161d980"
+  },
+  "Nci.SecurityProofs.DampenerWindows": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.DampenerWindows : Nci.Guarantees.DampenerWindows"],
+   "assumptions": [],
+   "type_hash": "c714b31cf1728e65cfbbe0a9d2beaf55916ed0f231856ba07ec443f505fde314"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -5572,7 +5590,10 @@
    "Nci.SecurityProofs.ThreadedReadsInfo": "frozen (no-function): It is about an arbitrary reference circuit and a threading of it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedContainedInfo": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedOfState": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.InfoOfState": "frozen (no-function): It is about an arbitrary declaration and a set of its gates whose novel reads are a state and an ingress, not about any verifier's code; a physical premise on a node's windows (Accounting.Guarantees.Actual.Windows) is what would give it an acceptance."
+   "Nci.SecurityProofs.InfoOfState": "frozen (no-function): It is about an arbitrary declaration and a set of its gates whose novel reads are a state and an ingress, not about any verifier's code; a physical premise on a node's windows (Accounting.Guarantees.Actual.Windows) is what would give it an acceptance.",
+   "Nci.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "Nci.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
+   "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7574,6 +7595,7 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -7617,6 +7639,7 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
@@ -7717,6 +7740,7 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
@@ -7826,6 +7850,7 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -7842,6 +7867,23 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
+  },
+  "Definitions.Nci.Dampener": {
+   "digest": "9e79c6755cea0343785155cd5a462c7ef001290ee919b4ee904728810d59f561",
+   "definitions": {
+    "Nci.Dampener.Lambda": "ef210083107a2919f8c01971c26c750866989c7133c468b4bcdd3808973c5611",
+    "Nci.Dampener.declaredShare": "6dda5611176f3c78724aa5590d0dfe86171e9f8b164801f896ff8b15d9025c4f",
+    "Nci.Dampener.efficiency": "3879d8e8de916a1abbf299adc3cb7f406f4536de3f546f6601c03f59ed803100",
+    "Nci.Dampener.memoryCap": "073461c722e9cae382634cacd0b1a2dbdc13c8b569e1a077a324c7e9c5acda0f",
+    "Nci.Dampener.residualShare": "7d8a763f9d42496bca5c824943d40cee8e9bc9998244ab1b930a38acb2d6869a",
+    "Nci.Dampener.rhoT": "6302d31b765d7595479735cb16765e75561d310e1eb3ae5614ac2a2c861bdefb",
+    "Nci.Dampener.unmonitoredShare": "44e99813f78fd4d8963b37d58aee437551d98e0581915d4f43a0e021509eceb0"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.Dampener",
+    "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerWindows"
    ]
   },
   "Definitions.Nci.Dark": {
@@ -7923,6 +7965,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.ThreadedContainedInfo",
@@ -17542,6 +17585,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
@@ -17596,6 +17640,19 @@
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn"
+   ]
+  },
+  "Models.Nci.Guarantees.Dampener": {
+   "digest": "2231b9ee9046156580647e17338125420a6dfaf73caf64b7a7615cec979a15c7",
+   "definitions": {
+    "Nci.Guarantees.Dampener": "51be110939f1e2aba3b5fc3a329564570308e79261930de29b31a6d9cf4d5ea9",
+    "Nci.Guarantees.DampenerThreaded": "c03add7a98d1b0c0cea190ae1604ddf8f4a6f9513d289c54c40ebcfe9efece19",
+    "Nci.Guarantees.DampenerWindows": "db15cac768253cf856ee929f5ffc06adac9ed01e62bf51f9fc7d551d654e884c"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.Dampener",
+    "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerWindows"
    ]
   },
   "Models.Nci.Guarantees.Info": {

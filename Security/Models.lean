@@ -5,6 +5,7 @@ import Models.Nci.Guarantees
 import Models.Nci.Guarantees.Reads
 import Models.Nci.Guarantees.Threads
 import Models.Nci.Guarantees.Contained
+import Models.Nci.Guarantees.Dampener
 import Models.Nci.Guarantees.Info
 import Models.Nci.Guarantees.Training
 import Models.Pous.Assumptions
