@@ -17,10 +17,10 @@
 #     --send BUILD_RUN/out/lib/sm_90a/libh1c.so --send BUILD_RUN/out/lib/sm_90a/libh1f.so --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     --env DITHER_NSYS=1 -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/hb_served.sh" run sm_90a --arms stock,exact,dither --gate ...'
 #
-# The stock arm is native compiled vLLM int8 (compressed-tensors W8A8): on sm_90a vLLM's own first choice,
-# CutlassInt8ScaledMMLinearKernel (hb_sbench.py drops sbench's disable, which sm_120 needs); on sm_100a cutlass refuses int8
-# ("Int8 not supported on SM100"), so sbench disables it and vLLM takes TritonInt8ScaledMMLinearKernel. Every arm samples
-# without FlashInfer's JIT sampler, as served_h1 and native.sh do.
+# The stock arm is native compiled vLLM int8 (compressed-tensors W8A8) on TritonInt8ScaledMMLinearKernel, whose dequant
+# order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
+# on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
+# default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
@@ -86,7 +86,7 @@ for lib in libh1c libh1f; do
     echo "hb_served.sh: $lib.so was built (source $bsha) from files that differ at $SHA: rebuild" >&2; exit 2; }
 done
 case $ARCH in
-  sm_90a) FI=9.0a; export HB_STOCK_CUTLASS=1 ;;
+  sm_90a) FI=9.0a ;;
   sm_100a) FI=10.0a ;;
   *) echo "hb_served.sh: no arch $ARCH" >&2; exit 2 ;;
 esac
