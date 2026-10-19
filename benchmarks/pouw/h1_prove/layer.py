@@ -107,6 +107,7 @@ def quant_a(x: np.ndarray) -> np.ndarray:
 
 def quant_vllm(x: np.ndarray, k: int = 0) -> np.ndarray:
     """vLLM's symmetric int8 quantization of each row, its scale from the row's first ``k`` entries (0: all)."""
+    # With k (a K = 64 smoke) the absmax is over those k entries so ±127 lands inside the tiles: not vLLM's full-row scale.
     x = x[:, :k] if k else x
     s = np.maximum(np.abs(x).max(axis=1, keepdims=True), 1e-30) / 127
     return np.clip(np.rint(x / s), -128, 127).astype(np.int8)
