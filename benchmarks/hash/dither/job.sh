@@ -2,15 +2,15 @@
 # The dither-hb benches. Libraries are built on a CPU node and shipped to the dc node, so nothing but the bench runs on
 # vy-dc-h200 / vy-dc-b200 (no CPU phase there):
 #   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u}.so and the
-#            variants h1u_b3 (H1U_MINB=3), h1u_pN and h1noise_pN (H1_PIPE=N, N in $PIPES and $NOISE_PIPES), their
+#            variants h1u_b3 (H1U_MINB=3), h1u_pf (H1U_PF=1), h1u_pN and h1noise_pN (H1_PIPE=N, N in $PIPES and $NOISE_PIPES), their
 #            SASS and resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository
 #            files nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
 #            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
-#   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit gated
-#            against receipts.py and h1tile.reference, the noise floor gated as h1bench.py does, then all timed against
-#            the plain int8 GEMMs)
+#   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
+#            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
+#            noise floor gated as h1bench.py does, then all timed against the plain int8 GEMMs)
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
@@ -43,7 +43,7 @@ if [ "$BENCH" = build ]; then
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
     # NAME[:FILE:FLAG]: a variant is FILE.cu built with FLAG
-    builds=(kb kb_pg h1noise h1u h1u_b3:h1u:-DH1U_MINB=3)
+    builds=(kb kb_pg h1noise h1u h1u_b3:h1u:-DH1U_MINB=3 h1u_pf:h1u:-DH1U_PF=1)
     # H1_PIPE's bits (h1sha.cuh): 4 Sigma1, 8 Sigma0, 16 sigma0, 32 sigma1 and (h1u.cu) 64 the fold's rotations on IMAD
     for p in ${PIPES:-4 12 36 76 100}; do builds+=("h1u_p$p:h1u:-DH1_PIPE=$p"); done
     for p in ${NOISE_PIPES:-4 12 36}; do builds+=("h1noise_p$p:h1noise:-DH1_PIPE=$p"); done

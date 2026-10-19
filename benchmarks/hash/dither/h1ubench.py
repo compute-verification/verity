@@ -53,8 +53,22 @@ from verity.core.protocols.pouw.circuit import seeds as SD
 SEED_WORDS = 4  # compressions a unit spends on seed_j and sigma_R
 
 
+_WS: dict = {}
+
+
+def workspace(nbytes: int) -> torch.Tensor:
+    """kh_unit_ws's workspace, one buffer for every build (they run one at a time), grown before any capture."""
+    if _WS.get("t") is None or _WS["t"].numel() < nbytes:
+        _WS["t"] = None
+        torch.cuda.empty_cache()
+        _WS["t"] = torch.empty((max(nbytes, 64),), dtype=torch.uint8, device="cuda")
+    return _WS["t"]
+
+
 class Lib:
-    def __init__(self, path: str):
+    """One build of h1u.cu; with ws, its two-launch form kh_unit_ws (the noise into the workspace, then the unit)."""
+
+    def __init__(self, path: str, ws: bool = False):
         h = self.h = ctypes.CDLL(path)
         vp, u32 = ctypes.c_void_p, ctypes.c_uint
         h.kh_seeds.argtypes = [vp, ctypes.c_ulonglong, u32, vp, vp]
@@ -62,6 +76,17 @@ class Lib:
         h.kh_words.restype = u32
         h.kh_words.argtypes = [u32]
         h.kh_digits.argtypes = [u32]
+        self.ws = ws
+        if ws:
+            h.kh_unit_ws.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp]
+            h.kh_ws_bytes.restype = ctypes.c_ulonglong
+            h.kh_ws_bytes.argtypes = [u32, u32, u32]
+            h.kh_noise_blocks.restype = u32
+            h.kh_noise_blocks.argtypes = [u32]
+
+    @staticmethod
+    def has_ws(path: str) -> bool:
+        return hasattr(ctypes.CDLL(path), "kh_unit_ws")
 
     def words(self, k: int) -> int:
         return int(self.h.kh_words(k))
@@ -70,13 +95,22 @@ class Lib:
         if self.h.kh_seeds(data.data_ptr(), base, units, out.data_ptr(), torch.cuda.current_stream().cuda_stream):
             raise RuntimeError("kh_seeds")
 
+    def ws_buffer(self, m: int, n: int, k: int) -> torch.Tensor | None:
+        return workspace(int(self.h.kh_ws_bytes(m, n, k))) if self.ws else None
+
     def unit(self, a: torch.Tensor, b: torch.Tensor, m: int, seeds: torch.Tensor, live: torch.Tensor | None,
              out: torch.Tensor) -> None:
-        rc = self.h.kh_unit(a.data_ptr(), b.data_ptr(), m, b.shape[0], a.shape[1], seeds.data_ptr(),
-                            None if live is None else live.data_ptr(), out.data_ptr(),
-                            torch.cuda.current_stream().cuda_stream)
+        n, k, st = b.shape[0], a.shape[1], torch.cuda.current_stream().cuda_stream
+        lv = None if live is None else live.data_ptr()
+        if self.ws:
+            nb = int(self.h.kh_noise_blocks(k))
+            j = auto_j((a.shape[0] // 32) * (n // 32), nb, torch.cuda.get_device_properties(0).multi_processor_count)
+            rc = self.h.kh_unit_ws(a.data_ptr(), b.data_ptr(), m, n, k, seeds.data_ptr(), lv, out.data_ptr(),
+                                   self.ws_buffer(a.shape[0], n, k).data_ptr(), j, st)
+        else:
+            rc = self.h.kh_unit(a.data_ptr(), b.data_ptr(), m, n, k, seeds.data_ptr(), lv, out.data_ptr(), st)
         if rc:
-            raise RuntimeError(f"kh_unit rc {rc}")
+            raise RuntimeError(f"kh_unit{'_ws' if self.ws else ''} rc {rc}")
 
 
 def be_words(b: bytes) -> list[int]:
@@ -110,6 +144,14 @@ class Call:
         self.lib.seeds(self.data, self.base, self.units, self.seeds)
         self.lib.unit(self.a, self.b, self.m if m is None else m, self.seeds, live, self.out)
 
+    def poison(self) -> None:
+        """0xA5 over the receipts and, for the two-launch form, its workspace: a twin's noise left there by an earlier
+        build has the same seeds, so a noise kernel that wrote nothing would otherwise pass."""
+        self.out.fill_(POISON)
+        w = self.lib.ws_buffer(self.m, self.b.shape[0], self.a.shape[1])
+        if w is not None:
+            w.fill_(0xA5)
+
     def twin(self, lib: Lib) -> Call:
         """The same call (inputs, salt, roots, base) on another build, with its own seeds and receipts."""
         return Call(lib, self.a, self.b, self.salt, *self.roots, self.base)
@@ -136,7 +178,7 @@ def gate_shape(call: Call, picks: list[int], ref_t: torch.Tensor) -> dict:
     pk = torch.tensor(picks, device="cuda")
 
     def once(m: int | None) -> tuple[int, int]:
-        call.out.fill_(POISON)
+        call.poison()
         call.run(m=m)
         torch.cuda.synchronize()
         return int((call.out[pk] != ref_t).sum()), int((call.out[:call.units] == POISON).sum())
@@ -164,7 +206,7 @@ def anchors(libs: dict[str, Lib], rng: random.Random) -> list[dict]:
         calls = {name: Call(lib, a.cuda(), b.cuda(), salt, ra, rb, base) for name, lib in libs.items()}
         got = {}
         for name, call in calls.items():
-            call.out.fill_(POISON)
+            call.poison()
             call.run(live=live)
             torch.cuda.synchronize()
             got[name] = call.out.cpu().numpy().view(np.uint32)
@@ -307,6 +349,7 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--item-ms", type=float, default=3.0)
     ap.add_argument("--picks", type=int, default=14)
+    ap.add_argument("--no-ws", action="store_true", help="skip every build's two-launch form (arm NAME-ws)")
     ap.add_argument("--ms", default=",".join(map(str, MS)))
     ap.add_argument("--linears", default=",".join(LINEARS))
     args = ap.parse_args()
@@ -317,6 +360,11 @@ def main() -> int:
         vname, _, path = v.partition("=")
         paths[f"h1u-{vname}"] = path
     libs = {arm: Lib(p) for arm, p in paths.items()}
+    if not args.no_ws:
+        for arm, p in list(paths.items()):
+            if Lib.has_ws(p):
+                libs[f"{arm}-ws"] = Lib(p, ws=True)
+                paths[f"{arm}-ws"] = f"{p} (kh_unit_ws)"
     npaths = {"floor": args.noise_lib} if args.noise_lib else {}
     for v in args.noise_variant:
         vname, _, path = v.partition("=")

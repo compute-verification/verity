@@ -20,15 +20,26 @@
 // A dead row block (live[ri] == 0, PouwH1Tile_v2's all-zero tile) writes the zero receipt and derives no noise.
 // Requires K % 512 == 0 (KS % 16: each noise block is 16 segments' bits) and m in {2, 3} (K <= 16384).
 //
+// kh_unit_ws is the same receipts in two launches, for calls too small to fill the GPU one warp a unit:
+//   h1s_noise  one warp an (unit, chunk) item, J blocks a lane: every block of seed_j's stream the unit reads (the rows'
+//              blocks t = lane RB + c, the columns' 32 RB + lane CB + c), its 16 words to the caller's workspace
+//   h1u<WS>    h1u reading those blocks instead of hashing them
+// Both forms load the next segment's A and B words while the current segment is multiplied and folded (WS always,
+// the fused form with H1U_PF).
+//
 //   kh_seeds(data, base, U, seeds, stream)   data: SEED_TAG, RECEIPT_TAG (3 words each), salt, root_a, root_b (8 each)
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
-//   kh_words(K), kh_digits(K)
+//   kh_unit_ws(A, B, M, N, K, seeds, live, out, ws, J, stream)   ws: kh_ws_bytes(M, N, K) bytes, the caller's
+//   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_noise_blocks(K)
 #include "h1sha.cuh"
 
 constexpr int WARPS = 4;
 // CTAs an SM the register allocation must leave room for (h1u_b3.so: 3, at most 168 registers a thread)
 #ifndef H1U_MINB
 #define H1U_MINB 1
+#endif
+#ifndef H1U_PF
+#define H1U_PF 0
 #endif
 
 constexpr u32 mix32c(u32 x) {
@@ -137,10 +148,37 @@ __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u6
   }
 }
 
-template <int MD>
+__global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, u32 units, u32 ncb, u32 nb, u32 J,
+                                                 const uint8_t* __restrict__ live, u32* __restrict__ ws) {
+  const u32 lane = threadIdx.x & 31;
+  const u32 per = 32 * J, chunks = (nb + per - 1) / per;
+  const u64 item = ((u64)blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  if (item >= (u64)units * chunks) return;
+  const u32 u = (u32)(item / chunks), chunk = (u32)(item % chunks);
+  if (live && !live[u / ncb]) return;
+  u64 seed[8];
+#pragma unroll
+  for (int j = 0; j < 8; ++j) seed[j] = __ldg(seeds + 16 * (u64)u + j);
+  NoiseMid nm;
+  noise_mid(seed, nm);
+#pragma unroll 1
+  for (u32 j = 0; j < J; ++j) {
+    const u32 t = chunk * per + 32 * j + lane;
+    if (t >= nb) break;
+    u64 s[8];
+    noise_block(nm, t, s);
+    uint4* o = reinterpret_cast<uint4*>(ws + 16 * ((u64)u * nb + t));
+#pragma unroll
+    for (int q = 0; q < 4; ++q)
+      o[q] = make_uint4((u32)(s[2 * q] >> 32), (u32)s[2 * q], (u32)(s[2 * q + 1] >> 32), (u32)s[2 * q + 1]);
+  }
+}
+
+template <int MD, bool WS>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
-                                                  u32* __restrict__ out) {
+                                                  u32* __restrict__ out, const u32* __restrict__ ws) {
+  constexpr bool PF = WS || H1U_PF;
   __shared__ WarpSmem smem[WARPS];
   const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
   const u32 g = lane >> 2, q = lane & 3;
@@ -178,7 +216,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
       z[2 * j + 1] = (u32)s[4 + j];
     }
   }
-  {
+  if (!WS) {
     u64 seed[8];
 #pragma unroll
     for (int j = 0; j < 8; ++j) seed[j] = __ldg(sd + j);
@@ -187,6 +225,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     if (lane == 0) S.nm = nm;
   }
   __syncwarp();
+  const u32* wsu = WS ? ws + 16ull * 32 * (rb + cb) * u : nullptr;
 
   // P: column n of n-tile nt is rho = 8 nt + n; fragment k = 4 q' + i is segment byte 8 q' + i, k = 16 + 4 q' + i is
   // 8 q' + 4 + i
@@ -205,6 +244,17 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 
   const int8_t* Ab = A + (u64)(32 * ri) * K;
   const int8_t* Bb = B + (u64)(32 * cj) * K;
+  // the next segment's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q
+  uint2 pa[4], pb[4];
+  const auto load_seg = [&](u32 sg) {
+    const u32 kofs = 32 * sg + 8 * q;
+#pragma unroll
+    for (int r = 0; r < 4; ++r) {
+      pa[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
+      pb[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+    }
+  };
+  if (PF) load_seg(0);
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
@@ -212,12 +262,24 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     for (int jb = 0; jb < 2; ++jb) {
       const u64 t = jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk;
       u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
-      u64 s[8];
-      noise_block(S.nm, t, s);
+      if (WS) {
+        const uint4* src = reinterpret_cast<const uint4*>(wsu + 16 * t);
 #pragma unroll
-      for (int j = 0; j < 8; ++j) {
-        dst[2 * j] = (u32)(s[j] >> 32);
-        dst[2 * j + 1] = (u32)s[j];
+        for (int w = 0; w < 4; ++w) {
+          const uint4 v = __ldg(src + w);
+          dst[4 * w] = v.x;
+          dst[4 * w + 1] = v.y;
+          dst[4 * w + 2] = v.z;
+          dst[4 * w + 3] = v.w;
+        }
+      } else {
+        u64 s[8];
+        noise_block(S.nm, t, s);
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          dst[2 * j] = (u32)(s[j] >> 32);
+          dst[2 * j + 1] = (u32)s[j];
+        }
       }
     }
     __syncwarp();
@@ -247,14 +309,30 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.colbits[0][0]);
 #pragma unroll 1
     for (u32 j = 0; j < 16; ++j) {
-      const u32 kofs = 32 * (16 * blk + j) + 8 * q;
+      const u32 sg = 16 * blk + j;
+      uint2 ca[4], cw[4];
+      if (PF) {
+#pragma unroll
+        for (int r = 0; r < 4; ++r) {
+          ca[r] = pa[r];
+          cw[r] = pb[r];
+        }
+        if (sg + 1 < ks) load_seg(sg + 1);
+      } else {
+        const u32 kofs = 32 * sg + 8 * q;
+#pragma unroll
+        for (int r = 0; r < 4; ++r) {
+          ca[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
+          cw[r] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * r + g) * K + kofs));
+        }
+      }
       u32 af[2][4], bf[4][2];
 #pragma unroll
       for (int mt = 0; mt < 2; ++mt) {
 #pragma unroll
         for (int h = 0; h < 2; ++h) {
           const u32 row = 16 * mt + g + 8 * h;
-          const uint2 a8 = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)row * K + kofs));
+          const uint2 a8 = ca[2 * mt + h];
           const u32 nb8 = rbits[row * 68 + 4 * j + q];
           af[mt][h] = add01(a8.x, expand4(nb8 & 15u));
           af[mt][2 + h] = add01(a8.y, expand4(nb8 >> 4));
@@ -263,7 +341,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
 #pragma unroll
       for (int nt = 0; nt < 4; ++nt) {
         const u32 col = 8 * nt + g;
-        const uint2 b8 = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)col * K + kofs));
+        const uint2 b8 = cw[nt];
         const u32 cb8 = cbits[col * 68 + 4 * j + q];
         bf[nt][0] = addw(b8.x, ulo[nt] + expand4(cb8 & 15u));
         bf[nt][1] = addw(b8.y, uhi[nt] + expand4(cb8 >> 4));
@@ -373,12 +451,40 @@ extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, uns
   const unsigned grid = (units + WARPS - 1) / WARPS;
   cudaStream_t s = (cudaStream_t)stream;
   if (m == 2)
-    h1u<2><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                        (const uint8_t*)live, (u32*)out);
+    h1u<2, false><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
+                                               (const uint8_t*)live, (u32*)out, nullptr);
   else if (m == 3)
-    h1u<3><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                        (const uint8_t*)live, (u32*)out);
+    h1u<3, false><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
+                                               (const uint8_t*)live, (u32*)out, nullptr);
   else
     return 2;
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// seed_j's blocks a unit reads: rows' and columns' (K / 512 + 1) each, 32 apiece
+extern "C" unsigned kh_noise_blocks(unsigned K) { return 64 * (K / 512 + 1); }
+extern "C" unsigned long long kh_ws_bytes(unsigned M, unsigned N, unsigned K) {
+  return 64ull * kh_noise_blocks(K) * ((M / 32) * (N / 32));
+}
+
+extern "C" int kh_unit_ws(const void* A, const void* B, unsigned M, unsigned N, unsigned K, const void* seeds,
+                          const void* live, void* out, void* ws, unsigned J, void* stream) {
+  if (K % 512 || !J || !ws) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  const unsigned units = (M / 32) * (N / 32);
+  if (!units) return 0;
+  cudaStream_t s = (cudaStream_t)stream;
+  const unsigned nb = kh_noise_blocks(K);
+  const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
+  h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
+                                                                  (const uint8_t*)live, (u32*)ws);
+  const unsigned grid = (units + WARPS - 1) / WARPS;
+  if (m == 2)
+    h1u<2, true><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
+                                              (const uint8_t*)live, (u32*)out, (const u32*)ws);
+  else
+    h1u<3, true><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
+                                              (const uint8_t*)live, (u32*)out, (const u32*)ws);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
