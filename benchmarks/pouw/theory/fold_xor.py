@@ -238,7 +238,8 @@ def combine_search(W: int, depth: int) -> int:
 # ---- the device build's SASS ---------------------------------------------------------------------------------------
 
 CHAINS = {8: "_Z5chainILi8EEvPKjS1_Pji", 16: "_Z5chainILi16EEvPKjS1_Pji"}
-LOOP = "_Z4loopPKjS0_Pjii"
+#: the loop kernels by their mangled names' prefix, and the XORs an iteration
+LOOPS = {"_Z4loop": ("loop", 1), "_Z5loop2": ("loop2", 2)}
 _FUNC = re.compile(r"Function : (\S+)")
 _INSN = re.compile(r"^\s*/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)([^;]*)")
 _TARGET = re.compile(r"0x([0-9a-f]+)")
@@ -252,10 +253,10 @@ def by_class(ops: dict) -> dict:
 
 
 def sass_mix(text: str) -> dict:
-    """One XOR's SASS mix in `fold_xor.sh`'s build, by census class and by opcode, two ways:
+    """One XOR's SASS mix in `fold_xor.sh`'s build, by census class and by opcode:
     - unrolled: chain<16>'s opcodes less chain<8>'s, over 8 (the chains' loads, store and exit cancel);
-    - loop: the body of `loop`'s one backward branch, one XOR an iteration with what ptxas can hoist hoisted, and the
-      loop's own count, compare and branch in it."""
+    - loop, loop2: the body of the kernel's one backward branch over its XORs an iteration, the loop's own count,
+      compare and branch in it. loop gives ptxas IMAD.HI's addends as words, loop2 as 64-bit pairs held in registers."""
     per, func = {}, None
     for line in text.splitlines():
         if (m := _FUNC.search(line)):
@@ -267,13 +268,16 @@ def sass_mix(text: str) -> dict:
     lo, hi = count(per[CHAINS[8]]), count(per[CHAINS[16]])
     ops = {op: (hi[op] - lo[op]) / 8 for op in sorted(set(lo) | set(hi)) if hi[op] != lo[op]}
     out = {"per_xor_by_class": by_class(ops), "per_xor_by_opcode": ops, "per_xor": sum(ops.values())}
-    if LOOP in per:
-        back = [(int(t.group(1), 16), at) for at, op, rest in per[LOOP]
-                if op == "BRA" and (t := _TARGET.search(rest)) and int(t.group(1), 16) < at]
-        assert len(back) == 1, f"loop has {len(back)} backward branches, not 1"
+    for func, insns in per.items():
+        name, xors = next((v for k, v in LOOPS.items() if func[len(k):len(k) + 1].isupper() and func.startswith(k)), (None, 0))
+        if not name:
+            continue
+        back = [(int(t.group(1), 16), at) for at, op, rest in insns
+                if op.split(".")[0] == "BRA" and (t := _TARGET.search(rest)) and int(t.group(1), 16) < at]
+        assert len(back) == 1, f"{name} has {len(back)} backward branches, not 1"
         start, end = back[0]
-        body = dict(sorted(count(i for i in per[LOOP] if start <= i[0] <= end).items()))
-        out["loop"] = {"body_by_class": by_class(body), "body_by_opcode": body, "body": sum(body.values())}
+        body = {op: n / xors for op, n in sorted(count(i for i in insns if start <= i[0] <= end).items())}
+        out[name] = {"per_xor_by_class": by_class(body), "per_xor_by_opcode": body, "per_xor": sum(body.values())}
     return out
 
 
