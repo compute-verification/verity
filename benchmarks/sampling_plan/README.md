@@ -13,7 +13,8 @@ the served Program's own commitment floor, which every plan pays.
 
 - `inputs.py`: the row's inputs (price ratio, rounds, throughput, replay and commitment speeds), each with a low and a
   high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, C-Flock's
-  zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`), with the builds and hardware they key.
+  zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of the remote
+  bandwidth audit's opening unit, `BlockOpeningCheck_v1`, at twice their ANDs), with the builds and hardware they key.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units are compute accounting's
   decision 106: every s8 dot checks its seed, derives its own noise and opens its rows in circuit. A linear's coordinate
   may be cut into K-chunks that commit their running sums, and r × c tiles are offered so the width rule's price shows
