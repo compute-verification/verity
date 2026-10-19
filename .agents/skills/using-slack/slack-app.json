@@ -1,17 +1,18 @@
 {
   "display_information": {
-    "name": "Verity",
+    "name": "Agents",
     "description": "Verity's coordinators post, read and route their asks, announcements and doorbells through it (research msg)."
   },
   "features": {
     "bot_user": {
-      "display_name": "Verity",
+      "display_name": "Agents",
       "always_online": true
     }
   },
   "oauth_config": {
     "scopes": {
       "bot": [
+        "bookmarks:write",
         "channels:history",
         "channels:join",
         "channels:manage",
@@ -19,9 +20,16 @@
         "chat:write",
         "chat:write.customize",
         "chat:write.public",
+        "conversations.connect:write",
+        "files:write",
         "groups:history",
+        "groups:read",
+        "groups:write",
+        "im:write",
         "pins:write",
+        "reactions:read",
         "reactions:write",
+        "team:read",
         "usergroups:read",
         "usergroups:write",
         "users:read",

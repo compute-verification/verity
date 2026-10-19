@@ -1,6 +1,6 @@
 {
   "schema": "verity/slack-routing-vectors/v2",
-  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`). `registry` is as `with_routes` folds each handle's route into it: its `holder` and `branch_suffixes` are the route's.",
+  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`; a vector with `chat` pins research.slack.chat_targets instead: a post in a chat channel, `thread` its thread so far, empty for a top-level post). `registry` is as `with_routes` folds each handle's route into it: its `holder` and `branch_suffixes` are the route's.",
   "registry": {
     "bot_id": "B1",
     "handles": [
@@ -1037,10 +1037,194 @@
       "targets": [
         "circuits"
       ]
+    },
+    {
+      "name": "in a chat channel a person's post that names no one wakes top, who routes it",
+      "chat": true,
+      "msg": {
+        "ts": "1700000070.000001",
+        "user": "UDANIEL",
+        "text": "how do I read a PoUW receipt?"
+      },
+      "thread": [],
+      "targets": [
+        "top"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's post that names a lane wakes that lane, not top",
+      "chat": true,
+      "msg": {
+        "ts": "1700000071.000001",
+        "user": "UDANIEL",
+        "text": "<!subteam^SCIRC|@circuits> is the TP8 sweep done?"
+      },
+      "thread": [],
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply that names no one wakes each lane that posted in its thread, in order",
+      "chat": true,
+      "msg": {
+        "ts": "1700000072.000009",
+        "thread_ts": "1700000072.000001",
+        "user": "UDANIEL",
+        "text": "and the Lean side?"
+      },
+      "thread": [
+        {
+          "ts": "1700000072.000001",
+          "user": "UDANIEL",
+          "text": "what does a receipt prove?"
+        },
+        {
+          "ts": "1700000072.000002",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        },
+        {
+          "ts": "1700000072.000003",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "circuits",
+          "text": "<!subteam^SCIRC|@circuits> here: the TP8 side"
+        },
+        {
+          "ts": "1700000072.000004",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        }
+      ],
+      "targets": [
+        "proofs",
+        "circuits"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply that names a lane wakes only that lane, not the thread's",
+      "chat": true,
+      "msg": {
+        "ts": "1700000072.000009",
+        "thread_ts": "1700000072.000001",
+        "user": "UDANIEL",
+        "text": "console: can you show it?"
+      },
+      "thread": [
+        {
+          "ts": "1700000072.000001",
+          "user": "UDANIEL",
+          "text": "what does a receipt prove?"
+        },
+        {
+          "ts": "1700000072.000002",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        }
+      ],
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply in a thread no lane posted in wakes top",
+      "chat": true,
+      "msg": {
+        "ts": "1700000075.000002",
+        "thread_ts": "1700000075.000001",
+        "user": "UDANIEL",
+        "text": "anyone?"
+      },
+      "thread": [
+        {
+          "ts": "1700000075.000001",
+          "user": "UDANIEL",
+          "text": "is anyone there?"
+        },
+        {
+          "ts": "1700000075.000003",
+          "thread_ts": "1700000075.000001",
+          "bot_id": "B9",
+          "username": "proofs",
+          "text": "another app's bot, posing"
+        }
+      ],
+      "targets": [
+        "top"
+      ]
+    },
+    {
+      "name": "in a chat channel a quiet post that names no one wakes no one, not even top",
+      "chat": true,
+      "msg": {
+        "ts": "1700000073.000001",
+        "user": "UDANIEL",
+        "text": "thanks, that answers it (quiet)"
+      },
+      "thread": [],
+      "targets": []
+    },
+    {
+      "name": "in a chat channel a lane's post that names no one wakes no one: top's rule is for people",
+      "chat": true,
+      "msg": {
+        "ts": "1700000074.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "node 2 is back"
+      },
+      "thread": [],
+      "targets": []
+    },
+    {
+      "name": "in a chat channel a lane's reply that starts with another lane's name hands off to it",
+      "chat": true,
+      "msg": {
+        "ts": "1700000072.000005",
+        "thread_ts": "1700000072.000001",
+        "bot_id": "B1",
+        "username": "proofs",
+        "text": "@console over to you for the panel"
+      },
+      "thread": [
+        {
+          "ts": "1700000072.000001",
+          "user": "UDANIEL",
+          "text": "what does a receipt prove?"
+        },
+        {
+          "ts": "1700000072.000002",
+          "thread_ts": "1700000072.000001",
+          "bot_id": "B1",
+          "username": "proofs",
+          "text": "it proves the sum"
+        }
+      ],
+      "targets": [
+        "console"
+      ]
+    },
+    {
+      "name": "in a chat channel a post by an author we don't know wakes no one",
+      "chat": true,
+      "msg": {
+        "ts": "1700000076.000001",
+        "user": "USTRANGER",
+        "text": "hello?"
+      },
+      "thread": [],
+      "targets": []
     }
   ],
   "doorbells": {
-    "about": "slack.doorbell(author, thread, ts, text, urgent, channel): the doorbell's text, posted as `router` in each woken name's inbox thread. A doorbell is for the post whose ts is its `reply R`, or, with no reply, its `thread T` (that is how delivery dedupes). A post outside the front door names its channel (`channel`, absent for the front door) before `thread`.",
+    "about": "slack.doorbell(author, thread, ts, text, urgent, channel, private): the doorbell's text, posted as `router` in each woken name's inbox thread. A doorbell is for the post whose ts is its `reply R`, or, with no reply, its `thread T` (that is how delivery dedupes). A post outside the front door names its channel (`channel`, absent for the front door) before `thread`. A `private` post's (a chat channel's) carries no text, only where to read it.",
     "cases": [
       {
         "name": "a top-level post: its user-group mention as @name, its footer dropped",
@@ -1097,6 +1281,17 @@
         "channel": "ask-the-team",
         "text": "@proofs and the Lean side?",
         "doorbell": "from daniel, #ask-the-team thread 1700000500.000006, reply 1700000600.000007: @proofs and the Lean side?"
+      },
+      {
+        "name": "a reply in a chat channel is private: the person and the thread, never the text",
+        "author": "luke",
+        "thread": "1700000500.000001",
+        "ts": "1700000500.000002",
+        "urgent": false,
+        "channel": "chat-luke",
+        "private": true,
+        "text": "my draft numbers: 41.7 TFLOP/s, please keep this between us",
+        "doorbell": "from luke, #chat-luke thread 1700000500.000001, reply 1700000500.000002: (a post in a private channel: research msg read --channel chat-luke --thread 1700000500.000001)"
       }
     ]
   }
