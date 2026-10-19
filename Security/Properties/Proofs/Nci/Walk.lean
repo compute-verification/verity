@@ -5,12 +5,13 @@ import Properties.Proofs.Nci
 
 Toward `DescAgree.GatesLocated`: what `Desc.walkable` gives a walk of `Flock.Steps.run`. A walk whose steps each lower a
 potential finishes within any fuel above the potential it starts at (`run_of_potential`), and `Desc.activations` and
-`Desc.depths`, folded callees first, are their recurrences (`activations_get`, `depths_get`).
+`Desc.depths`, folded callees first, are their recurrences (`activations_get`, `depths_get`). A reference of a sequence
+is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
 
-open Flock.Program (Prog)
+open Flock.Program (Prog Seq Part)
 
 /-- **A walk that lowers a potential finishes.** If every step from a state satisfying `Inv` either ends with a result
 satisfying `Good` or moves to a state satisfying `Inv` of lower potential, a walk from such a state with more fuel than
@@ -128,5 +129,134 @@ theorem depths_get (P : Prog) (hc : Desc.calleesFirst P = true) {d : ℕ} (hd : 
     apply foldl_nodes_congr
     intro n hn s
     rw [getElem!_extract _ (calleesFirst_spec P hc d hd n hn) (by rw [(pushFold_spec _ _).1]; omega)]
+
+
+/-- **The bisection over `starts`** (`Seq.get`'s, `Desc.nodeOf`'s): from `[lo, hi)` with `starts[lo] ≤ k` and
+`k < starts[hi]` (or `hi = n`), as many rounds as the width needs end at one index `lo` with the same bounds. -/
+theorem bisect_spec (starts : Array ℕ) (k n : ℕ) (f : ℕ → ℕ × ℕ → Id (ForInStep (ℕ × ℕ)))
+    (hf : ∀ x lo hi, f x (lo, hi) = if hi - lo ≤ 1 then pure (.done (lo, hi))
+      else if starts[(lo + hi) / 2]! ≤ k then pure (.yield ((lo + hi) / 2, hi)) else pure (.yield (lo, (lo + hi) / 2))) :
+    ∀ (l : List ℕ) (lo hi : ℕ), lo < hi → hi ≤ n → starts[lo]! ≤ k → (hi < n → k < starts[hi]!) →
+      hi - lo ≤ l.length + 1 →
+      (forIn l (lo, hi) f : Id (ℕ × ℕ)).1 < (forIn l (lo, hi) f : Id (ℕ × ℕ)).2 ∧
+      (forIn l (lo, hi) f : Id (ℕ × ℕ)).2 ≤ n ∧ starts[(forIn l (lo, hi) f : Id (ℕ × ℕ)).1]! ≤ k ∧
+      ((forIn l (lo, hi) f : Id (ℕ × ℕ)).2 < n → k < starts[(forIn l (lo, hi) f : Id (ℕ × ℕ)).2]!) ∧
+      (forIn l (lo, hi) f : Id (ℕ × ℕ)).2 - (forIn l (lo, hi) f : Id (ℕ × ℕ)).1 ≤ 1 := by
+  intro l
+  induction l with
+  | nil =>
+    intro lo hi h1 h2 h3 h4 h5
+    simp only [List.forIn_nil, List.length_nil] at h5 ⊢
+    exact ⟨h1, h2, h3, h4, by omega⟩
+  | cons x xs ih =>
+    intro lo hi h1 h2 h3 h4 h5
+    simp only [List.forIn_cons, hf]
+    by_cases hw : hi - lo ≤ 1
+    · simp only [hw, ite_true]
+      exact ⟨h1, h2, h3, h4, hw⟩
+    · simp only [hw, ite_false]
+      simp only [List.length_cons] at h5
+      by_cases hm : starts[(lo + hi) / 2]! ≤ k
+      · simp only [hm, ite_true]
+        exact ih _ _ (by omega) h2 hm h4 (by omega)
+      · simp only [hm, ite_false]
+        exact ih _ _ (by omega) (by omega) h3 (fun _ => by omega) (by omega)
+
+/-- `Seq.ofParts`'s starts: part `i` starts after the counts of the parts before it, and the count is all of them. -/
+theorem ofParts_spec (ps : Array Part) :
+    (Seq.ofParts ps).parts = ps ∧ (Seq.ofParts ps).starts.size = ps.size ∧
+      (∀ i < ps.size, (Seq.ofParts ps).starts[i]! = ((ps.toList.take i).map Part.count).sum) ∧
+      (Seq.ofParts ps).count = (ps.toList.map Part.count).sum := by
+  have key : ∀ (l : List Part) (acc : Array ℕ × ℕ),
+      (l.foldl (fun (acc : Array ℕ × ℕ) q => (acc.1.push acc.2, acc.2 + q.count)) acc).1.size = acc.1.size + l.length ∧
+      (∀ i < acc.1.size, (l.foldl (fun (acc : Array ℕ × ℕ) q => (acc.1.push acc.2, acc.2 + q.count)) acc).1[i]! =
+        acc.1[i]!) ∧
+      (∀ i < l.length, (l.foldl (fun (acc : Array ℕ × ℕ) q => (acc.1.push acc.2, acc.2 + q.count)) acc).1[acc.1.size + i]!
+        = acc.2 + ((l.take i).map Part.count).sum) ∧
+      (l.foldl (fun (acc : Array ℕ × ℕ) q => (acc.1.push acc.2, acc.2 + q.count)) acc).2 = acc.2 + (l.map Part.count).sum := by
+    intro l
+    induction l with
+    | nil => intro acc; simp
+    | cons q qs ih =>
+      intro acc
+      obtain ⟨h1, h2, h3, h4⟩ := ih (acc.1.push acc.2, acc.2 + q.count)
+      simp only [List.foldl_cons, Array.size_push, List.length_cons] at h1 h2 h3 h4 ⊢
+      refine ⟨by omega, fun i hi => ?_, fun i hi => ?_, by rw [h4]; simp; omega⟩
+      · rw [h2 i (by omega), getElem!_pos (acc.1.push acc.2) i (by simp; omega), getElem!_pos acc.1 i hi,
+          Array.getElem_push_lt]
+      · rcases i with _ | i
+        · rw [← Nat.add_zero (acc.1.size), ← Nat.add_zero (acc.1.size + 0)] at *
+          have := h2 acc.1.size (by simp)
+          simp only [Nat.add_zero] at this ⊢
+          rw [this, getElem!_pos (acc.1.push acc.2) acc.1.size (by simp)]
+          simp
+        · have := h3 i (by omega)
+          rw [show acc.1.size + (i + 1) = acc.1.size + 1 + i by omega, this]
+          simp [List.take_succ_cons]
+          omega
+  obtain ⟨h1, -, h3, h4⟩ := key ps.toList (#[], 0)
+  refine ⟨rfl, ?_, fun i hi => ?_, ?_⟩
+  · simp only [Seq.ofParts, ← Array.foldl_toList]; simpa using h1
+  · simp only [Seq.ofParts, ← Array.foldl_toList]
+    have := h3 i (by simpa using hi)
+    simpa using this
+  · simp only [Seq.ofParts, ← Array.foldl_toList]; simpa using h4
+
+theorem sum_take_succ_map (ps : Array Part) {i : ℕ} (hi : i < ps.size) :
+    ((ps.toList.take (i + 1)).map Part.count).sum = ((ps.toList.take i).map Part.count).sum + ps[i]!.count := by
+  rw [List.take_add_one, List.map_append, List.sum_append, getElem!_pos ps i hi]
+  simp [hi]
+
+/-- **Reference `k` of a sequence** is part `i`'s element `k - starts[i]`, for the part `i` holding it. -/
+theorem seq_get (ps : Array Part) {k : ℕ} (hk : k < (Seq.ofParts ps).count) :
+    ∃ i < ps.size, (Seq.ofParts ps).starts[i]! ≤ k ∧ k < (Seq.ofParts ps).starts[i]! + ps[i]!.count ∧
+      (Seq.ofParts ps).get k = ps[i]!.get (k - (Seq.ofParts ps).starts[i]!) := by
+  obtain ⟨hp, hsz, hst, hcnt⟩ := ofParts_spec ps
+  have hst' : ∀ i < ps.size, (Seq.ofParts ps).starts[i]! + ps[i]!.count =
+      ((ps.toList.take (i + 1)).map Part.count).sum := fun i hi => by rw [hst i hi, sum_take_succ_map ps hi]
+  have hpos : 0 < ps.size := by
+    rcases Nat.eq_zero_or_pos ps.size with h | h
+    · rw [hcnt] at hk
+      have : ps.toList = [] := by simpa [← Array.length_toList] using h
+      simp [this] at hk
+    · exact h
+  have h0 : (Seq.ofParts ps).starts[0]! = 0 := by rw [hst 0 hpos]; simp
+  have hlast : (Seq.ofParts ps).count = (Seq.ofParts ps).starts[ps.size - 1]! + ps[ps.size - 1]!.count := by
+    rw [hst' _ (by omega), hcnt, show ps.size - 1 + 1 = ps.toList.length by simp; omega, List.take_length]
+  by_cases h1 : ps.size = 1
+  · refine ⟨0, hpos, by rw [h0]; omega, ?_, ?_⟩
+    · rw [h0]; rw [hlast, h1] at hk; simpa [h0] using hk
+    · unfold Flock.Program.Seq.get
+      rw [if_pos (by simp [hp, h1])]
+      simp [h0, hp]
+  · let f : ℕ → ℕ × ℕ → Id (ForInStep (ℕ × ℕ)) := fun _ (st : ℕ × ℕ) =>
+      have lo := st.1; have hi := st.2
+      if hi - lo ≤ 1 then pure (ForInStep.done (lo, hi))
+      else
+        have mid := (lo + hi) / 2
+        if (Seq.ofParts ps).starts[mid]! ≤ k then pure (ForInStep.yield (mid, hi)) else pure (ForInStep.yield (lo, mid))
+    obtain ⟨b1, b2, b3, b4, b5⟩ := bisect_spec (Seq.ofParts ps).starts k ps.size f (fun _ _ _ => rfl)
+      (List.range' 0 ps.size 1) 0 ps.size hpos (le_refl _) (by rw [h0]; omega) (fun h => absurd h (lt_irrefl _))
+      (by simp)
+    set r := (forIn (List.range' 0 ps.size 1) (0, ps.size) f : Id (ℕ × ℕ))
+    have hr2 : r.2 = r.1 + 1 := by omega
+    refine ⟨r.1, by omega, b3, ?_, ?_⟩
+    · rw [hst' r.1 (by omega)]
+      rcases Nat.lt_or_ge r.2 ps.size with hlt | hge
+      · have := b4 hlt
+        rw [hst r.2 hlt, hr2] at this
+        exact this
+      · have hre : r.1 = ps.size - 1 := by omega
+        rw [← hst' r.1 (by omega), hre, ← hlast]
+        exact hk
+    · unfold Flock.Program.Seq.get
+      rw [if_neg (by simp [hp, h1])]
+      have hfor : ∀ (g : ℕ → ℕ × ℕ → Id (ForInStep (ℕ × ℕ))) (init : ℕ × ℕ),
+          (forIn [:ps.size] init g : Id (ℕ × ℕ)) = forIn (List.range' 0 ps.size) init g := by
+        intro g init
+        rw [Std.Legacy.Range.forIn_eq_forIn_range']
+        simp [Std.Legacy.Range.size]
+      simp only [hp, hfor]
+      rfl
 
 end NciCheck.Properties.SecurityProofs.Walk
