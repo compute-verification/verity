@@ -610,12 +610,22 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
                                                "layers": a.layers, "per_kind": a.per_kind}, indent=1, sort_keys=True, default=str))
 
 
+#: Definitions built on first use, outside the registry's catalog: name -> (module, builder) of its one static
+LAZY = {r"GatherE4m3x(\d+)_v2": ("verity_vllm.program.registry.boolean_fp8_moe", "gather_e4m3"),
+        r"GatherF32x(\d+)_v2": ("verity_vllm.program.registry.boolean_fp8_moe", "gather_f32")}
+
+
 def live(fn, registry):
     """A decoded Definition as the registry's own: a specialization bound again on its composite (the decoded one has no
-    builder, which `Program` and the stager's binding need), function-valued statics likewise."""
+    builder, which `Program` and the stager's binding need), function-valued statics likewise; one of `LAZY` built again."""
+    import importlib
     from verity.ml.circuits.defs import FunctionDefinition, SpecializedDefinition
     if not isinstance(fn, SpecializedDefinition):
         return fn
+    name = f"{fn.defn.name}_v{fn.defn.version}"
+    for pat, (mod, builder) in LAZY.items():
+        if name not in registry and (m := re.fullmatch(pat, name)):
+            return getattr(importlib.import_module(mod), builder)(int(m[1])).bind()
 
     def static(v):
         if isinstance(v, FunctionDefinition):
@@ -625,7 +635,7 @@ def live(fn, registry):
         if isinstance(v, dict):
             return {k: static(x) for k, x in v.items()}
         return v
-    return registry[f"{fn.defn.name}_v{fn.defn.version}"].bind(**{k: static(v) for k, v in fn.bindings.items()})
+    return registry[name].bind(**{k: static(v) for k, v in fn.bindings.items()})
 
 
 def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:

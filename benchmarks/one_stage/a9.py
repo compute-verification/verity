@@ -21,8 +21,14 @@ on layer 3's first routed pair:
 - ``m0``: the unit's rows (`a8_kinds.rows_of`) and the block M0 needs for them alone (`circuit.fits`' ranges without the unit's own),
   against ``K_MAX``.
 
-The units that agree everywhere and fit M0 are saved (`a8.save_values`' layout, one kind per launch) with ``kinds.json``, a
-table naming them, for ``a8.py --load-values SAVED --kinds SAVED/kinds.json``. ``OUT/a9.json`` holds every record.
+A w13 coordinate unit reads its whole [E][K] slab column, so its rows alone are over M0's block. Its cut (``<launch>-gather``,
+``<launch>-block``) is where the static pair form's own body cuts it: a `GatherE4m3x{E}_v2` unit per weight of the routed
+expert's row (an e4m3 out) and the `MoeExpertFp8BlockCoordinate_v4` unit on that row (a bf16 out), each held to the expert's
+weights and the capture's words as the whole unit is.
+
+The units that agree everywhere and fit M0 are saved (`a8.save_values`' layout, one kind per launch or cut unit) with
+``kinds.json``, a table naming them, for ``a8.py --load-values SAVED --kinds SAVED/kinds.json``. ``OUT/a9.json`` holds every
+record.
 """
 from __future__ import annotations
 
@@ -136,8 +142,59 @@ def m0_rows(rows_spec, out_bits: int = 16) -> dict:
             "k_log_rows": k_log, "k_max": FC.K_MAX, "fits": k_log <= FC.K_MAX}
 
 
+def check_unit(v1, v2, leaves_in: list[list[int]], want: np.ndarray, n_save: int) -> dict:
+    """A unit on each instance's leaves (``v1``'s, words): the word ``v1`` through the IR reference and the Boolean ``v2``
+    bit-sliced, on the same rows, each against ``want`` (the capture's words), and its rows against M0's block (`m0_rows`).
+    ``_kv`` (`a8.save_values`' entry, ``n_save`` instances) when ``v2`` is the capture, ``v1`` doesn't disagree, and the rows
+    fit."""
+    specs = {"v1": K.rows_of(v1), "v2": K.rows_of(v2)}
+    out_bits = sum(CS._leaf_bits(v2.signature()[1]))
+    rows, _ = a8.unit_rows(v1, specs["v1"], leaves_in, [[0] for _ in leaves_in])
+    rows_spec = specs["v2"]
+    rec = {"v1": v1.id, "v2": v2.id, "m0": m0_rows(rows_spec, out_bits)}
+    got, secs = {}, {}
+    for tag, d in (("v1", v1), ("v2", v2)):
+        t = time.time()
+        try:
+            got[tag] = rows_eval(d, specs[tag], rows)
+        except Exception as ex:  # noqa: BLE001
+            got[tag] = None
+            rec[f"{tag}_error"] = f"{type(ex).__name__}: {str(ex)[:300]}" + traceback.format_exc()[-600:]
+        secs[tag] = round(time.time() - t, 1)
+    hexw = -(-out_bits // 4)
+    is_cap = {tag: None if r is None else bool((r == want).all()) for tag, r in got.items()}
+    rec["units"] = {"capture": [f"{int(x):0{hexw}x}" for x in want],
+                    **{tag: None if r is None else [f"{int(x):0{hexw}x}" for x in r] for tag, r in got.items()},
+                    "v1_is_capture": is_cap["v1"], "v2_is_capture": is_cap["v2"],
+                    "v2_is_v1": None if any(r is None for r in got.values()) else bool((got["v1"] == got["v2"]).all()),
+                    "seconds": secs}
+    rec["ok"] = is_cap["v2"] is True and is_cap["v1"] is not False
+    if rec["ok"] and rec["m0"]["fits"]:
+        n = min(n_save, len(leaves_in))
+        outs = {"o0": np.stack([a8.pack([int(x)], [out_bits], pad16=True) for x in want[:n]])}
+        rec["_kv"] = {"unit": v2, "rows_spec": rows_spec, "rows": {r: v[:n] for r, v in rows.items()}, "outs": outs, "n": n}
+    return rec
+
+
+def cut(s: dict, xq, sx, e: int, w, ws, cap: np.ndarray, coords: list[int], n_save: int) -> dict:
+    """The w13 coordinate cut where the static pair form's own body cuts it (`boolean_fp8_moe._pair_coordinate`): one
+    `GatherE4m3x{E}_v2` unit per weight (the multiplexer tree over the expert id's bits, an e4m3 out) and one
+    `MoeExpertFp8BlockCoordinate_v4` unit on the row they select (a bf16 out), each as `check_unit` records it."""
+    from verity_vllm.program.registry import boolean_fp8_moe as BFM, fp8_moe as FM, fp8_moe_experts as X
+    E, Kd, G = s["E"], s["K"], s["G"]
+    picks = [(n, k) for n in (coords[0], coords[-1]) for k in (0, 1, Kd // 2, Kd - 1)]
+    gather = check_unit(X.gather_e4m3(E), BFM.gather_e4m3(E).bind(), [[e & 0xFFFFFFFF, *w[:, n, k].tolist()] for n, k in picks],
+                        np.asarray([int(w[e, n, k]) for n, k in picks], dtype=np.uint64), n_save)
+    st = {k: s[k] for k in ("K", "G", "KB", "SWAP")}
+    block = check_unit(bind(FM.MoeExpertFp8BlockCoordinateV3, **st, DOT=s["DOT"]),
+                       bind(BFM.MoeExpertFp8BlockCoordinateV4, **st, DOT=BOOL_DOT[s["DOT"].id]),
+                       [[*xq.tolist(), *sx.tolist(), *w[e, n, :].tolist(), *ws[e, n // G].tolist()] for n in coords], cap[coords], n_save)
+    return {"-gather": {**gather, "picks": picks, "per_coordinate": Kd}, "-block": {**block, "coords": coords, "per_coordinate": 1}}
+
+
 def launch(res, store, vals, kind: str, step: int, a) -> dict:
-    """One launch's records (module docstring) and, when they all hold, its units' rows and outputs."""
+    """One launch's records (module docstring) and, when they all hold, its units' rows and outputs; for a w13 launch whose
+    coordinate unit is over M0's block, its cut's units (`cut`) under ``_cut``."""
     from verity_vllm.program.kernels import fp8_moe_rows as FR
     from verity_vllm.program.registry.fp8 import weight_blocks
     m = pick(res, kind, step, a.layer)
@@ -177,38 +234,17 @@ def launch(res, store, vals, kind: str, step: int, a) -> dict:
     coords = [n for n in (int(c) for c in (a.coords_up if kind == UP else a.coords_down).split(",")) if 0 <= n < N]
     leaves_in = [[*xq.tolist(), *sx.tolist(), e & 0xFFFFFFFF, *([g] if routed else []), *w[:, n, :].reshape(-1).tolist(),
                   *ws[e, n // G].tolist()] for n in coords]
-    rows_spec = K.rows_of(v1)
-    rows, _ = a8.unit_rows(v1, rows_spec, leaves_in, [[0] for _ in coords])
-    rec["m0"] = m0_rows(rows_spec)
-    t = time.time()
-    try:
-        r1 = rows_eval(v1, rows_spec, rows)
-    except Exception as ex:  # noqa: BLE001
-        r1 = None
-        rec["v1_error"] = f"{type(ex).__name__}: {str(ex)[:300]}"
-    t1 = round(time.time() - t, 1)
-    t = time.time()
-    try:
-        r2 = rows_eval(v2, K.rows_of(v2), rows)
-    except Exception as ex:  # noqa: BLE001
-        r2 = None
-        rec["v2_error"] = f"{type(ex).__name__}: {str(ex)[:300]}" + traceback.format_exc()[-600:]
-    t2 = round(time.time() - t, 1)
-    want = cap[coords]
-    rec["units"] = {"coords": coords, "capture": [f"{int(x):04x}" for x in want],
-                    "v1": None if r1 is None else [f"{int(x):04x}" for x in r1], "v2": None if r2 is None else [f"{int(x):04x}" for x in r2],
-                    "v1_is_capture": None if r1 is None else bool((r1 == want).all()),
-                    "v2_is_capture": None if r2 is None else bool((r2 == want).all()),
-                    "v2_is_v1": None if r1 is None or r2 is None else bool((r1 == r2).all()), "seconds": {"v1": t1, "v2": t2}}
-    u = rec["units"]
-    ok = twin.get("agree") is True and u["v2_is_capture"] is True and u["v1_is_capture"] is not False
-    rec["staged"] = bool(ok and rec["m0"]["fits"])
-    if not rec["staged"]:
-        rec["why"] = ("rows over M0's block" if ok else "a check disagrees")
-        return rec
-    n = min(a.per_kind, len(coords))
-    outs = {"o0": np.stack([a8.pack([int(x)], [16], pad16=True) for x in want[:n]])}
-    rec["_kv"] = {"unit": v2, "rows_spec": K.rows_of(v2), "rows": {r: v[:n] for r, v in rows.items()}, "outs": outs, "n": n}
+    u = check_unit(v1, v2, leaves_in, cap[coords], a.per_kind)
+    kv = u.pop("_kv", None)
+    rec.update(m0=u.pop("m0"), units={"coords": coords, **u.pop("units")}, **u)
+    ok = twin.get("agree") is True and rec.pop("ok")
+    rec["staged"] = bool(ok and kv)
+    if rec["staged"]:
+        rec["_kv"] = kv
+    else:
+        rec["why"] = "rows over M0's block" if ok else "a check disagrees"
+    if kind == UP and ok and not rec["m0"]["fits"]:
+        rec["_cut"] = cut(s, xq, sx, e, w, ws, cap, coords, a.per_kind)
     return rec
 
 
@@ -244,11 +280,15 @@ def main() -> int:
             except Exception as ex:  # noqa: BLE001
                 rec = {"staged": False, "why": f"{type(ex).__name__}: {str(ex)[:400]}", "trace": traceback.format_exc()[-1500:]}
             rec["seconds"] = round(time.time() - t, 1)
-            kv = rec.pop("_kv", None)
-            staged[name] = {**{x: y for x, y in rec.items()}, **({"unit": kv["unit"].id, "n": kv["n"]} if kv else {})}
-            if kv:
-                rows_of_kind[name] = kv
-            print(f"A9 {name}: " + json.dumps(staged[name], default=str)[:3000], flush=True)
+            subs = {name: rec, **{name + sfx: {**c, "of": name} for sfx, c in rec.pop("_cut", {}).items()}}
+            for nm, r in subs.items():
+                kv = r.pop("_kv", None)
+                if nm != name:
+                    r["staged"] = bool(kv)
+                staged[nm] = {**r, **({"unit": kv["unit"].id, "n": kv["n"]} if kv else {})}
+                if kv:
+                    rows_of_kind[nm] = kv
+                print(f"A9 {nm}: " + json.dumps(staged[nm], default=str)[:3000], flush=True)
     doc["launches"] = staged
     doc["weights"] = {k: v for k, v in weights.notes.items() if ".experts." in str(v.get("served"))}
     (out / "a9.json").write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
