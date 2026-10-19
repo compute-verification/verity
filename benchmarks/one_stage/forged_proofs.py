@@ -132,7 +132,8 @@ def main() -> int:
     (fx / "cases.json").write_text(json.dumps({"kind": KIND, "n": N, "pin": st.pin, "draw_law": f"subset:{N}", "cases": cases},
                                               indent=1, sort_keys=True, default=str))
     honest, forged = cases["honest"], [c for n, c in cases.items() if n != "honest"]
-    ok = honest["lean"]["accepted"] and all(not c["lean"]["accepted"] and str(c["lean"]["why"]).startswith("zk inner") for c in forged)
+    ok = honest["lean"]["accepted"] and all(not c["lean"]["accepted"] and str(c["lean"]["why"]).startswith("zk inner")
+                                            for c in forged)
     return 0 if ok else 1
 
 
