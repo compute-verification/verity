@@ -1,6 +1,6 @@
 """The first certified PoUW accounting period: windows, draws, wall-clock and node-days, and what each lever buys.
 
-    uv run benchmarks/pouw/period_cost.py [--json OUT]
+    uv run benchmarks/pouw/period_cost.py [--json OUT] [--md OUT]
 
 **The bound.** An accepted period of n windows (#2722's `ComposePeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
 sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit ratio r:
@@ -363,26 +363,35 @@ def report() -> dict:
     )
 
 
+def markdown(rep: dict) -> str:
+    out = [f"A drawn served unit is {rep['lanes_per_unit']:.1f} lanes of the measured tile; a statement holds at most "
+           f"{rep['statement_lanes'][TODAY.rates]} lanes at `{TODAY.rates}`'s rates; a node has {NODE_GB} GB.", ""]
+    out += [f"- rates `{k}`: {rt['source']}" for k, rt in rep["rates"].items()]
+    out += ["", table(rep["configurations"]), "",
+            "Each lever alone on today's configuration (work: 1 a parameter, 2 one module, 3 a new path, 4 a new form):",
+            "", lever_table(rep["levers"]), ""]
+    for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
+        out.append(f"At the route's end, by {field} a window: " + "; ".join(
+            f"{r['value']}: {r['windows']:,} windows, {r['days']:,.2f} d, {r['node_days']:,.1f} node-d" for r in rep[key]))
+    s = rep["sensitivity"]
+    out += ["", "Windows to ε < 1% at u = 1, by δ_s: "
+            + ", ".join(f"2^-{k}: {v:,}" for k, v in s["delta_s_log2"].items()),
+            "... by ε_♭: " + ", ".join(f"{k}: {v:,}" for k, v in s["eps_flat"].items())]
+    return "\n".join(out) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--json", type=Path, help="write the whole report here")
+    ap.add_argument("--md", type=Path, help="write the tables here")
     a = ap.parse_args(argv)
     rep = report()
-    print(f"A drawn served unit is {rep['lanes_per_unit']:.1f} lanes of the measured tile; a statement holds at most "
-          f"{rep['statement_lanes']} lanes; a node has {NODE_GB} GB.\n")
-    for k, rt in RATES.items():
-        print(f"rates {k}: {rt.source}")
-    print("\n" + table(rep["configurations"]) + "\n")
-    print("Each lever alone on today's configuration (work: 1 a parameter, 2 one module, 3 a new path, 4 a new form):\n")
-    print(lever_table(rep["levers"]) + "\n")
-    for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
-        print(f"At the route's end, by {field} a window: " + "; ".join(
-            f"{r['value']}: {r['windows']:,} windows, {r['days']:,.2f} d, {r['node_days']:,.1f} node-d" for r in rep[key]))
-    s = rep["sensitivity"]
-    print("Windows to ε < 1% at u = 1, by δ_s: " + ", ".join(f"2^-{k}: {v:,}" for k, v in s["delta_s_log2"].items()))
-    print("... by ε_♭: " + ", ".join(f"{k}: {v:,}" for k, v in s["eps_flat"].items()))
+    md = markdown(rep)
+    print(md, end="")
     if a.json:
         a.json.write_text(json.dumps(rep, indent=1) + "\n")
+    if a.md:
+        a.md.write_text(md)
     return 0
 
 

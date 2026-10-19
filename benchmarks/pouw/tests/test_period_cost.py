@@ -102,10 +102,10 @@ def test_no_budget_is_refused():
 
 
 def test_main_writes_the_report(tmp_path, capsys):
-    out = tmp_path / "period.json"
-    assert PC.main(["--json", str(out)]) == 0
+    out, md = tmp_path / "period.json", tmp_path / "period.md"
+    assert PC.main(["--json", str(out), "--md", str(md)]) == 0
     rep = json.loads(out.read_text())
     assert {"rates", "configurations", "levers", "draws_scan", "rounds_scan", "sensitivity"} <= set(rep)
     assert rep["configurations"][0]["windows"] == 46604
     assert rep["sensitivity"]["delta_s_log2"]["40"] == 4815
-    assert "| lever |" in capsys.readouterr().out
+    assert "| lever |" in md.read_text() == capsys.readouterr().out
