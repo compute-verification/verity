@@ -49,7 +49,9 @@ its no-write control (a later B32 step whose kernels write none of them), and it
 `dither_one.check` on its gate, control, fault and fault_wb steps, tokens reported), under a CUDA
 profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
 kernels inside the range only).  The decode gate compares each arm's
-tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4).
+tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4); a worker
+that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
+checked, so N arms need N engines' memory plus one arm's captures.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -224,11 +226,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         outs = llm.generate(reqs, sp, use_tqdm=False)
         return time.perf_counter() - t, outs
 
-    while True:
-        cmd = conn.recv()
-        if cmd["op"] == "stop":
-            conn.send({"stopped": True})
-            return
+    def serve(cmd: dict) -> None:
         if cmd["op"] == "warm":
             gen(ps, 8)
             gen(prompts(64), 16)
@@ -276,6 +274,9 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
                 res["check_s"] = round(time.perf_counter() - t0, 1)
+                # the captures sit outside vLLM's memory budget; released, the next arm's gate has their room
+                win.caps = {}
+                torch.cuda.empty_cache()
             conn.send(res)
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -285,6 +286,30 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             conn.send({"stats": llm.dither_stats()})
         else:
             conn.send({"stats": None})
+
+    while True:
+        cmd = conn.recv()
+        if cmd["op"] == "stop":
+            conn.send({"stopped": True})
+            return
+        try:
+            serve(cmd)
+        except Exception as e:  # noqa: BLE001
+            conn.send({"error": f"{cmd['op']}: {type(e).__name__}: {e}"})
+            return
+
+
+def recv(arm: str, conn, op: str) -> dict:
+    """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
+    far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it."""
+    try:
+        msg = conn.recv()
+    except EOFError:
+        msg = {"error": f"{op}: the worker exited"}
+    if "error" in msg:
+        print(json.dumps({"arm": arm, "op": op, "error": msg["error"], "timed": False}), flush=True)
+        sys.exit(5)
+    return msg
 
 
 def main() -> int:
@@ -310,15 +335,13 @@ def main() -> int:
         here, there = ctx.Pipe()
         p = ctx.Process(target=worker, args=(arm, there, str(scratch), a.gpu_mem), daemon=True)
         p.start()
-        msg = here.recv()
-        if "error" in msg:
-            print(json.dumps({"arm": arm, **msg}), flush=True)
-            return 3
+        there.close()   # the worker's end, closed here so a dead worker's pipe reads EOF, not a wait
+        msg = recv(arm, here, "build")
         conns[arm], procs[arm], info[arm] = here, p, msg
         print(json.dumps({"arm": arm, **msg}), flush=True)
     for arm in arms:
         conns[arm].send({"op": "warm"})
-        conns[arm].recv(), conns[arm].recv()
+        recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
     ref_tokens: dict = {}
     gate = {}
@@ -326,9 +349,10 @@ def main() -> int:
     if a.gate:
         for arm in arms:
             conns[arm].send({"op": "gate"})
-            res = conns[arm].recv()
-            res["stats"] = conns[arm].recv()["stats"]
+            res = recv(arm, conns[arm], "gate")
+            res["stats"] = recv(arm, conns[arm], "gate")["stats"]
             gate_doc[arm] = res
+            (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         for arm in arms:
             ref = REF_OF.get(arm, arms[0])
             if ref in gate_doc and ref != arm:
@@ -351,8 +375,8 @@ def main() -> int:
             for j in range(len(arms)):
                 arm = arms[(j + r) % len(arms)]
                 conns[arm].send({"op": op})
-                res = conns[arm].recv()
-                stats = conns[arm].recv()["stats"]
+                res = recv(arm, conns[arm], op)
+                stats = recv(arm, conns[arm], op)["stats"]
                 toks = res.pop("tokens", None)
                 if toks is not None:
                     ref_tokens.setdefault((r, arm), toks)
