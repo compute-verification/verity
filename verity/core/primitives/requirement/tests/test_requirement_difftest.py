@@ -9,7 +9,9 @@ engine steps, its ingress and its credits. The reference is `requirement.py`'s: 
 `Store.resident`, `store_matches`, `plan_matches` and `Placement`'s `region`, `step_region`, `ingress` and `credits`.
 
 Drawn instances are small wirings with executions that follow them and some that don't, under `pack`'s layout and store,
-`paged`'s (a KV pool's, whose blocks fill over several steps), a mutation of `pack`'s or a random one, placed on a few
+`paged`'s (a KV pool's, whose blocks fill over several steps), `deferred`'s (either of those with each block's coin back
+late: memory-map/v1's deferred residency, credited from its first encoded read), a mutation of `pack`'s or a random
+one, placed on a few
 devices (sometimes in lockstep, with windows that bound their steps from inside or outside, and sometimes leaving a gate
 without a tick, which both refuse), and malformed instances, which both refuse. Then Programs
 end to end, each through `requirement.execution`, `pack` and
@@ -119,7 +121,8 @@ def requirement(i) -> dict:
         req = R.Requirement.of(ex)
     except ValueError as e:
         raise D.Reject(str(e)) from None
-    layout = R.Layout(dict(enumerate(block)), dict(enumerate(offset)))
+    encoded = _nats(_get(i, "encoded"), "encoded")
+    layout = R.Layout(dict(enumerate(block)), dict(enumerate(offset)), dict(enumerate(encoded)))
 
     def by_block(values) -> list[list[int]]:
         return [[j, layout.bits_in(req, values, j)] for j in sorted(layout.blocks(values))]
@@ -154,12 +157,13 @@ def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits:
            placement: R.Placement = R.Placement({}, {}), price=None, windows: list[Window] = ()) -> dict:
     """The instance `requirement` takes: `ex`'s values `0 … n - 1` (a value it has no width for is 0 bits, one with no
     device on device 0, one with no price priced 0, and those `layout` doesn't place share a block past every one the
-    layout and the store name, so that no block they name is incomplete for them), the store's steps and blocks up to
-    the last it names, and the placement's devices up to the last it gives ticks for."""
+    layout and the store name, so that no block they name is incomplete for them), the first encoded reads up to the
+    last block `layout` gives one, the store's steps and blocks up to the last it names, and the placement's devices up
+    to the last it gives ticks for."""
     n = 1 + max([*ex.width, *ex.ops, *ex.registered, *ex.inputs, *ex.step], default=-1)
     top = 1 + max([*store.written, *store.freed], default=-1)
     blocks = 1 + max(store.payload, default=-1)
-    spare = 1 + max([store.registered - 1, *layout.block.values(), *store.payload,
+    spare = 1 + max([store.registered - 1, *layout.block.values(), *layout.encoded, *store.payload,
                      *chain(*store.written.values(), *store.freed.values())], default=-1)
     price = price or {}
     return {"width": [ex.width.get(v, 0) for v in range(n)], "registered": sorted(ex.registered),
@@ -168,6 +172,7 @@ def encode(ex: R.Execution, layout: R.Layout, store: R.Store, plans, block_bits:
             "step": [ex.step.get(v) for v in range(n)], "value": [ex.values.get(v, 0) for v in range(n)],
             "block": [layout.block.get(v, spare) for v in range(n)],
             "offset": [layout.offset.get(v, 0) for v in range(n)],
+            "encoded": [layout.encoded.get(j, 0) for j in range(1 + max(layout.encoded, default=-1))],
             "store": {"registered": store.registered,
                       "written": [sorted(store.written.get(t, ())) for t in range(top)],
                       "freed": [sorted(store.freed.get(t, ())) for t in range(top)],
@@ -218,7 +223,8 @@ def _execution(rng: random.Random, n: int, T: int) -> R.Execution:
 
 
 def _random_layout(rng: random.Random, n: int, B: int) -> tuple[R.Layout, R.Store]:
-    layout = R.Layout({v: rng.randrange(4) for v in range(n)}, {v: rng.randrange(B + 2) for v in range(n)})
+    layout = R.Layout({v: rng.randrange(4) for v in range(n)}, {v: rng.randrange(B + 2) for v in range(n)},
+                      {j: rng.randrange(6) for j in range(4) if rng.random() < 0.4})
     T = rng.randrange(5)
     store = R.Store(rng.randrange(5), {t: frozenset(rng.sample(range(6), rng.randrange(3))) for t in range(T)},
                     {t: frozenset(rng.sample(range(6), rng.randrange(3))) for t in range(T)},
@@ -254,10 +260,38 @@ def paged(req: R.Requirement, B: int) -> tuple[R.Layout, R.Store]:
                                            {s: frozenset(js) for s, js in freed.items()}, payload)
 
 
+def deferred(rng: random.Random, layout: R.Layout, store: R.Store) -> tuple[R.Layout, R.Store]:
+    """memory-map/v1's deferred residency on an honest layout and store: each written block's coin back zero to two steps
+    late, so its write is recorded that many steps after the record of the step that completes it and its first encoded
+    read is the step after its write, and a block whose values' last structural reader (its free's step) comes no later
+    than that record is withdrawn, written and freed in no record. A block written at once has its first encoded read
+    given or left 0 at random, which are the same."""
+    free = {j: s for s, js in store.freed.items() for j in js}
+    written: dict[int, set[int]] = {}
+    freed = {s: set(js) for s, js in store.freed.items()}
+    encoded: dict[int, int] = {}
+    for s, js in store.written.items():
+        for j in js:
+            r = s + rng.choice([0, 0, 1, 2])
+            if r > s or rng.random() < 0.5:
+                encoded[j] = r + 1
+            if free.get(j, r + 1) <= r:
+                freed[free[j]].discard(j)
+            else:
+                written.setdefault(r, set()).add(j)
+    return (R.Layout(layout.block, layout.offset, encoded),
+            R.Store(store.registered, {s: frozenset(js) for s, js in written.items()},
+                    {s: frozenset(js) for s, js in freed.items()}, store.payload))
+
+
 def _mutated(rng: random.Random, layout: R.Layout, store: R.Store, B: int) -> tuple[R.Layout, R.Store]:
     """One change a dishonest store or layout makes: a payload bit, an extra resident block (filler, which keeps the
-    link), a block freed or written early or late, a value moved."""
-    kind = rng.randrange(5)
+    link), a block freed or written early or late, a value moved, a block's first encoded read moved."""
+    kind = rng.randrange(6)
+    if kind == 5:
+        j = rng.randrange(8)
+        return R.Layout(layout.block, layout.offset,
+                        {**layout.encoded, j: max(0, layout.encoded.get(j, 0) + rng.choice([-2, -1, 1, 2]))}), store
     if kind == 0 and store.payload:
         j = rng.choice(sorted(store.payload))
         return layout, R.Store(store.registered, store.written, store.freed,
@@ -275,7 +309,7 @@ def _mutated(rng: random.Random, layout: R.Layout, store: R.Store, B: int) -> tu
     if not layout.offset:
         return layout, store
     v = rng.choice(sorted(layout.offset))
-    return R.Layout(layout.block, {**layout.offset, v: layout.offset[v] + rng.choice([1, B])}), store
+    return R.Layout(layout.block, {**layout.offset, v: layout.offset[v] + rng.choice([1, B])}, layout.encoded), store
 
 
 def _placement(rng: random.Random, ex: R.Execution, n: int, T: int) -> tuple[R.Placement, dict[int, int], list[Window]]:
@@ -334,7 +368,7 @@ def _malformed(rng: random.Random, value: dict) -> object:
         return {**value, "plans": value["plans"] + [[]]}
     if kind in ("negative", "bool", "string"):
         bad = {"negative": -1, "bool": True, "string": "1"}[kind]
-        k = rng.choice(["width", "value", "block", "offset", "leaf", "price", "block_bits", "steps"])
+        k = rng.choice(["width", "value", "block", "offset", "encoded", "leaf", "price", "block_bits", "steps"])
         return {**value, k: bad} if not isinstance(value[k], list) or not value[k] else {**value, k: [bad, *value[k][1:]]}
     if kind == "hex":
         return {**value, "store": {**value["store"], "payload": [rng.choice(["0x1", "A", "g", " 1"])]}}
@@ -357,9 +391,11 @@ def drawn(seed: int) -> object:
     n, T, B = rng.randrange(13), rng.randrange(5), rng.choice([8, 16, 32, 64, 128])
     ex = _execution(rng, n, T)
     req = R.Requirement.of(ex) if ex.follows() else None
-    mode = rng.choice(["honest", "honest", "paged", "mutated", "random"])
+    mode = rng.choice(["honest", "honest", "paged", "deferred", "mutated", "random"])
     if req is not None and mode != "random" and all(w <= B for w in ex.width.values()):
-        layout, store = (paged if mode == "paged" else R.pack)(req, B)
+        layout, store = (paged if mode == "paged" or mode == "deferred" and rng.random() < 0.5 else R.pack)(req, B)
+        if mode == "deferred":
+            layout, store = deferred(rng, layout, store)
         if mode == "mutated":
             layout, store = _mutated(rng, layout, store, B)
         plans = [set(layout.blocks(R.credited_reads(req, layout, t))) for t in range(T)]
@@ -417,6 +453,33 @@ def test_a_paged_store_credits_all_but_the_block_being_filled(server):
             assert 0 <= s["live_bits"] - s["credited_bits"] <= B and 0 <= s["read_bits"] - s["credited_read_bits"] <= B
             short += s["live_bits"] > s["credited_bits"]
     assert short > 10, short
+
+
+def test_a_deferred_store_is_ws_from_each_blocks_first_encoded_read(server):
+    """`deferred`'s store and plans, on `pack`'s and `paged`'s, are W's at every step, crediting no more than the store
+    they defer and often less, and never a value in a withdrawn block. Without the first encoded reads, which credits a
+    block from the step after the one that completes it, the store often breaks the link at a step: a block is credited
+    before its record writes it, or one withdrawn."""
+    stores = less = withdrawn = broken = 0
+    for seed in range(200):
+        rng = random.Random(seed)
+        n, T, B = 1 + rng.randrange(12), 1 + rng.randrange(4), rng.choice([16, 32, 64])
+        ex = _execution(rng, n, T)
+        if not ex.follows() or any(w > B for w in ex.width.values()):
+            continue
+        req = R.Requirement.of(ex)
+        base, store0 = (paged if seed % 2 else R.pack)(req, B)
+        layout, store = deferred(rng, base, store0)
+        plans = [layout.blocks(R.credited_reads(req, layout, t)) for t in range(T)]
+        out, at_once = (_lean(encode(ex, lay, store, plans, B, T), server) for lay in (layout, base))
+        assert out is not None and all(s["store_matches"] and s["plan_matches"] for s in out["steps"])
+        gone = set(chain(*store0.written.values())) - set(chain(*store.written.values()))
+        for s, z in zip(out["steps"], at_once["steps"]):
+            assert set(s["credited"]) <= set(z["credited"]) and not {layout.block[v] for v in s["credited"]} & gone
+            less += s["credited_bits"] < z["credited_bits"]
+        stores, withdrawn = stores + 1, withdrawn + bool(gone)
+        broken += not all(z["store_matches"] for z in at_once["steps"])
+    assert less > 10 and withdrawn > 8 and broken > 10, (stores, less, withdrawn, broken)
 
 
 def _paced(ticks: list[list[int]], X, b: int) -> bool:

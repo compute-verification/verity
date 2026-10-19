@@ -36,16 +36,19 @@ the census's steps), or a WorkloadProgram's request calls, request r's step s (i
 request's executed prefix. A registered input is there before step 0, and a run input arrives at the first step whose
 gates read it.
 
-A block is complete when step `t` begins once every value a layout places in it was produced before `t` (`incomplete`),
-and the audit credits the live values in complete blocks (`credited`, `credited_reads`): memory-map/v1 writes a block
-once, complete, so a KV block later steps fill is in no record yet. `store_matches` asks for the blocks of the credited
-values resident, and `plan_matches` for the complete blocks a step reads planned. Other blocks may be resident or
-planned (filler, dead or another workload's): they hold none of the credited values.
+A block is complete when step `t` begins once every value a layout places in it was produced before `t` and `t` is at
+or after its first encoded read (`Layout.encoded`, `incomplete`), and the audit credits the live values in complete
+blocks (`credited`, `credited_reads`): memory-map/v1 writes a block once, complete and encoded, in the record of the
+step before its first encoded read (deferred residency), so a KV block later steps fill, or one whose append's coin is
+still out, is in no record yet. A block's values are credited from its first encoded read to their last structural
+reader, and a block whose values are dead before then is credited at no step. `store_matches` asks for the blocks of
+the credited values resident, and `plan_matches` for the complete blocks a step reads planned. Other blocks may be
+resident or planned (filler, dead or another workload's): they hold none of the credited values.
 
 `pack` places the values that are ever live in blocks of `block_bits`: the registered ones in canonical order from store
 index 0 (the registered store), then each step's newly live values in fresh blocks after them (the memory map's appends),
-each block written at its values' step and freed at their last read. Each block is complete at its values' step, so every
-live value is credited. That is the honest layout: `store_matches` and `plan_matches` hold at every step.
+each block written at its values' step and freed at their last read. Each block is complete and encoded at its values'
+step (no deferral, `encoded` empty), so every live value is credited. That is the honest layout: `store_matches` and `plan_matches` hold at every step.
 """
 
 from __future__ import annotations
@@ -409,10 +412,12 @@ class Store:
 
 @dataclass(frozen=True)
 class Layout:
-    """Each value's block (a store index) and its bit offset there."""
+    """Each value's block (a store index) and its bit offset there, and each block's first encoded read (`encoded`, the
+    first step whose reads see it under its append's coin: memory-map/v1's deferred residency), 0 for a block missing."""
 
     block: Mapping[int, int]
     offset: Mapping[int, int]
+    encoded: Mapping[int, int] = field(default_factory=dict)
 
     def blocks(self, values) -> frozenset[int]:
         return frozenset(self.block[v] for v in values)
@@ -477,9 +482,12 @@ def read_blocks(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
 
 
 def incomplete(req: Requirement, layout: Layout, t: int) -> frozenset[int]:
-    """The blocks incomplete when step `t` begins, as `incomplete` defines them: those holding a value produced at `t` or
-    later. A value `layout` doesn't place is in no block."""
-    return frozenset(layout.block[v] for v, b in req.born.items() if b >= t and v in layout.block)
+    """The blocks incomplete when step `t` begins, as `incomplete` defines them: those holding a value, not registered,
+    produced at `t` or later or whose block's first encoded read is after `t`. A value `layout` doesn't place is in no
+    block."""
+    return frozenset(layout.block[v] for v, b in req.born.items()
+                     if v in layout.block and v not in req.registered
+                     and (b >= t or layout.encoded.get(layout.block[v], 0) > t))
 
 
 def credited(req: Requirement, layout: Layout, t: int) -> frozenset[int]:

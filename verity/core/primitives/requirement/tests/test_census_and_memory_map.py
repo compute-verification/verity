@@ -24,13 +24,16 @@ every credited row is in a block the map holds; a block with no credited row may
 row's group is its request, layer and plane, and the rows the audit doesn't credit lie in one block per group
 (`OneBlockEach`). The builder frees each block in the record of its rows' last read and leaves out a block no step reads
 while it is resident (`test_a_block_its_last_read_completes_is_in_no_record`): the link holds at every step, and the
-map holds no block with every row dead, which the tests check beside the link.
+map holds no block with every row dead, which the tests check beside the link. Its coins come back before the next
+step's reads; with them back later (`deferred`, memory-map/v1's deferred residency) a block is written in the record of
+the step before its first encoded read and credited from that read, a block whose rows are dead by then is withdrawn,
+and the rows the audit doesn't credit lie in one block per group and page parity.
 """
 
 from __future__ import annotations
 
 import hashlib
-from itertools import count
+from itertools import chain, count
 
 import pytest
 
@@ -227,9 +230,10 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int]) -> tuple[dict
     (sb,) = {rs.row_bytes for rs in rows.values()}
     ids, lo, hi = _page_blocks(PageLayout(1 + max(max(t) for t in tables.values()), BLOCK_SIZE, sb), codec.BLOCK_BYTES)
     per_plane, region = ids.shape[1] // 2, int(ids.max()) + 1
-    # each block of a page: its request, layer, plane, rows, slot, its first byte in its rows, and whether it is whole
+    # each block of a page: its request, layer, plane, rows, slot, its first byte in its rows, whether it is whole, and
+    # the page's place in its request
     pages = [(r, layer, plane, kv[plane][p0:p1], layer * region + int(ids[page, c]), i * codec.BLOCK_BYTES - int(lo[c]) * sb,
-              p1 <= rs.positions)
+              p1 <= rs.positions, q)
              for r, rs in rows.items() for q, page in enumerate(tables[r]) for c in range(ids.shape[1])
              for plane, i in [divmod(c, per_plane)]
              for p0, p1 in [(q * BLOCK_SIZE + int(lo[c]), q * BLOCK_SIZE + int(hi[c]))]
@@ -245,11 +249,11 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int]) -> tuple[dict
             index.update(((t, w.slot), w) for w in by[t].written)
 
     unwritten = count(replay.extent)
-    width, step, value, block, offset, payload, of_value = {}, {}, {}, {}, {}, {}, {}
+    width, step, value, block, offset, payload, of_value, page_of = {}, {}, {}, {}, {}, {}, {}, {}
     ops: dict[tuple[str, int], set[int]] = {}
     uses: dict[tuple[str, int], set[int]] = {}
     reads = {r: row_reads(p) for r, p in requests.items()}
-    for r, layer, plane, got, slot, off, whole in pages:
+    for r, layer, plane, got, slot, off, whole, q in pages:
         w = index.get((arrive[r] + max(x.born for x in got), slot)) if whole else None
         j = next(unwritten) if w is None else w.index
         if w is not None:
@@ -258,7 +262,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int]) -> tuple[dict
             payload[j] = int.from_bytes(data, "little")
         for u, x in enumerate(got):
             v = len(width)
-            width[v], step[v], of_value[v] = 8 * sb, arrive[r] + x.born, (r, layer, plane, x)
+            width[v], step[v], of_value[v], page_of[v] = 8 * sb, arrive[r] + x.born, (r, layer, plane, x), q
             value[v] = int.from_bytes(_payload(r, x), "little")
             block[v], offset[v] = j, 8 * (u * sb - off)
             read, selected = reads[r](x.group)
@@ -274,7 +278,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int]) -> tuple[dict
     ex = R.Execution(width, frozenset(), step, ex_ops, ex_uses, value)
     store = R.Store(0, written, freed, payload)
     instance = encode(ex, R.Layout(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
-    return instance, {"rows": of_value, "width": width, "block": block, "held": held, "arrive": arrive}
+    return instance, {"rows": of_value, "page": page_of, "width": width, "block": block, "held": held, "arrive": arrive}
 
 
 def _verdicts(out: dict, session: dict) -> tuple[dict[int, set[int]], dict[int, set[int]]]:
@@ -342,3 +346,57 @@ def test_a_block_its_last_read_completes_is_in_no_record(requests, server):
     _one_block_each(out, session, uncredited)
     late = {t: sorted(js) for t, js in dead.items() if js}
     assert all(s["store_matches"] and s["plan_matches"] for s in out["steps"]) and not late, late
+
+
+def deferred(value: dict, lag: int) -> dict:
+    """`value` with every append's coin back `lag` steps late (memory-map/v1's deferred residency): each written block's
+    write recorded `lag` steps after the record of the step that completes it, its first encoded read the step after
+    that, and the block withdrawn, in no record, when its rows' last structural reader (its free's step) comes no later
+    than the record its write would be in. Each step's plan is the blocks the map holds then that are still resident."""
+    s = value["store"]
+    free = {j: t for t, js in enumerate(s["freed"]) for j in js}
+    top = len(s["written"]) + lag
+    written: list[list[int]] = [[] for _ in range(top)]
+    freed = [list(js) for js in s["freed"]] + [[] for _ in range(top - len(s["freed"]))]
+    encoded: dict[int, int] = {}
+    for t, js in enumerate(s["written"]):
+        for j in js:
+            encoded[j] = t + lag + 1
+            if free.get(j, t + lag + 1) <= t + lag:
+                freed[free[j]].remove(j)
+            else:
+                written[t + lag].append(j)
+    resident = lambda t: set(chain(*written[:t])) - set(chain(*freed[:t]))  # noqa: E731
+    return {**value, "encoded": [encoded.get(j, 0) for j in range(1 + max(encoded, default=-1))],
+            "store": {**s, "written": written, "freed": freed},
+            "plans": [sorted(set(p) & resident(t)) for t, p in enumerate(value["plans"])]}
+
+
+def test_deferred_residency_credits_each_block_from_its_first_encoded_read(requests, server):
+    """Every append's coin back two steps late (`deferred`), r1 from step 1: r0's first page, complete at step 0, is
+    written in step 2's record and credited from step 3, its first encoded read; r1's page (complete at step 1, last
+    read at step 2) and r0's second (complete at step 4, last read at step 5) are withdrawn. With the first encoded
+    reads the link holds at every step, and the rows the audit doesn't credit lie in one block per request, layer, plane
+    and page parity (`OneBlockEach`, a page's coin back before the next page is complete): at step 2 in two blocks per
+    layer and plane of r0, its first page waiting for its coin while its second fills. Without them the audit credits
+    r0's first page from step 1, before its record writes it, and the withdrawn second page at step 5, where the link
+    breaks."""
+    value, session = map_case({r: requests[r] for r in ("r0", "r1")}, {"r0": 0, "r1": 1})
+    late = deferred(value, 2)
+    out = _lean(late, server)
+    assert out is not None and all(s["store_matches"] and s["plan_matches"] for s in out["steps"])
+    rows, page, block = session["rows"], session["page"], session["block"]
+    gone = set(chain(*value["store"]["written"])) - set(chain(*late["store"]["written"]))
+    assert {(rows[v][0], page[v]) for v in rows if block[v] in gone} == {("r0", 1), ("r1", 0)}
+    pages = []
+    for s in out["steps"]:
+        uncredited = set(s["live"]) - set(s["credited"])
+        groups: dict[tuple, set[int]] = {}
+        for v in uncredited:
+            groups.setdefault((*rows[v][:3], page[v] % 2), set()).add(block[v])
+        assert all(len(js) == 1 for js in groups.values())
+        assert s["live_bits"] - s["credited_bits"] <= len(groups) * codec.BLOCK_BYTES * 8
+        pages.append(sorted({(rows[v][0], page[v]) for v in uncredited}))
+    assert pages == [[], [("r0", 0)], [("r0", 0), ("r0", 1), ("r1", 0)], [("r0", 1)], [("r0", 1)], [("r0", 1)]]
+    at_once = _lean({**late, "encoded": []}, server)
+    assert [s["store_matches"] for s in at_once["steps"]] == [True, False, False, True, True, False]
