@@ -21,7 +21,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
 plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
 (stock's differences are findings, not failures).
 
-    python kgate.py --out OUT [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--no-stock]
+    python kgate.py --out OUT [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump]
 """
 from __future__ import annotations
 
@@ -173,8 +173,24 @@ def work() -> X.Workspace:
     return _WORK[0]
 
 
-def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None) -> dict:
-    """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves)."""
+DUMP_N = 128
+
+
+def dump_replay(path: Path, x, xq, s, w, s_w, y) -> None:
+    """The fused outputs as words for replay.py: x (bf16), xq, s_a, W's and s_w's first DUMP_N rows, and y's first DUMP_N
+    columns."""
+    import numpy as np
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(path, x=x.view(torch.int16).cpu().numpy().view(np.uint16), xq=xq.cpu().numpy().view(np.uint8),
+             s=s.reshape(-1).view(torch.int32).cpu().numpy().view(np.uint32),
+             w=w[:DUMP_N].cpu().numpy().view(np.uint8), sw=s_w.reshape(-1)[:DUMP_N].view(torch.int32).cpu().numpy().view(np.uint32),
+             y=y[:, :DUMP_N].contiguous().view(torch.int16).cpu().numpy().view(np.uint16))
+
+
+def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None,
+        dump: Path | None = None) -> dict:
+    """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
+    graph replay's outputs (`dump_replay`)."""
     e = E()
     cfg = cfg or X.pick(m, n, k)
     wk = work()
@@ -216,6 +232,8 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     torch.cuda.synchronize()
     doc["graph"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     del g
+    if dump is not None:
+        dump_replay(dump / f"n{n}_k{k}_m{m}.npz", x, xq, s, w, s_w, y)
     if m > 1:
         sp = {kind: {"s_a": float(s_ref[i]), "xq_min": int(xq_ref[i].min()), "xq_max": int(xq_ref[i].max())}
               for i, kind in enumerate(SPECIAL[:m - 1])}
@@ -236,11 +254,12 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
 
 
 def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019,
-         models: tuple[str, ...] = ("llama-3.1-8b",)) -> dict:
+         models: tuple[str, ...] = ("llama-3.1-8b",), dump: Path | None = None) -> dict:
+    """`dump` gets each M <= 32 shape's outputs (`one`)."""
     ms = MS if shapes == "all" else DECODE_MS
     rows = []
     for n, k, m, names in shapes_of(models, ms):
-        d = one(n, k, m, seed + m, with_stock, names)
+        d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None)
         rows.append(d)
         print(json.dumps({k: v for k, v in d.items() if k not in ("ptx", "special")}), flush=True)
     return {"ok": all(r["ok"] for r in rows), "shapes": len(rows), "models": list(models), "poison": f"{POISON:#04x}",
@@ -253,10 +272,11 @@ def main() -> int:
     ap.add_argument("--shapes", default="all")
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(MODELS)}")
     ap.add_argument("--no-stock", action="store_true")
+    ap.add_argument("--dump", action="store_true", help="OUT/replay/*.npz, the M <= 32 outputs replay.py checks")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")))
+    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")), dump=out / "replay" if a.dump else None)
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"gate_ok": doc["ok"], "shapes": doc["shapes"]}), flush=True)
     return 0 if doc["ok"] else 4

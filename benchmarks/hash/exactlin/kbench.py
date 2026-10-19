@@ -190,13 +190,14 @@ def main() -> int:
     ap.add_argument("--arms", default=",".join(ARMS), help=f"of {ARMS + PARTS}")
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(kgate.MODELS)}")
     ap.add_argument("--special-rows", action="store_true", help="time on the gate's edge rows too (default: plain rows)")
+    ap.add_argument("--dump", action="store_true", help="the gate's M <= 32 outputs to OUT/replay (replay.py)")
     a = ap.parse_args()
     arms = tuple(a.arms.split(","))
     models = tuple(a.models.split(","))
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     if not a.skip_gate:
-        doc = kgate.gate(a.shapes, models=models)
+        doc = kgate.gate(a.shapes, models=models, dump=out / "replay" if a.dump else None)
         (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
         print(json.dumps({"gate_ok": doc["ok"], "shapes": doc["shapes"]}), flush=True)
         if not doc["ok"]:
