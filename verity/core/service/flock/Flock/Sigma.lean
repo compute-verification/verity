@@ -25,7 +25,7 @@ The check (`check`), each refusal named by its code (`codes`) with the fix in it
 * `return-runs`: the Boolean root's return is the word root's, moved.
 
 "Moved": a word reference's leaf `j` of a node's output is bit `bitOff out j` of that output, the prefix sums of the output's
-leaf widths (`Program.Ty.widths`), and the root's input nodes are one stream of bits in node order. A sequence's runs (`partRuns`)
+leaf widths (`Program.Ty.widths`; `bitOff_eq`), and the root's input nodes are one stream of bits in node order. A sequence's runs (`partRuns`)
 are compared once joined (`merged`), so a run the Boolean side splits differently is the same run.
 
 Cost: linear in the two descriptors' parts and in the runs a strided part spans (its rows, or its leaves when its inner stride
@@ -113,6 +113,209 @@ decreasing_by
   · omega
   · exact sizeOf_lt_of_mem f.2
   · exact sizeOf_snd_lt_of_mem f.2
+
+/-! ### `bitOff` is the prefix sums of the leaf widths -/
+
+private theorem foldl_append_toList {β : Type _} (l : List β) (g : β → Array Nat) (acc : Array Nat) :
+    (l.foldl (fun a t => a ++ g t) acc).toList = acc.toList ++ l.flatMap fun t => (g t).toList := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x l ih => simp [List.foldl, ih, Array.toList_append, List.flatMap_cons, List.append_assoc]
+
+private theorem foldl_add {β : Type _} (l : List β) (g : β → Nat) (acc : Nat) :
+    l.foldl (fun a t => a + g t) acc = acc + (l.map g).sum := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x l ih => simp [List.foldl, ih]; omega
+
+private theorem sum_flatMap {β : Type _} (l : List β) (g : β → List Nat) :
+    (l.flatMap g).sum = (l.map fun x => (g x).sum).sum := by
+  induction l with
+  | nil => simp
+  | cons x l ih => simp [List.flatMap_cons, List.sum_append, ih]
+
+private theorem length_flatMap' {β : Type _} (l : List β) (g : β → List Nat) :
+    (l.flatMap g).length = (l.map fun x => (g x).length).sum := by
+  induction l with
+  | nil => simp
+  | cons x l ih => simp [List.flatMap_cons, ih]
+
+private theorem sum_map_const {α : Type _} (l : List α) (c : Nat) : (l.map fun _ => c).sum = l.length * c := by
+  induction l with
+  | nil => simp
+  | cons x l ih => simp [ih, Nat.succ_mul]; omega
+
+private theorem copies_take {α : Type _} (l : List α) (W : List Nat) (hW : 0 < W.length) (j : Nat)
+    (hj : j ≤ l.length * W.length) :
+    ((l.flatMap fun _ => W).take j).sum = j / W.length * W.sum + (W.take (j % W.length)).sum := by
+  induction l generalizing j with
+  | nil => simp at hj; subst hj; simp
+  | cons x l ih =>
+    rw [List.flatMap_cons, List.take_append, List.sum_append]
+    by_cases h : j < W.length
+    · have : j - W.length = 0 := by omega
+      rw [this, Nat.div_eq_of_lt h, Nat.mod_eq_of_lt h]; simp
+    · have hle : W.length ≤ j := by omega
+      rw [List.take_of_length_le hle, ih (j - W.length) (by simp [Nat.succ_mul] at hj; omega),
+        Nat.div_eq_sub_div hW hle, Nat.mod_eq_sub_mod hle, Nat.add_mul, Nat.one_mul]
+      omega
+
+private theorem arrayWidths (n : Nat) (e : Ty) :
+    (Ty.widths (.array n e)).toList = (List.range n).flatMap fun _ => (Ty.widths e).toList := by
+  simp only [Ty.widths]
+  rw [← Array.foldl_toList, foldl_append_toList (g := fun _ => Ty.widths e), Array.toList_range]
+  simp
+
+private theorem tupleWidths (fs : Array Ty) :
+    (Ty.widths (.tuple fs)).toList = fs.toList.flatMap fun t => (Ty.widths t).toList := by
+  simp only [Ty.widths]
+  rw [← Array.foldl_toList, foldl_append_toList (g := Ty.widths)]
+  simp
+
+private theorem recordWidths (fs : Array (String × Ty)) :
+    (Ty.widths (.record fs)).toList = fs.toList.flatMap fun t => (Ty.widths t.2).toList := by
+  simp only [Ty.widths]
+  rw [← Array.foldl_toList, foldl_append_toList fs.toList (fun t : String × Ty => Ty.widths t.2) #[]]
+  simp
+
+theorem widths_length : (t : Ty) → (Ty.widths t).toList.length = t.leaves
+  | .value w => by simp [Ty.widths, Ty.leaves]
+  | .array n e => by
+    rw [arrayWidths, length_flatMap']
+    have ih := widths_length e
+    simp only [ih, sum_map_const, List.length_range, Ty.leaves]
+  | .tuple fs => by
+    have ih : ∀ f ∈ fs.toList, (Ty.widths f).toList.length = f.leaves := fun f hf => widths_length f
+    rw [tupleWidths, length_flatMap', List.map_congr_left ih]
+    simp only [Ty.leaves]
+    rw [← Array.foldl_toList, foldl_add]; simp
+  | .record fs => by
+    have ih : ∀ f ∈ fs.toList, (Ty.widths f.2).toList.length = f.2.leaves := fun f hf => widths_length f.2
+    rw [recordWidths, length_flatMap', List.map_congr_left ih]
+    simp only [Ty.leaves]
+    rw [← Array.foldl_toList, foldl_add]; simp
+termination_by t => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_of_mem (Array.mem_def.mpr hf)
+  · exact sizeOf_snd_lt_of_mem (Array.mem_def.mpr hf)
+
+
+theorem widths_sum : (t : Ty) → (Ty.widths t).toList.sum = bits t
+  | .value w => by simp [Ty.widths, bits]
+  | .array n e => by
+    rw [arrayWidths, sum_flatMap, sum_map_const, List.length_range, widths_sum e]
+    simp [bits]
+  | .tuple fs => by
+    have ih : ∀ f ∈ fs.toList, (Ty.widths f).toList.sum = bits f := fun f hf => widths_sum f
+    rw [tupleWidths, sum_flatMap, List.map_congr_left ih]
+    have e : fs.attach.foldl (fun a f => a + bits f.val) 0 = fs.toList.foldl (fun a f => a + bits f) 0 :=
+      (Array.foldl_attach (f := fun a (f : Ty) => a + bits f)).trans (Array.foldl_toList _).symm
+    simp only [bits]
+    rw [e, foldl_add]; simp
+  | .record fs => by
+    have ih : ∀ f ∈ fs.toList, (Ty.widths f.2).toList.sum = bits f.2 := fun f hf => widths_sum f.2
+    rw [recordWidths, sum_flatMap, List.map_congr_left ih]
+    have e : fs.attach.foldl (fun a f => a + bits f.val.2) 0 = fs.toList.foldl (fun a f => a + bits f.2) 0 :=
+      (Array.foldl_attach (f := fun a (f : String × Ty) => a + bits f.2)).trans (Array.foldl_toList _).symm
+    simp only [bits]
+    rw [e, foldl_add]; simp
+termination_by t => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_of_mem (Array.mem_def.mpr hf)
+  · exact sizeOf_snd_lt_of_mem (Array.mem_def.mpr hf)
+
+private theorem fieldStep_none (j L B : Nat) (O : Nat → Nat) (a b : Nat) :
+    fieldStep j L B O (none, a, b) = (if j < a + L then some (b + O (j - a)) else none, a + L, b + B) := rfl
+
+private theorem flatMap_nil' {α : Type _} (l : List α) : (l.flatMap fun _ => ([] : List Nat)) = [] := by
+  induction l with
+  | nil => rfl
+  | cons x l ih => simp [List.flatMap_cons, ih]
+
+private theorem fieldStep_some (j : Nat) {β : Type _} (p : β → Ty) (l : List β) (r a b : Nat) :
+    l.foldl (fun acc x => fieldStep j (p x).leaves (bits (p x)) (bitOff (p x)) acc) (some r, a, b) = (some r, a, b) := by
+  induction l with
+  | nil => rfl
+  | cons x l ih => simp only [List.foldl, fieldStep]; exact ih
+
+private theorem fieldFold (j : Nat) {β : Type _} (p : β → Ty) (l : List β)
+    (ih : ∀ x ∈ l, ∀ k ≤ (p x).leaves, bitOff (p x) k = ((Ty.widths (p x)).toList.take k).sum)
+    (a b : Nat) (h1 : a ≤ j) (h2 : j ≤ a + (l.map fun x => (p x).leaves).sum) (q : Option Nat × Nat × Nat)
+    (hq : l.foldl (fun acc x => fieldStep j (p x).leaves (bits (p x)) (bitOff (p x)) acc) (none, a, b) = q) :
+    q.1.getD q.2.2 = b + ((l.flatMap fun x => (Ty.widths (p x)).toList).take (j - a)).sum := by
+  induction l generalizing a b with
+  | nil =>
+    subst hq
+    have : j - a = 0 := by simp at h2; omega
+    simp [this]
+  | cons x l ihl =>
+    have hx := widths_length (p x)
+    rw [List.foldl_cons, fieldStep_none] at hq
+    rw [List.flatMap_cons, List.take_append, List.sum_append]
+    by_cases hj : j < a + (p x).leaves
+    · simp only [hj, ↓reduceIte, fieldStep_some] at hq
+      subst hq
+      have : j - a - (Ty.widths (p x)).toList.length = 0 := by omega
+      rw [this, ih x (List.mem_cons_self ..) (j - a) (by omega)]
+      simp
+    · simp only [hj, ↓reduceIte] at hq
+      have hb := widths_sum (p x)
+      rw [ihl (fun y hy => ih y (List.mem_cons_of_mem _ hy)) (a + (p x).leaves) (b + bits (p x)) (by omega)
+        (by simp at h2 ⊢; omega) hq, List.take_of_length_le (l := (Ty.widths (p x)).toList) (i := j - a) (by omega), hb, hx]
+      have : j - (a + (p x).leaves) = j - a - (p x).leaves := by omega
+      rw [this]; omega
+
+/-- `bitOff` is the prefix sums of the leaf widths: word leaf `j` of `t` is bit `Σ widths[0..j)` of `bitTy t`. -/
+theorem bitOff_eq : (t : Ty) → (j : Nat) → j ≤ t.leaves → bitOff t j = ((Ty.widths t).toList.take j).sum
+  | .value w, j, h => by
+    simp only [Ty.leaves] at h
+    rcases (by omega : j = 0 ∨ j = 1) with rfl | rfl <;> simp [bitOff, Ty.widths]
+  | .array n e, j, h => by
+    have hl := widths_length e
+    rw [arrayWidths]
+    simp only [bitOff]
+    by_cases hL : e.leaves = 0
+    · have : (Ty.widths e).toList = [] := List.eq_nil_of_length_eq_zero (by omega)
+      simp [hL, this, flatMap_nil']
+    · simp only [hL, ↓reduceIte]
+      rw [copies_take _ _ (by omega) j (by simp only [Ty.leaves] at h; rw [List.length_range, hl]; exact h),
+        hl, widths_sum e, bitOff_eq e (j % e.leaves) (Nat.le_of_lt (Nat.mod_lt _ (by omega)))]
+  | .tuple fs, j, h => by
+    have ih : ∀ f ∈ fs.toList, ∀ k ≤ f.leaves, bitOff f k = ((Ty.widths f).toList.take k).sum :=
+      fun f hf k hk => bitOff_eq f k hk
+    have e : fs.attach.foldl (fun acc f => fieldStep j f.val.leaves (bits f.val) (bitOff f.val) acc) (none, 0, 0)
+        = fs.toList.foldl (fun acc f => fieldStep j f.leaves (bits f) (bitOff f) acc) (none, 0, 0) :=
+      (Array.foldl_attach (f := fun acc (f : Ty) => fieldStep j f.leaves (bits f) (bitOff f) acc)).trans
+        (Array.foldl_toList _).symm
+    have hj : j ≤ 0 + (fs.toList.map fun x => x.leaves).sum := by
+      simp only [Ty.leaves] at h; rw [← Array.foldl_toList, foldl_add] at h; simpa using h
+    have := fieldFold j id fs.toList ih 0 0 (Nat.zero_le _) hj _ rfl
+    simp only [bitOff, e]
+    rw [tupleWidths]
+    simpa using this
+  | .record fs, j, h => by
+    have ih : ∀ f ∈ fs.toList, ∀ k ≤ f.2.leaves, bitOff f.2 k = ((Ty.widths f.2).toList.take k).sum :=
+      fun f hf k hk => bitOff_eq f.2 k hk
+    have e : fs.attach.foldl (fun acc f => fieldStep j f.val.2.leaves (bits f.val.2) (bitOff f.val.2) acc) (none, 0, 0)
+        = fs.toList.foldl (fun acc f => fieldStep j f.2.leaves (bits f.2) (bitOff f.2) acc) (none, 0, 0) :=
+      (Array.foldl_attach (f := fun acc (f : String × Ty) => fieldStep j f.2.leaves (bits f.2) (bitOff f.2) acc)).trans
+        (Array.foldl_toList _).symm
+    have hj : j ≤ 0 + (fs.toList.map fun x => x.2.leaves).sum := by
+      simp only [Ty.leaves] at h; rw [← Array.foldl_toList, foldl_add] at h; simpa using h
+    have := fieldFold j Prod.snd fs.toList ih 0 0 (Nat.zero_le _) hj _ rfl
+    simp only [bitOff, e]
+    rw [recordWidths]
+    simpa using this
+termination_by t => t
+decreasing_by
+  all_goals simp only [Ty.array.sizeOf_spec, Ty.tuple.sizeOf_spec, Ty.record.sizeOf_spec]
+  · omega
+  · exact sizeOf_lt_of_mem (Array.mem_def.mpr hf)
+  · exact sizeOf_snd_lt_of_mem (Array.mem_def.mpr hf)
 
 /-! ### The root as runs of bits -/
 

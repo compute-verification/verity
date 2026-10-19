@@ -1171,7 +1171,7 @@ the lift on the two descriptors, in their size and never over the unrolled circu
 exactly these two keys. The refusals, in order: `word-link`, `sigma-table`, `sigma-signature` (σ(f) declares f's signature on
 bits), `inputs` (the Boolean root's inputs are bits, the word root's input leaves in order), `signature`, `node-count`, and per
 Call `sigma-table`, `sigma-not-function`, `node-form` (form, members, axes, arity), `operand-type` and `operand-runs` (each run
-moved onto its bits: leaf `j` of an output is bit Σ of its first `j` leaf widths), then `return-runs`. With no refusal a Call
+moved onto its bits: leaf `j` of an output is bit Σ of its first `j` leaf widths, `Sigma.bitOff_eq`), then `return-runs`. With no refusal a Call
 reads another in the Boolean root exactly when its word Call reads the word one (`Sigma.reads_lift`), so the units of a
 partition read each other in the same graph and `unit-cycle` on the word partition is `unit-cycle` on its lift
 (`Sigma.acyclic_lift`). A `Q_call` cut inside a leaf word Call does not carry across (inside a leaf Boolean Definition its own
