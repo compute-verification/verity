@@ -77,7 +77,7 @@ uv run pytest                            # all tests
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
 research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait [--wait-max S]] [...] -- CMD...
-                                         # --wait: until the run ends, 20 min at most (research/waitcap.py): then exit 79, the run going on, `research status RUN` to check back
+                                         # --wait: 20 min at most, then exit 79 (research/waitcap.py)
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
