@@ -352,8 +352,15 @@ PROF_RANGE = "verity/exactlin/prof"
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
 # SBENCH_PICK=first|last: every engine's Inductor autotune choices made untimed (`picks.py`); each arm's picks are
-# logged either way (gate.json's full log, each rep's digest)
+# logged either way (gate.json's full log, each rep's digest).  SBENCH_PICK_ARMS=PREFIX[,PREFIX]: only the arms whose
+# names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
 PICK_ENV = "SBENCH_PICK"
+PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
+
+
+def pick_of(arm: str) -> str | None:
+    only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
+    return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
@@ -367,7 +374,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         import dither_fused as DF
     sys.path.insert(0, str(HERE))
     import picks as PK
-    plog = PK.install(os.environ.get(PICK_ENV))
+    plog = PK.install(pick_of(arm))
     t0 = time.perf_counter()
     try:
         llm = build(arm, Path(scratch), gpu_mem)
@@ -604,7 +611,7 @@ def main() -> int:
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
-               "pick": os.environ.get(PICK_ENV) or "timed",
+               "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
