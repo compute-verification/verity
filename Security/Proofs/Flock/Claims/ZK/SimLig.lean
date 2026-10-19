@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.SentE
 
 /-!
 # A rep's Ligerito opening from the cut (`SimLig`)
@@ -1409,10 +1410,156 @@ theorem ligYbarE : LigYbarE := by
 
 end Ybar
 
-/-- **`SimLig` from the four remaining value statements**: `ligOodE` and `ligYbarE` discharge the out-of-domain value
-and the restart's `ȳ`. -/
-theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hsalt : LigSaltE) : SimLig :=
-  simLig_of_fields ligOodE hmsg hsum hy1 ligYbarE hsalt
+/-! ### The restart's `y₁'`
+
+Where the pair's coins are answered (`hlt`) the restart is sent (`famPasses_of`, guard slot `ρ`'s plus two), so the
+deployed source's `y₁'` is the cut's view's, the table's `y₁'` of the witness lanes and the extra lanes (`srcE_y1_L`).
+Its lane sum is the executable's iterated fold of the packed table (`tabS_foldKs`, `foldLoL_eq_sum`), whose entries are
+the witness's lane words (`wordOf_packed`), and its pair's terms are `rhoS`'s times the extra lanes (`ligY1E`). -/
+
+section Y1
+
+/-- **The deployed source's `y₁'`** where the rep's restart is sent: the table's `y₁'` of the table witness, the tape's
+mask slot and extra lanes. -/
+private theorem srcE_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (r : Fin 2)
+    (hS : famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
+      j r .restart) :
+    ((srcE x c w τ j.val).rep r.val).y1 = Array.ofFn fun i =>
+      kVal (((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j) ((UE.tape x τ).1 j).1
+        ((UE.tape x τ).1 j).2.1.2.1 r i) := by
+  unfold srcE tabSrcCut
+  rw [dite_eq_left j.isLt]
+  show (if hr : r.val < 2 then repSrcCut PE x (czExe PE x c) (cutE x c w τ) j ⟨r.val, hr⟩ else default).y1 = _
+  rw [dite_eq_left r.isLt]
+  have e : (cutE x c w τ j).y1 r = some (((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j)
+      ((UE.tape x τ).1 j).1 ((UE.tape x τ).1 j).2.1.2.1 r) := ite_eq_left hS
+  unfold repSrcCut
+  dsimp only
+  rw [e]
+
+/-- **The table's `y₁'`**: the witness lanes under `eq(r̄)` plus the pair's coins times the extra lanes. -/
+private theorem tab_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (r : Fin 2) (i : Fin (tabC PE x j).z.L) :
+    ((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j) ((UE.tape x τ).1 j).1 ((UE.tape x τ).1 j).2.1.2.1 r i =
+      ∑ l, Composed.eqLane ((czExe PE x c j).rest.lane r) l.val *
+          FlockLevel3.embed (((tabC PE x j).T (czExe PE x c j)).lanes (wtOf PE x w j) ((UE.tape x τ).1 j).1 l i) +
+        (FlockLevel3.GF256.of (rhoAt c j.val r.val).1 * FlockLevel3.embed (((UE.tape x τ).1 j).2.1.2.1 r 0 i) +
+          FlockLevel3.GF256.of (rhoAt c j.val r.val).2 * FlockLevel3.embed (((UE.tape x τ).1 j).2.1.2.1 r 1 i)) := rfl
+
+/-- **`tabS` is the executable's iterated fold**: the table after `k` lane challenges, lowest variable first. -/
+private theorem tabS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (t : Array _root_.Flock.F128) :
+    ∀ k, FlockComplete.LigLock.tabS coin p0 t k =
+      FlockComplete.Replay.Lg.foldKs ((List.range k).map (FlockComplete.LigLock.chS coin p0)) (FlockComplete.embedF t)
+  | 0 => rfl
+  | k + 1 => by
+    rw [FlockComplete.LigLock.tabS, tabS_foldKs coin p0 t k, List.range_succ, List.map_append]
+    unfold FlockComplete.Replay.Lg.foldKs
+    rw [List.foldl_append]
+    rfl
+
+theorem ligY1E : LigY1E := by
+  intro x hx w hw τ c n hn s spec hs j r extras he
+  dsimp only
+  intro hlt _
+  have hS := famPasses_of (pointReads_czExe PE) (coinReads_czExe PE) hx hn hs j r .restart (by
+    show rhoSlot x j.val r.val + 2 ≤ n
+    unfold rhoSlot
+    rw [repSlot_p0 hs j r]
+    omega)
+  obtain ⟨hnL, hL, -, -, -, hm⟩ := tabC_z PE x j
+  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
+  unfold lv0 at hnL hL hm
+  rw [hl0] at hnL hm
+  have hmL : (ligSt x j).m = (tabC PE x j).S.m := by
+    unfold ligSt
+    rw [tabsOf_stAt]
+    rfl
+  have hesz : (FlockComplete.embedF (ligTab x w τ j)).size = 2 ^ ((tabC PE x j).S.m - 7) := by
+    simp [FlockComplete.embedF, ligTab, FlockComplete.JsonRT.packed_size, hmL]
+  have hpow : 2 ^ ((tabC PE x j).S.m - 7) =
+      2 ^ (zkTab x j).sch.k0 * 2 ^ ((zkTab x j).sch.levels.getD 0 default).cols := by
+    rw [← pow_add]
+    congr 1
+    omega
+  have hdiv : 2 ^ ((tabC PE x j).S.m - 7) / 2 ^ (zkTab x j).sch.k0 =
+      2 ^ ((zkTab x j).sch.levels.getD 0 default).cols := by
+    rw [hpow, Nat.mul_div_cancel_left _ (Nat.two_pow_pos _)]
+  have hlen : (((List.range (zkTab x j).sch.k0).map (FlockComplete.LigLock.chS (ligCoin c) (ligP0 x j r))).map
+      FlockSoundness.Refine.gOf).length = (zkTab x j).sch.k0 := by simp
+  have htsz : (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0).size =
+      2 ^ ((zkTab x j).sch.levels.getD 0 default).cols := by
+    rw [tabS_foldKs, FlockComplete.Replay.Lg.foldKs_size, hesz]
+    simpa using hdiv
+  unfold ligSrc
+  rw [srcE_y1_L x c w τ j r hS]
+  apply Array.ext
+  · simp only [Array.size_ofFn, Array.size_map, Array.size_range, htsz]
+    exact hL
+  · intro i h1 h2
+    simp only [Array.size_map, Array.size_range, htsz] at h2
+    have hi : i < (tabC PE x j).z.L := by rw [hL]; exact h2
+    rw [Array.getElem_ofFn, Array.getElem_map, Array.getElem_range]
+    apply kVal_eq_of
+    refine (tab_y1_L x c w τ j r ⟨i, hi⟩).trans ?_
+    rw [FlockSoundness.Refine.gOf_add, FlockSoundness.Refine.gOf_add, FlockSoundness.Refine.gOf_smul,
+      FlockSoundness.Refine.gOf_smul, add_assoc]
+    have hit : i < (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j)
+        (zkTab x j).sch.k0).size := by rw [htsz]; exact h2
+    refine congrArg₂ (· + ·) ?_ ?_
+    · show _ = FlockComplete.Replay.Lg.gv _ i
+      rw [tabS_foldKs, FlockComplete.Replay.Lg.gv_foldKs _ _ i (by
+          rw [hesz, List.length_map, List.length_range, hdiv]; exact h2),
+        FlockSoundness.foldLoL_eq_sum, hlen]
+      refine sum_fin_range hnL _ _ fun l hl => ?_
+      refine congrArg₂ (· * ·) ?_ ?_
+      · rw [FlockSoundness.Refine.eqList_eq]
+        unfold Composed.eqLane
+        refine prod_fin_range (by rw [hlen]; rfl) _ _ fun q hq => ?_
+        have hq' : q < (zkTab x j).sch.k0 := hq
+        rw [List.getD_eq_getElem _ _ (by simpa using hq')]
+        simp only [List.getElem_map, List.getElem_range]
+        have e : (czExe PE x c j).rest.lane r ⟨q, hq⟩ = FlockComplete.LigLock.chS (ligCoin c) (ligP0 x j r) q := by
+          show kAt c (repSlot x (2 * j.val + r.val) fun _ => 2 + q) = _
+          rw [repSlot_p0 hs j r]
+          simp only [kAt, FlockComplete.LigLock.chS, ligCoin, Nat.add_assoc]
+        rw [e]
+      · have hl' : l < 2 ^ (zkTab x j).sch.k0 := by rw [← hnL]; exact hl
+        have hy : l + 2 ^ (zkTab x j).sch.k0 * i < 2 ^ ((tabC PE x j).S.m - 7) := by
+          have hc : 2 ^ (zkTab x j).sch.k0 * (i + 1) ≤
+              2 ^ (zkTab x j).sch.k0 * 2 ^ ((zkTab x j).sch.levels.getD 0 default).cols :=
+            Nat.mul_le_mul_left _ h2
+          rw [hpow]
+          rw [Nat.mul_succ] at hc
+          omega
+        show FlockLevel3.embed (Composed.wordOf (zwL x w τ j) (l + (tabC PE x j).z.nL * i)) = _
+        rw [FlockComplete.Replay.Lg.gv_embedF _ (by rw [FlockComplete.JsonRT.packed_size, hmL]; exact hy)]
+        refine congrArg FlockLevel3.embed ?_
+        have hM7 : 7 ≤ (zkTab x j).table.S.m := by
+          have e : (zkTab x j).table.S.m = (tabC PE x j).S.m := rfl
+          omega
+        unfold ligTab
+        rw [hnL, hmL]
+        exact FlockComplete.wordOf_packed _ _ (zwL_trace w τ j) hy hM7
+    · have hρ : rhoAt c j.val r.val = FlockComplete.LigLock.rhoS (ligCoin c) (ligP0 x j r) (zkTab x j).sch.k0 := by
+        unfold rhoAt rhoSlot
+        rw [repSlot_p0 hs j r]
+        unfold FlockComplete.LigLock.rhoS ligCoin
+        rw [show ligP0 x j r + ((zkTab x j).sch.k0 + 2) = ligP0 x j r + 2 + (zkTab x j).sch.k0 by omega,
+          show ligP0 x j r + 2 + (zkTab x j).sch.k0 + 1 = ligP0 x j r + 3 + (zkTab x j).sch.k0 by omega]
+      have e0 := (agrees0_exe PE).ext x τ j r 0 ⟨i, hi⟩
+      have e1 := (agrees0_exe PE).ext x τ j r 1 ⟨i, hi⟩
+      simp only [Fin.val_zero, Fin.val_one, Nat.add_zero] at e0 e1
+      rw [hρ, FlockSoundness.Refine.getElem!_range_map _ hit, FlockSoundness.Refine.getElem!_range_map _ hit]
+      exact congrArg₂ (· + ·) (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e0))
+        (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e1))
+
+end Y1
+
+/-- **`SimLig` from the three remaining value statements**: `ligOodE`, `ligYbarE` and `ligY1E` discharge the
+out-of-domain value, the restart's `ȳ` and its `y₁'`. -/
+theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hsalt : LigSaltE) : SimLig :=
+  simLig_of_fields ligOodE hmsg hsum ligY1E ligYbarE hsalt
 
 end Masked
 
