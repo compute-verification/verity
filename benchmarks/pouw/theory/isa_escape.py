@@ -11,8 +11,8 @@ input to the receipt fold (which is itself such a word). The MODEL's menu for it
   - priced side units, each at the pi32 floor (>= 32 MACs a word; floors.csv).
 
 NOSUM (`nosum.py`) covered the fixed-function units DATASHEET measured. This script attacks the menu from the ISA: for
-every instruction class a red team would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision and
-1-bit MMA forms, the dot-product instructions, DPX, the video/SIMD ALU, texture filtering, the copies and transposes, the
+every instruction class a red team would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision,
+1-bit and FP64 MMA forms, the dot-product instructions, DPX, the video/SIMD ALU, texture filtering, the copies and transposes, the
 packing tricks, the wide multiply, and the uniform datapath beside an asynchronous tensor op -- it records the ISA fact,
 whether the instruction can even form an exact int8 product, the factor by which an int8 committed word decomposes onto
 it, and the verdict. A committed word that is a sum of 32 int8 products needs a MULTIPLY; an instruction with no multiply
@@ -62,8 +62,10 @@ INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
 # Mantissa bits (after the implicit 1) and the max normal exponent of each MMA input format.
-# E4M3: max 448 = 1.75*2^8. E5M2: emax 15. E2M1 (FP4) grid {0,.5,1,1.5,2,3,4,6}, max 6 = 1.5*2^2. f16: emax 15. bf16: emax 127.
-FLOAT_FORMATS = {"e4m3": (3, 8), "e5m2": (2, 15), "e2m1": (1, 2), "f16": (10, 15), "bf16": (7, 127)}
+# E4M3: max 448 = 1.75*2^8. E5M2: emax 15. E3M2 (FP6): max 28 = 1.75*2^4. E2M3 (FP6): max 7.5 = 1.875*2^2. E2M1 (FP4)
+# grid {0,.5,1,1.5,2,3,4,6}, max 6 = 1.5*2^2. f16: emax 15. bf16: emax 127. f64: 52 bits, emax 1023.
+FLOAT_FORMATS = {"e4m3": (3, 8), "e5m2": (2, 15), "e3m2": (2, 4), "e2m3": (3, 2), "e2m1": (1, 2), "f16": (10, 15),
+                 "bf16": (7, 127), "f64": (52, 1023)}
 
 
 def exact_in_float(n: int, mant_bits: int, emax: int) -> bool:
@@ -163,6 +165,24 @@ CANDIDATES = [
                   "so 4 passes = 0.25x int8; the FP8 DESIGNS (parked, decision 64) are the only ones it fits",
     },
     {
+        "name": "FP6 MMA (QMMA E3M2/E2M3, kind::f8f6f4)", "device": "sm_120", "cls": "DECOMPOSE", "D": 4,
+        "escape": False,
+        "isa": "mma.sync.kind::f8f6f4 m16n8k32 at e3m2 or e2m3 assembles to the same QMMA.16832 as E4M3 on sm_120a "
+               "(r20261019-050044-6f93) and runs at E4M3's rate, 0.2461 a SM-cycle (r20261019-052144-b4a4)",
+        "reason": "E3M2 holds integers exactly only to 8 and E2M3 only to 7, so an int8 operand needs >= 2 pieces and a "
+                  "product >= 4 QMMA passes; at QMMA's measured 0.992x IMMA that is <= 0.25x int8",
+    },
+    {
+        "name": "FP64 MMA (DMMA.8x8x4)", "device": "sm_120 (also sm_80..sm_100)", "cls": "DECOMPOSE", "D": 1,
+        "escape": False,
+        "isa": "mma.sync.m8n8k4.f64 assembles to one DMMA.8x8x4 on sm_120a (r20261019-050044-6f93): 64 f64 dot products "
+               "of depth 4, exact for int8 (a 32-MAC word is <= 2^19, f64 exact to 2^53)",
+        "reason": "exact at D = 1, but measured at 0.0068 DMMA a SM-cycle (r20261019-052144-b4a4), 1.74 MACs a SM-cycle "
+                  "against IMMA s8's 1016, 1/584 of int8's rate; packing two products a MAC in the 53-bit mantissa "
+                  "leaves 1/292. On issue a 32-MAC word takes 8 DMMA for 64 words (8 a slot against IMMA's 128) plus "
+                  "an F2I each, so it loses on both rows",
+    },
+    {
         "name": "FP4 MMA (OMMA/QMMA E2M1, dense and 2:4)", "device": "all", "cls": "DECOMPOSE", "D": 8, "escape": False,
         "isa": "mma.sync...e2m1.e2m1 m16n8k64 (OMMA 1.951x IMMA, 2:4 3.761x; decision 60): E2M1 holds only {0,.5,1,1.5,"
                "2,3,4,6}, so an int8 operand needs many pieces",
@@ -233,7 +253,8 @@ def main() -> int:
 
     # -- coverage: every candidate the brief names is enumerated, with a class and a verdict --------------------------
     brief = ["redux", "L2 reduction", "TMA bulk reduce", "IDP4A", "IDP2A", "sparse IMMA", "BMMA", "s4 IMMA", "FP16",
-             "FP8", "FP4", "DPX", "VABSDIFF4", "texture", "async copy", "ldmatrix", "PRMT", "IMAD.WIDE", "uniform"]
+             "FP8", "FP6", "FP4", "FP64", "DPX", "VABSDIFF4", "texture", "async copy", "ldmatrix", "PRMT", "IMAD.WIDE",
+             "uniform"]
     joined = " | ".join(c["name"] for c in CANDIDATES)
     for b in brief:
         checks.check(f"enumerated: {b}", b in joined)
@@ -320,6 +341,18 @@ def main() -> int:
     not_exact_e4m3 = [n for n in INT8 if not exact_in_float(n, m, e)]
     checks.check("E4M3 does NOT represent every int8 operand (e.g. 17, 127): so FP8 pays a piece split",
                  17 in not_exact_e4m3, f"{len(not_exact_e4m3)} of 256 int8 values not E4M3-exact")
+    for fp6 in ("e3m2", "e2m3"):
+        m, e = FLOAT_FORMATS[fp6]
+        not_exact = [n for n in INT8 if not exact_in_float(n, m, e)]
+        checks.check(f"{fp6.upper()} (FP6) does NOT represent every int8 operand (e.g. 9): so FP6 pays a piece split",
+                     9 in not_exact, f"{len(not_exact)} of 256 int8 values not {fp6.upper()}-exact")
+    m, e = FLOAT_FORMATS["f64"]
+    word_max = LANES * 128 * 128
+    checks.check("f64 holds an int8 product and a 32-MAC word exactly (<= 2^19 << 2^53), so DMMA is an exact D = 1 form",
+                 all(exact_in_float(n, m, e) for n in (word_max, -word_max, word_max - 1, 127 * -128)))
+    field = (2 * word_max).bit_length()  # a signed 32-MAC word's field, its range [-word_max, word_max] in bits
+    checks.check("f64's 53-bit mantissa packs at most two 32-MAC words' fields, so DMMA's packing gain is <= 2",
+                 2 * field <= m + 1 < 3 * field, f"{field}-bit fields, {m + 1}-bit mantissa")
     m, e = FLOAT_FORMATS["e2m1"]
     not_exact_e2m1 = [n for n in INT8 if not exact_in_float(n, m, e)]
     checks.check("E2M1 (FP4) represents almost no int8 operand (grid {0,.5,1,1.5,2,3,4,6})", len(not_exact_e2m1) > 240,
@@ -341,6 +374,8 @@ def main() -> int:
         ("IMMA.SP.16864 (2:4 s8, dense = 2 passes)", 2.0, 2),
         ("IMMA.S4.16864", 2.0, 4),
         ("QMMA.E4M3.16832 (FP8)", 1.0, 4),
+        ("QMMA.E3M2/E2M3.16832 (FP6, E4M3's opcode and rate)", 1.0, 4),
+        ("DMMA.8x8x4 (f64, measured 1/584 of IMMA a MAC, two fields a mantissa)", 2 / 584, 1),
         ("OMMA.NVF4.16864 (FP4, 2:4 logical)", 4.0, 8),
         ("BMMA.B1.16n256", 8.0, 64),
     ]
