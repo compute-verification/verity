@@ -42,6 +42,29 @@ def test_the_credit_is_what_the_checks_read():
         assert all(f.p == 1 for f in d.filler), fam.design
 
 
+def _price(x, lam: dict, n: dict) -> Fraction:
+    return sum((w * x.c[k].get(r, Fraction(0)) * q for r, w in lam.items() for k, q in n.items()), Fraction(0))
+
+
+def test_folds_meet_fold_opt_at_pi_star():
+    """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, an open conjecture under Security/lean-audit.json's
+    `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies: ♭'s fold meets it, and so does ♭'s fold
+    with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. That fold is why
+    FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD on the
+    sheets and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ* on all four readings."""
+    for fam in H.FAMILIES:
+        s = H.reading(fam, fam.sheet).data
+        pipe = dict(zip(s.classes, s.sheet["pipe"]))
+        for x, rt3 in ((s, {"DS_issue": Fraction(1, 20), "DS_imad": Fraction(19, 20)}),
+                       (H.reading(fam, fam.measured).data, {"I": Fraction(1, 20), "UP": Fraction(19, 20)})):
+            assert [k for k in x.nf if pipe.get(k) == "imad"] == ["IMAD"]
+            alu = {**x.nf, "IMAD": Fraction(0), "ALU": x.nf["ALU"] + 32 * x.nf["IMAD"]}
+            at = {"pi*": x.lam, "rt3": rt3}
+            nphi = {c: x.Nw * min(_price(x, lam, f) for f in x.folds) for c, lam in at.items()}
+            assert _price(x, x.lam, x.nf) >= nphi["pi*"] and _price(x, x.lam, alu) > 10 * nphi["pi*"], fam.ns
+            assert _price(x, rt3, alu) < nphi["rt3"], fam.ns
+
+
 def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
     coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which heads a share
