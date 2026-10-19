@@ -119,7 +119,9 @@ SCHEMA = "verity/census/v1"
 #: products an instance of each tensor-core step family performs (its k): the word primitives, and the Boolean Definitions that
 #: compute them (`ml.circuits.ops.boolean.gemm`, `ml.circuits.ops.boolean.s8`).  The s8 IMMA steps are one family in two arms,
 #: s8 x s8 clamped to s32 and u8 x s8 wrapping, 32 products each; the s8 matmul Definitions over them name the arm in a static and
-#: count by their `FAMILY_COUNTS` rule
+#: count by their `FAMILY_COUNTS` rule.  A step cut into parts (vLLM's `cublas_bf16.HOPPER_STEP`: the gates that read only one
+#: operand, shared across W's rows, and the rest, once per row) names each part: the per-row part performs the k products, the
+#: shared part none
 PRODUCTS: dict[str, int] = {
     "AmpereBF16TcDot16_v1": 16, "AmpereBF16TcDot16_v2": 16, "HopperBF16WgmmaDot16_v1": 16, "HopperTf32WgmmaDot8_v1": 8,
     "HopperTf32WgmmaDot8_v2": 8,
@@ -130,13 +132,15 @@ PRODUCTS: dict[str, int] = {
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
     "BlackwellMxf4OmmaDot64_v2": 64,
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
+    "HopperBf16Dot16StepFirst_v1": 16, "HopperBf16Dot16Step_v1": 16, "HopperBf16Dot16StepFirstX_v1": 0, "HopperBf16Dot16StepX_v1": 0,
 }
 
 #: the operand format of each `PRODUCTS` family's products, as the accounting layer names its multiply-add kinds (`mac:<precision>`):
 #: fp8 is E4M3 and E5M2, fp4 NVFP4 and MXFP4, and int8 the s8 and u8 x s8 IMMA arms, PoUW's u8 x s8 step and NCP's i7 step
 PRECISION: dict[str, str] = {
     **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
-                     "HopperBF16WgmmaDot16_v2"), "bf16"),
+                     "HopperBF16WgmmaDot16_v2", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
+                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1"), "bf16"),
     "HopperTf32WgmmaDot8_v1": "tf32", "HopperTf32WgmmaDot8_v2": "tf32",
     **dict.fromkeys(("HopperE4m3QgmmaDot32_v1", "HopperE4m3QgmmaDot32_v2", "HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2",
                      "BlackwellE4m3QmmaDot32_v1", "BlackwellE4m3QmmaDot32_v2", "BlackwellE5m2QmmaDot32_v1",
@@ -497,7 +501,7 @@ def _step_macs(fam: str) -> Counter:
         return Counter()
     if fam not in PRECISION:
         raise ValueError(f"census.PRODUCTS names {fam} with no census.PRECISION: add its operand format")
-    return Counter({f"mac:{PRECISION[fam]}": PRODUCTS[fam]})
+    return Counter({f"mac:{PRECISION[fam]}": PRODUCTS[fam]} if PRODUCTS[fam] else {})
 
 
 def _ruled_macs(fn: Any, below: Counter, served: int) -> Counter:

@@ -3,7 +3,8 @@ greedy on rtxpro6000 (cov-k05-7), its step (the traced Build `test_predict` pins
 then 31 decode steps), each step ending at a sampling event; the census path held to the explicit expansion on `TINY`'s; and
 the served MACs by precision of those rows and of GLM-5.3's served constructions on their stand-ins
 (`tests.program.test_derive_neutrality`); and the Boolean work (`work`) of a word Program through each Call's Boolean version
-(`boolean_version`), held to its lift's and, on Llama-3.2-1B's GEMMs and GLM-5.3's FP8 expert GEMMs, to their steps' gates.
+(`boolean_version`), held to its lift's and, on Llama-3.2-1B's GEMMs and GLM-5.3's cuBLAS and FP8 expert GEMMs, to their steps'
+gates.
 A change to a Definition either Program calls moves the census digests with the Program's: recompute them with `_views`.
 The requirement takes the weights as registered (`Program(fn, registered=("weights",))`), whatever the Build binds them as.
 """
@@ -20,13 +21,15 @@ from tests.program import test_derive_neutrality as GLM
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.ml.circuits.census import PRODUCTS, census, family, step_ends
 from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.predict.build import build_program, model_shape
 from verity_vllm.program.boolean import boolean_version, lift
+from verity_vllm.program.registry import cublas_bf16 as CB
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
@@ -154,6 +157,12 @@ def _calls(program) -> dict[str, object]:
     return {descriptor_id(nd.fn): nd.fn for nd in program.root.body.nodes if not is_input(nd.fn)}
 
 
+def _one(fn) -> CompositeDefinition:
+    """A root that Calls ``fn`` once, so ``fn`` is a root Call of its Program."""
+    return CompositeDefinition("OneCall", 1, (), lambda S: (tuple(fn.signature()[0]), fn.signature()[1]),
+                               lambda B, S, *args: B.call(fn, *args), register=False)
+
+
 @pytest.mark.slow
 def test_a_word_step_counts_its_lifts_work():
     """`TINY`'s step through each Call's Boolean version (about 8 s) counts the work its lift (`lift`, every Call its Boolean
@@ -179,14 +188,26 @@ def test_llama32_1b_gemms_are_their_steps_and_casts():
     gemms = {cid: fn for cid, fn in _calls(_llama_step().program).items() if family(fn) == "Gemm_v2"}
     assert len(gemms) == 5
     for cid, fn in gemms.items():
-        one = CompositeDefinition("OneGemm", 1, (), lambda S, fn=fn: (tuple(fn.signature()[0]), fn.signature()[1]),
-                                  lambda B, S, *args, fn=fn: B.call(fn, *args), register=False)
-        c = census(Program(one), boolean=boolean_version)
+        c = census(Program(_one(fn)), boolean=boolean_version)
         e, S = c["classes"][cid], fn.bindings
         dot = boolean_version(fn).bindings["DOT"]
         assert e["work"] == {"cuda:gate": _times(S["N"], _gates(BG.F2fpBf16)),
                              "tc:bf16": _times(S["N"] * S["K"] // 16, _gates(dot))}, cid
         assert c["totals"]["work"] == e["work"]
+
+
+def test_a_cublas_gemm_counts_its_k16_step_parts_as_tc():
+    """GLM-5.3's cuBLAS GEMMs on bits take the Hopper k16 step in its four parts (`cublas_bf16.HOPPER_STEP`): a word
+    `BatchedGemm_v1` through its Boolean version counts, per member, each step's shared part once and its per-row part N times as
+    `tc:bf16`, and the N casts `cuda:gate`; on bits it serves B x N x K bf16 products."""
+    B, K, N = 2, 32, 3
+    word = bind(CB.BatchedGemmWord, B=B, K=K, N=N, DOT=P.HopperBF16WgmmaDot16)
+    e = census(Program(_one(word)), boolean=boolean_version)["classes"][descriptor_id(word)]
+    first_x, first, x, step = (_gates(part) for part in CB.HOPPER_STEP)
+    member = {k: first_x[k] + x[k] + N * (first[k] + step[k]) for k in ("gates", "and")}
+    assert e["work"] == {"tc:bf16": _times(B, member), "cuda:gate": _times(B * N, _gates(BG.F2fpBf16))}
+    bits = census(Program(bind(CB.BatchedGemm, B=B, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)), boolean=True)["totals"]
+    assert bits["work"] == e["work"] and bits["served_macs_by_precision"] == {"mac:bf16": B * N * K}
 
 
 @pytest.mark.slow
