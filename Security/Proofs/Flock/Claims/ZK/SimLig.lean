@@ -507,8 +507,9 @@ structure LigHyp (coin : ℕ → ℕ → F128) (n p0 : ℕ) (ms : MerkleScheme) 
       ⟨h[lay.lgE 1 0]!, h[lay.lgE 1 1]!⟩
   y1 : p0 + 3 + sch.k0 < n → Zk.rhoIndependent (rhoS coin p0 sch.k0) = true →
     src.y1 = (Array.range (tabS coin p0 t sch.k0).size).map fun c =>
-      (tabS coin p0 t sch.k0)[c]! + (rhoS coin p0 sch.k0).1.smul (extra (2 * rep) c) +
-        (rhoS coin p0 sch.k0).2.smul (extra (2 * rep + 1) c)
+      (tabS coin p0 t sch.k0)[c]! +
+        (rhoS coin p0 sch.k0).1.smul ((Array.range (tabS coin p0 t sch.k0).size).map (extra (2 * rep)))[c]! +
+        (rhoS coin p0 sch.k0).2.smul ((Array.range (tabS coin p0 t sch.k0).size).map (extra (2 * rep + 1)))[c]!
   ybar : p0 + 3 + sch.k0 < n → Zk.rhoIndependent (rhoS coin p0 sch.k0) = true →
     src.ybar = (Array.range tPad).map fun i =>
       (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
@@ -582,7 +583,79 @@ theorem ligeritoCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes P
       sch.k0 ?step _ _ ?init) fun r s₁ r' s₁' t₁ l₁ _ _ hI => ?rest
     case init =>
       refine ⟨rfl, fun _ => ⟨by omega, rfl, rfl, by simp⟩, fun h => absurd h (by have := H.k0; omega)⟩
-    case step => sorry
+    case step =>
+      intro j hj u s u' s' tj lj ⟨hu, hlt, _⟩
+      obtain ⟨hlj, rfl, hw, hch⟩ := hlt hj
+      subst hu
+      rcases u with ⟨initCh, rho, zl⟩
+      dsimp only at hch ⊢
+      refine lliftT fun r tr lr er => ?_
+      obtain ⟨hnr, rfl, hlr⟩ := sampleKP_cut_inv coin er
+      rw [modify_bind_run, modify_bind_run, hlj, hw]
+      by_cases hk : j + 1 = sch.k0
+      · have hb : (j + 1 == sch.k0) = true := by simpa using hk
+        rw [ite_eq_left_of_eq_true _ _ (eq_true hb), ite_eq_left_of_eq_true _ _ (eq_true hb),
+          get_bind_run, get_bind_run]
+        subst hch
+        have he0 := H.e0
+        have he1 := H.e1
+        rw [← hk] at he0 he1
+        rw [he0, he1]
+        refine lliftT fun _ t₁ l₁ e₁ => ?_
+        obtain rfl := liftTM_inv e₁
+        refine lliftT fun _ t₂ l₂ e₂ => ?_
+        obtain rfl := liftTM_inv e₂
+        refine lliftT fun rh0 t₃ l₃ e₃ => ?_
+        obtain ⟨hn₃, rfl, hl₃⟩ := sampleKP_cut_inv coin e₃
+        refine lliftT fun rh1 t₄ l₄ e₄ => ?_
+        obtain ⟨hn₄, rfl, hl₄⟩ := sampleKP_cut_inv coin e₄
+        rw [show lr.size = l.size + 2 + (j + 1) by omega, show l₃.size = l.size + 3 + (j + 1) by omega]
+        by_cases hρ : Zk.rhoIndependent (rhoS coin l.size (j + 1)) = true
+        · have hρu : Zk.rhoIndependent (⟨coin (l.size + 2 + (j + 1)) 0, coin (l.size + 2 + (j + 1)) 1⟩,
+              ⟨coin (l.size + 3 + (j + 1)) 0, coin (l.size + 3 + (j + 1)) 1⟩) = true := hρ
+          have hb2 : ¬ (!Zk.rhoIndependent (⟨coin (l.size + 2 + (j + 1)) 0, coin (l.size + 2 + (j + 1)) 1⟩,
+              ⟨coin (l.size + 3 + (j + 1)) 0, coin (l.size + 3 + (j + 1)) 1⟩)) = true := by simp [hρu]
+          rw [ite_eq_right_of_eq_false _ _ (eq_false hb2), ite_eq_right_of_eq_false _ _ (eq_false hb2)]
+          have hnl : l.size + 3 + sch.k0 < n := by omega
+          have hρk : Zk.rhoIndependent (rhoS coin l.size sch.k0) = true := by rw [← hk]; exact hρ
+          have hy1 := H.y1 hnl hρk
+          have hyb := H.ybar hnl hρk
+          rw [← hk] at hy1 hyb
+          rw [hy1, hyb, show ((Array.range j).map (chS coin l.size)).push
+              ⟨coin (l.size + 2 + j) 0, coin (l.size + 2 + j) 1⟩ = (Array.range (j + 1)).map (chS coin l.size) by
+            simp [Array.range_succ, chS]]
+          refine lliftT fun _ t₅ l₅' e₅ => ?_
+          obtain rfl := liftTM_inv e₅
+          refine lliftT fun _ t₆ l₆ e₆ => ?_
+          obtain rfl := liftTM_inv e₆
+          refine lliftT fun _ t₇ l₇ e₇ => ?_
+          obtain rfl := liftTM_inv e₇
+          rw [modify_bind_run, modify_bind_run, get_bind_run, get_bind_run, sendMsg_bind_run, sendMsg_bind_run]
+          refine lliftT fun _ t₈ l₈' e₈ => ?_
+          obtain rfl := liftTM_inv e₈
+          refine lliftT fun _ t₉ l₉ e₉ => ?_
+          obtain rfl := liftTM_inv e₉
+          exact .inr ⟨_, _, _, _, rfl, rfl, _, _, rfl, rfl, rfl, fun h => absurd h (by omega),
+            fun _ => ⟨rfl, hnl, hρk⟩⟩
+        · have hρu : ¬ Zk.rhoIndependent (⟨coin (l.size + 2 + (j + 1)) 0, coin (l.size + 2 + (j + 1)) 1⟩,
+              ⟨coin (l.size + 3 + (j + 1)) 0, coin (l.size + 3 + (j + 1)) 1⟩) = true := hρ
+          have hb2 : (!Zk.rhoIndependent (⟨coin (l.size + 2 + (j + 1)) 0, coin (l.size + 2 + (j + 1)) 1⟩,
+              ⟨coin (l.size + 3 + (j + 1)) 0, coin (l.size + 3 + (j + 1)) 1⟩)) = true := by simpa using hρu
+          rw [ite_eq_left_of_eq_true _ _ (eq_true hb2), ite_eq_left_of_eq_true _ _ (eq_true hb2)]
+          exact .inl ⟨_, _, rfl, rfl⟩
+      · have hb : ¬ (j + 1 == sch.k0) = true := by simpa using hk
+        rw [ite_eq_right_of_eq_false _ _ (eq_false hb), ite_eq_right_of_eq_false _ _ (eq_false hb), get_bind_run]
+        have hm := H.msg (j + 1) (by omega)
+        simp only [mmOf] at hm
+        rw [hm, sendMsg_bind_run, sendMsg_bind_run]
+        refine lliftT fun _ t₁ l₁ e₁ => ?_
+        obtain rfl := liftTM_inv e₁
+        refine lliftT fun _ t₂ l₂ e₂ => ?_
+        obtain rfl := liftTM_inv e₂
+        refine .inr ⟨_, _, _, _, rfl, rfl, _, _, rfl, rfl, rfl, fun _ => ⟨by omega, rfl, rfl, ?_⟩,
+          fun h => absurd h (by omega)⟩
+        rw [hch]
+        simp [Array.range_succ, chS]
     case rest => sorry
 
 end LigLock
