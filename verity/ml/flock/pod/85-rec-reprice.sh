@@ -4,7 +4,8 @@
 # --cwd source); the big files stay under $FLOCK_WORK/data/$TAG for the next step, out/ gets the records:
 #   STEP=build   (CPU) the GPU prover (60-circuit.sh's build, keyed by its sources as 70-class-sweep.sh keys it), Lean's
 #                flock-verify (rec-env.sh's, keyed by its sources), and the inner statement staged (class_statement
-#                --definitions DEFS --stage-only, BATCH=fixed N) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
+#                --program-module rec_reprice.py:program --partition q-template-instance --stage-only, BATCH=fixed N,
+#                untiled) twice: with plain SHA-512 leaves (FLOCK_PLAIN_LEAVES=1, the
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
@@ -40,7 +41,8 @@
 # The prover runs on the job's first PCPUS cores, the verifier (proxy, serve, replay) on the rest. Every step writes
 # out/summary-$STEP.json. Only a prove invocation holds a GPU, leased for it alone (on_gpu), so every STEP is launched without
 # --gpus (a CPU phase): staging, the proxy, serve, replay and Lean never hold one.
-# env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (the Gemm_v2 contraction: DEFS is Gemm_v2{K,N})  N=2048 (instances: the Call's every unit)
+# env: FLOCK_WORK=/workspace/jobs/rec-reprice  TAG=k4096  K=4096 (GemmCoordinate_v2's contraction)  N=2048 (instances: the
+#      population program's every unit, rec_reprice.py)
 #      CUDA_TK= (default: CUDA_REDIST=13.3.1's archives under FLOCK_WORK)  SM=120  WARM=1  RUNS=3  PCPUS=16
 #      LEVELS= (comma-separated statement names, default every one: L3,alg; oprove and lean also forged-sum-L6, alg-p1,
 #              ..; a name without its part, alg, names every part)
@@ -374,15 +376,17 @@ lean_build() {
   )
 }
 
-# stage_inner NAME PLAIN: the inner statement (one Call of Gemm_v2{K, N}, its GemmCoordinate_v2 shape at N instances: the
-# Call's every unit, so the full draw over its partition proves every unit of the statement, which check 5 requires)
-# staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when PLAIN is 1; its records in $O/NAME
+# stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
+# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full draw over it proves every unit of the
+# statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
+# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
+# which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway
 stage_inner() {
   local o=$O/$1 c=$DD/$1-cache
   mkdir -p $o
-  python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=%s,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % (sys.argv[1], sys.argv[2]): 1151}, open(sys.argv[3], 'w'))" $K $N $o/defs.json
-  FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $o/time-stage.txt \
-    python3 -m verity_flock.class_statement --definitions $o/defs.json --partition q-word --out $o --stage-only --batch fixed --n $N \
+  K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= /usr/bin/time -v -o $o/time-stage.txt \
+    python3 -m verity_flock.class_statement --program-module $REPO/verity/ml/flock/pod/rec_reprice.py:program \
+    --partition q-template-instance --out $o --stage-only --batch fixed --n $N \
     --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $o/stage.log 2>&1
   echo "stage $1 exit $?"; tail -5 $o/stage.log
   local C=$(ls -td $c/*/ 2>/dev/null | head -1)
@@ -391,35 +395,12 @@ stage_inner() {
   du -sb $DD/$1/* | tee $o/sizes.txt
 }
 
-# inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage: the partition object (q-word over
-# the one-Call program, partition.json) and that program (program.json), which STEP=lean's statement check reads, and the
-# full draw over them (rec_live.full_draw: the stratified law at K = the population, every unit; draw.json), which the rec
-# proxy answers Register with
+# inner_partition: the verifier's copies of what the inner statement binds, into $DD/stage (rec_reprice.py partition): the
+# partition object (Q_template_instance over the population program, partition.json) and that program (program.json), which
+# STEP=lean's statement check reads, and the full draw over them (rec_live.full_draw: the stratified law at K = the
+# population, every unit; draw.json), which the rec proxy answers Register with
 inner_partition() {
-  python3 - $K $N $DD/stage <<'EOF'
-import json, sys
-from pathlib import Path
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity_flock import class_statement as CS, partition_units as PU, rec_live as RL
-d = Path(sys.argv[3])
-defs = {'Gemm_v2{K=%s,N=%s,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % (sys.argv[1], sys.argv[2]): 1151}
-program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
-units = PU.partition_units(program, "q-word")
-obj = PO.build(units.program, units.query)
-with open(d / "circuit.txt") as f:
-    f.readline()
-    meta = json.loads(f.readline()[5:])
-assert (meta["partition"]["digest"], meta["program_sha512"]) == (PO.digest(obj), obj["program"]), "not the circuit's partition"
-(d / "partition.json").write_text(json.dumps(obj, sort_keys=True))
-desc = encode_program(units.program)
-assert program_digest(desc) == obj["program"], "the program file is not the partition's program"
-(d / "program.json").write_bytes(canonical_json(desc))
-draw = RL.full_draw(units.program, obj["query"])
-assert draw["population"] == int(sys.argv[2]), f"the partition's population is {draw['population']}, not the statement's {sys.argv[2]} units"
-(d / "draw.json").write_text(json.dumps(draw))
-print("partition", PO.digest(obj), "program", obj["program"], "template", *meta["program_digests"], "population", draw["population"])
-EOF
+  K=$K N=$N python3 $REPO/verity/ml/flock/pod/rec_reprice.py partition $DD/stage
 }
 
 case $STEP in
