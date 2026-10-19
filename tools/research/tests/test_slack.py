@@ -317,6 +317,7 @@ DRY_RUNS = [
     ["match", "--as", "memory-accounting", "--event", '{"text":"x","ts":"2.0","thread_ts":"1.0","channel":"CCOORD"}'],
     ["verify-author", "--event", '{"ts":"1.0","channel":"CCOORD"}'], ["groups", "sync", "--apply"],
     ["ask-daniel", "status", "7", "--wait"], ["ask-daniel", "resolve", "7", "--choice", "yes"],
+    ["chat", "open", "luke", "--email", "luke@example.org", "--host", "proofs", "--start-page", "https://example.org/start"],
 ]
 
 
@@ -519,7 +520,8 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
 def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update"}
+    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
+                                      *slack.CHAT_METHODS}
     assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
 
@@ -534,6 +536,12 @@ METHOD_SCOPES = {
     "reactions.add": ("reactions:write",),
     "usergroups.list": ("usergroups:read",),
     **{f"usergroups.{m}": ("usergroups:write",) for m in ("create", "disable", "enable", "update")},
+    # `chat`: its channel is private, so creating, inviting to, archiving and unarchiving it need groups:write
+    **{f"conversations.{m}": ("groups:write",) for m in ("create", "invite", "archive", "unarchive")},
+    "conversations.inviteShared": ("conversations.connect:write",),
+    "conversations.info": ("channels:read", "groups:read"), "conversations.list": ("channels:read", "groups:read"),
+    "pins.add": ("pins:write",), "bookmarks.add": ("bookmarks:write",),
+    "users.lookupByEmail": ("users:read.email",), "users.list": ("users:read",),
 }
 
 
@@ -977,6 +985,7 @@ def test_verify_author_allows_nobody_when_the_registry_has_no_ids(fake, registry
 
 
 ADA = {"name": "Ada Lovelace", "slack_user": "UADA", "email": "ada@example.org", "note": "a visiting researcher (COMM-49)"}
+CHAT = {"channel": {"key": "chat-ada", "id": "CCHATADA"}, "host": "proofs"}
 
 
 def with_collaborator(registry: Path, **kw) -> dict:
@@ -990,6 +999,7 @@ def test_the_registry_checks_its_collaborators(registry):
     assert slack.load_registry(REAL_REGISTRY)["collaborators"] == []
     reg = json.loads(registry.read_text())
     assert slack.check_registry({**reg, "collaborators": [ADA, {**ADA, "name": "Grace Hopper", "slack_user": None, "email": None}]}, "r")
+    assert slack.chat_channels(slack.check_registry({**reg, "collaborators": [{**ADA, **CHAT}]}, "r"))["chat-ada"]["host"] == "proofs"
     bad = [({"collaborators": {"ada": ADA}}, "a list"),
            ({"collaborators": [{k: v for k, v in ADA.items() if k != "note"}]}, "{name, slack_user, email (optional), note}"),
            ({"collaborators": [{**ADA, "authorizes": True}]}, "{name, slack_user, email (optional), note}"),
@@ -999,7 +1009,13 @@ def test_the_registry_checks_its_collaborators(registry):
            ({"collaborators": [ADA, {**ADA, "slack_user": "UADA2"}]}, "posts as 'ada'"),
            ({"collaborators": [{**ADA, "slack_user": "UDANIEL"}]}, "no other person has"),
            ({"collaborators": [{**ADA, "slack_user": "ada"}]}, "no other person has"),
-           ({"collaborators": [{**ADA, "email": "ada at example"}]}, "is not an address")]
+           ({"collaborators": [{**ADA, "email": "ada at example"}]}, "is not an address"),
+           ({"collaborators": [{**ADA, "host": "proofs"}]}, "needs both a channel and its host"),
+           ({"collaborators": [{**ADA, **CHAT, "host": "nobody"}]}, "host 'nobody' is not a handle"),
+           ({"collaborators": [{**ADA, **CHAT, "channel": {"key": "ada", "id": "CCHATADA"}}]}, "{key: chat-NAME, id: C...}"),
+           ({"collaborators": [{**ADA, **CHAT, "channel": {"key": "chat-ada", "id": None}}]}, "{key: chat-NAME, id: C...}"),
+           ({"collaborators": [{**ADA, **CHAT}, {**ADA, **CHAT, "name": "Grace Hopper", "slack_user": "UGRACE"}]},
+            "a key no other channel has")]
     for change, says in bad:
         with pytest.raises(slack.SlackError, match=re.escape(says)):
             slack.check_registry({**reg, **change}, "r")
@@ -1523,7 +1539,8 @@ VECTORS = Path(__file__).with_name("slack_routing_vectors.json")
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["vectors"], ids=lambda v: v["name"])
 def test_the_routing_rule_matches_every_vector(v):
     doc = json.loads(VECTORS.read_text())
-    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]), v.get("history", []), v.get("branches")) == v["targets"]
+    assert slack.route_targets(v["msg"], v["root"], doc["registry"], set(doc["inboxes"]), v.get("history", []), v.get("branches"),
+                               v.get("host")) == v["targets"]
 
 
 def bells(fake, inbox_ts):

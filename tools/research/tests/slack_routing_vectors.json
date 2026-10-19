@@ -1,6 +1,6 @@
 {
   "schema": "verity/slack-routing-vectors/v2",
-  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`). `registry` is as `with_routes` folds each handle's route into it: its `holder` and `branch_suffixes` are the route's.",
+  "about": "The delivery rule. `vectors` pins research.slack.route_targets: which names a post in #agent-coordination wakes (`msg` the post, `root` its thread's root or null for a top-level post, `inboxes` every inbox thread's ts, `targets` the names in order; optional `history`, the thread's earlier replies, and `branches`, PR number -> head branch, feed a reply under an announcement's `pr_watchers`; `host`, a chat channel's host, which a person's post there that reaches no one else wakes). `registry` is as `with_routes` folds each handle's route into it: its `holder` and `branch_suffixes` are the route's.",
   "registry": {
     "bot_id": "B1",
     "handles": [
@@ -1037,6 +1037,73 @@
       "targets": [
         "circuits"
       ]
+    },
+    {
+      "name": "in a chat channel a person's post that names no one wakes its host",
+      "host": "proofs",
+      "msg": {
+        "ts": "1700000070.000001",
+        "user": "UDANIEL",
+        "text": "how do I read a PoUW receipt?"
+      },
+      "root": null,
+      "targets": [
+        "proofs"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's post that names a lane wakes that lane, not the host",
+      "host": "proofs",
+      "msg": {
+        "ts": "1700000071.000001",
+        "user": "UDANIEL",
+        "text": "<!subteam^SCIRC|@circuits> is the TP8 sweep done?"
+      },
+      "root": null,
+      "targets": [
+        "circuits"
+      ]
+    },
+    {
+      "name": "in a chat channel a person's reply in their own thread that names no one wakes the lanes the root named, else the host",
+      "host": "proofs",
+      "msg": {
+        "ts": "1700000072.000002",
+        "thread_ts": "1700000072.000001",
+        "user": "UDANIEL",
+        "text": "and the Lean side?"
+      },
+      "root": {
+        "ts": "1700000072.000001",
+        "user": "UDANIEL",
+        "text": "what does a receipt prove?"
+      },
+      "targets": [
+        "proofs"
+      ]
+    },
+    {
+      "name": "in a chat channel a quiet post that names no one wakes no one, not even the host",
+      "host": "proofs",
+      "msg": {
+        "ts": "1700000073.000001",
+        "user": "UDANIEL",
+        "text": "thanks, that answers it (quiet)"
+      },
+      "root": null,
+      "targets": []
+    },
+    {
+      "name": "in a chat channel a post by Verity's bot that names no one wakes no one: the host rule is for people",
+      "host": "proofs",
+      "msg": {
+        "ts": "1700000074.000001",
+        "bot_id": "B1",
+        "username": "infra",
+        "text": "node 2 is back"
+      },
+      "root": null,
+      "targets": []
     }
   ],
   "doorbells": {
