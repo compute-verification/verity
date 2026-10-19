@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import itertools
 import json
 import os
 import random
@@ -20,7 +21,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.ml.commitments.merkle import tree_levels
+from verity.ml.crypto import lms
+from verity.core.protocols.certifier import active
+from verity.core.protocols.certifier.active import Proxy
+from verity.core.protocols.certifier.certificate import LmsKey
+from verity.core.protocols.certifier.grid import GridParams
+from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.circuit import leaves as L
@@ -29,6 +37,7 @@ from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
@@ -53,13 +62,19 @@ def _coins(seed: int = 7) -> Coins:
     return Coins(0, random.Random(seed).randbytes)
 
 
+def _pass(run: str) -> tuple[dict, dict[int, bytes], Workload]:
+    """A served pass of `run` before its salt: its manifest's calls, weights' roots and tiles' commitment, the roots and
+    the workload."""
+    roots = {2: hashlib.sha512(run.encode()).digest()}
+    man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}},
+           "commitment": {"root": hashlib.sha512(f"{run}/tiles".encode()).hexdigest(), "count": 1}}
+    return man, roots, Workload((Matmul(5, Shape(16, K, N), 2),))
+
+
 def _manifest(run: str, coins: Coins | None) -> dict:
     """A served pass's manifest as the challenger reads it: its calls, its weights' roots and its salt, the salt coin of
     `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins carries."""
-    roots = {2: hashlib.sha512(run.encode()).digest()}
-    work = Workload((Matmul(5, Shape(16, K, N), 2),))
-    man = {"run": run, "matmuls": [{"index": 5, "m": 16, "k": K, "n": N, "weight": 2}], "weights": {"2": {"root": roots[2].hex()}},
-           "commitment": {"root": hashlib.sha512(f"{run}/tiles".encode()).hexdigest(), "count": 1}}
+    man, roots, work = _pass(run)
     if coins is None:
         beacon = bytes(32)
         return {**man, "schema": PD.MANIFEST_SCHEMA_RECORDED, "beacon": beacon.hex(),
@@ -453,6 +468,142 @@ def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_pat
     assert SC.replay(bare, log, tmp_path / "replay", record=OR.Record(lean=False)) == []
     (tmp_path / "bare.json").write_text(json.dumps(bare))
     assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"]) == 0
+
+
+#: the network certifier's grids, as `certifier.active` runs them; a PoUW window is two certifier windows of CW seconds
+EGRESS, INGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512), GridParams(buckets=6, allocation=2, frame_bytes=512)
+CW = INGRESS.buckets * INGRESS.bucket_ms / 1000
+
+
+def _prover(seed: bytes):
+    """A prover's LMS key as the certifier registers it, and a signer at one-time keys 0, 1, ... in turn."""
+    k, leaves = lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(seed).digest()), itertools.count()
+    return LmsKey(k.params, lms.public_key(k)), lambda m: lms.sign_at(k, next(leaves), m).encode()
+
+
+def _certifier(sid: bytes, key, sign, record: bytes, seed: bytes = b"", clock=lambda: 0.0) -> tuple[Proxy, bytes]:
+    """The certifier, PoUW's reader and the prover's `key` registered, the stream `sid` its context, on `clock`: the
+    prover records `record` for PoUW window 0 before its first tick, signed, then window 0 is published.  With the salt
+    it drew for window 0, which the prover's server receives in-band."""
+    drawn = {}
+
+    def source(p: int, n: int) -> bytes:
+        drawn[p] = hashlib.shake_256(b"certifier salt %d %s" % (p, seed)).digest(n)
+        return drawn[p]
+
+    c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * 4, origin=0.0, clock=clock,
+              salt=source, registered=PS.registered, prover_key=key, prover_context=sid, pouw_window=2)
+    c.commit_weights(0, record, sign(active.weights_message(c.bucketer.certifier.link, 0, record, sid)))
+    for _ in range(2 * INGRESS.buckets):
+        c.bucketer.tick()
+    return c, drawn[0]
+
+
+def _certified_window(words, run: str, reveal: bytes, sid: bytes, prover: bytes) -> tuple[dict, bytes, dict]:
+    """A window of two calls from a certified pass of `run` (`MANIFEST_CERTIFIED`) in PoUW window 0, salted by
+    `Epoch.certified` of the certifier's salt `reveal` under the stream `sid` and `prover`: its parameters, which name
+    window 0 and carry no registration_deadline, the manifest's bytes and the window's registration."""
+    man, roots, work = _pass(run)
+    raw = _raw({**man, "schema": CC.MANIFEST_CERTIFIED,
+                "salt": Epoch.certified(work, roots, [0, 1], 2, reveal, sid, prover).salt.hex()})
+    params = {k: v for k, v in _params(run, raw).items() if k != "registration_deadline"}
+    params["context"] = PS.context(f"served-zk/{run}", 0, hashlib.sha512(raw).hexdigest())
+    root_w, _ = SC.commit_weights(params, _weights())
+    public, _, _ = SC.commit_window(params, _calls(words), root_w, SC.root_h3_of(man))
+    return params, raw, _register(params, public)
+
+
+def _live(path: Path) -> tuple[Ch.LiveChallenger, Ch.LiveCommitment]:
+    """A live epoch's challenger on its host, its record signed and written to `path`, and the commitment the verifier
+    reads from that file under its key for the challenger (`challenger.trusted_commitment`)."""
+    p = lms.Params(64, 4, 2)
+    k = lms.keygen(p, hashlib.sha512(str(path).encode()).digest())
+    live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
+    Ch.write_record(path, live.sign_record("vy-nebius-cpu-1", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
+    return live, Ch.trusted_commitment(path, Ch.ChallengerKey(4, 2, lms.public_key(k)),
+                                       lambda key, m, s: lms.verify(p, key.public, m, lms.Signature.decode(p, s)))
+
+
+def test_a_certified_window_is_salted_and_drawn_by_coins_its_verifier_holds_and_credited_once(served, tmp_path):
+    """A certified window (`Challenger(certifier=…)`) end to end against the network certifier: the prover records its
+    pass's weights, the window's stream (`stream_id`) and its prover id (`salt.prover_id`) with the certifier for PoUW
+    window 0 before its salt is drawn, signed, and salts its pass from the salt it receives in-band.  `register` reads
+    that record on the window's registration and only then has the certifier reveal window 0's salt, so a challenger
+    whose stream or prover isn't the recorded one is refused (``coin``) and takes no reveal: the honest one after it
+    passes (``certifier``), and its draw is the live epoch's ``pouw/draw`` coin 0 opened after the registration, under
+    the commitment read from the challenger's signed record.  The certifier reveals window 0 once and within its reveal
+    deadline on its own clock, so a second registration, or one past the deadline, is refused (``certifier``).  Behind
+    another certifier the same stream and prover get another salt, and the deployment's shared `Credits` refuse that
+    window 0 (``credited``).  A certified challenger opens no salt coin, and is refused parameters with a registration
+    deadline, coins not read through `trusted_commitment`, a prover id that isn't 64 bytes or a context that names no
+    PoUW window; parameters that name one are refused without a certifier."""
+    *_, words = served
+    run = "r-certified"
+    key, sign = _prover(b"the prover")
+    prover, sid = PS.prover_id(key.public), SC.stream_id({"deployment": f"served-zk/{run}"}, "window")
+    other_prover = PS.prover_id(_prover(b"another prover")[0].public)
+    record = PS.pouw_record(weights_root(_pass(run)[1]), sid, prover)
+    t = [0.0]
+    c, salt = _certifier(sid, key, sign, record, clock=lambda: t[0])
+    params, raw, rec = _certified_window(words, run, salt, sid, prover)
+    credits = PS.Credits()
+
+    def challenger(name: str, certifier=c, prover=prover, p=params) -> SC.Challenger:
+        live, trusted = _live(tmp_path / f"{name}.json")
+        return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=certifier,
+                             prover=prover, trusted=trusted, credits=credits)
+
+    def refused(ch: SC.Challenger, code: str, **kw) -> str:
+        with pytest.raises(S.Refused) as e:
+            ch.register("x", rec, manifest=raw, **kw)
+        assert _codes(e) == {code} and "x" not in ch.regs and "x" not in ch.passes
+        return e.value.verdict.detail[code]
+
+    unrecorded = "the pass's weights, stream and prover are not those the certifier recorded before it drew the window's salt"
+    assert refused(challenger("other-stream"), "coin", stream="another") == unrecorded
+    assert refused(challenger("other-prover", prover=other_prover), "coin") == unrecorded
+    ch = challenger("honest")
+    with pytest.raises(S.Refused) as e:
+        ch.open("salt", bytes(64))
+    assert _codes(e) == {"coin"} and "opens no salt coin" in e.value.verdict.detail["coin"]
+    reg = ch.register("honest", rec, manifest=raw)
+    assert ch.passes == {"honest": "certifier"} and "draw" not in ch.openings
+    d = ch.select("honest")
+    o, st = ch.openings["draw"], ch.regs["honest"][0]
+    assert (o.label, o.index, o.after) == (Wd.DRAW, 0, bytes.fromhex(reg.digest))
+    assert Ch.live_reason(ch.trusted, o, Wd.DRAW, 0, o.after) is None and ch.trusted == ch.coins.commitment
+    k = SC.law_of(params, SC.level_of(rec))["k"]
+    assert d.units == CC.stream_subset(k, 26, SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26))
+    assert ch.coins_of("honest") == {"commitment": ch.trusted.to_json(), "pass": "certifier", "draw": o.to_json()}
+    assert refused(challenger("again"), "certifier").startswith("the certifier doesn't reveal PoUW window 0's salt")
+
+    late, late_salt = _certifier(sid, key, sign, record, seed=b"late", clock=lambda: t[0])
+    lparams, lraw, lrec = _certified_window(words, run, late_salt, sid, prover)
+    t[0] = 4 * CW + 1e-3
+    with pytest.raises(S.Refused) as e:
+        challenger("late", certifier=late, p=lparams).register("x", lrec, manifest=lraw)
+    assert _codes(e) == {"certifier"} and "the certifier doesn't give what PoUW recorded for window 0" in \
+        e.value.verdict.detail["certifier"]
+    t[0] = 0.0
+
+    second, second_salt = _certifier(sid, key, sign, record, seed=b"second")
+    assert second_salt != salt
+    sparams, sraw, srec = _certified_window(words, run, second_salt, sid, prover)
+    with pytest.raises(S.Refused) as e:
+        challenger("second", certifier=second, p=sparams).register("x", srec, manifest=sraw)
+    assert _codes(e) == {"credited"} and f"already credited to registration {reg.digest[:16]}" in \
+        e.value.verdict.detail["credited"]
+
+    live, trusted = _live(tmp_path / "init.json")
+    base = dict(certifier=c, prover=prover, trusted=trusted)
+    for p, kw, why in (({**params, "registration_deadline": 60.0}, base, "carry no registration_deadline"),
+                       (params, {**base, "trusted": None}, "trusted_commitment"),
+                       (params, {**base, "trusted": _coins().commitment}, "trusted_commitment"),
+                       (params, {**base, "prover": prover[:32]}, "64-byte id"),
+                       ({**params, "context": _params(run, raw)["context"]}, base, "names its PoUW window"),
+                       (params, {}, "so it is certified")):
+        with pytest.raises(ValueError, match=why):
+            SC.Challenger(p, live, **kw)
 
 
 @LEAN
