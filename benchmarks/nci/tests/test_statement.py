@@ -54,8 +54,8 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     assert rows["Best plausible PoUW design"]["D"]["T1"] == pytest.approx(P["mfu"] / (best + X.nu(P) + LAG), rel=1e-4)
     assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(P["mfu"] / (X.nu(P) + LAG + EPS), rel=1e-4)
     assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(P["mfu"] / (X.nu(P) + 60 / H + EPS), rel=1e-4)
-    six = P | S.streamed(6.0)
-    assert rows["Streamed-label wipes, 6 GB"]["D"]["T3"] == pytest.approx(P["mfu"] / X.mu(six), rel=0.01)
+    one = P | S.streamed(1.0)
+    assert rows["Power removal, 1 GB"]["D"]["T3"] == pytest.approx(P["mfu"] / X.mu(one), rel=0.01)
     fl = quantities(S.floor())
     assert fl["MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0"] == P["mfu"] / (X.nu(P) + EPS)
     assert fl["MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)
@@ -144,8 +144,9 @@ def test_alpha_falls_only_where_k_reaches_the_level_in_its_range():
 
 def test_the_symbols_closed_forms_are_what_evaluate_uses():
     sym = {(r["symbol"], r["meaning"]): r["value"] for r in S.symbols()}
-    capped = T.evaluate(P | S.streamed(6.0), T.TIERS["T3"])
-    assert sym[("μ̂", "at 6 GB")] == pytest.approx(capped["residual"] + capped["declared"], rel=0.01)
+    capped = T.evaluate(P | S.streamed(1.0), T.TIERS["T3"])
+    assert sym[("μ̂", "at 1 GB")] == pytest.approx(capped["residual"] + capped["declared"], rel=0.01)
+    assert sym[("μ̂", "at 6 GB")] == X.mu(P | S.streamed(6.0))
     assert sym[("ν = 2αΛ(K)/(κ b_a)", "NCI's term")] == pytest.approx(
         T.evaluate(P | S.BEST, T.TIERS["T1"])["declared"], rel=1e-6)
     assert sym[("χ", "cheating share (T5)")] == T.evaluate(P, T.TIERS["T5"])["cheat"]

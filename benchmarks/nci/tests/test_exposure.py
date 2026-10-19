@@ -23,8 +23,8 @@ def test_every_parameter_has_a_range_around_its_default_inside_its_slider():
 def test_the_defaults_give_the_statements_numbers():
     t = X.terms(T.DEFAULTS)
     assert t["R_wipe_gb"] == pytest.approx(166, rel=0.01)
-    assert t["mu"] == pytest.approx(0.550, rel=0.01)
-    assert t["nu"] == pytest.approx(9.7e-6, rel=0.01)
+    assert t["mu"] == pytest.approx(27.8, rel=0.01)
+    assert t["nu"] == pytest.approx(1.04e-4, rel=0.01)
     assert t["chi"] == pytest.approx(1.62e-3, rel=0.01)
     assert t["eta_T4"] == pytest.approx(0.508, rel=0.01)
 
@@ -46,8 +46,8 @@ def test_closed_forms_break_where_their_regimes_end(probe):
 
 
 def test_the_memory_cap_has_unit_elasticities_once_it_binds():
-    """Served today, eta = mu = 4 R_wipe alpha / (kappa d b_w b_a) at T4."""
-    p = T.DEFAULTS | X.SCENARIOS["served today"]
+    """Served today at R_wipe 4 GB, eta = mu = 4 R_wipe alpha / (kappa d b_w b_a) at T4."""
+    p = T.DEFAULTS | X.SCENARIOS["served today, R_wipe 4 GB"]
     for key in ("d", "b_w", "b_a", "kappa"):
         assert X.elasticity(p, key, "T4") == pytest.approx(-1, rel=0.02), key
     assert X.elasticity(p, "residual", "T4") == pytest.approx(0, abs=1e-9)

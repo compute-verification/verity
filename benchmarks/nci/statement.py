@@ -237,6 +237,7 @@ def symbols() -> list[dict]:
          X.mu(p | {"pous_rounds": 1e12, "pous_floor": 0.0})),
         ("μ̂", "at 13 GB", X.mu(p | streamed(13.0))),
         ("μ̂", "at 6 GB", X.mu(p | streamed(6.0))),
+        ("μ̂", "at 1 GB", X.mu(p | streamed(1.0))),
         ("J", "identities a detection doesn't end", p["identities"]),
         ("Δ", "verdict lag, s", p["lag_s"]),
         ("Δ/H", "the verdict lag's share of capacity per identity", p["lag_s"] / H),
