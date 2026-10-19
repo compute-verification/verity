@@ -60,4 +60,19 @@ Calibration, from a JSON trace of honest runs:
 uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
 
+## Not yet zero-knowledge
+
+Every protocol is to be zero-knowledge, and the network audit isn't yet. Nothing may call it zero-knowledge until both
+of these gaps are closed:
+- **N2's grid comparison.** `service.LinkWindows.verify` compares each certified egress digest with the Program's grid
+  in the clear (`check_link` with `grid` on), and that reads witness. It goes once N3 runs on every link-window
+  (NET-38): N2 then switches to `check_link(grid=False)`.
+- **The certificate's signature check.** The certificate signs an unsalted digest of the record head, which holds its
+  counts and an unsalted root of the raw frames. The host checks that signature, so it reads a hash of witness. The fix
+  is NET-42:
+  - the certifier signs `H("verity/net-cert/v1" ‖ salt_c ‖ R)`, with `salt_c` drawn by the certifier, 64 bytes, fresh
+    per record and handed to the prover as witness only;
+  - the head-check unit proves `R = H(head)` and that `H(salt_c ‖ R)` is the signed digest;
+  - the host's LMS check then reads only public fields and that hiding digest.
+
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.
