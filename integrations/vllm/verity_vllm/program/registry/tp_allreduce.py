@@ -693,11 +693,13 @@ def offset_free(c: Captured, world: int) -> bool:
     """Whether every element of the covered route is reduced the same way wherever it sits in the call: MNNVL's per-element sum,
     NCCL's tree (one chain for every element), multimem with one tree for every owner, the custom all-reduce's 1-stage kernel
     (`custom_owners`)."""
-    if c.definition in ("AllReduceMnnvl_v1", "AllReduceNcclTree_v1"):
-        return True
-    if c.definition == "AllReduceMultimem_v1":
-        return len(set(multimem_trees(c.statics["TREES"], world))) == 1
-    return c.definition == "AllReduceCustom_v1" and int(c.statics["STAGE"]) == 1
+    free = {
+        "AllReduceMnnvl_v1": lambda: True,
+        "AllReduceNcclTree_v1": lambda: True,
+        "AllReduceMultimem_v1": lambda: len(set(multimem_trees(c.statics["TREES"], world))) == 1,
+        "AllReduceCustom_v1": lambda: int(c.statics["STAGE"]) == 1,
+    }.get(c.definition)
+    return free is not None and free()
 
 
 def route_binding(c: Captured, world: int, M: int, N: int, rows: int | None = None) -> tuple[object, dict]:
