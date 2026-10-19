@@ -2122,7 +2122,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence high); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Its multiplier is 1, since the reference already allocates this way; its gain over Kaplan allocation (the scaling entries) is base-recipe progress. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence high); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
@@ -2212,13 +2212,12 @@
    }
   ],
   "multiplier": {
-   "value": 10,
-   "trend": "grows-with-scale",
+   "value": 1.0,
+   "trend": "constant",
    "evidence": [
-    "gundlach-2025-origin/10",
-    "gundlach-2025-origin/13"
+    "hoffmann-2022-chinchilla/1"
    ],
-   "metric": "CEG over Kaplan allocation near 2e23 FLOP; 1 against the reference by construction"
+   "metric": "1 against the reference by construction: the reference is Chinchilla-optimal. The scaling entries' 3.7-17.5x are over Kaplan allocation, a gain that belongs in g, not in m_A"
   },
   "confidence": "high",
   "convention": "as-published"
