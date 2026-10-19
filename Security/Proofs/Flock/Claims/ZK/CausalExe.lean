@@ -61,21 +61,21 @@ theorem eqAt_bind {n N M : ℕ} {P : α → Prop} {Q : β → Prop} {x y : PS α
 /-- **A bind of equal runs**, the continuations equal from each return. -/
 theorem eqAt_bindT {n N M : ℕ} {P : α × Transcript → Prop} {Q : β × Transcript → Prop} {x y : TMW PS α}
     {f g : α → TMW PS β} {t : Transcript} {l : Array Claims.Msg} (hxy : EqAt n N P ((x.run t).go l) ((y.run t).go l))
-    (hfg : ∀ a t' l', (x.run t).go l = (.ok (a, t'), l') → l'.size = N → N ≤ n → P (a, t') →
+    (hfg : ∀ a t' l', l'.size = N → N ≤ n → P (a, t') →
       EqAt n M Q (((f a).run t').go l') (((g a).run t').go l')) :
     EqAt n M Q (((x >>= f).run t).go l) (((y >>= g).run t).go l) := by
   rw [StateT.run_bind, StateT.run_bind]
-  exact eqAt_bind hxy fun p l' h h1 h2 h3 => hfg p.1 p.2 l' h h1 h2 h3
+  exact eqAt_bind hxy fun p l' _ h1 h2 h3 => hfg p.1 p.2 l' h1 h2 h3
 
 /-- **A Ligerito bind of equal runs.** -/
 theorem eqAt_bindL {n N M : ℕ} {P : (α × LigState) × Transcript → Prop} {Q : (β × LigState) × Transcript → Prop}
     {x y : LP PS α} {f g : α → LP PS β} {st : LigState} {t : Transcript} {l : Array Claims.Msg}
     (hxy : EqAt n N P (((x.run st).run t).go l) (((y.run st).run t).go l))
-    (hfg : ∀ a st' t' l', ((x.run st).run t).go l = (.ok ((a, st'), t'), l') → l'.size = N → N ≤ n →
+    (hfg : ∀ a st' t' l', l'.size = N → N ≤ n →
       P ((a, st'), t') → EqAt n M Q ((((f a).run st').run t').go l') ((((g a).run st').run t').go l')) :
     EqAt n M Q ((((x >>= f).run st).run t).go l) ((((y >>= g).run st).run t).go l) := by
   rw [StateT.run_bind, StateT.run_bind]
-  exact eqAt_bindT hxy fun p t' l' h h1 h2 h3 => hfg p.1 p.2 t' l' h h1 h2 h3
+  exact eqAt_bindT hxy fun p t' l' h1 h2 h3 => hfg p.1 p.2 t' l' h1 h2 h3
 
 theorem eqAt_pureT (a : α) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
     EqAt n N (fun _ => True) (((pure a : TMW PS α).run t).go l) (((pure a : TMW PS α).run t).go l) :=
@@ -153,6 +153,41 @@ theorem eqAt_lsilent {x : LP PS α} (hx : LSilent x) (st : LigState) (t : Transc
     obtain rfl := hx st t l p.1.1 p.1.2 p.2 L h
     exact ⟨hl, hN, trivial⟩
 
+/-- A step of the session's monad that sends nothing. -/
+def TSilent (x : TMW PS α) : Prop :=
+  ∀ t l a t' l', (x.run t).go l = (.ok (a, t'), l') → l' = l
+
+theorem tsilent_liftTM (x : TM α) : TSilent (liftTM x : TMW PS α) :=
+  fun t l _ _ _ h => (congrArg Prod.snd ((liftTM_go x t l).symm.trans h)).symm
+
+/-- **A bind after a step that sends nothing**: the continuations from the same bodies. -/
+theorem eqAt_tsilent_bind {x : TMW PS α} (hx : TSilent x) {f g : α → TMW PS β} {t : Transcript}
+    {l : Array Claims.Msg} {n M : ℕ} {Q : β × Transcript → Prop}
+    (hfg : ∀ a t', EqAt n M Q (((f a).run t').go l) (((g a).run t').go l)) :
+    EqAt n M Q (((x >>= f).run t).go l) (((x >>= g).run t).go l) := by
+  rw [StateT.run_bind, StateT.run_bind, go_bind, go_bind]
+  rcases hxr : (x.run t).go l with ⟨r, l'⟩
+  cases r with
+  | error e => exact ⟨rfl, fun a L h => by simp at h⟩
+  | ok p =>
+    obtain ⟨a, t'⟩ := p
+    obtain rfl := hx t l a t' l' hxr
+    exact hfg a t'
+
+/-- **A Ligerito bind after a step that sends nothing.** -/
+theorem eqAt_lsilent_bind {x : LP PS α} (hx : LSilent x) {f g : α → LP PS β} {st : LigState} {t : Transcript}
+    {l : Array Claims.Msg} {n M : ℕ} {Q : (β × LigState) × Transcript → Prop}
+    (hfg : ∀ a st' t', EqAt n M Q ((((f a).run st').run t').go l) ((((g a).run st').run t').go l)) :
+    EqAt n M Q ((((x >>= f).run st).run t).go l) ((((x >>= g).run st).run t).go l) := by
+  rw [StateT.run_bind, StateT.run_bind, StateT.run_bind, StateT.run_bind, go_bind, go_bind]
+  rcases hxr : ((x.run st).run t).go l with ⟨r, l'⟩
+  cases r with
+  | error e => exact ⟨rfl, fun a L h => by simp at h⟩
+  | ok p =>
+    obtain ⟨⟨a, st'⟩, t'⟩ := p
+    obtain rfl := hx st t l a st' t' l' hxr
+    exact hfg a st' t'
+
 /-! ## Loops -/
 
 /-- **A loop of equal steps**: step `i`, from `L + g i ≤ n` bodies, yields after `L + g (i + 1)`; the loops over
@@ -177,7 +212,7 @@ theorem eqAt_forIn {n : ℕ} (body body' : ℕ → σ → TMW PS (ForInStep σ))
   | succ j ih =>
     intro a s t l ha hl hL
     rw [List.range'_succ, List.forIn_cons, List.forIn_cons]
-    refine eqAt_bindT (hb a (by omega) s t l hl hL) fun r t₁ l₁ _ hl₁ hL₁ hr => ?_
+    refine eqAt_bindT (hb a (by omega) s t l hl hL) fun r t₁ l₁ hl₁ hL₁ hr => ?_
     obtain ⟨u, hu⟩ := hr
     dsimp only at hu
     subst hu
@@ -207,7 +242,7 @@ theorem eqAt_forInL {n : ℕ} (body body' : ℕ → σ → LP PS (ForInStep σ))
   | succ j ih =>
     intro a s st t l ha hl hL
     rw [List.range'_succ, List.forIn_cons, List.forIn_cons]
-    refine eqAt_bindL (hb a (by omega) s st t l hl hL) fun r st₁ t₁ l₁ _ hl₁ hL₁ hr => ?_
+    refine eqAt_bindL (hb a (by omega) s st t l hl hL) fun r st₁ t₁ l₁ hl₁ hL₁ hr => ?_
     obtain ⟨u, hu⟩ := hr
     dsimp only at hu
     subst hu
@@ -299,13 +334,13 @@ theorem eqAt_sampleP (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.s
     EqAt n (N + 1) (fun _ => True) (((sampleP (asksCut coin n)).run t).go l)
       (((sampleP (asksCut coin n)).run t).go l) := by
   unfold sampleP
-  exact eqAt_bindT (eqAt_squeezeP coin n 1 one_ne_zero t hl) fun _ t' _ _ h1 h2 _ => eqAt_pureT _ t' h1 h2
+  exact eqAt_bindT (eqAt_squeezeP coin n 1 one_ne_zero t hl) fun _ t' _ h1 h2 _ => eqAt_pureT _ t' h1 h2
 
 theorem eqAt_sampleKP (t : Transcript) {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) :
     EqAt n (N + 1) (fun _ => True) (((sampleKP (asksCut coin n)).run t).go l)
       (((sampleKP (asksCut coin n)).run t).go l) := by
   unfold sampleKP
-  exact eqAt_bindT (eqAt_squeezeP coin n 2 two_ne_zero t hl) fun _ t' _ _ h1 h2 _ => eqAt_pureT _ t' h1 h2
+  exact eqAt_bindT (eqAt_squeezeP coin n 2 two_ne_zero t hl) fun _ t' _ h1 h2 _ => eqAt_pureT _ t' h1 h2
 
 theorem eqAt_link (rootB publics : Array ByteArray) (hn : 1 ≤ n) :
     EqAt n 1 (fun _ => True) (((asksCut coin n).link rootB publics).go #[])
@@ -350,15 +385,15 @@ theorem eqAt_challengeP (split : Bool) (st : LigState) (t : Transcript) {l : Arr
     EqAt n (N + 1) (fun _ => True) ((((challengeP (asksCut coin n) split).run st).run t).go l)
       ((((challengeP (asksCut coin n) split).run st).run t).go l) := by
   unfold challengeP
-  refine eqAt_bindL (eqAt_lsampleKP coin n st t hl) fun _ st₁ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₁ t₁ h1 h2) fun _ st₂ t₂ l₂ _ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsampleKP coin n st t hl) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₁ t₁ h1 h2) fun _ st₂ t₂ l₂ h1 h2 _ => ?_
   split
-  · refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ _ h1 h2 _ => ?_
-    refine eqAt_bindL (eqAt_lsilent lsilent_get st₃ t₃ h1 h2) fun _ st₄ t₄ l₄ _ h1 h2 _ => ?_
-    refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ _ h1 h2 _ => ?_
+  · refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ h1 h2 _ => ?_
+    refine eqAt_bindL (eqAt_lsilent lsilent_get st₃ t₃ h1 h2) fun _ st₄ t₄ l₄ h1 h2 _ => ?_
+    refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ h1 h2 _ => ?_
     exact eqAt_pureL _ st₅ t₅ h1 h2
-  · refine eqAt_bindL (eqAt_lsilent lsilent_get st₂ t₂ h1 h2) fun _ st₄ t₄ l₄ _ h1 h2 _ => ?_
-    refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ _ h1 h2 _ => ?_
+  · refine eqAt_bindL (eqAt_lsilent lsilent_get st₂ t₂ h1 h2) fun _ st₄ t₄ l₄ h1 h2 _ => ?_
+    refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ h1 h2 _ => ?_
     exact eqAt_pureL _ st₅ t₅ h1 h2
 
 theorem eqAt_oodIntroP (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : ℕ} (hdim : dim ≠ 0) (st : LigState)
@@ -366,12 +401,12 @@ theorem eqAt_oodIntroP (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : 
     EqAt n (N + 2) (fun _ => True) ((((oodIntroP (asksCut coin n) nonce g dim).run st).run t).go l)
       ((((oodIntroP (asksCut coin n) nonce g dim).run st).run t).go l) := by
   unfold oodIntroP
-  refine eqAt_bindL (eqAt_lsampleVecP coin n hdim st t hl) fun _ st₁ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₁ t₁ h1 h2) fun _ st₂ t₂ l₂ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_liftTML n _ st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₃ t₃ h1 h2) fun _ st₄ t₄ l₄ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsilent (lsilent_powB nonce) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsampleP coin n st₅ t₅ h1) fun _ st₆ t₆ l₆ _ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsampleVecP coin n hdim st t hl) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₁ t₁ h1 h2) fun _ st₂ t₂ l₂ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_liftTML n _ st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₃ t₃ h1 h2) fun _ st₄ t₄ l₄ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsilent (lsilent_powB nonce) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsampleP coin n st₅ t₅ h1) fun _ st₆ t₆ l₆ h1 h2 _ => ?_
   exact eqAt_lsilent (lsilent_modify _) st₆ t₆ h1 h2
 
 theorem eqAt_queryP (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) (hq : lv.q ≠ 0)
@@ -379,10 +414,10 @@ theorem eqAt_queryP (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : L
     EqAt n (N + 2) (fun _ => True) ((((queryP (asksCut coin n) nonce ms lv cm).run st).run t).go l)
       ((((queryP (asksCut coin n) nonce ms lv cm).run st).run t).go l) := by
   unfold queryP
-  refine eqAt_bindL (eqAt_lsilent (lsilent_powP nonce 0) st t hl hN) fun _ st₁ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsampleVecP coin n hq st₁ t₁ h1) fun _ st₂ t₂ l₂ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsilent (lsilent_powP nonce 1) st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_lsampleVecP coin n (Nat.succ_ne_zero _) st₃ t₃ h1) fun _ st₄ t₄ l₄ _ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsilent (lsilent_powP nonce 0) st t hl hN) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsampleVecP coin n hq st₁ t₁ h1) fun _ st₂ t₂ l₂ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsilent (lsilent_powP nonce 1) st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_lsampleVecP coin n (Nat.succ_ne_zero _) st₃ t₃ h1) fun _ st₄ t₄ l₄ h1 h2 _ => ?_
   exact eqAt_pureL _ st₄ t₄ h1 h2
 
 end Asks
@@ -425,34 +460,34 @@ theorem zerocheckCut_eqAt {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray
       (((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l)
       (((zerocheckCut (asksCut coin n) m digest cap root lay mk').run t).go l) := by
   unfold zerocheckCut
-  refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_sampleVecP coin n (by norm_num) t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_sampleVecP coin n (by omega) t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_sampleVecP coin n (by norm_num) t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_sampleVecP coin n (by omega) t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
   dsimp only
   have e1 : ((Array.range 64).map fun i => mk (lay.r1ab i)) = (Array.range 64).map fun i => mk' (lay.r1ab i) :=
     Array.map_congr_left fun i hi => ((hab (by omega)) i (by simpa using hi)).1
   have e2 : ((Array.range 64).map fun i => mk (lay.r1c i)) = (Array.range 64).map fun i => mk' (lay.r1c i) :=
     Array.map_congr_left fun i hi => ((hab (by omega)) i (by simpa using hi)).2
   rw [e1, e2]
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_forIn _ _ (L + 3) (fun i => i) (m - 6) (fun i hi s t l hl hL => ?_) _ t₁ l₁
-    (by omega) (by omega)) fun r t₁ l₁ _ h1 h2 _ => ?_
+    (by omega) (by omega)) fun r t₁ l₁ h1 h2 _ => ?_
   · rw [(hml i hi (by omega)).1, (hml i hi (by omega)).2]
-    refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureP _ t₁ (by omega) (by omega) ⟨_, rfl⟩
   · obtain ⟨ea, eb, ec⟩ := hf (by omega)
     rw [ea, eb, ec]
-    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ h1 h2
 
 /-- **The cut's lincheck at masked values agreeing where sent**: lincheck round `j`'s after its `2 + j` sends, `z_partial`
@@ -466,24 +501,24 @@ theorem lincheckCut_eqAt (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk mk
       (((lincheckCut (asksCut coin n) c m lay mk' zc).run t).go l) := by
   unfold lincheckCut
   dsimp only
-  refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun alpha t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun alpha t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
   rcases hfold : c.fold alpha (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) with err | v
   · exact eqAt_throwT n err t₁ l₁
-  refine eqAt_bindT (eqAt_pureT v t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_pureT v t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_forIn _ _ (L + 2) (fun i => i) (c.kLog - 6) (fun i hi s t l hl hL => ?_) _ t₁ l₁
-    (by omega) (by omega)) fun r t₁ l₁ _ h1 h2 _ => ?_
+    (by omega) (by omega)) fun r t₁ l₁ h1 h2 _ => ?_
   · rw [(hlc i hi (by omega)).1, (hlc i hi (by omega)).2]
-    refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureP _ t₁ (by omega) (by omega) ⟨_, rfl⟩
   · have e : ((Array.range 64).map fun i => mk (lay.zp i)) = (Array.range 64).map fun i => mk' (lay.zp i) :=
       Array.map_congr_left fun i hi => hzp (by omega) i (by simpa using hi)
     rw [e]
-    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ (by omega) (by omega)
 
 /-- **The ring switch at switched vectors agreeing where sent**: claim `k`'s after `k` sends. -/
@@ -495,15 +530,15 @@ theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) 
       (((ringSwitchCut (asksCut coin n) sv' claims).run t).go l) := by
   unfold ringSwitchCut
   dsimp only
-  refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_forIn _ _ L (fun i => i) claims.size (fun i hi s t l hl hL => ?_) _ t₁ l₁
-    (by omega) (by omega)) fun r t₁ l₁ _ h1 h2 _ => ?_
+    (by omega) (by omega)) fun r t₁ l₁ h1 h2 _ => ?_
   · rw [hsv i hi (by omega)]
-    refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    refine eqAt_bindT (eqAt_sampleVecP coin n (by norm_num) t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_bindT (eqAt_sampleVecP coin n (by norm_num) t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureP _ t₁ (by omega) (by omega) ⟨_, rfl⟩
-  · refine eqAt_bindT (eqAt_sampleVecP coin n hc t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  · refine eqAt_bindT (eqAt_sampleVecP coin n hc t₁ h1) fun _ t₁ l₁ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ h1 h2
 
 /-- **The cut's PIOP at sources agreeing where sent**: the zerocheck's, the lincheck's and the ring switch's reads, each
@@ -525,19 +560,170 @@ theorem piopCut_eqAt (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (src s
       (((piopCut (asksCut coin n) st lay src cap root extras prior words).run t).go l)
       (((piopCut (asksCut coin n) st lay src' cap root extras prior words).run t).go l) := by
   unfold piopCut
-  refine eqAt_bindT (zerocheckCut_eqAt coin n hm _ _ _ lay _ _ t hl hL hab hml hf) fun zz t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (zerocheckCut_eqAt coin n hm _ _ _ lay _ _ t hl hL hab hml hf) fun zz t₁ l₁ h1 h2 _ => ?_
   obtain ⟨zp, zc⟩ := zz
   dsimp only
-  refine eqAt_bindT (lincheckCut_eqAt coin n _ _ lay _ _ zc t₁ h1 h2 hlc hzp) fun ll t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (lincheckCut_eqAt coin n _ _ lay _ _ zc t₁ h1 h2 hlc hzp) fun ll t₁ l₁ h1 h2 _ => ?_
   obtain ⟨lp, lc⟩ := ll
   dsimp only
-  refine eqAt_bindT (eqAt_rankCheckP n _ _ prior words t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  refine eqAt_bindT (eqAt_rankCheckP n _ _ prior words t₁ h1 h2) fun _ t₁ l₁ h1 h2 _ => ?_
   have hsz : (abcClaims st.m st.kLog zc lc ++ extras).size = 2 + extras.size := by
     simp [abcClaims, Nat.add_comm]
   refine eqAt_bindT (ringSwitchCut_eqAt coin n _ _ _ (by omega) t₁ h1 h2 fun k hk hkn => hsv k (by omega)
-    (by omega)) fun rr t₁ l₁ _ h1 h2 _ => ?_
+    (by omega)) fun rr t₁ l₁ h1 h2 _ => ?_
   obtain ⟨ss, T, sws⟩ := rr
   exact eqAt_pureT _ t₁ (by rw [h1, hsz]; omega) (by rw [← hsz]; omega)
+
+/-- A Ligerito refusal, whatever follows it. -/
+theorem eqAt_throwL (err : String) {f g : α → LP PS β} {Q : (β × LigState) × Transcript → Prop} (st : LigState)
+    (t : Transcript) (l : Array Claims.Msg) {M : ℕ} :
+    EqAt n M Q (((((throw err : LP PS α) >>= f).run st).run t).go l)
+      (((((throw err : LP PS α) >>= g).run st).run t).go l) := by
+  have e : (((((throw err : LP PS α) >>= f).run st).run t).go l) = (.error err, l) := rfl
+  have e' : (((((throw err : LP PS α) >>= g).run st).run t).go l) = (.error err, l) := rfl
+  rw [e, e']
+  exact eqAt_refl fun _ _ h => by simp at h
+
+/-- **The cut's Ligerito opening at sources agreeing where sent**: level 0's out-of-domain value after `1` send, lane
+message `j`'s after `2 + j`, the pair's sums after `2 + k_0`, and the restart's `y₁'`, `ȳ` and the salts of levels ≥ 1
+after `k_0 + 4`; it sends `k_0 + 7 + 11 R` bodies. -/
+theorem ligeritoCut_eqAt (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
+    (lay : Zk.PadLayout) (src src' : RepSrc) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hR : 2 ≤ sch.levels.size)
+    (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) (t : Transcript) {l : Array Claims.Msg} {L : ℕ}
+    (hl : l.size = L) (hL : L ≤ n)
+    (hood : L + 1 ≤ n → src.masked (lay.lgOod 0) = src'.masked (lay.lgOod 0))
+    (hmsg : ∀ j < sch.k0, L + 2 + j ≤ n → ∀ i < 4, src.masked (lay.lgMsg j i) = src'.masked (lay.lgMsg j i))
+    (hE : L + 2 + sch.k0 ≤ n → ∀ a < 2, ∀ i < 2, src.masked (lay.lgE a i) = src'.masked (lay.lgE a i))
+    (hy : L + sch.k0 + 4 ≤ n → src.y1 = src'.y1 ∧ src.ybar = src'.ybar ∧ src.hiSalt = src'.hiSalt) :
+    EqAt n (L + (sch.k0 + 7 + 11 * (sch.levels.size - 1))) (fun _ => True)
+      (((ligeritoCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) ms sch T cm0 b lay src).run t).go l)
+      (((ligeritoCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) ms sch T cm0 b lay src').run t).go l) := by
+  unfold ligeritoCut
+  dsimp only
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_tsilent_bind (tsilent_liftTM _) fun _ t₁ => ?_
+  refine eqAt_bindT (N := L + (sch.k0 + 7 + 11 * (sch.levels.size - 1))) (P := fun _ => True) ?_
+    fun r t₁ l₁ h1 h2 _ => ?_
+  rotate_left
+  · obtain ⟨⟨_, _, _, _, _, _, _, _, _⟩, _⟩ := r
+    exact eqAt_pureT _ t₁ h1 h2
+  refine eqAt_bindL (eqAt_lsampleVecP coin n hn _ t₁ hl) fun z st₁ t₁ l₁ h1 h2 _ => ?_
+  rw [hood (by omega)]
+  refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+  refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+  refine eqAt_lsilent_bind (lsilent_powB _) fun _ st₁ t₁ => ?_
+  refine eqAt_bindL (eqAt_lsampleP coin n st₁ t₁ h1) fun b0 st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+  have hm0 := hmsg 0 (by omega) (by omega)
+  rw [hm0 0 (by norm_num), hm0 1 (by norm_num), hm0 2 (by norm_num), hm0 3 (by norm_num)]
+  refine eqAt_lsilent_bind (lsilent_sendMsg _) fun _ st₁ t₁ => ?_
+  refine eqAt_bindL (eqAt_forInL _ _ (L + 2) (fun j => j + 2 * (j + 1 - sch.k0)) sch.k0
+    (fun i hi s st t l hl hL => ?_) _ st₁ t₁ l₁ (by omega) (by omega)) fun s st₁ t₁ l₁ h1 h2 _ => ?_
+  · have hg : i + 2 * (i + 1 - sch.k0) = i := by omega
+    have hg' : i + 1 + 2 * (i + 1 + 1 - sch.k0) = if i + 1 = sch.k0 then sch.k0 + 2 else i + 1 := by
+      split_ifs <;> omega
+    rw [hg] at hl hL
+    rw [hg']
+    clear hg hg'
+    refine eqAt_bindL (eqAt_lsampleKP coin n st t hl) fun r st₁ t₁ l₁ h1 h2 _ => ?_
+    refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+    by_cases hj1 : (i + 1 == sch.k0) = true
+    · have hik : i + 1 = sch.k0 := by simpa using hj1
+      rw [ite_eq_left hj1, ite_eq_left hj1, ite_eq_left hik]
+      have hE' := hE (by omega)
+      rw [hE' 0 (by norm_num) 0 (by norm_num), hE' 0 (by norm_num) 1 (by norm_num), hE' 1 (by norm_num) 0 (by norm_num),
+        hE' 1 (by norm_num) 1 (by norm_num)]
+      clear hE'
+      refine eqAt_lsilent_bind lsilent_get fun _ st₁ t₁ => ?_
+      refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+      refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+      refine eqAt_bindL (eqAt_lsampleKP coin n st₁ t₁ h1) fun rh0 st₁ t₁ l₁ h1 h2 _ => ?_
+      refine eqAt_bindL (eqAt_lsampleKP coin n st₁ t₁ h1) fun rh1 st₁ t₁ l₁ h1 h2 _ => ?_
+      obtain ⟨ey, eyb, -⟩ := hy (by omega)
+      rw [ey, eyb]
+      by_cases hc : (!Zk.rhoIndependent (rh0, rh1)) = true
+      · rw [ite_eq_left hc]
+        exact eqAt_throwL n _ st₁ t₁ l₁
+      · rw [ite_eq_right hc]
+        refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind lsilent_get fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind (lsilent_sendMsg _) fun _ st₁ t₁ => ?_
+        exact eqAt_purePL _ st₁ t₁ (by omega) (by omega) ⟨_, rfl⟩
+    · have hi1 : i + 1 ≠ sch.k0 := by simpa using hj1
+      rw [ite_eq_right hj1, ite_eq_right hj1, ite_eq_right hi1]
+      have hm := hmsg (i + 1) (by omega) (by omega)
+      rw [hm 0 (by norm_num), hm 1 (by norm_num), hm 2 (by norm_num), hm 3 (by norm_num)]
+      refine eqAt_lsilent_bind (lsilent_sendMsg _) fun _ st₁ t₁ => ?_
+      exact eqAt_purePL _ st₁ t₁ (by omega) (by omega) ⟨_, rfl⟩
+  have h2' : L + sch.k0 + 4 ≤ n := by omega
+  have h1' : l₁.size = L + sch.k0 + 4 := by omega
+  clear h1 h2
+  obtain ⟨-, -, ehs⟩ := hy h2'
+  rw [ehs]
+  refine eqAt_lsilent_bind lsilent_get fun _ st₁ t₁ => ?_
+  refine eqAt_lsilent_bind (lsilent_quiet (commitP_quiet Sha512.hash _ _ _ _)) fun _ st₁ t₁ => ?_
+  refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+  refine eqAt_bindL (eqAt_oodIntroP coin n _ _ (Nat.succ_ne_zero _) st₁ t₁ h1') fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_oodIntroP coin n _ _ (Nat.succ_ne_zero _) st₁ t₁ h1) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_queryP coin n _ ms _ cm0 (hq 0 (by omega)) st₁ t₁ h1 h2) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_lsilent_bind (lsilent_sendMsg _) fun _ st₁ t₁ => ?_
+  refine eqAt_lsilent_bind (lsilent_powB _) fun _ st₁ t₁ => ?_
+  refine eqAt_bindL (eqAt_lsampleP coin n st₁ t₁ h1) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+  have hb1 : l₁.size = L + sch.k0 + 11 := by omega
+  have hb2 : L + sch.k0 + 11 ≤ n := by omega
+  clear h1 h2 h1' h2'
+  refine eqAt_bindL (eqAt_forInL _ _ (L + sch.k0 + 11) (fun i => 11 * i - 4 * (i + 1 - (sch.levels.size - 1)))
+    (sch.levels.size - 1) (fun i hi s st t l hl hL => ?_) _ st₁ t₁ l₁ (by omega) (by omega))
+    fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+  · have hg : 11 * i - 4 * (i + 1 - (sch.levels.size - 1)) = 11 * i := by omega
+    rw [hg] at hl hL
+    clear hg
+    refine eqAt_bindL (eqAt_forInL _ _ (L + sch.k0 + 11 + 11 * i) (fun j => j) 4 (fun j hj f st t l hl hL => ?_) _ st t
+      l (by omega) (by omega)) fun f st₁ t₁ l₁ h1 h2 _ => ?_
+    · by_cases h4 : (j + 1 == 4) = true
+      · rw [ite_eq_left h4]
+        refine eqAt_bindL (eqAt_lsampleKP coin n st t hl) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+        refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind lsilent_get fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind lsilent_get fun _ st₁ t₁ => ?_
+        refine eqAt_lsilent_bind (lsilent_sendMsg _) fun _ st₁ t₁ => ?_
+        exact eqAt_purePL _ st₁ t₁ (by omega) (by omega) ⟨_, rfl⟩
+      · rw [ite_eq_right h4]
+        refine eqAt_bindL (eqAt_challengeP coin n false st t hl) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+        exact eqAt_purePL _ st₁ t₁ (by omega) (by omega) ⟨_, rfl⟩
+    by_cases hlast : i + 1 = sch.levels.size - 1
+    · rw [ite_eq_right (by simp [hlast])]
+      refine eqAt_lsilent_bind (lsilent_forIn_array _ _ _ fun x s =>
+        lsilent_bind' (lsilent_liftTM _) fun _ => lsilent_pure _) fun _ st₁ t₁ => ?_
+      refine eqAt_bindL (eqAt_queryP coin n _ ms _ _ (hq _ (by omega)) st₁ t₁ h1 h2) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+      refine eqAt_lsilent_bind (lsilent_powB _) fun _ st₁ t₁ => ?_
+      refine eqAt_bindL (eqAt_lsampleP coin n st₁ t₁ h1) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+      exact eqAt_purePL _ st₁ t₁ (by omega) (by omega) ⟨_, rfl⟩
+    · rw [ite_eq_left (by simp [hlast])]
+      refine eqAt_lsilent_bind (lsilent_quiet (commitP_quiet Sha512.hash _ _ _ _)) fun _ st₁ t₁ => ?_
+      refine eqAt_lsilent_bind (lsilent_liftTM _) fun _ st₁ t₁ => ?_
+      refine eqAt_bindL (eqAt_oodIntroP coin n _ _ (Nat.succ_ne_zero _) st₁ t₁ h1) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+      refine eqAt_bindL (eqAt_oodIntroP coin n _ _ (Nat.succ_ne_zero _) st₁ t₁ h1) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+      refine eqAt_bindL (eqAt_queryP coin n _ ms _ _ (hq _ (by omega)) st₁ t₁ h1 h2) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+      refine eqAt_lsilent_bind (lsilent_sendMsg _) fun _ st₁ t₁ => ?_
+      refine eqAt_lsilent_bind (lsilent_powB _) fun _ st₁ t₁ => ?_
+      refine eqAt_bindL (eqAt_lsampleP coin n st₁ t₁ h1) fun _ st₁ t₁ l₁ h1 h2 _ => ?_
+      refine eqAt_lsilent_bind (lsilent_modify _) fun _ st₁ t₁ => ?_
+      have hc : 11 * (i + 1) - 4 * (i + 1 + 1 - (sch.levels.size - 1)) = 11 * i + 11 := by
+        clear * - hlast hi; omega
+      rw [hc]
+      exact eqAt_purePL _ st₁ t₁ (by omega) (by omega) ⟨_, rfl⟩
+  have hc : 11 * (sch.levels.size - 1) - 4 * (sch.levels.size - 1 + 1 - (sch.levels.size - 1)) + sch.k0 + 11 =
+      sch.k0 + 7 + 11 * (sch.levels.size - 1) := by
+    clear * - hR; omega
+  exact eqAt_pureL _ st₁ t₁ (by omega) (by omega)
 
 end Phases
 
