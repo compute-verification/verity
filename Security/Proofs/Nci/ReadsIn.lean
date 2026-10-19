@@ -1,0 +1,98 @@
+import Definitions.Nci.Reads
+import Proofs.Nci.Pull
+import Proofs.Nci.Threads
+
+/-!
+# Reads in a set of gates, the pull into the contained circuit, and Theorem 1 over a read measure
+
+* `novelReads_le_readsIn`: what a set reads novelly is at most all it reads, `readsIn d R univ`.
+* `novelReads_pull_le_readsIn`: through a containment `M : c ≼ d`, a piece of a unit of `d` reads novelly at most what
+  its unit reads in `M`'s image, baseline included, so no condition on the baselines is needed: a value the piece reads
+  is a gate of `c` outside the piece or an input of `c`, and `M` sends either to a gate of its image that the unit reads.
+* `threaded_reads_by`: Theorem 1 (`threaded_reads`) with reads counted by any measure `ρ`. Its proof reads the count
+  twice, through `ρ R ≤ S` and through `ρ R` paying for the weights used and the thread values read, so it goes through
+  for any `ρ`; `threaded_count_by` is the counting, with the weights' charge `q` any number that caps each thread's
+  multiplications at `reuse · q`. Theorem 1 is the instance `ρ = novelReads`.
+-/
+
+namespace Nci.SecurityProofs
+
+open Verity Finset
+
+theorem novelReads_le_readsIn (d : Declaration) (R : Finset (Fin d.D.N)) : novelReads d R ≤ readsIn d R univ := by
+  unfold novelReads readsIn
+  rw [inter_univ]
+  exact sum_le_sum_of_subset sdiff_subset
+
+/-- **The pull into the contained circuit**: through a containment `M : c ≼ d`, the piece of `c` that a unit of `d`
+induces (`pull`) reads at most what the unit reads in `M`'s image, baseline included. -/
+theorem novelReads_pull_le_readsIn {c d : Declaration} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
+    (u : Fin n) : novelReads c ((pull M P).gates u) ≤ readsIn d (P.gates u) (univ.map ⟨M.emb, M.emb_inj⟩) := by
+  unfold novelReads readsIn
+  calc c.D.width (c.D.into ((pull M P).gates u) \ c.θ) ≤ c.D.width (c.D.into ((pull M P).gates u)) :=
+        sum_le_sum_of_subset sdiff_subset
+    _ = d.D.width ((c.D.into ((pull M P).gates u)).map ⟨M.emb, M.emb_inj⟩) := width_map (M := M) _
+    _ ≤ d.D.width (d.D.into (P.gates u) ∩ univ.map ⟨M.emb, M.emb_inj⟩) := by
+        refine sum_le_sum_of_subset fun b hb => ?_
+        obtain ⟨a, -, rfl⟩ := mem_map.1 hb
+        exact mem_inter.2 ⟨into_pull_map u hb, mem_map_of_mem _ (mem_univ a)⟩
+
+/-- Theorem 1's counting, for any `Rn ≤ S` that pays `b_w` for each of `q` weights and `b_a` for each thread value `R`
+reads, when each thread's counted multiplications in `R` number at most `reuse · q`. -/
+theorem threaded_count_by {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) {S b_w b_a Rn : ℝ} {d e q : ℕ}
+    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
+    (hT : ∀ t, (T.threadReads R t).card < d → (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
+    (hq : ∀ t, (T.threadMults R t).card ≤ T.reuse * q)
+    (hinc : b_w * q + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
+    b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e := by
+  classical
+  set L := univ.filter fun t => (T.threadReads R t).card < d with hL_def
+  set H := univ.filter fun t => ¬ (T.threadReads R t).card < d with hH_def
+  have hsplit : ((T.mults R).card : ℝ) =
+      ∑ t ∈ L, ((T.threadMults R t).card : ℝ) + ∑ t ∈ H, ((T.threadMults R t).card : ℝ) := by
+    rw [card_mults_eq_sum, Nat.cast_sum, sum_filter_add_sum_filter_not]
+  have hL : ∑ t ∈ L, ((T.threadMults R t).card : ℝ) ≤ e * ∑ t ∈ L, ((T.threadReads R t).card : ℝ) := by
+    rw [mul_sum]
+    refine sum_le_sum fun t ht => ?_
+    exact_mod_cast hT t (mem_filter.1 ht).2
+  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * q * H.card := by
+    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * q)
+      fun t _ => by exact_mod_cast hq t
+    rwa [nsmul_eq_mul, mul_comm] at this
+  have hHc : (d : ℝ) * H.card ≤ ∑ t ∈ H, ((T.threadReads R t).card : ℝ) := by
+    have := card_nsmul_le_sum H (fun t => ((T.threadReads R t).card : ℝ)) (d : ℝ)
+      fun t ht => by exact_mod_cast not_lt.1 (mem_filter.1 ht).2
+    rwa [nsmul_eq_mul, mul_comm] at this
+  push_cast at hinc
+  rw [← sum_filter_add_sum_filter_not univ (fun t => (T.threadReads R t).card < d)] at hinc
+  have hdr : (0 : ℝ) < d := by exact_mod_cast hd
+  refine threaded_ineq (Hb := b_a * H.card) (Y := b_a * ∑ t ∈ H, ((T.threadReads R t).card : ℝ))
+    (X := b_a * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (q := q) hbw hdr
+    (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _))
+    (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _) (by linarith)
+    hRS ?_ ?_
+  · calc (d : ℝ) * (b_a * H.card) = b_a * (d * H.card) := by ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left hHc hba.le
+  · rw [hsplit, mul_add]
+    have h1 := mul_le_mul_of_nonneg_left hL hba.le
+    have h2 := mul_le_mul_of_nonneg_left hH hba.le
+    nlinarith
+
+/-- **Theorem 1 over a read measure** `ρ`: for a `(d, e)`-threaded `c` whose small subcircuits pay for the weights they
+use and the thread values they read, both read by `ρ` (small: at most `Γ` computed gates and `ρ R ≤ S`), a small
+subcircuit `R` holds at most `ρ R Λ / b_a` counted multiplications, `Λ = T.bound S b_w d e`. -/
+theorem threaded_reads_by (c : Declaration) (T : Threading c) (ρ : Finset (Fin c.D.N) → ℝ) (Γ : ℕ) (S b_w b_a : ℝ)
+    (d e : ℕ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
+    (hT : ∀ R, R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ ρ R ≤ S → ∀ t, (T.threadReads R t).card < d →
+      (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
+    (hW : ∀ R, R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ ρ R ≤ S →
+      b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ ρ R)
+    (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ ρ R ≤ S) :
+    b_a * (T.mults R).card ≤ ρ R * T.bound S b_w d e :=
+  threaded_count_by T R hbw hba hd (hT R hR) (card_threadMults_le T R) (hW R hR) hR.2.2
+
+example : Guarantees.ThreadedReads := by
+  intro c T Γ S b_w b_a d e hbw hba hd hT hW
+  exact threaded_reads_by c T (fun R => (novelReads c R : ℝ)) Γ S b_w b_a d e hbw hba hd hT hW
+
+end Nci.SecurityProofs
