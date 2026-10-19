@@ -276,4 +276,4 @@ research msg groups sync --apply    # makes the changes; writes each group's id,
 ~~~
 
 A sync sets each group's name to its handle and its description to the remit, and leaves its members alone. Channel ids,
-alert bots' ids and the humans' and collaborators' Slack user ids are recorded by hand. An entry without an id allows nobody.
+alert bots' ids and the humans' Slack user ids are recorded by hand. An entry without an id allows nobody.
