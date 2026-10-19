@@ -103,4 +103,5 @@ def test_rl_trains_like_pretraining_at_the_rollout_length():
 
 def test_the_tiers_defaults_are_the_kimi_rows():
     i, c = rows()["pretrain-full"]["inputs"], rows()["pretrain-full"]["chain"]
-    assert (T.DEFAULTS["kappa"], T.DEFAULTS["kappa_chain"]) == (i["kappa"], c["kappa"])
+    assert T.DEFAULTS["kappa"] == i["kappa"] and c["kappa"] == 0.0695
+    assert T.DEFAULTS["kappa_chain"] == 0.0, "the partial-sum law stays off while its support premises are falsified"

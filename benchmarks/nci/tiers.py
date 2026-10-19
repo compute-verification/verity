@@ -77,7 +77,7 @@ BLOCK_NAME_BITS = 25
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any for a reference circuit C1 allows, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
+    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
@@ -86,7 +86,7 @@ DEFAULTS = {
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 505.0, "e": 37248.0, "kappa": 0.6, "thread_bits": 2.1e8, "block_mults": 1.0,
-    "kappa_chain": 0.0695, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
+    "kappa_chain": 0.0, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
 
@@ -96,6 +96,7 @@ SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (6.4%: 2,597 MHz against 2,430; 0 once credit uses the true maximum or auditor hardware reads the clock offset)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (Xeon 6776P INT8 AMX 11.8%; hosts without matrix units, two EPYC 9015s, 0.21%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
@@ -134,7 +135,7 @@ SPEC = [
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies 512 - E legs below E + 1 lookup columns, none at 512: 512 x 163,840 x 2.5 bits = 2.1e8 for any reference circuit C1 allows, 1.34e9 at bf16 embeddings; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e8, "max": 1e11, "log": True},
     {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695)", "unit": "", "min": 0.01, "max": 1, "log": True},
+    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695); 0 turns the partial-sum law off, as its support premises (PartialSumsSupport, ActivationsSupport) are falsified", "unit": "", "min": 0.01, "max": 1, "log": True, "zero": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
@@ -154,32 +155,34 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declared circuit contains the "
-     "whole reference circuit; the extension to dark gates (T1') is being proved. Rests on WeightsIncompressible and the "
-     "Threaded (d, e) premise, which a worker is proving for a defined reference circuit."),
-    ("Declared computation, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption "
-     "budget (PS') is being proved. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
-    ("Monitored compute residual", "PoUW's deficit epsilon_W = 0.74% is proved (CircuitWork and CircuitCredit, draft "
-     "#2638) under named premises, for live coins, but it is a share of credited work. r is about 1% of device time only "
-     "under the floor credit with verified filler (Decisions 89/90, Corollary D3; modelled, not served): today's served "
-     "windows credit 10.3% of padded MACs. Host CPUs are neither credited nor bounded and count at their datasheet peak "
-     "until a CPU filler or a physical cap exists (CMP-49)."),
-    ("Memory cap", "Actual.Windows and ThreadedReads are proved; the composition and reads counted by information are "
-     "being proved. Needs the declared computation's novel intake held to alpha F, which holds only once the per-window "
-     "count check is a gated unit in the ZK flow (NET-35); until then intake is line rate (intake_x about 1.3e6) and memory "
-     "caps nothing."),
-    ("Wipe residual", "The slack is proved only in the ideal-permutation model, and the reference permutation is refuted "
-     "(a developer passes from 1.53% of the store), so tier 3 rests on a falsified assumption today. The certificate's "
-     "floor (0.47% at D = 2) can be freed at any k. Memory outside the fill is measured as gaps (on-chip 3.05 GB, GPU "
-     "reserve 18.4 GB, host 29.5 GB). No theorem bounds help during a wipe; the helper term is an attack."),
+    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean (draft #2343) when the declaration "
+     "contains the reference circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
+     "on WeightsIncompressible and Threaded (d, e). (505, 37248) is ThreadedOfLayered's for a reference circuit with one "
+     "wide sum per entry, under the open conjecture ReferenceLayered; no Dot16 declaration contains that circuit, so the "
+     "deployment's (d, e) is a Dot16 reference circuit's, being derived (at d = 10 the floor is 1,260; at d = 1, 320)."),
+    ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
+     "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
+    ("Monitored compute residual", "r = r-hat + eps'. PoUW's deficit epsilon_W = 0.74% (CircuitCredit, draft #2638) is "
+     "a share of credited work, evaluated with its premises granted. Under the floor credit r-hat = 0.508: GPU floor "
+     "time 0.326 (honest kernels at 1.72 times the floor; run r20261017-123922-e558 has no published outputs), the "
+     "unchecked clock 0.064 and host CPUs at INT8 AMX peak 0.118. eps' = 1e-4 is what the theorem's delta of 2.7e-8 "
+     "costs (Markov over the windows)."),
+    ("Memory cap", "ThreadedRuntime and ThreadedRate (draft #2343) give the closed form's shape; its value needs Threaded "
+     "at window scale, which fails. The fit bound (FitBound under Reach and Fits, on a branch) replaces it, conditional "
+     "on F1 per parameter slot (being restated), F3, F4, NET-35 (intake held to alpha F), WipeFullUse (not yet stated) "
+     "and an information form. For a token-routed MoE, Lean's per-token Reach gives 55 at 6 GB; 217 rests on the fit "
+     "page's MoE argument."),
+    ("Wipe residual", "Streamed labels (MEM-51) replace the reference permutation, which is refuted (a developer passes "
+     "from 1.53% of the store); the slack is proved only for an ideal permutation. Memory outside the fill is measured as "
+     "gaps (on-chip 3.05 GB, the GPUs' own about 1.6 GB; GPU reserve 18.4 GB; host 29.5 GB). No theorem bounds help "
+     "during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
-    ("Cheating share", "The count of injecting blocks is proved (Population.Exfil.tail_cumPrev and the deployed draw's "
-     "drawPressure, on branches); a draw rate fixed against a public N is not. Each injected bit is valued at the chord "
-     "of one inference block's thread bound, with (1, 0)-threading above thread_bits (threaded_one_zero, proved); that "
-     "rests on T1' and WeightsIncompressible out to the block's full reads, about 1.1e9 bits. At a 1% total budget "
-     "today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
-     "zero-work templates at a floor of one per window (floor_steps)."),
+    ("Cheating share", "The bound on accepted faulty proof blocks over the deployment is proved "
+     "(Population.Exfil.tail_cumPrev, open #2687; the cumulative harm budget over adaptive rounds on a branch, PRF-86). "
+     "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
+     "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
+     "shrinks with the fleet, so detection must be terminal (J = 1)."),
     ("Unmonitored compute", "No bound: it trains at full efficiency."),
 ]
 
@@ -270,10 +273,15 @@ def ingress(p: dict, mech: dict) -> float:
     return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
 
-def residual_share(p: dict) -> float:
-    """r: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward it
-    until something credits or bounds them."""
+def audited_residual(p: dict) -> float:
+    """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward
+    it until something credits or bounds them."""
     return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
+
+
+def residual_share(p: dict) -> float:
+    """r = r-hat + eps': the audited residual plus the share whose certificates may be wrong."""
+    return min(1.0, audited_residual(p) + p["eps_agg"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:
@@ -307,10 +315,10 @@ def evaluate(p: dict, mech: dict) -> dict:
     B_max = 2 * p["b_p"] * res_ops + min(2 * p["b_p"] * U, p["nodes"] * H * link)
 
     rates = chain_rates(p)
-    share = p["kappa"] / p["kappa_chain"]
+    share = p["kappa"] / p["kappa_chain"] if p["kappa_chain"] > 0 else math.inf
 
     def declared_at(B: float) -> float:
-        return min(cap_T, share * chain_products(rates, alpha * C, B))
+        return cap_T if share == math.inf else min(cap_T, share * chain_products(rates, alpha * C, B))
 
     filled = (p["hbm_gb"] + p["host_gb"]) * GB
     mem = filled + p["disk_gb"] * GB
