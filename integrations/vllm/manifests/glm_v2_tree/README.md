@@ -23,13 +23,22 @@ Base `origin/main` @ c0ebeb8b93, then, in this order:
 | #2838 | 615e13bdc3 | served-default capture harnesses (bf16 v6); #2828 85d2659299 |
 | #2852 | ba1aa4b2d2 | TP served windows refused unless the run root is SHA-512; #2842 9ef0bf1d46 |
 | #2824 | 5b5840cf7f | the committer's rows-sha512 iterations |
+| `cursor/tp-sha512-21f3` (CIR-63 part 1, no PR yet) | d86c42a576 | TP Commits at rows-sha512 under the SHA-512 TP run root (`verity/tp-run-root/v2`); #2852 ba1aa4b2d2, #2824 5b5840cf7f |
+| `cursor/boolv-21f3` (CIR-47, no PR yet) | a326a9ce23 | main c0ebeb8b93 merged with #2729's head: CIR-47's Boolean versions are #2729's σ-lifts and on-demand constants, so it changes nothing past #2729 |
+| `cursor/rows64-land-21f3` (no PR yet) | 1d8869d1e4 | `MoeSum_v3` (`MoeSum_v1` on bits as a batch of `MoeSum_v2{TOPK,64}`), A11's Boolean-first probes |
+| `cursor/multimem-land-21f3` (no PR yet) | 7338aa92c8 | `AllReduceMultimem_v1` as a batch of 16-byte vectors (`AllReduceMultimemVector_v2`) |
+
+ROWS64 and the multimem batch joined when ASK-61 was provisionally accepted (Daniel, 19 Oct 21:59Z, option A: public
+power-of-two output classes up to 262,144 bits). Two conflicts, both sides kept:
+
+- `integrations/vllm/verity_vllm/pipeline/serving_rows.py` `after_commit` (TPSHA512 against #2848): the row-table layout's `row_tables`, and the
+  provenance's `commitment` read from the committer's scheme.
+- `integrations/vllm/tests/predict/test_predict.py`, GLM-5.3 B8 top-p's LP25/T6 request (multimem against the realized-arrival pin): this tree's
+  predictor gives `b632583a…`, the realized-arrival pin; the vector form does not move that Program.
 
 ## To merge when their PR opens
 
-- CIR-63 part 1 (TPSHA512, `cursor/tp-sha512-21f3`): TP Commits at rows-sha512 with a SHA-512 TP run root. The branch
-  already contains #2852 and #2842. No PR yet.
-- CIR-47 (BOOLV): Boolean versions of Const32, ResidualAdd_v1, EmbeddingShard_v1 and AllReduceRmsNormMnnvl_v1. No PR or
-  branch yet.
+- The branches above re-merge at their PR's head once it opens.
 - CIR-44: the two Call splits. No branch yet.
 - The static MoE frontend switch for GLM's expert GEMMs. The ops landed in #2665; no switch commit is on any branch.
   GLM's FP8 MoE in this tree is already the unpermuted pair set: per (token, slot) pair, the expert id is a value operand
@@ -37,6 +46,5 @@ Base `origin/main` @ c0ebeb8b93, then, in this order:
 
 ## Not in v2
 
-- ROWS64 (`cursor/rows64-21f3` @ 7a06367fbf) and multimem-batch (`cursor/multimem-batch-21f3` @ 217d9b38a0): wait on
-  ASK-61.
-- T8b's prefix commits (`cursor/prefix-tp-6f04`): wait on ASK-42.
+- T8b's prefix commits (`cursor/prefix-tp-6f04`): ASK-42 is provisionally A (the prefix length is private), so a prefix row
+  in a batch is proved cold and T8b's C-public commits stay out.
