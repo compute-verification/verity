@@ -259,7 +259,8 @@
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
   "Nci.Assumptions.WeightsIncompressibleSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
   "Nci.Assumptions.WeightsSupport": {
    "owner": "@lean",
@@ -1040,7 +1041,13 @@
    "type_hash": "9bd6de3d2ef77225f5a766ea6dfac6be2546d75334591b671abb995e8fe2f248"
   },
   "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots.{u_1, u_2} :",
+    "  Accounting.Guarantees.Actual.DampenerWindowsCapSlots"
+   ],
+   "assumptions": [],
+   "type_hash": "8e2d52627e6d53cf6c8bee181b31ec21dcca1abf60f8ed7fb3128ee10ba1886e"
   },
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
@@ -1055,7 +1062,12 @@
    "type_hash": "49bd57b93e2d722fa17c891c16f68c8118848be8d805f043fda4eda3174318f8"
   },
   "Accounting.SecurityProofs.Actual.ThreadedRateSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots.{u_1, u_2} : Accounting.Guarantees.Actual.ThreadedRateSlots"
+   ],
+   "assumptions": [],
+   "type_hash": "3967909c89d5d66348410342f80069295a6bc7252ea995d67839522d1c22a74b"
   },
   "Accounting.SecurityProofs.Actual.ThreadedRuntime": {
    "owner": "@lean",
@@ -1074,10 +1086,21 @@
    "type_hash": "438621e3578864ab81bafabed8a0ba62590cf642adc1a1a117c2c826c95ebf2f"
   },
   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots.{u_1, u_2} :",
+    "  Accounting.Guarantees.Actual.ThreadedRuntimeDarkSlots"
+   ],
+   "assumptions": [],
+   "type_hash": "1300a312aa267b9c0c2b12873e478d89e381cabfa52354725d098f573b6f43e4"
   },
   "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots.{u_1, u_2} : Accounting.Guarantees.Actual.ThreadedRuntimeSlots"
+   ],
+   "assumptions": [],
+   "type_hash": "84097be166a8bcb599b76f48253225429d256d5226fa3c041d95341356aeb0bb"
   },
   "Accounting.SecurityProofs.Actual.Windows": {
    "owner": "@lean",
@@ -5309,7 +5332,10 @@
    "type_hash": "4fd21ded7cc9bd15239bbcd454dc5f3d7d590c1923912e1d440f0f531161d980"
   },
   "Nci.SecurityProofs.DampenerThreadedSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.DampenerThreadedSlots : Nci.Guarantees.DampenerThreadedSlots"],
+   "assumptions": [],
+   "type_hash": "e8346706182fa61d97a4af8d0935c5bdfd04e45e4be9f86df1f08685d00b3333"
   },
   "Nci.SecurityProofs.DampenerWindows": {
    "owner": "@lean",
@@ -5456,7 +5482,10 @@
    "type_hash": "b0e528356d0260e4829a1626341ad77a934fb408d696687032705be38beb7643"
   },
   "Nci.SecurityProofs.ThreadedReadsSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedReadsSlots : Nci.Guarantees.ThreadedReadsSlots"],
+   "assumptions": [],
+   "type_hash": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112"
   },
   "Nci.SecurityProofs.ThreadedThrottled": {
    "owner": "@lean",
@@ -5471,7 +5500,10 @@
    "type_hash": "a3965e5caa03cf2e61926408d5047b84693ac61a62baafca0cca6e13d857dd2e"
   },
   "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledDarkSlots : Nci.Guarantees.ThreadedThrottledDarkSlots"],
+   "assumptions": [],
+   "type_hash": "f0fd651df80a204957a512ee9a4b43bbd40861f8aef36fd77bb331b62fa14301"
   },
   "Nci.SecurityProofs.ThreadedThrottledOn": {
    "owner": "@lean",
@@ -5480,10 +5512,16 @@
    "type_hash": "a7984c474df2870454bd2dfca9bd5e9b030354d05ffbceea7b2f791e14530d65"
   },
   "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledOnSlots : Nci.Guarantees.ThreadedThrottledOnSlots"],
+   "assumptions": [],
+   "type_hash": "1593e5bf02baa087182289a9fedaf463f3d5fdf1bcbc4c08691ceaae7500be91"
   },
   "Nci.SecurityProofs.ThreadedThrottledSlots": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedThrottledSlots : Nci.Guarantees.ThreadedThrottledSlots"],
+   "assumptions": [],
+   "type_hash": "6f1cd5018a0f1fbc06386cb1e9c7c06c3b2ec5b19ac3fa470a40e8f77f26e350"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
    "owner": "@lean",
@@ -8022,10 +8060,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B2",
@@ -8977,10 +9019,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B4",
@@ -10976,10 +11022,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B2",
@@ -11011,6 +11061,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -11033,9 +11084,13 @@
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
@@ -11057,10 +11112,14 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Nci.SecurityProofs.ContainedMatMul",
@@ -11068,6 +11127,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -11088,9 +11148,13 @@
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
@@ -11181,6 +11245,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -11193,7 +11258,10 @@
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
@@ -11377,16 +11445,21 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -11402,9 +11475,13 @@
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn",
     "Nci.SecurityProofs.Training",
@@ -11425,8 +11502,10 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Nci.SecurityProofs.Dampener",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.DampenerWindows"
    ]
   },
@@ -11439,10 +11518,13 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
   },
@@ -11458,7 +11540,20 @@
     "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
     "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots", "Nci.SecurityProofs.FitRate"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
+    "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
+    "Nci.SecurityProofs.FitRate",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots"
+   ]
   },
   "Definitions.Nci.Info": {
    "digest": "8fb3a35e7925ba55540307fa339b42bb6815b9a48b751456a64f404a260a9898",
@@ -11547,10 +11642,15 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
@@ -11567,9 +11667,13 @@
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
@@ -21126,23 +21230,33 @@
    ]
   },
   "Models.Accounting.Guarantees.Actual.Dampener": {
-   "digest": "94151bb8b1a85a1741ce23740b75ebfd5969ac58160d161b699e6a5fb69aa2f6",
+   "digest": "bd3d011900e05d29dd9b3d7ab6f9309150319240659dcc6aef240e67c5646111",
    "definitions": {
-    "Accounting.Guarantees.Actual.DampenerWindowsCap": "194b89f680891692381f0810495bba5a86242eb8b87a6548f19e11772cb2d04b"
+    "Accounting.Guarantees.Actual.DampenerWindowsCap": "194b89f680891692381f0810495bba5a86242eb8b87a6548f19e11772cb2d04b",
+    "Accounting.Guarantees.Actual.DampenerWindowsCapSlots": "74d9ec9ca19c64bc8babf81c3277a346ebb6efae872da35f0664a2b037365d2e"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.DampenerWindowsCap"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots"
+   ]
   },
   "Models.Accounting.Guarantees.Actual.Threaded": {
-   "digest": "89b9f4e4d04286c83dd88cb31e7625a4bd39c689fc4d9f7f38c17b2e3fc10f38",
+   "digest": "dfe40b4f5f1d3b18754e38769de6135d57c2b05c5daf30a2eb5ebfd283968124",
    "definitions": {
     "Accounting.Guarantees.Actual.ThreadedRate": "57d1584de42b3919425b9cb0bd254928c24a9779d7beaa7c9a9767728fad3858",
+    "Accounting.Guarantees.Actual.ThreadedRateSlots": "abebfca819b37496c76a594ce7bad67c1fb0642b44b4ad58e58eafb6052cbcc8",
     "Accounting.Guarantees.Actual.ThreadedRuntime": "0957634d1e3be4bb98d90dfae3044ac393c5fbb66218c58c2bc6be8d52fd6954",
-    "Accounting.Guarantees.Actual.ThreadedRuntimeDark": "d5809ab32e5fc281909fffaed2f7ae948c881b0f60ac3397442748092ea66003"
+    "Accounting.Guarantees.Actual.ThreadedRuntimeDark": "d5809ab32e5fc281909fffaed2f7ae948c881b0f60ac3397442748092ea66003",
+    "Accounting.Guarantees.Actual.ThreadedRuntimeDarkSlots": "3266e52e9cb7651bd61b0cfe2484e2afecd453a217937f0b15b926ceed9a7027",
+    "Accounting.Guarantees.Actual.ThreadedRuntimeSlots": "0a8f74067e77c4818d4a5b72400897ffa691160fd08de2cef54af543fdb99ac0"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
-    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark"
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
    ]
   },
   "Models.Accounting.Guarantees.Actual.WipePool": {
@@ -22021,22 +22135,32 @@
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
   },
   "Models.Nci.Assumptions.Threads": {
-   "digest": "e97519a8245dbe34eb8f42c2febf3910370ac44e740cd319415594e0bed0b43f",
+   "digest": "e9bcf22a82fceb17e374c1e6af08d94a3f0f2d662a9c92713dffe4504c37b210",
    "definitions": {
-    "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
+    "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8",
+    "Nci.Assumptions.WeightsIncompressibleSlots": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
+    "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRateSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedReads",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
@@ -22090,15 +22214,17 @@
    ]
   },
   "Models.Nci.Guarantees.Dampener": {
-   "digest": "2231b9ee9046156580647e17338125420a6dfaf73caf64b7a7615cec979a15c7",
+   "digest": "e9352f7f93c36e4b3537fe8f79ffe4a8ab6a1d2a07e31c6cf7c91c13406f0803",
    "definitions": {
     "Nci.Guarantees.Dampener": "51be110939f1e2aba3b5fc3a329564570308e79261930de29b31a6d9cf4d5ea9",
     "Nci.Guarantees.DampenerThreaded": "c03add7a98d1b0c0cea190ae1604ddf8f4a6f9513d289c54c40ebcfe9efece19",
+    "Nci.Guarantees.DampenerThreadedSlots": "1563d9170e36f9472d361fdaa99f9f4541233845ae30bb90d7eaf1db5f31efa1",
     "Nci.Guarantees.DampenerWindows": "db15cac768253cf856ee929f5ffc06adac9ed01e62bf51f9fc7d551d654e884c"
    },
    "guarantees": [
     "Nci.SecurityProofs.Dampener",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.DampenerWindows"
    ]
   },
@@ -22168,20 +22294,28 @@
    "guarantees": ["Nci.SecurityProofs.UpdatedMatMulReads"]
   },
   "Models.Nci.Guarantees.Threads": {
-   "digest": "6e177a187a6cdf7c33b2c07fc18111bf4c60d71d25f2ba04737f662455a9d83e",
+   "digest": "f3e616958de71413b30ee877f1dc84de0f769462a32f1a2123537021dad27ae6",
    "definitions": {
     "Nci.Guarantees.ThreadedReads": "a67a68ce475e8f51e9fc68a0c389a9b4de94d49141735c04702c4526c2ec2b98",
+    "Nci.Guarantees.ThreadedReadsSlots": "472df542ab1c1b78b52b07706cc6dcbd187c2d389d82eca0833bafd066256138",
     "Nci.Guarantees.ThreadedThrottled": "87cba58bdc2929fbf8bc48f250f03230593193f95d7c453c263078fe0bbf8f8f",
     "Nci.Guarantees.ThreadedThrottledDark": "f88db3542d8bc56a016f8bec0af300a5f6730f5ed71e24e546ea69f16b745589",
+    "Nci.Guarantees.ThreadedThrottledDarkSlots": "d3bc7048b70262dcfb3b3a87ccddd8b09eaa3bba8663c17b2077b259f23f1b1b",
     "Nci.Guarantees.ThreadedThrottledOn": "e26fbfc13cecda19384592d02b95746602a1b3bf2392a5ddf21bca5624cad830",
+    "Nci.Guarantees.ThreadedThrottledOnSlots": "a1a4027b7a642f5541adf16c6c614c6e31e33dc92f244a0a383a96394bd3e6eb",
+    "Nci.Guarantees.ThreadedThrottledSlots": "2bd618bd24478190f1191faf5e508b2060ca20373df5c64ca91a09bb76f46377",
     "Nci.Guarantees.ThreadedTraining": "11117e631a75eb8adb64d1a09eb29eb625d5c993d8eedd0cc38a52c364d9aa66",
     "Nci.Guarantees.ThreadedTrainingOn": "aa259844a49d7e1801fbf7973e60685b39dcd4a74940dd7d525ebd60d15f2c9f"
    },
    "guarantees": [
     "Nci.SecurityProofs.ThreadedReads",
+    "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
+    "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
+    "Nci.SecurityProofs.ThreadedThrottledOnSlots",
+    "Nci.SecurityProofs.ThreadedThrottledSlots",
     "Nci.SecurityProofs.ThreadedTraining",
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
