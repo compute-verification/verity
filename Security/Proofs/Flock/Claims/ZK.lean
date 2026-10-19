@@ -46,9 +46,12 @@ import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.SimPiopGo
-import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimPiopOf
 import Proofs.Flock.Claims.ZK.PiopSrcVals
 import Proofs.Flock.Claims.ZK.PiopSrcLc
+import Proofs.Flock.Claims.ZK.SentE
+import Proofs.Flock.Claims.ZK.PiopSrcSv
+import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -253,7 +256,7 @@ import Proofs.Flock.Claims.ZK.Stop
 * `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
   (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
   returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
-* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+* `SimPiopOf`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
   `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
 * `PiopSrcVals`: `Masked.PiopSrcE`'s zerocheck fields: the deployed source masks at the zerocheck's layout indices
   the plain prover's messages at the opened coins plus the session's pads (`Masked.src_r1ab`, `Masked.src_r1c`,
@@ -264,6 +267,14 @@ import Proofs.Flock.Claims.ZK.Stop
   plain prover's round messages and `z_partial` at `lcCoins` plus the session's pads (`Masked.src_lc0`,
   `Masked.src_lc1`, `Masked.src_zp`), since the prover's halved columns are the model's `lcU`, `lcV` folded at the round
   coins (`Replay.Lc.msg_lcMsg`) and the draw's coins are the executable's (`Masked.lcH_exe`).
+* `SentE`: every check of the deployed cut up to a seen slot passes where no refusal is seen (`Masked.famPasses_of`):
+  each check's round (`Masked.guardSlot`) follows the session's order (`Masked.guardSlot_mono`), and the rank check is
+  full rank at the plan's points, the executable's (`Masked.rankOn_of`).
+* `PiopSrcSv`: `Masked.PiopSrcE`'s ring-switch field (`Masked.src_sv`): where the rep sends masked claim `2r + k`'s
+  `ŝ` (`Masked.famPasses_of`) it is `shat` at `z = (w, u)` at the opened coins (`Masked.sv_masked`), and region claim
+  `k − 2`'s is the witness's off the mask slot at the link points of round `0`'s coin (`Masked.sv_region`,
+  `Masked.extras_x`), each the prover's switched vector (`Replay.Rs.switchVec_shat`).
+* `SimPiop`: `Masked.simPiop`, from `Masked.simPiop_of` at `Masked.piopSrcE`.
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
