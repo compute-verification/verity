@@ -16,6 +16,8 @@ subtract and compare; a constant word is constant bits, so it folds into the gat
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from types import SimpleNamespace
 
 from verity.ml.circuits import boolean as BL

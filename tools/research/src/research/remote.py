@@ -14,7 +14,8 @@
                         rate_usd_per_hour = 14.40      # the attempt's cost rate (a runpod pod reports its own)
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
-                    which snapshot ran.  No pip, no editable install, no credentials on the machine.
+                    which snapshot ran.  No pip, no editable install, no credentials on the machine.  The workload's PATH starts
+                    with <root>/cache/bin/<content-sha>/, whose `research` runs that snapshot, and ends with ~/.elan/bin.
     version check   PYTHONPATH does not guarantee which `research` answers (a wrapper python, a `research/` earlier on sys.path, an
                     altered snapshot).  The launcher sends tool_identity() of the package it shipped: `launch-request --expect-tool ID`
                     refuses before the claim, and the runner again before the workload, with ResearchVersionMismatch naming the
@@ -155,6 +156,7 @@ LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch
 LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
 FIRST_RECORD = "job.json"
 RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFailed reason (refused.json keeps PREFLIGHT_TAIL)
+CANCEL_GRACE_S = 20                           # research cancel: SIGTERM, then the runner SIGKILLs what of the run is left this long after
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
@@ -1402,6 +1404,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap (CI-99)
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -1557,6 +1560,25 @@ def _runner_failed(req: dict[str, Any], request_path: Path, run_dir: Path, proc:
             "runner_pid": proc.pid, "rc": proc.returncode}
 
 
+def _research_bin(tool: str, runs_root: Path) -> Path:
+    """<root>/cache/bin/<snapshot>/, holding a `research` that runs the run's shipped tool (`python -m research` with it on
+    PYTHONPATH), so a workload's `research data put` is the launcher's research and not whatever the machine's PATH has (INF-102)."""
+    d = runs_root.parent / "cache" / "bin" / Path(tool).name
+    text = f'#!/bin/sh\nPYTHONPATH={shlex.quote(tool)}${{PYTHONPATH:+:$PYTHONPATH}} exec {shlex.quote(sys.executable)} -m research "$@"\n'
+    shim = d / "research"
+    try:
+        if shim.read_text() == text:
+            return d
+    except OSError:
+        pass
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".research.{os.getpid()}"
+    tmp.write_text(text)
+    tmp.chmod(0o755)
+    os.replace(tmp, shim)
+    return d
+
+
 def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remote: dict[str, Any]) -> dict[str, str]:
     """The runner's environment, which a preflight also runs in: the workload's --env, and with a shipped tree its PYTHONPATH behind
     the tool snapshot (recorded in `remote`)."""
@@ -1574,9 +1596,14 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         remote["pythonpath"] = [p for p in env["PYTHONPATH"].split(":") if p]
         remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"],
                                         **({"shim": derived["shim"]} if derived["shim"] else {})}
+    path = [p for p in (env.get("PATH") or os.defpath).split(os.pathsep) if p]
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
+        path.insert(0, str(_research_bin(req["tool"], runs_root)))
+    if (elan := Path.home() / ".elan" / "bin").is_dir() and str(elan) not in path:
+        path.append(str(elan))                    # `lake` for a Lean job: vy-nebius-2 has it only there (rc 127, r20261019-072345-9757)
+    env["PATH"] = os.pathsep.join(path)
     gpus = req.get("gpus")
     if _kueue_owns_every_gpu():
         # a direct run must not open CUDA beside the queue's pods, whatever its --env says: GPU work goes through Kueue
@@ -2113,8 +2140,11 @@ def py_spy(local_dir: Path) -> str:
 
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
-    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
-    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.
+    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  The SIGTERM reaches every process
+    of the run's own cgroup scopes and the run's processes outside its group too, and CANCEL_GRACE_S later the runner SIGKILLs what is
+    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope, INF-93).  Never the runner: it
+    records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.  A run whose
+    shipped tool predates the scope end gets the SIGTERM to its group and run-dir processes alone, and the result says so (`scope`).
     A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
     it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
     (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
@@ -2138,11 +2168,18 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
             "--deliver"]
-    # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
-    script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(tele)}; rc=$?; "
-              f"tail -n +$((n + 1)) \"$f\"; exit $rc")
-    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+
+    def deliver(argv: list[str]) -> subprocess.CompletedProcess:
+        # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
+        script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(argv)}; rc=$?; "
+                  f"tail -n +$((n + 1)) \"$f\"; exit $rc")
+        return ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+
+    r, old_tool = deliver([*tele, "--grace-s", f"{CANCEL_GRACE_S:g}"]), False
     stderr = r.stderr.decode(errors="replace").strip()
+    if r.returncode == 2 and "--grace-s" in stderr:
+        r, old_tool = deliver(tele), True
+        stderr = r.stderr.decode(errors="replace").strip()
     if r.returncode == 2 and "--expect-run-dir" in stderr:
         raise Refused(f"{local_dir.name}'s research package ({tool}) predates the workload check, so nothing was signalled; on the machine, "
                       f"`kill -TERM -{pgid}` once /proc/<pid>/environ of a group member names RESEARCH_RUN_DIR={rd}")
@@ -2151,8 +2188,12 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     if res is None:
         raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
     tgt = res.get("target") or {}
+    scope = res.get("scope")
+    if old_tool:
+        scope = {"fallback": f"the run's research package ({tool}) predates the scope end: SIGTERM to its group and to the processes "
+                             f"naming its run dir only, and nothing SIGKILLs what ignores it", "runner_kills_after_s": None}
     return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
-            "why": res.get("reason")}
+            "why": res.get("reason"), "scope": scope}
 
 
 def _file_sha256(p: Path) -> str:

@@ -166,8 +166,21 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     meminfo = tmp_path / "meminfo"
     for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
-        assert S.default_jobs(meminfo) == want
-    assert S.default_jobs(tmp_path / "absent") == 4
+        assert S.default_jobs(meminfo, 1e9) == want
+    assert S.default_jobs(tmp_path / "absent", 1e9) == 4
+
+
+def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
+    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 32)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
+    assert S.default_jobs(meminfo, 16.0) == 1
+    assert S.default_jobs(meminfo, 100.0) == 11
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
+    assert S.default_jobs(meminfo) == 2
 
 
 def _workspace(root: Path) -> None:
@@ -1011,10 +1024,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM", "SIGTERM SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
-    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
-    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group, which `uv
+    run` forwards to the runner a second time): the tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1033,7 +1046,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
-    os.killpg(p.pid, getattr(signal, stop))
+    for s in stop.split():
+        os.killpg(p.pid, getattr(signal, s))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert list(tmp.glob("verity-suite-[0-9]*")) == [], out

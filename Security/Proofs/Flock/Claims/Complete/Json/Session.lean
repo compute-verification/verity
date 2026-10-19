@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Complete.Shape
 # What the one-table honest session returns and sends
 
 `sessionP_facts`: at one table, with no keyed coin tree, a run of the pure session from no sends returns the printed
-honest record (`recordObj`'s `compress`) of a non-empty `root_B` under `2^64` bytes, the link's points off the first
+honest record (`printJ` of `recordObj`) of a non-empty `root_B` under `2^64` bytes, the link's points off the first
 reply's coin (`ptsOf`), and one well-formed stream per rep stream (`RoundsOk`); the table's extra claims evaluate at
 those points; and its sends are the link of that `root_B` and no public words, then the streams' rounds in order
 (`SessionFacts`). It rests on two facts about the prover's pieces, taken as hypotheses: the commitment's cap, at the
@@ -14,8 +14,8 @@ schedule's first level, is non-empty and under `2^64` bytes, and each rep record
 
 * **Returns through `throw`, `monadLift` and `mapM`** (`Ret.throw'`, `Ret.monadLift`, `Ret.mapM_array`), on top of
   `Shape`'s `Ret`.
-* **The record's JSON is `recordObj`** (`recordJson_eq`): `recordJson` through `Hashes.ofSha512 h` returns its
-  `compress`.
+* **The record's JSON is `recordObj`** (`recordJson_eq`): `recordJson` through `Hashes.ofSha512 h` returns it,
+  printed (`printJ`).
 * **The sends**: the schedules and the commitment send nothing (`Still`; `pureS` runs a computation of `V` in `PS`, so
   `commitP` there is `commitP` in `V`, `commitP_pureS`), the link pushes its body (`link_go`), and a `for` loop keeps an
   invariant of its state and the sends (`forIn_array_inv`).
@@ -81,11 +81,11 @@ theorem foldl_push_map {α β : Type} (f : α → β) (xs : Array α) :
     xs.foldl (fun b a => b.push (f a)) #[] = xs.map f := by
   simp
 
-/-- **The session's record JSON is `recordObj`'s `compress`**, with no keyed coin tree. -/
+/-- **The session's record JSON is `recordObj`, printed**, with no keyed coin tree. -/
 theorem recordJson_eq (h : ByteArray → ByteArray) {spec : SessionSpec} (hct : spec.coinTree = none)
     (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray) :
     recordJson (Hashes.ofSha512 h : Hashes PS) spec rootB points streams proofs =
-      pure (recordObj spec h rootB points streams proofs).compress := by
+      pure (printJ (recordObj spec h rootB points streams proofs)) := by
   unfold recordJson roundJ
   have hl : (monadLift (pure (spec.hello, ([] : List (String × Json))) : V _) : PS _) = pure (spec.hello, []) := rfl
   simp only [helloOf, hct, dgWith_pure, pure_bind, hl, List.mapM_pure, Array.mapM_pure,
@@ -468,7 +468,7 @@ at those points; and its sends are the link of that `root_B` and no public words
 each from index `1` on (`Recs`). -/
 def SessionFacts (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spec : SessionSpec) (st : Setup)
     (r : String × Array ByteArray) (bodies : Array Claims.Msg) : Prop :=
-  ∃ rb streams, r.1 = (recordObj spec h #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2).compress ∧
+  ∃ rb streams, r.1 = printJ (recordObj spec h #[rb] (ptsOf spec (coinOf (resp 0))) streams r.2) ∧
     0 < rb.size ∧ rb.size < 2 ^ 64 ∧ streams.size = spec.repStreams.size ∧ (∀ rs ∈ streams, RoundsOk rs) ∧
     (∃ e, st.extra (ptsOf spec (coinOf (resp 0))) = .ok e) ∧
     ∃ bs, bodies.toList = linkBody [rb] [ByteArray.empty] :: bs ∧ Recs resp 1 (streams.toList.flatMap Array.toList) bs

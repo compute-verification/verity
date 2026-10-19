@@ -31,6 +31,9 @@ _COLLECTIVE_KINDS = {"all_reduce2": "all_reduce", "all_gather2": "all_gather",  
                      "all_reduce": "all_reduce", "all_gather": "all_gather"}      # the unsuffixed ops take the world's `parts` as one list
 MAX_RUNS = 1 << 16   # a reference sequence with more contiguous runs than this is not indexed (a leaf-strided view of a cache-sized
                      # tensor has one run per leaf); its slots stay unlocated and say so -- the emitter is O(runs), never O(leaves)
+MAX_SPANS = 1 << 9   # an argument read from several fx inputs is resolved run by run only up to this many runs; past it, one whose
+                     # every run an input holds stays unlocated and says so.  An attention row whose keys alternate two inputs
+                     # (`k_nope ++ k_pe` per key) is 2 x keys runs, so spans for every row of every head would be O(rows^2) records a layer
 
 
 def _runs(refs, max_runs: int = MAX_RUNS) -> list[tuple[str, int, int, int]] | None:
@@ -186,6 +189,26 @@ def _locate_shared(index: dict, rs: list[tuple[str, int, int, int]], log, s: int
             return None
         b = hi
     return a, b
+
+
+def _all_located(inputs: list, rs: list[tuple[str, int, int, int]], log, s: int, memo: dict) -> bool:
+    """Every run of `rs` lies in one of the occurrence's `inputs` (what resolving it run by run needs).  The first `s` runs, `log`'s
+    shared runs, are checked once per (inputs, log) and kept in `memo`, so a longer cut of the same log checks only its own runs."""
+    def held(space, i, lo, hi) -> bool:
+        return any(ix and _locate(ix, space, i, lo, hi) is not None for _a, _v, ix in inputs)
+
+    if log is None or not s:
+        return all(held(*r) for r in rs)
+    st = memo.get((id(inputs), id(log)))
+    if st is None or st[0] is not log or st[1] is not inputs:
+        st = memo[(id(inputs), id(log))] = [log, inputs, 0, None]   # log, inputs, shared runs checked, the first one not held
+    if st[3] is None and st[2] < s:
+        for r in log.shared_runs(st[2], s):
+            if not held(*r):
+                st[3] = st[2]
+                break
+            st[2] += 1
+    return (st[3] is None or st[3] >= s) and all(held(*r) for r in rs[s:])
 
 
 def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | bool:
@@ -409,6 +432,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
 
     # -- calls: Call k -> occurrence + return slots + argument slots --------------------------------------------------------------
     calls, located = [], {}   # located: (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
+    held: dict = {}           # (id(inputs), id(PartLog)) -> how far the log's shared runs lie in the occurrence's inputs (`_all_located`)
     for k, nd in enumerate(body.nodes):
         fx = node_fx.get(k)
         if fx is None:
@@ -454,7 +478,10 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                 found["input"] = j
                 found["leaves"] = [int(r[0]), int(r[1])] if r is not None else None
                 break
-            if found["input"] is None and len(occ_inputs[o]) > 1:
+            if found["input"] is None and len(occ_inputs[o]) > 1 and len(rs) > MAX_SPANS:
+                if _all_located(occ_inputs[o], rs, log, s, held):
+                    found["unlocated"] = f"spans>{MAX_SPANS}"
+            elif found["input"] is None and len(occ_inputs[o]) > 1:
                 # the Call's argument spans SEVERAL fx inputs (a collective's operand is `own ++ peer`): resolve run by run
                 spans: list[dict] = []
                 for space, i, lo, hi in rs:

@@ -2,8 +2,9 @@
 3 Oct: a change to what a guarantee says waits on nobody, and he is shown it).
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
-hash), every definition the statements read (its hash, under `reads`), and what the shape rule exempts (`shape.frozen`:
-an entry added there is shown with its reason). Between the main the push replaced and the one it
+hash), every definition the statements read (its hash, under `reads`), what the shape rule exempts (`shape.frozen`:
+an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
+entry added there is shown). Between the main the push replaced and the one it
 pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
 across every record that changed, not record by record: a guarantee or a definition that moved from one package's record
 to another's under its name is no change, nor is a guarantee renamed with the same type hash, one that only prints
@@ -77,6 +78,12 @@ def _conjectures(doc: dict) -> dict[str, dict]:
     return {n: e for n, e in c.items() if isinstance(e, dict)} if isinstance(c, dict) else {}
 
 
+def _allowed(doc: dict) -> list[str]:
+    """The record's `verifier.allow`: the compiled code no proof sees that its verifier's path may reach."""
+    a = (doc.get("verifier") or {}).get("allow") or []
+    return [x for x in a if isinstance(x, str)] if isinstance(a, list) else []
+
+
 def _signature(rec: dict) -> str:
     lines = rec.get("signature") or ["(no signature recorded)"]
     lines = [lines] if isinstance(lines, str) else list(lines)
@@ -101,7 +108,7 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
     The kinds are `changed`, `removed`, `definition`, `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
-    `shape.conjectures` added or with a new status) and `new`, in that order (what an existing guarantee says comes first,
+    `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
     another package's record under its name, counted in that package's tally. A guarantee under another name with its type
     hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's changed hash is
@@ -135,6 +142,9 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     out += [(_package(p), "conjecture", f"• conjecture `{n}` {c.get('status')}"
              + (f" (was {ca[n]})" if n in ca else "") + f": {c.get('why', '')}")
             for p, d in news.items() for n, c in sorted(_conjectures(d).items()) if ca.get(n, "") != c.get("status")]
+    va = {x for d in olds.values() for x in _allowed(d)}
+    out += [(_package(p), "compiled", f"• compiled code allowed on the verifier's path, which no proof sees: `{x}`")
+            for p, d in news.items() for x in _allowed(d) if x not in va]
     out += [(b[n][0], "new", f"• new guarantee `{n}`\n{_signature(r)}")
             for n, r in sorted(came.items()) if r.get("type_hash") not in renamed]
     out += [(b[n][0], "moved", "") for n in sorted(set(a) & set(b)) if a[n][0] != b[n][0] and not _restated(a[n][1], b[n][1])]
@@ -160,7 +170,9 @@ def _tally(kinds: list[str]) -> str:
     f = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("frozen", "frozen"), ("conjecture", "conjectures marked"))
                   if k in kinds)
     f = f"shape: {f}" if f else ""
-    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else []) + ([f] if f else []))
+    v = f"verifier: {kinds.count('compiled')} allowed" if "compiled" in kinds else ""
+    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else []) + ([f] if f else [])
+                     + ([v] if v else []))
 
 
 def web(repo: Path, remote: str) -> str | None:

@@ -5,14 +5,16 @@
 A circuit is its per-rank Program digests: the step Program, each request shape's and GP-01's workload Program, as
 `epoch.row_digests` reads them from a row's `build_summary.json`.  The circuit database's index, `manifests/records.json`
 (`config_record.load_index`), pins them for each row of record beside its record, with the tier of its rebuild and the Build they
-were taken from (`records publish` pins a record's Programs).  Each selected row (the ROWs named, else every row of `--tier`) is
-rebuilt by its own Build, `verity-vllm row run ROW ROLE REPO REV --stages build` (`epoch.resolve`), into OUT/<row>, and its digests
-compared with the pins; `--compare` compares the Builds already under OUT instead.  The manifest digest is reported, not compared: a
+were taken from (`records publish` pins a record's Programs; a switched row's, `aot`, are its predicted Programs).  Each selected row
+(the ROWs named, else every row of `--tier`) is rebuilt by its own Build traced, `verity-vllm row run ROW ROLE REPO REV --stages build
+--build-construction trace` (`epoch.resolve`), into OUT/<row>, and its digests compared with the pins: for a switched row, the trace
+checks its AOT Build.  `--compare` compares the Builds already under OUT instead.  The manifest digest is reported, not compared: a
 naming change moves the manifest and leaves the circuit; a heavy row's Build builds none (`TIER_FLAGS`).  Exit 0 when every pinned
 digest is reproduced, 1 when one moved or is missing (each named), 2 on a usage error.  `--update` rewrites the selected rows' pins
 from what was built and keeps their `record`: the PR that changes a circuit on purpose re-pins it and re-publishes its record, and its
-diff names what moved (`pinned_from`: the Build, and under `research run` its run and source commit).  A row whose Build failed or
-left a Program undigested keeps its pins, is named, and the exit is 1.
+diff names what moved (`pinned_from`: the Build, and under `research run` its run and source commit).  A switched row whose pins move
+loses its `aot` (its comparison was of other Programs) until `verity-vllm predict compare` finds the new ones equal.  A row whose Build
+failed or left a Program undigested keeps its pins, is named, and the exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
@@ -75,7 +77,7 @@ def rebuild(row: str, out: Path, flags: list[str]) -> int:
     engine_env.hide_devices()
     role, repo, rev, _world = epoch.resolve(row)
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "row", "run", row, role, repo, rev, "--stages", "build",
-           "--py", sys.executable, "--sweep-dir", str(out), *flags]
+           "--build-construction", "trace", "--py", sys.executable, "--sweep-dir", str(out), *flags]
     print("[neutrality] " + " ".join(cmd), flush=True)
     return subprocess.run(cmd, cwd=ROOT).returncode
 
@@ -113,6 +115,9 @@ def main(a: Options) -> int:
               + "".join(f"\n    {d}" for d in diffs), flush=True)
         if a.update and rc in (0, None) and finished(built):
             src = {"build": str((out / row).resolve()), **{k: v for k, v in (("run", a.run_id), ("tree", a.source_sha)) if v}}
+            if diffs and pin.pop("aot", None):
+                print(f"[neutrality] {row}: no longer switched (its pins moved): `verity-vllm predict compare` on this Build re-switches it",
+                      flush=True)
             doc["rows"][row] = {**pin, "pinned_from": src, "programs": built, "manifest_digest": man}
         elif a.update:
             unpinned.append(row)

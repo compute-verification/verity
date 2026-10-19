@@ -1,6 +1,7 @@
 import Difftest
 import VStar
 import Flock.RecResiduals
+import Flock.RecSetup
 
 /-!
 # V*'s difftest executable
@@ -12,7 +13,8 @@ SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`)
 `spec`, `parts`), and V*'s statements over an inner session's shape (`statements`); `spec_holo`, `statements_holo`,
 `inner_circuit_holo` and `verifier_parts_holo` are those over a holo inner session (`VStar.Holo`). `verifier_parts` holds the Lean
 verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
-(`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`.
+(`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`. `inner_draw`
+holds `rec_live.inner_draw`, the prover's reading of the inner session's draw, to the verifier's (`Flock.RecSetup.innerDrawn`).
 -/
 
 namespace VStar.DT
@@ -219,6 +221,15 @@ def verifierAlgebraFn (j : Json) : Except String Json := do
       ("v", natsJson Vs.toList), ("unit", unit)])
   pure (Json.mkObj ([("parts", Json.arr out)] ++ (← gfSummary (algGfS S))))
 
+/-- `rec_live.inner_draw` on an inner session's record: its draw, or the verifier's refusal of a session over it
+(`Flock.RecSetup.innerDrawn`, the same at the inner statement's files and at the verifier's inner coins). -/
+def innerDraw (j : Json) : Except String Json := do
+  let o ← input' j ["record"]
+  let record ← jStr (o "record") "record"
+  pure <| match Flock.RecSetup.innerDrawn (some (.coins Json.null record)) with
+    | .ok () => Json.mkObj [("draw", (Flock.RecCoins.recordDraw record).getD Json.null)]
+    | .error e => Json.mkObj [("refused", (e : Json))]
+
 end VStar.DT
 
 open VStar.DT in
@@ -228,4 +239,4 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("structure", structureFn), ("spec", specFn false), ("parts", partsFn), ("statements", statementsFn false),
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
-  ("verifier_parts_holo", verifierPartsFn true)])
+  ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw)])
