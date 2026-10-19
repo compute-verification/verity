@@ -138,19 +138,21 @@ class Clock:
 def gate_arm(run_write, run_control, C: torch.Tensor, R: torch.Tensor, ref_C: torch.Tensor, ref_rows_R: torch.Tensor,
              rows: torch.Tensor, m: int) -> dict:
     """0xA5 poison, the arm once, C against the reference product on its first m rows, R on the sampled rows against the
-    row reference; then the no-write control under the same poison, which must be rejected."""
+    row reference; then the no-write control under the same poison, which must be rejected. "R_rows" is the honest run's
+    receipt rows (for verify.py), taken before the control overwrites R with poison."""
     def once(fn):
         C.fill_(POISON)
         R.view(torch.int32).fill_(POISON)
         fn()
         torch.cuda.synchronize()
+        got = R.view(torch.int32)[rows.long()]
         c_bad = int((C[:m] != ref_C[:m]).sum())
-        r_bad = int((R.view(torch.int32)[rows.long()] != ref_rows_R.view(torch.int32)).sum())
-        return c_bad, r_bad
-    c_bad, r_bad = once(run_write)
-    k_c, k_r = once(run_control)
+        r_bad = int((got != ref_rows_R.view(torch.int32)).sum())
+        return c_bad, r_bad, got.cpu().numpy().view(np.uint32)
+    c_bad, r_bad, r_rows = once(run_write)
+    k_c, k_r, _ = once(run_control)
     return {"exact": c_bad == 0 and r_bad == 0, "c_bad": c_bad, "r_bad": r_bad, "control_c_bad": k_c, "control_r_bad": k_r,
-            "control_rejected": k_c > 0 and k_r > 0, "rows": rows.tolist()}
+            "control_rejected": k_c > 0 and k_r > 0, "rows": rows.tolist(), "R_rows": r_rows}
 
 
 def capture(fn, calls: int) -> torch.cuda.CUDAGraph:
@@ -220,8 +222,8 @@ def bench_shape(lib: Lib, pg: PgLib | None, args, name: str, n: int, k: int, m: 
     arms: dict = {}
     g = gate_arm(lambda: dg(1, 1)(0), lambda: dg(1, 0)(0), Cdg, Rdg, ref_C, refR, rows, mp)
     g["ref_rows_C_equal_int_mm"] = ref_ok
+    np.save(Path(args.out) / f"R-dg-{name}-m{m}.npy", g.pop("R_rows"))
     out["gates"]["dg"] = g
-    np.save(Path(args.out) / f"R-dg-{name}-m{m}.npy", Rdg[rows.long()].cpu().numpy().view(np.uint32))
     if g["exact"] and g["control_rejected"] and ref_ok:
         arms["dg"] = dg(1, 1)
         Cnf = torch.empty_like(Cdg)
@@ -260,8 +262,8 @@ def bench_shape(lib: Lib, pg: PgLib | None, args, name: str, n: int, k: int, m: 
             gp = gate_arm(lambda: pgf(2)(0), lambda: pgf(0)(0), Cpg, Rpg, refCp, refRp, rows_p, mpp)
             gp["ref_rows_C_equal_int_mm"] = ref_ok_p
             gp["cfg"] = {"nb": nb, "lw": lw, "mi": mi, "L": 32}
+            np.save(Path(args.out) / f"R-pg-{name}-m{m}.npy", gp.pop("R_rows"))
             out["gates"]["pg"] = gp
-            np.save(Path(args.out) / f"R-pg-{name}-m{m}.npy", Rpg[rows_p.long()].cpu().numpy().view(np.uint32))
             if gp["exact"] and gp["control_rejected"] and ref_ok_p:
                 arms["pg"] = pgf(2)
         else:
