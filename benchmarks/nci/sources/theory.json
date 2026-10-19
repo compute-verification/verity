@@ -1278,12 +1278,22 @@
    },
    {
     "id": "ho-2024-algorithmic-progress/7",
-    "claim": "A later version reports 6.1 months (90% CI 3.3-11.3).",
+    "claim": "The NeurIPS 2024 version's preferred model puts the effective-compute doubling time at 6.1 months (90% CI 3.3-11.3), about 3.9x per year (2.1-12x).",
     "quote": "6.1 months, with a 90% confidence interval of 3.3 to 11.3 months",
-    "location": "NeurIPS version",
+    "location": "NeurIPS 2024 proceedings version, Section 3.1",
     "quantities": [],
     "grade": "measured-at-scale",
-    "bears_on": "Confirm which version the URL serves.",
+    "bears_on": "The arXiv URL serves the earlier 8.4-month figure (/3); the proceedings version is faster, with an upper end above the README's 5x per year.",
+    "from_review": "efficiency-metrics"
+   },
+   {
+    "id": "ho-2024-algorithmic-progress/8",
+    "claim": "The NeurIPS 2024 version's abstract widens the headline halving time to a 90% interval of about 2 to 22 months, about 1.5x to 64x per year.",
+    "quote": "halved approximately every 8 months, with a 90% confidence interval of around 2 to 22 months",
+    "location": "NeurIPS 2024 proceedings version, abstract",
+    "quantities": [],
+    "grade": "measured-small",
+    "bears_on": "The published interval on loss-based progress spans more than an order of magnitude per year, wider than the README's 1.1-5x bracket at its top.",
     "from_review": "efficiency-metrics"
    }
   ]

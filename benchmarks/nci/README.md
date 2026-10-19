@@ -203,8 +203,8 @@ All values below are from `parameters.json`; render the index for the findings b
 - **Activations set the floor.**
   - Production systems send 8-bit activations across parallel links. The one boundary test in training is stable only
     from about 4.4 bits (`b_a.activation/boundary-training`).
-  - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x, and one unreplicated preprint
-    claims 100x (`activation.boundary_bits/d7168`).
+  - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x. One preprint claims 100x, and
+    its matched-token replication loses 14–15% in loss at only 8x (`activation.boundary_bits/d7168`).
   - The sharding floor is about `w_cut / b_tok`: centrally 7e2, and 60 at the most aggressive claim.
 - **Tokens are the auditor's lever.**
   - Raw token ids carry about 17.3 bits. Arithmetic-coded against a committed base model they carry about 2.2
@@ -223,8 +223,8 @@ All values below are from `parameters.json`; render the index for the findings b
 
 `library.py` answers questions across training algorithms.
 
-- **The library holds 71 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
-- **47 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
+- **The library holds 83 algorithms in 17 families.** 59 come from a scaling corpus of 91 sources.
+- **60 algorithms carry a measured `multiplier`:** a compute-equivalent gain over a dense AdamW Chinchilla-optimal
   reference, citing its findings, with the full `scaling` evidence beside it.
 - **Each algorithm states its `convention`.** `as-published` keeps the method's state at its stored precision
   (weights and optimizer moments). `attacker` assumes the cheapest rates at about the same quality. Queries default

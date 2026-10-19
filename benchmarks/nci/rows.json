@@ -63,7 +63,7 @@
    "d": 1536,
    "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
   },
-  "notes": "The activation-compression attack at its most aggressive published claim (Subspace Networks, unreplicated). Moves only the construction; the proven bound does not use w_cut.",
+  "notes": "The activation-compression attack at its most aggressive published claim (Subspace Networks; its one replication, at 8x and matched tokens, loses 14-15% in loss at 1B). Moves the construction, and the proven bound through its cap of b_a at w_cut / d.",
   "sources": [
    "ramasinghe-2025-protocolmodels"
   ]
