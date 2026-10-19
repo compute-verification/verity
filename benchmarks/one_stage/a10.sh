@@ -23,7 +23,8 @@ export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 C=${A10_CACHE:-$HOME/.cache/verity-a10}
 mkdir -p "$C"
-command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
+R() { PYTHONPATH=$SRC/tools/research/src python3 -m research "$@"; }   # a node's job has no `research` on its PATH
+R keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A10's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 
 BUNDLE=art:6437727df08be44eba654589780a7d307a4e8038d70b373146eba4b83878034e    # rank 0's replay bundle, Commit r20261019-074856-7c3a
@@ -39,7 +40,7 @@ fetch() {   # fetch ART DEST [GLOB...]: ART's files (those matching the globs) u
   rm -rf "$dest" && mkdir -p "$dest"
   local paths=() g
   for g in "$@"; do paths+=(--path "$g"); done
-  research data fetch "$art" --to "$dest" "${paths[@]}" >> "$OUT/fetch.log" 2>&1 && touch "$dest.done"
+  R data fetch "$art" --to "$dest" "${paths[@]}" >> "$OUT/fetch.log" 2>&1 && touch "$dest.done"
 }
 
 case ${A10_MODE:?} in
@@ -60,7 +61,7 @@ values)
     for t in "$C"/slice-*/out/*.tar; do tar -xf "$t" -C "$C/values" || { log "a10: can't extract $t"; exit 2; }; done
     touch "$C/values.done"
   fi
-  research keep "$C" --owner @circuits --expires 2d --priority low --root / \
+  R keep "$C" --owner @circuits --expires 2d --priority low --root / \
     --why "A10's inputs from the store (rank 0's bundle, the Commit's records, the Build, A11/A9 slices)" >> "$OUT/job.log" 2>&1
   log "a10: inputs $(du -sh "$C" | cut -f1); values"
   # shellcheck disable=SC2086
@@ -82,7 +83,7 @@ audit)
   (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   S=$W/saved && mkdir -p "$S"
-  research data fetch "${A10_VALUES:?}" --to "$W/fetch" --path "out/saved-${A10_SET:?}.tar" >> "$OUT/fetch.log" 2>&1 \
+  R data fetch "${A10_VALUES:?}" --to "$W/fetch" --path "out/saved-${A10_SET:?}.tar" >> "$OUT/fetch.log" 2>&1 \
     && tar -xf "$W/fetch/out/saved-$A10_SET.tar" -C "$S" || { log "a10: no saved-$A10_SET.tar in $A10_VALUES"; exit 2; }
   if [ "$A10_SET" = a9 ]; then KARGS=(--kinds "$S/kinds.json"); else
     fetch "$KINDS" "$C/kinds" 'kinds.json'; KARGS=(--kinds "$C/kinds/kinds.json" --try RMSNormCudaVector8_v1); fi
