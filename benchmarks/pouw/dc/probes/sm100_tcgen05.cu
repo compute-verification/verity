@@ -565,7 +565,7 @@ DC_DEV void bulk_solo_tc(const OpArgs& a) {
 }
 
 // lane_beside_mma exact on both sides: the MMA warp fixed, the lane warps running only while it does (OP_UNTIL).
-template <int X, int R>
+template <int X, int R, int N = 256>
 DC_DEV void lane_until_mma(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
   const uint32_t tmem = setup<0>(s, a.mode);
@@ -574,7 +574,7 @@ DC_DEV void lane_until_mma(const OpArgs& a) {
   OP_BEGIN_STOP
   if (warp_u() == 0) {
     OP_LOOP(it) {
-      if (elect_one()) mma4<0, 128, 256>(tmem, da, db);
+      if (elect_one()) mma4<0, 128, N>(tmem, da, db);
       __syncwarp();
     }
     OP_DONE
@@ -650,6 +650,10 @@ OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
 OP_KERNEL(tclaneU_redux, 512) { lane_until_mma<L_REDUX, 64>(a); }
 OP_KERNEL(tclaneU_reduce, 512) { lane_until_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
+OP_KERNEL(tclaneU_lop3_r128, 512) { lane_until_mma<L_LOP3, 128>(a); }
+OP_KERNEL(tclaneU_duo_r192, 512) { lane_until_mma<L_DUO, 192>(a); }
+OP_KERNEL(tclaneU_lop3_r128_n128, 512) { lane_until_mma<L_LOP3, 128, 128>(a); }
+OP_KERNEL(tclaneU_duo_r192_n128, 512) { lane_until_mma<L_DUO, 192, 128>(a); }
 OP_KERNEL(tcliU_base, 384) { tcli_until_mma<0, 8>(a); }
 OP_KERNEL(tcliU_redux, 384) { tcli_until_mma<1, 8>(a); }
 OP_KERNEL(tcliU_reduce, 384) { tcli_until_mma<2, 8>(a); }
@@ -721,6 +725,10 @@ static const OpProbe PROBES[] = {
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_redux", .kernel = (const void*)tclaneU_redux, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_reduce", .kernel = (const void*)tclaneU_reduce, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lop3_r128", .kernel = (const void*)tclaneU_lop3_r128, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_duo_r192", .kernel = (const void*)tclaneU_duo_r192, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lop3_r128_n128", .kernel = (const void*)tclaneU_lop3_r128_n128, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_duo_r192_n128", .kernel = (const void*)tclaneU_duo_r192_n128, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcbulk_cp", .kernel = (const void*)tcbulk_cp, .tpb = 256, .expect = UI ";UBLKCP*=8", .counted = "UBLKCP*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
     {.name = "tcbulk_red", .kernel = (const void*)tcbulk_red, .tpb = 256, .expect = UI ";UBLKRED*=8", .counted = "UBLKRED*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
     {.name = "bulkcp", .kernel = (const void*)bulkcp, .tpb = 32, .expect = "UBLKCP*=8", .words = 1024, .iters = 1024},
