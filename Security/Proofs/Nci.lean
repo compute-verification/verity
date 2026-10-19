@@ -10,6 +10,7 @@ import Proofs.Nci.Pull
 import Proofs.Nci.Threads
 import Proofs.Nci.Contained
 import Proofs.Nci.Fit
+import Proofs.Nci.FitSlotsWitness
 
 /-!
 # Proofs of NCI's guarantees
