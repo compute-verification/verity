@@ -34,7 +34,10 @@ family "hopper": the tuned sm_90 table; on sm_90 Triton lowers `tl.dot` to `wgmm
 so the Definition is `Gemm_v2{K,N,DOT}` — R13 lane hopper) and `blackwell_consumer` (cc 12.0, the RTX PRO 6000: vLLM family None, so a
 Triton launch takes the default tiling; vLLM's linear layers run that launch at every M (`linear_batch_invariant`), while other bf16
 matmuls stay on cuBLASLt with split-K disabled; the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is Hopper's, so the Definition is `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`).
-Anything else (datacenter Blackwell cc 10.x; cc 8.6/8.7 and 12.1 with no run yet) is
+`blackwell` (cc 10.0, the B200) is registered for served Builds only (`batch_invariant_refusal`): its k16 steps, cuBLAS's
+`tcgen05.mma kind::f16` and FA2's `mma.sync.m16n8k16`, are Hopper's, but vLLM's tuned "blackwell" table of the batch-invariant
+kernel is not pinned, so `gemm_target_for` refuses it to every batch-invariant consumer and only `acquire.served_device` reads it.
+Anything else (cc 10.x other than 10.0; cc 8.6/8.7 and 12.1 with no run yet) is
 `UnregisteredGemmTarget`: construction refuses (`numerics_unregistered`), the resolver answers Unsupported, and the
 applicability check fails — a launch that happens to show a registered tiling on an unregistered target is still refused.
 """
@@ -258,7 +261,13 @@ REGISTERED: dict[str, GemmTarget] = {
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
         batch_invariant_refusal="vLLM's tuned 'blackwell' table of matmul_kernel_persistent is not pinned and no batch-invariant launch "
                                 "on cc 10.0 has a correspondence run",
-        evidence=("provisional: tc_probe r20261018-234914-864e (sm100.tcgen05.mma.bf16, sm100.mma.m16n8k16.bf16 on the B200) in flight",)),
+        evidence=("tc_probe r20261018-234914-864e on the B200: tcgen05.mma kind::f16 (sm100.tcgen05.mma.bf16, SASS 1x UTCHMMA) "
+                  "42,418,176 swept + 5,688,320 chained elements and, with enable_input_d = 0, 17,842,176 + 3,703,808, every word "
+                  "HOPPER_BF16_WGMMA_K16's total step (trust dossier art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765, "
+                  "PINNED); mma.sync.m16n8k16 (sm100.mma.m16n8k16.bf16, HMMA.16816.F32.BF16) 25,833,472 finite elements Hopper's pipeline",
+                  "the compiled served Build of Llama-3.2-1B r20261019-000009-d8e9 (cuBLAS at vLLM's defaults, FLASH_ATTN FA2): served "
+                  "Match PASS, all 702 Gemm_v2, 208 CublasSplitKGemm_v1 and 224 attention launches of 14 steps exact; served Commit "
+                  "PASS, 2562/2562 values exact in both pairs")),
 }
 
 
@@ -294,8 +303,9 @@ def gemm_target_for(compute_capability, arch_family: Any = ..., *, batch_invaria
                 raise UnregisteredGemmTarget(f"numerics_unregistered: GEMM target cc {cc[0]}.{cc[1]} reports tuned_gemm_arch_family={fam!r}, the registered "
                                              f"'{t.key}' specialization requires {t.vllm_arch_family!r} (vLLM's table selection changed: not this Definition)")
             if batch_invariant and t.batch_invariant_refusal:
-                raise UnregisteredGemmTarget(f"numerics_unregistered: GEMM target cc {cc[0]}.{cc[1]} (tuned_gemm_arch_family={fam!r}) is registered "
-                                             f"for served Builds only ('{t.key}'): {t.batch_invariant_refusal}")
+                raise UnregisteredGemmTarget(f"numerics_unregistered: no registered GEMM specialization for target cc {cc[0]}.{cc[1]} "
+                                             f"(tuned_gemm_arch_family={fam!r}) for a batch-invariant launch: '{t.key}' is registered for "
+                                             f"served Builds only ({t.batch_invariant_refusal})")
             return t
     known = ", ".join(f"{t.key} (cc {'/'.join(f'{a}.{b}' for a, b in t.compute_capabilities)}, family {t.vllm_arch_family!r})" for t in REGISTERED.values())
     raise UnregisteredGemmTarget(f"numerics_unregistered: no registered GEMM specialization for target cc {cc[0]}.{cc[1]} "

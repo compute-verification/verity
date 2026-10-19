@@ -3,9 +3,11 @@
 A Build vouches for its own device only.  What the served Program binds is the device's own:
 
   * every cuBLAS GEMM's k16 step: its GEMM target's (`frontend.gemm_targets.gemm_target_for`), `HopperBF16WgmmaDot16_v1` on cc 9.0
-    (wgmma) and on cc 12.0 (mma.sync m16n8k16, silicon `sm120.mma.m16n8k16.bf16`: the same pipeline);
-  * the attention kernel vLLM selects at its defaults, FLASH_ATTN at the version `ATTENTION` names for the step family: FA3 on cc 9.0
-    (`fa3_launch`), FA2 on cc 12.0 (`fa2_launch`);
+    (wgmma), on cc 10.0 (tcgen05.mma kind::f16, silicon `sm100.tcgen05.mma.bf16`) and on cc 12.0 (mma.sync m16n8k16, silicon
+    `sm120.mma.m16n8k16.bf16`): the same pipeline;
+  * the attention kernel, FLASH_ATTN at the version `ATTENTION` names for the step family: vLLM's selection at its defaults on cc 9.0
+    (FA3, `fa3_launch`) and cc 12.0 (FA2, `fa2_launch`); on cc 10.0, where vLLM's default is FLASHINFER, the row declares FLASH_ATTN
+    FA2 (`engine.args`, with its `engine.reasons`), whose mma.sync m16n8k16 there is the same pipeline (`sm100.mma.m16n8k16.bf16`);
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.
@@ -38,8 +40,7 @@ from verity_vllm.program.registry import inductor as IR
 from verity_vllm.program.registry.hopper import Fa3InvSum
 from verity_vllm.program.registry.prims import Fa2InvSum
 
-#: the FLASH_ATTN version each step family's served attention Definitions model: vLLM's selection at its defaults on cc 9.0 and 12.0;
-#: on cc 10.0, whose default is FLASHINFER, the row declares FLASH_ATTN FA2 (`engine.args.attention_config`, with its `engine.reasons`)
+#: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}
 BACKEND = "FLASH_ATTN"
 
@@ -125,7 +126,7 @@ def attention_rows(qlen: int, klen: int, NS: int, *, NH: int, KVH: int, D: int, 
                   MASKED_FROM=attention_vocab.fa3_masked_from(klen, BN, 0, BM, g))]
 
 
-# ------------------------------------------------------------------------------------------------------------- FA2 (cc 12.0)
+# ---------------------------------------------------------------------------------------------------- FA2 (cc 10.0 and 12.0)
 def fa2_launch(qlens: list[int], *, NH: int, KVH: int, D: int, sms: int, batch: int, max_seqlen_k: int) -> dict[str, Any]:
     """FA2's launch of one varlen step (module docstring): swapped or not, its kBlockN and its split count."""
     if max(qlens) == 1 and NH > KVH and D % 8 == 0:
