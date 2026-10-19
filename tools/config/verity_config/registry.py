@@ -37,8 +37,8 @@ class Machine:
     provider: str
     platform: str
     preset: str
-    gpu_id: str | None
-    gpu_count: int
+    gpu_id: str | None = None
+    gpu_count: int = 0
 
 
 @dataclass(frozen=True)

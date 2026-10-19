@@ -138,7 +138,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
-    for at, kind, x in events:
+    for step, (at, kind, x) in enumerate(events):
         clock.now = at
         if kind == 0:
             coin = s.start() if x < 0 else s.boundary()
@@ -148,7 +148,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
         t, i = x
         ps = run(prover, t, i, challenges, previous, plan and plan(t, i))
         passes[t, i], previous = ps, ps.root
-        if s.receive(t, i, ps.root, (sent or (lambda q: q.plan.runs))(ps)) is not None:
+        if s.receive(t, i, ps.root, (sent or (lambda q: q.plan.runs))(ps), step=step) is not None:
             break
     return s, prover, passes, clock
 
@@ -171,15 +171,19 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
     assert SCHEDULE.passes == (4, 3, 3) and SCHEDULE.deadlines == (1000 + A, 2000 + A, 3000 + A)
-    assert r.public() == {"bind": False, "block_bytes": 4096, "blocks": N, "codec": "p1024/k2/masked",
+    assert r.public() == {"appended": 0, "appends": None, "bind": False, "block_bytes": 4096, "blocks": N,
+                          "codec": "p1024/k2/masked",
                           "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
-                          "coins": s.commitment.root.hex(), "layout": "store-order/v0", "passes": [4, 3, 3],
-                          "protocol": audit.PROTOCOL_ID,
+                          "coins": s.commitment.root.hex(), "heads": [[None] * 4, [None] * 3, [None] * 3],
+                          "layout": "store-order/v0", "lifetime": audit.LIFETIME, "passes": [4, 3, 3],
+                          "post_seed": [0, 0, 0], "protocol": audit.PROTOCOL_ID,
                           "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
-                          "registration": store.registration.digest.hex(), "rows": 16, "span_ns": 3000 + A}
+                          "registration": store.registration.digest.hex(), "released": 0, "rows": 16,
+                          "span_ns": 3000 + A, "stale": [[N] * 4, [N] * 3, [N] * 3]}
     assert r.codec == store.registration.codec == codec.FALLBACK
     w1 = r.profile()["windows"][1]
     assert w1["lengths"] == [N] * 3 and w1["released_ns"] == 1000 and w1["deadline_ns"] == 2000 + A
+    assert all(a < b for w in r.windows for a, b in zip(w.steps, w.steps[1:])) and len(w1["steps"]) == 3
     assert w1["opened_ns"] == 3000 + A + 1
     assert w1["profile"]["levels"] == [{"name": "receipt", "query": None, "size": 3 * N, "draw": {"subset": 7}}]
     assert r.end_ns == SCHEDULE.span_ns and A == timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
@@ -290,7 +294,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
 def test_a_plan_that_repeats_a_block_or_is_not_canonical_rejects(store, runs) -> None:
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s.start()
-    assert s.receive(0, 0, bytes(64), runs) == audit.Verdict(0, False, "plan")
+    assert s.receive(0, 0, bytes(64), runs, step=0) == audit.Verdict(0, False, "plan")
 
 
 def test_receipts_committed_under_another_plan_reject(store) -> None:
@@ -342,7 +346,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
 
 def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
     """μ_rebuild is the stated squaring ceiling over the record's codec's encode, `C_sq · 4096 / (E_sq · R)`: at the
-    node's ceiling and measured R 0.062% under p1024/k3/masked, 0.093% at k = 2 and 0.31% under p512/k2.  A model
+    node's ceiling and measured R 0.065% under p1024/k3/masked, 0.097% at k = 2 and 0.31% under p512/k2.  A model
     of another codec than the record's, a bare fraction, or a ceiling that isn't a finite nonnegative rate is
     refused."""
     p512 = codec.Codec(codec.P512, 2, False)
@@ -353,7 +357,7 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
         assert ((c.field.p + 1) // 4).bit_length() - 1 == c.field.n - 3
     fractions = [audit.Rebuild(c, timing.SQUARINGS_PER_S[c.field.name]).fraction(timing.READ_BYTES_PER_S)
                  for c in (codec.DEFAULT, codec.FALLBACK, p512)]
-    assert fractions == pytest.approx([6.195e-4, 9.292e-4, 3.1296e-3], rel=1e-4)
+    assert fractions == pytest.approx([6.4781e-4, 9.7172e-4, 3.1296e-3], rel=1e-4)
     r = synthetic((100, 100, 60), 5, 1e-6)
     assert r.codec == codec.DEFAULT
     rebuild = audit.Rebuild(codec.DEFAULT, timing.SQUARINGS_PER_S["p1024"])
@@ -778,28 +782,59 @@ def test_roots_out_of_order_reject(store) -> None:
         return Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=Clock())
     s = session()
     with pytest.raises(SessionError, match="not started"):
-        s.receive(0, 0, bytes(64))
+        s.receive(0, 0, bytes(64), step=0)
     s.start()
-    assert s.receive(0, 1, bytes(64)) == audit.Verdict(0, False, "order")
+    assert s.receive(0, 1, bytes(64), step=0) == audit.Verdict(0, False, "order")
     s = session()
     s.start()
-    assert s.receive(0, 0, bytes(64)) is None and s.receive(0, 0, bytes(64)) == audit.Verdict(0, False, "order")
+    assert s.receive(0, 0, bytes(64), step=0) is None
+    assert s.receive(0, 0, bytes(64), step=1) == audit.Verdict(0, False, "order")
     s = session()
     s.start()
-    assert s.receive(1, 0, bytes(64)) == audit.Verdict(0, False, "order")         # window 1's challenge isn't out
+    assert s.receive(1, 0, bytes(64), step=0) == audit.Verdict(0, False, "order")  # window 1's challenge isn't out
     clock = Clock()
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
     clock.now = 1000
     s.boundary()
-    assert s.receive(1, 0, bytes(64)) is None and s.receive(0, 0, bytes(64)) == audit.Verdict(1, False, "order")
+    assert s.receive(1, 0, bytes(64), step=0) is None
+    assert s.receive(0, 0, bytes(64), step=1) == audit.Verdict(1, False, "order")
     s = session()
     s.start()
-    assert s.receive(0, 0, bytes(63)) == audit.Verdict(0, False, "malformed")
+    assert s.receive(0, 0, bytes(63), step=0) == audit.Verdict(0, False, "malformed")
     s = session()
     s.start()
     with pytest.raises(SessionError, match="starts once"):
         s.start()
+
+
+@pytest.mark.parametrize("steps, failure", [
+    ((0, 5, 9), None),
+    ((None,), "step"),
+    ((3, 3), "step"),
+    ((4, 2), "step"),
+    ((-1,), "step"),
+    ((True,), "step"),
+    ((audit.STEP_LIMIT,), "step"),
+    ((0, 1, "2"), "step"),
+], ids=["increasing", "none", "repeated", "decreasing", "negative", "bool", "limit", "str"])
+def test_each_pass_names_a_step_above_the_previous_passs(store, steps, failure) -> None:
+    """A pass covers one step of the served circuit, named with its root: a root with no step, or one not above the
+    previous pass's, across windows too, rejects the session (`step`), and an accepted window records them."""
+    clock = Clock()
+    s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
+    s.start()
+    out = None
+    for k, step in enumerate(steps):
+        if k == 2:
+            clock.now = 1000
+            s.boundary()
+        out = s.receive(0 if k < 2 else 1, k if k < 2 else 0, bytes(64), step=step)
+        if out is not None:
+            break
+    assert out == (None if failure is None else audit.Verdict(0 if k < 2 else 1, False, failure))
+    if failure is None:
+        assert [w.steps for w in s.windows] == [[0, 5], [9]]
 
 
 def test_a_window_of_too_few_passes_is_rejected(store) -> None:
@@ -811,7 +846,7 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
     clock = Clock()
     s = Session(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
-    assert s.receive(0, 0, bytes(64)) is None
+    assert s.receive(0, 0, bytes(64), step=0) is None
     with pytest.raises(SessionError, match="not final"):
         s.close(0)
     clock.now = 1000
@@ -819,7 +854,7 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
     clock.now = 1000 + A
     with pytest.raises(SessionError, match="not final"):
         s.close(0)
-    assert s.receive(1, 0, bytes(64)) is None                  # window 1's first root makes window 0's final
+    assert s.receive(1, 0, bytes(64), step=1) is None          # window 1's first root makes window 0's final
     with pytest.raises(SessionError, match="in order"):
         s.close(1)
     assert isinstance(s.close(0), tuple)
@@ -943,7 +978,7 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
     GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
-    openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.885–0.917%; over the
+    openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.888–0.920%; over the
     horizon the pooled μ_sample is under 0.01% and the whole γ about 0.66%, over 0.15%, which μ_chip exceeds alone and
     λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
     The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.56–5.59%.  The 20 s option at 11,091
@@ -956,7 +991,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
     idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
     for rtt in (1, 20):
         g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.001 and 0.00885 < g.worst.gamma < 0.00917
+        assert g.worst.sample < 0.001 and 0.00888 < g.worst.gamma < 0.00920
         assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
         assert g.horizon < 1e-4 and 0.0065 < g.gamma_horizon < 0.0067
         spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
@@ -967,7 +1002,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
                             read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
         assert hbm.timing > idle and 0.0556 < hbm.gamma < 0.0560
         twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
-        assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0135
+        assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0136
         one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
         assert one.sample < 0.01 < 0.09 < one.gamma
 
@@ -1015,8 +1050,8 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
-    is μ_chip, λ and μ_rebuild alone, about 372 GB over the node's every tier."""
-    assert 371.8e9 < timing.store_floor() < 372.0e9 and 449.5e9 < timing.store_floor(50 * timing.US) < 449.7e9
+    is μ_chip, λ and μ_rebuild alone, about 373 GB over the node's every tier."""
+    assert 373.1e9 < timing.store_floor() < 373.3e9 and 451.0e9 < timing.store_floor(50 * timing.US) < 451.2e9
     for scale, over in ((0.98, True), (1.02, False)):
         g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
                           samples=555 * 1200)

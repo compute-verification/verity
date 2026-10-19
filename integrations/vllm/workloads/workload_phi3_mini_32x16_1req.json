@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "microsoft/Phi-3-mini-4k-instruct",
- "checkpoint_revision": "f39ac1d28e925b323eae81227eaba4464caced4e",
  "case": "PHI3_MINI",
+ "engine": {
+  "revision": "f39ac1d28e925b323eae81227eaba4464caced4e",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -60,5 +64,5 @@
    ]
   }
  ],
- "note": "[GEN dense2 2026-09-17] microsoft/Phi-3-mini-4k-instruct one-request workload mirroring workload_qwen15_32x16_1req.json: 32 prompt tokens, 16 greedy tokens (1 prefill + 15 decode steps), logprobs=None (D62). NO accepted tokens: the sealed driver's clean control run is the reference (RULES \u00a75)."
+ "note": "[GEN dense2 2026-09-17] microsoft/Phi-3-mini-4k-instruct one-request workload mirroring workload_qwen15_32x16_1req.json: 32 prompt tokens, 16 greedy tokens (1 prefill + 15 decode steps), logprobs=None (D62). NO accepted tokens: the sealed driver's clean control run is the reference (RULES §5)."
 }

@@ -121,6 +121,7 @@ import Proofs.Flock.Soundness.Audit.Influence
 import Proofs.Flock.Soundness.Audit.InfluenceWitness
 import Proofs.Flock.Soundness.Audit.Partitioning
 import Proofs.Flock.Soundness.Audit.TwoStageExfil
+import Proofs.Flock.Soundness.Audit.HarmBound
 import Proofs.Flock.Soundness.Refine
 import Proofs.Flock.Soundness.E2E
 import Proofs.Flock.Soundness.Certificate
@@ -176,4 +177,5 @@ import Proofs.Flock.Soundness.Discharge.Composed
 import Proofs.Flock.Soundness.Discharge.ZkReg
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin
 import Proofs.Flock.Soundness.Discharge.FailClosed
+import Proofs.Flock.Soundness.Discharge.General
 import Proofs.Flock.Soundness.ZK.PadNonvanishing40

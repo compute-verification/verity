@@ -27,9 +27,16 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
   `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
   `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
+- **Lean is the definition and the verifier of record** (Daniel, 18 Oct; `AGENTS.md` "Design rules"). A verifier is
+  Lean code and imports nothing from `verity.ml`; the Python that mirrors it, for the prover's speed, is held to it by
+  difftest (`verity/core/difftest/`). A protocol whose Python verifier is still of record switches by the 8 Oct
+  procedure (`.agents/skills/friction/SKILL.md`), which moves its properties from `Models/` to `Properties/`.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
+- **Code the verifier runs costs O(description)** (AGENTS.md "Design rules"): summarize per Definition and multiply
+  through batch members and scan iterations, never walk the unrolled circuit; `tests/test_verifier_cost.py` refuses the
+  walk, and its failure says the fix.
 - **Parallel proof work runs against fixed statements** (Daniel, 8 Oct). Before any worker starts, the final theorem's
   statement and each open piece's statement are on the branch; each worker proves its piece against that statement, and
   integration builds the final theorem against them continuously. What isn't closed by the deadline is a gap list on the
@@ -41,8 +48,8 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
   rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
-- **A reviewer or red-team subagent works in its own worktree** (`git worktree add`), never by `git checkout` in a tree
-  another agent is using: a checkout there switches that agent's files under it.
+- **A reviewer or red-team subagent is a cloud worker** (AGENTS.md "Lanes"), so it works in its own checkout: a checkout
+  in another agent's tree switches that agent's files under it.
 
 ## Build, iterate, check
 
@@ -56,8 +63,14 @@ python tools/verity/lean/check.py PKG  once, before pushing (the kernel replay o
 
 Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib) is the long one. Never `lake
 update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
-proofs peaks at 15–24 GB of memory: on a machine with less than 24 GB, add a swapfile first, and give a queued job
-`--mem-gb 32`.
+proofs peaks at 15–24 GB of memory, so `check.py` and the fast path refuse a package that pins ArkLib on a machine with
+less than 24 GiB (memory and swap, within its cgroup) and print the fast path's line on a node; a 16 GB agent VM runs
+it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). A whole-Security audit
+(`Security`, which audits Security/Proofs beside it) needs more: with 48 replay threads it peaked at 189 GiB, in its kernel
+replays, and died at 64 and 96 GiB (r20261018-175656-1c85), and at 128 GiB with 16 threads (r20261019-084601-01a0): the
+replay's resident base is most of it, so fewer threads don't help. `check.py` gives a heavy replay one thread per 4 GiB,
+runs heavy replays one at a time, and refuses that audit below 160 GiB. For a record, use the fast path, which skips the
+replay; a queued `check.py --build` of Security takes `--kind lean-audit`, which brings its memory.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
 your own, use the fast path on a shared machine. Don't run `check.py --build --update` from a fresh tree there: that took
@@ -209,6 +222,16 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-18 (18:11Z): "I'm fine with verifier doing O(circuit description length) stuff, but not O(unrolled circuit
+  length) stuff." Lean the verifier runs reads the descriptor once per specialized Definition, and never lays out the
+  canonical circuit gate by gate (`Prog.gate`, a loop to a Definition's `gates`). On bits the unrolled circuit is about
+  1,000× the word-level one, so a gate-by-gate walk that passes at word level fails there. A gate-by-gate version may stay
+  as the reference the description-sized one is difftested against, as `NciCheck.check` is for `NciCheck.Desc`
+  (AGENTS.md "Design rules"; `tests/test_verifier_cost.py`).
+- 2026-10-17 (6:28 PM PDT): a guarantee goes statement first, then red team, then a card to Daniel for each new premise,
+  then the proof, in that order. Memory accounting's stacking guarantee was restated four times, and its cards updated
+  three times, because the red team read it after its proofs. Freeze the statement (above), have a red team attack it
+  and its premises, card what it rests on, and only then prove it, so a finding costs a restatement and not a reproof.
 - 2026-10-08 (5:59 PM PDT): a named conjecture can be a premise, in a section of the list of its own, and a claim that
   rests on one is listed as conditional, apart from the rest. Sort first: a statement that models how a specific device
   computes, such as `TTOutPearlC` (falsified by what the hardware does, and dependent on G), is an assumption about the
@@ -255,7 +278,7 @@ These are Daniel's rulings, newest first.
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
   Daniel gets a DM showing it. "Pin" is retired: say guarantee. (Since 8 Oct no change waits on a per-head grant at all.)
 - 2026-10-01: a pinned theorem is called a **guarantee** (security guarantee): a proved `Prop`, assumptions implying a
-  conclusion, where an assumption is a named `Prop` (README "Glossary").
+  conclusion, where an assumption is a named `Prop` (DESIGN.md "Glossary").
 - 2026-10-01: a guarantee that only moved, renamed or restated as a `Guarantees` definition, needs no statement reviewer
   when `--update --moved` prints it as the same statement under its old names, with every definition it reads the same.
   Since 2026-10-03 no change needs one; `--moved` now decides only whether Daniel's DM lists it.

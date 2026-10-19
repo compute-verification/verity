@@ -1,10 +1,11 @@
 """Hidden outputs (PROTOCOL.md §16.13): the Lean verifier reads M0's hidden-output statements, `verity/flock-circuit` and
 `verity/flock-circuit/types`, as the Rust prover writes them, on its recorded CPU selftest sessions: flat RoPE (the unit
 returns its output), flat GEMM (a tail stage returns it, one BF16 word in a 64-word row), typed RoPE (a flat class) and typed
-GEMM (a template). Each public file holds only roots, hiding leaves and structure. Flat GEMM (its unit reads two input
-groups) and both typed sets are forms the soundness proof does not cover (§16.15), which `verify` refuses after every check
-has passed. No session has a draw, which `verify` refuses after that (D12). So the honest session gets the form's refusal
-(`REFUSED`), on flat RoPE the draw-less one (`DRAWLESS`), and each false statement the check that catches it.
+GEMM (a template). Each public file holds only roots, hiding leaves and structure. Both typed sets are forms the soundness
+proof does not cover (§16.15), which `verify` refuses after every check has passed; flat GEMM (its unit reads two input
+groups, a tail stage returns the outputs) is the general instance form, which it covers. No session has a draw, which
+`verify` refuses after that (D12). So the honest session gets the form's refusal on the typed sets (`REFUSED`), on the flat
+ones the draw-less one (`DRAWLESS`), and each false statement the check that catches it.
 
 It is the one test in `check` of the default statements against the prover's sessions: check's agreement step replays only
 upstream's pinned builds, none of which has hidden outputs. So it catches a verifier that disagrees with the prover on the
@@ -40,8 +41,7 @@ CASES = {"honest": True, "output_claim_false": False, "output_row_committed_fals
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 #: the sets whose form the soundness proof does not cover, and the reason the verifier refuses a case of them that passes
 #: every check for
-REFUSED = {("flat", "gemm-coordinate"): "a unit reading 2 input groups",
-           ("typed", "rope-head"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement",
+REFUSED = {("typed", "rope-head"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement",
            ("typed", "gemm-coordinate"): "verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement"}
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

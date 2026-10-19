@@ -1,9 +1,12 @@
 """The GLM-5.3 capture map (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`) against the meta-device inventory of
-the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7):
+the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7, with
+the default dynamic dense-FP8 kernel facts refreshed from the pinned source and H200 GO run r20261013-115825-d357):
 every module the pinned vLLM builds has exactly one entry, so a module the map misses fails here; every tap reads tensors of
 the shape the inventory gives a rank; each rank built for the target's profile and switches; and the counts the H200 runbook
 cites are pinned."""
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 import copy
 import hashlib
@@ -32,7 +35,7 @@ DOC = json.loads((FIX / "inventory-tp8-rank0.json").read_text())
 RANK0 = DOC["ranks"]["0"]
 TP = CMAP["target"]["tensor_parallel_size"]
 ENV = CM.symbols(CMAP, CONFIG, TP)
-TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.logits", "indexer.topk"}
+TARGET_ONLY = {"attn", "indexer.q_fp8", "indexer.weights", "indexer.k_cache", "indexer.k_scale", "indexer.logits", "indexer.topk"}
 
 
 @pytest.fixture(scope="module")
@@ -56,7 +59,7 @@ def test_the_map_the_fixture_and_the_config_are_one_checkpoint():
     assert DOC["tp"] == TP and {k: DOC["target"][k] for k in target["profile"]} == target["profile"]
     assert DOC["env"] == target["env"] and DOC["kv_cache_dtype"] == target["kv_cache_dtype"]
     assert DOC["device"] == {"name": target["device"], "memory_gb": target["device_memory_gb"]}
-    assert DOC["run"] in CMAP["pins"]["inventory_runs"]["VLLM_USE_DEEP_GEMM=0"]
+    assert DOC["run"] in CMAP["pins"]["inventory_runs"]["default"]
 
 
 def test_the_map_covers_the_inventory_with_no_problems(registry):
@@ -127,15 +130,15 @@ def test_a_wrong_weight_shape_fails():
 def test_a_different_kernel_fails_an_expectation():
     inv = copy.deepcopy(RANK0)
     g = next(g for g in inv["groups"] if g["pattern"] == "model.layers.{i}.self_attn.o_proj")
-    g["kernels"]["quant_method"]["fp8_linear"]["type"] = "DeepGemmFp8BlockScaledMMKernel"
+    g["kernels"]["quant_method"]["fp8_linear"]["type"] = "CutlassFp8BlockScaledMMKernel"
     problems = _check(inv=inv)
     assert len(problems) == 1 and problems[0].startswith("expect model.layers.{i}.self_attn.o_proj kernels.quant_method.fp8_linear.type")
 
 
 def test_a_different_switch_or_device_fails():
     rec = copy.deepcopy(RANK0)
-    rec["selections"]["VLLM_USE_DEEP_GEMM"] = True
-    assert check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = False, the inventory has True"]
+    rec["selections"]["VLLM_USE_DEEP_GEMM"] = False
+    assert check_target(CMAP, rec) == ["switch VLLM_USE_DEEP_GEMM = True, the inventory has False"]
     rec = copy.deepcopy(RANK0)
     rec["applied"]["compute_capability"] = [12, 0]
     assert check_target(CMAP, rec) == ["compute_capability = [9, 0], the inventory has [12, 0]"]
@@ -147,6 +150,20 @@ def test_an_unregistered_definition_fails(registry):
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["silu-mul"]["definitions"].append("SiluMul_v99")
     assert _check(cmap, registry=registry) == ["program silu-mul: Definition SiluMul_v99 is not registered"]
+
+
+def test_the_captures_are_registered_properties_and_the_map_is_its_checkpoints_at_its_world():
+    """Each property a Program's `captures` names is registered (an unknown one fails the check), and the circuit database finds the
+    map by the Build's checkpoint and world (`records.due`)."""
+    caps = CM.captures(CMAP)
+    assert caps["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
+                                         "dsa-topk"]
+    assert caps["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and caps["deepgemm_capture"] == ["fp8-block-linear-deepgemm"]
+    cmap = copy.deepcopy(CMAP)
+    cmap["programs"]["silu-mul"]["captures"] = ["glm53_silu_capture"]
+    assert _check(cmap) == ["program silu-mul: capture 'glm53_silu_capture' is not a registered property"]
+    repo = CMAP["pins"]["checkpoint"]["repo"]
+    assert CM.of_checkpoint(repo, TP)["id"] == CMAP["id"] and CM.of_checkpoint(repo, 2) is None
 
 
 def test_every_tap_names_a_program_of_a_known_status():
@@ -166,7 +183,7 @@ def test_the_target_only_taps_are_the_indexer_and_the_sparse_attention_and_name_
     assert {tid for tid, t in taps.items() if t["target_only"]} == TARGET_ONLY
     first = {tid: CMAP["programs"][taps[tid]["program"]]["definitions"][0] for tid in TARGET_ONLY}
     assert first == {"attn": "SparseMla_v1", "indexer.q_fp8": "DsaIndexerQ_v1", "indexer.weights": "DsaIndexerQ_v1",
-                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
+                     "indexer.k_cache": "DsaIndexerKRow_v1", "indexer.k_scale": "DsaIndexerKRow_v1", "indexer.logits": "DsaMqaLogits_v3", "indexer.topk": "DsaTopKShortRow_v1"}
     assert {CMAP["programs"][taps[tid]["program"]]["status"] for tid in TARGET_ONLY} == {"port"}
     assert all(d in registry for tid in TARGET_ONLY for d in CMAP["programs"][taps[tid]["program"]]["definitions"])
 
@@ -191,11 +208,11 @@ def test_the_runbook_counts():
 
     every = CM.counts(CMAP, ENV)
     assert (every["module_entries"], every["module_types"], every["tap_templates_by_status"]) == (
-        40, 29, {"exists": 17, "tonight": 0, "port": 32, "copy": 2, "committed-only": 0})
+        40, 29, {"exists": 18, "tonight": 0, "port": 35, "copy": 2, "committed-only": 0})
     assert brief(CM.counts(CMAP, ENV, ("dense-mha",))) == (
-        47, 2347, {"exists": 721, "tonight": 0, "port": 1547, "copy": 79, "committed-only": 0}, 63)
+        51, 2593, {"exists": 796, "tonight": 0, "port": 1718, "copy": 79, "committed-only": 0}, 84)
     assert brief(CM.counts(CMAP, ENV, ("sparse-mqa",))) == (
-        49, 2389, {"exists": 643, "tonight": 0, "port": 1667, "copy": 79, "committed-only": 0}, 183)
+        53, 2635, {"exists": 718, "tonight": 0, "port": 1838, "copy": 79, "committed-only": 0}, 204)
 
 
 def test_the_bound_tap_counts():
@@ -204,21 +221,21 @@ def test_the_bound_tap_counts():
         c = CM.counts(CMAP, ENV, routes)
         return c["bound_taps_per_step"], c["bound_taps_per_step_by_binder"]
 
-    common = {"allreduce_norm": 468, "moe": 525, "sampler": 1, "tp_partial": 2}
-    assert bound(("dense-mha",)) == (2272, {**common, "attention": 609, "module_hook": 667})
-    assert bound(("sparse-mqa",)) == (2293, {**common, "attention": 708, "module_hook": 589})
-    assert bound(("dense-mha", "sparse-mqa")) == (2449, {**common, "attention": 786, "module_hook": 667}), \
+    common = {"allreduce_norm": 468, "moe": 825, "sampler": 1, "tp_partial": 2}
+    assert bound(("dense-mha",)) == (2593, {**common, "attention": 630, "module_hook": 667})
+    assert bound(("sparse-mqa",)) == (2614, {**common, "attention": 729, "module_hook": 589})
+    assert bound(("dense-mha", "sparse-mqa")) == (2770, {**common, "attention": 807, "module_hook": 667}), \
         "a mixed step binds both routes' attention taps, each over its own rows"
 
 
 def test_target_only_taps_are_named_on_the_target_only():
     """Off the map's target device a step commits no `target_only` tap: forward_mqa's attention and the indexer's taps."""
-    for routes, off in ((("dense-mha",), 63), (("sparse-mqa",), 63 + 78 + 21)):
+    for routes, off in ((("dense-mha",), 63 + 21), (("sparse-mqa",), 63 + 21 + 78 + 21)):
         on = CM.committer_names(CMAP, ENV, routes=routes, rank=0)
         elsewhere = CM.committer_names(CMAP, ENV, routes=routes, rank=0, on_target=False)
         assert set(elsewhere) < set(on) and len(on) - len(elsewhere) == off
         assert all(tap["target_only"] for n, (tap, _layer) in on.items() if n not in elsewhere)
-    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/v_absorb" in elsewhere
+    assert "model.layers.4.self_attn/attn_mqa" not in elsewhere and "model.layers.4.self_attn/out" in elsewhere
 
 
 @pytest.mark.parametrize("route", ["dense-mha", "sparse-mqa"])
@@ -243,11 +260,14 @@ def test_a_tap_bound_by_an_unknown_binder_fails():
     assert any("commit binder 'nobody'" in p for p in _check(cmap))
 
 
-def test_moe_source_binds_its_seven_tensors_on_every_moe_layer():
+def test_moe_source_binds_its_ten_block_fp8_planes_and_the_unreduced_output_on_every_moe_layer():
+    from verity_vllm.query.manifest.format import MOE_FP8_PLANES
+
     sourced = [t for t in CMAP["taps"] if t.get("source", "").startswith("moe/")]
-    assert len(sourced) == moe_source.TENSORS_PER_LAYER + 1                     # act_scale: block-FP8 experts
-    assert {t["source"].rsplit("/", 1)[1] for t in sourced} == {"router_w", "router_ids", "up", "act", "act_scale", "down", "sum"}
+    assert [t["source"].rsplit("/", 1)[1] for t in sourced] == list(MOE_FP8_PLANES)
     assert all(t["commit"] == {"name": t["source"], "binder": "moe"} for t in sourced)
+    out = next(t for t in CMAP["taps"] if t["id"] == "moe.out")
+    assert out["commit"] == {"name": "model.layers.{i}.mlp.experts/out", "binder": "moe"} and out["layers"] == "moe"
     assert {t["layers"] for t in sourced} == {"moe"} and {t["manifest_family"] for t in sourced} == {"moe_block_stream"}
     runner = next(g for g in RANK0["groups"] if g["pattern"] == "model.layers.{i}.mlp.experts")
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == CM.layer_set(CMAP, "moe", ENV)
@@ -267,7 +287,7 @@ def test_the_check_command_passes_the_meta_build_and_a_live_document(tmp_path, c
     (tmp_path / "live.json").write_text(json.dumps(live))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 0 and out.count(": 0 problems") == TP
-    per_rank[2]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": True}
+    per_rank[2]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": False}
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
     code, out = _cli_check(tmp_path / "live.json", capsys)
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 5: switch VLLM_USE_DEEP_GEMM" in out

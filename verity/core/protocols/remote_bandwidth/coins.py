@@ -1,5 +1,6 @@
 """The challenger's live coins for one session (`verity/remote-bandwidth/coins/v0`): two a window, its challenge and
-its openings coin, every coin drawn and committed before the session and each opened once.
+its openings coin, every coin drawn and committed before the session and each opened once; and an append's coin
+(`Challenger.append_coin`), drawn when the append's root arrives.
 
 ~~~text
 K          2W coins for W windows: window t's challenge σ_t at t, its openings coin at W + t
@@ -15,7 +16,9 @@ challenger can't choose a coin after seeing a root.  hm96 keeps every unopened c
 (`hm96/PROTOCOL.md`), so the root says nothing about a window's seeds or draws before its coins are released.  The
 construction is PoUW's epoch coins' (`verity.core.protocols.pouw.coins`): the coins are live and the verifier
 designated.  Within a window the passes' seeds are Fiat–Shamir, chained from the coin through the prover's roots
-(`receipts.seed`); the openings are drawn from a coin of their own.
+(`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin `c_a` answers the append's root,
+a commitment the prover has already made, so it needs no commitment of its own: the challenger draws it from its
+generator when the root arrives, sends it once, and never draws it again (PROTOCOL.md §4).
 """
 
 from __future__ import annotations
@@ -93,21 +96,29 @@ def coin_reason(commitment: CoinCommitment, opening: CoinOpening, index: int) ->
 
 class Challenger:
     """The challenger's side of one session's coins: it draws every coin and salt from `entropy` (the operating system's
-    generator by default) and commits to them at construction, before the session; `open` releases a coin, once."""
+    generator by default) and commits to them at construction, before the session; `open` releases a coin, once.
+    `append_coin` draws an append's coin from the same generator when it is called, and `appends` counts them."""
 
     def __init__(self, registration: bytes, session: int, count: int,
                  entropy: Callable[[int], bytes] = os.urandom) -> None:
-        def draw(n: int) -> bytes:
-            out = entropy(n)
-            if type(out) is not bytes or len(out) != n:
-                raise ValueError(f"entropy({n}) returned other than {n} bytes")
-            return out
-
+        self._entropy = entropy
         d = domain(registration, session, count)
-        self._coins = tuple((draw(COIN_BYTES), draw(HM96.salt_bytes)) for _ in range(count))
+        self._coins = tuple((self._draw(COIN_BYTES), self._draw(HM96.salt_bytes)) for _ in range(count))
         self._tree = MerkleTree(d, {k: leaf_value(*c) for k, c in enumerate(self._coins)}, lambda _k: SCHEME)
         self.commitment = CoinCommitment(registration, session, count, self._tree.commitment.root)
         self._opened: set[int] = set()
+        self.appends = 0
+
+    def _draw(self, n: int) -> bytes:
+        out = self._entropy(n)
+        if type(out) is not bytes or len(out) != n:
+            raise ValueError(f"entropy({n}) returned other than {n} bytes")
+        return out
+
+    def append_coin(self) -> bytes:
+        """An append's coin, drawn now: each call draws a fresh one, so the session asks once an append."""
+        self.appends += 1
+        return self._draw(COIN_BYTES)
 
     def open(self, index: int) -> CoinOpening:
         if type(index) is not int or not 0 <= index < self.commitment.count:

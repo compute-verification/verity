@@ -15,6 +15,10 @@ copies none), and its XOR and NOT gates are the builder's own linear work.
 depth, its operands named explicitly. `definition` wraps a builder as a `CompositeDefinition` whose body is its traced circuit,
 emitted; the body is traced on first use, not on import. A Boolean Definition names the word Definition it computes as its ``word`` (a Definition, or for one with statics a
 function of its bindings); `word_of` reads it.
+
+`definition` keeps the builder as the Definition's ``build``, and a lowering into `forms` rows runs it instead of the gates:
+C-Flock's (`verity_flock.ir_lower.lower_gates`) lowers each activation of the Definition it holds whole by ``build`` on its
+own circuit, so a commit is a row there, and an AND operand the form its builder gave it.
 """
 from __future__ import annotations
 
@@ -61,7 +65,7 @@ class TracingCircuit(Circuit):
         return TL(w.s, 0, None)
 
     def commit(self, word):
-        """The word itself: a commit (`forms.Circuit.commit`) is a row of the lowering, not a gate."""
+        """The word itself: a commit (`forms.Circuit.commit`) is a row of a lowering that runs the builder (``build``), not a gate."""
         return list(word)
 
 

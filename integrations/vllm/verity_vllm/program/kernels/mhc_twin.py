@@ -11,6 +11,8 @@ which of them the H200 runs.  A is widened bf16 and therefore already exact in T
 it is an f32 subnormal, so only such operands tell the three contractions apart."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity.ml.circuits.ops.scalar import F32Fmaxf, F32_NAN_PTX
@@ -430,3 +432,17 @@ def compute_num_split(block_k: int, k: int, grid: int, sms: int = 132) -> int:
 def tf32_num_split(T: int, K: int, sms: int = 132) -> int:
     """The split count `tf32_hc_prenorm_gemm` runs at T tokens over K (block 64 x 64): `compute_num_split(64, K, cdiv(T, 64))`."""
     return compute_num_split(64, K, -(-T // 64), sms)
+
+
+def tf32_split_schedule(K: int, sms: int = 132, envelope: int = 1024) -> list[tuple[int, int]]:
+    """`tf32_hc_prenorm_gemm`'s split-count regimes up to ``envelope`` tokens: each (first token count, NS) where NS changes.
+
+    `tf32_num_split` reads T only through the 64-row M grid, so NS moves only at a grid edge and every regime starts at
+    64 g + 1; between two edges every token count runs one launch configuration (one NS, one `mhc.tf32_ranges`)."""
+    out: list[tuple[int, int]] = []
+    for g in range(1, -(-envelope // 64) + 1):
+        T = 64 * (g - 1) + 1
+        ns = tf32_num_split(T, K, sms)
+        if not out or out[-1][1] != ns:
+            out.append((T, ns))
+    return out

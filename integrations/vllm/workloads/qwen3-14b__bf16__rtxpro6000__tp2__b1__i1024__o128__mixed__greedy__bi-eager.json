@@ -1,8 +1,28 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen3-14B",
  "case": "QWEN3_14B",
- "tokenizer_revision": "40c069824f4251a91eefaf281ebe4c544efd3e18",
+ "engine": {
+  "revision": "40c069824f4251a91eefaf281ebe4c544efd3e18",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 1152,
+   "tensor_parallel_size": 2,
+   "disable_custom_all_reduce": true
+  },
+  "env": {
+   "NCCL_P2P_DISABLE": "1",
+   "VLLM_BATCH_INVARIANT": "1"
+  },
+  "target": {
+   "compute_capability": [
+    12,
+    0
+   ],
+   "num_sms": 188
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,12 +48,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 1152,
-  "tensor_parallel_size": 2,
-  "disable_custom_all_reduce": true
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 aeb13307a71acd8f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   1024
@@ -1135,16 +1149,5 @@
   "tp": 2,
   "execution": "bi-eager"
  },
- "note": "R12 sweep qwen3-14b__bf16__rtxpro6000__tp2__b1__i1024__o128__mixed__greedy__bi-eager: B=1 I<=1024 O<=128 greedy arrivals=none; prompt lens [1024], caps [128], arrive steps [0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.",
- "env_required": {
-  "NCCL_P2P_DISABLE": "1",
-  "VLLM_BATCH_INVARIANT": "1"
- },
- "target": {
-  "compute_capability": [
-   12,
-   0
-  ],
-  "num_sms": 188
- }
+ "note": "R12 sweep qwen3-14b__bf16__rtxpro6000__tp2__b1__i1024__o128__mixed__greedy__bi-eager: B=1 I<=1024 O<=128 greedy arrivals=none; prompt lens [1024], caps [128], arrive steps [0]; every request to max_tokens => 128 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
 }

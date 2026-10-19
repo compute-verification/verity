@@ -1,15 +1,9 @@
 """Execution profile (CONTRACT.md §2 / §2.1) shared by production and replay.
 
 Everything that decides *what vLLM runs* lives here so that production and replay
-construct the engine from one place. The declared flags are:
-
-* ``VLLM_BATCH_INVARIANT=1`` (contract §2),
-* ``VLLM_USE_V2_MODEL_RUNNER=1`` (trace replay requires Model Runner V2, which is not
-  the default for Llama/Qwen2 architectures in the pinned wheel: see
-  ``vllm/config/vllm.py::DEFAULT_V2_MODEL_RUNNER_ARCHITECTURES``), and
-* ``VLLM_ENABLE_V1_MULTIPROCESSING=0`` (engine core in-process so the recorder can read
-  the scheduler's step trace and the replay adapter can intercept the model runner; it
-  changes process topology, not the executed kernels).
+construct the engine from one place.  The declared flags are ``engine.env.ENGINE``, each with
+its reason in ``engine.env.REASONS``; batch invariance is the row's execution label's
+(``engine.served``), and a served Commit reads every switch back (``engine.served.require``).
 
 Import this module *before* ``vllm`` so the environment is set first.
 """
@@ -21,7 +15,6 @@ import json
 import os
 import platform
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -78,17 +71,19 @@ def apply_env() -> dict[str, str]:
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
-    doc = json.loads(Path(path).read_text())
-    return {c["repo"]: c for c in doc["checkpoints"]}
+    from verity_vllm.config import checkpoint_entries
+
+    return {c["repo"]: c for c in checkpoint_entries(path)}
 
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
+    from verity_vllm.config import checkpoint_entries
+
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
     else:
         # generalization sweep: roles registered by verity_vllm/input_provenance/add_checkpoint.py carry `role == case`
-        doc = json.loads(Path(checkpoints_path).read_text())
-        matches = [c for c in doc["checkpoints"] if c.get("role") == case]
+        matches = [c for c in checkpoint_entries(checkpoints_path) if c.get("role") == case]
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
         cp = matches[0]
@@ -465,7 +460,3 @@ def canonical_json_bytes(doc: Any) -> bytes:
 
 def profile_id_of(manifest: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()[:12]
-
-
-def utc_stamp() -> str:
-    return time.strftime("%Y%m%dT%H%MZ", time.gmtime())

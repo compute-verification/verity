@@ -45,7 +45,9 @@
 #include <map>
 
 // The fold the TP filler path (tp_dfill_k) and the deferred pass commit their receipts with (decision 43, the filler
-// receipt break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), PROVED. -DTP_NC=4 is the ram
+// receipt break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), provisionally: the binding
+// is proved for runs of one to four words (Lean Pouw.SecurityProofs.Receipt.DuoQuadNoKernel), and five or more words
+// and the served receipt's projected form are open. -DTP_NC=4 is the ram
 // fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF). At NC 4 one
 // of P2-FF r9's XOR-family folds is built with -DPFILL_LI or -DPFILL_XIN13 (pfill.cuh's r9 folds); each is
 // provisional and reads at Theorem K's proved half (0.45) until RS-E-REF r7's select-charging lemma lands. -DPFILL_XIN
@@ -54,7 +56,7 @@
 #ifndef TP_NC
 #define TP_NC 2
 #endif
-static_assert(TP_NC == 2 || TP_NC == 4, "TP_NC is the receipt fold: 2 (duo, PROVED) or 4 (ram; -DPFILL_LI/-DPFILL_XIN13 for r9's XOR-family)");
+static_assert(TP_NC == 2 || TP_NC == 4, "TP_NC is the receipt fold: 2 (duo, binding proved for runs of one to four words) or 4 (ram; -DPFILL_LI/-DPFILL_XIN13 for r9's XOR-family)");
 #if defined(PFILL_LI) || defined(PFILL_XIN13)
 constexpr int TP_XIN = 1;  // an XOR-family r9 fold at NC 4 (li or xin13); reads at 0.45 like ram, labelled apart
 #else
@@ -1134,7 +1136,7 @@ static int pf_setup(PFill& f) {
   f.tiles = getenv_i("TPC_TILES", 2);
   f.tiles_g = getenv_i("TPC_TILES_G", 16);
   f.poll = getenv_i("TPC_POLL", KF_PJ);
-  f.NC = TP_NC;  // the fold is compile-time (TP_NC): duo (2, PROVED) by default, or ram/XOR-in (4, -DPFILL_XIN)
+  f.NC = TP_NC;  // the fold is compile-time (TP_NC): duo (2, binding proved up to four words) by default, or ram/XOR-in (4, -DPFILL_XIN)
   if (f.S < 32 || f.S % 32) { fprintf(stderr, "TPC_S must be a positive multiple of 32 (pfill's)\n"); return 1; }
   if (f.poll > 0 && f.poll % KF_PJ) { fprintf(stderr, "TPC_POLL must be -1, 0 or a multiple of %d\n", KF_PJ); return 1; }
   if (f.tiles < 1 || f.tiles_g < 1 || f.grid < 1) { fprintf(stderr, "TPC_TILES, TPC_TILES_G and the grid must be >= 1\n"); return 1; }

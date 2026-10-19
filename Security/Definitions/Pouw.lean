@@ -4,6 +4,7 @@ import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
 import Definitions.Pouw.D1
+import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
@@ -84,10 +85,14 @@ import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.W1Stop
 import Definitions.Pouw.PearlC.WholeCircuit
 import Definitions.Pouw.PearlC.WholeCircuit4
+import Definitions.Pouw.Receipt.Duo
+import Definitions.Pouw.Receipt.Li
+import Definitions.Pouw.Receipt.Fx1
 import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
+import Definitions.Pouw.Window
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
@@ -147,8 +152,31 @@ completeness on a population of activations (`Completeness`), its one assumption
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).
 
+## `Receipt`: the receipt folds
+
+`Duo`: duo's step, runs of one to four words and of any length (`benchmarks/pouw/receipts/receipt_folds.py`,
+`duo_word`). `Fx1`: sm_120's fold, one keyed IMAD by an odd multiplier in front of duo's step (decision 83). `Li`: li's
+half step, a chain of them and a checkpoint, the XOR of several chains' states (`li_step`). Their binding statements
+are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
+
 ## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
 
 `Defs`: the model over `BLACKWELL_SM120_NVF4`'s tile gate, with per-slot pricing and the rewrite class (trusted
 definitions). `Proofs`: the block-support count and the cost bounds it gives.
+
+## `Window`: a window of calls
+
+One draw that depends on the registration (C1), then the calls' sessions in order, in the form of C-Flock's one-stage
+audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
+roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
+call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
+prover's state) and the window's collision term (`coll`, bounded at the sessions' counted queries by `CollCounted`),
+what the served pass committed (`ServedPass`) and the transcripts that are its (`Anchored`, `Served`), the tie to what's
+served (`ServedTie`, open on main), and the deployed draw, sampled proofs' service's uniform subset in rank-ordered
+sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
+(`UnitStmts.copies`, `WrongCopyClosed`).
+The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Models.Pouw.Guarantees.Window`, stated and
+not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
+collision term on average over the oracle, and the bridge from the window's game to C-Flock's, with C-Flock's knowledge
+bound at main's `--zk` sessions.
 -/

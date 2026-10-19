@@ -1,8 +1,8 @@
 """stage.py UNIT N OUT: N instances of one served unit type's Q_word unit, from synthetic values at the model's served statics,
 staged for C-Flock as a ``verity/flock-circuit`` statement with hidden outputs.
 
-    UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are GLM-5.3's at TP8), e.g.
-                           fp8-coord:K=2048, router:C=1
+    UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
+                           s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
 
 A type of `UNITS` is a unit Definition, staged by `class_statement.stage_unit`: its Boolean Definition lowered once, its input
 rows hashed in the circuit (the per-call row on ``hm96-sha512/row-seg/v1``, the weight row on ``hm96-sha512/row/v2``, PoUW's
@@ -29,6 +29,13 @@ FP8 blocks of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 rank):
                 N(0, 0.02) bf16 weight row quantized per 128 the same way.  K = 6144 is fused_qkv_a and the dense and
                 shared experts' gate_up; 2048 is q_b, the indexer's wq_b and o_proj (one TP8 rank); 256 is the shared
                 expert's down_proj on one rank.  The routed experts run Triton's fused MoE (`moe-w13`, `moe-w2`).
+    s8-coord    ScaledMmS8Coordinate_v2{K,DOT=BlackwellS8ImmaDot32_v2}: one output coordinate of a W8A8 linear on sm_120 (K/32
+                satfinite s8 IMMA steps, then steps.py's int8_linear scaling), x = a seeded N(0, 1) row quantized per token to s8
+                (scale absmax/127), w = a seeded N(0, 0.02) row quantized per channel the same way; the twin is the epilogue in
+                numpy (the exact int sum, two float32 multiplies, the bf16 round).  Llama-3.2-1B's statics: K = 2048 is q, k, v,
+                o, gate and up, 8192 is down.
+    s8-linear   `PARTS`: ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, the W8A8 linear on one token row, whose `Q_word`
+                units are its N coordinates (`ScaledMmS8Coordinate_v1`): the s8-coord unit as a class of the partition.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -48,6 +55,8 @@ from circuit_check import targets as TG
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops import gemm as OG
+from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
@@ -93,9 +102,32 @@ def _fp8_coord_draw(S: dict, n: int, rng: np.random.Generator):
     return {"x": np.stack(xs), "w": np.stack(ws)}, np.stack(twin)
 
 
+def _s8_quant(v: np.ndarray) -> tuple[np.ndarray, np.float32]:
+    """steps.py's `quant_rows` at top 127, in float32."""
+    v = v.astype(np.float32)
+    s = np.abs(v).max() / np.float32(127)
+    return np.clip(np.rint(v / s), -127, 127).astype(np.int8), s
+
+
+def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
+    K = S["K"]
+    xs, ws, twin = [], [], []
+    for _ in range(n):
+        xq, sx = _s8_quant(rng.standard_normal(K))
+        wq, sw = _s8_quant(rng.standard_normal(K) * 0.02)
+        acc = np.int32((xq.astype(np.int64) * wq).sum())
+        y = (np.float32(acc) * np.float32(sx)) * np.float32(sw)
+        xs.append(words(xq.view(np.uint8), np.array([sx], np.float32).view(np.uint32)))
+        ws.append(words(wq.view(np.uint8), np.array([sw], np.float32).view(np.uint32)))
+        twin.append(bf16(np.array([y], np.float32)))
+    return {"x": np.stack(xs), "w": np.stack(ws)}, np.stack(twin)
+
+
 UNITS: dict[str, Unit] = {
     "fp8-coord": Unit(lambda S: bind(BF.ScaledMmFp8BlockCoordinateV2, K=S["K"], G=S["G"]),
                       (("x", SEG, ("xq", "sx")), ("w", V2, ("wrow", "sw"))), _fp8_coord_draw, {"K": 6144, "G": 128}),
+    "s8-coord": Unit(lambda S: bind(BG.ScaledMmS8Coordinate, K=S["K"], **BG.GEMM_SM120_S8),
+                     (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_draw, {"K": 2048}),
 }
 
 
@@ -128,6 +160,7 @@ PARTS: dict[str, Part] = {
     "dsa-topk": Part(dsa.DsaTopKShortRow, {"TOPK": 2048}),
     "sparse-mla-head": Part(sparse_mla.SparseMlaHead, {"T": 2048, "DR": 64, "DV": 512, "BN": 64, "SCALE": 0.0625}, _MLA),
     "token-select": Part(b1.TokenSelect, {"V": 154880}),
+    "s8-linear": Part(OG.ScaledMmS8, {"K": 2048, "N": 2}, tuple(OG.GEMM_SM120_S8.items())),
 }
 for _p in PARTS.values():
     _p.defaults.setdefault("C", 0)

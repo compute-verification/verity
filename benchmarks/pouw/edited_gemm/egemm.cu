@@ -127,20 +127,28 @@ template <int RK, int T, int E> DEV void fr_word(St& s, uint32_t p) {
     }
   }
 }
-// Verified-filler stand-ins: duo folds the end of a dependent chain of x lane ops from the word (t = t a_i + p, IMAD,
-// and t = t ^ p ^ k_i, LOP3, alternating from an IMAD), so a word costs x + 3 ops and no op can be dropped. FX45
-// (x = 4.5): 4 ops on words 0 and 2, 5 on 1 and 3. Timing variants, not receipts
-constexpr int FX45 = -145, FX8 = -108, FX12 = -112, FX24 = -124;
-__host__ __device__ constexpr bool is_fx(int k) { return k == FX45 || k == FX8 || k == FX12 || k == FX24; }
-__host__ __device__ constexpr int fx_ops(int k, int e) { return k == FX45 ? 4 + e % 2 : k == FX8 ? 8 : k == FX12 ? 12 : 24; }
-template <int RK, int T, int E, int I = 0> DEV uint32_t fx_chain(uint32_t t, uint32_t p) {
-  if constexpr (I == fx_ops(RK, E)) {
+// Verified filler: duo folds the end of a dependent chain of x lane ops from the word (t = t a_i, IMAD with a_i odd, and
+// t = t ^ k_i, LOP3, alternating and ending on an IMAD so no constant XOR meets duo's LOP3), so a word costs x + 3 ops,
+// no op can be dropped or merged, and the chain is a bijection, so the fold binds the word as duo does. FX45 (x = 4.5):
+// 4 ops on words 0 and 2, 5 on 1 and 3; FX05 (x = 0.5): one op on words 1 and 3; FX15: one on 0 and 2, two on 1 and 3.
+// Timing variants, not receipts
+constexpr int FX05 = -150, FX1 = -101, FX15 = -115, FX2 = -102, FX3 = -103, FX45 = -145, FX8 = -108, FX12 = -112, FX24 = -124;
+__host__ __device__ constexpr bool is_fx(int k) {
+  return k == FX05 || k == FX1 || k == FX15 || k == FX2 || k == FX3 || k == FX45 || k == FX8 || k == FX12 || k == FX24;
+}
+__host__ __device__ constexpr int fx_ops(int k, int e) {
+  return k == FX05 ? e % 2 : k == FX1 ? 1 : k == FX15 ? 1 + e % 2 : k == FX2 ? 2 : k == FX3 ? 3 : k == FX45 ? 4 + e % 2
+         : k == FX8 ? 8 : k == FX12 ? 12 : 24;
+}
+template <int RK, int T, int E, int I = 0> DEV uint32_t fx_chain(uint32_t t) {
+  constexpr int n = fx_ops(RK, E);
+  if constexpr (I == n) {
     return t;
   } else {
     constexpr int c = (4 * T + E) * 32 + I;
-    if constexpr (I % 2 == 0) t = t * key_mul(1, c) + p;
-    else t = t ^ p ^ key_xor(1, c);
-    return fx_chain<RK, T, E, I + 1>(t, p);
+    if constexpr ((n - I) % 2 == 1) t = t * key_mul(1, c);
+    else t = t ^ key_xor(1, c);
+    return fx_chain<RK, T, E, I + 1>(t);
   }
 }
 
@@ -168,8 +176,9 @@ DEV void mbar_sleep_warp(uint32_t bar, uint32_t parity) {
 // SLEEP: a consumer waits for its stage with mbar_sleep_warp. UF: UF instructions a MMA after each atom on two pairs of
 // dependent warp-uniform chains from the seed, folded into the receipt at the tile's end, the uniform filler's stand-in;
 // ptxas keeps them on the vector datapath unless USH broadcasts the chains from lane 0 (__shfl_sync, which ptxas reads as
-// warp-uniform) before each atom's (1) or each tile's (2)
-template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0> struct EL : MLW {
+// warp-uniform) before each atom's (1) or each tile's (2). BAT: problems stacked in rows, 2^bsh row tiles of A each against
+// their own tiles_n row tiles of B (d2sgemm.cu's Q K^T, a problem a head)
+template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0, bool BAT = false> struct EL : MLW {
   static_assert(LAG >= -1 && LAG < MI * NI, "an absorb runs before its accumulator's next MMA");
   static constexpr bool R = RK != NONE, TB = is_tb(RK), XF = RK == XIN || RK == XIN64 || RK == XIN13,
                         HALF = RK == DUO64 || RK == XIN64;
@@ -179,27 +188,45 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0>
   using MLW::MLW;
   static constexpr int NST = (SMEM - 1024) / (STAGE + 16);   // ML's STAGES
   static_assert(NST == 3, "MLW's 3 stages");
-  // raster's tile place with group 8 (esetup checks tiles_m % 8 == 0, so every group has 8 rows) without its divisions,
-  // whose integer-division seed ptxas sometimes schedules so the SASS gate can't match it: a place keeps its group row
-  // blk and its rank r in the group, advanced by subtraction
+  // raster's tile place with group 8 (any-M: esetup needs only m % 128 == 0, so tiles_m is any count and the last group is
+  // ragged, tiles_m % 8 rows), without its divisions, whose integer-division seed ptxas sometimes schedules so the SASS
+  // gate can't match it: a place keeps its group row blk and its rank r in the group, advanced by subtraction. place_step
+  // still steps a group as 8 * tiles_n ranks, which the ragged last group's ranks stay below, so it never over-advances;
+  // place_tile maps the ragged group's rank by the row count a compile-time divisor in a switch picks, so ptxas uses a
+  // magic multiply, not the division seed
   struct Place { int blk, r; };
   DEV void place_step(Place& p, int d) const {
     p.r += d;
     while (p.r >= 8 * tiles_n) { p.r -= 8 * tiles_n; p.blk++; }
   }
-  DEV static void place_tile(const Place& p, int& tm, int& tn) { tm = 8 * p.blk + (p.r & 7); tn = p.r >> 3; }
+  DEV static void place_tile(const Place& p, int tiles_m, int& tm, int& tn) {
+    const int full = tiles_m >> 3, rem = tiles_m & 7;
+    if (rem == 0 || p.blk < full) { tm = 8 * p.blk + (p.r & 7); tn = p.r >> 3; return; }
+    int col, row;   // the ragged last group of rem rows (1 .. 7): col = r / rem, row = r % rem by a constant divisor a case
+    switch (rem) {
+      case 1: col = p.r; row = 0; break;
+      case 2: col = p.r >> 1; row = p.r & 1; break;
+      case 3: col = p.r / 3; row = p.r - col * 3; break;
+      case 4: col = p.r >> 2; row = p.r & 3; break;
+      case 5: col = p.r / 5; row = p.r - col * 5; break;
+      case 6: col = p.r / 6; row = p.r - col * 6; break;
+      default: col = p.r / 7; row = p.r - col * 7; break;
+    }
+    tm = 8 * full + row; tn = col;
+  }
   // ML::issue with the refill's tile place kept: it recomputes it (raster's divisions) at every refill, in warp 0, which
   // every warp then waits for at the next refill
-  int ipt = -1, itm = 0, itn = 0;
+  int ipt = -1, itm = 0, itn = 0, bsh = 31;
   Place ipl{0, 0};
   DEV void issue() {
     if (pt >= tiles_m * tiles_n) return;
-    if (pt != ipt) { place_step(ipl, ipt < 0 ? pt : pt - ipt); place_tile(ipl, itm, itn); ipt = pt; }
+    if (pt != ipt) { place_step(ipl, ipt < 0 ? pt : pt - ipt); place_tile(ipl, tiles_m, itm, itn); ipt = pt; }
     mbar_wait(empty(ps), pph ^ 1);
     mbar_expect_tx(full(ps), STAGE);
     if (pkt < KT) {
+      const int btn = BAT ? itn + (itm >> bsh) * tiles_n : itn;
       tma_load(stage(ps), &maps->a, full(ps), pkt * BK, itm * (A_BYTES / BK));
-      tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, itn * ((STAGE - A_BYTES) / BK));
+      tma_load(stage(ps) + A_BYTES, &maps->b, full(ps), pkt * BK, btn * ((STAGE - A_BYTES) / BK));
     } else {
       tma_load(stage(ps), &maps->pa, full(ps), 0, itm * (A_BYTES / BK));
       tma_load(stage(ps) + A_BYTES, &maps->pb, full(ps), 0, itn * ((STAGE - A_BYTES) / BK));
@@ -292,10 +319,10 @@ template <int RK, int LAG, int TIE, bool SLEEP = false, int UF = 0, int USH = 0>
       fr_word<RK, J, 3>(ch[H + 3], (uint32_t)w[3]);
     } else if constexpr (is_fx(RK)) {
       constexpr int H = 4 * (J % 2);
-      duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0], (uint32_t)w[0]));
-      duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1], (uint32_t)w[1]));
-      duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2], (uint32_t)w[2]));
-      duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3], (uint32_t)w[3]));
+      duo<DUO, 0, J>(ch[H], fx_chain<RK, J, 0>((uint32_t)w[0]));
+      duo<DUO, 0, J>(ch[H + 1], fx_chain<RK, J, 1>((uint32_t)w[1]));
+      duo<DUO, 0, J>(ch[H + 2], fx_chain<RK, J, 2>((uint32_t)w[2]));
+      duo<DUO, 0, J>(ch[H + 3], fx_chain<RK, J, 3>((uint32_t)w[3]));
     } else if constexpr (XF) {
       St& c = ch[J % 4];
       c.y = (rotl(c.y, ROT0) ^ (uint32_t)w[0]) * kr[0] + (uint32_t)w[1];
@@ -464,7 +491,7 @@ template <int RK, int LAG, int TIE, bool THREE, bool SLEEP = false, int UF = 0, 
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
     int tm, tn;
     ml.place_step(pl, t == (int)blockIdx.x ? t : (int)gridDim.x);
-    L::place_tile(pl, tm, tn);
+    L::place_tile(pl, tiles_m, tm, tn);
     const uint32_t tile_id = tm * tiles_n + tn;
     St ch[8];
 #pragma unroll
@@ -552,6 +579,11 @@ EGEMM(f40_l2q, FR40, 2, 4)
   __global__ void __launch_bounds__(MLW::NT, 1) NAME(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, false, true, UF, USH>(a); } \
   __global__ void __launch_bounds__(MLW::NT, 1) NAME##_k3(const __grid_constant__ Args a) { e_body<RK, LAG, TIE, true, true, UF, USH>(a); }
 EGEMMS(f20_l7qs, FR20, 7, 4)
+EGEMMS(fx05_l7qs, FX05, 7, 4)
+EGEMMS(fx1_l7qs, FX1, 7, 4)
+EGEMMS(fx15_l7qs, FX15, 7, 4)
+EGEMMS(fx2_l7qs, FX2, 7, 4)
+EGEMMS(fx3_l7qs, FX3, 7, 4)
 EGEMMS(fx45_l7qs, FX45, 7, 4)
 EGEMMS(fx8_l7qs, FX8, 7, 4)
 EGEMMS(fx12_l7qs, FX12, 7, 4)
@@ -801,6 +833,7 @@ static const EKn EK[] = {
     EKE(t4_l2, "tb4"), EKE(t4c_l2, "tb4c"), EKE(t2w_l0, "tb2w"), EKE(t2w_l2, "tb2w"),
     EKE(t1w_l0, "tb1w"), EKE(t1w_l2, "tb1w"),
     EKE(f10_l2q, ""), EKE(f15_l2q, ""), EKE(f20_l2q, ""), EKE(f25_l2q, ""), EKE(f40_l2q, ""), EKE(f20_l7qs, ""),
+    EKE(fx05_l7qs, ""), EKE(fx1_l7qs, ""), EKE(fx15_l7qs, ""), EKE(fx2_l7qs, ""), EKE(fx3_l7qs, ""),
     EKE(fx45_l7qs, ""), EKE(fx8_l7qs, ""), EKE(fx12_l7qs, ""), EKE(fx24_l7qs, ""), EKE(u8_l7qs, ""), EKE(u16_l7qs, ""),
     EKE(u8s_l7qs, ""), EKE(u16s_l7qs, ""), EKE(u16t_l7qs, "")};
 static const EKn* ekern(const std::string& n) {
@@ -825,8 +858,9 @@ static void qf(EP& P, const Sig& s, QweK f = qwe<0>) {
 }
 static void esetup(EP& P, int m, int n, int k, uint32_t seed, bool gate) {
   P.m = m; P.n = n; P.k = k; P.seed = seed;
-  if (m % 1024 || n % 128 || k % 256 || k > 16128) {
-    fprintf(stderr, "shape %d %d %d: m %% 1024 == 0 (EL's raster groups), n %% 128 == 0, k %% 256 == 0, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
+  // k = 128: cgemm.cu's cohalf, on its own operands (quant's 256-column steps leave this file's X unwritten there)
+  if (m % 128 || n % 128 || (k % 256 && k != 128) || k > 16128) {
+    fprintf(stderr, "shape %d %d %d: m %% 128 == 0 (any-M: EL's raster has a ragged last group), n %% 128 == 0, k %% 256 == 0 or 128, k <= 16128 (S_1, S_2 in s8)\n", m, n, k);
     exit(2);
   }
   int nsm;
@@ -1239,6 +1273,7 @@ static int eone(const std::string& arm, int m, int n, int k) {
   return 0;
 }
 
+#ifndef EGEMM_LIB
 int main(int argc, char** argv) {
   CL(cublasLtCreate(&g_lt));
   CK(cudaMalloc(&g_ws, g_wsz));
@@ -1249,3 +1284,4 @@ int main(int argc, char** argv) {
   fprintf(stderr, "usage: egemm gate DIR M N K SEED | bench REPS M N K | il REPS ARM BASE M N K | one ARM M N K\n");
   return 2;
 }
+#endif

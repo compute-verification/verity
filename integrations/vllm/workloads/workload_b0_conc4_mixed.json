@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
  "case": "B0",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -299,6 +303,5 @@
    "origin": "TEXTS[3][0:128]"
   }
  ],
- "engine_args_required": {},
  "note": "GEN batch: 4 requests admitted together, prompts 7/32/61/128 (block boundaries: <1, =2, 3+13, =8 blocks of 16), max_tokens 16/8/12/4 (the batch shrinks at steps 4, 8, 12).  Expected 16 engine steps."
 }

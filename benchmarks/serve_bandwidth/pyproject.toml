@@ -1,0 +1,10 @@
+# Where a served mix's DRAM reads go: `mix.py` and `run.sh` run on a GPU node under nsys; `timeline.py`'s accounting of
+# the export and `budget.py`'s of step profiles run here as a suite on synthetic ones.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# timeline.py takes kv_filler/step_profile.py's kernel classes, which imports serve.py and through it analyze.py (which
+# imports lag.py) and bench.py (which imports word_codec/kv.py)
+inputs = ["benchmarks/kv_filler/step_profile.py", "benchmarks/kv_filler/serve.py", "benchmarks/kv_filler/analyze.py",
+          "benchmarks/kv_filler/bench.py", "benchmarks/kv_filler/lag.py", "benchmarks/word_codec/kv.py"]

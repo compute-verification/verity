@@ -1,0 +1,210 @@
+"""The request manifest of GLM-5.3's attention (MLA + the DSA indexer) on the Program the Build derives (`tests/program/test_dsa_derive.py`'s
+indexer and IndexShare layers over a prefill of two and a decode), its modules relabelled to GLM's `model.layers.<i>.self_attn` and
+each step closed by an `o_proj` reading the W_UV product and a sampling event:
+
+* UNRETURNED: the indexer's MQA logits and top-k, which the correspondence lowers to no runtime tensor and no Call reads, are not
+  required, so the prefill's logits rows of N = 1 and N = 2 keys never meet in one manifest group and the manifest is complete;
+  q_c, which no Call of this Program reads either, keeps its rows (its fx node returns it);
+* every required attention Value binds from what the capture map's attention binder commits (`verity_vllm.query.manifest.bind`): the
+  module's own outputs by their label, the indexer's ports and the two call boundaries (the W_UK_T absorb and the sparse MLA) by the
+  ports the source declares."""
+from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
+
+import copy
+import json
+from collections import defaultdict
+
+import pytest
+
+from tests.acquire.glm53_model import CMAP, ENV
+from tests.program import test_dsa_derive as T
+from verity_vllm.acquire.sources import attention_source as AS
+from verity_vllm.commit import capture_map as CM
+from verity_vllm.query.manifest.bind import Binder
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.program.frontend.emit import NAMESPACE
+from verity_vllm.program.frontend.rules import vllm_bindings as VB
+from verity_vllm.program.frontend.rules import vllm_dsa
+from verity_vllm.program.frontend.rules.vocab import PROFILES
+from verity_vllm.program.registry import hopper
+from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
+from verity_vllm.query.required import Population, request_manifest
+from verity_vllm.query.units import ValueRef
+
+INDEXER_LAYER = min(CM.layer_set(CMAP, "indexer", ENV))
+SHARED_LAYER = min(i for i in CM.layer_set(CMAP, "shared_topk", ENV) if i > INDEXER_LAYER)
+MODULE = {"layers.0": f"model.layers.{INDEXER_LAYER}.self_attn", "layers.1": f"model.layers.{SHARED_LAYER}.self_attn"}
+ATTENTION = {"q_c", "kv_c", "k_pe", "q_pe", "out"}
+#: the indexer's DsaIndexerKRow_v1 / DsaIndexerQ_v1, both two ports, under the Build's hints
+INDEX = {"index_k.0", "index_k.1", "index_q.0", "index_q.1"}
+#: the Calls of the attention body whose outputs only another Call of it reads: the W_UK_T absorb and the sparse MLA
+CALL_BOUNDARIES = {"BatchedGemm_v1", "SparseMla_v1"}
+RES = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
+       "attention_impls_observed": {f"{m}.attn": {"kind": "mla", "impl": T.IMPL} for m in MODULE.values()}}
+
+
+def _derived():
+    from verity_vllm.pipeline.build import _instance_rows
+
+    with pytest.MonkeyPatch.context() as mp:
+        saved = dict(VB._OBSERVED)
+        mp.setitem(PROFILES, T.STANDIN.name, T.STANDIN)
+        mp.setitem(vllm_dsa.FA3_SPARSE_GEOMETRY, (T.R, T.L), {"BN": T.BN, "DOT": T.DOT, "INV": hopper.Fa3InvSum})
+        VB.observe_target_profile(T.H200)
+        VB.observe_attention_impls({n: T._observation() for n in T.NAMES})
+        try:
+            model = T._model()
+            rep = T._derive(model, T._inputs(model))
+        finally:
+            VB._OBSERVED.clear()
+            VB._OBSERVED.update(saved)
+    assert rep.program is not None, rep.unsupported
+    prog = rep.program
+    doc = {"schema": "cb-a/instance-sequence/v2", "digest": "d", "params": [[n, str(t)] for n, t in prog.fn.body.params],
+           "rows": list(_instance_rows(prog))}
+    return from_instances(doc), copy.deepcopy(prog.annotations[NAMESPACE])
+
+
+def _served(P0: ProgramView, doc: dict) -> tuple[ProgramView, dict]:
+    """`P0` with GLM's module paths, an `o_proj` Call (module `<attention>.o_proj`) reading each W_UV product and, after each step, an
+    `ArgmaxTokenSelect_v1` reading the step's last `o_proj` row; the correspondence document gains a record per added Call."""
+    for occ in doc["occurrences"]:
+        occ["module"] = MODULE.get(occ.get("module"), occ.get("module"))
+    corr0 = Correspondence(P0, document=doc)
+    sparse = {c.id for c in P0.calls if c.family == "SparseMla_v1"}
+    w_uv = [c.id for c in P0.calls if c.family == "BatchedGemm_v1" and any(r.call in sparse for r in c.reads)]
+    step_nodes = len(MODULE)
+    second = next(c.id for c in P0.calls if corr0.name(c.id).node == f"dsa_norm_rope_{step_nodes}")
+    calls, records, new_id, last = [], [], {}, None
+
+    def add(definition: str, name: str, module: str, reads: tuple, elems: int, width: int) -> int:
+        cid = len(calls)
+        calls.append(CallView(cid, definition, definition.split("{")[0], "call", name, (Port("out", 0, elems, elems, width),), reads))
+        doc["occurrences"].append({"module": module, "node": name.split("/")[-1].split("[")[0], "outputs": [{"shape": [elems], "dtype": "bfloat16"}], "inputs": []})
+        records.append({"occ": len(doc["occurrences"]) - 1, "member": None, "row": None, "hint": None,
+                        "returns": [{"port": 0, "output": 0, "leaves": [0, elems]}], "args": []})
+        return cid
+
+    def close_step() -> None:
+        add("ArgmaxTokenSelect_v1{N=1}", "argmax", "", (ValueRef(last, "out"),), 1, 32)
+
+    for c in P0.calls:
+        if c.id == second:
+            close_step()
+        new_id[c.id] = len(calls)
+        calls.append(CallView(len(calls), c.definition, c.family, c.form, c.name, c.port_table,
+                              tuple(ValueRef(new_id[r.call], r.port) if r.call >= 0 else r for r in c.reads)))
+        records.append(doc["calls"][c.id])
+        if c.id in w_uv:
+            m = corr0.module_of(c.id)
+            last = add("Gemm_v1{N=4}", f"{m}.o_proj/linear[0]", f"{m}.o_proj", (ValueRef(new_id[c.id], "out"),), 4, 16)
+    close_step()
+    doc["calls"] = records
+    return ProgramView(tuple(calls), P0.params, (ValueRef(len(calls) - 1, "out"),), "d", "test"), doc
+
+
+@pytest.fixture(scope="module")
+def glm():
+    P, doc = _served(*_derived())
+    corr = Correspondence(P, document=doc)
+    return P, corr, request_manifest(P, corr, RES, request_id="r0").manifest
+
+
+def _unread_stand_ins(P: ProgramView) -> set[int]:
+    """The first layer's stand-in o_proj rows: each step's argmax reads the last layer's (TENSOR-RETURN keeps every row of that node),
+    so no Call reads these and no policy requires them, and they are unreturned too."""
+    return {c.id for c in P.calls if c.name.startswith(f"{MODULE['layers.0']}.o_proj/")}
+
+
+def test_the_indexers_logits_and_top_k_are_unreturned_and_not_required(glm):
+    P, corr, man = glm
+    pop = Population(P, corr)
+    dead = {c.id for c in P.calls if c.family in ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")}
+    assert len(dead) == 2 * 3 and pop.unreturned == dead | _unread_stand_ins(P)
+    assert not {v.call for v in pop.required.values} & dead
+    listed = {(r["spec"], r["step"]) for r in man["unreturned"]}
+    assert {(P.call(c).family, pop.step_of(c)) for c in dead} <= listed and man["unreturned_digest"]
+    q_c = {c.id for c in P.calls if corr.name(c.id).hint == "q_c"}
+    assert q_c and q_c <= {v.call for v in pop.required.values} and not q_c & corr.tensorless, "q_c's fx node returns it"
+    assert man["complete"] is True and man["unmodelled"] == {}
+    assert not {"logits", "topk"} & {r["output_member"] for r in man["identities"]}
+    boundaries = [r for r in man["identities"] if r["family"] == "call_boundaries"]
+    assert {r["spec"].split("{")[0] for r in boundaries} == CALL_BOUNDARIES and all(AS.claims(r) == AS.BINDER for r in boundaries)
+
+
+def test_the_word_check_skips_the_unreturned_indexer_calls(glm):
+    from verity_vllm.pipeline import manifest as M
+    P, corr, _man = glm
+    r = request_manifest(P, corr, RES, request_id="r0")
+    assert r.unreturned == Population(P, corr).unreturned and r.unreturned
+    dsa = ("DsaMqaLogits_v3", "DsaTopKShortRow_v1")
+    def flagged(unreturned):
+        wc = M.word_check(P, corr, r.required, "16/32", strict=False, unreturned=unreturned)
+        return {v["definition"].split("{")[0] for v in wc["violations"]} & set(dsa)
+    assert flagged(frozenset()) == set(dsa) and flagged(r.unreturned) == set()
+
+
+def test_the_manifest_build_word_check_flags_no_indexer_call(glm, tmp_path, monkeypatch):
+    """`manifest.build` as each rank's check runs it, its `16/32` word check included, over the GLM Program: the check it runs names no
+    DSA Call (strict, it raised output-not-committed on the unreturned indexer logits and top-k at the end of every rank's check).  The
+    fixture's own stand-ins (o_proj's `Gemm_v1{N=4}`, the argmax) are no registered Definitions, so the check runs unstrict here."""
+    from verity_vllm.pipeline import manifest as M
+    P, corr, _man = glm
+    (tmp_path / "result.json").write_text(json.dumps(RES))
+    monkeypatch.setattr(M, "from_instances", lambda _path: P)
+    monkeypatch.setattr(M.Correspondence, "of", classmethod(lambda cls, *_a, **_k: corr))
+    checks, word_check = [], M.word_check
+    monkeypatch.setattr(M, "word_check", lambda *a, **k: checks.append(word_check(*a, **{**k, "strict": False})) or checks[-1])
+    man = M.build(str(tmp_path), request_id="r0", word="16/32")
+    (wc,) = checks
+    assert wc["calls"] and man["complete"] is True
+    assert not [v for v in wc["violations"] if v["definition"].startswith(("Dsa", "SparseMla"))], wc["violations"]
+
+
+def test_without_the_runtime_record_the_logits_stay_required():
+    """The fallback correspondence records no return slots: only the unread stand-ins are unreturned, and the hinted logits stay
+    return slots."""
+    P, _doc = _served(*_derived())
+    pop = Population(P, Correspondence(P))
+    assert pop.unreturned == _unread_stand_ins(P)
+    assert {c.id for c in P.calls if c.family == "DsaMqaLogits_v3"} <= {v.call for v in pop.required.values}
+
+
+def _bound(man: dict, step: int, routes: tuple[str, ...]) -> list[tuple[str, str]]:
+    """The identities the attention binder's names of `routes` bind at `step`, with the ports the source declares for them."""
+    taps = {n: tap["id"] for n, (tap, _i) in CM.committer_names(CMAP, ENV, routes=routes, rank=0).items() if tap["commit"]["binder"] == AS.BINDER}
+    ports = {n.rsplit("/", 1)[1]: AS.TAP_PORTS[t] for n, t in taps.items() if t in AS.TAP_PORTS}
+    return [(op, m) for op, m, _k, how in Binder(man["identities"], ports=ports).bind(step, list(taps)) if how != "unbound"]
+
+
+def test_each_attention_value_binds_from_what_the_capture_map_commits(glm):
+    _P, _corr, man = glm
+    rows = defaultdict(set)
+    for r in man["identities"]:
+        if r["op_path"].split("/")[0] in MODULE.values() and r["family"] != "input_token_ids":     # the stand-in's activations are Program inputs
+            assert r["family"] == ("call_boundaries" if "/" in r["op_path"] else "instance_outputs"), r
+            rows[r.get("engine_step", r["step"])].add((r["op_path"], r["output_member"] if "/" not in r["op_path"] else r["spec"].split("{")[0]))
+    indexer, shared = MODULE["layers.0"], MODULE["layers.1"]
+    for step, got in rows.items():
+        assert {m for op, m in got if op == indexer} == ATTENTION | INDEX and {m for op, m in got if op == shared} == ATTENTION
+        assert sorted(m for op, m in got if "/" in op) == sorted([*CALL_BOUNDARIES] * 2)
+    for step in rows:
+        want = {(r["op_path"], r["output_member"]) for r in man["identities"] if r.get("engine_step", r["step"]) == step
+                and r["op_path"].split("/")[0] in MODULE.values() and r["family"] != "input_token_ids"}
+        bound = [b for routes in (("sparse-mqa",), ("dense-mha",)) for b in _bound(man, step, routes)]
+        assert want <= set(bound), sorted(want - set(bound))
+        assert all(bound.count(b) <= 2 for b in bound), "no identity bound twice on one route"
+
+
+def test_the_wrapper_prefix_of_glm53_rows_is_determined_from_the_attention_paths_parent():
+    """GLM-5.3's MLA rows sit under `inner.model.model.layers.N.self_attn` while the implementation is `model.layers.N.self_attn.attn`
+    (result.json): the prefix is `inner.model.`, not the `model.` default; a Llama-style Attention row keeps its answer."""
+    from verity_vllm.query.manifest import format as MF
+    glm = [{"spec": "EmbeddingShard_v1{V=8,H=4}", "name": "inner.model.model.embed_tokens/embedding[0]"},
+           {"spec": "RoPEHeadGptJ_v2{D=64}", "name": "inner.model.model.layers.0.self_attn/dsa_norm_rope/k_pe[0]"}]
+    assert MF.wrapper_prefix_of(glm, ["model.layers.0.self_attn.attn"]) == "inner.model."
+    llama = [{"spec": "Attention_v3{T=1,NH=2,KVH=1,D=4,BN=16}", "name": "model.model.layers.0.self_attn.attn/attn[t=0]"}]
+    assert MF.wrapper_prefix_of(llama, ["model.layers.0.self_attn.attn"]) == "model."
+    assert MF.wrapper_prefix_of(llama, []) == "model." and MF.wrapper_prefix_of([], ["model.layers.0.self_attn.attn"]) == "model."

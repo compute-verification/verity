@@ -26,6 +26,8 @@ def _tp_dir(tmp_path: Path, world: int = 4) -> Path:
         _w(rd / "build_request_LP9_T2" / "instances.json.gz", "planes")
         _w(rd / "build_request_LP9_T2.log", "derive log")
         _w(rd / "build_workload" / "workload_program.json", {"workload_digest": WDS[r]})
+        _w(rd / "build_workload" / "descriptor.json.gz", "workload descriptor")
+        _w(rd / "build_workload" / "address_map.json", "{}")
         ranks[f"rank{r}"] = {"build_step": {"ok": True, "program_digest": f"{r}" * 64}, "workload": {"ok": True, "workload_digest": WDS[r]}}
     _w(d / "build_summary.json", {"tp": {"world": world}, "ranks": ranks, "step": {"program_digest": "0" * 64}})
     _w(d / "manifest.json", {"program_digest": "x"})
@@ -62,6 +64,8 @@ def test_tp_build_and_match_outputs_take_the_rank_files(tmp_path):
         assert f"build/rank{r}/build_step/result.json" in staged
         assert f"build/rank{r}/build_request_LP9_T2/result.json" in staged
         assert f"build/rank{r}/build_workload/workload_program.json" in staged
+        assert f"build/rank{r}/build_workload/descriptor.json.gz" in staged
+        assert f"build/rank{r}/build_workload/address_map.json" not in staged
         assert f"build/rank{r}/build_request_LP9_T2/instances.json.gz" not in staged
     assert {"manifest.json", "build_summary.json"} <= staged
     assert build["meta"]["program_digest"] == ro.program_digest(d, ROW)["program_digest"]

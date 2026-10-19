@@ -13,7 +13,7 @@ from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.kernels.rows import EVALUATORS
 from verity_vllm.check.replay.delegate import DELEGATES
-from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word
+from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word, node_runs
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 
@@ -140,9 +140,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
     member claims), never from the collector's emissions.  Empty when every interior input composes (Gemm_v1 under BiasAdd_v1)."""
     out: set[str] = set()
     for group in r.get("args") or []:
-        for sl in group:
-            if not sl or sl[0] != "n":
-                continue
+        for sl in node_runs(group):
             a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
             if pi.member_at(a, lo, hi) is not None:
                 continue                                                         # a committed member: read at replay, nothing to compose

@@ -31,7 +31,7 @@ stream it returns what `runOS` does on those bytes, and these runs exhaust every
 limit of the ones bounded here, each at most the model's. A3 is what makes those bytes uniform. The limit itself is
 measure theory the theorems don't state.
 
-Not covered: the Bernoulli law (no executable Bernoulli theorem is pinned).
+The Bernoulli law's live draw is `Proofs.Flock.Claims.Sampling.ExecBernoulli`'s `drawOS_bernoulli_escape_le`.
 -/
 
 namespace FlockSoundness.Audit.Law

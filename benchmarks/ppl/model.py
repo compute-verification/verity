@@ -16,7 +16,7 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 
-from matmul import MM, Run, run_chain
+from matmul import MM, Run, Softmaxed, run_chain
 
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "I64": torch.int64, "I32": torch.int32,
           "I8": torch.int8, "U8": torch.uint8}
@@ -188,6 +188,8 @@ class Layer:
         v = self.linear("self_attn.v_proj", x, run, collect).view(B, T, -1, c.head_dim).transpose(1, 2)
         cu, su = cos.unsqueeze(1), sin.unsqueeze(1)
         q, k = (q * cu) + (rotate_half(q) * su), (k * cu) + (rotate_half(k) * su)
+        if collect is not None:
+            collect("keys", k)
         a = self.attention(q, k, v, run).reshape(B, T, -1).contiguous()
         h = res + self.linear("self_attn.o_proj", a, run, collect)
         res = h
@@ -216,9 +218,9 @@ class Layer:
         return self.edited_attention(q, k, v, run)
 
     def edited_attention(self, query, key, value, run: Run) -> torch.Tensor:
-        """Per KV group, in FP32: S = Q K^T through the arm's attention chain, the causal softmax, O = P V through it;
-        query rows in chunks past 8K (the rows are independent). On the check window, the attention's relative error
-        against FP32 attention on the same inputs (a diagnostic)."""
+        """Per KV group, in FP32: S = Q K^T through the arm's attention chain, the causal softmax (or the chain's own,
+        when it returns `Softmaxed`), O = P V through it; query rows in chunks past 8K (the rows are independent). On the
+        check window, the attention's relative error against FP32 attention on the same inputs (a diagnostic)."""
         b, H, s, d = query.shape
         if b != 1:
             raise ValueError("an arm's attention runs one window at a time")
@@ -244,9 +246,13 @@ class Layer:
                     del sc
                 extra = {"group": g, "rows": (r0, r1), "causal": causal, "rep": rep, "s": s, "d": d}
                 scores = run_chain(qk_steps, MM("qk", "qk", run, qg[:, r0:r1], kg, cache=cache, extra=extra))
-                p = torch.softmax((scores * self.scaling).masked_fill(~causal, float("-inf")), dim=-1)
+                if isinstance(scores, Softmaxed):
+                    p, pv_extra = scores.p, {**extra, **scores.extra}
+                else:
+                    p, pv_extra = torch.softmax((scores * self.scaling).masked_fill(~causal, float("-inf")), dim=-1), extra
                 del scores
-                o[:, r0:r1] = run_chain(pv_steps, MM("pv", "pv", run, p, vg, cache=cache, extra=extra)).float()
+                o[:, r0:r1] = run_chain(pv_steps, MM("pv", "pv", run, p, vg, cache=cache, extra=pv_extra)).float()
+                del pv_extra
                 del p, causal
             if ref is not None:
                 run.attn_err[0] += float(((o - ref) ** 2).sum())

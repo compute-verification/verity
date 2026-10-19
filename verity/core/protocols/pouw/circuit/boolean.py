@@ -19,8 +19,8 @@ on (lo, hi) half-lanes), the same function on bits.
     PouwRotl64Hi_v2    (lo, hi, c: Array<32, Value<1>>) -> Array<32, Value<1>>                  word view: PouwRotl64Hi_v1
 
 Each is traced from a builder over core's `forms` (`verity.ml.circuits.boolean.trace.definition`), so its And gates are the builder's
-live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); a backend whose lowering
-takes `forms` builders (C-Flock's pieces) can run the builder itself (``.build``).
+live ANDs but for its commits (`forms.Circuit.commit`, a row of a `forms` lowering and no gate); C-Flock's lowering runs the
+builder itself (``.build``), for the word primitive's piece and for an activation of the Definition, so it keeps the commits.
 
 * the windows: the 15 calls of the atom's own builder (`verity.ml.circuits.ops.boolean.gemm`) that build a window's masked words, on a
   view of the circuit that keeps its own AND memo (`_Shared`), so atom j's 32 products, and every part of its step that

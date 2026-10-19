@@ -253,6 +253,7 @@ def test_run_refuses_while_another_runner_holds_the_lock(tmp_path, monkeypatch, 
 def test_run_exits_1_while_its_alert_dir_takes_no_writes_and_node_1s_heartbeat_pages_on_it(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv(M.WEBHOOK_ENV, raising=False)
     monkeypatch.setattr(M, "HELD_IDLE", str(tmp_path / "none.jsonl"))       # held-idle-stale finds `stale`
+    monkeypatch.setattr(M, "HELD_IDLE_PANEL", str(tmp_path / "none.json"))
     (tmp_path / "alerts").write_text("not a directory")
 
     def run(state, alerts):
@@ -538,6 +539,17 @@ def test_held_idle_is_stale_70_minutes_after_the_newest_hour_ends(tmp_path):
     (f,) = M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-03T21:11:00Z"), root=tmp_path))
     assert f.key == "stale" and "71 minutes" in f.text and "19:00Z" in f.text
     assert M.held_idle_stale(M.Ctx(now=T0, root=tmp_path / "none"))[0].key == "stale"
+
+
+def test_an_idle_node_whose_panel_still_publishes_is_not_stale(tmp_path):
+    """17 Oct 09:13Z: node 1 held no GPU from 08:00Z, so no hour reached the jsonl while verity-console published every 5 min."""
+    write_rows(tmp_path, [held_row("2026-10-03T19:00Z")])
+    panel = tmp_path / M.HELD_IDLE_PANEL.lstrip("/")
+    panel.parent.mkdir(parents=True, exist_ok=True)
+    panel.write_text(json.dumps({"id": "held-idle-hourly", "updated_at": "2026-10-03T23:55:00Z"}))
+    assert M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-04T00:00:00Z"), root=tmp_path)) == []
+    (f,) = M.held_idle_stale(M.Ctx(now=M.epoch("2026-10-04T01:06:00Z"), root=tmp_path))
+    assert f.key == "stale" and "71 minutes" in f.text
 
 
 # ---- a GPU idle while a waiter waits --------------------------------------------------------------------------------------------
@@ -1213,6 +1225,25 @@ def test_an_oom_kill_is_named_with_the_run_its_scope_held_and_who_sent_it_even_a
     blind = Run((has("journalctl"), (0, "", "Hint: You are currently not seeing messages from other users and the system.")))
     with pytest.raises(RuntimeError, match="can't read the kernel's log"):
         M.oom_kills(mctx(root, blind, memo))
+
+
+def test_an_oom_kill_in_a_queue_runs_cluster_scope_names_the_run_from_the_scope_and_its_requests_sender(tmp_path):
+    """INF-50: a `--queue` run is a cluster-RUN.scope under the user manager, not a session scope; a kill there names the run
+    even when no pass saw the scope, and the sender its request records."""
+    rid = "r20261018-105651-b36a"
+    root = machine_root(tmp_path, {})
+    queued = root / M.USER_SLICE.lstrip("/") / M.QUEUE_SCOPES / f"cluster-{rid}.scope"
+    queued.mkdir(parents=True)
+    (queued / "memory.current").write_text(f"{192 * 2**30}\n")
+    assert M.run_scopes(mctx(root)) == {f"cluster-{rid}.scope": {"run": rid, "bytes": 192 * 2**30}}
+    req = root / M.REQUESTS.lstrip("/") / rid
+    req.mkdir(parents=True)
+    (req / "request.json").write_text(json.dumps({"submitted_by": "https://cursor.com/agents/bc-q", "command": ["uv"]}))
+    memcg = f"/user.slice/user-1001.slice/user@1001.service/app.slice/cluster-{rid}.scope"
+    line = (f"1792324443.1 host kernel: oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=cluster-{rid}.scope,"
+            f"mems_allowed=0-1,oom_memcg={memcg},task_memcg={memcg},task=python,pid=2924379,uid=1001\n")
+    (f,) = M.oom_kills(mctx(root, Run((has("journalctl"), (0, line, "")))))
+    assert f"run {rid}, sent by https://cursor.com/agents/bc-q" in f.text and "no research run" not in f.text
 
 
 def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6_hours_and_names_the_biggest_live_runs(

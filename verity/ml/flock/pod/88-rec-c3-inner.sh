@@ -7,12 +7,15 @@
 # (rec_vstar) over the verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit (an
 # executable, cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the
 # session's h is the full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from
-# the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves, refused
-# with exit 2 until soundness covers plain leaves: recorded, not required). Run from the verity tree (research run --cwd
-# source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, session.log, time-prove.txt, prove.txt/.err,
-# inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json,
-# check-fold.json, vstage.json, lean.log, summary.json. Exits 1 unless the session, replay, rec_vstar, the fold check and the
-# staging all pass.
+# the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves,
+# without --zk, holding the session's draw to its own law: --stratified N --program --partition). The coin server answers
+# Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep. Then
+# three controls on copies of the prover's record, each of which Lean must refuse: rep 0's first challenge flipped, the
+# draw removed, and the draw's last unit dropped (rec_inner.py forge --record prover). Run from the verity tree (research run
+# --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, session.log, time-prove.txt,
+# prove.txt/.err, inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json,
+# fold.json, check-fold.json, vstage.json, lean.log, forged-*-lean.txt, summary.json. Exits 1 unless the session, replay,
+# rec_vstar, the fold check, the staging and Lean's verdicts (the honest session accepted, every control refused) all pass.
 # Launch it through a check slot, which pins it to the slot's cores and holds the slot:
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
@@ -59,8 +62,8 @@ cat $O/stage.json
 
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1
-python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt $SPA $STK \
-  > $O/session.log 2>&1 &
+python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt \
+  --draw $D/draw.json $SPA $STK > $O/session.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/session.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done
@@ -89,9 +92,16 @@ echo "vstage exit $?"
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage-sizes.txt 2>&1
 
 wait $LP
-$LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $D/circuit.txt --public $D/pub-$N.bin \
-  --partition $D/partition.json --coins os --session $O/inner/prover > $O/lean.log 2>&1
+LEAN=($LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $D/circuit.txt --public $D/pub-$N.bin
+  --partition $D/partition.json --program $D/program.json --stratified $N --coins os)
+"${LEAN[@]}" --session $O/inner/prover > $O/lean.log 2>&1
 echo "lean exit $?" | tee $O/lean-exit.txt
+for F in challenge nodraw partial; do
+  FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
+  python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS --record prover > $O/forged-$F.json
+  "${LEAN[@]}" --session $FS/prover > $O/forged-$F-lean.txt 2>&1
+  echo "forged $F lean exit $?"
+done
 
 python3 - $O <<'EOF'
 import json, os, re, sys
@@ -112,6 +122,8 @@ for r in pub["rounds"]:
     if r["stream"].startswith(f"{RL.TABLE}/rep") and r["k"] in (zp, zp + 1):
         reps.setdefault(r["stream"], {})["z_partial" if r["k"] == zp else "h"] = {"k": r["k"], "n": r["n"], "commits": len(r["commits"])}
 vs = js("vstage.json") or {}
+verdict = lambda f: next((json.loads(l[len("VERDICT "):]) for l in text(f).splitlines() if l.startswith("VERDICT ")), None)
+forged = {f: verdict(f"forged-{f}-lean.txt") for f in ("challenge", "nodraw", "partial")}
 s = {"stage": stage, "served": served[0] if served else text("session.log")[-1500:],
      "schedule_is_the_statements": json.loads(text("schedule.json")) == json.loads(text("inner/schedule.json") or "null"),
      "replay": up["verdict"] if up else text("replay.txt")[-600:], "vstar": js("vstar.json") or text("vstar.err")[-600:],
@@ -129,7 +141,9 @@ s = {"stage": stage, "served": served[0] if served else text("session.log")[-150
                                            "opening": [{x: p.get(x) for x in ("part", "holds", "nonzero_residuals", "unit_agrees", "unit_rows")}
                                                        for p in vs["stacked"]["opening"]], "stage_s": vs["stacked"].get("stage_s")}}
      if vs else text("vstage.err")[-1500:], "vstage_sizes": text("vstage-sizes.txt"),
-     "lean": {"exit": text("lean-exit.txt").strip(), "tail": text("lean.log")[-400:]},
+     "lean": {"exit": text("lean-exit.txt").strip(), "verdict": verdict("lean.log"), "tail": text("lean.log")[-400:]},
+     "forged": {f: {"accepted": v and v.get("accepted"), "why": v and str(v.get("why"))[:300]} if v else text(f"forged-{f}-lean.txt")[-300:]
+                for f, v in forged.items()},
      "prover_peak_gb": int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", t).group(1)) / 2**20 if t else None,
      "prove_wall": (re.search(r"Elapsed \(wall clock\) time.*: (\S+)", t) or [None, None])[1] if t else None,
      "fold_wall": (re.search(r"Elapsed \(wall clock\) time.*: (\S+)", text("time-fold.txt")) or [None, None])[1],
@@ -137,7 +151,9 @@ s = {"stage": stage, "served": served[0] if served else text("session.log")[-150
 ok = {"session": bool(served) and bool(served[0].get("session")), "schedule": s["schedule_is_the_statements"],
       "replay": bool(up) and up["verdict"].get("accepted") is True, "vstar": isinstance(s["vstar"], dict) and s["vstar"].get("accepted") is True,
       "check_fold": bool(s["check_fold"]) and all(s["check_fold"]["comb_plus_h_is_full"]) and all(s["check_fold"]["h_nonzero"]),
-      "vstage": bool(vs) and vs.get("holo") is True and bool(vs.get("algebra")) and all(all(p["holds"]) for p in vs["algebra"])}
+      "vstage": bool(vs) and vs.get("holo") is True and bool(vs.get("algebra")) and all(all(p["holds"]) for p in vs["algebra"]),
+      "lean": (verdict("lean.log") or {}).get("accepted") is True,
+      "controls": all(v is not None and v.get("accepted") is False for v in forged.values())}
 st = vs.get("stacked") if vs else None
 if os.environ.get("STACKED"):
     ok["vstar"] = ok["vstar"] and s["vstar"].get("stacked", {}).get("accepted") is True

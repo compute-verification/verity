@@ -113,6 +113,7 @@ INSTANCES_MANIFEST_SHA256 = "instances_manifest_sha256"
 COMPONENT = "component"
 JOBS = "jobs"
 DTYPE = "dtype"
+STAGED = "staged"
 
 # ---- approach labels: the registry (`research.approaches`), by the owning lane or its coordinator ------------------------------------
 
@@ -351,6 +352,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
     _k(LEVEL, GROUP_EVIDENCE, TEXT, "a trust dossier's computed trust level for its target (benchmarks/tc_probe/trust.py)"),
     _k(ANCHOR, GROUP_EVIDENCE, TEXT, "the anchor family a trust dossier rests on"),
+    _k(STAGED, GROUP_EVIDENCE, TEXT, "on ckpt:<repo>@<revision>: the UTC time a host finished staging the checkpoint's weights and checking every "
+       "shard's sha256, written by the step that stages them (`verity-vllm records staged`); its ref names the evidence (the staging run, "
+       "or host:path of the verify record)"),
     # approach
     _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),
     _k(TITLE, GROUP_APPROACH, TEXT, "an approach's title, one line"),

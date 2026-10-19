@@ -1,8 +1,14 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
  "case": "B0",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 64
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -252,8 +258,5 @@
    "origin": "TEXTS[4][0:200]"
   }
  ],
- "engine_args_required": {
-  "max_num_batched_tokens": 64
- },
- "note": "GEN batch: chunked prefill.  Requires engine arg max_num_batched_tokens=64 (chunked prefill is vLLM V1's default).  Request 0 (7 tokens, max_tokens 8) is added first and decodes while request 1's 200-token prompt is prefilled in chunks (57 + 63 + 63 + 17 expected); request 1 samples its first token only when its prompt is complete, so the run takes MORE engine steps than max(max_tokens) \u2014 gate G1 / noninterference.compare read the step count and are expected to say so."
+ "note": "GEN batch: chunked prefill.  Requires engine arg max_num_batched_tokens=64 (chunked prefill is vLLM V1's default).  Request 0 (7 tokens, max_tokens 8) is added first and decodes while request 1's 200-token prompt is prefilled in chunks (57 + 63 + 63 + 17 expected); request 1 samples its first token only when its prompt is complete, so the run takes MORE engine steps than max(max_tokens) — gate G1 / noninterference.compare read the step count and are expected to say so."
 }

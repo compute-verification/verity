@@ -1,0 +1,3 @@
+order = 60
+tool = "The fused linears with filler warps, FILL's arms"
+files = "`flin.cuh`, `flin.sh`, `fused_score.py` on `fscore.cu`, `fused_arm.py`"

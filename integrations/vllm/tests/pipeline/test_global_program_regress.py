@@ -269,7 +269,7 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
         name = f"w_{lag}_{'default' if target is None else 'declared'}.json"
         m = _manifest(tmp_path, reqs, name=name, eos_token_ids=[7])
         if target is not None:
-            mm = json.load(open(m)); mm["target"] = target; json.dump(mm, open(m, "w"))
+            mm = json.load(open(m)); mm["engine"] = {"target": target}; json.dump(mm, open(m, "w"))
         out = str(tmp_path / f"out_{name}")
         a = gp.build(m, derived, out, eos_token_ids=None)
         assert a["ok"], a

@@ -206,8 +206,8 @@ def test_workload_file(case):
     mod = MODULES[case]
     path = REPO / "workloads" / WORKLOADS[case]
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "verity-vllm/workload/v1" and doc["case"] == case
-    assert doc["model"] == mod.REPO_ID and doc["checkpoint_revision"] == mod.REVISION
+    assert doc["schema"] == "verity-vllm/workload/v2" and doc["case"] == case
+    assert doc["model"] == mod.REPO_ID and doc["engine"]["revision"] == mod.REVISION
     assert doc["variants"] == {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}}
     assert doc["prompt_lengths"] == [32] and doc["max_tokens"] == [16] and len(doc["requests"]) == 1
     r = doc["requests"][0]

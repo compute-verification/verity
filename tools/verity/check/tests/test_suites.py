@@ -166,8 +166,21 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     meminfo = tmp_path / "meminfo"
     for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
-        assert S.default_jobs(meminfo) == want
-    assert S.default_jobs(tmp_path / "absent") == 4
+        assert S.default_jobs(meminfo, 1e9) == want
+    assert S.default_jobs(tmp_path / "absent", 1e9) == 4
+
+
+def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
+    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "cpus", lambda: 32)
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
+    assert S.default_jobs(meminfo, 16.0) == 1
+    assert S.default_jobs(meminfo, 100.0) == 11
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
+    assert S.default_jobs(meminfo) == 2
 
 
 def _workspace(root: Path) -> None:
@@ -666,7 +679,8 @@ def _per_test_workspace(root: Path) -> None:
 def _run_suite(root: Path, tmp_path: Path, *args: str, extra: dict | None = None) -> subprocess.CompletedProcess:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))}
     env.update(RESEARCH_STORE=str(tmp_path / "pod-store"), RESEARCH_STORE_CONFIG=str(tmp_path / "absent.toml"), RESEARCH_FIXTURES_URL="",
-               VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1")
+               VERITY_TEST_CACHE=str(tmp_path / "cache"), PYTHONDONTWRITEBYTECODE="1",
+               CHECK_SLOT_MEM_GB="1000")                         # the slot's memory, not the cgroup of the machine the test runs on
     env.update(extra or {})
     return subprocess.run([sys.executable, str(root / "tools" / "verity" / "check" / "suites.py"), "--jobs", "1", "--logs", str(tmp_path / "logs"), *args],
                           cwd=root, env=env, capture_output=True, text=True)
@@ -1010,10 +1024,10 @@ def _until_written_or_exited(fifo: Path, p: subprocess.Popen) -> tuple[bool, byt
         os.close(fd)
 
 
-@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("stop", ["SIGINT", "SIGTERM", "SIGTERM SIGTERM"])
 def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
-    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group): the
-    tests that passed before it are kept, and the suite's `--basetemp` is gone."""
+    """A stop mid-suite (check.py's SIGINT to the step's processes, or `research cancel`'s SIGTERM to the run's group, which `uv
+    run` forwards to the runner a second time): the tests that passed before it are kept, and the suite's `--basetemp` is gone."""
     import signal
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1032,7 +1046,8 @@ def test_an_interrupted_run_keeps_what_finished(tmp_path, stop):
     written, before = _until_written_or_exited(gate, p)    # test_heavy's two tests have passed; test_block is running
     assert written, f"the runner ended before test_block ran:\n{before.decode(errors='replace')}"
     assert len(list(tmp.glob("verity-suite-[0-9]*"))) == 1
-    os.killpg(p.pid, getattr(signal, stop))
+    for s in stop.split():
+        os.killpg(p.pid, getattr(signal, s))
     out = (before + p.communicate()[0]).decode(errors="replace")
     assert p.returncode != 0 and "2 per-test passes kept" in out, out
     assert list(tmp.glob("verity-suite-[0-9]*")) == [], out
@@ -1509,6 +1524,16 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
         "no worker_gb: TEST_PROCESS_GB each (r20261016-140947-47fc: pous_check's undeclared workers reached 11 GB)"
 
 
+def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
+    """17 Oct, cpu-2 (note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent): circuit_check's 53 workers and flock's 30
+    ran side by side, each sized to all of --mem-gb, and reached 800 GB together."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
+    flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
+    assert S.wide_workers(flock, 69, S.wide_gb(480, 4)) == (480 - 4 * S.TEST_PROCESS_GB) // 16
+    assert S.worker_gb(flock) == 16 and S.worker_gb(S.Suite("light", "l", (), (), parallel=True)) == S.TEST_PROCESS_GB
+
+
 def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_their_longest(tmp_path, monkeypatch):
     """ee02's pytest step ran its parallel suites one at a time (650 s) before circuit_check's one process (2,730 s) started, and
     its lean-suites ran evaluate (527 s) only after flock (862 s): the suites in one process now run beside the parallel ones."""
@@ -1520,6 +1545,17 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
     assert S.serial_slots([100.0, 100.0] + [None] * 40, 2, 32) == 10
     assert S.serial_slots([100.0] * 40, 1, 32) == 31, "the parallel suites keep a slot"
     assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
+
+
+def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
+    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
+    against memory for, and the OOM killer took the whole scope."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
+    assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
+    assert S.serial_slots([], 3, 32, 16) == 0
 
 
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
@@ -1536,3 +1572,30 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert p.returncode == 0, p.stdout + p.stderr
     assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
+
+
+def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
+    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
+    `check` passed `--mem-gb`."""
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
+    assert S.slot_mem_gb() == 480.0
+    monkeypatch.setenv(S.SLOT_MEM_ENV, "")
+    monkeypatch.setattr(S, "cgroup_mem_gb", lambda: None)
+    assert S.slot_mem_gb() is None
+
+
+def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
+    """17 Oct 13:02Z, vy-nebius-1: two queued `suites.py verity-flock --fresh` runs, in no check slot, were OOM-killed in
+    their queue scopes."""
+    S = _suites(monkeypatch, tmp_path)
+    root = tmp_path / "fs"
+    (root / "proc/self").mkdir(parents=True)
+    (root / "proc/self/cgroup").write_text("0::/research.slice/job.scope\n")
+    for d, v in (("sys/fs/cgroup/research.slice", str(700 * 2**30)), ("sys/fs/cgroup/research.slice/job.scope", str(64 * 2**30))):
+        (root / d).mkdir(parents=True)
+        (root / d / "memory.max").write_text(v + "\n")
+    assert S.cgroup_mem_gb(root) == 64.0
+    (root / "sys/fs/cgroup/research.slice/job.scope/memory.max").write_text("max\n")
+    assert S.cgroup_mem_gb(root) == 700.0
+    assert S.cgroup_mem_gb(tmp_path / "nowhere") is None

@@ -25,11 +25,12 @@ class FakeGitHub:
 
     def __init__(self, prs: list[dict]):
         self.open = {p["number"]: dict(p) for p in prs}
+        self.merged: list[dict] = []
         self.mutations: list[tuple[str, ...]] = []
 
     def __call__(self, *args: str) -> str:
         if args[:2] == ("pr", "list"):
-            return json.dumps(list(self.open.values()))
+            return json.dumps(self.merged if "merged" in args else list(self.open.values()))
         self.mutations.append(args)
         n = int(args[2])
         if args[:2] == ("pr", "close"):
@@ -241,6 +242,8 @@ def test_after_a_landing_the_declarations_command_starts_detached_on_the_commit(
     assert "started `python post.py --x abc123def4567`" in lines[0]
     assert M.after_land(tmp_path, "mytools.decl:U", "abc", spawn=spawn) is None
     assert M.after_land(tmp_path, "nothere.decl:T", "abc", spawn=spawn) is None and len(started) == 1
+    assert M.after_land(tmp_path, "mytools.decl:T", "abc", spawn=spawn, attempt="r20261019-010000-0001") == [
+        "python", "post.py", "--x", "abc", "--attempt", "r20261019-010000-0001"], "drive's landing names the check it landed on"
 
 
 def test_the_after_landing_command_runs_in_a_worktree_of_the_landed_commit_that_goes_when_it_ends(tmp_path):
@@ -335,6 +338,26 @@ def test_a_landing_pushed_another_way_gets_its_after_landing_steps_on_the_next_m
     assert _marker(repo) == tip
     assert f"last ran for {merge[:12]}; catching up 2 commit(s) of main to {tip[:12]}" in capsys.readouterr().out
     assert M.main(["--sweep"]) == 0 and len(ran) == 5, "caught up once"
+
+
+def test_the_after_landing_command_gets_the_attempt_drive_landed_the_tip_on(tmp_path, monkeypatch):
+    """CI-81: `post_train.py` refused every landing drive made with deferred steps, since none had a passed check in the store
+    yet; drive's `runs` names the attempt of the tip it pushed, and `after_land` gets it.  A tip it doesn't name gets none."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a")
+    _git(repo, "push", "-q", "origin", "HEAD:main", f"HEAD:{M.AFTER_LAND_REF}", f"HEAD:{M.SPEC_ALERTED_REF}")
+    _steps(monkeypatch)
+    got: list[tuple] = []
+    monkeypatch.setattr(M, "after_land", lambda _repo, _tool, sha, **k: got.append((sha, k.get("attempt"))))
+    for rid in ("r20261019-010000-0001", None):
+        _git(repo, "commit", "-q", "--allow-empty", "-m", "Merge #1 into next")
+        tip = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "push", "-q", "origin", "HEAD:main")
+        assert M.caught_up(repo, "origin", "check", log=lambda *_: None, runs={"0" * 40: "r20261019-000000-0000"} |
+                           ({tip: rid} if rid else {})) == tip
+        assert got[-1] == (tip, rid or ""), rid
 
 
 def test_a_merge_with_push_runs_the_steps_from_the_marker_over_what_it_and_the_landings_it_missed_brought(tmp_path, monkeypatch,
@@ -615,3 +638,43 @@ def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_th
     assert not M.report_landings(repo, start, merge, api=Down(), reg=reg, gh=gh)
     assert f"the landings {start[:12]}..{merge[:12]} weren't posted to the merge thread: OSError" in capsys.readouterr().err
     assert M.report_landings(repo, merge, merge, api=Down(), reg=reg, gh=gh), "nothing landed, nothing to post"
+
+
+def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(tmp_path):
+    """17 Oct (CI-48): drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its
+    branch stayed: 2,119 of the repository's 3,543 branches were already on main."""
+    repo, gh, tips, _merge = _world(tmp_path)
+    del gh.open[1], gh.open[2]
+    gh.merged = [{"number": 1, "headRefName": "A", "headRefOid": tips["A"]}, {"number": 2, "headRefName": "B", "headRefOid": tips["B"]},
+                 {"number": 9, "headRefName": "D", "headRefOid": tips["D"]}]                       # D isn't on main: kept
+    M.sweep(repo, gh=gh, log=[].append)
+    assert _heads(repo) == {"main", "C", "D", "E"}
+    log = []
+    M.sweep(repo, gh=gh, log=log.append)                                  # A and B are gone: nothing to delete, nothing kept
+    assert not [x for x in log if "branch A" in x or "branch B" in x or "kept" in x], log
+
+
+def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_work(tmp_path):
+    now = 1_800_000_000                                                   # the sweep's clock, injected
+
+    repo, gh, tips, _merge = _world(tmp_path)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    for name, base, days in (("old-landed", "main", 2), ("new-landed", "main", 0), ("old-work", "C", 5), ("new-work", "C", 1),
+                             ("cursor/verity-ci-3d4e", "C", 9)):
+        _git(repo, "checkout", "-q", "-b", name, base)
+        (repo / f"{name.replace('/', '_')}.txt").write_text(name)
+        _git(repo, "add", "-A")
+        when = f"@{now - days * 86400} +0000"
+        subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "-m", name], cwd=repo, check=True,
+                       env={**env, "GIT_COMMITTER_DATE": when, "GIT_AUTHOR_DATE": when})
+        _git(repo, "push", "-q", "origin", name)
+    _git(repo, "checkout", "-q", "main")
+    for name in ("old-landed", "new-landed"):
+        _git(repo, "merge", "-q", "--no-ff", "-m", f"land {name}", name)
+    _git(repo, "push", "-q", "origin", "main")
+    del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
+    for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
+        _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (1, 1)  # old-landed deleted, old-work archived
+    assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
+    assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")

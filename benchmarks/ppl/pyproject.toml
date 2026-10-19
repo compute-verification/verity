@@ -7,5 +7,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The tests read only this directory: its modules, specs/, datasets.json, windows.lock.json and baseline.json, and its
-# README (the baseline section and the plugin example are checked against the code).
+# README (the plugin example runs as written, and the README holds no table: `run.py tables` prints them).
 inputs = ["benchmarks/ppl/README.md"]

@@ -1,0 +1,11 @@
+# The L40S (sm_89) as `eps` prices it (README "Devices"): one epoch, the census of EPS1 ADA (note:20261017T0605Z-draft-
+# eps1-ada), and no vector solved for prices, so the constants only `solve` reads are left out.
+current = "ADA-89"
+epochs = ["ADA-89"]
+
+# The CUDA lane classes a word on lanes may use: every lane class the census prices. LEA.HI and VIMNMX share ALU's pipe
+# row A; IDP4A has its own row (I4A), and FFMA only the issue rows.
+cuda = ["FFMA", "VIMNMX", "HFMA2", "IMAD", "IDP4A", "ALU", "LEA", "XU", "FLO", "SHFL"]
+
+[constants]
+cycle_u = 300.08          # u in one SMSP-cycle: a unit, the same as data/'s (eps divides it out)

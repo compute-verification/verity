@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-1.5B",
- "tokenizer_revision": "8faed761d45a263340a0528343f099c05c9a4323",
  "case": "B1",
+ "engine": {
+  "revision": "8faed761d45a263340a0528343f099c05c9a4323",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -299,6 +303,5 @@
    "origin": "TEXTS[3][0:128]"
   }
  ],
- "engine_args_required": {},
  "note": "GEN batch: Qwen2.5-1.5B, 4 requests admitted together, prompts 7/32/61/128, max_tokens 16/8/12/4 (shrinks at steps 4, 8, 12).  Expected 16 engine steps.  Tier b under --replay-budget-leaves 8000000 (wave-1 rule for >= 1B models)."
 }

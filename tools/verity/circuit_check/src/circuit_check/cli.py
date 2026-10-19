@@ -121,12 +121,26 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     return tasks
 
 
+def _calls(specs: list[str]) -> None:
+    """Whether each Definition target is a Call (`targets.is_call`), resolved once in the process the targets' processes fork
+    from, so one that needs the catalog builds it there once rather than in each.  A target that doesn't resolve is left to its
+    own check."""
+    from verity.ml.circuits.evaluation.reference import resolve
+
+    for s in specs:
+        if TG.kind_of(s) == "definition":
+            try:
+                TG.is_call(TG.family(resolve(TG.definition(s))))
+            except Exception:  # noqa: BLE001  (its check raises it again, by name)
+                continue
+
+
 def _init(specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, tracing: bool) -> None:
     if tracing:
         CC.trace(REPO)
     _TASKS[:] = _tasks(specs, opts, everything, as_call)
     if as_call is None:
-        TG.call_families()            # what a Definition's check would otherwise build in each target's process (every template)
+        _calls(specs)
 
 
 def _rss_gb() -> float | None:
@@ -297,13 +311,13 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     so a run that is itself killed still leaves them.
 
     Isolated, circuit-check's memory stays under ``mem_gb`` GiB (default: what `memory_gb` leaves this process) as long as every
-    target that peaks over `HEAVY_GB` is listed in `HEAVY` with its peak: a target starts only while the peaks of those running
-    and its own add up to at most `budget_gb` (``mem_gb`` less this process's RSS), counting an unlisted target as `HEAVY_GB`;
-    one heavier than that still runs, alone, and the log says it does not fit; the
-    listed targets go first, heaviest first.  The sum counts each process's copy of the task list, which they share, so the bound
-    is conservative by that much per process.  An unlisted target that peaks well over `HEAVY_GB` can still break it: the process
-    it gets killed in is reported as that target's failure (``circuit-check/killed``, with its peak), the other targets run on,
-    and its peak belongs in `HEAVY`.
+    target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) is listed in `HEAVY`
+    with its peak: a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
+    less this process's RSS), counting an unlisted target as `HEAVY_GB`; one heavier than that still runs, alone, and the log
+    says it does not fit; the listed targets go first, heaviest first.  The sum counts each listed process's copy of the task
+    list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
+    `HEAVY_GB` can still break it: the process it gets killed in is reported as that target's failure (``circuit-check/killed``,
+    with its peak), the other targets run on, and its peak belongs in `HEAVY`.
 
     The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
     could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
@@ -409,24 +423,36 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
-#: the targets that peak over `HEAVY_GB`, each with its peak in GiB (`run`'s scheduling; ``peak_gb``, which counts the 9.6 GiB
-#: task list each process is forked with), from the isolated cold `--all` run r20261009-170758-f674 on vy-cpu-1: its first 239
-#: targets, every one an earlier list held among them, peaked at 125-151 GiB (these six) or at most 10.6 GiB (the rest; the
-#: earlier 29.4 and 104.2 GiB entries were what a long-lived worker kept from a previous target); its other targets confirm it
-HEAVY = Path(__file__).with_name("heavy.json")
+#: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
+#: isolated `--all` run (`run`'s scheduling; it counts that task list, 26.7 GiB on 17 Oct).  The commit that writes a peak
+#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here
+HEAVY = CC.HEAVY
 HEAVY_GB = 16
 PEAKS_REPORTED = 50
 
 
+#: tools/verity/check/slot.py's SLOT_MEM_ENV: the GiB the check slot this process runs in may take
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+
+
+def slot_gb() -> int | None:
+    """The enclosing check slot's mem=, so a raw `circuit-check` in a slot keeps to it without `--mem-gb` (CIR-21: two runs in one
+    node's slots each budgeted the whole machine's MemAvailable and took it down)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return int(v) if v.isdigit() else None
+
+
 def budget_gb(mem_gb: int | None) -> float:
     """What the targets' processes may take together, in GiB: what `memory_gb` leaves (this process's use taken off already),
-    and with ``mem_gb`` (all of circuit-check: a check slot's mem=) at most that less what this process holds now (its own copy
-    of the task list)."""
+    and with ``mem_gb`` (all of circuit-check: a check slot's mem=, `slot_gb` when not given) at most that less what this process
+    holds now (its own copy of the task list)."""
+    mem_gb = slot_gb() if mem_gb is None else mem_gb
     return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
 
 
 def heavy() -> dict[str, float]:
-    return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
+    with CC.internal():
+        return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
 
 
 #: the memory a worker counts on: a cold `--all` grew six of 23 workers on vy-nebius-cpu-1 to 40-136 GiB (7 Oct), and two
@@ -456,8 +482,9 @@ def memory_gb(root: Path = Path("/")) -> int:
 
 
 def auto_jobs(root: Path = Path("/")) -> int:
-    """`--jobs 0`: one worker per core this process may run on, at most one per `GB_PER_JOB` of its memory."""
-    return max(1, min(len(os.sched_getaffinity(0)), memory_gb(root) // GB_PER_JOB))
+    """`--jobs 0`: one worker per core this process may run on, at most one per `GB_PER_JOB` of its memory (its slot's, in one)."""
+    gb = min(memory_gb(root), slot_gb() or memory_gb(root))
+    return max(1, min(len(os.sched_getaffinity(0)), gb // GB_PER_JOB))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -467,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, help="write the JSON report here")
     ap.add_argument("-j", "--jobs", type=int, default=1, help="targets checked in parallel by this many workers (0: one per core, at most one per GB_PER_JOB of memory)")
     ap.add_argument("--mem-gb", type=int, default=None, help="the memory circuit-check may take, in GiB, this process included "
-                    "(default: what this process may use, `memory_gb`); see `run`")
+                    "(default: the enclosing check slot's CHECK_SLOT_MEM_GB, else what this process may use, `memory_gb`); see `run`")
     ap.add_argument("--vectors", type=int, default=CK.Options.vectors)
     ap.add_argument("--seed", type=int, default=CK.Options.seed)
     ap.add_argument("-X", type=int, default=CK.Options.X)

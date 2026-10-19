@@ -26,8 +26,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RunEnv, row_execution, row_target
+from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_target
+from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
@@ -148,7 +150,7 @@ class Row:
         env = dict(self.env.environ)
         env.update({"VERITY_TREE": self.tree, "VERITY_CORE": core_s, "VERITY_RESEARCH": research_s,
                     "PYTHONPATH": f".:{core_s}:{research_s}", "HF_HOME": self.env.hf_home, "HF_HUB_OFFLINE": "1",
-                    "VLLM_BATCH_INVARIANT": "1", "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
+                    **served.execution_env(self.execution()), "TOKENIZERS_PARALLELISM": "false", "CUDA_HOME": self.env.cuda_home})
         env.update(pins)
         jit_cache(env, self.tree, lambda: jit_key(self.py, env["CUDA_HOME"], self.row, self.tree) if self.bi_eager() else None)
         if GL.leased(env):
@@ -164,15 +166,32 @@ class Row:
         """``rel`` under the tree (the stages' cwd)."""
         return os.path.join(self.tree, rel)
 
-    def bi_eager(self) -> bool:
-        """The row's execution is ``bi-eager``, the only one the template gives JIT caches: its workload's ``execution`` (or
-        ``sweep.execution``), else its id's last token.  A compiled row records cubins its Triton cache holds
-        (`code_identity.loaded_code_objects`), so it never shares one."""
+    def config(self) -> RowConfig:
+        """The row's config, its file in the tree that runs."""
+        return RowConfig.load(self.path(self.wl))
+
+    def refuse_unserved_engine(self) -> None:
+        """Refuse a tensor-parallel row whose file declares prefix caching: its capture, Match and Commit engines run with it off and a
+        rank Program (`vllm_meta.with_peers`) takes no cached prefix, so the row's record would name a serve it never ran.  A
+        single-GPU row serves it: a warm request's Program reads its cached rows as its `prefix` input (`program.prefix_plan`)."""
+        if self.config().engine.args.get("enable_prefix_caching") is True:
+            self.verdict("precheck", "FAIL", "engine.args.enable_prefix_caching is true on a tensor-parallel row: its stages serve with prefix "
+                                             "caching off and a rank Program takes no cached prefix, so the record would name a serve it never ran")
+            raise Stop(3)
+
+    def execution(self) -> str | None:
+        """The row's execution label: its workload's ``execution`` (or ``sweep.execution``), else its id's last token; None without
+        a workload file."""
         doc = _read_json(self.path(self.wl))
         if not isinstance(doc, dict):
-            return False
+            return None
         sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
-        return (doc.get("execution") or sw.get("execution") or row_execution(self.row)) == "bi-eager"
+        return doc.get("execution") or sw.get("execution") or row_execution(self.row)
+
+    def bi_eager(self) -> bool:
+        """The row's execution is ``bi-eager``, the only one the template gives JIT caches.  A compiled row records cubins its Triton
+        cache holds (`code_identity.loaded_code_objects`), so it never shares one."""
+        return self.execution() == "bi-eager"
 
     def export_commit(self) -> str:
         """The shipped tree's commit (``EXPORT.json``), "" when absent."""
@@ -354,6 +373,23 @@ class Row:
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
         return rc, line
+
+    def launch_args(self, lp: int, t: int, C: int = 0) -> list[str] | None:
+        """A B >= 2 request Program is built under its launch context (``launch-context``; `C` a warm request's cached rows); None =
+        the context did not read, which FAILS that shape's Build (it is not "no context")."""
+        if self.B <= 1:
+            return []
+        name = PP.shape_name(PP.shape(lp, t, C))
+        err = f"{self.d}/launch_context_{name}.err"
+        with open(err, "w") as f:
+            r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t), *([str(C)] if C else [])), stdout=subprocess.PIPE,
+                               stderr=f, text=True, cwd=self.tree, env=self.child_env)
+        if r.returncode != 0:
+            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            return None
+        os.remove(err)
+        lc = r.stdout.rstrip("\n")
+        return ["--launch-context", *lc.split("\n")] if lc else []
 
     def call_boundaries(self, to: int | str, cmd: list[str] | None = None) -> None:
         """After a PASS Build: the row stops (exit 21, no Match, no Commit) unless every `call_boundaries` identity of its manifest has

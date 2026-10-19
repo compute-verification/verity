@@ -37,6 +37,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("LEASE_DEADLINE_FILE", str(tmp_path_factory.mktemp("lease") / "absent-deadline"))
     # ... nor its GPU split: gpu-lease and the runner read /etc/vy/direct-gpus, which says `none` on a cut-over Nebius host
     monkeypatch.setenv("GPU_LEASE_ALLOWED_FILE", str(tmp_path_factory.mktemp("gpu-lease") / "absent-direct-gpus"))
+    monkeypatch.setenv("GPU_LEASE_HOST_FILE", str(tmp_path_factory.mktemp("gpu-lease") / "absent-gpu-lease-host"))   # a GPU VM's marker
     # ... nor its bookings: gpu-lease refuses a lease that overlaps a window in /workspace/pouw/fill/windows on vy-nebius-2
     monkeypatch.setenv("GPU_LEASE_WINDOWS", str(tmp_path_factory.mktemp("gpu-lease") / "absent-windows"))
     monkeypatch.setenv("DIRECT_CPUS_FILE", str(tmp_path_factory.mktemp("cpus") / "absent-direct-cpus"))     # nor its CPU map
@@ -51,6 +52,10 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
+    # ... nor does a routed post fetch origin/main to read its registry
+    monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
+    # ... nor does anything that folds in the inbox routes (holders: research msg, drive's PR owners) read the published ones
+    monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
 
 
 @pytest.fixture(autouse=True)

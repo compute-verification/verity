@@ -437,8 +437,10 @@ pub struct Composite {
     pub hm_net: usize,
     /// the circuit whose output group holds the returned outputs: the unit, or (a tail that returns them) the last stage
     pub out_net: usize,
-    /// `out_net`'s output ports that are the output words (a stage), in output-leaf order
-    pub out_ports: Vec<usize>,
+    /// `out_net`'s `(slot, output port)` of each output word (a stage), in output-leaf order: META `out_net_ports` of ports
+    /// (slot 0, the one-slot last stage) or of `[slot, port]` pairs (a repeated last stage, `out_slotted`)
+    pub out_ports: Vec<(usize, usize)>,
+    pub out_slotted: bool,
     /// a unit input that is a row word (attention's public query): `(unit, input port, leaf)`; low 16 bits the message bits
     pub leaf_cuts: Vec<(usize, usize, usize)>,
     /// `leaf_cuts` by unit: `(input port, leaf)`
@@ -898,7 +900,16 @@ impl Composite {
         }
         let (sha_net, hm_net) = (net_of(SHA_NET)?, net_of(HM_NET)?);
         let out_net = if instance.is_some() { unit_net } else { net_of(meta["out_net"].as_str().unwrap_or("unit"))? };
-        let out_ports: Vec<usize> = meta["out_net_ports"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as usize).collect()).unwrap_or_default();
+        let entry = |x: &Value| -> (usize, usize) {
+            let n = |v: &Value| v.as_u64().map_or(usize::MAX, |v| v as usize);
+            match x.as_array() {
+                Some(p) if p.len() == 2 => (n(&p[0]), n(&p[1])),
+                Some(_) => (usize::MAX, usize::MAX),
+                None => (0, n(x)),
+            }
+        };
+        let out_ports: Vec<(usize, usize)> = meta["out_net_ports"].as_array().map(|a| a.iter().map(entry).collect()).unwrap_or_default();
+        let out_slotted = meta["out_net_ports"].as_array().is_some_and(|a| a.iter().any(Value::is_array));
         let leaf_cuts: Vec<(usize, usize, usize)> = meta["leaf_cuts"].as_array().map(|a| a.iter().map(|w| {
             (w[1].as_u64().unwrap_or(u64::MAX) as usize, w[2].as_u64().unwrap_or(u64::MAX) as usize, w[3].as_u64().unwrap_or(u64::MAX) as usize)
         }).collect()).unwrap_or_default();
@@ -921,7 +932,7 @@ impl Composite {
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
-            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
+            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, out_slotted, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(), typed: None,
         };
         let typed = instance.map(|inst| {
@@ -1035,9 +1046,18 @@ impl Composite {
             let n_out: usize = self.out_words.iter().sum();
             let net = &self.nets[self.out_net].1;
             let oc = port_cols(&net.out_groups);
-            if !self.nets[self.out_net].0.starts_with("stage") || self.out_ports != (0..oc.len()).collect::<Vec<_>>() || oc.len() != n_out
+            if !self.nets[self.out_net].0.starts_with("stage") || self.leaves_out.iter().any(|l| !l.is_empty()) {
+                return Err("the returned outputs are not the last stage's only output group: one 16-bit port per output word".into());
+            }
+            if self.out_slotted {
+                let mut seen = BTreeSet::new();
+                if self.out_ports.len() != n_out || self.out_ports.iter().any(|&(s, p)| {
+                    s >= self.per_vu[self.out_net] || p >= oc.len() || oc[p].1 != 16 || !seen.insert((s, p))
+                }) {
+                    return Err("the returned outputs are not one 16-bit port of a slot of the last stage per output word, each once".into());
+                }
+            } else if self.out_ports != (0..oc.len()).map(|p| (0, p)).collect::<Vec<_>>() || oc.len() != n_out
                 || oc.iter().any(|x| x.1 != 16) || net.out_groups.len() != 1 || !(16 * n_out).is_power_of_two()
-                || self.leaves_out.iter().any(|l| !l.is_empty())
             {
                 return Err("the returned outputs are not the last stage's only output group: one 16-bit port per output word".into());
             }
@@ -1331,7 +1351,8 @@ impl Composite {
             if self.typed.is_some() {
                 self.slot_col(self.unit_net, g, 0) + unit.out_groups[0].col * WORD + 16 * o
             } else if self.out_net != self.unit_net {
-                self.slot_col(self.out_net, g, 0) + tail_cols[self.out_ports[o]].0
+                let (s, p) = self.out_ports[o];
+                self.slot_col(self.out_net, g, s) + tail_cols[p].0
             } else {
                 let (u, q) = ret[o];
                 self.slot_col(self.unit_net, g, u) + unit_cols[q].0
@@ -3540,6 +3561,43 @@ mod tests {
                 section("unit", &[16], 1, &[16], 1), section("stage0", &[16], 1, &[16], 1),
                 section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
                 section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
+    }
+
+    /// A repeated last stage (two slots per VU, slot `s` reading unit `s`) returns output word `o` from its slot's port (META
+    /// `out_net_ports` of `[slot, port]`); an output word named twice or not at all, or a slot or port past the stage's, is refused.
+    #[test]
+    fn a_repeated_last_stage_returns_each_output_from_its_slot() {
+        let text = flat_tail_statement();
+        let edit = |f: &dyn Fn(&mut Value)| {
+            let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
+            let mut m: Value = serde_json::from_str(&lines[1][5..]).unwrap();
+            m["units_per_vu"] = json!(2);
+            m["leaves_in"] = json!([[0], [1]]);
+            m["leaves_out"] = json!([[], []]);
+            m["ranges"][2]["count"] = json!(4);
+            m["ranges"][3]["count"] = json!(4);
+            m["ranges"][3]["pos0"] = json!(136);
+            m["per_vu"]["stage0"] = json!(2);
+            let mut wires: Vec<Value> = m["wires"].as_array().unwrap().iter().filter(|w| w[0] != "stage0").cloned().collect();
+            wires.extend((0..2).map(|s| json!(["stage0", s, 0, "unit", s, 0])));
+            m["wires"] = json!(wires);
+            m["out_ports"] = json!([["y", 2]]);
+            m["dummy"]["outputs"] = json!([0, 0]);
+            m["out_net_ports"] = json!([[0, 0], [1, 0]]);
+            f(&mut m);
+            lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
+            lines.join("\n")
+        };
+        let c = Composite::parse(&edit(&|_| {}), None).unwrap_or_else(|e| panic!("{e}"));
+        let s0 = c.nets.iter().position(|n| n.0 == "stage0").unwrap();
+        let at = port_cols(&c.nets[s0].1.out_groups)[0].0;
+        assert_eq!((c.out_col()(1, 0), c.out_col()(1, 1)), (c.slot_col(s0, 1, 0) + at, c.slot_col(s0, 1, 1) + at));
+        for bad in [json!([[0, 0], [0, 0]]), json!([[0, 0], [2, 0]]), json!([[0, 0]]), json!([[0, 0], [1, 1]])] {
+            let err = Composite::parse(&edit(&|m| m["out_net_ports"] = bad.clone()), None).err().unwrap_or_default();
+            assert!(err.contains("each once"), "{bad}: {err}");
+        }
+        let flat = Composite::parse(&edit(&|m| m["out_net_ports"] = json!([0, 0])), None).err().unwrap_or_default();
+        assert!(flat.contains("one 16-bit port per output word"), "{flat}");
     }
 
     /// No unit in a VU is refused (PROTOCOL.md §16.10, D8), with the tail that returns the outputs, whose unit count need not

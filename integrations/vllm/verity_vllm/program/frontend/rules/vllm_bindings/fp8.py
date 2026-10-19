@@ -4,24 +4,26 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll, array_of
 from verity_vllm.program.frontend.derive import Alloc, refuse
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
+from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
+from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
-# -- [R15 fp8] the block-scaled FP8 linear: dynamic per-token-group activation quant + the blockwise CUTLASS scaled GEMM -----------------
+# -- [R15 fp8] block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
 
 FP8_E4M3 = torch.float8_e4m3fn
-#: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3, use_ue8m0=False)` as vLLM's
-#: `QuantFP8(group_shape=(1, 128), use_ue8m0=False)` calls it for `CutlassFp8BlockScaledMMKernel`); the Definition `Fp8GroupQuant_v1{K,G}`
-#: hard-codes eps and the e4m3 range, so a launch with other values is refused (another kernel configuration, not this Definition).
+#: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3)` as vLLM calls it for
+#: `CutlassFp8BlockScaledMMKernel` and the block-FP8 Triton experts); the Definitions `Fp8GroupQuant_v1{K,G}` and
+#: `Fp8GroupQuantUe8m0_v1{K,G}` hard-code eps and the e4m3 range, so a launch with other values is refused (another kernel
+#: configuration, not these Definitions).  `use_ue8m0` is not pinned: it selects between the two Definitions.
 #: `group_size` is the blockwise GEMM's block; the quant takes any of `fp8.QUANT_GROUPS`.
-FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max": 448.0, "use_ue8m0": False}
+FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max": 448.0}
 
 
 def _f32_equal(a, b: float) -> bool:
@@ -29,9 +31,153 @@ def _f32_equal(a, b: float) -> bool:
     return isinstance(a, (int, float)) and not isinstance(a, bool) and _np.float32(a) == _np.float32(b)
 
 
+class DynamicDeepGemmFp8LinearRule(OpRule):
+    """vLLM's default Hopper block-FP8 linear, one registered row call per token.
+
+    The custom op owns both branches: FlashInfer for M < 32 and DeepGEMM for
+    M >= 32, M the launch's tokens (`launch_tokens_of`).  GLM-5.3's load-time ``requant_weight_ue8m0_inplace`` output is
+    the op's ``weight`` / ``weight_scale`` parameter pair, so those served
+    tensors are the declared weight operands.
+    """
+
+    modes = frozenset({"profile"})
+    info = RuleInfo(
+        "DynamicDeepGemmFp8Linear[vllm-default]",
+        1,
+        "op-binding",
+        applies_to="vllm.dynamic_flashinfer_deepgemm_blockscale_gemm(input, weight, weight_scale, 128, True)",
+        preconditions=(
+            "Hopper without batch invariance and vLLM's default dynamic FlashInfer/DeepGEMM custom op",
+            "bf16 input [M,K], e4m3 weight [N,K], f32 weight scales [ceil(N/128),K/128]",
+            "group_size=128 and use_deep_gemm_e8m0=True",
+        ),
+        evidence_domain="deepgemm_sm90_capture/v1; GLM-5.3 f32 checkpoint scales are load-time requantised to ue8m0",
+    )
+
+    def targets(self):
+        return targets_for("dynamic_flashinfer_deepgemm_blockscale_gemm")
+
+    def applies(self, node, ctx):
+        target = active_target_profile()
+        if target.compute_capability != (9, 0):
+            return f"compute capability {target.compute_capability}, not cc 9.0"
+        if target.batch_invariant:
+            return "batch invariance selects DeepGEMM for every M"
+        if len(node.args) != 5 or node.kwargs:
+            return f"unexpected args={node.args[3:]} kwargs={node.kwargs}"
+        x, w, ws, group, ue8m0 = node.args
+        if group != 128 or ue8m0 is not True:
+            return f"expected group_size=128 and use_deep_gemm_e8m0=True, got {group!r}, {ue8m0!r}"
+        if not all(isinstance(ctx.val(v), Coll) for v in (x, w, ws)):
+            return "input, weight or weight_scale is not a value"
+        if ctx.dtype_of(x) != BF16 or ctx.dtype_of(w) != FP8_E4M3 or ctx.dtype_of(ws) != torch.float32:
+            return f"expected bf16/e4m3/f32 operands, got {ctx.dtype_of(x)}, {ctx.dtype_of(w)}, {ctx.dtype_of(ws)}"
+        xs, wsh, ssh, osh = shape(ctx, x), shape(ctx, w), shape(ctx, ws), shape(ctx, node)
+        if xs is None or len(xs) != 2 or wsh is None or len(wsh) != 2 or xs[1] != wsh[1]:
+            return f"input {xs} vs weight {wsh}"
+        N, K = wsh
+        if K % 128:
+            return f"K={K} is not a multiple of 128"
+        expected_scales = (weight_blocks(N, 128), K // 128)
+        if ssh != expected_scales:
+            return f"weight_scale {ssh}, expected {expected_scales}"
+        if osh != xs[:-1] + (N,) or ctx.dtype_of(node) != BF16:
+            return f"output {osh} {ctx.dtype_of(node)}, expected {xs[:-1] + (N,)} bf16"
+        if ctx.weight_of(w) is None or ctx.weight_of(ws) is None:
+            return "weight / weight_scale are not declared weight operands"
+        role = "flashinfer_fp8_linear" if launch_tokens_of(node, xs[0]) < 32 else "deepgemm_fp8_linear"
+        if not ctx.vocab.has(role):
+            return f"the vocabulary has no {role}"
+        return True
+
+    def emit(self, node, ctx):
+        x, w, ws, _group, _ue8m0 = node.args
+        N, K = shape(ctx, w)
+        rows, lead = rows_of(ctx.coll(x))
+        M = launch_tokens_of(node, len(rows))
+        branch = "flashinfer" if M < 32 else "deepgemm"
+        fn = ctx.kind(f"{branch}_fp8_linear", node, K=K, N=N)
+        calls = [
+            ctx.call(fn, row, ctx.coll(w), ctx.coll(ws), node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]")
+            for i, row in enumerate(rows)
+        ]
+        outs = calls if branch == "flashinfer" else [call[2] for call in calls]
+        ctx.define(node, from_rows(outs, lead))
+        ctx.bind_weight_role(w, self, "fp8_w_requant_ue8m0", K=K, N=N)
+        ctx.bind_weight_role(ws, self, "fp8_ws_requant_ue8m0", K=K, N=N, G=128)
+        ctx.record(
+            self,
+            node,
+            {"M": M, "K": K, "N": N, "G": 128, "branch": branch, "use_deep_gemm_e8m0": True},
+            emitted=f"{fn.id} x{len(rows)}",
+        )
+
+
+class DeepGemmFp8EinsumRule(InPlaceRule):
+    """DeepGEMM's `fp8_einsum("bhr,hdr->bhd", (a, a_scale), (b, b_scale), d, recipe=(1, 128, 128))` (`vllm.utils.deep_gemm`, exported
+    as `vllm_iface.deep_gemm_fp8_einsum` by `export_compat.deep_gemm_fp8_einsum_leaf`) -> `deepgemm_fp8_einsum_grouped{H,K,N,G}`
+    (ScaledMmFp8BlockGrouped_v1) per token b; `d` is rebound.  DeepSeek-V4's `wo_a` is the caller: a and a_scale the inverse-RoPE
+    quant's e4m3 words and group scales, b and b_scale the grouped weight and its block scales as the loader leaves them."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("DeepGemmFp8Einsum[vllm]", 1, "in-place-binding",
+                    applies_to="vllm_iface.deep_gemm_fp8_einsum(expr, a, a_scale, b, b_scale, Tensor! d, recipe)",
+                    preconditions=("cc 9.0 (recipe (1, 128, 128) with f32 block scales: DeepGEMM's cc 9.0 bmm)", "expr 'bhr,hdr->bhd', recipe [1, 128, 128]",
+                                   "a an e4m3 value [T, H, K], a_scale an f32 value [T, H, K/128], K % 128 == 0",
+                                   "b an e4m3 parameter [H, N, K], b_scale an f32 parameter [H, cdiv(N, 128), K/128]",
+                                   "d an unwritten bf16 allocation [T, H, N]"),
+                    evidence_domain="structural; numerics: ScaledMmFp8BlockGrouped_v1 (registry.deepgemm; the DeepGEMM capture its conformance "
+                                    "names compares every output word on cc 9.0)")
+    EXPR = "bhr,hdr->bhd"
+
+    def targets(self):
+        return {iface.deep_gemm_fp8_einsum.default}
+
+    def applies(self, node, ctx):
+        cc = active_target_profile().compute_capability
+        if cc != (9, 0):
+            return f"compute capability {cc}, not cc 9.0"
+        if len(node.args) != 7 or node.kwargs:
+            return "unexpected operator arity"
+        expr, a, a_s, b, b_s, d, recipe = node.args
+        G = FP8_QUANT_PINS["group_size"]
+        if expr != self.EXPR or list(recipe) != [1, G, G]:
+            return f"numerics_unregistered: fp8_einsum({expr!r}, recipe={list(recipe)}); the Definition is {self.EXPR!r} at recipe [1, {G}, {G}]"
+        for name, x, dt in (("a", a, FP8_E4M3), ("a_scale", a_s, torch.float32), ("b", b, FP8_E4M3), ("b_scale", b_s, torch.float32)):
+            if not isinstance(ctx.val(x), Coll) or not dtype_is(ctx, x, dt):
+                return f"{name} is not a {dt} value ({type(ctx.val(x)).__name__}, {ctx.dtype_of(x)})"
+        if not isinstance(ctx.val(d), Alloc) or not dtype_is(ctx, d, BF16):
+            return f"d is not an unwritten bf16 allocation ({type(ctx.val(d)).__name__}, {ctx.dtype_of(d)})"
+        ash, bsh = shape(ctx, a), shape(ctx, b)
+        if len(ash) != 3 or len(bsh) != 3 or ash[1] != bsh[0] or ash[2] != bsh[2] or ash[2] % G:
+            return f"a {ash} and b {bsh} are not [T, H, K] and [H, N, K] with K % {G} == 0"
+        (T, H, K), N = ash, bsh[1]
+        want = {"a_scale": (T, H, K // G), "b_scale": (H, weight_blocks(N, G), K // G), "d": (T, H, N)}
+        for name, x in (("a_scale", a_s), ("b_scale", b_s), ("d", d)):
+            if shape(ctx, x) != want[name]:
+                return f"{name} {shape(ctx, x)}, expected {want[name]}"
+        if ctx.weight_of(b) is None or ctx.weight_of(b_s) is None:
+            return "b / b_scale are not declared weight operands"
+        if not ctx.vocab.has("deepgemm_fp8_einsum_grouped"):
+            return "the vocabulary has no deepgemm_fp8_einsum_grouped"
+        return True
+
+    def emit(self, node, ctx):
+        _expr, a, a_s, b, b_s, d, _recipe = node.args
+        (T, H, K), N, G = shape(ctx, a), shape(ctx, b)[1], FP8_QUANT_PINS["group_size"]
+        fn = ctx.kind("deepgemm_fp8_einsum_grouped", node, H=H, K=K, N=N, G=G)
+        x, s, w, ws = (ctx.coll(v) for v in (a, a_s, b, b_s))
+        outs = [ctx.call(fn, x[t], s[t], w, ws, node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t in range(T)]
+        ctx.rebind(d, array_of(outs), self, what="d")
+        ctx.bind_weight_role(b, self, "fp8_einsum_w", H=H, K=K, N=N)
+        ctx.bind_weight_role(b_s, self, "fp8_einsum_ws", H=H, K=K, N=N, G=G)
+        ctx.record(self, node, {"T": T, "H": H, "K": K, "N": N, "G": G, "expr": self.EXPR}, emitted=f"{fn.id} x{T}")
+
+
 class PerTokenGroupFp8QuantRule(InPlaceRule):
     """`_C.per_token_group_fp8_quant(x bf16 [.., K], x_q! e4m3 [.., K], x_s! f32 [.., K/G], G, eps, fp8_min, fp8_max, use_ue8m0,
-    column_major_scales, tma_aligned_scales)` -> `fp8_group_quant{K,G}` (Fp8GroupQuant_v1) per token row; BOTH allocations are rebound
+    column_major_scales, tma_aligned_scales)` -> `fp8_group_quant{K,G}` (Fp8GroupQuant_v1), or under `use_ue8m0=True` (power-of-two
+    scales, what `moe_kernel_quantize_input` passes for the block-FP8 Triton experts when DeepGEMM is on, vLLM's default on the
+    target) `fp8_group_quant_ue8m0{K,G}` (Fp8GroupQuantUe8m0_v1), per token row; BOTH allocations are rebound
     (`x_q` to port 0, `x_s` to port 1).  `x_s` is usually a permuted view of its allocation (column-major scales): the view node is what the
     GEMM reads, so the view node is rebound (AllocView v2).  The scale layout / TMA alignment flags are storage facts, not values."""
     modes = frozenset({"profile"})
@@ -39,12 +185,14 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
                     applies_to="_C.per_token_group_fp8_quant(x, Tensor! x_q, Tensor! x_s, group_size, eps, fp8_min, fp8_max, use_ue8m0, column_major_scales, tma_aligned_scales)",
                     preconditions=("x is bf16 [.., K] with K % group_size == 0", "x_q is an unwritten allocation float8_e4m3fn [.., K]",
                                    "x_s is an unwritten allocation (or a view of one) f32 [.., K/group_size]",
-                                   "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448, use_ue8m0 == False "
-                                   "(the pinned Definition)"),
-                    evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant)")
+                                   "group_size in fp8.QUANT_GROUPS (64, 128), eps == 1e-10f, fp8_min/max == -448/448",
+                                   "use_ue8m0 selects the Definition: False -> Fp8GroupQuant_v1, True -> Fp8GroupQuantUe8m0_v1"),
+                    evidence_domain="structural; numerics: Fp8GroupQuant_v1 (exact-model-tested on the H100 against _C.per_token_group_fp8_quant); "
+                                    "Fp8GroupQuantUe8m0_v1 (registry.deepgemm: the DeepGEMM capture is its hardware check on cc 9.0, "
+                                    "and tests/properties/glm53_block_fp8_capture_gpu.py compares it at the MoE shapes)")
 
     def targets(self):
-        return _C_op("per_token_group_fp8_quant")
+        return _C_op("per_token_group_fp8_quant") | targets_for("per_token_group_fp8_quant")
 
     @staticmethod
     def _scalars(node) -> dict:
@@ -69,8 +217,6 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         for key in ("eps", "fp8_min", "fp8_max"):
             if not _f32_equal(a[key], FP8_QUANT_PINS[key]):
                 return f"numerics_unregistered: {key}={a[key]!r} differs from the pinned {FP8_QUANT_PINS[key]!r} (another kernel configuration)"
-        if bool(a.get("use_ue8m0", False)):
-            return "numerics_unregistered: use_ue8m0=True (power-of-two scales, the DeepGEMM path) has no registered Definition"
         for name in ("x_q", "x_s"):
             if not isinstance(ctx.val(a[name]), Alloc):
                 return f"{name} is not an unwritten allocation ({type(ctx.val(a[name])).__name__})"
@@ -88,7 +234,7 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         a = self._scalars(node)
         rows, lead = rows_of(ctx.coll(a["x"]))
         K, G = rows[0].type.n, int(a["group_size"])
-        fn = ctx.kind("fp8_group_quant", node, K=K, G=G)
+        fn = ctx.kind("fp8_group_quant_ue8m0" if bool(a.get("use_ue8m0", False)) else "fp8_group_quant", node, K=K, G=G)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(a["x_q"], from_rows([o[0] for o in outs], lead), self, what="x_q")
         ctx.rebind(a["x_s"], from_rows([o[1] for o in outs], lead), self, what="x_s")

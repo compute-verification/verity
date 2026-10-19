@@ -50,7 +50,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import RowEngine, option
 from verity_vllm.pipeline.admission_bound import compare_observed, host_cap, observed_steps, scheduled_step_bytes
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
 
@@ -582,7 +582,7 @@ def gap_accounting(p: dict[str, Any], measured: dict[str, Any]) -> list[dict[str
 def _load_workload_sizing(wl_path: str, sizing_path: str) -> tuple[dict, dict, int | None]:
     wl = json.loads(Path(wl_path).read_text())
     sizing = json.loads(Path(sizing_path).read_text())
-    mnbt = (wl.get("engine_args_required") or {}).get("max_num_batched_tokens") or (sizing.get("envelope") or {}).get("max_num_batched_tokens")
+    mnbt = RowEngine.of(wl).args.get("max_num_batched_tokens") or (sizing.get("envelope") or {}).get("max_num_batched_tokens")
     return wl, sizing, mnbt
 
 

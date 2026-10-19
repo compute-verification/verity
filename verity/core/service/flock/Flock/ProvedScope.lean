@@ -1,7 +1,8 @@
 /-
 The statement forms the soundness proof covers (PROTOCOL.md §16.15). `verify` refuses every other: soundness is one theorem
 over every session the verifier accepts, so a form no theorem covers is refused, never accepted. Widening the proof to
-another form is a change to one rule here, with the proof that the headlines cover it.
+another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
+general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
 -/
 import Flock.HmRow
 
@@ -58,6 +59,13 @@ def bitRows (c : Circuit) : Bool :=
 def scopeOkH (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
     (v1Ports c || bitRows c)
+
+/-- **The circuits the hidden-output headlines cover at the template instance's program** (`instProg`): `scopeOkH`'s
+conditions but the first two, so the unit may read any number of input groups and any stage may return the outputs. Its
+headlines also need `wiresAcyclic`, which `check` requires first wherever the wires feed the unit or the outputs
+(`wiresFeed`); where they don't, the circuit passes `scopeOkH` and `scopeOkH`'s headlines cover it. -/
+def scopeOkI (c : Circuit) : Bool :=
+  decide (c.unit.unitLog ≤ 32) && portReadsB c.unit && (v1Ports c || bitRows c)
 
 /-- `f` over row `i`'s entries in order: `(m.row i).foldl f init`, without building the row. -/
 @[inline] def foldRow {β : Type} (m : Sparse) (i : Nat) (f : β → Nat → β) (init : β) : β :=
@@ -146,10 +154,10 @@ def wiresWhy : String :=
   "a slot no order of the wires computes from the leaves: a cycle through wires, an input port no wire fills, or a read \
     of an input column that is not a port bit"
 
-/-- Which part of `scopeOk` (`scopeOkH` for a statement with hidden outputs) a circuit fails, for the refusal. -/
+/-- Which part of `scopeOk` (`scopeOkI` for a statement with hidden outputs) a circuit fails, for the refusal. -/
 def scopeWhy (hidden : Bool) (c : Circuit) : String :=
-  if c.unit.inGroups.size != 1 then s!"a unit reading {c.unit.inGroups.size} input groups"
-  else if c.outNet != c.unitNet then "a circuit whose outputs a tail stage computes (META out_net)"
+  if !hidden && c.unit.inGroups.size != 1 then s!"a unit reading {c.unit.inGroups.size} input groups"
+  else if !hidden && c.outNet != c.unitNet then "a circuit whose outputs a tail stage computes (META out_net)"
   else if c.unit.unitLog > 32 then s!"a unit of 2^{c.unit.unitLog} rows"
   else if !portReadsB c.unit then "a unit row reading an input column that is not a port bit"
   else if hidden then "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all \
@@ -165,15 +173,29 @@ def circuitOf (tags : Tags) (file : ByteArray) (tables : List (String × ByteArr
 def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
   if tags.hiddenOutputs then HmOut.loadPublic tags c file else HmRow.loadPublic tags c file
 
+/-- **The most tables a `--zk` session may have**, `2^16`: ZK's tape premise holds only over a bounded table count. -/
+def zkTableCap : Nat := 65536
+
+/-- **The proof's Merkle leaves the headlines cover**: `hm96-sha512/v1` in every form, and plain SHA-512 leaves
+(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, §16.16) on a statement with hidden outputs without
+`--zk`. Without `--zk` a leaf only binds its column, which either leaf does (a second column under one leaf is a SHA-512
+collision); `--zk`'s hiding needs `hm96`'s salts. -/
+def leafOk (tags : Tags) (zk : Bool) : Bool :=
+  tags.merkleLeaf == "hm96-sha512/v1" ||
+    (!zk && tags.hiddenOutputs && tags.merkleLeaf == "flock-leaf/sha512-unsalted")
+
 /-- The forms of `verify`'s statement the proof covers, each with what a statement outside it is: an hm96-sha512 row
-statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and `hm96-sha512/v1` leaves, at
-most one table without `--zk`, and no public input ports (the proof's setup takes no `--public-inputs`). -/
+statement (`Stmt.setupTables`, the setup the proof models), untyped, with retained rounds and leaves `leafOk` covers, at
+most one table without `--zk` and `zkTableCap` with it, and no public input ports (the proof's setup takes no
+`--public-inputs`). -/
 def statementRules (tags : Tags) (zk : Bool) (count : Nat) (publicInputs : Bool) : List (Bool × String) :=
   [(tags.hm96Rows, s!"{tags.name}, a statement before hm96-sha512 rows"),
    (!tags.typed, s!"{tags.name}, a typed statement"),
    (tags.retainRounds, s!"{tags.name}, a statement without retained rounds"),
-   (tags.merkleLeaf == "hm96-sha512/v1", s!"{tags.name}, a statement with {tags.merkleLeaf} leaves"),
-   (zk || decide (count ≤ 1), s!"{count} tables in a session without --zk"),
+   (leafOk tags zk, s!"{tags.name}, a statement with {tags.merkleLeaf} leaves{if zk then " under --zk" else ""}"),
+   (decide (count ≤ if zk then zkTableCap else 1),
+    if zk then s!"{count} tables in a --zk session, more than {zkTableCap}"
+    else s!"{count} tables in a session without --zk"),
    (!publicInputs, "public input ports (--public-inputs)")]
 
 /-- The first rule that fails, by what it refuses. -/
@@ -199,17 +221,18 @@ with hidden outputs whose verifier holds its own registered reads (`--registered
 def sharedRowsOk (tags : Tags) (zk registered : Bool) : Bool := zk && tags.hiddenOutputs && registered
 
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
-file as the proof reads them, a shared-row public file only where `sharedRowsOk`, and `scopeOk` (`scopeOkH` for a
-statement with hidden outputs, whose headlines also cover `sha512/row/v2` and `sha512/row-seg/v1` rows). `tags` are the
-session's (under `--zk`, `Zk.tags`'s), `count` its tables, `publicInputs` whether the verifier holds its own public
-input words and `registered` whether it holds its own registered reads. The tables' sizes are `sizesOk`'s, which `verify`
-runs after this on the tables the session set up. When this check moves from `scopeOk` to a format
-check (`formatOk`), a tail must stay refused (`c.outNet == c.unitNet`): `formatOk` puts no condition on a tail's stage
-nets, and the session headline's `keyProg` reads the unit nets only.
+file as the proof reads them, a shared-row public file only where `sharedRowsOk`, wherever the wires feed the unit or the
+outputs (`wiresFeed`) an order of the wires that computes every slot (`wiresAcyclic`), and `scopeOk` (`scopeOkI` for a
+statement with hidden outputs). `tags` are the session's (under `--zk`, `Zk.tags`'s), `count` its tables, `publicInputs`
+whether the verifier holds its own public input words and `registered` whether it holds its own registered reads. The
+tables' sizes are `sizesOk`'s, which `verify` runs after this on the tables the session set up.
 
-Where the wires feed the unit or the outputs (`wiresFeed`), a circuit whose wires no order computes (`wiresAcyclic`) is
-refused before `scopeOk`. It only refuses: `scopeOk` and `scopeOkH` require `wiresFeed` false, so the statements this
-accepts are the ones it accepted without it, and it names the cycle in place of the scope rule a cyclic circuit fails. -/
+With hidden outputs this is the general instance form: one unit, repeated, reading any number of committed input groups,
+and any number of stages the verifier evaluates, each reading wires from earlier outputs, the outputs returned by any of
+them. Its headlines are at the template instance's program (`instProg`), which needs `wiresAcyclic`. A circuit the wires
+don't feed passes `scopeOkH` and is also covered at the unit's program (`keyProg`). With public outputs `scopeOk` keeps
+`wiresFeed` false: the public-output headlines read the outputs off the unit, so the unit reads only its leaf group and
+returns the outputs. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (publicInputs registered : Bool) : Except String Unit :=
   match firstFailure (statementRules tags zk count publicInputs) with
@@ -222,8 +245,31 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
         if pub.tables.isSome && !sharedRowsOk tags zk registered then
           .error (refusal "a shared-row public file (header shared_rows)")
         else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
-        else if (if tags.hiddenOutputs then scopeOkH c else scopeOk c) then .ok ()
+        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
         else .error (refusal (scopeWhy tags.hiddenOutputs c))
+
+/-- `check` on its circuit as `circuitOf` returns it (`parsed`), which `verify` parses once for this and the setup
+(`check_eq`). -/
+def checkOf (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
+    (publicInputs registered : Bool) : Except String Unit :=
+  match firstFailure (statementRules tags zk count publicInputs) with
+  | some why => .error (refusal why)
+  | none => match parsed with
+    | .error e => .error (refusal s!"a circuit that does not parse ({e})")
+    | .ok c => match publicOf tags c publicFile with
+      | .error e => .error (refusal s!"a public file that does not load ({e})")
+      | .ok pub =>
+        if pub.tables.isSome && !sharedRowsOk tags zk registered then
+          .error (refusal "a shared-row public file (header shared_rows)")
+        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
+        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
+        else .error (refusal (scopeWhy tags.hiddenOutputs c))
+
+theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
+    (count : Nat) (publicInputs registered : Bool) :
+    check tags zk circuitFile publicFile tables count publicInputs registered
+      = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
+  rfl
 
 /-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
 `--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset

@@ -29,14 +29,18 @@ def test_rank_config_refuses_a_world_the_kv_heads_neither_divide_nor_replicate_i
 
 @dataclass
 class _Ck:
-    tensors: dict
+    arrays: dict
     config: dict = field(default_factory=lambda: dict(CFG))
 
-    def has(self, name):
-        return name in self.tensors
+    @property
+    def tensors(self):
+        return {n: ("model.safetensors", "BF16", list(a.shape), 0, a.nbytes) for n, a in self.arrays.items()}
 
-    def array(self, name):
-        return self.tensors[name]
+    def has(self, name):
+        return name in self.arrays
+
+    def array(self, name, rows=None):
+        return self.arrays[name] if rows is None else self.arrays[name][rows[0]:rows[1]]
 
     def dtype(self, name):
         return "BF16"

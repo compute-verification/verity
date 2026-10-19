@@ -1,0 +1,4 @@
+order = 10
+tool = "The served GEMM on the floored int8 grid, its receipt kernels (duo, DUOS, tb) and their reference"
+files = "`floored_gemm/fgemm.cu`, `ref.py`, `run.sh`, `tb_run.sh`"
+includes = "`masked_gemm/sha_noise.cuh`"

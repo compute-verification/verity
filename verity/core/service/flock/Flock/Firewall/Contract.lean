@@ -40,7 +40,9 @@ an opening, and it refuses coins that carry one.
 A transcript is the firewall's candidate outbound items in order: the values it would release, each tagged with its case,
 with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The firewall's send check
 decides each candidate as it comes; so does `run`. The first item that breaks the contract is the cut: a refused item
-stops the session, nothing after it leaves, and the auditor sees a stop. A session is accepted when every item may leave
+stops the session, nothing of the session's own after it leaves, and the auditor sees a stop (in the outer phase at the
+session's `Finish`: the firewall releases the statement's schedule in the refused item's place, live PROTOCOL.md §10.1, and
+the transcript ends at the cut). A session is accepted when every item may leave
 and the last one is `finish`; one that ends without `finish` is a stop at its end.
 
 `holds_commit`, `holds_masked`, `holds_fixed`, `holds_coins` and `holds_finish` say what an accepted session lets out, in

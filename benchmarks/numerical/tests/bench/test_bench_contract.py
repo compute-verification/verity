@@ -438,6 +438,28 @@ def test_rate_measurements_are_three_consistent_numbers_the_validator_recomputes
     assert any("needs K in the fingerprint and positive t.total and vu.count" in p for p in contract.validate(bare))
 
 
+def test_the_verifiers_derived_numbers_are_recomputed_from_its_cpu_seconds(conforming: dict) -> None:
+    """``verifier_rates``: CPU seconds per VU and verifier cores per prover, from ``verify.cpu_s``, ``vu.count`` and
+    ``t.total``; a tampered one, or one without the numbers it is checked against, is a problem."""
+
+    cpu, B, t_total = 169.0, 1024, 1.479
+    ms = contract.verifier_rates(cpu, B, t_total)
+    assert [(m["name"], m["unit"], m["value"]) for m in ms] == [
+        ("verifier.cpu_seconds_per_vu", "s", cpu / B), ("verifier.cores_per_gpu", "ratio", cpu / t_total)]
+    with pytest.raises(ValueError, match="vu_count must be positive"):
+        contract.verifier_rates(cpu, 0, t_total)
+    res = json.loads(json.dumps(conforming))
+    res["measurements"] = [m for m in res["measurements"] if not m["name"].startswith(("t.", "vu."))]
+    res["measurements"] += [contract.measurement("t.arithmetic", t_total), contract.measurement("t.total", t_total),
+                            contract.measurement("vu.count", B), contract.measurement("verify.cpu_s", cpu), *ms]
+    assert contract.validate(res) == []
+    tampered = json.loads(json.dumps(res))
+    tampered["measurements"][-1]["value"] *= 1.01
+    assert [p.split(" ")[0] for p in contract.validate(tampered)] == ["verifier.cores_per_gpu"]
+    bare = {**res, "measurements": [m for m in res["measurements"] if m["name"] != "verify.cpu_s"]}
+    assert any("needs positive verify.cpu_s, vu.count and t.total" in p for p in contract.validate(bare))
+
+
 def test_results_of_different_profiles_are_never_compared(conforming: dict) -> None:
     fp = conforming["workload_fingerprint"]
     first, ada = {**fp, "profile": FIRST.name}, {**fp, "profile": FP8_ADA_MMA.name}

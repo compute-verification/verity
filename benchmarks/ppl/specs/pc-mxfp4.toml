@@ -1,0 +1,35 @@
+description = "PPL-COMPILE's format baseline, no PoUW: MXFP4: E2M1 in blocks of 32 along k with E8M0 scales, every matmul (linears, lm_head, both attention matmuls) rounded to nearest, products in FP32, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "fp"
+fmt = "e2m1"
+scale = "mx"
+
+[[linear]]
+step = "fp"
+fmt = "e2m1"
+scale = "mx"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "fp"
+fmt = "e2m1"
+scale = "mx"

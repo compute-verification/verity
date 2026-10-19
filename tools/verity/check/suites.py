@@ -112,18 +112,21 @@ suite runs in one process.
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
 an hour, not its slot until the run's own timeout.
 
-`--mem-gb GB` (`check` passes its slot's share) bounds a parallel suite to as many xdist workers as GB holds at its `[tool.verity.tests]
-worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`.
+`--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, and the
+parallel suites share the rest, each with as many xdist workers as it holds at its `[tool.verity.tests] worker_gb`, what one of
+them may reach, else at `TEST_PROCESS_GB`; one that overlaps another waits for its workers' GB (`wide_gb`).
 """
 from __future__ import annotations
 
 import argparse
 import ast
 import concurrent.futures
+import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import os
 import platform
 import re
@@ -135,7 +138,7 @@ import tempfile
 import threading
 import time
 import tomllib
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -165,10 +168,12 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
-              "verity/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
+              "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous",
-              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks")
+              "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
+              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
+              "verity/core/primitives/requirement", "benchmarks/remote_session")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -207,15 +212,18 @@ def cpus() -> int:
 TEST_PROCESS_GB = 9
 
 
-def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
+def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
     """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
-    processes at `TEST_PROCESS_GB` each."""
+    processes at `TEST_PROCESS_GB` each. The memory is the machine's MemAvailable or this run's own limit (``limit_gb``, by
+    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (19 Oct, r20261019-045749-398f:
+    an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB free started 32 test processes and was OOM-killed)."""
     n = cpus()
-    try:
+    limit_gb = slot_mem_gb() if limit_gb is None else limit_gb
+    limits = [] if limit_gb is None else [limit_gb]
+    with contextlib.suppress(OSError, StopIteration, ValueError, IndexError):
         kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
-    except (OSError, StopIteration, ValueError, IndexError):
-        return n
-    return min(n, max(1, kb // (TEST_PROCESS_GB << 20)))
+        limits.append(kb / 2**20)
+    return min(n, max(1, int(min(limits) // TEST_PROCESS_GB))) if limits else n
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
@@ -1380,20 +1388,105 @@ DIST = ["--dist", "worksteal"]
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
-#: each suite's pytest `--basetemp`, `<tmp>/<BASETEMP>-<suites.py's pid>-*`, removed when the suite ends: pytest's own keeps
-#: its last three runs, and a flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. The name is no
-#: longer than pytest's own `pytest-of-<user>/pytest-<n>`: a test's AF_UNIX socket under tmp_path has at most 107 bytes of path
+#: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-<suites.py's pid>m*`, which holds its `OWNER` marker beside it
+#: (pytest empties the `--basetemp` it is given) and is removed when the suite ends: pytest's own keeps its last three runs, and a
+#: flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. Keep the path short: a test's AF_UNIX
+#: socket under tmp_path has at most 107 bytes of path. The `m` after the pid: an older suites.py's sweep removes
+#: `<BASETEMP>-<pid>-*` whose pid it can't see, and skips these
 BASETEMP = "verity-suite"
+OWNER = "owner.json"
+#: a basetemp without a readable marker of this boot and pid namespace is removed once nothing in it changed for this long
+UNOWNED_AGE_S = 24 * 3600
 
 
-def sweep_basetemps(tmp: Path | None = None) -> list[Path]:
-    """Remove the `--basetemp`s whose suites.py is gone (killed before it could remove them); returns them."""
+def _stat(proc: Path, pid: int | str) -> list[str]:
+    """`/proc/<pid>/stat`'s fields from the third (state) on: [3] is the session, [19] the start time in clock ticks."""
+    return (proc / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()
+
+
+def _identity(proc: Path) -> tuple[str, str]:
+    """This boot and this process's pid namespace: a pid means the same process only under both."""
+    return (proc / "sys" / "kernel" / "random" / "boot_id").read_text().strip(), os.readlink(proc / "self" / "ns" / "pid")
+
+
+def mark_basetemp(d: Path, session: int | None = None, proc: Path = Path("/proc")) -> None:
+    """Write ``d``'s owner marker: this process and, once pytest is started, its session (`start_new_session`), each by pid and
+    start time, so neither a reused pid nor a sweep that can't see them (another pid namespace or boot) counts them gone."""
+    boot, ns = _identity(proc)
+    doc = {"boot": boot, "pidns": ns, "owners": [[os.getpid(), int(_stat(proc, "self")[19])]], "sessions": []}
+    if session is not None:
+        with contextlib.suppress(OSError, IndexError, ValueError):
+            doc["sessions"].append([session, int(_stat(proc, session)[19])])
+    tmp = d / f".{OWNER}.tmp"
+    tmp.write_text(json.dumps(doc))
+    tmp.replace(d / OWNER)
+
+
+def _newer(d: Path, cutoff: float) -> bool:
+    """Whether ``d`` or anything under it changed after ``cutoff``; stops at the first that did."""
+    stack = [d]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                for e in it:
+                    if e.stat(follow_symlinks=False).st_mtime > cutoff:
+                        return True
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(Path(e.path))
+        except OSError:
+            continue
+    return False
+
+
+def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: float | None = None) -> list[Path]:
+    """Remove the basetemps no suite uses any more (its suites.py killed before it could remove them); returns them.
+
+    One is in use while its marker shows this boot and pid namespace and an owner alive with its start time, or a process left
+    in pytest's session (pytest outlives a suites.py killed by SIGKILL: on vy-nebius-1, 18 Oct, the next suites.py's sweep took
+    two running flock suites' basetemps, INF-95). One without such a marker (an older suites.py's, the guard's
+    `verity-suite-host-*`, another namespace's or boot's) is removed only once nothing in it changed for `UNOWNED_AGE_S`."""
+    now = time.time() if now is None else now
+    try:
+        me = _identity(proc)
+    except OSError:
+        me = None
+    table: dict[int, tuple[int, int]] | None = None
+
+    def processes() -> dict[int, tuple[int, int]]:
+        nonlocal table
+        if table is None:
+            table = {}
+            for p in proc.iterdir():
+                with contextlib.suppress(OSError, IndexError, ValueError):
+                    if p.name.isdigit():
+                        f = _stat(proc, p.name)
+                        table[int(p.name)] = (int(f[19]), int(f[3]))
+        return table
+
+    def used(doc: dict) -> bool:
+        ps = processes()
+        return (any(ps.get(pid, (None,))[0] == start for pid, start in doc["owners"])
+                or any(sid == s and st >= start for st, s in ps.values() for sid, start in doc["sessions"]))
+
     gone = []
     for d in (tmp or Path(tempfile.gettempdir())).glob(f"{BASETEMP}-*"):
-        pid = d.name.removeprefix(f"{BASETEMP}-").split("-", 1)[0]
-        if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
-            shutil.rmtree(d, ignore_errors=True)
-            gone.append(d)
+        try:
+            st = d.lstat()
+        except OSError:
+            continue
+        if not d.is_dir() or d.is_symlink() or st.st_uid != os.getuid():
+            continue
+        try:
+            doc = json.loads((d / OWNER).read_text())
+            owned = me is not None and (doc["boot"], doc["pidns"]) == me
+            if owned and used(doc):
+                continue
+        except (OSError, ValueError, KeyError, TypeError):
+            owned = False
+        if not owned and (st.st_mtime > now - UNOWNED_AGE_S or _newer(d, now - UNOWNED_AGE_S)):
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        gone.append(d)
     return gone
 
 
@@ -1423,12 +1516,18 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     own = not any(a == "--basetemp" or a.startswith("--basetemp=") for a in args)
-    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}-")) if own else None
+    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}m")) if own else None
+    if basetemp:
+        with contextlib.suppress(OSError, IndexError, ValueError):
+            mark_basetemp(basetemp)
     start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
         p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                              *spread, *([f"--basetemp={basetemp}"] if basetemp else []), *args], cwd=ROOT / suite.path, env=env,
-                             stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+                              *spread, *([f"--basetemp={basetemp / 'b'}"] if basetemp else []), *args], cwd=ROOT / suite.path,
+                             env=env, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+        if basetemp:
+            with contextlib.suppress(OSError, IndexError, ValueError):
+                mark_basetemp(basetemp, session=p.pid)
         with _GROUPS_LOCK:
             _GROUPS.add(p.pid)
         expired = threading.Event()
@@ -1561,27 +1660,73 @@ class Slots:
                 self.cond.notify_all()
 
 
+#: the memory a check slot gives the run it holds (`tools/verity/check/slot.py`'s SLOT_MEM_ENV)
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: after a stop's SIGINT, how long a suite's process group has to end before it is killed
+STOP_GRACE_S = 30.0
+
+
+def slot_mem_gb() -> float | None:
+    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
+    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+
+
+def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
+    """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
+    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
+    try:
+        rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    top, limits = root / "sys/fs/cgroup", []
+    d = top / rel.strip("/")
+    for c in (d, *d.parents):
+        if not c.is_relative_to(top):
+            break
+        with contextlib.suppress(OSError):
+            if (m := (c / "memory.max").read_text().strip()).isdigit():
+                limits.append(int(m))
+    return min(limits) / 2**30 if limits else None
+
+
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
     at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
     if mem_gb is None:
         return n
-    return max(1, min(n, int(mem_gb // (s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB))))
+    return max(1, min(n, int(mem_gb // worker_gb(s))))
 
 
-def serial_slots(seconds: list[float | None], parallel: int, jobs: int) -> int:
+def worker_gb(s: Suite) -> float:
+    return s.worker_gb if s.worker_gb > 0 else TEST_PROCESS_GB
+
+
+def wide_gb(mem_gb: float | None, serial: int) -> float | None:
+    """The GB the parallel suites share: ``mem_gb`` less `TEST_PROCESS_GB` for each of the ``serial`` processes that run the
+    one-process suites beside them. Parallel suites that overlap draw their workers' GB from it in turn, so two side by side can't
+    each size to the whole (17 Oct, note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent: circuit_check's 53 workers and
+    flock's 30, each sized to all of --mem-gb, reached 800 GB together on cpu-2)."""
+    return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)
+
+
+def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: float | None = None) -> int:
     """How many of the ``jobs`` slots the suites that run in one process share (``seconds``: each one's last duration, None when
     none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
     up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
-    every slot the others couldn't use."""
+    every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (18 Oct: a 16 GiB
+    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope)."""
     if not parallel:
-        return jobs
-    if not seconds:
+        r = jobs
+    elif not seconds:
         return 0
-    timed = [s for s in seconds if s is not None]
-    need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + min(len(seconds) - len(timed), jobs // 4)
-    return max(1, min(int(need), jobs - 1))
+    else:
+        timed = [s for s in seconds if s is not None]
+        need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + min(len(seconds) - len(timed), jobs // 4)
+        r = max(1, min(int(need), jobs - 1))
+    return r if mem_gb is None else max(1, min(r, int(mem_gb // TEST_PROCESS_GB)))
 
 
 def select(suites: list[Suite], names: list[str]) -> list[Suite]:
@@ -1624,10 +1769,22 @@ def failing(out: Path, results: list[Result]) -> None:
     tmp.replace(failing_path(out))
 
 
+_stopping = False
+
+
+def _first_sigterm_stops(signum: int, frame: object) -> None:
+    """The first SIGTERM raises KeyboardInterrupt; a later one is dropped, since `uv run` forwards the SIGTERM the group got and the
+    second one would interrupt the stop the first started (INF-93)."""
+    global _stopping
+    if not _stopping:
+        _stopping = True
+        raise KeyboardInterrupt
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
-    signal.signal(signal.SIGTERM, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, _first_sigterm_stops)
     argv = sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv
@@ -1644,8 +1801,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
-    ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
-                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
+    ap.add_argument("--mem-gb", type=float, default=slot_mem_gb(), metavar="GB",
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB "
+                         f"undeclared; default: the check slot's ${SLOT_MEM_ENV}, so a quick tier in a slot stays inside it)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
@@ -1757,9 +1915,11 @@ def main(argv: list[str] | None = None) -> int:
         print("pytest-xdist is not installed: each parallel suite runs in one process")
     wide = [t[0] for t in todo if t[0].parallel and spread > 1]
     one = [t[0] for t in todo if t[0] not in wide]
-    r = serial_slots([known.get(s.name) for s in one], len(wide), jobs)
+    r = serial_slots([known.get(s.name) for s in one], len(wide), jobs, a.mem_gb)
     lanes = {False: Slots(r), True: Slots(jobs - r)}
     turns = {s: lane.index(s) for lane in (wide, one) for s in lane}
+    shared_gb = wide_gb(a.mem_gb, r)
+    memory = Slots(int(shared_gb)) if shared_gb is not None else None
     if wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
     min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
@@ -1769,8 +1929,9 @@ def main(argv: list[str] | None = None) -> int:
     stopping = threading.Event()
 
     def start(s: Suite, paths: list[str]) -> Result:
-        n = wide_workers(s, jobs - r, a.mem_gb) if s in wide else 1
-        with lanes[s in wide].take(turns[s], n):
+        n = wide_workers(s, jobs - r, shared_gb) if s in wide else 1
+        gb = min(int(shared_gb), math.ceil(n * worker_gb(s))) if memory and s in wide else 0
+        with lanes[s in wide].take(turns[s], n), (memory.take(turns[s], gb) if memory and s in wide else nullcontext()):
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
@@ -1859,6 +2020,15 @@ def main(argv: list[str] | None = None) -> int:
             with _GROUPS_LOCK:
                 for g in list(_GROUPS):
                     kill_group(g, signal.SIGINT)
+
+            def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
+                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
+                    for g in list(_GROUPS):
+                        kill_group(g, signal.SIGKILL)
+
+            stop = threading.Timer(STOP_GRACE_S, kill_rest)
+            stop.daemon = True
+            stop.start()
             for fut in futures:
                 if fut not in handled:
                     finish(fut)

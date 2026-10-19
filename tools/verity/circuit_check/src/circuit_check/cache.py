@@ -50,8 +50,9 @@ package an enumerator listed (`targets.load_registries`, the vLLM registry's ``c
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py` and ``pins/``.  Beside them the key holds the
-interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+own version is the digest of this package's sources less `targets.py`, ``pins/`` and `heavy.json` (`HEAVY`: the scheduler's
+peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
+`cli.heavy`).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`), the modules the registries import for having a sidecar (`registries`: a new or removed sidecar, or a
 moved module that has one, reruns every target, as a new import line in `targets.py` would) and the ``VERITY_*`` /
@@ -135,6 +136,9 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
+#: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
+#: which, and a target whose process the OOM killer took is never stored
+HEAVY = _HERE / "heavy.json"
 #: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
@@ -280,6 +284,39 @@ _IMPORTLIB = ("<frozen importlib._bootstrap>", "<frozen importlib._bootstrap_ext
 _HOOKS = ("__import__", "import_module", "exec_module")
 
 
+#: the read `importlib.metadata` makes of every `sys.path` entry, held by what it yields: each installed distribution's
+#: name and version (`_distributions`), not each directory's listing (17 Oct: since every workspace member is installed,
+#: every member's root was in every target's reads, and a file added to one made every target miss)
+DISTRIBUTIONS = "<distributions>"
+_METADATA: list[str] = []
+
+
+def _metadata_listing() -> bool:
+    """Whether the audited listing is `importlib.metadata` searching `sys.path` for distributions."""
+    if not _METADATA:
+        import importlib.metadata as md
+
+        _METADATA.append(os.path.dirname(md.__file__))
+    f = sys._getframe(2)
+    while f is not None:
+        if f.f_code.co_filename.startswith(_METADATA[0]):
+            return True
+        f = f.f_back
+    return False
+
+
+def _distributions() -> str:
+    """The installed distributions as one digest: each one's name and version, sorted."""
+    import importlib.metadata as md
+
+    _INTERNAL.append(True)
+    try:
+        names = sorted({f"{d.metadata['Name']}=={d.version}" for d in md.distributions() if d.metadata['Name']})
+    finally:
+        _INTERNAL.pop()
+    return hashlib.sha512("\0".join(names).encode()).hexdigest()
+
+
 def _importing() -> bool:
     """Whether the audited call is the import system finding or loading a module for one of the import hooks: a listing it
     searched or a source it read, which the module's name and content stand for (`_modules`)."""
@@ -366,7 +403,10 @@ def _hook(event: str, args: tuple) -> None:
                 _FRAMES[-1].files.add(rel)
     elif event in ("os.listdir", "os.scandir"):
         if (rel := _rel(args[0] if args and args[0] is not None else ".")) is not None and not _importing():
-            (_FRAMES[-1].enums if _enumerating() else _FRAMES[-1].dirs).add(rel)
+            if _metadata_listing():
+                _FRAMES[-1].dirs.add(DISTRIBUTIONS)
+            else:
+                (_FRAMES[-1].enums if _enumerating() else _FRAMES[-1].dirs).add(rel)
     elif event in UNTRACEABLE and not _INTERNAL:
         argv = args[1] if len(args) > 1 and isinstance(args[1], (list, tuple)) else args[:1]
         _UNTRACED.append(f"{event} {' '.join(map(str, argv))[:240]}")
@@ -1560,12 +1600,12 @@ def _dist(root: Path, top: str) -> str | None:
 
 def version() -> str:
     """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them)."""
+    its own parts of them) and `HEAVY` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
-            if p.is_file() and "__pycache__" not in p.parts and p != TARGETS and PINS not in p.parents:
+            if p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY) and PINS not in p.parents:
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
     finally:
         _INTERNAL.pop()
@@ -1696,7 +1736,8 @@ def _digests_of(root: Path, got: dict[str, list[str]], fresh: bool) -> dict[str,
         return _MEMO[k]
 
     files = {r: memo("f", r, lambda r=r: _sha_file(root / r) if seen(r) and (root / r).is_file() else None) for r in got["files"]}
-    dirs = {r: memo("d", r, lambda r=r: _listing(root, r) if seen(r) and (root / r).is_dir() else None) for r in got["dirs"]}
+    dirs = {r: memo("d", r, lambda r=r: _distributions() if r == DISTRIBUTIONS else
+                    _listing(root, r) if seen(r) and (root / r).is_dir() else None) for r in got["dirs"]}
     probes = {r: memo("p", r, lambda r=r: _kind(root / r) if seen(r) else None) for r in got.get("probes", [])}
     # a library the dynamic loader mapped is git-ignored (built from its source here), so it counts by its bytes
     libs = {r: memo("l", r, lambda r=r: _sha_file(root / r) if (root / r).is_file() else None) for r in got.get("libs", [])}
@@ -1974,7 +2015,8 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     eid = hashlib.sha512(body.encode()).hexdigest()
     d = _dir(cache, k)
     d.mkdir(parents=True, exist_ok=True)
-    tmp = d / f".{eid}.tmp"
+    # a temporary name of this writer's own: two checks may store the same entry at once
+    tmp = d / f".{eid}.{os.getpid()}.{os.urandom(4).hex()}.tmp"
     tmp.write_text(body)
     os.replace(tmp, d / f"{eid}.json")
     return eid

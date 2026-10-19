@@ -60,6 +60,37 @@ def test_earlier_pair_failure_is_not_forgotten():
     assert sr["why"] == "a rank of an earlier pair failed"
 
 
+def test_every_collective_the_cross_rank_pass_evaluates_is_annotated_with_its_site_coverage_and_the_rest_are_not():
+    """The world-8 routed all-reduces (GLM-5.3 TP8: Mnnvl, Multimem, the fused RMSNorm) are evaluated by TP-12 like AllReduce_v2 and
+    carry its record into the fold; a family the pass does not evaluate (AllGather2_v1 at world 8) stays a named gap."""
+    from verity_vllm.pipeline.tp import c2 as C2
+    from verity_vllm.program.frontend import collective_kinds as CK
+
+    fams = ["AllGather_v1", "AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceRmsNormMnnvl_v1", "AllGather2_v1"]
+    xr = {"result": True, "by_family": {"AllReduceRmsNormMnnvl_v1": {"picks": 156, "equal": 156}},
+          "coverage_of_unreplayable": {"families": {"AllReduceRmsNormMnnvl_v1": {"sites": 78, "covered": 78, "missing": []}}}}
+    per_rank = {}
+    for r_ in (0, 1):
+        s = _sr(True, "complete", unrep=[{"family": f, "n": 2, "why": "no registered evaluator"} for f in fams])
+        C2.annotate_unreplayable([s], xr, 0, CK.cross_rank_families(8))
+        per_rank[r_] = {"sampled_replay": s, "boundary_linkage": {"result": True, "pairs": 9, "linked": 9}}
+    sr, _lk = sampled_replay_components(_rows([per_rank]), VERS)
+    by = {u["family"]: u for u in sr["unreplayable"]}
+    assert sorted(f for f, u in by.items() if "evaluated_by" in u) == fams[:4]
+    fused = by["AllReduceRmsNormMnnvl_v1"]["evaluated_by"]
+    assert (fused["picks"], fused["equal"], fused["sites"], fused["sites_covered"], fused["sites_missing"]) == (156, 156, 78, 78, [])
+    assert by["AllGather2_v1"] == {"family": "AllGather2_v1", "n": 4, "why": "no registered evaluator", "ranks": [0, 1]}
+
+
+def test_evaluated_cross_rank_is_the_worlds_families_and_every_all_reduce_route():
+    from verity_vllm.program.frontend import collective_kinds as CK
+
+    w8 = CK.cross_rank_families(8)
+    assert all(CK.evaluated_cross_rank(f, w8) for f in w8 | {"AllReduceMnnvl_v1", "AllReduceMultimem_v1", "AllReduceCustom_v1",
+                                                             "AllReduceRmsNormMnnvl_v1{WORLD=8,N=6144}"})
+    assert not any(CK.evaluated_cross_rank(f, w8) for f in ("BatchedGemm_v1", "AllGather2_v1", "Const32[0x00000001]_v1", "Gemm_v2"))
+
+
 def test_not_run_shape_when_replay_disabled():
     sr, lk = sampled_replay_components(_rows([{0: {"sampled_replay": None}}]), {})
     assert sr["result"] is None and "not run" in sr["why"] and lk["result"] is None
@@ -75,7 +106,7 @@ def _worker(cfg, bmap, rc=None, model=None):
 
     s = Stub()
     s._tp2_commit = {"rank": 1, "replay": cfg, "bmap": bmap, "com": types.SimpleNamespace(_layouts={}, weights=None, register_weights=lambda: {"root": "x"}),
-                     "eng": types.SimpleNamespace(model=model)}
+                     "eng": types.SimpleNamespace(model=model), "weights": model}
     return s
 
 
@@ -146,9 +177,9 @@ if __name__ == "__main__":
 # ---- [MAN-09 per rank] the weights-pin fold ------------------------------------------------------------------------------------------
 
 def _rows_with_pins(p0, p1):
-    from verity_vllm.pipeline.tp.commit import _weights_pin_component
+    from verity_vllm.pipeline.tp.c2 import weights_pin_component
     rows = [{"arm": "control"}, {"arm": "instrumented", "commit": {"per_rank": {"0": {"weights_pin": p0}, "1": {"weights_pin": p1}}}}]
-    return _weights_pin_component(rows, {"weights_pin": {"checkpoint_dir": "/ck"}})
+    return weights_pin_component(rows, {"weights_pin": {"checkpoint_dir": "/ck"}})
 
 
 def test_weights_pin_true_only_when_every_rank_compared_equal():

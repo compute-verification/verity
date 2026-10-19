@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import ast
-import hashlib
 import json
 import sys
 import types
@@ -12,21 +10,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.observe.test_gen_sampling import _adapter_fn
+
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 B1 = ["temp07", "topk50", "topp09", "topk50_topp09", "n2", "2req_seeds", "noseed", "combo", "mixed"]
-
-
-def _adapter_fn(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
-    tree = ast.parse(src)
-    ns: dict = {"json": json, "Path": Path, "hashlib": hashlib, "Any": object}
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "ACCEPTED_TOKENS":
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name in (name, "execution_of_workload"):
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    return ns[name]
 
 
 @pytest.mark.parametrize("name", B1)

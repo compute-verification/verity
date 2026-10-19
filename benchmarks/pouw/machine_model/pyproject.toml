@@ -22,5 +22,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The tests read this directory alone: the package and data/.
-inputs = []
+# The tests read this directory (the package and data/), the perplexity arms the designs name, and the README, which
+# holds no table (`machine-model render` prints them).
+inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md"]

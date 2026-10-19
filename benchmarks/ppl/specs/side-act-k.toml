@@ -1,0 +1,43 @@
+description = "one-sided everywhere, no U: adopted-bd-lm with the linears' and lm_head's weights and Q rounded on +-127, only the activations and K dithered (the record's sides without its U and +-63 caps); P V as in adopted-bd-lm"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "round"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "round"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "round"
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

@@ -1,28 +1,28 @@
 {
  "definitions": {
   "MoeExpertFp8BlockCoordinateW_v2{K=64,G=32,KB=32,SWAP=True}": {
-   "and": 28533
+   "and": 27929
   },
   "MoeExpertFp8BlockCoordinateW_v4{K=128,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2}": {
-   "and": 47011
+   "and": 46966
   },
   "MoeExpertFp8BlockCoordinate_v2{K=64,G=32,KB=32,SWAP=False}": {
-   "and": 26103
+   "and": 25499
   },
   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=32,SWAP=True}": {
-   "and": 26103
+   "and": 25499
   },
   "MoeExpertFp8BlockCoordinate_v2{K=64,G=64,KB=64,SWAP=False}": {
-   "and": 19391
+   "and": 19072
   },
   "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v2}": {
-   "and": 30639
+   "and": 30543
   },
   "MoeExpertFp8BlockCoordinate_v4{K=64,G=32,KB=32,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2}": {
-   "and": 31805
+   "and": 31715
   },
   "SiluMulFp8BlockQuantResult_v2": {
-   "and": 16899
+   "and": 13334
   }
  }
 }

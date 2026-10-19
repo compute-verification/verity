@@ -8,10 +8,14 @@ BlockPool.get_new_blocks            after: kv_alloc of the pages it handed out
 BlockPool.free_blocks               after: kv_free of the pages it freed, moved to the back of the free queue (FIFO
                                     reuse, so a page freed inside a window is reused as late as the pool allows)
 BlockPool.touch                     refused: a prefix-cache hit would bring a page back with its KV (run without it)
-Scheduler.schedule                  after: kv_append of the scheduled tokens' slots, then begin_pass over the
-                                    allocated pages (a pass still open from an earlier schedule is ended first; a
-                                    verifier's message since then ends the window, the next challenge begins one)
-Scheduler.update_from_output        before: end_pass, with the device reader's roots
+Scheduler.schedule                  after: a verifier's message since the last pass ends the window, the next
+                                    challenge begins one; then kv_append of the scheduled tokens' slots, which closes
+                                    the last step's memory-map line (with its re-keys for the window just begun), and
+                                    begin_pass over the allocated pages, tagged with the step (a pass still open from
+                                    an earlier schedule is ended first)
+Scheduler.update_from_output        before: end_pass, with the device reader's roots, and end_step (the step's KV is
+                                    written by now, so a memory map takes its digests; the pages vLLM frees after
+                                    this, in update_from_output, are freed at this step)
 ~~~
 
 The step's own device work (a codec's ``encode_slots_`` in attention's KV write, a fused GEMM's receipts) is the
@@ -229,17 +233,19 @@ class Binder:
     `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
-    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block."""
+    (`RemoteBandwidthReceipt`); without them, the tag receipt, which binds only the block.  With ``passes=False`` the
+    binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.store.remote.serve`)."""
 
     def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
-                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None) -> None:
+                 on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
+                 passes: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec = store, block_bytes, kv_codec
         self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else default_receipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
-        self.messages, self.registration, self.on_window = messages, registration, on_window
+        self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
         self.hooks: Hooks | None = None
         self.step = 0
         self.windows = 0
@@ -325,18 +331,19 @@ class Binder:
     def on_schedule(self, sched: Any, so: Any) -> None:
         if self.store.in_pass:
             self.end()
-        t = time.perf_counter()
-        apps = self.appends(sched, so)
-        self.store.counters.add("appends", time.perf_counter() - t)
-        self.store.kv_append(apps, self.step)
-        self.step += 1
         for m in self.messages() if self.messages is not None else ():
             self.end_window()
             if m is not None:
                 self.store.begin_window(m, None if self.windows else self.registration)
                 self._in_window = True
-        ps = self.store.begin_pass(None)
-        self._segments, self._seed = ps.segments, ps.seed
+        t = time.perf_counter()
+        apps = self.appends(sched, so)
+        self.store.counters.add("appends", time.perf_counter() - t)
+        s, self.step = self.step, self.step + 1
+        self.store.kv_append(apps, s)
+        if self.passes:
+            ps = self.store.begin_pass(None, step=s)
+            self._segments, self._seed = ps.segments, ps.seed
 
     def z(self, seed: bytes) -> Callable[[str, int], bytes]:
         """The tile outputs a pass under ``seed`` binds its receipts to, by region and region block."""
@@ -344,6 +351,7 @@ class Binder:
         return lambda name, b: tiles.output(seed, region(name).first + b)
 
     def end(self) -> None:
+        self.store.end_step()
         if self.store.in_pass:
             read = self.reader(self._segments) if self.reader else None
             z = self.z(self._seed) if self.tiles is not None and self._seed is not None else None

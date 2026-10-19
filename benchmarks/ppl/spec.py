@@ -48,9 +48,10 @@ class StepDef:
     on: tuple             # attention: the matmuls it acts on
     check: Callable | None
     types: dict = field(default_factory=dict)  # name -> annotation, as written ("float", "int", "bool", "str")
+    source: str = ""      # the harnesses and notes it comes from (`run.py tables steps`)
 
 
-def _register(kind: str, name: str, phase: str, seeded, calib, on, check):
+def _register(kind: str, name: str, phase: str, seeded, calib, on, check, source=""):
     if phase not in PHASES:
         raise ValueError(f"phase {phase}")
 
@@ -62,17 +63,19 @@ def _register(kind: str, name: str, phase: str, seeded, calib, on, check):
         types = {p.name: p.annotation if isinstance(p.annotation, str) else getattr(p.annotation, "__name__", "")
                  for p in list(sig.parameters.values())[2:]}
         as_fn = lambda v: v if callable(v) else (lambda p: v)  # noqa: E731
-        REGISTRY[kind][name] = StepDef(kind, name, fn, phase, params, as_fn(seeded), as_fn(calib), tuple(on), check, types)
+        REGISTRY[kind][name] = StepDef(kind, name, fn, phase, params, as_fn(seeded), as_fn(calib), tuple(on), check,
+                                       types, source)
         return fn
     return deco
 
 
-def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, check=None):
-    return _register("linear", name, phase, seeded, calib, ("linear",), check)
+def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, check=None, source=""):
+    return _register("linear", name, phase, seeded, calib, ("linear",), check, source)
 
 
-def attention_step(name: str, *, phase: str = "real", seeded=False, on=ATTENTION_MATMULS, check=None):
-    return _register("attention", name, phase, seeded, False, on, check)
+def attention_step(name: str, *, phase: str = "real", seeded=False, calib=False, on=ATTENTION_MATMULS, check=None,
+                   source=""):
+    return _register("attention", name, phase, seeded, calib, on, check, source)
 
 
 @dataclass(frozen=True)
@@ -235,5 +238,5 @@ def catalogue() -> dict:
         for n, d in sorted(reg.items()):
             out[f"{kind}.{n}"] = {"phase": d.phase, "on": list(d.on),
                                   "params": {p: (None if v is inspect.Parameter.empty else v) for p, v in d.params.items()},
-                                  "doc": inspect.getdoc(d.fn) or ""}
+                                  "doc": inspect.getdoc(d.fn) or "", "source": d.source}
     return out

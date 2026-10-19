@@ -13,8 +13,9 @@ bits, copied from the output bits the circuit computes. Its flat twin `Hidden.fl
 Every first column of `outPairs` is a message bit of a row's `sha512x3` slot (`deltaMsgCol`), which no unit slot's row
 is (`outPairs_ne_unit`, for output rows that fit, `Hidden.Any.OutRowsS`). So at every unit slot's row the hidden
 statement's level-0 matrices are its flat twin's (`unitRowsFlat`): the rows that place a template instance and copy its
-inputs read the same in both. `Layout.scopeOkH` gives rows each fit or `sha512/row-seg/v1`, the output rows fit
-(`rowsFit_of_scope`).
+inputs read the same in both. The hidden-output headlines' rows (`Layout.v1Ports` or `Layout.bitRows`, which
+`Layout.scopeOkH` and `Layout.scopeGenH` require) are each fit or `sha512/row-seg/v1`, the output rows fit
+(`rowsFit_of_rows`).
 -/
 
 set_option Elab.async false
@@ -136,14 +137,14 @@ theorem unitRowsFlat (ht : tags.typed = false)
 
 /-! ## The rows `scopeOkH` covers -/
 
-/-- **`scopeOkH`'s rows are covered**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then `HmOut.checkRows`), all
-`sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port, `Hidden.out_rows_v1`), or
-each row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port. -/
-theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
-    Hidden.Any.RowsFitS c := by
+/-- **The hidden-output headlines' rows are covered**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then
+`HmOut.checkRows`), all `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port,
+`Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port. -/
+theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : (Layout.v1Ports c || Layout.bitRows c) = true) : Hidden.Any.RowsFitS c := by
   have P := parse_facts hp
-  rcases Layout.scopeOkH_rows h with h1 | ⟨h2, hr, ho⟩
+  rcases Layout.rowsH_spec h with h1 | ⟨h2, hr, ho⟩
   · have hv : ∀ p ∈ c.ports.toList, p.v2 = false := fun p hm => (h1 p hm).1
     obtain ⟨hu, hrep, hj⟩ := Hidden.out_rows_v1 hp hc hv
     refine Hidden.Any.RowsFit.rowsFitS ⟨⟨fun p hm => ?_, hrep, fun j hj' => (hj j hj').1⟩, fun p hm => ?_⟩
@@ -169,5 +170,11 @@ theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String �
         exact Or.inl ⟨hs, hb, h1', h2'⟩
       · obtain ⟨hs, hb, hn, hf⟩ := Layout.segRow_spec hs
         exact Or.inr ⟨hs, hb, hn, hf⟩
+
+/-- **`scopeOkH`'s rows are covered** (`rowsFit_of_rows`). -/
+theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
+    Hidden.Any.RowsFitS c :=
+  rowsFit_of_rows hp hc (Layout.scopeOkH_rowsB h)
 
 end FlockSoundness.Discharge.HiddenExec

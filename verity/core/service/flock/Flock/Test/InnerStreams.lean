@@ -31,6 +31,9 @@ def gone : Option (Option (List UInt8)) := some none
 -- a session of one table's reps holds no stream of R's
 #guard row { reps := ic.reps } "rec-opening-c0" 0 == gone
 #guard row ic "rec-acc" 0 == none && row ic "rec-top-L1" 0 == none && row ic "rec-sparse-h" 0 == none
+-- the circuit table's tops are held apart from `fixedRow`, to the coin server's `root_B` and salted tops at every shape
+-- (`topLevel`, `topRow`, `checkTopRows`; `Flock.Test.InnerLink`)
+#guard topLevel "rec-top-L1" == some 1 && topLevel "rec-top-stacked-L1" == none
 -- rec-claim is the sparse phase's: without the verifier's RecSparse shape it is fixed by no row
 #guard row ic "rec-claim" 0 == gone
 

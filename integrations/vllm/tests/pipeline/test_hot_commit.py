@@ -44,7 +44,7 @@ def _tree(tmp_path: Path) -> Path:
     (t / "manifests" / "checkpoints.json").write_text('{"LLAMA32_1B": {"repo": "unsloth/Llama-3.2-1B"}}\n')
     (t / "EXPORT.json").write_text('{"commit": "abc"}\n')
     (t / "RELEASE.json").write_text('{"tag": "r16-int-9"}\n')
-    (t / "wl.json").write_text(json.dumps({"case": "LLAMA32_1B", "model": "unsloth/Llama-3.2-1B", "engine_args_required": {}, "requests": [{"prompt_token_ids": [1]}],
+    (t / "wl.json").write_text(json.dumps({"case": "LLAMA32_1B", "model": "unsloth/Llama-3.2-1B", "engine": {"args": {}}, "requests": [{"prompt_token_ids": [1]}],
                                            "sampling": {"variant": "greedy"}}) + "\n")
     return t
 

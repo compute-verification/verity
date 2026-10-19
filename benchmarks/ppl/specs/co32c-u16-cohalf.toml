@@ -1,0 +1,47 @@
+description = "co32c-u16-cohalf (FRONTIER r2, decision 82): Dither-2S's served values with the weights capped for a narrow peeled U on [-16, 16] (co32c's committed strip digits, U of width 33 instead of 129): linears and lm_head weights dithered within +-111 (served [-110, 111]), activations dithered on 8 bits; Q K^T as Dither-C's cohalf with its U on [-16, 16]: Q and K dithered within +-111; P V as in adopted-bd-lm"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 111
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 111
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 111
+k = "dither"
+k_top = 111
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

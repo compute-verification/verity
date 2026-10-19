@@ -1,5 +1,6 @@
 """A TP Commit's C2 of record per rank, and the Commit's side of a deferred replay: the gates that put a rank's sampled replay, boundary
-linkage, population reconciliation and weights pin into its verdict (`replay_gates`, `pin_gate`, `c2_and_pin_gates`), the components
+linkage, population reconciliation, families with no evaluator, cuBLAS route pin and weights pin into its verdict (`replay_gates`,
+`no_evaluator_gate`, `pin_gate`, `c2_and_pin_gates`; the route pin is `check.cublas_route_pin.route_pin_gate`, a TP1 run's too), the components
 folded over the ranks (`sampled_replay_components`, `query_population_component`, `annotate_value_correspondence`), and `seal`, which
 seals every rank's replay bundle of a deferred Commit (`tp-commit --replay-deferred`) and writes `replay_deferred.json`.  `pipeline.tp.commit`
 decides in place with them, `pipeline.tp.commit_replay` from the ranks' replays on CPU.  A Commit defers only at a world where deferral
@@ -13,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
+from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED = "replay_deferred.json"
@@ -84,12 +87,81 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
     return block, None
 
 
-def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool) -> tuple[bool, str | None]:
+#: why form (B) on a TP Commit never stands in for the values its replay cannot evaluate
+TP_FORM_B_SCOPE = ("the TP match oracle compares the TP partials and received MoE outputs only, never a module output "
+                   "(oracle_compare_component: complete False by construction)")
+NO_EVALUATOR_RULE = ("the dense rule (c2_rules._complete_replay_population_gap) per rank: a family the complete replay counted with no "
+                     "evaluator, outside NOT_YET, is a named gap that FAILS the rank; waived only by a declared rule: a collective family "
+                     "the cross-rank collectives pass evaluates (collective_kinds.evaluated_cross_rank, while that pass runs), and a "
+                     "selector whose every committed sampled id equals the Match record's (the request attribution, form (B)'s "
+                     "selector test); the TP form (B) is never complete over the values, so it covers no other gap")
+
+
+def tp_form_b(cblock: dict) -> dict | None:
+    """The rank's form (B) in the shape the dense rules read (`c2_rules`): its request attribution against the Match record, which
+    compares every committed sampled id (the family `_form_b_selector_coverage` tests), and its match oracle, never complete over the
+    values (`TP_FORM_B_SCOPE`).  None without a Match record (no --match-dir)."""
+    att, mo = cblock.get("attribution"), cblock.get("match_oracle")
+    if not isinstance(att, dict) and not isinstance(mo, dict):
+        return None
+    att, mo = att or {}, mo or {}
+    rows = int(att.get("rows_checked") or 0) if att.get("ok") is True and int(att.get("steps_checked") or 0) > 0 else 0
+    return {"result": not (att.get("ok") is False or mo.get("verdict") == "FAIL"), "complete": False, "scope": TP_FORM_B_SCOPE,
+            "mismatch_n": int(att.get("mismatches_n") or 0) + int(mo.get("mismatch_n") or 0), "compared": rows + int(mo.get("tensors") or 0),
+            "attribution": {"complete": rows > 0, "pairs": rows}, "compared_by_family": {"sampled_token_ids": rows}}
+
+
+def unreplayable_reasons(entries: list[dict]) -> tuple[dict[str, int], dict[str, dict]]:
+    """`population.not_evaluable` and its codes, read off a replay record's `unreplayable` families, for a record that carries those
+    alone: a family with no identity (structure, an interior composed into its consumer) is no gap; the rest keep their why class."""
+    from verity_vllm.check.replay import replay_codes as RC
+
+    not_ev: dict[str, int] = {}
+    codes: dict[str, dict] = {}
+    for u in entries:
+        fam, _, tail = str(u.get("family")).partition(" (")
+        if "no identity" in tail or tail.startswith("interior:"):
+            continue
+        why = str(u.get("why") or "")
+        cls = RC.why_class(tail or why)
+        k = f"{fam} ({tail}" if tail else (f"no registered evaluator for {fam}" if cls == "no-evaluator" else why)
+        not_ev[k] = not_ev.get(k, 0) + int(u.get("n") or 0)
+        codes[k] = RC.reason_code(cls, fam, domain=why in RC.NOT_YET.values(),
+                                  tags={"plane-fed": ("MAN-06f",), "interior-composed-v2": ("MAN-06g",)}.get(cls, ()))
+    return not_ev, codes
+
+
+def no_evaluator_gate(cblock: dict, sr_: dict, *, rank: int, xrank_families: frozenset[str] | set[str] | None) -> tuple[dict, str | None]:
+    """[`NO_EVALUATOR_RULE`] The rank's no-evaluator families into its verdict: (record block, FAIL text | None).  ``xrank_families``:
+    the cross-rank families of the world while the Commit's cross-rank collectives pass runs, else None (nothing is waived by it)."""
+    from verity_vllm.check.c2_rules import _complete_replay_population_gap
+    from verity_vllm.check.replay import replay_codes as RC
+    from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
+
+    pop = sr_.get("population") if isinstance(sr_.get("population"), dict) else {}
+    if isinstance(pop.get("not_evaluable"), dict):
+        not_ev, codes = pop["not_evaluable"], RC.not_evaluable_codes(pop)
+    else:
+        not_ev, codes = unreplayable_reasons(sr_.get("unreplayable") or [])
+    fam_of = {str(k): str((codes.get(str(k)) or {}).get("family") or "") for k in not_ev}
+    waived = sorted({f for f in fam_of.values() if f and xrank_families is not None and evaluated_cross_rank(f, xrank_families)})
+    keep = {str(k): v for k, v in not_ev.items() if fam_of[str(k)] not in waived}
+    view = dict(sr_, population=dict(pop, not_evaluable=keep, not_evaluable_codes={k: codes.get(k) or RC.reason_code("other") for k in keep}))
+    note, fail = _complete_replay_population_gap(view, tp_form_b(cblock))
+    block = {"rule": NO_EVALUATOR_RULE, "rank": int(rank), "waived_cross_rank": waived, "cross_rank_pass": xrank_families is not None,
+             "note": note, "fail": fail}
+    return block, (None if fail is None else f"no-evaluator families (rank {rank}): {fail}")
+
+
+def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool,
+                 xrank_families: frozenset[str] | set[str] | None) -> tuple[bool, str | None]:
     """The rank's C2 of record into its verdict, after the gates before it (in the rank's process, or from its bundle on CPU:
     `pipeline.tp.commit_replay`).  [TP-08 / manbind MAN-06 O1, per rank] sampled exact replay result True AND boundary linkage True
     on this rank; absence, a partial (a stratum not evaluated, an input not retained), population 0 or a mismatch = FAIL named.
-    Per rank, the replay's POPULATION reconciled against Q(P) (`query_population_gate`) goes INTO the verdict, fail closed, by the
-    dense committer's rule -- not behind the gates above: a PASS-graded replay over a population that does not reconcile is named."""
+    Per rank, the replay's POPULATION reconciled against Q(P) (`query_population_gate`) and its families with no evaluator
+    (`no_evaluator_gate`) go INTO the verdict, fail closed, by the dense committer's rules -- not behind the gates above: a PASS-graded
+    replay over a population that does not reconcile, or with a family nothing evaluates, is named.  So does the cuBLAS route pin
+    (`route_pin_gate`): a rank that binds the pin's routes and served under other conditions is named."""
     cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(sr_.get("strata") or {})}) if sr_ else None
     cblock["boundary_linkage"] = lk_ or None
     if replay_on and ok:
@@ -100,8 +172,13 @@ def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, 
     if replay_on:
         qp_block, qp_fail = query_population_gate(sr_, rank=rank, required=required)
         cblock["query_population"] = qp_block
-        if qp_fail is not None:
-            ok, why = False, (f"{why}; also: {qp_fail}" if not ok and why else qp_fail)
+        ne_block, ne_fail = no_evaluator_gate(cblock, sr_, rank=rank, xrank_families=xrank_families)
+        cblock["no_evaluator_gap"] = ne_block
+        rp_block, rp_fail = route_pin_gate(sr_, rank=rank)
+        cblock["cublas_route_pin"] = rp_block
+        for fail in (qp_fail, ne_fail, rp_fail):
+            if fail is not None:
+                ok, why = False, (f"{why}; also: {fail}" if not ok and why else fail)
     return ok, why
 
 
@@ -126,11 +203,13 @@ def pin_gate(cblock: dict, wp_: dict, ok: bool, why: str | None, *, rank: int, r
     return ok, why
 
 
-def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool, bundle: str) -> tuple[bool | None, str | None]:
+def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool, bundle: str,
+                     xrank_families: frozenset[str] | set[str] | None) -> tuple[bool | None, str | None]:
     """The rank's verdict after its C2 of record and its weights pin, from the gates before them (``ok``, ``why``) and its finalize ``f``.
     A rank whose replay was deferred to its bundle (`--replay-deferred`: sampled-replay grade `deferred`) gets the pin alone: a rank that
     failed already is decided here, any other is PENDING (None) with its pre-replay verdict in ``cblock["replay_deferred"]["pre"]``,
-    which `pipeline.tp.commit_replay.fold` passes to `replay_gates` once the rank's replay is on the record."""
+    which `pipeline.tp.commit_replay.fold` passes to `replay_gates` once the rank's replay is on the record.  ``xrank_families``: as
+    `no_evaluator_gate` reads it."""
     srb = f.get("sampled_replay") or {}
     sr_, lk_ = (srb.get("sampled_replay") or {}), (srb.get("boundary_linkage") or {})
     if replay_on and sr_.get("grade") == "deferred":
@@ -138,19 +217,25 @@ def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: 
         cblock["replay_deferred"] = {"pre": [ok, why], "bundle": bundle}
         ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rank, required=required)
         return (None, RB.PENDING) if ok else (ok, why)
-    ok, why = replay_gates(cblock, sr_, lk_, ok, why, rank=rank, replay_on=replay_on, required=required)
+    ok, why = replay_gates(cblock, sr_, lk_, ok, why, rank=rank, replay_on=replay_on, required=required, xrank_families=xrank_families)
     return pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rank, required=required)
 
 
 def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
-    """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them."""
+    """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them
+    (`collective_kinds.evaluated_cross_rank`: the world's cross-rank families and every routed all-reduce) and its site coverage of each."""
+    from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
+
     byf = xr.get("by_family") or {}
+    cov = (xr.get("coverage_of_unreplayable") or {}).get("families") or {}
     for sr in srs:
         for u_ in (sr or {}).get("unreplayable") or []:
             fam_ = str(u_.get("family"))
-            if fam_ in xrank_families:
+            if evaluated_cross_rank(fam_, xrank_families):
+                c_ = cov.get(fam_) or {}
                 u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12, rev F-r16-18 / COORD ruling 27)", "result": xr.get("result"),
                                       "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
+                                      "sites": c_.get("sites"), "sites_covered": c_.get("covered"), "sites_missing": c_.get("missing"),
                                       "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
 
 
@@ -229,6 +314,8 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
             unrep.setdefault(k, {"family": k, "n": 0, "why": u.get("why"), "ranks": []})
             unrep[k]["n"] += int(u.get("n") or 0)
             unrep[k]["ranks"].append(int(r_))
+            if u.get("evaluated_by") and "evaluated_by" not in unrep[k]:
+                unrep[k]["evaluated_by"] = u["evaluated_by"]
     lifetimes: dict[str, int] = {}
     for k_ in keys.values():
         for lv, n_ in ((((k_.get("lifetime") or {}).get("values")) or {}).items()):
@@ -318,3 +405,88 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
     if summ.get("only_arm"):
         summ["commit_pass"] = None
     summ["replay_deferred"] = {"record": DEFERRED, "pending_pairs": pending, "bundles": bundles}
+
+
+def weights_pin_component(rows: list[dict], versions: dict) -> dict:
+    """[manbind MAN-09 / COORD M-0614 (1)] value_correspondence.components.weights_pin folded over ranks and instrumented pairs: True only when
+    every rank of every pair compared its served shards to the checkpoint-composed digests of record with no difference; a rank without a
+    record is 'unpinned' (result None -> the Commit FAILs closed under --required-manifest)."""
+    per_rank: dict[str, dict] = {}
+    results: list = []
+    for r in rows:
+        if r.get("arm") == "control":
+            continue
+        for rk, c in ((r.get("commit") or {}).get("per_rank") or {}).items():
+            wp = c.get("weights_pin") or {}
+            results.append(wp.get("result"))
+            per_rank[str(rk)] = {k: wp.get(k) for k in ("result", "root_of_record", "compared", "mismatched_n", "missing", "unpinned", "all_shards_pinned", "committed_weights_root", "why")}
+    res = (all(x is True for x in results) if results and all(x is not None for x in results) else (False if any(x is False for x in results) else None))
+    return {"result": res, "per_rank": per_rank, "pairs": len({id(r) for r in rows if r.get("arm") != "control"}),
+            "method": "MAN-09 per rank: sha256(served shard bytes) == digest composed from the PINNED checkpoint shards by the rank Program's shard map, every weight field",
+            "reference": "the checkpoint of record (manifests/checkpoints.json revision + shard sha256), never the live engine (rev-cb M-0610)",
+            "checkpoint_dir": (versions.get("weights_pin") or {}).get("checkpoint_dir"),
+            "why": (None if res is True else ("weights unpinned (MAN-09) on a rank" if res is None else "served weights differ from the checkpoint of record on a rank"))}
+
+
+def linkage_component(rows: list[dict], versions: dict) -> dict:
+    """[report M-0407 / DECISIONS-2 §4] `components.linkage` = the per-(request, engine step) token gate: every committed sampled-ids row
+    of every rank is the Match record's k-th generated id of the request the rank's request->rows map names (tp2_worker._tp2_attribution).
+    Shape per report's interface: {result, method, checked, why} (+ per_rank)."""
+    pr = last_per_rank(rows)
+    if not versions.get("match_record") or not pr:
+        return {"result": None, "method": "per-(request, engine step) committed sampled_token_ids vs the Match record", "checked": 0,
+                "why": "not run (no --match-dir Match record)" if not versions.get("match_record") else "no instrumented pair finalized"}
+    atts = {r_: (c.get("attribution") or {}) for r_, c in pr.items()}
+    ok = all(a.get("ok") is True for a in atts.values()) and len(atts) > 0
+    return {"result": ok,
+            "method": ("per rank: committed runner.sampler/sampled_token_ids row j of engine step s -> request of row j in the rank's request->rows map "
+                       "(InputBatch.req_ids x num_scheduled_tokens at sample time) -> k-th generated id of that request in the Match record "
+                       f"({versions['match_record']['path']}, tp2_match capture arm, an independent instrumented run); every step, every row, both ranks"),
+            "checked": sum(int(a.get("rows_checked") or 0) for a in atts.values()),
+            "why": (None if ok else "; ".join(str(a.get("why")) for a in atts.values() if not a.get("ok"))),
+            "per_rank": {r_: {k2: a.get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "requests")} for r_, a in atts.items()}}
+
+
+def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | None) -> dict:
+    """[coord M-0481 C2 form (B), as far as a TP2 row can carry it] `components.oracle_compare` = committed values vs the INDEPENDENT Match
+    observation (tp2_match capture arm, a different instrumented run): (a) `attribution` = every committed sampled-ids row vs the record's
+    k-th generated id of its request (rev-cb T6-3 / F-cb-23), (b) `tp_partials` = every committed TP partial / MoE received output vs the
+    recorder's stored collective input/output per (step, k) (TPPartialSource.compare_match_oracle).  `complete` is FALSE by construction:
+    this Match is collective-level, so the manifest's instance_outputs / fa2 stream / input ids / weights have no TP Match oracle --
+    the families covered and the identity counts are stated, never rounded up to 'every committed value'."""
+    pr = last_per_rank(rows)
+    if not versions.get("match_record") or not pr:
+        return {"result": None, "complete": False, "reference": "not run (no --match-dir: no Match record to compare the committed values against)"}
+    atts = {r_: (c.get("attribution") or {}) for r_, c in pr.items()}
+    mos = {r_: (c.get("match_oracle") or {}) for r_, c in pr.items()}
+    att_ok = len(atts) > 0 and all(a.get("ok") is True for a in atts.values())
+    mo_ran = any(m for m in mos.values())
+    mo_ok = mo_ran and all(m.get("verdict") == "PASS" for m in mos.values())
+    fam = (man_doc or {}).get("populations", {}).get("by_family") or {}
+    covered = [f for f in ("tp_rank_partials", "sampled_token_ids") if f in fam] if fam else ["tp_rank_partials", "sampled_token_ids"]
+    if not mo_ran:
+        covered = [f for f in covered if f != "tp_rank_partials"]
+    # [rev-pm M-0585] the oracle is the Match run's capture: if that Match run FAILED its own check, its capture still compares, but the
+    # component says so and its result is not True (a commit == a failed Match's bytes is not a PASS ingredient)
+    mv = versions["match_record"].get("tp2_match_verdict")
+    oracle_failed_match = (mv is False)
+    result = (att_ok and (mo_ok if mo_ran else True)) if (att_ok is not None) else None
+    if oracle_failed_match and result:
+        result = None
+    return {"result": result,
+            "complete": False,
+            "oracle_match_verdict": mv,
+            "oracle_is_failed_match_run": oracle_failed_match,
+            **({"oracle_note": "oracle is a FAILED Match run (tp2_match.json pass False): compared, not a PASS ingredient"} if oracle_failed_match else {}),
+            "reference": (f"Match record {versions['match_record']['path']} (tp2_match capture arm, independent instrumented run; tp2_match verdict "
+                          f"{versions['match_record'].get('tp2_match_verdict')}): (a) sampled ids per (request, engine step) [attribution]; "
+                          "(b) TP partials / MoE received outputs vs the recorder's stored collectives per (step, k) [tp_partials]; per rank"),
+            "attribution": {"complete": all(a.get("ok") is not None and int(a.get("steps_checked") or 0) > 0 for a in atts.values()) and len(atts) > 0, "result": att_ok,
+                            "per_rank": {r_: a.get("ok") for r_, a in atts.items()}, "rows_checked_per_rank": {r_: a.get("rows_checked") for r_, a in atts.items()}},
+            "tp_partials": ({"result": mo_ok, "per_rank": {r_: {k2: m.get(k2) for k2 in TPS_SUMMARY_KEYS} for r_, m in mos.items()}}
+                            if mo_ran else {"result": None, "reference": "not run (--no-match-oracle or no stored capture steps)"}),
+            "identities": {"families_covered": covered, "families_not_covered": [f for f in fam if f not in covered] if fam else ["instance_outputs", "fa2_hidden_m1_stream", "input_token_ids", "weights"],
+                           "covered_n": sum(int(fam.get(f) or 0) for f in covered) if fam else None, "total_n": sum(int(v or 0) for v in fam.values()) if fam else None},
+            "why": (None if (att_ok and (mo_ok or not mo_ran)) else "; ".join([f"rank {r_}: attribution {a.get('why')}" for r_, a in atts.items() if not a.get("ok")]
+                                                                          + [f"rank {r_}: match oracle {m.get('verdict')} {m.get('why') or m.get('error') or ''} mismatch {m.get('mismatch_n')} missing {m.get('missing_n')} not_in_oracle {m.get('not_in_oracle_n')}"
+                                                                             for r_, m in mos.items() if m and m.get("verdict") != "PASS"]))}

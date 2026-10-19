@@ -106,8 +106,8 @@ def _range(s: dict) -> str:
 
 
 def baseline_table(lk: dict) -> str:
-    """The locked baseline as the README shows it: per point and arm, the bench's perplexity, its Δ against bf16 and
-    plain int8, tonight's measurement of the same arm, and whether the two reproduce each other
+    """The locked baseline as `run.py tables baseline` prints it: per point and arm, the bench's perplexity, its Δ
+    against bf16 and plain int8, tonight's measurement of the same arm, and whether the two reproduce each other
     (methodology.reproduces)."""
     lines = ["| model · set · context | arm | perplexity | Δ% vs bf16 | Δ% vs plain int8 | tonight | tonight's method | "
              "Δ% vs tonight | reproduces |", "|---|---|---:|---:|---:|---:|---|---:|---|"]

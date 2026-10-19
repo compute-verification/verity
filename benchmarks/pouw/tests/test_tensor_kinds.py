@@ -74,6 +74,18 @@ def _case(mode, form, struct, R, iters, cyc, mma_loop, op_loop=None, slots=128):
     return row, sass
 
 
+def test_an_add_moved_to_the_fma_pipe_still_counts_as_an_add():
+    # sm_89's ptxas emits part of an add.u32 stream as IMAD.IADD (r20261017-060507-6438's lane loops)
+    sass = _fn("f", ["IADD3 R3, R3, R4, RZ", "IMAD.IADD R5, R5, 0x1, R6", "FFMA R7, R7, R8, 1"])
+    [loop] = TK.loops(TK.parse_sass(sass)["f"])
+    assert loop["iadd3"] == 2 and loop["ffma"] == 1 and loop["other"] == 4
+
+
+def test_kernel_key_reads_alone4():
+    assert TK.kernel_key("_Z8k_alone4I9ImmaS8k16EviPjP8BlockClk") == ("alone4", "imma_s8_m16n8k16", 0)
+    assert TK.kernel_key("_Z6k_specI11BmmaAndK256Li32ELi0EEviPjP8BlockClk") == ("spec_iadd3", "bmma_and_m16n8k256", 32)
+
+
 def test_a_form_cheaper_in_issue_a_slot_is_flagged(tmp_path: Path):
     imma = ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
     hmma = [x.replace("IMMA.16832.S8.S8", "HMMA.16816.F32") for x in imma]
@@ -139,3 +151,50 @@ def test_an_unfinished_run_fails_the_gate(tmp_path: Path):
     (tmp_path / "sass" / "tensor_kinds.sass").write_text("")
     _, fails = TK.analyze(tmp_path)
     assert fails == ["the run did not finish (no done line)", "opalone: no iadd3_ffma row"]
+
+
+def test_kernel_names_of_the_search_decode():
+    assert TK.tpl_key("_Z7k_spec2I9ImmaS8k16Li64ELi0ELi8ELi1ELi1EEviPjP8BlockClk") == (
+        "k_spec2", "imma_s8_m16n8k16", (64, 0, 8, 1, 1))
+    assert TK.tpl_key("_Z6k_mix2I11ImmaS8m8k16Li32ELi4ELi16ELi6ELi2EEviPjP8BlockClk") == (
+        "k_mix2", "imma_s8_m8n8k16", (32, 4, 16, 6, 2))
+    assert TK.tpl_key("_Z6k_specI9ImmaS8k16Li64ELi0EEviPjP8BlockClk") == ("k_spec", "imma_s8_m16n8k16", (64, 0))
+    assert TK.tpl_key("_Z9k_opaloneILi2EEviPjP8BlockClk") is None and TK.tpl_key("_Z4mainv") is None
+
+
+def test_a_faster_schedule_joins_the_refit_and_measures_the_margin(tmp_path: Path):
+    # M1: IMMA.16816 + IADD3 x8 (spec) at 17.4 SMSP-cycles a MMA; the search finds the same program at 17.0 (k_spec2,
+    # 2 + 2 warps a SMSP) and re-times M1's own at 17.5 (the control). Both 8.75 others a MMA.
+    k16 = ["IMMA.16816.S8.S8 R8, R4.ROW, R2.COL, R8"] * 8 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    lane = ["IADD3 R3, R3, R4, RZ"] * 64 + ["IADD3 R0, R0, 0x1, RZ", "ISETP.GE.AND P0, PT, R0, R9, PT"]
+    m1 = tmp_path / "m1"
+    m1.mkdir()
+    _write(m1, [_opalone(1000, 8 * 67 / 0.98), _case("spec", "imma_s8_m16n8k16", "ImmaS8k16", 64, 1000, 16000 * 17.4, k16, lane)])
+    srch = tmp_path / "m1c"
+    (srch / "sass").mkdir(parents=True)
+    names = {"k_spec2": "_Z7k_spec2I9ImmaS8k16Li64ELi0ELi8ELi2ELi2EEviPjP8BlockClk",
+             "k_spec": "_Z6k_specI9ImmaS8k16Li64ELi0EEviPjP8BlockClk"}
+    (srch / "sass" / "search-ImmaS8k16_R64.sass").write_text("\n".join(_fn(n, k16, lane) for n in names.values()) + "\n")
+    recs = [{"kernel": k, "form": "imma_s8_m16n8k16", "tpl": tpl, "mma_warps": 2, "lane_warps": 2, "warps": 0, "iters": 1000,
+             "cyc_med": 16000 * cyc, "distinct_sms": 188, "mhz": 2100.0}
+            for k, tpl, cyc in [("k_spec", [64, 0], 17.5), ("k_spec2", [64, 0, 8, 2, 2], 17.0)]]
+    (srch / "search-ImmaS8k16_R64.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in recs + [{"done": True, "num_sms": 188}]) + "\n")
+    pts, fails = TK.search_points(srch)
+    assert fails == [] and [round(p["cycles_per_mma"], 9) for _, p in pts] == [17.5, 17.0]
+    assert all(abs(p["ops_per_mma"] - 8.75) < 1e-12 for _, p in pts) and [p["control"] for _, p in pts] == [True, False]
+
+    # the margin is the time ratio the faster schedule beat M1's row by, 17.4 / 17.0 at the same counts, on every row
+    a, b = TK.JI3E["JI3e_1"]
+    fit = TK.refit([m1], search=[srch])
+    assert all(abs(fit["sched"][f"JI3o_{i}"] - 17.4 / 17.0) < 1e-12 for i in range(3))
+    assert abs(fit["rows"]["JI3o_1"]["MMA"] - (0.98 * 17.0 - b * 8.75) / (17.4 / 17.0)) < 1e-9
+    assert abs(fit["rows"]["JI3o_1"]["other"] - b / (17.4 / 17.0)) < 1e-12
+    assert abs(fit["rows"]["JI3o_0"]["MMA"] - (0.98 * 17.0 - 8.75) / (17.4 / 17.0)) < 1e-9
+    # a search that finds nothing faster than M1's row allows leaves the 2% noise margin alone
+    slow = json.loads((srch / "search-ImmaS8k16_R64.jsonl").read_text().splitlines()[1])
+    (srch / "search-ImmaS8k16_R64.jsonl").write_text(
+        json.dumps({**slow, "cyc_med": 16000 * 17.9}) + "\n" + json.dumps({"done": True, "num_sms": 188}) + "\n")
+    assert TK.refit([m1], search=[srch])["sched"] == {f"JI3o_{i}": 1.0 for i in range(3)}
+    assert TK.main(["tensor_kinds.py", "search", str(srch)]) == 0
+    assert json.loads((srch / "search.json").read_text())["gate_failures"] == []

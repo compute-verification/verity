@@ -34,6 +34,130 @@ def clmulGo (a : UInt64) : Nat → Nat → UInt64 → UInt64 → UInt64 → UInt
 /-- Carry-less product of two 64-bit words, as (low word, high word). -/
 def clmul (a b : UInt64) : UInt64 × UInt64 := clmulGo a 64 0 b 0 0
 
+/-- The low word of `lo + a · x^i` if bit `t` of `bb` is set, else `lo`, without a branch (`i < 64`). -/
+@[inline] def clmulStepLo (a bb t i lo : UInt64) : UInt64 :=
+  lo ^^^ ((a <<< i) &&& ((0 : UInt64) - ((bb >>> t) &&& 1)))
+
+/-- The high word, likewise: `a · x^i`'s high word is `(a >>> 1) >>> (63 − i)`, `0` at `i = 0`. -/
+@[inline] def clmulStepHi (a bb t i hi : UInt64) : UInt64 :=
+  hi ^^^ (((a >>> 1) >>> (63 - i)) &&& ((0 : UInt64) - ((bb >>> t) &&& 1)))
+
+/-- `clmulStepLo`, `clmulStepHi` on bits `0, 1, 2, 3` of `bb`, as `a · x^s, …, a · x^(s+3)`, each word its own chain. -/
+@[inline] def clmulWindow (a bb s lo hi : UInt64) : F128 :=
+  ⟨clmulStepLo a bb 3 (s + 3) (clmulStepLo a bb 2 (s + 2) (clmulStepLo a bb 1 (s + 1) (clmulStepLo a bb 0 s lo))),
+    clmulStepHi a bb 3 (s + 3) (clmulStepHi a bb 2 (s + 2) (clmulStepHi a bb 1 (s + 1) (clmulStepHi a bb 0 s hi)))⟩
+
+/-- `clmulGo` four bits at a time: `fuel` windows of `bb`, from bit `s`, stopping once no bit of `bb` is left. -/
+def clmulWin (a : UInt64) : Nat → UInt64 → UInt64 → UInt64 → UInt64 → F128
+  | 0, _, _, lo, hi => ⟨lo, hi⟩
+  | fuel + 1, s, bb, lo, hi =>
+    if bb = 0 then ⟨lo, hi⟩ else
+    clmulWin a fuel (s + 4) (bb >>> 4) (clmulWindow a bb s lo hi).lo (clmulWindow a bb s lo hi).hi
+
+/-- `clmul` as compiled code computes it (`clmul_eq_clmulFast`): up to sixteen 4-bit windows, each branch-free, with no
+`Nat` but the fuel. -/
+@[inline] def clmulFast (a b : UInt64) : UInt64 × UInt64 :=
+  let r := clmulWin a 16 0 b 0 0
+  (r.lo, r.hi)
+
+theorem clmulMask_eq (x c : UInt64) : x &&& ((0 : UInt64) - (c &&& 1)) = if c &&& 1 = 1 then x else 0 := by
+  have h2 : (c &&& 1).toNat < 2 := by
+    rw [UInt64.toNat_and]
+    exact Nat.lt_of_le_of_lt Nat.and_le_right (by decide)
+  rcases (by omega : (c &&& 1).toNat = 0 ∨ (c &&& 1).toNat = 1) with h | h
+  · have e : c &&& 1 = 0 := UInt64.toNat_inj.mp (by simp [h])
+    rw [e]
+    apply UInt64.toNat_inj.mp
+    simp
+  · have e : c &&& 1 = 1 := UInt64.toNat_inj.mp (by simp [h])
+    simp only [e, ↓reduceIte]
+    apply UInt64.toNat_inj.mp
+    rw [UInt64.toNat_and, show ((0 : UInt64) - 1).toNat = 2 ^ 64 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod,
+      Nat.mod_eq_of_lt x.toNat_lt]
+
+theorem clmulHi_eq (a j : UInt64) (i : Nat) (hj : j.toNat = i) (h64 : i < 64) :
+    (a >>> 1) >>> (63 - j) = if i = 0 then 0 else a >>> (64 - i).toUInt64 := by
+  have e63 : (63 - j).toNat = 63 - i := by
+    rw [UInt64.toNat_sub_of_le _ _ (by rw [UInt64.le_iff_toNat_le]; simp; omega)]
+    simp [hj]
+  have hl : ((a >>> 1) >>> (63 - j)).toNat = a.toNat >>> (64 - i) := by
+    rw [UInt64.toNat_shiftRight, UInt64.toNat_shiftRight, e63, show (1 : UInt64).toNat = 1 from rfl,
+      ← Nat.shiftRight_add]
+    congr 1
+    omega
+  apply UInt64.toNat_inj.mp
+  rw [hl]
+  split
+  · rename_i h0
+    subst h0
+    rw [UInt64.toNat_zero, Nat.shiftRight_eq_div_pow]
+    exact Nat.div_eq_of_lt a.toNat_lt
+  · rw [UInt64.toNat_shiftRight, Nat.toUInt64, UInt64.toNat_ofNat']
+    congr 1
+    omega
+
+theorem clmulGo_succ (a : UInt64) (n i : Nat) (bb lo hi j : UInt64) (hj : j.toNat = i) (h64 : i < 64) :
+    clmulGo a (n + 1) i bb lo hi =
+      clmulGo a n (i + 1) (bb >>> 1) (clmulStepLo a bb 0 j lo) (clmulStepHi a bb 0 j hi) := by
+  have hjt : i.toUInt64 = j := UInt64.toNat_inj.mp (by simp [Nat.toUInt64, hj]; omega)
+  simp only [clmulGo, clmulStepLo, clmulStepHi, UInt64.shiftRight_zero, clmulMask_eq, clmulHi_eq a j i hj h64, hjt]
+  by_cases hb : bb &&& 1 = 1
+  · by_cases hi0 : i = 0
+    · simp [hb, hi0]
+    · simp [hb, hi0]
+  · simp [hb]
+
+theorem clmulShr_shr (x m n p : UInt64) (h : m.toNat + n.toNat = p.toNat) (hp : p.toNat < 64) :
+    (x >>> m) >>> n = x >>> p := by
+  apply UInt64.toNat_inj.mp
+  rw [UInt64.toNat_shiftRight, UInt64.toNat_shiftRight, UInt64.toNat_shiftRight, ← Nat.shiftRight_add]
+  congr 1
+  omega
+
+theorem clmulGo_four (a : UInt64) (n i : Nat) (s bb lo hi : UInt64) (hs : s.toNat = i) (h : i + 4 ≤ 64) :
+    clmulGo a (n + 4) i bb lo hi =
+      clmulGo a n (i + 4) (bb >>> 4)
+        (clmulStepLo a bb 3 (s + 3) (clmulStepLo a bb 2 (s + 2) (clmulStepLo a bb 1 (s + 1) (clmulStepLo a bb 0 s lo))))
+        (clmulStepHi a bb 3 (s + 3) (clmulStepHi a bb 2 (s + 2) (clmulStepHi a bb 1 (s + 1) (clmulStepHi a bb 0 s hi)))) := by
+  have hk : ∀ k : UInt64, k.toNat < 4 → (s + k).toNat = i + k.toNat := fun k hk => by
+    rw [UInt64.toNat_add]; omega
+  rw [clmulGo_succ a (n + 3) i bb lo hi s hs (by omega),
+    clmulGo_succ a (n + 2) (i + 1) _ _ _ (s + 1) (hk 1 (by decide)) (by omega),
+    clmulGo_succ a (n + 1) (i + 1 + 1) _ _ _ (s + 2) (hk 2 (by decide)) (by omega),
+    clmulGo_succ a n (i + 1 + 1 + 1) _ _ _ (s + 3) (hk 3 (by decide)) (by omega),
+    clmulShr_shr bb 1 1 2 (by decide) (by decide), clmulShr_shr bb 2 1 3 (by decide) (by decide),
+    clmulShr_shr bb 3 1 4 (by decide) (by decide)]
+  simp only [clmulStepLo, clmulStepHi, UInt64.shiftRight_zero]
+
+theorem clmulGo_zero (a : UInt64) : ∀ (n i : Nat) (lo hi : UInt64), clmulGo a n i 0 lo hi = (lo, hi)
+  | 0, _, _, _ => rfl
+  | n + 1, i, lo, hi => by
+    rw [clmulGo, show (0 : UInt64) >>> 1 = 0 from rfl]
+    simpa using clmulGo_zero a n (i + 1) lo hi
+
+theorem clmulWin_eq (a : UInt64) : ∀ (f : Nat) (s bb lo hi : UInt64), s.toNat + 4 * f ≤ 64 →
+    clmulWin a f s bb lo hi = ⟨(clmulGo a (4 * f) s.toNat bb lo hi).1, (clmulGo a (4 * f) s.toNat bb lo hi).2⟩
+  | 0, _, _, _, _, _ => rfl
+  | f + 1, s, bb, lo, hi, h => by
+    rw [clmulWin]
+    split
+    · rename_i hb
+      rw [hb, clmulGo_zero]
+    · have hs4 : (s + 4).toNat = s.toNat + 4 := by rw [UInt64.toNat_add]; simp; omega
+      rw [clmulWin_eq a f (s + 4) _ _ _ (by omega), hs4, show 4 * (f + 1) = 4 * f + 4 by omega,
+        clmulGo_four a (4 * f) s.toNat s bb lo hi rfl (by omega)]
+      simp only [clmulWindow]
+
+theorem clmulFast_eq_clmul (a b : UInt64) : clmulFast a b = clmul a b := by
+  have h := clmulWin_eq a 16 0 b 0 0 (by decide)
+  rw [show 4 * 16 = 64 from rfl, show (0 : UInt64).toNat = 0 from rfl] at h
+  rw [clmulFast, h, clmul]
+
+/-- Compiled code runs `clmulFast`; the kernel and every proof see `clmul`. `@[csimp]` rewrites only code compiled after
+it, so it stays above `mul`. -/
+@[csimp] theorem clmul_eq_clmulFast : @clmul = @clmulFast :=
+  funext fun a => funext fun b => (clmulFast_eq_clmul a b).symm
+
 /-- Reduce the 256-bit carry-less product `r3·2^192 + r2·2^128 + r1·2^64 + r0` modulo the GHASH polynomial. -/
 @[inline] def reduce (r0 r1 r2 r3 : UInt64) : F128 :=
   let tl := r2 ^^^ (r2 <<< 1) ^^^ (r2 <<< 2) ^^^ (r2 <<< 7)

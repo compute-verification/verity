@@ -4596,8 +4596,8 @@
      "art:50de1919/flat/gemm-coordinate/records"
     ],
     "selftest_note": "every selftest case that runs a session (21: 3 honest; the false statements each with its own pub.bin); upstream's verdicts are its live ones in each case.json",
-    "agreement": "local ci.py --live --sets 3 (2026-10-02T00:38Z, Lean at ce0e60810): 21/21, 3 accepted",
-    "lean_refuses": "refused: a unit reading 2 input groups: a statement form the soundness proof does not cover"
+    "agreement": "local ci.py --live --sets 3 (2026-10-17T07:00Z, Lean at the general instance form): 21/21, 3 passed every check (drawless)",
+    "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
     "tags": "verity/flock-circuit/types (hidden outputs, PROTOCOL.md §16.13): RoPE as a flat class",

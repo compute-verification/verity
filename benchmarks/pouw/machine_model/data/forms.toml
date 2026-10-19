@@ -1,0 +1,110 @@
+# The MMA forms the ε LP's cheater may write a committed s8·s8 word on (eps.py `forms`), one table a census kind: the
+# kind's shape m×n×k, whether it is 2:4 sparse, and `split`, the k-slots one s8 product takes on it, each product exact
+# on its own (no form takes fewer than 1: a 32-step word's bilinear form has rank 32). A form writes
+# m·n fresh words and k_dense/split s8 k-steps a warp instruction (k_dense = k, k/2 when sparse), so a committed word at
+# L costs L·split/(k_dense·m·n) of its instructions. Converting an FP accumulator to s32, and summing a split form's
+# partial accumulators, cost nothing here (the cheater's favour). `ptx` are tensor_kinds' 19 native mma.sync forms
+# (KIND in benchmarks/pouw/tensor_kinds/tensor_kinds.py), `sass` the opcodes its runs read for them.
+source = "tensor_kinds' M1, all 19 native mma.sync forms timed on sm_120 (r20261017-041103-d35d, r20261017-041754-7630; note:20261017T0321Z-draft-eps1-tensor §2.1); shapes from the PTX ISA's mma.sync"
+
+[IMMA16832]
+shape = [16, 8, 32]
+split = 1
+exact = "s8·s8 into s32: exact (wraps mod 2^32 without .satfinite)"
+ptx = ["imma_s8_m16n8k32", "imma_u8s8_m16n8k32", "imma_s8_m16n8k32_sat"]
+sass = ["IMMA.16832.S8.S8", "IMMA.16832.U8.S8", "IMMA.16832.S8.S8.SAT"]
+
+[IMMA16816]
+shape = [16, 8, 16]
+split = 1
+exact = "s8·s8 into s32: exact"
+ptx = ["imma_s8_m16n8k16"]
+sass = ["IMMA.16816.S8.S8"]
+
+[IMMA8816]
+shape = [8, 8, 16]
+split = 1
+exact = "s8·s8 into s32: exact (runs as IMMA.16816 keeping 64 of its 128 accumulators)"
+ptx = ["imma_s8_m8n8k16"]
+sass = ["IMMA.16816.S8.S8"]
+
+[IMMASP16864]
+shape = [16, 8, 64]
+sparse = true
+split = 1
+exact = "s8·s8 into s32: exact, a dense k32 product with fixed metadata"
+ptx = ["imma_sp_s8_m16n8k64"]
+sass = ["IMMA.SP.16864"]
+
+[IMMASP16832]
+shape = [16, 8, 32]
+sparse = true
+split = 1
+exact = "s8·s8 into s32: exact, a dense k16 product with fixed metadata"
+ptx = ["imma_sp_s8_m16n8k32"]
+sass = ["IMMA.SP.16832"]
+
+[HMMA16816]
+shape = [16, 8, 16]
+split = 1
+exact = "f16 and bf16 hold every s8; products < 2^14 and a 32-step word < 2^19 are exact in the FP32 accumulator (exact below 2^24)"
+ptx = ["hmma_f16_m16n8k16_f32", "hmma_bf16_m16n8k16_f32"]
+sass = ["HMMA.16816.F32", "HMMA.16816.F32.BF16"]
+
+[HMMA16816F16]
+shape = [16, 8, 16]
+split = 4
+exact = "the f16 accumulator holds integers to 2^11 only: both operands in balanced nibbles (16h + l, h in [-8, 8], l in [-8, 7]) make 4 digit products of at most 64, and a 32-step chain of each stays within 2048"
+ptx = ["hmma_f16_m16n8k16_f16"]
+sass = ["HMMA.16816.F16"]
+
+[HMMASP16832]
+shape = [16, 8, 32]
+sparse = true
+split = 1
+exact = "as HMMA16816: exact in FP32, a dense k16 product with fixed metadata"
+ptx = ["hmma_sp_f16_m16n8k32_f32"]
+sass = ["HMMA.SP.16832.F32"]
+
+[HMMA1688T]
+shape = [16, 8, 8]
+split = 1
+exact = "tf32 (11 significant bits) holds every s8; exact in FP32 as HMMA16816"
+ptx = ["hmma_tf32_m16n8k8"]
+sass = ["HMMA.1688.F32.TF32"]
+
+[HMMA1684T]
+shape = [16, 8, 4]
+split = 1
+exact = "tf32 holds every s8; exact in FP32 as HMMA16816"
+ptx = ["hmma_tf32_m16n8k4"]
+sass = ["HMMA.1684.F32.TF32"]
+
+[QMMA16832]
+shape = [16, 8, 32]
+split = 3
+exact = "e4m3 (the kind's widest grid) holds the integers in [-16, 16] only: with a = 16h + l (h in [-8, 8], l in [-8, 7]), a·b = 240·h·h' + 16·(h + l)(h' + l') − 15·l·l', three products (Karatsuba), each exact in FP32; two slots a product would need e4m3, scaled, to hold an s8 operand's 256 values in arithmetic progression"
+ptx = ["qmma_e4m3_m16n8k32_f32", "qmma_e5m2_m16n8k32_f32", "qmma_e2m1_m16n8k32_f32"]
+sass = ["QMMA.16832.F32.E4M3.E4M3", "QMMA.16832.F32.E5M2.E5M2", "QMMA.16832.F32.E2M1.E2M1"]
+
+[QMMASF16832]
+shape = [16, 8, 32]
+split = 3
+exact = "as QMMA16832 (block scales don't add values to a block's grid)"
+ptx = ["qmma_sf_e4m3_m16n8k32_f32"]
+sass = ["QMMA.SF.16832.F32.E4M3.E4M3.E8"]
+
+[QMMASP16864]
+shape = [16, 8, 64]
+sparse = true
+split = 3
+exact = "as QMMA16832, on a dense k32 product with fixed metadata"
+ptx = ["qmma_sp_e4m3_m16n8k64_f32"]
+sass = ["QMMA.SP.16864.F32.E4M3.E4M3"]
+
+[OMMASF16864]
+shape = [16, 8, 64]
+split = 3
+exact = "e2m1 has 15 values, so under one pair of block scales two slots a product hold at most 225 < 256 values of an s8 operand: 3 is a lower bound (balanced base-8 digits in [-4, 3] take 9 products), exact in the FP32 accumulator"
+ptx = ["omma_nvf4_m16n8k64"]
+sass = ["OMMA.SF.16864"]

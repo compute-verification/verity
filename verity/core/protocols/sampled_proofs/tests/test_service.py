@@ -273,6 +273,23 @@ def test_one_stage_refusals_come_through_register():
     assert stream.register(_record(), _ports(6)).order == 0
 
 
+def test_a_law_whose_count_varies_is_refused_at_register():
+    """A Bernoulli law at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
+    different shapes: `register` refuses it (`shapes`) after R1-R7, one-stage or as a two-stage rule's replay, and logs
+    nothing. At p = 0 or 1 it registers."""
+    for p in ("1/2", "2/3", "2/4"):
+        law = {"law": "bernoulli", "p": p}
+        for stream, args, subset in ((_stream(_spec(S.Law(f"bernoulli:{p}"))), (_record(law=law), _ports(6)),
+                                      (_record(), _ports(6))),
+                                     (_stream(_two_spec(f"bernoulli:{p}")), _half("x", 6, law), _half("x", 6))):
+            assert _refused(lambda: stream.register(*args)) == ("shapes",)
+            assert "R1-law" in _refused(lambda: stream.register(*subset))
+            assert stream.log == () and stream.records == ()
+    for p in ("0/1", "1/1", "3/3"):
+        stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
+        assert stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6)).order == 0
+
+
 def test_no_retries_nothing_redraws_and_an_outcome_is_final():
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
@@ -569,6 +586,31 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
             stream.select(reg)
 
 
+def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
+    """A one-stage outcome on a draw from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
+    from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
+    accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
+    the round, its audit record failing `run`; a sampler's draw isn't run."""
+    run, ran = S.V.run, []
+
+    def spy(python, *a, **kw):
+        ran.append(v := run(python, *a, **kw))
+        return v
+
+    monkeypatch.setattr(S.V, "run", spy)
+    stream = _stream(budget=10)
+    assert [_round(stream).accepted, _round(stream, accepted=False).accepted] == [True, False]
+    assert len(ran) == 2 and all(v.ok and v.verifiers["of_record"] == "lean" for v in ran)
+    monkeypatch.setattr(S.V, "run", lambda python, *a, **kw: spy({**python, "read": python["read"] + 1}, *a, **kw))
+    out = _round(stream)
+    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"] and ran[-1].codes == ("disagree",)
+    body = stream.records[-1]["audit"]
+    assert body["accepted"] is False and body["checks"]["run"]["codes"] == ["disagree"]
+    assert set(body["checks"]["run"]["detail"]["disagree"]["fields"]) == {"read"}
+    sampled = _stream(sampler=lambda law, n: [0, 1])
+    assert _round(sampled).accepted and len(ran) == 3
+
+
 def test_public_outputs_come_from_the_verifier_of_record():
     spec = _spec(public=(*STEP0, S.Public("credited", "output", "the credited work")), public_outputs=("credited",))
     stream = _stream(spec)
@@ -685,8 +727,8 @@ def test_a_two_stage_outcome_accepts_only_when_both_audits_do():
 
 
 def test_a_two_stage_draw_of_no_rus_has_no_interiors():
-    stream = _stream(_two_spec("bernoulli:1/2"), sampler=lambda law, n: [])
-    reg = stream.register(*_half("x", 6, {"law": "bernoulli", "p": "1/2"}))
+    stream = _stream(_two_spec("bernoulli:0/1"), sampler=lambda law, n: [])
+    reg = stream.register(*_half("x", 6, {"law": "bernoulli", "p": "0/1"}))
     draw = stream.select(reg)
     assert draw.units == [] == draw.proved
     assert _refused(lambda: stream.register_interiors(draw, *_half("out", 1, {"law": "subset", "k": 1},
@@ -769,7 +811,7 @@ def test_two_stage_interiors_cover_a_work_draws_closure():
     assert out.accepted and stream.records[0]["interior"]["audit"]["proved_units"] == list(range(len(draw.proved)))
 
 
-@pytest.mark.parametrize("text", ["subset:2", "bernoulli:1/3", "stratified:2", "work:2"])
+@pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The draw is Lean's `drawWith` on the coins (`two_stage.draw_first`), so `flock-verify draw` on the same bytes
     draws the same units; a work draw's closure is the same too."""

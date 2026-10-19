@@ -1,6 +1,12 @@
 """The two-stage law on the proof service's `Stream`: the four steps in order, the draw as the Lean verifier's from the
 challenger's own bytes, the interiors held to the rule, one outcome record binding both registrations, both receipts and
-the draw, and no retries. PoUW's example follows the architecture note: a uniform subset:K' over N equal tiles."""
+the draw, and no retries.
+
+PoUW's example follows the architecture note
+(`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`, §4.1): a uniform `subset:K′` over `N`
+equal tiles, whose boundaries are A's rows, the tile digests and the per-call records, and whose interiors are A′, the ok
+rows, `rowk`'s carries and the cap rows. A `work:K` first stage runs as well, with the challenger's closure, and an
+accepted audit's profile is `two_stage.TwoStageLaw.profile` of `Stage(law)` over the RUs."""
 
 from __future__ import annotations
 
@@ -316,6 +322,44 @@ def test_a_draw_of_no_rus_has_no_interiors_and_its_proof_goes_to_the_boundary():
     out = stream.outcome(draw, _lean(), {}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR_VALUES)})
     assert out.accepted and stream.symbols == ("accept",) and stream.records[0]["interior"] is None
     assert stream.register(_boundary(law=law, row=1, previous=reg.digest), _ports(N, BOUNDARY)).order == 1
+
+
+def test_each_outcome_is_the_lean_runs_with_its_interiors(monkeypatch):
+    """A two-stage outcome is the verifier of record's run (`verifier.run`, the Lean's `Run.run`) whole: the boundary's
+    registration and draw, the interiors registered after it and before the proof, both audit records, and the sessions'
+    roots split between them. One run per outcome, agreeing on an accepted round, a wrong interior root, a work first
+    stage with its closure and a draw of no RUs; interiors the Python doesn't make alike (here, said to fail a check of
+    theirs that held) reject the round, its audit record failing `run`."""
+    run, ran = S.V.run, []
+
+    def spy(python, *a, **kw):
+        ran.append(v := run(python, *a, **kw))
+        return v
+
+    monkeypatch.setattr(S.V, "run", spy)
+    both = {**_roots(BOUNDARY), **_roots(INTERIOR_VALUES)}
+    stream = _stream(budget=10)
+    assert _audit(stream, session_roots=both).accepted
+    assert not _audit(stream, row=1, session_roots={**both, **_roots(INTERIOR_VALUES, "cap_rows")}).accepted
+    work = _spec(S.TwoStage(S.Law("work:2"), "all"),
+                 public=(*PUBLIC, S.Public(f"population:{TILE.id}", "structure", "the tiles' one stratum")))
+    table, closure = {TILE.id: 3}, {u: [(u + 1) % N] for u in range(N)}
+    assert _audit(_stream(work, seed=5), law={"law": "work", "k": 2}, work_table=table, closure=closure,
+                  session_roots=both).accepted
+    none = _stream(_spec(S.TwoStage(S.Law("bernoulli:0/1"), "all")))
+    draw = none.select(none.register(_boundary(law={"law": "bernoulli", "p": "0/1"}), _ports(N, BOUNDARY)))
+    none.deliver(draw, [SESSION])
+    assert none.outcome(draw, _lean(), {}, session_roots=both).accepted
+    assert len(ran) == 4 and all(v.ok and v.verifiers["of_record"] == "lean" for v in ran)
+
+    def tamper(python, *a, **kw):
+        audit = python["interior"]["audit"]
+        return spy({**python, "interior": {**python["interior"], "audit": {**audit, "accepted": False}}}, *a, **kw)
+
+    monkeypatch.setattr(S.V, "run", tamper)
+    out = _audit(stream, row=2, session_roots=both)
+    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"] and ran[-1].codes == ("disagree",)
+    assert ran[-1].detail["disagree"]["fields"] == ["interior"]
 
 
 def test_what_a_two_stage_spec_and_stream_refuse():

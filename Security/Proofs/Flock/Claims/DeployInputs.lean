@@ -14,7 +14,7 @@ string. `decode` reads that layout back and keeps only a reading whose encoding 
 injective (`decode_injective`).
 
 The verifier's own parsers then run on those bytes, as `Main.verifyCmd` runs them (`Raw.ins`): `Tags.find?` on the
-statement id, the refusals of plain-leaf statements and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
+statement id, the refusals of a plain-leaf statement under `--zk` and of `--zk` with `--coins`, the coins (`--zk`'s keyed coin tree,
 else `--coins`), `Json.parse` then `Draw.workTableOfJson`, `Draw.closureMapOfJson` and `Registered.ofJson` on the files.
 The result is C's `Readable.Read` (`readOf`), so the claims' parser is C's `parseOf` (`parse`: `Read.parse`,
 `Stmt.setupTables` and under `--zk` every table's `Zk.shapeOk`, read as `Claims.Flock.Stmt` by `toReadable`), and the
@@ -183,7 +183,7 @@ structure Ins where
 /-- **The verifier's parsers on the statement's bytes**, as `verifyCmd` runs them. -/
 def Raw.ins (w : Raw) : Except String Ins := do
   let some tags := Tags.find? w.statement | throw "unknown statement"
-  if tags.plainLeaves then throw s!"verify: refused: {tags.name}, a statement with plain SHA-512 leaves"
+  if w.zk && tags.plainLeaves then throw s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves"
   if w.zk && w.osCoins then throw "verify --zk: a --zk session's coins are its keyed coin tree, so --coins does not apply"
   let coins : Coins := if w.zk then .tree (Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed
   let draw ← w.draw.mapM (jsonOf "draw")

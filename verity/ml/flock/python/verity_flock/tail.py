@@ -286,13 +286,23 @@ OPS = {"F32Add_v1": fp.f32_add, "F32Mul_v1": fp.f32_mul, "F32Fma_v1": fp.f32_fma
 @dataclass
 class Stage:
     """One stage circuits: its input ports (``("cut", k)`` a cut word, ``("pass", slot)`` a value the previous stage hands on,
-    ``("lookup", j)`` lookup j's table word) and its output ports (``("pass", slot)``, ``("index", j)``, ``("cut", k)``)."""
+    ``("lookup", j)`` lookup j's table word) and its output ports (``("pass", slot)``, ``("index", j)``, ``("cut", k)``,
+    ``("ret", o)``). ``count`` slots of it per VU, slot ``i``'s ports tagged ``slot_ins[i]`` / ``slot_outs[i]`` (default: one
+    slot, tagged ``ins`` / ``outs``): a repeated stage is a second repeated unit type, its slots reading other cut words."""
 
     circuit: Circuit
     ins: list = field(default_factory=list)
     outs: list = field(default_factory=list)
     in_widths: list = field(default_factory=list)
     out_widths: list = field(default_factory=list)
+    count: int = 1
+    slot_ins: list | None = None
+    slot_outs: list | None = None
+
+    def tags(self, i: int) -> tuple[list, list]:
+        """Slot ``i``'s input and output port tags."""
+        return (self.slot_ins[i] if self.slot_ins is not None else self.ins,
+                self.slot_outs[i] if self.slot_outs is not None else self.outs)
 
 
 @dataclass

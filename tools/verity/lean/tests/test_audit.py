@@ -301,7 +301,13 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
     group = pol["reads"]["P.Defs"]
     hyp = [{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
            {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "8" * 32}]
+    applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
+    premised = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
+    premised["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"}]
     for policy, now in [
+            (POLICY, facts()),                                                      # owned, no record yet
+            ({**A.judge(POLICY, facts(pins={"P.t": premised}), FILES, update=True)[1], "assumptions": {}},
+             facts(pins={"P.t": premised})),                                        # a premise the lock doesn't list
             (pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})),
             (pol, facts(pins={"P.t": fact(reads=fact()["reads"] + [{"name": "P.g", "module": "P.More", "kind": "def",
                                                                     "hash": "4" * 32}])})),
@@ -315,7 +321,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
         "assumptions: P.Hyp's definition in P.Assumptions changed;")
     signed = facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")})
     for policy, now, files in [(pol, facts(), FILES),                                      # passes
-                               (POLICY, facts(), FILES),                                   # no record yet
+                               ({**POLICY, "guarantees": {"P.t": {}}}, facts(), FILES),    # no record and no owner
                                (pol, facts(pins={}), FILES),                               # renamed or gone: `--moved`
                                (pol | {"guarantees": {"P.t": pol["guarantees"]["P.t"] | {"owner": "lean"}}}, facts(), FILES),
                                (pol, signed, FILES | {"Scratch": "Scratch.lean"})]:        # a difference beside an orphan
@@ -625,6 +631,133 @@ def test_all_neither_updates_records_nor_names_instances(capsys):
         with pytest.raises(SystemExit):
             A.main(["--all", flag])
         assert "neither updates records nor names instances" in capsys.readouterr().err
+
+
+def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
+    """A machine with less memory than ArkLib's build peaks at (swap included, within its cgroup) refuses to audit a package
+    that pins it, and the refusal prints the fast path's line on a node; other packages, or a floor set to 0, go ahead."""
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc" / "meminfo").write_text("MemTotal:       16000000 kB\nMemFree:  100 kB\nSwapTotal:      4000000 kB\n")
+    cg = tmp_path / "cg"
+    cg.mkdir()
+    assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 19.1
+    (cg / "memory.max").write_text(f"{8 * 2**30}\n")
+    (cg / "memory.swap.max").write_text("max\n")
+    assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 11.8
+    (cg / "memory.swap.max").write_text("0\n")
+    assert A.memory_gib(tmp_path / "proc", cg) == 8
+    heavy, light = tmp_path / "Proofs", tmp_path / "Spec"
+    for p, deps in ((heavy, ["mathlib", "Arklib"]), (light, ["mathlib"])):
+        p.mkdir()
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    why = A.memory_refusal([light, heavy], 16)
+    assert why.startswith(f"{heavy} pins ArkLib") and "lean_changed.py --records" in why and str(light) in why
+    assert A.memory_refusal([light], 16) is None
+    assert A.memory_refusal([light, heavy], 64) is None
+    assert A.memory_refusal([heavy], 16, env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
+
+
+def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds(tmp_path):
+    """Two queued Security builds were OOM-killed in 64 and 16 GB scopes on 18 Oct, with a `lean` per CPU: Lake runs as many
+    at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with at most one per `BUILD_GIB_PER_JOB`.
+    The scope's limit is read where `/proc/self/cgroup` says the process is, and the smallest of it and its parents' holds."""
+    proc, cg = tmp_path / "proc", tmp_path / "cg"
+    (proc / "self").mkdir(parents=True)
+    (proc / "meminfo").write_text(f"MemTotal: {512 * 2**20} kB\nSwapTotal: 0 kB\n")
+    (proc / "self" / "cgroup").write_text("0::/user.slice/cluster-r1.scope\n")
+    (cg / "user.slice" / "cluster-r1.scope").mkdir(parents=True)
+    (cg / "memory.max").write_text("max\n")
+    assert A.memory_gib(proc, cg) == 512
+    (cg / "user.slice" / "cluster-r1.scope" / "memory.max").write_text(f"{64 * 2**30}\n")
+    assert A.memory_gib(proc, cg) == 64
+    (cg / "user.slice" / "memory.max").write_text(f"{32 * 2**30}\n")
+    assert A.memory_gib(proc, cg) == 32, "a parent's smaller limit holds"
+    heavy, light = tmp_path / "heavy", tmp_path / "light"
+    for p, deps in ((heavy, ["mathlib"]), (light, ["batteries"])):
+        p.mkdir()
+        (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
+    env = {}
+    assert A.build_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.BUILD_GIB_PER_JOB)
+    assert A.build_threads(heavy, env, have_gib=4) == 1
+    assert A.build_threads(light, env, have_gib=4) is None
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
+    assert A.replay_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.REPLAY_GIB_PER_THREAD)
+    assert A.replay_threads(light, env, have_gib=4) is None
+
+
+def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
+    """A whole-Security replay holds about 120 GiB whatever its threads (killed at 128 GiB with 16 in r20261019-084601-01a0),
+    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
+    it; the package alone needs the build's floor."""
+    proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
+    for p in (proofs, spec):
+        p.mkdir()
+    (proofs / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "Arklib"}]}))
+    (spec / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../Proofs"]}))
+    assert A.memory_refusal([proofs], 32) is None
+    why = A.memory_refusal([spec, proofs], 32)
+    assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
+    assert "--kind lean-audit" in (A.memory_refusal([spec, proofs], 128) or "")
+    assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
+
+
+PLUGGED = '''name = "Dep"
+defaultTargets = ["Dep"]
+
+[[lean_lib]]
+name = "Plug"
+srcDir = "scripts"
+roots = ["Plug"]
+
+[[lean_lib]]
+name = "Dep"
+plugins = ["Plug:shared"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "DepTest"
+plugins = ["Plug:shared"]
+'''
+
+
+def test_the_dependencies_plugins_are_named_once_each():
+    """`plugin_targets`: each plugin a fetched dependency's libraries load, once, under the dependency's name."""
+    import tempfile
+    pkg = Path(tempfile.mkdtemp())
+    for name, text in (("Dep", PLUGGED), ("doc", 'name = "«doc-gen4»"\n[[lean_lib]]\nname = "D"\nplugins = ["P:shared"]\n'),
+                       ("plain", 'name = "plain"\n[[lean_lib]]\nname = "Plain"\n'), ("broken", "name = \n")):
+        (pkg / ".lake" / "packages" / name).mkdir(parents=True)
+        (pkg / ".lake" / "packages" / name / "lakefile.toml").write_text(text)
+    assert A.plugin_targets(pkg) == ["@Dep/Plug:shared", "@doc-gen4/P:shared"]
+    assert A.plugin_targets(pkg / "none") == []
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
+    """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
+    `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
+    Whether a plain build schedules the second link depends on Lake's scheduling, so the test checks only the fix: linked
+    alone first (`plugin_targets`), the build finds it up to date and links nothing."""
+    dep, root = tmp_path / "dep", tmp_path / "root"
+    (dep / "scripts").mkdir(parents=True)
+    root.mkdir()
+    toolchain = (A.FIXTURES / "control" / "lean-toolchain").read_text()
+    (dep / "lakefile.toml").write_text(PLUGGED)
+    (dep / "scripts" / "Plug.lean").write_text("def plug : Nat := 1\n")
+    (dep / "Dep.lean").write_text("module\npublic def dep : Nat := 2\n")
+    (dep / "DepTest.lean").write_text("def depTest : Nat := 3\n")
+    (root / "lakefile.toml").write_text('name = "root"\ndefaultTargets = ["Root"]\n\n[[require]]\nname = "Dep"\n'
+                                        'path = "../dep"\n\n[[lean_lib]]\nname = "Root"\n')
+    (root / "Root.lean").write_text("import Dep\nimport DepTest\ndef root : Nat := dep + depTest\n")
+    for d in (dep, root):
+        (d / "lean-toolchain").write_text(toolchain)
+    lake = lambda *a: subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
+    (root / ".lake" / "packages").mkdir(parents=True)
+    (root / ".lake" / "packages" / "Dep").symlink_to(dep)
+    assert A.plugin_targets(root) == ["@Dep/Plug:shared"]
+    assert lake("build", *A.plugin_targets(root)).returncode == 0
+    out = lake("build")
+    assert out.returncode == 0 and "Plug:shared" not in out.stdout, out.stdout
 
 
 def test_update_refuses_a_shared_shipped_tree(tmp_path, capsys):
@@ -980,13 +1113,42 @@ def test_the_verifiers_path_has_no_unlisted_compiled_code_and_hashes_through_its
     assert fails == [
         "verifier: entry P.gone is not a constant of the build; fix `verifier.entries`",
         "verifier: P.fast (@[implemented_by], in P.Defs) is on the path from P.verify, P.gone: compiled code no proof sees; "
-        "add it to `verifier.allow` only if it is a core primitive",
+        "if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing DM shows "
+        "it), else take it off the path",
         "verifier: P.verify, P.gone reach P.Sha512.hash outside the hash parameter, by P.verify -> P.tag -> P.Sha512.hash; "
         "route it through the parameter, or add the public constant it serves to `verifier.stop`"]
     assert A.verifier_failures(None, path) == []
     assert A.verifier_failures(rule, None)[0].startswith("verifier: `Facts.lean` reported no verifier path")
     f = facts(); f["verifier"] = {**path, "missing": [], "implemented_by": [], "hash": []}
     assert A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)[0] == []
+
+
+def test_verifier_allow_is_a_record_of_the_compiled_code_on_the_path_by_name():
+    """LEAN-33: `verifier.allow` lists by name each `@[extern]` and `@[implemented_by]` constant the verifier reaches, as
+    `--update` writes it, so the landing DM shows one added: an Init extern the list doesn't name fails (no `module:Init`
+    admitting all of Init), a name that admits nothing on the path fails, and a `module:` entry still admits its modules."""
+    path = {"missing": [], "reached": 40, "hash": [], "csimp": [],
+            "implemented_by": [{"name": "Array.foldlM", "module": "Init.Data.Array.Basic", "by": "Array.foldlMUnsafe"}],
+            "extern": [{"name": "Nat.add", "module": "Init.Prelude"}, {"name": "ByteArray.push", "module": "Init.Data.ByteArray.Basic"}]}
+    rule = {"entries": ["P.verify"], "stop": [], "hash": "P.Sha512", "allow": ["Array.foldlM", "Nat.add"]}
+    assert A.verifier_failures(rule, path) == [
+        "verifier: ByteArray.push (@[extern], in Init.Data.ByteArray.Basic) is on the path from P.verify: compiled code no "
+        "proof sees; if it is a core primitive, run `check.py --update`, which lists it under `verifier.allow` (the landing "
+        "DM shows it), else take it off the path"]
+    assert A.verifier_failures({**rule, "allow": [*rule["allow"], "ByteArray.push", "UInt64.add"]}, path) == [
+        "verifier: `verifier.allow` lists UInt64.add, which admits nothing on the path from P.verify; run `check.py --update`"]
+    assert A.verifier_failures({**rule, "allow": ["module:Init"]}, path) == []
+    assert A.verifier_failures({**rule, "allow": ["module:Init.Data"]}, path)[0].startswith("verifier: Nat.add (@[extern]")
+    f = facts(); f["verifier"] = path
+    fails, pol = A.judge({**POLICY, "verifier": rule}, f, FILES, update=True)
+    assert fails == [] and pol["verifier"] == {**rule, "allow": ["Array.foldlM", "ByteArray.push", "Nat.add"]}
+    assert A.verifier_failures(pol["verifier"], path) == []
+    kept = A.judge({**POLICY, "verifier": {**rule, "allow": ["module:Init.Data"]}}, f, FILES, update=True)[1]["verifier"]
+    assert kept["allow"] == ["module:Init.Data", "Nat.add"]
+    notes = A.review({"verifier": rule}, {"verifier": pol["verifier"]}, {"pins": {}, "verifier": path}, {})
+    assert notes == ["verifier: allowed ByteArray.push (@[extern], in Init.Data.ByteArray.Basic): compiled code no proof "
+                     "sees, now on the verifier's path"]
+    assert A.statement_changes(notes) == notes
 
 
 def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecedents_are_met():
@@ -997,7 +1159,8 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         return {"name": name, "module": "P.Claims", "kind": "def", "statement": False, "predicate": predicate}
 
     def thm(head, negated):
-        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated}}
+        conclusion = [{"head": head, "defs": [head], "refl": False, "assumed": False}]
+        return fact() | {"kind": "theorem", "body": {"head": head, "negated": negated, "conclusion": conclusion, "absurd": False}}
     defs = [spec("P.KS"), spec("P.Complete"), spec("P.Helper"), spec("P.Hyp"), spec("P.size", predicate=False)]
     pins = {"P.t": fact(), "P.KS_fails": thm("P.KS", True), "P.KS_meets": thm("P.ListWithin", False),
             "P.Complete_fails": thm("P.KS", True), "P.Complete_meets": thm("P.Complete", False)}
@@ -1021,6 +1184,40 @@ def test_every_claim_has_a_witness_that_it_fails_and_witnesses_that_its_antecede
         "claims: P.Gone is listed under `claims` but is no predicate of the spec under P.Claims; remove the entry"]
     assert A.claim_failures(POLICY, f) == []
     assert A.claim_witnesses(policy) == {"P.KS_fails", "P.KS_meets", "P.Complete_fails", "P.Complete_meets", "P.Complete_zk"}
+
+
+def test_a_meets_witness_says_something_about_the_deployment():
+    """LEAN-32: a `meets` witness whose statement is `True`, a conjunction of `True`s, a reflexivity, one of its own
+    hypotheses, a bound variable, a fact of Init alone, or anything under a `False` hypothesis fails; one whose every
+    conjunct applies a definition of the spec (`∃ s w, InScope deploy s ∧ RelS s w`, `deploy.zk = true`) passes."""
+    def k(head, defs=("P.deploy",), refl=False, assumed=False):
+        return {"head": head, "defs": list(defs), "refl": refl, "assumed": assumed}
+
+    def judged(*conclusion, absurd=False):
+        pins = {"P.KS_fails": fact() | {"body": {"head": "P.KS", "negated": True}},
+                "P.KS_meets": fact() | {"body": {"head": conclusion[0]["head"] if len(conclusion) == 1 else "And",
+                                                 "negated": False, "conclusion": list(conclusion), "absurd": absurd}}}
+        rule = {"modules": ["P.Claims"], "witnesses": {"P.KS": {"fails": "P.KS_fails", "meets": ["P.KS_meets"]}}}
+        f = facts(pins=pins, spec_definitions=[{"name": "P.KS", "module": "P.Claims", "kind": "def", "predicate": True}])
+        fails = A.claim_failures({**POLICY, "claims": rule, "guarantees": {n: {"owner": "@lean"} for n in pins}}, f)
+        assert all(x.endswith("applies a definition of the spec (the deployed record, a predicate or a field of it)")
+                   for x in fails)
+        return [x.removeprefix("claims: P.KS_meets, P.KS's `meets` witness, ").partition(":")[0] for x in fails]
+
+    assert judged(k("P.InScope", ["P.InScope", "P.deploy"]), k("P.RelS", ["P.RelS"])) == []
+    assert judged(k("Eq", ["P.Deploy.zk", "P.deploy"])) == []
+    assert judged(k("True", [])) == ["has a conjunct (True …) that applies no definition under `meaning` (`True`, or a "
+                                     "fact of Init or Mathlib alone)"]
+    assert judged(k("True", []), k("True", [])) == judged(k("True", []))
+    assert judged(k("P.InScope"), k("True", [])) == judged(k("True", []))
+    assert judged(k("LT.lt", [])) == ["has a conjunct (LT.lt …) that applies no definition under `meaning` (`True`, or a "
+                                      "fact of Init or Mathlib alone)"]
+    assert judged(k("Eq", refl=True)) == ["has a conjunct that is a reflexivity (Eq of two equal sides)"]
+    assert judged(k("P.Ok", assumed=True)) == ["has a conjunct (P.Ok …) that is one of its own hypotheses"]
+    assert judged(k(None)) == ["has a conjunct that applies a bound variable, not a constant"]
+    assert judged(k("P.Ok"), absurd=True) == ["takes `False` as a hypothesis, so it proves anything"]
+    assert judged(k("P.InScope"), k("P.KS")) == ["has a conjunct that states P.KS itself"]
+    assert A.vacuous_meets({"head": "P.Ok", "negated": False}, "P.KS").startswith("has no conclusion")
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():
@@ -1265,6 +1462,35 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
     assert r.stdout.strip() == "1"
 
 
+def test_a_trains_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
+    """`--regenerate` (a train's lean-audit step): a package whose every failure is a record difference, so the audit wrote
+    the record `--update` would, passes, and `audit.json` names that record for the train to commit; one with any other
+    failure fails as before, and the packages' own locks are never written."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for p in (a, b):
+        p.mkdir()
+        (p / A.POLICY).write_text("{}")
+
+    def fake(pkg, out, *args, **_):
+        rec = out / f"audit-{pkg.name}" / A.POLICY
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text("{}")
+        regen = {"regenerated": str(rec)} if pkg.name == "a" else {}
+        return {"package": str(pkg), "seconds": {}, "failures": ["guarantees: they no longer read P.Defs"]} | regen
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), "--out", str(out), "--repo", str(tmp_path)]) == 1
+    assert A.main([str(a), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 0
+    rep = json.loads((out / "audit.json").read_text())
+    assert rep["regenerated"] == {"a": str(out / "audit-a" / A.POLICY)} and rep["packages"][0]["settled"]
+    assert A.main([str(a), str(b), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 1
+    assert json.loads((out / "audit.json").read_text())["failed"] == [str(b)]
+    assert (a / A.POLICY).read_text() == "{}"
+    with pytest.raises(SystemExit):
+        A.main([str(a), "--regenerate", "--update"])
+
+
 def test_packages_are_audited_side_by_side_and_a_build_waits_for_the_builds_it_requires(tmp_path, monkeypatch):
     """`b` requires `a` by path, and `c` requires nothing. Each fake audit blocks on the event it needs, so the run finishes
     only when `c` runs beside `a`'s build, and `b`'s build beside the rest of `a`'s audit."""
@@ -1500,6 +1726,58 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     assert any(f.startswith("reads: Core.SecurityProofs.inline read Core.SecurityProofs.twice in CoreProofs, outside the spec")
                for f in A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"]), \
         "a statement reading a proof package's definition fails: that package requires the spec, so it is no spec of it"
+
+
+@pytest.mark.parametrize("spec", [True, False])
+def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_in_reading(tmp_path, monkeypatch, spec):
+    """A spec's `proved_in` reading (`proved`) waits for its provers' builds and reads them, and the kernel replay, the
+    dependency scans and digests and the upstream scan read only the package's own facts, which `proved` returns unchanged
+    beside its pins: each starts before `proved`, is given the package's own facts, and its result is judged as before (a
+    recorded dependency digest that differs still fails). A package without `proved_in` has no wait to fill: its replay
+    starts after its facts and the rest run in turn, as their Python would contend with the audits on the critical path."""
+    pkg = tmp_path / "spec"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    A.dump(pkg, {"roots": ["P"], "upstream": {"scan": {}}, "dependencies": {"mathlib": "d0"}} |
+           ({"proved_in": ["../proofs"]} if spec else {}))
+    own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": ["own.olean"],
+           "pins": {}}
+    order, given = [], {}
+
+    class Recording(A.ThreadPoolExecutor):
+        def submit(self, fn, *args, **kw):
+            if fn is A.timed:
+                order.append(getattr(args[0], "__name__", str(args[0])))
+            return super().submit(fn, *args, **kw)
+
+    def proved(pkg, policy, facts, work, moved, ready):
+        order.append("proved")
+        return [], facts | {"pins": {"P.g": {"kind": "theorem"}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
+
+    def stub(name, result):
+        def f(*args):
+            given[name] = args
+            return result
+        f.__name__ = name
+        return f
+
+    monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
+    monkeypatch.setattr(A, "facts_of", lambda *a: own)
+    monkeypatch.setattr(A, "proved", proved)
+    monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
+    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", (["unchecked: a hit"], 7)))
+    monkeypatch.setattr(A, "dependency_digests", stub("dependency_digests", {"mathlib": "d1"}))
+    monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
+    assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
+    assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
+    assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
+    assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}
+    assert {"audit", "dependency-sources", "upstream", "dependencies", "replay"} <= set(rep["seconds"])
 
 
 def _runs(tmp_path, monkeypatch, entry, exit=0):

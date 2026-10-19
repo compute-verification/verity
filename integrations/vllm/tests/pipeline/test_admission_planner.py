@@ -1,5 +1,5 @@
 """admission_planner (COORD R17-29): the five terms, the named dominant contributor, the calibrated decision, per-record calibration.
-Torch-free; fixtures = the admission fixtures (stoch) + the fp8 B1 sizing / B8 workload of record + the planner calibration table."""
+Torch-free; fixtures = the fp8 B1 sizing / B8 workload of record + the planner calibration table."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _wl(row):
     if not p.exists():
         pytest.skip(f"workload {row} not in this checkout")
     wl = json.loads(p.read_text())
-    return wl, (wl.get("engine_args_required") or {}).get("max_num_batched_tokens")
+    return wl, wl["engine"]["args"].get("max_num_batched_tokens")
 
 
 def _cal():

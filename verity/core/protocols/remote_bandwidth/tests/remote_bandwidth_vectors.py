@@ -10,12 +10,16 @@ across calls (`Entropy`).  The challenger draws coin k and then its salt, k = 0,
 openings coin); the payload salts are drawn in block order and the receipt leaves' salts pass by pass, leaf by leaf.  The
 three passes are one window's chain: pass 0 follows the registration's digest and each later pass the root before it.
 A GPU receipter fills its store with the same payloads, encodes them under the pinned codec seed, and checks its blocks,
-receipts and roots against these.  The middle pass reads a partial plan out of store order, so its receipt for position
-p is block plan[p]'s and its tree has 10 positions.  The main chain is the default registration's: sketch-sha512, the
-default receipt kind, at 16 rows, of the block alone.  `variants` holds every other: the same store registered under
-each other kind and `bind`, and sketch-sha512 at 64 rows (named "kind", "kind/bind" for receipts that bind the stub
-tiles' z, "sketch-sha512/rows64"), with the same nonce, so the same codec seed and blocks (none of them is in the seed's
-context) under another digest, so other coins' binding, seeds, signs and roots.
+receipts and roots against these.  `codec.bound` holds blocks 0 and 20 encoded under their bound keys, as blocks
+written after the codec seed are: d_j, b_j, the first word and the block's SHA-512; `codec.coin` the same blocks under
+the coin form of their bound keys, an append's coin c_a being the first 32 bytes of `SHA512(APPEND_COIN_LABEL)`, with
+b_j(c_a) in place of b_j, so a device that takes b_j as its input is checked on both forms.  The middle pass reads a
+partial plan out of store order, so its receipt for position p is block plan[p]'s and its tree has 10 positions.  The main
+chain is the default registration's: sketch-sha512, the default receipt kind, at 16 rows, of the block alone.
+`variants` holds every other: the same store registered under each other kind and `bind`, and sketch-sha512 at 64 rows
+(named "kind", "kind/bind" for receipts that bind the stub tiles' z, "sketch-sha512/rows64"), with the same nonce, so
+the same codec seed and blocks (none of them is in the seed's context) under another digest, so other coins' binding,
+seeds, signs and roots.
 """
 
 from __future__ import annotations
@@ -38,7 +42,10 @@ NONCE = bytes(range(32))
 COIN_LABEL = b"verity remote bandwidth vector coins"
 PAYLOAD_SALT_LABEL = b"verity remote bandwidth vector payload salts"
 LEAF_SALT_LABEL = b"verity remote bandwidth vector receipt salts"
+APPEND_COIN_LABEL = b"verity remote bandwidth vector append coin"
+APPEND_COIN = hashlib.sha512(APPEND_COIN_LABEL).digest()[:codec.COIN_BYTES]
 BLOCKS = 21
+BOUND_BLOCKS = (0, 20)
 PLANS = (receipts.Plan.whole(BLOCKS), receipts.Plan(((16, 5), (3, 4), (0, 1)), BLOCKS), receipts.Plan.whole(BLOCKS))
 PARAMS = audit.Params(blocks=BLOCKS, deadline_ns=10, windows=1, samples=7, delta=1e-6, window_ns=10)
 TILES = audit.NoiseTiles(96)
@@ -158,6 +165,15 @@ def draws(reg: audit.Registration, opening: coins.CoinOpening) -> list[int]:
     return list(key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))
 
 
+def bound(payload: bytes, j: int, key: codec.Key, coin: bytes | None = None) -> dict:
+    """Block `j` encoded under its bound key, as a block written after the codec seed is, under its append's `coin` if
+    given."""
+    d, s = codec.digest(payload), key.codec.field.word_bytes
+    block = codec.encode(payload, j, key, bound=True, coin=coin)
+    return {"j": j, "digest": d.hex(), "b": format(codec.binding(d, j, key, coin), "x"), "word_0": block[:s].hex(),
+            "block_sha512": _sha(block)}
+
+
 def generate() -> dict:
     st = store()
     payloads, salts, tree, reg, blocks = st.payloads, st.salts, st.payload_tree, st.registration, st.blocks
@@ -171,7 +187,10 @@ def generate() -> dict:
                   "c": [format(c, "x") for c in key.c], "tau": format(key.tau, "x"), "mask": format(key.mask, "x"),
                   "words": [{"j": j, "w": w, "payload": payloads[j][s * w:s * (w + 1)].hex(),
                              "word": blocks[j][s * w:s * (w + 1)].hex()} for j, w in ((0, 0), (0, last), (1, 0), (20, 5))],
-                  "blocks_sha512": _sha(b"".join(blocks))},
+                  "blocks_sha512": _sha(b"".join(blocks)),
+                  "bound": [bound(payloads[j], j, key) for j in BOUND_BLOCKS],
+                  "coin": {"c_a": APPEND_COIN.hex(), "index": codec.COIN_INDEX,
+                           "bound": [bound(payloads[j], j, key, APPEND_COIN) for j in BOUND_BLOCKS]}},
         "payload": {"schema": audit.PAYLOAD_SCHEMA, "binding": audit.payload_domain(NODE, BLOCKS).binding.hex(),
                     "leaf_0": {"x": sha512_row_v2_digest(payloads[0], 8 * codec.BLOCK_BYTES).hex(), "salt": salts[0].hex(),
                                "value": receipts.hidden(payloads[0], salts[0]).hex()},

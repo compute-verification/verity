@@ -300,9 +300,9 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
   let shaNet ← netOf SHA_NET
   let hmNet ← netOf HM_NET
   let outNet ← if tmpl.isSome then pure unitNet else netOf ((mj.getObjValAs? String "out_net").toOption.getD "unit")
-  let outNetPorts ← match mj.getObjVal? "out_net_ports" with
-    | .ok (.arr a) => a.mapM (J.asNat · "out_net_ports")
-    | _ => pure #[]
+  let onp ← match mj.getObjVal? "out_net_ports" with
+    | .ok (.arr a) => outNetEntries a
+    | _ => pure (#[], none)
   let leafCuts ← match mj.getObjVal? "leaf_cuts" with
     | .ok (.arr a) => a.mapM fun w => do
       let x ← J.asArr w "a leaf cut"
@@ -329,7 +329,7 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
   if leafId != tags.merkleLeaf then throw s!"leaf-commitment scheme {leafId} is not one this verifier implements"
   let c : Circuit := { name, sha, nets, ranges, ports, outPorts, outRowPorts, g, kLog := ← kLogOf mj, upv, unitNet,
                        leavesIn, leavesOut, key := ByteArray.empty, dummyDigests, dummyOutputs, leafScheme := leafId, perVu, wires,
-                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts, leafCuts,
+                       shaNet, hmNet, classSha, metaJ := mj, outNet, outNetPorts := onp.1, outNetSlots := onp.2, leafCuts,
                        typed := ← tmpl.mapM fun t => pure (blockOf t) }
   check c tags leafScheme
   HmNets.check c

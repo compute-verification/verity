@@ -11,8 +11,8 @@ the two records an honest certifier issues for it, each signed at its own leaf (
 unit with no records is undecided (`somePending_instance`).
 
 Two hypotheses stay hypotheses, each of a function no proof can evaluate: the parameters digests (`ParamsDigests`),
-since `parametersDigest` reads `Flock.canon`, a `partial def`; and, for `answer`, that the bytes decode to the unit,
-since the parameters' and evidence's decoders read canonical JSON through it too.
+since `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate; and, for `answer`,
+that the bytes decode to the unit, since the parameters' and evidence's decoders read canonical JSON through it too.
 -/
 
 open NetworkCheck hiding Params

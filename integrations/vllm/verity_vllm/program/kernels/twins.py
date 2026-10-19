@@ -29,8 +29,7 @@ Twins (twin_id -> registered body it reproduces; see `out/capture/reports/h4_twi
     attention.fa2.bf16.v3        Attention_v3         fa2_model.cpp `fa2_rows` (online softmax, blocks last -> first); declines
                                                       non-finite operands and rows with a non-finite intermediate (flags)
 
-Equivalence evidence is machine-checked by `--check` (random small-statics instances against the gate evaluator, real
-captured instances against their output snapshots, edge words) and written as `verity-gen/twins/v1` JSON.
+Equivalence evidence is machine-checked by `--check` against the gate evaluator and written as `verity-gen/twins/v1` JSON.
 """
 from __future__ import annotations
 
@@ -58,11 +57,7 @@ from verity_vllm.program.kernels import cuda_rmsnorm_rows as CNR, prims_twins
 SCHEMA = "verity-gen/twins/v1"
 U16, U32, U64, F32, F64 = np.uint16, np.uint32, np.uint64, np.float32, np.float64
 
-# ---------------------------------------------------------------------------------------------------------
-# word helpers
-# ---------------------------------------------------------------------------------------------------------
-
-
+# word helpers ------------------------------------------------------------------------------------------------------------
 def _words16(a) -> np.ndarray:
     """bf16 leaf encodings as a contiguous uint16 array (the Replayer hands uint16/uint32/uint64 of the same values)."""
     a = np.asarray(a)

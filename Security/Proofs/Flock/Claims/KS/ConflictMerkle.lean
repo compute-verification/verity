@@ -11,6 +11,10 @@ row's digest input, the salt digest's, the leaf's, and each node's two children 
 accepted openings of one position against one cap with different rows collide (`Flock.opens_binding`), and the
 colliding pair's inputs are inputs of the two openings (`opensPair_mem`), so the two logs hold a SHA-512 collision
 (`tiedColl_of_opens`).
+
+The same for plain SHA-512 leaves (`flock-leaf/sha512-unsalted`, `MerkleScheme.sha512`), whose leaf's one input is the
+row's encoding (`opensInsP`, `merkleCheck_logsP`, `tiedColl_of_opensP`); `opensInsOf` and `merkleCheck_logsOf` take
+either scheme.
 -/
 
 namespace FlockDeploy.KS
@@ -301,6 +305,249 @@ theorem tiedColl_of_opens {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 :
       hw1 hw2 h1 h2 hr
   obtain ⟨hne, heq⟩ := MerklePair.hm96_inputs _ hc
   obtain ⟨m1, m2⟩ := opensPair_mem pos r1 y1 s1 r2 y2 s2 hc
+  refine ⟨_, _, ⟨fun e => hne (toMsg_injective e), ?_⟩, hl1 _ m1, hl2 _ m2⟩
+  show Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _))) =
+    Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _)))
+  rw [Claims.ofMsg_toMsg, Claims.ofMsg_toMsg, heq]
+
+/-! ## Plain SHA-512 leaves -/
+
+/-- The SHA-512 inputs of a leaf under `flock-leaf/sha512-unsalted`: the row's encoding. -/
+def leafInsP (row : Array F128) : List ByteArray := [MerkleScheme.rowBytes row]
+
+/-- **The SHA-512 inputs of an opening** under `flock-leaf/sha512-unsalted`: its leaf's, then its climb's. -/
+def opensInsP (row : Array F128) (salt : ByteArray) (pos : ℕ) (sibs : List ByteArray) : List ByteArray :=
+  leafInsP row ++ climbIns ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf row salt) pos sibs
+
+/-- The SHA-512 inputs of an opening under either scheme the verifier admits for its tables. -/
+def opensInsOf (ms : MerkleScheme) : Array F128 → ByteArray → ℕ → List ByteArray → List ByteArray :=
+  if ms.id = "hm96-sha512/v1" then opensIns else opensInsP
+
+theorem opensInsOf_hm96 : opensInsOf MerkleScheme.hm96Sha512 = opensIns := by
+  unfold opensInsOf
+  exact if_pos rfl
+
+theorem opensInsOf_plain : opensInsOf (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") = opensInsP := by
+  unfold opensInsOf
+  exact if_neg (by decide)
+
+theorem opsWith_plain (hs : Hashes Claims.OCV) :
+    (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").opsWith hs = MerkleOps.sha512With hs := rfl
+
+/-- The two schemes climb alike: both nodes are `SHA-512(l ‖ r)`. -/
+theorem climbWith_sha512 :
+    climbWith (MerkleOps.sha512With Claims.Hashes.oc) = climbWith (MerkleOps.hm96With Claims.Hashes.oc) := by
+  funext acc idx sibs
+  induction sibs generalizing acc idx with
+  | nil => rfl
+  | cons s rest ih => simp only [climbWith, ih] <;> rfl
+
+theorem climb_sha512 (id : String) : climb (MerkleScheme.sha512 id) = climb MerkleScheme.hm96Sha512 := by
+  funext acc idx sibs
+  induction sibs generalizing acc idx with
+  | nil => rfl
+  | cons s rest ih =>
+    simp only [climb]
+    exact ih _ _
+
+theorem Runs.leafWP {row : Array F128} {salt y : ByteArray} {L : List Claims.Msg}
+    (h : Runs sha512 ((MerkleOps.sha512With Claims.Hashes.oc).leaf row salt) y L) :
+    y = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf row salt ∧
+      ∀ b ∈ leafInsP row, Claims.toMsg b ∈ L := by
+  obtain ⟨rfl, hxm⟩ := Runs.hash (b := MerkleScheme.rowBytes row) h
+  refine ⟨rfl, fun b hb => ?_⟩
+  rw [leafInsP, List.mem_singleton] at hb
+  rw [hb]
+  exact hxm
+
+theorem Runs.opensWP {cap : Array ByteArray} {c d lanes pos : ℕ} {row : Array F128} {salt : ByteArray}
+    {sibs : List ByteArray} {L : List Claims.Msg}
+    (h : Runs sha512 (opensWith (MerkleOps.sha512With Claims.Hashes.oc)
+      (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos row salt sibs) true L) :
+    opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos row salt sibs = true ∧
+      ∀ b ∈ opensInsP row salt pos sibs, Claims.toMsg b ∈ L := by
+  unfold opensWith at h
+  split at h
+  · next hs =>
+    obtain ⟨y, hy, h⟩ := Runs.bind h
+    obtain ⟨rfl, hly⟩ := Runs.leafWP hy
+    obtain ⟨top, ht, h⟩ := Runs.bind h
+    rw [climbWith_sha512] at ht
+    obtain ⟨rfl, hlt⟩ := Runs.climbW ht
+    have he := Runs.pure h
+    refine ⟨?_, fun b hb => ?_⟩
+    · unfold opens
+      rw [hs, climb_sha512, ← he]
+      rfl
+    · rcases List.mem_append.1 hb with hb | hb
+      · exact hly b hb
+      · exact hlt b hb
+  · cases Runs.pure h
+
+/-- **The shipped plain-leaves Merkle check logs every opening**: run against `sha512` within `L`, the compiled check
+passed, and every SHA-512 input of query `j`'s opening is a message of `L`. -/
+theorem merkleCheck_logsP {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
+    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
+    (h : Runs sha512 (merkleCheckWith (MerkleOps.sha512With Claims.Hashes.oc)
+      (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d positions rows siblings salts lanes) () L) :
+    merkleCheck (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d positions rows siblings salts lanes =
+        .ok () ∧
+      ∀ j < positions.size, ∀ b ∈ opensInsP rows[j]! (salts.getD j ByteArray.empty) positions[j]!
+        (sibsOf siblings (d - c) j), Claims.toMsg b ∈ L := by
+  have hpure : merkleCheck (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d positions rows siblings salts
+      lanes = .ok () := by
+    have hR := With.merkleCheckWith_sim (shadow sha512) (With.opsWith_sim (shadow sha512) shadow_std
+      (MerkleScheme.sha512 "flock-leaf/sha512-unsalted")) (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d
+      positions rows siblings salts lanes
+    have named : (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").Named := fun s hs => by
+      have e : MerkleScheme.find? (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").id =
+          some (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := rfl
+      rw [e] at hs
+      exact (Option.some.inj hs).symm
+    rw [opsWith_plain, With.opsWith_std _ named, With.ofScheme_merkleCheck] at hR
+    exact Runs.std hR h
+  refine ⟨hpure, fun j hj b hb => ?_⟩
+  unfold merkleCheckWith at h
+  split at h
+  · exact (Runs.throw h).elim
+  split at h
+  · exact (Runs.throw h).elim
+  obtain ⟨bad, hbad, h⟩ := Runs.bind h
+  cases bad with
+  | some k => exact (Runs.throw h).elim
+  | none =>
+    have hj' := Runs.findM?_none hbad j (List.mem_range.2 hj)
+    obtain ⟨o, ho, hj'⟩ := Runs.bind hj'
+    have hno : false = !o := Runs.pure hj'
+    cases o with
+    | false => cases hno
+    | true => exact (Runs.opensWP ho).2 b hb
+
+/-- **The shipped Merkle check of either admitted scheme logs every opening.** -/
+theorem merkleCheck_logsOf {ms : MerkleScheme}
+    (hms : ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted")
+    {cap : Array ByteArray} {c d : ℕ} {positions : Array ℕ} {rows : Array (Array F128)}
+    {siblings salts : Array ByteArray} {lanes : ℕ} {L : List Claims.Msg}
+    (h : Runs sha512 (merkleCheckWith (ms.opsWith Claims.Hashes.oc) ms cap c d positions rows siblings salts lanes)
+      () L) :
+    merkleCheck ms cap c d positions rows siblings salts lanes = .ok () ∧
+      ∀ j < positions.size, ∀ b ∈ opensInsOf ms rows[j]! (salts.getD j ByteArray.empty) positions[j]!
+        (sibsOf siblings (d - c) j), Claims.toMsg b ∈ L := by
+  rcases hms with rfl | rfl
+  · rw [opsWith_hm96] at h
+    rw [opensInsOf_hm96]
+    exact merkleCheck_logs h
+  · rw [opsWith_plain] at h
+    rw [opensInsOf_plain]
+    exact merkleCheck_logsP h
+
+theorem climbPair_memP : ∀ (s1 s2 : List ByteArray) (a b : ByteArray) (idx : ℕ),
+    (climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") s1 s2 a b idx).Collides
+        (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") →
+      (climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") s1 s2 a b idx).shaInputs.1 ∈ climbIns a idx s1 ∧
+        (climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") s1 s2 a b idx).shaInputs.2 ∈ climbIns b idx s2
+  | s :: rest, t :: rest2, a, b, idx, h => by
+    by_cases hp : idx % 2 = 0
+    · have ec : ∀ x y : ByteArray, (if idx % 2 = 0 then x ++ y else y ++ x) = x ++ y := fun _ _ => ite_eq_left hp
+      by_cases he : (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node a s =
+          (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node b t
+      · have e : climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (s :: rest) (t :: rest2) a b idx =
+            .node a s b t := by
+          show (if idx % 2 = 0 then _ else _) = _
+          rw [ite_eq_left hp, ite_eq_left he]
+        rw [e]
+        refine ⟨?_, ?_⟩
+        · show a ++ s ∈ (if idx % 2 = 0 then a ++ s else s ++ a) :: _
+          rw [ec]
+          exact List.Mem.head _
+        · show b ++ t ∈ (if idx % 2 = 0 then b ++ t else t ++ b) :: _
+          rw [ec]
+          exact List.Mem.head _
+      · have e : climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (s :: rest) (t :: rest2) a b idx =
+            climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") rest rest2
+              ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node a s)
+              ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node b t) (idx / 2) := by
+          show (if idx % 2 = 0 then _ else _) = _
+          rw [ite_eq_left hp, ite_eq_right he]
+        rw [e] at h ⊢
+        obtain ⟨h1, h2⟩ := climbPair_memP rest rest2 _ _ (idx / 2) h
+        refine ⟨List.Mem.tail _ ?_, List.Mem.tail _ ?_⟩
+        · show _ ∈ climbIns (Sha512.hash (if idx % 2 = 0 then a ++ s else s ++ a)) (idx / 2) rest
+          rw [ec]
+          exact h1
+        · show _ ∈ climbIns (Sha512.hash (if idx % 2 = 0 then b ++ t else t ++ b)) (idx / 2) rest2
+          rw [ec]
+          exact h2
+    · have ec : ∀ x y : ByteArray, (if idx % 2 = 0 then x ++ y else y ++ x) = y ++ x := fun _ _ => ite_eq_right hp
+      by_cases he : (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node s a =
+          (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node t b
+      · have e : climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (s :: rest) (t :: rest2) a b idx =
+            .node s a t b := by
+          show (if idx % 2 = 0 then _ else _) = _
+          rw [ite_eq_right hp, ite_eq_left he]
+        rw [e]
+        refine ⟨?_, ?_⟩
+        · show s ++ a ∈ (if idx % 2 = 0 then a ++ s else s ++ a) :: _
+          rw [ec]
+          exact List.Mem.head _
+        · show t ++ b ∈ (if idx % 2 = 0 then b ++ t else t ++ b) :: _
+          rw [ec]
+          exact List.Mem.head _
+      · have e : climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (s :: rest) (t :: rest2) a b idx =
+            climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") rest rest2
+              ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node s a)
+              ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").node t b) (idx / 2) := by
+          show (if idx % 2 = 0 then _ else _) = _
+          rw [ite_eq_right hp, ite_eq_right he]
+        rw [e] at h ⊢
+        obtain ⟨h1, h2⟩ := climbPair_memP rest rest2 _ _ (idx / 2) h
+        refine ⟨List.Mem.tail _ ?_, List.Mem.tail _ ?_⟩
+        · show _ ∈ climbIns (Sha512.hash (if idx % 2 = 0 then a ++ s else s ++ a)) (idx / 2) rest
+          rw [ec]
+          exact h1
+        · show _ ∈ climbIns (Sha512.hash (if idx % 2 = 0 then b ++ t else t ++ b)) (idx / 2) rest2
+          rw [ec]
+          exact h2
+  | [], _, a, b, _, h => (h.2.2.2.2.1 rfl).elim
+  | _ :: _, [], a, b, _, h => (h.2.2.2.2.1 rfl).elim
+
+/-- **The colliding pair's inputs are the openings' inputs**, under plain SHA-512 leaves. -/
+theorem opensPair_memP (pos : ℕ) (r1 : Array F128) (y1 : ByteArray) (s1 : List ByteArray) (r2 : Array F128)
+    (y2 : ByteArray) (s2 : List ByteArray)
+    (h : (opensPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") pos r1 y1 s1 r2 y2 s2).Collides
+      (MerkleScheme.sha512 "flock-leaf/sha512-unsalted")) :
+    (opensPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") pos r1 y1 s1 r2 y2 s2).shaInputs.1 ∈
+        opensInsP r1 y1 pos s1 ∧
+      (opensPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") pos r1 y1 s1 r2 y2 s2).shaInputs.2 ∈
+        opensInsP r2 y2 pos s2 := by
+  by_cases hl : (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf r1 y1 =
+      (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf r2 y2
+  · have e : opensPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") pos r1 y1 s1 r2 y2 s2 = .leaf r1 r2 y1 y2 :=
+      ite_eq_left hl
+    rw [e]
+    exact ⟨List.mem_append_left _ (List.Mem.head _), List.mem_append_left _ (List.Mem.head _)⟩
+  · have e : opensPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") pos r1 y1 s1 r2 y2 s2 =
+        climbPair (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") s1 s2
+          ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf r1 y1)
+          ((MerkleScheme.sha512 "flock-leaf/sha512-unsalted").leaf r2 y2) pos := ite_eq_right hl
+    rw [e] at h ⊢
+    obtain ⟨h1, h2⟩ := climbPair_memP s1 s2 _ _ pos h
+    exact ⟨List.mem_append_right _ h1, List.mem_append_right _ h2⟩
+
+/-- **Two accepted plain-leaves openings of one position against one cap, with different rows, collide in the two
+logs.** -/
+theorem tiedColl_of_opensP {cap : Array ByteArray} {c d lanes pos : ℕ} {r1 r2 : Array F128} {y1 y2 : ByteArray}
+    {s1 s2 : List ByteArray} {l : List (Claims.Msg × Claims.Msg)}
+    (hw1 : ∀ x ∈ s1, x.size = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").digestLen)
+    (hw2 : ∀ x ∈ s2, x.size = (MerkleScheme.sha512 "flock-leaf/sha512-unsalted").digestLen)
+    (h1 : opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos r1 y1 s1 = true)
+    (h2 : opens (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") cap c d lanes pos r2 y2 s2 = true) (hr : r1 ≠ r2)
+    (hl1 : ∀ b ∈ opensInsP r1 y1 pos s1, Claims.toMsg b ∈ l.map Prod.fst)
+    (hl2 : ∀ b ∈ opensInsP r2 y2 pos s2, Claims.toMsg b ∈ l.map Prod.fst) : Claims.TiedColl sha512 l := by
+  have hc := opens_binding (MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (MerkleScheme.sha512_sized _) cap c d
+    lanes pos r1 r2 y1 y2 s1 s2 hw1 hw2 h1 h2 hr
+  obtain ⟨hne, heq⟩ := MerklePair.sha512_inputs _ _ hc
+  obtain ⟨m1, m2⟩ := opensPair_memP pos r1 y1 s1 r2 y2 s2 hc
   refine ⟨_, _, ⟨fun e => hne (toMsg_injective e), ?_⟩, hl1 _ m1, hl2 _ m2⟩
   show Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _))) =
     Claims.toMsg (Sha512.hash (Claims.ofMsg (Claims.toMsg _)))

@@ -1,0 +1,29 @@
+# Honest at L = 64 on the H200 (sm_90), a model profile (no kernel measured at this spacing yet): one
+# IGMMA.64x256x32.S8.S8, then duo on each committed word (LOP3 + IMAD + LEA.HI); the accumulator is in registers, so a
+# committed word needs no load.
+name = "dc90-l64"
+status = "provisional"
+source = "CALC from EPS1 DC's census (note:20261017T0452Z-draft-eps1-dc): duo is LOP3 + IMAD + LEA.HI a word on sm_90 (DC 05:25Z), 64 committed words a lane a MMA at L = 64"
+L = 64
+
+[mma]
+kind = "IGMMA.64x256x32.S8.S8"
+# wgmma m64n256k32 s8 (SS): a warp's 4096 of the warpgroup's 16384 words, 128 SMSP-cycles on the tensor pipe, 128
+# words/SM/clk
+class = "IGMMA_S8_N256"
+words = 4096
+depth = 32
+
+[per_mma]       # warp instructions a MMA: the MMA and the fold (LEA.HI on ALU's row)
+IGMMA_S8_N256 = 1
+ALU = 128
+IMAD = 64
+
+[operands]      # the least operand delivery any program pays a MMA when the design names none
+floor = { IGMMA_S8_N256 = 0.0 }
+source = "wgmma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the warpgroup fences and commit groups are left out, so it is a lower bound"
+
+[fold]          # lane instructions a committed word
+name = "duo"
+ALU = 2
+IMAD = 1

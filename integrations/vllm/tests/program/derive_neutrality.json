@@ -1,0 +1,42 @@
+{
+ "dsa-indexer-indexshare-h200": {
+  "digest": "37e68a1eaf764a950018412b46084c448a8825e8b9b5d91074e1cf859afeba0fa7d989b93872c33717e07fa3ac4bf0d70cb811a0ea3fb1cf1363770b7db5fc1d",
+  "gates": 24798,
+  "nodes": 63
+ },
+ "moe-experts-fp8-ue8m0-h200": {
+  "digest": "0e1ecadc1c3de5dc565f99b193b86e56ece695369de7c222389ed565d9a82e4f4b5487f5a55e6e305d43a70eda3a7e5ba35097d4806e6c354a1b45d09a647674",
+  "gates": 623574,
+  "nodes": 16
+ },
+ "rmsnorm-6144-h200": {
+  "digest": "4a59cef30bf44ea22ed3f313226e61d60e8223ccb99be43d45aee2527a0e77aa109ce2c420ed5e378f51fab283580fb0be9db5c8e319b9f95573b6aec8dc7ae6",
+  "gates": 62212,
+  "nodes": 1
+ },
+ "rmsnorm-fused-6144-h200": {
+  "digest": "de0d451e6c2c2c1bbf559e887af68f2a4d91a9b89cd46cb9a7c447975d3ddb2c181f6f4fdae9a68e6285d0ace6d3a5bd20695aa192874a53a077dc3237a8421d",
+  "gates": 73732,
+  "nodes": 1
+ },
+ "tp-toy-w2-r0": {
+  "digest": "83c4f253601c0f0dd9870bdeb96b0945b33d69cb5a79d730ea8c9275b4d25c380991b0b7591c9648ad112fcef28512f339beccfaf580881867f7750578eddd69",
+  "gates": 816,
+  "nodes": 21
+ },
+ "tp-toy-w2-r1": {
+  "digest": "3eda79a12c8b763611eecc3b8f00357fccfe152a2f09c28d35e65b3765c497e773dc6f970ef79826232f15034d3c92b84815569ce17d29fb917769fc8f8140b5",
+  "gates": 816,
+  "nodes": 21
+ },
+ "tp-toy-w8-r0": {
+  "digest": "37fc8dce364f9ea51d8033d3477f315bce657a3350598e3cc2160fbbd4ca7568967b6605c87baf673a1ab2101af1914fc5364fc02d7bce458bfead600e123c57",
+  "gates": 1496,
+  "nodes": 27
+ },
+ "tp-toy-w8-r7": {
+  "digest": "6fa4e9de6124abbcc424cd92825fa093881a536b9fa6e5d8b1a50554f9cbf07e72019cba0f1a9ab1f1683cc18c066722173a781e055850f660a30d3e63e8440b",
+  "gates": 1496,
+  "nodes": 27
+ }
+}

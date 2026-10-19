@@ -120,10 +120,8 @@ def replay(row: Any) -> None:
 
 def config_record(row: Any) -> dict[str, Any]:
     """`config_record.json` beside the row (`pipeline.config_record`) and its verdict line."""
-    st = f"{row.d}/stages.txt"
-    stages = open(st, errors="replace").read().splitlines() if os.path.isfile(st) else []
     rec = CR.write(row.d, row.row, tree=row.env.environ.get("RESEARCH_SOURCE_SHA") or row.code9,
-                   device=R.load_json(f"{row.d}/target_family.json"), stages={"lines": stages[-24:]})
+                   device=R.load_json(f"{row.d}/target_family.json"))
     rp = rec["replay"]
     row.verdict("config", rec["outcome"], rec["why"] or f"replay {rp.get('equal')}/{rp.get('evaluated')} equal (k={rp.get('k')}, "
                                                           f"{rp.get('strata_by')} strata), run root {str(rec['commit'].get('run_root'))[:16]}")

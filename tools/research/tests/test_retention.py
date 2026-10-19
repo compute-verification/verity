@@ -504,7 +504,7 @@ def test_keep_refuses_a_bad_owner_and_a_bad_expiry_and_report_prints_a_table(tmp
     assert research_main(["keep", str(d), "--owner", "pouw", "--expires", "never", "--priority", "low", "--root", str(tmp_path)]) == 2
     assert "lane handle" in capsys.readouterr().err
     assert research_main(["keep", str(d), "--owner", "@pouw", "--expires", "soon", "--priority", "low", "--root", str(tmp_path)]) == 2
-    assert "give never, a date" in capsys.readouterr().err and not (d / R.SIDECAR).exists()
+    assert "give never, now, a date" in capsys.readouterr().err and not (d / R.SIDECAR).exists()
     assert research_main(["keep", str(d), "--owner", "@pouw", "--expires", "7d", "--priority", "low", "--root", str(tmp_path)]) == 0
     assert R.load(d)["expires"] == "2026-10-08T19:30:00Z"
     data(tmp_path, "cache/uv")
@@ -658,3 +658,11 @@ def test_rm_through_research(tmp_path, monkeypatch, capsys):
     assert research_main([*base, "--approved-by", "@compute-accounting", "--apply"]) == 0
     assert not p0.exists() and not p1.exists() and "deleted 2 of 2 path(s)" in capsys.readouterr().out
     assert [x["by"] for x in log_lines(root)][-2:] == [BY, BY]
+
+
+def test_expires_now_is_what_rm_tells_an_owner_to_record():
+    """17 Oct: rm's refusal tells the owner to record `--expires now`, and keep refused that word, so 34 records failed."""
+    now = datetime(2026, 10, 17, 14, 20, tzinfo=timezone.utc)
+    assert R.parse_expires("now", now) == R.fmt_utc(now) == R.parse_expires("0h", now)
+    with pytest.raises(R.RecordError, match="never, now, a date"):
+        R.parse_expires("soon", now)

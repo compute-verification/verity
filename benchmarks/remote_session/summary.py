@@ -1,6 +1,7 @@
 """A run's sessions in a few lines, from its `verifier.json` and `prover.json` (`run.sh`'s outputs): each honest
-session's verdict, γ terms and costs, and for each skip fraction F the sessions accepted against the rate the draws
-predict, Π_t C(U_t − F·N·L_t, s) / C(U_t, s) over the windows drawn, and the draws that landed on a dropped block.
+session's verdict, γ terms and costs, each kv session's verdict and the blocks it appended, released and read after the
+seed, and for each skip fraction F the sessions accepted against the rate the draws predict,
+Π_t C(U_t − F·N·L_t, s) / C(U_t, s) over the windows drawn, and the draws that landed on a dropped block.
 
     python summary.py OUT [--json]
     python summary.py OUT OUT ... [--json]      the skip sessions of several runs, pooled
@@ -26,7 +27,7 @@ def summarize(out: Path) -> dict:
     v = json.loads((out / "verifier.json").read_text())
     p = json.loads((out / "prover.json").read_text())
     N, s = v["registration"]["blocks"], None
-    honest, skips = [], defaultdict(list)
+    honest, kv, skips = [], [], defaultdict(list)
     for vs, ps in zip(v["sessions"], p["sessions"]):
         s = vs["samples"]
         passes = [w["passes"] for w in vs["windows_seen"]]
@@ -42,6 +43,14 @@ def summarize(out: Path) -> dict:
                         "slack_ms_min": min(w["slack_ns"] for w in vs["windows_seen"] if w["slack_ns"] is not None) / 1e6,
                         "passes_per_s": sum(passes) / (vs["windows"] * vs["window_ns"] / 1e9)})
             honest.append(row)
+        elif ps["mode"] in ("kv", "kvdrop"):
+            pub = vs.get("record", {}).get("public", {})
+            row.update({"mode": ps["mode"], "pages": ps["kv"]["pages"], "appended": vs.get("appended"),
+                        "released": vs.get("released"), "post_seed": pub.get("post_seed"),
+                        "pass_appended_max": max(ps["kv"]["pass_appended"], default=0),
+                        "gamma_spec": vs.get("ledger", {}).get("spec", {}).get("gamma"),
+                        "rejected_on_dropped": ps.get("failure_on_dropped")})
+            kv.append(row)
         else:
             dropped = ps["dropped_count"] if "dropped_count" in ps else len(ps["dropped"])
             # The chance this session is accepted: every one of its W windows drawn clean, at the passes each made
@@ -71,7 +80,7 @@ def summarize(out: Path) -> dict:
                       "rejected_windows": [r.get("rejected_window") for r in rows], "rows": rows})
     return {"blocks": N, "bytes": N * 4096, "samples": s, "calibration": v["calibration"], "rtt": v["rtt"],
             "allowance_ms": v["allowance_ns"] / 1e6, "verifier_process_cpu_s": v["process_cpu_ns"] / 1e9,
-            "wire": v["wire"], "honest": honest, "skip": table}
+            "wire": v["wire"], "honest": honest, "kv": kv, "skip": table}
 
 
 def pooled(summaries: list[dict]) -> list[dict]:
@@ -126,6 +135,10 @@ def main() -> int:
     for h in r["honest"]:
         print(f"honest {h['k']}: accepted={h['accepted']} passes/s={h['passes_per_s']:.1f} gamma(spec)={h['gamma_spec']} "
               f"slack_min={h['slack_ms_min']:.2f} ms verify_cpu={h['verify_cpu_s']:.2f} s")
+    for h in r["kv"]:
+        print(f"{h['mode']}:{h['pages']} {h['k']}: accepted={h['accepted']} failure={h['failure']} "
+              f"appended={h['appended']} released={h['released']} post_seed={h['post_seed']} "
+              f"gamma(spec)={h['gamma_spec']} rejected_on_dropped={h['rejected_on_dropped']}")
     for t in r["skip"]:
         print(f"skip 2^{t['log2_fraction']:.0f} ({t['dropped_blocks']} blocks): {t['accepted']}/{t['sessions']} accepted, "
               f"expected {t['expected_accepted']:.2f} ± {t['sd']:.2f}; draws on dropped {t['draws_on_dropped']}/{t['draws']} "

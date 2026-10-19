@@ -44,6 +44,12 @@ theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
     st.merkle = MerkleScheme.hm96Sha512 :=
   Hidden.setupHidden_hm96 hl h
 
+/-- `setupHidden_hm96` under plain SHA-512 leaves (`Hidden.setupHidden_plain`). -/
+theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" :=
+  Hidden.setupHidden_plain hl h
+
 /-- `StmtWF` and `RegionsWF` ([wave2-hidden]'s `Hidden.setupHidden_wf`). -/
 theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     StmtWF st ∧ RegionsWF st :=

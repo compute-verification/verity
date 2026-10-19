@@ -399,8 +399,8 @@ def withPlainLeaves (t : Tags) : Tags :=
   let identity := (t.identity.setObjVal! "leaf_scheme" leafSchemePlain).setObjVal! "hashes" hashes
   { t with merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }
 
-/-- A statement whose trees have plain SHA-512 leaves (leafSchemePlain), ZK off: verify refuses it with or without --zk
-until a soundness headline covers plain leaves; upstream's --zk refuses it too. -/
+/-- A statement whose trees have plain SHA-512 leaves (leafSchemePlain), ZK off: verify refuses it under --zk, as upstream's
+--zk does, and without --zk takes it where `ProvedScope.leafOk` covers it (hidden outputs). -/
 def plainLeaves (t : Tags) : Bool := t.pinnedLeafScheme == some leafSchemePlain
 
 /-- A recursive session's inner statement (PROTOCOL.md §16.16): the default statement with plain SHA-512 leaves. -/

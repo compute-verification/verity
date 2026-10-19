@@ -3,9 +3,10 @@
 `instances.jsonl` (one line per Compute instance) lists every operand's references.  The record form (`verity-gen/instances/v1`,
 `operand_refs_form: runs`) writes every maximal run `["space", idx, lo, hi]` -- the node-space K/V gathers of a long prefill run by run:
 54 M items / 1.63 GB on a B8 1024/128 row, of which every reader keeps the ~564 k parameter-space ("p") runs and discards the rest after
-parsing it.  The compact form (`verity-gen/instances/v2`, `operand_refs_form: progressions`) keeps the "p" runs exactly as before and
-writes the node-space references as progressions `["N", idx, lo, hi, dI, dL, dH, count]` (cb_a.compact's form, count >= 2; a single
-node-space run stays `["n", idx, lo, hi]`).  Lossless: `compact.runs_from_file_items` returns the record's run list, item for item.
+parsing it.  The compact form (`verity-gen/instances/v2`, `operand_refs_form: progressions`) writes node- AND parameter-space references
+as progressions `["N"|"P", idx, lo, hi, dI, dL, dH, count]` (cb_a.compact's form, count >= 2; a single run stays `["n"|"p", idx, lo, hi]`).
+"P" since the GLM-5.3 scattered weight reads: a transposed-weight operand is ~1e6 parameter-space runs, run by run under the first v2
+form.  Lossless: `compact.runs_from_file_items` returns the record's run list, item for item.
 
 Every reader accepts both forms and expands on read where it needs runs (compare.load_oracle keeps the "p" runs of either form;
 tp.rank_match and bench.gen_batch_candidate expand); nothing caches an expansion by digest.  The writer is `run_config.persist_program`

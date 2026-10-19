@@ -1,8 +1,5 @@
 """[P6, 2026-09-23] `profiles.generic`: every checkpoint role's κ profile from its HF config.json and the family facts table -- no per-model
-module, no role -> module table.  The per-role fixtures `profiles/expected/derived_<ROLE>[_tp<W>].json` pin the canonical form
-(`profiles.canonical`) the generic constructor produced when the hand-written modules were retired (they were shown equal to it, object by
-object, by the `test_profiles_generic_equals_hand.py` that left with those modules); a change here is a deliberate re-pin
-(`verity-vllm canonical-profiles --write`, reviewed in the diff)."""
+module, no role -> module table.  Every shipped config.json builds a profile or is refused with its reason."""
 from __future__ import annotations
 
 import dataclasses
@@ -15,63 +12,27 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import TokenSelectArgmax
-from verity_vllm.engine.profiles import canonical as K
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import generic as G
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
 
-FIXTURES = sorted(K.EXPECTED_DIR.glob("derived_*.json"))
-ROLES = K.fixture_roles()
+SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
+#: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
+TP2_ROLES = ("B1", "LLAMA32_1B", "QWEN3_30B_A3B")
+ROLES = [(r, 1) for r in SHIPPED] + [(r, 2) for r in TP2_ROLES]
+#: shipped configs the constructor refuses, by the reason it states
+REFUSED = {"QWEN15_AWQ": "awq", "DSV4_PRO": "no κ profile constructor"}
 
 
-def _diff(a, b, path="", out=None):
-    out = [] if out is None else out
-    if isinstance(a, dict) and isinstance(b, dict):
-        for k in sorted(set(a) | set(b)):
-            if k not in a or k not in b:
-                out.append(f"{path}.{k}: {'only expected' if k in a else 'only built'}")
-            else:
-                _diff(a[k], b[k], f"{path}.{k}", out)
-    elif isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
-        for i, (x, y) in enumerate(zip(a, b)):
-            _diff(x, y, f"{path}[{i}]", out)
-    elif a != b:
-        out.append(f"{path}: expected {json.dumps(a, default=repr)[:200]} built {json.dumps(b, default=repr)[:200]}")
-    return out
+# ------------------------------------------------------------------------------------------------------------------- shipped configs
 
-
-# --------------------------------------------------------------------------------------------------------------------- the pinned form
-
-def test_every_shipped_config_has_a_fixture_and_vice_versa():
-    """The fixture set IS the shipped-config set (at TP1 and the recorded TP worlds) minus the roles the constructor refuses."""
-    names = {p.stem for p in FIXTURES}
-    expected = set()
-    for role, world in ROLES:
-        try:
-            G.make_module(f"verity_vllm.engine.profiles.{G.module_name(role, world)}")
-        except ImportError:
-            continue
-        expected.add(G.module_name(role, world))
-    assert names == expected, (sorted(names - expected), sorted(expected - names))
-
-
-@pytest.mark.parametrize("fixture", FIXTURES, ids=[p.stem for p in FIXTURES])
-def test_generic_profile_equals_its_fixture(fixture):
-    role, world = G.parse_module(fixture.stem)
-    built = json.loads(K.dumps(K.canonical_of_role(role, world)))     # through JSON: the fixture's own value domain
-    expected = json.loads(fixture.read_text())
-    delta = _diff(expected, built)
-    assert not delta, f"{fixture.name}: {len(delta)} differences (a deliberate re-pin is `verity-vllm canonical-profiles --write`):\n  " + "\n  ".join(delta[:40])
-
-
-def test_fixture_config_sha_is_the_manifest_bytes():
-    """The config.json a fixture was derived from is the manifest's byte copy (sha256 == checkpoints.json's config_sha256)."""
-    for role, world in ROLES:
-        if world != 1:
-            continue
+def test_shipped_config_sha_is_the_manifest_bytes():
+    """A role's config.json is the manifest's byte copy (sha256 == checkpoints.json's config_sha256)."""
+    for role in SHIPPED:
         hit = dg.find_hf_config(role)
         assert hit is not None, role
         path, source, entry = hit
@@ -90,10 +51,12 @@ def test_module_name_grammar():
     assert G.parse_module("gen_llama_llama32_1b") is None and G.parse_module("vllm_d9105ea80_sm89_eager") is None
 
 
-def test_finder_materialises_every_fixture_module_and_the_x07_name():
-    for fixture in FIXTURES:
-        mod = importlib.import_module(f"verity_vllm.engine.profiles.{fixture.stem}")
-        assert mod.PROFILE.id == json.loads(fixture.read_text())["id"]
+def test_finder_materialises_every_role_module_and_the_x07_name():
+    for role, world in ROLES:
+        if role in REFUSED:
+            continue
+        mod = importlib.import_module(f"verity_vllm.engine.profiles.{G.module_name(role, world)}")
+        assert mod.PROFILE.id == G.profile_id(role, mod.C, world)
         assert callable(mod.weight_field) and callable(mod.root_class) and callable(mod.check_header) and callable(mod.build_profile)
     dense = importlib.import_module("verity_vllm.engine.profiles.dense_MISTRAL7B")
     assert dense.PROFILE.id == importlib.import_module("verity_vllm.engine.profiles.derived_MISTRAL7B").PROFILE.id
@@ -109,17 +72,28 @@ def test_the_x07_name_is_for_dense_architectures_only():
 def test_profile_module_for_case_is_derived_not_looked_up():
     from verity_vllm.engine import profiles
     assert not hasattr(profiles, "PROFILE_BY_CASE")
-    refused = {"QWEN15_AWQ": "awq"}                                             # shipped configs the constructor refuses by name
     for role, world in ROLES:
-        if role in refused:
+        if role in REFUSED:
             continue
         assert profile_module_for_case(role, world) == G.module_name(role, world)
         assert profile_for_case(role, world).notes["case"] == role
-    for role, why in refused.items():
+    for role, why in REFUSED.items():
         with pytest.raises(KeyError, match=why):
             profile_module_for_case(role)
     with pytest.raises(KeyError, match="no HF config.json"):
         profile_module_for_case("NO_SUCH_ROLE")
+
+
+def test_derived_b0_is_the_protected_base_profile_behind_the_tuned_gemm():
+    """The golden corpus's profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
+    same C up to the identity fields and unset keys, the same pattern list after the target's tuned-GEMM specialization."""
+    derived = importlib.import_module("verity_vllm.engine.profiles.derived_B0").PROFILE
+
+    def facts(C):
+        return {k: v for k, v in C.items() if k not in ("family", "revision", "profile") and v is not None}
+
+    assert facts(derived.config) == facts(BASE.PROFILE.config)
+    assert [p.name for p in derived.patterns] == ["gemm.matmul_kernel_persistent.tuned"] + [p.name for p in BASE.PROFILE.patterns]
 
 
 # ------------------------------------------------------------------------------------------------------------------- family facts
@@ -129,9 +103,9 @@ def test_family_facts_rules_agree_with_analytic():
     for fam, f in FF.FAMILY_FACTS.items():
         if fam in analytic.FAMILY_RULES:
             assert f["rules"] == analytic.FAMILY_RULES[fam], fam
-        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe"), fam
+        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe", "mhc-moe"), fam
         assert "ForCausalLM" in f["vllm_class"], fam
-        assert "vllm/model_executor/models/" in f["rules_provenance"] or "transformers" in f["rules_provenance"], fam
+        assert any(s in f["rules_provenance"] for s in ("vllm/model_executor/models/", "vllm/models/", "transformers")), fam
 
 
 def test_every_hand_fact_cites_where_vllm_hard_codes_it():
@@ -171,14 +145,6 @@ def test_moe_hand_facts_and_derived_router_vpt():
 
 
 # --------------------------------------------------------------------------------------------------------------------- world > 1
-
-TP2_ROLES = sorted(r for r, w in K.fixture_roles() if w == 2)
-
-
-def test_the_recorded_tp2_worlds_are_pinned():
-    """The two retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half: three roles have a TP2 fixture (data, not a table)."""
-    assert len(TP2_ROLES) == 3
-
 
 @pytest.mark.parametrize("role", TP2_ROLES)
 def test_rank_profile_is_the_world_divided_configuration(role):
@@ -225,16 +191,44 @@ def test_structural_refusals_are_stated():
     assert "awq" in G.structural_refusal(json.loads((dg.HF_CONFIG_DIR / "QWEN15_AWQ.config.json").read_text()))
 
 
-def test_the_sparse_attention_family_is_described_and_refused():
-    """GLM-5.3's `glm_moe_dsa`: the facts resolve over a TP8 rank's configuration to what the MoE scope and the capture map read, and the
-    profile refuses the class (no fold patterns for the indexer or sparse MLA)."""
+def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile():
+    """GLM-5.3's facts resolve over a TP8 rank and register every DSA fold before the shared-expert MoE scope."""
     from pathlib import Path
+
+    from verity_vllm.observe.fold.patterns.dsa import (
+        INDEX_SHARE_SRC_SHA,
+        NORM_SRC_SHA,
+        Q_SRC_SHA,
+        DsaIndexShare,
+        DsaMqaAllocation,
+        DsaMqaGather,
+        DsaNormRope,
+        DsaQ,
+        DsaSparseMla,
+        DsaTopK,
+    )
+    from verity_vllm.engine.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 
     cfg = json.loads((Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
     assert FF.facts_for(cfg)["arch"] == "dsa-moe"
-    assert "sparse attention" in G.structural_refusal(cfg)
-    with pytest.raises(ValueError, match="sparse attention"):
-        G.derive_config(cfg, repo=None, revision=None, world=8)
+    assert G.structural_refusal(cfg) is None
+    profile = G.build_profile("GLM53", 8, hf_config=cfg, repo="zai-org/GLM-5.3-FP8", revision="aca966e4")
+    assert profile.config["MOE_I_FULL"] == 2048 and profile.config["I"] == 256 and profile.config["ROUTER_VPT"] == 8
+    assert [type(p) for p in profile.patterns[2:9]] == [
+        DsaNormRope, DsaQ, DsaMqaGather, DsaMqaAllocation, DsaTopK, DsaIndexShare, DsaSparseMla]
+    assert (NORM_SRC_SHA, Q_SRC_SHA, INDEX_SHARE_SRC_SHA) == (
+        "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de",
+        "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043",
+        "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63",
+    )
+    shared = next(p for p in profile.patterns if isinstance(p, MoEFusedSharedExpertsFp8))
+    assert shared.group == 128 and shared.gate_spec is None
+    wf = profile.weight_field                                           # the family's `params`: dense below FIRST_DENSE = 3, MoE from it on
+    assert wf("model.layers.0.mlp.gate_up_proj.weight") == ("dense_layers", 0, "gate_up_w")
+    assert wf("model.layers.3.mlp.experts.routed_experts.w13_weight") == ("layers", 0, "w13")
+    assert wf("model.layers.6.self_attn.indexer.wq_b.weight") == ("indexers", 3, "wq_b_w")      # INDEXER_LAYERS = (0, 1, 2, 6, ...)
+    assert wf("model.layers.4.self_attn.indexer.k_norm.bias") is None
+    assert profile.notes["moe"]["status"].startswith("constructive")
     vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
     assert {k: vals[k] for k in ("NUM_EXPERTS", "N_GROUP", "TOPK_GROUP", "RENORMALIZE", "SCORING", "ROUTED_SCALING_FACTOR", "SHARED_I",
                                  "INDEX_HEADS", "INDEX_HEAD_DIM", "INDEX_TOPK", "INDEX_TOPK_FREQ", "INDEX_SKIP_TOPK_OFFSET", "FIRST_DENSE")} == {
@@ -242,6 +236,19 @@ def test_the_sparse_attention_family_is_described_and_refused():
         "SHARED_I": 256, "INDEX_HEADS": 32, "INDEX_HEAD_DIM": 128, "INDEX_TOPK": 2048, "INDEX_TOPK_FREQ": 4, "INDEX_SKIP_TOPK_OFFSET": 3,
         "FIRST_DENSE": 3}
     assert vals["ATTN_SCALE"] == 256 ** -0.5 and vals["ROPE_NEOX"] is False and prov["SHARED_I"] == "derived"
+
+
+def test_the_hyper_connected_family_resolves_its_rank_facts_without_a_profile():
+    """DeepSeek-V4-Pro's facts resolve over a TP8 rank (the experts' width and the heads divided, the rest whole); its profile refuses."""
+    cfg = json.loads((dg.HF_CONFIG_DIR / "DSV4_PRO.config.json").read_text())
+    assert FF.facts_for(cfg)["arch"] == "mhc-moe" and "no κ profile constructor" in G.structural_refusal(cfg)
+    vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
+    assert {k: vals[k] for k in ("Q_LORA", "HEAD_DIM", "QK_ROPE", "O_GROUPS", "O_LORA", "WINDOW", "PADDED_HEADS", "INDEX_HEADS", "NUM_EXPERTS",
+                                 "TOPK", "HASH_LAYERS", "SCORING", "SCORE_BIAS", "SHARED_I", "EXPERT_DTYPE", "HC_MULT", "HC_REPEAT")} == {
+        "Q_LORA": 1536, "HEAD_DIM": 512, "QK_ROPE": 64, "O_GROUPS": 16, "O_LORA": 1024, "WINDOW": 128, "PADDED_HEADS": 64, "INDEX_HEADS": 64,
+        "NUM_EXPERTS": 384, "TOPK": 6, "HASH_LAYERS": 3, "SCORING": "sqrtsoftplus", "SCORE_BIAS": "noaux_tc", "SHARED_I": 384,
+        "EXPERT_DTYPE": "fp4", "HC_MULT": 4, "HC_REPEAT": 20}
+    assert vals["ATTN_SCALE"] == 512 ** -0.5 and len(vals["COMPRESS_RATIOS"]) == cfg["num_hidden_layers"] + 1 and prov["SHARED_I"] == "derived"
 
 
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():

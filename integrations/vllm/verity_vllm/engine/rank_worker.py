@@ -67,7 +67,8 @@ def repo_modules_loaded() -> dict[str, Any]:
     jit = []
     if nc is not None and getattr(nc, "_EXT", None) is not None:
         here = Path(getattr(nc, "HERE", str(root / "verity_vllm" / "commit" / "committer")))
-        jit = [str(Path(here, n).resolve().relative_to(root)) for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_plans.h") if Path(here, n).exists()]
+        jit = [str(Path(here, n).resolve().relative_to(root))
+               for n in ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu", "native_plans.h", "sha512.cuh") if Path(here, n).exists()]
         files.update(jit)
     return {"method": "runtime: sys.modules of this process filtered to the repo root + vllm-poc, plus native_collect's cpp_extension sources when loaded (TP-11)",
             "pid": os.getpid(), "n": len(files), "files": sorted(files), "native_collect_jit_sources": jit}
@@ -91,6 +92,20 @@ def _moe_collective_modules() -> list[Any]:
 
 def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
+
+
+def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
+    """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
+    hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
+    the process (on the steps' clock, `t_end`); and each source's own counters."""
+    sources = {}
+    for s in getattr(com, "sources", ()):
+        st = getattr(s, "stats", None)
+        sources[getattr(s, "short_name", type(s).__name__)] = st() if callable(st) else st
+    return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
+                       "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
+            "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
+            "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
 
 
 class _LLMShim:
@@ -198,7 +213,7 @@ class TP2CaptureWorkerExtension:
     def tp2_install(self, *, out_dir: str, workload: dict, case: str, cp: dict, engine_kwargs: dict, env_flags: dict,
                     snapshot_steps: list[int], snapshot_max_bytes: int, adapter_revision: str, wheel_sha256: str | None,
                     vllm_commit: str | None, reenter: bool = True, triton: bool = True, module_hooks: bool = True,
-                    weights_verified: bool = False, argv: list[str] | None = None) -> dict[str, Any]:
+                    weights_verified: bool = False, argv: list[str] | None = None, target: Any = None) -> dict[str, Any]:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
@@ -212,7 +227,7 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
-                           env_flags=dict(env_flags), build_s=0.0, case=case)
+                           env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
                                 extra_notes={"tp2": {"rank": rank, "world_size": world, "log": f"log.rank{rank}.jsonl.gz",
                                                      "seam": "worker_extension_cls " + EXTENSION, "facts": facts},
@@ -320,124 +335,6 @@ class TP2CaptureWorkerExtension:
         return {"rank": rank, "n_params": doc["n_params"], "n_buffers": doc["n_buffers"], "total_bytes": doc["total_bytes"],
                 "modules": len(mods)}
 
-    # ------------------------------------------------------------------ R13 P4: TP2 numerical-semantics probe
-
-    def tp2_sem_install(self, *, out_dir: str, layers: list[int], max_calls: int = 3) -> dict[str, Any]:
-        """Record, for the first `max_calls` forward calls of the parallel layers of `layers` (+ embed_tokens, logits_processor),
-        the rank-local INPUT, the rank-local partial GEMM output (the argument of the all-reduce / all-gather), the collective
-        OUTPUT, and the module output, plus this rank's weight shards.  `tp2_semantics_analyze.py` recomputes the TP1 and TP2
-        semantics offline and compares bit-exactly.  Collectives are seen by wrapping the module-global names
-        `tensor_model_parallel_all_reduce` / `_all_gather` in vLLM's linear / vocab_parallel_embedding / logits_processor modules
-        while a hooked module is executing (the wrapper is pass-through otherwise; the run is unchanged)."""
-        import torch
-        import vllm.model_executor.layers.linear as L
-        import vllm.model_executor.layers.logits_processor as LP
-        import vllm.model_executor.layers.vocab_parallel_embedding as VE
-
-        facts = _tp_facts(self)
-        rank, world = int(facts["tp"]["rank"]), int(facts["tp"]["world_size"])
-        out = Path(out_dir) / f"rank{rank}"
-        out.mkdir(parents=True, exist_ok=True)
-        model = self.model_runner.get_model()
-        names = ["model.embed_tokens", "logits_processor"]
-        for li in layers:
-            names += [f"model.layers.{li}.self_attn.qkv_proj", f"model.layers.{li}.self_attn.o_proj",
-                      f"model.layers.{li}.mlp.gate_up_proj", f"model.layers.{li}.mlp.down_proj"]
-        mods = dict(model.named_modules())
-        st: dict[str, Any] = {"active": None, "calls": {n: 0 for n in names}, "handles": [], "hooks": hooks.Hooks(), "rank": rank, "out": out,
-                              "max_calls": int(max_calls), "records": []}
-        self._tp2_sem = st
-
-        def cpu(t: Any) -> Any:
-            if isinstance(t, torch.Tensor):
-                return t.detach().to("cpu", copy=True)
-            if t is None or isinstance(t, (int, float, str, bool)):
-                return t
-            return f"<{type(t).__module__}.{type(t).__name__}>"   # e.g. the lm_head module passed to LogitsProcessor.forward
-
-        def coll_wrap(orig: Any, kind: str) -> Any:
-            def w(x: Any, *a: Any, **k: Any) -> Any:
-                y = orig(x, *a, **k)
-                act = st["active"]
-                if act is not None:
-                    torch.cuda.synchronize()
-                    act["coll"].append({"kind": kind, "in": cpu(x), "out": cpu(y), "args": [str(v) for v in a], "kwargs": {kk: str(v) for kk, v in k.items()}})
-                return y
-            return w
-
-        for mod, attr, kind in ((L, "tensor_model_parallel_all_reduce", "all_reduce"), (VE, "tensor_model_parallel_all_reduce", "all_reduce"),
-                                (LP, "tensor_model_parallel_all_gather", "all_gather"), (LP, "tensor_model_parallel_gather", "gather")):
-            if hasattr(mod, attr):
-                st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
-
-        def pre(name: str) -> Any:
-            def h(m: Any, args: tuple, kwargs: dict) -> None:
-                c = st["calls"][name]
-                if c >= st["max_calls"] or st["active"] is not None:
-                    return
-                torch.cuda.synchronize()
-                st["active"] = {"name": name, "call": c, "in": [cpu(a) for a in args], "in_kw": {k: cpu(v) for k, v in kwargs.items()}, "coll": []}
-            return h
-
-        def post(name: str) -> Any:
-            def h(m: Any, args: tuple, kwargs: dict, output: Any) -> None:
-                act = st["active"]
-                if act is None or act["name"] != name:
-                    return
-                torch.cuda.synchronize()
-                o = output[0] if isinstance(output, tuple) else output
-                act["out"] = cpu(o)
-                act["out_extra"] = [cpu(x) for x in output[1:]] if isinstance(output, tuple) else []
-                act["module_class"] = type(m).__name__
-                act["module_attrs"] = _jsonable({k: getattr(m, k, None) for k in ("tp_size", "tp_rank", "input_size", "output_size",
-                                                 "input_size_per_partition", "output_size_per_partition", "output_sizes", "reduce_results",
-                                                 "gather_output", "skip_bias_add", "num_embeddings", "num_embeddings_per_partition",
-                                                 "org_vocab_size", "embedding_dim", "use_all_gather", "input_is_parallel") if hasattr(m, k)})
-                torch.save(act, out / f"{name}.call{act['call']}.pt")
-                st["records"].append({"name": name, "call": act["call"], "n_coll": len(act["coll"]),
-                                      "in_shape": [list(a.shape) for a in act["in"] if isinstance(a, torch.Tensor)],
-                                      "out_shape": list(act["out"].shape) if isinstance(act["out"], torch.Tensor) else None})
-                st["calls"][name] = act["call"] + 1
-                st["active"] = None
-            return h
-
-        for n in names:
-            m = mods.get(n)
-            if m is None:
-                st["records"].append({"name": n, "missing": True})
-                continue
-            st["handles"].append(m.register_forward_pre_hook(pre(n), with_kwargs=True))
-            st["handles"].append(m.register_forward_hook(post(n), with_kwargs=True))
-        # weight shards of the hooked modules (+ lm_head, which logits_processor uses without a module call)
-        W: dict[str, Any] = {}
-        for n in names + ["lm_head"]:
-            m = mods.get(n)
-            if m is None:
-                continue
-            for pn, p in m.named_parameters(recurse=False):
-                W[f"{n}.{pn}"] = cpu(p)
-            for bn, b in m.named_buffers(recurse=False):
-                W[f"{n}.{bn}"] = cpu(b)
-        lm = mods.get("lm_head")
-        meta = {"rank": rank, "world_size": world, "facts": facts, "layers": list(layers), "names": names,
-                "lm_head_is_embed": bool(lm is not None and getattr(lm, "weight", None) is not None and
-                                        lm.weight.data_ptr() == mods["model.embed_tokens"].weight.data_ptr()),
-                "weights": {k: {"shape": list(v.shape), "dtype": str(v.dtype)} for k, v in W.items()}}
-        torch.save(W, out / "weights.pt")
-        (out / "meta.json").write_text(json.dumps(meta, indent=1, default=str) + "\n")
-        return _jsonable({"rank": rank, "world_size": world, "hooked": [n for n in names if n in mods], "weights": list(W)})
-
-    def tp2_sem_close(self) -> dict[str, Any]:
-        import torch
-
-        st = self._tp2_sem
-        torch.cuda.synchronize()
-        for h in st["handles"]:
-            h.remove()
-        st["hooks"].uninstall()
-        (st["out"] / "records.json").write_text(json.dumps(st["records"], indent=1, default=str) + "\n")
-        return _jsonable({"rank": st["rank"], "records": st["records"]})
-
     # ------------------------------------------------------------------ R13 P4 step 3: every collective of the run, per rank, in order
 
     def tp2_coll_install(self, *, out_dir: str, store_steps: int = 1 << 30) -> dict[str, Any]:
@@ -445,8 +342,8 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  Same wrapping seam as
-        `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
+        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  The collectives are
+        seen by wrapping their module-global names; the run's computation is unchanged."""
         import hashlib
 
         import torch
@@ -478,6 +375,8 @@ class TP2CaptureWorkerExtension:
             flush_step()
             st["step"] += 1
             st["k"] = 0
+            if st["witness"] is not None:
+                st["witness"].step(st["step"])
 
         def observer_rec() -> Any:
             """[R17 tp D90] the aten observer of `tp2_install`, when this rank runs BOTH (one engine run = one fold + one recorder): the
@@ -526,6 +425,10 @@ class TP2CaptureWorkerExtension:
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
         for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
+        # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`): each
+        # Marlin MoE align call's schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl`
+        from verity_vllm.acquire.sources.moe_align_source import capture_witness
+        st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 
         # [R15 rev-cb T6-1, mirrored on the Match side] `cur` is a stack: a collective issued by an outer module after a nested hooked module
         # returned is attributed to the OUTER module; a fused-MoE runner nested under a hooked fused-MoE wrapper is NOT hooked, so the
@@ -575,13 +478,15 @@ class TP2CaptureWorkerExtension:
         for h in st["handles"]:
             h.remove()
         st["hooks"].uninstall()
+        witness = st["witness"].close(st["out"]) if st["witness"] is not None else None
         with (st["out"] / f"coll.rank{st['rank']}.jsonl").open("w") as f:
             for r in st["records"]:
                 f.write(json.dumps(r) + "\n")
         by_kind: dict[str, int] = {}
         for r in st["records"]:
             by_kind[r["kind"]] = by_kind.get(r["kind"], 0) + 1
-        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"]})
+        return _jsonable({"rank": st["rank"], "n_steps": st["step"] + 1, "n_collectives": len(st["records"]), "by_kind": by_kind, "n_stored_steps": st["n_stored"],
+                          "witness": witness})
 
     # ------------------------------------------------------------------ R13 P4 step 4: rank-aware commitment (the collector in every rank)
 
@@ -593,11 +498,14 @@ class TP2CaptureWorkerExtension:
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
+                        commit_scheme: str | None = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
-        the rank's loaded weight SHARDS), attach the FA2 hidden source, size the arena from the workload envelope, register the rank's
+        the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
-        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
+        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
+        (unset = vllm-v1) is the committer's (`NativeCollectCommitter`); tp-commit's root combination takes vllm-v1's 32-byte roots only,
+        so another scheme is for drivers that read each rank's root as it is (`benchmarks/served_commit/tp_decode.py`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
@@ -606,12 +514,13 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
-        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
+        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True,
+                               commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
-        if hidden_so:
-            from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
-            man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+        from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
+        man = json.loads(Path(required_manifest).read_text()) if required_manifest else None      # its ROW word 3 / MS class must be the build's
+        if (res.setdefault("attention_hidden", attention_hidden(man, model))["family"] and hidden_so):   # MLA / DSA: no hidden class, no FA2 source
             com.attach_source(make_hidden_source(com, hidden_so, ns=(hidden_ns or Path(hidden_so).stem), manifest=man,
                                                  fa2_cls=getattr(com, "hidden_source_cls", HiddenM1Source), fa3_cls=getattr(com, "hidden_source_cls_fa3", None)))
             res["hidden_source"] = hidden_so
@@ -622,7 +531,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model)
+            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1))
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
@@ -656,7 +565,7 @@ class TP2CaptureWorkerExtension:
         else:
             res["tp_partial_source"] = None      # negative: collective outputs only (the R13 state) -- must fail the required classes
         if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None:
-            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1=bool(hidden_so)))
+            res["arena_sizing"] = _jsonable(com.size_arena(envelope, hidden_m1="hidden_source" in res))
             if getattr(com, "windowed", False):
                 # [R13 tp / P0-01 parity] windowed staging (VERITY_WINDOW_MB > 0): the ring replaces the per-step blocks -- the same call
                 # commit_delta makes after size_arena; without it every windowed step fails closed (`win_log2_chunks` unset -> 0 tensors).
@@ -717,7 +626,12 @@ class TP2CaptureWorkerExtension:
                                 "served_before_sha256": before, "served_after_sha256": after, "own_shard_of_record_sha256": own_sha,
                                 "own_equals_before": own_sha == before, "after_equals_before": after == before})
             res["serve_shard_from"] = applied
-        res["weight_registration"] = _jsonable(com.register_weights())
+        # the weights the rank registers, pins and replays: its MXFP4 Marlin experts' fields as loaded (`acquire.as_loaded`, bound by the TP
+        # driver with the checkpoint of record), every other tensor as served
+        weights, res["weights_as_loaded"] = (weights_as_loaded(model, world=int(facts["tp"]["world_size"]), rank=rank) if weights_as_loaded
+                                             else (model, None))
+        with hooks.patched(com, "model", weights):
+            res["weight_registration"] = _jsonable(com.register_weights())
         # [manbind MAN-09, COORD M-0614 (1)] WEIGHTS OF RECORD per rank: sha256 of every live parameter of THIS rank (the shards the root
         # covers) == the digest composed from the PINNED checkpoint shards by the rank Program's shard map (weights_of_record.build_record,
         # engine-free, from result.json tp {world, rank}); self-consistency with the run's own root is not this check.  Absent -> unpinned
@@ -737,12 +651,12 @@ class TP2CaptureWorkerExtension:
                         raise RuntimeError(f"rank {rank}: no rank Program (instances.json.gz) under {pdir}")
                     pdir = subs[0]
                 rec = WR.build_record(str(pdir), str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
-                                      model=weights_pin.get("model"))
+                                      model=weights_pin.get("model"), shard_pin=weights_pin.get("shard_pin"))
                 rtp = (rec.get("tp") or {})
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
                     raise RuntimeError(f"rank {rank}: weights of record built from a Program of tp={rtp}, not this rank's (world {world_}, rank {rank})")
-                live = WR.live_param_digests(model)
+                live = WR.live_param_digests(weights)
                 chk = WR.check(rec, live)
                 chk["rank"] = rank
                 chk["program_dir"] = str(pdir)
@@ -810,7 +724,7 @@ class TP2CaptureWorkerExtension:
             except Exception as e:  # noqa: BLE001
                 res["attention_plane_classes"]["error"] = repr(e)[:300]
         self._tp2_commit = {"com": com, "eng": eng, "base": baseline_state(eng), "rank": rank, "rc": None, "program_digest": program_digest,
-                            "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
+                            "weights": weights, "tps": (tps if tp_partials else None), "world": int(facts["tp"]["world_size"]), "n_requests": int(n_requests),
                             "required_manifest": required_manifest, "request_order": list(request_order or []), "arrivals": dict(arrivals or {}),
                             "caps": dict(caps or {}), "match_tokens": dict(match_tokens) if match_tokens else None, "swap_requests": swapped, "swap_rule": swap_rule,
                             "match_capture_dir": (str(match_capture_dir) if match_capture_dir else None), "weights_pin": st_pin,
@@ -885,10 +799,11 @@ class TP2CaptureWorkerExtension:
                           "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "spans_total_s": rc.spans["total_s"],
                           "expected_tensors": rc.extra.get("expected_tensors"), "committed_tensors": rc.extra.get("committed_tensors"),
                           "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
-                          "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
+                          "collector_failure": rc.extra.get("collector_failure"), "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
-                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes")})
+                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                          "timing": _commit_timing(com, rc)})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
         """Engine row id -> workload `r<i>` (commit_delta's rule, mirrored per rank): vLLM v1 suffixes the external request id with
@@ -996,10 +911,9 @@ class TP2CaptureWorkerExtension:
                 "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
-        """[R14 TP-03 x BIND-01] THIS rank's binding map (bind's `verity_vllm.commit.binding`: identity -> commitment location, fixed at
-        finalize before any challenge) and its coverage against the rank's EXPECTED population = model structure x workload steps x this
-        rank, where every collective-issuing module additionally requires its rank-local member `part_rank<r>` / `shard_rank<r>` (the TP
-        partial source's sites).  The population is structural (install-time module set + site set), never read from what was emitted."""
+        """[R14 TP-03 x BIND-01] THIS rank's binding map (`verity_vllm.commit.binding`: identity -> commitment location, fixed at finalize
+        before any challenge) and its coverage against the rank's required manifest, whose rows the committed tensors bind (`query.manifest.bind`);
+        without one, against model structure x workload steps x this rank plus each collective site's `part_rank<r>` / `shard_rank<r>`."""
         st = self._tp2_commit
         pd = st.get("program_digest")
         if not pd:
@@ -1007,6 +921,7 @@ class TP2CaptureWorkerExtension:
         n_req = int(st.get("n_requests") or 1)
         try:
             from verity_vllm.commit import binding as bd
+            from verity_vllm.query.manifest.bind import Binder, source_ports
         except Exception as e:  # noqa: BLE001
             return {"skipped": f"binding module unavailable: {e!r}"}
         com, rank = st["com"], int(st["rank"])
@@ -1018,7 +933,11 @@ class TP2CaptureWorkerExtension:
         if n_req > 1 and not step_rows:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
-            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows,
+            requests = [f"r{i}" for i in range(n_req)]
+            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            man_doc = st.get("manifest_doc") if st.get("required_manifest") else None
+            binder = Binder.of_manifest(man_doc, rank=rank, ports=source_ports(com.sources), arrivals=arrivals) if man_doc else None
+            bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, binder=binder,
                                         collector={"committer": com.name, "layout": "chunk-leaf-v1", "retain": getattr(com, "retain", None), "windowed": bool(getattr(com, "windowed", False))})
             struct = bd.structure_of(com)
             tps = st.get("tps")
@@ -1038,8 +957,6 @@ class TP2CaptureWorkerExtension:
                         struct["modules"].append({"op_path": site, "class": cls, "invocations": 1, "members": [mem]})
                     tp_members += 1
                 struct["tp_partial_sites"] = len(tps.sites)
-            requests = [f"r{i}" for i in range(n_req)]
-            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
             caps = {f"r{i}": int((st.get("caps") or {}).get(f"r{i}", 0)) for i in range(n_req)}
             horizon = max(arrivals[k] + caps[k] for k in caps) if any(caps.values()) else len(rc.steps)
             wl = {"program_digest": pd, "requests": requests, "steps": horizon, "ranks": [rank],
@@ -1051,12 +968,10 @@ class TP2CaptureWorkerExtension:
             source = "structure(model modules x MEMBER_RULES + TP partial sites) x workload(requests, steps, rank)"
             if st.get("required_manifest"):
                 # [R15 TP-04] population of record = manbind's Program x canonical query manifest for THIS rank (rows with rank=r; the
-                # manifest's per-rank Program digest already checked at make); the structural population is recorded beside it
+                # manifest's per-rank Program digest already checked at make)
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
-                man_hdr["structural_population_digest"], man_hdr["structural_population_n"] = bd.population_digest(pop_struct)
-                man_hdr["structural_coverage_ok"] = bd.coverage_check(pop_struct, bmap)["ok"]
                 man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
                 source = "required-manifest (manbind: Program(rank) x canonical query, rows with rank=r)"
                 if not pop:
@@ -1118,101 +1033,18 @@ class TP2CaptureWorkerExtension:
         return dict(repo_modules_loaded(), rank=int(self._tp2_commit["rank"]) if getattr(self, "_tp2_commit", None) else None)
 
     def tp2_commit_xrank_dump(self, *, out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2, max_rows: int = 16) -> dict[str, Any]:
-        """[R16 tp TP-12, rev F-r16-18] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (every member opened
-        and verified against this rank's run root, the same reader as the value check and the sampled replay; a member that does not verify
-        is a pick without bytes, named -> the driver's check FAILs it): per pick the rank's partial rows and the
-        rows of the received collective output as this rank committed it (`<site>/0` dense module output, `<site>/out` MoE block).  Picks are
-        drawn identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt; the driver pairs
-        the ranks and evaluates the definition (xrank_collectives.check_picks)."""
-        import time as _t
-
+        """[TP-12] THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
+        each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
 
-        from verity_vllm.check import oracle_compare as OC
-        from verity_vllm.check.match import xrank_collectives as XC
-        from verity_vllm.acquire.sources.partial_source import _committed
+        from verity_vllm.engine import env as engine_env
+        from verity_vllm.pipeline.tp import xrank_dump as XD
+        from verity_vllm.program.registry.tp_allreduce import device_of, settings_of
 
-        st = self._tp2_commit
-        com, rank = st["com"], int(st["rank"])
-        t0 = _t.perf_counter()
-        layouts = {int(s): [(m.name, tuple(m.shape)) for m in ms] for s, ms in getattr(com, "_layouts", {}).items()}
-        plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=int(st["world"]))
-        picks, missing, nbytes = [], 0, 0
-        rd = OC.OpenedReader(com, st["rc"]) if st.get("rc") is not None else None
-        unverified: dict[tuple[int, str], str] = {}
-
-        def tensor_of(step: int, meta) -> Any:
-            if rd is None:
-                unverified[(step, meta.name)] = "no run commitment on this rank (not finalized)"
-                return None
-            try:
-                b = _committed(rd, step, meta)
-            except OC.OpeningNotVerified as e:
-                unverified[(step, meta.name)] = f"opened value not verified: {e}"[:200]
-                return None
-            if b is None:
-                return None
-            dt = getattr(torch, str(meta.dtype).replace("torch.", ""))
-            return torch.frombuffer(bytearray(b), dtype=dt).reshape(tuple(meta.shape)).clone()
-
-        for pk in plan["picks"]:
-            step = int(pk["step"])
-            metas = {m.name: m for m in com._layouts.get(step, [])}
-            pm = metas.get(pk["member"])
-            rname = next((n for n in pk["recv_candidates"] if n in metas), None)
-            rm = metas.get(rname) if rname else None
-            rows = torch.tensor(pk["rows"], dtype=torch.long)
-            part = tensor_of(step, pm) if pm is not None else None
-            recv = tensor_of(step, rm) if rm is not None else None
-            why = None
-            if part is None or recv is None:
-                def _gone(meta) -> str:
-                    return unverified.get((step, meta.name), "bytes not retained")
-                why = ("partial " + ("not in this step's layout" if pm is None else _gone(pm)) if part is None else "") + \
-                      ("; " if part is None and recv is None else "") + \
-                      (("received output " + ("not committed under any of " + "/".join(pk["recv_candidates"]) if rm is None else _gone(rm))) if recv is None else "")
-                missing += 1
-            else:
-                if part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] == recv.shape[0] == pk["rows_total"]:
-                    part, recv = part[rows], recv[rows]
-                elif part.dim() >= 2 and recv.dim() >= 2 and part.shape[0] != recv.shape[0]:
-                    why = f"row counts differ: partial {tuple(part.shape)} vs received {tuple(recv.shape)}"
-                nbytes += part.numel() * part.element_size() + recv.numel() * recv.element_size()
-            emb = None
-            if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]):
-                # EmbeddingShard_v1 leg (ruling 27): this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
-                # (the live parameter, which the per-rank weights pin ties to the checkpoint of record); rows outside the rank's range are zero
-                try:
-                    im = metas.get(f"{pk['site']}/in")
-                    ids_t = tensor_of(step, im) if im is not None else None
-                    mod = dict(st["eng"].model.named_modules()).get(pk["site"])
-                    si = getattr(mod, "shard_indices", None)
-                    if ids_t is None or mod is None or si is None or part is None:
-                        emb = {"ok": None, "why": (((unverified.get((step, im.name)) if im is not None else None) or "no committed ids member <site>/in") if ids_t is None
-                                                   else "no VocabParallelEmbedding shard_indices on the module" if si is None else "partial not committed")}
-                    else:
-                        lo, hi = int(si.org_vocab_start_index), int(si.org_vocab_end_index)
-                        idx = ids_t.reshape(-1)
-                        idx = idx[rows] if (idx.numel() == pk["rows_total"] and part.shape[0] == len(pk["rows"])) else idx
-                        mask = (idx >= lo) & (idx < hi)
-                        local = torch.where(mask, idx - lo, torch.zeros_like(idx)).long()
-                        W = mod.weight
-                        exp = W[local.to(W.device)].masked_fill((~mask).unsqueeze(-1).to(W.device), 0).to("cpu")
-                        ok = bool(exp.shape == part.shape and exp.dtype == part.dtype and torch.equal(exp, part))
-                        emb = {"ok": ok, "n_diff": (int((exp.view(torch.int16) != part.view(torch.int16)).sum()) if (exp.shape == part.shape and exp.dtype == torch.bfloat16) else None),
-                               "vocab_range": [lo, hi], "masked_rows": int((~mask).sum()), "rows": int(idx.numel()), "why": None if ok else "committed partial != masked gather from this rank's shard"}
-                except Exception as e:  # noqa: BLE001
-                    emb = {"ok": None, "why": f"embedding-shard leg error: {e!r}"[:200]}
-            picks.append(dict(pk, part=part, recv=recv, recv_member=rname, why=why, emb=emb))
-        rec = {"schema": "verity/tp2/xrank-picks/v1", "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
-               "per_stratum": int(per_stratum), "max_rows": int(max_rows), "steps_in_layout": len(layouts)}
-        fn = Path(out_dir) / f"xrank_pair{int(pair)}_rank{rank}.pt"
-        torch.save(rec, fn)
-        return {"rank": rank, "file": str(fn), "picks": len(picks), "strata": len(plan["strata"]), "missing": missing, "bytes": nbytes,
-                "value_source": rd.record() if rd is not None else {"source": "opened", "reads": 0, "why": "no run commitment on this rank"},
-                "unreplayable_sites": st.get("xrank_unreplayable_sites"), "strata_sites": sorted({v["site"] for v in plan["strata"].values()}),
-                "families": sorted({p["family"] for p in picks}), "flipped_collective_inputs": int(getattr(st.get("tps"), "flipped", 0) or 0),
-                "wall_s": round(_t.perf_counter() - t0, 3)}
+        settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
+        p = torch.cuda.get_device_properties(torch.cuda.current_device())
+        return XD.dump(self._tp2_commit, settings=settings, out_dir=out_dir, seed_hex=seed_hex, pair=pair, per_stratum=per_stratum, max_rows=max_rows,
+                       device=device_of((p.major, p.minor), p.multi_processor_count))
 
     def tp2_commit_binding_map_dump(self, *, out_dir: str) -> dict[str, Any]:
         """[R15 TP-04] write THIS rank's binding map of the last finalized run (identity -> commitment location, fixed at finalize before any
@@ -1391,7 +1223,8 @@ class TP2CaptureWorkerExtension:
         self._tp2_prof = p
         return {"rank": int(_tp_facts(self)["tp"]["rank"]), "started": True, "pid": os.getpid()}
 
-    def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False) -> dict[str, Any]:
+    def tp2_profiler_stop(self, *, out_dir: str, keep_trace: bool = False, keep_ranks: list[int] | None = None) -> dict[str, Any]:
+        """The census of the profiled stretch; ``keep_trace``: the Kineto trace too, gzipped (only on ``keep_ranks`` when given)."""
         import torch
 
         from verity_vllm.properties import census
@@ -1411,7 +1244,7 @@ class TP2CaptureWorkerExtension:
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":
                 cpu_ops[e.get("name", "")] = cpu_ops.get(e.get("name", ""), 0) + 1
-        if keep_trace:
+        if keep_trace and (keep_ranks is None or rank in keep_ranks):
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()

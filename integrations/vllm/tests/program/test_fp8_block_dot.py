@@ -299,14 +299,19 @@ def _quant_rule_ctx(K: int, G: int):
 
 
 @pytest.mark.parametrize("G", [64, 128])
-def test_the_quant_rule_binds_every_registered_group(G: int) -> None:
+@pytest.mark.parametrize("ue8m0", [False, True])
+def test_the_quant_rule_binds_every_registered_group(G: int, ue8m0: bool) -> None:
+    """`use_ue8m0` selects the Definition the rule emits: False `fp8_group_quant` (Fp8GroupQuant_v1), True `fp8_group_quant_ue8m0`
+    (Fp8GroupQuantUe8m0_v1, registry.deepgemm) -- the MoE experts' input quant when DeepGEMM is on, vLLM's sm_90 default."""
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
+    from verity_vllm.program.registry import deepgemm as DG
 
     (x, xq, xs), ctx = _quant_rule_ctx(6144, G)
-    node = types.SimpleNamespace(args=(x, xq, xs, G, 1e-10, -448.0, 448.0, False, False, False), kwargs={})
+    node = types.SimpleNamespace(args=(x, xq, xs, G, 1e-10, -448.0, 448.0, ue8m0, False, False), kwargs={})
     assert R.PerTokenGroupFp8QuantRule().applies(node, ctx) is True
     assert V.kind("fp8_group_quant", K=6144, G=G) == bind(F.Fp8GroupQuant, K=6144, G=G)
+    assert V.kind("fp8_group_quant_ue8m0", K=6144, G=G) == bind(DG.Fp8GroupQuantUe8m0, K=6144, G=G)
 
 
 @pytest.mark.parametrize("G", [32, 96, 256, True])

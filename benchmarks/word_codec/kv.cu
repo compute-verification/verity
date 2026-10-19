@@ -8,7 +8,8 @@
 // x_M = a^(2^M - 1) by M's bits from the top, then LOW_BITS squarings with a multiply by a at LOW's set bits.
 //
 // Kernels (extern "C" launchers at the end): encode and decode of a flat store of words (NL limbs each, contiguous), the
-// decode written out or XORed into a checksum (the read-and-decode rate); the read of a store; compute-only chains for the
+// decode written out or XORed into a checksum (the read-and-decode rate), and under bound keys (a token-layer's offset b
+// added to every round's tweak, `kv.py`'s binding); the read of a store; compute-only chains for the
 // squaring (ILP 1 or 2 words a thread), decode and encode rates; a spin kernel to queue timed launches behind.
 #include <algorithm>
 #include <cstdint>
@@ -618,17 +619,46 @@ __device__ __forceinline__ void sigma(u32 (&x)[NL], const u32 (&m)[NL]) {
   }
 }
 
+__device__ __forceinline__ void load(const u32 *__restrict__ p, u32 (&x)[NL]) {
+  const uint4 *q = reinterpret_cast<const uint4 *>(p);
+#pragma unroll
+  for (int k = 0; k < NL / 4; ++k) {
+    const uint4 v = q[k];
+    x[4 * k] = v.x;
+    x[4 * k + 1] = v.y;
+    x[4 * k + 2] = v.z;
+    x[4 * k + 3] = v.w;
+  }
+}
+
+__device__ __forceinline__ void store(u32 *__restrict__ p, const u32 (&x)[NL]) {
+  uint4 *q = reinterpret_cast<uint4 *>(p);
+#pragma unroll
+  for (int k = 0; k < NL / 4; ++k) q[k] = make_uint4(x[4 * k], x[4 * k + 1], x[4 * k + 2], x[4 * k + 3]);
+}
+
+// t(i) + b mod p, b a bound block's offset (`kv.py`'s binding: NL canonical limbs in global memory, 16-byte aligned), or
+// t(i) with b null, the seed's key.
+__device__ __forceinline__ void tweak_at(u64 i, const u32 *b, u32 (&t)[NL]) {
+  tweak(i, t);
+  if (b) {
+    u32 s[NL];
+    load(b, s);
+    add_mod(t, s);
+  }
+}
+
 // Past 768 bits the tweak is recomputed each round, so it isn't held through the root.
-__device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k) {
+__device__ __forceinline__ void encode_word(u32 (&x)[NL], u64 i, int k, const u32 *b = nullptr) {
   u32 t[NL];
-  if (!STREAM) tweak(i, t);
+  if (!STREAM) tweak_at(i, b, t);
 #pragma unroll 1
   for (int j = 0; j < k; ++j) {
     u32 c[NL];
     if (MASK && j > 0) sigma(x, kMask);
     round_constant(j, c);
     add_mod(x, c);
-    if (STREAM) tweak(i, t);
+    if (STREAM) tweak_at(i, b, t);
     add_mod(x, t);
     rho(x);
   }
@@ -648,9 +678,9 @@ __device__ __forceinline__ void decode_word_t(u32 (&x)[NL], const u32 (&t)[NL], 
   }
 }
 
-__device__ __forceinline__ void decode_word(u32 (&x)[NL], u64 i, int k) {
+__device__ __forceinline__ void decode_word(u32 (&x)[NL], u64 i, int k, const u32 *b = nullptr) {
   u32 t[NL];
-  tweak(i, t);
+  tweak_at(i, b, t);
   decode_word_t(x, t, k);
 }
 
@@ -660,24 +690,6 @@ __device__ __forceinline__ void tweak_step(u32 (&t)[NL], const u32 *td) {
 #pragma unroll
   for (int l = 0; l < NL; ++l) s[l] = td[l];
   add_mod(t, s);
-}
-
-__device__ __forceinline__ void load(const u32 *__restrict__ p, u32 (&x)[NL]) {
-  const uint4 *q = reinterpret_cast<const uint4 *>(p);
-#pragma unroll
-  for (int k = 0; k < NL / 4; ++k) {
-    const uint4 v = q[k];
-    x[4 * k] = v.x;
-    x[4 * k + 1] = v.y;
-    x[4 * k + 2] = v.z;
-    x[4 * k + 3] = v.w;
-  }
-}
-
-__device__ __forceinline__ void store(u32 *__restrict__ p, const u32 (&x)[NL]) {
-  uint4 *q = reinterpret_cast<uint4 *>(p);
-#pragma unroll
-  for (int k = 0; k < NL / 4; ++k) q[k] = make_uint4(x[4 * k], x[4 * k + 1], x[4 * k + 2], x[4 * k + 3]);
 }
 
 __device__ __forceinline__ void xor_out(u32 acc, unsigned long long *xr) {
@@ -756,7 +768,9 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ s, 
 }
 
 // what 0: `steps` squarings of ILP words a thread; 1: `steps` decodes of k rounds; 2: `steps` encodes of k rounds, each
-// step's input the previous output and the index advancing. The words start canonical (top limb below p's).
+// step's input the previous output and the index advancing. The words start canonical (top limb below p's). Timing
+// only, the squaring split in two (FOLD 6 builds): 3 FOLD 6's product with its fold replaced by the halves' XOR (every
+// limb of the product still live), 4 the fold alone, of the word and its limbs rotated one place.
 template <int WHAT, int ILP>
 __global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned long long *xr) {
   const u64 gid = (u64)blockIdx.x * WPB + threadIdx.x;
@@ -780,9 +794,28 @@ __global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned l
   } else if constexpr (WHAT == 1) {
 #pragma unroll 1
     for (u64 s = 0; s < steps; ++s) decode_word(x[0], gid + s, k);
-  } else {
+  } else if constexpr (WHAT == 2) {
 #pragma unroll 1
     for (u64 s = 0; s < steps; ++s) encode_word(x[0], gid + s, k);
+  } else if constexpr (WHAT == 3) {
+#pragma unroll 1
+    for (u64 s = 0; s < steps; ++s) {
+      u32 t[2 * NL];
+      sqr_fold6(x[0], t);
+#pragma unroll
+      for (int l = 0; l < NL; ++l) x[0][l] = t[l] ^ t[NL + l];
+    }
+  } else {
+#pragma unroll 1
+    for (u64 s = 0; s < steps; ++s) {
+      u32 t[2 * NL];
+#pragma unroll
+      for (int l = 0; l < NL; ++l) {
+        t[l] = x[0][l];
+        t[NL + l] = x[0][(l + 1) % NL];
+      }
+      fold(t, x[0]);
+    }
   }
   u32 acc = 0;
 #pragma unroll
@@ -790,6 +823,27 @@ __global__ void __launch_bounds__(WPB) chain_kernel(int k, u64 steps, unsigned l
 #pragma unroll
     for (int l = 0; l < NL; ++l) acc ^= x[w][l];
   }
+  xor_out(acc, xr);
+}
+
+// Timing only: what 2's encodes held to MINB CTAs an SM (what 5: 3), so ptxas fits the root's registers to 3 warps a
+// sub-partition and spills what the squarings don't read (the root's base and its saved power, read at its multiplies).
+template <int MINB>
+__global__ void __launch_bounds__(WPB, MINB) encode_held_kernel(int k, u64 steps, unsigned long long *xr) {
+  const u64 gid = (u64)blockIdx.x * WPB + threadIdx.x;
+  u32 x[NL];
+  u32 h = (u32)(gid * 2654435761u) ^ 0x9e3779b9u;
+#pragma unroll
+  for (int l = 0; l < NL; ++l) {
+    h = h * 1664525u + 1013904223u;
+    x[l] = h;
+  }
+  x[NL - 1] &= 0x7fffffffu;
+#pragma unroll 1
+  for (u64 s = 0; s < steps; ++s) encode_word(x, gid + s, k);
+  u32 acc = 0;
+#pragma unroll
+  for (int l = 0; l < NL; ++l) acc ^= x[l];
   xor_out(acc, xr);
 }
 
@@ -823,6 +877,28 @@ constexpr int AT = 32 * KV_HEADS;
 constexpr int PART = HEADS * (HEAD_DIM + 2);
 static_assert(GROUP * TT == 32 && GROUP <= 8 && TLE % 16 == 0 && WB % 16 == 0,
               "a warp's scores, one a lane; 16-byte copies");
+
+// encode_kernel and decode_kernel under bound keys: the launch's words are whole token-layers of TLW words, and token-layer
+// u (words u TLW … from index base) takes the offset at b + u NL. A thread a word, each word's tweak its own.
+__global__ void __launch_bounds__(WPB) encode_bound_kernel(const u32 *__restrict__ in, u32 *__restrict__ out, u64 n,
+                                                           u64 base, int k, const u32 *__restrict__ b) {
+  for (u64 w = (u64)blockIdx.x * WPB + threadIdx.x; w < n; w += (u64)gridDim.x * WPB) {
+    u32 x[NL];
+    load(in + w * NL, x);
+    encode_word(x, base + w, k, b + w / TLW * NL);
+    store(out + w * NL, x);
+  }
+}
+
+__global__ void __launch_bounds__(WPB) decode_bound_kernel(const u32 *__restrict__ in, u32 *__restrict__ out, u64 n,
+                                                           u64 base, int k, const u32 *__restrict__ b) {
+  for (u64 w = (u64)blockIdx.x * WPB + threadIdx.x; w < n; w += (u64)gridDim.x * WPB) {
+    u32 x[NL];
+    load(in + w * NL, x);
+    decode_word(x, base + w, k, b + w / TLW * NL);
+    store(out + w * NL, x);
+  }
+}
 
 template <bool ENC>
 __host__ __device__ constexpr int attn_dt() {
@@ -2197,6 +2273,27 @@ int kv_encode(const void *in, void *out, uint64_t n, uint64_t base, int k, int g
   return launched();
 }
 
+// kv_encode and kv_decode under bound keys: n words from index base, both whole token-layers (multiples of TLW), and
+// token-layer u's offset b_u at b + u NL (NL limbs, canonical: `kv.py`'s binding of its digest and block, plus
+// tau TLW (j - base / TLW - u) mod p to encode it at another block j's indices).
+int kv_encode_bound(const void *in, void *out, uint64_t n, uint64_t base, int k, const void *b, int grid,
+                    cudaStream_t s) {
+  if (k < 1 || k > kv::KMAX || !b || n % kv::TLW || base % kv::TLW) return -1;
+  kv::encode_bound_kernel<<<blocks(n, grid), kv::WPB, 0, s>>>((const uint32_t *)in, (uint32_t *)out, n, base, k,
+                                                               (const uint32_t *)b);
+  return launched();
+}
+
+int kv_decode_bound(const void *in, void *out, uint64_t n, uint64_t base, int k, const void *b, int grid,
+                    cudaStream_t s) {
+  if (k < 1 || k > kv::KMAX || !b || !out || n % kv::TLW || base % kv::TLW) return -1;
+  kv::decode_bound_kernel<<<blocks(n, grid), kv::WPB, 0, s>>>((const uint32_t *)in, (uint32_t *)out, n, base, k,
+                                                               (const uint32_t *)b);
+  return launched();
+}
+
+int kv_tlw() { return kv::TLW; }
+
 // The encode's preferred shared memory carveout (percent of the SM's L1 and shared memory, -1 the driver's choice). An
 // SM holding the encode's CTAs takes another kernel's CTAs only when its carveout fits their shared memory, so beside a
 // GEMM the encode asks for the most.
@@ -2243,7 +2340,21 @@ int kv_read(const void *store, uint64_t bytes, unsigned long long *xr, int grid,
 }
 
 int kv_chain(int what, int k, int ilp, uint64_t steps, int grid, unsigned long long *xr, cudaStream_t s) {
-  if (what < 0 || what > 2 || ((what > 0) && (k < 1 || k > kv::KMAX))) return -1;
+  if (what < 0 || what > 5 || ((what == 1 || what == 2 || what == 5) && (k < 1 || k > kv::KMAX))) return -1;
+  if (what == 5) {
+    if (ilp != 1) return -1;
+    kv::encode_held_kernel<3><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+    return launched();
+  }
+  if (what > 2) {
+    if constexpr (kv::FOLD6) {
+      if (ilp != 1) return -1;
+      if (what == 3) kv::chain_kernel<3, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+      else kv::chain_kernel<4, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
+      return launched();
+    }
+    return -1;
+  }
   if (what == 0 && ilp == 1) kv::chain_kernel<0, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
   else if (what == 0 && ilp == 2) kv::chain_kernel<0, 2><<<grid, kv::WPB, 0, s>>>(k, steps, xr);
   else if (what == 1) kv::chain_kernel<1, 1><<<grid, kv::WPB, 0, s>>>(k, steps, xr);

@@ -1,0 +1,37 @@
+# Honest at L = 32 on the B200 (sm_100) with the LI fold and LI-CP-W's checkpoint reduced across the warp by ONE
+# `redux.sync.xor.b32` a segment (DC EPS1 r9), in place of the 5-shuffle fallback dc100-licpw-l32 prices. Measured: the
+# honest LI loop beside the saturated UTCIMMA folds 95.99 words/SM/clk with no checkpoint, 89.60 with the redux reduction
+# (+7.1% cycles) and 68.27 with the 5-shuffle one (+40.6%); so redux costs the latency-bound loop about a fifth of what
+# the dependent butterfly does, and one word a warp a segment still leaves the SM. redux has no census kind, so its one
+# instruction is priced on SHFL's MIO class at its measured 2 SHFL (REDUX 0.5 /SM/clk against SHFL's 1.0).
+name = "dc100-licpw-redux-l32"
+status = "measured"
+source = "DC EPS1 r9, tcliU (r20261017-202319-b781, redux 89.60 words/SM/clk vs base 95.99), on dc100-li-l32's 1216.6 (r20261017-085236-51a6, r20261017-104307-644b)"
+L = 32
+
+[mma]
+kind = "UTCIMMA.128x256x32.S8.S8"
+class = "UTCIMMA_M128_N256"
+words = 32768
+depth = 32
+
+[per_mma]       # warp instructions a MMA: the MMA, the TMEM loads and the fold
+UTCIMMA_M128_N256 = 1
+LDTM_32X32B_X128 = 8
+ALU = 544       # 0.53125 x 1024
+IMAD = 512
+SHFL = 24       # 0.0234375 x 1024
+
+[measured]
+cycles_per_mma = 1303.3         # dc100-li-l32's 1216.6 x 1.071, the measured checkpoint cost of one redux.sync.xor a segment
+source = "DC EPS1 r9, tcliU (r20261017-202319-b781): the honest LI loop beside the saturated UTCIMMA folds 95.99 words/SM/clk with no checkpoint and 89.60 with one redux.sync.xor.b32 a segment (+7.1% cycles), on dc100-li-l32's 1216.6 (r20261017-085236-51a6, r20261017-104307-644b)"
+
+[operands]      # the least operand delivery any program pays a MMA when the design names none
+floor = { LDTM_32X32B_X128 = 8 }
+source = "tcgen05.mma reads both operands from shared memory by descriptor (TMA fills it), so delivery costs no warp instruction a MMA; the accumulator's 32768 words leave TMEM by 8 tcgen05.ld.32x32b.x128 a MMA at L = 32 (4096 words each), which every tensor-route word pays to be folded on lanes"
+
+[fold]          # lane instructions a committed word; the x128 loads are the tensor route's, as [operands] says
+name = "li"
+ALU = 0.53125   # LI's 0.5 and the 4-LOP3 chain XOR a segment (0.03125)
+IMAD = 0.5
+SHFL = 0.0234375 # one redux.sync.xor priced at 2 SHFL, and the store at 1, a segment (3 / 128)

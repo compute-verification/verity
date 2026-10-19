@@ -24,8 +24,9 @@ So `SHVZK` holds at `δ_B = 2·max(n_hid, |L|)·δ₁`.
 simulated messages, `τ = (⟨λ, Y₁⟩ − θ)/β`, which is the real `τ = ⟨λ, μ⟩` only if the honest prover's pads `h` satisfy the
 inner proof's constraint `⟨λ, h⟩ = θ` in every run (`Table.InnerHolds`: for every randomness and rep, the replay on the
 prover's own messages gives `Σ_i λ_i·h_i = θ`). It holds because a valid witness's clear values pass the clear checks,
-each of the ten constraints being affine in `h`; nothing in Lean proves it of the masked prover, so it stays a hypothesis
-about the code. Where the prover refuses, the inner proof is not sent and nothing reads it; Lemma A needs no witness
+each of the ten constraints being affine in `h`: at the tables `verify --zk` sets up it is `CoinedOK`'s
+(`innerOf_holds_of`, through `coinedOf_setup_of`), which `Proofs.Flock.Claims.ZK.Deployed` reads; at the tables here it
+is a hypothesis. Where the prover refuses, the inner proof is not sent and nothing reads it; Lemma A needs no witness
 property but the public region data (`hreg`).
 -/
 

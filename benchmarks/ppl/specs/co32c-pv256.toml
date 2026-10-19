@@ -1,0 +1,38 @@
+description = "co32c-pv with P in blocks of 256 keys (p_block = 256, key 0 its own block): each block its own scale and strip, which bounds the fresh bit c's noise to half a step of the block's peak (note:20261017T0030Z-draft-checked-strip, Result 3: gamma_PV about 1.375)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act = "dither"
+weight = "dither"
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+q_top = 63
+k = "dither"
+k_top = 63
+p = "dither"
+p_block = 256
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

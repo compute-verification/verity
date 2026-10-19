@@ -90,3 +90,29 @@ def test_every_call_boundary_of_a_tp_manifest_stops_the_row(tmp_path):
     rec = G.call_boundaries(man, str(tmp_path))
     assert rec["pass"] is False and rec["uncovered"] == rec["identities"] == _cb(man) and "call_boundary" not in rec["sources"]
     assert rec["named"]["uncovered"][0].endswith(": a manifest of 2 ranks (the source serves one rank)")
+
+
+def _sparse_mla_manifest(model="zai-org/GLM-5.3", ranks=8):
+    """GLM-5.3's TP manifest shape: one SparseMla call boundary per (rank, layer, engine step), its rows 256 at prefill and 1 after."""
+    ids = [{"family": CB.FAMILY, "request_id": "r0", "step": s, "engine_step": s, "invocation": 0, "rank": k, "output_member": "out",
+            "op_path": f"inner.model.model.layers.{lay}.self_attn/dsa_indexer_attn" + (f"_{s * 2 + lay}" if s * 2 + lay else ""),
+            "dtype": "bf16", "spec": "SparseMlaSplit_v1", "element_range": [0, (256 if s == 0 else 1) * 4096]}
+           for k in range(ranks) for s in range(2) for lay in range(2)]
+    return {"ranks": ranks, "fixture": {"model": model}, "identities": ids}
+
+
+def test_the_attention_source_claims_every_sparse_mla_call_boundary_of_glm53_tp8(tmp_path):
+    man = _sparse_mla_manifest()
+    assert "attention" in taps.attached(man)
+    rec = G.call_boundaries(man, str(tmp_path))
+    n = len(man["identities"])
+    assert rec["pass"] is True and (rec["identities"], rec["claimed"], rec["uncovered"], rec["unattached"]) == (n, n, 0, 0)
+    assert rec["sources"] == ["attention"]
+
+
+def test_a_sparse_mla_call_boundary_without_an_attached_attention_source_stops_the_row(tmp_path):
+    for man in (_sparse_mla_manifest(model="other/model"), _sparse_mla_manifest(ranks=4)):
+        assert "attention" not in taps.attached(man)
+        rec = G.call_boundaries(man, str(tmp_path))
+        assert rec["pass"] is False and rec["unattached"] == rec["identities"] == len(man["identities"])
+        assert rec["named"]["unattached"][0].endswith("claimed by attention, a source the Commit does not attach")

@@ -4,7 +4,7 @@ model id + revision, dtype, hw family, tp, batch, input / output lengths, arriva
 id -- and the stages chain: the Match Attempt names the Build artifact it consumed, the Commit names both, and those are the artifacts
 the earlier Attempts published.
 
-Expected = lifted from the fixture (`fixtures.toml` row key + `tp` / `batch`, the in-repo workload manifest's model / tokenizer_revision,
+Expected = lifted from the fixture (`fixtures.toml` row key + `tp` / `batch`, the in-repo row file's model / engine.revision,
 the query id default).  Actual = read from the candidate Attempts' manifests (`params` restricted to `key_params`).  Applies only in
 candidate mode with attempt ids (`VERITY_REGRESSION_CANDIDATE=r2026…,…`); a directory candidate has no Attempts to cite.
 """
@@ -49,7 +49,7 @@ def applies(row: resolver.Row) -> str | None:
 def expected(row: resolver.Row) -> dict:
     wl = json.load(open(row.workload()))
     cfg = row_config(row.key)
-    out = {"row": row.key, "model": wl.get("model"), "revision": wl.get("tokenizer_revision"), "query": DEFAULT_QUERY, **cfg}
+    out = {"row": row.key, "model": wl.get("model"), "revision": (wl.get("engine") or {}).get("revision"), "query": DEFAULT_QUERY, **cfg}
     if row.spec.get("tp") is not None:
         out["tp"] = int(row.spec["tp"])
     if row.spec.get("batch") is not None:

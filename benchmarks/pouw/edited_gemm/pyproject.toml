@@ -7,5 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # egemm_depthr_check.py uses exact_kit's check registry and rotl/wrap helpers; numpy is in the workspace environment. The
-# proof inlines the XOR-in(13,19) fold (receipt_folds_r9.xorin_step), so it reads nothing else of the tree.
-inputs = ["benchmarks/pouw/exact_kit"]
+# proof inlines the XOR-in(13,19) fold (receipt_folds_r9.xorin_step). d2sgemm_ref.py's tests read derive.py's
+# tile_receipts and what it imports (floored_gemm's ref.py, masked_gemm's sref.py and mref.py).
+inputs = ["benchmarks/pouw/exact_kit", "benchmarks/pouw/e2e_slice/derive.py", "benchmarks/pouw/floored_gemm/ref.py",
+          "benchmarks/pouw/masked_gemm/sref.py", "benchmarks/pouw/masked_gemm/mref.py"]

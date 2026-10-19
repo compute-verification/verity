@@ -245,8 +245,13 @@ class ComponentProgram:
         """The component at `derived_dir`: its `instances.json.gz`, with the Build's correspondence record when the dir carries one
         (`runtime_correspondence.read_program_dir`: result.json `correspondence_digest` + descriptor annotation), else the v1 reading."""
         from verity_vllm.correspondence.runtime import read_program_dir
+        from verity_vllm.program.compact import expanded_file_args
         with gzip.open(os.path.join(derived_dir, "instances.json.gz"), "rt") as f:
             inst = json.load(f)
+        for r in inst.get("rows") or ():   # a v2 file's argument progressions -> the v1 per-leaf run lists (`producers` reads "n" runs)
+            a = r.get("args")
+            if a:
+                r["args"] = expanded_file_args(a)
         table, digest, problem = read_program_dir(derived_dir)
         return cls(inst, DescriptorCorrespondence(inst, attention_paths=attention_paths, table=table, digest=digest, problem=problem))
 
@@ -585,11 +590,6 @@ class Attribution:
         """The engine steps in which the request had a prompt row (its prefill chunks), from the live cursors."""
         c = self.live.requests.get(rid) if self.live is not None else None
         return sorted(c.prefill_steps) if c is not None else []
-
-    def instance_indices(self, legs: dict[str, list[int]] | None = None) -> dict[str, list[int]]:
-        """Node ids -> instance indices (`node - n_input_nodes`, the index into `compare.Prog.inst` when no root node was dropped)."""
-        src = legs if legs is not None else self.per_req
-        return {rid: [k - self.n_input_nodes for k in ks] for rid, ks in src.items()}
 
 
 def attribute_record(record_dir: str, *, programs: dict[str, ComponentProgram] | None = None, validate_each: bool = True,

@@ -1,0 +1,17 @@
+{
+ "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier"],
+ "exempt": {
+  "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof",
+  "RemoteAudit.VerifierMain": "the remote-audit-verifier executable's entry point, one line; it runs RemoteAudit.Verifier.serve, audited under RemoteAudit.Verifier"
+ },
+ "layers": {
+  "RemoteAudit": {
+   "imports": ["Std", "Flock", "Randomness", "RemoteAudit"],
+   "except": ["RemoteAudit.Difftest"],
+   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, and core's randomness; no Mathlib and nothing of Security. The difftest's table (RemoteAudit.Difftest) also imports the difftest server"
+  }
+ },
+ "dependencies": {
+  "toolchain": "67182288f4701e1c98266195f69c10a9fd4d7d7c92bf3b3f6ba382bd0dd31687"
+ }
+}

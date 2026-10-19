@@ -542,6 +542,90 @@ mod tests {
                  st.rels.len(), st.registry.m_total(), st.union().dense_m());
     }
 
+    /// The several-tables form of a multi-unit statement (`benchmarks/multi_unit`): the repeated-stage composite's unit and its
+    /// last stage as two tables, every stage port a glue relation from its unit's output port, the units numbered `kb · S + s`
+    /// (`S` stages, a power of two; `kb` the stage's `kb`-th source unit in the composite's wires), so that each relation is one
+    /// sub-cube with the identity map. Random leaf inputs, no rows; prints the prover's and verifier's times. `FC_MU_CIRCUIT`: a
+    /// staged repeated-stage `circuit.txt`; `FC_MU_STAGES`: `S` (default: the composite's stage slots per VU).
+    #[test]
+    #[ignore]
+    fn multi_unit_as_tables() {
+        let Ok(path) = std::env::var("FC_MU_CIRCUIT") else { return };
+        let c = crate::circuit::Composite::parse(&std::fs::read_to_string(path).unwrap(), None).unwrap();
+        let (un, sn) = (c.unit_net, c.out_net);
+        let (unit, stage) = (&c.nets[un].1, &c.nets[sn].1);
+        let s_count: usize = std::env::var("FC_MU_STAGES").ok().and_then(|x| x.parse().ok()).unwrap_or(c.per_vu[sn]);
+        assert!(s_count.is_power_of_two() && un != sn);
+        // stage slot 0's ports: each one unit output port, the units in order of first use (kb)
+        let mut srcs: Vec<usize> = Vec::new();
+        let mut ports: Vec<(usize, usize, usize)> = Vec::new();
+        for w in c.wires.iter().filter(|w| w.dst.0 == sn && w.dst.1 == 0) {
+            assert_eq!(w.src.0, un, "a stage port this harness reads is a unit output");
+            let kb = srcs.iter().position(|&u| u == w.src.1).unwrap_or_else(|| { srcs.push(w.src.1); srcs.len() - 1 });
+            ports.push((w.dst.2, kb, w.src.2));
+        }
+        let t = srcs.len();
+        let (sp, up) = (crate::circuit::port_cols(&stage.in_groups), crate::circuit::port_cols(&unit.out_groups));
+        assert_eq!(ports.len(), sp.len(), "every stage port is wired");
+        let (us, ss) = (Template::from_net(unit), Template::from_net(stage));
+        let (ub, sb) = ((t * s_count).next_power_of_two().trailing_zeros() as usize, s_count.trailing_zeros() as usize);
+        let order: Vec<usize> = if ss.k_log > us.k_log { vec![1, 0] } else { vec![0, 1] };
+        let (ti_u, ti_s) = (order.iter().position(|&x| x == 0).unwrap(), order.iter().position(|&x| x == 1).unwrap());
+        let glue: Vec<Glue> = ports.iter().map(|&(p, kb, q)| {
+            let ((dc, dw), (sc, sw)) = (sp[p], up[q]);
+            assert!(dw == sw && dw.is_power_of_two() && dc % dw == 0 && sc % sw == 0, "port {p}: an aligned power-of-two width");
+            let lw = dw.trailing_zeros() as usize;
+            Glue {
+                dst: TableRegion { table: ti_s, fixed: (lw..ss.k_log).map(|l| (l, dc >> l & 1 == 1)).collect(),
+                                   free: (0..lw).chain(ss.k_log..ss.k_log + sb).collect() },
+                src: TableRegion { table: ti_u,
+                                   fixed: (lw..us.k_log).map(|l| (l, sc >> l & 1 == 1))
+                                       .chain((sb..ub).map(|l| (us.k_log + l, kb >> (l - sb) & 1 == 1))).collect(),
+                                   free: (0..lw).chain(us.k_log..us.k_log + sb).collect() },
+                map: Map::Id,
+            }
+        }).collect();
+        let templates: Vec<Template> = order.iter().map(|&x| if x == 0 { us.clone() } else { ss.clone() }).collect();
+        let counts: Vec<usize> = order.iter().map(|&x| if x == 0 { t * s_count } else { s_count }).collect();
+        let st = Tables::new(templates, counts, glue).unwrap();
+        let mut r = 0x2545f4914f6cdd1du64;
+        let leaves = crate::circuit::port_cols(&unit.in_groups);
+        let unit_in: Vec<Vec<bool>> = (0..t * s_count).map(|_| {
+            let mut x = vec![false; us.n_in];
+            for &(col, w) in &leaves {
+                for b in col..col + w {
+                    r ^= r << 13; r ^= r >> 7; r ^= r << 17;
+                    x[b] = r & 1 == 1;
+                }
+            }
+            x
+        }).collect();
+        let tw = std::time::Instant::now();
+        let unit_z: Vec<Vec<bool>> = unit_in.iter().map(|x| us.eval(x).0).collect();
+        let stage_in: Vec<Vec<bool>> = (0..s_count).map(|s| {
+            let mut x = vec![false; ss.n_in];
+            for &(p, kb, q) in &ports {
+                let ((dc, dw), (sc, _)) = (sp[p], up[q]);
+                x[dc..dc + dw].copy_from_slice(&unit_z[kb * s_count + s][sc..sc + dw]);
+            }
+            x
+        }).collect();
+        let witness_s = tw.elapsed().as_secs_f64();
+        let ins: Vec<Vec<Vec<bool>>> = order.iter().map(|&x| if x == 0 { unit_in.clone() } else { stage_in.clone() }).collect();
+        let tp = std::time::Instant::now();
+        let (cm, proof, gp) = st.prove(&ins, LigeritoProfile::Fast100, &mut FsChallenger::new(b"multi-unit-tables"));
+        let prove_s = tp.elapsed().as_secs_f64();
+        let tv = std::time::Instant::now();
+        st.verify(&cm, &proof, &gp, LigeritoProfile::Fast100, &mut FsChallenger::new(b"multi-unit-tables")).unwrap();
+        let verify_s = tv.elapsed().as_secs_f64();
+        let (gp_s, gv_s) = st.glue_s.get();
+        let proof_bytes = bincode::serialized_size(&proof).unwrap_or(0) + 16 * (2 * gp.rounds.len() as u64 + 1);
+        println!("MU_TABLES {}", serde_json::json!({"units": t * s_count, "stages": s_count, "t": t, "relations": st.rels.len(),
+            "unit_k_log": us.k_log, "stage_k_log": ss.k_log, "nu": st.nu, "m_total": st.registry.m_total(), "dense_m": st.union().dense_m(),
+            "witness_s": witness_s, "prove_s": prove_s, "glue_prove_s": gp_s, "verify_s": verify_s, "glue_verify_s": gv_s,
+            "proof_bytes": proof_bytes}));
+    }
+
     #[test]
     fn two_tables_with_private_glue_prove_and_verify() {
         let st = statement();

@@ -9,8 +9,10 @@ phase are the medians over their (interleaved) repeats. Shares are of the tensor
 served = the step's int8 MACs, fill = the phase filler's; idle = 1 - served; comm = (base - nocomm) / base, the exposed
 collective time; off-comm idle = idle - comm, the idle tensor time the collective windows don't reach; slowdown = phase /
 base. fill K = fill × the fold's proved fraction under Theorem K (decision 43): duo (NC 2) binds every word, PHI = 0.9,
-PROVED; the ram fold (NC 4) binds word pairs only, 0.45; r9's XOR-family (NC 4, -DPFILL_LI/-DPFILL_XIN13) is provisional,
-credited at the same proved half 0.45 (SCORER's 13:15Z correction).
+provisional: its binding is proved for runs of one to four words (Lean Pouw.SecurityProofs.Receipt.DuoQuadNoKernel), and
+five or more words and the served receipt's projected form are open; the ram fold (NC 4) binds word pairs only, 0.45;
+r9's XOR-family (NC 4, -DPFILL_LI/-DPFILL_XIN13) is provisional, credited at the same proved half 0.45 (SCORER's 13:15Z
+correction).
 coverage is filler-scorer
 v3's per GPU at the slowest rank's step: the scorer's serving fraction × served (at base alone, at phase with the
 filler) + fill K. The fill counts every MMA
@@ -39,7 +41,8 @@ SASS_OK = {"IMMA.16832.S8.S8"}
 
 def proved_fraction(nc, xin, S):
     """The fold's proved fill fraction under Theorem K (decision 43, the filler receipt break). duo (NC 2) binds every
-    word: PHI, PROVED. The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
+    word: PHI, provisional (binding proved for runs of one to four words, DuoQuadNoKernel; longer runs and the served
+    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
     (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. P2-FF r9's XOR-family folds (NC 4 with -DPFILL_LI
     or -DPFILL_XIN13) read at the same proved half (SCORER's 13:15Z correction after RS-E-REF r7: a run may pick a
     complement flip from the data, so Theorem K certifies only >= 1/2 of the words); their fuller reading waits on r10's
@@ -270,8 +273,8 @@ def main():
         print("Decision 36's deferred decode pass: demand a step = the step's served MACs; gap share = run beside the "
               "collectives; overflow = drained after the step; slowdown = the true step-time cost (gap share 1 with "
               "slowdown > 1 means it ran in the gap windows but did not hide); store GiB/shard = the served-side operands "
-              "kept over the sub-round (per shard, scales with T); fold = the receipt fold (duo PROVED, ram 0.45, "
-              "xin provisional); rem. fill K = the filler's remaining proved fill under that fold; dalone = the whole "
+              "kept over the sub-round (per shard, scales with T); fold = the receipt fold (duo 0.9, provisional: "
+              "binding proved for runs of one to four words; ram 0.45; xin provisional); rem. fill K = the filler's remaining proved fill under that fold; dalone = the whole "
               "step's deferred work with no gaps.")
         print("| set | TP | B | L | T | store GiB/shard | base ms | defer ms | defer slowdown | gap share | overflow "
               "share | fold | rem. fill K | dalone ms | dalone cost (xbase) | dp bad/checked |")

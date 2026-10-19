@@ -1,0 +1,43 @@
+description = "PPL-COMPILE C2: Dither's 1-bit coins on the format's grid, every linear and lm_head: E2M1's integers in blocks of 32 with E8M0 scales, both operands dithered, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "rotate"
+linears = ["lm_head"]
+
+[[linear]]
+step = "native"
+grid = "e2m1i"
+scale = "mx"
+
+[[linear]]
+step = "native"
+grid = "e2m1i"
+scale = "mx"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+q = "dither"
+k = "dither"
+v = "dither"
+p_sink = true
+
+[[attention]]
+step = "peel"
+operand = "p"
+width = 64
+offset = 64

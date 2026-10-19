@@ -289,12 +289,12 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
             if v.get("of_record") and isinstance(v.get("registered"), dict) else v for k, v in vs.items()})
     if served is not None:
         drawn = set(served)
-        other = next(u for u in range(result["registration"]["population"]) if u not in drawn)
-        neg["served-share-not-the-verifier's-draw (C1)"] = decide(served=sorted(served)[1:] + [other])
+        other = [u for u in range(result["registration"]["population"]) if u not in drawn][:1]
+        neg["served-share-not-the-verifier's-draw (C1)"] = decide(served=sorted(served)[1:] + other)
     return neg
 
 
-def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, rec: dict, check) -> dict:
+def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, rec: dict, check, zk: bool = False) -> dict:
     """A public file whose body is altered (its last output word's high byte flipped) and whose leaf-layer digest is updated
     to match, so the registration passes R1-R6 and only the verifier of record, recomputing the roots from the file, can
     refuse it. `check(record, leaf_layer)` is the verifier's registration check."""
@@ -311,7 +311,7 @@ def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, re
     (stage / f"pub-{n}.bin").write_bytes(bytes(body))
     digest = hashlib.sha512(bytes(body)).hexdigest()
     registration = check(dict(rec, leaf_layer=digest), digest)
-    lean_v = lean_verify(lean, dict(st, dir=stage), n, out)
+    lean_v = lean_verify(lean, dict(st, dir=stage), n, out, zk=zk)
     return {"refused": registration.ok and lean_refused(lean_v, names="do not hash to the header's"),
             "registration_passes": registration.ok,
             "lean": lean_v.get("why")}

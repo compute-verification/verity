@@ -76,11 +76,16 @@ def Desc.parse (bytes : ByteArray) : V Desc := do
 /-- Members of a node: a batch's (or a scan's iterations), else one. -/
 def DNode.members (x : DNode) : Nat := if x.form == "batch" || x.form == "scan" then x.n else 1
 
-/-- Gates of one activation of `id` (a primitive: one; a composite: its nodes' members times their callees' gates). -/
-partial def Desc.gates (d : Desc) (id : String) : Nat :=
-  match d.def? id with
-  | none => 0
-  | some df => if df.prim then 1 else df.nodes.foldl (fun acc x => acc + x.members * d.gates (d.callees.getD x.fn "")) 0
+/-- Gates of one activation of `id` (a primitive: one; a composite: its nodes' members times their callees' gates), through at
+most `fuel` nested definitions. Past them it counts none: definitions nested deeper than there are definitions include one
+that depends on itself, which `Program.decode` refuses. -/
+def Desc.gatesIn (d : Desc) : Nat → String → Nat
+  | 0, _ => 0
+  | n + 1, id => match d.def? id with
+    | none => 0
+    | some df => if df.prim then 1 else df.nodes.foldl (fun acc x => acc + x.members * d.gatesIn n (d.callees.getD x.fn "")) 0
+
+def Desc.gates (d : Desc) (id : String) : Nat := d.gatesIn Steps.FUEL id
 
 /-- One root node's units: its root-body index, template, first unit and count. -/
 structure TRange where

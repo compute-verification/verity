@@ -1,0 +1,4 @@
+order = 330
+path = "`machine_model/`"
+runs_on = "CPU"
+what = "The sm_120 machine model's price vectors (`machine-model list`; `data/model.toml`'s `current` is the vector of record): the LP, the rows, census and attack families as data, `machine-model solve NAME` and `machine-model render`, which prints its tables (its own README, and its own suite)"

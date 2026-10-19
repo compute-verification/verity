@@ -62,7 +62,10 @@ def test_sr_is_unbiased_between_adjacent_levels(grid):
     assert torch.allclose(q.mean(0), (x / s)[0], atol=0.1 * (hi - lo).amax().item())
 
 
-def test_a_dithered_p_serves_no_future_key():
+@pytest.mark.parametrize("step, kw", [
+    (steps.grid_attention, {"grid": "fp4c", "q": "dither", "k": "dither", "p": "dither", "v": "dither"}),
+    (steps.int8_attention, {"p": "dither", "p_top": 126, "v": "dither", "v_top": 63})])
+def test_a_dithered_p_serves_no_future_key(step, kw):
     rep, s, d = 2, 12, 8
     g = torch.Generator().manual_seed(3)
     causal = torch.ones(s, s, dtype=torch.bool).tril()
@@ -77,9 +80,28 @@ def test_a_dithered_p_serves_no_future_key():
         served.append(m.x)
         return m.int_product()
 
-    out = steps.grid_attention(mm, nxt, grid="fp4c", q="dither", k="dither", p="dither", v="dither")
+    out = step(mm, nxt, **kw)
     assert len(served) == 1 and bool((served[0][:, ~causal] == 0).all()) and bool((served[0][:, causal] >= 0).all())
+    assert served[0].max() <= kw.get("p_top", 127)
     assert out.shape == (rep, s, d) and run.gates.passed and run.gates.log["int8_range"]["checked"] == 1
+
+
+def test_a_dithered_int8_p_takes_its_bits_mean_off():
+    """A bit's +1/2 on every causal key would add half of V's causal sum to the output (perplexity 1949 at 8B WT-2 2K)."""
+    rep, s, d = 2, 256, 16
+    g = torch.Generator().manual_seed(3)
+    causal = torch.ones(s, s, dtype=torch.bool).tril()
+    p = torch.softmax((torch.randn(rep, s, s, generator=g) * 2).masked_fill(~causal, float("-inf")), -1)
+    v = torch.randn(s, d, generator=g)
+    err = {}
+    for mode in ("round", "dither"):
+        run = matmul.Run(types.SimpleNamespace(name="t"), 0, 1, types.SimpleNamespace(li=0), G.Gates(), {}, {}, None)
+        mm = matmul.MM("pv", "pv", run, p, v, cache={}, extra={"group": 0, "rows": (0, s), "causal": causal, "rep": rep,
+                                                               "s": s, "d": d})
+        out = steps.int8_attention(mm, lambda m: m.int_product(), p=mode)
+        assert run.gates.passed
+        err[mode] = float((out - p @ v).pow(2).mean().sqrt())
+    assert err["dither"] < 3 * err["round"], err
 
 
 @pytest.mark.parametrize("grid, mode", [("fp4", "round"), ("fp4", "dither"), ("fp4c", "dither"), ("fp4", "sr")])
