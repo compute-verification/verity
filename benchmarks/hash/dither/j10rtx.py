@@ -12,9 +12,10 @@ until CA's reference lands. Measured only: nothing here is served or credited.
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
           seeds buffer), its CPU units on j10b_ref's noise (h1v3_ca's word functions: dither_one.h1v3_unit with h1tile's
-          rows taken from the leader) and z held to A B^T (peeled); CA's H1V3 tree code takes per-unit noise only, so it
-          checks the per-unit arm alone. Then the band workspace of the gate step against j10b_ref.row_block on every
-          live band of every call (8 sampled (row, chunk) blocks each, all of band 0) and no 0xA5 block left in a live band.
+          rows taken from the leader), z held to A B^T (peeled), and CA's H1V3 tree's own reference on the same units
+          (j10v3_ref.py: its noise taken twice, the rows from the leader's seed_j). Then the band workspace of the gate
+          step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 drawn bands 8
+          blocks each) and no 0xA5 block left in a live band.
     time  per arm and m, CUDA graphs replayed between events with the arms interleaved: the window's calls (A table and
           units), the units launches alone, each site's alone; banded arms also the units without the pass (mode 1) and
           the pass alone (mode 2): the noise share, the other way.
@@ -30,7 +31,9 @@ import json
 import os
 import random
 import statistics
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -141,10 +144,23 @@ def band_check(win: BandWindow, lib: str, which: str) -> dict:
         out["band_leader_position"] = lead
         return out
 
+    def itself(units: list[dict]) -> dict:
+        tree = os.environ.get("DITHER_H1V3_TREE")
+        if not tree:
+            return {"tree": None}
+        with tempfile.TemporaryDirectory() as td:
+            src, dst = os.path.join(td, "in.json"), os.path.join(td, "out.json")
+            with open(src, "w") as f:
+                json.dump([{**x, "leader_position": lead_of(x["position"])} for x in units], f)
+            p = subprocess.run([sys.executable, str(HERE / "j10v3_ref.py"), src, dst], env={**os.environ, "PYTHONPATH": tree},
+                               capture_output=True, text=True)
+            if p.returncode:
+                return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), "error": p.stderr[-2000:]}
+            with open(dst) as f:
+                return {"tree": tree, "sha": os.environ.get("DITHER_H1V3_SHA"), **json.load(f)}
+
     BandH1R.G = win.g
-    DO.H1R, DO.h1v3_unit = BandH1R, unit
-    DO.h1v3_itself = lambda units: {"tree": None, "why": "CA's H1V3 code takes per-unit noise only; banded units are "
-                                    "j10b_ref's on h1v3_ca's words"}
+    DO.H1R, DO.h1v3_unit, DO.h1v3_itself = BandH1R, unit, itself
     try:
         doc = DO.check(win, lib, which)
     finally:
