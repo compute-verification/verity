@@ -114,6 +114,13 @@ CHANNELS = {
 # 24 Xeon 6776P cores of node 2 (r20261012-211331-ae6a, ncp_resident.jsonl and ncp_stream.jsonl, Y stored). Resident is
 # operands blocked in L2, as a large-m (prefill) tile allows; streamed reads Y from DRAM.
 AMX_PER_CORE = {"resident": 1.3879e13 / 24, "streamed": 5.2886e12 / 24}
+# Sapphire Rapids, resident, the same bench on vy-dc-h200's 8 Xeon 8468 cores (r20261019-093714-2359, gated bit-exact,
+# best m): 4.3% under node 2's a core. The Sapphire and Emerald Rapids hosts share its AMX unit, so they take it; Emerald
+# Rapids itself is unmeasured. Streamed keeps node 2's rate: the slot's 8 cores stream faster (2.8486e12), which a
+# socket's 56 cores would not.
+AMX_RESIDENT_SPR = 4.4278e12 / 8
+SPR_HOSTS = {"vy-dc-h200 slot, Xeon 8468", "DGX H200, 2 x Xeon 8480C", "vy-dc-b200 slot, Xeon 8580",
+             "DGX B200, 2 x Xeon 8570"}
 # The fold's and fillers' lane work, per core: LOP3+IMAD chains on AVX-512, best of 10 cores (r20261019-064611-062c,
 # Xeon 8580), priced at the design's own lane instructions a word.
 LANE_PER_CORE = 5.1349e11 / 10
@@ -134,6 +141,11 @@ HOSTS = {
 def mac_rate(device: str) -> float:
     m, sms, f = DEVICES[device]
     return m * sms * f
+
+
+def amx_rate(host: str, mode: str) -> float:
+    """The host's AMX words a second a core, MACs, for `mode` ("resident" or "streamed")."""
+    return AMX_RESIDENT_SPR if mode == "resident" and host in SPR_HOSTS else AMX_PER_CORE[mode]
 
 
 def offload_fraction(bw: float, rate: float) -> float:
@@ -234,7 +246,7 @@ def main() -> int:
         rate = mac_rate(device)
         pcie = offload_fraction(64 * GB, rate)
         for host, cores, gpus, _, _ in HOSTS[device]:
-            tiles = host_tile_fraction(words[device, "sheet"], cores, gpus, AMX_PER_CORE["resident"])
+            tiles = host_tile_fraction(words[device, "sheet"], cores, gpus, amx_rate(host, "resident"))
             checks.check(f"{device}: {host} doing whole tiles, words and fold, lends more than PCIe's word-level floor",
                          tiles > pcie, f"{tiles * 100:.3f}% vs {pcie * 100:.3f}% (HOST-TILES is not link-bound)")
         for name, bw, cls in CHANNELS[device]:
@@ -274,8 +286,8 @@ def main() -> int:
     #    Paying the design's own fold and fillers, it takes sm_120 over 1% counted on node 2 with resident operands, the
     #    H200 and the B200 on a DGX, and the B200 on every host at the measured reading.
     def lent(device: str, host: int, mode: str, fold: bool = True) -> dict[str, float]:
-        _, cores, gpus, _, _ = HOSTS[device][host]
-        return {r: host_tile_fraction(words[device, r], cores, gpus, AMX_PER_CORE[mode], fold) for r in READINGS}
+        name, cores, gpus, _, _ = HOSTS[device][host]
+        return {r: host_tile_fraction(words[device, r], cores, gpus, amx_rate(name, mode), fold) for r in READINGS}
 
     def shown_lent(device: str, f: dict[str, float]) -> str:
         return f"+{f['sheet'] * 100:.3f}% / +{f['measured'] * 100:.3f}%: {shown(counted(device, f))}"
@@ -300,7 +312,7 @@ def main() -> int:
     for device in (h200, b200):
         dgx = lent(device, 1, "resident")
         checks.check(f"{device}: a DGX's host, resident operands, words and fold, takes counted eps over 1%",
-                     min(counted(device, dgx)) > TARGET, shown_lent(device, dgx) + " (GNR per-core AMX rate)")
+                     min(counted(device, dgx)) > TARGET, shown_lent(device, dgx) + " (SPR's measured AMX rate a core)")
     slot = lent(h200, 0, "resident")
     checks.check("H200 sm_90: vy-dc-h200's host, resident operands, words and fold, is over 1% at the measured reading",
                  counted(h200, slot)[1] > TARGET, shown_lent(h200, slot))
@@ -362,9 +374,9 @@ def main() -> int:
                         upper["sheet"] > 2 * folded["sheet"],
                         f"{upper['sheet'] * 100:.3f}% vs {folded['sheet'] * 100:.3f}%")
         # The host as a share of the B200's tensor peak, the 08:15Z error, keeps a DGX B200 under 1% at the sheet reading.
-        _, cores, gpus, _, _ = HOSTS[b200][1]
+        name, cores, gpus, _, _ = HOSTS[b200][1]
         _, macs, lanes = words[b200, "sheet"]
-        peak_share = cores / gpus * macs / (macs / AMX_PER_CORE["resident"] + lanes / LANE_PER_CORE) / mac_rate(b200)
+        peak_share = cores / gpus * macs / (macs / amx_rate(name, "resident") + lanes / LANE_PER_CORE) / mac_rate(b200)
         checks.mutation("a share of the tensor peak, not the credited time, would keep a DGX B200 under 1% counted",
                         eps[b200]["sheet"] + peak_share < TARGET, f"{(eps[b200]['sheet'] + peak_share) * 100:.3f}%")
 
