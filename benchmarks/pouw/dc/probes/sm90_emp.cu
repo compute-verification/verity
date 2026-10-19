@@ -28,6 +28,16 @@
 //                 (indices 0 and 1 of every group of 4: a valid 2:4 pattern; the values don't move a peak).
 //   wgd_<form>    its dense twin in the same kernel shape and binary (k32 s8/e4m3, k16 f16): the ratio wgsp/wgd is the
 //                 sparse speedup at equal instruction count, A3's bound is 1 (twice the MACs on a logical k twice as deep).
+//
+// A5 says shared memory serves 128 B an SM clock, loads and stores together. A saturated SS-mode wgmma reads its A and
+// B tiles from shared memory (10 KB a wgmma s8 m64n256k32, ~80 B a SM-clock at the tensor peak) through no
+// shared-memory class instruction, so the sheet's smem facet never sees it.
+//   emp_smem      warpgroups 0-1 wgmma s8 m64n256k32 flat out (OP_LOOP), warpgroups 2-3 8 conflict-free LDS.128 a trip
+//                 (lm.cu's ring) only while they run (OP_UNTIL): LDS bytes a SM-clock beside the wgmma's own reads.
+//   emp_lds_solo  the same LDS warpgroups alone (OP_LOOP), the LDS ceiling at this warp count.
+//   emp_reg       wg_until's split with setmaxnreg (the producer/consumer register handoff): the wgmma warpgroups raise
+//                 to 232 registers, the lane warpgroup drops to 40 and runs 64 IMAD a trip; registers are no facet of
+//                 the sheet, so its rates should be wgU_imad's.
 #include "../../opcode_probe/probe.cuh"
 #include "../../opcode_probe/probes/honest.cuh"
 #include "../dc.cuh"
@@ -168,6 +178,86 @@ OP_KERNEL(wgd_s8, ATPB) { wg_sp<G_s8_d>(a); }
 OP_KERNEL(wgd_e4m3, ATPB) { wg_sp<G_e4m3_d>(a); }
 OP_KERNEL(wgd_f16, ATPB) { wg_sp<G_f16_d>(a); }
 
+// ---- shared memory beside the wgmma's own shared-memory reads, and setmaxnreg ---------------------------------------
+constexpr int LU = 8, RING = 2048;
+__host__ __device__ inline unsigned ring_off(int slot, int lane, int warp, int it) {
+  return ((((unsigned)lane + 8u * LU * (unsigned)(warp + it)) & (RING - 1)) + 8u * (unsigned)slot) * 16u;
+}
+DC_DEV uint32_t lds8(unsigned rbase, int lane, int w, int it) {
+  uint32_t acc = 0;
+#pragma unroll
+  for (int u = 0; u < LU; u++) {
+    unsigned r0, r1, r2, r3;
+    asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3}, [%4];"
+                 : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3) : "r"(rbase + ring_off(u, lane, w, it)));
+    acc ^= r0 ^ r1 ^ r2 ^ r3;
+  }
+  return acc;
+}
+constexpr int RING_BYTES = (RING + 8 * LU) * 16;
+template <bool WG>
+DC_DEV void emp_smem_k(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB + RING_BYTES];
+  const Tiles t = emp_tiles(sm, a.mode);
+  unsigned char* ring = sm + (AROWS + BROWS) * KB;
+  for (int i = threadIdx.x; i < RING_BYTES / 4; i += blockDim.x)
+    reinterpret_cast<uint32_t*>(ring)[i] = (uint32_t)i * 2654435761u + blockIdx.x + 1;
+  __syncthreads();
+  const unsigned rbase = smem_u32(ring);
+  const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
+  const bool mma_role = WG && threadIdx.x < 256;
+  int d[128] = {};
+  uint32_t acc = threadIdx.x + 1;
+  if constexpr (WG) {
+    OP_BEGIN_STOP
+    if (mma_role) {
+      OP_LOOP(it) {
+        emp_group4(d, t);
+        wgmma_wait<1>();
+      }
+      wgmma_wait<0>();
+      OP_DONE
+      wgmma_hold(d);
+    } else {
+      OP_UNTIL(n) { acc ^= lds8(rbase, lane, w, n); }
+      OP_TRIPS(n)
+    }
+    OP_END_STOP
+  } else {
+    OP_BEGIN
+    OP_LOOP(it) { acc ^= lds8(rbase, lane, w, it); }
+    OP_END
+  }
+  OP_SINK((mma_role ? emp_fold(d) : acc) ^ threadIdx.x)
+}
+OP_KERNEL(emp_smem, 512) { emp_smem_k<true>(a); }
+OP_KERNEL(emp_lds_solo, 256) { emp_smem_k<false>(a); }
+
+OP_KERNEL(emp_reg, 384) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = emp_tiles(sm, a.mode);
+  const bool mma_role = threadIdx.x < 256;
+  int d[128] = {};
+  Lane l((uint32_t)threadIdx.x);
+  OP_BEGIN_STOP
+  if (mma_role) {
+    asm volatile("setmaxnreg.inc.sync.aligned.u32 232;" ::: "memory");
+    OP_LOOP(it) {
+      emp_group4(d, t);
+      wgmma_wait<1>();
+    }
+    wgmma_wait<0>();
+    OP_DONE
+    wgmma_hold(d);
+  } else {
+    asm volatile("setmaxnreg.dec.sync.aligned.u32 40;" ::: "memory");
+    OP_UNTIL(n) { lane_ops<L_IMAD, 64>(l); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  OP_SINK((mma_role ? emp_fold(d) : l.fold()) ^ threadIdx.x)
+}
+
 #define WGI "IGMMA.64x256x32.S8.S8=4"
 #define HON "IMMA.16832.S8.S8=8,IMAD=32,LEA.HI=32,LOP3.LUT=32"
 // counted: the chain's UIMAD (K > 0) or the IGMMA (K = 0). FFMA = R is the filler; UIMAD = ULOP3 = K/2 is the chain.
@@ -187,6 +277,13 @@ static const OpProbe PROBES[] = {
 #define P_SP(NM) {.name = #NM, .kernel = (const void*)NM, .tpb = ATPB, .expect = "*GMMA*=4", .iters = AITERS}
     P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16),
 #undef P_SP
+    // No bank check here (the OP_UNTIL loop's stop poll is one more LDS): its ring is emp_lds_solo's, which has one.
+    {.name = "emp_smem", .kernel = (const void*)emp_smem, .tpb = 512, .expect = "IGMMA.64x256x32.S8.S8=4;LDS.128=8",
+     .warps = "8;8", .iters = AITERS, .until = 2},
+    {.name = "emp_lds_solo", .kernel = (const void*)emp_lds_solo, .tpb = 256, .expect = "LDS.128=8",
+     .smem_ops = "LDS.128*8", .smem = ring_off, .iters = AITERS},
+    {.name = "emp_reg", .kernel = (const void*)emp_reg, .tpb = 384, .expect = "IGMMA.64x256x32.S8.S8=4;IMAD=64",
+     .warps = "8;4", .iters = AITERS, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
