@@ -473,8 +473,12 @@ def run_measures(run: str, scratch: Path) -> list[Measure]:
         print(f"curve.py: {run} has no run record", file=sys.stderr)
         return []
     to = scratch / run
-    research("data", "fetch", rec, "--to", str(to), "--path", "*bench/result.json", "--path", "*pin_check.txt",
-             "--path", "out/*/summary.json")
+    got = subprocess.run(["research", "data", "fetch", rec, "--to", str(to), "--path", "*bench/result.json", "--path",
+                          "*pin_check.txt", "--path", "out/*/summary.json"], capture_output=True, text=True, check=False)
+    if got.returncode:
+        why = (got.stderr or got.stdout).strip().splitlines()[-1:] or [f"exit {got.returncode}"]
+        print(f"curve.py: {run}: no result files read from its record ({why[0]})", file=sys.stderr)
+        return []
     cond = att.get("conditions") or {}
     device = gpu_name(cond.get("hw.family"), cond.get("hw.sku")) if cond.get("hw.family") or cond.get("hw.sku") else None
     out: list[Measure] = []
