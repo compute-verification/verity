@@ -1,4 +1,4 @@
-"""Infra's relay for the agent watch (INF-69, `agent_watch.sh` on the control pod). The pod holds no Slack credential, so every 5
+"""Infra's relay for the agent watch (INF-69, `agent_watch.sh` on the control pod). The pod holds no Slack credential, so every 2
 minutes this reads the lines added to /data/agent-watch/events.jsonl over ssh and posts each in #agent-alerts: a held run the watch
 cancelled and continued, a tool call running 45 minutes, a crashed run, a coordinator ready to wake. An agent that holds a handle
 (the Slack registry's `holder`) is named by its handle. What the watch leaves for a person (`TOP`: erroring, stuck, a refused
@@ -8,8 +8,10 @@ own route can't ring it). A cloud worker (a Task subagent) that went idle, or ha
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
 the doorbell also counts toward the coordinator's own ready-to-wake rule). A silent agent (ACTIVE 90 min with no note and no push)
 and a `research run` that ended on a node lead with the record's handle and ring it the same way: a coordinator's own, a worker's
-launcher's, for a run whose sender is a lane, the lane's. The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes
-from the offset it last posted.
+launcher's, for a run whose sender is a lane, the lane's. A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
+its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
+worker. A handle renamed in the registry ("renamed from @OLD") is rung by its new name. The pod frees held runs whether or not
+this runs; it stops when infra's VM is suspended, and resumes from the offset it last posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
 notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`). The watch ignores
@@ -32,7 +34,7 @@ EVENTS = "/data/agent-watch/events.jsonl"
 BELLS = "/data/agent-watch/doorbells.json"
 BELLS_WINDOW_S = 24 * 3600
 OFFSET = Path.home() / "agent-watch/offset"
-EVERY_S = 5 * 60
+EVERY_S = 2 * 60
 DRY = "--dry-run" in sys.argv
 REG = slack.load_registry(slack.registry_path())
 ALERTS = slack.channel_id_for(REG, "agent-alerts")
@@ -54,10 +56,20 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "worker_idle": "went idle at {at}; if it didn't report back, resume it with Task",
        "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
-       "run_ended": "ended rc={rc} after {after} on {node}"}
+       "run_ended": "ended rc={rc} after {after} on {node}",
+       "stalled": "streamed nothing for {minutes} min since {since} while RUNNING (a hung call or a suspended VM); the watch "
+                  "{action}",
+       "idle_after_run": "sat idle after its run {ended_run} ended ({result}), with nothing resuming it for {minutes} min; the "
+                         "watch {action}",
+       "relaunch": "needs a fresh launch ({reason}); the watch {action}"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended"}       # rung to the record's handle
+FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
+#: a renamed handle's old name -> its new one, from the registry's "renamed from @OLD" (hash -> kernels, 18 Oct): lanes' notes
+#: and workers.d still carry the old name
+RENAMED = {old: h["handle"] for h in REG.get("handles") or []
+           for old in re.findall(r"renamed from @([a-z0-9-]+)", str(h.get("charter", "")) + str(h.get("holder", "")))}
 
 
 def log(msg: str) -> None:
@@ -68,8 +80,13 @@ def rung(rec: dict) -> str | None:
     """The handle whose inbox the alert rings, if any."""
     if rec.get("kind") in TOP:
         return "top"
-    if rec.get("kind") in HANDLE and rec.get("handle") in {h["handle"] for h in REG.get("handles") or []}:
-        return rec["handle"]
+    handles = {h["handle"] for h in REG.get("handles") or []}
+    owner = RENAMED.get(rec.get("owner"), rec.get("owner"))
+    if rec.get("kind") in FAIL and owner in handles:
+        return owner
+    handle = RENAMED.get(rec.get("handle"), rec.get("handle"))
+    if rec.get("kind") in HANDLE and handle in handles:
+        return handle
     return None
 
 
@@ -77,7 +94,8 @@ def text(rec: dict) -> str:
     link = f"<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>"
     line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
                                                          "reason": "?", "status": "?", "at": "?", "hours": "?", "rc": "?",
-                                                         "after": "?", "node": "?", "active_minutes": "?", **rec})
+                                                         "after": "?", "node": "?", "active_minutes": "?", "ended_run": "?",
+                                                         "result": "?", **rec})
     lead = f"{slack.tag(slack.entry(REG, to))} " if (to := rung(rec)) else ""
     name = rec.get("name") or "(unnamed)"
     if rec.get("kind") == "silent":
@@ -90,13 +108,15 @@ def text(rec: dict) -> str:
         if rec.get("role") == "coordinator":
             return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
         return f"{lead}*Agent watch:* {run} of lane {rec.get('handle')} {line}."
-    if rec.get("kind") in WORKER:
+    if rec.get("kind") in WORKER or rec.get("role") == "worker":
         lane = f" of lane {rec['lane']}" if rec.get("lane") else ""
-        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}."
+        new = f" New agent {rec['new_agent']}." if rec.get("new_agent") else ""
+        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}.{new}"
     handle = rec.get("handle") or HOLDERS.get(rec.get("agent"))
     who = f"@{handle}'s coordinator" if handle else (rec.get("name") or "an agent")
     return (f"{lead}*Agent watch:* {who} ({link}, run {rec.get('run')}) {line}."
-            + (f" New run {rec['new_run']}." if rec.get("new_run") else ""))
+            + (f" New run {rec['new_run']}." if rec.get("new_run") else "")
+            + (f" New agent {rec['new_agent']}." if rec.get("new_agent") else ""))
 
 
 def pod(cmd: str, data: str | None = None) -> str:

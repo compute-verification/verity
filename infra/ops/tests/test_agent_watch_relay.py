@@ -190,3 +190,43 @@ def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_i
         f"{proofs} *Agent watch:* run r20261019-040000-ef56 (slot --by proofs --) of lane proofs ended rc=0 after 30 s on "
         "vy-nebius-2."]
     assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 5
+
+
+def test_a_failure_the_watch_acted_on_leads_with_its_owner_and_rings_that_inbox(relay):
+    """Daniel, 19 Oct: ring the owner at once. A coordinator's owner is top; a worker's, its launcher's handle."""
+    top, proofs = (relay.slack.tag(relay.slack.entry(relay.REG, h)) for h in ("top", "proofs"))
+    w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "stalled", "agent": co, "name": "verity: proofs", "run": "run-s", "since": "2026-10-19T10:00:00Z", "minutes": 30,
+         "action": "cancelled and continued", "new_run": "run-n", "owner": "top"},
+        {"kind": "idle_after_run", "agent": co, "name": "verity: proofs", "run": "run-b", "role": "coordinator", "handle": "proofs",
+         "ended_run": "r1", "result": "run r1 (lean) on vy-nebius-2: done rc=0 after 12 min at 2026-10-19T10:30:00Z",
+         "minutes": 10, "action": "cancelled its background wait (run-b) and resumed it with the run's result", "owner": "top"},
+        {"kind": "idle_after_run", "agent": w, "name": "ZKS10", "run": "", "role": "worker", "lane": "zk", "handle": "proofs",
+         "ended_run": "r2", "result": "run r2 (sweep) on vy-nebius-1: failed rc=3 after 1 h 00 min at 2026-10-19T10:30:00Z",
+         "minutes": 10, "action": "rang @proofs to resume it with Task", "owner": "proofs"},
+        {"kind": "relaunch", "agent": w, "name": "ZKS10", "run": "", "role": "worker", "lane": "zk", "handle": "proofs",
+         "reason": "idle since 10:20Z", "action": "relaunched it fresh as bc-7", "new_agent": "bc-7", "owner": "proofs"},
+        {"kind": "held", "agent": "bc-x", "name": "x", "run": "run-h", "since": "2026-10-19T10:00:00Z", "minutes": 15,
+         "action": "cancelled and continued"}]) + "\n"
+    relay.once()
+    link = f"<https://cursor.com/agents/{co}|{co}>"
+    assert relay.posts[:2] == [
+        f"{top} *Agent watch:* verity: proofs ({link}, run run-s) streamed nothing for 30 min since 2026-10-19T10:00:00Z "
+        "while RUNNING (a hung call or a suspended VM); the watch cancelled and continued. New run run-n.",
+        f"{top} *Agent watch:* @proofs's coordinator ({link}, run run-b) sat idle after its run r1 ended (run r1 (lean) on "
+        "vy-nebius-2: done rc=0 after 12 min at 2026-10-19T10:30:00Z), with nothing resuming it for 10 min; the watch cancelled "
+        "its background wait (run-b) and resumed it with the run's result."]
+    assert relay.posts[2].startswith(f"{proofs} *Agent watch:* worker ZKS10 (") and "of lane zk sat idle after its run r2" in relay.posts[2]
+    assert relay.posts[3].endswith("needs a fresh launch (idle since 10:20Z); the watch relaunched it fresh as bc-7. New agent bc-7.")
+    assert relay.posts[4].startswith("*Agent watch:*"), "a failure with no owner is posted in the channel only"
+    assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]] * 2 + [PROOFS_INBOX["inbox_ts"]] * 2
+
+
+def test_a_renamed_handle_is_rung_by_its_new_name(relay):
+    """hash became kernels on 18 Oct; lanes' notes and workers.d still carry hash."""
+    assert relay.RENAMED.get("hash") == "kernels"
+    relay.log_text["text"] = json.dumps({"kind": "worker_idle", "agent": "bc-x", "name": "H1", "run": "", "lane": "hash",
+                                         "handle": "hash", "at": "2026-10-18T20:06:00Z"}) + "\n"
+    relay.once()
+    assert relay.posts[0].startswith(relay.slack.tag(relay.slack.entry(relay.REG, "kernels")))

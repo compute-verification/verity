@@ -113,13 +113,17 @@ def test_a_run_held_after_a_finished_tool_call_is_cancelled_and_continued_once(t
 
 
 def test_a_long_tool_call_or_fresh_text_is_never_cancelled(tmp_path):
+    """A long call while its agent's `updatedAt` moves is working, not stalled."""
     api, clock, w, started = setup(tmp_path)
     w.on_event("run-1", "tool_call", {"callId": "c1", "name": "Shell", "status": "running"})
     call_from = clock.t
-    clock.t += W.LONG_CALL_S - 60
-    w.sweep(started.append)
+    for _ in range(W.LONG_CALL_S // 60 - 1):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(started.append)
     assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
     clock.t += 60
+    api._agents[0]["updatedAt"] = W.iso(clock.t)
     w.sweep(started.append)
     w.sweep(started.append)
     assert api.posts == []
@@ -128,6 +132,7 @@ def test_a_long_tool_call_or_fresh_text_is_never_cancelled(tmp_path):
     w.on_event("run-1", "tool_call", {"callId": "c1", "status": "completed"})
     w.on_event("run-1", "assistant", {"text": "done with the build"})
     clock.t += W.HELD_S
+    api._agents[0]["updatedAt"] = W.iso(clock.t)
     w.sweep(started.append)
     assert api.posts == [], "the last event was the agent's own text, not a finished tool call"
     assert [status(tmp_path)["bc-a"][k] for k in ("watch_state", "since")] == ["followed", None], "a long call only while it lasts"
@@ -908,6 +913,7 @@ def test_a_failed_publish_is_said_once_an_hour_and_never_stops_a_sweep(tmp_path,
         w.sweep(lambda r: None)
         assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
         clock.t += W.RECANCEL_S / 2
+        w.on_event("run-1", "thinking", {"text": "still at it"})
     said = [ln for ln in capsys.readouterr().err.splitlines() if "not published" in ln]
     assert len(said) == 2 and "connection refused" in said[0] and "dummy-not-a-secret" not in "".join(said)
     assert all(s.startswith(W.PUBLISH_DDL) for s, _ in calls(psql)), "the table is created until a publish succeeds"
@@ -1471,6 +1477,12 @@ def test_a_push_to_an_agents_branch_is_activity(tmp_path):
     api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
                                  {"run-r": run}, notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
     (tmp_path / "notes").mkdir()
+    sweep = w.sweep
+
+    def working(start):                     # the agent works (its updatedAt moves) but writes no note and pushes nothing
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        sweep(start)
+    w.sweep = working
     w.sweep(lambda r: None)
     sweeps(w, clock, 60)
     sh.heads[f"cursor/by-suffix-{CO[-4:]}"] = "4" * 40
@@ -1658,3 +1670,244 @@ def test_the_deployed_nodes_file_names_the_nebius_nodes_and_an_ssh_argv():
     cfg = W.read_json(root / "infra/control/agent_watch_nodes.json")
     assert cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"] and cfg["every_s"] >= 60
     assert cfg["ssh"][0] == "ssh" and all(isinstance(a, str) for a in cfg["ssh"]) and "BatchMode=yes" in cfg["ssh"]
+
+
+def test_a_running_run_that_streams_nothing_for_30_min_is_stalled_cancelled_and_continued(tmp_path):
+    """Daniel, 19 Oct (proofs sat 7 h): a run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
+    is a hung call or a suspended VM, which the API doesn't show. Its owner (top, for a coordinator) is rung with the record."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r",
+                                             "updatedAt": W.iso(T0)}], {"run-r": {"status": "RUNNING"}}, timers=None)
+    w.sweep(lambda r: None)
+    w.on_event("run-r", "tool_call", {"callId": "c1", "name": "Shell", "status": "running"})
+    quiet_from = clock.t
+    for _ in range(W.STALL_S // 60 - 1):
+        clock.t += 60
+        w.on_event("run-r", "heartbeat", {})
+        w.sweep(lambda r: None)
+    assert api.posts == [] and records(tmp_path) == [], "29 min of nothing is not yet a stall"
+    clock.t += 60
+    w.sweep(lambda r: None)
+    (cancel, cont) = api.posts
+    assert cancel == (f"/v1/agents/{CO}/runs/run-r/cancel", None)
+    assert cont[0] == f"/v1/agents/{CO}/runs" and "streamed nothing for 30 min" in cont[1]["prompt"]["text"]
+    (rec,) = records(tmp_path)
+    assert {k: rec[k] for k in ("kind", "since", "minutes", "action", "owner")} == {
+        "kind": "stalled", "since": W.iso(quiet_from), "minutes": 30, "action": "cancelled and continued", "owner": "top"}
+    assert status(tmp_path)[CO]["watch_state"] == "stalled"
+
+
+def test_a_quiet_stream_while_the_agent_moves_or_its_subagents_report_is_no_stall(tmp_path):
+    """The stream may break while the agent works (its updatedAt moves), or the parent may wait on a subagent that reports
+    progress: neither is cancelled."""
+    api, clock, w, started = setup(tmp_path)
+    for _ in range(2 * W.STALL_S // 60):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(started.append)
+    api._agents[0]["updatedAt"] = W.iso(clock.t)
+    w.on_event("run-1", "tool_call", {"callId": "t1", "name": "task", "status": "running"})
+    for _ in range(2 * W.STALL_S // 60):
+        clock.t += 60
+        w.on_event("run-1", "interaction_update", {"type": "tool-call-delta", "callId": "t1", "taskUpdate": {}})
+        w.sweep(started.append)
+    assert api.posts == [] and [r["kind"] for r in records(tmp_path)] == ["long_call"]
+
+
+def test_an_error_run_is_restarted_10_min_after_the_last_restart(tmp_path):
+    api, clock, w, started = setup(tmp_path, status="ERROR")
+    for n, dt in ((2, W.RESTART_S - 60), (2, 60), (3, W.RESTART_S)):
+        clock.t += dt
+        api._agents[0]["latestRunId"] = f"run-e{clock.t:.0f}"
+        api._runs[f"run-e{clock.t:.0f}"] = {"status": "ERROR"}
+        w.sweep(started.append)
+    assert [r["action"] for r in records(tmp_path)] == ["restarted (1 of 3)", "restarted (2 of 3)", "restarted (3 of 3)"]
+
+
+def run_end_for(tmp_path, roots, clock, w, agent, rid="r20261018-200100-0002"):
+    """A `research run` sent by `agent` ends a minute on; the watch reads the node within 5 min. Returns when it ended."""
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], rid, clock.t, by=f"https://cursor.com/agents/{agent}", job="sweep-a")
+    return clock.t
+
+
+def test_a_coordinator_idle_after_its_run_ended_is_resumed_with_the_result_10_min_on(tmp_path):
+    """Rule (b), Daniel 19 Oct: a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    ended = run_end_for(tmp_path, roots, clock, w, CO)
+    while clock.t < ended + W.RESUME_S - 60:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["run_ended"] and api.posts == [], "9 min: its subscription may yet fire"
+    clock.t += 60
+    w.sweep(lambda r: None)
+    ((path, body),) = api.posts
+    assert path == f"/v1/agents/{CO}/runs"
+    text = body["prompt"]["text"]
+    assert "r20261018-200100-0002 (sweep-a) on vy-nebius-1: done rc=0" in text and "research msg read --as circuits" in text
+    rec = records(tmp_path)[-1]
+    assert {k: rec[k] for k in ("kind", "agent", "run", "role", "handle", "owner", "ended_run", "action", "new_run", "minutes")} == {
+        "kind": "idle_after_run", "agent": CO, "run": "run-f", "role": "coordinator", "handle": "circuits", "owner": "top",
+        "ended_run": "r20261018-200100-0002", "action": "resumed it with the run's result", "new_run": "run-new", "minutes": 10}
+    for _ in range(30):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert len(api.posts) == 1, "resumed once"
+
+
+def test_a_coordinator_that_ran_after_its_run_ended_is_not_resumed(tmp_path):
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    ended = run_end_for(tmp_path, roots, clock, w, CO)
+    api._agents[0]["latestRunId"] = "run-g"
+    api._runs["run-g"] = {"status": "FINISHED", "createdAt": W.iso(ended + 120), "updatedAt": W.iso(ended + 180)}
+    for _ in range(30):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert api.posts == [] and [r["kind"] for r in records(tmp_path)] == ["run_ended"] and w.awaiting == {}
+
+
+def busy_once(api):
+    """The first new run POSTed is refused 409 (agent busy), as Cursor refuses one on an agent waiting on background work."""
+    real, refused = api.post, []
+
+    def post(path, body=None):
+        if path.endswith("/runs") and not refused:
+            refused.append(path)
+            raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+        return real(path, body)
+    api.post = post
+
+
+def test_a_background_wait_that_refuses_the_resume_is_cancelled_first(tmp_path):
+    """proofs, 19 Oct: from 10:46 to 16:12Z its wakes got 409 hourly while its run sat in WAITING_FOR_BACKGROUND_WORK."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    api._agents[0].update(status="ACTIVE", latestRunId="run-b")
+    api._runs["run-b"] = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T19:00:00Z",
+                          "updatedAt": "2026-10-18T19:30:00Z"}
+    ended = run_end_for(tmp_path, roots, clock, w, CO)
+    busy_once(api)
+    while clock.t < ended + W.RESUME_S:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert [p for p, _ in api.posts] == [f"/v1/agents/{CO}/runs/run-b/cancel", f"/v1/agents/{CO}/runs"]
+    rec = records(tmp_path)[-1]
+    assert (rec["kind"], rec["action"]) == ("idle_after_run", "cancelled its background wait (run-b) and resumed it with the "
+                                                              "run's result")
+
+
+def test_a_wake_refused_by_a_background_wait_cancels_it_and_starts_the_wake(tmp_path):
+    run = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T19:00:00Z", "updatedAt": "2026-10-18T19:30:00Z"}
+    bells = {"t": W.iso(T0 - 60), "inboxes": {"vllm": {"agent": NEW, "last": W.epoch("2026-10-18T19:45:00Z")}}}
+    api, clock, w = coordinators(tmp_path, [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-b"}], {"run-b": run}, wake=True,
+                                 bells=bells, timers=None)
+    busy_once(api)
+    w.sweep(lambda r: None)
+    assert [p for p, _ in api.posts] == [f"/v1/agents/{NEW}/runs/run-b/cancel", f"/v1/agents/{NEW}/runs"]
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["action"], rec["new_run"]) == (
+        "ready_to_wake", "cancelled its background wait (run-b) and started a run", "run-new")
+
+
+class FakeLaunchApi:
+    def __init__(self):
+        self.keys, self.posts = [], []
+
+    def __call__(self, key):
+        self.keys.append(key)
+        return self
+
+    def post(self, path, body=None):
+        self.posts.append((path, body))
+        return {"agent": {"id": "bc-77777777-7777-7777-7777-777777777777"}}
+
+
+KEY = "dummy-" "launch-key-ff"
+
+
+def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaunched_only_with_the_key(tmp_path, capsys):
+    """A Task worker can't be started (400 legacy workflow): its coordinator is rung at 10 min, and if it stays idle 20 min more
+    a fresh agent takes its place, told its branch and given its newest note, with the launch key; without one, recorded."""
+    for keyed in (False, True):
+        d = tmp_path / str(keyed)
+        (d / "workers.d").mkdir(parents=True)
+        (d / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW,
+                                                             "branch": "cursor/zk-w1-c7a9"}))
+        launch_api = FakeLaunchApi()
+        api, clock, w, sh, roots = nodes_setup(d, launch_api=launch_api)
+        note(d / "notes", "zk-port", "20261018T1950Z-report-w1.md", f"zk-port worker ({W1_}); code cursor/zk-w1-c7a9")
+        api.workers[W1_] = worker("IDLE", W.iso(T0 - 600))
+        if keyed:
+            (d / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
+        ended = run_end_for(d, roots, clock, w, W1_)
+        while clock.t < ended + W.RESUME_S:
+            clock.t += 60
+            w.sweep(lambda r: None)
+        rec = records(d)[-1]
+        assert {k: rec[k] for k in ("kind", "role", "handle", "owner", "lane", "ended_run")} == {
+            "kind": "idle_after_run", "role": "worker", "handle": "vllm", "owner": "vllm", "lane": "zk-port",
+            "ended_run": "r20261018-200100-0002"}
+        assert rec["action"] == "rang @vllm to resume it with Task; relaunched fresh in 20 min if it stays idle"
+        for _ in range(W.WORKER_RELAUNCH_S // 60 + 5):
+            clock.t += 60
+            w.sweep(lambda r: None)
+        relaunches = [r for r in records(d) if r["kind"] == "relaunch"]
+        assert len(relaunches) == 1 and relaunches[0]["owner"] == "vllm" and api.posts == []
+        if not keyed:
+            assert relaunches[0]["action"].startswith("not relaunched: no launch key in") and launch_api.posts == []
+            continue
+        ((path, body),) = launch_api.posts
+        assert launch_api.keys == [KEY] and path == "/v1/agents" and body["env"] == {"type": "cloud", "name": W.ENV_NAME}
+        assert "cursor/zk-w1-c7a9" in body["prompt"]["text"] and "20261018T1950Z-report-w1.md" in body["prompt"]["text"]
+        assert relaunches[0]["new_agent"] == "bc-77777777-7777-7777-7777-777777777777"
+        new = json.loads((d / "workers.d" / "zk-port-bc-77777777-7777-7777-7777-777777777777.json").read_text())
+        assert new == {"agent_id": "bc-77777777-7777-7777-7777-777777777777", "lane": "zk-port", "launched_by": NEW,
+                       "relaunch_of": W1_, "branch": "cursor/zk-w1-c7a9"}
+        written = "".join(p.read_text() for p in d.rglob("*") if p.is_file() and p.name != "launch.env")
+        assert KEY not in written and KEY not in "".join(capsys.readouterr()), "the key is never written or printed"
+
+
+def test_a_coordinator_past_its_restarts_is_relaunched_from_its_handover_note_with_the_key(tmp_path, capsys):
+    gen3 = f"bc-{W.uuid.uuid5(W.COORDINATORS, 'circuits/3')}"
+    assert W.generation("circuits", gen3) == 3 and W.generation("circuits", CO) is None
+    launcher, launched = tmp_path / "launch_coordinator.py", []
+    launcher.write_text("# stand-in\n")
+    gen4 = f"bc-{W.uuid.uuid5(W.COORDINATORS, 'circuits/4')}"
+
+    def launch(argv, env):
+        launched.append((argv, env))
+        return 0, f"circuits: launched {gen4}, https://cursor.com/agents/{gen4}\n", ""
+    api, clock, w = coordinators(tmp_path, [{"id": gen3, "name": "verity: circuits", "status": "IDLE", "latestRunId": "run-e1",
+                                             "updatedAt": W.iso(T0)}], {"run-e1": {"status": "ERROR"}}, timers=None,
+                                 notes=tmp_path / "notes", launcher=launcher, launch=launch)
+    (tmp_path / "registry.json").write_text(json.dumps({"handles": [{"handle": "circuits", "holder": f"circuits ({gen3})"}]}))
+    (tmp_path / "routes.d" / "circuits.json").write_text(json.dumps({"name": "circuits", "holder": gen3, "closed": None,
+                                                                     "inbox_ts": "1760000000.000300"}))
+    note(tmp_path / "notes", "circuits", "20261018T1900Z-report-coordinator-handover.md", f"circuits ({gen3})")
+    note(tmp_path / "notes", "circuits", "20261018T1950Z-reply-from-x-handover-ack.md", "x")
+    note(tmp_path / "notes", "circuits", "20261018T1955Z-report-checkpoint.md", f"circuits ({gen3})")
+    for n in range(W.MAX_RESTARTS + 1):
+        api._agents[0]["latestRunId"] = f"run-e{n + 1}"
+        api._runs[f"run-e{n + 1}"] = {"status": "ERROR"}
+        w.sweep(lambda r: None)
+        clock.t += W.RESTART_S
+    kinds = [r["kind"] for r in records(tmp_path)]
+    assert kinds == ["crashed"] * 3 + ["erroring", "relaunch"] and launched == []
+    assert records(tmp_path)[-1]["action"].startswith("not relaunched: no launch key in"), "gated off until the key exists"
+    assert records(tmp_path)[-2]["owner"] == records(tmp_path)[-1]["owner"] == "top"
+    (tmp_path / "launch.env").write_text(f"export CURSOR_API_KEY='{KEY}'\n")
+    w.left.discard(gen3)
+    clock.t += W.RELAUNCH_EVERY_S
+    api._agents[0].update(latestRunId="run-e9", updatedAt=W.iso(clock.t))
+    api._runs["run-e9"] = {"status": "ERROR"}
+    w.sweep(lambda r: None)
+    ((argv, env),) = launched
+    assert argv[1:] == [str(launcher), "launch", "circuits", "--predecessor", gen3, "--pairing-thread", "1760000000.000300",
+                        "--generation", "4", "--text-file", str(tmp_path / "relaunch-circuits.md")]
+    assert env == {"CURSOR_API_KEY": KEY, "RESEARCH_SLACK_REGISTRY": str(tmp_path / "registry.json")}
+    brief = (tmp_path / "relaunch-circuits.md").read_text()
+    assert "20261018T1900Z-report-coordinator-handover.md" in brief and f"origin: circuits ({gen3})" in brief
+    rec = records(tmp_path)[-1]
+    assert (rec["kind"], rec["new_agent"], rec["action"]) == (
+        "relaunch", gen4, f"relaunched it from its handover note as {gen4} (generation 4)")
+    written = "".join(p.read_text() for p in tmp_path.rglob("*") if p.is_file() and p.name != "launch.env")
+    assert KEY not in written and KEY not in "".join(capsys.readouterr())
