@@ -20,6 +20,14 @@
 //                           pins UIMAD/ULOP3 (the chain stayed uniform), FFMA = R (the filler), IMMA = 8 and IGMMA = 4.
 //                           counted is the chain op (K > 0) or the IGMMA (K = 0); analyze sums every class's rate a
 //                           SMSP-cycle (total issue) and reads the K-slope at each R.
+//
+// A3 says a 2:4 sparse form does at most twice the dense peak on its logical k: the same instruction rate as the dense
+// form of half its logical k. wgmma.mma_async.sp was never measured in the tree.
+//   wgsp_<form>   2 warpgroups, 4 sparse wgmma m64n256 a commit group, wait_group 1 (as wg_<form>_a1): s8 and e4m3
+//                 k64, f16 k32 (logical), A compressed (64 rows x 32 B), B 256 rows x 64 B, metadata 0x44444444
+//                 (indices 0 and 1 of every group of 4: a valid 2:4 pattern; the values don't move a peak).
+//   wgd_<form>    its dense twin in the same kernel shape and binary (k32 s8/e4m3, k16 f16): the ratio wgsp/wgd is the
+//                 sparse speedup at equal instruction count, A3's bound is 1 (twice the MACs on a logical k twice as deep).
 #include "../../opcode_probe/probe.cuh"
 #include "../../opcode_probe/probes/honest.cuh"
 #include "../dc.cuh"
@@ -94,6 +102,72 @@ PACK(S_I, i, 256, 64)
 PACK(S_I, i, 256, 128)
 #undef PACK
 
+// ---- sparse wgmma beside its dense twin ---------------------------------------------------------------------------
+constexpr int SKB = 64;  // B's K bytes a row: k64 s8/e4m3, k32 f16 (A compressed to 32 B a row, as the dense k32 tile)
+
+// Operand bytes: s8 every code (TY 0), e4m3 no NaN or inf code (1), f16 in ±[0.5, 1) (4); zeros in mode 1.
+template <int TY>
+DC_DEV uint32_t sp_word(uint32_t i, int mode) {
+  if (mode == 1) return 0u;
+  const uint32_t x = dc_mix32(i * 0x9E3779B9u + 0x1234567u);
+  if constexpr (TY == 1) return x & 0x77777777u;
+  if constexpr (TY == 4) return (x & 0x83FF83FFu) | 0x38003800u;
+  return x;
+}
+// A (64 rows x 32 B) then B (256 rows x BK bytes), K-major: the sparse form's B is twice the dense form's.
+template <int TY, int BK>
+DC_DEV Tiles sp_tiles(unsigned char* sm, int mode) {
+  uint32_t* w = reinterpret_cast<uint32_t*>(sm);
+  for (uint32_t i = threadIdx.x; i < (AROWS * KB + BROWS * BK) / 4; i += blockDim.x) w[i] = sp_word<TY>(i, mode);
+  fence_async_smem();
+  __syncthreads();
+  const uint32_t base = smem_u32(sm);
+  return {wgmma_desc(base, kmaj_lbo(), kmaj_sbo(KB)), wgmma_desc(base + AROWS * KB, kmaj_lbo(), kmaj_sbo(BK))};
+}
+#define SPF(NAME, ACC, TY, BK, CALL)                                                       \
+  struct G_##NAME {                                                                       \
+    using Acc = ACC;                                                                      \
+    static constexpr int TYPE = TY, B_K = BK;                                             \
+    DC_DEV static void mma(Acc (&d)[128], const Tiles& t, uint32_t e, int sd) { CALL; }   \
+  };
+SPF(s8_sp, int, 0, SKB, wgmma_s8_n256_sp(d, t.da, t.db, e, sd))
+SPF(e4m3_sp, float, 1, SKB, wgmma_e4m3_n256_sp(d, t.da, t.db, e, sd))
+SPF(f16_sp, float, 4, SKB, wgmma_f16_n256_sp(d, t.da, t.db, e, sd))
+SPF(s8_d, int, 0, KB, wgmma_s8_n256(d, t.da, t.db, sd))
+SPF(e4m3_d, float, 1, KB, wgmma_e4m3_n256(d, t.da, t.db, sd))
+SPF(f16_d, float, 4, KB, wgmma_f16_n256(d, t.da, t.db, sd))
+#undef SPF
+template <class G>
+DC_DEV void wg_sp(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[AROWS * KB + BROWS * SKB];
+  const Tiles t = sp_tiles<G::TYPE, G::B_K>(sm, a.mode);
+  typename G::Acc d[128] = {};
+  const uint32_t e = 0x44444444u;
+  OP_BEGIN
+  OP_LOOP(it) {
+    wgmma_fence();
+    G::mma(d, t, e, 0);
+    G::mma(d, t, e, 1);
+    G::mma(d, t, e, 1);
+    G::mma(d, t, e, 1);
+    wgmma_commit();
+    wgmma_wait<1>();
+  }
+  wgmma_wait<0>();
+  wgmma_hold(d);
+  OP_END
+  uint32_t x = threadIdx.x;
+#pragma unroll
+  for (int i = 0; i < 128; i++) x ^= *reinterpret_cast<const uint32_t*>(&d[i]);
+  OP_SINK(x)
+}
+OP_KERNEL(wgsp_s8, ATPB) { wg_sp<G_s8_sp>(a); }
+OP_KERNEL(wgsp_e4m3, ATPB) { wg_sp<G_e4m3_sp>(a); }
+OP_KERNEL(wgsp_f16, ATPB) { wg_sp<G_f16_sp>(a); }
+OP_KERNEL(wgd_s8, ATPB) { wg_sp<G_s8_d>(a); }
+OP_KERNEL(wgd_e4m3, ATPB) { wg_sp<G_e4m3_d>(a); }
+OP_KERNEL(wgd_f16, ATPB) { wg_sp<G_f16_d>(a); }
+
 #define WGI "IGMMA.64x256x32.S8.S8=4"
 #define HON "IMMA.16832.S8.S8=8,IMAD=32,LEA.HI=32,LOP3.LUT=32"
 // counted: the chain's UIMAD (K > 0) or the IGMMA (K = 0). FFMA = R is the filler; UIMAD = ULOP3 = K/2 is the chain.
@@ -110,6 +184,9 @@ static const OpProbe PROBES[] = {
     P(i, 256, 0, WGI "," HON ",FFMA=256", "IGMMA.64x256x32.S8.S8"),
     P(i, 256, 64, WGI "," HON ",FFMA=256,UIMAD=32,ULOP3.LUT=32", "UIMAD"),
     P(i, 256, 128, WGI "," HON ",FFMA=256,UIMAD=64,ULOP3.LUT=64", "UIMAD"),
+#define P_SP(NM) {.name = #NM, .kernel = (const void*)NM, .tpb = ATPB, .expect = "*GMMA*=4", .iters = AITERS}
+    P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16),
+#undef P_SP
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
