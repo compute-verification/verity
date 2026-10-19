@@ -67,7 +67,7 @@ def test_vercel_json_wires_the_functions_and_the_crons_and_no_queue_trigger():
     assert "experimentalTriggers" not in json.dumps(v)                  # the subscriber's trigger is generated from pyproject
     assert {c["path"]: c["schedule"] for c in v["crons"]} == {"/api/cron/watchdog": "*/5 * * * *",
                                                              "/api/cron/reconcile": "*/10 * * * *"}
-    assert v["framework"] is None and v["buildCommand"] == "python3 build.py && mkdir -p public"   # a custom build with no framework needs an output dir
+    assert v["framework"] is None and v["buildCommand"] == "python3 build.py && mkdir -p public && echo slack-events > public/index.txt"   # a custom build with no framework needs a non-empty output dir
     assert (SERVICE / ".python-version").read_text().strip() == "3.13"
     assert not (SERVICE / "api" / "consume.py").exists()
 
