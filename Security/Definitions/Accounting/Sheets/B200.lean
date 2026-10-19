@@ -277,57 +277,73 @@ theorem machine_eq_census : sheet.machine.a = census := by
 theorem impliedMHz_lt_fmaxMHz : impliedMHz < fmaxMHz := by
   norm_num [impliedMHz, fmaxMHz]
 
-/-- A3's s8 peak reproduces the document: 2 · 8192 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure, dense
-4500 ± 50, in 10¹² a second. -/
+/-- A3's s8 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the `implied`
+clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or the SM
+count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not each to
+a document. -/
 theorem peakS8_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakS8 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakS8 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakS8, smCount, impliedMHz]
 
-/-- A3's e4m3 peak reproduces the document: 2 · 8192 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 4500 ± 50, in 10¹² a second. -/
+/-- A3's e4m3 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakE4m3_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakE4m3 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakE4m3 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakE4m3, smCount, impliedMHz]
 
-/-- A3's e5m2 peak reproduces the document: 2 · 8192 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 4500 ± 50, in 10¹² a second. -/
+/-- A3's e5m2 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakE5m2_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakE5m2 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakE5m2 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakE5m2, smCount, impliedMHz]
 
-/-- A3's fp6 peak reproduces the document: 2 · 8192 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 4500 ± 50, in 10¹² a second. -/
+/-- A3's fp6 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakFp6_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakFp6 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakFp6 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakFp6, smCount, impliedMHz]
 
-/-- A3's f16 peak reproduces the document: 2 · 4096 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 2200 ± 50, in 10¹² a second. -/
+/-- A3's f16 peak is consistent with the document's figure, not confirmed by it: 2 · 4096 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 2200 ± 50, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakF16_figure :
     (2200 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakF16 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakF16 * smCount * (impliedMHz * 10 ^ 6) ≤ (2200 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakF16, smCount, impliedMHz]
 
-/-- A3's bf16 peak reproduces the document: 2 · 4096 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 2200 ± 50, in 10¹² a second. -/
+/-- A3's bf16 peak is consistent with the document's figure, not confirmed by it: 2 · 4096 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 2200 ± 50, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakBf16_figure :
     (2200 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakBf16 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakBf16 * smCount * (impliedMHz * 10 ^ 6) ≤ (2200 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakBf16, smCount, impliedMHz]
 
-/-- A3's tf32 peak reproduces the document: 2 · 2048 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 1100 ± 50, in 10¹² a second. -/
+/-- A3's tf32 peak is consistent with the document's figure, not confirmed by it: 2 · 2048 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 1100 ± 50, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakTf32_figure :
     (1100 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakTf32 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakTf32 * smCount * (impliedMHz * 10 ^ 6) ≤ (1100 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakTf32, smCount, impliedMHz]
 
-/-- A3's fp4 peak reproduces the document: 2 · 16384 MACs · 148 SMs at the `implied` clock, 1854 MHz, is its figure,
-dense 9000 ± 500, in 10¹² a second. -/
+/-- A3's fp4 peak is consistent with the document's figure, not confirmed by it: 2 · 16384 MACs · 148 SMs at the
+`implied` clock, 1854 MHz, is its figure, dense 9000 ± 500, in 10¹² a second. No document states the `implied` clock or
+the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
+each to a document. -/
 theorem peakFp4_figure :
     (9000 - 500 : ℝ) * 10 ^ 12 ≤ 2 * peakFp4 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakFp4 * smCount * (impliedMHz * 10 ^ 6) ≤ (9000 + 500 : ℝ) * 10 ^ 12 := by

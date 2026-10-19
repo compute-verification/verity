@@ -251,6 +251,11 @@ def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | No
 WIDTH = 120
 
 
+def _stated(c: Const) -> bool:
+    """Whether a document states the constant: its grade isn't `none (...)` or `measured only`."""
+    return not c.grade.startswith(("none", "measured only"))
+
+
 def _num(x: Fraction) -> str:
     """A Lean literal."""
     return str(x.numerator) if x.denominator == 1 else f"{x.numerator} / {x.denominator}"
@@ -390,9 +395,15 @@ def lean(s: Sheet, data: Path) -> str:
         figure = (f"{_dec(p.sheet)} with sparsity, dense {_dec(dense)} ± {_dec(tol)}" if p.sparse
                   else f"dense {_dec(dense)} ± {_dec(tol)}")
         lhs = f"2 * {peak[ty]} * smCount * ({clock[p.clock]} * 10 ^ 6)"
-        out += [*_doc(f"A3's {ty} peak reproduces the document: 2 · {_dec(p.macs)} MACs · {_dec(s.sms.value)} SMs at "
-                      f"the `{p.clock}` clock, {_dec(s.clocks[p.clock].value)} MHz, is its figure, {figure}, in 10¹² "
-                      "a second."),
+        c = s.clocks[p.clock]
+        unstated = [what for what, x in [(f"the `{p.clock}` clock", c), ("the SM count", s.sms)] if not _stated(x)]
+        head = (f"A3's {ty} peak reproduces the document" if not unstated else
+                f"A3's {ty} peak is consistent with the document's figure, not confirmed by it")
+        tail = ("" if not unstated else
+                f" No document states {' or '.join(unstated)} (their grades above), so this holds the per-clock peak, "
+                "the SMs and the clock to the figure together, not each to a document.")
+        out += [*_doc(f"{head}: 2 · {_dec(p.macs)} MACs · {_dec(s.sms.value)} SMs at the `{p.clock}` clock, "
+                      f"{_dec(c.value)} MHz, is its figure, {figure}, in 10¹² a second.{tail}"),
                 f"theorem {peak[ty]}_figure :",
                 f"    ({_num(dense)} - {_num(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
                 f"      {lhs} ≤ ({_num(dense)} + {_num(tol)} : ℝ) * 10 ^ 12 := by",
