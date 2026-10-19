@@ -327,26 +327,58 @@ def sender(environ: dict[str, str] | None = None) -> str | None:
 
 
 WAKE_WAIT_S, WAKE_POLL_S = 900.0, 15.0
+NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY_B64")
+CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
 
 
-def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
+def wake_on_control(iid: str, *, run=None) -> str | None:
+    """Ask the control pod to start instance `iid` (pods/nebius/wake.py there, which starts only an instance the registry names,
+    before its deadline, under a live budget line) over the ssh path `pods create` reads the budgets guard through; -> the state
+    it was in. Refused with the pod's reason."""
+    from .pods import budgets
+    from .pods.connect import ssh_base
+
+    host = os.environ.get("RESEARCH_GUARD_HOST") or budgets.GUARD_HOST
+    try:
+        r = (run or subprocess.run)([*ssh_base(host), f"{CONTROL_WAKE} {shlex.quote(iid)}"], capture_output=True, text=True, timeout=180)
+    except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
+        raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
+    if r.returncode != 0:
+        why = (r.stderr or r.stdout).strip().splitlines()
+        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}")
+    return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
+
+
+def wake(machine: dict[str, Any], ssh: list[str], *, nebius=None, control=None, sleep=time.sleep, clock=time.monotonic) -> str | None:
     """Start a stopped Nebius VM before a run and wait for its ssh (INF-58: the H200s stop after 2 h idle, disks kept): a machine
     whose registry entry names its `nebius_instance_id` and whose ssh doesn't answer is started through the Nebius API, then waited
-    for up to WAKE_WAIT_S. Returns what it did, None when the machine answered at once or names no instance."""
+    for up to WAKE_WAIT_S. With no Nebius key here (a lane's VM), the control pod starts it (`wake_on_control`, or `control`).
+    Returns what it did, None when the machine answered at once or names no instance."""
     iid = machine.get("nebius_instance_id")
     if not iid or ssh_run(ssh, ["true"], timeout=30).returncode == 0:
         return None
-    if nebius is None:
-        from .pods.nebius.fleet import nb as nebius
-    try:
-        state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
-        if state in ("STOPPED", "STOPPING"):
-            nebius("compute", "instance", "start", "--id", iid, "--async")
-    except (RuntimeError, OSError, ValueError) as e:
-        raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no Nebius "
-                      f"credentials here, ask @infra to start {iid}") from None
-    print(f"research: {machine['name']} was {state}; started it through the Nebius API, waiting up to {WAKE_WAIT_S / 60:g} min "
-          f"for its ssh (disks kept)", file=sys.stderr)
+    if nebius is None and control is None and not all(os.environ.get(k) for k in NEBIUS_KEY_ENV):
+        control = wake_on_control
+    if control is not None:
+        try:
+            state = control(iid)
+        except Refused as e:
+            raise Refused(f"{machine['name']} doesn't answer on ssh, and with no Nebius key here it was to be started by the control "
+                          f"pod: {e}") from None
+        how = "the control pod started it"
+    else:
+        if nebius is None:
+            from .pods.nebius.fleet import nb as nebius
+        try:
+            state = (nebius("compute", "instance", "get", "--id", iid).get("status") or {}).get("state")
+            if state in ("STOPPED", "STOPPING"):
+                nebius("compute", "instance", "start", "--id", iid, "--async")
+        except (RuntimeError, OSError, ValueError) as e:
+            raise Refused(f"{machine['name']} doesn't answer on ssh and couldn't be started through the Nebius API ({e}); with no "
+                          f"Nebius credentials here, ask @infra to start {iid}") from None
+        how = "started it through the Nebius API"
+    print(f"research: {machine['name']} was {state}; {how}, waiting up to {WAKE_WAIT_S / 60:g} min for its ssh (disks kept)",
+          file=sys.stderr)
     end = clock() + WAKE_WAIT_S
     while clock() < end:
         sleep(WAKE_POLL_S)
