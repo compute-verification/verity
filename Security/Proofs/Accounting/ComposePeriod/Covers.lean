@@ -27,12 +27,11 @@ namespace Accounting.SecurityProofs.ComposePeriod
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
 open Classical in
-/-- **The period layer's covers on a credited window's live tiles** (for training's Lean worker to prove): the period
-layer's writers read their positions (`DrawnLayer.WriterReads`), and on every path `x`, in every credited window `w`
-whose dead tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles that aren't good under the
-period's modes (`periodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at
-its rounds' coins. The right side is window `w`'s round's deficiency in `periodGame` at weights `liveCone` and costs
-`1, 1`. -/
+/-- **The period layer's covers on a credited window's live tiles** (proved as `periodCovers`): the period layer's
+writers read their positions (`DrawnLayer.WriterReads`), and on every path `x`, in every credited window `w` whose dead
+tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles that aren't good under the period's modes
+(`periodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at its rounds'
+coins. The right side is window `w`'s round's deficiency in `periodGame` at weights `liveCone` and costs `1, 1`. -/
 def PeriodCoversStmt : Prop :=
   ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
