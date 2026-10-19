@@ -86,7 +86,7 @@ def test_honest_session_is_accepted(batch):
     assert sum(r.count for r in signed.batches) == K and all(r.wrong == 0 for r in signed.batches)
     v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
     assert v.accepted, v.reasons
-    assert v.public() == {"accepted": True}
+    assert v.public() == {"accepted": True, "egress_mib": 1}
     assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
@@ -107,7 +107,7 @@ def test_wrong_answer_ends_the_session():
     with pytest.raises(RuntimeError, match="no batch is retried"):
         c.challenge()
     v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
-    assert not v.accepted and v.public() == {"accepted": False}
+    assert not v.accepted and v.public() == {"accepted": False, "egress_mib": 1}
 
 
 def test_late_batch_ends_the_session():
@@ -169,6 +169,13 @@ def test_verdict_fails_closed():
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
     more = dataclasses.replace(signed, egress_bits=0)
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
+
+
+def test_public_egress_is_16_bits_of_mib_rounded_up():
+    """The bound reads the egress `E`, so the verdict publishes it, rounded up to whole MiB and saturating at 16 bits."""
+    mib = sw.EGRESS_UNIT_BITS
+    assert [sw.egress_units(e) for e in (0, 1, mib, mib + 1)] == [0, 1, 1, 2]
+    assert sw.egress_units(sw.EGRESS_MAX_UNITS * mib) == sw.egress_units(10**15) == sw.EGRESS_MAX_UNITS == 2**16 - 1
 
 
 def test_deployed_bound():

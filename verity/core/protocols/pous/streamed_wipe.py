@@ -29,9 +29,9 @@ session has four steps:
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
-cover yet.  `verdict` is what a verifier checks of a signed session; its public output is the verdict alone.
-`retained_bits` and `challenges_for` are the guarantee's bound, which says how much of the prior content can survive an
-accepted wipe.
+cover yet.  `verdict` is what a verifier checks of a signed session; its public output is the verdict and the egress the
+network certifier counted, in whole MiB (16 bits), which the bound reads.  `retained_bits` and `challenges_for` are the
+guarantee's bound, which says how much of the prior content can survive an accepted wipe.
 """
 
 from __future__ import annotations
@@ -335,15 +335,28 @@ class Prover:
         return b"".join(bytes(self.store[LABEL_BYTES * i:LABEL_BYTES * (i + 1)]) for i in indices)
 
 
+EGRESS_UNIT_BITS = 8 << 20
+"""The public egress count's unit: one MiB."""
+EGRESS_MAX_UNITS = (1 << 16) - 1
+"""A proof unit's output is at most 16 bits, so the count saturates at 64 GiB less one MiB."""
+
+
+def egress_units(egress_bits: int) -> int:
+    """The certified egress in whole MiB, rounded up, saturating at `EGRESS_MAX_UNITS`: what the bound reads as `E`."""
+    return min(-(-egress_bits // EGRESS_UNIT_BITS), EGRESS_MAX_UNITS)
+
+
 @dataclass(frozen=True, slots=True)
 class Verdict:
-    """Whether a signed session passes; `reasons` are witness, and only `public()` is published."""
+    """Whether a signed session passes, and its egress in MiB; `reasons` are witness, and only `public()` is
+    published.  The guarantee's `E` is `egress_mib` MiB, and a saturated count (`EGRESS_MAX_UNITS`) bounds nothing."""
 
     accepted: bool
     reasons: tuple[str, ...]
+    egress_mib: int
 
     def public(self) -> dict[str, Any]:
-        return {"accepted": self.accepted}
+        return {"accepted": self.accepted, "egress_mib": self.egress_mib}
 
 
 def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
@@ -377,7 +390,7 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
             reasons.append(f"batch {b} is past its deadline of {p.limit_ns} ns")
         if b == 0 and r.send_ns < signed.fill_end_ns:
             reasons.append("the first batch was sent before the fill completed")
-    return Verdict(not reasons, tuple(reasons))
+    return Verdict(not reasons, tuple(reasons), egress_units(signed.egress_bits))
 
 
 def _log2_choose(n: int, r: int) -> float:
@@ -421,8 +434,9 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
     return math.ceil(log2_delta / math.log2(1 - slack_labels / n))
 
 
-__all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "KEY_DOMAIN", "LABEL_BITS",
-           "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG",
-           "BatchRecord", "Challenger", "Prover", "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
-           "challenges_for", "draw_indices", "label", "labels", "log2_error", "message", "records_root", "retained_bits",
-           "verdict", "wipe_key"]
+__all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
+           "EGRESS_UNIT_BITS", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL",
+           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
+           "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "draw_indices",
+           "egress_units", "label", "labels", "log2_error", "message", "records_root", "retained_bits", "verdict",
+           "wipe_key"]
