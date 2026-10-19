@@ -87,12 +87,15 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "DsaTopKShortRow_v1, and every compared FA3 sparse output SparseMlaHead_v1 at its row's valid count, bit for bit; "
              "where FA3 splits a row's keys, SparseMlaHeadSplit_v1 at its split count in the launch (launch_num_splits) in its place; "
              "the k_pe and q_pe RoPE words are each one named contraction."),
-    Property("glm53_fa3_prefill_capture", "verity-vllm/glm53-fa3-prefill-capture/v1",
-             "On the capture's Hopper GPU, vLLM selects FA3 for GLM-5.3's dense MHA prefill at head dim 256, MUFU ex2 / rcp are core's "
-             "tables, every launch runs FlashAttnFwdSm90 at TileShape 128x80x256 with the Split mainloop and FlashAttnFwdCombine "
-             "exactly where fa3_model.split_plan splits it, and every output row of a launch at num_splits 1, and of every served "
-             "sequence the plan runs as one split, equals Attention_v4{T,NH=8,KVH=8,D=256,BN=80,...}, which the target binds, bit for "
-             "bit."),
+    Property("glm53_fa3_prefill_capture", "verity-vllm/glm53-fa3-prefill-capture/v3",
+             "On the capture's Hopper GPU, vLLM selects FA3 for GLM-5.3's dense MHA prefill at head dim 256 and its "
+             "FlashAttnPrefillBackend runs FA3 with v unpadded at scale 256^-0.5, MUFU ex2 / rcp are core's tables, every launch runs "
+             "FlashAttnFwdSm90 at TileShape 128x80x256 with the Split mainloop and FlashAttnFwdCombine exactly where "
+             "fa3_model.split_plan splits it, the backend's run_prefill_new_tokens writes the served launch's words, every output "
+             "row of a launch at num_splits 1, and of every served sequence the plan runs as one split, equals "
+             "Attention_v4{T,NH=8,KVH=8,D=256,BN=80,...}, which the target binds, and every output row of a served sequence the plan "
+             "runs as NS > 1 splits equals AttentionSplit_v1{T,NH=8,KVH=8,D=256,BN=80,...,PER} at its tile's PER, which the "
+             "vocabulary binds there, bit for bit."),
     Property("glm53_fused_rmsnorm_capture", "verity-vllm/glm53-fused-rmsnorm-capture/v1",
              "On the capture's Hopper GPU, vLLM runs one specialisation of _fused_norm_rope_kernel, its code the PTX DsaRMSNorm_v1 was "
              "read from, and every q_c and kv_c word of GLM-5.3's MLA RMSNorms (N 2048 and 512, eps 1e-5) on served and on probe rows "
@@ -202,9 +205,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("noninterference", "verity-vllm/noninterference/v2",
              "At the record's tensor-parallel world, the observed engine generated the bare engine's tokens for every request (and, "
              "where boundary hashes were taken, every compared boundary value is bit-identical)."),
-    Property("census", "verity-capture/census-reconciliation/v1",
+    Property("census", "verity-capture/census-reconciliation/v2",
              "Every device kernel the bare engine launched is claimed by a kernel the Match resolution declares or by the frozen "
-             "kernel allowlist, at every step."),
+             "kernel allowlist, at every step, and every declared kernel launched exactly as many times as the step has events "
+             "declaring it, unless the frozen launch-count allowlist exempts it with its reason."),
     Property("golden", "verity-gen/golden-check/v1",
              "Every golden log still resolves to its recorded attribution under the current patterns."),
     Property("holdout", "verity-gen/holdouts/v1",

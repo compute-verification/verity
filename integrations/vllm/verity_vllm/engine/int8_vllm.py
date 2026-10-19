@@ -10,10 +10,18 @@ Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own p
 when `modules_to_not_convert` is `[]` (recipe v2), not `["lm_head"]` (v1, where it stays bf16): the logits processor calls the
 method's `apply` and takes its bf16 logits.  Nothing else is quantized (the embedding is a gather, attention keeps its KV cache
 unquantized).  The method computes
-`engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
-refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
-shard would take each row's activation scale over its own K slice, not the row's), a bias, K or N not a multiple of 8, K > MAX_K, and
-activations that are not bf16.
+`engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  After
+both ops it hands the call's served values to `Int8PlainLinearMethod.observe`, a no-op a protocol option wraps (PoUW's H1,
+`protocol_options.pouw_h1`): the layer it was handed, the s8 rows and per-token scales (what the Commit taps as
+``Int8RowQuant_v1``) and y.  Loading
+refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses a bias, K or N (its shard's) not a
+multiple of 8, K > MAX_K, and activations that are not bf16.
+
+Under tensor parallelism each rank runs the plain step on its shard, as vLLM's own linear methods do: a column-parallel shard (qkv,
+gate_up) is its rows of W and of ``weight_scale``, the whole activation row; a row-parallel shard (o_proj, down_proj) is its K slice
+of W with every row's ``weight_scale``, and quantizes its K slice of the activation, so its activation scale is that slice's max,
+not the whole row's.  The ranks' bf16 outputs are then summed by vLLM's all-reduce.  The LM head's shard is its vocabulary rows, as
+a column-parallel one, and the logits processor gathers them.
 """
 from __future__ import annotations
 
@@ -47,8 +55,6 @@ class Int8PlainLinearMethod(LinearMethodBase):
     def create_weights(self, layer: torch.nn.Module, input_size_per_partition: int, output_partition_sizes: list[int],
                        input_size: int, output_size: int, params_dtype: torch.dtype, **extra_weight_attrs: Any) -> None:
         n, k = sum(output_partition_sizes), input_size_per_partition
-        if getattr(layer, "tp_size", 1) != 1:
-            raise ValueError(f"{self.prefix}: the int8 plain arm is single-GPU (tp_size {layer.tp_size})")
         if n % 8 or k % 8 or k > E.MAX_K:
             raise ValueError(f"{self.prefix}: [{n}, {k}] needs N and K multiples of 8 and K <= {E.MAX_K}")
         loader = extra_weight_attrs["weight_loader"]
@@ -83,7 +89,13 @@ class Int8PlainLinearMethod(LinearMethodBase):
         x2 = x.reshape(-1, k)
         if x2.shape[0] == 0:
             return x.new_empty(*lead, layer.weight.shape[0])
-        return int8_ops.linear(x2, layer.weight, layer.weight_scale)[2].reshape(*lead, layer.weight.shape[0])
+        xq, s_a, y = int8_ops.linear(x2, layer.weight, layer.weight_scale)
+        self.observe(layer, xq, s_a, y)
+        return y.reshape(*lead, layer.weight.shape[0])
+
+    def observe(self, layer: torch.nn.Module, xq: torch.Tensor, s_a: torch.Tensor, y: torch.Tensor) -> None:
+        """A served call's values, after both ops: its s8 rows xq [M, K], their f32 scales s_a [M] and y [M, N] bf16. A
+        protocol option wraps it; it must not change them."""
 
 
 class Int8ExactConfig(QuantizationConfig):
