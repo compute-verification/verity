@@ -28,6 +28,7 @@ import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
+import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -165,11 +166,29 @@ import Proofs.Flock.Claims.ZK.Stop
 * `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled Lean frame
   (`Masker.answer`, then `Flock.Firewall.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
   frame's own configuration from its draws on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
-  `cfg_root`). Its coin stops are the frame's. It stops a session only at its `Finish`, with its scheduled rounds in a failed device's place
+  `cfg_root`). Its coin stops are the frame's, all four of them (a zerocheck outer coin `1`, a mask slot short of full
+  rank, level 0's `ρ` dependent, the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), and where the
+  frame refuses the coins the release is the stop (`LeanRelease.release_of_refusesCoins`). Its pass decision is the
+  frame's too (`Flock.Firewall.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
+  scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
+  `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`).
-  Its `RefD` is D8 (a)'s `FirewallComputes` plus the item-stream refinement `LeanRelease.ItemsRefine` (`Reports`,
-  `LiveRefine` at the worker's passed rounds, `FillRefine` at the scheduled rounds; `LeanRelease.refD`), so
+  Its `RefD` is the item-stream refinement `LeanRelease.ItemsRefine` alone, with no assumption on what the firewall
+  computes (`LiveRefine` at the worker's passed rounds and `FillRefine` at the scheduled rounds, read at the values the
+  firewall's transcript reports, where the frame takes the coins, and `StopRefine`, the stop where it refuses them;
+  `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
+* `Refine`: toward `ItemsRefine` at the reference session's prover (`strat`). Its `StopRefine` holds wherever the
+  session sends the stop where the frame refuses the coins (`LeanRelease.stopRefine_of_sessionStops`), and so wherever
+  the session's message is the frame's release (`SessionFrames`, `stopRefine_of_sessionFrames`) and its abort is the
+  stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
+  (`LeanRelease.release_eq_abort_of_liveRefine`). The frame's coin refusal reads no tape (`LeanRelease.refusesCoins_tape`),
+  and `RefSession.withStops` is a session with the stop where a rule of the coins says, keeping the session's six Props;
+  where that rule is the frame's refusals wherever the openings pass (`LeanRelease.StopsAt`), its `StopRefine` is proved
+  (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and `FillRefine` follow from the transport's refusal of a
+  failed opening and the per-round byte equality at the worker's and the stand-in rounds
+  (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of
+  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`).
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
