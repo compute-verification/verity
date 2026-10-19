@@ -17,8 +17,7 @@ The rest is the simulation's: a fork after `j` coins against the simulated strat
 coins of the decoded event (`forkC_simAt_le`, by `Claims.Bridge.Sim.forkC_le`, the dead branches' empty openings
 opening nothing, `opRL_nul`), which is the deployed runs' fork at round `j` (`forkC_liveStrat`).
 
-* `plainAdv_le_of`, `plainSimForkLe_of`, `plain_KS_of_align`: so KS at the deployed plain verifier's trimmed record
-  holds from `PlainForkAlign` and `PlainForkClash`.
+* `plainAdv_le_of`, `plainSimForkLe_of`: so `PlainSimForkLe` holds from `PlainForkAlign` and `PlainForkClash`.
 -/
 
 namespace FlockDeploy.KS
@@ -390,13 +389,5 @@ theorem plainSimForkLe_of {x : Claims.Msg} (ha : PlainForkAlign x) (hc : PlainFo
       C r ℓ (ha'.1 hh C r ℓ) fun _ _ _ hq => pairEv_of_forkQ (hab C) (hc'.1 hh) hq,
     fun hh hl C _ r ℓ => plainAdv_le_of (tables_head_one h) hL L m k0 l₀ l₁ rest ext hsch hk0 hm hlay _ _ _ _ _ P ω
       C r ℓ (ha'.2 hh hl C r ℓ) fun _ _ _ hq => pairEv_of_forkQ (hab C) (hc'.2 hh hl) hq⟩
-
-/-- **The deployed plain verifier: KS, from the simulated fork's alignment and the live fork's clash**, at SHA-512 at
-the trimmed record at the deployed relation: `plain_KS_of_fork` at `plainSimForkLe_of`. -/
-theorem plain_KS_of_align (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkAlign x)
-    (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkClash x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_fork (fun x hno => plainSimForkLe_of (ha x hno) (hc x hno)) hleaf
 
 end FlockDeploy.KS

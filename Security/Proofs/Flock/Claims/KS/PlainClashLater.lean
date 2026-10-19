@@ -27,9 +27,8 @@ those entries are the run's level-`ℓ` rows (`rawLevelCols_plain`), which clash
 * `plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterClashAt`, `plain_laterClashHAt`: those at the
   statement's draw, at `plainTab`.
 * `rawLevelCols_plain`: an accepted plain run's level-`ℓ` rows are its reps' `plainLevelColsOf` entries.
-* `plainClashQL`, `plainSimLaterClashAt`, `plain_KS_of_fork`: so a self-clash past level 0 at the concrete
-  simulator's outcome gives `P`'s accepting run a raw clash, at every statement, and KS at the deployed plain
-  verifier's trimmed record holds from `PlainSimForkLe`.
+* `plainClashQL`, `plainSimLaterClashAt`: so a self-clash past level 0 at the concrete simulator's outcome gives
+  `P`'s accepting run a raw clash, at every statement.
 -/
 
 namespace FlockSoundness.Discharge.AtDraw
@@ -783,12 +782,5 @@ theorem plainSimLaterClashAt (x : Claims.Msg) : PlainSimLaterClashAt x := by
       (plain_laterClashAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω,
     fun hh hl => plainClashQL hs hin hset h hd _ _ _
       (plain_laterClashHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
-
-/-- **The deployed plain verifier: KS, from the concrete simulator's fork bound**, at SHA-512 at the trimmed record at
-the deployed relation: `plain_KS_of_later` at `plainSimLaterClashAt`. -/
-theorem plain_KS_of_fork (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_later (fun x _ => plainSimLaterClashAt x) hf hleaf
 
 end FlockDeploy.KS

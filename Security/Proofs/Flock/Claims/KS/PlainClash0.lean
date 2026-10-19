@@ -19,9 +19,8 @@ gives the run a raw clash at level 0.
 * `plain_clash₀At`, `plain_clash₀HAt`: those at the statement's draw, at `plainTab`.
 * `rawCols_plain`: an accepted plain run's raw columns are its reps' `plainRepColsOf` entries.
 * `plainClashQ₀`: so a level-0 self-clash at the concrete simulator's outcome gives `P`'s accepting run a raw clash.
-* `plainClashQ_or`, `PlainSimLaterClashAt`, `plainSimClashAt_of_later`, `plain_KS_of_later`: so `PlainSimClashAt`
-  needs only its case past level 0, and KS at the deployed plain verifier's trimmed record holds from
-  `PlainSimLaterClashAt` and `PlainSimForkLe`.
+* `plainClashQ_or`, `PlainSimLaterClashAt`, `plainSimClashAt_of_later`: so `PlainSimClashAt` needs only its case
+  past level 0.
 -/
 
 namespace Claims.Bridge.PlainDraw
@@ -560,13 +559,5 @@ theorem plainSimClashAt_of_later {x : Claims.Msg} (hl : PlainSimLaterClashAt x) 
   · exact plainClashQ_or _ (plainClashQ₀ hs hin hset h hd _ _ _
       (plain_clash₀HAt hs hin hset h hh hleaf hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω)
       ((hl s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh hleaf) fun _ hq => hq
-
-/-- **The deployed plain verifier: KS, from the concrete simulator's clash past level 0 and fork bound**, at SHA-512
-at the trimmed record at the deployed relation: `plain_KS_of_parts` at `plainSimClashAt_of_later`. -/
-theorem plain_KS_of_later (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimLaterClashAt x)
-    (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_parts (fun x hno => plainSimClashAt_of_later (hc x hno)) hf hleaf
 
 end FlockDeploy.KS

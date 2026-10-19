@@ -11,8 +11,7 @@ least two levels. So its live strategy, read through `liveSession_eq` as its byt
 * `SchedK`, `schedL_of_schedK`: the schedule on `roundsK`'s strategies, carried to `liveSession`'s across `bind_rounds`;
 * `schedK_plain`, `plainLive_sched`: the plain simulator's bytes prover keeps it, round by round;
 * `plainRepNs_length`: `|plainRepNs| = repRounds` at two levels or more;
-* `plainSchedAlign`, `plain_KS_of_leaf`: so `PlainSchedAlign` holds at every statement, and KS at the deployed plain
-  verifier's trimmed record rests on `PlainLeafLive` alone.
+* `plainSchedAlign`: so `PlainSchedAlign` holds at every statement.
 -/
 
 namespace FlockDeploy.KS
@@ -249,10 +248,5 @@ theorem plainSchedAlign (x : Claims.Msg) : PlainSchedAlign x := by
       (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d)
       (plain_hdecHAt hs hin hset ht hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) (plain_mPts hs hin hset).1 P ω C u
       (hS u)
-
-/-- **Knowledge soundness at the deployed plain verifier's trimmed record**, from `PlainLeafLive` alone. -/
-theorem plain_KS_of_leaf (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_sched (fun x _ => plainSchedAlign x) hleaf
 
 end FlockDeploy.KS

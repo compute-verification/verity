@@ -14,8 +14,8 @@ opens only empty rows, meets rep 0's slots after that count and rep 1's after `r
 * `afterOf`: the table's strategy after the link points, read off the session's;
 * `NulOut`, `LeadsAfter`: an outcome opening only empty rows, and the strategy leading with rep 0 (`Lock.Lead`);
 * `slotRSL_lead`: so `SlotRSL` holds at `forkRound spec st k0 r ℓ`;
-* `PlainSchedAlign`, `plainSlotAlign_of_sched`, `plain_KS_of_sched`: so `PlainSlotAlign`, and KS at the deployed plain
-  verifier's trimmed record, hold where the simulated strategy leads with rep 0 for `repRounds` coins.
+* `PlainSchedAlign`, `plainSlotAlign_of_sched`: so `PlainSlotAlign` holds where the simulated strategy leads with
+  rep 0 for `repRounds` coins.
 -/
 
 namespace FlockDeploy.KS
@@ -156,13 +156,5 @@ theorem plainSlotAlign_of_sched {x : Claims.Msg} (h : PlainSchedAlign x) : Plain
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).1 hh C u) r ℓ.val,
       fun hh hl C r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 _ _ _ _ m k0 l₀ l₁ rest ext hsch hk0 hm _ _ _
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh hl C u) r ℓ.val⟩
-
-/-- **The deployed plain verifier: KS, from the simulated strategy's schedule**, at SHA-512 at the trimmed record at
-the deployed relation: `plain_KS_of_slot` at `plainSlotAlign_of_sched`, with the live sessions' bound where hidden
-outputs sit under plain leaves (`PlainLeafLive`). -/
-theorem plain_KS_of_sched (h : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSchedAlign x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_slot (fun x hno => plainSlotAlign_of_sched (h x hno)) hleaf
 
 end FlockDeploy.KS

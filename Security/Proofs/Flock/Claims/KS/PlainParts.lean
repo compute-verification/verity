@@ -6,8 +6,8 @@ import Proofs.Flock.Claims.KS.PlainClashL
 /-!
 # The plain chain from the concrete simulator's parts
 
-`plain_KS_of_simD` asks, at each plain statement some run accepts, for a simulator of each prover at the verdict at
-the draw (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform law
+The plain table bound asks, at each plain statement some run accepts, for a simulator of each prover at the verdict
+at the draw (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform law
 (`Pr_plainΦ`), its roots (`plainSim_root`), the simulation (`plainSimRun`), the abort (`plainSimAbortAt`) and, at the
 coupling's chances, the slack's fit (`plain_slack_fits`) and the fork's slack (`plain_fork_le_fnAt`). What it does not
 have yet is two parts, each a named Prop here:
@@ -19,8 +19,8 @@ have yet is two parts, each a named Prop here:
 * `plainDecQ`, `PlainClashQ`: the live outcome decoded at the verdict at the draw with a property `Q` of the table's
   output, and `Q` giving `P`'s accepting runs a raw clash; `LiveSelfClash` is `plainDecQ` at `SelfClashL`.
 * `plainAdv`: the strategies' fork advantage `PlainSimWrPAtD` bounds, at the concrete simulator.
-* `plainRawClashRunL_of_abort`, `plainSimWrPAtD_of_parts`, `plainSimWD_of_parts`, `plain_KS_of_parts`: so KS at the
-  deployed plain verifier's trimmed record holds from `PlainSimClashAt` and `PlainSimForkLe` alone.
+* `plainRawClashRunL_of_abort`, `plainSimWrPAtD_of_parts`, `plainSimWD_of_parts`: so `PlainSimWD` holds from
+  `PlainSimClashAt` and `PlainSimForkLe` alone.
 -/
 
 namespace FlockDeploy.KS
@@ -220,14 +220,5 @@ theorem plainSimWD_of_parts {x : Claims.Msg} (hc : PlainSimClashAt x) (hf : Plai
         (fun Ω _ _ P ω => (hc s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hm hlay Ω P ω).2 hh hl)
         (fun Ω _ _ P ω =>
           (hf s hs hin ins spec sts hset st h d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh hl)⟩
-
-/-- **The deployed plain verifier: KS, from the concrete simulator's clash and fork bound**, at SHA-512 at the
-trimmed record at the deployed relation: `plain_KS_of_simD` at `plainSimWD_of_parts`, at the statements some run
-accepts. -/
-theorem plain_KS_of_parts (hc : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimClashAt x)
-    (hf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSimForkLe x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_simD (fun x hno => plainSimWD_of_parts (hc x hno) (hf x hno)) hleaf
 
 end FlockDeploy.KS

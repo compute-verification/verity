@@ -15,8 +15,7 @@ logs (`tiedColl_of_openings`).
   later-level opening there is an `Opening` in the run's log against one of them.
 * `capDig_inj`, `opRL_eq_some`, `forkEvL_entries`: two caps of 64-byte digests with one `capDig` are one, and
   `ForkEvL` is one recorded cap and two openings of one position of it to different rows.
-* `plainForkQ_of`, `plainForkClash`, `plain_KS_of_forkAlign`: so `PlainForkClash` holds at every statement, and KS at
-  the deployed plain verifier's trimmed record holds from `PlainForkAlign` alone.
+* `plainForkQ_of`, `plainForkClash`: so `PlainForkClash` holds at every statement.
 -/
 
 namespace FlockDeploy.KS
@@ -214,12 +213,5 @@ theorem plainForkClash (x : Claims.Msg) : PlainForkClash x := by
       (plain_laterEntriesAt hs hin hset h hh hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω,
     fun hh hl => plainForkQ_of hs hin hset h hd _ _ _
       (plain_laterEntriesHAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay) P ω⟩
-
-/-- **The deployed plain verifier: KS, from the simulated fork's alignment**, at SHA-512 at the trimmed record at the
-deployed relation: `plain_KS_of_align` at `plainForkClash`. -/
-theorem plain_KS_of_forkAlign (ha : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainForkAlign x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_align ha (fun x _ => plainForkClash x) hleaf
 
 end FlockDeploy.KS

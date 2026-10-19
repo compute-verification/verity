@@ -17,8 +17,8 @@ comparison is the alignment alone, since the session's leaves record the cap of 
 * `opRL_of_nul`, `not_conflictAt_nul`, `opens_of_outN_bind`, `opens_of_outN_sessAfterL`, `slotAt_answerWith_nul`,
   `slotRSL_answerWith_nul`: a dead branch, which answers the openings with `nulOp`, reaches only empty rows, so two of
   its runs never conflict and it meets `Lock.SlotAt` by `nul` at any number of coins (`Lock.forkE_answerWith`);
-* `PlainSlotAlign`, `plainForkAlign_of_slot`, `plain_KS_of_slot`: so `PlainForkAlign`, and KS at the deployed plain
-  verifier's trimmed record, hold where the simulated strategy reaches each plain fork slot after `plainJ r ℓ` coins.
+* `PlainSlotAlign`, `plainForkAlign_of_slot`: so `PlainForkAlign` holds where the simulated strategy reaches each
+  plain fork slot after `plainJ r ℓ` coins.
 -/
 
 namespace FlockDeploy.KS
@@ -286,13 +286,5 @@ theorem plainForkAlign_of_slot {x : Claims.Msg} (h : PlainSlotAlign x) : PlainFo
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).1 hh C r ℓ u),
       fun hh hl C r ℓ u => plainAlignQ_of_slot
         ((h s hs hin ins spec sts hset st ht d hd L m k0 l₀ l₁ rest ext hsch hk0 hm hlay Ω P ω).2 hh hl C r ℓ u)⟩
-
-/-- **The deployed plain verifier: KS, from the simulated strategy's slot alignment**, at SHA-512 at the trimmed record
-at the deployed relation: `plain_KS_of_forkAlign` at `plainForkAlign_of_slot`, with the live sessions' bound where
-hidden outputs sit under plain leaves (`PlainLeafLive`). -/
-theorem plain_KS_of_slot (h : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainSlotAlign x)
-    (hleaf : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLeafLive x) :
-    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
-  plain_KS_of_forkAlign (fun x hno => plainForkAlign_of_slot (h x hno)) hleaf
 
 end FlockDeploy.KS

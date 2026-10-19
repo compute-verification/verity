@@ -3,11 +3,10 @@ import Proofs.Flock.Claims.KS.PlainLeafFork
 /-!
 # Knowledge soundness at the deployed plain verifier, with no premise
 
-E14's chain gives KS at the deployed plain verifier's trimmed record from `PlainLeafLive` alone (`plain_KS_of_leaf`):
-the live sessions' bound at the statements whose hidden outputs sit under a leaf other than hm96's. The deployed
-scope admits exactly one such leaf, `flock-leaf/sha512-unsalted` (`Claims.Flock.InScope`, `plain_leafU`), and
-`PlainLeafLive` reads it at the hm96 model leaf `leaf512`, where the deployed decoders are not right. At the model's
-plain leaf `leafPlain` they are (`plain_hdecHUAt`), so the simulator's chain runs there as it does at hm96 leaves:
+The simulator's chain (`PlainSimWD`) covers the statements whose outputs are public or hidden under hm96 leaves. The
+deployed scope admits exactly one other leaf, `flock-leaf/sha512-unsalted` (`Claims.Flock.InScope`, `plain_leafU`),
+which the deployed decoders read at the model's plain leaf `leafPlain` (`plain_hdecHUAt`), not at the hm96 model leaf
+`leaf512`, so the simulator's chain runs there as it does at hm96 leaves:
 
 * `PlainSimWrPAtDU`, `plain_le_sessionsEU`, `plain_tableBoundθAt_of_simDU`, `plainSimWrPAtD_of_partsU`: the
   simulator's table bound at `leafPlain`, copies of `PlainSimWrPAtD`, `plain_le_sessionsE`,
@@ -16,7 +15,7 @@ plain leaf `leafPlain` they are (`plain_hdecHUAt`), so the simulator's chain run
   bound (`plainAdv_leU`).
 * `plainSimWD_all`: E14's simulator where the outputs are public or hidden under hm96 leaves.
 * `plain_tableBoundθAt_all`, `plain_KS`: so KS at SHA-512 at the deployed plain verifier's trimmed record at the
-  deployed relation holds with no hypothesis, and `PlainLeafLive` is not needed.
+  deployed relation holds with no hypothesis.
 -/
 
 namespace FlockDeploy.KS
@@ -325,9 +324,11 @@ theorem plainSimWD_all (x : Claims.Msg) : PlainSimWD x :=
   plainSimWD_of_parts (plainSimClashAt_of_later (plainSimLaterClashAt x))
     (plainSimForkLe_of (plainForkAlign_of_slot (plainSlotAlign_of_sched (plainSchedAlign x))) (plainForkClash x))
 
-/-- **The plain table bound at every statement some run accepts**: `plain_tableBoundθAt_simD`'s case split, at
-`plainSimWD_all` where the outputs are public or hidden under hm96 leaves, and at `plainSimWrPAtDU_at` where they are
-hidden under the one other leaf the scope admits (`plain_leafU`). -/
+/-- **The plain table bound at every statement some run accepts**: such a statement is in scope with one table
+(`acc_inScope`, `plain_one`), whose model statement no table off it is committed to (`plain_not_committed`), so
+`plain_tableBoundθAt_of_simD` at `plainSimWD_all` where the outputs are public or hidden under hm96 leaves, and
+`plain_tableBoundθAt_of_simDU` at `plainSimWrPAtDU_at` where they are hidden under the one other leaf the scope admits
+(`plain_leafU`). -/
 theorem plain_tableBoundθAt_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
