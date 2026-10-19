@@ -131,6 +131,7 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "identity_check", "where": "runs.jsonl commit.extra", "new": "program_source_identity/identity_layout (X-03)"},
     {"old": "classes", "where": "runs.jsonl commit", "new": "required_value_coverage/required_classes (the declaration read back)"},
     {"old": "sampled_replay", "where": "runs.jsonl commit; commit/sampled_replay_p*.json", "new": "local_replay/sampled_replay, /seed_of_record, /population_gaps, /population_scope"},
+    {"old": "cublas_route_pin", "where": "runs.jsonl commit (check.cublas_route_pin.stamp)", "new": "local_replay/cublas_route_pin"},
     {"old": "boundary_linkage", "where": "runs.jsonl commit; commit/sampled_replay_p*.json", "new": "boundary_linkage/ordered_linkage"},
     {"old": "linkage", "where": "prose", "new": "boundary_linkage"},
     {"old": "weights_pin", "where": "runs.jsonl commit", "new": "checkpoint_binding/weights_of_record"},
@@ -151,6 +152,7 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "manifest_verify.rebuilt_digest / manifest_verify.used_digest", "where": "commit/manifest_verify.json", "new": "required_value_coverage/manifest_of_record_verified (differences)"},
     {"old": "binding.error / binding.map_digest / binding.program_digest", "where": "runs.jsonl commit.binding", "new": "program_source_identity/binding_context (inputs / differences)"},
     {"old": "extra.errors", "where": "runs.jsonl commit.extra", "new": "runtime_match/collector_errors (differences.first)"},
+    {"old": "extra.collector_failure", "where": "runs.jsonl commit.extra", "new": "runtime_match/collector_errors (differences[collector_failure])"},
     {"old": "declaration_*.json", "where": "commit/ (commit_integ.api.declaration)", "new": "required_value_coverage/required_classes (inputs)"},
     {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
 ]
@@ -284,6 +286,8 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
         errs_n = len(ex.get("errors") or [])
     ops = commit.get("openings") or {}
     n_open, n_ok = int(ops.get("n") or 0), int(ops.get("verified") or 0)
+    if ex.get("collector_failure"):                        # a step the worker abandoned: the counts and the root below follow from it
+        return False, f"collector failed: {str(ex['collector_failure'])[:200]}"
     if n_exp is None or n_com is None:
         return False, "reference integrity counters missing (expected_tensors/committed_tensors): committer does not report them"
     if int(commit.get("fa2_zero_rows") or 0) > 0:
@@ -391,6 +395,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     wp = commit.get("weights_pin")
     if isinstance(wp, dict) and wp.get("result") is False:
         return False, f"weights of record: {wp.get('why') or 'served weights differ from the checkpoint of record'}"
+    rp = commit.get("cublas_route_pin")
+    if isinstance(rp, dict) and rp.get("ok") is False:
+        return False, rp.get("why") or "cuBLAS route pin: served off the pin's scan's conditions"
     if isinstance(bnd, dict) and (bnd.get("population") or bnd.get("coverage")):
         _oc = oc if isinstance(oc, dict) else ((vc.get("oracle_compare") if isinstance(vc, dict) else None) or
                                                (_comps.get("oracle_compare") if isinstance(_comps, dict) else None))
@@ -622,7 +629,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     runs' own collector record (runs.jsonl commit.binding.collector: variant, retention, window_mb, window_slots, arena_mb, layout, gpu_tree),
     `collector_variant` / `retention` ('windowed' iff window_mb > 0 else 'whole-block'; retention from the record, else --retain in cmd),
     `engine_settings` = --engine-arg k=v pairs + --max-num-seqs / --openings / --pairs / --open-after-release / --required-manifest /
-    --expect-root from the command line.  [P5] this is what `commit_summary.json` used to carry (F-r19-int-21: that file is no longer
+    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (F-r19-int-21: that file is no longer
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}
@@ -667,7 +674,8 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
             m = re.search(flag + r"\s+(\d+)", cmd)
             if m:
                 es[key] = int(m.group(1))
-        es["open_after_release"] = "--open-after-release" in cmd
+        es["open_after_release"] = "--open-after-release" in cmd or any(
+            isinstance(r.get("commit"), dict) and r["commit"].get("openings_after_release") is not None for r in trt)
         es["required_manifest"] = bool(re.search(r"--required-manifest\s+\S+", cmd))
         m = re.search(r"--expect-root\s+([0-9a-f]{64})", cmd)
         if m:

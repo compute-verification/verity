@@ -3,6 +3,8 @@ the 128 x 80 tile in the target's rule and the twin's, the row binding `Attentio
 Definition word for word, the kernel's fully-masked leading blocks, and which launches the served split heuristic splits."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 from pathlib import Path
 

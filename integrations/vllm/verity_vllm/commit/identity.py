@@ -32,14 +32,13 @@ tensor (format v1 leaves, and the range opening of a v2 tensor).
   ``sampling_params``, ``seed``, ``finish_reason`` (without ``t``).
 
 **Tree order** is the code-point order of the id string (equal to UTF-8 byte order), i.e.
-Python's ``sorted(ids)``.  :func:`sort_key` returns that key; :func:`structured_key` is a
-human-friendly ordering (numeric ``t``, numeric layers) for reports only.
+Python's ``sorted(ids)``; :func:`sort_key` returns that key.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Literal
 
 PROFILE_ID_RE = re.compile(r"^[0-9a-f]{12}$")
@@ -90,12 +89,6 @@ class CanonicalId:
 
     def __str__(self) -> str:
         return format_id(self)
-
-    def with_(self, **changes: object) -> CanonicalId:
-        """A copy with fields replaced, re-validated (used by relabel tests and arg resolution)."""
-        new = replace(self, **changes)  # type: ignore[arg-type]
-        validate(new)
-        return new
 
 
 # --- construction --------------------------------------------------------------------------------
@@ -350,14 +343,6 @@ def parse(text: str) -> CanonicalId:
     return cid
 
 
-def is_canonical(text: str) -> bool:
-    try:
-        parse(text)
-    except IdentityError:
-        return False
-    return True
-
-
 def kind_of(text: str) -> Kind:
     return parse(text).kind
 
@@ -372,34 +357,3 @@ def sort_key(canonical_id: str) -> str:
 
 def tree_sorted(ids: list[str] | tuple[str, ...] | set[str]) -> list[str]:
     return sorted(ids, key=sort_key)
-
-
-def structured_key(canonical_id: str) -> tuple:
-    """Report ordering: kind, request, numeric position, phase, numeric layer, op, port, extras."""
-    cid = parse(canonical_id)
-    if cid.kind == "weight":
-        return (
-            0,
-            cid.param,
-            cid.shard if cid.shard is not None else -1,
-            int(cid.coordinate) if cid.coordinate is not None else -1,
-        )
-    if cid.kind == "boundary":
-        return (1, cid.request_id, cid.t if cid.t is not None else -1, cid.field)
-    layer_rank = (
-        int(cid.layer) if INT_RE.match(cid.layer or "") else 10**6 + NAMED_LAYERS.index(cid.layer)
-    )
-    if cid.layer == "embed":
-        layer_rank = -1
-    return (
-        2,
-        cid.request_id,
-        cid.t,
-        cid.phase,
-        layer_rank,
-        cid.op,
-        cid.port,
-        cid.shard if cid.shard is not None else -1,
-        cid.expert if cid.expert is not None else -1,
-        cid.coordinate or "",
-    )

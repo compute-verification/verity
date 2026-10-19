@@ -46,7 +46,7 @@ is ``M = 1``: one opened input row -> the ``N`` BF16 words of one output row.
 
 A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``attrs.split_k``)
 ``{"nsplit": S, "bounds": [...], "order": [...]|null, "reduce_mode": 0|1|2}`` in K/16-tile units,
-e.g. the ``sliced1x2`` 64x64 kernel = ``verity_vllm.program.kernels.gemm_production.sliced_k_spec(K, 2, 2, ...)``.
+e.g. the ``sliced1x2`` 64x64 kernel = ``verity_vllm.program.kernels.kernel_zoo.sliced_k_spec(K, 2, 2, ...)``.
 A node whose kernel is unresolved must not carry this relation (checker ``none``).
 
 Coverage (what the checker claims).  ``independent_gemm`` predicts only on the families this
@@ -129,16 +129,6 @@ def _words(value: Any) -> np.ndarray:
 
 def _node_of(node_or_inst: Any) -> Any:
     return getattr(node_or_inst, "node", node_or_inst)
-
-
-def _arg_names(node: Any) -> list[str]:
-    args = getattr(node, "args", None)
-    if args is not None and not isinstance(args, Mapping):
-        return [a.name for a in args]
-    if isinstance(node, Mapping):
-        a = node.get("args") or node.get("inputs") or {}
-        return list(a.keys()) if isinstance(a, Mapping) else [x["name"] for x in a]
-    return []
 
 
 def _arg_value(node: Any, inputs: Mapping[str, Any], role: str) -> Any:

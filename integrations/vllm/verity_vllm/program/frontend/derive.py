@@ -197,7 +197,7 @@ class Ctx:
         self.env: dict[Any, Any] = {}
         self.storage: _Storage = _Storage()  # node -> storage base node (alias groups); absent: own storage
         self.stale: dict[Any, str] = {}  # node -> why its value may no longer be read (alias of a mutated tensor)
-        self.written_allocs: set = set()
+        self.written_allocs: dict = {}  # node an in-place rule wrote -> the storage base it was written through
         self.mutation_effects: list[dict] = []
         self.returned_inputs: list[dict] = []
         self.applications: list[dict] = []
@@ -457,7 +457,7 @@ class Ctx:
             if inp is not None:
                 self.mutation_effects.append({"input": inp, "node": self.current.name, "rule": rule.rule_id, "what": what,
                                               "representation": "the mutated value is the pure result; the Input gates keep the pre-mutation value"})
-            self.written_allocs.add(node)
+            self.written_allocs[node] = self.storage_base(node)
         self.env[node] = new_value
         self.storage.pop(node, None)  # fresh storage
 
@@ -562,7 +562,8 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     corr_doc = emit_correspondence(ctx, flat_sd.body, rank=rank)
     corr_digest = correspondence_digest(corr_doc)
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in ctx.node_hints.items()}, _CORR: corr_doc},
-                           registered=ctx.registration.names if ctx.registered_values else ())
+                           registered=ctx.registration.names if ctx.registered_values else (),
+                           theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None
