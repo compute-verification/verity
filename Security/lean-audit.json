@@ -58,6 +58,10 @@
    "owner": "@compute-accounting",
    "digest": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3"
   },
+  "Accounting.Assumptions.TS.FoldOptFoldedAt": {
+   "owner": "@compute-accounting",
+   "digest": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb"
+  },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
    "digest": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e"
@@ -70,9 +74,17 @@
    "owner": "@compute-accounting",
    "digest": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda"
   },
+  "Accounting.Assumptions.TS.OperandHMu": {
+   "owner": "@compute-accounting",
+   "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc"
+  },
   "Accounting.Assumptions.TS.ProofsSound": {
    "owner": "@compute-accounting",
    "digest": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3"
+  },
+  "Accounting.Assumptions.TS.ReceiptLuckAt": {
+   "owner": "@compute-accounting",
+   "digest": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df"
   },
   "Accounting.Assumptions.TS.RightFixed": {
    "owner": "@compute-accounting",
@@ -121,6 +133,10 @@
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
    "digest": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
+  },
+  "Accounting.Assumptions.TS.WholeLuckAt": {
+   "owner": "@compute-accounting",
+   "digest": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd"
   },
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
@@ -465,6 +481,18 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "Accounting.Assumptions.TS.BindingForkAt": {
+   "owner": "@compute-accounting",
+   "digest": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d"
+  },
+  "Accounting.Assumptions.TS.ProofSoundAt": {
+   "owner": "@compute-accounting",
+   "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c"
+  },
+  "Accounting.Assumptions.TS.ProofsPin": {
+   "owner": "@compute-accounting",
+   "digest": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6"
   }
  },
  "meaning": [
@@ -2406,6 +2434,18 @@
    "signature": ["Accounting.SecurityProofs.TS.SheetScalarRouteHalf : Accounting.Guarantees.TS.SheetScalarRouteHalf"],
    "assumptions": [],
    "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
+  },
+  "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline"],
+   "assumptions": [],
+   "type_hash": "f1c79fa1a2296647966ae2763703bb07c5e9d15bdb71b6b0e83f6228938c4dc5"
+  },
+  "Accounting.SecurityProofs.TS.Sm120SheetHeadline": {
+   "owner": "@compute-accounting",
+   "signature": ["Accounting.SecurityProofs.TS.Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline"],
+   "assumptions": [],
+   "type_hash": "0707af8f7ef0f1b38f84f251088d19dcca4fd9e8a5e66a965e0d71629a781ef6"
   },
   "Accounting.SecurityProofs.TS.StageBudget": {
    "owner": "@compute-accounting",
@@ -6981,6 +7021,18 @@
     "function": "Pouw.Receipt.duoQuad",
     "outcome": "none"
    },
+   "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
+    "function": "Pouw.Receipt.liHalf",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective": {
+    "function": "Pouw.Receipt.liCheckpoint",
+    "outcome": "none"
+   },
+   "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
+    "function": "Pouw.Receipt.liCheckpoint",
+    "outcome": "none"
+   },
    "Pouw.SecurityProofs.Receipt.DuoStepBijective": {
     "function": "Pouw.Receipt.duoWord",
     "outcome": "none"
@@ -7011,18 +7063,6 @@
    },
    "Pouw.SecurityProofs.Receipt.Fx1RunWordInjective": {
     "function": "Pouw.Receipt.fx1Run",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.LiHalfBijective": {
-    "function": "Pouw.Receipt.liHalf",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective": {
-    "function": "Pouw.Receipt.liCheckpoint",
-    "outcome": "none"
-   },
-   "Pouw.SecurityProofs.Receipt.LiCheckpointLowBit": {
-    "function": "Pouw.Receipt.liCheckpoint",
     "outcome": "none"
    },
    "Accounting.SecurityProofs.Gates.FmaxfRange": {
@@ -7599,6 +7639,7 @@
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
+   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
    "Accounting.SecurityProofs.PouwLocalOff": "frozen (conjecture,no-function,world-unlisted): It is stated over arbitrary strategies (maps from the verifier's coins to Accounting.Actual.Run) and an abstract verdict (Accounting.PouwWork.Verdict, its acceptance a field) rather than a function's acceptance, and it rests on the named open conjecture A3 (Accounting.Assumptions.PouwFloorOff, Security/Models/Accounting/Assumptions/PouwFloor.lean: on paper at L = 32 given a merge price, conjectured at served eta, claimed only at removable markings), a hypothesis that is not on the premises list until shape.conjectures lists it with a falsification test; its other premises, A2, A2b and A5 at 0 (PouwDetection, PouwLuck, PouwHelpBound), are.",
    "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "frozen (no-function): It is a theorem about every staged spot-check play (StagedPlay, its game's acceptance and deficiency) over any finite cells and bits and any ring, not about a Lean function: the service's staged check has no Lean code yet, and once it has, this is restated as that check's property.",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "frozen (no-function,world-unlisted,scope): It is stated over an arbitrary Machine and Service and an analysis map (RunMap), not the service's code, and takes three premises about that map: ServiceSoundStaged (live coins, and the proof layer's binding and zero knowledge, with the seed identified with the staged window's coins), KScopeAffine (Theorem K's proved affine scope: products of bit-affine operands, mixed included, row-pure, and E3, which no check of the service refuses a run outside of) and ChargeVF3j16 (the active vector VF3j-16's prices with B_theta complete, for stages that don't overlap). It is a sibling of StagedFloorKOneSided, a floor of record (Daniel, decision 53), proved on its own scope at the luck 3/4: the affine scope isn't inside the one-sided one; K1 is not claimed outside the two proved scopes.",
@@ -7619,26 +7660,41 @@
    "Accounting.SecurityProofs.TS.TensorSlotCount": "frozen (no-function): T1 of EPS1-TENSOR over any tensor run's slot writes, injective by freshness (a hypothesis), not a Lean function.",
    "Accounting.SecurityProofs.TS.TensorSlotTight": "lemma: T1's tightness criterion (epsilon_tensor = 0 iff L = d_H and rho_H = rho_T), arithmetic.",
    "Accounting.SecurityProofs.TS.OutputCount": "frozen (no-function): Lemma 2's count over any straight-line program's head writes, the copy tracing given as the head map, not a Lean function.",
+   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
    "Pouw.SecurityProofs.Eps1.WordLocalZero": "frozen (no-function): Theorem B of EPS1-QSTAR at the zero instance, over every word-local M3 program (Pouw.Eps1.Prog), not a Lean function.",
    "Pouw.SecurityProofs.Eps1.WordLocalGeneral": "frozen (no-function): Theorem B of EPS1-QSTAR at a general int8 instance, over every word-local M3 program, not a Lean function.",
-   "Pouw.Guarantees.Eps1.ClassPPacked": "unstated: Theorem C of EPS1-QSTAR at the zero instance; its theorem Pouw.SecurityProofs.Eps1.ClassPPacked is not proved yet (gap list in note:20261017T0801Z-draft-lean-stmt).",
-   "Flock.SecurityProofs.RecursionClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims/Recursion.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed compiled verifier.",
-   "Accounting.SecurityProofs.TS.LuckOfReceipt": "lemma: the bridge of LEDGER 1.3-1.5 over every ideal game split at the receipt, the operand and receipt lucks (definitions, not named assumptions) giving (L) at p + (1 - p) pr; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo, fx1 or li units or duo or fx1 checkpoint units (a definition), from DuoRunWordInjective, Fx1RunWordInjective, LiSegmentsBind, DuoSegmentsBind and Fx1SegmentsBind; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.OperandLuckCube": "lemma: the operand luck at 3/4 over every game whose rounds draw uniform cube bits against a degree-2 operand error (a definition), luck_quad as a probability; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.DuoFoldFanIn": "restatable: the fan-in floor of duo's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
-   "Accounting.SecurityProofs.TS.FoldFanIn": "restatable: the fan-in floor of a fold of binding steps over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
-   "Accounting.SecurityProofs.TS.Fx1FoldFanIn": "restatable: the fan-in floor of fx1's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
+   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks, filler allowed (StoreMatches), held blocks hold all of W's credited live bits (those in complete blocks) but b per resident block not held; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks (StoreMatches), resident blocks holding at least D credited live bits each number at most creditedBits / D; about no function of the code.",
+   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan covers the complete blocks W reads at the step, filler allowed (PlanMatches), moved blocks carry all of the bits W reads from complete blocks but b per planned block not moved; about no function of the code.",
    "Accounting.SecurityProofs.TS.FanInCount": "frozen (no-function): the fan-in count over any straight-line dataflow whose outputs see its inputs, not a Lean function.",
    "Accounting.SecurityProofs.TS.SeesOfInjective": "lemma: a receipt injective in each input sees it, over any dataflow and receipt map.",
    "Accounting.SecurityProofs.TS.ThinFoldInjective": "lemma: the thin fold's state is injective in each absorbed word and in its start, BitVec arithmetic.",
    "Accounting.SecurityProofs.TS.FoldOptOfFanIn": "frozen (no-function): FOLD-OPT from FanIn for any fold given as a straight-line dataflow over the committed words, not a Lean function.",
    "Accounting.SecurityProofs.TS.FillOptOfFanIn": "frozen (no-function): FILL-OPT from FanIn for any filler given as a straight-line dataflow over its fresh inputs, not a Lean function.",
-   "Accounting.SecurityProofs.RequirementHeld": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks, filler allowed (StoreMatches), held blocks hold all of W's credited live bits (those in complete blocks) but b per resident block not held; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementDense": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks (StoreMatches), resident blocks holding at least D credited live bits each number at most creditedBits / D; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan covers the complete blocks W reads at the step, filler allowed (PlanMatches), moved blocks carry all of the bits W reads from complete blocks but b per planned block not moved; about no function of the code.",
+   "Accounting.SecurityProofs.TS.LuckOfReceipt": "lemma: the bridge of LEDGER 1.3-1.5 over every ideal game split at the receipt, the operand and receipt lucks (definitions, not named assumptions) giving (L) at p + (1 - p) pr; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.ReceiptLuckCaseA": "lemma: Lemma B of LEDGER 1.3 in case (a), the receipt luck 0 over every game whose rounds are committed duo, fx1 or li units or duo or fx1 checkpoint units (a definition), from DuoRunWordInjective, Fx1RunWordInjective, LiSegmentsBind, DuoSegmentsBind and Fx1SegmentsBind; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseA": "lemma: LuckOfReceipt at the receipt luck ReceiptLuckCaseA gives, (L) at the operand luck in case (a); not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.OperandLuckCube": "lemma: the operand luck at 3/4 over every game whose rounds draw uniform cube bits against a degree-2 operand error (a definition), luck_quad as a probability; not a property of a Lean function.",
+   "Accounting.SecurityProofs.TS.LuckCaseACube": "lemma: LuckCaseA at OperandLuckCube's 3/4, (L) at 3/4 in case (a) with degree-2 operands and no luck hypothesis; not a property of a Lean function.",
+   "Accounting.SecurityProofs.FillerLuck.ParityLuck": "lemma: Lemma P2 of RS-E-REF r6 VI.2.2 at one cell, over any word ring read mod 2 and any column of uniform parity, at every deficit; FillerCellLuck and the window statements are what it is for.",
+   "Accounting.SecurityProofs.FillerLuck.FillerCellLuck": "frozen (no-function): the filler's cell check (decision 47) at pfill-bits and pfill-bU, in the s32 word and over Z, over every run word with R two-sided products in the cell projection, not a Lean function: the filler's check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.FillerParityBalanced": "lemma: the four filler columns (pfill-bits' bits, pfill-bU's uOf entries, in the s32 word and over Z) have uniform parity, the hypothesis the window statements take.",
+   "Accounting.SecurityProofs.FillerLuck.FillerLuckAt": "frozen (no-function): (I7) LuckAt at luck 1 over every full-checking filler window (Accounting.Filler.FullFill), not a Lean function: the service's full check has no Lean code yet; it takes the column's uniform parity as a hypothesis, which FillerParityBalanced proves for the filler's columns.",
+   "Accounting.SecurityProofs.FillerLuck.FillerBudget": "frozen (no-function): Lemma C's BudgetAt at 1/(1 - 0.854) over every spot-checked filler window (Accounting.Filler.SpotFill), not a Lean function: the service's spot check has no Lean code yet; it takes the column's uniform parity as a hypothesis.",
+   "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": "frozen (no-function): Theorem S with each block at its own p over every window of another block's one-draw check beside the filler's spot check (Accounting.Filler.FillBlocks), not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape, and the column's uniform parity a hypothesis.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
+   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
+   "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Models.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
+   "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,496, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4; measured to hold at saturation, r20261019-120714-132b, RT2-120-4), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue facet and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3s-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3t_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 8,320, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%, 0.588% at the data with ln(8/7) >= 2/15; the unfolded one gives 0.587%); FacetCeilings on VF3s-16's rows (RT-FACET's refit of VF3r-16, whose JI3s_0 bit-exact census programs load at up to 1.0383: RT2-LOGIC-9), WordsWritten at the forms' omega, ScalarRoute at 9/8 (assumed: ClassPSlots once writers create at most 15 incidences, a cap nothing proves; at A6's proved 1/2 floor the same bound is 7.791%, r20261019-172339-a93b, RT3-LOGIC-2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at JI3t_0 and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Models.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
+   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
+   "Accounting.SecurityProofs.TS.BindingOfFork": "lemma: the rewinding step behind (I8)'s delta_bind over every window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding's failure at a round, squared, is at most its fork form's (two runs off one commitment, both accepted, opening it differently), so a bound on the fork form is binding at its square root; ProofsSoundOfPinned, which takes binding at delta_bind, is what it is for.",
+   "Accounting.SecurityProofs.TS.DuoFoldFanIn": "restatable: the fan-in floor of duo's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
+   "Accounting.SecurityProofs.TS.FoldFanIn": "restatable: the fan-in floor of a fold of binding steps over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
+   "Accounting.SecurityProofs.TS.Fx1FoldFanIn": "restatable: the fan-in floor of fx1's run over #2355's Dataflow, whose earlier and reads fields are hypotheses; it fits restated over Accounting.Gates.ofLane (#2362), whose circuits carry no Prop field.",
    "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringCarry": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the sparse family (Accounting.Gates.sparse), a counting bound from Fooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
@@ -7654,23 +7710,9 @@
    "Accounting.SecurityProofs.Gates.SquaringUnits": "frozen (no-function): The units bound over every circuit of the gate model that squares on the nibble family (Accounting.Gates.nibbles), a counting bound from UnitsFooling, not a property of a Lean function.",
    "Accounting.SecurityProofs.HMu.LemmaB": "lemma: Lemma B of the receipt-aggregate binding note (decisions 22 and 48), receipt luck at most Z*mu times the deficiency under (H-mu+) taken as a hypothesis (SkipRound.HMuPlus, a definition, not a named assumption); ReceiptLuckOfCoins and ReceiptLuckOfCoin are what it is for.",
    "Accounting.SecurityProofs.HMu.PersistentOneWord": "lemma: Lemma B' for a persistent pattern with one word before the checkpoint, a fold's checkpoint state injective in the skipped value from the step's injectivity in state and word and the pattern's positions, taken as hypotheses; it gives SkipRound.Inj with Z = 1.",
-   "Accounting.SecurityProofs.FillerLuck.ParityLuck": "lemma: Lemma P2 of RS-E-REF r6 VI.2.2 at one cell, over any word ring read mod 2 and any column of uniform parity, at every deficit; FillerCellLuck and the window statements are what it is for.",
-   "Accounting.SecurityProofs.FillerLuck.FillerCellLuck": "frozen (no-function): the filler's cell check (decision 47) at pfill-bits and pfill-bU, in the s32 word and over Z, over every run word with R two-sided products in the cell projection, not a Lean function: the filler's check has no Lean code yet.",
-   "Accounting.SecurityProofs.FillerLuck.FillerParityBalanced": "lemma: the four filler columns (pfill-bits' bits, pfill-bU's uOf entries, in the s32 word and over Z) have uniform parity, the hypothesis the window statements take.",
-   "Accounting.SecurityProofs.FillerLuck.FillerLuckAt": "frozen (no-function): (I7) LuckAt at luck 1 over every full-checking filler window (Accounting.Filler.FullFill), not a Lean function: the service's full check has no Lean code yet; it takes the column's uniform parity as a hypothesis, which FillerParityBalanced proves for the filler's columns.",
-   "Accounting.SecurityProofs.FillerLuck.FillerBudget": "frozen (no-function): Lemma C's BudgetAt at 1/(1 - 0.854) over every spot-checked filler window (Accounting.Filler.SpotFill), not a Lean function: the service's spot check has no Lean code yet; it takes the column's uniform parity as a hypothesis.",
-   "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": "frozen (no-function): Theorem S with each block at its own p over every window of another block's one-draw check beside the filler's spot check (Accounting.Filler.FillBlocks), not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape, and the column's uniform parity a hypothesis.",
-   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "lemma: (I8) ProofsSound of EPS1-SPEC from its pieces over every play and window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding at delta_bind and proof soundness at delta_ZK as probability hypotheses, the Definitions' pinning (ProofLayer.Pins) and the play being its proofs' (ProofLayer.Of) as definitional hypotheses, and E1(c) as the named assumption RightFixed, not on the premises list; DIdeal and CompilerC, which take ProofsSound, are what it is for.",
-   "Accounting.SecurityProofs.TS.BindingOfFork": "lemma: the rewinding step behind (I8)'s delta_bind over every window of proofs (Accounting.TS.ProofLayer), not a Lean function: binding's failure at a round, squared, is at most its fork form's (two runs off one commitment, both accepted, opening it differently), so a bound on the fork form is binding at its square root; ProofsSoundOfPinned, which takes binding at delta_bind, is what it is for.",
-   "Accounting.SecurityProofs.TS.SheetFacetCeilings": "lemma: (I1) FacetCeilings on the data-sheet machine from A1-A5 (Models.Accounting.Assumptions.Sheet), over any sheet and run with counts >= 0; arithmetic over the machine's rows, not a Lean function.",
-   "Accounting.SecurityProofs.TS.SheetScalarRouteHalf": "lemma: (I3) ScalarRoute at q, q_T <= 1/2 and b_T <= 0 from A6 (two words a lane) and the labelling's split; arithmetic, not a Lean function.",
-   "Accounting.SecurityProofs.TS.SheetDIdealFloor": "frozen (no-function,world-unlisted): Theorem D-ideal (2.7-flat) of EPS1-SPEC on the data-sheet machine, DIdealFloor with (I1)-(I5) replaced by A1-A7 at the 1/2 floor, over every full-checking play and labelled program, not a Lean function; A1-A7 and (I6)-(I8) are not on the premises list.",
    "Pouw.SecurityProofs.Receipt.DuoReceiptNotInjective": "lemma: the counterexample to the served receipt's binding at a state (two words, one receipt y ⊕ rotl(z, 16) at the served word 0's keys); a statement about one concrete step, not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.DuoSegmentsBind": "lemma: Lemma B for duo checkpoint units (a definition: a warp's window, a full-state checkpoint a segment, one deficient word a segment), from DuoRunWordInjective segment by segment; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.Fx1SegmentsBind": "lemma: Lemma B for fx1 checkpoint units (a definition: duo checkpoint units on the words times odd IMAD multipliers), from DuoSegmentsBind's segment lemma and the odd multiplier's injectivity; not a property of a Lean function.",
-   "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt": "frozen (no-function): (I7) LuckAt at 0 over every full-checking window of pinned receipts (Accounting.Filler.FullPinnedFill), at any receipt function of the round's committed data and live coins, not a Lean function: the service's filler check has no Lean code yet.",
-   "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget": "frozen (no-function): Lemma C's BudgetAt at 1 over every spot-checked window of pinned receipts (Accounting.Filler.SpotPinnedFill), at any receipt function, not a Lean function: the service's spot check has no Lean code yet.",
-   "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit": "frozen (no-function): Theorem S with another block's one-draw check beside a pinned receipt's spot check (Accounting.Filler.PinnedFillBlocks), the filler at p = 0, not a Lean function: the service's check has no Lean code yet; the other block's pass bound is part of each round's shape.",
    "Accounting.SecurityProofs.RequirementHeldLive": "frozen (no-function): A counting identity over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store holds W's credited blocks, filler allowed (StoreMatches), W's credited live bits (those in complete blocks) are those in the held blocks plus the credited live bits of each resident block not held; about no function of the code.",
    "Accounting.SecurityProofs.TS.SampledBudget": "lemma: the sampled budget over every sampled window (Accounting.TS.SampledWindow), Lambda = r/ln(1/p) at s >= 2 draws a round, from its pricing and its draws' luck at p in [1/e, 1) taken as hypotheses (definitions, not named assumptions); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.StageBudget": "frozen (no-function,world-unlisted): the budget under per-stage coins over every stage window (Accounting.TS.StageWindow), Lambda = r/ln(1/p), not a Lean function: per-stage coins have no service code yet. Its premise StageLuck (Models.Accounting.Assumptions.Stages) is not on the premises list.",
@@ -7770,6 +7812,11 @@
    "Accounting.Assumptions.TS.LinSteer": {
     "status": "falsified",
     "why": "SAMPLING's LIN-STEER, that zeroing a fraction phi of a row's noise-active coordinates saves at most phi of the consumer's work; false for every segmented consumer whose noise-active segments carry unequal counts (Accounting.SecurityProofs.TS.LinSteerSegments, LinSteerFalse)."
+   },
+   "Accounting.Assumptions.TS.FoldOptFoldedAt": {
+    "status": "open",
+    "test": "benchmarks/pouw/tests/test_lean_headline.py::test_bit_exact_folds_meet_fold_opt_at_pi_star",
+    "why": "FOLD-OPT per word folded at the one certificate a headline prices at: at pi*, no run folds its words at a price below (1 - mu_f)·folded·phi*(pi*). Open; at every certificate (FoldOptFolded) it is false: the IMAD rotate, a bit-exact fold of LOP3 and four IMAD-pipe instructions a word, costs 14 to the menu's 16 halfway between DS-120's issue and LOP rows (RT2-LOGIC-1). Its test prices each bit-exact fold we know (the menu's, the funnel, shift, IMAD and wide rotates, the wide multiplies) at both sm_120 headlines' pi* against phi*."
    },
    "Nci.Assumptions.ActivationsSupport": {
     "status": "falsified",
@@ -8658,8 +8705,80 @@
     "Accounting.SecurityProofs.HMu.LemmaB",
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
-    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
+  },
+  "Definitions.Accounting.Headline.Encoding": {
+   "digest": "de76fe4cd1caab7861b2407763fbf6143fcc74b209b95ad7649ba06cc11d597f",
+   "definitions": {
+    "Accounting.TS.Headline.DesignData": "9d82dbbbe3b9effd6c80f7e4795afb12bc7d8dfb36b99b4fb137e2dacf08ea93",
+    "Accounting.TS.Headline.DesignData.Nw": "b6f5ce0360cc7ae94b2ede2f2d4b401a3e3a306d30489fcef9bff472d29f135b",
+    "Accounting.TS.Headline.DesignData.bytes": "0e0021c0c95eb62395f65eeb4bc7269aff35a058062ead5598127af4258d2e86",
+    "Accounting.TS.Headline.DesignData.folds": "f9a24408e14e94c7c8f0e9e46d305746032ad9bce1770e76516d743d310d4366",
+    "Accounting.TS.Headline.DesignData.model": "730678e18f9e657b24e02f5c3cce1e325a649772115822b2cdc51a1091d9f654",
+    "Accounting.TS.Headline.DesignData.q": "93e519de76cb1f65985054eb03f43d0957f65f90854727a4b702e6cf1c028964",
+    "Accounting.TS.Headline.DesignData.qT": "472d5d2638cb54ab7e274f4f6c64832761e9a276c36757371b12ccb1caa6341c",
+    "Accounting.TS.Headline.DesignData.vec": "5816bf009ae487c78d26e722e7b15f1fe746a6e56bd662a0cada5f3174a29815",
+    "Accounting.TS.Headline.DesignData.writers": "6726d149d105fd6efdfb649107895d364af3b962e52d1155cd842ac5b81e1d60",
+    "Accounting.TS.Headline.SheetData": "f1193ba9c08e2d68f6ceeec0eb5e44b8f800192a568e3c638b2b32253a37ec8e",
+    "Accounting.TS.Headline.SheetData.fmax": "3614767666a23c3458f97caaa32ddd7f93a33a4ea70ce35eebfaab03e9744864",
+    "Accounting.TS.Headline.SheetData.macs": "9866f3110c5abdd7b8895acc80933ed6b2476a867bc70ff486136f2a123b1cb6",
+    "Accounting.TS.Headline.SheetData.peak": "eb71a233b0d6c331f2557fcda5c9f65a3df2b63072724c0447093eaa92ce5724",
+    "Accounting.TS.Headline.SheetData.pipe": "cc704d91bedb7cf63d10f529c2c4661578c8e0bd32935599f02cef529b2fe3e5",
+    "Accounting.TS.Headline.SheetData.sheet": "1e2d6796adaf241db10e3b185c1cd39c3537fe045f7141e44fb479a0cdc8a19c",
+    "Accounting.TS.Headline.SheetData.smem": "cdb864a1b846d6a3fe8e5a19cfbb2e6c3048d6658a50bd64e3ac502af4e84aa8",
+    "Accounting.TS.Headline.SheetData.width": "c27aa76ffff40f09cc011177a3330c136c9bede624506bab44a94d1d64fc766e",
+    "Accounting.TS.Headline.Sparse": "719c786f86357711611023d0221c264c3e96645d698b2bc96a1c4533deeac658",
+    "Accounting.TS.Headline.Sparse.coeff": "76451a40b638950fc540999485eb0cc327052d950a9fbb88e01a59b4ba17c957",
+    "Accounting.TS.Headline.Sparse.counts": "436c235b9c6aa6d31f4fa046e7166edb62f41afcd59001f3e7e10a865b01b4c2",
+    "Accounting.TS.Headline.Sparse.ratio": "711c15ccc52eb978d0f5503e727422d88c7a4f34343b5d15572052b39ec4501c",
+    "Accounting.TS.Headline.idx": "17b428bfc84e715129eddc925ad55739e066c24c430dac8852cce0945a885d91",
+    "Accounting.TS.Headline.labelled": "4d15c0c955724b0182fb7b37f0589ab47a2087a7e52f5ac3a2d63bd72bd7da58",
+    "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
+  },
+  "Definitions.Accounting.Headline.Sm120": {
+   "digest": "4009ad302b29d9fdd28aec19ffba79af5ba519fd03ffed884194c6a35711edbc",
+   "definitions": {
+    "Accounting.TS.Headline.Sm120.Pipe": "2bca7649adecea1103990e84d41626c2c5668255a78c1bb2873d0352526d9791",
+    "Accounting.TS.Headline.Sm120.Pipe.casesOn": "1ad14beedcf4e7eb5471c4eaec9f632e73e2cfcbbb00a27bccb236d3b1474036",
+    "Accounting.TS.Headline.Sm120.Pipe.ctorIdx": "7f28e616c999d42414778437148a7a9c1536fc3c471ba25fb4ac0f29d3fdddc5",
+    "Accounting.TS.Headline.Sm120.Pipe.imad": "9e7b26b87361019791bb58d6739dab32ac19f7b2f1886d6cf3e43b9f7fd73b1b",
+    "Accounting.TS.Headline.Sm120.Pipe.lop": "107595302622e782dcb01efdc8a8b41a981effa45adfc42074573c3d628db777",
+    "Accounting.TS.Headline.Sm120.Pipe.rec": "e7e73765f42521dee161d766c99997a5976168a0537a569dbda886b8e9a5f4f4",
+    "Accounting.TS.Headline.Sm120.Pipe.shfl": "9ab83c003749ed3be802329c5092e15f57eb300466214518b23c77348feb8aaf",
+    "Accounting.TS.Headline.Sm120.Pipe.width": "967c3954f1f19da8bcecd1b8c63729f198d15d3563990e8287aea75a814d1fca",
+    "Accounting.TS.Headline.Sm120.Pipe.xu": "f11d4a1ddd9e9ff1e84072565b410aa104ea8117ea87c06b3f7cd9d5c8f2476f",
+    "Accounting.TS.Headline.Sm120.checks": "ae8e4e4c25c4bb8b27f6aeb5a139de2a1e13bbd7f2ed9873b72d4e16fbfd9aae",
+    "Accounting.TS.Headline.Sm120.ds120": "a8781e51e72c61d51b39695cdd76451783cf33bbf92c6f2bbabce0b9af07356d",
+    "Accounting.TS.Headline.Sm120.flat": "b9b8b48bf0020f9970ba8177c790d7dbe2e06bd802f1848b0510f23c6d7e4f73",
+    "Accounting.TS.Headline.Sm120.flatFold": "6eea49af7038931fa768c5996e8b13cf32cc893f41fa3b611d9dfc0e6326d62c",
+    "Accounting.TS.Headline.Sm120.flatSkip": "69e0e59c9db3f2313694ee525565f3170a27d53be94eb6f91a81564d8d7e6351",
+    "Accounting.TS.Headline.Sm120.flatWords": "5c72accfb9c15a5146ef8ec1cd9e8783c002e3e4b057175febaeec4d9fe7d804",
+    "Accounting.TS.Headline.Sm120.h1fx1": "98ec71f2dc4fa7436956df11a2c33954ca55294a1dfa1c5b388a6d25dde748e9",
+    "Accounting.TS.Headline.Sm120.instDecidableEqPipe": "2148dcd54c0370d8d493176ba9386343c2091052e0f0f4ebdb3f5e3ddd323ea1",
+    "Accounting.TS.Headline.Sm120.instFintypePipe": "774f748010c4154f00a1134416cdc8c1f2d6113fb889b81de897cf54de8370f4",
+    "Accounting.TS.Headline.Sm120.model": "c0bf0929b7382d341511c5a65d85eb11562c726ec1c5e70846616d0b5ab6deb8",
+    "Accounting.TS.Headline.Sm120.piStar": "29efa18364df97b8817a7bf334d6603cd33a1944f75072712b700f84bbd1a75a",
+    "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
+  },
+  "Definitions.Accounting.Headline.Sm120Measured": {
+   "digest": "382797e234f81375e846f98ef896092b89329dadf4e2c789c2a924b61dee47a6",
+   "definitions": {
+    "Accounting.TS.Headline.Sm120Measured.flat": "c8965f5cd36248f02301a08d05949b542de290e1aca341c23263557c5ac3cea5",
+    "Accounting.TS.Headline.Sm120Measured.flatSkip": "d583a1bd3658b6ba3bdf3e97529fa5928fe50517af10d3acabbc1d139d9341c8",
+    "Accounting.TS.Headline.Sm120Measured.h1fx1": "1e91ad967a39b4a74d6adaf6696b1d4019f02708453c6a7aa8002303e13ec5ec",
+    "Accounting.TS.Headline.Sm120Measured.machine": "55bce2c751bb35027fb668ece07dda52dad0846ba0c4477f59c5c9deb27f116a",
+    "Accounting.TS.Headline.Sm120Measured.model": "1532e86eba864104bfb89c29129a38fabc827a3d52e095ee1e849a54fa79d5f7",
+    "Accounting.TS.Headline.Sm120Measured.piStar": "c1de65e34966627832062e95e941279474355bf7dbd9f34cfc3ddae0573b0239",
+    "Accounting.TS.Headline.Sm120Measured.vf3s16": "df7561232e082fdc78ba414b646d5e6cbfd6cfda4a907e9b45e8846aac2b0bdc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -9686,6 +9805,8 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
@@ -9718,6 +9839,8 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal"
    ]
@@ -9748,7 +9871,9 @@
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
-    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned"
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -9830,8 +9955,17 @@
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
-    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
+  },
+  "Definitions.Accounting.TS.ReceiptHMu": {
+   "digest": "e22dc98da0997b9b3c729c29fa7f2c12886eab6122019e4978f16bc8b588e169",
+   "definitions": {
+    "Accounting.TS.ReceiptGame.OperandPointMass": "6df5cc888c4948e81cfd63c48efd7e5cb7c956f25c2a3bf31d645fb38dc3aed3"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Definitions.Accounting.TS.Routes": {
    "digest": "30c8abcb6735ac3215f7f48cfa482adc6e2ae2096c61de3f69ef8282eb1c6166",
@@ -9918,12 +10052,14 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
   },
   "Definitions.Accounting.TS.Sheet": {
-   "digest": "64cb041605a930b7b485d8894c2f1026a845b847e28357ebc57b5d9f4a5db67a",
+   "digest": "1cfc992fd24b7c21a652bbe6ecdea0891d713bb1ba67609d41b62d48783afa3f",
    "definitions": {
     "Accounting.TS.Sheet": "e4ac34c1d3a252753762139ebcb218e7f59cb8b7f98b57e34b1be60342fe8bbb",
     "Accounting.TS.Sheet.fmax": "96206b791af38cbd657f608e98fbb2325a372b4965ead42e95b62dfeb421a758",
@@ -9941,11 +10077,17 @@
     "Accounting.TS.SheetRow.rec": "0f00eb7ee0bf9b1faa0d522f91dc2ecfb6a145886ec24bdbced2985a57b73d82",
     "Accounting.TS.SheetRow.smem": "366015ce7d4e265e5ce79298d3698590413049c0c4b3ff01c8cb284328f6ee6b",
     "Accounting.TS.SheetRow.tensor": "48c50f19eac83ff47bac7949c3c94a426790827f1dec8012b7e03c44aa57f26f",
+    "Accounting.TS.instDecidableEqSheetRow": "25f449097a33d9383adcafa26d9ae094f77c21da75ad5209908845bf275a708d",
+    "Accounting.TS.instDecidableEqSheetRow.decEq": "de18110aa419f9da2286ad2348b7b43b9e797e75d56f6a480456707a271a0efc",
     "Accounting.TS.instFintypeSheetRow": "3da30af8c579da1302161a47f364b102f812db3a1412a36006a57983085fecfe",
     "Accounting.TS.instFintypeSheetRow.match_3": "9afbb3d57117ea303b093c1babded32ccfa2876821e4730474ffc427877c80f0",
     "Accounting.TS.instFintypeSheetRow.match_5": "9d7e13656b63f7e674f8703098a4843c3053a146b71b18edc3ddfe2ae7689ab6"
    },
-   "guarantees": ["Accounting.SecurityProofs.TS.SheetDIdealFloor", "Accounting.SecurityProofs.TS.SheetFacetCeilings"]
+   "guarantees": [
+    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
+   ]
   },
   "Definitions.Accounting.TS.Slots": {
    "digest": "f53a4573d3e15326d2f4872f87e46e20d6828ae8a21c989aaaa8250f16505b1e",
@@ -10029,6 +10171,22 @@
     "Accounting.SecurityProofs.TS.LinSteerSegments",
     "Accounting.SecurityProofs.TS.SegmentSteer"
    ]
+  },
+  "Definitions.Accounting.TS.Unfolded": {
+   "digest": "db560d83d2af1e9493ba8784c7419e0683e495dee551d7f46b85c73d985293b9",
+   "definitions": {
+    "Accounting.TS.ReceiptGame.WholeLuck": "0fb26594c15b8d1762accc0966bed20f6c49edbfbf47555738dea92dfe950b1b",
+    "Accounting.TS.Unfolded": "18f50cc35425f194dd6c741f04e1a37fb1fa987adce501602f34c1643259c7f3",
+    "Accounting.TS.Unfolded.below": "fb0bf2f6cac9316770d83c85d945374b1a7cec4cee81eadfa5153a85b966ec3a",
+    "Accounting.TS.Unfolded.brecOn": "07bdb8dabf47e3097caaa1e26492b2029785baa0205ac65fbb5b9afb0850702d",
+    "Accounting.TS.Unfolded.brecOn.go": "c03d5b2ec2a629743f46156746aad3931a993da9228b9087007949c048d84e86",
+    "Accounting.TS.Unfolded.casesOn": "959aebf46603f06e92de62c1f0366ccaee8dae1cad6c3115b46967dc248aba42",
+    "Accounting.TS.Unfolded.done": "8a82b6f9e28adc63f0029cf2618157d69f424a2770807c7fe8b8a831d5b82681",
+    "Accounting.TS.Unfolded.rec": "bb7c868ff6b06c922d8ffe2e35efdbbe95cfc1e5e47678cb1d321464049f3ece",
+    "Accounting.TS.Unfolded.round": "7d37232d94dabc302c97bc664c8b1e986e5ee1578f7e8e582682e288e324bb86",
+    "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Definitions.Accounting.Tag.PolyHash": {
    "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
@@ -15644,6 +15802,8 @@
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
@@ -20783,7 +20943,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Models.Accounting.Assumptions.Stacking": {
@@ -20810,20 +20971,27 @@
    ]
   },
   "Models.Accounting.Assumptions.TS": {
-   "digest": "ab0280c55d23b72604d69566d3e52e46219dd6e210712e1963b3773d9926940d",
+   "digest": "e28be16294cbb8bd60dcbd94dccd8c76d266e180bb6ac38e0ccf0e486b435e1e",
    "definitions": {
+    "Accounting.Assumptions.TS.BindingForkAt": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d",
     "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
     "Accounting.Assumptions.TS.FanIn": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
     "Accounting.Assumptions.TS.FillOpt": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
     "Accounting.Assumptions.TS.FoldOpt": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3",
+    "Accounting.Assumptions.TS.FoldOptFoldedAt": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb",
     "Accounting.Assumptions.TS.LinSteer": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e",
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
     "Accounting.Assumptions.TS.NoSum": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
+    "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
+    "Accounting.Assumptions.TS.ProofSoundAt": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
+    "Accounting.Assumptions.TS.ProofsPin": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6",
     "Accounting.Assumptions.TS.ProofsSound": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3",
+    "Accounting.Assumptions.TS.ReceiptLuckAt": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
     "Accounting.Assumptions.TS.RightFixed": "d17ab6dafa91dbbf183e5a1221cd1f8fc26fb93ebb1b21e83117ef2337a454f2",
     "Accounting.Assumptions.TS.ScalarRoute": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd",
     "Accounting.Assumptions.TS.SideUnits": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
     "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2",
+    "Accounting.Assumptions.TS.WholeLuckAt": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd",
     "Accounting.Assumptions.TS.WordsWritten": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
    },
    "guarantees": [
@@ -20849,6 +21017,8 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
+    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
@@ -21084,6 +21254,14 @@
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
    ]
+  },
+  "Models.Accounting.Guarantees.Headline": {
+   "digest": "9f0fcb730490987dac94ce32b765d09199515a2ecfd8d629b2bb8357032e4c33",
+   "definitions": {
+    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "bae07f933ee02e72d88651a068c4ee94eacfeaddf8423aac6bbc714cf546e68c",
+    "Accounting.Guarantees.TS.Sm120SheetHeadline": "fdc70c01afee3212ea21c8e2d55aca356da529c78022d10dcfdf4e20fdc3fe12"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Models.Accounting.Guarantees.Joint": {
    "digest": "6c3005740d08578ac0e0fda861dbe77c578ceb28314b3b026ad572fb9ffd9837",

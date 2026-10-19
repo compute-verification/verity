@@ -1,9 +1,10 @@
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
-import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Gates
 import Proofs.Accounting.Gates.Rows
 import Proofs.Accounting.Gates.Macs
+import Proofs.Accounting.FillerLuck
+import Proofs.Accounting.Headline
 import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
