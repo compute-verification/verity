@@ -26,6 +26,10 @@
 #include "h1sha.cuh"
 
 constexpr int WARPS = 4;
+// CTAs an SM the register allocation must leave room for (h1u_b3.so: 3, at most 168 registers a thread)
+#ifndef H1U_MINB
+#define H1U_MINB 1
+#endif
 
 constexpr u32 mix32c(u32 x) {
   x ^= x >> 16;
@@ -128,7 +132,7 @@ __global__ void __launch_bounds__(128) h1_seeds(const u64* __restrict__ data, u6
 }
 
 template <int MD>
-__global__ void __launch_bounds__(32 * WARPS) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out) {
   __shared__ WarpSmem smem[WARPS];

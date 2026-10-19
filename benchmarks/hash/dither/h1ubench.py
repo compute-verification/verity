@@ -2,7 +2,11 @@
 (receipts_ca.py, its `call_receipts`) and `h1tile.reference`, then timed interleaved with the plain int8 GEMM of the same
 call and H1's noise floor (h1noise.cu's midstate kernel), at Llama-3.1-8B's linears and M = 1, 32, 256, 2048, 8192.
 
-    python h1ubench.py --lib h1u.so [--noise-lib h1noise.so] --out OUT [--reps 5] [--ms ...] [--linears ...]
+    python h1ubench.py --lib h1u.so [--variant NAME=h1u_x.so ...] [--noise-lib h1noise.so] --out OUT [--reps 5]
+                       [--ms ...] [--linears ...]
+
+A variant (another build of h1u.cu, e.g. h1u_b3.so with H1U_MINB=3) passes every gate below on the same inputs, then is
+timed as arm h1u-NAME in the same interleaved reps; a variant whose gate fails is not timed.
 
 The receipts are a side computation beside the served product (z, the plain A B^T, is the served call's own GEMM), so a
 call served with them costs plain + h1u and gamma = 1 + h1u / plain, plain the faster of torch._int_mm and vLLM's
@@ -103,6 +107,10 @@ class Call:
         self.lib.seeds(self.data, self.base, self.units, self.seeds)
         self.lib.unit(self.a, self.b, self.m if m is None else m, self.seeds, live, self.out)
 
+    def twin(self, lib: Lib) -> Call:
+        """The same call (inputs, salt, roots, base) on another build, with its own seeds and receipts."""
+        return Call(lib, self.a, self.b, self.salt, *self.roots, self.base)
+
 
 def gate_seeds(call: Call, picks: list[int]) -> int:
     got = call.seeds.cpu().numpy()
@@ -114,10 +122,14 @@ def gate_seeds(call: Call, picks: list[int]) -> int:
     return int(bad)
 
 
-def gate_shape(call: Call, picks: list[int]) -> dict:
-    """0xA5 poison, the kernel, its sampled receipts against receipts.py's; then the no-write control."""
+def shape_ref(call: Call, picks: list[int]) -> torch.Tensor:
     ref = RC.call_receipts(RC.Call(call.a, call.b), call.salt, call.base, *call.roots, only=picks)
-    ref_t = torch.from_numpy(ref.view(np.int32)).to("cuda")
+    return torch.from_numpy(ref.view(np.int32)).to("cuda")
+
+
+def gate_shape(call: Call, picks: list[int], ref_t: torch.Tensor) -> dict:
+    """0xA5 poison, the kernel, its sampled receipts against receipts.py's (ref_t, shape_ref's); then the no-write
+    control."""
     pk = torch.tensor(picks, device="cuda")
 
     def once(m: int | None) -> tuple[int, int]:
@@ -133,8 +145,9 @@ def gate_shape(call: Call, picks: list[int]) -> dict:
             "ok": bad == 0 and poison == 0 and seed_bad == 0 and k_bad > 0}
 
 
-def anchors(lib: Lib, rng: random.Random) -> list[dict]:
-    """kh_unit against h1tile.reference (the Definition's words, CPU) on two small calls, dead row block included."""
+def anchors(libs: dict[str, Lib], rng: random.Random) -> list[dict]:
+    """Every build's kh_unit against h1tile.reference (the Definition's words, CPU) on two small calls, dead row block
+    included."""
     res = []
     for m, n, k, dead in ((64, 64, 512, (1,)), (32, 32, 4608, ())):
         g = torch.Generator().manual_seed(rng.getrandbits(32))
@@ -144,43 +157,61 @@ def anchors(lib: Lib, rng: random.Random) -> list[dict]:
             a[32 * ri:32 * ri + 32] = 0
         salt, ra, rb = (rng.randbytes(64) for _ in range(3))
         base = rng.getrandbits(40)
-        call = Call(lib, a.cuda(), b.cuda(), salt, ra, rb, base)
         live = torch.tensor([0 if ri in dead else 1 for ri in range(m // 32)], dtype=torch.uint8, device="cuda")
-        call.out.fill_(POISON)
-        call.run(live=live)
-        torch.cuda.synchronize()
-        got = call.out.cpu().numpy().view(np.uint32)
-        bad, t0 = 0, time.time()
+        calls = {name: Call(lib, a.cuda(), b.cuda(), salt, ra, rb, base) for name, lib in libs.items()}
+        got = {}
+        for name, call in calls.items():
+            call.out.fill_(POISON)
+            call.run(live=live)
+            torch.cuda.synchronize()
+            got[name] = call.out.cpu().numpy().view(np.uint32)
+        call = next(iter(calls.values()))
+        bad, t0 = dict.fromkeys(libs, 0), time.time()
         for u, (ri, cj) in enumerate(RC.units(m, n)):
             ar = (a[32 * ri:32 * ri + 32].to(torch.int64) & 0xFF).tolist()
             br = (b[32 * cj:32 * cj + 32].to(torch.int64) & 0xFF).tolist()
-            want = [0] * call.words if ri in dead else HT.reference(ar, br, salt, base + u, (ra, rb))[1]
-            bad += int((got[u] != np.array(want, dtype=np.uint32)).sum())
-        res.append({"m": m, "n": n, "k": k, "digits": int(lib.h.kh_digits(k)), "dead_row_blocks": list(dead),
-                    "units": call.units, "bad_words": bad, "seed_bad": gate_seeds(call, list(range(call.units))),
-                    "reference_s": round(time.time() - t0, 2)})
-        res[-1]["ok"] = bad == 0 and res[-1]["seed_bad"] == 0
+            want = np.array([0] * call.words if ri in dead else HT.reference(ar, br, salt, base + u, (ra, rb))[1],
+                            dtype=np.uint32)
+            for name in libs:
+                bad[name] += int((got[name][u] != want).sum())
+        for name, c in calls.items():
+            r = {"lib": name, "m": m, "n": n, "k": k, "digits": int(c.lib.h.kh_digits(k)), "dead_row_blocks": list(dead),
+                 "units": c.units, "bad_words": bad[name], "seed_bad": gate_seeds(c, list(range(c.units))),
+                 "reference_s": round(time.time() - t0, 2)}
+            r["ok"] = r["bad_words"] == 0 and r["seed_bad"] == 0
+            res.append(r)
     return res
 
 
-def bench(lib: Lib, nlib: NoiseLib | None, args, name: str, n: int, k: int, m: int, Xh: np.ndarray, clock: Clock, l2: int,
-          sms: int, rng: random.Random) -> dict:
+def bench(libs: dict[str, Lib], nlib: NoiseLib | None, args, name: str, n: int, k: int, m: int, Xh: np.ndarray,
+          clock: Clock, l2: int, sms: int, rng: random.Random) -> dict:
+    """libs: arm name -> build, "h1u" (the main build) first; a build is timed only if its gate passed."""
     lay = HT.Layout(32, 32, k)
     mp = max(32, m)
     X = torch.from_numpy(Xh[:m]).to("cuda")
     a = X if m >= 32 else torch.cat([X, X.new_zeros(32 - m, k)])
     b = torch.from_numpy(inputs(w_seed(name), n, k)).to("cuda")
-    call = Call(lib, a.contiguous(), b, rng.randbytes(64), rng.randbytes(64), rng.randbytes(64), rng.getrandbits(40))
+    call = Call(libs["h1u"], a.contiguous(), b, rng.randbytes(64), rng.randbytes(64), rng.randbytes(64),
+                rng.getrandbits(40))
+    builds = {arm: call if arm == "h1u" else call.twin(lib) for arm, lib in libs.items()}
     S = call.units
     out: dict = {"linear": name, "m": m, "n": n, "k": k, "units": S, "padded_row_block": m < 32,
-                 "blocks_per_unit": lay.blocks + KEY_BLOCKS + SEED_WORDS, "receipt_words": call.words, "arms": {}}
+                 "blocks_per_unit": lay.blocks + KEY_BLOCKS + SEED_WORDS, "receipt_words": call.words, "arms": {},
+                 "gates": {}}
     picks = sorted({0, S - 1, *rng.sample(range(S), min(S, args.picks))})
-    out["gate"] = g = gate_shape(call, picks)
-    print(json.dumps({"linear": name, "m": m, "gate": {x: g[x] for x in g if x != "picks"}}), flush=True)
-    if not g["ok"]:
+    out["picks"] = picks
+    ref_t = shape_ref(call, picks)
+    for arm, c in builds.items():
+        out["gates"][arm] = g = gate_shape(c, picks, ref_t)
+        print(json.dumps({"linear": name, "m": m, "arm": arm, "gate": {x: g[x] for x in g if x != "picks"}}), flush=True)
+    out["gate"] = out["gates"]["h1u"]
+    failed = [arm for arm, g in out["gates"].items() if not g["ok"]]
+    if failed:
+        out["gate_failed"] = failed
+    if not out["gate"]["ok"]:
         out["error"] = "gate failed: nothing timed"
         return out
-    arms: dict = {"h1u": lambda i: call.run()}
+    arms: dict = {arm: (lambda c: lambda i: c.run())(c) for arm, c in builds.items() if arm not in failed}
     if nlib is not None:
         sj = torch.randint(0, 256, (S, 64), dtype=torch.uint8, device="cuda").view(torch.int64)
         J = auto_j(S, lay.blocks, sms)
@@ -222,12 +253,15 @@ def bench(lib: Lib, nlib: NoiseLib | None, args, name: str, n: int, k: int, m: i
                 "gamma": round(1 + med["h1u"] / plain[fp], 4),
                 "h1u_gcomp_per_s": round(comp / (med["h1u"] * 1e3), 3),
                 "ratios": {f"{x}/{p}": round(med[x] / v, 4) for x in med if x not in plain for p, v in plain.items()}})
+    out["variants"] = {arm: {"us": med[arm], "gamma": round(1 + med[arm] / plain[fp], 4),
+                             "gcomp_per_s": round(comp / (med[arm] * 1e3), 3), "over_h1u": round(med[arm] / med["h1u"], 4)}
+                       for arm in builds if arm != "h1u" and arm in med}
     if "floor" in med:
         out["floor_us"] = med["floor"]
         out["h1u_over_floor"] = round(med["h1u"] / med["floor"], 4)
         out["gamma_floor"] = round(1 + med["floor"] / plain[fp], 4)
     out["mp"] = mp
-    del graphs
+    del graphs, builds, call
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
     return out
@@ -236,6 +270,7 @@ def bench(lib: Lib, nlib: NoiseLib | None, args, name: str, n: int, k: int, m: i
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--lib", required=True)
+    ap.add_argument("--variant", action="append", default=[], metavar="NAME=PATH")
     ap.add_argument("--noise-lib")
     ap.add_argument("--out", required=True)
     ap.add_argument("--reps", type=int, default=5)
@@ -246,7 +281,11 @@ def main() -> int:
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    lib = Lib(args.lib)
+    paths = {"h1u": args.lib}
+    for v in args.variant:
+        vname, _, path = v.partition("=")
+        paths[f"h1u-{vname}"] = path
+    libs = {arm: Lib(p) for arm, p in paths.items()}
     nlib = NoiseLib(args.noise_lib) if args.noise_lib else None
     clock = Clock()
     props = torch.cuda.get_device_properties(0)
@@ -255,13 +294,19 @@ def main() -> int:
     doc = {"schema": "dither-hb/h1u/v1", "device": clock.name, "sms": props.multi_processor_count, "l2_bytes": l2,
            "torch": torch.__version__, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "reference": "receipts_ca.py (served_h1/receipts.py at origin/cursor/serve-h1-ea24 8d04cd79db), h1tile.reference",
+           "libs": paths,
            "shapes": []}
-    doc["anchors"] = anchors(lib, rng)
+    doc["anchors"] = anchors(libs, rng)
     print(json.dumps({"anchors": doc["anchors"]}), flush=True)
     (out / "h1u.json").write_text(json.dumps(doc, indent=1))
-    if not all(x["ok"] for x in doc["anchors"]):
+    bad_libs = sorted({x["lib"] for x in doc["anchors"] if not x["ok"]})
+    if "h1u" in bad_libs:
         print("h1ubench: an anchor failed; nothing timed", file=sys.stderr)
         return 4
+    for arm in bad_libs:
+        print(f"h1ubench: {arm} failed an anchor; it is not timed", file=sys.stderr)
+        del libs[arm]
+    doc["anchor_failed"] = bad_libs
     xs: dict = {}
     ms = [int(v) for v in args.ms.split(",")]
     for name in args.linears.split(","):
@@ -271,32 +316,38 @@ def main() -> int:
         for m in ms:
             t0 = time.time()
             try:
-                r = bench(lib, nlib, args, name, n, k, m, xs[k], clock, l2, props.multi_processor_count, rng)
+                r = bench(libs, nlib, args, name, n, k, m, xs[k], clock, l2, props.multi_processor_count, rng)
             except Exception as e:  # noqa: BLE001
                 r = {"linear": name, "m": m, "error": "".join(traceback.format_exception(e))[-3000:]}
             r["wall_s"] = round(time.time() - t0, 2)
             doc["shapes"].append(r)
             print(json.dumps({x: r.get(x) for x in ("linear", "m", "units", "h1u_us", "floor_us", "plain_us", "fastest_plain",
-                                                     "gamma", "gamma_floor", "h1u_over_floor", "h1u_gcomp_per_s", "error",
-                                                     "wall_s")}), flush=True)
+                                                     "gamma", "gamma_floor", "h1u_over_floor", "h1u_gcomp_per_s", "variants",
+                                                     "gate_failed", "error", "wall_s")}), flush=True)
             (out / "h1u.json").write_text(json.dumps(doc, indent=1))
     layer: dict = {}
     for r in doc["shapes"]:
         if "h1u_us" in r:
-            d = layer.setdefault(r["m"], {"h1u_us": 0.0, "plain_us": 0.0, "floor_us": 0.0, "linears": []})
+            d = layer.setdefault(r["m"], {"h1u_us": 0.0, "plain_us": 0.0, "floor_us": 0.0, "linears": [], "variants": {}})
             d["h1u_us"] += r["h1u_us"]
             d["plain_us"] += r["plain_us"]
             d["floor_us"] += r.get("floor_us", 0.0)
             d["linears"].append(r["linear"])
+            for arm, v in r.get("variants", {}).items():
+                d["variants"].setdefault(arm, {"us": 0.0, "linears": []})
+                d["variants"][arm]["us"] += v["us"]
+                d["variants"][arm]["linears"].append(r["linear"])
     for d in layer.values():
         d["gamma"] = round(1 + d["h1u_us"] / d["plain_us"], 4)
         d["gamma_floor"] = round(1 + d["floor_us"] / d["plain_us"], 4)
+        for v in d["variants"].values():
+            v["gamma"] = round(1 + v["us"] / d["plain_us"], 4) if v["linears"] == d["linears"] else None
     doc["per_layer"] = layer
     doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     (out / "h1u.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({"per_layer": layer}))
-    bad = [r for r in doc["shapes"] if "error" in r]
-    return 4 if any("gate" in r.get("error", "") for r in bad) else (0 if not bad else 4)
+    bad = [r for r in doc["shapes"] if "error" in r or "gate_failed" in r]
+    return 4 if bad or bad_libs else 0
 
 
 if __name__ == "__main__":
