@@ -1040,7 +1040,7 @@
     }
   ],
   "doorbells": {
-    "about": "slack.doorbell(author, thread, ts, text, urgent): the doorbell's text, posted as `router` in each woken name's inbox thread. A doorbell is for the post whose ts is its `reply R`, or, with no reply, its `thread T` (that is how delivery dedupes).",
+    "about": "slack.doorbell(author, thread, ts, text, urgent, channel): the doorbell's text, posted as `router` in each woken name's inbox thread. A doorbell is for the post whose ts is its `reply R`, or, with no reply, its `thread T` (that is how delivery dedupes). A post outside the front door names its channel (`channel`, absent for the front door) before `thread`.",
     "cases": [
       {
         "name": "a top-level post: its user-group mention as @name, its footer dropped",
@@ -1077,6 +1077,26 @@
         "urgent": false,
         "text": "@proofs xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
         "doorbell": "from lean, thread 1700000400.000004, reply 1700000400.000005: @proofs xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx… (the rest: `research msg read --thread 1700000400.000004`)"
+      },
+      {
+        "name": "a person's post in another channel names it, so its reader answers there",
+        "author": "daniel",
+        "thread": "1700000500.000006",
+        "ts": "1700000500.000006",
+        "urgent": false,
+        "channel": "ask-the-team",
+        "text": "<!subteam^SCIRCUITS|@circuits> how far is the TP8 decode point?",
+        "doorbell": "from daniel, #ask-the-team thread 1700000500.000006: @circuits how far is the TP8 decode point?"
+      },
+      {
+        "name": "a reply in another channel names it and its reply",
+        "author": "daniel",
+        "thread": "1700000500.000006",
+        "ts": "1700000600.000007",
+        "urgent": false,
+        "channel": "ask-the-team",
+        "text": "@proofs and the Lean side?",
+        "doorbell": "from daniel, #ask-the-team thread 1700000500.000006, reply 1700000600.000007: @proofs and the Lean side?"
       }
     ]
   }

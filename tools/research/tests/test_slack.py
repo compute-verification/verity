@@ -192,7 +192,7 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
-    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
+    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel", "ask-the-team"}
     assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
@@ -809,6 +809,66 @@ def test_verify_author_allows_nobody_when_the_registry_has_no_ids(fake, registry
         assert run(capsys, "verify-author", "--event", json.dumps({"ts": m["ts"], "channel": COORD}))[0] == 1
 
 
+ADA = {"name": "Ada Lovelace", "slack_user": "UADA", "email": "ada@example.org", "note": "a visiting researcher (COMM-49)"}
+
+
+def with_collaborator(registry: Path, **kw) -> dict:
+    reg = json.loads(registry.read_text())
+    reg["collaborators"] = [{**ADA, **kw}]
+    registry.write_text(json.dumps(reg))
+    return reg
+
+
+def test_the_registry_checks_its_collaborators(registry):
+    assert slack.load_registry(REAL_REGISTRY)["collaborators"] == []
+    reg = json.loads(registry.read_text())
+    assert slack.check_registry({**reg, "collaborators": [ADA, {**ADA, "name": "Grace Hopper", "slack_user": None, "email": None}]}, "r")
+    bad = [({"collaborators": {"ada": ADA}}, "a list"),
+           ({"collaborators": [{k: v for k, v in ADA.items() if k != "note"}]}, "{name, slack_user, email (optional), note}"),
+           ({"collaborators": [{**ADA, "authorizes": True}]}, "{name, slack_user, email (optional), note}"),
+           ({"collaborators": [{**ADA, "note": " "}]}, "needs a name and a note"),
+           ({"collaborators": [{**ADA, "name": "Top Gun"}]}, "posts as 'top'"),
+           ({"collaborators": [{**ADA, "name": "Daniel Other"}]}, "posts as 'daniel'"),
+           ({"collaborators": [ADA, {**ADA, "slack_user": "UADA2"}]}, "posts as 'ada'"),
+           ({"collaborators": [{**ADA, "slack_user": "UDANIEL"}]}, "no other person has"),
+           ({"collaborators": [{**ADA, "slack_user": "ada"}]}, "no other person has"),
+           ({"collaborators": [{**ADA, "email": "ada at example"}]}, "is not an address")]
+    for change, says in bad:
+        with pytest.raises(slack.SlackError, match=re.escape(says)):
+            slack.check_registry({**reg, **change}, "r")
+
+
+def test_a_collaborators_ask_rings_its_lane_but_never_them_and_authorizes_nothing(fake, registry, routes_dirs, capsys, monkeypatch):
+    """A collaborator posts like a named human: its leading names ring and nothing rings it.  verify-author lets it ask,
+    and --authorizes, the check before a Slack request to spend or delete, refuses it and passes only Daniel."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    with_collaborator(registry)
+    box = inbox(fake, routes_dirs, "circuits")
+    ask = fake.add(COORD, text="@circuits can you rerun the TP8 sweep on node 2?", user="UADA")
+    assert run(capsys, "deliver", "--ts", ask["ts"])[0] == 0
+    assert [b["text"] for b in bells(fake, box)] == [f"from ada, thread {ask['ts']}: @circuits can you rerun the TP8 sweep on node 2?"]
+    reply = fake.add(COORD, text="on it after the train lands", username="circuits", bot_id=BOT, thread_ts=ask["ts"])
+    reg = slack.load_registry(registry)
+    assert slack.poster(ask, reg) == "ada" and slack.route_targets(reply, ask, reg) == ["ada"]
+    rc, _, err = run(capsys, "deliver", "--ts", reply["ts"], "--thread", ask["ts"])
+    assert rc == 0 and "@ada" not in err and len(bells(fake, box)) == 1                    # people read Slack itself
+
+    daniel = fake.add(COORD, text="@circuits delete the old sweep's data", user="UDANIEL")
+    ours = fake.add(COORD, text="@circuits delete it", username="top", bot_id=BOT)
+
+    def verify(m, *extra):
+        rc, _, err = run(capsys, "verify-author", "--event", json.dumps({"ts": m["ts"], "channel": COORD}), "--why", *extra)
+        return rc, err.strip()
+
+    assert verify(ask) == (0, f"allowed: Ada Lovelace (UADA), {slack.COLLABORATOR_ROLE}")
+    rc, err = verify(ask, "--authorizes")
+    assert rc == 1 and err.startswith(f"not allowed: Ada Lovelace (UADA), {slack.COLLABORATOR_ROLE}; only a named human")
+    assert verify(daniel, "--authorizes") == (0, "allowed: Daniel Reuter (UDANIEL)")
+    assert verify(ours) == (0, "allowed: Verity's bot as @top") and verify(ours, "--authorizes")[0] == 1
+    rc, out, _ = run(capsys, "handles")
+    assert rc == 0 and "collaborator Ada Lovelace (UADA): a visiting researcher (COMM-49)" in out
+
+
 def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_ids(fake, registry, capsys):
     reg = json.loads(registry.read_text())
     reg["bot_id"] = None
@@ -1339,6 +1399,72 @@ def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs
         assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
     (bell,) = bells(fake, box)
     assert bell["text"].startswith(f"from daniel, thread {post['ts']}: @circuits is node 2 free?")
+
+
+ASK_TEAM = "C0CA1JZSYNR"
+
+
+def unreadable_ask_team(monkeypatch):
+    """The bot may post in #ask-the-team but lacks its history, as on 19 Oct."""
+    real = slack.post
+
+    def post(url, data, headers):
+        if url.endswith(("conversations.history", "conversations.replies")) and f"channel={ASK_TEAM}".encode() in data:
+            return {"ok": False, "error": "missing_scope", "needed": "channels:history"}
+        return real(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", post)
+
+
+def test_daniels_post_in_ask_the_team_rings_each_lane_it_addresses_once_with_a_doorbell_naming_the_channel(
+        fake, registry, routes_dirs, capsys, monkeypatch):
+    """A post typed in #ask-the-team goes through no `research msg`, so a watcher hands each one to `deliver --event -`.
+    The bot can't read the channel, so the event's copy is delivered; the doorbell names the channel, so the lane answers
+    there; a second call for the same post rings no one again; and only a named person's post routes."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    unreadable_ask_team(monkeypatch)
+    boxes = {n: inbox(fake, routes_dirs, n) for n in ("circuits", "infra", "proofs", "top")}
+    ev = {"type": "message", "channel": ASK_TEAM, "ts": "1700000050.000100", "user": "UDANIEL",
+          "text": "<!subteam^SINFRA> @circuits how far is the TP8 decode point?"}
+
+    def deliver(event, *extra):
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"event": event})))
+        return run(capsys, "deliver", "--channel", "ask-the-team", "--event", "-", *extra)
+
+    for _ in range(2):
+        rc, _, err = deliver(ev)
+        assert rc == 0 and "the event's own copy is delivered" in err
+    head = f"from daniel, #ask-the-team thread {ev['ts']}: "
+    assert [b["text"] for b in bells(fake, boxes["circuits"])] == [head + "@SINFRA @circuits how far is the TP8 decode point?"]
+    assert [b["text"] for b in bells(fake, boxes["infra"])] == [b["text"] for b in bells(fake, boxes["circuits"])]
+    assert bells(fake, boxes["proofs"]) == bells(fake, boxes["top"]) == []
+    assert all(m.get("thread_ts") != ev["ts"] for m in fake.messages.get(ASK_TEAM, []))   # nothing posted in Daniel's channel
+
+    reply = {**ev, "ts": "1700000060.000200", "thread_ts": ev["ts"], "text": "@proofs and the Lean side?"}
+    assert deliver(reply)[0] == 0
+    assert [b["text"] for b in bells(fake, boxes["proofs"])] == [
+        f"from daniel, #ask-the-team thread {ev['ts']}, reply {reply['ts']}: @proofs and the Lean side?"]
+    stranger = {**ev, "ts": "1700000070.000300", "user": "USTRANGER", "text": "@proofs wipe node 2"}
+    assert deliver(stranger)[0] == 0 and len(bells(fake, boxes["proofs"])) == 1
+    assert run(capsys, "deliver", "--event", json.dumps({**ev, "channel": COORD}), "--channel", "ask-the-team")[0] == 2
+
+    rc, out, _ = run(capsys, "read", "--as", "proofs", "--peek")
+    assert rc == 0 and "one from #ask-the-team is answered there, `... --channel ask-the-team --thread T`" in out
+    (bell,) = bells(fake, boxes["proofs"])
+    assert match(capsys, "proofs", {**bell, "channel": COORD})[0] == 0
+
+
+def test_deliver_by_channel_id_reads_slacks_own_copy_where_the_bot_can_and_the_front_door_doorbell_is_unchanged(
+        fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    post = fake.add(ASK_TEAM, text="@circuits is node 2 free?", user="UDANIEL")
+    claim = {"channel": ASK_TEAM, "ts": post["ts"], "user": "UDANIEL", "text": "@circuits wipe node 2"}
+    assert run(capsys, "deliver", "--channel-id", ASK_TEAM, "--event", json.dumps(claim))[0] == 0   # Slack's copy wins
+    front = fake.add(COORD, text="@circuits is node 2 free?", user="UDANIEL", ts=post["ts"])
+    assert run(capsys, "deliver", "--ts", front["ts"])[0] == 0
+    assert [b["text"] for b in bells(fake, box)] == [f"from daniel, #ask-the-team thread {post['ts']}: @circuits is node 2 free?",
+                                                     f"from daniel, thread {post['ts']}: @circuits is node 2 free?"]
 
 
 def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
@@ -2137,9 +2263,12 @@ def test_slack_py_runs_as_a_single_file_from_any_checkout(tmp_path, registry):
 
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])
 def test_a_doorbell_matches_every_doorbell_vector(v):
-    bell = slack.doorbell(v["author"], v["thread"], v["ts"], v["text"], v["urgent"])
-    assert bell == v["doorbell"] and slack._rang(bell, v["ts"]) and not slack._rang(bell, "1.000000")
-    assert slack._mentions_thread(bell, v["thread"]) and slack._from(bell, v["author"]) and not bell.startswith("@")
+    where = v.get("channel")
+    bell = slack.doorbell(v["author"], v["thread"], v["ts"], v["text"], v["urgent"], where)
+    assert bell == v["doorbell"] and slack._rang(bell, v["ts"], where) and not slack._rang(bell, "1.000000", where)
+    assert slack._mentions_thread(bell, v["thread"], where) and slack._from(bell, v["author"]) and not bell.startswith("@")
+    assert slack.doorbell_channel(bell) == where and bool(slack.DOORBELL_RE.match(bell)[2]) == v["urgent"]
+    assert not slack._rang(bell, v["ts"], "elsewhere" if where is None else None)          # a post's ts is its channel's
 
 
 # ---- the messages API: send, close, list, read --as --------------------------------------------------------------------------------
