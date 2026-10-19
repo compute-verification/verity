@@ -10,10 +10,8 @@ import PouwWindow.Shape
 
 * `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
   of tile counts, the window's context, the check query's SHA-512 and the window's shape (`PouwWindow.shapeOf?`, a
-  shape within the entry bound whose N is within the range) and its fixed length (`PouwWindow.lengthOf?`, ignore_eos
-  and one max_tokens per call); its template one the verifier pins (`tiles`), with that template's tile work and query.
-  Parameters with no shape are the superseded window's (`windowFormParams`), and ones with a shape but no fixed length
-  an EOS-keyed window's (`eosKeyedParams`).
+  shape within the entry bound whose N is within the range); its template one the verifier pins (`tiles`), with that
+  template's tile work and query. Parameters with no shape are the superseded window's (`windowFormParams`).
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
 * `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
@@ -30,16 +28,10 @@ open Flock (V)
 
 def scheme : String := "frame-v3-sha512/hm96-sha512"
 def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
-def paramsKeys : List String :=
-  ["check", "context", "delta", "eps", "grid_bits", "length", "query", "range", "shape"]
+def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range", "shape"]
 /-- `WINDOW_FORM_PARAMS`: the superseded window's parameters, which have no shape (decision 129: refuse and label). -/
 def windowFormParams : String :=
   "window-form: the parameters have no shape: they are the superseded window's, whose tiles and N followed its real tiles"
-/-- `EOS_KEYED_PARAMS`: an EOS-keyed window's parameters, which have a shape but no length that ran ignoring
-end-of-sequence (`PouwWindow.fixedLength`; CMP-43, refuse and label). -/
-def eosKeyedParams : String :=
-  "window-form: eos-keyed: the parameters have no fixed length (ignore_eos and max_tokens per call): the window's rows " ++
-  "stopped at end-of-sequence"
 def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
 /-- `window.COINS` and `window.MODES`: the check item's optional key and the coin modes it may name. -/
 def coinsKey : String := "coins"
@@ -74,8 +66,6 @@ structure Params where
   hi : Nat
   /-- The window's shape (`window.shape_of`): its calls, which fix its N, entries and the tile each index is. -/
   shape : List PouwWindow.Call
-  /-- The window's fixed length (`window.length_of`): ignore_eos, and each call's max_tokens. -/
-  length : PouwWindow.Length
   deriving DecidableEq, Repr
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
@@ -88,10 +78,7 @@ def ratioField (j : Json) (k : String) (ok : Core.Ratio → Bool) (what : String
   pure r
 
 def paramsOf (j : Json) : V Params := do
-  let unlengthed := (keys j).map (·.filter (· != "length"))
-  if unlengthed == some (paramsKeys.filter fun k => k != "length" && k != "shape") then throw windowFormParams
-  if unlengthed == some (paramsKeys.filter (· != "length")) && !PouwWindow.fixedLength (get j "length") then
-    throw eosKeyedParams
+  if keys j == some (paramsKeys.filter (· != "shape")) then throw windowFormParams
   unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
   let c := get j "check"
   unless (keys c).map (·.filter (· != coinsKey)) == some checkKeys do
@@ -126,11 +113,7 @@ def paramsOf (j : Json) : V Params := do
   if let some why := PouwWindow.shapeProblem shape entries then throw s!"shape: {why}"
   let n := PouwWindow.shapeTiles shape
   if n > hi then throw s!"shape: its {n} tiles are more than the range's {hi}"
-  let some length := PouwWindow.lengthOf? (get j "length")
-    | throw "length is not {ignore_eos, max_tokens}: a boolean and a non-empty list of natural numbers"
-  if let some why := PouwWindow.lengthProblem length shape then throw s!"length: {why}"
-  pure { check := { entries, scheme, template, tileWork, coins }, context, delta, eps, gridBits, query, lo, hi, shape,
-         length }
+  pure { check := { entries, scheme, template, tileWork, coins }, context, delta, eps, gridBits, query, lo, hi, shape }
 
 /-- One of the record's roots. -/
 structure Root where

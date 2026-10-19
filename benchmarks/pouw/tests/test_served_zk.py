@@ -82,7 +82,7 @@ TILES = Wd.shape_tiles(Wd.shape_of(SHAPE))
 def _params(run: str, raw: bytes) -> dict:
     return {"context": f"served-zk/{run}/{hashlib.sha512(raw).hexdigest()}", "deployment": f"served-zk/{run}",
             "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N,
-            "calls": [5, 9], "shape": SHAPE, "length": {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS] * len(SHAPE)}}
+            "calls": [5, 9], "shape": SHAPE}
 
 
 #: each window's pass by its parameters' context: (the epoch's coins, the manifest's bytes, the manifest)
@@ -230,15 +230,14 @@ def test_windows_of_one_shape_differ_only_in_their_level(served):
 
 
 def test_register_makes_exactly_the_public_items_public(served):
-    """The record's window holds exactly the registered public items (work, check, sampling, shape, length, root_W) and
-    nothing of the calls' values: no call index, no record, no row count.  One more item, a root_W that is no registered
-    root, or a commitment whose level the range refuses, is refused."""
+    """The record's window holds exactly the registered public items (work, check, sampling, shape, root_W) and nothing of
+    the calls' values: no call index, no record, no row count.  One more item, a root_W that is no registered root, or a
+    commitment whose level the range refuses, is refused."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     assert rec["window"] == {"kind": "served", "context": params["context"], "public": public["items"]}
     assert set(rec["window"]["public"]) == set(Wd.REGISTERED) and rec["population"] == 129 and rec["scheme"] == S.SCHEME
-    assert rec["window"]["public"]["length"] == {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS] * len(SHAPE)}
     assert rec["law"] == {"law": "subset", "k": rec["window"]["public"]["sampling"]["law"]["k"]}
     assert [r["port"] for r in rec["roots"]] == [SC.PORT, "W"]
     assert S.check_public(SC.spec_of(params, public["level"]), rec).ok and SC.public_problem(params, rec).ok
@@ -257,15 +256,6 @@ def test_register_makes_exactly_the_public_items_public(served):
                                                                           "domain:W"}
     with pytest.raises(ValueError, match="outside"):
         SC.work_at({**params, "range": [100, 1 << 40]}, public["level"])
-
-
-def test_the_fixed_length_is_the_served_requests():
-    """The parameters' fixed length is what e2e.py serves: every request at max_tokens `MAX_TOKENS`, ignoring
-    end-of-sequence (CMP-43), so a window's registered length is its rows' real one."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    import e2e
-    assert SC.MAX_TOKENS == e2e.SERVED_TOKENS
-    assert "max_tokens=SERVED_TOKENS, ignore_eos=True" in Path(e2e.__file__).read_text()
 
 
 def _challenger(params, units=None, coins=None) -> SC.Challenger:

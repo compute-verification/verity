@@ -356,27 +356,8 @@ def test_the_window_statement_refuses_each_departure_from_the_layout():
     for bad in (fs[:2], [*fs[:2], {"a": [[0, 0, 0]], "b": [[0, 0, 0, 1]]}], [*fs[:2], {"a": [[0, 0, 0, 1]]}]):
         with pytest.raises(ValueError, match="fields"):
             Wd.window_problem(_rows(es), w, 5, H3, SHAPE, bad)
-    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "shape", "length", "drawn", "root_W"}
+    assert {p[0] for p in Wd.PUBLIC} == {"verdict", "work", "check", "sampling", "shape", "drawn", "root_W"}
     assert set(Wd.REGISTERED) == {p[0] for p in Wd.PUBLIC if p[2] != "outcome"}
-
-
-def test_the_fixed_length_is_one_max_tokens_per_call_ignoring_eos_or_eos_keyed():
-    length = Wd.length_of({"ignore_eos": True, "max_tokens": [4, 9]})
-    assert length == Wd.Length(True, (4, 9)) and Wd.length_of(length.to_json()) == length
-    assert Wd.length_problem(length, SHAPE) is None and Wd.fixed_length(length.to_json())
-    cases = {"ignore_eos false": Wd.Length(False, (4, 9)), "1 lengths, not one per call of the shape's 2":
-             Wd.Length(True, (4,)), "call 0: its max_tokens 0 is not a positive length": Wd.Length(True, (0, 9))}
-    for want, bad in cases.items():
-        got = Wd.length_problem(bad, SHAPE)
-        assert got and want in got, (want, got)
-    for eos_keyed in (None, {}, {"ignore_eos": False, "max_tokens": [4, 9]}, {"ignore_eos": 1, "max_tokens": [4, 9]},
-                      [True]):
-        assert not Wd.fixed_length(eos_keyed)
-    for bad in (None, {"ignore_eos": True}, {"ignore_eos": True, "max_tokens": []}, {"ignore_eos": 1, "max_tokens": [4]},
-                {"ignore_eos": True, "max_tokens": [-1]}, {"ignore_eos": True, "max_tokens": [True]},
-                {"ignore_eos": True, "max_tokens": [4], "eos": 2}):
-        with pytest.raises(ValueError):
-            Wd.length_of(bad)
 
 
 def test_windows_of_one_shape_have_one_structure_whatever_their_real_tokens():

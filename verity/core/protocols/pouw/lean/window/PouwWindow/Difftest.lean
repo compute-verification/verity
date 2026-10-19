@@ -21,7 +21,6 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
   `entry_leaf` (`domain` `{binding, count}`, `e`, `bc`); `tile_read` (`row`, `i`, `j`);
 * the shape: `shape_of`, `shape_tiles` (`shape`); `shape_problem`, `shape_entries` (`shape`, `bound`); `tile_at`
   (`shape`, `t`);
-* the fixed length: `length_of`, `fixed_length` (`length`); `length_problem` (`length`, `shape`);
 * a call's record: `record_digest` (`record`); `record_problem` (`row`, `record`);
 * the side trees: `side_row` (`words`, `index`, `ok`, `admit`); `side_field` (`row`); `side_domain` (`window`, `side`);
   `pad_node` (`domain`, `level`, `index`); `side_levels` (`domain`, `leaves`); `side_path` (`domain`, `leaves`, `index`);
@@ -117,11 +116,6 @@ def shapeArg (j : Json) : Except String (List Call) := do
   | some s => pure s
   | none => throw "a window's shape is a non-empty list of calls {m, n, tile0} of natural numbers"
 
-def lengthArg (j : Json) : Except String Length := do
-  match lengthOf? (← get j "length") with
-  | some l => pure l
-  | none => throw "a window's length is {ignore_eos, max_tokens}: a boolean and a non-empty list of natural numbers"
-
 def levelsOf (j : Json) : Except String (PouwCommit.Domain × Array (Array ByteArray)) := do
   let d ← domain j
   pure (d, ← sideLevels? d (← hexes j "leaves"))
@@ -162,9 +156,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("tile_at", fun j => do
     let (e, i, b) ← tileAt? (← shapeArg j) (← int j "t")
     pure (toJson [e, i, b])),
-  ("length_of", fun j => do pure (← lengthArg j).toJson),
-  ("fixed_length", fun j => do pure (toJson (fixedLength (← get j "length")))),
-  ("length_problem", fun j => do pure (toJson (lengthProblem (← lengthArg j) (← shapeArg j)))),
   ("tile_read", fun j => do
     let (p, w) ← (← rowEntry j).tileRead? (← int j "i") (← int j "j")
     pure (toJson [(p : Int), w])),

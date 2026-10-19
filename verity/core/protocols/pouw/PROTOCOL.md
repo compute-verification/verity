@@ -204,14 +204,6 @@ drawn index t's entry and rows (`tile_at`), so no read between units depends on 
 the old form, whose structure followed the real tokens; the check refuses it as `window-form` (`core_check.registered`,
 Lean `PouwCheck.registered`).
 
-**The window runs at a fixed length** (Daniel, 18 Oct, CMP-43): tokens past the honest end-of-sequence are not useful
-work, so a window of record's requests run ignoring end-of-sequence at a public max_tokens L_c per call. The registration's
-item `length` (`window.Length`, `length_of`) is `{"ignore_eos": true, "max_tokens": [L_0, …]}`, one L per call of the
-shape in its order, and the verifier's parameters carry the same item. A window without it, or with ignore_eos false, is
-EOS-keyed: its useful work is not public, and the check refuses it as `window-form: eos-keyed` (`core_check.EOS_KEYED`
-and `EOS_KEYED_PARAMS`, Lean `PouwCheck.eosKeyed` and `eosKeyedParams`, `program.problems`'s `eos-keyed`; decision 129:
-refuse and label). A request's `done` stays a computed value: it masks neither egress nor credit.
-
 **The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
 registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
 `hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is

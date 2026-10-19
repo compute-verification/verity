@@ -9,9 +9,6 @@ rows `n` and its first tile `tile0` in its pass. Call c's entry holds every slot
 and the m·n tiles after the calls before it; the filler's one tile is the last, N − 1 (`shapeTiles`, `shapeEntries`); and
 `tileAt?` maps a drawn index to its entry and rows from the shape and no value. `shapeProblem` holds a shape to what a
 window of a given entry bound can have.
-
-Beside the shape, the window's fixed length (`Length`, CMP-43): its rows ran ignoring end-of-sequence at a public
-`max_tokens` per call, so its useful work is public; `fixedLength` and `lengthProblem` hold a window of record to it.
 -/
 
 namespace PouwWindow
@@ -63,44 +60,6 @@ def shapeProblem (shape : List Call) (bound : Int) : Option String := Id.run do
       return some s!"call {c}: its pass tiles end at {inPass}, beyond 2^{tBits}"
   if shapeTiles shape ≥ 2 ^ tBits then
     return some s!"its {shapeTiles shape} tiles are not of {tBits}-bit indices"
-  return none
-
-/-- A window's fixed length (`window.Length`): whether its rows ran ignoring end-of-sequence (vLLM's `ignore_eos`), and
-each call's `max_tokens` L, in the shape's order. -/
-structure Length where
-  ignoreEos : Bool
-  maxTokens : List Nat
-  deriving DecidableEq, Repr
-
-def Length.toJson (l : Length) : Json :=
-  Json.mkObj [("ignore_eos", Json.bool l.ignoreEos),
-    ("max_tokens", Json.arr (l.maxTokens.map fun (n : Nat) => Json.num n).toArray)]
-
-/-- `length_of`: the length a JSON value holds, `{ignore_eos, max_tokens}`, a boolean and a non-empty list of natural
-numbers, or `none` where Python raises. -/
-def lengthOf? : Json → Option Length
-  | j@(.obj kvs) =>
-    if kvs.toArray.toList.map (·.1) == ["ignore_eos", "max_tokens"] then
-      match field? j "ignore_eos", field? j "max_tokens" with
-      | some (.bool b), some (.arr a) => if a.isEmpty then none else do pure ⟨b, ← a.toList.mapM natOf?⟩
-      | _, _ => none
-    else none
-  | _ => none
-
-/-- `fixed_length`: whether a JSON value says its rows ran at a fixed length, an object whose `ignore_eos` is true;
-anything else is an EOS-keyed window's, which PoUW's check refuses as `window-form: eos-keyed`. -/
-def fixedLength (j : Json) : Bool := field? j "ignore_eos" == some (.bool true)
-
-/-- `length_problem`: why `length` is not a fixed length of `shape`'s calls, or `none`: its rows ignored
-end-of-sequence, and it holds one max_tokens per call, each at least 1. -/
-def lengthProblem (length : Length) (shape : List Call) : Option String := Id.run do
-  if !length.ignoreEos then
-    return some "its rows stop at end-of-sequence (ignore_eos false), not at a fixed length"
-  if length.maxTokens.length != shape.length then
-    return some s!"{length.maxTokens.length} lengths, not one per call of the shape's {shape.length}"
-  for (n, c) in length.maxTokens.zipIdx do
-    if n < 1 then
-      return some s!"call {c}: its max_tokens {n} is not a positive length"
   return none
 
 /-- `shape_entries`: the entries' public fields, each a function of the shape (their roots and records zero), then

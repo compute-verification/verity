@@ -52,8 +52,7 @@ def honest(rng: random.Random) -> dict:
     dom = CC.window_domain(CC.params(params), rec)
     seg, v2 = (s for _, s in CC.OPENED)
     shape = [{"m": 16, "n": rng.randint(1, 4), "tile0": rng.randrange(1 << 20)}]
-    params.update(shape=shape, range=[1, Wd.shape_tiles(Wd.shape_of(shape)) + rng.randrange(5)],
-                  length={"ignore_eos": True, "max_tokens": params["length"]["max_tokens"][:1]})
+    params.update(shape=shape, range=[1, Wd.shape_tiles(Wd.shape_of(shape)) + rng.randrange(5)])
     entries, sides = [], []
     rows = random.Random(rng.getrandbits(64))
     for pub in Wd.shape_entries(Wd.shape_of(shape), n)[:2]:

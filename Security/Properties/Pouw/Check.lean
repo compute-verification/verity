@@ -27,16 +27,14 @@ open PouwWindow (Work point level floorPoint shapeTiles)
 /-! ## Acceptance -/
 
 /-- The registration keeps PoUW's rule, with `f` the level, sampling item and `root_W` it fixes: a served window in the
-verifier's context with a shape item (one without is the superseded window, refused as `window-form`) and a length item
-that ran ignoring end-of-sequence (one without is an EOS-keyed window, refused as `window-form: eos-keyed`), registering
+verifier's context with a shape item (one without is the superseded window, refused as `window-form`), registering
 exactly `window.REGISTERED`; a work level whose credited tiles lie from the range's low end to `N − 1`, `N` the shape's
 tile count (`shapeTiles`), so the filler is never credited; each item the verifier's own at that level (`expected`, the
-shape and the fixed length among them, compared canonically); the population `N`; the law `subset:K′` with `K′` the
-window's exact `kPrime`; and the check's query and scheme. -/
+shape among them, compared canonically); the population `N`; the law `subset:K′` with `K′` the window's exact `kPrime`;
+and the check's query and scheme. -/
 def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
   (c.window.kind = "served" ∧ c.window.context = p.context) ∧
   "shape" ∈ (keys c.window.items).getD [] ∧
-  PouwWindow.fixedLength (get c.window.items "length") = true ∧
   (keys c.window.items).getD [] = registeredSorted ∧
   levelOf c.window.items = some f.work.level ∧
   f.work.level ≤ level p.gridBits (floorPoint p.gridBits (shapeTiles p.shape - 1)) ∧
@@ -62,13 +60,13 @@ def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (
   draw.units.size = f.sampling.k ∧ Ascending draw.units.toList ∧ ∀ u ∈ draw.units.toList, u < f.work.n
 
 /-- What the check accepts is a registration that keeps PoUW's rule, which the service accepted as the rule fixes; it
-then publishes the check item, the level's work, the sampling item, the shape, the fixed length, `root_W` and the drawn
-units, and the profile is the service's. -/
+then publishes the check item, the level's work, the sampling item, the shape, `root_W` and the drawn units, and the
+profile is the service's. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
       ∃ f draw, RegistrationKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧
-        pub = ⟨p.check, f.work, f.sampling, p.shape, p.length, f.rootW, draw.units⟩
+        pub = ⟨p.check, f.work, f.sampling, p.shape, f.rootW, draw.units⟩
 
 /-- An accepted window is credited a grid level inside its credit range: its credited tiles are at least `lo` and fewer
 than its `N` tiles, the shape it publishes (`shapeTiles`), so the filler's tile is never credited. (`N ≤ hi` is the

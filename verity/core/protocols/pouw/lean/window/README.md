@@ -12,7 +12,7 @@ pure move, to the same path under `verity/core/`; the Python keeps running until
 | `PouwWindow.Public` | `PUBLIC`, `REGISTERED`, `KINDS` |
 | `PouwWindow.Json` | integers read as Python's `json` reads them; the items written as Python writes them |
 | `PouwWindow.Entry` | `T_BITS`, `DEPTHS`, `PORT`, `ENTRY_SCHEMA`, `TILE`, `ROW_STEP`, `Entry` (`row`, `words`, `from_row`, `from_words`), `pass_tiles`, `layout_problem`, `tile_read`, `entry_digest`, `entry_bc`, `entry_leaf` |
-| `PouwWindow.Shape` | the window's public shape: `Call`, `shape_of`, `shape_json`, `shape_tiles` (its N), `shape_problem`, `shape_entries`, `public_fields`, `tile_at` (a unit's call, A row and B row, fixed by the shape alone); the window's fixed length: `Length`, `length_of`, `fixed_length`, `length_problem` (each call's max_tokens, its rows ignoring end-of-sequence) |
+| `PouwWindow.Shape` | the window's public shape: `Call`, `shape_of`, `shape_json`, `shape_tiles` (its N), `shape_problem`, `shape_entries`, `public_fields`, `tile_at` (a unit's call, A row and B row, fixed by the shape alone) |
 | `PouwWindow.Record` | `record_digest` (`canonical_json` as Python writes it), `record_problem`, and how Python reads a record's JSON |
 | `PouwWindow.Side` | `SIDE_DOMAIN`, `OWNER`, `SIDE_INDEX_WORDS`, `side_row` (a slot's row with its index, `ok` and `admit`), `side_field`, `side_domain`, `pad_node`, `side_levels`, `side_path` |
 | `PouwWindow.Statement` | `window_problem`, the window statement L4 on the entry rows: the entries the shape's, every slot's side field (an unadmitted slot the canonical empty row), and the credit the masked sum of admitted, accepted rows rounded down to the grid |
