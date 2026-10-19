@@ -25,7 +25,7 @@ SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("
 TP2_ROLES = ("B1", "LLAMA32_1B", "QWEN3_30B_A3B")
 ROLES = [(r, 1) for r in SHIPPED] + [(r, 2) for r in TP2_ROLES]
 #: shipped configs the constructor refuses, by the reason it states
-REFUSED = {"QWEN15_AWQ": "awq", "DSV4_PRO": "no κ profile constructor"}
+REFUSED = {"QWEN15_AWQ": "awq"}
 
 
 # ------------------------------------------------------------------------------------------------------------------- shipped configs
@@ -238,10 +238,10 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
     assert vals["ATTN_SCALE"] == 256 ** -0.5 and vals["ROPE_NEOX"] is False and prov["SHARED_I"] == "derived"
 
 
-def test_the_hyper_connected_family_resolves_its_rank_facts_without_a_profile():
-    """DeepSeek-V4-Pro's facts resolve over a TP8 rank (the experts' width and the heads divided, the rest whole); its profile refuses."""
+def test_the_hyper_connected_family_resolves_its_rank_facts():
+    """DeepSeek-V4-Pro's facts resolve over a TP8 rank (the experts' width and the heads divided, the rest whole)."""
     cfg = json.loads((dg.HF_CONFIG_DIR / "DSV4_PRO.config.json").read_text())
-    assert FF.facts_for(cfg)["arch"] == "mhc-moe" and "no κ profile constructor" in G.structural_refusal(cfg)
+    assert FF.facts_for(cfg)["arch"] == "mhc-moe" and G.structural_refusal(cfg) is None
     vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
     assert {k: vals[k] for k in ("Q_LORA", "HEAD_DIM", "QK_ROPE", "O_GROUPS", "O_LORA", "WINDOW", "PADDED_HEADS", "INDEX_HEADS", "NUM_EXPERTS",
                                  "TOPK", "HASH_LAYERS", "SCORING", "SCORE_BIAS", "SHARED_I", "EXPERT_DTYPE", "HC_MULT", "HC_REPEAT")} == {
@@ -249,6 +249,44 @@ def test_the_hyper_connected_family_resolves_its_rank_facts_without_a_profile():
         "NUM_EXPERTS": 384, "TOPK": 6, "HASH_LAYERS": 3, "SCORING": "sqrtsoftplus", "SCORE_BIAS": "noaux_tc", "SHARED_I": 384,
         "EXPERT_DTYPE": "fp4", "HC_MULT": 4, "HC_REPEAT": 20}
     assert vals["ATTN_SCALE"] == 512 ** -0.5 and len(vals["COMPRESS_RATIOS"]) == cfg["num_hidden_layers"] + 1 and prov["SHARED_I"] == "derived"
+
+
+def test_the_hyper_connected_rank_profile_states_the_builds_weights_record():
+    """DeepSeek-V4-Pro's TP8 rank profile: `C` from the facts and the rank's config.json, a weights Record of the family's params in their
+    order at the allocated shapes (the fold's `weights` parameter), every non-Marlin parameter bound to its own field and the Marlin-served
+    experts to none (their words are no leaves of the checkpoint-layout fields), and the header check over the recorded full config."""
+    from verity_vllm.observe.fold.fold import weights_type_of
+    mod = importlib.import_module(f"verity_vllm.engine.profiles.{G.module_name('DSV4_PRO', 8)}")
+    prof, C, W = mod.PROFILE, mod.C, mod.PROFILE.weights_type
+    assert {k: C[k] for k in ("H", "NL", "NH", "V", "VOCAB", "I", "SHARED_I", "FP8_BLOCK", "WORLD")} == {
+        "H": 7168, "NL": 61, "NH": 16, "V": 16160, "VOCAB": 129280, "I": 384, "SHARED_I": 384, "FP8_BLOCK": 128, "WORLD": 8}
+    names = [n for n, _ in W.fields]
+    assert names[:5] == ["model.hc_head_fn", "model.hc_head_base", "model.hc_head_scale", "model.embed_tokens.weight", "model.layers.0.hc_attn_fn"]
+    assert names[-3:] == ["model.norm.weight", "lm_head.weight", "model.layers.0.attn.rotary_emb.cos_sin_cache"]
+    assert "model.layers.0.hc_attn_fn_broadcast" in names and "model.layers.1.hc_attn_fn_broadcast" not in names
+    assert "model.layers.2.attn.indexer.wq_b.weight" in names and "model.layers.3.attn.indexer.wq_b.weight" not in names    # ratios 4 / 128
+    assert "model.layers.2.ffn.gate.tid2eid" in names and "model.layers.3.ffn.gate.e_score_correction_bias" in names      # HASH_LAYERS 3
+
+    def field(n):
+        return W.fields[W.index(n)][1]
+    assert (field("model.layers.0.attn.wo_a.weight").leaves, field("model.layers.0.attn.wo_a.weight").leaf_widths()[0]) == (2 * 1024 * 4096, 8)
+    assert field("model.layers.5.ffn.experts.routed_experts.w13_weight").leaves == 384 * 768 * 3584
+    assert prof.weight_field("model.layers.5.attn.wq_b.weight_scale_inv") == ("model.layers.5.attn.wq_b.weight_scale_inv",)
+    assert prof.weight_field("model.layers.5.ffn.experts.routed_experts.w2_weight_scale") is None
+    assert mod.root_class("model.layers.5.ffn.experts.routed_experts.w2_weight_scale") == "marlin-served"
+    assert mod.root_class("model.layers.5.attn.wq_b.weight") == "weight" and mod.root_class("model.layers.5.attn.k_scale") == "unknown"
+    assert weights_type_of(prof, C) is W and weights_type_of(BASE.PROFILE, BASE.C) == analytic.weights_type(BASE.C)
+    from verity_vllm.observe.fold.patterns import dsv4_patterns
+    names, own = [p.name for p in prof.patterns], [p.name for p in dsv4_patterns()]
+    assert own[-4:] == ["fp8.dynamic_deepgemm_linear", "gemm.cublas_linear_default", "gemm.cublas_mm_f32out", "norm.rms_norm_cuda"]
+    assert names[:len(own)] == own and names[len(own):len(own) + 4] == [
+        "tp.embedding_shard_cuda", "tp.collective", "moe.marlin_shared_experts.mxfp4", "residual_add.aten_add"]
+    assert prof.witnesses == ("schedule",)
+    h = RunHeader("verity-capture/log/v1", "2026-10-18T00:00:00Z", "pid", {}, {"repo": mod.REPO_ID, "config": mod.HF_CONFIG, "tp": 8},
+                  {"requests": []})
+    assert mod.check_header(h) == []
+    bad = dataclasses.replace(h, model={**h.model, "config": {**mod.HF_CONFIG, "num_hidden_layers": 60, "n_routed_experts": 256}, "tp": 4})
+    assert mod.check_header(bad) == ["num_hidden_layers=60 != C[NL]=61", "n_routed_experts=256 != C[NUM_EXPERTS]=384", "tensor_parallel_size=4 != WORLD=8"]
 
 
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():

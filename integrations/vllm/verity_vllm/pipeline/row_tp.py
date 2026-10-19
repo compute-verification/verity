@@ -210,6 +210,10 @@ class TpRow(Row):
     def rank(self, r: int) -> str:
         return f"{self.bdir}/rank{r}"
 
+    def build_ranks(self) -> list[str]:
+        """``--build-rank <rank dir>`` in rank order: the Build tp-capture and tp-commit read the post-load tensors from."""
+        return [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
+
     def derive(self, r: int, out: str, *args: str) -> None:
         """One CPU derive of rank ``r``, a switched row's ``predict emit``; the .rc beside its log carries the exit code."""
         if self.aot is not None:
@@ -274,10 +278,11 @@ class TpRow(Row):
                     self.cli("global-program", "--workload", self.wl, *der, "--out", f"{self.rank(r)}/build_workload", "--checkpoint-dir", self.ck))
 
     def compose_all(self, ranks: list[int]) -> None:
-        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.COMPOSE_PEAK_RATIO` x the largest shape's
-        derive peak (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
-        n = R.build_jobs_auto(self.shapes, R.model_layers(self.ck), derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO,
-                              budget_gb=self.cb.build_ram_budget_gb)
+        """GP-01 of each of `ranks`, as many at once as the memory holds at `row_records.compose_bytes` a compose
+        (``--build-ram-budget-gb`` when smaller than the headroom), marked ``build.compose_jobs``."""
+        layers = R.model_layers(self.ck)
+        n = R.build_jobs_auto(self.shapes, layers, derives=len(ranks), peak_ratio=R.COMPOSE_PEAK_RATIO, budget_gb=self.cb.build_ram_budget_gb,
+                              job_bytes=R.compose_bytes(self.shapes, layers) if self.shapes and layers else None)
         self.tl("build.compose_jobs", "mark", ("jobs", n), ("ranks", len(ranks)))
         with ThreadPoolExecutor(max_workers=n) as pool:
             for f in [pool.submit(self.compose, r) for r in ranks]:
@@ -325,7 +330,10 @@ class TpRow(Row):
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
                 self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
-        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step")])
+        kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
+        if kept:
+            self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
+        self.compose_all([r for r in range(self.W) if R.derived_ok(f"{self.rank(r)}/build_step") and r not in kept])
         ok, rc, programs_only = self.guarded_summary(), None, self.cb.build_programs_only == "1"
         if ok == "PASS" and not programs_only:   # the Build's manifest, as SingleRow's: an incomplete one (rc 4) fails the Build its Commit would refuse
             rc = self.manifest_global("build.required_manifest", self.to_b)
@@ -369,7 +377,7 @@ class TpRow(Row):
                 raise Stop(11)
         br = [a for r in range(self.W) for a in ("--build-rank", f"{self.rank(r)}/build_step")]
         cap = self.cli("tp-capture", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine)
+                       "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", *self.engine, *self.build_ranks())
         t0 = int(time.time())
         self.tl("stage.match", "start")
         if phase == "cpu":
@@ -433,7 +441,7 @@ class TpRow(Row):
             rc_fold = self.run_tl("match.fold_match", 4 * to_f, f"{M}/fold_match.log",
                                   self.cli("tp-fold-match", "--capture", f"{M}/capture", "--profile", fp, *fargs, "--workload", self.wl,
                                            "--tp2-match", f"{M}/tp2_match.json", "--within-step", "dag", "--rank-workers", str(cm.fold_rank_workers),
-                                           "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
+                                           "--fold-workers", str(cm.fold_workers), "--python", self.py, "--timeout", str(to_f), "--out", f"{M}/fold_match"))
             fold = f"fold_match rc={rc_fold} {R.tp_fold_line(M)}"
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0
@@ -512,14 +520,13 @@ class TpRow(Row):
     def commit_cmd(self, taps: list[str]) -> list[str]:
         """`tp-commit`'s command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources the ranks attach."""
         ck, d = self.ck_, self.d
-        brk = [a for r in range(self.W) for a in ("--build-rank", self.rank(r))]
         if self.config_run:                       # one instrumented run, k units over the ranks; no Match to compare against
             match, arms = [], ["--pairs", "1", "--warmup", "1", "--only-arm", "instrumented", "--replay-k", str(ck.replay_k)]
         else:
             match, arms = ["--match-dir", self.M], ["--pairs", str(ck.pairs), "--warmup", "2", "--value-check"]
         cmd = self.cli("tp-commit", "--workload", self.wl, "--case", self.role, "--tp", str(self.W), "--committer", "native_collect_v2b",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
-                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *brk,
+                       "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *self.build_ranks(),
                        "--required-manifest", f"{d}/manifest.json", *match, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
