@@ -37,7 +37,7 @@ Arms:
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
 its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's (dither-1s:
-`dither_one.check` on its gate, control and fault steps, tokens reported), under a CUDA
+`dither_one.check` on its gate, control, fault and fault_wb steps, tokens reported), under a CUDA
 profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
 kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4).
@@ -248,8 +248,10 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 else:
                     lib = os.environ[mod.LIB_ENV]
                     with torch.inference_mode():
-                        res["check"], res["control"], res["fault"] = (mod.check(win, lib, n) for n in mod.CAPTURES)
-                    res["verdict"] = mod.gate_verdict(res["check"], res["control"], res["fault"])
+                        caps = {n: mod.check(win, lib, n) for n in mod.CAPTURES}
+                    res["check"] = caps.pop("gate")
+                    res.update(caps)
+                    res["verdict"] = mod.gate_verdict(res["check"], *(caps[n] for n in mod.CAPTURES[1:]))
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
                 res["check_s"] = round(time.perf_counter() - t0, 1)

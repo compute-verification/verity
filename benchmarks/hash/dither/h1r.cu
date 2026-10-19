@@ -224,8 +224,11 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
 }
 
 // The unit's served output (h1o.cu): with E::ON the lane's accumulators become O = O' - sum_d 128^d D_d as the tail
-// absorbs O' and each D_d, and E writes them; E also says which A rows are the canonical empty row (read as zero), what a
-// dead unit writes, and may perturb a noised accumulator word (the conformance test).  NoEpi: the receipts alone.
+// absorbs O' and each D_d, plus the exact wrap correction 256 X (wb⁺ - wb⁻)^T (H1V3's PouwWrapSeg): each segment's wb
+// from the B, c and U bytes its W' is made of, as an s8 {-1, 0, 1} operand in E's shared buffer (E::wbs, 32 * XS bytes),
+// and one more MMA a fragment against the same X.  E writes z; it also says which A rows are the canonical empty row (read
+// as zero), what a dead unit writes, and may perturb a noised accumulator word or flip a wb⁺ bit (the conformance tests).
+// NoEpi: the receipts alone.
 struct NoEpi {
   static constexpr bool ON = false;
   __device__ bool a_ok(int) const { return true; }
@@ -233,6 +236,18 @@ struct NoEpi {
   __device__ void fault(int, int, int, int (&)[2][4][4]) const {}
   __device__ void out(int, int, int, const int (&)[2][4][4]) const {}
 };
+
+// per byte, r = b + u + c mod 2^8 (c a bit a byte) read as s8 wraps where b + u + c leaves [-128, 127]: b and u share a sign
+// that r doesn't.  P has bit 7 of each byte that wrapped up (wb⁺, r negative), N of each that wrapped down (wb⁻)
+__device__ __forceinline__ void wrap_masks(u32 b, u32 u, u32 r, u32& P, u32& N) {
+  const u32 v = ~(b ^ u) & (b ^ r) & 0x80808080u;
+  P = v & r;
+  N = v & ~r;
+}
+// wb⁺ - wb⁻ a byte as s8 (both bits set: 0, as PouwWrapSeg reads them)
+__device__ __forceinline__ u32 wrap_s8(u32 P, u32 N) {
+  return ((P ^ N) >> 7) | (((N & ~P) >> 7) * 0xFEu);
+}
 
 // V 1: the first kernel.  V 2: a column block's row blocks on adjacent warps (B's tile from L2 when T > 32); noise blocks
 // from the unit's midstate; each chunk's noise words in shared memory; the next segment's A and B words loaded a segment
@@ -330,13 +345,13 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
   }
   __syncwarp();
 
-  int acc[2][4][4], Y[2][4][4];
+  int acc[2][4][4], Y[2][4][4], cr[2][4][4];  // cr: X wbᵀ (E::ON)
 #pragma unroll
   for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
     for (int ni = 0; ni < 4; ++ni)
 #pragma unroll
-      for (int e = 0; e < 4; ++e) acc[mi][ni][e] = Y[mi][ni][e] = 0;
+      for (int e = 0; e < 4; ++e) acc[mi][ni][e] = Y[mi][ni][e] = cr[mi][ni][e] = 0;
 
   uint4 pa0, pa1, pb0, pb1;
   if constexpr (V >= 2) {
@@ -396,6 +411,16 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
       *reinterpret_cast<uint4*>(Xs + lane * XS + 16) = make_uint4(xw[4], xw[5], xw[6], xw[7]);
       *reinterpret_cast<uint4*>(Ws + lane * XS) = make_uint4(ww[0], ww[1], ww[2], ww[3]);
       *reinterpret_cast<uint4*>(Ws + lane * XS + 16) = make_uint4(ww[4], ww[5], ww[6], ww[7]);
+      if constexpr (E::ON) {
+        u32 P[8], N[8], wq[8];
+#pragma unroll
+        for (int w = 0; w < 8; ++w) wrap_masks(bv[w], Uw[w], ww[w], P[w], N[w]);
+        ep.wb_fault(u, lane, s, P);
+#pragma unroll
+        for (int w = 0; w < 8; ++w) wq[w] = wrap_s8(P[w], N[w]);
+        *reinterpret_cast<uint4*>(ep.wbs + lane * XS) = make_uint4(wq[0], wq[1], wq[2], wq[3]);
+        *reinterpret_cast<uint4*>(ep.wbs + lane * XS + 16) = make_uint4(wq[4], wq[5], wq[6], wq[7]);
+      }
       if constexpr (V >= 2) {
         if (s + 1 < KS) {
           pa0 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * (s + 1)) : zero4;
@@ -418,6 +443,14 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
         bf[ni][0] = *reinterpret_cast<const u32*>(Ws + (8 * ni + g) * XS + 4 * q);
         bf[ni][1] = *reinterpret_cast<const u32*>(Ws + (8 * ni + g) * XS + 16 + 4 * q);
       }
+      u32 wf[4][2];
+      if constexpr (E::ON) {
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni) {
+          wf[ni][0] = *reinterpret_cast<const u32*>(ep.wbs + (8 * ni + g) * XS + 4 * q);
+          wf[ni][1] = *reinterpret_cast<const u32*>(ep.wbs + (8 * ni + g) * XS + 16 + 4 * q);
+        }
+      }
       __syncwarp();
 #pragma unroll
       for (int mi = 0; mi < 2; ++mi)
@@ -425,6 +458,7 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
         for (int ni = 0; ni < 4; ++ni) {
           mma(acc[mi][ni], af[mi], bf[ni][0], bf[ni][1]);
           mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
+          if constexpr (E::ON) mma(cr[mi][ni], af[mi], wf[ni][0], wf[ni][1]);
         }
       if constexpr (E::ON) ep.fault(u, lane, s, acc);
       absorb(st, acc, o, s, lane, nowrite);
@@ -499,7 +533,15 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
             acc[mi][ni][e] = d == 0 ? P[mi][ni][e] : (int)((u32)acc[mi][ni][e] - ((u32)P[mi][ni][e] << (7 * d)));
     }
   }
-  if constexpr (E::ON) ep.out(ri, cj, lane, acc);
+  if constexpr (E::ON) {
+#pragma unroll
+    for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+      for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+        for (int e = 0; e < 4; ++e) acc[mi][ni][e] = (int)((u32)acc[mi][ni][e] + ((u32)cr[mi][ni][e] << 8));
+    ep.out(ri, cj, lane, acc);
+  }
 }
 
 template <int NW, int V>

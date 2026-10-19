@@ -1,7 +1,9 @@
-// Dither's served linear in one stream (CA's H1V3, 07:04Z): each call's y = dequant(O), O = O' - sum_d 128^d D_d, from the
-// noised mainloop that also computes the call's H1 + fx1 receipts (`h1r_unit`'s MMAs over X = A + b and W' = B + c + U and
-// its tail, `segment.call_words`), so the MMAs whose words are receipted are the MMAs that serve: no other product of A
-// and B is computed.  z = O (s32, mod 2^32) is the z each cell commits.  The seeds are the call's own, from the window's
+// Dither's served linear in one stream (CA's H1V3, 07:04Z, with its exact wrap correction, 08:20Z): each call's
+// y = dequant(z), z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T, from the noised mainloop that also computes the call's
+// H1 + fx1 receipts (`h1r_unit`'s MMAs over X = A + b and W' = B + c + U and its tail, `segment.call_words`), so the MMAs
+// whose words are receipted are the MMAs that serve: no other product of A and B is computed.  wb⁺ = [B + c + U > 127] and
+// wb⁻ = [B + c + U < -128] come from B and the noise in the unit (never an input), so z = X (B + c)^T exactly for every
+// int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the window's
 // salt and root(A_j), root(B_j) (`h1r_seeds`, the 17 Oct seeded regime), so a call needs its A table's root before its
 // units and nothing from a later round.  A served call is, on the caller's stream, plain launches into caller-owned
 // buffers, the step read from the device (`H1OStep`), so a CUDA graph captured once serves every step:
@@ -13,7 +15,9 @@
 //                and zero z and y
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
-// and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y).
+// and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
+// B + c + U leaves [-128, 127] of ±X (a scalar scatter, not the served kernel's byte masks and MMA); it counts them, wb's
+// density.
 #include "h1r.cu"
 #include <cuda_bf16.h>
 
@@ -30,8 +34,9 @@ struct H1O {
 
 // flags: F_DUMP copies y rows < m to ydump; F_NW_TILES (no A slot, scale or z write) and F_NW_UNITS (no receipt write) are
 // the gate's no-write control, y still written; F_FAULT adds 2^FAULT_SHIFT to unit 0's accumulator of cell (0, 0) after
-// segment 0, before that segment's words are absorbed (the conformance test: the receipt and the served z and y must move)
-enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8 };
+// segment 0, before that segment's words are absorbed (the conformance test: the receipt and the served z and y must move);
+// F_FAULT_WB flips unit 0's wb⁺ bit at column 0, entry 0 (only column 0's z and y may move, by 256 (1 - 2 wb⁺) X[:, 0])
+enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8, F_FAULT_WB = 16 };
 constexpr int FAULT_SHIFT = 24;
 
 struct H1OStep {
@@ -47,8 +52,12 @@ struct OutEpi {
   const float* sa;
   const float* sw;
   int n, M, m, flags;
+  uint8_t* wbs;  // the warp's wb operand, 32 * XS bytes of shared memory
 
   __device__ bool a_ok(int row) const { return row < m; }
+  __device__ void wb_fault(int u, int lane, int s, u32 (&P)[8]) const {
+    if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && s == 0) P[0] ^= 0x80u;
+  }
   __device__ void dead(int ri, int cj, int lane) const {
     const int row = 32 * ri + lane;
     if (!(flags & F_NW_TILES)) {
@@ -109,11 +118,12 @@ __global__ void h1o_slot_k(const H1O* __restrict__ F, const H1OStep* __restrict_
 }
 
 template <int NW>
-__global__ void __launch_bounds__(32 * NW, 3) h1o_units_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
+__global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                           const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                           const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
                                                           int* __restrict__ zo, u64 nt0, u64 nt1, u64 nt2) {
   __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
+  __shared__ __align__(16) uint8_t wbsm[NW][32 * XS];
   __shared__ u64 sd[NW][24];
   __shared__ u32 nzs[NW][2][32 * NZ];
   const H1OStep st = *S;
@@ -124,17 +134,20 @@ __global__ void __launch_bounds__(32 * NW, 3) h1o_units_k(const H1O* __restrict_
   if (v >= C.units) return;
   C.a = xq;
   C.lda = F->k;
-  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags};
+  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, wbsm[wid]};
   h1r_unit<2, OutEpi>(C, v, lane, smem[wid][0], smem[wid][1], sd[wid], nzs[wid][0], F->seeds, nt0, nt1, nt2, F->out[p],
                       (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
 // the reference: unit u = ri * ncb + cj of call C (A rows from C.a, rows >= the slot's m already zero), z_ref [T, N]
+// wbc (or null): [wb⁺ count, wb⁻ count] added over the call's live units
 __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call, const u64* __restrict__ seeds, u64 nt0,
-                                                u64 nt1, u64 nt2, int* __restrict__ zref, int n) {
+                                                u64 nt1, u64 nt2, int* __restrict__ zref, int n,
+                                                unsigned long long* __restrict__ wbc) {
   __shared__ __align__(16) uint8_t Xs[32][516];
   __shared__ __align__(16) uint8_t Ws[32][516];
   __shared__ int8_t Us[32][32];
+  __shared__ int Cs[32][33];  // [row][column]: sum over wrapped entries of ±X, column j's written by lane j alone
   const H1Call C = *call;
   const int u = blockIdx.x, lane = threadIdx.x;
   if (u >= C.units) return;
@@ -144,6 +157,8 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
     for (int j = 0; j < 32; ++j) zr[j] = 0;
     return;
   }
+  for (int j = 0; j < 32; ++j) Cs[lane][j] = 0;
+  unsigned long long np = 0, nn = 0;
   const u64* sj = seeds + (long long)(C.seed0 + u) * 16;
   const int KS = C.k >> 5, nb = KS / 16, RB = nb + 1;
   const u64 rowb = (u64)lane * RB, colb = (u64)32 * RB + (u64)lane * RB;
@@ -181,12 +196,25 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
 #pragma unroll
         for (int j = 0; j < 32; ++j) acc[j] = __dp4a(xw, *reinterpret_cast<const int*>(&Ws[j][4 * k4]), acc[j]);
       }
+    for (int kk = 0; kk < 512; ++kk) {
+      const int s16 = kk / 32, t = kk % 32;
+      const int sv = (int)brow[512 * ch + kk] + (int)((hc[s16] >> t) & 1u) + (int)Us[lane][t];
+      const int w = sv > 127 ? 1 : sv < -128 ? -1 : 0;
+      if (w) {
+        if (w > 0) ++np; else ++nn;
+        for (int i = 0; i < 32; ++i) Cs[i][lane] += w * (int)(int8_t)Xs[i][kk];
+      }
+    }
   }
   __syncwarp();
   for (int j = 0; j < 32; ++j) {
     u32 o = (u32)acc[j];
     for (int r = 0; r < 32; ++r) o -= (u32)((int)Us[j][r] * Y[r]);
-    zr[j] = (int)o;
+    zr[j] = (int)(o + ((u32)Cs[lane][j] << 8));
+  }
+  if (wbc) {
+    atomicAdd(wbc, np);
+    atomicAdd(wbc + 1, nn);
   }
 }
 
@@ -212,10 +240,11 @@ extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n
   return (int)cudaGetLastError();
 }
 
-extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seeds, int* zref, int n, cudaStream_t stream) {
+extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seeds, int* zref, int n,
+                              unsigned long long* wbc, cudaStream_t stream) {
   u64 nt[3];
   tag3("verity/pouw/noise/v1", nt);
-  h1o_ref_k<<<(unsigned)units, 32, 0, stream>>>(call_dev, seeds, nt[0], nt[1], nt[2], zref, n);
+  h1o_ref_k<<<(unsigned)units, 32, 0, stream>>>(call_dev, seeds, nt[0], nt[1], nt[2], zref, n, wbc);
   return (int)cudaGetLastError();
 }
 
