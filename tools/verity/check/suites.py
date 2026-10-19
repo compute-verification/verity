@@ -1575,11 +1575,19 @@ SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
 STOP_GRACE_S = 30.0
 
 
+#: the memory `research run --mem-gb` reserved for the run (remote.py), which on a CPU node is no cgroup cap
+RUN_MEM_ENV = "RESEARCH_RUN_MEM_GB"
+
+
 def slot_mem_gb() -> float | None:
-    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
-    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
-    v = os.environ.get(SLOT_MEM_ENV, "")
-    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap (17 Oct:
+    a quick tier in proofs' 480 GB pool slot ran circuit_check's suite on 94 workers, 784 GB, since only `check` passed `--mem-gb`;
+    19 Oct, INF-118: a quick tier on a 32 GB reservation on cpu-2, where nothing caps it, reached 900 GiB and OOM-killed others)."""
+    for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
+        v = os.environ.get(env, "")
+        if v.replace(".", "", 1).isdigit():
+            return float(v)
+    return cgroup_mem_gb()
 
 
 def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
