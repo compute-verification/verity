@@ -7,14 +7,16 @@
 //   b: 2 IMMA, 16 FFMA, 40 LOP3, 40 IMAD (ALU and IMAD pipes: 80 each), about 100 warp instructions.
 // uniform.cu's chains run beside it (UIMAD + ULOP3), NP chain pairs, K instructions a loop, seeded from a parameter and
 // carried around the loop. ptxas places each chain pair on the uniform datapath or on lanes on its own; each probe's
-// expect pins what it placed, so the loop's V and U are exact. At 1024 threads (64 registers) with 4 pairs it moves one
-// pair to the uniform datapath and keeps three on lanes; with fewer pairs, or at 512 threads, it keeps every pair on
-// lanes (r20261019-052718-24a9). So each 4-pair probe has a 3-pair control at 3K/4 with the same lane instructions and
-// no uniform ones:
+// expect pins what it placed, so the loop's V and U are exact. At 1024 threads (64 registers) with 3 or 4 pairs it moves
+// one pair to the uniform datapath and keeps the rest on lanes; with 1 or 2 pairs, or at 512 threads, it keeps every
+// pair on lanes (r20261019-052718-24a9, r20261019-053148-a07e). So each probe with a uniform pair has a 2-pair control
+// with the same chain instructions on lanes and none uniform:
 //   <s>8_<K>     4 pairs: K/4 uniform instructions and 3K/4 chain instructions on lanes;
-//   <s>8_<J>p3   3 pairs, J = 3K/4: the same 3K/4 on lanes, no uniform instruction.
-// With A2u the pair's time differs by K/4 SMSP-cycles a warp-iteration over the stream's issue efficiency; without it
-// by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle, uniform.cu's uz_*) far from binding.
+//   <s>8_<K>p3   3 pairs: K/3 uniform and 2K/3 on lanes;
+//   <s>8_<J>p2   2 pairs: J on lanes, no uniform instruction (J = 3K/4 or 2K/3 of a probe above).
+// With A2u a probe and its control differ by its uniform count in SMSP-cycles a warp-iteration over the stream's issue
+// efficiency; without it by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle, uniform.cu's uz_*) far
+// from binding.
 // Joint points: rows.jsonl only, no census line.
 #include "../probe.cuh"
 
@@ -93,29 +95,29 @@ __device__ __forceinline__ void ai(const OpArgs& a) {
 
 #define SA 64, 16, 16
 #define SB 16, 40, 40
-#define AI(nm, TPB, K, NP, S) \
-  OP_KERNEL(nm, TPB) { ai<K, NP, S>(a); }
-AI(ai8_0, 1024, 0, 4, SA)
-AI(ai8_64, 1024, 64, 4, SA)
-AI(ai8_128, 1024, 128, 4, SA)
-AI(ai8_48p3, 1024, 48, 3, SA)
-AI(ai8_96p3, 1024, 96, 3, SA)
-AI(bi8_0, 1024, 0, 4, SB)
-AI(bi8_64, 1024, 64, 4, SB)
-AI(bi8_128, 1024, 128, 4, SB)
-AI(bi8_48p3, 1024, 48, 3, SB)
-AI(bi8_96p3, 1024, 96, 3, SB)
+#define AI(nm, TPB, K, NP, ...) \
+  OP_KERNEL(nm, TPB) { ai<K, NP, __VA_ARGS__>(a); }
+#define AIS(s, S)                    \
+  AI(s##8_0, 1024, 0, 4, S)          \
+  AI(s##8_64, 1024, 64, 4, S)        \
+  AI(s##8_128, 1024, 128, 4, S)      \
+  AI(s##8_48p3, 1024, 48, 3, S)      \
+  AI(s##8_96p3, 1024, 96, 3, S)      \
+  AI(s##8_32p2, 1024, 32, 2, S)      \
+  AI(s##8_64p2, 1024, 64, 2, S)      \
+  AI(s##8_96p2, 1024, 96, 2, S)
+AIS(ai, SA)
+AIS(bi, SB)
 
 #define P_AI(nm, EX)                                                                                                   \
   {.name = #nm, .kernel = (const void*)nm, .tpb = 1024, .expect = "IMMA.16832.S8.S8=2," EX,                            \
    .counted = "IMMA.16832.S8.S8", .iters = ITERS, .note = "an issue-bound vector stream beside uniform chains"}
 #define U(n) ",UIMAD*=" #n ",ULOP3*=" #n
 
-static const OpProbe PROBES[] = {
-    P_AI(ai8_0, "FFMA*=64" U(0)),     P_AI(ai8_64, "FFMA*=64" U(8)),    P_AI(ai8_128, "FFMA*=64" U(16)),
-    P_AI(ai8_48p3, "FFMA*=64" U(0)),  P_AI(ai8_96p3, "FFMA*=64" U(0)),  P_AI(bi8_0, "FFMA*=16" U(0)),
-    P_AI(bi8_64, "FFMA*=16" U(8)),    P_AI(bi8_128, "FFMA*=16" U(16)),  P_AI(bi8_48p3, "FFMA*=16" U(0)),
-    P_AI(bi8_96p3, "FFMA*=16" U(0)),
-};
+#define P_AIS(s, F)                                                                                                   \
+  P_AI(s##8_0, F U(0)), P_AI(s##8_64, F U(8)), P_AI(s##8_128, F U(16)), P_AI(s##8_48p3, F U(8)),                      \
+      P_AI(s##8_96p3, F U(16)), P_AI(s##8_32p2, F U(0)), P_AI(s##8_64p2, F U(0)), P_AI(s##8_96p2, F U(0))
+
+static const OpProbe PROBES[] = {P_AIS(ai, "FFMA*=64"), P_AIS(bi, "FFMA*=16")};
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
