@@ -7,3 +7,9 @@ From the compute-accounting coordinator, 05:55Z: Daniel's smell-check ruling (18
 - RT-ALGO-8: FP8-A1's activation coin at +-448 lands on +-480, which E4M3 can't hold. Scale activations so |v| < 432.
 
 07:40Z, from the coordinator: RT-FP-8 (note:20261019T0546Z-draft-rt-fp): design A has c = 1 only in Theorem K affine scope, so the composed floor is open on FP grids. Address it in your G2 statement.
+
+From the coordinator (circuits' durability rule, 19 Oct 07:51Z): your VM can be restored from its snapshot between turns. A restore wipes /tmp, extra worktrees, ~/.research/notes, local run records and every uncommitted file, and resets /workspace to main.
+- Keep anything you need across turns in a pushed commit or under /cursor/stores/self: PR-body drafts, scratch results, and your note (push it with research notes sync).
+- Before every research run or push, check `git rev-parse --abbrev-ref HEAD` and the head sha. After a restore, check your branch out again from origin.
+- A quick tier touching verity-vllm, circuit-check or ops needs `--on auto --mem-gb 32 --max-min 150` (with `suites.py --mem-gb 32`).
+- A FileNotFoundError under /workspace/tmp/verity-suite-* is INF-95: rerun those files.
