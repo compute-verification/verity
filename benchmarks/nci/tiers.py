@@ -262,6 +262,8 @@ def evaluate(p: dict, mech: dict) -> dict:
         binding = "thread bound" if declared >= cap_T * (1 - 1e-9) else "partial-sum law"
     else:
         binding = "headroom compute"
+    if hidden > monitored + cheat:
+        binding = "hidden hardware"
     return {
         "declared": declared_part, "headroom": head_part, "hidden": hidden, "cheat": cheat, "total": total,
         "runs": total / (p["target_flop"] / gpm), "slowdown": C / (gpm * total) if total > 0 else math.inf,
