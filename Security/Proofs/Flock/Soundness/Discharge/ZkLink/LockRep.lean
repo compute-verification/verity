@@ -11,9 +11,9 @@ table (`tabOrcP`), where every committed object is an oracle:
 * each **level's cap** (slot `slotOf r ℓ + 4`): `LockLevel`'s tables, moved four slots up (`lockReindex`).
 
 The index (`IZ`) records the three; `getZ r` reads it by slot, and the two reps' getters are disjoint (`disjoint_getZ`).
-On openings that agree with the fixed tables (`AgreeZ` on the rows, `PadsAgree` on the pads pairs, `TauAgree` on `τ`),
-the compiled verdict implies the primed one (`RepRelZ`, `TopRelZ`). The locksteps for two level-0 tables are aligned
-(`aligned_lockSessZ`).
+On openings that agree with the fixed tables (`AgreeZ` on the rows, `PadsAgreeAt` on the pads pairs at the positions
+the queries drew, `TauAgree` on `τ`), the compiled verdict implies the primed one (`RepRelZ`, `TopRelZ`). The locksteps
+for two level-0 tables are aligned (`aligned_lockSessZ`).
 -/
 
 namespace FlockSoundness.Discharge.ZkLink
@@ -171,10 +171,11 @@ noncomputable def lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ
 
 /-! ## The inner proof -/
 
-/-- **The pads openings agree with the fixed pads oracle**: a query's pads pair that verifies at a position against
-the root's cap is the oracle's two words there. -/
-def PadsAgree (Hs : Hashes F D Sl) (N q : ℕ) (j : IZ F D) (io : InnerOpens F D Sl) : Prop :=
-  ∀ O c, j.pads = some (O, c) → ∀ jj < q, ∀ p : Fin N,
+/-- **The pads openings agree with the fixed pads oracle at the queried positions**: query `jj`'s pads pair, if it
+verifies against the root's cap at the position `qpos jj` that query drew, is the oracle's two words there. Every
+reader passes the positions its pending record's `innerGameC` drew (`PendZ.qpos`). -/
+def PadsAgreeAt (Hs : Hashes F D Sl) (N q : ℕ) (qpos : ℕ → ℕ) (j : IZ F D) (io : InnerOpens F D Sl) : Prop :=
+  ∀ O c, j.pads = some (O, c) → ∀ jj < q, ∀ p : Fin N, p.val = qpos jj →
     Merkle.VerifiesL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val (io.pads jj).1 (io.pads jj).2.1
       (io.pads jj).2.2 → (io.pads jj).1 = (O 0 p.val, O 1 p.val)
 
@@ -183,11 +184,11 @@ def PadsAgree (Hs : Hashes F D Sl) (N q : ℕ) (j : IZ F D) (io : InnerOpens F D
 def TauAgree (Hs : Hashes F D Sl) (j : IZ F D) (io : InnerOpens F D Sl) : Prop :=
   ∀ Oτ cτ, j.tau = some (Oτ, cτ) → Hs.Lτ.leaf io.tau.1 io.tau.2 = cτ 0 → io.tau.1 = Oτ 0 0
 
-/-- **The inner proof's leaf relation**: on openings that agree with the fixed pads and `τ`, the compiled check
-implies the oracle verdict. -/
+/-- **The inner proof's leaf relation**: on openings that agree with the fixed pads at the queried positions and with
+the fixed `τ`, the compiled check implies the oracle verdict. -/
 def InnerRelZ (Hs : Hashes F D Sl) (N q : ℕ) (lev : IRep F D) (j : IZ F D) (a : Bool)
-    (v : InnerOpens F D Sl → Prop) : Prop :=
-  j.lev = lev ∧ ∀ io, PadsAgree Hs N q j io → TauAgree Hs j io → v io → a = true
+    (v : (InnerOpens F D Sl → Prop) × (ℕ → ℕ)) : Prop :=
+  j.lev = lev ∧ ∀ io, PadsAgreeAt Hs N q v.2 j io → TauAgree Hs j io → v.1 io → a = true
 
 /-- **The inner proof in lockstep** (`innerGameP` on the fixed pads oracle beside `innerGameCP` on its root's cap),
 `τ`'s commitment a table at slot `2 + r`. -/
@@ -207,18 +208,19 @@ def lockInnerZ (Hs : Hashes F D Sl) (r : ℕ) (hr : r < 2) {N : ℕ} (dom : Fin 
           have hτ' : io.tau.1 = Oτ 0 0 := htau Oτ cτ rfl hτ
           refine decide_eq_true ⟨by rw [← hτ']; exact hbat, fun jj => ?_⟩
           obtain ⟨henc, hver⟩ := hq jj
-          have hp := hpads O c rfl jj jj.isLt (pos (w jj)) hver
+          have hp := hpads O c rfl jj jj.isLt (pos (w jj)) (by simp [qposOf, jj.isLt]) hver
           rw [henc, hp]
           rfl⟩
 
 /-! ## A rep -/
 
 /-- **A rep's leaf relation**: on rows agreeing with the fixed level tables and inner openings agreeing with the fixed
-pads and `τ`, the compiled verdicts imply the oracle verdict; and the levels' caps are recorded. -/
+pads at the rep's queried positions and with the fixed `τ`, the compiled verdicts imply the oracle verdict; and the
+levels' caps are recorded. -/
 def RepRelZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (r : ℕ) (C₀ : Oracle F) (j : IZ F D) (acc : Bool)
     (pend : PendZ F D Sl) : Prop :=
-  (∀ rows io, AgreeZ r C₀ (width₀ T) j.lev pend.lig.reqs rows → PadsAgree Hs T.N T.q j io → TauAgree Hs j io →
-      pend.lig.verdict rows = true → pend.inner io → acc = true) ∧
+  (∀ rows io, AgreeZ r C₀ (width₀ T) j.lev pend.lig.reqs rows → PadsAgreeAt Hs T.N T.q pend.qpos j io →
+      TauAgree Hs j io → pend.lig.verdict rows = true → pend.inner io → acc = true) ∧
     RecStruct T.sch j.lev pend.lig
 
 /-- **A rep in lockstep** (`repZPAt` beside `repZCP`): the pads root a table at slot `r`, the masked phase over the
@@ -271,7 +273,8 @@ def TopRelZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (cap₀ : 
   a.2 = C₀ ∧ out.cap₀ = cap₀ ∧
     (out.accepted = true → AgreeZ 0 C₀ (width₀ T) i.1.lev out.pend.1.lig.reqs out.opens.rows →
       AgreeZ 1 C₀ (width₀ T) i.2.lev out.pend.2.lig.reqs out.opens.rows →
-      PadsAgree Hs T.N T.q i.1 (out.opens.inner 0) → PadsAgree Hs T.N T.q i.2 (out.opens.inner 1) →
+      PadsAgreeAt Hs T.N T.q out.pend.1.qpos i.1 (out.opens.inner 0) →
+      PadsAgreeAt Hs T.N T.q out.pend.2.qpos i.2 (out.opens.inner 1) →
       TauAgree Hs i.1 (out.opens.inner 0) → TauAgree Hs i.2 (out.opens.inner 1) → a.1 = true) ∧
     (out.accepted = true →
       OpensOKZ Hs.H Hs.E Hs.Lf (width₀ T) cap₀ 0 out.pend.1.lig out.opens.rows out.opens.salts ∧

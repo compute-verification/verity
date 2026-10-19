@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Witnesses.Sampling
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Each claim fails somewhere, stated over the spec
@@ -43,6 +44,15 @@ theorem ZKmalR_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
     ∃ (P : Unit → Prover (N × Ω)) (S : Simulator), ¬ Claims.ZKmalR H (fun _ => 1) P (fun _ _ => True) S εzk γ :=
   ⟨_, _, Witness.ZKmalR_fails H [] [] εzk γ x hε⟩
+
+/-- **`ZKmalRx` fails**: at every `ε_zk < 1` and `γ`, some prover and simulator fail it, at one tape at every
+statement, where it is `ZKmalR` (`ZKMal.zkmalRx_const`). -/
+theorem ZKmalRx_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
+    ∃ (P : Unit → (x : Msg) → Prover (N × Ω)) (S : Simulator),
+      ¬ Claims.ZKmalRx (fun _ => N) (fun _ => Ω) H (fun _ => 1) P (fun _ _ => True) S εzk γ :=
+  ⟨fun _ _ => ZKMal.quietP N Ω [], ZKMal.collSim [] [],
+    (ZKMal.zkmalRx_const H _ (fun _ => ZKMal.quietP N Ω []) _ _ εzk γ).not.2 (Witness.ZKmalR_fails H [] [] εzk γ x hε)⟩
 
 /-- **`Nontrivial` fails**: some verifier rejects a recorded run. -/
 theorem Nontrivial_fails {Coin : Type} [Inhabited Coin] (H : Msg → Msg) :

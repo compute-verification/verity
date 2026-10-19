@@ -9,8 +9,13 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwCheck.Tile": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwCheck.Inputs": {
-   "imports": ["CoreProtocol.Protocol", "CoreProtocol.Profile", "Flock.Hash", "PouwCheck.Json"],
+   "imports": ["CoreProtocol.Protocol", "CoreProtocol.Profile", "Flock.Hash", "PouwCheck.Json", "PouwCheck.Tile"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },

@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.ZK.Reference
-import Proofs.Flock.Claims.ZK.Interact
+import Proofs.Flock.Claims.ZK.Cut
 import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
@@ -48,6 +48,13 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
   of the event at each fixed one; `stream_leak`, on a stream of `m` sessions of which at most `b` stop, each in one of
   `r` forms, there are at most `∑_{i ≤ b} C(m, i)·r^i` patterns (`card_pattern_le`), so at most that many times the
   worst fixed one's probability.
+* **Every stop deferred to the last round** (live PROTOCOL.md §10.1: a failed check stops the session at its `Finish`,
+  never before): `nextD` releases, below the last round, the frame at the worker's values with the server's own
+  stand-in `fill` in once a round failed (`wkD`), and at the last round the frame if every round passed, else the stop.
+  Where that frame is `P`'s message wherever it releases one (`RefD`), the released run is `P`'s run, or it with its
+  last message replaced by the stop (`split_deferred`, no probability), so zero knowledge carries over within a factor
+  `2` of `leaky1`, the simulator that guesses whether the session stops (`zk_deferred`): one bit a session, and over a
+  stream of `m` sessions with at most `b` stops, one stop form, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`).
 -/
 
 namespace Claims.ZKServer
@@ -181,107 +188,6 @@ def Faithful {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (
       wk x w ρ h s = some (S.honest x h.length s w ρ h)
 
 end ZkServer
-
-/-! ## Cut runs -/
-
-/-- The cut prover: `τ`'s messages before round `t`, then the stop. -/
-def cutMsg (stop : Msg) (t : ℕ) (τ : List (Msg × Out)) (h : List (Msg × Msg)) : Msg :=
-  if h.length < t then ((τ[h.length]?).map Prod.fst).getD stop else stop
-
-/-- **The transcript `τ` cut at round `t`**: `n` rounds of `τ`'s messages before `t`, then the stop, against `ask`. -/
-def cutT (ask : List Msg → Out) (stop : Msg) (t n : ℕ) (τ : List (Msg × Out)) : List (Msg × Out) :=
-  interact ask (cutMsg stop t τ) n []
-
-/-- The prover `pm` stopped at round `t`. -/
-def stopAt (pm : List (Msg × Msg) → Msg) (t : ℕ) (stop : Msg) (h : List (Msg × Msg)) : Msg :=
-  if h.length < t then pm h else stop
-
-theorem stopAt_of_lt {pm : List (Msg × Msg) → Msg} {t : ℕ} {stop : Msg} {h : List (Msg × Msg)} (hl : h.length < t) :
-    stopAt pm t stop h = pm h := by
-  simp [stopAt, hl]
-
-theorem stopAt_of_ge {pm : List (Msg × Msg) → Msg} {t : ℕ} {stop : Msg} {h : List (Msg × Msg)}
-    (hl : ¬ h.length < t) : stopAt pm t stop h = stop := by
-  simp [stopAt, hl]
-
-theorem cutMsg_of_lt {stop : Msg} {t : ℕ} {τ : List (Msg × Out)} {h : List (Msg × Msg)} (hl : h.length < t) :
-    cutMsg stop t τ h = ((τ[h.length]?).map Prod.fst).getD stop := by
-  simp [cutMsg, hl]
-
-theorem cutMsg_of_ge {stop : Msg} {t : ℕ} {τ : List (Msg × Out)} {h : List (Msg × Msg)} (hl : ¬ h.length < t) :
-    cutMsg stop t τ h = stop := by
-  simp [cutMsg, hl]
-
-theorem length_histOf_take (τ : List (Msg × Out)) (i : ℕ) : (histOf (τ.take i)).length = min i τ.length := by
-  simp [histOf]
-
-theorem histOf_take_take (τ : List (Msg × Out)) {i i' : ℕ} (h : i' ≤ i) :
-    (histOf (τ.take i)).take i' = histOf (τ.take i') := by
-  simp only [histOf, ← List.map_take, List.take_take, Nat.min_eq_left h]
-
-/-- Round `i`'s message is the prover's on the history before it. -/
-theorem interact_getElem_fst (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (i : ℕ), i < (interact ask pm n hist).length →
-      ((interact ask pm n hist)[i]?).map Prod.fst = some (pm (hist ++ histOf ((interact ask pm n hist).take i)))
-  | 0, _, _, hi => by simp [interact] at hi
-  | n + 1, hist, i, hi => by
-      simp only [interact] at hi ⊢
-      cases hb : ask (hist.map Prod.fst ++ [pm hist]) with
-      | msg m =>
-          rw [hb] at hi
-          cases i with
-          | zero => simp [histOf]
-          | succ i =>
-              have := interact_getElem_fst ask pm n (hist ++ [(pm hist, m)]) i (by simpa using hi)
-              rw [List.getElem?_cons_succ, this, List.take_succ_cons]
-              simp [histOf, msgOf]
-      | acc =>
-          rw [hb] at hi
-          simp only [List.length_singleton, Nat.lt_one_iff] at hi
-          subst hi
-          simp [histOf]
-      | rej =>
-          rw [hb] at hi
-          simp only [List.length_singleton, Nat.lt_one_iff] at hi
-          subst hi
-          simp [histOf]
-
-/-- The stopped prover's run agrees with the prover's before the stop. -/
-theorem stopAt_take (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (t n : ℕ) :
-    (interact ask (stopAt pm t stop) n []).take t = (interact ask pm n []).take t := by
-  cases t with
-  | zero => simp
-  | succ j =>
-      refine interact_take_congr ask pm (stopAt pm (j + 1) stop) n [] j fun i hi hlt => ?_
-      have hl : (histOf ((interact ask pm n []).take i)).length = i := by
-        rw [length_histOf_take]; omega
-      simp only [List.nil_append]
-      exact stopAt_of_lt (by rw [hl]; omega)
-
-/-- **The stopped prover's run is its run cut**. -/
-theorem interact_stopAt (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (stop : Msg) (t n : ℕ) :
-    interact ask (stopAt pm t stop) n [] = cutT ask stop t n (interact ask pm n []) := by
-  symm
-  unfold cutT
-  refine interact_congr ask (stopAt pm t stop) (cutMsg stop t (interact ask pm n [])) n [] fun i hi => ?_
-  simp only [List.nil_append]
-  have hl : (histOf ((interact ask (stopAt pm t stop) n []).take i)).length = i := by
-    rw [length_histOf_take]; omega
-  by_cases hit : i < t
-  · rw [cutMsg_of_lt (by rw [hl]; exact hit), stopAt_of_lt (by rw [hl]; exact hit), hl]
-    have htk := stopAt_take ask pm stop t n
-    have e1 : (interact ask (stopAt pm t stop) n []).take i =
-        ((interact ask (stopAt pm t stop) n []).take t).take i := by
-      rw [List.take_take, Nat.min_eq_left hit.le]
-    have e2 : (interact ask pm n []).take i = ((interact ask pm n []).take t).take i := by
-      rw [List.take_take, Nat.min_eq_left hit.le]
-    have hiτ : i < (interact ask pm n []).length := by
-      have := congrArg List.length htk
-      simp only [List.length_take] at this
-      omega
-    rw [interact_getElem_fst ask pm n [] i hiτ, e1, htk, ← e2]
-    simp
-  · rw [cutMsg_of_ge (by rw [hl]; exact hit), stopAt_of_ge (by rw [hl]; exact hit)]
 
 /-! ## The split -/
 
@@ -836,6 +742,196 @@ theorem stream_leak {Ω α : Type} [Fintype Ω] (m r b : ℕ) (obs : Pattern m r
     _ ≤ ∑ _p : Pattern m r b, q := Finset.sum_le_sum fun p _ => hq p
     _ = (Fintype.card (Pattern m r b) : ℝ) * q := by rw [Finset.sum_const, nsmul_eq_mul, Finset.card_univ]
     _ ≤ _ := mul_le_mul_of_nonneg_right (by exact_mod_cast card_pattern_le m r b) hq0
+
+/-! ## Every stop deferred to the last round -/
+
+namespace ZkServer
+
+/-- **The values the deferred server masks**: the worker's while every round so far, the current one's included,
+passed; once one failed, the server's own stand-in `fill`, whatever the worker sends. -/
+def wkD {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (wk : S.Worker)
+    (κ : S.Chk) : S.Worker :=
+  fun x w ρ h s => if S.live wk x w ρ κ h then wk x w ρ h s else some (fill x h.length s w ρ h)
+
+/-- **The deferred server's frame** after `h`: the round's frame at `wkD`'s values. -/
+def frameD {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
+    (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk) (h : List (Msg × Msg)) : Msg :=
+  S.frame x h.length fun s => S.value x h.length s w ρ h (S.copy (S.wkD fill wk κ) x w ρ h) (S.wkD fill wk κ x w ρ h s)
+
+/-- **What the server that defers every stop releases** after `h`, its last round being round `n x - 1`: below the
+last round its frame, whether or not a check failed; at the last round its frame if every round passed, else the stop.
+-/
+def nextD {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ)
+    (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk) (h : List (Msg × Msg)) : Msg :=
+  if h.length + 1 < n x ∨ S.live wk x w ρ κ h = true then S.frameD fill wk x w ρ κ h else S.stop
+
+/-- The deferred server with the worker `wk` as a prover. -/
+def proverD {W R : Type} (S : ZkServer W R) (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val)
+    (n : Msg → ℕ) (wk : S.Worker) (w : W) : Prover (R × S.Chk) :=
+  ⟨fun x h ω => .ret (S.nextD fill n wk x w ω.1 ω.2 h)⟩
+
+/-- **The deferred server's frame is `P`'s message wherever it releases one**, at `(x, w)`. -/
+def RefD {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
+    (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (wk : S.Worker) (x : Msg) (w : W) :
+    Prop :=
+  ∀ ρ κ h, (h.length + 1 < n x ∨ S.live wk x w ρ κ h = true) →
+    (((P w).next x h ρ).eval H).1 = S.frameD fill wk x w ρ κ h
+
+/-- The deferred frame at `(x, w)` reads the stand-in only at `(x, w)`. -/
+theorem frameD_congr {W R : Type} (S : ZkServer W R) {fill fill' : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val}
+    (wk : S.Worker) (x : Msg) (w : W) (hf : ∀ j s ρ h, fill x j s w ρ h = fill' x j s w ρ h) (ρ : R) (κ : S.Chk)
+    (h : List (Msg × Msg)) : S.frameD fill wk x w ρ κ h = S.frameD fill' wk x w ρ κ h := by
+  have e : ∀ ρ h s, S.wkD fill wk κ x w ρ h s = S.wkD fill' wk κ x w ρ h s := fun ρ h s => by
+    simp only [wkD, hf]
+  have ec : S.copy (S.wkD fill wk κ) x w ρ h = S.copy (S.wkD fill' wk κ) x w ρ h := by
+    funext i s
+    simp only [copy, e]
+  simp only [frameD, ec, e]
+
+/-- **The deferred split**: for every worker, check coins and tape, the deferred server releases `P`'s run, or that
+run with its last message replaced by the stop (cut at `n x - c`, `c : Fin 2`). -/
+theorem split_deferred {W R : Type} (S : ZkServer W R) (H : Msg → Msg) (P : W → Prover R)
+    (fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val) (n : Msg → ℕ) (x : Msg) (w : W) (wk : S.Worker)
+    (hRef : S.RefD H P fill n wk x w) (ask : List Msg → Out) (ρ : R) (κ : S.Chk) :
+    ∃ c : Fin 2, interact ask (S.nextD fill n wk x w ρ κ) (n x) [] =
+      cutT ask S.stop (n x - c) (n x) (interact ask (fun h => (((P w).next x h ρ).eval H).1) (n x) []) := by
+  classical
+  set pm : List (Msg × Msg) → Msg := fun h => (((P w).next x h ρ).eval H).1 with hpm
+  set N := n x with hN
+  set τ := interact ask pm N [] with hτ
+  set dead : Prop := N - 1 < τ.length ∧ S.live wk x w ρ κ (histOf (τ.take (N - 1))) = false with hdead
+  set t := if dead then N - 1 else N with ht
+  have hct : ∃ c : Fin 2, N - (c : ℕ) = t := by
+    by_cases hd : dead
+    · exact ⟨1, by simp [ht, hd]⟩
+    · exact ⟨0, by simp [ht, hd]⟩
+  obtain ⟨c, hc⟩ := hct
+  refine ⟨c, ?_⟩
+  rw [hc, ← interact_stopAt]
+  refine interact_congr ask (stopAt pm t S.stop) (S.nextD fill n wk x w ρ κ) N [] fun i hi => ?_
+  simp only [List.nil_append]
+  set σ := interact ask (stopAt pm t S.stop) N [] with hσ
+  have hσn : σ.length ≤ N := interact_length_le ask _ N []
+  have hτn : τ.length ≤ N := interact_length_le ask pm N []
+  have hst : σ.take t = τ.take t := stopAt_take ask pm S.stop t N
+  have hgl : (histOf (σ.take i)).length = i := by rw [length_histOf_take]; omega
+  have htN : N - 1 ≤ t := by simp only [ht]; split_ifs <;> omega
+  by_cases hlast : i + 1 < N
+  · have hit : i < t := by omega
+    rw [stopAt_of_lt (by rw [hgl]; exact hit)]
+    unfold nextD
+    rw [ite_eq_left (Or.inl (by rw [hgl]; exact hlast))]
+    exact (hRef ρ κ _ (Or.inl (by rw [hgl]; exact hlast))).symm
+  · have hiN : i = N - 1 := by omega
+    have hσt : σ.take i = τ.take i := by
+      have e1 : σ.take i = (σ.take t).take i := by rw [List.take_take, Nat.min_eq_left (by omega)]
+      have e2 : τ.take i = (τ.take t).take i := by rw [List.take_take, Nat.min_eq_left (by omega)]
+      rw [e1, hst, ← e2]
+    by_cases hd : dead
+    · have htv : t = N - 1 := by simp [ht, hd]
+      rw [stopAt_of_ge (by rw [hgl]; omega)]
+      unfold nextD
+      rw [ite_eq_right]
+      rintro (h1 | h1)
+      · rw [hgl] at h1; omega
+      · rw [hσt, hiN, hd.2] at h1; exact Bool.false_ne_true h1
+    · have htv : t = N := by simp [ht, hd]
+      have hiτ : i < τ.length := by
+        have := congrArg List.length hst
+        simp only [List.length_take, htv] at this
+        omega
+      have hlv : S.live wk x w ρ κ (histOf (τ.take (N - 1))) = true := by
+        by_contra hne
+        exact hd ⟨by omega, by simpa using hne⟩
+      rw [stopAt_of_lt (by rw [hgl]; omega)]
+      unfold nextD
+      have hcond : (histOf (σ.take i)).length + 1 < n x ∨ S.live wk x w ρ κ (histOf (σ.take i)) = true :=
+        Or.inr (by rw [hσt, hiN]; exact hlv)
+      rw [ite_eq_left hcond]
+      exact (hRef ρ κ _ hcond).symm
+
+end ZkServer
+
+/-- **The simulator that guesses whether the session stops**: it draws a bit `c` and `Sim`'s coins, and replays
+`Sim`'s transcript against the verifier, its last message replaced by the stop where `c = 1` (cut at `k x - c`). -/
+def leaky1 (Sim : Simulator) (k : Msg → ℕ) (stop : Msg) : Simulator where
+  C x := Fin 2 × Sim.C x
+  prog x c := spBind (Sim.prog x c.2) fun τ => spRun (fun h => .ret (cutMsg stop (k x - (c.1 : ℕ)) τ h)) (k x) []
+
+theorem leaky1_out {Θ : Type} (H : Msg → Msg) (Sim : Simulator) (k : Msg → ℕ) (stop : Msg) (Vs : VStar Θ) (θ : Θ)
+    (x : Msg) (c : (leaky1 Sim k stop).C x) :
+    (leaky1 Sim k stop).out H Vs θ x c =
+      cutT (fun as => ((Vs.next x as θ).eval H).1) stop (k x - (c.1 : ℕ)) (k x) (Sim.out H Vs θ x c.2) := by
+  unfold Simulator.out leaky1 cutT
+  rw [spBind_eval, spRun_eval]
+  rfl
+
+namespace ZkServer
+
+/-- **Zero knowledge of the server that defers every stop**: for every worker, if `P` meets `ZKmalR` and the deferred
+server's frame is `P`'s message wherever it releases one (`RefD`), an event of the server's scheduled transcript has
+probability at most twice its probability at the simulator that guesses the stop (`leaky1`) plus `ε_zk + γ·Fork`. The
+factor `2` is the stop's leak: one bit a session, whether it stopped at its last round. -/
+theorem zk_deferred {W N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (S : ZkServer W (N × Ω))
+    (fill : Msg → ℕ → ℕ → W → N × Ω → List (Msg × Msg) → S.Val) (H : Msg → Msg) (k : Msg → ℕ)
+    (P : W → Prover (N × Ω)) (Rl : Rel W) (Sim : Simulator) (εzk γ : Msg → ℝ) (hZK : ZKmalR H k P Rl Sim εzk γ)
+    (x : Msg) (w : W) (hR : Rl x w) (wk : S.Worker) (hRef : S.RefD H P fill k wk x w) (Vs : VStar Θ) (θ : Θ)
+    (hk : Vs.k x = k x) (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : (N × Ω) × S.Chk => Ev (S.timed x (runStar H (S.proverD fill k wk w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 Sim k S.stop).C x => Ev (S.timed x ((leaky1 Sim k S.stop).out H Vs θ x c))) +
+        εzk x + γ x * (Fork H (P w) Vs θ x).Pr H) := by
+  classical
+  set ask : List Msg → Out := fun as => ((Vs.next x as θ).eval H).1 with hask
+  set e₀ := εzk x + γ x * (Fork H (P w) Vs θ x).Pr H with he₀
+  set B : Fin 2 → ℝ := fun c => Pr (fun s : Sim.C x =>
+    Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (Sim.out H Vs θ x s)))) with hB
+  have hsrv : ∀ ω : (N × Ω) × S.Chk, (runStar H (S.proverD fill k wk w) Vs x ω θ).msgs =
+      interact ask (S.nextD fill k wk x w ω.1 ω.2) (k x) [] := fun ω => by
+    rw [runStar_msgs, hk]; rfl
+  have hP : ∀ ρ : N × Ω, (runStar H (P w) Vs x ρ θ).msgs =
+      interact ask (fun h => (((P w).next x h ρ).eval H).1) (k x) [] := fun ρ => by
+    rw [runStar_msgs, hk]
+  have hA : ∀ c : Fin 2, Pr (fun ρ : N × Ω =>
+      Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (runStar H (P w) Vs x ρ θ).msgs))) ≤ B c + e₀ := fun c => by
+    have := hZK x w hR Θ Vs θ hk (fun τ => Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) τ)))
+    rw [he₀]
+    linarith [le_abs_self (Pr (fun ρ : N × Ω => Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x)
+      (runStar H (P w) Vs x ρ θ).msgs))) - B c)]
+  have hsim : Pr (fun c : (leaky1 Sim k S.stop).C x => Ev (S.timed x ((leaky1 Sim k S.stop).out H Vs θ x c))) =
+      (∑ c : Fin 2, B c) / ((2 : ℕ) : ℝ) := by
+    simp only [leaky1_out]
+    exact Pr_guess (fun c : Fin 2 × Sim.C x =>
+      Ev (S.timed x (cutT ask S.stop (k x - (c.1 : ℕ)) (k x) (Sim.out H Vs θ x c.2))))
+  calc _ ≤ Pr (fun ω : (N × Ω) × S.Chk => ∃ c ∈ (Finset.univ : Finset (Fin 2)),
+          Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (runStar H (P w) Vs x ω.1 θ).msgs))) := by
+        refine Pr_mono fun ω hω => ?_
+        obtain ⟨c, hc⟩ := S.split_deferred H P fill k x w wk hRef ask ω.1 ω.2
+        refine ⟨c, Finset.mem_univ _, ?_⟩
+        rw [hP, ← hc, ← hsrv]
+        exact hω
+    _ ≤ ∑ c : Fin 2, Pr (fun ω : (N × Ω) × S.Chk =>
+          Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (runStar H (P w) Vs x ω.1 θ).msgs))) :=
+        Pr_exists_finset_le _ _
+    _ = ∑ c : Fin 2, Pr (fun ρ : N × Ω =>
+          Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (runStar H (P w) Vs x ρ θ).msgs))) :=
+        Finset.sum_congr rfl fun c _ => Pr_fst (fun ρ : N × Ω =>
+          Ev (S.timed x (cutT ask S.stop (k x - (c : ℕ)) (k x) (runStar H (P w) Vs x ρ θ).msgs)))
+    _ ≤ ∑ c : Fin 2, (B c + e₀) := Finset.sum_le_sum fun c _ => hA c
+    _ = _ := by
+        rw [hsim, Finset.sum_add_distrib, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, he₀]
+        push_cast
+        ring
+
+end ZkServer
+
+/-- **The deferred stop's leak over a stream**: with one stop form (`r = 1`), a stream of `m` sessions of which at
+most `b` stop has at most `∑_{i ≤ b} C(m, i)` stop patterns, so an event at the pattern the workers choose is at most
+that many times the worst fixed pattern's probability: the stream leaks at most `log₂ ∑_{i ≤ b} C(m, i)` bits. -/
+theorem stream_leak_deferred {Ω α : Type} [Fintype Ω] (m b : ℕ) (obs : Pattern m 1 b → Ω → α)
+    (π : Ω → Pattern m 1 b) (E : α → Prop) {q : ℝ} (hq : ∀ p, Pr (fun ω => E (obs p ω)) ≤ q) :
+    Pr (fun ω => E (obs (π ω) ω)) ≤ ((∑ i ∈ Finset.range (b + 1), m.choose i : ℕ) : ℝ) * q := by
+  have h := stream_leak m 1 b obs π E hq
+  simpa only [one_pow, mul_one] using h
 
 /-! ## At Flock's reference prover -/
 

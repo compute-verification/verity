@@ -10,7 +10,9 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.OracleP
 import Proofs.Flock.Soundness.Discharge.ZkLink.LockLevel
 import Proofs.Flock.Soundness.Discharge.ZkLink.AlignLevel
 import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
+import Proofs.Flock.Soundness.Discharge.ZkLink.ChooseZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.BadZ
+import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched

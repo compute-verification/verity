@@ -87,7 +87,7 @@ def RepRoundsZk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 
 /-- **What the record needs of the masked prover's pieces** (`ProverOkZk`), at an oracle of 64-byte outputs, from its
 rep half (`RepRoundsZk`). -/
-theorem proverOkZk (h64 : Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
+theorem proverOkZk (h64 : Claims.Out64 H) (hR : RepRoundsZk H rel) : ProverOkZk H rel := by
   intro c st hst
   obtain ⟨st', hst', -, hm1, hm2⟩ := c.table
   obtain ⟨st'', hst'', hms⟩ := c.hm96

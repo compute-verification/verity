@@ -1,7 +1,6 @@
 import Proofs.Flock.Claims.Complete.Zk.Run
 import Proofs.Flock.Claims.Complete.Zk.Layout
 import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Runs
 
 /-!
 # δcZk: where the honest masked prover can fail
@@ -22,7 +21,7 @@ fail.
   prover alike.
 * **The mask slot's rank** (`rankSlotsZk`, `MaskRank.MaskRankAt`): the prover refuses coins at which the mask slot's
   weights at its claim points so far are rank-deficient (`rankCheckP`), one event per table, at its rep `1`'s four
-  points. At most `4·m·2^-128` per table: the open premise `MaskRank.MaskRankBound`.
+  points. At most `4·m·2^-128` per table: the premise `MaskRank.MaskRankBound`, proved (`MaskRank.maskRankBound`).
 
 `εZk` is their count, each pair coin twice and each table's rank checks `4·m` times, over `2^128` (`Complete.Ready`,
 with the slots and `δcZk`); `pr_badZk_le` is the union bound. The slots read the statement's `m`, `k_log`, regions and
@@ -218,7 +217,7 @@ theorem pr_badZk_le (hMR : MaskRank.MaskRankBound) (x : Claims.Msg)
 
 /-- **Completeness from acceptance at the good coins**, at the masked verifier: if, on every statement in scope that it
 can accept and every witness in the relation, the honest masked prover is accepted at every tape and every coin outside
-`BadZk`, then Flock's masked verifier is complete for `honestPZk` with error `δcZk H`. -/
+`BadZk`, then Flock's masked verifier is complete for `honestPZk` at the record's error, `δcZk H`. -/
 theorem complete_zk_of (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (hMR : MaskRank.MaskRankBound)
     (hacc : ∀ x w, Claims.Flock.Scope (deployZk rel) x → Claims.Flock.R (deployZk rel).parse x w →

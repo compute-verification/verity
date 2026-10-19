@@ -15,6 +15,7 @@ import Proofs.Flock.Claims.Complete.Custody
 import Proofs.Flock.Claims.Complete.Files
 import Proofs.Flock.Claims.Complete.Runs
 import Proofs.Flock.Claims.Complete.Reps
+import Proofs.Flock.Claims.Complete.Zk
 import Proofs.Flock.Claims.Complete.Replay
 import Proofs.Flock.Claims.Complete.Walk
 import Proofs.Flock.Claims.Complete.WalkPacked

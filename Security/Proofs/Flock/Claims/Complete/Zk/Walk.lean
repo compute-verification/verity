@@ -97,8 +97,8 @@ theorem sessionPZk_walk (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.M
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2
         (packed trs[0]! st.m) (tape.extra 0) (tape.lanePad 0) (tape.salt 0 0 0) = .ok cm ∧
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok e ∧
-      r.1 = (printJ (recordObjZk spec (Claims.hOf H) hz ct #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams
-        r.2)) ∧
+      r.1 = printJ (recordObjZk spec (Claims.hOf H) hz ct #[flat cm.cap] (ptsOf spec (coinOf (resp 0))) streams
+        r.2) ∧
       0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64 ∧ streams.size = 2 ∧ r.2.size = 2 ∧
       (∀ rs ∈ streams, RoundsOk rs) ∧
       (∃ bs, bodies.toList = linkBody [flat cm.cap] [ByteArray.empty] :: bs ∧
@@ -215,8 +215,8 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 streams whose every round is retained, rep `r`'s recorded rounds are its stream's as the decoder reads them back, the
 verifier's extra claims are the prover's, the table has `25 ≤ m`, and rep `r`'s decoded masked proof is the proof it
 returned, ending at that stream. -/
-theorem RunZk.walk (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkZk H rel) (hP : ProverOkZk H rel)
-    (hR : RepShapedZk H rel) (o : RunZk H rel) :
+theorem RunZk.walk (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
+    (hP : ProverOkZk H rel) (hR : RepShapedZk H rel) (o : RunZk H rel) :
     ∃ (st : Flock.Stmt) (v : Schedule × ℕ) (cm : Commit) (e : Array Claim) (streams : Array (Array Round)),
       o.tabs = #[Setup.ofCircuit st] ∧ o.sch 0 = v.1 ∧ streams.size = 2 ∧
       (∀ rs ∈ streams, ∀ x ∈ rs, ∃ c, x.bytes = some c) ∧

@@ -105,7 +105,7 @@ theorem zk_tableBoundθAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Dec
     intro t
     have hs := session_sound_of_table_accZ A hA Hs T [] [] cap₀
       (fun outs => AccOneZ outs ∧ ¬ Off₀Z Hs T cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutZC))
-      (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
+      (fun _ h i hi => by obtain rfl := Nat.le_zero.1 hi; exact h.1) (Claims.Flock.oracleOf C) (σ t)
     have e : (ind fun outs : List (OutZC 𝔽 D Sl) =>
         (AccOneZ outs ∧ ¬ Off₀Z Hs T cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutZC)) ∧
           ¬ T.Committed A (Claims.Flock.oracleOf C)) = ind fun outs => AccOneZ outs ∧

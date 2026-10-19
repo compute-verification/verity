@@ -139,6 +139,12 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
   firewall one at a time.
+- **Verifier cost: O(circuit description), never O(unrolled circuit)** (Daniel, 18 Oct). A verifier of record may do
+  work proportional to the descriptor it reads (its Definitions, nodes and references), never to the circuit it unrolls
+  to: no walk over every gate, batch member or scan iteration. Summarize once per specialized Definition and multiply
+  through batches and scans (`NciCheck.Desc`). An unrolled walk stays only as the reference a difftest holds the
+  verifier to. `tests/test_verifier_cost.py` refuses one in `verity/core/`'s Lean, with the walks still open in its
+  `ALLOWED`; `benchmarks/verifier_cost/` measures the cost.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
@@ -313,9 +319,11 @@ Never print a secret's value.
 - List environment variable names with `compgen -e`, never `env | cut`, `env | grep`, `printenv | …` or tmux's
   `show-environment`: a multi-line value's later lines print as if they were names.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
-  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
-  environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs
-  `install.sh`.
+  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook,
+  origin/main's `tools/agent-guard/boot.sh` writes the hook into `/workspace`, runs `install.sh`, starts the VM's OOM
+  recorder and puts `research` on PATH. The environment's `start` runs it after the GitHub helper (since 18 Oct, INF-71),
+  and every coordinator's launch brief (`infra/cursor/launch_coordinator.py`) runs it first too, for a VM booted from an
+  older environment version.
 - A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
   on the VM.
 
@@ -367,6 +375,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **An agent's turn waits on nothing long.** Spawn workers as cloud agents (`Task` with `environment: cloud`) where your
+  Task tool offers it, else with `run_in_background: true`, never in the foreground. Local workers share the agent's one
+  VM, and an out-of-memory kill there stops all of them and the coordinator silently, so heavy work goes through
+  `research run`. No step blocks longer than about 20 minutes: launch detached and check back with
+  `research status RUN`. A worker resumed twice is relaunched fresh from its last checkpoint note.
 - **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
   '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,

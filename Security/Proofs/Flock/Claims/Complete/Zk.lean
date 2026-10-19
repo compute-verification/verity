@@ -46,7 +46,21 @@ import Proofs.Flock.Claims.Complete.Zk.ConsCoins
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Proofs.Flock.Claims.Complete.Zk.Layout
 import Proofs.Flock.Claims.Complete.Zk.RankBridge
+import Proofs.Flock.Claims.Complete.Zk.RankDual
+import Proofs.Flock.Claims.Complete.Zk.RankPrimal
+import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 import Proofs.Flock.Claims.Complete.Zk.Complete
+import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+import Proofs.Flock.Claims.Complete.Zk.Level0Run
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+import Proofs.Flock.Claims.Complete.Zk.Level0Shape
+import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+import Proofs.Flock.Claims.Complete.Zk.Level0Model
+import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+import Proofs.Flock.Claims.Complete.Zk.Level0HonestRun
+import Proofs.Flock.Claims.Complete.Zk.Level0Opens
+import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+import Proofs.Flock.Claims.Complete.Zk.Level0Complete
 
 /-! Flock's completeness at the deployed masked (`--zk`) verifier at one table (`ZkTables` lifts it to any number, at
 the masked record's prover `ZkTables.honestPR`): the honest masked prover (`Honest`: `honestPZk`, on
@@ -63,7 +77,8 @@ and coin-tree checks passing on it (`checkHello_ok`, `checkRecord_ok`, with `Jso
 which it decodes as the plain record of `specZ` (`decodeWith_specZ`); `Json.Decode` reads it back: decoded, live, and
 its draw (`decode_recordObjZk`, `live_recordObjZk`, `recordDraw_recordObjZk`); `Json.Session` is what the one-table
 masked session returns and sends (`sessionPZk_facts`), its reps' rounds their sends (`repPZk_rec`); `Json.Goals` proves
-the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`);
+the record's goals from `StmtOkZk` and `ProverOkZk` (`RunZk.json`, `decodesZk_goal`, …, `repExtrasZk_goal`), and
+`Json.Stmt` `StmtOkZk` from the case's setup (`stmtOkZk`, with `Same.good` and `good_subset`);
 `Json.Files` the proof files' goals, given `RepShapedZk` (`RunZk.rep`, `repDecodesZk_goal`, `repParamsZk_goal`,
 `padsRoot_goal`, `capCommittedZk_goal`, and `finalFitsZk_goal`, the record's length from `readyZk`); `Json.Runs` the
 session running, given `ProverRunsZk` (`sessionRunsZk_goal`); `Count` the sends fitting the rounds (`sendCountZk_goal`);
@@ -96,7 +111,24 @@ those coins the prover's on rounds carrying its sends, with the rows as `ConsHol
 `replay_consHold_agrees`); `MaskRank` the mask slot's span, the prover's rank check over the slot's words
 (`RankFull`, `maskRankOk`, `maskRankOk_iff`), a rep's claim points from its coins (`claimPoints`, `claimsAt`), the
 slot's size (`maskWords_ge`: an in-scope masked table has at least `1024` words), and the rank bound the prover's
-refusal needs (`DeployedRankBound`, open; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout`
+refusal needs (`DeployedRankBound`; at the verifier's coins `MaskRankBound`, a premise of `complete_zk`); `Layout`
 the layout every table of a masked session in scope has (`layoutOk_of_scope`); `RankBridge` `MaskRankBound` from
-`DeployedRankBound` and the small slots' `SmallSlotBound`, open (`maskRankBound_of`); `Complete` assembles them into
-`complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at the deployed relation. -/
+`DeployedRankBound` and the small slots' `SmallSlotBound` (`maskRankBound_of`), which holds since the verifier refuses
+a slot under `2^13` bits (`smallSlotBound`); `RankDual` the bound's dual side, the deficient coins summed over the
+killing functionals' supports (`card_deficient_le`); `RankPrimal` its primal side, the spans' sizes step by step
+(`sum_env_le`, `chain`); `RankDeployed` `DeployedRankBound` from the two (`deployedRankBound`), so `MaskRankBound`
+(`maskRankBound`); `Complete`
+assembles them into `complete_zk`, from those premises and the goals not yet proved, and `complete_zk_relation` at
+the deployed relation.
+`Level0Pad` is level 0's masked query identity: a row's padded lanes combine to the blinded table's, the padding
+cancelling (`row_comb`, `consE0_honestZk`); `Level0Run` the masked Ligerito prover returning where its pair's coins are
+independent (`ligeritoPZk_ret`); `Level0Lanes` its lane phase in closed form (`ligeritoPZk_lanes`); `Level0Shape` its
+proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the premises of `ZkTables.Level0` proved (`proverRuns`,
+`proverShape`, `lanes`); `Level0Model` the masked verifier's Ligerito returning on rounds carrying its closed-form
+model, given its openings and final identity at the model's values (`ligeritoWithZ_of`); `Level0Honest` the honest
+masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
+transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
+checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
+premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
+`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`), and with
+`maskRankBound` the JSON specification alone (`complete_jsonT_of_spec`). -/

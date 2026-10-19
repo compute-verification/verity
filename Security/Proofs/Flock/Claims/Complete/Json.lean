@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Complete.Json.Spec
+import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Flock.Claims.Complete.Json.Record
 import Proofs.Flock.Claims.Complete.Json.Decode
