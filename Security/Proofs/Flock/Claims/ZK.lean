@@ -38,6 +38,7 @@ import Proofs.Flock.Claims.ZK.SaltProver
 import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.SimCommit
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -287,9 +288,10 @@ import Proofs.Flock.Claims.ZK.Stop
 * `Split`: the open premises of `Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan, as eight statements
   (`Masked.PrefixLive`, `Masked.SimPiop`, `Masked.SimLig`, `Masked.SimInner`, `Masked.SimCommit`, `Masked.SimSession`,
   `Masked.CausalExe`, `Masked.FinExe`).
-* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from those eight
-  statements: `hstep` from `PrefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `SimCommit` and the
-  hybrids.
+* `SimCommit`: `Masked.simCommit`, the commitments from the cut's leaves (`Masked.SimCommit`).
+* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from those
+  statements but `SimCommit`: `hstep` from `PrefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from
+  `Masked.simCommit` and the hybrids.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
