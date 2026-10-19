@@ -13,7 +13,7 @@ input to the receipt fold (which is itself such a word). The MODEL's menu for it
 NOSUM (`nosum.py`) covered the fixed-function units DATASHEET measured. This script attacks the menu from the ISA: for
 every instruction class a red team would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision,
 1-bit and FP64 MMA forms, the dot-product instructions, DPX, the video/SIMD ALU, texture filtering, the copies and transposes, the
-packing tricks, the wide multiply, and the uniform datapath beside an asynchronous tensor op -- it records the ISA fact,
+packing tricks, the wide multiply, the two-word add, min/max and select, and the uniform datapath beside an asynchronous tensor op -- it records the ISA fact,
 whether the instruction can even form an exact int8 product, the factor by which an int8 committed word decomposes onto
 it, and the verdict. A committed word that is a sum of 32 int8 products needs a MULTIPLY; an instruction with no multiply
 can at most sum or move words that already exist (not fresh), and an instruction whose multiply is lower precision pays a
@@ -236,6 +236,16 @@ CANDIDATES = [
                   "word); priced IMADW at the pi32 floor; ISA-CAP caps its packing at 4 fields a word = IMAD's density",
     },
     {
+        "name": "IADD.64 / IMNMX.64 / SEL.64 (two destination words, no multiply)", "device": "sm_120",
+        "cls": "NO-MULTIPLY", "D": None, "escape": False,
+        "isa": "a register pair a lane: add.u64 assembles to one IADD.64 on sm_120a (r20261019-070108-91a5; either "
+               "operand negated, the sass_gate fixtures), IMNMX.U64 is in FOLD-FANIN's table (TS.lean) and SEL.64 in "
+               "harness/sass_pins.json",
+        "reason": "no multiply, so they sum, compare or select existing words (not fresh); as a fold step, fold_wide3.c "
+                  "finds no program whose last instruction writes fx1's two outputs as one IADD.64, IMNMX.64 or SEL.64 "
+                  "(fold_opt_fx.py --wide3)",
+    },
+    {
         "name": "uniform datapath beside saturated async wgmma / tcgen05.mma", "device": "sm_90, sm_100",
         "cls": "WATCH", "D": 1, "escape": False,
         "isa": "UIMAD is an exact s32 MAC, one warp-uniform word an instruction; the census priced it on issue beside "
@@ -254,7 +264,7 @@ def main() -> int:
     # -- coverage: every candidate the brief names is enumerated, with a class and a verdict --------------------------
     brief = ["redux", "L2 reduction", "TMA bulk reduce", "IDP4A", "IDP2A", "sparse IMMA", "BMMA", "s4 IMMA", "FP16",
              "FP8", "FP6", "FP4", "FP64", "DPX", "VABSDIFF4", "texture", "async copy", "ldmatrix", "PRMT", "IMAD.WIDE",
-             "uniform"]
+             "IADD.64", "uniform"]
     joined = " | ".join(c["name"] for c in CANDIDATES)
     for b in brief:
         checks.check(f"enumerated: {b}", b in joined)
