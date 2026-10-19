@@ -61,6 +61,12 @@ LADDER = [
     ("Floor (r̂ = 0, 4 GB)", "Floor,\none-hour\nlag", "policy choice"),
     ("Floor, one-minute verdict lag", "Floor,\none-minute\nlag", "policy choice"),
 ]
+#: the rungs whose headline is the PoUW route, r̂ to 0 with no memory cap (``statement.ladder``'s closed-form D, which
+#: caps nothing there); the fit bound's cap at their 4 GB is drawn beside it
+FLOORS = ("Floor (r̂ = 0, 4 GB)", "Floor, one-minute verdict lag")
+#: the Dot16 conjecture's (d, e), ``tiers.REFERENCE_THREADED``: conditional, as a run that trains its embedding reads
+#: Layered's lookup columns as updated weights
+CONJECTURE = {"d": T.REFERENCE_THREADED[0], "e": T.REFERENCE_THREADED[1]}
 
 
 def one_line(label: str) -> str:
@@ -89,10 +95,13 @@ SHA, DIRTY = S.commit()
 COMMIT = f"{SHA[:10]}{' with uncommitted changes' if DIRTY else ''}"
 num = S.num
 BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (tiers.evaluate's dampener), at m = {num(P['m'])}, "
-        f"kappa = {num(P['kappa'])}, d = {num(P['d'])}, e = {num(P['e'])}, a one-hour verdict lag and r = r̂ + eps' "
-        f"with the aggregation slack eps' = {num(P['eps_agg'])} (r̂ is tiers.audited_residual); the memory "
-        f"rungs by the fit bound at central w_e = {num(W_E)} bits for a {TARGET.upper()}-class target "
-        f"(N* = {num(N_STAR)}), as statement.py gives them. Rendered by benchmarks/nci/figures.py at commit {COMMIT}.")
+        f"kappa = {num(P['kappa'])}, the structural entry fee d = {num(P['d'])} (a run that trains its embedding reads "
+        "Layered's lookup columns as updated weights; the Dot16 conjecture's (d, e) = "
+        f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}) is conditional), e = {num(P['e'])}, a one-hour verdict lag "
+        f"and r = r̂ + eps' with the aggregation slack eps' = {num(P['eps_agg'])} (r̂ is tiers.audited_residual); the "
+        f"memory rungs by the fit bound at central w_e = {num(W_E)} bits for a {TARGET.upper()}-class target "
+        f"(N* = {num(N_STAR)}) and the floors by the PoUW route, as statement.py gives them. Rendered by "
+        f"benchmarks/nci/figures.py at commit {COMMIT}.")
 
 
 def plain(v: float, _=None) -> str:
@@ -158,41 +167,61 @@ def at_wipe(gb: float, **over: float) -> dict:
     return p
 
 
+def rung_parts(name: str, p: dict, tier: str) -> tuple[float, dict[str, float]]:
+    """D at ``tier`` by the rung's route: the PoUW route for ``FLOORS``, the fit bound for the rest."""
+    return parts(p, tier) if name in FLOORS else fit_parts(p, tier)
+
+
 @cache
 def rungs() -> list[dict]:
-    """Each rung of ``LADDER``: ``statement.ladder``'s row, its overrides, label and status, and D at T3 and T5 under
-    the routed-mixture gain where its memory cap is the fit bound's."""
+    """Each rung of ``LADDER``: ``statement.ladder``'s row, its overrides, label and status, D at T3 and T5 by its
+    route (``D_rung``), under the routed-mixture gain where its memory cap is the fit bound's, and the floor's under the
+    Dot16 conjecture."""
     rows = {r["rung"]: r for r in S.ladder()}
     out = []
     for name, label, status in LADDER:
         row = rows[name]
         p = P | row["overrides"]
+        D = {t: rung_parts(name, p, t)[0] for t in S.FIT_TIERS}
         for t in S.FIT_TIERS:
             assert math.isclose(fit_parts(p, t)[0], row["D_fit"][t], rel_tol=1e-4), (name, t)
+            assert math.isclose(D[t], row["D" if name in FLOORS else "D_fit"][t], rel_tol=1e-4), (name, t)
         routed = None
         if name.startswith("Streamed-label"):
             routed = {t: fit_parts(p, t, N=N_STAR / ROUTED)[0] for t in S.FIT_TIERS}
             routed["void"] = math.isinf(fit_mu(p, N=N_STAR / ROUTED))
-        out.append(row | {"name": name, "label": label, "status": status, "p": p, "routed": routed})
+        conj = None
+        if name == FLOORS[0]:
+            conj = {t: parts(p | CONJECTURE, t)[0] for t in S.FIT_TIERS}
+            assert all(math.isclose(conj[t], S.dampener(p | CONJECTURE, t), rel_tol=1e-4) for t in S.FIT_TIERS)
+        out.append(row | {"name": name, "label": label, "status": status, "p": p, "routed": routed,
+                          "D_rung": D, "years_rung": S.years(D), "conjecture": conj})
     return out
 
 
 def ladder(out: Path) -> dict:
-    """Figure 1: D per rung at T3 and T5, log y, coloured by status; the streamed-label rungs by the fit bound, with
-    the x2 routed-mixture case."""
+    """Figure 1: D per rung at T3 and T5, log y, coloured by status; the memory rungs by the fit bound, with the x2
+    routed-mixture case, and the floors by the PoUW route, with the fit bound's cap at their 4 GB and the floor under
+    the Dot16 conjecture."""
     rows = rungs()
+    floors = [x for x, r in enumerate(rows) if r["name"] in FLOORS]
+    fits = [rows[x]["D_fit"]["T3"] for x in floors]
+    assert floors == [len(rows) - 2, len(rows) - 1] and math.isclose(*fits), (
+        "the floors' fit-bound diamonds share one label between the last two rungs: label each if they differ")
     fig, ax = plt.subplots()
     fig.subplots_adjust(left=0.115, right=0.99, bottom=0.17, top=0.8)
+    conj = None
     for x, r in enumerate(rows):
         c = STATUS[r["status"]]
-        d3, d5 = r["D_fit"]["T3"], r["D_fit"]["T5"]
+        d3, d5 = r["D_rung"]["T3"], r["D_rung"]["T5"]
         ax.plot([x, x], [d5, d3], color=c, lw=2.5, zorder=2)
         ax.plot(x, d3, "o", ms=22, color=c, mec="white", mew=2, zorder=4)
         ax.plot(x, d5, "o", ms=17, mfc="white", mec=c, mew=3, zorder=3)
-        ax.text(x - 0.17, d3, num(d3), ha="right", va="center", fontsize=20, color=c, fontweight="bold")
+        sx, ha = (0.17, "left") if x == floors[-1] else (-0.17, "right")
+        ax.text(x + sx, d3, num(d3), ha=ha, va="center", fontsize=20, color=c, fontweight="bold")
         apart = abs(math.log10(d3 / d5))
         if apart > 0.25:
-            ax.text(x - 0.17, d5, num(d5), ha="right", va="center", fontsize=17, color=c)
+            ax.text(x + sx, d5, num(d5), ha=ha, va="center", fontsize=17, color=c)
         elif apart > 0.02:
             ax.text(x + 0.17, d5, num(d5), ha="left", va="center", fontsize=17, color=c)
         if r["routed"]:
@@ -200,8 +229,19 @@ def ladder(out: Path) -> dict:
             ax.plot(x + 0.25, q3, "^", ms=16, mfc="white", mec=c, mew=2.5, zorder=4)
             ax.text(x + 0.4, q3, "×2: void" if r["routed"]["void"] else f"×2: {num(q3)}", ha="left", va="center",
                     fontsize=16, color=c)
+        if x in floors:
+            ax.plot(x + (0.25 if x == floors[0] else -0.25), r["D_fit"]["T3"], "D", ms=13, mfc="white", mec=c,
+                    mew=2.5, zorder=4)
+        if r["conjecture"]:
+            conj, cc = r["conjecture"]["T3"], STATUS["conditional"]
+            ax.plot([x, x], [d3, conj], color=cc, lw=1.8, ls=(0, (2, 2)), zorder=1)
+            ax.plot(x, conj, "o", ms=18, color=cc, mec="white", mew=2, zorder=4)
+            ax.text(x + 0.17, conj, f"d = {num(CONJECTURE['d'])}: {num(conj, 4)}", ha="left", va="center",
+                    fontsize=16, color=cc)
+    ax.text(sum(floors) / 2, fits[0], num(fits[0]), ha="center", va="center", fontsize=16,
+            color=STATUS[rows[floors[0]]["status"]])
     ax.set_yscale("log")
-    ax.set_ylim(0.7, 10 ** math.ceil(math.log10(max(r["D_fit"]["T3"] for r in rows)) + 0.3))
+    ax.set_ylim(0.7, 10 ** math.ceil(math.log10(max(conj, *(r["D_rung"]["T3"] for r in rows))) + 0.3))
     ax.yaxis.set_major_formatter(FuncFormatter(plain))
     ax.set_xlim(-0.65, len(rows) - 0.35)
     ax.set_xticks(range(len(rows)), [r["label"] for r in rows], fontsize=17)
@@ -210,30 +250,41 @@ def ladder(out: Path) -> dict:
     ax.grid(axis="y", color="#e4e4e4", lw=1.2, zorder=0)
     marks = [plt.Line2D([], [], ls="", marker="o", ms=17, color=GRAY),
              plt.Line2D([], [], ls="", marker="o", ms=14, mfc="white", mec=GRAY, mew=3),
-             plt.Line2D([], [], ls="", marker="^", ms=14, mfc="white", mec=GRAY, mew=2.5)]
-    ax.add_artist(ax.legend(marks, ["T3 (every proof block proved)", "T5 (1% sampled, today's proving cost)",
-                                    r"×2 routed mixtures ($N^*/2$)"], loc="lower left", bbox_to_anchor=(-0.01, 1.0),
-                            ncol=3, fontsize=17, handletextpad=0.2, columnspacing=1.4))
+             plt.Line2D([], [], ls="", marker="^", ms=14, mfc="white", mec=GRAY, mew=2.5),
+             plt.Line2D([], [], ls="", marker="D", ms=11, mfc="white", mec=GRAY, mew=2.5)]
+    ax.add_artist(ax.legend(marks, ["T3, all blocks proved", "T5, 1% sampled, today's cost",
+                                    r"×2 routed ($N^*/2$)", "fit bound at 4 GB"], loc="lower left",
+                            bbox_to_anchor=(-0.01, 1.0), ncol=4, fontsize=17, handletextpad=0.2, columnspacing=1.2))
     status = [plt.Line2D([], [], ls="", marker="o", ms=17, color=c) for c in STATUS.values()]
     ax.legend(status, list(STATUS), loc="lower left", bbox_to_anchor=(-0.01, 1.07), ncol=5, fontsize=19,
               handletextpad=0.2, columnspacing=1.4)
     title(fig, r"The ladder: $\mathcal{D}$ per rung")
     quote = {r["name"]: {"status": r["status"], "r_hat": r["r_hat"], "R_wipe_gb": r["R_wipe_gb"],
-                         "D_T3": r["D_fit"]["T3"], "D_T5": r["D_fit"]["T5"],
-                         **({"routed_x2": r["routed"]} if r["routed"] else {})} for r in rows}
+                         "D_T3": r["D_rung"]["T3"], "D_T5": r["D_rung"]["T5"],
+                         **({"routed_x2": r["routed"]} if r["routed"] else {}),
+                         **({"fit_bound": r["D_fit"]} if r["name"] in FLOORS else {}),
+                         **({"conjecture": CONJECTURE | r["conjecture"]} if r["conjecture"] else {})} for r in rows}
+    floor = rows[floors[0]]
+    mu4 = fit_mu(floor["p"])
     caption = (
         "The compute dampener D at each rung of the ladder (log y): filled at T3 (NCI, PoUW, network accounting and "
         "wipes, every proof block proved), hollow at T5 (1% of proof blocks sampled at today's proving cost, "
         f"{num(P['overhead'])}). "
         "Colour is how far the rung is from real: deployed, specified, modelled, conditional (on unproved links: F3, "
-        "F4, NET-35 and WipeFullUse for the memory rungs) or a policy choice. D at T3 (T5): "
-        + "; ".join(f"{r['name']} {num(r['D_fit']['T3'])} ({num(r['D_fit']['T5'])}), {r['status']}" for r in rows)
+        "F4, NET-35 and WipeFullUse for the memory rungs) or a policy choice. The memory rungs are by the fit bound, "
+        "the floors by the PoUW route (r̂ to 0, no memory cap; the closed form caps nothing at d = "
+        f"{num(P['d'])}). D at T3 (T5): "
+        + "; ".join(f"{r['name']} {num(r['D_rung']['T3'])} ({num(r['D_rung']['T5'])}), {r['status']}" for r in rows)
         + f". Triangles: the streamed-label rungs under routed mixtures at the defensible gain x{ROUTED:g} on N* "
         "(N*/2): "
         + "; ".join(f"{r['name'].split(', ')[1]} "
                     + ("void (one window holds N*/2 weights; no cap, D = 1)" if r["routed"]["void"] else
                        f"{num(r['routed']['T3'])} ({num(r['routed']['T5'])})") for r in rows if r["routed"])
-        + ". " + BASE)
+        + f". Diamonds: both floors by the fit bound, whose cap at 4 GB (mu = {num(mu4)}) is below what the floor "
+        f"leaves (eps', the verdict lag and nu), so the lag doesn't matter there: {num(fits[0])} "
+        f"({num(floor['D_fit']['T5'])}). The dotted line rises to the floor under the Dot16 conjecture's (d, e) = "
+        f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}), conditional: {num(floor['conjecture']['T3'], 4)} "
+        f"({num(floor['conjecture']['T5'])}). " + BASE)
     return {"files": save(fig, out, "1_ladder"), "title": "The ladder", "caption": caption, "quote": quote}
 
 
@@ -305,7 +356,7 @@ def phase(out: Path) -> dict:
         dx, dy = place[name]
         if x == 0:
             ax.plot(rs[0], y, "<", ms=20, color=c, mec="white", mew=2, zorder=5, clip_on=False)
-            text = f"Floor, $\\hat r \\to 0$: {num(d)}"
+            text = f"Floor, $\\hat r \\to 0$: {num(d)} (fit bound)"
             x = rs[0]
         else:
             ax.plot(x, y, "o", ms=19, color=c, mec="white", mew=2.5, zorder=5, clip_on=False)
@@ -316,6 +367,7 @@ def phase(out: Path) -> dict:
                     arrowprops={"arrowstyle": "-", "color": c, "lw": 1.3} if dy < -30 else None)
     title(fig, r"Memory rescues a bad residual: $\mathcal{D}$ at T4")
     corner = 10 ** D_lo[0, 0]
+    route = parts(next(r["p"] for r in rungs() if r["name"] == FLOORS[0]), "T4")[0]
     caption = (
         "The compute dampener D at T4 (colour in half-decades; black contours at D = 10, 100 and 1000) over the "
         "monitored compute residual r̂ (x, log, 0.001 to 1; the GPUs' residual, host CPUs and clock at 0) and the "
@@ -330,9 +382,10 @@ def phase(out: Path) -> dict:
         "Markers are the ladder's rungs: "
         + "; ".join(f"{name} (r̂ = {num(x)}, R_wipe = {num(y)} GB): D = {num(d)}" for name, (x, y, d, _, _) in
                     pts.items())
-        + f". At r̂ = 0.001 and 0.5 GB, D = {num(corner)}. " + BASE)
+        + f". The floor's marker is by the fit bound, as everything below the edge is; by the ladder's PoUW route, "
+        f"with no memory cap, it is {num(route)}. At r̂ = 0.001 and 0.5 GB, D = {num(corner)}. " + BASE)
     return {"files": save(fig, out, "2_phase"), "title": "The phase diagram", "caption": caption,
-            "quote": {"edge_gb": EDGE_GB, "corner_D": corner,
+            "quote": {"edge_gb": EDGE_GB, "corner_D": corner, "offset": offset, "floor_pouw_route_T4": route,
                       "rungs": {k: {"r_hat": x, "R_wipe_gb": y, "D_T4": d} for k, (x, y, d, _, _) in pts.items()}}}
 
 
@@ -462,11 +515,19 @@ def exposure(out: Path, rung: str, name: str) -> dict:
                       **({"routed_x2": routed} if math.isfinite(fit_mu(p0, N=N_STAR / ROUTED)) else {})}}
 
 
+def free_share(p: dict) -> float:
+    """What memory has to cap at T3: r = r̂ + eps', the verdict lag and nu, as a share of compute."""
+    r = T.evaluate(p, T.TIERS["T3"] | {"wipes": False, "exhaust": False})
+    return r["residual"] + r["declared"]
+
+
 def memory(out: Path) -> dict:
-    """Figure 4: the memory cap mu against R_wipe, by the fit bound with its w_e band and by the closed form."""
+    """Figure 4: the memory cap mu against R_wipe, by the fit bound with its w_e band and by the closed form at the
+    structural d and at the Dot16 conjecture's."""
     Rs = np.geomspace(0.5, 200, 241)
     held = Rs[Rs < EDGE_GB]
     closed = [closed_mu(at_wipe(R)) for R in Rs]
+    closed_conj = [closed_mu(at_wipe(R, **CONJECTURE)) for R in Rs]
     fits = {k: [fit_mu(at_wipe(R), w_e=w) for R in held] for k, w in F.BOUNDARY.items()}
     routed_edge = F.bite_gb(P, N_STAR / ROUTED, P["b_w"])
     held2 = Rs[Rs < routed_edge]
@@ -477,34 +538,32 @@ def memory(out: Path) -> dict:
     central, = ax.plot(held, fits["central"], color=TERM["memory"], zorder=3)
     dashed, = ax.plot(held2, routed, color=TERM["memory"], lw=2.2, ls=(0, (5, 2)), zorder=3)
     form, = ax.plot(Rs, closed, color=TERM["residual"], zorder=3)
+    form_conj, = ax.plot(Rs, closed_conj, color=TERM["residual"], lw=2.4, ls=(0, (7, 2, 1.5, 2)), zorder=3)
     ax.axvline(EDGE_GB, color="k", lw=1.8, ls=(0, (2, 2)), zorder=2)
     ax.text(EDGE_GB * 1.06, 1.6, f"fit bound void above {EDGE_GB:.1f} GB", fontsize=17, va="center")
-    ax.legend([form, central, band, dashed],
-              [r"closed form, $4R_{\rm wipe}\lambda_{\rm in}/(\kappa\, d\, b_w b_a F)$",
+    ax.legend([form, form_conj, central, band, dashed],
+              [rf"closed form, $4R_{{\rm wipe}}\lambda_{{\rm in}}/(\kappa\, d\, b_w b_a F)$, $d$ = {num(P['d'])}",
+               f"the same at the Dot16 conjecture's $d$ = {num(CONJECTURE['d'])}",
                f"fit bound, central $w_e$ ({num(W_E)} bits)",
                f"$w_e$ from {num(F.BOUNDARY['low'])} (top) to {num(F.BOUNDARY['high'])} bits (bottom)",
                rf"×{ROUTED:g} routed mixtures ($N^*/2$), void above {routed_edge:.1f} GB"],
               loc="lower right", fontsize=17, frameon=True, facecolor="white", edgecolor="none", framealpha=0.92)
     names = {"PoUW's floor credit": "PoUW's floor credit",
              "Floor credit, attested clock and EPYC hosts": "floor credit + attested clock, EPYC hosts",
-             "Best plausible PoUW design": "best PoUW design"}
-    levels = [(r["r_hat"], names[r["name"]]) for r in rungs() if r["name"] in names]
-    for y, txt in levels:
+             "Best plausible PoUW design": "best PoUW design", FLOORS[0]: "the floor"}
+    levels = [(free_share(r["p"]), r["r_hat"], names[r["name"]]) for r in rungs() if r["name"] in names]
+    for y, rh, txt in levels:
         ax.axhline(y, color=GRAY, lw=1.8, ls=(0, (6, 3)), zorder=1)
-        ax.text(0.53, y * 1.1, rf"$\hat r$ = {num(y)}: {txt}", color=GRAY, fontsize=16, va="bottom")
+        ax.text(0.53, y * 1.1, rf"{num(y)}: {txt} ($\hat r$ = {num(rh)})", color=GRAY, fontsize=16, va="bottom")
     marks = {}
-    for gb in (13.0, 6.0, 1.0):
+    for gb in (13.0, 6.0, 4.0, 1.0):
         p = at_wipe(gb)
-        f, c = fit_mu(p), closed_mu(p)
-        marks[f"{gb:g}"] = {"fit": f, "closed": c, "fit_low": fit_mu(p, w_e=F.BOUNDARY["low"]),
-                            "fit_high": fit_mu(p, w_e=F.BOUNDARY["high"])}
+        f = fit_mu(p)
+        marks[f"{gb:g}"] = {"fit": f, "closed": closed_mu(p), "closed_conjecture": closed_mu(p | CONJECTURE),
+                            "fit_low": fit_mu(p, w_e=F.BOUNDARY["low"]), "fit_high": fit_mu(p, w_e=F.BOUNDARY["high"])}
         ax.plot(gb, f, "o", ms=13, color=TERM["memory"], mec="white", mew=2, zorder=5)
-        ax.plot(gb, c, "o", ms=13, color=TERM["residual"], mec="white", mew=2, zorder=5)
-        ax.annotate(f"{gb:g} GB: {sci(f)}", (gb, f), xytext=(10, -10), textcoords="offset points", va="top",
-                    fontsize=15, color="#333333", zorder=6,
-                    bbox={"boxstyle": "round,pad=0.1", "fc": "white", "ec": "none", "alpha": 0.8})
-        ax.annotate(sci(c), (gb, c), xytext=(-9, 9), textcoords="offset points", ha="right", va="bottom",
-                    fontsize=15, color=TERM["residual"], zorder=6,
+        ax.annotate(f"{gb:g} GB{', the floor' if gb == 4.0 else ''}: {sci(f)}", (gb, f), xytext=(10, -10),
+                    textcoords="offset points", va="top", fontsize=15, color="#333333", zorder=6,
                     bbox={"boxstyle": "round,pad=0.1", "fc": "white", "ec": "none", "alpha": 0.8})
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -515,27 +574,37 @@ def memory(out: Path) -> dict:
     ax.set_xlabel(r"wipe residual $R_{\rm wipe}$ (GB per server)")
     ax.set_ylabel(r"memory cap $\mu$ (share of compute)")
     title(fig, r"The memory cap $\mu$: the fit bound and the closed form")
-    cross = float(np.exp(np.interp(np.log(levels[0][0]), np.log(closed), np.log(Rs))))
+    credit = levels[0][0]
+    assert closed[0] > credit, "the closed form at d is below the floor credit's level on the chart: quote where"
+    cross = float(np.exp(np.interp(np.log(credit), np.log(closed_conj), np.log(Rs))))
+    assert Rs[0] < cross < Rs[-1]
+    floor_cross = float(np.exp(np.interp(np.log(levels[-1][0]), np.log(fits["central"]), np.log(held))))
     caption = (
         "The memory cap mu, the most monitored compute can achieve as a share of server peak, against the wipe "
         f"residual R_wipe per server (log-log, 0.5 to 200 GB; streamed-label wipes, {ROUNDS} rounds). Dark blue: the "
         "closed form 4 R_wipe lambda_in / (kappa d b_w b_a F) as tiers.evaluate takes it (the windows bound: windows "
-        "start at wipes and span whole periods), which needs (d, e)-threading at window scale. Light blue: the fit "
-        f"bound (fit.py) for a {TARGET.upper()}-class target (N* = {num(N_STAR)} weights) at central w_e = "
-        f"{num(W_E)} bits, with the band from high w_e ({num(F.BOUNDARY['high'])}, lower cap) to low w_e "
-        f"({num(F.BOUNDARY['low'])}, higher cap); it holds while a one-period window holds fewer than N* weights, "
-        f"below {EDGE_GB:.1f} GB. Dashed: routed mixtures at x{ROUTED:g} (N*/2), void above {routed_edge:.1f} GB. "
-        "Memory caps the residual where mu is below r̂ (gray lines: the floor credit, the floor credit with an "
-        "attested clock and EPYC hosts, and the best PoUW design). Markers: the streamed-label rungs at 13 and 6 GB "
-        "and power removal at 1 GB, each fit-bound value at its lower right and each closed-form value at its upper "
-        "left. At the rungs, fit bound "
-        "(closed form): "
-        + "; ".join(f"{k} GB {num(v['fit'])} ({num(v['closed'])}), w_e band {num(v['fit_high'])} to "
-                    f"{num(v['fit_low'])}" for k, v in marks.items())
-        + f". The closed form reaches the floor credit's r̂ = {num(levels[0][0])} at {num(cross)} GB. " + BASE)
+        "start at wipes and span whole periods), which needs (d, e)-threading at window scale: solid at the "
+        f"structural d = {num(P['d'])}, where it is {num(closed[0])} already at 0.5 GB and caps nothing, dash-dot at "
+        f"the Dot16 conjecture's d = {num(CONJECTURE['d'])} (conditional), which reaches the floor credit's "
+        f"{num(credit)} at {num(cross)} GB. Light blue: the fit "
+        f"bound (fit.py), which doesn't depend on d, for a {TARGET.upper()}-class target (N* = {num(N_STAR)} weights) "
+        f"at central w_e = {num(W_E)} bits, with the band from high w_e ({num(F.BOUNDARY['high'])}, lower cap) to "
+        f"low w_e ({num(F.BOUNDARY['low'])}, higher cap); it holds while a one-period window holds fewer than N* "
+        f"weights, below {EDGE_GB:.1f} GB. Dashed: routed mixtures at x{ROUTED:g} (N*/2), void above "
+        f"{routed_edge:.1f} GB. Memory caps where mu is below what a rung leaves, r = r̂ + eps' plus the verdict lag "
+        "and nu (gray lines: the floor credit, the floor credit with an attested clock and EPYC hosts, the best PoUW "
+        f"design, and the floor's r̂ = 0, where only eps', the lag and nu are left, {num(levels[-1][0])}); the fit "
+        f"bound crosses the floor's line at {num(floor_cross)} GB. Markers: the fit bound at the streamed-label rungs' "
+        "13 and 6 GB, the floor's 4 GB and power removal's 1 GB. Fit bound (closed form at d = "
+        f"{num(P['d'])}, at d = {num(CONJECTURE['d'])}): "
+        + "; ".join(f"{k} GB {num(v['fit'])} ({num(v['closed'])}, {num(v['closed_conjecture'])}), w_e band "
+                    f"{num(v['fit_high'])} to {num(v['fit_low'])}" for k, v in marks.items())
+        + ". " + BASE)
     return {"files": save(fig, out, "4_memory_cap"), "title": "The memory cap", "caption": caption,
             "quote": {"rungs": marks, "edge_gb": EDGE_GB, "routed_edge_gb": routed_edge,
-                      "closed_reaches_floor_credit_gb": cross}}
+                      "levels": {txt: {"r": y, "r_hat": rh} for y, rh, txt in levels},
+                      "closed_at_0p5gb": closed[0], "closed_conjecture_reaches_floor_credit_gb": cross,
+                      "fit_crosses_floor_gb": floor_cross}}
 
 
 COSTS = [("today's sparse draws", P["overhead"]), ("512 draws per statement", S.COSTS["512 draws per statement"]),
@@ -552,7 +621,7 @@ def cheating(out: Path) -> dict:
     fig.subplots_adjust(left=0.1, right=0.97, bottom=0.13, top=0.85, wspace=0.32)
     ax.plot(xs, chi, color=TERM["cheat"], zorder=3)
     quote = {}
-    for (label, x), (dx, dy, ha, va) in zip(COSTS, ((-24, 8, "right", "center"), (-30, 40, "right", "center"),
+    for (label, x), (dx, dy, ha, va) in zip(COSTS, ((-24, 18, "right", "center"), (-30, 40, "right", "center"),
                                                     (16, -14, "left", "top"))):
         c = S.cheat(P | {"overhead": x})
         quote[label] = {"overhead": x, "chi": c}
@@ -567,8 +636,8 @@ def cheating(out: Path) -> dict:
     ax.text(xs[0] * 1.4, best * 1.25, rf"best PoUW design's $\hat r$ = {num(best)}", color=GRAY, fontsize=16,
             va="bottom")
     ax.axhline(nu, color=TERM["declared"], lw=1.8, ls=(0, (6, 3)), zorder=2)
-    ax.text(xs[-1] / 1.4, nu / 1.3, rf"NCI's $\nu$ = {sci(nu)}", color=TERM["declared"], fontsize=16, ha="right",
-            va="top")
+    ax.text(xs[0] * 1.4, nu / 1.3, rf"NCI's $\nu$ = {sci(nu)} at $d$ = {num(P['d'])}", color=TERM["declared"],
+            fontsize=16, va="top")
     every_two = FuncFormatter(lambda v, _: sci(v) if round(np.log10(v)) % 2 == 0 else "")
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -581,17 +650,17 @@ def cheating(out: Path) -> dict:
     D5 = {}
     for name in TOP:
         r = next(r for r in rungs() if r["name"] == name)
-        ys = [fit_parts(r["p"] | {"overhead": x}, "T5")[0] for x in xs]
+        ys = [rung_parts(name, r["p"] | {"overhead": x}, "T5")[0] for x in xs]
         c = STATUS[r["status"]]
         ls = (0, (5, 2)) if name.startswith(("Floor,", "Streamed")) else "-"
         bx.plot(xs, ys, color=c, ls=ls, zorder=3)
-        below = name == "Floor (r̂ = 0, 4 GB)"
+        below = name in (FLOORS[0], "Streamed-label wipes, 6 GB")
         bx.annotate(one_line(r["label"]), (xs[0], ys[0]), xytext=(6, -8 if below else 8), textcoords="offset points",
                     va="top" if below else "bottom", color=c, fontsize=15)
-        D5[name] = {label: fit_parts(r["p"] | {"overhead": x}, "T5")[0] for label, x in COSTS}
-        D5[name]["T3"] = r["D_fit"]["T3"]
-        for _, x in COSTS:
-            bx.plot(x, fit_parts(r["p"] | {"overhead": x}, "T5")[0], "o", ms=10, color=c, zorder=4)
+        D5[name] = {label: rung_parts(name, r["p"] | {"overhead": x}, "T5")[0] for label, x in COSTS}
+        D5[name]["T3"] = r["D_rung"]["T3"]
+        for label, x in COSTS:
+            bx.plot(x, D5[name][label], "o", ms=10, color=c, zorder=4)
     for label, x in COSTS:
         for a in (ax, bx):
             a.axvline(x, color="#bbbbbb", lw=1.4, ls=":", zorder=1)
@@ -612,9 +681,10 @@ def cheating(out: Path) -> dict:
         f"2^{math.log2(P['p_evade']):.0f}, 16 output bits each, each bit worth the chord of one inference block's "
         f"thread bound ({num(chord)} counted multiplications). "
         "Marked: " + "; ".join(f"{k} ({num(v['overhead'])}): chi = {num(v['chi'])}" for k, v in quote.items())
-        + f". Reference lines: the best PoUW design's r̂ = {num(best)} and NCI's nu = {num(nu)}. Right: D at T5 for "
-        "the top rungs against the same cost (memory rungs by the fit bound); D at T3 is where each line flattens "
-        "to the left. D at T5 at today's sparse draws, 512 draws per statement and batched throughput (and at T3): "
+        + f". Reference lines: the best PoUW design's r̂ = {num(best)} and NCI's nu = {num(nu)} at the structural "
+        f"d = {num(P['d'])}. Right: D at T5 for the top rungs against the same cost (memory rungs by the fit bound, the "
+        "floors by the PoUW route); D at T3 is where each line flattens to the left. D at T5 at today's sparse "
+        "draws, 512 draws per statement and batched throughput (and at T3): "
         + "; ".join(f"{k} " + ", ".join(num(v[label]) for label, _ in COSTS) + f" ({num(v['T3'])})"
                     for k, v in D5.items()) + ". " + BASE)
     return {"files": save(fig, out, "5_cheating_share"), "title": "The cheating share", "caption": caption,
@@ -631,8 +701,8 @@ def years(out: Path) -> dict:
     for i, r in enumerate(rows):
         y = len(rows) - 1 - i
         c = STATUS[r["status"]]
-        y3, y5 = r["years_fit"]["T3"], r["years_fit"]["T5"]
-        quote[r["name"]] = {"T3": y3, "T5": y5, "D_T3": r["D_fit"]["T3"], "D_T5": r["D_fit"]["T5"]}
+        y3, y5 = r["years_rung"]["T3"], r["years_rung"]["T5"]
+        quote[r["name"]] = {"T3": y3, "T5": y5, "D_T3": r["D_rung"]["T3"], "D_T5": r["D_rung"]["T5"]}
         ax.barh(y, y3, height=0.66, color=c, lw=0, zorder=3)
         if abs(y3 - y5) > 0.02:
             ax.plot([y5, y5], [y - 0.42, y + 0.42], color="white" if y5 > 0.3 else c, lw=3, zorder=4)
@@ -647,7 +717,7 @@ def years(out: Path) -> dict:
     ax.set_yticks(range(len(rows)), [one_line(r["label"]) for r in reversed(rows)], fontsize=18)
     ax.tick_params(axis="y", length=0)
     ax.spines["left"].set_visible(False)
-    right = max(r["years_fit"]["T3"] for r in rows) + 1.9
+    right = max(r["years_rung"]["T3"] for r in rows) + 1.9
     ax.set_xlim(0, right)
     ax.set_ylim(-0.6, len(rows) - 0.4)
     ax.set_xlabel(rf"years of frontier-compute growth, $\ln\mathcal{{D}}/\ln {S.GROWTH:g}$ (T3)")
@@ -659,12 +729,17 @@ def years(out: Path) -> dict:
     status = [plt.Rectangle((0, 0), 1, 1, color=c) for c in STATUS.values()]
     ax.legend(status, list(STATUS), loc="upper right", ncol=1, fontsize=17, handlelength=1.0, handletextpad=0.4)
     title(fig, r"Years of delay: what each rung's $\mathcal{D}$ is worth")
+    floor = next(r for r in rows if r["name"] == FLOORS[0])
+    fit_years, conj_years = floor["years_fit"]["T3"], math.log(floor["conjecture"]["T3"]) / g
     caption = (
         f"Each rung's compute dampener D as years of frontier training-compute growth at {S.GROWTH:g}x a year "
-        f"(Epoch AI): ln D / ln {S.GROWTH:g}, at T3 (bars; memory rungs by the fit bound), with T5 at today's proving "
-        "cost as the white tick, coloured by status. Years at T3 (T5): "
+        f"(Epoch AI): ln D / ln {S.GROWTH:g}, at T3 (bars; memory rungs by the fit bound, the floors by the PoUW "
+        "route), with T5 at today's proving cost as the white tick, coloured by status. Years at T3 (T5): "
         + "; ".join(f"{k} {v['T3']:.1f} ({v['T5']:.1f}; D = {num(v['D_T3'])})" for k, v in quote.items())
-        + f". Triangle: routed mixtures at x{ROUTED:g} on the 6 GB rung (13 GB is void under them). " + BASE)
+        + f". Triangle: routed mixtures at x{ROUTED:g} on the 6 GB rung (13 GB is void under them). By the fit bound "
+        f"both floors are {fit_years:.1f} years; under the Dot16 conjecture's d = {num(CONJECTURE['d'])} the floor "
+        f"is {conj_years:.1f} (conditional). " + BASE)
+    quote["floors_by_fit_bound"], quote["floor_conjecture"] = fit_years, conj_years
     return {"files": save(fig, out, "6_years"), "title": "Years of delay", "caption": caption, "quote": quote}
 
 
@@ -676,6 +751,7 @@ def schematic(out: Path) -> dict:
     chi = {label: S.cheat(P | {"overhead": x}) for label, x in COSTS}
     r_floor, r_best = T.audited_residual(P), T.audited_residual(P | S.BEST)
     eps = P["eps_agg"]
+    nu_conj = X.nu(P | CONJECTURE)
     s_lo, s_hi = min(min(v) for v in S.REGIMES.values()), max(max(v) for v in S.REGIMES.values())
     fig = plt.figure()
     ax = fig.add_axes((0, 0, 1, 1))
@@ -698,20 +774,22 @@ def schematic(out: Path) -> dict:
     leaks = [
         ("s", 5.95, 1.1, "$s$", "unmonitored compute",
          [rf"{num(s_lo)}–{num(s_hi)} by regime; $\mathcal{{D}} \leq 1/s$"], TERM["unmonitored"]),
-        ("r", 4.2, 1.95, r"$\hat r$", "monitored residual",
+        ("r", 4.25, 1.95, r"$\hat r$", "monitored residual",
          [f"PoUW: 1 today → {num(r_floor)} floor credit → {num(r_best)} best design",
           rf"+ $\varepsilon'$ = {sci(eps)}: certificates that may be wrong",
           rf"memory: $\mu$ = {sci(mu6)} at 6 GB; $\mathcal{{D}}$ = {num(D6)} for any $\hat r > \mu$"],
          TERM["residual"]),
-        ("nu", 2.45, 1.1, r"$\nu$", "declared computation", [f"{sci(X.nu(P))} at Kimi K2's K"], TERM["declared"]),
+        ("nu", 2.42, 1.45, r"$\nu$", "declared computation",
+         [rf"{sci(X.nu(P))} at Kimi K2's K and the structural $d$ = {num(P['d'])}",
+          rf"{sci(nu_conj)} at the Dot16 conjecture's $d$ = {num(CONJECTURE['d'])}"], TERM["declared"]),
         ("chi", 1.0, 1.1, r"$\chi$", "faulty proof blocks (T5)",
          [f"{sci(chi[COSTS[0][0]])} today, {sci(chi[COSTS[1][0]])} at 512 draws"], TERM["cheat"]),
     ]
     plugs = [
         ("none", 5.95, "none: trains at full efficiency", "", "s", None),
-        ("pouw", 4.62, "PoUW: credit certified work", "T1", "r", TERM["residual"]),
-        ("memory", 3.78, "memory: wipes cap the residual", "T3", "r", TERM["memory"]),
-        ("nci", 2.45, "NCI: novel-bit throttle", "T1", "nu", TERM["declared"]),
+        ("pouw", 4.67, "PoUW: credit certified work", "T1", "r", TERM["residual"]),
+        ("memory", 3.83, "memory: wipes cap the residual", "T3", "r", TERM["memory"]),
+        ("nci", 2.42, "NCI: novel-bit throttle", "T1", "nu", TERM["declared"]),
         ("detect", 1.4, "terminal detection", "T5", "chi", TERM["cheat"]),
         ("prove", 0.6, "cheaper proving per draw", "T5", "chi", TERM["cheat"]),
     ]
@@ -747,7 +825,9 @@ def schematic(out: Path) -> dict:
         "certificates may be wrong, which the theorem's delta needs), and memory caps whatever PoUW leaves "
         f"(mu = {num(mu6)} at 6 GB streamed-label wipes by the fit "
         f"bound, so D = {num(D6)} at T3 for any r̂ above it). NCI plugs the declared "
-        f"computation (nu = {num(X.nu(P))}). Faulty proof blocks at T5 are plugged by terminal detection, which ends "
+        f"computation (nu = {num(X.nu(P))} at Kimi K2's K and the structural entry fee d = {num(P['d'])}; "
+        f"{num(nu_conj)} at the Dot16 conjecture's d = {num(CONJECTURE['d'])}, conditional), which is now the largest "
+        "term the floor leaves. Faulty proof blocks at T5 are plugged by terminal detection, which ends "
         "the identity, and by the cost of proving a draw, which sets how many pass: chi = "
         f"{num(chi[COSTS[0][0]])} at today's sparse draws, {num(chi[COSTS[1][0]])} at 512 draws per statement. "
         "PoUW and NCI are complements: without PoUW r̂ = 1, without NCI nu = 1. Each plug's tag is the tier from "
@@ -756,7 +836,7 @@ def schematic(out: Path) -> dict:
     return {"files": save(fig, out, "7_schematic"), "title": "Leaks and plugs", "caption": caption,
             "quote": {"s_range": [s_lo, s_hi], "r_hat": {"floor credit": r_floor, "best design": r_best},
                       "eps_agg": eps,
-                      "mu_6gb": mu6, "nu": X.nu(P), "chi": chi}}
+                      "mu_6gb": mu6, "nu": X.nu(P), "nu_conjecture": nu_conj, "chi": chi}}
 
 
 FIGURES = {
