@@ -8,7 +8,9 @@ the weakness they show is there:
   window salt binds its stream and prover (#2640); the certified salt binds neither;
 * the weights' order holds end to end on the certifier's own record: weights committed before p's first ingress tick
   are the only ones a certified pass of p passes over;
-* `commit_weights` takes the first root anyone hands it, so a root handed first refuses the honest one."""
+* `commit_weights` takes the first root anyone hands it, so a root handed first refuses the honest one;
+* `reveal` bounds the registration's time from below only: p's salt goes to a registration made any number of windows
+  after p's last ingress record (t_d), so the certifier alone doesn't put a window's work in [t_s, t_d]."""
 
 from __future__ import annotations
 
@@ -120,3 +122,24 @@ def test_the_first_root_handed_is_the_windows():
     raw, ctx = certified_pass(work, roots, 0, Epoch.certified(work, roots, [0], 1, reveal).salt, "r")
     assert CC.pass_epoch(None, raw, ctx, reveal=reveal, weights=PS.committed(c, 0, registration(0, ctx=ctx))) == \
         (None, ("coin", "the pass's weights are not those the certifier recorded before it drew the window's salt"))
+
+
+def test_a_registration_long_after_the_window_gets_its_salt():
+    """PoUW window 0's salt is revealed to a registration of window 0 made after windows 1, 2 and 3 have run, as it is
+    at t_d: the registration carries no time on the certifier's clock, and `reveal` asks only that p's records are
+    published."""
+    work, roots = setup()
+    salts: dict[int, bytes] = {}
+    c = recording(salts)
+    c.commit_weights(0, weights_root(roots))
+    for _ in range(INGRESS.buckets):
+        c.bucketer.tick()
+    at_td = PS.revealed(c, 0, registration(0))
+    for _ in range(3 * INGRESS.buckets):
+        c.bucketer.tick()
+    assert c.bucketer.certifier.window == 4
+    late = PS.revealed(c, 0, registration(0))
+    raw, ctx = certified_pass(work, roots, 0, Epoch.certified(work, roots, [0], 1, late).salt, "late")
+    assert late == at_td == salts[0]
+    assert CC.pass_epoch(None, raw, ctx, reveal=late, weights=PS.committed(c, 0, registration(0, ctx=ctx))) == \
+        ("certifier", None)
