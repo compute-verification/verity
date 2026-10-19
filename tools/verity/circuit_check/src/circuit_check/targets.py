@@ -415,8 +415,8 @@ ROOT_ERRORS: list[tuple[str, str]] = []
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:
     """The kinds no small table binds (launch blocks, collective routes, split counts, the DSA and sparse-MLA shapes; DeepSeek-V4's
-    mHC, FlashMLA, compressors, routers and Marlin MoE), each at a binding its Definition module's sidecar already checks, so they
-    add no task."""
+    mHC, FlashMLA, compressors, routers and Marlin MoE; the int8 attention row, whose head dim is a multiple of 32), each at a
+    binding its Definition module's sidecar already checks, so they add no task."""
     from verity.ml.circuits.boolean.trace import word_of
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity_vllm.program.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
@@ -431,6 +431,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     mhc = {"HC": 4, "REPEAT": 20, "EPS": 1e-6, "HC_EPS": 1e-6, "TN": 64}
     router = {"E": 8, "SCALE": 2.5}
     marlin = {"E": 3, "K": 256, "N": 16, "TK": 128, "TN": 8, "GRID": 5, "DOT": MM.DOT}
+    int8_row = {"D": 32, "S": 33, "SCALE": 32 ** -0.5}   # Q' K'^T steps 32 channels, so D >= 32; int8_exact's sidecar's row
     dsv4 = {"triton_block_rmsnorm": {"N": 512, "BLOCK": 2048, "WARPS": 8, "EPS": 1e-6},
             "mhc_pre_broadcast": {**mhc, "H": 7168, "NS": 28}, "mhc_residual_broadcast": {"HC": 2, "H": 8},
             "mhc_fused_post_pre": {**mhc, "H": 1024, "NS": 4, "TH": 256}, "mhc_post_pre_tf32": {**mhc, "H": 1024, "NS": 4},
@@ -455,7 +456,8 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "batched_gemm": {"B": 2, "K": 32, "N": 3, "DOT": hop},
             "ll_bf16_dotprod": {"N": 2, "K": 256, "BS": 64, "VEC": 2, "FMA": 1},
             "ll_bf16_splitk": {"N": 2, "K": 128, "SPLIT_K": 2, "TILE_K": 32, "WARPS": 2, "DOT": hop},
-            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla}, **dsv4}
+            "sparse_mla": {"T": 65, **mla}, "sparse_mla_split": {"T": 130, "NS": 2, **mla},
+            "int8_attention_row": int8_row, "int8_attention_row_table": int8_row, **dsv4}
 
 
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
