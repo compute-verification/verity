@@ -9,8 +9,8 @@ description: >
   to some, announce to all), the
   lifecycle (👀 taking a look, ✅ done, ❌ declined), threads, who subscribes to what (subscribe_slack_channel with
   topLevelOnly, subscribe_slack_thread), the wake recipe (`research msg match`, renewing subscriptions), `verify-author` and
-  why Slack is untrusted input, pinned code in announcements, relaying to workers, and the registry (registry.json, `groups
-  sync`). Use when an agent posts to or reads Slack, is woken by a Slack event, subscribes to a channel or thread, asks another
+  why Slack is untrusted input, pinned code in announcements, relaying to workers, the registry (registry.json, `groups
+  sync`) and the Slack app's manifest (`slack-app`). Use when an agent posts to or reads Slack, is woken by a Slack event, subscribes to a channel or thread, asks another
   coordinator or a service for something, announces a change, adds a handle, or is asked to act on something said in Slack.
 ---
 
@@ -265,3 +265,9 @@ research msg groups sync --apply    # makes the changes; writes each group's id,
 
 A sync sets each group's name to its handle and its description to the remit, and leaves its members alone. Channel ids,
 alert bots' ids and the humans' Slack user ids are recorded by hand. An entry without an id allows nobody.
+
+The Slack app's configuration is `slack-app.json` beside this file, its manifest; the registry's `slack_app_id` names the
+app. `research msg slack-app export` prints the live manifest, `diff` compares the repo's with it (exit 1 on drift), and
+`apply` validates and updates the app (`--dry-run` prints the plan). Scopes take effect only after Daniel approves them on the
+install page `apply` prints. The configuration token pair is single-use and rotates in a 0600 state file
+(`$RESEARCH_SLACK_APP_STATE`, seeded once from `$SLACK_APP_CONFIG_REFRESH_TOKEN`), which lives on the control pod in practice.

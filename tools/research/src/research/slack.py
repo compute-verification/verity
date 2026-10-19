@@ -25,6 +25,7 @@ Notes are records, never messages.
   research msg verify-author --event JSON|@PATH|- [--why]          # exit 0 only for our bot, a channel's bot or a named human
   research msg deliver --ts TS [--thread T]                         # ring the doorbells for a post no client delivered
   research msg groups sync [--apply]                               # one user group per handle; a plan unless --apply
+  research msg slack-app export|diff|apply [--app-id ID] [--manifest PATH]   # the app's manifest: live, against the repo's, update
   research msg ask-daniel --as HANDLE --kind blocking|default --question Q --why W --option VALUE=LABEL... --recommend V
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
@@ -42,7 +43,8 @@ another server (the tests' fake).
 Every subcommand takes `--dry-run` (no request reaches Slack; each one it would send is printed, the token never),
 `--registry PATH` (default $RESEARCH_SLACK_REGISTRY, else the checkout's) and `--channel KEY` (default agent-coordination);
 a channel's id is $SLACK_CHANNEL_<KEY> (upper case, `-` as `_`) or the registry's, and `--channel-id` overrides both. The token
-is $SLACK_BOT_TOKEN and is never printed; $SLACK_API_URL points the client at another Web API (the tests' fake). Stdlib only,
+is $SLACK_BOT_TOKEN and is never printed; `slack-app` instead takes the app configuration token from its state file
+(`app_token`), and its --dry-run reads the live app (export, validate) but changes nothing; $SLACK_API_URL points the client at another Web API (the tests' fake). Stdlib only,
 and it runs as a single file (`python3 slack.py ...`) from any checkout.
 
 Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes through Verity's Slack broker instead: a POST of
@@ -58,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import fcntl
 import html
 import http.client
 import json
@@ -101,6 +104,7 @@ DIRECT_ONLY = ("chat.update", "usergroups.create", "usergroups.disable", "usergr
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
+POINTER_RE = re.compile(r"^/[A-Za-z0-9_/.:-]{0,120}$")                         # a JSON pointer into a manifest: /oauth_config/scopes/bot/3
 EVERY = "every handle"
 DESCRIPTION_MAX = 140                                            # Slack's user-group description limit (description_too_long)
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,79}$")
@@ -167,7 +171,7 @@ FLAGS = ("urgent", QUIET)
 
 
 class SlackError(RuntimeError):
-    pass
+    code: str | None = None                                       # a not-ok answer's error code, when it is one
 
 
 # --- registry ---------------------------------------------------------------------------------------------------------------
@@ -478,12 +482,13 @@ class Slack:
     with this agent's OIDC token (`broker`, see `via`). With `dry_run`, nothing is sent and no token is fetched: each call is
     printed (method and parameters, never a token) and answered with an empty `ok` response."""
 
-    def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None, transport=None):
-        self.via = via(token)
+    def __init__(self, token: str | None, *, base: str | None = None, dry_run: bool = False, log=None, transport=None,
+                 direct: bool = False):
+        self.via = "direct" if direct else via(token)               # direct: the app configuration API, which the broker can't reach
         self.token = token if self.via == "direct" else None
         self.dry_run, self.log, self.transport, self._oidc = dry_run, log, transport or post, _Identity(BROKER)
         self.base = (base or os.environ.get("SLACK_API_URL") or DEFAULT_API).rstrip("/") + "/"
-        if not dry_run and self.via == "direct" and not token:
+        if not dry_run and self.via == "direct" and not token and not direct:
             raise SlackError("SLACK_BOT_TOKEN is not set (a Cursor secret; see the using-slack skill), or pass --dry-run")
 
     def call(self, method: str, **params: Any) -> dict:
@@ -497,7 +502,8 @@ class Slack:
             try:
                 out = self._broker(method, args) if self.via == "broker" else self.transport(
                     self.base + method, urllib.parse.urlencode(args).encode(),
-                    {"Authorization": f"Bearer {self.token}", "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
+                    {**({"Authorization": f"Bearer {self.token}"} if self.token else {}),
+                     "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
                 break
             except urllib.error.HTTPError as e:
                 if e.code == 429 and attempt < RATE_RETRIES:                 # a burst of doorbells: wait as asked, then again
@@ -514,8 +520,14 @@ class Slack:
             raise SlackError(f"{method}: the answer is not a JSON object")
         if not out.get("ok"):
             error, needed = out.get("error"), out.get("needed")     # echoed only when they are codes: an answer is not to be printed
-            raise SlackError(f"{method}: {error if isinstance(error, str) and ERROR_CODE_RE.fullmatch(error) else 'not ok'}"
-                             + (f" (needed scope {needed})" if isinstance(needed, str) and SCOPES_RE.fullmatch(needed) else ""))
+            code = error if isinstance(error, str) and ERROR_CODE_RE.fullmatch(error) else None
+            at = [e["pointer"] for e in out.get("errors") or [] if isinstance(e, dict) and isinstance(e.get("pointer"), str)
+                  and POINTER_RE.fullmatch(e["pointer"])][:10]                   # apps.manifest.validate: where the manifest is wrong
+            err = SlackError(f"{method}: {code or 'not ok'}"
+                             + (f" (needed scope {needed})" if isinstance(needed, str) and SCOPES_RE.fullmatch(needed) else "")
+                             + (f" at {', '.join(at)}" if at else ""))
+            err.code = code
+            raise err
         return out
 
     def _broker(self, method: str, args: dict[str, str]) -> dict:
@@ -2251,6 +2263,185 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     return 0
 
 
+# --- the app's configuration ------------------------------------------------------------------------------------------------
+
+MANIFEST_REL = REGISTRY_REL.with_name("slack-app.json")
+APP_STATE_ENV, APP_SEED_ENV = "RESEARCH_SLACK_APP_STATE", "SLACK_APP_CONFIG_REFRESH_TOKEN"
+#: the app configuration API: these take the configuration token (rotating it, the refresh token), never the bot's scopes
+APP_METHODS = ("apps.manifest.export", "apps.manifest.update", "apps.manifest.validate", "tooling.tokens.rotate")
+ROTATE_BEFORE_S = 600                                            # a configuration token lives 12 h; rotate this long before its exp
+APP_TOKENS_PAGE = "https://api.slack.com/apps"                   # "Your App Configuration Tokens": where a person generates a pair
+MANIFEST_IGNORED = ("_metadata",)                                # the manifest format's version, which export adds
+
+
+def _epoch() -> float:
+    return time.time()
+
+
+def app_state_path() -> Path:
+    return Path(os.environ.get(APP_STATE_ENV) or Path.home() / ".research" / "slack-app-token.json")
+
+
+def _write_private(path: Path, data: dict) -> None:
+    """`data` as `path`, readable by its owner only, replaced atomically and synced: a reader sees the old pair or the new."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    d = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(d)
+    finally:
+        os.close(d)
+
+
+def _app_state(path: Path) -> dict:
+    if not path.exists():
+        if seed := os.environ.get(APP_SEED_ENV, "").strip():
+            return {"refresh_token": seed}
+        raise SlackError(f"no app configuration token: {path} is absent and {APP_SEED_ENV} is unset. A person generates a pair at "
+                         f"{APP_TOKENS_PAGE} (Your App Configuration Tokens); set {APP_SEED_ENV} to its refresh token, which "
+                         f"seeds the file once, or {APP_STATE_ENV} to the state file")
+    if path.stat().st_mode & 0o077:
+        raise SlackError(f"{path} is readable by others: `chmod 600 {path}` (it holds the app's configuration tokens)")
+    try:
+        state = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise SlackError(f"{path}: {type(e).__name__}; it should be {{token, refresh_token, exp}} as rotation writes it") from None
+    if not isinstance(state, dict) or not isinstance(state.get("refresh_token"), str) or not state["refresh_token"]:
+        raise SlackError(f"{path} has no refresh_token; move it aside and set {APP_SEED_ENV} to a new one")
+    return state
+
+
+def app_token(path: Path | None = None, *, transport=None) -> str:
+    """The app configuration token from its state file (`app_state_path`), rotated through tooling.tokens.rotate first when it
+    is within ROTATE_BEFORE_S of its exp. A refresh token works once, so the new pair is written before the new token is used,
+    under a lock so that two processes never spend the same one; an absent file is seeded once from $SLACK_APP_CONFIG_REFRESH_TOKEN."""
+    path = path or app_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with open(path.with_name(path.name + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state = _app_state(path)
+        if isinstance(state.get("token"), str) and state["token"] and _epoch() < float(state.get("exp") or 0) - ROTATE_BEFORE_S:
+            return state["token"]
+        try:
+            out = Slack(None, direct=True, transport=transport).call("tooling.tokens.rotate", refresh_token=state["refresh_token"])
+        except SlackError as e:
+            if e.code is None:                                     # no answer: whether Slack spent the token is unknown
+                raise SlackError(f"{e}; if Slack refuses the refresh token on the next try, it was spent: see the using-slack skill") from None
+            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in "
+                             f"{path if path.exists() else '$' + APP_SEED_ENV}. A refresh token works once, so an earlier "
+                             f"rotation or another copy of it spent it. A person generates a new pair at {APP_TOKENS_PAGE} "
+                             f"(Your App Configuration Tokens); then move {path} aside and set {APP_SEED_ENV} to the new refresh token") from None
+        token, refresh, exp = out.get("token"), out.get("refresh_token"), out.get("exp")
+        if not (isinstance(token, str) and token and isinstance(refresh, str) and refresh and isinstance(exp, (int, float))):
+            raise SlackError(f"tooling.tokens.rotate: the answer lacks a token, refresh_token or exp, so {path} is unchanged "
+                             "and its refresh token may be spent")
+        _write_private(path, {"token": token, "refresh_token": refresh, "exp": int(exp), "rotated": int(_epoch())})
+        return token
+
+
+def manifest_path(explicit: str | None = None) -> Path:
+    if explicit:
+        return Path(explicit)
+    for d in (Path.cwd(), *Path.cwd().parents, *Path(__file__).resolve().parents):
+        if (d / MANIFEST_REL).is_file():
+            return d / MANIFEST_REL
+    raise SlackError(f"no {MANIFEST_REL} here or above: run from your verity checkout, or pass --manifest")
+
+
+def _leaves(v: Any, at: str = ""):
+    """(path, member, value) for each leaf: a list of strings (scopes, events, URLs) is a set whose members are leaves."""
+    if isinstance(v, dict) and v:
+        for k in sorted(v):
+            if not (at == "" and k in MANIFEST_IGNORED):
+                yield from _leaves(v[k], f"{at}.{k}" if at else k)
+    elif isinstance(v, list) and v and all(isinstance(x, str) for x in v):
+        for x in sorted(set(v)):
+            yield at, x, None
+    elif isinstance(v, list) and v:
+        for i, x in enumerate(v):
+            yield from _leaves(x, f"{at}[{i}]")
+    else:
+        yield at, None, v
+
+
+def manifest_diff(repo: dict, live: dict) -> list[str]:
+    """The live manifest against the repo's, one line per key path: `+` only the repo has it, `-` only the live app, `~` both
+    with different values (live -> repo). A set's member is `path: member`."""
+    a = {(p, m): v for p, m, v in _leaves(live)}
+    b = {(p, m): v for p, m, v in _leaves(repo)}
+    show = lambda k, v: f"{k[0]}: {k[1]}" if k[1] is not None else f"{k[0]}: {json.dumps(v, ensure_ascii=False)}"  # noqa: E731
+    out = []
+    for k in sorted(a.keys() | b.keys(), key=lambda k: (k[0], k[1] or "")):
+        if k not in a:
+            out.append("+ " + show(k, b[k]))
+        elif k not in b:
+            out.append("- " + show(k, a[k]))
+        elif a[k] != b[k]:
+            out.append(f"~ {k[0]}: {json.dumps(a[k], ensure_ascii=False)} -> {json.dumps(b[k], ensure_ascii=False)}")
+    return out
+
+
+def manifest_scopes(m: dict) -> dict[str, set[str]]:
+    scopes = (m.get("oauth_config") or {}).get("scopes") or {}
+    return {k: set(scopes.get(k) or ()) for k in ("bot", "user")}
+
+
+def cmd_slack_app(ns: argparse.Namespace, reg: dict) -> int:
+    """`export` the live manifest, `diff` the repo's against it (exit 1 when they differ), or `apply` the repo's: validate,
+    then update, refused in --dry-run. Scopes the repo adds take effect only once a person approves them on the install page."""
+    app = ns.app_id or reg.get("slack_app_id")
+    if not app:
+        raise SlackError("no Slack app id: the registry's slack_app_id is null. Record it there (the App ID on the app's Basic "
+                         f"Information page at {APP_TOKENS_PAGE}) or pass --app-id")
+    if not re.fullmatch(r"A[A-Z0-9]{4,30}", app):
+        raise SlackError(f"--app-id {app!r} is not a Slack app id (A...)")
+    path = manifest_path(ns.manifest) if ns.acmd != "export" else None
+    try:
+        repo = json.loads(path.read_text()) if path else None
+    except (OSError, ValueError) as e:
+        raise SlackError(f"{path}: {e}") from None
+    api = Slack(app_token(), direct=True)
+    live = api.call("apps.manifest.export", app_id=app).get("manifest")
+    if not isinstance(live, dict):
+        raise SlackError("apps.manifest.export: the answer has no manifest")
+    if ns.acmd == "export":
+        print(json.dumps(live, indent=2, ensure_ascii=False))
+        return 0
+    lines = manifest_diff(repo, live)
+    print(f"--- live (app {app})\n+++ repo ({path})")
+    print("\n".join(lines) if lines else "no drift: the live manifest is the repo's")
+    if ns.acmd == "diff":
+        return 1 if lines else 0
+    if not lines:
+        return 0
+    api.call("apps.manifest.validate", app_id=app, manifest=repo)
+    print("validate: Slack accepts the repo's manifest")
+    have, want = manifest_scopes(live), manifest_scopes(repo)
+    moved = [f"{k} {s}{x}" for k in ("bot", "user") for s, xs in (("+", want[k] - have[k]), ("-", have[k] - want[k])) for x in sorted(xs)]
+    approve = lambda why: (f"{why}: Slack requires a person to approve new scopes. Daniel: open "  # noqa: E731
+                           f"https://api.slack.com/apps/{app}/install-on-team and click Allow")
+    if ns.dry_run:
+        print(f"dry-run: would call apps.manifest.update for {app} with {path}; nothing changed")
+        if moved:
+            print("then " + approve(f"scopes change ({', '.join(moved)})"))
+        return 0
+    out = api.call("apps.manifest.update", app_id=app, manifest=repo)
+    print(f"updated {app} to {path}")
+    if moved or out.get("permissions_updated"):
+        print(approve(f"scopes change ({', '.join(moved)})" if moved else "Slack says the permissions changed"))
+    return 0
+
+
 # --- #ask-daniel ------------------------------------------------------------------------------------------------------------
 
 def _now() -> datetime:
@@ -2868,6 +3059,14 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = sub.add_parser("groups", help="the handles' Slack user groups")
     gsub = p.add_subparsers(dest="gcmd", required=True)
     gsub.add_parser("sync", parents=[c], help="create or update a user group per handle; a plan unless --apply").add_argument("--apply", action="store_true")
+    p = sub.add_parser("slack-app", help=f"the Slack app's configuration: {MANIFEST_REL} against the live app")
+    asub = p.add_subparsers(dest="acmd", required=True)
+    for name, help in (("export", "print the live manifest as JSON"),
+                       ("diff", "the repo's manifest against the live one, by key path; exit 1 when they differ"),
+                       ("apply", "validate the repo's manifest, then update the app to it (--dry-run: validate and print the plan)")):
+        q = asub.add_parser(name, parents=[c], help=help)
+        q.add_argument("--app-id", default=None, metavar="ID", help="the app (default: the registry's slack_app_id)")
+        q.add_argument("--manifest", default=None, metavar="PATH", help=f"the repo's manifest (default: the checkout's {MANIFEST_REL})")
 
     ns = ap.parse_args(argv)
     try:
@@ -2875,6 +3074,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
         reg = load_registry(path)
         if ns.cmd == "groups":
             return cmd_groups_sync(ns, reg, path)
+        if ns.cmd == "slack-app":
+            return cmd_slack_app(ns, reg)
         if ns.cmd in ROUTED or ns.cmd == "owners":                # who owns a path now is main's answer too
             reg = routing_registry(reg, path)
         return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,

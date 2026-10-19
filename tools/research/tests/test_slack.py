@@ -524,6 +524,173 @@ def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_wri
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
 
 
+REAL_MANIFEST = REAL_REGISTRY.with_name("slack-app.json")
+#: the bot scopes each Web API method this module calls needs (chat.postMessage always sets a username)
+METHOD_SCOPES = {
+    "auth.test": (), "chat.getPermalink": (),
+    "chat.postMessage": ("chat:write", "chat:write.customize"), "chat.update": ("chat:write",),
+    "conversations.history": ("channels:history", "groups:history"),
+    "conversations.replies": ("channels:history", "groups:history"),
+    "reactions.add": ("reactions:write",),
+    "usergroups.list": ("usergroups:read",),
+    **{f"usergroups.{m}": ("usergroups:write",) for m in ("create", "disable", "enable", "update")},
+}
+
+
+def test_the_app_manifest_s_bot_scopes_cover_every_method_this_module_calls():
+    """A silent scope swap (19 Oct: channels:history replaced by groups:history) fails here, naming the scope."""
+    called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+(?:\.[A-Za-z]+)+)\"", Path(slack.__file__).read_text())) - set(slack.APP_METHODS)
+    assert not called - METHOD_SCOPES.keys(), f"map {sorted(called - METHOD_SCOPES.keys())} to the bot scopes they need in METHOD_SCOPES"
+    manifest = json.loads(REAL_MANIFEST.read_text())
+    bot = set(manifest["oauth_config"]["scopes"]["bot"])
+    missing = sorted({(s, m) for m in called for s in METHOD_SCOPES[m] if s not in bot})
+    assert not missing, "the manifest's bot scopes lack " + ", ".join(f"{s} (for {m})" for s, m in missing)
+    assert manifest["display_information"]["name"] == manifest["features"]["bot_user"]["display_name"] == "Verity"
+    assert len(manifest["display_information"]["description"]) <= slack.DESCRIPTION_MAX
+    assert not any(manifest["settings"].values())
+
+
+APP = "A0VERITY"
+T0 = 1_800_000_000
+
+
+class FakeAppConfig:
+    """Slack's app configuration API as a transport: tooling.tokens.rotate spends each refresh token once, and the
+    apps.manifest.* methods take only the newest configuration token."""
+
+    def __init__(self, live: dict, refresh: str = "dummy-seed"):
+        self.live, self.refresh, self.token, self.now = live, refresh, None, T0
+        self.calls: list[tuple[str, dict]] = []
+        self._n = itertools.count(1)
+
+    def __call__(self, url, data, headers):
+        method, p = url.rsplit("/", 1)[-1], {k: v[0] for k, v in urllib.parse.parse_qs(data.decode()).items()}
+        self.calls.append((method, p))
+        if method == "tooling.tokens.rotate":
+            if "Authorization" in headers or p.get("refresh_token") != self.refresh:
+                return {"ok": False, "error": "invalid_refresh_token"}
+            n = next(self._n)
+            self.token, self.refresh = f"dummy-config-{n}", f"dummy-refresh-{n}"
+            return {"ok": True, "token": self.token, "refresh_token": self.refresh, "iat": self.now, "exp": self.now + 43200}
+        if headers.get("Authorization") != f"Bearer {self.token}" or p.get("app_id") != APP:
+            return {"ok": False, "error": "invalid_auth"}
+        if method == "apps.manifest.export":
+            return {"ok": True, "manifest": {"_metadata": {"major_version": 1, "minor_version": 1}, **self.live}}
+        if method == "apps.manifest.validate":
+            return {"ok": True}
+        if method == "apps.manifest.update":
+            new = json.loads(p["manifest"])
+            changed = slack.manifest_scopes(new) != slack.manifest_scopes(self.live)
+            self.live = new
+            return {"ok": True, "app_id": APP, "permissions_updated": changed}
+        return {"ok": False, "error": "unknown_method"}
+
+    def methods(self) -> list[str]:
+        return [m for m, _ in self.calls]
+
+
+@pytest.fixture
+def app_config(tmp_path, monkeypatch, registry):
+    live = json.loads(REAL_MANIFEST.read_text())
+    fake = FakeAppConfig(live)
+    monkeypatch.setattr(slack, "post", fake)
+    monkeypatch.setattr(slack, "_epoch", lambda: fake.now)
+    monkeypatch.setenv(slack.APP_STATE_ENV, str(tmp_path / "app" / "slack-app-token.json"))
+    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed")
+    return fake
+
+
+def app(capsys, *argv) -> tuple[int, str, str]:
+    rc, out, err = run(capsys, "slack-app", *argv, "--app-id", APP, "--manifest", str(REAL_MANIFEST))
+    assert "dummy-config" not in out + err and "dummy-refresh" not in out + err and "dummy-seed" not in out + err
+    return rc, out, err
+
+
+def test_the_configuration_token_is_seeded_from_the_env_and_rotated_near_its_exp(app_config, capsys, monkeypatch):
+    state = slack.app_state_path()
+    assert app(capsys, "export")[0] == 0
+    assert app_config.methods() == ["tooling.tokens.rotate", "apps.manifest.export"]
+    assert app_config.calls[0][1] == {"refresh_token": "dummy-seed"}
+    assert oct(state.stat().st_mode & 0o777) == "0o600"
+    assert json.loads(state.read_text()) == {"token": "dummy-config-1", "refresh_token": "dummy-refresh-1", "exp": T0 + 43200, "rotated": T0}
+    monkeypatch.setenv(slack.APP_SEED_ENV, "dummy-seed-spent")                   # the file exists: the seed is never read again
+    app_config.now = T0 + 43200 - slack.ROTATE_BEFORE_S - 1
+    assert app(capsys, "export")[0] == 0 and app_config.methods()[2:] == ["apps.manifest.export"]
+    app_config.now += 2                                                          # within 10 min of exp: rotate first
+    assert app(capsys, "export")[0] == 0 and app_config.methods()[3:] == ["tooling.tokens.rotate", "apps.manifest.export"]
+    assert app_config.calls[3][1] == {"refresh_token": "dummy-refresh-1"}
+    assert json.loads(state.read_text())["refresh_token"] == "dummy-refresh-2" and app_config.refresh == "dummy-refresh-2"
+    assert oct(state.stat().st_mode & 0o777) == "0o600"
+
+
+def test_a_spent_refresh_token_says_how_to_get_a_new_pair(app_config, capsys, monkeypatch):
+    state = slack.app_state_path()
+    state.parent.mkdir()
+    slack._write_private(state, {"token": "dummy-config-old", "refresh_token": "dummy-refresh-old", "exp": T0 - 1})
+    before = state.read_text()
+    rc, _, err = app(capsys, "export")
+    assert rc == 2 and "tooling.tokens.rotate: invalid_refresh_token" in err and "works once" in err
+    assert slack.APP_SEED_ENV in err and str(state) in err and slack.APP_TOKENS_PAGE in err
+    assert "dummy-refresh-old" not in err and state.read_text() == before and app_config.methods() == ["tooling.tokens.rotate"]
+    state.chmod(0o644)
+    rc, _, err = app(capsys, "export")
+    assert rc == 2 and f"chmod 600 {state}" in err
+    state.unlink()
+    monkeypatch.delenv(slack.APP_SEED_ENV)
+    rc, _, err = app(capsys, "export")
+    assert rc == 2 and f"{slack.APP_SEED_ENV} is unset" in err
+
+
+def test_slack_app_needs_an_app_id(app_config, capsys):
+    rc, _, err = run(capsys, "slack-app", "diff")
+    assert rc == 2 and "slack_app_id is null" in err and "--app-id" in err and not app_config.calls
+
+
+def test_slack_app_diff_names_each_key_path_and_exits_1_on_drift(app_config, capsys):
+    rc, out, _ = app(capsys, "diff")
+    assert rc == 0 and "no drift" in out                                         # export's _metadata is not drift
+    bot = app_config.live["oauth_config"]["scopes"]["bot"]
+    bot.remove("channels:history")
+    bot.append("im:history")
+    app_config.live["display_information"]["name"] = "Verity (old)"
+    rc, out, _ = app(capsys, "diff")
+    assert rc == 1 and out.splitlines()[2:] == [
+        '~ display_information.name: "Verity (old)" -> "Verity"',
+        "+ oauth_config.scopes.bot: channels:history",
+        "- oauth_config.scopes.bot: im:history",
+    ]
+    assert app_config.methods()[-1] == "apps.manifest.export"
+
+
+def test_slack_app_apply_validates_refuses_update_in_dry_run_and_names_the_install_page_when_scopes_change(app_config, capsys):
+    url = f"https://api.slack.com/apps/{APP}/install-on-team"
+    app_config.live["oauth_config"]["scopes"]["bot"].remove("channels:history")     # 19 Oct's swap, live
+    rc, out, _ = app(capsys, "apply", "--dry-run")
+    assert rc == 0 and "dry-run: would call apps.manifest.update" in out and "bot +channels:history" in out and url in out
+    assert "apps.manifest.update" not in app_config.methods() and app_config.methods()[-1] == "apps.manifest.validate"
+    rc, out, _ = app(capsys, "apply")
+    assert rc == 0 and app_config.methods()[-2:] == ["apps.manifest.validate", "apps.manifest.update"]
+    assert app_config.live == json.loads(REAL_MANIFEST.read_text())
+    assert "requires a person to approve new scopes" in out and url in out
+    app_config.live["display_information"]["description"] = "old words"
+    rc, out, _ = app(capsys, "apply")
+    assert rc == 0 and app_config.methods()[-1] == "apps.manifest.update" and "install-on-team" not in out
+    n = len(app_config.calls)
+    rc, out, _ = app(capsys, "apply")
+    assert rc == 0 and "no drift" in out and app_config.methods()[n:] == ["apps.manifest.export"]
+
+
+def test_a_manifest_slack_rejects_names_where_and_is_not_applied(app_config, capsys, monkeypatch):
+    app_config.live["display_information"]["name"] = "Verity (old)"
+    answers = {"apps.manifest.validate": {"ok": False, "error": "invalid_manifest",
+                                          "errors": [{"message": "too long", "pointer": "/display_information/name"},
+                                                     {"message": "x", "pointer": "not a pointer\n"}]}}
+    monkeypatch.setattr(slack, "post", lambda url, data, headers: answers.get(url.rsplit("/", 1)[-1]) or app_config(url, data, headers))
+    rc, _, err = app(capsys, "apply")
+    assert rc == 2 and "apps.manifest.validate: invalid_manifest at /display_information/name\n" in err
+    assert "apps.manifest.update" not in app_config.methods()
+
+
 def test_groups_sync_plans_through_the_broker_but_applies_only_with_the_token(broker, registry, capsys):
     rc, out, _ = run(capsys, "groups", "sync")
     assert rc == 0 and "plan only" in out and [r[1]["method"] for r in broker.requests] == ["auth.test", "usergroups.list"]
