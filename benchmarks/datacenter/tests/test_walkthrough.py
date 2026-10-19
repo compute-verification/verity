@@ -221,6 +221,7 @@ def section_14(program, registration, dc, p):
         plan = Plan(Interval(start, start + 16), wipes=wipes)
         ledger.add(account(audit(run(tonight, {"x": X}, plan), tonight.public(plan)), tonight.public(plan)))
     print(ledger)
+    print(ledger.custody(sum(16 * len(w) for w in WEIGHTS.values())))
     print(Ledger([ledger.epochs[1], ledger.epochs[1]]).joint())
     serviced = Plan(Interval(0, 16), maintenance=[Maintenance("b", Interval(12, 16))])
     off = Deviation(down={(Port("b.cert", "egress"), 3), (Port("b.cert", "ingress"), 3)})
@@ -271,7 +272,7 @@ def test_the_walkthrough_runs_as_shown(capsys):
     assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
     assert acc.export_bits == 1024 and acc.uncovered == ["world-leaf"]   # h and y leave their blocks, uncharged
     assert acc12.sound and acc12.input_bits == {"x": 512, "temperature": 16}
-    assert ledger.sound and len(ledger.epochs) == 3
+    assert ledger.sound and len(ledger.epochs) == 3 and ledger.custody(32768).share < 0.1
     out = capsys.readouterr().out
     for shown in ("passes no certifier", "occupancy differs", "past its deadline", "differ from the registration",
                   "REFUSED"):

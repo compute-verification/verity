@@ -39,7 +39,9 @@ the rest on the whole datacenter, since PoUW credits the prover system (decision
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
 test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
-across them (`joint`): one device's time, bandwidth and memory are credited once.
+across them (`joint`): one device's time, bandwidth and memory are credited once. Its `custody` is the cumulative check
+on the registered weights (NET-37): the share of them that the epochs' covert budgets, charged exports and a side
+channel of σ a server (`DEDICATED_RACKS`) could have carried out.
 """
 from __future__ import annotations
 
@@ -61,6 +63,9 @@ SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 #: a block's proof units counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
 #: Program's partition (proofs, review 4)
 SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
+#: σ, the side channel from each server to machines off its block, under Daniel's premise (19 Oct 04:30Z) that no
+#: untrusted machine shares a block's rack
+DEDICATED_RACKS = Assumption("dedicated-racks", 1e3, "bit/s per server", "declared")
 
 
 def facet(kind: str) -> str:
@@ -120,6 +125,10 @@ class Account:
     exported: dict[Port, float] = field(default_factory=dict)
     #: the links the declaration leaves uncovered (`Datacenter.uncovered_links`), by their ends
     uncovered: list[str] = field(default_factory=list)
+    #: the epoch's real duration, in seconds, and its servers, counted as the blocks' GPU devices: what the side-channel
+    #: premise multiplies (`Ledger.custody`)
+    seconds: float = 0.0
+    servers: int = 0
 
     @property
     def export_bits(self) -> float:
@@ -283,7 +292,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
                    {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
                    _credits(claims, profile, blocks, inside, refused_stores), capacity(dc),
-                   dict(profile.exported), [f"{l.a}-{l.b}" for l in dc.uncovered_links()])
+                   dict(profile.exported), [f"{l.a}-{l.b}" for l in dc.uncovered_links()], seconds,
+                   sum(d.kind == "gpu" for b in dc.blocks for d in b.devices))
 
 
 def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
@@ -315,9 +325,10 @@ def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], 
 @dataclass
 class Ledger:
     """The joint ledger: accounts of successive epochs (nights, say) or of audits that overlap, joined. Covert bits and
-    failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end; what
-    each epoch could carry in is per epoch, and nightly wipes keep it down to the devices' residuals; and each unit's
-    time, bandwidth and memory are credited once across all of them (`joint`)."""
+    failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end, and
+    so does what could have carried the registered weights out (`custody`); what each epoch could carry in is per epoch,
+    and nightly wipes keep it down to the devices' residuals; and each unit's time, bandwidth and memory are credited
+    once across all of them (`joint`)."""
 
     epochs: list[Account] = field(default_factory=list)
 
@@ -357,10 +368,51 @@ class Ledger:
     def carried(self) -> list[float]:
         return [sum(b.carried for b in a.blocks) for a in self.epochs]
 
+    def custody(self, registered_bits: float, sigma: Assumption = DEDICATED_RACKS) -> Custody:
+        """The share of the registered weights, `registered_bits`, that could have left over the ledger's epochs: each
+        epoch's covert budget, its export where it is charged, and σ (`sigma`) from each of its servers over its real
+        duration. Weight custody over a horizon needs this share well below 1. The covert budget's inbound channels
+        (inputs, ingress timing) count too, and the certifier protocol's free fields don't, since no record here has
+        any."""
+        return Custody(registered_bits, self.covert_bits, sum(a.export_bits for a in self.epochs if a.export_charged),
+                       float(sigma) * sum(a.seconds * a.servers for a in self.epochs), sigma,
+                       sum(a.export_bits for a in self.epochs if not a.export_charged))
+
     def __repr__(self) -> str:
         return (f"{len(self.epochs)} epochs, {'sound' if self.sound else 'NOT sound'}: {self.covert_bits:g} covert bits in "
                 f"all, at most {max(self.carried, default=0):.3g} bits carried into any epoch, failure probability at "
                 f"most {self.delta:.3g}")
+
+
+@dataclass(frozen=True)
+class Custody:
+    """What of the registered weights could have left over a ledger's epochs (`Ledger.custody`): the covert budgets,
+    the export where it is charged and the side channel, against the `registered` bits."""
+
+    registered: float
+    covert: float
+    export: float
+    side: float
+    #: σ, the side channel's rate from each server
+    sigma: Assumption
+    #: the export of epochs whose declaration leaves a link uncovered: reported, not charged
+    uncharged: float = 0.0
+
+    @property
+    def bits(self) -> float:
+        """The bits that could have left."""
+        return self.covert + self.export + self.side
+
+    @property
+    def share(self) -> float:
+        """The share of the registered weights that could have left."""
+        return self.bits / self.registered
+
+    def __repr__(self) -> str:
+        return (f"custody: {self.bits:g} bits could have left = {self.covert:g} covert + {self.export:g} export + "
+                f"{self.side:.3g} side channel at {self.sigma!r}, {self.share:.3g} of the {self.registered:g} registered "
+                f"bits" + (f"; {self.uncharged:g} exported bits not charged while a link is uncovered"
+                           if self.uncharged else ""))
 
 
 @dataclass(frozen=True)

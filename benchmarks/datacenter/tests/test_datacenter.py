@@ -595,3 +595,29 @@ def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night
     assert ledger.sound and ledger.covert_bits == 3 * ledger.epochs[0].covert_bits
     first, *wiped = ledger.carried
     assert all(w == 2 * RESIDUAL for w in wiped) and first == 2 * HBM
+
+
+def test_custody_is_the_share_of_the_registered_weights_the_ledgers_epochs_could_have_carried_out():
+    """NET-37: what could leave adds up over a horizon, so weight custody is a cumulative check. Over the ledger's
+    epochs it adds each one's covert budget, its export where it is charged, and σ from each server (a block's GPU)
+    over the epoch's real duration, under `DEDICATED_RACKS` (1 kbit/s a server), against the registered weights' bits:
+    three 16 ms nights on two GPUs give 96 bits of side channel. On the leaf datacenter the export isn't charged and is
+    reported beside the bits; with every link covered it is charged. At a co-resident DRAM channel's rate (DRAMA, about
+    2 Mbit/s, training's red team W4) the same nights could have carried more than the weights."""
+    registered = 2 * 32 * 32 * 16
+
+    def nights(dc: Datacenter) -> Ledger:
+        ledger = Ledger()
+        for night in range(3):
+            plan, q = Plan(Interval(16 * night, 16 * night + 16)), staged(dc, start=16 * night)
+            ledger.add(account(audit(run(q, INPUTS, plan), q.public(plan)), q.public(plan)))
+        return ledger
+
+    covert = 3 * (4 * 4 * 7 + 512)
+    leaf, covered = nights(datacenter()).custody(registered), nights(certified()).custody(registered)
+    assert (leaf.covert, leaf.export, leaf.uncharged) == (covert, 0, 3 * 1024) and leaf.side == pytest.approx(96)
+    assert leaf.bits == pytest.approx(covert + 96) and leaf.share == pytest.approx((covert + 96) / registered)
+    assert (covered.export, covered.uncharged) == (3 * 1024, 0) and covered.bits == pytest.approx(covert + 96 + 3 * 1024)
+    assert "3072 exported bits not charged" in repr(leaf) and "not charged" not in repr(covered)
+    dram = nights(datacenter()).custody(registered, Assumption("co-resident-dram", 2e6, "bit/s per server", "measured"))
+    assert dram.side == pytest.approx(2e6 * 3 * 16e-3 * 2) and dram.share > 1
