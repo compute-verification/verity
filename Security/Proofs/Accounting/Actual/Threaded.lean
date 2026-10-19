@@ -11,7 +11,9 @@ total width, so the bound on each window's starting state takes its place); a wi
 plus `β_X ω`, so at most `K = R + r ω` (`windows_small`). Pulled back through the containment
 (`Nci.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger that read no more, each
 small at `(Γ, K)`, and Theorem 1 (`Nci.SecurityProofs.ThreadedReads`) bounds each piece's counted multiplications by
-`K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
+`K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`). Through a partial containment the
+windows divide only the gates the declaration computes (`Nci.SecurityProofs.piece`), and every other counted
+multiplication is a dark gate (`ThreadedRuntimeDark`).
 
 The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r` from `(2R)² / ω = 4 R r`.
 -/
@@ -161,5 +163,35 @@ theorem ThreadedRate : Guarantees.Actual.ThreadedRate := by
     _ = 2 * (b_a * b_w * d * T.M.card) := by ring
     _ ≤ 2 * (T.reuse * n * R * r * t) := by linarith
     _ = 2 * T.reuse * n * R * r * t := by ring
+
+theorem ThreadedRuntimeDark : Guarantees.Actual.ThreadedRuntimeDark := by
+  intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT hW
+  obtain ⟨P, hP⟩ := windows_small A ℓ Φ ends β link n X θ hθ t ω Γ R r hω hX hC hΦ hL hΓ hr hR
+  have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
+  have hpiece : ∀ u, Small c Γ (R + r * ω) (Nci.SecurityProofs.piece M P u) := fun u =>
+    ⟨Nci.SecurityProofs.piece_subset_computed u, (Nci.SecurityProofs.card_piece_le u).trans (hP u).1,
+      (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_piece u)).trans (hP u).2⟩
+  have hM : (T.M ∩ M.S).card = ∑ u, (T.mults (Nci.SecurityProofs.piece M P u)).card := by
+    have h := Nci.SecurityProofs.sum_card_filter_piece (M := M) (P := P) T.M fun g => g
+    simp only [filter_mem_eq_inter] at h
+    exact h.symm
+  have hcount : b_a * (T.M ∩ M.S).card ≤
+      ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) :=
+    calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (Nci.SecurityProofs.piece M P u)).card : ℝ) := by
+          rw [hM, Nat.cast_sum, mul_sum]
+      _ ≤ ∑ u, (novelReads c (Nci.SecurityProofs.piece M P u) : ℝ) * T.bound (R + r * ω) b_w d e :=
+          sum_le_sum fun u _ =>
+            Nci.SecurityProofs.ThreadedReads c T Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
+      _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
+          sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
+      _ = _ := by simp
+  refine ⟨hcount, runtime_of_count (mul_nonneg hba.le (Nat.cast_nonneg _)) hcount, ?_⟩
+  have hS : ((T.M ∩ M.S).card : ℝ) ≤
+      ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) / b_a := by
+    rw [le_div_iff₀ hba]
+    linarith
+  have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
+    exact_mod_cast Nci.SecurityProofs.card_le_dark_add_inter M T.M_computed
+  linarith
 
 end Accounting.SecurityProofs.Actual

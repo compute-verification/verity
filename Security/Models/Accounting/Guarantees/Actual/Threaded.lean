@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Nci.Assumptions.Threads
+import Definitions.Nci.Dark
 
 /-!
 # The memory cap over threads (trusted)
@@ -17,8 +18,11 @@ capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
 * `ThreadedRuntime`: `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |M| / (n K Λ(K)) − 1)`.
 * `ThreadedRate`: at the window `ω = R/r` in the quadratic regime, with a wipe period dividing the window, at most
   `reuse · n R r / (d b_w b_a)` counted multiplications a tick.
+* `ThreadedRuntimeDark`: `ThreadedRuntime` through a partial containment (`Nci.PartialContainment`): the counted
+  multiplications the declaration computes obey the cap, and every other one is a dark gate,
+  `|M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
 
-Both count reads by width: `Placed.state` and `novelReads` are widths of the gates read. A wipe bounds information, what
+All count reads by width: `Placed.state` and `novelReads` are widths of the gates read. A wipe bounds information, what
 the state can determine, not the width of the gates a window reads from before its start, so composing these with a wipe
 needs the read bound in its determination form.
 -/
@@ -79,5 +83,29 @@ def ThreadedRate : Prop :=
       b_a * b_w * d * T.M.card ≤ T.reuse * n * R * r * t ∧
       ∀ κ : ℝ, κ * c.D.size c.D.computed ≤ 2 * T.M.card →
         κ * b_a * b_w * d * c.D.size c.D.computed ≤ 2 * T.reuse * n * R * r * t
+
+/-- **The memory cap over threads, with dark gates.** `ThreadedRuntime` when the developer's declaration over `[0, t)`
+contains `c` only partly (`Nci.PartialContainment`): it computes the gates `S` of `c`, and the rest, the dark gates, are
+computed outside the developer's region `A[X, [0, t))`, at no location `X i`, and enter it only as inputs outside its
+baseline. The counted multiplications in `S` obey the
+memory cap, `b_a |T.M ∩ S| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M ∩ S| / (n K Λ(K)) − 1)`, and every other counted
+multiplication is a dark gate: `|T.M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`. At `S = computed` it is `ThreadedRuntime`.
+
+Reads are counted by width, as in `ThreadedRuntime`. -/
+def ThreadedRuntimeDark : Prop :=
+  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
+    (c : Declaration) (T : Threading c) (d e : ℕ) (M : PartialContainment c (A.declaration (univ.biUnion X) t θ hθ)),
+    0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
+    A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
+    0 < b_w → 0 < b_a → 0 < d →
+    (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
+    (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
+    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressible c T Γ (R + r * ω) b_w b_a →
+      b_a * (T.M ∩ M.S).card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
+      (ω : ℝ) * (b_a * (T.M ∩ M.S).card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t ∧
+      (T.M.card : ℝ) ≤
+        M.dark.card + (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) / b_a
 
 end Accounting.Guarantees.Actual
