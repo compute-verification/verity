@@ -68,8 +68,8 @@ def test_at_the_design_eta_is_the_residual():
     ("served today", "d", "T4", False),
 ])
 def test_thresholds_are_monotone(scenario, key, tier, rising):
-    """The set where D < 2 lies inside the set where D < 10, which lies inside the set where D < 100; each is one
-    interval at the end of the slider that raises eta, so its inner edge moves outward as the level falls."""
+    """The set where 1/eta < 2 lies inside the set where 1/eta < 10, which lies inside the set where 1/eta < 100; each
+    is one interval at the end of the slider that raises eta, so its inner edge moves outward as the level falls."""
     th = X.thresholds(T.DEFAULTS | X.SCENARIOS[scenario], key, tier)
     lo, hi = X.SPECS[key]["min"], X.SPECS[key]["max"]
     edges = []
@@ -84,7 +84,7 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
 
 
 def test_the_residual_threshold_is_the_closed_form():
-    """At T1, D < X once r_gpu > 1/X - host_share - clock_share - nu."""
+    """At T1, 1/eta < X once r_gpu > 1/X - host_share - clock_share - nu."""
     p = T.DEFAULTS | X.DESIGN | {"lag_s": 0.0}
     th = X.thresholds(p, "residual", "T1")
     for level in (10.0, 2.0):

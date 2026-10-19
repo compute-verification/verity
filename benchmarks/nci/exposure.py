@@ -1,7 +1,8 @@
-"""What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and the
-compute dampener D = 1/eta across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which
-D falls below 100, 10 and 2, and the closed forms of the memory cap mu, NCI's term nu and the cheating share chi checked
-against ``tiers.evaluate``.
+"""What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and 1/eta
+across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
+and 2, and the closed forms of the memory cap mu, NCI's term nu and the cheating share chi checked against
+``tiers.evaluate``. 1/eta is not the compute dampener D (``tiers.evaluate()["dampener"]``): at s = 0 and g = 1,
+D = MFU_0 / eta wherever D > 1. ``statement.py`` gives the thresholds on D.
 
     python benchmarks/nci/exposure.py           # terms, tornado, elasticities, thresholds and closed-form checks
     python benchmarks/nci/exposure.py --json    # the same, for renderers
@@ -13,6 +14,7 @@ import argparse
 import json
 import math
 import sys
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -223,21 +225,28 @@ def grid(key: str, n: int = GRID) -> list[float]:
     return [s["min"], *inner, s["max"]]
 
 
-def thresholds(p: dict, key: str, tier: str, n: int = GRID, steps: int = BISECT) -> dict[float, list[list[float]]]:
-    """For each level, the intervals of the parameter's slider range on which D < level, the others at ``p``."""
+def inverse_eta(p: dict, tier: str) -> float:
+    e = eta(p, tier)
+    return 1 / e if e > 0 else math.inf
+
+
+def thresholds(p: dict, key: str, tier: str, n: int = GRID, steps: int = BISECT, levels: tuple[float, ...] = LEVELS,
+               size: Callable[[dict, str], float] = inverse_eta) -> dict[float, list[list[float]]]:
+    """For each level, the intervals of the parameter's slider range on which ``size`` (1/eta, or tiers' dampener D) is
+    below it, the others at ``p``."""
     xs = grid(key, n)
-    ys = [eta(p | {key: x}, tier) for x in xs]
+    ys = [size(p | {key: x}, tier) for x in xs]
     mid = (lambda a, b: math.sqrt(a * b)) if SPECS[key]["log"] else (lambda a, b: (a + b) / 2)
     out = {}
-    for level in LEVELS:
-        inside = [y * level > 1 for y in ys]
+    for level in levels:
+        inside = [y < level for y in ys]
         edges = []
         for i in range(n - 1):
             if inside[i] != inside[i + 1]:
                 a, b = xs[i], xs[i + 1]
                 for _ in range(steps):
                     m = mid(a, b)
-                    a, b = (m, b) if (eta(p | {key: m}, tier) * level > 1) == inside[i] else (a, m)
+                    a, b = (m, b) if (size(p | {key: m}, tier) < level) == inside[i] else (a, m)
                 edges.append(mid(a, b))
         bounds = [xs[0], *edges, xs[-1]]
         out[level] = [bounds[j:j + 2] for j in range(len(bounds) - 1) if inside[0] != (j % 2 == 1)]
@@ -269,7 +278,7 @@ def rank(rows: list[dict], scenario: str, tiers: tuple[str, ...] = ("T1", "T4"))
     return sorted(rows, key=lambda r: -max(swing(r, scenario, t) for t in tiers))
 
 
-def describe(intervals: list[list[float]], key: str) -> str:
+def describe(intervals: list[list[float]], key: str, show: Callable[[float], str] = lambda x: f"{x:.3g}") -> str:
     lo, hi = SPECS[key]["min"], SPECS[key]["max"]
     if not intervals:
         return "never"
@@ -277,7 +286,7 @@ def describe(intervals: list[list[float]], key: str) -> str:
         return "always"
     parts = []
     for a, b in intervals:
-        parts.append(f"< {b:.3g}" if a == lo else f"> {a:.3g}" if b == hi else f"{a:.3g}-{b:.3g}")
+        parts.append(f"< {show(b)}" if a == lo else f"> {show(a)}" if b == hi else f"{show(a)}-{show(b)}")
     return ", ".join(parts)
 
 
@@ -288,16 +297,16 @@ def g(x: float | None) -> str:
 def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
     print("Terms per scenario (mu at T3, mu_T4 with exhaustion; window = R_wipe / lambda_in)")
     print(f"{'scenario':27} {'r':>6} {'mu':>7} {'mu_T4':>7} {'nu':>8} {'chi':>8} {'R_wipe GB':>9} {'window h':>8} "
-          f"{'eta T1':>7} {'eta T4':>7} {'eta T5':>7} {'D T5':>6}")
+          f"{'eta T1':>7} {'eta T4':>7} {'eta T5':>7} {'1/eta T5':>8}")
     for name, t in scenario_terms.items():
         print(f"{name:27} {t['r']:6.3g} {t['mu']:7.3g} {t['mu_T4']:7.3g} {t['nu']:8.2g} {t['chi']:8.2g} "
               f"{t['R_wipe_gb']:9.4g} {t['window_s'] / 3600:8.3g} {t['eta_T1']:7.3g} {t['eta_T4']:7.3g} "
-              f"{t['eta_T5']:7.3g} {1 / t['eta_T5']:6.3g}")
+              f"{t['eta_T5']:7.3g} {1 / t['eta_T5']:8.3g}")
     for scenario in THRESHOLD_SCENARIOS:
         print(f"\nTornado, {scenario}: eta at low / central / high, ranked by the larger log swing at T1 or T4; "
               "elasticity at the default")
         print(f"{'parameter':12} {'low':>8} {'central':>8} {'high':>8}  {'T1 low':>7} {'central':>7} {'high':>7}  "
-              f"{'T4 low':>7} {'central':>7} {'high':>7}  {'D at T4':>13} {'el T1':>6} {'el T4':>6}")
+              f"{'T4 low':>7} {'central':>7} {'high':>7}  {'1/eta at T4':>13} {'el T1':>6} {'el T4':>6}")
         base = T.DEFAULTS | SCENARIOS[scenario]
         for r in rank(rows, scenario):
             e1, e4 = r["eta"][scenario]["T1"], r["eta"][scenario]["T4"]
@@ -320,8 +329,8 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
             print(f"{r['key']:12} " + " ".join(f"{g(v):>6}" for v in vals))
     for scenario in THRESHOLD_SCENARIOS:
         for tier in THRESHOLD_TIERS:
-            print(f"\nThresholds, {scenario}, {tier}: where D < 100, 10, 2 over the slider range, the others as in "
-                  "the scenario")
+            print(f"\nThresholds, {scenario}, {tier}: where 1/eta < 100, 10, 2 over the slider range, the others as "
+                  "in the scenario")
             flat = {}
             for r in rows:
                 cells = [describe(r["thresholds"][scenario][tier][level], r["key"]) for level in LEVELS]
