@@ -1054,9 +1054,9 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     The verdict refuses, by name, what it doesn't cover yet: ports declared on a Definition other than the root; a
     root Call that may pass one of its arguments through, whose readers the census would hand to the value passed;
     and a batch whose members read more than \(2^{22}\) runs of their part, where the census approximates. Open:
-    - *Steps are values.* A pass's step is a committed input, not public (memory-accounting, 18 Oct), so the
-      verdict is to read the steps through the record's commitment, never in the clear. The record commits no steps
-      yet: it carries them in the clear (§4), and the verdict reads them so.
+    - *Steps are values.* A pass's step is a committed input, not public (memory-accounting, 18 Oct; §7, "Declared
+      outputs"), so the verdict is to read the steps through the record's commitment, never in the clear. The record
+      commits no steps yet: it carries them in the clear (§4), and the verdict reads them so.
     - *W's step ends.* The prover gives them, and the verdict checks only that they increase through W's root
       nodes past its inputs to the last. Nothing yet binds them to the steps serving executed.
     - *Pacing.* This session has no paced mode, so `ledger` reads every record as unpaced.
