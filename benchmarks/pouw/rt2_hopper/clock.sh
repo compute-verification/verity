@@ -3,11 +3,12 @@
 #
 #   research run --on auto --project verity --campaign eps1 --source <tree> --cwd source -- \
 #     bash benchmarks/pouw/rt2_hopper/clock.sh build
-#       builds sm90_clock.cu for sm_90a, writes its SASS and sass_count.py's counts and gate.
-#       Outputs: nvcc.txt, sm90_clock.sass, sass.json, gate.txt, bins.tgz.
+#       builds sm90_clock.cu and msp90.cu for sm_90a, writes their SASS and sass_count.py's counts and gate.
+#       Outputs: nvcc.txt, sm90_clock.sass, sass.json, gate.txt, msp90.sass, msp90-sass.json, bins.tgz.
 #   research run --on vy-dc-h200 --project verity --campaign eps1 --source <tree> --cwd source --send bins.tgz \
 #     --timeout 25m --env GPU_LEASE_WHO=rt2-hopper -- bash benchmarks/pouw/rt2_hopper/clock.sh time
-#       under one gpu-lease: li's fold bit for bit against the host's reference (exact.jsonl), then each load's SM clock
+#       under one gpu-lease: li's fold bit for bit against the host's reference (exact.jsonl), msp90's mma.sp
+#       timings for (M′) (msp90.jsonl), then each load's SM clock
 #       read in the kernel and its MACs a clock (clock.jsonl), with NVML sampled every 100 ms (smi.csv) and its clock,
 #       performance and power reports before and after (smi-{before,after}.txt).
 # Exit: 0 done, 1 build, gate or a probe failed, 2 no nvcc, no inputs or wrong device.
@@ -26,12 +27,16 @@ build)
   "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
   "$NVCC" -std=c++20 -O3 -ldl -gencode arch=compute_90a,code=sm_90a -o "$WORK/sm90_clock" "$HERE/sm90_clock.cu" \
     >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
+  "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_90a,code=sm_90a -o "$WORK/msp90" \
+    "$HERE/msp90.cu" -ldl >"$OUT/build-msp90.log" 2>&1 || { cat "$OUT/build-msp90.log" >&2; exit 1; }
   "$(dirname "$NVCC")/cuobjdump" -sass "$WORK/sm90_clock" >"$OUT/sm90_clock.sass" 2>&1
+  "$(dirname "$NVCC")/cuobjdump" -sass "$WORK/msp90" | "$(dirname "$NVCC")/cu++filt" >"$OUT/msp90.sass" 2>&1
+  python3 "$HERE/sass_count.py" "$OUT/msp90.sass" --json "$OUT/msp90-sass.json" >/dev/null 2>&1
   python3 "$HERE/sass_count.py" "$OUT/sm90_clock.sass" --json "$OUT/sass.json" --gate >"$OUT/gate.txt" 2>&1
   rc=$?
   cat "$OUT/gate.txt"
   [ $rc -eq 0 ] || exit 1
-  tar -C "$WORK" -czf "$OUT/bins.tgz" sm90_clock
+  tar -C "$WORK" -czf "$OUT/bins.tgz" sm90_clock msp90
   ;;
 time)
   IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
@@ -55,6 +60,7 @@ time)
   smi=$!
   rc=0
   "$B" exact 64 >"$OUT/exact.jsonl" 2>&1 || rc=1
+  [ -x "$WORK/msp90" ] && { "$WORK/msp90" >"$OUT/msp90.jsonl" 2>&1 || rc=1; }
   : >"$OUT/clock.jsonl"
   # ~0.4 s a launch, 30 launches a load: the light loop first, then the wgmma alone, the design's mixed load, the honest
   # loop without filler, and the mixed load again (the clock at the end of a minute's saturation)
