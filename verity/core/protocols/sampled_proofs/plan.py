@@ -92,10 +92,6 @@ class VerificationPlan:
         """The gate classes proved on every audit: an `IntegrityProfile`'s covered families."""
         return frozenset(ob.gate_class.name for ob in self.unconditional)
 
-    def covered_by_proof(self, gate: Gate) -> bool:
-        """Whether some unconditional obligation covers `gate` (checked on every audit)."""
-        return any(ob.gate_class.selector(gate) for ob in self.unconditional)
-
     def expected_checked(self, sub: GateSelection) -> Fraction:
         """Expected number of checked gates in `sub` under this plan (explicit enumeration)."""
         return sum((self.check_probability(g) for g in sub), Fraction(0))
