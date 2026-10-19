@@ -136,6 +136,36 @@ def test_diff_flags_the_lane_classifiers_uniform_mis_map():
     assert all(x["class_of"] == "UNI" for x in d["disagreements"])
 
 
+def test_ds_tensor_types_read_each_devices_sheet():
+    """A3 prices a tensor form by its operand type's `DS_tensor` peak, read from each device's own rows file: no device
+    lists f64, sm_90/sm_100 list no e2m1 (fp4), sm_120 does; sm_90's "no b1 figure" (after the `;`) doesn't count b1."""
+    assert diff_menu.ds_tensor_types("sm_90") == {"s8", "e4m3", "e5m2", "f16", "bf16", "tf32"}
+    assert diff_menu.ds_tensor_types("sm_100") == {"s8", "e4m3", "e5m2", "f16", "bf16", "tf32"}
+    assert diff_menu.ds_tensor_types("sm_120") == {"s8", "e4m3", "e5m2", "e2m1", "f16", "bf16", "tf32"}
+
+
+def test_mma_type_reads_the_operand_type():
+    t = diff_menu.mma_type
+    assert (t("DMMA.8x8x4"), t("HMMA.16816.F32"), t("HMMA.16816.F32.BF16"), t("HMMA.1688.F32.TF32")) == \
+        ("f64", "f16", "bf16", "tf32")
+    # tcgen05 names no type (it's in the descriptor): UTCOMMA goes by base, the block-scaled fp4 family
+    assert t("UTCOMMA.4X") == t("OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X") == "e2m1"
+    assert (t("IMMA.16832.S8.S8"), t("UTCQMMA"), t("BGMMA")) == ("s8", "e4m3", "b1")
+
+
+def test_a_tensor_form_is_priced_by_its_type_not_only_a_census_row():
+    """sm_100's census has no mma.sync HMMA row, but f16/bf16/tf32 have a `DS_tensor` peak, so HMMA is priced; UTCOMMA's
+    e2m1 has neither, so it's a gap there, while sm_120 (which lists e2m1) prices its OMMA fp4."""
+    def b(family, op):
+        census = {family: {"ops": {op: {"count": 1, "example": "", "base": op.split(".")[0], "sources": {}}}}}
+        return next(r["bucket"] for r in diff_menu.diff(family, census, with_unused=False)["rows"] if r["op"] == op)
+    assert b("sm_100", "HMMA.16816.F32") == "PRICED-TENSOR"
+    assert b("sm_100", "HMMA.1688.F32.TF32") == "PRICED-TENSOR"
+    assert b("sm_100", "UTCOMMA.4X") == "GAP-TENSOR"
+    assert b("sm_120", "OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X") == "PRICED-TENSOR"
+    assert b("sm_90", "DMMA.8x8x4") == b("sm_100", "DMMA.8x8x4") == b("sm_120", "DMMA.8x8x4") == "GAP-TENSOR"
+
+
 def test_a_gap_row_carries_the_cheapest_escape():
     d = diff_menu.diff("sm_90", census(), with_unused=False)
     dmma = next(r for r in d["rows"] if r["op"] == "DMMA.8")

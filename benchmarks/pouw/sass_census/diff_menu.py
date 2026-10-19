@@ -10,10 +10,12 @@ This reads the device's opcode vocabulary -- the union of what `cuobjdump` emitt
 NVIDIA's Instruction Set Reference table for the architecture (`data/sass_isa_tables.json`) -- and buckets every opcode:
 
   PRICED-LANE     `loads.class_of` gives a census class, or the base is a lane/uniform MAC: priced on the q* lane route.
-  PRICED-TENSOR   an MMA form whose operand-type family has a peak in the device's census (A3 prices it).
+  PRICED-TENSOR   an MMA form A3 prices: its operand type has a peak in the device's `DS_tensor` row (A3 prices a form by
+                  its type's data-sheet peak), or the form has a measured row in the device census.
   PRICED-SIDE     a reduction / atomic / texture side unit, priced at the pi32 floor (floors.csv); no multiply (NoSum).
   MOVER           no arithmetic: the output word equals an existing word (a copy / transpose / load / select) (NoSum).
-  GAP-TENSOR      an MMA form with NO peak in the device's census: A3 prices it at macs/(0/4) = 0 (DMMA f64, b1, s4).
+  GAP-TENSOR      an MMA form whose operand type has no `DS_tensor` peak and no census row: A3 has no rate for its MACs
+                  (f64 `DMMA` everywhere; e2m1 fp4 `UTCOMMA` on sm_100, whose sheet lists no e2m1).
   GAP-MULTIPLY    a product unit on no menu route: a fresh product the model prices at 0.
   UNDERPRICED     a native paired lane multiply (FFMA2/FMUL2) the census prices as one FMA: charged half its work.
   GAP-WORD        writes a word but forms no product (a SIMD add / cross-lane fold) that the model prices at 0: NoSum
@@ -45,6 +47,9 @@ MM = HERE.parent / "machine_model" / "data"
 #: the device census file an architecture family reads its priced kinds from
 DEVICE_CENSUS = {"sm_120": MM / "census" / "DS-120.csv", "sm_100": MM / "devices" / "sm_100" / "census.csv",
                  "sm_90": MM / "devices" / "sm_90" / "census.csv", "sm_80": MM / "devices" / "sm_80" / "census.csv"}
+#: the rows file whose `DS_tensor` row gives each operand type's data-sheet tensor peak
+DEVICE_ROWS = {"sm_120": MM / "rows.csv", "sm_100": MM / "devices" / "sm_100" / "rows.csv",
+               "sm_90": MM / "devices" / "sm_90" / "rows.csv", "sm_80": MM / "devices" / "sm_80" / "rows.csv"}
 #: NVIDIA's Instruction Set Reference table an architecture family maps to
 ISA_TABLE = {"sm_90": "hopper", "sm_100": "blackwell", "sm_103": "blackwell", "sm_120": "blackwell", "sm_80": "ampere"}
 #: an MMA SASS base -> the census-kind token its peak would appear under (QMMA covers FP8/FP6/FP4 mma.sync on sm_120)
@@ -68,14 +73,9 @@ ESCAPE = {
             "but has no floors.csv kind of its own",
     "LDGMC": "a reducing / multicast global load (NVLS); an add of existing words with no multiply (NoSum); RT-SCOPE owns "
              "the NVLS switch-side reduction",
-    "HMMA": "mma.sync FP16/BF16/TF32 on the B200 heads FP16/BF16 committed words; the sm_100 census prices only the "
-            "tcgen05 UTCHMMA peak, not the mma.sync form, so A3 has no peak for HMMA MACs (sm_100 only; sm_90/sm_120 price it)",
-    "QMMA": "mma.sync FP8 on the B200 heads FP8 committed words; the sm_100 census prices only tcgen05 UTCQMMA, not the "
-            "mma.sync form, so A3 has no peak for QMMA MACs (sm_100 only)",
-    "OMMA": "mma.sync FP8/FP6/FP4 (OCP formats) on the B200 heads low-precision words; no mma.sync peak in the sm_100 "
-            "census (sm_100 only; sm_120 prices OMMASF16864)",
-    "UTCOMMA": "tcgen05 FP4 (mxf4/nvf4) MMA on the B200; no UTCOMMA peak in the sm_100 census, so A3 can't price its FP4 "
-               "words (a tensor gap on B200; sm_120 has no tcgen05)",
+    "UTCOMMA": "tcgen05 block-scaled fp4 (e2m1, kind::mxf4/mxf4nvf4) on the B200 heads FP4 committed words; the sm_100 "
+               "DS_tensor row lists no e2m1 and the census has no UTCOMMA row, so A3 has no rate for its MACs. fp4 is the "
+               "B200's fastest tensor format, so this is the widest-rate gap; sm_120 lists e2m1 and prices its OMMA fp4",
     "SPARSIFY": "compresses an operand to 2:4; a data reshape with no product (MOVER)",
     "DECOMPRESS": "expands a 2:4 operand; a data reshape with no product (MOVER)",
 }
@@ -95,6 +95,49 @@ def priced_tensor_tokens(family: str) -> set[str]:
     return toks
 
 
+#: an operand type the `DS_tensor` row can name (bf16 before f16 so the lookbehind keeps `f16` out of `bf16`)
+TYPE_TOKEN = re.compile(r"(?<![a-z0-9])(e4m3|e5m2|e2m1|e3m2|e2m3|bf16|f16|tf32|f64|s8|u8|s4|b1)(?![a-z0-9])")
+
+
+def ds_tensor_types(family: str) -> set[str]:
+    """The operand types the device's `DS_tensor` row gives a data-sheet peak for: the types its "dense MACs a SM-clock"
+    clause lists, up to the first `;` (so sm_90's "no b1 figure" after it doesn't count b1). e5m2 runs at e4m3's FP8 rate,
+    so a listed e4m3 covers it."""
+    f = DEVICE_ROWS.get(family)
+    if not f or not f.exists():
+        return set()
+    for r in csv.DictReader(f.read_text().splitlines()):
+        if r["row"] == "DS_tensor":
+            desc = r["description"]
+            i = desc.find("dense MACs a SM-clock")
+            clause = desc[i:].split(";")[0] if i >= 0 else ""
+            types = set(TYPE_TOKEN.findall(clause))
+            if "e4m3" in types:
+                types.add("e5m2")
+            return types
+    return set()
+
+
+def mma_type(op: str) -> str | None:
+    """An MMA form's operand type. tcgen05 (UTC*) opcodes name no type (it's in the instruction descriptor), so they go by
+    base: OMMA/UTCOMMA are the block-scaled fp4 family (sm_120's `OMMA.SF...E2M1.E2M1.UE4M3`)."""
+    s = op.upper()
+    base = s.split(".")[0]
+    if base == "DMMA":
+        return "f64"
+    if base in ("BMMA", "BGMMA", "UTCBMMA"):
+        return "b1"
+    if base in ("IMMA", "IGMMA", "UTCIMMA"):
+        return "s8"
+    if base in ("OMMA", "OGMMA", "UTCOMMA"):
+        return "e2m1"
+    if base in ("QMMA", "QGMMA", "UTCQMMA"):
+        return "e5m2" if "E5M2" in s and "E4M3" not in s else "e4m3"
+    if base in ("HMMA", "HGMMA", "UTCHMMA"):
+        return "tf32" if "TF32" in s else "bf16" if "BF16" in s else "f16"
+    return None
+
+
 def isa_vocab(family: str) -> dict[str, dict]:
     t = json.loads((HERE / "data" / "sass_isa_tables.json").read_text())["tables"]
     return t.get(ISA_TABLE.get(family, ""), {})
@@ -106,10 +149,11 @@ LANE_MAC_BASE = {"IMAD", "IMUL", "IMUL32I", "IDP", "IDP4A", "FFMA", "FHFMA", "FF
                  "DMUL", "HFMA2", "HMUL2", "UIMAD", "UFFMA", "UFMUL"}
 
 
-def bucket(op: str, sem: dict, cls: str | None, priced_toks: set[str]) -> str:
+def bucket(op: str, sem: dict, cls: str | None, priced_toks: set[str], ds_types: set[str]) -> str:
     base = op.split(".")[0]
     if base in MMA_KIND_TOKEN:
-        return "PRICED-TENSOR" if MMA_KIND_TOKEN[base] in priced_toks else "GAP-TENSOR"
+        priced = mma_type(op) in ds_types or MMA_KIND_TOKEN[base] in priced_toks
+        return "PRICED-TENSOR" if priced else "GAP-TENSOR"
     if sem.get("paired"):
         return "UNDERPRICED"
     if sem["route"] == "control" or sem["word"] is False:
@@ -146,27 +190,31 @@ def diff(family: str, census: dict, with_unused: bool) -> dict:
     used = fam.get("ops", {})
     vocab = isa_vocab(family)
     priced_toks = priced_tensor_tokens(family)
+    ds_types = ds_tensor_types(family)
     names = set(used) | ({o for o in vocab} if with_unused else set())
     rows = []
     for op in sorted(names):
         base = op.split(".")[0]
         sem = classify(base)
         cls = class_of(op)
-        b = bucket(op, sem, cls, priced_toks)
+        b = bucket(op, sem, cls, priced_toks, ds_types)
         rows.append({"op": op, "base": base, "group": vocab.get(base, {}).get("group") if base in vocab else
                      (vocab.get(op, {}).get("group")), "bucket": b, "mul": sem["mul"], "word": sem["word"],
-                     "route": sem["route"], "class_of": cls, "count": used.get(op, {}).get("count", 0),
+                     "route": sem["route"], "type": mma_type(op) if base in MMA_KIND_TOKEN else None,
+                     "class_of": cls, "count": used.get(op, {}).get("count", 0),
                      "in_corpus": op in used, "note": sem["note"],
                      "escape": ESCAPE.get(base) if b.startswith("GAP") else None})
     by = {}
     for r in rows:
         by.setdefault(r["bucket"], []).append(r)
     return {"family": family, "isa_table": ISA_TABLE.get(family), "priced_tensor_tokens": sorted(priced_toks),
-            "counts": {b: len(v) for b, v in sorted(by.items())}, "disagreements": disagreements(rows), "rows": rows}
+            "ds_tensor_types": sorted(ds_types), "counts": {b: len(v) for b, v in sorted(by.items())},
+            "disagreements": disagreements(rows), "rows": rows}
 
 
 def report(d: dict) -> str:
-    out = [f"== {d['family']} (ISA table: {d['isa_table']}; priced tensor: {', '.join(d['priced_tensor_tokens'])})",
+    out = [f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
+           f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})",
            "buckets: " + ", ".join(f"{b} {n}" for b, n in d["counts"].items())]
     if d["disagreements"]:
         out.append("class_of disagreements (the lane classifier's UNIFORM regex mis-maps these): "
