@@ -541,7 +541,11 @@ causal, releases, on every event, at most twice the probability at the simulator
 It holds under `Claims.Hm96Hiding`, the session's six Props and the item-stream refinement at `swP vs`
 (`LeanRelease.ItemsRefine`: `LiveRefine`, `FillRefine` at the values the firewall's transcript reports, and `StopRefine`),
 with no assumption on what the firewall computes. The stop leaks one bit a session; over a stream of `m` sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits
-(`stream_leak_deferred`). -/
+(`stream_leak_deferred`).
+
+It does not yet cover the deployed session's hello, link and final messages: every round here is a frame round, so
+at the deployed session `ItemsRefine` fails at those three and at every frame round's tag, and the bound holds there only
+vacuously (note:proofs/20261019T1825Z-finding-zks10-release-messages). -/
 theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (vs : S.SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
