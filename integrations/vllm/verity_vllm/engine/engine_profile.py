@@ -15,7 +15,6 @@ import json
 import os
 import platform
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -88,7 +87,8 @@ def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
         cp = matches[0]
-    if not cp.get("downloaded") or not cp.get("local_path"):
+    # a recipe pin (fp8_checkpoint, int8_checkpoint) is made on the pod, never downloaded: its snapshot is there or not
+    if not (cp.get("downloaded") or cp.get("recipe")) or not cp.get("local_path"):
         raise SystemExit(f"{cp['repo']} is not downloaded on this pod (manifest says resolve-only)")
     if not Path(cp["local_path"]).exists():
         raise SystemExit(f"{cp['repo']}: local snapshot {cp['local_path']} missing")
@@ -461,7 +461,3 @@ def canonical_json_bytes(doc: Any) -> bytes:
 
 def profile_id_of(manifest: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()[:12]
-
-
-def utc_stamp() -> str:
-    return time.strftime("%Y%m%dT%H%MZ", time.gmtime())

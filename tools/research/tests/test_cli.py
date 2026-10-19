@@ -284,8 +284,9 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
 
 
 def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypatch, capsys):
-    """`research run --on auto` (18 Oct, remote by default): --queue pinned to vy-nebius-2 (its Verity share, nice 19 inside the check
-    slots), from the checkout it runs in, as project verity and kind agent-test, which gives what the run doesn't declare."""
+    """`research run --on auto` (18 Oct, remote by default): --queue pinned to vy-nebius-2 (its Verity share, whole cores of its own
+    inside the check slots), from the checkout it runs in, as project verity and kind agent-test, which gives what the run doesn't
+    declare."""
     from research import remote
 
     specs, sources = [], []
@@ -315,6 +316,54 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
     assert main([*runs, "--queue", "--", "true"]) == 2 and "takes no --queue or --pool" in capsys.readouterr().err
     monkeypatch.chdir(tmp_path)
     assert main([*runs, "--", "true"]) == 2 and "no git checkout here" in capsys.readouterr().err
+
+
+def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_gb_and_timeout_s(tmp_path, monkeypatch, capsys):
+    """vllm's suite declares worker_gb 8 and timeout_s 14400 (#2696): `--on auto` gives its suites.py run 4 CPUs x 8 GB and the
+    suite's 4 h plus 10 min to sync, where the run says neither; what the run gives, and a run of no named suite, a suite that
+    declares nothing, a name that matches none or another kind, keep the kind's size."""
+    from research import cli as C
+    from research import remote
+
+    specs = []
+
+    def place(src, run_id, spec):
+        specs.append((spec["cpus"], spec["mem-gb"], spec["max-s"]))
+        raise remote.Refused("placement reached")
+
+    monkeypatch.setattr(remote, "queue_placement", place)
+    repo = tmp_path / "repo"
+    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
+                       "integrations/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'
+                                            '[tool.verity.tests]\nworker_gb = 8\ntimeout_s = 14400\nparallel = true\n',
+                       "verity/core": '[project]\nname = "verity-core"\n[tool.pytest.ini_options]\n[tool.verity.tests]\ntimeout_s = 1800\n',
+                       "tools/x": '[project]\nname = "x"\n'}.items():
+        (repo / path).mkdir(parents=True, exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    for extra, cmd, want in (
+            ([], [*suites, "verity-vllm", "--quick"], (None, 32, 15000)),
+            (["--cpus", "8"], [*suites, "--jobs", "2", "integrations/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
+            (["--cpus", "8"], [*suites, "vllm", "verity-core"], (8, 64, 14400 + 1800 + 600)),
+            (["--mem-gb", "20"], [*suites, "vllm"], (None, 20, 15000)),
+            (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
+            (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
+            ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
+            ([], [*suites, "--quick"], (None, None, None)),
+            ([], [*suites, "repository"], (None, None, None)),
+            ([], [*suites, "nosuch"], (None, None, None)),
+            ([], [*suites, "verity_vllm"], (None, None, None)),             # suites.py's names are normalized: it matches none
+            ([], [*suites, "verity"], (None, None, None)),                  # in two: suites.py refuses it
+            ([], ["pytest", "integrations/vllm"], (None, None, None)),
+            (["--kind", "adhoc-x"], [*suites, "vllm"], (None, None, None))):
+        specs.clear()
+        assert C.main([*runs, *extra, "--", *cmd]) == 3, (extra, cmd)
+        assert specs == [want], (extra, cmd)
+    assert "32 GB and 250 min, from the [tool.verity.tests] of verity-vllm" in capsys.readouterr().err
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):

@@ -1,0 +1,15 @@
+# /etc/systemd/system/vy-retention-gc.service on vy-nebius-1 and vy-nebius-2 (`research deploy` installs it): research's retention
+# policy, applied. Over 80% of /workspace it deletes expired paths, oldest and lowest priority first, until under 75%
+# (`research retention gc --apply`, its defaults), with the newest research tool snapshot. On 19 Oct 06:40Z node 2 sat at 80% with
+# 3.5 TiB collectable, and the fill runner held every queued run until a hand-run gc. Never inside a timed window on node 2, like the
+# store eviction (store_evict_timed.conf): deleting a few TB competes with a timed measurement for the disk.
+[Unit]
+Description=retention gc: delete expired research paths while /workspace is over 80%
+
+[Service]
+Type=oneshot
+User=research
+Nice=19
+IOSchedulingClass=idle
+ExecCondition=/bin/sh -c '! grep -qs "timed True" /workspace/pouw/fill/status.txt'
+ExecStart=/bin/sh -c 'T=$(ls -td /workspace/research/tool/*/ | head -1); cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --apply'

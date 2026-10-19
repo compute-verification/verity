@@ -27,10 +27,11 @@ there; the rates and the GEMM's exactness need the GPU (`run.sh`).
 | `probes/uchain.cuh`, `probes/sm90_async.cu`, `probes/sm100_async.cu` | The same 8 warp-uniform chains (now in `uchain.cuh`, shared with `uniform.cuh`) beside a *saturated async* tensor op (RT-ISA round 2 WATCH): on sm_90a, 4 wgmma s8 m64n256k32 a group, bare (`uwg_`), with an in-loop accumulator fold (`uwgf_`), and with the honest mma.sync step (`uwgh_`); on sm_100a, 4 tcgen05.mma i8 128×256×32 a group from one warp, bare (`utc_`) and with the honest step (`utch_`). K sweeps 0, 32, 64, 128; each loop's full SASS is pinned, so a chain that moves off its datapath refuses (`UNI_TABLES=async`) |
 | `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
 | `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
+| `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The machine model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
-pipe.py's SASS profile and q*, uniform.py's tables, fit and writer) and `../tests/test_ffill.py` (ffill's reference
+pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock) and `../tests/test_ffill.py` (ffill's reference
 against the integer FP32 pipe, its coins, chains and pinned receipts, its dump checks, the header's host build, the
 design that prices it). A probe's rate is
 opcode_probe's: warp instructions a SM a clock, timed only after its SASS gate, its poisoned sink and its no-write
@@ -168,6 +169,33 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   1.155 / 0.656 / 0.613% and 1.791 / 0.789 / 0.707%. The H200 doesn't move (5.013 / 4.514 / 4.471% at L = 32, 10.440 /
   9.438 / 9.356% at L = 64): its binding joint issue row JI90_0 charges a uniform instruction 0.965, which closes the
   route.
+
+## Combined routes beside wgmma (`emp.sh`, 1× H200)
+
+`probes/sm90_emp.cu` runs the routes the machine model's red team named (note:20261019T0533Z-draft-rt-h200-emp) beside
+a saturated wgmma, and `emp.py` prices each timed loop's whole SASS on DS-90's facets. Three rounds, 69 loops
+(r20261019-062628-43df, r20261019-063344-f650, r20261019-064443-0ae6), none above a facet:
+
+- **A uniform instruction takes an issue slot beside a saturated wgmma.** `emp_pack3_i_r1024_k{0,64,128}` runs 3 warps a
+  SMSP, each with 4 wgmma s8 n128 a group, the honest step's 8 IMMA, 1024 FFMA and K uniform instructions an iteration.
+  The chain stays uniform, and the loop's SASS adds only uniform opcodes as K grows. It issues 0.870 / 0.869 / 0.871 a
+  SMSP-cycle, and each added uniform instruction costs 1.19 (K 0 → 64) and 1.08 (K 64 → 128) SMSP-cycles. So A2u holds
+  beside async wgmma on the H200, and JI90_0's 0.965 sits below the measured price, the conservative side.
+- **2:4 sparse wgmma reaches A3's sparse line only with A in registers.** `wgsprs_s8` (m64n256k64.sp) runs at its dense
+  twin's instruction rate, 4095.6 physical (8191 logical) MACs a SM-clock. With A in shared memory (`wgsp_s8`, `_e4m3`,
+  `_f16`) it runs at 0.889 of it: 18 KB of operands an instruction at the dense rate is 144 B a SM-clock against the
+  128 B shared port. B is always in shared memory, so the port caps a 2:4 form at 4096/b physical MACs a SM-clock for
+  b-byte operands, each type's dense peak.
+- **SS wgmma's operand reads share the shared-memory port with LDS.** `emp_smem`: wgmma n128 SS reads 94.3 B a SM-clock
+  and LDS.128 beside it 28.7, 123.0 of 128; LDS.128 alone 127.96.
+- **setmaxnreg changes no rate.** ptxas drops a release it can't honor (C7507, no USETMAXREG: 232/40 and 208/64 at 384
+  threads) and keeps 184/96 (`emp_reg_d96`). All three run tensor 0.9996 beside IMAD 0.789 a SM-clock.
+- **The clock under a saturated wgmma is under the 1830 MHz tensor clock.** NVML's sample reads 1905–1965 MHz there, but
+  the event clock (`emp.py`'s evMHz: the longest block's cycles over the event time a call) is 1518–1797 MHz on every
+  loop at tensor ≥ 0.99 (r20261019-053910-d2c9). A second, the H200 does at most 1942.7 dense s8 TOPS (1.8% under its
+  sheet's 1979), 899.7 f16 TFLOPS and 473.8 tf32. Light loops (scalar, shared memory) read the same on both clocks.
+- **b1**: BGMMA.64x256x256 runs at s8 n256's instruction rate (0.03125 a SM-clock, 4× its MACs) and BMMA.168256 at
+  0.656, as IMMA.16832; DS-90 prices b1 on issue alone.
 
 ## B300 (sm_103a)
 

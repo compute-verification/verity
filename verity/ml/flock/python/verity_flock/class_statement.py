@@ -893,7 +893,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
                 flat = flat[w:]
     flat_in = [lf for n, _t in params for key in sorted(k for k in leaves if k[0] == n) for lf in leaves[key]]
     outs = IL.lower(C, definition, flat_in)
-    fields = ret.fields if hasattr(ret, "fields") else (ret,)
+    fields = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else (ret,)
     out_words, out_bits, at = [], [], 0
     for f in fields:
         bits = []

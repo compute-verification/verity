@@ -991,7 +991,8 @@ static void loop(State* sp) {
 
 }  // namespace sq
 
-// --- the SM partition: green contexts (benchmarks/fill_compute's fill.cu `gc_split`, the filler's side split first) ---
+// --- the SM partition: green contexts (benchmarks/fill_compute/fill.cu's `gc_split` at 1b21bc8f7, the filler's side
+// split first) ---
 // sq_green splits the device's SMs into the filler's `fill_sms` (as the driver rounds) and the step's rest, each a green
 // context. Once it has run, sq_start makes the BASE, STEP and PREFILL streams on the filler's context; IDLE stays on the
 // device's, every SM, as no step is on the GPU while it reads. The driver API through dlopen, as fill.cu's.

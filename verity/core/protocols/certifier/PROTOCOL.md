@@ -144,8 +144,10 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
-- **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests and
-  the charge (log2 #Σ_sync per window, 7 bits at 16 × 8), both bound by the spec's context with the link, the run,
+- **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests, the
+  charge (log2 #Σ_sync per window, 7 bits at 16 × 8) and the occupancy profile (`LinkWindows.occupancy`: for each end,
+  each window's T counts as the Program and the placement fix them, or none for an end the Program reads rather than
+  predicts), all bound by the spec's context with the link, the run,
   the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused.
@@ -155,7 +157,11 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   that reads the opening: it accepts when the opening reproduces the registered root (so each head leaf holds its
   record's head) and the audit accepts both
   records under the certifier's key in its session (`LinkWindows.certifier_session`; `check_link` against the Program's grid under the declared syncs,
-  `check_ingress_link` on the status and parameters). The outcome passes the opening's root as the session's, which
+  `check_ingress_link` on the status and parameters), and each head's counts are the profile's for its end and window
+  (`LinkWindows.declares`; a window past the profile is a reject). The count check needs no frame's bytes, so it is the
+  part of the grid check a proof of the unit can make without the content, and the only grid check on ingress: an
+  equality of 32·T bits a head, 32·T − 1 ANDs (19,199 at T = 600). It runs on every link-window, and N3, which holds its
+  N frames to the head's root, so to Σ n_t, runs on drawn ones. The outcome passes the opening's root as the session's, which
   one-stage's audit holds to the registered one. An unset deadline bit is a `no-verdict` there, so a reject; a proof
   after `proof_deadline` is the service's `late`.
 
@@ -412,34 +418,56 @@ them.
 - **Ingress:** a frame read at time s is enqueued at bucket ⌈s/τ_in⌉ and released by the ingress `Certifier` at r_in
   (`Bucketer`, `calibration.size_ingress_ms`'s model).
 - **The salt** (`Proxy(salt=…)`) is off by default, and with it off every record, wire and verdict is as above.
-  - **What.** 512 bits per window from the certifier's own randomness (`fresh_salt`), drawn at the window's first
-    ingress tick. A source of coins handed to the certifier, such as the memory challenger's, takes the same place: a
-    function from the window to 64 bytes.
-  - **Into the block only.** At that tick the certifier enqueues one salt frame ahead of the bucket's arrivals, and
+  - **What.** `salt_bits` bits (512 by default, `SALT_BITS`) per PoUW window from the certifier's own randomness
+    (`fresh_salt`). PoUW window p is the `pouw_window` = k certifier windows p·k … p·k + k − 1 (k = 1 by default),
+    and its salt is drawn at its first ingress tick, t_s. A source of coins handed to the certifier, such as the
+    memory challenger's, takes the same place: a function from the PoUW window and the width in bytes to that many
+    bytes. A proxy back from maintenance in the middle of a PoUW window has no salt for it.
+  - **Into the block only.** At that tick the certifier enqueues its own salt frame ahead of the bucket's arrivals, and
     behind any queue carried from the window before (`Bucketer(first=…)`). It is kind `SALT` (3) on `SALT_STREAM`
-    (2^32 − 1), and its payload is u64be w ‖ `salt_commitment(salt)`, where
-    `salt_commitment(s) = tagged_sha512("verity-network-certifier/salt/v1", s)`. It takes one of the window's ingress
-    slots like any crossing, so r_in carries honest ingress plus one frame per window. When the ingress certifier
-    releases it, the proxy writes the frame's header, w and the salt (`SALT_FRAME_BYTES`, 81 bytes, no fill) on a
-    server connection of its own. The proxy never reads that connection, so nothing the server writes there reaches
-    egress. The egress side never holds the salt, its commitment or anything drawn from them: the egress grid, its
-    padding and the wire are the unsalted run's. A frame of kind `SALT` read from the link is never taken for the
-    certifier's.
-  - **In the record.** The window's ingress record holds the salt frame, so it holds the commitment and not the salt.
-    The record's formats are unchanged: the v1 digest and the v2 frame tree bind the salt frame like any other frame,
-    so a certified record signs the commitment. Neither the Lean analysis nor the Lean ports change.
-  - **Revealed after registration.** `Proxy.reveal(w)` gives window w's salt. The verifier calls it once the prover
-    has registered window w, and the certifier refuses it while w's ingress record is unpublished. Nothing else
-    publishes the salt.
-  - **The audit's read** (`check_salts(audit, link, records, windows, salts)`). An ingress link-window is accepted if it
-    has exactly one raw record, which holds exactly one salt frame of its window, and that frame's commitment is the
-    revealed salt's. Anything else, a missing salt included, is a `salt` violation, recorded with the audit's
-    verdicts. A committed or certified record doesn't show its frames, so there a proof opens the salt frame.
-  - **What it costs.** The protocol fixes the salt frame's place in the queue, so it adds nothing to the ingress
-    count `(r_in + 1)^T`. Its content is the certifier's coins, which no outside party chooses and nothing X sends
-    can change, so it costs 0 bits by the argument the trusted text makes for the challenger's coins (D7,
-    `Security/Models/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin openings on a coin
-    link, and doesn't name the certifier's salt yet.
+    (2^32 − 1), and its payload is u64be p ‖ `PLACEHOLDER`, 64 zero bytes (`SALT_FRAME_BYTES`, 81 bytes, the least
+    ingress frame a salted proxy takes). It takes one of the window's ingress slots like any crossing, so r_in carries
+    honest ingress plus one frame per PoUW window. The `Bucketer` follows it by its place in the queue, never by its
+    bytes (`Bucketer.own`), so a frame of kind `SALT` read from the link, even one of the same bytes, is never taken
+    for the certifier's, and one a fault drops is never released. When the ingress certifier releases it, the proxy
+    writes the frame's header, p and the salt (no fill; the header's length is 8 plus the salt's bytes) on a server
+    connection of its own. The proxy never reads that connection, so nothing the server writes there reaches egress.
+    The egress side never holds the salt or anything drawn from it: the egress grid, its padding and the wire are the
+    unsalted run's.
+  - **In the record: nothing of the salt.** The salt frame's bytes and its slot are fixed by the window and the traffic,
+    so every record, before t_d and after, is a function of the traffic alone, and two salts at the same traffic give
+    the same records. The record's formats are unchanged: the v1 digest and the v2 frame tree bind the salt frame like
+    any other frame, and N3 checks it against its public payload. Neither the Lean analysis nor the Lean ports change.
+    A placeholder in the commitment's slot was the smaller of the two changes compute accounting offered (18 Oct): the
+    other, the commitment in the record published at t_d, changes the record's format, its digest and certificate,
+    and N3's public input, and with the certifier trusted it binds nothing the reveal doesn't.
+  - **The sealed slot.** The certifier's record cells are its grids and one sealed slot per PoUW window, `_salts[p]`,
+    which holds the salt and which only `reveal` opens. So the record's open cells (`Accounting.Attribution.openCells`,
+    the record minus that slot, ATTRIB-R4) are the grids, and what the certifier sends into the block, the salt frame's
+    release included, is a function of its record, the sealed slot included, and its jitter, as
+    `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `Security/Definitions/Accounting/Physical.lean`.
+  - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
+    The verifier calls it with the registration the proof service returned for p (`Registration`, from
+    `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
+    registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
+    and `registered` reads p off the registration: by default `served_window`, which reads the provenance
+    `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
+    refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d), and for a PoUW window whose salt
+    was never drawn. Nothing else publishes the salt. The receipt isn't signed, so `reveal` holds only while it is
+    called on the auditor's side: by the verifier, or by the proof service's challenger, which is the auditor's too
+    (#2573). Exposed beyond the auditor's hosts, it would need an authenticated caller or a receipt signed under LMS
+    (`lms.DEPLOYED`, n = 64), the repository's one signature scheme.
+  - **The audit's read** (`check_salts(audit, link, records, windows, salts, pouw_window=k, salt_bits=…)`). PoUW
+    window p is accepted, at its first certifier window w = p·k, if w has exactly one raw record, which holds exactly
+    one salt frame of p, carrying the placeholder, and p's revealed salt has `salt_bits` bits. Anything else, a missing
+    salt included, is a `salt` violation at w, recorded with the audit's verdicts. No record binds the salt: the
+    revealed salt is the certifier's word, under `trusted-nebius-host`. A committed or certified record doesn't show
+    its frames, so there a proof opens the salt frame.
+  - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
+    ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
+    chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
+    challenger's coins (D7, `Security/Models/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
+    openings on a coin link, and doesn't name the certifier's salt yet.
 - **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and
   verdict is as above.
   - **What.** A certifier that was down serves from window k of the trusted clock on: each grid's first tick is window
@@ -556,10 +584,14 @@ and seven lemmas, and three more proved lemmas:
   - a late tick, an ingress tick read early (the online prover's refusal), an overrun, a refused stream, a request
     forwarded a bucket late, a fault that drops a carried queue and out-of-set advice each fail closed;
   - with the salt on, each window's salt reaches the server on its own connection and nothing else carries it: the
-    wire and the egress records are the unsalted run's, and each ingress record holds one salt frame, with the
-    salt's commitment, at the window's first bucket. `reveal` refuses a window until its ingress record is published,
-    and `check_salts` accepts the revealed salts and rejects a wrong or missing one. The bucketer puts the certifier's
-    own frame first in each window, behind the carried queue;
+    wire and the egress records are the unsalted run's, each ingress record holds one salt frame, the placeholder's,
+    at the window's first bucket, and two runs on different salts publish the same records. With PoUW windows of two
+    certifier windows and 256-bit salts, one 256-bit salt is drawn per PoUW window. `reveal` refuses a window
+    without its registration (none, another window's, a receipt or digest that isn't the record's, a provenance its
+    reader doesn't read as the window), until its last ingress record is published, and for a salt never drawn;
+    `check_salts` accepts the revealed salts and rejects a missing one, one of another width and a second salt frame.
+    The bucketer puts the certifier's own frame first in each window, behind the carried queue, and knows it by its
+    place: a link frame of the same bytes is never taken for it, and one a fault drops is never released;
   - back from maintenance at window 2 of a Program with nothing in window 1, a proxy publishes exactly the full run's
     window-2 records and wire, and hands each frame when the full run does; so do a shaper and a bucketer on random
     instances. A proxy can't start past its windows or with an online prover;

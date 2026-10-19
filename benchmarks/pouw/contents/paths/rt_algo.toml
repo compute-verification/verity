@@ -1,0 +1,4 @@
+order = 340
+path = "`rt_algo/`"
+runs_on = "CPU"
+what = "RT-ALGO's red-team check that no algebraic route (reuse the served AB, low rank, fast matmul, packing, CRT, fold linearity, precompute, U's period) produces int8 Dither's credited words below the floor: every claim checked bit-exact against `h1tile.reference` on forced-wrap operands (`rt_algo_check.py`; RT-ALGO, note:20261019T0520Z-draft-rt-algo)"

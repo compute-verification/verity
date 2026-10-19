@@ -73,6 +73,12 @@ class Vocabulary:
         return d
 
 
+def _int8():
+    """`registry.int8_exact`, loaded on a profile's first int8 kind (it builds the s8 family's circuits)."""
+    from verity_vllm.program.registry import int8_exact
+    return int8_exact
+
+
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
@@ -414,6 +420,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_tp_allreduce.AllReduceMultimem, WORLD=WORLD, SIZE=SIZE, TREES=TREES, FTZ=FTZ),
            "all_reduce_custom": lambda WORLD, SIZE, STAGE:
                ir_bind(_tp_allreduce.AllReduceCustom, WORLD=WORLD, SIZE=SIZE, STAGE=STAGE),
+           "all_reduce_nccl_tree": lambda WORLD, SIZE, CHAIN:
+               ir_bind(_tp_allreduce.AllReduceNcclTree, WORLD=WORLD, SIZE=SIZE, CHAIN=CHAIN),
            "all_reduce_rmsnorm_mnnvl": lambda WORLD, N, SHOT, CLUSTER, EPS, FMA:
                ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
@@ -445,6 +453,12 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # (`registry/layer_norm.py`, `engine/profiles/gen_ln_patterns.py`).  `rules/vllm_bindings/layer_norm.py` asks for it.
            "layer_norm_aten": lambda N, EPS: ir_bind(_LN.LayerNormAten, N=N, EPS=EPS),
            "layer_norm_aten_value": lambda N: ir_bind(_LN.LayerNormAtenV2, N=N),
+           # the exact-int8 profile (`TargetProfile.int8_exact`, `engine.int8_ops`): `rules/vllm_bindings/int8.py` asks for them
+           "int8_row_quant": lambda K: ir_bind(_int8().Int8RowQuant, K=K),
+           "int8_scaled_mm": lambda K, N: _int8().scaled_mm(K, N),
+           "int8_kv_quant": lambda S, D: ir_bind(_int8().Int8KvQuant, S=S, D=D),
+           "int8_attention_row": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRow, D=D, S=S, SCALE=SCALE),
+           "int8_attention_row_table": lambda D, S, SCALE: ir_bind(_int8().Int8LutAttentionRowV2, D=D, S=S, SCALE=SCALE),
            # [GLM-5.3] DeepSeek sparse attention on the H200 (registry.dsa, registry.sparse_mla): the indexer's K slot and query, DeepGEMM's
            # MQA logits, the top-k of a row of at most TOPK keys, and FA3's sparse MLA over the selected rows. `rules/vllm_dsa.py` asks for them.
            "dsa_indexer_k_row": lambda D, ROPE, EPS: ir_bind(_dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=EPS),
@@ -483,7 +497,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsv4_qnorm_rope_kv_insert": lambda NH, NHP, DN, DR, QB, EPS:
                ir_bind(_dsv4_qnorm.Dsv4QNormRopeKvInsert, NH=NH, NHP=NHP, DN=DN, DR=DR, QB=QB, EPS=EPS),
            "dsv4_compressor_score": lambda W: ir_bind(_dsv4_indexer.Dsv4CompressorScore, W=W),
-           "dsv4_indexer_compress": lambda D, ROPE, EPS: ir_bind(_dsv4_indexer.Dsv4IndexerCompress, D=D, ROPE=ROPE, EPS=EPS),
            "dsv4_compress_c4": lambda ROWS, D, QB, EPS: ir_bind(_dsv4_compressor.Dsv4MlaCompressC4, ROWS=ROWS, D=D, QB=QB, EPS=EPS),
            "dsv4_compress_c128": lambda W, R, D, QB, EPS:
                ir_bind(_dsv4_compressor.Dsv4MlaCompressC128, W=W, R=R, D=D, QB=QB, EPS=EPS),
@@ -508,6 +521,19 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "marlin_moe_gemm_w": lambda E, K, N, TK, TN, GRID, DOT:
                ir_bind(_marlin.MarlinMoeExpertGemmW, E=E, K=K, N=N, TK=TK, TN=TN, GRID=GRID, DOT=DOT)},
     notes={**PROFILE_B1_EAGER.notes, **_PAD_NOTES, **_DNN,
+           "int8_row_quant": "Int8RowQuant_v1{K}: verity_int8::row_quant on one bf16 token row -> (x_q s8[K], s_a f32): s_a = "
+                             "RN32(max(amax, RN32(1e-30))/127), x_q = clamp(rint(RN32(x/s_a)), ±127) (registry.int8_exact)",
+           "int8_scaled_mm": "ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}: verity_int8::scaled_mm on one quantized row -> "
+                             "y bf16[N], ScaledMmS8Coordinate_v1 per output: K/32 satfinite s8 IMMA steps, y = bf16(RN32(RN32(f32(acc)·s_a)·s_w)); "
+                             "W s8 [N,K] + s_w f32 [N] Inputs (ml.circuits.ops.gemm)",
+           "int8_kv_quant": "Int8KvQuant_v1{S,D}: verity_int8::kv_quant on one KV head of one request's S-key window -> (K' s8 [S,D] under "
+                            "the layer's K scale (a Const32), V' s8 [S,D] per channel over the window, s_v f32 [D], f32(V'_0) [D]) "
+                            "(registry.int8_exact)",
+           "int8_attention_row": "Int8LutAttentionRow_v1{D,S,SCALE}: verity_int8::window_rows on one (query row, head) over its S keys "
+                                 "-- Q' per row, S = Q'K'ᵀ, fattn's uint32 A and 256-entry exp2 LUT (Exp2Lut127_v1), P V', the sink "
+                                 "term; K', V', s_v, f32(V'_0) its KV head's Int8KvQuant_v1 rows (registry.int8_exact)",
+           "int8_attention_row_table": "Int8LutAttentionRow_v2{D,S,SCALE}(.., exp2_lut127): Int8LutAttentionRow_v1 with the exp2 LUT "
+                                       "read from the registered table (Exp2Lut127_v2, TableRead8x2_v1)",
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
            "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
@@ -555,6 +581,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "all_reduce_mnnvl": "AllReduceMnnvl_v1{WORLD,N,SHOT}: FlashInfer MNNVL all-reduce on a captured route",
            "all_reduce_multimem": "AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}: torch symmetric-memory multimem all-reduce on captured trees",
            "all_reduce_custom": "AllReduceCustom_v1{WORLD,SIZE,STAGE}: vLLM custom all-reduce on a captured route",
+           "all_reduce_nccl_tree": "AllReduceNcclTree_v1{WORLD,SIZE,CHAIN}: pynccl ncclSum bf16 on NCCL's intra-node tree, a captured "
+                                   "chain of __hadd2 adds (NaN 0x7FFF)",
            "all_reduce_rmsnorm_mnnvl": "AllReduceRmsNormMnnvl_v1{WORLD,N,SHOT,CLUSTER,EPS,FMA}: FlashInfer fused all-reduce + RMS norm",
            "all_gather": "AllGather_v1{WORLD,N}: vllm.all_gather of WORLD>2 [N] shards along the trailing axis = the [WORLD*N] concatenation (b1_tp2)",
            "embedding_shard": "EmbeddingShard_v1{VS,H,START}: one rank of VocabParallelEmbedding — shard[id-START] if START<=id<START+VS else 0 (b1_tp2)",
@@ -614,8 +642,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsv4_qnorm_rope_kv_insert": "Dsv4QNormRopeKvInsert_v1{NH,NHP,DN,DR,QB,EPS}: the sparse MLA's query norm, RoPE and "
                                         "fp8_ds_mla window row, one token",
            "dsv4_compressor_score": "Dsv4CompressorScore_v1{W}: save_partial_states' score row plus ape[pos % ratio]",
-           "dsv4_indexer_compress": "Dsv4IndexerCompress_v1{D,ROPE,EPS}: the indexer compressor's index-key cache entry at a window's "
-                                    "end, from its 8 state rows",
            "dsv4_compress_c4": "Dsv4MlaCompressC4_v1{ROWS,D,QB,EPS}: the ratio-4 compressor's row at a window's end (CuTe DSL)",
            "dsv4_compress_c128": "Dsv4MlaCompressC128_v1{W,R,D,QB,EPS}: the ratio-128 compressor's row at a window's end (CuTe DSL)",
            "flashmla_decode": "FlashMlaDecode_v1{NH,SPLITS,NW,DN,DR,QT,BN,DOT,SCALE}: FlashMLA's sparse fp8 decode of one token over "
