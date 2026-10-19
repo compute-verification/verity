@@ -391,8 +391,11 @@ designs and honest kernels. The directory follows these rules:
 - It holds `rows.csv` and `census.csv` in `data/`'s schema, and its rows follow "Measure a facet". Its probe's
   `census.py` writes them from gated runs.
 - An MMA kind is one SASS form, as on sm_120's JI3n rows.
-- It has one epoch, its lines without `since` or `until`. `rows(DIR)`, `entries(m, DIR)` and `census(m, epoch, DIR)`
-  take the directory.
+- Its measured census is `census.csv`, which its writer rewrites whole. `dc/census.py --write` keeps only the uniform
+  lines `dc/uniform.py` owns. A refit within it closes the old line with `until` and opens the new one with `since`,
+  as sm_90's and sm_100's `-ri` epochs do. An epoch whose lines no writer produces (the data sheet's `DS-90` and
+  `DS-100`) is a file of its own, `census/EPOCH.csv`, read after `census.csv`. `rows(DIR)`, `entries(m, DIR)` and
+  `census(m, epoch, DIR)` take the directory.
 - To price a design on the device, it gains the rest of `data/`'s files, and `--device sm_NN` (or `--data DIR`) reads
   it:
   - `model.toml`: its epoch, its vector and its CUDA lane classes, and optionally `uniform_forms`, the lane classes
@@ -416,6 +419,8 @@ the Programming Guide's throughput table on Nsight Compute's pipes, and `DS_smem
 each shared-memory instruction, whatever its width, since a broadcast load reads as little as one word). `eps --vector
 DS-NN` prices a design on the axioms alone. The current vector is the measured one, and every row is some vector's.
 sm_120's is `DS-120`, an epoch of its own after VF whose lines close where they open, so it moves no other vector.
+sm_90's `DS-90` and sm_100's `DS-100` are the same, after DC-90 and DC-100, in `census/DS-90.csv` and
+`census/DS-100.csv`.
 
 The L40S (`data/devices/sm_89/`, note:20261017T0605Z-draft-eps1-ada) prices Dither-1S, Dither-2S and Dither-C at L = 16
 (IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
