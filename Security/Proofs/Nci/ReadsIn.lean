@@ -13,8 +13,7 @@ import Proofs.Nci.Threads
   image of `S` and of the gates `S` reads in place of `M`'s image.
 * `threaded_reads_by`: Theorem 1 (`threaded_reads`) with reads counted by any measure `ρ`. Its proof reads the count
   twice, through `ρ R ≤ S` and through `ρ R` paying for the weights used and the thread values read, so it goes through
-  for any `ρ`; `threaded_count_by` (`Proofs.Nci.Threads`) is the counting, with the weights' charge `q` any number that
-  caps each thread's multiplications at `reuse · q`. Theorem 1 is the instance `ρ = novelReads`.
+  for any `ρ`; `threaded_count` (`Proofs.Nci.Threads`) is the counting. Theorem 1 is the instance `ρ = novelReads`.
 -/
 
 namespace Nci.SecurityProofs
@@ -83,7 +82,7 @@ theorem threaded_reads_by (c : Declaration) (T : Threading c) (ρ : Finset (Fin 
       b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ ρ R)
     (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed ∧ c.D.size R ≤ Γ ∧ ρ R ≤ S) :
     b_a * (T.mults R).card ≤ ρ R * T.bound S b_w d e :=
-  threaded_count_by T R hbw hba hd (hT R hR) (card_threadMults_le T R) (hW R hR) hR.2.2
+  threaded_count T R hbw hba hd (hT R hR) (hW R hR) hR.2.2
 
 example : Guarantees.ThreadedReads := by
   intro c T Γ S b_w b_a d e hbw hba hd hT hW

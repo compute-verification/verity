@@ -5,11 +5,11 @@ import Proofs.Nci.Info
 # Proofs of NCI's guarantees with each thread charged by its work
 
 Theorem 1's counting reads a thread's count only through the threading inequality and the charge, so it holds for any
-nonnegative count `ρ` of each thread's values that meets both (`threaded_count_of`). The work on a thread meets the
-threading inequality itself (`work_threaded`), and every count that meets it is at least the work (`work_le`): so the old
-pair of premises gives `WeightsSupportFmt` (`weightsSupportFmt_of_weightsSupport`), and `WeightsSupportFmt` alone gives
-Theorem 1 at any `b_a` at most its rate (`threaded_reads_info_fmt`). The containment and the state carry over as in
-`Proofs.Nci.Info`.
+nonnegative count `ρ` of each thread's values that meets both (`threaded_count_of`, in `Proofs.Nci.Threads`). The work
+on a thread meets the threading inequality itself (`work_threaded`), and every count that meets it is at least the work
+(`work_le`): so the old pair of premises gives `WeightsSupportFmt` (`weightsSupportFmt_of_weightsSupport`), and
+`WeightsSupportFmt` alone gives Theorem 1 at any `b_a` at most its rate (`threaded_reads_info_fmt`). The containment and
+the state carry over as in `Proofs.Nci.Info`.
 -/
 
 namespace Nci.SecurityProofs
@@ -48,45 +48,6 @@ theorem work_le {d e : ℕ} (he : 0 < e) (R : Finset (Fin c.D.N)) (t : Fin T.m) 
   · exact (min_le_left _ _).trans (not_lt.1 hρ)
 
 end Work
-
-/-- Theorem 1's counting, for any nonnegative count `ρ` of each thread's values that meets the threading inequality
-and, with a count `q` of weights that bounds each thread's counted multiplications at `reuse` apiece, is paid for by a
-measure `Rn ≤ S` of what `R` reads. -/
-theorem threaded_count_of {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (ρ : Fin T.m → ℝ) (q : ℕ)
-    {S b_w b_a Rn : ℝ} {d e : ℕ} (hq : ∀ t, (T.threadMults R t).card ≤ T.reuse * q) (hρ : ∀ t, 0 ≤ ρ t)
-    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
-    (hT : ∀ t, ρ t < d → ((T.threadMults R t).card : ℝ) ≤ e * ρ t)
-    (hinc : b_w * q + b_a * ∑ t, ρ t ≤ Rn) (hRS : Rn ≤ S) :
-    b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e := by
-  classical
-  set L := univ.filter fun t => ρ t < d with hL_def
-  set H := univ.filter fun t => ¬ ρ t < d with hH_def
-  have hsplit : ((T.mults R).card : ℝ) =
-      ∑ t ∈ L, ((T.threadMults R t).card : ℝ) + ∑ t ∈ H, ((T.threadMults R t).card : ℝ) := by
-    rw [card_mults_eq_sum, Nat.cast_sum, sum_filter_add_sum_filter_not]
-  have hL : ∑ t ∈ L, ((T.threadMults R t).card : ℝ) ≤ e * ∑ t ∈ L, ρ t := by
-    rw [mul_sum]
-    exact sum_le_sum fun t ht => hT t (mem_filter.1 ht).2
-  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * q * H.card := by
-    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * q)
-      fun t _ => by exact_mod_cast hq t
-    rwa [nsmul_eq_mul, mul_comm] at this
-  have hHc : (d : ℝ) * H.card ≤ ∑ t ∈ H, ρ t := by
-    have := card_nsmul_le_sum H ρ (d : ℝ) fun t ht => not_lt.1 (mem_filter.1 ht).2
-    rwa [nsmul_eq_mul, mul_comm] at this
-  rw [← sum_filter_add_sum_filter_not univ (fun t => ρ t < d)] at hinc
-  have hdr : (0 : ℝ) < d := by exact_mod_cast hd
-  refine threaded_ineq (Hb := b_a * H.card) (Y := b_a * ∑ t ∈ H, ρ t)
-    (X := b_a * ∑ t ∈ L, ρ t) (q := (q : ℝ)) hbw hdr
-    (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun t _ => hρ t))
-    (mul_nonneg hba.le (sum_nonneg fun t _ => hρ t)) (Nat.cast_nonneg _) (by linarith)
-    hRS ?_ ?_
-  · calc (d : ℝ) * (b_a * H.card) = b_a * (d * H.card) := by ring
-      _ ≤ _ := mul_le_mul_of_nonneg_left hHc hba.le
-  · rw [hsplit, mul_add]
-    have h1 := mul_le_mul_of_nonneg_left hL hba.le
-    have h2 := mul_le_mul_of_nonneg_left hH hba.le
-    nlinarith
 
 /-- **The new premise is weaker than the old pair**: `WeightsSupport` at rate `log₂ n − μ` and `(d, e)`-threading by
 information give `WeightsSupportFmt`. -/
