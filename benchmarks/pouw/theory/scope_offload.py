@@ -30,7 +30,8 @@ So the word-level numbers are floors on each channel's exposure, not caps. The c
     measured rates shared across the GPUs beside it, not by PCIe. The machine model's per-GPU eps has no host term; LOC
     (decision 37) deducts the host at node level at its int8 peak.
 
-Each fraction is read against the 1% target as counted eps, the headline's eps plus the fraction.
+Each fraction is read against the 1% target as counted eps, the headline's eps plus the fraction, at the sheet reading
+and at decision 89's measured one.
 
 The checkable arithmetic: the committed word packs exactly 32 int8*weight products into an s32 with no wrap (verified
 over Z/2^32 and the operand alphabets), and a tile digest carries more MACs a byte than a word even at H1's smallest
@@ -40,8 +41,8 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib + exact_kit only.
-Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); the headline eps at the
-sheet reading, `machine-model headline` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
+Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); the headline eps at both
+readings, `machine-model headline` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
 ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); device memory 96 / 141 / 192 GB; H1's smallest tile
 4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: `benchmarks/host_tiles` runs, cited where they're used; host
@@ -72,9 +73,10 @@ DEVICES = {
     "B200 sm_100": (8192, 148, 1965e6),
 }
 
-# Per device, the headline eps at the sheet reading (`machine-model headline`, designs dither-c-peel-fx1,
-# dither-2s-licpw-redux-l32, dither-2s-licpw-redux-heavy-l32) and device memory in bytes.
+# Per device, the headline eps at the sheet reading and at decision 89's measured reading (`machine-model headline`,
+# designs dither-c-peel-fx1, dither-2s-licpw-redux-l32, dither-2s-licpw-redux-heavy-l32), and device memory in bytes.
 HEADLINE_EPS = {"sm_120 RTX PRO 6000": 0.00585, "H200 sm_90": 0.00646, "B200 sm_100": 0.00472}
+MEASURED_EPS = {"sm_120 RTX PRO 6000": 0.00540, "H200 sm_90": 0.00615, "B200 sm_100": 0.00900}
 TARGET = 0.01
 MEMORY_BYTES = {"sm_120 RTX PRO 6000": 96e9, "H200 sm_90": 141e9, "B200 sm_100": 192e9}
 
@@ -216,35 +218,49 @@ def main() -> int:
         checks.check(f"{device}: word-level, a helper delivering every word over PCIe is under 0.12%", pcie < 0.0012,
                      f"{pcie * 100:.3f}% -- a floor: whole tiles cross as 64-byte digests")
     checks.check("sm_120 has no NVLink, so no uncounted intra-node channel", "sm_120 RTX PRO 6000" not in worst_uncounted)
+    def counted(device: str, f: float) -> tuple[float, float]:
+        return HEADLINE_EPS[device] + f, MEASURED_EPS[device] + f
+
+    def shown(pair: tuple[float, float]) -> str:
+        return f"{pair[0] * 100:.2f}% sheet / {pair[1] * 100:.2f}% measured"
+
     for device in ("H200 sm_90", "B200 sm_100"):
-        f, eps = worst_uncounted[device], HEADLINE_EPS[device]
+        f = worst_uncounted[device]
         checks.check(f"{device}: word-level, NVLink lends >=0.3% of credited MACs, unobserved by any certifier",
                      f >= 0.003, f"{f * 100:.3f}%")
-        checks.check(f"{device}: word-level NVLink alone keeps counted eps under 1%", eps + f < TARGET,
-                     f"{eps * 100:.3f}% + {f * 100:.3f}% = {(eps + f) * 100:.3f}% (a peer doing whole tiles is RT-SCOPE-1)")
+    h200, b200 = counted("H200 sm_90", worst_uncounted["H200 sm_90"]), counted("B200 sm_100", worst_uncounted["B200 sm_100"])
+    checks.check("H200 sm_90: word-level NVLink alone keeps counted eps under 1% on both readings", max(h200) < TARGET,
+                 shown(h200) + " (a peer doing whole tiles is RT-SCOPE-1)")
+    checks.check("B200 sm_100: word-level NVLink alone stays under 1% at the sheet reading, not at the measured one",
+                 b200[0] < TARGET < b200[1], shown(b200))
 
     # 5. Whole-tile: the host's measured rates, not PCIe, bound what it lends. On node 2 it takes sm_120 over 1% counted
-    #    with resident operands even paying the fold; the H200's AMX-only bound doesn't exclude 1%; the B200's does.
+    #    on both readings with resident operands even paying the fold. The H200's AMX-only bound doesn't exclude 1% on
+    #    either; the B200's excludes it at the sheet reading and not at the measured one.
     sm120 = "sm_120 RTX PRO 6000"
-    rate, eps = mac_rate(sm120), HEADLINE_EPS[sm120]
+    rate = mac_rate(sm120)
     _, cores, gpus = HOSTS[sm120][0]
     upper = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"])
     folded = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"], FOLD_LANES_PER_WORD)
     streamed = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["streamed"], FOLD_LANES_PER_WORD)
     checks.check("sm_120: node 2's host, resident operands, words and fold on each core, takes counted eps over 1%",
-                 eps + folded > TARGET, f"{eps * 100:.3f}% + {folded * 100:.3f}% = {(eps + folded) * 100:.2f}% "
-                 f"(AMX-only bound {upper * 100:.2f}%)")
+                 min(counted(sm120, folded)) > TARGET,
+                 f"+{folded * 100:.3f}%: {shown(counted(sm120, folded))} (AMX-only bound {upper * 100:.2f}%)")
     checks.check("sm_120: node 2's host, operands streamed, words and fold, stays under 1% counted",
-                 eps + streamed < TARGET, f"{eps * 100:.3f}% + {streamed * 100:.3f}% = {(eps + streamed) * 100:.2f}%")
+                 max(counted(sm120, streamed)) < TARGET, f"+{streamed * 100:.3f}%: {shown(counted(sm120, streamed))}")
     checks.check("sm_120: node 2's host is over training C7's 0.3% host target on every reading",
                  min(upper, folded, streamed) > 0.003, f"min {min(upper, folded, streamed) * 100:.3f}%")
-    for device, over in (("H200 sm_90", True), ("B200 sm_100", False)):
-        rate, eps = mac_rate(device), HEADLINE_EPS[device]
+    for device in ("H200 sm_90", "B200 sm_100"):
+        rate = mac_rate(device)
         for host, cores, gpus in HOSTS[device]:
             bound = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"])
-            checks.check(f"{device}: {host}, AMX-only bound, {'does not exclude' if over else 'excludes'} 1% counted",
-                         (eps + bound > TARGET) == over,
-                         f"{eps * 100:.3f}% + {bound * 100:.3f}% = {(eps + bound) * 100:.2f}% (GNR per-core rate)")
+            pair = counted(device, bound)
+            if device == "H200 sm_90":
+                checks.check(f"{device}: {host}, AMX-only bound, does not exclude 1% counted on either reading",
+                             min(pair) > TARGET, f"+{bound * 100:.3f}%: {shown(pair)} (GNR per-core rate)")
+            else:
+                checks.check(f"{device}: {host}, AMX-only bound, excludes 1% at the sheet reading, not at the measured",
+                             pair[0] < TARGET < pair[1], f"+{bound * 100:.3f}%: {shown(pair)} (GNR per-core rate)")
 
     # 6. Device memory: its word stock covers under 0.2% of a 1-s window, and on main early work is counted work.
     for device in DEVICES:
