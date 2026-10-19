@@ -17,7 +17,7 @@
 //                           where ptxas keeps the chain on the uniform datapath, as uwgh), R FFMA on independent vector
 //                           accumulators (the issue filler: FADD/FFMA is the vector pipe, distinct from the fold's
 //                           IMAD/LOP3/LEA), and a K-instruction warp-uniform chain (uchain.cuh), then waits. The gate
-//                           pins UIMAD/ULOP3 (the chain stayed uniform), FFMA = R (the filler), IMMA = 8 and IGMMA = 4.
+//                           pins UIMAD/ULOP3 (the chain's uniform half), FFMA = R (the filler), IMMA = 8 and IGMMA = 4.
 //                           counted is the chain op (K > 0) or the IGMMA (K = 0); analyze sums every class's rate a
 //                           SMSP-cycle (total issue) and reads the K-slope at each R.
 //
@@ -247,11 +247,12 @@ OP_KERNEL(emp_reg, 384) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   const Tiles t = emp_tiles(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
-  int d[64] = {};
-  Lane l((uint32_t)threadIdx.x);
+  uint32_t out;
+  // Each role folds its own state inside its branch: the lane role at 40 registers must not hold the accumulators live.
   OP_BEGIN_STOP
   if (mma_role) {
     asm volatile("setmaxnreg.inc.sync.aligned.u32 232;" ::: "memory");
+    int d[64] = {};
     OP_LOOP(it) {
       emp_group4n128(d, t);
       wgmma_wait<1>();
@@ -259,31 +260,38 @@ OP_KERNEL(emp_reg, 384) {
     wgmma_wait<0>();
     OP_DONE
     wgmma_hold(d);
+    out = emp_fold(d);
   } else {
     asm volatile("setmaxnreg.dec.sync.aligned.u32 40;" ::: "memory");
+    Lane l((uint32_t)threadIdx.x);
     OP_UNTIL(n) { lane_ops<L_IMAD, 64>(l); }
     OP_TRIPS(n)
+    out = l.fold();
   }
   OP_END_STOP
-  OP_SINK((mma_role ? emp_fold(d) : l.fold()) ^ threadIdx.x)
+  OP_SINK(out ^ threadIdx.x)
 }
 
-#define WGI "IGMMA.64x256x32.S8.S8=4"
-#define HON "IMMA.16832.S8.S8=8,IMAD=32,LEA.HI=32,LOP3.LUT=32"
-// counted: the chain's UIMAD (K > 0) or the IGMMA (K = 0). FFMA = R is the filler; UIMAD = ULOP3 = K/2 is the chain.
+#define WGI "IGMMA.64x256x32.S8.S8=4,IMMA.16832.S8.S8=8,LEA.HI=32"
+#define HON WGI ",IMAD=32,LOP3.LUT=32"
+// ptxas 13.0 keeps half of emp_pack's chain uniform (uwgh keeps all of it): K/4 UIMAD and ULOP3, and K/4 each on the
+// lanes beside the honest step's 32 IMAD and 32 LOP3.
+#define K64 WGI ",IMAD=48,LOP3.LUT=48,UIMAD=16,ULOP3.LUT=16"
+#define K128 WGI ",IMAD=64,LOP3.LUT=64,UIMAD=32,ULOP3.LUT=32"
+// counted: the chain's UIMAD (K > 0) or the IGMMA (K = 0). FFMA = R is the filler.
 #define P(SN, R, K, EX, CNT) \
   {.name = "emp_pack_" #SN "_r" #R "_k" #K, .kernel = (const void*)emp_pack_##SN##_r##R##_k##K, .tpb = ATPB, \
    .expect = EX, .counted = CNT, .iters = AITERS}
 static const OpProbe PROBES[] = {
-    P(i, 0, 0, WGI "," HON, "IGMMA.64x256x32.S8.S8"),
-    P(i, 0, 64, WGI "," HON ",UIMAD=32,ULOP3.LUT=32", "UIMAD"),
-    P(i, 0, 128, WGI "," HON ",UIMAD=64,ULOP3.LUT=64", "UIMAD"),
-    P(i, 128, 0, WGI "," HON ",FFMA=128", "IGMMA.64x256x32.S8.S8"),
-    P(i, 128, 64, WGI "," HON ",FFMA=128,UIMAD=32,ULOP3.LUT=32", "UIMAD"),
-    P(i, 128, 128, WGI "," HON ",FFMA=128,UIMAD=64,ULOP3.LUT=64", "UIMAD"),
-    P(i, 256, 0, WGI "," HON ",FFMA=256", "IGMMA.64x256x32.S8.S8"),
-    P(i, 256, 64, WGI "," HON ",FFMA=256,UIMAD=32,ULOP3.LUT=32", "UIMAD"),
-    P(i, 256, 128, WGI "," HON ",FFMA=256,UIMAD=64,ULOP3.LUT=64", "UIMAD"),
+    P(i, 0, 0, HON, "IGMMA.64x256x32.S8.S8"),
+    P(i, 0, 64, K64, "UIMAD"),
+    P(i, 0, 128, K128, "UIMAD"),
+    P(i, 128, 0, HON ",FFMA=128", "IGMMA.64x256x32.S8.S8"),
+    P(i, 128, 64, K64 ",FFMA=128", "UIMAD"),
+    P(i, 128, 128, K128 ",FFMA=128", "UIMAD"),
+    P(i, 256, 0, HON ",FFMA=256", "IGMMA.64x256x32.S8.S8"),
+    P(i, 256, 64, K64 ",FFMA=256", "UIMAD"),
+    P(i, 256, 128, K128 ",FFMA=256", "UIMAD"),
 #define P_SP(NM) {.name = #NM, .kernel = (const void*)NM, .tpb = ATPB, .expect = "*GMMA*=4", .iters = AITERS}
     P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16),
 #undef P_SP
