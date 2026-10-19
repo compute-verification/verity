@@ -20,17 +20,24 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   values of the gates `args` names, each earlier than `i` (`Topological`). A gate is one primitive: one `Value` out.
   Its values on an input are `values` (`val` for one gate's).
 * **Provenance.** Each gate carries its primitive's id (`prim`), which names the device form the bridge to the actual
-  run prices (`BlackwellS8ImmaDot32_v1` is sm_120's m16n8k32 IMMA, so `Op.mma` has no m and n), and where it sits in
-  the Definition that made it, as the IR binds it (`site`: step `s` of an `S8Dot_v1` body, with the statics `K`, `L`
-  and `TAIL`). Its role (`Gate.role`: a served product's step toward committed word `T_t`, a tail group's step, a limb
-  split's carry or limb read, a receipt fold's step) is a function of the two (`roleOf`), never a field, so no gate
-  carries a role its primitive and statics don't give it. A gate is committed (`commit`) when its value is one of the
-  circuit's committed outputs (`committed`): S8-PORT's COMMIT layout, the final `T_1` or the prefix `T_1 … T_{K/L}`.
+  run prices (`BlackwellS8ImmaDot32_v1` is sm_120's m16n8k32 IMMA, so `Op.mma` has no m and n), and where it sits in the
+  Definition that made it, as the IR binds it (`site`: step `s` of an `S8Dot_v1` body, with the statics `K`, `L` and
+  `TAIL`; or word `w` of an H1 + fx1 tile's CP-W receipt, with the tile's dot kind, `K` and operand rows). Its role
+  (`Gate.role`: a served product's step toward committed word `T_t`, a tail group's step, a limb split's carry or limb
+  read, a receipt fold's step) is a function of the two (`roleOf`), never a field, so no gate carries a role its
+  primitive and statics don't give it. A gate is committed (`commit`) when its value is one of the circuit's committed
+  outputs (`committed`): S8-PORT's COMMIT layout, the final `T_1` or the prefix `T_1 … T_{K/L}`, or an H1 + fx1 tile's
+  receipt. Of an H1 + fx1 tile only the receipt's words after its `K`-segment checkpoints have the `served` role:
+  `2·K/32` of them, `256` at `K = 4096`, each checkpoint's two halves (`Site.parts`), never its `z` or a lane's own
+  value.
 * **Inputs.** An input gate reads slot `i` of the input assignment `x : ι → ℤ`, by its binding time (circuits' input
   origins, `verity/ml/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
   parameters) is bound before the audit's coins; a `coin` input is a live verifier coin (a noise or fold key), passed
   through untouched; a `run` input (a request's tokens, anything the prover sends a running circuit) is bound after
-  the coins, so it may be any function of them. Only run inputs are charged, and only they count against `R_in`.
+  the coins it follows. Compose's live commit order (`LayerCommitted`, a premise today's coins don't meet) puts it
+  under the root of its first reader's round, before that round's coin, so it may be any function of the coins
+  released before that round's and never of its reader's: one chosen after its reader's coin could match the reader's
+  noise. Only run inputs are charged, and only they count against `R_in`.
 * **Classes.** Free (no unit in any cap): an input, a constant (an operation's own bits), an exact integer affine map
   with constant coefficients (`I32Add`, `I32Sub`, and `Bf16ToF32`, `×2^16` on the readings), proven within s32, and
   an s8-family step (`mma`: the exact int8 dot of `verity/ml/circuits/silicon/integer.py`, `D = C + Σ a_k·b_k` with
@@ -77,7 +84,8 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
 namespace Accounting.Gates
 
 /-- When an input is bound, as circuits' input origins: at registration, before the audit's coins; a live verifier
-coin; or at run time, after the coins. -/
+coin; or at run time, after the coins it follows (Compose's `LayerCommitted` puts it under the root of its first
+reader's round, before that round's coin). -/
 inductive Binding
   | registered
   | coin
@@ -226,9 +234,10 @@ def IsDerived : Op ι → Prop
 
 end Op
 
-/-- A gate's role in the Definition that made it (S8-PORT's `ops/s8.py`). -/
+/-- A gate's role in the Definition that made it (S8-PORT's `ops/s8.py`, and H1 + fx1's CP-W receipt). -/
 inductive Role
-  /-- a step of a served product's main chain, toward its committed word `T_t` -/
+  /-- a step of a served product's main chain, toward its committed word `T_t` (its first `t·L` products), or an
+  H1 + fx1 tile's receipt word, either half of the checkpoint that binds its first `32·t` products -/
   | served (t : ℕ)
   /-- a step of tail group `g` -/
   | tail (g : ℕ)
@@ -251,13 +260,31 @@ def Role.isTail : Role → Bool
   | .tail _ => true
   | _ => false
 
-/-- Where a gate sits in the Definition that made it, as the IR binds it: step `s` of an `S8Dot_v1` coordinate's body
-(an `S8Matmul_v1` row's among them), whose statics are `K` products committed every `L` (`T_t` after `t·L`) and the
-tail groups' atom counts (`TAIL`); or any other place. -/
+/-- Where a gate sits in the Definition that made it, as the IR binds it:
+* `dot K L tail s`: step `s` of an `S8Dot_v1` coordinate's body (an `S8Matmul_v1` row's among them), whose statics
+  are `K` products committed every `L` (`T_t` after `t·L`) and the tail groups' atom counts (`TAIL`);
+* `receipt dot K w a b`: word `w` of an H1 + fx1 tile's CP-W receipt (`PouwH1Tile`, decision 104,
+  `verity/core/protocols/pouw/circuit/h1tile.py`): the XOR over the tile's lanes of half `w % 2` of each lane's fx1
+  state after set `w / 2` of `[T_0 … T_{KS−1}, O′, D_1 … D_{m−1}]`, `2·(KS + m)` words at contraction `K`
+  (`KS = K/32` segments). `dot` is the tile's dot kind (its `EXACT`: `S8Dot_v2` or `GemmAccumulatorS8_v2`), and `a`
+  and `b` are the gates of its `A` and `B` operand rows (its call's arguments), from which a word's kind reads whether
+  each operand is an activation, so that a kind reading two (H1 + fx1's attention) stays uncredited under seeded coins
+  (Compose's `Scheme.SeedPriced`);
+* `other`: any other place. Every other gate of an H1 + fx1 tile is here: its `z` (each cell's exact product, `EXACT` on
+  its rows, which no noise reaches and PIN's warp check never compares), its noise, its sets and folds, and each lane's
+  own `PouwXinFinal` words, which aren't committed: only their XOR over lanes is. -/
 inductive Site
   | dot (K L : ℕ) (tail : List ℕ) (s : ℕ)
+  | receipt (dot : String) (K w : ℕ) (a b : List ℕ)
   | other
   deriving DecidableEq, Repr
+
+/-- **The committed words one checkpoint is split into**: `2` for an H1 + fx1 tile's receipt word (a checkpoint's two
+halves, both of role `served t` at one `t`), `1` at any other site. A floor priced per checkpoint, as a dot kind's is,
+counts once across a checkpoint's parts, `1/parts` a word. -/
+def Site.parts : Site → ℕ
+  | .receipt .. => 2
+  | _ => 1
 
 /-- Tail atom `j`'s group, among groups of the given atom counts numbered from `g`. -/
 def tailRole : List ℕ → ℕ → ℕ → Role
@@ -266,10 +293,21 @@ def tailRole : List ℕ → ℕ → ℕ → Role
 
 /-- **The role** of a gate of primitive `prim` at `site` (S8-PORT's `ops/s8.py`). Step `s < K/32` of an `S8Dot_v1`
 body is on the main chain toward `T_t`, `t = ⌊32·s/L⌋ + 1`, and a later step is tail atom `s − K/32`, in the group
-that holds it. Off a dot body, `S32ByteCarry` and `S32ClampRest` are a limb split's carries (`N − 1` a split, in
+that holds it.
+
+An H1 + fx1 tile's receipt word `w` after checkpoint `T_s` (`w < 2·(K/32)`, `s = w / 2`, either half) has role
+`served (s + 1)`, toward its products' `T_{s+1}`, their first `32·(s + 1)`: each checkpoint binds one 32-wide
+`K`-segment of the tile's products, whose floor its dot kind prices (GRIND's fold premise, `HMu`'s Lemma B′), and its
+two halves share it (`Site.parts`). The last `2·m` words, after `O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, are `other`:
+they bind the check's cancellation of the columns' keyed word `U` against the rows' digits, which no segment's floor
+prices, so they carry no floor (RT-COMPOSE r4's check 6). A receipt word's role reads its site alone, not the primitive
+that computes it (the lanes' `PouwXor32`).
+
+Off a dot body and a receipt, `S32ByteCarry` and `S32ClampRest` are a limb split's carries (`N − 1` a split, in
 either form), `S32LowByte` and `S32ClampS8` its limb reads, and `PouwDuoAbsorb_v1` the receipt fold's step. -/
 def roleOf (prim : String) : Site → Role
   | .dot K L tail s => if s < K / 32 then .served (32 * s / L + 1) else tailRole tail (s - K / 32) 0
+  | .receipt _ K w _ _ => if w < 2 * (K / 32) then .served (w / 2 + 1) else .other
   | .other =>
       if prim ∈ ["S32ByteCarry_v1", "S32ByteCarry_v2", "S32ClampRest_v1", "S32ClampRest_v2"] then .limbSplit true
       else if prim ∈ ["S32LowByte_v1", "S32LowByte_v2", "S32ClampS8_v1", "S32ClampS8_v2"] then .limbSplit false

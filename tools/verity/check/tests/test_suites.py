@@ -1533,6 +1533,17 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
     assert S.serial_slots([5.0], 0, 32) == 32 and S.serial_slots([], 3, 32) == 0
 
 
+def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
+    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
+    against memory for, and the OOM killer took the whole scope."""
+    S = _suites(monkeypatch, tmp_path)
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
+    assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
+    assert S.serial_slots([], 3, 32, 16) == 0
+
+
 def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_path):
     import json
 

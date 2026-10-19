@@ -75,6 +75,19 @@ def test_pous_end_to_end_rings_claims_are_cited_separately() -> None:
     assert get("prf/sha-512").kind == "assumption"
 
 
+def test_the_sm120_headlines_claims_name_what_their_statements_assume() -> None:
+    """HEADLINE-R2's restatement: FOLD-OPT at π*, binding's fork form, A2's catch-all and A1 assumed at the driver's
+    report."""
+    fold = get("accounting-ts-fold-opt").name
+    assert "FoldOptFoldedAt" in fold and "only at their own certificate π*" in fold
+    proofs = get("accounting-ts-proofs-sound").name
+    assert all(s in proofs for s in ("BindingForkAt", "√δ_fork", "BindingOfFork", "ProofSoundAt", "ProofsPin"))
+    assert "catch-all" in get("accounting-sheet-dispatch").name and "NOROW" in get("accounting-sheet-dispatch").name
+    clock = get("accounting-sheet-clock")
+    assert "nvidia-smi" in clock.name and "data sheet's maximum" not in clock.name
+    assert clock.label == "A1 clock (assumed)"
+
+
 def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
     e = get("pouw-gamma-per-coin")
     assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name

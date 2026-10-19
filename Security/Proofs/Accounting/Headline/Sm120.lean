@@ -265,13 +265,15 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 
 /-- sm_120's headline at the data sheet: `Whole.sheetDIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`,
 `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the receipt split
-(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), FILL-OPT from the data, and the terms bounded
-by `Whole.headline_of_branches`: the folded branch by `sm120_eps_le`, the unfolded one by `sm120_unfolded`. -/
+(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
+`Whole.moved_le_sqrt`), FILL-OPT from the data, and the terms bounded by `Whole.headline_of_branches`: the folded
+branch by `sm120_eps_le`, the unfolded one by `sm120_unfolded`. -/
 theorem Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline := by
-  intro Ω _ Pl G Uf V nπ pf δbind δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 h2 h3 h4 h5 h6 h7 hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  set δbind := Real.sqrt δfork
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
-  have hPS :=
-    ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf hB hZK hPin hRF
+  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120.model.Nw δbind δzk hOf
+    (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith

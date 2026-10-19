@@ -59,15 +59,16 @@
                     the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
                     so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
                     refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
-                    `launched`.  `disk-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    `launched`.  `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
                     launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
                     wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
     memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
-                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
-                    else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
-                    reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N and no older --mem-wait run is waiting in
+                    line, and writes the run's reservation there; else MemoryNotAvailable (refused.json).  --mem-wait S waits in line
+                    up to S seconds instead, first come first served.  The runner removes the reservation at exit; job.json
+                    run.remote.mem records the reading it was admitted on (research.mem).
     GPUs            on a machine whose GPUs gpu-lease hands out (GPU_LEASE_HOST_FILE), a run sees no GPU (CUDA_VISIBLE_DEVICES='')
                     unless it declares `--gpus N`: its workload then runs under `gpu-lease N --wait`, which queues it first come first
                     served for N of them (the wait counts against --timeout) and names them in CUDA_VISIBLE_DEVICES.  A workload that
@@ -1417,6 +1418,10 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
+        if cores := (req.get("queue") or {}).get("cores"):   # held here until whole cores of the share are its own (research.cores)
+            argv = [req.get("python") or sys.executable, "-m", "research", "cpu-hold", "--cpus", str(cores["n"]), "--from",
+                    cores["cpus"], "--wrap", str(len(req[QUEUE_WRAP])), "--who", run_id, "--ack",
+                    str(request_path.parent / LAUNCH_ACK), "--", *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
                 "--path", str(runs_root), "--ack", str(request_path.parent / LAUNCH_ACK), "--", *argv]
@@ -1450,7 +1455,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
 
 
 def ack_launch(path: Path | str, what: str) -> None:
-    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, or `disk-hold`) is in place.  Never
+    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, `disk-hold` or `cpu-hold`) is in place.  Never
     blocks: no FIFO there, or nobody reading it any more (ENXIO), means nobody waits on this launch."""
     try:
         fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)

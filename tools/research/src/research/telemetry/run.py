@@ -16,7 +16,6 @@ import argparse
 import fnmatch
 import json
 import os
-import shlex
 import shutil
 import signal
 import subprocess
@@ -27,10 +26,10 @@ from pathlib import Path
 from typing import Any
 
 from . import CANCEL_ACTORS, pyspy
-from .cancel import add_args as cancel_args, cancel as cancel_run
+from .cancel import cancel as cancel_run
 from .cgroup import Cgroup, session_cap, uncapped
 from .classify import classify, write as write_failure
-from .events import Emitter, append, events_path, utc_now_ms
+from .events import Emitter, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import live_group, stat_fields
 

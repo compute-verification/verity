@@ -423,12 +423,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
   circuit accepting implies the verifier of record accepts; completeness stays a test.
 - 2026-10-05 (rewritten 8 Oct): a lead resumes or re-dispatches a turn cut off by a console drop or a provider outage on
   its own judgment, and tells its coordinator.
-- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. Nothing reaches a running agent:
-  a `Task` resume is refused, another agent's `SendToAgent` refuses it ("not a worker of this coordinator") and its
-  dashboard follow-up box is disabled. So the Lean move lead went 85 minutes unreachable. Every brief therefore names an
-  inbox branch, `cursor/inbox-<first 8 of the worker's id>-<launcher's suffix>`, and the worker runs `git fetch` on it
-  at every checkpoint (at least every 20 minutes, contract §3), acting on each new commit message. The launcher writes
-  there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
+- 2026-10-05 (1:27 PM PDT), superseded on 18 Oct by AGENTS.md's agent norms ("Lanes") but for its first sentence: a
+  coordinator never loses contact with a worker it launched. The rest read: nothing reaches a running agent, so each
+  brief names an inbox branch the worker fetches at every checkpoint (at least every 20 minutes), acting on each new
+  commit message. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every
