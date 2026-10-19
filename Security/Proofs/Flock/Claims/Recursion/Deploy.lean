@@ -523,7 +523,7 @@ noncomputable def refP (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Floc
 `hComplete`); on a V* session it runs at the recursive outer record `deployZkRec`, whose statements set up at the
 recursive setup (`setupO`), and is to be complete there, with error `δ`. -/
 def OuterRef (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Claims.Msg → ℝ) : Prop :=
-  Claims.Flock.Complete H (deployZkRec rel) FlockComplete.honestPZk δ
+  Claims.Flock.Complete H { deployZkRec rel with δc := fun _ => δ }
 
 /-! ## The completeness error -/
 

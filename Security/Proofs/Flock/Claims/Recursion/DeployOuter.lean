@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.DeployInputs
 import Proofs.Flock.Claims.NumbersDeploy
+import Proofs.Flock.Claims.Complete.Zk.Honest
 
 /-!
 # The outer verifier: `verify --zk` with the recursive inputs, in public-coin form
@@ -17,7 +18,9 @@ the deployed `Zk.verify` accepts the record and proof files at the recursive set
 so does the full-draw refusal (`nextO_decide_sha512`).
 
 `deployZkRec rel` is the record Flock's claims read at that verifier: `deployZk rel`'s code, decoder spec and numbers,
-each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`).
+each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`), with the deployed
+`flock-circuit --zk` prover `honestPZk`. Its completeness error is `1`, which bounds nothing: `RecDeploy.OuterRef` states
+the error it is to meet.
 -/
 
 namespace RecDeploy
@@ -272,7 +275,7 @@ theorem εtableO_nonneg (x : Claims.Msg) : 0 ≤ εtableO x := by
 /-! ## The instance -/
 
 /-- **The outer verifier**, as the record Flock's claims read: `deployZk rel`'s code and numbers at the recursive
-setup. -/
+setup, with the prover `honestPZk` and the completeness error `1`. -/
 noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace where
   zk := true
@@ -291,6 +294,9 @@ noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
   weight := weightO
   waits _ := Claims.Flock.Numbers.waits
   cap _ := Claims.Flock.Numbers.cap
+  Tape := FlockComplete.TapeZk
+  P := FlockComplete.honestPZk
+  δc _ _ := 1
 
 /-- **`ScopeMatches` for the outer verifier** (C's `scopeMatches` at its parser and scope check). -/
 theorem scopeMatches_zkRec (rel : Readable.Parsed → Readable.Relation) : Claims.Flock.ScopeMatches (deployZkRec rel) :=
