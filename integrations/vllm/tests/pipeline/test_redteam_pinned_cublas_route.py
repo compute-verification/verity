@@ -41,7 +41,8 @@ ROUTER = ("router", 17, 6144, 256)
 #: r20261016-213336-6c35's replay population (rows over 8 ranks)
 POPULATION = {"DeepGemmFp8Linear_v1": 841728, "DsaRMSNorm_v1": 358176, "FlashInferFp8Linear_v1": 101928, "Gemm_v2": 256, "MoeSum_v1": 172200,
               "SiluMul_v2": 1556688, "TokenSelect_v1": 256}
-#: its unreplayable bf16 GEMMs, each bound at a pinned route (rows over 8 ranks)
+#: its bf16 GEMMs bound at a pinned route (rows over 8 ranks): `unreplayable` on that record, evaluated now (`kernels.cublas_gemm_rows`,
+#: `glm53_rows`, `batched_gemm_rows`), so the per-rank no-evaluator rule passes a rank whose replay counts them
 PINNED_ROUTE = {"CublasSplitKGemmF32Out_v1": 153600, "CublasSplitKGemm_v1": 48216, "LlBf16DotprodGemm_v1": 18600, "BatchedGemm_v1": 358176}
 #: its match oracle on rank 0: every TP partial compared and equal
 ORACLE = {"verdict": "PASS", "steps_compared": 32, "tensors": 5056, "equal": 5056, "mismatch_n": 0, "missing_n": 0, "not_in_oracle_n": 0,
@@ -54,13 +55,14 @@ def _bf16(a: np.ndarray) -> np.ndarray:
 
 def _gates(engine: dict) -> tuple[bool | None, str | None]:
     checks = {k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "identities_unreachable_by_alias", "rows_disagree")}
-    pop = {"vus": sum(POPULATION.values()) // 8, "by_family": dict(POPULATION), "scope": "Q_module_v1(P)", "query_checks": checks | {"ok": True}}
+    by_family = POPULATION | PINNED_ROUTE
+    pop = {"vus": sum(by_family.values()) // 8, "by_family": by_family, "scope": "Q_module_v1(P)", "query_checks": checks | {"ok": True}}
     sr = {"result": True, "grade": "complete", "population": pop, "engine_of_record": dict(engine),
-          "sample": {"picked": 3985, "evaluated": 3985, "equal": 3985, "mismatch_n": 0},
-          "unreplayable": [{"family": f, "n": n, "why": "no registered evaluator", "ranks": list(range(8))} for f, n in PINNED_ROUTE.items()]}
+          "sample": {"picked": 3985, "evaluated": 3985, "equal": 3985, "mismatch_n": 0}, "unreplayable": []}
     f = {"sampled_replay": {"sampled_replay": sr, "boundary_linkage": {"result": True, "linked": 32, "pairs": 32}},
          "weights_pin": {"result": True, "compared": 1700}}
-    return c2_and_pin_gates({"match_oracle": dict(ORACLE)}, f, True, None, rank=0, replay_on=True, required=True, bundle="bundle_pair0_rank0")
+    return c2_and_pin_gates({"match_oracle": dict(ORACLE)}, f, True, None, rank=0, replay_on=True, required=True, bundle="bundle_pair0_rank0",
+                            xrank_families=None)
 
 
 def test_the_bound_route_is_the_pin_whatever_the_process_configures(monkeypatch):
@@ -146,6 +148,6 @@ def test_the_gate_reads_the_deferred_replays_facts_too():
     (the Commit engine's, measured in its process)."""
     sr = {"result": True, "grade": "complete", "engine_of_record": SWITCHED, "population": {"by_family": {"CublasSplitKGemmF32Out_v1": 9}}}
     cblock: dict = {}
-    ok, why = replay_gates(cblock, sr, {"result": True}, True, None, rank=3, replay_on=True, required=False)
+    ok, why = replay_gates(cblock, sr, {"result": True}, True, None, rank=3, replay_on=True, required=False, xrank_families=None)
     assert ok is False and why.startswith("cuBLAS route pin (rank 3): CublasSplitKGemmF32Out_v1 x9")
     assert cblock["cublas_route_pin"]["departures"] and cblock["cublas_route_pin"]["pin"] == BC.CUBLAS_ROUTES["run"]
