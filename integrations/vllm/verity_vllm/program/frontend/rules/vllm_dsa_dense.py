@@ -18,9 +18,10 @@ from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
-from verity_vllm.program.frontend.rules.vllm_dsa import (_DENSE, BF16, E4M3, F32, _append_rows, _args, _decode_threshold, _f32,
-                                                         _missing, _observed_sparse_mla, _open_history, _positions, _rows,
-                                                         _static_float, _value)
+from verity_vllm.program.frontend.rules.vllm_dsa import (_DENSE, BF16, DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, E4M3, F32,
+                                                         _append_rows, _args, _decode_threshold, _f32, _missing,
+                                                         _observed_sparse_mla, _open_history, _positions, _rows, _static_float,
+                                                         _value)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.registry import fa3_split
 
@@ -44,6 +45,17 @@ def _observed_prefill_backend(layer_name: str, scale: float) -> str | None:
     if not _static_float(ps) or _f32(ps) != _f32(scale):
         return f"{layer_name!r}'s prefill backend scale {ps!r} is not the call's {scale!r}"
     return None
+
+
+def takes_dense_mha(layer, T: int, rows: int, topk: int) -> bool:
+    """Whether vLLM serves a sparse attention call of T query rows, its layer's history then `rows` rows long, by dense MHA
+    (`DeepseekV32Attention._use_sparse_mha`, `use_dense_mha`): the layer has a prefill backend, `sparse_mla_force_mqa` is off, the
+    metadata builder counts the call a prefill (T above its decode threshold at the layer's heads) and the prefill's rows have at
+    most TOPK keys.  Masked MHA, the route past TOPK, is FA4's and not the H200's.  `export_compat.dsa_leaves` asks it."""
+    cfg = getattr(getattr(layer, "_vllm_config", None), "attention_config", None)
+    if getattr(layer, "prefill_backend", None) is None or getattr(cfg, "sparse_mla_force_mqa", False):
+        return False
+    return T > DECODE_THRESHOLD.get(int(layer.num_heads), DECODE_THRESHOLD_DEFAULT) and rows <= topk
 
 
 class DsaDenseMhaRule(StateRule):

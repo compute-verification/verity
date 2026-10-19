@@ -257,7 +257,7 @@ def _run(rep, model: _Model, inputs, run: list[int] | None = None) -> list[int]:
 
 
 def _dense(layer: _Layer, P0: int, T: int) -> bool:
-    """vLLM's route for a call of T rows after P0 (`export_compat._takes_dense_mha`): dense MHA for a prefill of at most TOPK keys."""
+    """vLLM's route for a call of T rows after P0 (`vllm_dsa_dense.takes_dense_mha`): dense MHA for a prefill of at most TOPK keys."""
     return (layer.prefill_backend is not None and T > vllm_dsa.DECODE_THRESHOLD.get(NH, vllm_dsa.DECODE_THRESHOLD_DEFAULT)
             and P0 + T <= layer.topk_indices_buffer.shape[-1])
 
