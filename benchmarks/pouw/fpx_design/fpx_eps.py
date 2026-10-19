@@ -11,7 +11,13 @@ files on their int8 bases (`base`, so the skip, luck, clock and baseline are the
   k9: 3.5), or the 2SP peel's served GEMM beside its twin (1).
 - the extraction (`fold_add`): lane instructions a word that turn FP32 accumulators into integers. The folded word's
   (one add, from a running sum or a reset at a magic base) and the served sum, read every RB words, RB the words the
-  binade at 1.5 * 2^23 holds: e4m3i120 (k32 words <= 2^18.8) RB 9, e4m3i352 (<= 2^21.9) RB 1.
+  binade at 1.5 * 2^23 holds on any data: e4m3i120 (k32 words <= 32 * 121^2 = 2^18.84) RB 8, e4m3i352 (<= 2^21.9)
+  RB 1. These are estimated lane counts, not measured.
+
+Where int8 runs at the FP8 rate (sm_120, H200, B200), the int8 MMA writes the C1 rows' and the FP-unit g1 rows' words
+with no extraction, so the cheater's floor is the int8 twin's and those rows' printed ε is too low there (RT-FP-1, -3,
+-5, note:20261019T0546Z-draft-rt-fp). Their ε stands only where int8 is slow (B300, which has no sheet yet); on the
+other three, credit the int8 twin (`fpx-g1s-*`, the record) and read the FP route's cost in γ only.
 
 g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fair live coin b of 1 and centred:
 R + b - 1/2. The one GEMM of the integers R + b is int8 Dither-2S's on fair coins, folded and served (its rank-one
@@ -58,7 +64,7 @@ VARIANTS = [
                  "fair coin of 1; one IMMA GEMM, folded and served centred"),
     dict(device="sm_120", name="fpx-g1s-fp8-fp", base="dither-2s", plain=1.0, fold_add={"IMAD": 1.6, "ALU": 0.6},
          title="FP8 g1 on FP units: one FP16 GEMM of R + b (e4m3i120), fx1",
-         summary="the word one add at a magic base, the served sum read every 9 words"),
+         summary="the word one add at a magic base, the served sum read every 8 words"),
     dict(device="sm_120", name="fpx-g1s-fp4-fp", base="dither-2s", plain=3.0, fold_add={"IMAD": 1.75, "ALU": 0.75},
          title="FP4 g1 on FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale, fx1",
          summary="four block-scaled k64 FP4 products a word, u and b at unit scale"),
@@ -81,7 +87,7 @@ VARIANTS = [
     dict(device="sm_100", name="fpx-g1s-fp8-fp", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
          fold_add={"ALU": 0.625, "IMAD": 0.625},
          title="FP8 g1 on B200's FP units: one FP16 GEMM of R + b (e4m3i120)",
-         summary="the word one add, the running sum rebased every 9 words"),
+         summary="the word one add, the running sum rebased every 8 words"),
     dict(device="sm_100", name="fpx-g1s-fp4-fp", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
          fold_add={"ALU": 0.75, "IMAD": 0.75},
          title="FP4 g1 on B200's FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale",
