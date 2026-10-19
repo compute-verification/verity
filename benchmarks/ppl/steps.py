@@ -692,10 +692,11 @@ def _e4m3_integers() -> tuple:
 
 #: every grid a quantizer may put integers on: GRIDS, every integer E4M3 holds (0..16, then E4M3's spacing to 448),
 #: those up to 352 (a k32 word of their products, 32 * 352^2 < 2^22, stays inside the 1.5 * 2^23 binade, so one
-#: integer add reads it), those up to 120 (moved by one they stay in int8), E2M1's integers, and twice every E2M1 value
-#: (the whole E2M1 grid as integers)
+#: integer add reads it), those up to 120 (moved by one they stay in int8), those up to 60 (moved by one they stay in
+#: H1's weight range, 63), E2M1's integers, and twice every E2M1 value (the whole E2M1 grid as integers)
 LEVELS = {**GRIDS, "e4m3i": _e4m3_integers(), "e4m3i352": tuple(v for v in _e4m3_integers() if abs(v) <= 352),
           "e4m3i120": tuple(v for v in _e4m3_integers() if abs(v) <= 120),
+          "e4m3i60": tuple(v for v in _e4m3_integers() if abs(v) <= 60),
           "e2m1i": (-6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6),
           "e2m1x2": (-12, -8, -6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6, 8, 12)}
 
@@ -994,7 +995,8 @@ def fp_attention(mm, nxt, *, fmt: str, scale: str):
 
 
 #: the format each native grid's integers are exact in
-NATIVE = {"e4m3i": "e4m3", "e4m3i352": "e4m3", "e4m3i120": "e4m3", "int5": "e4m3", "e2m1i": "e2m1", "e2m1x2": "e2m1"}
+NATIVE = {"e4m3i": "e4m3", "e4m3i352": "e4m3", "e4m3i120": "e4m3", "e4m3i60": "e4m3", "int5": "e4m3", "e2m1i": "e2m1",
+          "e2m1x2": "e2m1"}
 #: a native grid's scales: the formats' (FP_SCALES), `nvi`, NVFP4's blocks of 16 with any integer UE4M3 scale to 15,
 #: `nv9`, with the odd ones to 9, and `nvi10`, with any integer to 10
 NATIVE_SCALES = FP_SCALES + ("nvi", "nv9", "nvi10")
@@ -1066,10 +1068,13 @@ def _check_native(p):
             raise ValueError(f"native.{o} is one of {NATIVE_MODES}")
     if "g1" in (p["act"], p["weight"]) and p["scale"] == "mx":
         raise ValueError("native: g1's coin is one in the row's unit, which mx's power-of-two blocks don't have")
-    if p["act_grid"] not in ("", "int8"):
-        raise ValueError("native.act_grid is '' (the weights' grid and scale) or int8 (Dither's activations)")
+    if p["act_grid"] not in ("", "int8", *NATIVE):
+        raise ValueError("native.act_grid is '' (the weights' grid and scale), int8 (Dither's activations) or a native "
+                         "grid")
     if p["act_grid"] == "int8" and (p["act"] != "dither" or p["scale"] == "mx"):
         raise ValueError("native: int8 activations are Dither's, dithered, beside integer weights (not mx)")
+    if p["act_grid"] in NATIVE and p["scale"] not in ("tensor", "channel"):
+        raise ValueError("native: activations on their own native grid take tensor or channel scales")
     if p["gptq"] and p["weight"] == "dither":
         raise ValueError("native: gptq rounds the weights (weight = round or g1)")
 
@@ -1082,7 +1087,8 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     e2m1x2 on E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level
     below or above by a fresh bit), the activations' coins first, then the weights', fresh every call (Dither-2S's
     order). `act_grid = int8`: the activations Dither's own (`act_quant` at top 127, the int8 design's draws), the
-    weights native: the hybrid that serves int8 activations as limbs. tensor, channel and the integer blocks give
+    weights native: the hybrid that serves int8 activations as limbs; `act_grid` a native grid: the activations on
+    that grid, the weights on `grid` (tensor or channel scales). tensor, channel and the integer blocks give
     integers, so the product is the gated exact one; mx's power-of-two blocks give dyadic operands, multiplied
     dequantized in FP32 (the MX MMA). `gptq`: rounded weights by GPTQ (blocks of 128, on the calibration windows'
     inputs) on the grid, each row's scale and block multipliers fixed by `native_parts` first. `g1`: the nearest level
@@ -1118,9 +1124,10 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         xq, sa = act_quant(mm.x, "dither", mm.coins(mm.x.shape), 127)
         sa, ma, xtop = sa[:, None], None, 127
     else:
-        v, sa, ma = native_parts(mm.x, grid, scale, act == "dither")
-        xq = to_grid(v, grid, "round" if act == "g1" else act, mm.coins(mm.x.shape) if act == "dither" else None)
-        xtop = LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
+        agrid = act_grid or grid
+        v, sa, ma = native_parts(mm.x, agrid, scale, act == "dither")
+        xq = to_grid(v, agrid, "round" if act == "g1" else act, mm.coins(mm.x.shape) if act == "dither" else None)
+        xtop = LEVELS[agrid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
     bx = mm.coins(mm.x.shape) if act == "g1" else 0
     wq = wl.float() if wg is None else wl.float() + mm.coins(wl.shape) * wg.float()
     xq, wq = with_blocks(xq, ma) + bx, with_blocks(wq, mw) + (mm.coins(wl.shape) if weight == "g1" else 0)

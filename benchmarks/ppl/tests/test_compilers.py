@@ -17,7 +17,7 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", "fpx-g1-e4m3i120", "fpx-g1-nvfp4x2-nv9",
           "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq", "fpx-g1-nvfp4x2-nvi-gptq",
           "fpx-g1s-e4m3i120", "fpx-g1s-nvfp4x2-nvi10", "fpx-g1s-nvfp4x2-nvi10-gptq",
-          "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq",
+          "fpx-g1s-nvfp4x2-nvi10-lm8", "fpx-g1s-w4a8-nvi10", "fpx-g1s-w4a8-nvi10-gptq", "fpx-g1s-h1-e4m3i120-w60",
           *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
@@ -35,6 +35,8 @@ def test_a_k32_word_of_e4m3i352_products_stays_in_one_binade():
 def test_the_int8_subgrids_moved_by_one_stay_in_int8():
     assert steps.LEVELS["e4m3i120"] == tuple(v for v in steps.LEVELS["e4m3i"] if abs(v) <= 120)
     assert steps.LEVELS["e4m3i120"][-1] + 1 <= 127
+    assert steps.LEVELS["e4m3i60"] == tuple(v for v in steps.LEVELS["e4m3i"] if abs(v) <= 60)
+    assert steps.LEVELS["e4m3i60"][-1] + 1 <= 63
     assert steps.SCALES["odd9"][-1] * (steps.LEVELS["e2m1x2"][-1] + 1) <= 127
     assert steps.SCALES["int10"][-1] * steps.LEVELS["e2m1x2"][-1] + 1 <= 127
 
@@ -113,26 +115,28 @@ def test_native_gptq_stays_on_the_grid_and_beats_rounding(grid, scale):
     assert torch.equal(steps.native_gptq(w, torch.diag(torch.rand(64, generator=g) + 1), grid, scale)[0], rounded)
 
 
-@pytest.mark.parametrize("grid,scale", [("e4m3i120", "channel"), ("e2m1x2", "nvi10")])
+@pytest.mark.parametrize("grid,scale,act_grid", [("e4m3i120", "channel", ""), ("e2m1x2", "nvi10", ""),
+                                                  ("e4m3i60", "channel", "e4m3i120")])
 @pytest.mark.parametrize("coin", [0.0, 1.0])
-def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, coin, monkeypatch):
+def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, act_grid, coin, monkeypatch):
     import types
     import gates as G
     g = torch.Generator().manual_seed(5)
     x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
-    step = spec.parse({"linear": [{"step": "native", "grid": grid, "scale": scale, "act": "g1", "weight": "g1"}]},
-                      "x").linear[0]
+    step = spec.parse({"linear": [{"step": "native", "grid": grid, "scale": scale, "act": "g1", "weight": "g1",
+                                   "act_grid": act_grid}]}, "x").linear[0]
     gates = G.Gates()
     run = matmul.Run(types.SimpleNamespace(name="t"), 0, 0, types.SimpleNamespace(li=0), gates, {}, {}, None)
     mm = matmul.MM("linear", "mlp.up_proj", run, x, w).enter(step)
     monkeypatch.setattr(matmul.MM, "coins", lambda self, shape, levels=2: torch.full(tuple(shape), coin))
     y = step.defn.fn(mm, matmul.terminal, **step.kw)
 
-    def served(a):
-        v, s, m = steps.native_parts(a, grid, scale, coined=False)
-        return (steps.with_blocks(steps.to_grid(v, grid, "round", None), m) + coin - 0.5) * s
+    def served(a, on):
+        v, s, m = steps.native_parts(a, on, scale, coined=False)
+        return (steps.with_blocks(steps.to_grid(v, on, "round", None), m) + coin - 0.5) * s
 
-    assert torch.allclose(y.double(), served(x).double() @ served(w).double().T, rtol=1e-6, atol=1e-5)
+    want = served(x, act_grid or grid).double() @ served(w, grid).double().T
+    assert torch.allclose(y.double(), want, rtol=1e-6, atol=1e-5)
     assert gates.passed
 
 
@@ -208,5 +212,7 @@ def test_native_checks():
         spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "mx", "act": "g1"}]}, "x")
     with pytest.raises(ValueError, match="int8 activations"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "mx", "act_grid": "int8"}]}, "x")
+    with pytest.raises(ValueError, match="own native grid"):
+        spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nvi10", "act_grid": "e2m1i"}]}, "x")
     with pytest.raises(ValueError, match="route"):
         spec.parse({"linear": [{"step": "int8"}, {"step": "emulate", "route": "e5m2"}]}, "x")
