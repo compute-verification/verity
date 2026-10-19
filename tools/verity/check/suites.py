@@ -1385,11 +1385,11 @@ DIST = ["--dist", "worksteal"]
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
-#: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-m*`, which holds its `OWNER` marker beside it (pytest empties the
-#: `--basetemp` it is given) and is removed when the suite ends: pytest's own keeps its last three runs, and a flock suite's is
-#: ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. The path is no longer than pytest's own
-#: `pytest-of-<user>/pytest-<n>`: a test's AF_UNIX socket under tmp_path has at most 107 bytes of path. No pid in the name: the
-#: sweep of an older suites.py removes `<BASETEMP>-<pid>-*` whose pid it can't see, and skips these
+#: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-<suites.py's pid>m*`, which holds its `OWNER` marker beside it
+#: (pytest empties the `--basetemp` it is given) and is removed when the suite ends: pytest's own keeps its last three runs, and a
+#: flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. Keep the path short: a test's AF_UNIX
+#: socket under tmp_path has at most 107 bytes of path. The `m` after the pid: an older suites.py's sweep removes
+#: `<BASETEMP>-<pid>-*` whose pid it can't see, and skips these
 BASETEMP = "verity-suite"
 OWNER = "owner.json"
 #: a basetemp without a readable marker of this boot and pid namespace is removed once nothing in it changed for this long
@@ -1513,7 +1513,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     own = not any(a == "--basetemp" or a.startswith("--basetemp=") for a in args)
-    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-m")) if own else None
+    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}m")) if own else None
     if basetemp:
         with contextlib.suppress(OSError, IndexError, ValueError):
             mark_basetemp(basetemp)
