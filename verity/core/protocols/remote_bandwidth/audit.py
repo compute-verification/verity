@@ -130,27 +130,23 @@ windows unless the prover appends it again, which gives it a fresh index and a f
 @dataclass(frozen=True, slots=True)
 class Pace:
     """A paced session's schedule (`PROTOCOL.md` §7, "Pacing"): each window is a group of about `k` passes under a live
-    coin of its own, and the windows are taken `groups` at a time, a stretch, then one more, the closing window, whose
-    reads back the credited span's end (`ledger.memory`).  Window t's boundary message is due once t has k − 1 roots,
-    so that the pass in flight is its last (at k = 1, once window t − 1 has its root, and window 0's at once), and
-    leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)), never sooner than `Params.window_ns` after its
-    challenge (`Session.next_boundary_ns`)."""
+    coin of its own, the last the closing window, whose reads back the credited span's end (`ledger.memory`).  Window
+    t's boundary message is due once t has k − 1 roots, so that the pass in flight is its last (at k = 1, once window
+    t − 1 has its root, and window 0's at once), and leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)),
+    never sooner than `Params.window_ns` after its challenge (`Session.next_boundary_ns`).  When its coins leave
+    follows its roots, so is a value: its γ is declared per fixed window of `window_ns`, the stated T, from its first
+    challenge (`ledger.windows`)."""
 
     k: int
-    groups: int
+    window_ns: int = WINDOW_NS
 
     def __post_init__(self) -> None:
-        for name in ("k", "groups"):
+        for name in ("k", "window_ns"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"a pace's {name} is a positive integer")
 
-    def stretches(self, windows: int) -> list[range]:
-        """The windows of each stretch, in order, the closing window alone last."""
-        return [range(a, min(a + self.groups, windows - 1)) for a in range(0, windows - 1, self.groups)] + [
-            range(windows - 1, windows)]
-
     def to_json(self) -> dict:
-        return {"groups": self.groups, "k": self.k}
+        return {"k": self.k, "window_ns": self.window_ns}
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,7 +160,7 @@ class Params:
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
     block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1, and at L = 1 that is
     before it may be resident.  `pace` paces the session (`Pace`, None for a stated window each): its windows are
-    then `groups` a stretch over one or more stretches, and the closing window."""
+    then groups of at most k passes, the last the closing window."""
 
     blocks: int
     deadline_ns: int
@@ -188,10 +184,9 @@ class Params:
                 raise ValueError(f"{name} is a positive integer")
         if type(self.deferred) is not bool:
             raise ValueError("deferred is a bool")
-        if self.pace is not None and (type(self.pace) is not Pace or self.windows <= self.pace.groups
-                                      or (self.windows - 1) % self.pace.groups):
-            raise ValueError("a paced session's windows are its stretches of `groups` windows each, at least one, and "
-                             f"the closing window: m·groups + 1, m ≥ 1, not {self.windows} under {self.pace!r}")
+        if self.pace is not None and (type(self.pace) is not Pace or self.windows < 2):
+            raise ValueError(f"a paced session is a Pace's, with at least one window and the closing window, not "
+                             f"{self.windows} windows under {self.pace!r}")
         if self.deferred and self.lifetime < 2:
             raise ValueError(f"a session that defers residency has a lifetime of at least 2 windows, not "
                              f"{self.lifetime}: a block appended in window w is resident from w or w + 1, so its "
@@ -585,15 +580,15 @@ class WindowRecord:
     released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; each pass's head, `heads`, the chain over every append received
-    before its root (`append_head`, None before the first), which its seed binds (`chained`); and each pass's stale
+    before its root (`append_head`, None before the first), which its seed binds (`chained`); each pass's stale
     bound, `stale`: N, the registered store's size, plus the counts of the session's appends that joined window
     `window` − L or before (L `Params.lifetime`), an append joining the window of the first root received after it,
     which is the window of the first pass whose head chains it.  That is the store index below which every appended
     block is past the cap, which a re-key's old index is below at the cap, and the same for every pass of a window;
     `Session._stale_below` takes it as the first index of the earliest append received before the pass's root that
-    joined a window above `window` − L, or the store's extent at that root if none did.  `arrived_ns` is when each
-    pass's root arrived on the verifier's clock, one a pass.  All four are empty in a record no session made, such as
-    `timing.stated`'s model."""
+    joined a window above `window` − L, or the store's extent at that root if none did; and when each pass's root
+    arrived on the verifier's clock, `arrived_ns`, one a pass.  All four are empty in a record no session made, such
+    as `timing.stated`'s model."""
 
     window: int
     lengths: tuple[int, ...]
@@ -664,8 +659,8 @@ class Record:
     session appended after the codec seed and released, the lifetime cap it held them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
     one), which, with each pass's head and stale bound (`WindowRecord.heads`, `WindowRecord.stale`), the
-    memory-map unit's verdict is on (`RequirementLink.mapped`), and its pace (`Params.pace`, None
-    unpaced).  `public` is what acceptance makes public;
+    memory-map unit's verdict is on (`RequirementLink.mapped`), and its pace (`Params.pace`, None unpaced).
+    `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -1114,8 +1109,7 @@ class Session:
             profile = IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(len(w.draws))},
                                        self.params.delta, drawn={"receipt": len(w.draws)})
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
-                                    tuple(w.steps), tuple(w.heads), tuple(w.stale),
-                                    tuple(w.arrived)))
+                                    tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,

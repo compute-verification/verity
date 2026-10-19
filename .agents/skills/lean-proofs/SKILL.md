@@ -27,6 +27,10 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
   `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
   `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
+- **Lean is the definition and the verifier of record** (Daniel, 18 Oct; `AGENTS.md` "Design rules"). A verifier is
+  Lean code and imports nothing from `verity.ml`; the Python that mirrors it, for the prover's speed, is held to it by
+  difftest (`verity/core/difftest/`). A protocol whose Python verifier is still of record switches by the 8 Oct
+  procedure (`.agents/skills/friction/SKILL.md`), which moves its properties from `Models/` to `Properties/`.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.

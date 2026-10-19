@@ -9,12 +9,14 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 
 - N, the registered blocks; P, the credited passes; `planned`, their registered receipts (each pass's `lengths` less
   its post-seed reads); W, the most of them wrong (`audit.pooled`'s, at the record's δ); S, S_chip/b;
-- X, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's squarings a block
-  (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links';
-- snapshot: `planned − W − X·span − P·S` blocks over the passes, `span` the record's;
+- X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
+  squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
+- B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
+  disk read (plus, link-charged, one link window B_l), `Node`'s bursts;
+- snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
 - paced, with each window a group g ≤ C, its challenge at s_g, its n_g passes, e_g = max(its last root's arrival,
   s_(g+1)) (the closing window C's: its last arrival), L = max_g (e_g − s_g), and the credited span Σ = [e_0, s_C):
-  time-held is `Σ·(N − S) − 2L·X·(Σ + 2L) − fill` block-ns over Σ, where `fill` spreads W over the groups at
+  time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
   v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
@@ -23,7 +25,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
@@ -47,7 +49,11 @@ class Node:
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
     on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), its SHA-512
     compressions a second (the sketch's term), and the read ceilings of its own disks and of its boundary links
-    (bytes a second, 0 charging none).  `stated` takes `timing`'s, which a reported read rate can only raise."""
+    (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
+    beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
+    maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
+    nanosecond, which no device with a nonzero rate meets.  `stated` takes `timing`'s, which a reported read rate can
+    only raise."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
@@ -56,6 +62,9 @@ class Node:
     sha512_per_s: float = timing.SHA512_PER_S
     disk_bytes_per_s: float = 0.0
     link_bytes_per_s: float = 0.0
+    rebuild_burst_bytes: float = 0.0
+    disk_burst_bytes: float = 0.0
+    link_burst_bytes: float = 0.0
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s"):
@@ -63,7 +72,8 @@ class Node:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
-        for name in ("sha512_per_s", "disk_bytes_per_s", "link_bytes_per_s"):
+        for name in ("sha512_per_s", "disk_bytes_per_s", "link_bytes_per_s", "rebuild_burst_bytes",
+                     "disk_burst_bytes", "link_burst_bytes"):
             _rate(getattr(self, name), name)
         squarings = dict(self.squarings_per_s)
         for width, rate in squarings.items():
@@ -72,13 +82,18 @@ class Node:
 
     @classmethod
     def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
-               link_bytes_per_s: float = 0.0) -> Node:
+               link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
+               link_burst_bytes: float | None = None) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term (MEM-24)."""
+        a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
+        second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
+        links are charged."""
         measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
+        disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
+        link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s)
+                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
@@ -87,10 +102,11 @@ class Node:
         return audit.Rebuild(codec, self.squarings_per_s[codec.field.name])
 
     def to_json(self) -> dict:
-        return {"chip_bytes": self.chip_bytes, "disk_bytes_per_s": self.disk_bytes_per_s,
+        return {"chip_bytes": self.chip_bytes, "disk_burst_bytes": self.disk_burst_bytes,
+                "disk_bytes_per_s": self.disk_bytes_per_s, "link_burst_bytes": self.link_burst_bytes,
                 "link_bytes_per_s": self.link_bytes_per_s, "read_bytes_per_s": self.read_bytes_per_s,
-                "sha512_per_s": self.sha512_per_s, "spec_bytes_per_s": self.spec_bytes_per_s,
-                "squarings_per_s": dict(self.squarings_per_s)}
+                "rebuild_burst_bytes": self.rebuild_burst_bytes, "sha512_per_s": self.sha512_per_s,
+                "spec_bytes_per_s": self.spec_bytes_per_s, "squarings_per_s": dict(self.squarings_per_s)}
 
 
 def sketch(record: audit.Record, node: Node) -> float:
@@ -102,18 +118,21 @@ def sketch(record: audit.Record, node: Node) -> float:
     return float(timing.sketch_failure(compressions, record.passes, record.rows))
 
 
-def windows(record: audit.Record) -> list[range]:
-    """The record's windows as γ declares them: each window alone, or a paced session's stretches
-    (`audit.Pace.stretches`)."""
-    n = len(record.windows)
-    return [range(t, t + 1) for t in range(n)] if record.pace is None else record.pace.stretches(n)
+def windows(record: audit.Record) -> list[tuple[int, int]]:
+    """The spans γ is declared over, each `(from, to)` in ns: each window's own, `[b_(t−1), D_t]`, a stated window
+    apart; or a paced session's fixed windows of the stated T (`audit.Pace.window_ns`) from its first challenge, the
+    last ending at its last deadline.  Both are protocol structure: when a paced session's coins left is a value."""
+    if record.pace is None:
+        return [(w.released_ns, w.deadline_ns) for w in record.windows]
+    T = record.pace.window_ns
+    return [(a, min(a + T, record.end_ns)) for a in range(record.start_ns, record.end_ns, T)]
 
 
 @dataclass(frozen=True, slots=True)
 class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
-    and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each window as declared (`windows`: a
-    paced session's stretches), each as a fraction of R over its own span.  `error` and `error_horizon` are the
+    and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
+    a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
     ledger's with the sketch's term added."""
 
     capacity_bytes_per_s: float
@@ -145,34 +164,52 @@ class Gamma:
                              "window": w.window} for w in self.windows]}
 
 
-def _stretch(record: audit.Record, lg: audit.Ledger, ws: range, index: int, capacity: float) -> audit.WindowLedger:
-    """The ledger's window terms over windows `ws` together, its span from the first's challenge to the last's
-    deadline: each term's bytes summed over them, the timing term from their credited receipts."""
-    parts, recs = [lg.windows[t] for t in ws], [record.windows[t] for t in ws]
-    if len(parts) == 1:
-        return replace(parts[0], window=index)
-    span = recs[-1].deadline_ns - recs[0].released_ns
-    whole = capacity * span / 1e9
+def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
+    """The ledger's window terms over a paced record's fixed windows (`windows`).  A pass is in the fixed window that
+    holds it whole, from its challenge's release to its root's arrival, and in none if it straddles a boundary; each
+    term is its passes': their credited receipts, chip and counting, and of each window they are from, its wrong
+    receipts' bytes, read per window and over the horizon, at most their receipts', and its floor."""
+    if (why := _arrivals(record)) is not None:
+        raise ValueError(f"γ per fixed window: {why}")
+    spans, b, start, T = windows(record), record.block_bytes, record.start_ns, record.pace.window_ns
+    held: list[dict[int, list[int]]] = [{} for _ in spans]
+    for t, w in enumerate(record.windows):
+        m = (w.released_ns - start) // T
+        for i, arrived in enumerate(w.arrived_ns):
+            if arrived <= spans[m][1]:
+                held[m].setdefault(t, []).append(i)
 
-    def summed(name: str) -> float:
-        return sum(getattr(p, name) * capacity * p.span_ns / 1e9 for p in parts) / whole
+    def charged(parts: list[tuple[audit.WindowLedger, int]], name: str) -> float:
+        return sum(min(getattr(p, name) * capacity * p.span_ns / 1e9, n * b) for p, n in parts)
 
-    credited = sum(sum(w.credited(False)) for w in recs) * record.block_bytes
-    return audit.WindowLedger(index, span, timing=1 - credited / whole, sample=summed("sample"), chip=summed("chip"),
-                              counting=summed("counting"), rebuild=lg.rebuild, host=lg.host, link=lg.link,
-                              carrier=summed("carrier"), horizon=summed("horizon"),
-                              floor=max(p.floor for p in parts))
+    out = []
+    for m, ((u, v), passes) in enumerate(zip(spans, held)):
+        whole = capacity * (v - u) / 1e9
+        ps = [(record.windows[t], i) for t, js in passes.items() for i in js]
+        reads = sum(w.lengths[i] for w, i in ps) * b
+        if reads > whole:
+            raise ValueError(f"fixed window {m} certifies {reads} bytes read, more than the capacity allows in its "
+                             "span: the capacity is understated")
+        parts = [(lg.windows[t], sum(record.windows[t].lengths[i] for i in js)) for t, js in passes.items()]
+        credited = sum(w.credited(False)[i] for w, i in ps) * b
+        named = sum(audit.named_bits(w.lengths[i]) + audit.SLACK_LOG2 for w, i in ps)
+        out.append(audit.WindowLedger(
+            m, v - u, timing=1 - credited / whole, sample=charged(parts, "sample") / whole,
+            chip=len(ps) * chip_bytes / whole, counting=named / 8 / whole, rebuild=lg.rebuild, host=lg.host,
+            link=lg.link, carrier=charged(parts, "carrier") / whole, horizon=charged(parts, "horizon") / whole,
+            floor=max((p.floor for p, _ in parts), default=0.0)))
+    return tuple(out)
 
 
 def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
           wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Gamma:
     """γ against `capacity_bytes_per_s`, over the registered store only (nothing appended after the codec seed is
-    credited), with the node's S_chip and squaring ceiling (`audit.ledger`), and per window as declared."""
+    credited), with the node's S_chip and squaring ceiling (`audit.ledger`), and per window as declared (`windows`):
+    a paced record's needs each root's arrival, in order."""
     lg = audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=node.chip_bytes,
                       rebuild=node.rebuild(record.codec), wrong=wrong)
-    return Gamma(capacity_bytes_per_s, lg,
-                 tuple(_stretch(record, lg, ws, m, capacity_bytes_per_s) for m, ws in enumerate(windows(record))),
-                 sketch(record, node))
+    ws = lg.windows if record.pace is None else _fixed(record, lg, node.chip_bytes, capacity_bytes_per_s)
+    return Gamma(capacity_bytes_per_s, lg, ws, sketch(record, node))
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,18 +241,29 @@ class Line:
                 "lost_blocks": self.lost_blocks}
 
 
-def _paced(record: audit.Record) -> str | None:
-    """Why the record has no time-held line, or None: it must be paced, with every root's arrival, in order from its
-    window's challenge to its deadline, every pass reading every registered block (`Covers`: a block a pass leaves out
-    can be absent across it with neither a wrong read nor a rebuild), and a credited span."""
-    if record.pace is None:
-        return "an unpaced session has no time-held line: its windows' coins come a stated window apart"
+def _arrivals(record: audit.Record) -> str | None:
+    """Why a paced record's arrivals can't be read, or None: every root's, in order from its window's challenge to its
+    deadline, on one clock."""
     if any(len(w.arrived_ns) != w.passes for w in record.windows):
-        return "the time-held line reads each root's arrival, and this record has none: read a session's own record"
+        return "a paced record is read at each root's arrival, and this record has none: read a session's own record"
     for w in record.windows:
         if any(a > b for a, b in zip((w.released_ns, *w.arrived_ns), (*w.arrived_ns, w.deadline_ns))):
-            return (f"window {w.window}'s arrivals are not in order from its challenge to its deadline: the time-held "
-                    "line reads them on one clock")
+            return (f"window {w.window}'s arrivals are not in order from its challenge to its deadline: a paced "
+                    "record's are read on one clock")
+    return None
+
+
+def _paced(record: audit.Record) -> str | None:
+    """Why the record has no time-held line, or None: it must be paced, with a closing window after the first, every
+    root's arrival in order (`_arrivals`), every pass reading every registered block (`Covers`: a block a pass leaves
+    out can be absent across it with neither a wrong read nor a rebuild), and a credited span."""
+    if record.pace is None:
+        return "an unpaced session has no time-held line: its windows' coins come a stated window apart"
+    if len(record.windows) < 2:
+        return ("a record of one window has no time-held line: the credited span runs from the first window's end to "
+                "the closing window's challenge")
+    if (why := _arrivals(record)) is not None:
+        return why
     for w in record.windows:
         if (short := next((n for n in w.credited(False) if n != record.blocks), None)) is not None:
             return (f"a pass of window {w.window} read {short} of the {record.blocks} registered blocks: the "
@@ -234,8 +282,9 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     rebuild = node.rebuild(record.codec)
     X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
     X_link = X + node.link_bytes_per_s / b / 1e9
+    Br, Bd, Bl = node.rebuild_burst_bytes / b, node.disk_burst_bytes / b, node.link_burst_bytes / b
     planned = sum(sum(w.credited(False)) for w in record.windows)
-    snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - X * record.span_ns - P * S) / P)
+    snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + (Br + Bd)) - P * S) / P)
     if (why := _paced(record)) is not None:
         return snapshot, Line(TIME_HELD, N, b, delta, refused=why), Line(LINK_CHARGED, N, b, delta, refused=why)
     ws = record.windows
@@ -253,10 +302,11 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
         if left <= 0:
             break
 
-    def lost(x: float) -> float:
-        return S + (2 * L * x * (span + 2 * L) + fill) / span
+    def lost(x: float, B: float) -> float:
+        return S + (2 * L * (x * (span + 2 * L) + B) + fill) / span
 
-    return snapshot, Line(TIME_HELD, N, b, delta, lost(X)), Line(LINK_CHARGED, N, b, delta, lost(X_link))
+    return (snapshot, Line(TIME_HELD, N, b, delta, lost(X, Br + Bd)),
+            Line(LINK_CHARGED, N, b, delta, lost(X_link, Br + Bd + Bl)))
 
 
 @dataclass(frozen=True, slots=True)
