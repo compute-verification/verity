@@ -64,7 +64,9 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
     from verity.core.protocols.pouw.circuit import h1tile
 
     assert (h1tile.SCHEME, h1tile.FOLD) == (P.SCHEME, "fx1") and all("S8" in k for k in h1tile.KINDS)
-    grid = {P.Tile(4, 16, 64, 64): 1}       # benchmarks/datacenter's compiled s8 grid on its block, one tile
+    # benchmarks/datacenter's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_datacenter's `work["a"]`):
+    # census/v1's int8 products are z's and the lanes' segment dots', 4·16·(64 + 64 + 32·2), of which z's 4·16·64 credit
+    grid = {P.Tile(4, 16, 64, 64): 1}
     block = {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}
     assert P.placed(block, grid) == {"mac:linears": 4096} and P.units(P.placed(block, grid), S) == 1
     assert P.proved_block_ticks(P.placed(block, grid), S, P.SHEET_EPS, 1e-3) == pytest.approx(
