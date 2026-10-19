@@ -7,12 +7,13 @@
 // case (no delivery). wgli_true (RT-HOPPER-8) is the honest loop folding the wgmma's own accumulators, after each
 // wait, wgli_pp the same loop with its warpgroups ordered (ping-pong: the next warpgroup's barrier is arrived after the
 // wait), wgli_pp2 with the barrier arrived right after the commit, and wgli_db one warpgroup double-buffering two N128
-// accumulators (fold one while the other's wgmma runs). Built and gated by ../opcode_probe/probe.py; rs.sh builds it
-// on a CPU node and times it on the H200, rs.py reads it.
+// accumulators (fold one while the other's wgmma runs). a2u (RT-HOPPER-3) is A2u beside an asynchronous wgmma. Built
+// and gated by ../opcode_probe/probe.py; rs.sh builds it on a CPU node and times it on the H200, rs.py reads it.
 #include "../opcode_probe/probe.cuh"
 #include "../dc/dc.cuh"
 #include "../dc/probes/lanes.cuh"
 #include "../dc/wgmma.cuh"
+#include "../dc/probes/uniform.cuh"
 
 constexpr int KB = 32, AROWS = 64, BROWS = 256;
 
@@ -245,6 +246,38 @@ DC_DEV void wg_li_db(const OpArgs& a) {
   OP_SINK(fold_acc(dA) ^ fold_acc(dB) ^ li.sink() ^ threadIdx.x)
 }
 
+// a2u (RT-HOPPER-3): A2u beside an asynchronous wgmma. uniform.cuh's issue-saturated loop (uni_sat's uv_ form: the
+// honest step, 512 FFMA and 128 IADD3/LOP3 that read no MMA, and K uniform instructions on uchain.cuh's chains), with
+// G wgmma m64n128k32 committed before it and waited after it, so they run under it: a2u_v (G 0) and a2u_w (G 4). A2u
+// holds while the loop's instructions, lane, uniform and control, issue at most one a SMSP-cycle together.
+template <int S, int K, int G>
+DC_DEV void a2u(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles(sm, a.mode);
+  int d[64] = {};
+  UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
+  Honest h(a.mode);
+  UVec<512, 128, 1> w(a.mode);
+  OP_BEGIN
+  OP_LOOP(it) {
+    if constexpr (G > 0) {
+      wgmma_fence();
+#pragma unroll
+      for (int g = 0; g < G; g++) wgmma_s8_n128(d, t.da, t.db, 1);
+      wgmma_commit();
+    }
+    h.step();
+    w.step();
+    u.step();
+    if constexpr (G > 0) {
+      wgmma_wait<0>();
+      wgmma_hold(d);
+    }
+  }
+  OP_END
+  OP_SINK(fold_acc(d) ^ u.fold() ^ h.fold() ^ w.fold() ^ threadIdx.x)
+}
+
 OP_KERNEL(wg_s8_n256_a1, 256) { wg_alone<F_ss>(a); }
 OP_KERNEL(wg_s8_n256_rs_a1, 256) { wg_alone<F_rs>(a); }
 OP_KERNEL(wg_u8s8_n256_a1, 256) { wg_alone<F_u8>(a); }
@@ -263,12 +296,24 @@ OP_KERNEL(wgli_pp2_w2, 256) { wg_li_pp<F_ss, 2, true>(a); }
 OP_KERNEL(wgli_pp2_w3, 384) { wg_li_pp<F_ss, 3, true>(a); }
 OP_KERNEL(wgli_db_w1, 128) { wg_li_db(a); }
 OP_KERNEL(wgli_db_w2, 256) { wg_li_db(a); }
+OP_KERNEL(a2u_v_0, 256) { a2u<S_I, 0, 0>(a); }
+OP_KERNEL(a2u_v_128i, 256) { a2u<S_I, 128, 0>(a); }
+OP_KERNEL(a2u_v_256i, 256) { a2u<S_I, 256, 0>(a); }
+OP_KERNEL(a2u_v_256x, 256) { a2u<S_X, 256, 0>(a); }
+OP_KERNEL(a2u_w_0, 256) { a2u<S_I, 0, 4>(a); }
+OP_KERNEL(a2u_w_128i, 256) { a2u<S_I, 128, 4>(a); }
+OP_KERNEL(a2u_w_256i, 256) { a2u<S_I, 256, 4>(a); }
+OP_KERNEL(a2u_w_256x, 256) { a2u<S_X, 256, 4>(a); }
 
 #define S8 "IGMMA.64x256x32.S8.S8*=4"
 #define U8 "IGMMA.64x256x32.U8.S8*=4"
 #define S8H "IGMMA.64x128x32.S8.S8*=8"
 #define LI ",LOP3.LUT=272,IMAD=256,REDUX*=4"
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = PAT, .iters = 4096}
+#define UV "FFMA=512,IADD3=64,IMMA.16832.S8.S8=8,"
+#define A2U_V UV "IGMMA*=0,"
+#define A2U_W UV "IGMMA.64x128x32.S8.S8=4,"
+#define PA(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = PAT, .counted = "FFMA", .iters = 2048}
 static const OpProbe PROBES[] = {
     P(wg_s8_n256_a1, S8),
     P(wg_s8_n256_rs_a1, S8),
@@ -288,6 +333,14 @@ static const OpProbe PROBES[] = {
     {.name = "wgli_pp2_w3", .kernel = (const void*)wgli_pp2_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
     {.name = "wgli_db_w1", .kernel = (const void*)wgli_db_w1, .tpb = 128, .expect = S8H LI, .iters = 4096},
     P(wgli_db_w2, S8H LI),
+    PA(a2u_v_0, A2U_V "UIMAD*=0,ULOP3*=0"),
+    PA(a2u_v_128i, A2U_V "UIMAD=64,ULOP3.LUT=64"),
+    PA(a2u_v_256i, A2U_V "UIMAD=128,ULOP3.LUT=128"),
+    PA(a2u_v_256x, A2U_V "ULOP3.LUT=384"),
+    PA(a2u_w_0, A2U_W "UIMAD*=0,ULOP3*=0"),
+    PA(a2u_w_128i, A2U_W "UIMAD=64,ULOP3.LUT=64"),
+    PA(a2u_w_256i, A2U_W "UIMAD=128,ULOP3.LUT=128"),
+    PA(a2u_w_256x, A2U_W "ULOP3.LUT=384"),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
