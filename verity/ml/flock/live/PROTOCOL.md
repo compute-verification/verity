@@ -604,7 +604,7 @@ kept as an early tripwire).
 | `T'^r` | recomputed | `T'^r = ⟨w^r, y_1'^r⟩ = ⟨w^r, y_1^r⟩ + ρ^r_0 e^r_0 + ρ^r_1 e^r_1` with the honest `e^r = ⟨w^r, R^r⟩`: `w^r` from the coins and claims, `y_1^r` the fold of the host witness's lanes, `R^r` the host's extra lanes. The lane-phase relation alone (`claim_k + ρe + T'`, on the device's unmasked values) does not fix it: a device that shifts `e` by `δ` and `T'` by `ρδ` keeps the relation and sends 256 bits of its choice |
 | `ybar^r` | recomputed | `zk::ybar` from the session's level-0 padding (host), `w^r` and `ρ^r` |
 | levels 1+: the code-switch message, every cap, OOD value, sumcheck message and nonce | recomputed | functions of `y_1'^r`, the coins and the salts the host expands for trees `1..R` |
-| the inner proof: `[ρ, σ]`, `τ`'s commitment, `Y`, its openings | the firewall's own | `zk_finish`, from the pads on the host, over §4's rows replayed from the passed values with the lincheck's comb the firewall folds itself: a device's comb would choose the rows the inner proof proves, so the firewall drops it (the outer proof never carries it; the verifier folds its own) |
+| the inner proof: `[ρ, σ]`, `τ`'s commitment, `Y`, its openings | the firewall's own | `[ρ, σ]` and `Y`: the rep's Lean frame computes them from its draws and the coins and refuses an inner round that is not them (`innerOwn`); the rest `zk_finish`, from the pads on the host, over §4's rows replayed from the passed values with the lincheck's comb the firewall folds itself: a device's comb would choose the rows the inner proof proves, so the firewall drops it (the outer proof never carries it; the verifier folds its own) |
 | the proof bytes | recomputed | every transcript field equals what the firewall passed; level 0's rows and paths are the recheck tree's at the queries the coins fix; levels 1+'s are the recomputed trees' |
 
 So the rule is: **the firewall masks the algebraic phase and level 0's lane rounds, and recomputes the polynomial
@@ -668,7 +668,9 @@ The stops the coins decide are the firewall's own, taken from the public coins a
 - level 0's `ρ_0, ρ_1` dependent over F128: the Lean frame, from the four words the stream answered after level 0's last
   masked value (`rhoCoins`, `Flock.Zk.rhoIndependent`), and level 0 closes only after all four;
 - β = 0 in the inner proof: the Lean frame, at the inner proof's third round (`innerCoins`). The inner proof's four rounds
-  leave through the rep's Lean frame as every other round does, unmasked, and the frame's `finish` comes after them.
+  leave through the rep's Lean frame, unmasked, in the form it fixes (`innerOwn`): `[ρ, σ]` and `Y` are the frame's own,
+  from its draws and the coins, and of the other two rounds only `final_c'` and `τ`'s commitment are the firewall's. The
+  frame's `finish` comes after them.
 
 Rust's own versions of all four (`Masking::refuse_outer`, `mask_rank_ok`, the shadow opening's `rho_independent`,
 `prove_inner`'s β check) still run under the firewall, as cross-checks: the first two record instead of stopping
@@ -776,7 +778,10 @@ it), and the prover one `flock-firewall tap` for its other draws (§2), started 
 - **the inner proof**: its four rounds (`ε`, the batching coins, `β`, the queries), after the opening's, are the
   firewall's own and come alone (`round N LEN`), which the frame takes nowhere else: `zk_finish` proves it on a
   challenger that sends each round through the rep's frame first, and the frame takes one inner proof, after the opening
-  ended, and no round after its fourth.
+  ended, and no round after its fourth. It takes each round only in the form it fixes (`innerOwn`): the inner label,
+  `final_c'` and `ε`'s squeeze; `[ρ, σ] = [ε h_fa + h_tx, h_fb + h_ty]` and the batching coins; `τ`'s 64-byte commitment
+  and `β`'s squeeze; `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries, with `ρ`, `σ` and `Y` its own values from its draws
+  and the coins. Any other round (a frame more, a value changed) is answered `err WHY` and releases nothing.
 - **finish**: `ok`, or `stop` for a stopped rep, once every masked phase closed with every pad of the layout used and
   the inner proof's four rounds left. A Lean frame that stopped the rep at its `finish` where the firewall's checks all
   passed is refused (`FIREWALL-REFUSED: the Lean frame stopped the rep`).
@@ -784,8 +789,9 @@ it), and the prover one `flock-firewall tap` for its other draws (§2), started 
 A `stop` ends the rep where the coins stand, as an honest prover's refusal does. The masking challenger still runs as the
 speed reference. Its inner challenger (`firewall::Gate`) frames what it would send, holds that to the Lean round byte for
 byte, refuses on any difference, and hands the stream only the Lean round; the inner proof's rounds go through it the same
-way. The values of `final_c'`, the inner proof, the recheck and the shadow opening are still Rust's (`FirewallComputes`),
-as are the scheduled rounds the pass decision reads. Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
+way. The values of `final_c'`, `τ`'s commitment, the inner proof's openings (outside the stream, in the proof's bytes),
+the recheck and the shadow opening are still Rust's (`FirewallComputes`), as are the scheduled rounds the pass decision
+reads; the inner proof's `[ρ, σ]` and `Y` are the frame's. Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
 reference, over Rust's claim points).
 
 In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
@@ -899,12 +905,20 @@ verdict the relay cuts the challenger's connection without forwarding `Finish`, 
 A refused or stopped session's worker is answered after the session has left the slot, so a worker that keeps talking
 holds up no other session.
 
-**The release side is Rust's** (`flock_live::release`). `flock-circuit prove --zk --firewall-state DIR --session ID --part
+**The release decision is Lean's** (`Core.Firewall.decide`, `core-firewall decide`), and Rust runs it
+(`flock_live::release`). `flock-circuit prove --zk --firewall-state DIR --session ID --part
 NAME`, behind its send check (`FC_FIREWALL=1`, §10.4), runs each outer session straight to `serve` under the rules of this
 section, and keeps `verity_flock.firewall`'s record byte for byte: `live/src/firewall_record_vectors.json`, which
 `release::tests::the_shared_vectors_hold` and `test_the_record_is_the_rust_firewalls_byte_for_byte` both run. It takes the
-slot, admits the session (`Record::admit`: the statements' order is enforced there, before the prover connects), runs its
-rounds, holds its proofs and `Finish` until the session's release time, and sends them, every proof before `Finish`.
+slot and admits the session in one read of the record (`Record::slot_admit`: the statements' order is enforced there,
+before the prover connects), runs its rounds, holds its proofs and `Finish` until the session's release time, and sends
+them, every proof before `Finish`. Rust's decision is the reference: once the session is refused, or once its rounds and
+the send check returned, `core-firewall decide` (`FC_CORE_FIREWALL`, else this checkout's build in
+`verity/core/service/firewall`) decides on the record as it was when the slot was taken, and a session it doesn't decide
+as Rust did (refused, stopped or sent, the why, the release time, and the record after the slot and the admission) is a
+stop, its why naming the difference; a refusal stays one. Nothing leaves that the Lean decision doesn't send, and a Lean
+that can't be run is a stop. `verity/core/service/firewall/tests/test_firewall_release_agreement.py` holds Rust's
+sessions with that judge to Lean's `outerSession`.
 Every stop (the send check's refusal, a fault, a panic, a missed time) drops the connection before `Finish`, and a
 prover killed while it holds the slot is recorded as its session's stop by the next one to take it. Since admission comes
 before the connection, a session cut before its first request is its statement's stop here; through the relay it records
@@ -913,8 +927,9 @@ session (`--warm 0 --runs 1`: each statement is served once) and refuses `FC_VER
 until each session's verdict). `verity_flock.firewall` stays as the inner side
 (`rec_live`'s opens, finishes and inner stops) and as the tests' relay. These decisions across sessions (whether a
 recursive session's next outer session goes on, and when its proofs leave) are outside `FirewallComputes`, in either
-language: that assumption covers the values one session's transcript reports the firewall fixed, and no contract checks
-the record yet.
+language: that assumption covers the values one session's transcript reports the firewall fixed. The Lean decision
+checks them on the record, session by session, before anything leaves; the tests' Python relay decides its own unchecked,
+and refuses a schedule.
 
 **Outer proofs one at a time.** The firewall has one slot across streams and protocols (`slot.lock` in its state directory,
 which every relay process of the firewall shares). An outer session takes it at its first request other than `Ping` and holds

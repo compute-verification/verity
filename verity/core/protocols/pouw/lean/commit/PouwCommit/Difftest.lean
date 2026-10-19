@@ -4,12 +4,12 @@ import PouwCommit.Rows
 import Lean.Data.Json
 
 /-!
-# The difftest: PoUW's commitments in Lean against the Python, on generated cases
+# The difftest: the Python held to PoUW's commitments in Lean, its verifier of record, on generated cases
 
-`tests/difftest_vectors.py` writes `difftest/cases.jsonl`, one case a line: `{"kind", "in", "python"}`, and `"lean"`
-where Lean refuses by name what Python refuses another way (the case's `"why"` says how). An outcome is `{"ok": v}`,
-`{"reason": text}` (a coin refused, in `coin_reason`'s words) or `{"error": …}` (Python raised; Lean threw), and errors
-agree by kind alone. `main` computes each case's outcome from the port and fails unless it is the one expected. The kinds:
+`tests/difftest_vectors.py` writes `difftest/cases.jsonl`, one case a line: `{"kind", "in", "python"}`. An outcome is
+`{"ok": v}`, `{"reason": text}` (a coin refused, in `coin_reason`'s words) or `{"error": …}` (Python raised; Lean threw),
+and errors agree by kind alone. `main` computes each case's outcome from the Lean and fails on every case where Python's
+is not it, naming the Lean's. The kinds:
 
 * `tagged`: `protocol.tagged` of a tag and parts (`{"b": hex}`, `{"s": text}`, `{"i": n}`);
 * `bindings`: `weight_binding`, `activation_binding`, `weights_root` and `transcript_binding`;
@@ -175,16 +175,16 @@ def wrap (kind : String) : E Json → Json
 
 def isError (j : Json) : Bool := (j.getObjVal? "error").toOption.isSome
 
-/-- The case's differences: none when Lean's outcome is the expected one. -/
+/-- The case's differences: none when Python's outcome is the Lean's. -/
 def differences (n : Nat) (line : String) : List String :=
   match Json.parse line with
   | .error e => [s!"case {n}: not JSON: {e}"]
   | .ok c =>
     let kind := (c.getObjValAs? String "kind").toOption.getD ""
-    let want := (c.getObjVal? "lean").toOption.getD ((c.getObjVal? "python").toOption.getD .null)
-    let got := wrap kind (outcome kind ((c.getObjVal? "in").toOption.getD .null))
-    if (isError want && isError got) || want == got then []
-    else [s!"case {n} ({kind}): expected {want.compress}, Lean gives {got.compress}"]
+    let python := (c.getObjVal? "python").toOption.getD .null
+    let lean := wrap kind (outcome kind ((c.getObjVal? "in").toOption.getD .null))
+    if (isError python && isError lean) || python == lean then []
+    else [s!"case {n} ({kind}): Python gives {python.compress} where the Lean, of record, gives {lean.compress}"]
 
 def main (args : List String) : IO UInt32 := do
   let [cases, n] := args | IO.eprintln "usage: PouwCommit/DifftestMain.lean CASES N"; return 2

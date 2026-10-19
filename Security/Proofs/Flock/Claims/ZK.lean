@@ -21,6 +21,8 @@ import Proofs.Flock.Claims.ZK.Reference
 import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
+import Proofs.Flock.Claims.ZK.Session
+import Proofs.Flock.Claims.ZK.Masked
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -30,6 +32,10 @@ import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+import Proofs.Flock.Claims.ZK.Compose
+import Proofs.Flock.Claims.ZK.Layout
+import Proofs.Flock.Claims.ZK.Cut
+import Proofs.Flock.Claims.ZK.Stop
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -49,7 +55,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`zkmalR_congr`).
 * `Pin`: `Claims.Flock.ZK` reads the masked record's own reference prover (`ZkDeploy.prover`) and simulator; the proofs
   prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover. The masked record at a protocol `G` (`zkOf`) has
-  `honestPZk` behind `G`'s `Hello` and opening checks; where `G`'s messages are `honestPZk`'s (`Proto.Honest`, a named
+  `ZkTables.honestP` behind `G`'s `Hello` and opening checks; where `G`'s messages are `ZkTables.honestP`'s (`Proto.Honest`, a named
   Prop), `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf` (`zk_zkOf`).
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
   opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
@@ -105,7 +111,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   admit the coins); `Binding` holds of it with no hypothesis (`Proto.binding_of_open`), `TablesOK` from `Tables` and
   `TMsgLink` from `Complete`, `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is
   the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
-  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `honestPZk`'s, a named Prop), each also at the
+  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `ZkTables.honestP`'s, a named Prop), each also at the
   pinned key's hiding gap (`_gap`).
 * `CoinLayer`: the deployed masked record `zkDeployed`, `RefSession.zkD` at `coin-tree/hm96-sha512/v2`'s coin layer
   (the 32-byte nonce, `Hello`'s frame with its hex, `Hello`'s answer of root and hm96 key, the keyed tree, the
@@ -122,6 +128,12 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
   **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
   fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
+* `Session`: `RefSession.HonestMsgsOn A` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`, `fin`
+  and `off` each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
+* `Masked`: the deployed masked session's table data (`Masked.tableData`): its tables `setupOf true x`'s, each
+  `coinedOf` at its `TabZK`, the witness's table witnesses its shares; the tables' plan (`TabPlan`) and the rest
+  (`SessionPlan`: tape, coins, dummy, round encodings) named. `Masked.tables_hidden`: `Tables` there at the
+  hidden-output form. `Masked.OneTableLowers`: the lowering's completeness at one table, which `Complete` needs.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
@@ -192,4 +204,21 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   whose simulator is colliding given the leaf layer (`not_samplingZK_collSim`), at one whose reference prover sends its
   witness at two honest witnesses of one leaf layer (`not_samplingZK_leak`), and is not met at every masked deployment
   where one has an honest pair (`not_forall_samplingZK`).
+* `Compose`: sequential composition. Two protocols in turn, the second at a statement the first's history selects
+  (`Seq`), are `ZKmalR` under the simulator that runs the first's, then the second's at the unit its transcript selects
+  (**`zkmalR_seqU`**, with one coin type for the second at every unit, so units need not be finitely many;
+  **`zkmalR_seq`** for finitely many): `ε` and `γ` add up, the hybrid that changes the second keeping the first real
+  and giving `V*` its messages as tape, and the composed tape (`forkTape`) guesses which session's `Fork` to charge
+  (`Seq.fork_ge`). A first protocol with `γ₀ ≤ c·g`, then `n` sessions in turn (**`zkmalR_iter`**), cost
+  `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
+  (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
+  spec's statement-indexed tapes (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
+* `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
+  tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
+  `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
+* `Cut`: a run cut at a round (`cutT`), and the run of a prover stopped there is its own run cut (`interact_stopAt`).
+* `Stop`: a run in parts with a public stop, a test of the verifier-visible history read through the first part:
+  the run with the stop is the run cut where it fires (`interact_censor`), so a first part that rewinds nothing keeps
+  its error (`ZKmalAt.censor`), sessions where it fired are silent and simulated exactly, and **`zkmalAt_layout_stop`**
+  charges the parts in turn `ε₀ + Σ_{j < m} eB j` and `m·g` against the prover with the stop.
 -/

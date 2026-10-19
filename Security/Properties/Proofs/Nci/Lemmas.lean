@@ -87,9 +87,9 @@ theorem any_ge_iff (ops : Array ℕ) (g : ℕ) : (ops.any fun x => decide (x ≥
     obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 ha
     exact ⟨i, hi, by simpa using h⟩
 
-theorem gateOf_ok (P : Prog) (g : ℕ) (x : ℕ × Bool × Array ℕ) :
+theorem gateOf_ok (P : Prog) (g : ℕ) (x : ℕ × Bool × Bool × Array ℕ) :
     gateOf P g = .ok x ↔ ∃ p ops w, Located P g p ops w ∧ (∀ a ∈ ops, a < g) ∧
-      x = (w, Flock.Program.isInputId (P.defs[p]!).key, ops) := by
+      x = (w, Flock.Program.isInputId (P.defs[p]!).key, isRegisteredId (P.defs[p]!).key, ops) := by
   unfold gateOf Located
   rcases h : P.gate g with e | ⟨p, ops, sc⟩
   · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
@@ -177,27 +177,32 @@ theorem getElem!_push_size {α : Type} [Inhabited α] (xs : Array α) (x : α) :
   rw [getElem!_pos (xs.push x) xs.size (by simp), Array.getElem_push_eq]
 
 theorem circuitOf_ok (P : Prog) (c : Circuit) (h : circuitOf P = .ok c) :
-    c.N = gates P ∧ c.isInput.size = gates P ∧ c.reads.size = gates P ∧
-      ∀ g < gates P, gateOf P g = .ok (c.w[g]!, c.isInput[g]!, c.reads[g]!) := by
+    c.N = gates P ∧ c.isInput.size = gates P ∧ c.reads.size = gates P ∧ c.registered.size = gates P ∧
+      ∀ g < gates P, gateOf P g = .ok (c.w[g]!, c.isInput[g]!, c.registered[g]!, c.reads[g]!) := by
   refine foldlM_range_ok _ _ (fun n (c : Circuit) => c.w.size = n ∧ c.isInput.size = n ∧ c.reads.size = n ∧
-    ∀ g < n, gateOf P g = .ok (c.w[g]!, c.isInput[g]!, c.reads[g]!)) ⟨rfl, rfl, rfl, by simp⟩ ?_ _ c h
-  rintro n c c' ⟨hw, hi, hr, hg⟩ hs
-  rcases hx : gateOf P n with e | ⟨w, inp, ops⟩
+    c.registered.size = n ∧ ∀ g < n, gateOf P g = .ok (c.w[g]!, c.isInput[g]!, c.registered[g]!, c.reads[g]!))
+    ⟨rfl, rfl, rfl, rfl, by simp⟩ ?_ _ c h
+  rintro n c c' ⟨hw, hi, hr, hq, hg⟩ hs
+  rcases hx : gateOf P n with e | ⟨w, inp, reg, ops⟩
   · simp [hx, Functor.map, Except.map] at hs
   · simp only [hx, Functor.map, Except.map, Except.ok.injEq] at hs
     subst hs
-    refine ⟨by simp [Circuit.push, hw], by simp [Circuit.push, hi], by simp [Circuit.push, hr], fun g hg' => ?_⟩
+    refine ⟨by simp [Circuit.push, hw], by simp [Circuit.push, hi], by simp [Circuit.push, hr],
+      by simp [Circuit.push, hq], fun g hg' => ?_⟩
     simp only [Circuit.push]
     rcases Nat.lt_succ_iff_lt_or_eq.1 hg' with hlt | rfl
-    · rw [getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega)]
+    · rw [getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega), getElem!_push_lt _ _ (by omega),
+        getElem!_push_lt _ _ (by omega)]
       exact hg g hlt
     · have e1 : (c.w.push w)[c.w.size]! = w := getElem!_push_size _ _
       have e2 : (c.isInput.push inp)[c.isInput.size]! = inp := getElem!_push_size _ _
       have e3 : (c.reads.push ops)[c.reads.size]! = ops := getElem!_push_size _ _
+      have e4 : (c.registered.push reg)[c.registered.size]! = reg := getElem!_push_size _ _
       rw [hw] at e1
       rw [hi] at e2
       rw [hr] at e3
-      rw [e1, e2, e3]
+      rw [hq] at e4
+      rw [e1, e2, e3, e4]
       exact hx
 
 /-- A fold over a range succeeds exactly when every step does, each step's success read off the state through an
@@ -273,9 +278,9 @@ theorem circuitOf_gate {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : �
     ∃ p sc, P.gate g = .ok (p, c.reads[g]!, sc) ∧ (P.defs[p]!).ret = .value c.w[g]! ∧
       c.isInput[g]! = Flock.Program.isInputId (P.defs[p]!).key ∧
       (c.isInput[g]! = true → c.reads[g]! = #[]) ∧ ∀ a ∈ c.reads[g]!, a < g := by
-  obtain ⟨p, ops, w, ⟨⟨sc, hs⟩, hr, hin⟩, hlt, hx⟩ := (gateOf_ok P g _).1 ((circuitOf_ok P c h).2.2.2 g hg)
+  obtain ⟨p, ops, w, ⟨⟨sc, hs⟩, hr, hin⟩, hlt, hx⟩ := (gateOf_ok P g _).1 ((circuitOf_ok P c h).2.2.2.2 g hg)
   simp only [Prod.mk.injEq] at hx
-  obtain ⟨hw, hi, ho⟩ := hx
+  obtain ⟨hw, hi, -, ho⟩ := hx
   refine ⟨p, sc, ho ▸ hs, hw ▸ hr, hi, fun h' => ho ▸ hin (hi ▸ h'), ho ▸ hlt⟩
 
 theorem circuitOf_isInput {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
@@ -290,26 +295,50 @@ theorem circuitOf_isInput {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g 
     obtain ⟨rfl, -, -⟩ := hs'
     exact hi ▸ h'
 
+theorem isRegisteredId_iff (id : String) :
+    isRegisteredId id = true ↔ (Flock.Program.inputId? id).map (·.1) = some Flock.Program.REGISTRATION := by
+  simp [isRegisteredId]
+
+theorem circuitOf_registered {P : Prog} {c : Circuit} (h : circuitOf P = .ok c) {g : ℕ} (hg : g < gates P) :
+    c.registered[g]! = true ↔ IsRegistered P g := by
+  obtain ⟨p, ops, w, ⟨⟨sc, hs⟩, -, -⟩, -, hx⟩ := (gateOf_ok P g _).1 ((circuitOf_ok P c h).2.2.2.2 g hg)
+  simp only [Prod.mk.injEq] at hx
+  obtain ⟨-, -, hq, -⟩ := hx
+  rw [hq, isRegisteredId_iff]
+  constructor
+  · intro h'
+    exact ⟨p, ops, sc, hs, h'⟩
+  · rintro ⟨p', ops', sc', hs', h'⟩
+    rw [hs] at hs'
+    simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
+    obtain ⟨rfl, -, -⟩ := hs'
+    exact h'
+
 /-! ## θ -/
 
 theorem natOf?_str (s : String) : natOf? (.str s) = none := rfl
 
 theorem thetaStep_ok (c : Circuit) (s s' : Std.HashSet ℕ) (t : Json) :
-    thetaStep c s t = .ok s' ↔ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = true ∧ g ∉ s ∧ s' = s.insert g := by
+    thetaStep c s t = .ok s' ↔ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = true ∧ c.registered[g]! = true ∧
+      g ∉ s ∧ s' = s.insert g := by
   unfold thetaStep
   rcases hn : natOf? t with _ | g
   · simp [throw, throwThe, MonadExceptOf.throw]
   · simp only [bind, Except.bind, pure, Except.pure, Option.some.injEq, exists_eq_left']
     rcases Nat.lt_or_ge g c.N with h1 | h1 <;>
       [have h1' : ¬ c.N ≤ g := Nat.not_le.2 h1; have h1' : ¬ g < c.N := Nat.not_lt.2 h1] <;>
-      by_cases h2 : c.isInput[g]! = true <;> by_cases h3 : g ∈ s <;>
-      simp [h1, h1', h2, h3, Std.HashSet.contains_iff_mem, throw, throwThe, MonadExceptOf.throw, eq_comm (a := s')]
+      by_cases h2 : c.isInput[g]! = true <;> by_cases h4 : c.registered[g]! = true <;> by_cases h3 : g ∈ s <;>
+      simp [h1, h1', h2, h3, h4, Std.HashSet.contains_iff_mem, throw, throwThe, MonadExceptOf.throw,
+        eq_comm (a := s')]
 
 theorem thetaStep_error (c : Circuit) (s : Std.HashSet ℕ) (t : Json) (k : String) :
     thetaStep c s t = .error k ↔
       (k = "theta-unknown" ∧ ∀ g, natOf? t = some g → c.N ≤ g) ∨
       (k = "theta-not-input" ∧ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = false) ∨
-      (k = "theta-duplicate" ∧ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = true ∧ g ∈ s) := by
+      (k = "theta-not-registered" ∧ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = true ∧
+        c.registered[g]! = false) ∨
+      (k = "theta-duplicate" ∧ ∃ g, natOf? t = some g ∧ g < c.N ∧ c.isInput[g]! = true ∧ c.registered[g]! = true ∧
+        g ∈ s) := by
   unfold thetaStep
   rcases hn : natOf? t with _ | g
   · simp [throw, throwThe, MonadExceptOf.throw]
@@ -317,8 +346,8 @@ theorem thetaStep_error (c : Circuit) (s : Std.HashSet ℕ) (t : Json) (k : Stri
   · simp only [bind, Except.bind, pure, Except.pure, Option.some.injEq, exists_eq_left', forall_eq']
     rcases Nat.lt_or_ge g c.N with h1 | h1 <;>
       [have h1' : ¬ c.N ≤ g := Nat.not_le.2 h1; have h1' : ¬ g < c.N := Nat.not_lt.2 h1] <;>
-      by_cases h2 : c.isInput[g]! = true <;> by_cases h3 : g ∈ s <;>
-      simp [h1, h1', h2, h3, Std.HashSet.contains_iff_mem, throw, throwThe, MonadExceptOf.throw] <;>
+      by_cases h2 : c.isInput[g]! = true <;> by_cases h4 : c.registered[g]! = true <;> by_cases h3 : g ∈ s <;>
+      simp [h1, h1', h2, h3, h4, Std.HashSet.contains_iff_mem, throw, throwThe, MonadExceptOf.throw] <;>
       exact ⟨Eq.symm, Eq.symm⟩
 
 /-- The set after entry `n`: the gates the entries up to `n` name. -/
@@ -326,7 +355,7 @@ theorem thetaStep_mem (c : Circuit) (theta : Array Json) (n : ℕ) (s s' : Std.H
     (hQ : ∀ g, g ∈ s ↔ ∃ t < n, natOf? theta[t]! = some g) (hs : thetaStep c s theta[n]! = .ok s') :
     ∀ g, g ∈ s' ↔ ∃ t < n + 1, natOf? theta[t]! = some g := by
   intro g
-  obtain ⟨g0, hg0, -, -, -, rfl⟩ := (thetaStep_ok c s s' _).1 hs
+  obtain ⟨g0, hg0, -, -, -, -, rfl⟩ := (thetaStep_ok c s s' _).1 hs
   rw [Std.HashSet.mem_insert, hQ g]
   simp only [beq_iff_eq]
   constructor
@@ -351,10 +380,12 @@ theorem thetaStep_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (thet
   have hN := (circuitOf_ok P c hc).1
   simp only [thetaStep_ok, ThetaOk]
   constructor
-  · rintro ⟨_, g, hg, hlt, hin, hns, -⟩
-    refine ⟨g, hg, hN ▸ hlt, (circuitOf_isInput hc (hN ▸ hlt)).1 hin, fun t' ht' h => hns ((hs g).2 ⟨t', ht', h⟩)⟩
-  · rintro ⟨g, hg, hlt, hin, hne⟩
-    refine ⟨_, g, hg, hN ▸ hlt, (circuitOf_isInput hc hlt).2 hin, fun hm => ?_, rfl⟩
+  · rintro ⟨_, g, hg, hlt, hin, hreg, hns, -⟩
+    refine ⟨g, hg, hN ▸ hlt, (circuitOf_isInput hc (hN ▸ hlt)).1 hin, (circuitOf_registered hc (hN ▸ hlt)).1 hreg,
+      fun t' ht' h => hns ((hs g).2 ⟨t', ht', h⟩)⟩
+  · rintro ⟨g, hg, hlt, hin, hreg, hne⟩
+    refine ⟨_, g, hg, hN ▸ hlt, (circuitOf_isInput hc hlt).2 hin, (circuitOf_registered hc hlt).2 hreg, fun hm => ?_,
+      rfl⟩
     obtain ⟨t', ht', h⟩ := (hs g).1 hm
     exact hne t' ht' h
 
@@ -365,15 +396,21 @@ theorem thetaStep_error' {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (th
   rw [thetaStep_error, ThetaFault, hN]
   have hb : ∀ g < gates P, (c.isInput[g]! = false ↔ ¬ IsInput P g) := fun g hg => by
     rw [← circuitOf_isInput hc hg]; simp
+  have hq : ∀ g < gates P, (c.registered[g]! = false ↔ ¬ IsRegistered P g) := fun g hg => by
+    rw [← circuitOf_registered hc hg]; simp
   constructor
-  · rintro (h | ⟨rfl, g, hg, hlt, hin⟩ | ⟨rfl, g, hg, hlt, hin, hm⟩)
+  · rintro (h | ⟨rfl, g, hg, hlt, hin⟩ | ⟨rfl, g, hg, hlt, hin, hreg⟩ | ⟨rfl, g, hg, hlt, hin, hreg, hm⟩)
     · exact Or.inl h
     · exact Or.inr (Or.inl ⟨rfl, g, hg, hlt, (hb g hlt).1 hin⟩)
-    · exact Or.inr (Or.inr ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).1 hin, (hs g).1 hm⟩)
-  · rintro (h | ⟨rfl, g, hg, hlt, hin⟩ | ⟨rfl, g, hg, hlt, hin, hm⟩)
+    · exact Or.inr (Or.inr (Or.inl ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).1 hin, (hq g hlt).1 hreg⟩))
+    · exact Or.inr (Or.inr (Or.inr ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).1 hin,
+        (circuitOf_registered hc hlt).1 hreg, (hs g).1 hm⟩))
+  · rintro (h | ⟨rfl, g, hg, hlt, hin⟩ | ⟨rfl, g, hg, hlt, hin, hreg⟩ | ⟨rfl, g, hg, hlt, hin, hreg, hm⟩)
     · exact Or.inl h
     · exact Or.inr (Or.inl ⟨rfl, g, hg, hlt, (hb g hlt).2 hin⟩)
-    · exact Or.inr (Or.inr ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).2 hin, (hs g).2 hm⟩)
+    · exact Or.inr (Or.inr (Or.inl ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).2 hin, (hq g hlt).2 hreg⟩))
+    · exact Or.inr (Or.inr (Or.inr ⟨rfl, g, hg, hlt, (circuitOf_isInput hc hlt).2 hin,
+        (circuitOf_registered hc hlt).2 hreg, (hs g).2 hm⟩))
 
 theorem thetaFold_isOk {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) (theta : Array Json) :
     (∃ s, (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {} = .ok s) ↔

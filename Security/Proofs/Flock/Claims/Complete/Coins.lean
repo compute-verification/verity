@@ -17,7 +17,7 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   record's error `δc H` (`Complete.Ready`, which states where it is `1`), whose prover is the record's (`honestP`).
 * **The error is below `1`** where the verifier can accept, at the sessions the numbers are stated at (`PlainIn`,
   `ZkIn`: at most `200` tables at `m ≤ 35`): at most `44` outer coins per table (`Claims.Flock.Complete_meets_plain`),
-  and `50` coins at the masked verifier's one table (`Claims.Flock.Complete_meets_zk`).
+  and `190` coins at the masked verifier's one table (`Claims.Flock.Complete_meets_zk`).
 -/
 
 namespace FlockComplete
@@ -193,6 +193,27 @@ theorem betaSlotsZk_length_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {s
   rw [hs]
   exact length_flatMap_range_le _ _ _ fun q _ => by split <;> simp
 
+theorem sum_flatMap_range_le (n c : ℕ) (f : ℕ → List ℕ) (h : ∀ q < n, (f q).sum ≤ c) :
+    ((List.range n).flatMap f).sum ≤ n * c := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.range_succ, List.flatMap_append, List.sum_append, List.flatMap_singleton, Nat.succ_mul]
+    exact Nat.add_le_add (ih fun q hq => h q (by omega)) (h n (by omega))
+
+/-- **At most `4·35` rank-check coins per table**, at tables of `m ≤ 35`. -/
+theorem rankSlotsZk_sum_le {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
+    (hs : setupOf true x = some (s, spec, sts)) (hm : ∀ st ∈ sts.toList, st.m ≤ 35) :
+    ((rankSlotsZk x).map fun s => 4 * s.1.m).sum ≤ sts.size * 140 := by
+  unfold rankSlotsZk
+  rw [hs]
+  dsimp only
+  rw [List.map_flatMap]
+  refine sum_flatMap_range_le _ _ _ fun i hi => ?_
+  have := hm sts[i]! (by rw [getElem!_pos sts i hi]; exact Array.getElem_mem_toList hi)
+  split <;> simp
+  omega
+
 end FlockComplete
 
 open Flock FlockDeploy FlockComplete in
@@ -217,12 +238,12 @@ theorem Claims.Flock.Complete_meets_plain (rel : Readable.Parsed → Readable.Re
 
 open Flock FlockDeploy FlockComplete in
 /-- **The masked record's error is below `1`** on every statement the masked verifier can accept (`readyZk H`, one
-table) at a session the numbers are stated at (`ZkIn`): `44` outer coins, two `β`s and two pairs counted twice, over
-`2^128`. -/
+table) at a session the numbers are stated at (`ZkIn`): `44` outer coins, two `β`s, two pairs counted twice and the
+table's rank checks counted `4·m ≤ 140` times, over `2^128`. -/
 theorem Claims.Flock.Complete_meets_zk (rel : Readable.Parsed → Readable.Relation) (H : Claims.Msg → Claims.Msg)
     {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} (hin : ZkIn x s spec sts)
     (hready : readyZk H x = true) :
-    (deployZk rel).δc H x ≤ 50 / 2 ^ 128 ∧ (deployZk rel).δc H x < 1 := by
+    (deployZk rel).δc H x ≤ 190 / 2 ^ 128 ∧ (deployZk rel).δc H x < 1 := by
   have h1 : sts.size = 1 := by
     have h := hready
     unfold readyZk at h
@@ -232,14 +253,16 @@ theorem Claims.Flock.Complete_meets_zk (rel : Readable.Parsed → Readable.Relat
   have ho := outerSlotsZk_length_le hin.setup fun st hst => (hin.tab st hst).2.1
   have hr := rhoSlotsZk_length_le hin.setup
   have hb := betaSlotsZk_length_le hin.setup
-  rw [h1] at ho hr hb
-  have hle : (deployZk rel).δc H x ≤ 50 / 2 ^ 128 := by
+  have hk := rankSlotsZk_sum_le hin.setup fun st hst => (hin.tab st hst).2.1
+  rw [h1] at ho hr hb hk
+  have hle : (deployZk rel).δc H x ≤ 190 / 2 ^ 128 := by
     have e : δcZk H x = εZk x := by simp [δcZk, hready]
-    show δcZk H x ≤ _
-    rw [e, εZk]
+    show ZkTables.δc H x ≤ _
+    rw [ZkTables.δc_eq_δcZk hready, e, εZk]
     gcongr
     have ho' : ((outerSlotsZk x).length : ℝ) ≤ 44 := by exact_mod_cast ho
     have hr' : ((rhoSlotsZk x).length : ℝ) ≤ 2 := by exact_mod_cast hr
     have hb' : ((betaSlotsZk x).length : ℝ) ≤ 2 := by exact_mod_cast hb
+    have hk' : ((((rankSlotsZk x).map fun s => 4 * s.1.m).sum : ℕ) : ℝ) ≤ 140 := by exact_mod_cast hk
     linarith
   exact ⟨hle, lt_of_le_of_lt hle (by norm_num)⟩

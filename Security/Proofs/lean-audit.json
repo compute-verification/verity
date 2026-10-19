@@ -6,8 +6,10 @@
   "Proofs.Pouw",
   "Proofs.NetworkCertifier",
   "Proofs.Flock",
+  "Proofs.Hash",
   "Proofs.Accounting",
-  "Proofs.Accounting.Bandwidth"
+  "Proofs.Accounting.Bandwidth",
+  "Proofs.Population"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -37,6 +39,10 @@
   "Proofs.Flock.Claims.Complete.CostWalk": {
    "why": "cost_walk, the tactic that bounds a computation's sends by its head (Flock/Claims/Complete/Count.lean's proof of the goal SendCount), a macro that expands to repeated apply of the module's Cost lemmas, extract_lets, intro and split. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
    "digest": "31980c57d92439ebfa78113f6020236da361df92073e51a3e32ca499b163bbfb"
+  },
+  "Proofs.Flock.Claims.KS.PushSched": {
+   "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",

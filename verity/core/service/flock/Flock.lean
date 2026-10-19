@@ -57,6 +57,7 @@ import Flock.DeriveCheck
 import Flock.Rows
 import Flock.Qword
 import Flock.Program
+import Flock.Sigma
 import Flock.Extract
 import Flock.Qcall
 import Flock.Fuel

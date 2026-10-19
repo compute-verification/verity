@@ -6,7 +6,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
 `zk_inner_plays`: `Zk.verifyInner` on seven rows refines the model's compiled inner proof. After `final_c'` (absorbed,
 no coin), the executable draws `ε`, absorbs `[ρ, σ]`, draws the ten batching coins (seven rows and the triple's
 three), absorbs `τ`'s commitment, draws `β`, absorbs `Y` and draws the `Q` query words; the model draws and receives the
-same, in order. What follows the last coin is checks only (`forIn_keeps`).
+same, in order. What follows the last coin is checks only (`forIn_keeps`). `zk_inner_coins` is the four rounds read,
+and `innerGameC_plays` the model's run on them, which records each query's position from the fourth round's coin.
 -/
 
 namespace FlockSoundness.Discharge.ZkExec
@@ -29,8 +30,14 @@ theorem forIn_keeps {σ : Type} (body : ℕ → σ → TM (ForInStep σ))
       obtain ⟨s₁, rfl, ht⟩ := hbody a s t r t₁ h₁
       exact (forIn_keeps body hbody n (a + 1) s₁ t₁ t' s' h₂).trans ht
 
-theorem zk_inner_plays : ZkInnerPlays := by
-  intro lay pr finalC cons t t' hcons hwf h
+/-- **The coins `Zk.verifyInner` reads**: four rounds from `t.k`, of one coin (`ε`), `7 + 3` (the batching coins), one
+(`β`) and `Q` (the query words, the fourth round's coins). -/
+theorem zk_inner_coins {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} {cons : Array (String × Zk.Lin)}
+    {t t' : Flock.Transcript} (hcons : cons.size = 7) (hwf : RoundsWF t.rounds)
+    (h : Zk.verifyInner lay pr finalC cons t = .ok ((), t')) :
+    t'.rounds = t.rounds ∧ t'.k = t.k + 4 ∧ ∃ c₀ c₁ c₂ c₃ : Array F128, c₀.size = 1 ∧ c₁.size = 7 + 3 ∧
+      c₂.size = 1 ∧ c₃.size = Zk.Q ∧ c₃ = (t.rounds[t.k + 3]!).coins ∧
+      consumed t.rounds t.k t'.k = [c₀, c₁, c₂, c₃] := by
   unfold Zk.verifyInner at h
   dsimp only at h
   obtain ⟨-, h⟩ := check_bind h
@@ -81,8 +88,17 @@ theorem zk_inner_plays : ZkInnerPlays := by
       consumed_append t.rounds (show t.k + 2 ≤ t.k + 3 by omega) (by omega), consumed_succ, consumed_succ,
       consumed_succ, consumed_succ, hc₀, hc₁, hc₂, hc₃, hr₂, hk₂, hr₄, hk₄, hr₆, hk₆, hr₈, hk₈]
     rfl
-  refine ⟨hr₉, by omega, fun Hs N dom np nP pos rows tr root => ?_⟩
-  rw [hcoins]
+  exact ⟨hr₉, hk₉, c₀, c₁, c₂, c₃, hsz₀, hsz₁, hsz₂, hsz₃, by rw [hc₃, hr₈, hk₈], hcoins⟩
+
+/-- **The compiled inner proof's run on four rounds of coins**: played with the proof's `[ρ, σ]`, `τ`'s commitment and
+`Y`, it records at query `jj` the position `pos` gives the fourth round's coin `jj` (`qposOf`). -/
+theorem innerGameC_plays {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) {N : ℕ} (dom : Fin N ↪ 𝔽) (np nP : ℕ)
+    (pos : 𝔽 → Fin N) (rows : Fin 7 → ZkSession.Lin 𝔽 np) (tr : ZkSession.Triple np) (root : Dig)
+    (pr : Zk.InnerProof) {c₀ c₁ c₂ c₃ : Array F128} (hsz₀ : c₀.size = 1) (hsz₁ : c₁.size = 7 + 3)
+    (hsz₂ : c₂.size = 1) (hsz₃ : c₃.size = Zk.Q) :
+    ∃ u, Plays fOf (ZkLink.innerGameC Hs.H Hs.Ep Hs.Lp Hs.Lτ dom np nP Zk.Q pos rows tr root)
+      [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩, ⟨Fin (np + nP) → 𝔽, vecOf (np + nP) pr.y⟩]
+      [c₀, c₁, c₂, c₃] (u, ZkLink.qposOf pos fun i : Fin Zk.Q => fOf c₃[i.val]!) := by
   unfold ZkLink.innerGameC
   refine ⟨?w, ?_⟩
   swap
@@ -99,5 +115,13 @@ theorem zk_inner_plays : ZkInnerPlays := by
   refine Plays.bind' (ms₂ := []) (cs₂ := [c₃]) (Plays.recv _ (vecOf (np + nP) pr.y)) ?_ rfl rfl
   refine Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c₃ hsz₃ (by decide)) ?_ rfl rfl
   exact Plays.pure (ι := fOf) _
+
+theorem zk_inner_plays : ZkInnerPlays := by
+  intro lay pr finalC cons t t' hcons hwf h
+  obtain ⟨hr, hk, c₀, c₁, c₂, c₃, hsz₀, hsz₁, hsz₂, hsz₃, -, hcoins⟩ := zk_inner_coins hcons hwf h
+  refine ⟨hr, by omega, fun Hs N dom np nP pos rows tr root => ?_⟩
+  rw [hcoins]
+  obtain ⟨u, hu⟩ := innerGameC_plays Hs dom np nP pos rows tr root pr hsz₀ hsz₁ hsz₂ hsz₃
+  exact ⟨_, hu⟩
 
 end FlockSoundness.Discharge.ZkExec

@@ -89,10 +89,10 @@ theorem answer_beta_zero (c : Cfg) (s : Masker) (b : _root_.Flock.F128) (hn : s.
   simp [hn, hi, innerCoins, hb, INNER_BETA]
   rfl
 
-/-- At the inner proof's `β` round, any other coin is taken. -/
+/-- At the inner proof's `β` round, any other coin is taken, and kept as `β`. -/
 theorem answer_beta_ne (c : Cfg) (s : Masker) (b : _root_.Flock.F128) (hn : s.owed = some 1)
     (hi : s.inner = some INNER_BETA) (hb : b.isZero = false) :
-    s.answer c #[b] = .ok { s with owed := none, inner := some (INNER_BETA + 1) } := by
+    s.answer c #[b] = .ok { s with owed := none, beta := b, inner := some (INNER_BETA + 1) } := by
   unfold _root_.Flock.Firewall.Frame.Masker.answer
   simp [hn, hi, innerCoins, hb, INNER_BETA]
   rfl

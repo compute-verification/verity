@@ -1,6 +1,7 @@
 """The difftest of the NCI policy's Lean check against its Python reference: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions, and
+`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions and
+two pinned ones (θ with an input bound per run, refused, and θ the registered input, accepted), and
 `scripts/nci_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
 `lean-audit.json`): `NciCheck/DifftestMain.lean` checks every instance with `NciCheck.check` and fails on any difference.
@@ -22,10 +23,6 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Value
 
 LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
 
@@ -44,10 +41,10 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.Difft
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 4,000 instances and the reference's results on them, byte for byte as the record pins them."""
+    """All 4,002 instances and the reference's results on them, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
-    assert RUN["args"] == ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", str(vectors.COUNT)]
+    assert RUN["args"] == ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", str(vectors.total())]
 
 
 def test_the_generator_covers_what_it_says():
@@ -76,26 +73,10 @@ def test_the_generator_covers_what_it_says():
     assert set(vectors.WIDTHS) <= widths
 
 
-def _hand():
-    """a: Value<8> (registered), b: Value<16>; c = f(a, b): Value<4>; d = f(c, b): Value<2>; e = f(d, a): Value<1>.
-    Gates 0 a, 1 b, 2 c, 3 d, 4 e."""
-    def op(ins, r):
-        return PrimitiveDefinition(f"HandOp{'x'.join(map(str, ins))}r{r}", 1, tuple((f"a{i}", Value(w)) for i, w in enumerate(ins)),
-                                   Value(r), lambda *_: 0, register=False)
-    f1, f2, f3 = op((8, 16), 4), op((4, 16), 2), op((2, 8), 1)
-
-    def body(B, S, a, b):
-        c = B.call(f1, a, b)
-        d = B.call(f2, c, b)
-        return B.call(f3, d, a)
-    fn = bind(CompositeDefinition("HandDecl", 1, (), lambda S: ((("a", Value(8)), ("b", Value(16))), Value(1)), body,
-                                  register=False))
-    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
-
-
 def test_the_reference_on_a_declaration_worked_by_hand():
-    """IU 0 = {c} reads a (baseline) and b: 16 novel bits. IU 1 = {d, e} reads c, b and a: 4 + 16 novel bits, a free."""
-    inst = {"program": _hand(), "theta": [0], "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
+    """`vectors.hand()`: IU 0 = {c} reads a (baseline) and b: 16 novel bits. IU 1 = {d, e} reads c, b and a: 4 + 16
+    novel bits, a free. b is bound per run, so it can't be baseline."""
+    inst = {"program": vectors.hand(), "theta": [0], "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     assert reference.check(inst) == {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}
     assert reference.check(inst | {"alpha": [31, 2]})["failure"] == [0, "nci"]
     assert reference.check(inst | {"alpha": [32, 2], "gamma": 1})["failure"] == [1, "size"]
@@ -106,5 +87,15 @@ def test_the_reference_on_a_declaration_worked_by_hand():
                         ([0, "input", 0, 1, 1], "input-in-iu"), (["input", "input", "input", 1, 1], "gate-in-no-iu"),
                         (["input", "input", 0, 1, -1], "owner-entry")):
         assert reference.check(inst | {"owner": owner}) == {"error": code}
-    for theta, code in (([2], "theta-not-input"), ([0, 0], "theta-duplicate"), ([5], "theta-unknown")):
+    for theta, code in (([2], "theta-not-input"), ([0, 0], "theta-duplicate"), ([5], "theta-unknown"),
+                        ([1], "theta-not-registered"), ([0, 1], "theta-not-registered"), ([1, 2], "theta-not-registered")):
         assert reference.check(inst | {"theta": theta}) == {"error": code}
+
+
+def test_the_pinned_instances_get_their_results():
+    """The data's last two lines: θ holding b, bound per run, is refused (`theta-not-registered`), and θ of the
+    registered a alone gets its verdict. The difftest holds `NciCheck.check` to these results."""
+    pins = vectors.pinned()
+    assert [p["theta_kind"] for p in pins] == ["all", "registered"]
+    for p in pins:
+        assert reference.check(p["instance"]) == p["expect"]

@@ -98,7 +98,7 @@ def Proto.HonestOn {Ω : Type} (G : Proto Flock.Wit) (A : Msg → Prop) (H : Msg
 where `G`'s messages are the reference prover's there (`Proto.HonestOn A`): `zkOf_prover` at one statement. -/
 theorem zkOf_prover_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (G : Proto Flock.Wit)
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) (H : Msg → Msg)
-    (A : Msg → Prop) (hG : G.HonestOn A H FlockComplete.honestPZk coinOf tapeOf) (w : Flock.Wit) (x : Msg)
+    (A : Msg → Prop) (hG : G.HonestOn A H FlockComplete.ZkTables.honestP coinOf tapeOf) (w : Flock.Wit) (x : Msg)
     (hx : A x) (hist : List (Msg × Msg)) (ω : G.Nonce × G.Rand) (hlen : hist.length < G.k x) :
     (((G.prover w).next x hist ω).eval H).1 = ((((zkOf rel G coinOf tapeOf S).prover w).next x hist ω).eval H).1 ∧
       (((G.prover w).next x hist ω).eval H).2 ⊆ ((((zkOf rel G coinOf tapeOf S).prover w).next x hist ω).eval H).2 := by
@@ -115,7 +115,7 @@ theorem zkOf_prover_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
       rw [ocBind_eq_bind, allOk_eq_allPass]
     have e₂ : ((zkOf rel G coinOf tapeOf S).prover w).next x ((a, ρ) :: ops) ω =
         (Claims.Flock.allPass (G.chk x ω.1 ρ) 0 (ops.map Prod.snd)).bind fun ok =>
-          if ok then (FlockComplete.honestPZk w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf ω)
+          if ok then (FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf ω)
           else .ret G.abort := rfl
     rw [e₁, e₂, OC.eval_bind, OC.eval_bind]
     obtain ⟨h₁, h₂⟩ := hG x hx w ω.1 ω.2 ops hops
@@ -133,7 +133,7 @@ theorem zk_zkOf_on (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable
     (coinOf : Msg → Msg) (tapeOf : G.Nonce × G.Rand → FlockComplete.TapeZk) (S : Simulator) {H : Msg → Msg}
     {εzk γ : Msg → ℝ} (A : Msg → Prop) [DecidablePred A] (hγ : ∀ x, 0 ≤ γ x)
     (hk : ∀ x, G.k x = (FlockDeploy.deployZk rel).V.k x + 1)
-    (hG : G.HonestOn A H FlockComplete.honestPZk coinOf tapeOf)
+    (hG : G.HonestOn A H FlockComplete.ZkTables.honestP coinOf tapeOf)
     (h : Claims.Flock.ZKAt H (deployOn (FlockDeploy.deployZk rel) A) G.prover S εzk γ) :
     Claims.Flock.ZK H (zkOf rel G coinOf tapeOf S) (fun x => if A x then εzk x else 1) γ := by
   have h' : ZKmalR H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (zkOf rel G coinOf tapeOf S).prover
@@ -313,11 +313,11 @@ def HonestMsgsOn (S : RefSession) (A : Msg → Prop) (H : Msg → Msg) (coinOf :
     (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) : Prop :=
   ∀ x, A x → ∀ w ν t (ops : List (Msg × Msg)), ops.length ≤ refK x →
     S.msgAt x (S.wt x w) t (ops.map fun p => S.decOf p.2) =
-      (((FlockComplete.honestPZk w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
+      (((FlockComplete.ZkTables.honestP w).next x (ops.map fun p => (p.1, coinOf p.2)) (tapeOf (ν, t))).eval H).1
 
 theorem honestOn_of_msgs (S : RefSession) (A : Msg → Prop) (H : Msg → Msg) (coinOf : Msg → Msg)
     (tapeOf : S.refP.Nonce × S.refP.Rand → FlockComplete.TapeZk) (h : S.HonestMsgsOn A H coinOf tapeOf) :
-    S.refP.HonestOn A H FlockComplete.honestPZk coinOf tapeOf :=
+    S.refP.HonestOn A H FlockComplete.ZkTables.honestP coinOf tapeOf :=
   fun x hx w ν t ops hops => ⟨h x hx w ν t ops hops, List.nil_subset _⟩
 
 /-- `preModel_link` at a statement in `A`, from `TapeOKOn A`. -/

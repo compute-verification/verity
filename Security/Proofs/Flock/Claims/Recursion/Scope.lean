@@ -10,8 +10,9 @@ the inner statement's files where it holds them (`RecCoins.Source`), its own inn
 `--rec-inner`) and each V* session's record (`Read`). Its setup refuses an inner shape whose V* list
 `RecVStar.statements` refuses, and at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
 refuses (`checkInnerRange`). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
-whose draw is not every unit of its population (`RecSetup.fullDraw`, #2219). There is no other recursion-level
-refusal.
+whose draw is not every unit of its population (`RecSetup.fullDraw`, #2219), and a session over an inner session whose
+record holds no draw (`RecSetup.innerDrawn`); the compiled statement's reader refuses an inner statement without a draw
+(`RecDeploy.innerOk`). There is no other recursion-level refusal.
 
 * `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
 * `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, and `RecSetup.fullDraw` takes
@@ -97,11 +98,16 @@ def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Clai
 
 /-- **A V* session's draw passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a draw
 (`ProvedScope.drawLaw` refuses a session without one), and `RecSetup.fullDraw` takes it, as `verify` calls it in a
-recursive session. -/
+recursive session (under an inner shape its `rec` flag changes nothing, `fullDraw_some`). -/
 def fullDrawOk (i : RecVStar.Inner) (record : String) : Bool :=
   match Witness.recordDraw record with
   | some d => (RecSetup.fullDraw (some i) true (some d) record).isOk
   | none => false
+
+/-- Under an inner shape, `RecSetup.fullDraw`'s `noInner` refusal never fires, so its `rec` flag changes nothing. -/
+theorem fullDraw_some (i : RecVStar.Inner) (rec rec' : Bool) (draw : Option Lean.Json) (record : String) :
+    RecSetup.fullDraw (some i) rec draw record = RecSetup.fullDraw (some i) rec' draw record := by
+  simp [RecSetup.fullDraw]
 
 /-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, and
 every V* session's draw passes. -/

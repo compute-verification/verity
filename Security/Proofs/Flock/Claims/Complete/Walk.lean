@@ -253,11 +253,11 @@ theorem _root_.FlockComplete.Run.walk {H : Claims.Msg → Claims.Msg} {rel : Rea
   obtain ⟨sch, cm, e, hsch, hcm, he, p₀, t₀, l₁, p₁, t₁, hr₀, hr₁, hps, hrec⟩ :=
     JsonRT.sessionP_reps H o.resp ht hct (Setup.ofCircuit st) _ _ hrun
   dsimp only at hps hrec
+  have hok₀ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _ he) hr₀
+  have hok₁ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _ he) hr₁
   rw [show o.resp 0 = (Claims.coinSeq o.r 0).bytes from rfl, JsonRT.ptsOf_coin] at he hrec
   have hcap := hC sch hsch _ _ cm hcm
   have hrs1 := JsonRT.repStreams_one ht
-  have hok₀ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _) hr₀
-  have hok₁ := JsonRT.repP_rounds _ _ _ _ _ _ _ _ _ _ _ _ (hRk sch hsch _ _ _ _ _ _ _) hr₁
   have hpts : (pointsOf o.spec (Claims.coinSeq o.r 0)).size = o.spec.points := by simp [pointsOf]
   have hpm : ∀ p ∈ pointsOf o.spec (Claims.coinSeq o.r 0), p.size = o.spec.mPts := by
     intro p hp
@@ -395,13 +395,14 @@ theorem _root_.FlockComplete.Run.walkAt {H : Claims.Msg → Claims.Msg} {rel : R
 
 /-- **Flock's completeness at the deployed plain verifier**, at the deployed relation (`Readable.relation`) and the
 record's error (`δc H`, `Complete.Ready`), from the named premises: the record's JSON (`JsonSpec`), the oracle's
-64-byte outputs (`Out64`), what the record needs of the prover's pieces (`ProverOk`), the Merkle schemes' digest widths
-(`SchemeWidths`), and Ligerito's final identity at every rep (`LgFinal`). The session walk (`Run.walkAt`,
-`Run.repWalk`) aligns every rep. -/
+64-byte outputs (`Out64`), and Ligerito's final identity at every rep (`LgFinal`). What the record needs of the
+prover's pieces (`ProverOk`, `proverOk`) and the Merkle schemes' digest widths (`SchemeWidths`, `schemeWidths`) follow
+from `Out64`, and the session walk (`Run.walkAt`, `Run.repWalk`) aligns every rep. -/
 theorem complete_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H)
-    (hP : JsonRT.ProverOk H Readable.relation) (hW : SchemeWidths H Readable.relation)
     (hfin : LgFinal H Readable.relation) :
     Claims.Flock.Complete H (deployPlain Readable.relation) := by
+  have hP : JsonRT.ProverOk H Readable.relation := proverOk h64
+  have hW : SchemeWidths H Readable.relation := schemeWidths h64
   have w : ∀ o : Run H Readable.relation, ∀ i < o.tabs.size, ∀ r < 2,
       ZcAt o i r ∧ LcAt o i r ∧ RsAt o i r ∧ LgAt o i r ∧ LgCount o i r :=
     fun o _ hi _ hr => o.walkAt S h64 hP hi hr

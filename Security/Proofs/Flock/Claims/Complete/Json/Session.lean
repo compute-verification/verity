@@ -480,6 +480,7 @@ theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
       commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (sch.levels.getD 0 default) g salt = .ok cm →
         0 < (flat cm.cap).size ∧ (flat cm.cap).size < 2 ^ 64)
     (hR : ∀ sch, fast100 st.m = some sch → ∀ tr tb cm₀ extras salt nonce d,
+      st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repP (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st sch tr tb cm₀ extras salt nonce).run
         (Transcript.init #[] d)) fun pt => RepOk pt.2.rounds)
     {r : String × Array ByteArray} {bodies : Array Claims.Msg}
@@ -547,7 +548,7 @@ theorem sessionP_facts (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Ms
     simp only [Prod.mk.injEq] at e1
     obtain ⟨hex, rfl⟩ := e1
     obtain ⟨⟨pf, tr'⟩, l₂, e2, e⟩ := go_bind_ok e
-    have hok := Ret.go (hR sch hsch _ _ _ _ _ _ _) e2
+    have hok := Ret.go (hR sch hsch _ _ _ _ _ _ _ hex) e2
     obtain ⟨rs, bs', hrs, hl₂, hrec'⟩ := Rec.go (repP_rec resp (Claims.hOf H) _ _ _ _ _ _ _ _) e2
     simp only [go_pure, Prod.mk.injEq, Except.ok.injEq] at e
     obtain ⟨rfl, rfl⟩ := e
