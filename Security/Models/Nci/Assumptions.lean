@@ -11,6 +11,12 @@ own products alone, must read at least their combined width". The draft's proof 
 activations an IU uses, and for the weights it uses and the partial sums it receives. Each is a `Prop` about one
 declaration and one chain it runs, taken as a hypothesis by the guarantees that need it.
 
+Which declaration matters. On a declared circuit, whose wiring the prover controls, both are false, an analysis
+simplification (Daniel, 9 Oct 2026, 02:46Z), and the guarantees that apply them there (`UpdatedMatMul`,
+`UpdatedMatMulReads`, `Training`) are falsified. That ruling covers declared circuits only (card 7d82eba8, 19 Oct 2026):
+on a reference training circuit, the one a declared circuit contains, both stand, and with `WeightsIncompressible` they
+are `TrainingIncompressible`, NCI's one adopted premise (card 90f5557c).
+
 Both are assumed only for chains whose weights and first inputs `x^{(0)}` depend on more than `Γ` work of training since
 the commitment (the draft, "Frontier training currently requires updated matrix multiplications"). Starting from a
 committed checkpoint, one IU could compute weights that depend on less from the training data itself. If the layers
@@ -42,7 +48,12 @@ an IU can use an entry without reading its scale and leave the scaling to anothe
 The draft's rationale (Lemma 1's proof): `R` must read each input entry it uses, its linked output entry, or a partial
 sum of that output entry; these are distinct for distinct input entries, since the links are injective, and each is at
 least `b_a` wide. No IU of at most `Γ` gates can reconstruct entries of `W_ℓ`, or entries of the chain's input and output
-vectors, from fewer bits of novel information than their width. -/
+vectors, from fewer bits of novel information than their width.
+
+False when `D` is a declared circuit (Daniel, 9 Oct 2026, 02:46Z); it stands when `D` is a reference training circuit
+(card 7d82eba8), as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
+apply to it: an E2M1 product takes at most 37 values, but an IU that holds the product gate reads its weight and input
+wires whole, at least `b_w + b_a` bits. -/
 def ActivationsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ Γ → (novelReads D R : ℝ) ≤ K →
     b_w * (c.weightsUsed R).card +
@@ -83,7 +94,12 @@ partial sums passed between IUs can be charged to the IUs that receive them, `s 
 2. each IU reads at least `b_w` bits for each weight entry it uses and `b_a` bits for each partial sum charged to it.
 
 This is the draft's statement with `s u` the number of partial sums IU `u` receives: the partial sums are not gates the
-chain names, since `D` may add up each entry in any order. -/
+chain names, since `D` may add up each entry in any order.
+
+False when `D` is a declared circuit (Daniel, 9 Oct 2026, 02:46Z); it stands when `D` is a reference training circuit
+(card 7d82eba8), as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s counterexample does not
+apply to it: an adder IU over a `k × k × k` block holds values determined by `2k²` entries, but it reads its `k³`
+products' wires to form them. -/
 def PartialSumsIncompressible (D : Declaration) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
     ∃ s : Fin n → ℕ,

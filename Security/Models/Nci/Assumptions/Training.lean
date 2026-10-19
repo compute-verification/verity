@@ -9,8 +9,20 @@ it uses, the activations it uses, and the partial sums it receives. `TrainingInc
 over every division of `c`, in reads: each small IU reads at least what it is charged. It is equivalent to the
 conjunction of `WeightsIncompressible`, `ActivationsIncompressible` and `PartialSumsIncompressible` on `c`
 (`Nci.SecurityProofs.trainingIncompressible_iff`), and the support-form assumptions imply it
-(`Nci.SecurityProofs.trainingIncompressible_of_support`), so the guarantees restated on it are at least as strong as those
-on any of them.
+(`Nci.SecurityProofs.trainingIncompressible_of_support`).
+
+It is NCI's one incompressibility premise (card 90f5557c, 19 Oct 2026); the older assumptions stay beside it until the
+guarantees that read them move to it. It is about the reference circuit, not a declared one: Daniel's "analysis
+simplification, known false" (9 Oct, 02:46Z) is about `ActivationsIncompressible` and `PartialSumsIncompressible` on a
+declared circuit and does not reach it (card 7d82eba8). The reference circuit runs the chain gate for gate, one gate
+per product, with ordinary matrix multiplications and no Strassen-like algorithm; that is a stated assumption (Daniel,
+19 Oct 2026, 10:47 AM PDT), and in Lean it is the `Chain` the guarantees take.
+
+The chain guarantees restated on it (`Nci.Guarantees.IncompressibleContainedTraining`) conclude what the support forms
+do from a weaker premise, since the support forms with `WeightsIncompressible` imply it; the thread guarantees read only
+its weights' half. With a partial containment, the restated chain guarantee
+(`Nci.Guarantees.IncompressibleContainedMatMulOn`) bounds what the dark gates absorb by their novel reads, where the
+support form bounds it by their width.
 -/
 
 namespace Nci.Assumptions

@@ -303,6 +303,12 @@ Under each question, newest first; the lane that found or reported it is in brac
 
 ### 8. Theorems and bounds that say less than they read
 
+- **A premise false on one circuit, unmarked once it is true on another** (19 Oct) [lean]. `ActivationsIncompressible`
+  and `PartialSumsIncompressible` are false on a declared circuit and stand on a reference one (card 7d82eba8), but
+  `shape.conjectures` holds one status per constant, so they left it, and a new guarantee that applies them to a
+  declared circuit would pass `check` without the `falsified` category. Only their docstrings and the frozen reasons of
+  `UpdatedMatMul`, `UpdatedMatMulReads`, `Training` and `Actual.Runtime` say so. Fix: a reference-circuit form the
+  Lean can tell from a declared one (lean, not started).
 - **A recursion soundness statement only a SHA-512 collision could prove** (19 Oct) [proofs]. "Claim it, (d).
   Every change RT5 and RT9 named is applied", on `RecDeploy.KSBoundRoute` (#2546). Fix: REC1 restates it with staging
   and holder-agreement facts, then proves it.

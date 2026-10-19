@@ -5440,6 +5440,12 @@
    "assumptions": [],
    "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
   },
+  "Nci.SecurityProofs.ContainedFanOutOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ContainedFanOutOn : Nci.Guarantees.ContainedFanOutOn"],
+   "assumptions": [],
+   "type_hash": "73829ebd967ff8c364d3f61bf5fa17d4876ebd5f88b398444265e0ebe4ec593d"
+  },
   "Nci.SecurityProofs.ContainedMatMul": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ContainedMatMul : Nci.Guarantees.ContainedMatMul"],
@@ -5512,17 +5518,39 @@
    "assumptions": [],
    "type_hash": "55856778f974cf265b7c2df6fc78adbf826e9d78ff0e128bc585a20f62d9ff39"
   },
+  "Nci.SecurityProofs.IncompressibleContainedMatMulOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.IncompressibleContainedMatMulOn : Nci.Guarantees.IncompressibleContainedMatMulOn"],
+   "assumptions": [],
+   "type_hash": "d8e0a11a49a4d39ff941fc7d55b66c4082a7e912c64d32536aa42d064cf716e8"
+  },
   "Nci.SecurityProofs.IncompressibleContainedTraining": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.IncompressibleContainedTraining : Nci.Guarantees.IncompressibleContainedTraining"],
    "assumptions": [],
    "type_hash": "4227f6d22e9148a31c0837137544b6cf10c3e13aa7c68a4d5d1cfd8f6641c67b"
   },
+  "Nci.SecurityProofs.IncompressibleContainedTrainingOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn : Nci.Guarantees.IncompressibleContainedTrainingOn"
+   ],
+   "assumptions": [],
+   "type_hash": "9170485bec4c7f00877387a073840ef69c858782c201513859ec40f31fc6d8bb"
+  },
   "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.IncompressibleThreadedThrottled : Nci.Guarantees.IncompressibleThreadedThrottled"],
    "assumptions": [],
    "type_hash": "3f0744ed7643bc3edea9b8bcf41a99c0a872164d55e92857ae748cac9d1ba7f6"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn : Nci.Guarantees.IncompressibleThreadedThrottledOn"
+   ],
+   "assumptions": [],
+   "type_hash": "796765adf9071efb9307c0bc132a001510b1a96beab7fb237fdd64013c33899f"
   },
   "Nci.SecurityProofs.Inference": {
    "owner": "@lean",
@@ -7500,7 +7528,7 @@
    "Accounting.Guarantees.Remote.NodeLevel": "unstated: the remote audit's node-level statement under Identity (statement C); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevel, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelJoint": "unstated: the node-level statement's counting form under Identity (Mbw at the node); proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelJoint, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
-   "Accounting.SecurityProofs.Actual.Runtime": "falsified (conjecture,no-function): It is the runtime corollary of Accounting.SecurityProofs.Actual.Windows and UpdatedMatMulReads, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates them.",
+   "Accounting.SecurityProofs.Actual.Runtime": "falsified (no-function): It is the runtime corollary of Accounting.SecurityProofs.Actual.Windows and UpdatedMatMulReads, so it applies ActivationsIncompressible and PartialSumsIncompressible to the declared circuit, where they are false: Daniel's \"analysis simplification, known false\" (9 Oct 2026, 02:46Z) is about them on a declared circuit, which card 7d82eba8 (19 Oct) scopes it to; on a reference circuit they stand, as TrainingIncompressible (card 90f5557c). lean restates them.",
    "Accounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
@@ -7748,9 +7776,9 @@
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMul": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
    "Nci.SecurityProofs.ContainedTraining": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
-   "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
-   "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
-   "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
+   "Nci.SecurityProofs.Training": "falsified (no-function): It applies ActivationsIncompressible and PartialSumsIncompressible to the declared circuit, where they are false: Daniel's \"analysis simplification, known false\" (9 Oct 2026, 02:46Z) is about them on a declared circuit, which card 7d82eba8 (19 Oct) scopes it to; on a reference circuit they stand, as TrainingIncompressible (card 90f5557c). lean restates it on a reference circuit (Nci.SecurityProofs.IncompressibleContainedTraining).",
+   "Nci.SecurityProofs.UpdatedMatMul": "falsified (no-function): It applies ActivationsIncompressible and PartialSumsIncompressible to the declared circuit, whose wiring the prover controls, where they are false: Daniel's \"analysis simplification, known false\" (9 Oct 2026, 02:46Z) is about them on a declared circuit, which card 7d82eba8 (19 Oct) scopes it to; on a reference circuit they stand, as TrainingIncompressible (card 90f5557c). lean restates it on a reference circuit (Nci.SecurityProofs.IncompressibleContainedMatMulOn).",
+   "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (no-function): It is UpdatedMatMul before its division by alpha, so it applies ActivationsIncompressible and PartialSumsIncompressible to the declared circuit, where they are false: Daniel's \"analysis simplification, known false\" (9 Oct 2026, 02:46Z) is about them on a declared circuit, which card 7d82eba8 (19 Oct) scopes it to; on a reference circuit they stand, as TrainingIncompressible (card 90f5557c). lean restates it on a reference circuit (Nci.SecurityProofs.IncompressibleContainedMatMulOn).",
    "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
@@ -7991,8 +8019,8 @@
    "Nci.SecurityProofs.ContainedMatMulOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), not the NCI check's code.",
    "Nci.SecurityProofs.ContainedTrainingOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), not the NCI check's code.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
-   "Nci.SecurityProofs.IncompressibleContainedTraining": "falsified (no-function): It rests on TrainingIncompressible, falsified (shape.conjectures: equivalent to the conjunction with ActivationsIncompressible and PartialSumsIncompressible by trainingIncompressible_iff, both falsified; LEAN-35, F8); it is also about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, not the NCI check's code.",
-   "Nci.SecurityProofs.IncompressibleThreadedThrottled": "falsified (no-function): It rests on TrainingIncompressible, falsified (shape.conjectures: equivalent to the conjunction with ActivationsIncompressible and PartialSumsIncompressible by trainingIncompressible_iff, both falsified; LEAN-35, F8); it is also about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, not the NCI check's code.",
+   "Nci.SecurityProofs.IncompressibleContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedReadsInfo": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit and a threading of it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedContainedInfo": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedOfState": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -8134,20 +8162,16 @@
    "Accounting.SecurityProofs.StackedSessionConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationRelay on a store, one for the session, made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), for pass devices that also read a carrier at odd side addresses (Accounting.Rate.PassProvenance, whose inputs may depend on the pass's stream and oracle), at side link L + C with C the carriers' input and encoded bits under the property's budgets, with delta once and no advice, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
    "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
-   "Accounting.Guarantees.DeclaredCircuitRequirement": "unstated: G, memory accounting's Milestone 2 composed statement (note:20261018T0230Z-report-declared-circuit-g), stated first: its theorem Accounting.SecurityProofs.DeclaredCircuitRequirement lands with its proof once the red team of the statement reports, and the named assumptions only it reads (Accounting.Assumptions.CircuitCarriers, SteeredLayout) return to `assumptions` with it. Its shape will be frozen (no-function,hash): the deployed sketch game on a steered per-pass store whose devices are told the steering summary, each append's blocks read within the lifetime cap L of the window it joined, a layer-1 bound on the prover system with carriers charged over L windows, with the circuit's credited reads in appended blocks linked pass by pass through the one-sided StoreMatches and PlanMatches, on the devices' clocks."
+   "Accounting.Guarantees.DeclaredCircuitRequirement": "unstated: G, memory accounting's Milestone 2 composed statement (note:20261018T0230Z-report-declared-circuit-g), stated first: its theorem Accounting.SecurityProofs.DeclaredCircuitRequirement lands with its proof once the red team of the statement reports, and the named assumptions only it reads (Accounting.Assumptions.CircuitCarriers, SteeredLayout) return to `assumptions` with it. Its shape will be frozen (no-function,hash): the deployed sketch game on a steered per-pass store whose devices are told the steering summary, each append's blocks read within the lifetime cap L of the window it joined, a layer-1 bound on the prover system with carriers charged over L windows, with the circuit's credited reads in appended blocks linked pass by pass through the one-sided StoreMatches and PlanMatches, on the devices' clocks.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions.lean), the activations' half of TrainingIncompressible, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
-   "Nci.Assumptions.ActivationsIncompressible": {
-    "status": "falsified",
-    "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
-   },
    "Nci.Assumptions.ActivationsSupport": {
     "status": "falsified",
     "why": "ActivationsIncompressible in support form; false at FP4 for every chain, updated or not (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32): T one first-multiplication product gate holding an E2M1 x E2M1 product is charged b_w + b_a and takes at most 37 values, so it fails at every cap >= b_w + b_a once b_w + b_a > log2 37 = 5.21 (the calculator's 2.5 + 4 = 6.5). Nci.SecurityProofs.IuReads rests on it, and so do Nci.SecurityProofs.ContainedMatMul and ContainedTraining."
-   },
-   "Nci.Assumptions.PartialSumsIncompressible": {
-    "status": "falsified",
-    "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
    },
    "Nci.Assumptions.PartialSumsSupport": {
     "status": "falsified",
@@ -8190,10 +8214,6 @@
    "Nci.Assumptions.WeightsSupport": {
     "status": "falsified",
     "why": "WeightsIncompressible in support form; false at FP4 at b_a = 4 under the standard threading (19 Oct 2026, Linear CMP-56, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:32d42058ab76d8012ef741449665e9e1c2a444fa7158bcb03cbf2457b97944dd): with each FP4 thread value a gate holding its E2M1 value (15 values), one wgrad product delta_t[i] * x_t[j] reads 2 thread values and no weight, charged 8 against support <= 225 < 2^8, and 16 fprop products sharing one weight are charged 66.5 against <= 2^66.42; with E2M1 codes (16 with -0) and each block scale in its own gate, an NVFP4 or MXFP4 block of codes always holds a code of magnitude >= 3, so 16 wgrad products over one 16-token block are charged 128 against <= 2^127.998. It holds against these at FP8 (E4M3, 7.98 bits per entry) and when each FP4 gate holds its scaled value. Nci.SecurityProofs.ThreadedReadsInfo, ThreadedContainedInfo and ThreadedOfState rest on it."
-   },
-   "Nci.Assumptions.TrainingIncompressible": {
-    "status": "falsified",
-    "why": "equivalent to the conjunction with ActivationsIncompressible and PartialSumsIncompressible (trainingIncompressible_iff), both falsified"
    },
    "Nci.Assumptions.Reach": {
     "status": "open",
@@ -11405,6 +11425,7 @@
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
+    "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -11415,8 +11436,11 @@
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
@@ -11474,6 +11498,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -11483,8 +11508,11 @@
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
@@ -11595,6 +11623,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -11604,8 +11633,11 @@
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
@@ -11809,6 +11841,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -11819,8 +11852,11 @@
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
@@ -11874,8 +11910,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTrainingOn",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
@@ -12032,8 +12072,11 @@
     "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -22558,6 +22601,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -22655,8 +22699,11 @@
     "Nci.Assumptions.TrainingIncompressible": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
    },
    "guarantees": [
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
-    "Nci.SecurityProofs.IncompressibleThreadedThrottled"
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn"
    ]
   },
   "Models.Nci.Guarantees": {
@@ -22818,14 +22865,22 @@
    ]
   },
   "Models.Nci.Guarantees.Training": {
-   "digest": "09d84ac6f56d1a4acbae14d11372cb36662530656fe16b7c5a140ae659b1254a",
+   "digest": "05d9180e48cd370b9deb9adcb2c373554dc9a5a355804638885149a8f2f1fe95",
    "definitions": {
+    "Nci.Guarantees.ContainedFanOutOn": "2eb89d49ea32c59f9e761b1d4ca75007314fdaa0bfe6406cb6512fab34c741df",
+    "Nci.Guarantees.IncompressibleContainedMatMulOn": "db216c06d512cf1e428e98e2e209a484d5961ed6648fb53cd8255aa29099c8f3",
     "Nci.Guarantees.IncompressibleContainedTraining": "1aa30787eb8e58ffcb1074206389619df415b788d0f120b4272463940a0fed86",
-    "Nci.Guarantees.IncompressibleThreadedThrottled": "bd514e3b70ea71b37a3e6338134d81d331f7cf989f7b09081380d77d69ddd1fd"
+    "Nci.Guarantees.IncompressibleContainedTrainingOn": "585ef2e10f84f883e7f1ce0d9f92647e0f45740c277b3bae928b436abffc3051",
+    "Nci.Guarantees.IncompressibleThreadedThrottled": "bd514e3b70ea71b37a3e6338134d81d331f7cf989f7b09081380d77d69ddd1fd",
+    "Nci.Guarantees.IncompressibleThreadedThrottledOn": "68324d849bdd220d02b65c6a72a58ff02e64dbf3e1c76ba34266ddb5761537fe"
    },
    "guarantees": [
+    "Nci.SecurityProofs.ContainedFanOutOn",
+    "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
-    "Nci.SecurityProofs.IncompressibleThreadedThrottled"
+    "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottled",
+    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn"
    ]
   },
   "Models.NetworkCertifier.Assumptions": {
