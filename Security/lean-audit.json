@@ -258,6 +258,9 @@
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
+  "Nci.Assumptions.WeightsIncompressibleSlots": {
+   "owner": "@lean"
+  },
   "Nci.Assumptions.WeightsSupport": {
    "owner": "@lean",
    "digest": "8d999550f4e64e7c8e339dc7bd9c4dc714395133afc90c62cee82aca2a19204b"
@@ -1036,6 +1039,9 @@
    "assumptions": [],
    "type_hash": "9bd6de3d2ef77225f5a766ea6dfac6be2546d75334591b671abb995e8fe2f248"
   },
+  "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots": {
+   "owner": "@lean"
+  },
   "Accounting.SecurityProofs.Actual.Runtime": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Actual.Runtime.{u_1, u_2} : Accounting.Guarantees.Actual.Runtime"],
@@ -1047,6 +1053,9 @@
    "signature": ["Accounting.SecurityProofs.Actual.ThreadedRate.{u_1, u_2} : Accounting.Guarantees.Actual.ThreadedRate"],
    "assumptions": [],
    "type_hash": "49bd57b93e2d722fa17c891c16f68c8118848be8d805f043fda4eda3174318f8"
+  },
+  "Accounting.SecurityProofs.Actual.ThreadedRateSlots": {
+   "owner": "@lean"
   },
   "Accounting.SecurityProofs.Actual.ThreadedRuntime": {
    "owner": "@lean",
@@ -1063,6 +1072,12 @@
    ],
    "assumptions": [],
    "type_hash": "438621e3578864ab81bafabed8a0ba62590cf642adc1a1a117c2c826c95ebf2f"
+  },
+  "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots": {
+   "owner": "@lean"
   },
   "Accounting.SecurityProofs.Actual.Windows": {
    "owner": "@lean",
@@ -5293,6 +5308,9 @@
    "assumptions": [],
    "type_hash": "4fd21ded7cc9bd15239bbcd454dc5f3d7d590c1923912e1d440f0f531161d980"
   },
+  "Nci.SecurityProofs.DampenerThreadedSlots": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.DampenerWindows": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.DampenerWindows : Nci.Guarantees.DampenerWindows"],
@@ -5437,6 +5455,9 @@
    "assumptions": [],
    "type_hash": "b0e528356d0260e4829a1626341ad77a934fb408d696687032705be38beb7643"
   },
+  "Nci.SecurityProofs.ThreadedReadsSlots": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ThreadedThrottled": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottled : Nci.Guarantees.ThreadedThrottled"],
@@ -5449,11 +5470,20 @@
    "assumptions": [],
    "type_hash": "a3965e5caa03cf2e61926408d5047b84693ac61a62baafca0cca6e13d857dd2e"
   },
+  "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ThreadedThrottledOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledOn : Nci.Guarantees.ThreadedThrottledOn"],
    "assumptions": [],
    "type_hash": "a7984c474df2870454bd2dfca9bd5e9b030354d05ffbceea7b2f791e14530d65"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots": {
+   "owner": "@lean"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
    "owner": "@lean",
@@ -7271,7 +7301,9 @@
    "Accounting.Guarantees.Remote.NodeLevelLinks": "unstated: the node-level statement without Identity, with the links charged; proved from its routes as hypotheses by Accounting.SecurityProofs.Remote.NodeLevelLinks, a lemma; not listed until the routes are proved for the runs the actual circuit realizes (note:20261012T1824Z-draft-remote-theorem-spec)",
    "Accounting.SecurityProofs.Actual.Runtime": "falsified (conjecture,no-function): It is the runtime corollary of Accounting.SecurityProofs.Actual.Windows and UpdatedMatMulReads, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates them.",
    "Accounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.ThreadedRateSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.Windows": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and takes the physical constraints Causal, ComputeRate, Memory and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks read off the run and increasing in it, the location's state, first tick and help fixed by the setup, what reaches it during each window fixed by the help, that window's challenge and its tick, the next tick a function of those and of what the location does, and each challenge's tick taking at most 2^τ values on the runs on time, as hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick, takes B2's hypotheses on them, which are not on the premises list, and composes them with PoUS's AuditSecureOn over the ring model, taken as a hypothesis, through lemma M: about no function of the code.",
@@ -7513,7 +7545,9 @@
    "Nci.SecurityProofs.OtherPositions": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.ReadBound": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.ThreadedReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedReadsSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedThrottled": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedThrottledSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMul": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
    "Nci.SecurityProofs.ContainedTraining": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, not the NCI check's code.",
@@ -7755,11 +7789,14 @@
    "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Nci.SecurityProofs.ThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedThrottledOnSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedThrottledDark": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedThrottledDarkSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMulOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), not the NCI check's code.",
    "Nci.SecurityProofs.ContainedTrainingOn": "falsified (no-function): It rests on ActivationsSupport and PartialSumsSupport, both falsified (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), not the NCI check's code.",
    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains in part (a PartialContainment, Security/Definitions/Nci/Dark.lean), and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressibleSlots on the reference circuit, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedTraining": "falsified (no-function): It rests on TrainingIncompressible, falsified (shape.conjectures: equivalent to the conjunction with ActivationsIncompressible and PartialSumsIncompressible by trainingIncompressible_iff, both falsified; LEAN-35, F8); it is also about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, not the NCI check's code.",
    "Nci.SecurityProofs.IncompressibleThreadedThrottled": "falsified (no-function): It rests on TrainingIncompressible, falsified (shape.conjectures: equivalent to the conjunction with ActivationsIncompressible and PartialSumsIncompressible by trainingIncompressible_iff, both falsified; LEAN-35, F8); it is also about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains it, not the NCI check's code.",
    "Nci.SecurityProofs.ThreadedReadsInfo": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit and a threading of it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -7769,6 +7806,7 @@
    "Nci.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
+   "Nci.SecurityProofs.DampenerThreadedSlots": "frozen (no-function): It composes the compute dampener with ThreadedThrottledSlots discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressibleSlots (Security/Models/Nci/Assumptions/Threads.lean), weights charged per parameter slot, with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
    "Accounting.SecurityProofs.Actual.WindowsAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
    "Nci.SecurityProofs.FitBound": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Nci.SecurityProofs.ThreadedOfLayered": "frozen (no-function): It is about an arbitrary keyed reference circuit (Layered, Security/Definitions/Nci/Layered.lean) and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
@@ -7864,6 +7902,7 @@
    "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.Actual.DampenerWindowsCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots": "frozen (no-function,world-unlisted): It is ThreadedRuntimeSlots's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressibleSlots, weights charged per parameter slot, per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.TS.DrawnRightOff": "lemma: the crypto half of (I8) for a sampled window over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding of every committed position before the coin that follows its commitment at delta_bind and the proofs' soundness jointly over a round's draws at delta_ks as probability hypotheses, and each unit's pinning (DrawnLayer.Pins) as a definitional hypothesis, give the drawn units right at their committed values outside S(delta_bind + delta_ks); ProofsSoundOfDrawn and a composition's folded credit, which take the drawn units right, are what it is for.",
    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "lemma: (I8) ProofsSound of EPS1-SPEC at n_pi = 1, delta_ZK = delta_ks, from its pieces over every sampled play and its drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: DrawnRightOff's hypotheses, the play being its drawn units' proofs' (DrawnLayer.Of), each position's writer reading it (DrawnLayer.WriterReads), the unit weights summing to the window's words and the share covering every unit that isn't good, good being the run having computed the unit's late cone at the run's modes, drawn at each unit's coin (DrawnLayer.Covers, proved for each game) as definitional hypotheses, and E1(c) per unit with its fold clause as the named assumption UnitFixed, not on the premises list; CompilerC and the composed credit, which take ProofsSound, are what it is for.",
    "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "lemma: the rewinding step behind a sampled window's delta_bind over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding's failure in a round, squared, is at most |L|^2 times its fork form at its positions' cuts, L the positions its units read (two runs sharing every value committed before a position's cut, opening it differently in accepted proofs of drawn units), so a bound on the fork form is binding at |L| times its square root; DrawnRightOff and ProofsSoundOfDrawn, which take binding at delta_bind, are what it is for.",
