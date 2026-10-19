@@ -48,6 +48,7 @@ import Proofs.Flock.Claims.ZK.InnerY
 import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Claims.ZK.InnerTauVal
 import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.InnerTauLig
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -321,7 +322,10 @@ import Proofs.Flock.Claims.ZK.Stop
 * `InnerTauVal`: `Masked.innerTauVal_of`, `InnerTauVal` from the inner proof's seven rows before the triple
   (`Masked.TauRows`), split as the replay's five (`Masked.TauRep`) and level 0's two (`Masked.TauLig`).
 * `InnerTauRep`: `Masked.tauRep`, the replay's three rows and the two ring-switch rows are `rowsOf`'s on the view and
-  `czExe`'s coins; `Masked.innerTauVal_of_tauLig : TauLig → InnerTauVal`.
+  `czExe`'s coins (the run being the session's, `Masked.innerPre_cutE`); `Masked.innerTauVal_of_tauLig : TauLig →
+  InnerTauVal`.
+* `InnerTauLig`: `Masked.tauLig`, level 0's two lane rows are `limbRows` of the model's `laneRow` at `czExe`'s coins
+  (`Masked.lanesA`), so **`Masked.innerTauVal`**: `InnerTauVal`.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from the
   hybrid `SimLig`, `SplitInner`'s open statements `InnerBatched` and `InnerTauVal`, `CausalExe` and `FinExe`: `hstep`
   from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`,
