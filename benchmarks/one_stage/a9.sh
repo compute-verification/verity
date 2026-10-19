@@ -7,6 +7,7 @@
 # Inputs: a8_slice.py's value slice (inputs/a8-values*.tar), a8_slice.ckpt_experts' share (inputs/a9-experts*.tar), the
 # load-time roles (inputs/derive-report.json). Records: $OUT/a9 (a9.json, the saved units) and $OUT/a8 (the audit's records).
 # env: A9_MEM_GB (the job's --mem-gb)  A9_ARGS (more a9.py arguments)  A8_ARGS (more a8.py arguments)  A8_CACHE (the build cache)
+#      A9_SAVED (an input tar of a9.py --save-values' directory: audit those units, with no values stage and no value tars)
 set -uo pipefail
 export HZ_CONFIGS=a8 HZ_MEM_GB=${A9_MEM_GB:?}
 export HZ_CACHE=${A8_CACHE:-$HOME/.cache/verity-a8}
@@ -20,15 +21,20 @@ command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --
 setup
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-V=$W/values && mkdir -p "$V"
-for t in "$IN"/a8-values*.tar "$IN"/a9-experts*.tar; do tar -xf "$t" -C "$V" || { log "a9: can't extract $t"; exit 2; }; done
-log "a9: values $(du -sh "$V" | cut -f1)"
 mkdir -p "$OUT/a9"
-# shellcheck disable=SC2086
-"$PY" benchmarks/one_stage/a9.py --values "$V" --roles "$IN/derive-report.json" --out "$OUT/a9" --save-values "$OUT/a9/saved" \
-  ${A9_ARGS:-} 2>&1 | tee -a "$OUT/a9.log" | cut -c1-4000
-rc=${PIPESTATUS[0]}
-log "a9: values rc $rc"
+if [ -n "${A9_SAVED:-}" ]; then
+  mkdir -p "$OUT/a9/saved" && tar -xf "$IN/$A9_SAVED" -C "$OUT/a9/saved" || { log "a9: can't extract $A9_SAVED"; exit 2; }
+  log "a9: the saved units of $A9_SAVED, no values stage"
+else
+  V=$W/values && mkdir -p "$V"
+  for t in "$IN"/a8-values*.tar "$IN"/a9-experts*.tar; do tar -xf "$t" -C "$V" || { log "a9: can't extract $t"; exit 2; }; done
+  log "a9: values $(du -sh "$V" | cut -f1)"
+  # shellcheck disable=SC2086
+  "$PY" benchmarks/one_stage/a9.py --values "$V" --roles "$IN/derive-report.json" --out "$OUT/a9" --save-values "$OUT/a9/saved" \
+    ${A9_ARGS:-} 2>&1 | tee -a "$OUT/a9.log" | cut -c1-4000
+  rc=${PIPESTATUS[0]}
+  log "a9: values rc $rc"
+fi
 [ -f "$OUT/a9/saved/kinds.json" ] || exit "$rc"
 # shellcheck disable=SC2086
 "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" --load-values "$OUT/a9/saved" --kinds "$OUT/a9/saved/kinds.json" \

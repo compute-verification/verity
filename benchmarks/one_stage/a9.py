@@ -280,7 +280,7 @@ def main() -> int:
             except Exception as ex:  # noqa: BLE001
                 rec = {"staged": False, "why": f"{type(ex).__name__}: {str(ex)[:400]}", "trace": traceback.format_exc()[-1500:]}
             rec["seconds"] = round(time.time() - t, 1)
-            subs = {name: rec, **{name + sfx: {**c, "of": name} for sfx, c in rec.pop("_cut", {}).items()}}
+            subs = {name: rec, **{name + sfx: {**c, "of": name, "twin": rec["twin"]} for sfx, c in rec.pop("_cut", {}).items()}}
             for nm, r in subs.items():
                 kv = r.pop("_kv", None)
                 if nm != name:
