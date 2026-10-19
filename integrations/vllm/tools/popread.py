@@ -282,7 +282,7 @@ def _gate_chunk(a: int, b: int) -> tuple[bytes, bytes, bytes, bytes]:
     """Gates a..b-1 of the Call: per gate its declared width, flags (1: a constant, no parameters; 2: wiring; 4: reads outside
     the Call), and the in-Call operands it reads (CSR: end offsets, operands), as `CallGraph` enumerates them."""
     from array import array
-    from verity.ml.circuits.cut import WIDE_FAN_IN, _wide_operands
+    from verity.ml.circuits.cut import WIDE_FAN_IN, wide_operands
     c, call, n, wiring = _GATES
     lo = call.offset
     hi = lo + n
@@ -291,7 +291,7 @@ def _gate_chunk(a: int, b: int) -> tuple[bytes, bytes, bytes, bytes]:
         g = c.gate(lo + j)
         p, o = g.prim, g.operands
         if len(o) > WIDE_FAN_IN:
-            mine, ext = [x - lo for x in _wide_operands(g, call) if lo <= x < hi], True
+            mine, ext = [x - lo for x in wide_operands(g, call) if lo <= x < hi], True
         else:
             mine = [x - lo for x in o if lo <= x < hi]
             ext = len(mine) != len(o)
