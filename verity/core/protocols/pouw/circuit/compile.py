@@ -240,10 +240,11 @@ class Scheme:
     arm, the receipt fold and the spot check, and returns its cells' exact products as z. A factory may raise
     `CompileError` ("scheme") for a dot or tile it doesn't take.
 
-    `stream`, for a one-stream scheme (`h1tile.SCHEME_V3`): the Definitions that recombine a cell's z from the words its
-    receipt folds. Such a unit's z is the served product of the noised operands, so it reads the seed by design, and the
-    unit check's ``noise-in-z`` rule gives way to ``stream``: every z leaf is the output of a call of one of them, and every
-    leaf such a call reads is read by the receipt's own cone. The served values are then that product, not the Call's."""
+    `stream`, for a one-stream scheme (`h1tile.SCHEME_V3`): the Definitions that make a cell's z from the words its receipt
+    folds (`h1tile.STREAM`: the recombinations and the wrap correction). Such a unit's z is the served product of the
+    noised operands, so it reads the seed by design, and the unit check's ``noise-in-z`` rule gives way to ``stream``: every
+    z leaf is the output of a call of one of them, and every leaf such a call reads is either another such call's output or
+    read by the receipt's own cone. The served values are then that product, not the Call's."""
 
     name: str
     tile: tuple[int, int]
@@ -1209,8 +1210,9 @@ def _check_unit(U: Any, boolean: bool, stream: tuple[Any, ...] = ()) -> None:
 
 
 def _check_stream(U: Any, stream: tuple[Any, ...]) -> None:
-    """A one-stream unit's z: each leaf an output of a call of a `stream` Definition, every leaf of whose operands a node in
-    the receipt's cone reads, so z is a function of the words the receipt folds and of nothing else."""
+    """A one-stream unit's z: each leaf an output of a call of a `stream` Definition, and every leaf such a call reads either
+    another such call's output or a leaf a node in the receipt's cone reads (a parameter's included), so z is a function of
+    the words the receipt folds and of what they are made from, and of nothing else."""
     body = U.body
     lz = U.signature()[1].fields[0][1].leaves
     cone, todo = set(), [i for s, i, _lo, _hi in runs(body.ret.slice(lz, body.ret.count)) if s == "n"]
@@ -1219,21 +1221,38 @@ def _check_stream(U: Any, stream: tuple[Any, ...]) -> None:
         if k not in cone:
             cone.add(k)
             todo += [i for a in body.nodes[k].args for s, i, _lo, _hi in runs(a.refs) if s == "n"]
-    folded: dict[int, bytearray] = {}
+    folded: dict[tuple[str, int], bytearray] = {}
     for k in cone:
         for a in body.nodes[k].args:
             for s, i, lo, hi in runs(a.refs):
-                if s == "n":
-                    folded.setdefault(i, bytearray(body.nodes[i].out.leaves))[lo:hi] = b"\x01" * (hi - lo)
+                f = folded.setdefault((s, i), bytearray())
+                if len(f) < hi:
+                    f.extend(bytes(hi - len(f)))
+                f[lo:hi] = b"\x01" * (hi - lo)
     ids = {id(f) for f in stream}
+    names = ", ".join(f.id for f in stream)
+
+    def made(nd: Any) -> bool:
+        return id(getattr(nd.fn, "defn", nd.fn)) in ids
+
     for s, i, _lo, _hi in runs(body.ret.slice(0, lz)):
         nd = body.nodes[i] if s == "n" else None
-        if nd is None or id(getattr(nd.fn, "defn", nd.fn)) not in ids:
+        if nd is None or not made(nd):
             raise CompileError("stream", f"{U.id}'s z reads {s}{i} ({nd.fn.id if nd else 'a parameter'}), not a recombination "
-                                         f"of the words its receipt folds ({', '.join(f.id for f in stream)})")
+                                         f"of the words its receipt folds ({names})")
+    seen: set[int] = set()
+    todo = [i for s, i, _lo, _hi in runs(body.ret.slice(0, lz)) if s == "n"]
+    while todo:
+        i = todo.pop()
+        if i in seen:
+            continue
+        seen.add(i)
+        nd = body.nodes[i]
         for a in nd.args:
             for s2, j, lo, hi in runs(a.refs):
-                if s2 != "n" or j not in folded or not all(folded[j][lo:hi]):
+                if s2 == "n" and made(body.nodes[j]):
+                    todo.append(j)
+                elif len(f := folded.get((s2, j), b"")) < hi or not all(f[lo:hi]):
                     raise CompileError("stream", f"{U.id}'s z at node {i} ({nd.fn.id}) reads {s2}{j} [{lo}, {hi}), which the "
                                                  f"receipt doesn't fold: z is the one stream's served output")
 

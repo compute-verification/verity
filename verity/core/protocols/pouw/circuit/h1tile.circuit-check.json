@@ -8,6 +8,12 @@
   },
   "PouwU129_v2": {
    "and": 14
+  },
+  "PouwWrapBits_v2": {
+   "and": 9
+  },
+  "PouwWrapSeg_v2": {
+   "and": 614
   }
  },
  "pieces": {

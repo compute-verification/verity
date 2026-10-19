@@ -195,7 +195,7 @@ def test_h1_tile_is_its_reference():
 
 # -- v3, the one stream ------------------------------------------------------------------------------------------------------
 
-STREAM = tuple(H.ONE_STREAM.values())
+STREAM = H.STREAM
 GRID48 = tuple((i, j) for i in range(4) for j in range(8))
 
 
@@ -224,27 +224,126 @@ def test_v3_is_registered_beside_v1():
     assert H.PouwH1Tile3.signature is H.PouwH1Tile.signature
 
 
+def _wraps(r, b, position=0):
+    """How many entries of B wrap in W' = B + c + U, each way, in an r-row tile."""
+    lay = H.Layout(r, len(b), len(b[0]))
+    _rows_, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
+    wb = [w for j in range(lay.c) for w in H.col_wrap(b[j], cols[j])]
+    return wb.count(1), wb.count(2)
+
+
 @pytest.mark.parametrize("r,c,k", [(32, 32, 64), (4, 8, 4096), (4, 8, 14336)])
 def test_one_stream_is_the_served_product(r, c, k):
-    """v3's z, O' - sum_d 128^d D_d of each cell's folded words, is X Ŵᵀ exactly (as s32) on random A and on random B in
-    [-64, 62] (m = 2 at K <= 4096, m = 3 at 14336), and its receipt is v1's: the same words, folded the same way."""
+    """v3's z, O' - sum_d 128^d D_d of each cell's folded words plus the wrap correction, is X Ŵᵀ exactly (as s32) on
+    random full-range int8 A and B (m = 2 at K <= 4096, m = 3 at 14336), where W' wraps both ways; and its receipt is v1's:
+    the same words, folded the same way."""
     rng = random.Random(k)
-    a, b = _rows(rng, r, k, -128, 127), _rows(rng, c, k, -64, 62)
+    a, b = _rows(rng, r, k, -128, 127), _rows(rng, c, k, -128, 127)
     z3, rc3 = H.reference(a, b, SALT, 0, ROOTS, stream=True)
     z1, rc1 = H.reference(a, b, SALT, 0, ROOTS)
     assert H.Layout(r, c, k).m == (3 if k > 4096 else 2)
+    assert min(_wraps(r, b)) > 0
     assert [_s32(v) for v in z3] == _served(a, b)
     assert rc3 == rc1 and z3 != z1
 
 
-def test_one_stream_needs_weights_in_range():
-    """At the edges of [-64, 62] (B + c + U still int8 under U in ±64) z is X Ŵᵀ; past them W' wraps and some cell's z is not."""
+def test_the_wrap_correction_is_needed():
+    """At B's edges (127, -128, ±110) z is X Ŵᵀ; without the correction (the recombination alone) some cell's is not, and
+    where B + c + U never wraps ([-64, 62] under U in ±64) the correction is zero."""
     k = 64
+    lay = H.Layout(4, 8, k)
     a = [[v & 0xFF for v in row] for row in ([[127] * k, [-128] * k, [126] * k, [-127] * k])]
-    edge = [[v & 0xFF for v in row] for row in ([[62] * k, [-64] * k] * 4)]
-    assert [_s32(v) for v in H.reference(a, edge, SALT, 0, ROOTS, stream=True)[0]] == _served(a, edge)
-    past = [[v & 0xFF for v in row] for row in ([[110] * k, [-110] * k] * 4)]
-    assert [_s32(v) for v in H.reference(a, past, SALT, 0, ROOTS, stream=True)[0]] != _served(a, past)
+    rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
+    for edge, wraps in (([127, -128], True), ([110, -110], True), ([62, -64], False)):
+        b = [[v & 0xFF for v in row] for row in ([[edge[0]] * k, [edge[1]] * k] * 4)]
+        assert [_s32(v) for v in H.reference(a, b, SALT, 0, ROOTS, stream=True)[0]] == _served(a, b)
+        bare = {}
+        for ln in range(lay.lanes):
+            sets = H.lane_sets(a, b, rows, cols, lay, ln)
+            for e in range(32):
+                bare[(lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)])] = H.one_stream(
+                    sets[lay.ks][e], [d[e] for d in sets[lay.ks + 1:]])
+        plain = [_s32(bare[(i, j)]) for i in range(4) for j in range(8)]
+        assert (plain != _served(a, b)) == wraps and (sum(_wraps(4, b)) > 0) == wraps
+
+
+def test_wrap_bits_on_bits_is_the_word():
+    """`PouwWrapBits_v2` is its word, [B + c + U > 127] and [B + c + U < -128], on every (B, U) at the edges and at random."""
+    rng = random.Random(11)
+    edge = [0, 1, 62, 63, 64, 126, 127, 128, 129, 191, 192, 193, 254, 255]
+    for b, c, u in [(b, c, u) for b in edge for c in (0, 1) for u in edge] + [
+            (rng.randrange(256), rng.randrange(2), rng.randrange(256)) for _ in range(512)]:
+        s = _sx8(b) + c + _sx8(u)
+        want = 1 if s > 127 else 2 if s < -128 else 0
+        got = evaluate(H.PouwWrapBits, [(b >> i) & 1 for i in range(8)], [c], [(u >> i) & 1 for i in range(8)])
+        assert list(got) == [want & 1, want >> 1] and list(evaluate(H.PouwWrapBits.word, b, c, u)) == [want]
+
+
+def test_wrap_seg_on_bits_is_the_word():
+    """`PouwWrapSeg_v2` is its word on random and edge operands, both wrap bits set included (0: wb⁺ - wb⁻)."""
+    rng = random.Random(12)
+    for _ in range(96):
+        acc = rng.choice([0, H.M32, 1 << 31, rng.getrandbits(32)])
+        x = [rng.choice([0, 0x7F, 0x80, 0xFF, rng.randrange(256)]) for _ in range(32)]
+        wb = [rng.randrange(4) for _ in range(32)]
+        got = evaluate(H.PouwWrapSeg, [(acc >> i) & 1 for i in range(32)], [(v >> i) & 1 for v in x for i in range(8)],
+                       [(w >> i) & 1 for w in wb for i in range(2)])
+        want = H.wrap_seg(acc, x, wb)
+        assert _words(list(got)) == [want] == list(evaluate(H.PouwWrapSeg.word, acc, *x, *wb))
+        assert want == (acc + 256 * sum(_sx8(v) * ((w & 1) - (w >> 1)) for v, w in zip(x, wb))) & H.M32
+
+
+def test_a_flipped_wrap_bit_moves_only_its_z():
+    """Flipping one wrap bit wb(j, t), either one, moves exactly the cells it enters: each z(i, j) of column j by
+    ±256 X(i, t) (+ for wb⁺ set or wb⁻ cleared), and no other column's z (the receipt never reads wb:
+    `test_the_receipt_never_reads_wb`). Kernels' gate mirrors this fault."""
+    rng = random.Random(13)
+    k = 4096
+    lay = H.Layout(4, 8, k)
+    a, b = _rows(rng, 4, k, -128, 127), _rows(rng, 8, k, -128, 127)
+    rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
+    X = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(k)] for i in range(4)]
+    wbs = [H.col_wrap(b[j], cols[j]) for j in range(8)]
+    words = {}
+    for ln in range(lay.lanes):
+        sets = H.lane_sets(a, b, rows, cols, lay, ln)
+        for e in range(32):
+            words[(lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)])] = (
+                sets[lay.ks][e], [d[e] for d in sets[lay.ks + 1:]])
+
+    def z(w):
+        return {(i, j): H.stream_cell(*words[(i, j)], X[i], w[j]) for i in range(4) for j in range(8)}
+
+    base = z(wbs)
+    assert [base[(i, j)] for i in range(4) for j in range(8)] == H.reference(a, b, SALT, 0, ROOTS, stream=True)[0]
+    flips = 0
+    for _ in range(24):
+        j, t, bit = rng.randrange(8), rng.randrange(k), rng.choice([1, 2])
+        flipped = [list(w) for w in wbs]
+        flipped[j][t] ^= bit
+        sign = (1 if bit == 1 else -1) * (1 if flipped[j][t] & bit else -1)
+        moved = z(flipped)
+        assert moved == {(i, jj): (v + 256 * sign * _sx8(X[i][t])) & H.M32 if jj == j else v
+                         for (i, jj), v in base.items()}
+        flips += sum(moved[(i, j)] != base[(i, j)] for i in range(4))
+    assert flips >= 24 * 4 - 4
+
+
+def test_the_receipt_never_reads_wb():
+    """In v3's body no wrap bit or wrap correction is in the receipt's cone: the receipt is v1's sets alone, and wb reaches
+    only z."""
+    v3 = bind(H.PouwH1Tile3, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48)
+    body = v3.body
+    lz = v3.signature()[1].fields[0][1].leaves
+    cone, todo = set(), [i for s, i, _lo, _hi in runs(body.ret.slice(lz, body.ret.count)) if s == "n"]
+    while todo:
+        k = todo.pop()
+        if k not in cone:
+            cone.add(k)
+            todo += [i for a in body.nodes[k].args for s, i, _lo, _hi in runs(a.refs) if s == "n"]
+    fns = {getattr(body.nodes[k].fn, "defn", body.nodes[k].fn) for k in cone}
+    made = {getattr(nd.fn, "defn", nd.fn) for nd in body.nodes}
+    assert {H.PouwWrapBits, H.PouwWrapSeg} <= made and not fns & {H.PouwWrapBits, H.PouwWrapSeg}
 
 
 def test_a_tampered_word_moves_z():
@@ -253,7 +352,7 @@ def test_a_tampered_word_moves_z():
     range, leaves it."""
     rng = random.Random(3)
     k = 14336
-    a, b = _rows(rng, 4, k, -126, 126), _rows(rng, 8, k, -64, 62)
+    a, b = _rows(rng, 4, k, -128, 127), _rows(rng, 8, k, -128, 127)
     lay = H.Layout(4, 8, k)
     rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
     sets = H.lane_sets(a, b, rows, cols, lay, 0)
@@ -282,7 +381,7 @@ def test_one_stream_on_bits_is_the_word():
 
 
 def _bad_body(B, S, a, b, salt, position, roots):
-    receipt, words = H._sets(B, S, a, b, salt, position, roots)
+    receipt, words = H._sets(B, S, a, b, salt, position, roots)[:2]
     z = [B.call(H.PouwOneStream2, B.call(S.EXACT, a[i], b[j]), words[(i, j)][1]).refs for i, j in S.PAIRS]
     return Coll(H._signature(S)[1], concat(z + receipt))
 
@@ -293,14 +392,16 @@ BAD = CompositeDefinition("H1TestStreamBeside", 1, ("EXACT", "R", "C", "PAIRS"),
 
 def test_the_stream_check():
     """The unit check takes v3 under a one-stream scheme and refuses it under a plain one (its z reads the seed), refuses v1
-    under a one-stream scheme (its z is a product of its own), and refuses a unit recombining an exact product it doesn't fold."""
+    under a one-stream scheme (its z is a product of its own), refuses a unit recombining an exact product it doesn't fold,
+    and refuses v3 under a stream without the wrap correction (z is then `PouwWrapSeg`'s output, not a recombination)."""
     v3 = bind(H.PouwH1Tile3, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48)
     C._check_unit(v3, True, STREAM)
     for unit, stream, code, why in ((v3, (), "noise-in-z", "z is the exact product"),
                                     (bind(H.PouwH1Tile, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48), STREAM, "stream",
                                      "not a recombination"),
                                     (bind(BAD, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48), STREAM, "stream",
-                                     "which the receipt doesn't fold")):
+                                     "which the receipt doesn't fold"),
+                                    (v3, tuple(H.ONE_STREAM.values()), "stream", "not a recombination")):
         with pytest.raises(C.CompileError) as e:
             C._check_unit(unit, True, stream)
         assert e.value.code == code and why in str(e.value), str(e.value)
@@ -310,14 +411,15 @@ def test_the_stream_check():
 @pytest.mark.slow
 def test_h1_tile_v3_is_its_reference():
     """A 4 × 16 grid at K = 64 compiles under `SCHEME_V3` to one `PouwH1Tile_v3`; on random rows its served outputs are
-    `reference(stream=True)`'s z (X Ŵᵀ, not the served Program's A Bᵀ) and its receipt v1's. Slow (about 150 s): the only
-    test of v3's gates, as `test_h1_tile_is_its_reference` is v1's."""
+    `reference(stream=True)`'s z (X Ŵᵀ on full-range B, where W' wraps, not the served Program's A Bᵀ) and its receipt
+    v1's. Slow (about 180 s): the only test of v3's gates, wrap correction included, as `test_h1_tile_is_its_reference` is
+    v1's."""
     served = Program(bind(GRID, R=4, C=16, K=64))
     c = C.compile(served, H.SCHEME_V3)
     (u,) = c.units
     assert u.defn.base_id == "PouwH1Tile_v3"
     rng = random.Random(9)
-    a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 16, 64, -60, 60)
+    a, b = _rows(rng, 4, 64, -128, 127), _rows(rng, 16, 64, -128, 127)
     args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]
     got = list(evaluate(c.program.fn, *args, *c.inputs(SALT, [ROOTS])))
     S = c.served_leaves
