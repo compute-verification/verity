@@ -13,13 +13,14 @@ draw, `DrawSetupZHJ.table`), so every table is a table the session sets up (`set
 * `ZkHidden.schedule_ok_of_shapeOk`: a statement the `--zk` shape check passes has a `--zk` schedule (`queries0` puts
   `m` in `[25, 35]`, where `Zk.schedule` accepts, `scheduleOkB_all`).
 * `Readable.tableAt_zk`: each table the masked verifier parses passes the shape check, is a `MaskSetup` and has
-  whole-word regions (`setupH_whole` at the scope's `outNet = unitNet`, or `setupHidden_whole`).
+  whole-word regions (`setupH_whole` at the `outNet = unitNet` that `scopeOk` gives where the outputs aren't hidden, or
+  `setupHidden_whole` where they are).
 * `Readable.tableLowers`: the relation at a parse makes each table's share satisfy the table's lowered statement
   (`stmtOf`). `OneTableLowers` is its one-table case (`oneTableLowers`), the converse of `good_of_committed_plain`'s
   reading; it needs `Parses p`, an untyped statement and no public input ports, under which the readable table's
   matrices are `stmtOf`'s (`tableAt_model`), and none of `SetupTable`'s other side conditions.
 * `Readable.parsed_zk`: what the masked scope and the relation give the parse (`FlockComplete.ZkTables.Case.parsed`
-  without the case, the verifier's parse of `x`, and the scope's `outNet = unitNet`).
+  without the case, the verifier's parse of `x`, and `scopeOk`'s `outNet = unitNet` where the outputs aren't hidden).
 * `Masked.Live`: the statements in the masked scope each of whose tables has a `ZkTab`; `jOf` is their table count
   (`0` elsewhere), `tabC` their tables, `dummy` a witness holding the regions (`RegionsHold`), and `wtOf` the shares.
   `live_of`: every statement of the scope with a witness is `Live`. So `Tables` (`setupTable_tabC`) and `DummyReg`
@@ -163,12 +164,12 @@ theorem tablesOf_shapeOk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some s
   · cases hs
 
 /-- **Each table the masked verifier parses is a `--zk` table it sets up**: untyped, without public input ports, at a
-circuit whose output is its unit's (the scope's `scopeOk`/`scopeOkH`), each table passes the shape check, is a
-`MaskSetup` and has whole-word regions. -/
+circuit whose output is its unit's wherever the outputs aren't hidden (the scope's `scopeOk`), each table passes the
+shape check, is a `MaskSetup` and has whole-word regions. -/
 theorem tableAt_zk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (hz : r.zk = true)
     (ht : r.tags.typed = false) (hpi : r.publicInputs = none) {c : Circuit}
-    (hc : ProvedScope.circuitOf r.tags r.I.circuitFile r.I.tables = .ok c) (ho : c.outNet = c.unitNet) {j : ℕ}
-    (hj : j < sts.size) :
+    (hc : ProvedScope.circuitOf r.tags r.I.circuitFile r.I.tables = .ok c)
+    (ho : r.tags.hiddenOutputs = false → c.outNet = c.unitNet) {j : ℕ} (hj : j < sts.size) :
     Zk.shapeOk sts[j] = .ok () ∧ Composed.MaskSetup sts[j] ∧ Composed.WholeWords sts[j] := by
   refine ⟨array_forM_ok (tablesOf_shapeOk hs hz) j hj, ?_⟩
   obtain ⟨spec, hset⟩ := setup_of_tablesOf hs
@@ -187,7 +188,7 @@ theorem tableAt_zk {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (h
       rw [Composed.parse_tagsAt] at hp
       simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte, hp] at hc
       exact (Except.ok.inj hc).symm
-    exact ⟨Composed.maskSetup_of_setupH ht' hd, Composed.setupH_whole hd (hc' ▸ ho) (parse_facts hp).typed⟩
+    exact ⟨Composed.maskSetup_of_setupH ht' hd, Composed.setupH_whole hd (hc' ▸ ho hh) (parse_facts hp).typed⟩
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     exact ⟨ZkHidden.maskSetup_of_setupHidden ht' hd, Composed.setupHidden_whole hd⟩
@@ -231,14 +232,16 @@ theorem oneTableLowers : OneTableLowers := by
 
 /-- **What the masked scope and the relation give the parse**: at a statement of the masked record's scope with a
 witness in its relation, whose setup has the tables `sts`, the verifier's parse is masked, untyped, without public input
-ports, has the tables `sts`, the witness is in its readable relation, and the circuit's output is its unit's. -/
+ports, has the tables `sts`, the witness is in its readable relation, and the circuit's output is its unit's wherever the
+outputs aren't hidden. -/
 theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock.Wit} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hsc : Claims.Flock.Scope (FlockDeploy.deployZk rel) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk rel).parse x w)
     (hset : FlockDeploy.setupOf true x = some (s, spec, sts)) :
     ∃ p : Parsed, Parses p ∧ p.zk = true ∧ p.tags.typed = false ∧ p.publicInputs = none ∧ p.sts = sts ∧
       (FlockDeploy.deployZk rel).parse x = some (toReadable rel p) ∧ Claims.Flock.RelS (toReadable rel p) w ∧
-      ∃ c, ProvedScope.circuitOf p.tags p.I.circuitFile p.I.tables = .ok c ∧ c.outNet = c.unitNet := by
+      ∃ c, ProvedScope.circuitOf p.tags p.I.circuitFile p.I.tables = .ok c ∧
+        (p.tags.hiddenOutputs = false → c.outNet = c.unitNet) := by
   obtain ⟨p, hp, hsc'⟩ := (scope_iff (FlockDeploy.deployZk rel) rel (FlockDeploy.readOf true) rfl
     (fun _ _ h => FlockDeploy.readOf_zk h) x).1 hsc
   have hparse : (FlockDeploy.deployZk rel).parse x = some (toReadable rel p) := by
@@ -269,9 +272,12 @@ theorem parsed_zk {rel : Parsed → Relation} {x : Claims.Msg} {w : Claims.Flock
     have := hset'.symm.trans (FlockDeploy.Ins.setup_read (FlockDeploy.setupOf_some hset).2)
     simp only [Except.ok.injEq, Prod.mk.injEq] at this
     exact this.2
-  have ho : c.outNet = c.unitNet := by
-    split at hok <;>
-      simp only [ProvedScope.scopeOk, ProvedScope.scopeOkH, Bool.and_eq_true, beq_iff_eq] at hok <;>
+  have ho : p.tags.hiddenOutputs = false → c.outNet = c.unitNet := by
+    intro hh
+    split at hok
+    · rename_i h
+      cases h.symm.trans hh
+    · simp only [ProvedScope.scopeOk, Bool.and_eq_true, beq_iff_eq] at hok
       exact hok.1.1.1.2
   exact ⟨p, hps, hz, hRu.2.1, hpi, hpe, hparse, hR', c, hcirc, ho⟩
 
