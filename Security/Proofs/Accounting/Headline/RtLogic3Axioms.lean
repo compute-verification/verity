@@ -11,3 +11,5 @@ example : Accounting.Guarantees.TS.Sm120MeasuredHeadline := Accounting.SecurityP
 #print axioms Accounting.SecurityProofs.TS.Sm120SheetHeadline
 #print axioms Accounting.SecurityProofs.TS.Sm120MeasuredHeadline
 #print axioms Accounting.SecurityProofs.TS.RtLogic3.coinLayer_budget_unsat
+#print axioms Accounting.SecurityProofs.TS.RtLogic3.coinLayer_moved_budget_unsat_dc
+#print axioms Accounting.SecurityProofs.TS.RtLogic3.game_accepts_last

@@ -192,8 +192,8 @@ theorem coinLayer_moved_budget_unsat (n : ℕ) (s δbind δzk : ℝ) (hs : 1 ≤
   have hδ : 1 / 2 ≤ δbind := by
     by_contra h
     exact coinLayer_not_moved_le n δbind (not_le.mp h) hB
-  have h1 : (1 / 2 : ℝ) ≤ δbind + ((1 : ℕ) : ℝ) * δzk := by push_cast; linarith
-  have h2 := mul_le_mul_of_nonneg_right hs (show (0 : ℝ) ≤ δbind + ((1 : ℕ) : ℝ) * δzk by linarith)
+  simp only [Nat.cast_one, one_mul] at hb
+  have h2 := mul_le_mul_of_nonneg_right hs (show (0 : ℝ) ≤ δbind + δzk by linarith)
   have h3 : ((1 : ℝ) / 2) ^ 41 < 1 / 2 := by norm_num
   linarith
 
