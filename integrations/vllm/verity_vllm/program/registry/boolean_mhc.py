@@ -26,6 +26,7 @@ is over circuit-check's partition budget.
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -71,12 +72,12 @@ def _tf32_rne(C, w):
     return mux(C, special, kept, rounded)
 
 
-HopperTf32WgmmaDot8V2 = definition(
+HopperTf32WgmmaDot8V2 = silicon_step(definition(
     "HopperTf32WgmmaDot8", 2,
     lambda C, acc, *ab: FP.tc_dot_tf32(C, acc, [_tf32_rne(C, x) for x in ab[:8]], [_tf32_rne(C, y) for y in ab[8:16]],
                                        M.TF32_GROUPS, M.TF32_WIDTH, M.TF32_FLOOR),
     (("acc", F32), ("a", Array(8, F32)), ("b", Array(8, F32))), F32, word=M.HopperTf32WgmmaDot8,
-    doc="the candidate wgmma.m64nNk8 tf32 step on bits: HopperTf32WgmmaDot8_v1")
+    doc="the candidate wgmma.m64nNk8 tf32 step on bits: HopperTf32WgmmaDot8_v1"), M.HopperTf32WgmmaDot8.silicon)
 
 
 def _sigmoid(B, S, z):

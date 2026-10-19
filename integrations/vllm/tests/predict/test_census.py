@@ -2,7 +2,8 @@
 greedy on rtxpro6000 (cov-k05-7), its step (the traced Build `test_predict` pins) and its request Program (a prefill of 256 rows,
 then 31 decode steps), each step ending at a sampling event; the census path held to the explicit expansion on `TINY`'s; and
 the served MACs by precision of those rows and of GLM-5.3's served constructions on their stand-ins
-(`tests.program.test_derive_neutrality`).
+(`tests.program.test_derive_neutrality`); and the Boolean work (`work`) of a word Program through each Call's Boolean version
+(`boolean_version`), held to its lift's and, on Llama-3.2-1B's GEMMs and GLM-5.3's FP8 expert GEMMs, to their steps' gates.
 A change to a Definition either Program calls moves the census digests with the Program's: recompute them with `_views`.
 The requirement takes the weights as registered (`Program(fn, registered=("weights",))`), whatever the Build binds them as.
 """
@@ -10,16 +11,22 @@ The requirement takes the weights as registered (`Program(fn, registered=("weigh
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 
 import pytest
 
 from tests.predict.test_predict import FIX, TINY, _phi
 from tests.program import test_derive_neutrality as GLM
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.ml.circuits.census import census, step_ends
-from verity.ml.circuits.program import Program
+from verity.ml.circuits.census import PRODUCTS, census, family, step_ends
+from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits.evaluation import bits as BS
+from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.predict.build import build_program, model_shape
+from verity_vllm.program.boolean import boolean_version, lift
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
@@ -131,3 +138,69 @@ def test_the_census_path_is_the_expansion_on_tiny(wrapper, kw):
     if not all(by_census.resolved(t) for t in range(by_census.steps)):
         want["read_bits_upper"] = want.pop("read_bits")
     assert by_census.to_json() == want
+
+
+def _gates(fn) -> dict[str, int]:
+    """`fn`'s two-input gates and ANDs, from its compiled circuit (`evaluation.bits`)."""
+    c = BS.compile(fn).counts
+    return {"gates": sum(c.values()), "and": c["and"]}
+
+
+def _times(n: int, g: dict[str, int]) -> dict[str, int]:
+    return {k: n * v for k, v in g.items()}
+
+
+def _calls(program) -> dict[str, object]:
+    return {descriptor_id(nd.fn): nd.fn for nd in program.root.body.nodes if not is_input(nd.fn)}
+
+
+@pytest.mark.slow
+def test_a_word_step_counts_its_lifts_work():
+    """`TINY`'s step through each Call's Boolean version (about 8 s) counts the work its lift (`lift`, every Call its Boolean
+    version) counts as a Boolean Program, Call class by Call class, and in every facet."""
+    r = build_program(_phi(TINY), "step", M=1, pos0=8)
+    c = census(r.program, boolean=boolean_version)
+    b = census(Program(lift(r.program.fn)), boolean=True)
+    assert c["totals"]["work"] == b["totals"]["work"] and c["steps"]["work"] == b["steps"]["work"]
+    assert set(c["totals"]["work"]) == {"tc:bf16", "cuda:gate"}
+    for cid in _calls(r.program):
+        v = c["classes"][cid]["boolean_version"]
+        assert c["classes"][cid]["work"] == b["classes"][v]["work"], cid
+
+
+@lru_cache(maxsize=1)
+def _llama_step():
+    return build_program(_phi(CFG), "step", M=1, pos0=8)
+
+
+def test_llama32_1b_gemms_are_their_steps_and_casts():
+    """Each GEMM of Llama-3.2-1B's step, a root Call of its own: N x K/16 BF16 tensor-core steps are `tc:bf16`, the N casts
+    (`F2fpBf16_v2`) `cuda:gate`, nothing else."""
+    gemms = {cid: fn for cid, fn in _calls(_llama_step().program).items() if family(fn) == "Gemm_v2"}
+    assert len(gemms) == 5
+    for cid, fn in gemms.items():
+        one = CompositeDefinition("OneGemm", 1, (), lambda S, fn=fn: (tuple(fn.signature()[0]), fn.signature()[1]),
+                                  lambda B, S, *args, fn=fn: B.call(fn, *args), register=False)
+        c = census(Program(one), boolean=boolean_version)
+        e, S = c["classes"][cid], fn.bindings
+        dot = boolean_version(fn).bindings["DOT"]
+        assert e["work"] == {"cuda:gate": _times(S["N"], _gates(BG.F2fpBf16)),
+                             "tc:bf16": _times(S["N"] * S["K"] // 16, _gates(dot))}, cid
+        assert c["totals"]["work"] == e["work"]
+
+
+@pytest.mark.slow
+def test_glm53_fp8_expert_gemms_are_their_steps_and_the_rest():
+    """GLM-5.3's routed-expert stand-in through its Boolean versions (about 30 s, its expert GEMMs, quantizers and router traced
+    on bits): an expert GEMM's `tc:fp8` gates are its served MACs' FP8 steps (served MACs / 32 of them), and the dequantization
+    and epilogue around them `cuda:gate`; nothing but the expert GEMMs has `tc:fp8`."""
+    program = GLM._moe().program
+    moe = census(program, boolean=boolean_version)
+    experts = {cid: fn for cid, fn in _calls(program).items() if family(fn) in ("MoeExpertFp8Gemm_v1", "MoeExpertFp8GemmW_v1")}
+    assert len(experts) == 2
+    for cid, fn in experts.items():
+        e, dot = moe["classes"][cid], boolean_version(fn).bindings["DOT"]
+        assert set(e["work"]) == {"tc:fp8", "cuda:gate"} and e["work"]["cuda:gate"]["gates"] > 0
+        assert e["work"]["tc:fp8"] == _times(e["served_macs"] // PRODUCTS[family(dot)], _gates(dot)), cid
+    assert moe["totals"]["work"]["tc:fp8"] == {k: sum(moe["classes"][cid]["instances"] * moe["classes"][cid]["work"]["tc:fp8"][k]
+                                                       for cid in experts) for k in ("gates", "and")}
