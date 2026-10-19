@@ -2290,24 +2290,6 @@
    "assumptions": [],
    "type_hash": "cac0d5f86541bd5206eb1febfe2492aedfd31678311825bd6371970062c982f2"
   },
-  "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline"],
-   "assumptions": [],
-   "type_hash": "f1c79fa1a2296647966ae2763703bb07c5e9d15bdb71b6b0e83f6228938c4dc5"
-  },
-  "Accounting.SecurityProofs.TS.Sm120SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm120SheetHeadline : Accounting.Guarantees.TS.Sm120SheetHeadline"],
-   "assumptions": [],
-   "type_hash": "0707af8f7ef0f1b38f84f251088d19dcca4fd9e8a5e66a965e0d71629a781ef6"
-  },
-  "Accounting.SecurityProofs.TS.Sm80SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm80SheetHeadline : Accounting.Guarantees.TS.Sm80SheetHeadline"],
-   "assumptions": [],
-   "type_hash": "2e1ed52402571923f9ec8347d4d5ccffc1354e2d155778e16fbbd2a7e7f9fbcf"
-  },
   "Accounting.SecurityProofs.TS.StageBudget": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.StageBudget : Accounting.Guarantees.TS.StageBudget"],
@@ -7403,9 +7385,6 @@
    "Accounting.SecurityProofs.Compose.CircuitWork": "frozen (no-function,world-unlisted): decision 113's logical layer under live coins, over every declared circuit (Accounting.Compose.Declared, with its rounds, their coin modes, the service's commit coins and its proof units, in Scope every round holding a credited tile live, Declared.Live, and every value committed by its IR cut, Accounting.Compose.LayerCommitted) run as one sampled window (serviceGame at the tiles' late cones from the IR, tileCone, its rate at shareCone, drawOf) and its proofs on the layer from the IR (Accounting.Compose.Declared.layer, only its run-dependent half ProofRun a parameter): an accepted run has its committed words fixed right but for a share at cost Lambda ln(1/delta_s) + min(a, b) D0 (WorkAt at rOf), except with probability delta_s + delta_bind + delta_ks, delta_bind per prover (BindingOfECR reads it); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and the four claims (OperandHMu and ReceiptLuckAt per tile folded, GuessLuckAt per tile whole, Accounting.Assumptions.TS.UnitFixed at the run's modes, tileMode) are taken per tile under PerTile's binders or at the window's modes, not on the premises list. LayerCommitted is a protocol fact of the declared circuit, a Definition in Scope, not a premise about the cheater: today's code doesn't meet it (one salt a window and the draw), so on today's code Scope fails and nothing is credited. Its luck line is the live claims' point lucks, p = 7/8 folded and p0 = 1/2 whole (ASK-9, card 8b00536a: the guess bound at B-prime's 1/2, 2^-64 not granted), where the whole branch binds: 0.173% at r = 1 closed, 0.110% sharp. The seeded pair's folded branch reads GRIND's stronger TemplateMoment, but its whole skips are priced at a rate no granted premise sets (Scheme.wholeRate), so the seeded line is conditional: 56.1% at Llama-3.1-8B decode, r = 1, at 1/2 a query, 1.120% under GuessLuckAt at 2^-64, and below this one (0.101%) only under Accounting.Assumptions.Compose.WholeEntropyAt at K/8 nats a tile. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
    "Accounting.SecurityProofs.Compose.CreditOfWork": "frozen (no-function,world-unlisted): decision 113's physical step, the tensor-scalar model on a data sheet: a run with WorkAt's work that meets A1-A7, FoldOptFolded and FillOpt takes at least (1 - eps) T_cred (SheetDIdealFloor's chain on one run), over every model and anatomy, not a Lean function; A1-A7, FoldOptFolded and FillOpt are not on the premises list.",
    "Accounting.SecurityProofs.Compose.CircuitCredit": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWork (decision 113) under live coins, Accounting.Compose.Certificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = live, an Accounting.TS.prob event that shape.events does not list, not a Lean function; OperandHMu, ReceiptLuckAt and GuessLuckAt per tile, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its Scope holds Accounting.Compose.LayerCommitted, the service's commit order, a protocol fact (a Definition) that today's code doesn't meet. Its eps at eps_flat = 0.571% and eps_mu = 0, with whole units at p0 = 1/2 (ASK-9), is 0.744% at r = 1 closed (0.681% sharp), below EPS1's 1%, with every premise it reads granted or #2466's. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
-   "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), SheetDIdealFloor at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins, not a Lean function; A1-A7, FOLD-OPT (its every-run form excludes fold skippers, RT-COMPOSE B1; charging them gives about 0.656% with an unfolded round at 1/2, 0.599% at the whole-unit guess bound 2^-64), the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, false for today's Definitions until #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), DIdealFloor at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins, not a Lean function; FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT (its every-run form excludes fold skippers, RT-COMPOSE B1; charging them leaves 0.591%, the folded branch binding), the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, false for today's Definitions until #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm80SheetHeadline": "frozen (no-function,world-unlisted): sm_80's headline, FOLD-OPT only (kappa = 0, so its luck and proof-layer premises are idle), under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), SheetDIdealFloor at the exact data of DS-80 and Dither-2S at L = 16 (Definitions.Accounting.Headline.Sm80) with pi* the ALU pipe's facet, p = 7/8, S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins, not a Lean function; A1-A7, FOLD-OPT (its every-run form excludes fold skippers, RT-COMPOSE B1; charging them gives about 0.232% with an unfolded round at 1/2, 0.148% at the whole-unit guess bound 2^-64), the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, false for today's Definitions until #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
    "Accounting.SecurityProofs.Compose.ServiceCovers": "lemma: the service's share (Accounting.Compose.jointGame at 1 1 on any joint run of the rounds' coins, serviceGame its split-stage case, each skipped tile charged its late cone from the IR, tileCone) covers every tile that isn't good (Accounting.TS.DrawnLayer.Covers at the run's modes, jointMode) on the window's proofs' layer from the IR (Accounting.Compose.Declared.layer: its slots, writers, cuts, coins and draw defined from the circuit, so StageCuts under Accounting.Compose.LayerCommitted, StageCoins and StageSlots are its lemmas), over every declared circuit's window committed as the layer says (LayerCommitted, which Declared.atIR always meets), from DrawnLayer.covers_of_cone; not a property of a Lean function.",
    "Accounting.SecurityProofs.Compose.BindingOfECR": "lemma: a prover's delta_bind on a sampled window's proofs (Accounting.TS.DrawnLayer.MovedIn in a round whose slots lie in L) is at most delta' + |L|^2/(4 delta') (ecr(F) + kappa) for every delta' > 0, where F is a SHA-512 collision finder whose collisions bound the fork event (DrawnLayer.Forked) up to kappa and ecr(F) is E[cost F]/2^256 if F meets ecr/sha-512 (Definitions.Claims' ExpectedCR) and top if it doesn't (RT-DELTA r2): DrawnBindingOfFork with AM-GM, assuming no hash, so it is the per-prover reading of delta_bind and of SeedLuckAt's delta_b; ENNReal arithmetic over events, not a Lean function.",
    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy": "lemma: SeedLuckAt for whole tiles at kappa0 and rate theta (Accounting.Assumptions.Compose.SeedLuckAt) from Accounting.Assumptions.Compose.WholeEntropyAt at entropy h (each round's whole tiles fixed before the query's own answer, and all of a set S of them lucky on at most a share e^(-sum_S h) of its answers), wherever every tile's moment e^(-h) e^(theta w) + (1 - e^(-h)) e^(-kappa0 theta w) is at most 1: the gain's exponential expands over the subsets of the whole tiles with nonnegative coefficients; real arithmetic over finite sums, not a property of a Lean function.",
@@ -8444,109 +8423,8 @@
     "Accounting.SecurityProofs.HMu.LemmaB",
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
-    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
    ]
-  },
-  "Definitions.Accounting.Headline.Encoding": {
-   "digest": "de76fe4cd1caab7861b2407763fbf6143fcc74b209b95ad7649ba06cc11d597f",
-   "definitions": {
-    "Accounting.TS.Headline.DesignData": "9d82dbbbe3b9effd6c80f7e4795afb12bc7d8dfb36b99b4fb137e2dacf08ea93",
-    "Accounting.TS.Headline.DesignData.Nw": "b6f5ce0360cc7ae94b2ede2f2d4b401a3e3a306d30489fcef9bff472d29f135b",
-    "Accounting.TS.Headline.DesignData.bytes": "0e0021c0c95eb62395f65eeb4bc7269aff35a058062ead5598127af4258d2e86",
-    "Accounting.TS.Headline.DesignData.folds": "f9a24408e14e94c7c8f0e9e46d305746032ad9bce1770e76516d743d310d4366",
-    "Accounting.TS.Headline.DesignData.model": "730678e18f9e657b24e02f5c3cce1e325a649772115822b2cdc51a1091d9f654",
-    "Accounting.TS.Headline.DesignData.q": "93e519de76cb1f65985054eb03f43d0957f65f90854727a4b702e6cf1c028964",
-    "Accounting.TS.Headline.DesignData.qT": "472d5d2638cb54ab7e274f4f6c64832761e9a276c36757371b12ccb1caa6341c",
-    "Accounting.TS.Headline.DesignData.vec": "5816bf009ae487c78d26e722e7b15f1fe746a6e56bd662a0cada5f3174a29815",
-    "Accounting.TS.Headline.DesignData.writers": "6726d149d105fd6efdfb649107895d364af3b962e52d1155cd842ac5b81e1d60",
-    "Accounting.TS.Headline.SheetData": "f1193ba9c08e2d68f6ceeec0eb5e44b8f800192a568e3c638b2b32253a37ec8e",
-    "Accounting.TS.Headline.SheetData.fmax": "3614767666a23c3458f97caaa32ddd7f93a33a4ea70ce35eebfaab03e9744864",
-    "Accounting.TS.Headline.SheetData.macs": "9866f3110c5abdd7b8895acc80933ed6b2476a867bc70ff486136f2a123b1cb6",
-    "Accounting.TS.Headline.SheetData.peak": "eb71a233b0d6c331f2557fcda5c9f65a3df2b63072724c0447093eaa92ce5724",
-    "Accounting.TS.Headline.SheetData.pipe": "cc704d91bedb7cf63d10f529c2c4661578c8e0bd32935599f02cef529b2fe3e5",
-    "Accounting.TS.Headline.SheetData.sheet": "1e2d6796adaf241db10e3b185c1cd39c3537fe045f7141e44fb479a0cdc8a19c",
-    "Accounting.TS.Headline.SheetData.smem": "cdb864a1b846d6a3fe8e5a19cfbb2e6c3048d6658a50bd64e3ac502af4e84aa8",
-    "Accounting.TS.Headline.SheetData.width": "c27aa76ffff40f09cc011177a3330c136c9bede624506bab44a94d1d64fc766e",
-    "Accounting.TS.Headline.Sparse": "719c786f86357711611023d0221c264c3e96645d698b2bc96a1c4533deeac658",
-    "Accounting.TS.Headline.Sparse.coeff": "76451a40b638950fc540999485eb0cc327052d950a9fbb88e01a59b4ba17c957",
-    "Accounting.TS.Headline.Sparse.counts": "436c235b9c6aa6d31f4fa046e7166edb62f41afcd59001f3e7e10a865b01b4c2",
-    "Accounting.TS.Headline.Sparse.ratio": "711c15ccc52eb978d0f5503e727422d88c7a4f34343b5d15572052b39ec4501c",
-    "Accounting.TS.Headline.idx": "17b428bfc84e715129eddc925ad55739e066c24c430dac8852cce0945a885d91",
-    "Accounting.TS.Headline.labelled": "4d15c0c955724b0182fb7b37f0589ab47a2087a7e52f5ac3a2d63bd72bd7da58",
-    "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
-   ]
-  },
-  "Definitions.Accounting.Headline.Sm120": {
-   "digest": "7d6807dbdccbf6a4190cfddc186da8f8fcebdf58188ac87f91b81093aca70cd2",
-   "definitions": {
-    "Accounting.TS.Headline.Sm120.Pipe": "2bca7649adecea1103990e84d41626c2c5668255a78c1bb2873d0352526d9791",
-    "Accounting.TS.Headline.Sm120.Pipe.casesOn": "1ad14beedcf4e7eb5471c4eaec9f632e73e2cfcbbb00a27bccb236d3b1474036",
-    "Accounting.TS.Headline.Sm120.Pipe.ctorIdx": "7f28e616c999d42414778437148a7a9c1536fc3c471ba25fb4ac0f29d3fdddc5",
-    "Accounting.TS.Headline.Sm120.Pipe.imad": "9e7b26b87361019791bb58d6739dab32ac19f7b2f1886d6cf3e43b9f7fd73b1b",
-    "Accounting.TS.Headline.Sm120.Pipe.lop": "107595302622e782dcb01efdc8a8b41a981effa45adfc42074573c3d628db777",
-    "Accounting.TS.Headline.Sm120.Pipe.rec": "e7e73765f42521dee161d766c99997a5976168a0537a569dbda886b8e9a5f4f4",
-    "Accounting.TS.Headline.Sm120.Pipe.shfl": "9ab83c003749ed3be802329c5092e15f57eb300466214518b23c77348feb8aaf",
-    "Accounting.TS.Headline.Sm120.Pipe.width": "967c3954f1f19da8bcecd1b8c63729f198d15d3563990e8287aea75a814d1fca",
-    "Accounting.TS.Headline.Sm120.Pipe.xu": "f11d4a1ddd9e9ff1e84072565b410aa104ea8117ea87c06b3f7cd9d5c8f2476f",
-    "Accounting.TS.Headline.Sm120.checks": "ae8e4e4c25c4bb8b27f6aeb5a139de2a1e13bbd7f2ed9873b72d4e16fbfd9aae",
-    "Accounting.TS.Headline.Sm120.ds120": "a8781e51e72c61d51b39695cdd76451783cf33bbf92c6f2bbabce0b9af07356d",
-    "Accounting.TS.Headline.Sm120.flat": "b9b8b48bf0020f9970ba8177c790d7dbe2e06bd802f1848b0510f23c6d7e4f73",
-    "Accounting.TS.Headline.Sm120.flatFold": "6eea49af7038931fa768c5996e8b13cf32cc893f41fa3b611d9dfc0e6326d62c",
-    "Accounting.TS.Headline.Sm120.flatSkip": "69e0e59c9db3f2313694ee525565f3170a27d53be94eb6f91a81564d8d7e6351",
-    "Accounting.TS.Headline.Sm120.flatWords": "5c72accfb9c15a5146ef8ec1cd9e8783c002e3e4b057175febaeec4d9fe7d804",
-    "Accounting.TS.Headline.Sm120.h1fx1": "906bcdc7b7489aff8f124fcb3b982db6e3c706cd85195fa9e6bdd26bbc36ed61",
-    "Accounting.TS.Headline.Sm120.instDecidableEqPipe": "2148dcd54c0370d8d493176ba9386343c2091052e0f0f4ebdb3f5e3ddd323ea1",
-    "Accounting.TS.Headline.Sm120.instFintypePipe": "774f748010c4154f00a1134416cdc8c1f2d6113fb889b81de897cf54de8370f4",
-    "Accounting.TS.Headline.Sm120.model": "c0bf0929b7382d341511c5a65d85eb11562c726ec1c5e70846616d0b5ab6deb8",
-    "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
-  },
-  "Definitions.Accounting.Headline.Sm120Measured": {
-   "digest": "4da2fa9a83e1d4eb1dc30865e2b5c1b96ca3b7dee153d12826d8c5cb3be75693",
-   "definitions": {
-    "Accounting.TS.Headline.Sm120Measured.flat": "c8965f5cd36248f02301a08d05949b542de290e1aca341c23263557c5ac3cea5",
-    "Accounting.TS.Headline.Sm120Measured.flatSkip": "94ee64e235e9669b896653722ecb5f95a61ff33d6fcef3611c123e2e885f5fd6",
-    "Accounting.TS.Headline.Sm120Measured.h1fx1": "1e91ad967a39b4a74d6adaf6696b1d4019f02708453c6a7aa8002303e13ec5ec",
-    "Accounting.TS.Headline.Sm120Measured.machine": "c4c153f980905853e6a4e83e8f4b3d18b60fdacb470abb9ec7843d77e7e7bd9d",
-    "Accounting.TS.Headline.Sm120Measured.model": "bbbae9ae30dd00c89b9fd1b08962137613df75acee05f19e157f44638b8b98da",
-    "Accounting.TS.Headline.Sm120Measured.vf3r16": "ab7019168928c20bf4b481e6408d6ca8ee744123e16c05aa164d43fe69946d6b"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"]
-  },
-  "Definitions.Accounting.Headline.Sm80": {
-   "digest": "9ae8a1631f4c24cabea30cd791ca8519a41726c072095ebd52f1a1d09fbb75f3",
-   "definitions": {
-    "Accounting.TS.Headline.Sm80.Pipe": "eb911ef517e03d9f8373237ba621561906cbbf5e034a0b60a213fd8577eb19a8",
-    "Accounting.TS.Headline.Sm80.Pipe.alu": "02ca6e3e0856dec1942d5daa35c800c330718d96374567efb92806815a7df909",
-    "Accounting.TS.Headline.Sm80.Pipe.casesOn": "a27928119ad4a7ac0922d480857a97845894bfc04cf41f7c740353a0b5ce28d4",
-    "Accounting.TS.Headline.Sm80.Pipe.ctorIdx": "a863061c4cd331d84ef886d492845b9c9f7532b94d5fc19bf14cf64f3898c5a2",
-    "Accounting.TS.Headline.Sm80.Pipe.fma": "c7c3e23495350dcc7da8d2d000fec637e36bf1dd9154f5867a53e82e5eb546d7",
-    "Accounting.TS.Headline.Sm80.Pipe.rec": "0920b400ca5d999dacf009782b8b83b2ade3b0900778bafccea2f3ec62d436b7",
-    "Accounting.TS.Headline.Sm80.Pipe.shfl": "fda2dc9ff59d044c0d933bc6b26c3643a5483b1d157b168b3adfc4e95d301976",
-    "Accounting.TS.Headline.Sm80.Pipe.width": "7df9b128fb4951cbfa6b71facb3f8f4de099ff8bdb47fbfbba4a84df059d2ce3",
-    "Accounting.TS.Headline.Sm80.Pipe.xu": "ef0dbacfb875d59a7d4e487c426adfcbef19b01d8c42a008525acc8ae03e893a",
-    "Accounting.TS.Headline.Sm80.checks": "9da94f10ca7d652ba0eee3355584a7240d593953362b3a99300b871a4e180db8",
-    "Accounting.TS.Headline.Sm80.d2s": "1192fc7a2706224c3cc59ee0843369684d8897f1c9c03969cb484809438380c6",
-    "Accounting.TS.Headline.Sm80.ds80": "c962dea946e094dc3980acdc469278c1d610f22e154eb5b1cb080e59a6a60f10",
-    "Accounting.TS.Headline.Sm80.flat": "aecb17278edaf5d52eb5384a4e86305100084b29954ff716cc0a7ebd22a1b1f2",
-    "Accounting.TS.Headline.Sm80.flatFold": "a7df979e19c6f2afa7300061a43ade4ab187f34266414a575e4e25545f81c6bd",
-    "Accounting.TS.Headline.Sm80.flatSkip": "230775ceda18240ea3daf892f79df943637ddee76f61234e87b091cf9bc0a845",
-    "Accounting.TS.Headline.Sm80.flatWords": "df48c612a710b1837f53ffa9d475c6a8d0ab5b498aa059ec3b5f3b9e931e988a",
-    "Accounting.TS.Headline.Sm80.instDecidableEqPipe": "b20a0949d774381f4a886b253fa20a213b3f9acc7f9c50d40642eb576bdf75a9",
-    "Accounting.TS.Headline.Sm80.instFintypePipe": "f1a20177b5a02551fc08c0ec996c921a6680dc794e597cfab78bbac62889d89d",
-    "Accounting.TS.Headline.Sm80.model": "7b64b64df9ef75b1efd2d0d5b51694a420b1f02c900d4be66d9fa59ff650487a",
-    "Accounting.TS.Headline.Sm80.sheet": "6d33f29a33ba9f1da1592fe9a2d32dcc2d1ab9961f3f9e20336f5d594e1aa316"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm80SheetHeadline"]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -9497,9 +9375,6 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
@@ -9538,9 +9413,6 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal"
    ]
@@ -9576,10 +9448,7 @@
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
-    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -9663,10 +9532,7 @@
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
-    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
    ]
   },
   "Definitions.Accounting.TS.ReceiptHMu": {
@@ -9674,13 +9540,7 @@
    "definitions": {
     "Accounting.TS.ReceiptGame.OperandPointMass": "6df5cc888c4948e81cfd63c48efd7e5cb7c956f25c2a3bf31d645fb38dc3aed3"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitWork",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.Compose.CircuitCredit", "Accounting.SecurityProofs.Compose.CircuitWork"]
   },
   "Definitions.Accounting.TS.Routes": {
    "digest": "30c8abcb6735ac3215f7f48cfa482adc6e2ae2096c61de3f69ef8282eb1c6166",
@@ -9773,9 +9633,6 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
@@ -9808,9 +9665,7 @@
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.SheetFacetCeilings"
    ]
   },
   "Definitions.Accounting.TS.Slots": {
@@ -15288,9 +15143,6 @@
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
@@ -20394,9 +20246,7 @@
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
    ]
   },
   "Models.Accounting.Assumptions.Stages": {
@@ -20457,9 +20307,6 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
@@ -20725,19 +20572,6 @@
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
-   ]
-  },
-  "Models.Accounting.Guarantees.Headline": {
-   "digest": "def530d5e86be8d418e94b93614a9d05107603fb69b46d904208302f187f83a0",
-   "definitions": {
-    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "758f2abbb4abdb797f1284499b9c12cacfa2193f72e5b9e7a0977e3ba90876db",
-    "Accounting.Guarantees.TS.Sm120SheetHeadline": "ee3c2241e74ab27053a8294ad56c4a3bbc4f18ef467c05ad3030939f31824854",
-    "Accounting.Guarantees.TS.Sm80SheetHeadline": "d66c403cb71ae9974723c66e2a4fe8e5b987521bc6dba5a5a7f6277fdfa94d5b"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
    ]
   },
   "Models.Accounting.Guarantees.Joint": {
