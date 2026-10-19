@@ -36,8 +36,11 @@
 //   kh_seeds(data, base, U, seeds, stream)   data: SEED_TAG, RECEIPT_TAG (3 words each), salt, root_a, root_b (8 each)
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
 //   kh_unit_ws(A, B, M, N, K, seeds, live, out, ws, J, stream)   ws: kh_ws_bytes(M, N, K) bytes, the caller's
-//   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_noise_blocks(K)
+//   kh_one(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   the one-stream form
+//              (OneOut, below): kh_unit_ws' receipts (kh_unit's if ws is null) and the served z and y from the same MMAs
+//   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
+#include <cuda_bf16.h>
 
 #ifndef H1U_WARPS
 #define H1U_WARPS 4
@@ -106,6 +109,16 @@ __device__ __forceinline__ u32 add01(u32 a, u32 bb) { return ((a & 0x7F7F7F7Fu) 
 // bytewise (b + 128) + v mod 2^8, v's bytes in [64, 193] (U + 128 + c): B + c + U
 __device__ __forceinline__ u32 addw(u32 b, u32 v) {
   return ((b & 0x7F7F7F7Fu) + (v & 0x7F7F7F7Fu)) ^ (~(b ^ v) & 0x80808080u);
+}
+
+// W' = B + c + U's int8 wrap at each byte as s8 WB = wb+ - wb- (b = B, v = U + 128 + c as addw takes them): wb+ where B >= 0
+// and c + U >= 0 (v's top bit set) and the 7-bit sum carries into the sign, wb- where both are < 0 and it doesn't
+__device__ __forceinline__ u32 wrapw(u32 b, u32 v) {
+  const u32 lo = (b & 0x7F7F7F7Fu) + (v & 0x7F7F7F7Fu);
+  const u32 p = ~b & v & lo, n = b & ~v & ~lo;
+  u32 nn;  // each byte's sign replicated (prmt's sign mode: selector nibbles 8..11)
+  asm("prmt.b32 %0, %1, %2, %3;" : "=r"(nn) : "r"(n), "r"(0u), "n"(0xBA98));
+  return nn | ((p >> 7) & 0x01010101u);
 }
 
 __device__ __forceinline__ void prefetch_l2(const void* p) { asm volatile("prefetch.global.L2 [%0];" ::"l"(p)); }
@@ -190,10 +203,31 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
   }
 }
 
-template <int MD, bool WS>
+// The one-stream form (kh_one; CA's PouwH1Tile_v3): the same walk and receipts, plus each cell's served z =
+// O' - sum_d 128^d D_d + 256 X WB^T mod 2^32, WB = wb+ - wb- (wrapw) from B and the noise, carried by a third MMA set a
+// segment into its own accumulator; then y = RN_bf16(RN32(RN32(z) s_a[row]) s_w[col]) (int8_exact.dequantize), s_a = 0
+// for rows >= m. The step (m, flags) is read from the device, as dither_one's H1OStep {parity, m, pad, flags}.
+enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8, F_FAULT_WB = 16 };
+// F_FAULT: 2^FAULT_SHIFT added to unit 0's accumulator of cell (0, 0) after segment 0's MMAs, before its set is folded;
+// F_FAULT_WB: wb+ of unit 0's column 0 at k = 0 flipped (WB moves by +1 where wb+ was clear, else -1); F_NW_TILES writes
+// no z, F_NW_UNITS no receipt (the gate's no-write control); F_DUMP copies y rows < m to ydump
+constexpr int FAULT_SHIFT = 24;
+
+struct OneOut {
+  int* z;               // [rows, N] s32: the committed z of every unit's cells
+  int* zo;              // [M, N] s32 or null: rows < M of z
+  __nv_bfloat16* y;     // [M, N] bf16
+  __nv_bfloat16* ydump; // [rows, N] or null
+  const float* sa;      // s_a, rows < m read
+  const float* sw;      // s_w [N]
+  const int* step;      // {parity, m, pad, flags}
+  u32 M;
+};
+
+template <int MD, bool WS, bool OS>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
-                                                  u32* __restrict__ out, const u32* __restrict__ ws) {
+                                                  u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
   constexpr bool PF = WS || H1U_PF;
   constexpr int PD = H1U_PD;
   __shared__ WarpSmem smem[WARPS];
@@ -206,8 +240,39 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
   const u32 nwords = 2 * (ks + MD);
   u32* o = out + (u64)u * nwords;
+  int alive = 0, flags = 0;
+  if (OS) {
+    const int4 st = *reinterpret_cast<const int4*>(oo.step);
+    alive = st.y;
+    flags = st.w;
+  }
+  const bool rcpt = !OS || !(flags & F_NW_UNITS);
   if (live && !live[ri]) {
-    for (u32 w = lane; w < nwords; w += 32) o[w] = 0;
+    if (rcpt)
+      for (u32 w = lane; w < nwords; w += 32) o[w] = 0;
+    if (OS) {
+      const u32 row = 32 * ri + lane;
+      if (!(flags & F_NW_TILES)) {
+        uint4* zr = reinterpret_cast<uint4*>(oo.z + (u64)row * N + 32 * cj);
+#pragma unroll
+        for (int i = 0; i < 8; ++i) zr[i] = make_uint4(0, 0, 0, 0);
+      }
+      if (row < oo.M) {
+        uint4* yr = reinterpret_cast<uint4*>(oo.y + (u64)row * N + 32 * cj);
+#pragma unroll
+        for (int i = 0; i < 4; ++i) yr[i] = make_uint4(0, 0, 0, 0);
+        if (oo.zo) {
+          uint4* zr = reinterpret_cast<uint4*>(oo.zo + (u64)row * N + 32 * cj);
+#pragma unroll
+          for (int i = 0; i < 8; ++i) zr[i] = make_uint4(0, 0, 0, 0);
+        }
+        if ((flags & F_DUMP) && (int)row < alive && oo.ydump) {
+          uint4* dr = reinterpret_cast<uint4*>(oo.ydump + (u64)row * N + 32 * cj);
+#pragma unroll
+          for (int i = 0; i < 4; ++i) dr[i] = make_uint4(0, 0, 0, 0);
+        }
+      }
+    }
     return;
   }
   WarpSmem& S = smem[wp];
@@ -252,11 +317,17 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     idr[nt][0] = (q == (u32)nt && g < 4) ? 1u << (8 * g) : 0u;
     idr[nt][1] = (q == (u32)nt && g >= 4) ? 1u << (8 * (g - 4)) : 0u;
   }
-  int T[8][4], Y[8][4];
+  int T[8][4], Y[8][4], Cw[OS ? 8 : 1][4];
 #pragma unroll
   for (int t = 0; t < 8; ++t)
 #pragma unroll
     for (int e = 0; e < 4; ++e) T[t][e] = Y[t][e] = 0;
+  if constexpr (OS) {
+#pragma unroll
+    for (int t = 0; t < 8; ++t)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) Cw[t][e] = 0;
+  }
   u32 ulo[4], uhi[4];
 
   const int8_t* Ab = A + (u64)(32 * ri) * K;
@@ -368,13 +439,23 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
             af[mt][2 + h] = add01(a8.y, expand4(nb8 >> 4));
           }
         }
+        u32 wbf[OS ? 4 : 1][2];
 #pragma unroll
         for (int nt = 0; nt < 4; ++nt) {
           const u32 col = 8 * nt + g;
           const uint2 b8 = cw[nt];
           const u32 cb8 = cbits[col * 68 + 4 * j + q];
-          bf[nt][0] = addw(b8.x, ulo[nt] + expand4(cb8 & 15u));
-          bf[nt][1] = addw(b8.y, uhi[nt] + expand4(cb8 >> 4));
+          const u32 v0 = ulo[nt] + expand4(cb8 & 15u), v1 = uhi[nt] + expand4(cb8 >> 4);
+          bf[nt][0] = addw(b8.x, v0);
+          bf[nt][1] = addw(b8.y, v1);
+          if constexpr (OS) {
+            wbf[nt][0] = wrapw(b8.x, v0);
+            wbf[nt][1] = wrapw(b8.y, v1);
+          }
+        }
+        if constexpr (OS) {
+          if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && sg == 0)
+            wbf[0][0] = (wbf[0][0] & ~0xFFu) | ((wbf[0][0] & 0xFFu) == 0 ? 1u : 0u);
         }
 #pragma unroll
         for (int mt = 0; mt < 2; ++mt)
@@ -382,13 +463,17 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
           for (int nt = 0; nt < 4; ++nt) {
             mma_s8(T[4 * mt + nt], af[mt], bf[nt]);
             mma_s8(Y[4 * mt + nt], af[mt], idr[nt]);
+            if constexpr (OS) mma_s8(Cw[4 * mt + nt], af[mt], wbf[nt]);
           }
+        if constexpr (OS) {
+          if ((flags & F_FAULT) && u == 0 && lane == 0 && sg == 0) T[0][0] = (int)((u32)T[0][0] + (1u << FAULT_SHIFT));
+        }
         fold(T, y, z);
         ring_put(S, j, lane, y, z);
       }
     }
     __syncwarp();
-    o[32 * blk + lane] = ring_xor(S, lane);
+    if (rcpt) o[32 * blk + lane] = ring_xor(S, lane);
     __syncwarp();
   }
 
@@ -459,9 +544,42 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
       for (int nt = 0; nt < 4; ++nt) mma_s8(Y[4 * mt + nt], ad[d][mt], uf[nt]);
     fold(Y, y, z);
     ring_put(S, d, lane, y, z);
+    if constexpr (OS) {
+#pragma unroll
+      for (int t = 0; t < 8; ++t)
+#pragma unroll
+        for (int e = 0; e < 4; ++e) T[t][e] = (int)((u32)T[t][e] - ((u32)Y[t][e] << (7 * d)));
+    }
   }
   __syncwarp();
-  if (lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if (rcpt && lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
+  if constexpr (OS) {
+    // T[4 mt + nt][e] is cell (16 mt + g + 8 (e >> 1), 8 nt + 2 q + (e & 1)): z there, then y
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int eh = 0; eh < 2; ++eh) {
+        const u32 row = 32 * ri + 16 * mt + g + 8 * eh;
+        const float s_a = (int)row < alive ? oo.sa[row] : 0.0f;
+#pragma unroll
+        for (int nt = 0; nt < 4; ++nt) {
+          const int t = 4 * mt + nt;
+          const u32 col = 32 * cj + 8 * nt + 2 * q;
+          const int z0 = (int)((u32)T[t][2 * eh] + ((u32)Cw[t][2 * eh] << 8));
+          const int z1 = (int)((u32)T[t][2 * eh + 1] + ((u32)Cw[t][2 * eh + 1] << 8));
+          if (!(flags & F_NW_TILES)) *reinterpret_cast<int2*>(oo.z + (u64)row * N + col) = make_int2(z0, z1);
+          if (row < oo.M) {
+            if (oo.zo) *reinterpret_cast<int2*>(oo.zo + (u64)row * N + col) = make_int2(z0, z1);
+            __nv_bfloat162 yv;
+            yv.x = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z0), s_a), oo.sw[col]));
+            yv.y = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z1), s_a), oo.sw[col + 1]));
+            *reinterpret_cast<__nv_bfloat162*>(oo.y + (u64)row * N + col) = yv;
+            if ((flags & F_DUMP) && (int)row < alive && oo.ydump)
+              *reinterpret_cast<__nv_bfloat162*>(oo.ydump + (u64)row * N + col) = yv;
+          }
+        }
+      }
+  }
 }
 
 // a pair's shared state: the chunk's blocks by chunk parity ([0 rows | 1 columns][i][half]), reused after the last chunk
@@ -814,8 +932,16 @@ static void launch_unit(unsigned units, cudaStream_t s, const void* A, const voi
   constexpr unsigned per = WARPS / 2;
   h1p<MD, WS><<<(units + per - 1) / per, 32 * WARPS, 0, s>>>(a, b, M, N, K, sd, lv, (u32*)out, w);
 #else
-  h1u<MD, WS><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(a, b, M, N, K, sd, lv, (u32*)out, w);
+  h1u<MD, WS, false><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(a, b, M, N, K, sd, lv, (u32*)out, w, OneOut{});
 #endif
+}
+
+template <int MD, bool WS>
+static void launch_one(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
+                       const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
+  h1u<MD, WS, true><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K,
+                                                                     (const u64*)seeds, (const uint8_t*)live, (u32*)out,
+                                                                     (const u32*)ws, oo);
 }
 
 extern "C" int kh_digits(unsigned K) { return n_digits((int)(K / 32)); }
@@ -867,3 +993,37 @@ extern "C" int kh_unit_ws(const void* A, const void* B, unsigned M, unsigned N, 
     launch_unit<3, true>(units, s, A, B, M, N, K, seeds, live, out, ws);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
+
+// the one-stream call: kh_unit's (or with ws, kh_unit_ws') receipts of A [rows, K] and B [N, K], and the cells' z and
+// y (OneOut) from the same MMAs; step on the device ({parity, m, pad, flags}), M the y rows. ws null: the fused form.
+extern "C" int kh_one(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                      const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
+                      const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+#if H1U_SPLIT
+  return 2;
+#endif
+  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || (ws && !J)) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  const unsigned units = (rows / 32) * (N / 32);
+  if (!units) return 0;
+  cudaStream_t s = (cudaStream_t)stream;
+  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M};
+  if (ws) {
+    const unsigned nb = kh_noise_blocks(K);
+    const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
+    h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
+                                                                    (const uint8_t*)live, (u32*)ws);
+    if (m == 2)
+      launch_one<2, true>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
+    else
+      launch_one<3, true>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
+  } else if (m == 2) {
+    launch_one<2, false>(units, s, A, B, rows, N, K, seeds, live, out, nullptr, oo);
+  } else {
+    launch_one<3, false>(units, s, A, B, rows, N, K, seeds, live, out, nullptr, oo);
+  }
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
