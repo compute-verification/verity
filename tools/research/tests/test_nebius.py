@@ -64,6 +64,23 @@ def test_register_host_writes_an_ssh_machine_that_run_on_resolves(reg):
                                  probe=reachable)[1] == "unchanged"
 
 
+def test_register_records_the_owning_lane_and_a_reregistration_keeps_it_and_the_deadline(reg):
+    """The lane whose budget line pays for a node stops it (lane contract v2.19 §3c), and fleet.py's daily report rings it: launch.sh
+    re-registers with --replace and no --lane, which must not hand the machine back to infra, nor drop the sampled deadline."""
+    p, _ = registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", lane="circuits", probe=reachable)
+    assert tomllib.loads(p.read_text())["lane"] == "circuits"
+    p.write_text(p.read_text() + 'deadline = "2026-10-23T21:00:00Z"\n')
+    assert registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", probe=reachable)[1] == "unchanged"
+    assert registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", rate=43.2, replace=True, probe=reachable)[1] == "updated"
+    doc = tomllib.loads(p.read_text())
+    assert (doc["lane"], doc["deadline"], doc["rate_usd_per_hour"]) == ("circuits", "2026-10-23T21:00:00Z", 43.2)
+    assert tomllib.loads(registry.register_ssh("vy-glm53-eu", HOST, "verity", user="research", rate=43.2, lane="kernels",
+                                               probe=reachable)[0].read_text())["lane"] == "kernels"
+    with pytest.raises(remote.Refused, match="lane '@circuits' is not a lane's handle"):
+        registry.register_ssh("vy-glm53-eu2", HOST, "verity", lane="@circuits", probe=reachable)
+    assert "lane" not in tomllib.loads(registry.register_ssh("vy-nebius-1", "198.51.100.9", "verity", probe=reachable)[0].read_text())
+
+
 def test_register_host_refuses_an_unreachable_host_and_a_silent_rebind(reg):
     with pytest.raises(remote.Refused, match="does not answer over ssh"):
         registry.register_ssh("vy-nebius-1", HOST, "verity", probe=lambda e: "ssh rc 255: Connection refused")
