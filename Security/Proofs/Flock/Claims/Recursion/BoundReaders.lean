@@ -19,8 +19,9 @@ version here drops it (`RecDeploy.ksBoundRoute_wholeBeforeLast`), with `ksBoundR
 bind as before (`RecDeploy.forksBind_nf_pick`): two forks agree on the run's messages before the fork, so on `pick` of
 them.
 
-The staging is read only at accepted runs (`StagedRuns`), not at every staging as `VStarB.VstarShowsB` asks, which no
-accepted run of the deployed compiled verifier meets; so `VStar.RunPairs` isn't needed either.
+The staging is read only at accepted runs (`StagedRuns`), not at every staging as `VStarB.VstarShowsB` asks, which with
+`HeldB` leaves the deployed compiled verifier no accepted run at a statement with a part; so `VStar.RunPairs` isn't
+needed either.
 
 `ReadersTrue` and `ReadersLogColl` stay premises: each is a fact about V*'s circuits (the SHA-512 evaluations the parts
 record are true ones, and they are `IVStar`'s calls), which no layout here pins.
