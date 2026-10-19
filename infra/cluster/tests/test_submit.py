@@ -225,3 +225,63 @@ def test_a_malformed_registry_names_its_file(tmp_path):
     (tmp_path / "p.toml").write_text('[kinds.b]\nphase = "cpu-s"\nmax_wall_min = 5\ndisk_gb = "lots"\n')
     with pytest.raises(ValueError, match="disk_gb"):
         kinds.load(tmp_path)
+
+
+def _room(n2=500.0, n1=500.0, pool_free=1, pool_gb=42.9, left=None):
+    """Each machine's `research room --json` as the kind's placement reads it (a number: the node's headroom)."""
+    out = {}
+    for name, head in (("vy-nebius-2", n2), ("vy-nebius-1", n1)):
+        out[name] = head if isinstance(head, str) else {"headroom_gb": head, "pools": {}, "deadline_in_s": None}
+    out["vy-nebius-cpu-1"] = {"headroom_gb": -400.0, "deadline_in_s": left,
+                              "pools": {"research": {"slots": 4, "free": pool_free, "mem_gb": pool_gb}}}
+    return out
+
+
+def test_agent_test_is_placed_on_the_first_of_its_nodes_with_room_beside_the_check_slots():
+    """`research run --on auto`'s kind lists node 2, node 1 and cpu-1's research pool: without the machines' rooms submit names
+    what to read; with them, the first with room takes it, a pool only through its slots, and with none the pool's line waits."""
+    c, reg = model.load(NEBIUS), kinds.load(KINDS)
+    assert reg["agent-test"].nodes == ("vy-nebius-2", "vy-nebius-1", "vy-nebius-cpu-1/research")
+
+    def put(room=None, **kw):
+        return submit.submit(c, reg, run_id="r1", now=T, kind="agent-test", project="verity", submitter="w", custody_s=900,
+                             preempt="requeue", room=room, **kw)
+
+    assert put() == {"read": ["vy-nebius-2", "vy-nebius-1", "vy-nebius-cpu-1"], "kind": "agent-test"}
+    out = put(_room())
+    assert out["node"] == "vy-nebius-2" and "500 GB free beside its check slots" in out["why"] and "nice" in out["wrap"]
+    out = put(_room(n2=10.0))
+    assert out["node"] == "vy-nebius-1" and "CPUWeight=idle" in out["wrap"] and "AllowedCPUs=96-127" in out["wrap"]
+    assert "not vy-nebius-2: 10 GB free beside its check slots, under the job's 17 GB" in out["why"]
+    out = put(_room(n2=10.0, n1="exit 255: ssh: connect refused"))
+    assert (out["machine"], out["pool"], out["wrap"], out["workload_wrap"]) == ("vy-nebius-cpu-1", "research", [], [])
+    assert out["job"]["node"] == "vy-nebius-cpu-1" and "1 of 4 slots free" in out["why"] and "connect refused" in out["why"]
+    out = put(_room(n2=10.0, n1=10.0, pool_free=0))
+    assert out["pool"] == "research" and out["why"].startswith("no target has room now, so vy-nebius-cpu-1/research, where it waits")
+    out = put(_room(n2=10.0, n1=10.0, pool_free=0), pools=False)
+    assert out["node"] == "vy-nebius-2" and "pool run needs a lane" in out["why"], "no lane: a node without room, as before"
+    out = put(_room(n2=10.0, n1=10.0), memory_gib=64)
+    assert out["node"] == "vy-nebius-2" and "its slots admit 42.9 GB, and the job takes 69 GB" in out["why"]
+    out = put(_room(n2=10.0, n1=10.0, left=600))
+    assert "pool" not in out and "vy-nebius-cpu-1 stops in 10 min, before the job's 75 min" in out["why"]
+    out = put(_room(n2=1.0, n1=1.0), node="vy-nebius-1")
+    assert out["node"] == "vy-nebius-1" and "read" not in out, "a pinned job goes where it is pinned, unread"
+    with pytest.raises(submit.Refused, match="vy-nebius-2: .*ends at.*vy-nebius-cpu-1/research: its room can't be read"):
+        submit.submit(c, reg, run_id="r1", now=1_792_420_000, kind="agent-test", project="verity", submitter="w",
+                      preempt="requeue", room={"vy-nebius-cpu-1": "not read"})
+
+
+def test_the_cli_places_a_kind_among_its_nodes_by_the_room_it_is_given(capsys):
+    base = ["submit", NEBIUS, "--run-id", "r1", "--now", str(T), "--project", "verity", "--submitter", "w", "--kind", "agent-test"]
+    assert cli.main(base) == 0 and json.loads(capsys.readouterr().out)["read"][0] == "vy-nebius-2"
+    assert cli.main([*base, "--room", json.dumps(_room(n2=0.0, n1=0.0))]) == 0
+    assert json.loads(capsys.readouterr().out)["pool"] == "research"
+    assert cli.main([*base, "--no-pools", "--room", json.dumps(_room(n2=0.0, n1=0.0))]) == 0
+    assert json.loads(capsys.readouterr().out)["node"] == "vy-nebius-2"
+    assert cli.main([*base, "--room", "{nope"]) == 3 and "refused" in json.loads(capsys.readouterr().out)
+
+
+def test_a_kinds_nodes_are_a_list_of_names(tmp_path):
+    (tmp_path / "o.toml").write_text('[kinds.a]\nphase = "cpu-s"\nmax_wall_min = 5\nnodes = "vy-nebius-1"\n')
+    with pytest.raises(ValueError, match="nodes must be a list"):
+        kinds.load(tmp_path)

@@ -9,6 +9,7 @@ submitter ships (never a node-local copy), so a job's kind is resolved at the co
     restart = "idempotent"          # idempotent | requeue | never
     next = "some-kind"              # optional: the kind its declared outputs go to
     disk_gb = 20                    # optional: the disk it writes (DISK_GB when absent); the machine holds it near full
+    nodes = ["vy-nebius-2", "vy-nebius-cpu-1/research"]   # optional: where it may run unpinned, in order (submit.TARGETS)
 
 A registered kind supplies a job's defaults: its shape's GPUs, CPUs and memory, its `max_wall_min`, its question. The rules
 on kinds are warnings for now, never refusals (infra's hold, 30 Sep): an unregistered kind, a job with no question, a shape
@@ -48,6 +49,7 @@ class Kind:
     restart: str = "requeue"
     next: str | None = None
     disk_gb: float | None = None
+    nodes: tuple[str, ...] = ()
     source: dict[str, str] = field(default_factory=dict, compare=False)
 
     @property
@@ -75,12 +77,14 @@ def load(directory: Path) -> dict[str, Kind]:
                 raise ValueError(f"{where}: max_wall_min must be a positive integer")
             if "disk_gb" in d and (not isinstance(d["disk_gb"], (int, float)) or d["disk_gb"] < 0):
                 raise ValueError(f"{where}: disk_gb must be a number of GB, 0 or more")
+            if not isinstance(d.get("nodes", []), list) or not all(isinstance(n, str) and n for n in d.get("nodes", [])):
+                raise ValueError(f"{where}: nodes must be a list of node names (NODE, or MACHINE/POOL for a check-slot pool)")
             if d.get("restart", "requeue") not in RESTART:
                 raise ValueError(f"{where}: restart must be one of {', '.join(RESTART)}")
             out[name] = Kind(name=name, owner=path.stem, phase=d["phase"], max_wall_min=d["max_wall_min"],
                              question=str(d.get("question", "")), inputs=tuple(d.get("inputs", ())),
                              outputs=tuple(d.get("outputs", ())), restart=d.get("restart", "requeue"), next=d.get("next"),
-                             disk_gb=d.get("disk_gb"), source=source)
+                             disk_gb=d.get("disk_gb"), nodes=tuple(d.get("nodes", ())), source=source)
     for k in out.values():
         if k.next is not None and k.next not in out:
             raise ValueError(f"kinds/{k.owner}.toml: kind {k.name}: next names {k.next!r}, which isn't registered")

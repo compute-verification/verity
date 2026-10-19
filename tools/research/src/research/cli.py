@@ -7,7 +7,8 @@
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
-                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given)
+                                                 # from this checkout as kind agent-test (4 CPUs, 16 GB, 60 min unless given) onto the first
+                                                 # of node 2, node 1 and cpu-1's research pool with room beside its check slots
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -77,6 +78,7 @@
                                                  # with no commit, change or live process for --hours is QUIET (exit 1)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
+  research room [--ramlock DIR] [--json]          # machine side: memory free beside its idle check slots, its pools' free slots (research.room)
   research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
                                                  # messages between agents, on Slack (research/slack.py; skill using-slack)
   research digest --as LANE [--roster FILE] [--watch N TODO | --unwatch N | --thread NAME TS [--channel KEY] | --show]
@@ -185,7 +187,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
-                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise")
+                         "queued from this checkout onto whichever of node 2, node 1 and cpu-1's research pool has room beside its check "
+                         "slots, 4 CPUs, 16 GB and 60 min unless the run says otherwise")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -948,15 +951,16 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 
 
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
-#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: nice 19 inside its check slots, so never a slot a
-#: train waits for) as kind AUTO_KIND (infra/cluster/kinds/infra.toml). Not node 1, whose CPUs trains and lanes' direct runs already
-#: oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and proofs' Lean slots have reserved (03:01Z).
+#: queued as kind AUTO_KIND (infra/cluster/kinds/infra.toml), which the queue places on the first of its `nodes` with room beside
+#: the check slots (node 2's Verity share, node 1's CPUs outside its pools, a slot of cpu-1's research pool; `research room`); a
+#: run of another --kind is queued onto AUTO_NODE, vy-nebius-2's Verity share, inside its check slots.
 AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
-    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
-    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), and the workload runs in the shipped tree
+    """`--on auto` is `--queue --kind AUTO_KIND --cwd source` from this checkout (its --source) as project AUTO_PROJECT, placed among
+    the kind's nodes (another --kind: pinned to AUTO_NODE): the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min),
+    and the workload runs in the shipped tree
     unless --cwd says otherwise (its environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in
     place; a reason when it can't."""
     if ns.queue or ns.pool:
@@ -966,13 +970,15 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         if top.returncode != 0:
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
-    ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
+    if ns.queue_kind == "adhoc":
+        ns.queue_kind = AUTO_KIND
+    ns.queue, ns.preemptible = True, True                        # a guest on node 2 is preemptible; a test reruns from the start
+    ns.on = None if ns.queue_kind == AUTO_KIND else AUTO_NODE
     ns.project = ns.project or AUTO_PROJECT
     if remote.flag_value(harness_opts, "--cwd") is None:
         harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
-    if ns.queue_kind == "adhoc":
-        ns.queue_kind = AUTO_KIND
-    print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
+    print(f"research run --on auto: queued as {ns.queue_kind}" + (f" onto {ns.on}" if ns.on else ", among its kind's nodes")
+          + f", from {ns.source}", file=sys.stderr)
     return None
 
 
@@ -996,7 +1002,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             "max-s": int(given_max) if given_max else None, "custody-s": RUN_MARGIN_S,
             "disk-gb": ns.disk_gb,
             "preempt": "requeue" if ns.preemptible else "never", "quiet": ns.quiet, "node": ns.on, "gpu-ids": ns.gpu_ids,
-            "gpu-host": ns.gpu_host}
+            "gpu-host": ns.gpu_host, "no-pools": not ns.lane}
     try:
         placed = remote.queue_placement(Path(ns.source).expanduser(), run_id, spec)
     except remote.Refused as e:
@@ -1022,6 +1028,13 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         print(f"research run: {why}", file=sys.stderr)
         return 2
     harness_opts = ["--project", ns.project, *harness_opts]
+    if placed.get("pool"):               # a check-slot pool outside the queue: `--on MACHINE --pool POOL`, its slot line and mem= admit it
+        from .pods.nebius import slot_only  # noqa: PLC0415
+
+        ns.queue, ns.pool = False, placed["pool"]
+        print(f"research: run {run_id} runs in {placed['machine']}'s {ns.pool} pool, through slot.py (research run --pool)",
+              file=sys.stderr)
+        return _run_remote(ns, run_id, root / run_id, harness_opts, slot_only.in_pool(ns.pool, ns.lane, command))
     return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
 
 
@@ -1658,6 +1671,10 @@ def main(argv: list[str] | None = None) -> int:
         from .mem import main as mem_main
 
         return mem_main(rest)
+    if cmd == "room":
+        from .room import main as room_main
+
+        return room_main(rest)
     if cmd == "tele":
         from .telemetry.cli import main as tele_main
 
