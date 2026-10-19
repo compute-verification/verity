@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# CP-W's checkpoint routes on the sm_120 unit (cpw_routes.cu): each route's SASS on sm_120a, its timed loop's opcodes
-# counted (counts.json), then on the device: every route bit-exact against the host's reference, and its rate at 1, 2, 4
-# warps a SMSP and full occupancy. From a pushed commit:
+# CP-W's checkpoint routes on the sm_120 unit (cpw_routes.cu), and mode 8's fold with its XOR in memory: each route's
+# SASS on sm_120a, its timed loop's opcodes counted (counts.json), then on the device: every route bit-exact against the
+# host's reference, and its rate at 1, 2, 4 warps a SMSP and full occupancy. From a pushed commit:
 #
 #   research run --on vy-nebius-2 --project verity --campaign eps1 --source <tree> --cwd source --mem-gb 4 \
 #     --timeout 40m --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/theory/cpw_routes.sh
@@ -28,7 +28,7 @@ parts = re.split(r"\n\s*Function : (\S+)\n", "\n" + open(sys.argv[1]).read())
 ins_re = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)([^;]*);")
 out = {}
 for name, body in zip(parts[1::2], parts[2::2]):
-    m = re.search(r"cpwILi(\d+)E", name)
+    m = re.search(r"cpwm?ILi(\d+)E", name)
     if not m:
         continue
     ins = [(int(a, 16), op, rest) for a, op, rest in ins_re.findall(body)]
