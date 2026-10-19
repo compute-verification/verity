@@ -243,12 +243,16 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its facts of that package held 30–50 GiB between
-#: replays in r20261018-175656-1c85, so with replay threads bounded (`replay_threads`) about this fits
-SPEC_FLOOR_GIB = 64
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
+#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
+SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
            "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
+ON_NODE_SPEC = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
+                "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -301,9 +305,9 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
 
 
-#: about what one replay thread of a Mathlib or ArkLib package peaks at: the whole-Security `--build --update` of 18 Oct
-#: (r20261018-175656-1c85, 48 threads) peaked at 145 GiB in one replay, about 3 GiB a thread, and was OOM-killed at 64 and
-#: 96 GiB; a heavy replay runs alone (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
+#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
+#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
 REPLAY_GIB_PER_THREAD = 4
 _HEAVY_REPLAY = threading.Semaphore(1)
 
@@ -334,7 +338,8 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
     what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
             f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
     return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
-            f"GiB floor: run it on a node, `{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set "
+            f"GiB floor: run it on a node, `{(ON_NODE_SPEC if heavy and spec else ON_NODE).format(pkg=rel(pkgs[0]))}` "
+            f"(add --update for the record), or set "
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 

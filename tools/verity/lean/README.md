@@ -104,7 +104,8 @@ or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgr
 `/proc/self/cgroup` puts the process, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
 replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`): 48 threads
 of Security's replay peaked at 145 GiB. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (64 GiB), for that package's facts.
+is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads (it died
+at 128 GiB with 16), and the refusal names `--kind lean-audit`, a 280 GiB shape.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, so it is not part of
