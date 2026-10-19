@@ -74,7 +74,7 @@ theorem lastRG_accepts : ∀ (n : ℕ) (x : Paths Bool (n + 1)),
     (lastRG n).game.accepts x ↔ coinAt x (Fin.last n) = true
   | 0, x => by
     show (x.1 = true ∧ True) ↔ x.1 = true
-    exact and_true _
+    exact ⟨fun h => h.1, fun h => ⟨h, trivial⟩⟩
   | n + 1, x => by
     show (True ∧ (lastRG n).game.accepts x.2) ↔ coinAt x.2 (Fin.last n) = true
     rw [true_and]
