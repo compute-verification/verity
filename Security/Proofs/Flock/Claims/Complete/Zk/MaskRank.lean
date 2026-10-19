@@ -359,6 +359,7 @@ theorem maskWords_ge {st : Flock.Stmt} (h : Flock.Zk.shapeOk st = .ok ()) :
   | none => simp [hr] at h
   | some r =>
     simp only [hr] at h
+    have h := (FlockSoundness.Refine.ite_throw_ok.1 h).2
     refine ⟨st.nbl + (r.slotLog - 7), ?_, by rw [maskWordsOf_length st r hr, pow_add]⟩
     by_contra hlt
     have hle : 2 ^ (st.nbl + (r.slotLog - 7)) ≤ 2 ^ 9 := Nat.pow_le_pow_right (by norm_num) (by omega)
