@@ -76,6 +76,10 @@ variable (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings
 set_option hygiene false in
 local notation "𝔇" => deployRecMStop IV ivScope b VM iv T₀ NB ΩB pre wit PS SO
 
+set_option hygiene false in
+local notation "𝔓" => Claims.ZKMal.stopProgB (sR IV ivScope b) (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
+  fun j x u c => (SO' x j).prog (xsOf IV b x j u) c
+
 theorem nAt_deployRecMStop (x : Claims.Msg) (i : ℕ) : (𝔇).nAt x i = 1 := rfl
 
 /-- The record's commit strings to the zero digest are `deployRec`'s. -/
@@ -162,7 +166,7 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
         Claims.Recursion.simRounds (fun _ => .ret []) ((𝔇).V.k x - kPre IV x) τ
       else Claims.Recursion.simOuter SO' x ((𝔇).vstar x τ) cs (List.finRange ((𝔇).nS x)) τ)).1 =
       (List.finRange ((𝔇).nS x)).foldl
-        (fun τ' (j : Fin ((𝔇).nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ := by
+        (fun τ' (j : Fin ((𝔇).nS x)) => stepS H ask SO' x 𝔓 τ' j (cs j)) τ := by
   by_cases hg : Claims.Recursion.goesOn τ = true
   · obtain ⟨hl, hm⟩ := hτ hg
     have hh : (𝔇).halted H (kPre IV x) x τ =
@@ -174,7 +178,7 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
     by_cases hf : Claims.ZKMal.fired (sR IV ivScope b x) (kPre IV x) (Claims.ZKMal.histOf τ) = true
     · rw [if_pos hf, simRounds_interact H ask _ _ τ hm]
       have hfold : (List.finRange ((𝔇).nS x)).foldl
-          (fun τ' (j : Fin ((𝔇).nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ =
+          (fun τ' (j : Fin ((𝔇).nS x)) => stepS H ask SO' x 𝔓 τ' j (cs j)) τ =
           (List.finRange ((𝔇).nS x)).foldl (fun τ' (j : Fin ((𝔇).nS x)) => if Claims.Recursion.goesOn τ' then
             τ' ++ Claims.ZKMal.interact ask (fun _ => []) ((nums b.st x j).rounds + 1) (Claims.ZKMal.histOf τ')
             else τ') τ := by
@@ -219,7 +223,7 @@ theorem tail_eval (H : Claims.Msg → Claims.Msg) (SO' : Claims.Msg → ℕ → 
         exact ⟨rfl, r, rfl⟩
   · have hg0 : Claims.Recursion.goesOn τ = false := Bool.eq_false_iff.2 hg
     have hR : (List.finRange ((𝔇).nS x)).foldl
-        (fun τ' (j : Fin ((𝔇).nS x)) => stepS IV b H ask SO' (sR IV ivScope b) x τ' j (cs j)) τ = τ :=
+        (fun τ' (j : Fin ((𝔇).nS x)) => stepS H ask SO' x 𝔓 τ' j (cs j)) τ = τ :=
       Claims.ZKMal.foldl_stuck _ (fun τ' i h => by simp [stepS, h]) _ τ hg0
     rw [hR]
     split
@@ -243,7 +247,7 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
   have hpos : 0 < kPre IV x := by simp [kPre, kS]
   have hrhs := iterSimG_stopped_eval IV b H ask (T₀ x) NB ΩB
     (Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b) (kPre IV)) SO' (sR IV ivScope b) x
-    (nS x) (stopEquiv IV ivScope b VM iv T₀ NB ΩB pre wit PS SO I SO' H x (c₁, c₂, cs))
+    𝔓 (nS x) (stopEquiv IV ivScope b VM iv T₀ NB ΩB pre wit PS SO I SO' H x (c₁, c₂, cs))
   have hc : Claims.ZKMal.iterCoins (T₀ x) 0 NB ΩB
       (Layout.seq (T₀ x) 0 NB ΩB ((parts IV b ((T₀ x).N × (T₀ x).Ω)).stopped (sR IV ivScope b)))
       (Claims.ZKMal.censorSim (simPre (deployRec IV ivScope b) I) (sR IV ivScope b) (kPre IV))
@@ -280,7 +284,8 @@ theorem simStop_eval (H : Claims.Msg → Claims.Msg) (I : Claims.Recursion.Inner
       refine (innerRound_eval IV ivScope b VM iv T₀ NB ΩB pre wit PS SO H ask x (asRounds h)
         (c₁ ⟨(asRounds h).length, h₁⟩)).trans ?_
       unfold pmZ
-      exact (dif_pos (show (asRounds h).length < I.V.k (xIOf x) from h₁)).symm
+      rw [dif_pos (show (asRounds h).length < I.V.k (xIOf x) from h₁)]
+      try rfl
   case hg =>
     intro h hh
     try beta_reduce

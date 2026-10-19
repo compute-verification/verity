@@ -185,7 +185,7 @@ theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursi
     rw [dif_pos h₁]
     refine (zeroCommit_eval IV b ivScope H ask _).trans ?_
     unfold pmZ
-    exact (dif_pos (show (asRounds h).length < I.V.k (xIOf x) from h₁)).symm
+    rw [dif_pos (show (asRounds h).length < I.V.k (xIOf x) from h₁)]
   case hg =>
     intro h hh
     try beta_reduce
@@ -198,9 +198,10 @@ theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursi
     have hn : ¬ (asRounds h).length < I.V.k (xIOf x) := by
       rw [hl, hh]; try exact lt_irrefl _
     rw [dif_pos h0, hs]
-    simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval, zeroCommits_eval, stage_eval, List.map_map]
+    simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval, zeroCommits_eval, stage_eval]
     unfold pmZ
-    rw [dif_neg hn] <;> rfl
+    rw [dif_neg hn, List.map_map]
+    rfl
 
 /-! ## The composed simulator with the stop -/
 
@@ -260,28 +261,30 @@ theorem zkAtStop (H : Claims.Msg → Claims.Msg) {NB ΩB : Type} [Fintype NB] [N
     parts_start] at h
   exact h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun _ _ _ => rfl
 
-/-- One session's step of `simMStop`: while the run goes on, under the transcript so far, the session's outer
-simulator at the V\* statement the history so far stages where the stop hasn't fired, else the silent one. -/
+/-- One session's step of a nested simulator: while the run goes on, under the transcript so far, the session's
+program `pB` at the history so far. -/
 noncomputable def stepS (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
-    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
-    (x : Claims.Msg) (τ : List (Claims.Msg × Claims.Out)) (j : ℕ) (c : (SO x j).C) : List (Claims.Msg × Claims.Out) :=
-  if Claims.Recursion.goesOn τ then τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst)
-    (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
-      (fun j x u c => (SO x j).prog (xsOf IV b x j u) c) j x (Claims.ZKMal.histOf τ) c))).1 else τ
+    (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg)
+    (pB : (j : ℕ) → (x : Claims.Msg) → List (Claims.Msg × Claims.Msg) → (SO x j).C →
+      Claims.SP (List (Claims.Msg × Claims.Out)))
+    (τ : List (Claims.Msg × Claims.Out)) (j : ℕ) (c : (SO x j).C) : List (Claims.Msg × Claims.Out) :=
+  if Claims.Recursion.goesOn τ then
+    τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst) (pB j x (Claims.ZKMal.histOf τ) c))).1
+  else τ
 
-/-- **`simMStop`'s nested simulator's transcript**: the first part's, then one `stepS` per session, on the coins
-`iterCoins` reads off the nested ones. -/
+/-- **The stopped parts' nested simulator's transcript**: the first part's, then one `stepS` per session, on the
+coins `iterCoins` reads off the nested ones, for any sessions' programs `pB` (`simMStop`'s are `stopProgB`'s). -/
 theorem iterSimG_stopped_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (T₀ : SeqTape)
     (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (S₀ : Claims.Simulator)
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (s : Claims.Msg → List (Claims.Msg × Claims.Msg) → Bool)
-    (x : Claims.Msg) :
+    (x : Claims.Msg)
+    (pB : (n : ℕ) → (x : Claims.Msg) → (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s) n).U x →
+      (SO x n).C → Claims.SP (List (Claims.Msg × Claims.Out))) :
     ∀ (m : ℕ) (c : (iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
-        (fun j x => (SO x j).C) (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
-          fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) m).C x),
+        (fun j x => (SO x j).C) pB (fun _ _ => Claims.Recursion.goesOn) m).C x),
       (Claims.SP.eval H ask ((iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB ((parts IV b (T₀.N × T₀.Ω)).stopped s)) S₀
-        (fun j x => (SO x j).C) (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
-          fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (fun _ _ => Claims.Recursion.goesOn) m).prog x c)).1 =
-      (List.finRange m).foldl (fun τ (j : Fin m) => stepS IV b H ask SO s x τ j
+        (fun j x => (SO x j).C) pB (fun _ _ => Claims.Recursion.goesOn) m).prog x c)).1 =
+      (List.finRange m).foldl (fun τ (j : Fin m) => stepS H ask SO x pB τ j
           ((Claims.ZKMal.iterCoins T₀ 0 NB ΩB _ S₀ _ _ _ x m c).2 j))
         (Claims.SP.eval H ask (S₀.prog x (Claims.ZKMal.iterCoins T₀ 0 NB ΩB _ S₀ _ _ _ x m c).1)).1
   | 0, c => by simp only [List.finRange_zero, List.foldl_nil]; rfl
@@ -289,7 +292,7 @@ theorem iterSimG_stopped_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims
       rw [Claims.ZKMal.iterCoins_succ, List.finRange_succ_last, List.foldl_append, List.foldl_map]
       simp only [Fin.snoc_castSucc, Fin.snoc_last, List.foldl_cons, List.foldl_nil]
       dsimp only [Fin.val_castSucc, Fin.val_last]
-      rw [← iterSimG_stopped_eval H ask T₀ NB ΩB S₀ SO s x m a]
+      rw [← iterSimG_stopped_eval H ask T₀ NB ΩB S₀ SO s x pB m a]
       simp only [iterSimG, Claims.ZKMal.Seq.simG, Claims.ZKMal.spBind_eval]
       unfold stepS
       split
