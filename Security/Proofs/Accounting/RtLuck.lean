@@ -14,6 +14,8 @@ in mode `s`, check `same`), and `luckAt_tile_iff` unfolds `RoundGame.LuckAt` on 
 * `selectiveOracle` (RT-LUCK-3): over the salt and a two-point oracle, a cheater that queried the oracle at a guessed
   salt and is in mode whole only when the salt is its guess. The round's coin has point mass `½` at every value, and
   the cheater's luck in mode whole is `1`, so no relative luck below `1` holds.
+* `guessedSeed` (RT-LUCK-7): a function of a seed answer keeps its value at a guessed answer on at least `1/|B|` of the
+  answers, so no per-query whole-skip bound below the answer's size holds.
 * `adaptiveOrder` (RT-LUCK-4): with the order read from the coins, each tile's commitment reads nothing or only an
   earlier tile on each branch, and tile 1's commitment is its own coin.
 -/
@@ -111,6 +113,19 @@ theorem selectiveOracle :
     norm_num
   · rw [luckAt_tile_iff, hS, hW] at h
     linarith
+
+/-- **A guessed seed answer caps whole-skip entropy at the answer's size.** In the seeded model a tile's honest
+checkpoints are a function `f` of its seed query's answer: its products are a function of the committed operands, and
+its noise and receipt keys are oracle answers at inputs the seed names, which the cheater may read. A cheater that
+commits `f b0` for a guessed answer `b0`, reading no answer of the query, keeps them on a share at least `1/|B|` of the
+answers. So no per-query bound `e^{-h}` below `1/|B|` holds: `h ≤ ln |B|`, which is `1024·ln 2` for a unit's
+`seed_j` and `σ_R`. -/
+theorem guessedSeed {B Y : Type} [Fintype B] [DecidableEq Y] (f : B → Y) (b0 : B) :
+    1 / (Fintype.card B : ℝ) ≤ prob (fun b => f b = f b0) := by
+  rw [prob_eq_card]
+  have h1 : 1 ≤ (Finset.univ.filter fun b => f b = f b0).card := Finset.card_pos.2 ⟨b0, by simp⟩
+  gcongr
+  exact_mod_cast h1
 
 /-- Tile 1's commitment: `false` when its coin `c.1` is `false` (order 1, 2: it reads nothing), and `true` otherwise
 (order 2, 1: it may read tile 2's coin, and reads none). -/
