@@ -134,6 +134,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         zrows = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8)
         z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, f"z/{s}/{w}", i, bytes(zrows[i]))[0] for i in range(t)])[-1][0]
     doc["a_roots_bad"] = [w for w in range(L) if a_cpu[w] != g["a_roots"][w]]
+    doc["a_bad_diag"] = DO.a_bad_diag(g, doc["a_roots_bad"])
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
     doc["z_roots_bad"] = [w for w in range(L) if z_cpu[w] != g["z_roots"][w]]
     f_step = {"window": W, "step": s, "linears": L}

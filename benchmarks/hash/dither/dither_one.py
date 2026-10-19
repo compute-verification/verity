@@ -582,6 +582,22 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 
 
+def a_bad_diag(g: dict, bad: list[int]) -> list[dict]:
+    """For each call whose A root is off commit.py's, what of its saved slot rows and scales the A kernel left unwritten
+    or wrote wrong: live rows still all 0xA5, live scales still 0xA5 or not positive, dead rows not zero."""
+    m, out = g["m"], []
+    for w in bad:
+        q, sc = g["a"][w], g["sa"][w].reshape(-1).contiguous()
+        rows_p = (q.view(torch.uint8) == DF.POISON).all(dim=1)
+        sc_p = (sc.view(torch.uint8).view(-1, sc.element_size()) == DF.POISON).all(dim=1)
+        out.append({"call": w, "live_rows_poison": rows_p[:m].nonzero().flatten().tolist()[:8],
+                    "live_scales_poison": sc_p[:m].nonzero().flatten().tolist()[:8],
+                    "live_scales_not_positive": (sc[:m].float() <= 0).nonzero().flatten().tolist()[:8],
+                    "dead_rows_nonzero": (q[m:] != 0).any(dim=1).nonzero().flatten().add(m).tolist()[:8],
+                    "dead_scales_nonzero": (sc[m:] != 0).nonzero().flatten().add(m).tolist()[:8]})
+    return out
+
+
 def h1v3_itself(units: list[dict]) -> dict:
     """`h1v3_ref.py` under the H1V3 tree sbench.sh extracted (DITHER_H1V3_TREE): z and receipt of each unit by CA's own
     `h1tile.reference(stream=True)`; {"tree": None} when there is none."""
@@ -647,6 +663,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
         zrows = g["z"][w].cpu().numpy().astype("<i4").view(np.uint8)
         z_cpu[w] = CM.levels(zd, [CM.leaf(zd, key, f"z/{s}/{w}", i, bytes(zrows[i]))[0] for i in range(t)])[-1][0]
     doc["a_roots_bad"] = [w for w in range(L) if a_cpu[w] != g["a_roots"][w]]
+    doc["a_bad_diag"] = a_bad_diag(g, doc["a_roots_bad"])
     doc["admit_roots_bad"] = [w for w in range(L) if s_cpu[w] != g["admit_roots"][w]]
     doc["z_roots_bad"] = [w for w in range(L) if z_cpu[w] != g["z_roots"][w]]
     f_step = {"window": W, "step": s, "linears": L}
