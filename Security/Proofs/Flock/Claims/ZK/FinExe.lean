@@ -1120,6 +1120,62 @@ theorem innerCommitP_ch {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommi
   rw [h] at e
   exact Except.ok.inj e
 
+/-! ### `τ`'s salt is a constant of each rep -/
+
+theorem map_ite' {m : Type → Type} [Functor m] {α β : Type} (f : α → β) (c : Prop) [Decidable c] (a b : m α) :
+    f <$> (if c then a else b) = if c then f <$> a else f <$> b := by
+  split <;> rfl
+
+section TauSalt
+
+variable {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT _root_.Flock.V M]
+
+theorem innerP_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (lay : _root_.Flock.Zk.PadLayout) (p : PadsZk)
+    (ic : InnerCommit) (finalC : _root_.Flock.F128) (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    (fun z => z.tauSalt) <$> innerP io hs lay p ic finalC cons =
+      (fun _ => p.tauSalt) <$> innerP io hs lay p ic finalC cons := by
+  unfold innerP
+  simp only [map_bind, map_pure, map_ite']
+
+/-- **The session's rep proves under the pads' `τ` salt**, whatever it returns. -/
+theorem repPZk_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : _) (t : Array _root_.Flock.F128) (cm0 : Commit)
+    (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit) (extra lanePad : ℕ → ℕ → _root_.Flock.F128)
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    (fun z => z.inner.tauSalt) <$> repPZk io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce
+        prior words =
+      (fun _ => pads.tauSalt) <$> repPZk io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce
+        prior words := by
+  unfold repPZk
+  simp only [map_bind, bind_pure_comp, Functor.map_map, innerP_map_tauSalt]
+
+theorem innerCut_map_tauSalt (io : Asks M) (lay : _root_.Flock.Zk.PadLayout) (ic : InnerCommit)
+    (finalC : _root_.Flock.F128) (src : RepSrc) (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    (fun z => z.tauSalt) <$> innerCut io lay ic finalC src cons =
+      (fun _ => src.tauSalt) <$> innerCut io lay ic finalC src cons := by
+  unfold innerCut
+  simp only [map_bind, map_pure, map_ite']
+
+/-- **The cut's rep proves under its source's `τ` salt**, whatever it returns. -/
+theorem repCut_map_tauSalt (io : Asks M) (hs : _root_.Flock.Hashes M) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm : Commit) (extras : Array _root_.Flock.Claim)
+    (ic : InnerCommit) (src : RepSrc) (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    (fun z => z.inner.tauSalt) <$> repCut io hs st sch rep dom cm extras ic src prior words =
+      (fun _ => src.tauSalt) <$> repCut io hs st sch rep dom cm extras ic src prior words := by
+  unfold repCut
+  simp only [map_bind, bind_pure_comp, Functor.map_map, innerCut_map_tauSalt]
+
+end TauSalt
+
+/-- A rep run that returns proves under the salt its every run proves under. -/
+theorem tauSalt_of_map {m : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.ZkProof} {b : ByteArray}
+    (hm : (fun z => z.inner.tauSalt) <$> m = (fun _ => b) <$> m) {s : _root_.Flock.Transcript} {l l' : Array Msg}
+    {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript} (h : (m.run s).go l = (.ok (p, t), l')) :
+    p.inner.tauSalt = b := by
+  have e := congrArg (fun z => (z.run s).go l) hm
+  simp only [StateT.run_map, FlockComplete.go_map', h, Except.map, Prod.mk.injEq, Except.ok.injEq] at e
+  exact e.1.1
+
 end FinRep
 
 /-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`): at opened coins
@@ -1250,11 +1306,59 @@ theorem repFin_of (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hFin : RepFinal)
     fun p q t l' hp hq hz => hFin x w τ c spec i hi r cm0 extras ic l
       ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, hic, he, hl⟩ p q t l' hp hq hz
 
+/-- **The views' `τ` salt is the honest pads'**: table `i`'s rep `r` source from the views reads `y_τ`'s bytes from the
+tape's cell `i`, which `padsOf` fits to `TAU_SALT_BYTES`. -/
+theorem srcV_tauSalt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
+    (hi : i < jOf x) (hr : r < 2) (lay : _root_.Flock.Zk.PadLayout) :
+    ((srcV x c w τ i).rep r).tauSalt = (FlockComplete.padsOf (UE.tapeZk τ) i r lay).tauSalt := by
+  have hc : i < Claims.Flock.zkTableCap := lt_of_lt_of_le hi (jOf_le_cap x)
+  show ((tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).rep r).tauSalt = _
+  unfold tabSrcView
+  rw [dite_eq_left hi]
+  dsimp only
+  rw [dite_eq_left hr]
+  show ZkView.saltBytes ((τ ⟨i, hc⟩).2.1.2.2 ⟨r, hr⟩) =
+    FlockComplete.fitBytes 192 (fAt ByteArray.empty (fun r => ZkView.saltBytes ((cellAt τ i).2.1.2.2 r)) r)
+  rw [cellAt_lt τ hc, fAt_lt _ _ hr, fitBytes_of_size (saltBytes_size _)]
+
+/-- **Two rep proofs agree on their final-only data that the run decides**: level 0's opened rows and salts, `τ`, and
+the pads' opened columns and salts (`FinalEq` but `τ`'s salt, which each rep fixes in advance). -/
+def FinalOpen (p q : _root_.Flock.Zk.ZkProof) : Prop :=
+  p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
+    p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts ∧
+    p.inner.tau = q.inner.tau ∧ p.inner.opened = q.inner.opened ∧ p.inner.salts = q.inner.salts
+
+/-- **`RepFinal` but `τ`'s salt**: in a rep's context, where the rep read from the views and the session's rep both
+return, at one transcript and history and with proofs equal up to `eraseZ`, level 0's opened rows and salts, `τ`, and
+the pads' opened columns and salts agree. -/
+def RepOpenFinal : Prop :=
+  ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
+    ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
+      (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
+      FlockComplete.eraseZ p = FlockComplete.eraseZ q → FinalOpen p q
+
+/-- **`RepFinal` from the run-decided fields**: `τ`'s salt is the views' in the rep from the views
+(`FinRep.repCut_map_tauSalt`) and the pads' in the session's (`FinRep.repPZk_map_tauSalt`), and those are equal
+(`srcV_tauSalt`). -/
+theorem repFinal_of (h : RepOpenFinal) : RepFinal := by
+  intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
+  obtain ⟨h1, h2, h3, h4, h5⟩ := h x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq hz
+  refine ⟨h1, h2, h3, ?_, h4, h5⟩
+  rw [FinRep.tauSalt_of_map (FinRep.repCut_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _) hp,
+    FinRep.tauSalt_of_map (FinRep.repPZk_map_tauSalt _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) hq]
+  exact srcV_tauSalt x c w τ hi hC.2.2.2.2.1 _
+
 /-- **`FinExe` from the hybrids, the live end and the per-rep facts**: `finExe_of_reps` with `RepFin` from `SimPiop`,
 `SimLig`, `SimInner` and the final-only data (`repFin_of`). -/
 theorem finExe_of_parts (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
     (hFin : RepFinal) (hE : RepExact) (hP : RepPoints) : FinExe :=
   finExe_of_reps hL hSC (repFin_of h0 h1 h2 hFin) hE hP
+
+/-- **`FinExe` from the hybrids, the live end, the per-rep facts and the run-decided final-only data**
+(`finExe_of_parts` with `RepFinal` from `RepOpenFinal`, `repFinal_of`). -/
+theorem finExe_of_open (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner)
+    (hO : RepOpenFinal) (hE : RepExact) (hP : RepPoints) : FinExe :=
+  finExe_of_parts hL hSC h0 h1 h2 (repFinal_of hO) hE hP
 
 end Masked
 
