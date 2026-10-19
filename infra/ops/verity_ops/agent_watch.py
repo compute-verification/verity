@@ -4,8 +4,9 @@
 
 An agent hears Slack, Linear and timer events only between runs, and a run can hang after a tool call returns: proofs from
 05:29 to 15:33Z and circuits from 09:49Z on 18 Oct, three coordinators at once about 15:26Z on 15 Oct. Until now only Daniel
-pressing Stop freed one. Every `POLL_S` the watch lists the team's agents (`GET /v1/agents`; ACTIVE ones, and IDLE ones changed
-in the last `IDLE_RECENT_S`, since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
+pressing Stop freed one. Every `POLL_S` the watch lists the agents (`GET /v1/agents`, which shows every agent on the account:
+it keeps those whose `repos` name compute-verification/verity; ACTIVE ones, and IDLE ones changed in the last `IDLE_RECENT_S`,
+since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
 page by page back to the newest that started: its `latestRunId` is often a run cancelled on arrival, created and cancelled
 within half a second while the run doing the work is older (memory-accounting, 19:32Z 18 Oct; 52 such runs in 50 min by 20:40Z). It follows the event stream (`GET .../runs/{run}/stream`,
 server-sent events) of the agent's newest run that is RUNNING or WAITING_FOR_BACKGROUND_WORK, until that run ends or another
@@ -246,6 +247,14 @@ def doorbells(path: Path, t: float) -> tuple[dict[str, float], str]:
         except (KeyError, TypeError, ValueError):
             continue
     return out, "fresh"
+
+
+VERITY_REPO = re.compile(r"github\.com[/:]compute-verification/verity(?:\.git)?/?$")
+
+
+def verity(a: dict) -> bool:
+    """Whether an agent's `repos` (`[{"url": "https://github.com/compute-verification/verity"}]`) name Verity's repository."""
+    return any(VERITY_REPO.search(str(r.get("url") if isinstance(r, dict) else r)) for r in a.get("repos") or [])
 
 
 def started(x: dict) -> bool:
@@ -664,6 +673,10 @@ class Watch:
             except (urllib.error.URLError, OSError, ValueError) as e:
                 print(f"{iso(t)} worker {agent}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
                 continue
+            if info.get("repos") and not verity(info):         # not Verity's: never acted on (a worker's GET may carry none)
+                w["gone"] = True
+                print(f"{iso(t)} worker {agent}: not a Verity agent; not read again", file=sys.stderr, flush=True)
+                continue
             status, updated, prev = str(info.get("status") or "unknown"), epoch(info.get("updatedAt")) or t, w.get("status")
             w.update(status=status, updated=updated, name=str(info.get("name") or w.get("name") or ""))
             self.worker_status[agent] = status
@@ -691,6 +704,9 @@ class Watch:
         start refused continue runs, then judge every followed run."""
         t = self.clock()
         live, agents = {}, list(self.api.agents())
+        # the key sees every agent on the account (Daniel's own too: 'Open calendar for Calendly', restarted 02:21Z 19 Oct);
+        # only Verity's are followed, restarted or woken, and only they are status rows
+        listed, agents = {a["id"] for a in agents}, [a for a in agents if verity(a)]
         for a in agents:
             recent = t - (epoch(a.get("updatedAt")) or 0) < IDLE_RECENT_S
             if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
@@ -746,7 +762,7 @@ class Watch:
             last = max((x for x in (epoch(info.get("updatedAt") or info.get("createdAt")), heard) if x is not None), default=None)
             if why := self.ready(info.get("status"), last, bells.get(handle), t, every.get(handle)):
                 self.wake_up(a, handle, run, why, t)
-        self.watch_workers(coords, {a["id"] for a in agents}, t)
+        self.watch_workers(coords, listed, t)
         for run, (a, x) in current.items():
             with self.lock:
                 r = self.runs.get(run)
