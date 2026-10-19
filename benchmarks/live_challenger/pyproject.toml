@@ -9,4 +9,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/sampled_proofs/one_stage", "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/commitments", "verity/ml/crypto"]
+          "verity/ml/commitments", "verity/ml/crypto",
+          # serve.py's coins are one_stage.verifier's, which imports two_stage, which reads verity.ml.randomness
+          "verity/core/protocols/sampled_proofs/two_stage.py", "verity/ml/randomness/__init__.py"]
