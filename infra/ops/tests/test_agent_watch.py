@@ -19,11 +19,12 @@ class Clock:
 class FakeApi:
     """`older[agent]` lists an agent's runs before its latest, newest first; `GET .../runs` lists the latest, then those.
     A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API. `workers` (Task subagents) aren't
-    listed but are read by id (`GET /v1/agents/{id}`; 404 for any other id); `gets` counts each read."""
+    listed but are read by id (`GET /v1/agents/{id}`; 404 for any other id); `gets` counts each read. `convs[agent]` is its
+    conversation as `GET /v0/agents/{id}/conversation` gives it (user and assistant text only; 404 when absent)."""
 
-    def __init__(self, agents, runs, older=None, workers=None):
+    def __init__(self, agents, runs, older=None, workers=None, convs=None):
         self._agents, self._runs, self.older, self.posts = agents, runs, older or {}, []
-        self.workers, self.gets = workers if workers is not None else {}, []
+        self.workers, self.gets, self.convs = workers if workers is not None else {}, [], convs if convs is not None else {}
 
     def agents(self):
         """Each agent as the list gives it, on Verity's repository unless it says otherwise (`repos`)."""
@@ -32,6 +33,11 @@ class FakeApi:
     def get(self, path, **params):
         parts = path.split("/")
         self.gets.append(path)
+        if parts[-1] == "conversation":
+            if parts[-2] not in self.convs:
+                raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
+            return {"id": parts[-2], "messages": [{"id": str(i), "type": k, "text": s}
+                                                  for i, (k, s) in enumerate(self.convs[parts[-2]])]}
         if len(parts) == 4:
             if parts[-1] not in self.workers:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
@@ -1231,9 +1237,12 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
         "agent_id": W1_, "run_id": "", "agent_status": "ACTIVE", "run_status": "unknown", "watch_state": "ok", "since": None,
         "restart_count": 0}
     api.workers[W1_] = worker("IDLE", "2026-10-18T20:06:00Z")
-    for _ in range(3):
+    for _ in range(W.BURST_QUIET_S // 60):
         clock.t += 60
         w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "held a sweep or so, for others of its parent's to join"
+    clock.t += 60
+    w.sweep(lambda r: None)
     (rec,) = records(tmp_path)
     assert {k: rec[k] for k in ("kind", "agent", "name", "run", "lane", "handle", "at")} == {
         "kind": "worker_idle", "agent": W1_, "name": "ZKS10", "run": "", "lane": "circuits", "handle": "circuits",
@@ -1246,6 +1255,8 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
     again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
                     notes=notes)
     api.workers[W1_] = worker("IDLE", "2026-10-18T20:30:00Z")
+    again.sweep(lambda r: None)
+    clock.t += W.BURST_QUIET_S
     again.sweep(lambda r: None)
     assert [r["at"] for r in records(tmp_path)] == ["2026-10-18T20:06:00Z", "2026-10-18T20:30:00Z"], \
         "the ACTIVE read before a restart of the watch counts (state.json)"
@@ -1839,7 +1850,7 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         if keyed:
             (d / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
         ended = run_end_for(d, roots, clock, w, W1_)
-        while clock.t < ended + W.RESUME_S:
+        while clock.t < ended + W.RESUME_S + W.BURST_QUIET_S:
             clock.t += 60
             w.sweep(lambda r: None)
         rec = records(d)[-1]
@@ -1911,3 +1922,98 @@ def test_a_coordinator_past_its_restarts_is_relaunched_from_its_handover_note_wi
         "relaunch", gen4, f"relaunched it from its handover note as {gen4} (generation 4)")
     written = "".join(p.read_text() for p in tmp_path.rglob("*") if p.is_file() and p.name != "launch.env")
     assert KEY not in written and KEY not in "".join(capsys.readouterr())
+
+
+# INF-126, 19 Oct: the 14 workers of proofs' generation 3 that stopped mid-step, each its last entry a tool call, a tool result
+# or thinking, with no assistant turn after, at seconds after the first (16:49:23Z), from their transcripts
+STOPS = [("REC1", 0), ("G2-1", 143), ("REC2", 423), ("G2-7", 632), ("ZKS10", 655), ("M18b", 655), ("G2-4", 670), ("INT7", 757),
+         ("KSF1", 767), ("FIX2595", 774), ("G2-3", 795), ("G2-2", 815), ("G2-6", 836), ("G2-8", 862)]
+KIDS = {name: f"bc-{i + 1:08x}-0000-0000-0000-{i + 1:012x}" for i, (name, _) in enumerate(STOPS)}
+
+
+def task_call(w, run, cid, agent, description, completed=False):
+    """A Task call as a followed run streams it: the worker's id in `args.agentId` (a launch or a resume), the result truncated."""
+    w.on_event(run, "tool_call", {"callId": cid, "name": "task", "status": "completed" if completed else "running",
+                                  "args": {"agentId": agent, "description": description, "resume": agent},
+                                  **({"truncated": {"result": True}} if completed else {})})
+
+
+def test_proofs_workers_that_stop_together_are_one_alert_to_their_parents_lane_naming_each_and_its_wake_up(tmp_path):
+    """INF-126: 14 of a coordinator's workers, known only from its Task calls (a handover note's body named them), stopped
+    over 14 min; the watch flagged none. Now they are watched as its workers, and their IDLE reads, a sweep every 5 min, make one
+    workers_failed to its handle naming all 14, with the wake-ups two said they set (the API's conversation has no tool calls,
+    only what an agent says). A worker of another coordinator that stops meanwhile is its own record, to its own handle."""
+    other = "bc-0000000f-0000-0000-0000-00000000000f"
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-co",
+                                             "updatedAt": W.iso(T0)},
+                                            {"id": NEW, "name": "verity: vllm", "status": "ACTIVE", "latestRunId": "run-v",
+                                             "updatedAt": W.iso(T0)}],
+                                 {"run-co": {"status": "RUNNING"}, "run-v": {"status": "RUNNING"}}, timers=None)
+    w.sweep(lambda r: None)
+    for i, (name, agent) in enumerate(KIDS.items()):
+        task_call(w, "run-co", f"t{i}", agent, f"{name}: continue", completed=i % 2 == 1)
+        api.workers[agent] = worker("ACTIVE", W.iso(T0), f"{name}: continue")
+    task_call(w, "run-v", "tv", other, "V1: serve")
+    api.workers[other] = worker("ACTIVE", W.iso(T0), "V1: serve")
+    api.convs[KIDS["INT7"]] = [("user_message", "Coordinator (proofs), 17:33Z. You went idle at about 17:05Z."),
+                               ("assistant_message", "Everything is pushed and synced. Setting my wake-up timer before ending "
+                                                     "the turn.")]
+    api.convs[KIDS["G2-1"]] = [("user_message", "Continue."),
+                               ("assistant_message", "It's still one job behind. I'll record the run in the note."),
+                               ("assistant_message", "The note is synced.\n\nA one-off wake-up fires in 15 minutes. Then I'll "
+                                                     "check the run.")]
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert {a: (w.workers[a]["parent"], w.workers[a]["handle"]) for a in [*KIDS.values(), other]} == {
+        **{a: (CO, "circuits") for a in KIDS.values()}, other: (NEW, "vllm")}, "each worker its parent's, from the Task call"
+    first = clock.t + 30
+    stops = {KIDS[name]: first + s for name, s in STOPS}
+    posted_at = None
+    while clock.t < first + 40 * 60 and posted_at is None:
+        clock.t += 5 * 60
+        for agent, at in stops.items():
+            if at <= clock.t:
+                api.workers[agent] = worker("IDLE", W.iso(at), api.workers[agent]["name"])
+        if clock.t >= first + 300:
+            api.workers[other] = worker("IDLE", W.iso(first + 300), "V1: serve")
+        w.sweep(lambda r: None)
+        if any(r["kind"] == "workers_failed" for r in records(tmp_path)):
+            posted_at = clock.t
+    assert posted_at is not None and posted_at - first <= W.BURST_S + 5 * 60, "rung within a sweep of the burst's end"
+    (burst,) = [r for r in records(tmp_path) if r["kind"] == "workers_failed"]
+    assert {k: burst[k] for k in ("agent", "name", "handle", "owner", "lane", "count", "role")} == {
+        "agent": CO, "name": "verity: circuits", "handle": "circuits", "owner": "circuits", "lane": "circuits", "count": 14,
+        "role": "workers"}
+    assert [m["name"] for m in burst["members"]] == [f"{name}: continue" for name, _ in STOPS]
+    assert {m["kind"] for m in burst["members"]} == {"worker_idle"} and burst["minutes"] == 14
+    wakes = {m["name"]: (m.get("wake"), m.get("wake_due")) for m in burst["members"] if m.get("wake")}
+    assert wakes == {"INT7: continue": ("Setting my wake-up timer before ending the turn.", None),
+                     "G2-1: continue": ("A one-off wake-up fires in 15 minutes.", W.iso(stops[KIDS["G2-1"]] + 15 * 60))}
+    rest = [r for r in records(tmp_path) if r["kind"] != "workers_failed"]
+    assert [(r["kind"], r["agent"], r["handle"]) for r in rest] == [("worker_idle", other, "vllm")], \
+        "no worker_idle of the 14 on its own; the other coordinator's worker alone, as itself"
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d")
+    assert again.bursts == {} and set(KIDS.values()) <= set(again.children), "nothing left held; the children kept"
+
+
+def test_a_burst_held_when_the_watch_restarts_is_still_posted_once(tmp_path):
+    """The watch restarts on every deploy: a burst held in state.json is posted by the next one, once."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-co",
+                                             "updatedAt": W.iso(T0)}], {"run-co": {"status": "RUNNING"}}, timers=None)
+    w.sweep(lambda r: None)
+    pair = [KIDS["G2-2"], KIDS["G2-6"]]
+    for i, agent in enumerate(pair):
+        task_call(w, "run-co", f"t{i}", agent, "G2: continue")
+        api.workers[agent] = worker("ACTIVE", W.iso(T0))
+    clock.t += 60
+    w.sweep(lambda r: None)
+    for agent in pair:
+        api.workers[agent] = worker("IDLE", W.iso(clock.t))
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and len(json.loads((tmp_path / "state.json").read_text())["bursts"][CO]["items"]) == 2
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d")
+    for _ in range(2):
+        clock.t += W.BURST_QUIET_S
+        again.sweep(lambda r: None)
+    assert [(r["kind"], r["count"]) for r in records(tmp_path)] == [("workers_failed", 2)]

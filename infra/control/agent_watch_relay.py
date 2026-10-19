@@ -10,8 +10,10 @@ the doorbell also counts toward the coordinator's own ready-to-wake rule). A sil
 and a `research run` that ended on a node lead with the record's handle and ring it the same way: a coordinator's own, a worker's
 launcher's, for a run whose sender is a lane, the lane's. A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
-worker. A handle renamed in the registry ("renamed from @OLD") is rung by its new name. The pod frees held runs whether or not
-this runs; it stops when infra's VM is suspended, and resumes from the offset it last posted.
+worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
+with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
+name. The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes from the offset it last
+posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
 notes' routes.d) and its latest doorbell in the last day (a reply in the inbox thread, `from NAME, thread ...`). The watch ignores
@@ -61,10 +63,11 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                   "{action}",
        "idle_after_run": "sat idle after its run {ended_run} ended ({result}), with nothing resuming it for {minutes} min; the "
                          "watch {action}",
-       "relaunch": "needs a fresh launch ({reason}); the watch {action}"}
+       "relaunch": "needs a fresh launch ({reason}); the watch {action}",
+       "workers_failed": "stopped within {minutes} min"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
-HANDLE = WORKER | {"silent", "run_ended"}       # rung to the record's handle
+HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
 #: a renamed handle's old name -> its new one, from the registry's "renamed from @OLD" (hash -> kernels, 18 Oct): lanes' notes
 #: and workers.d still carry the old name
@@ -90,6 +93,22 @@ def rung(rec: dict) -> str | None:
     return None
 
 
+def woke(rec: dict) -> str:
+    """The wake-up a worker says it set, as the watch read it from its conversation."""
+    if not rec.get("wake"):
+        return ""
+    due = f", due about {rec['wake_due'][11:16]}Z" if rec.get("wake_due") else ""
+    return f"it set its own wake-up (\u201c{rec['wake']}\u201d{due})"
+
+
+def member(rec: dict) -> str:
+    name = rec.get("name") or "(unnamed)"
+    what = (f"idle after its run {rec.get('ended_run')} ended" if rec.get("kind") == "idle_after_run" else
+            f"idle at {str(rec.get('at') or rec.get('since') or '?')[11:16]}Z")
+    wake = f"; {woke(rec)}" if rec.get("wake") else ""
+    return f"{name} (<https://cursor.com/agents/{rec.get('agent')}|{str(rec.get('agent'))[:11]}>) {what}{wake}"
+
+
 def text(rec: dict) -> str:
     link = f"<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>"
     line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
@@ -108,10 +127,21 @@ def text(rec: dict) -> str:
         if rec.get("role") == "coordinator":
             return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
         return f"{lead}*Agent watch:* {run} of lane {rec.get('handle')} {line}."
+    if rec.get("kind") == "workers_failed":
+        members = rec.get("members") or []
+        handle = rec.get("handle")
+        if rec.get("agent"):
+            who = " ".join(x for x in (f"@{handle}'s coordinator" if handle else "the coordinator", rec.get("name")) if x)
+            parent = f"{who} ({link})"
+        else:
+            parent = f"lane {rec.get('lane') or '?'}"
+        return (f"{lead}*Agent watch:* {len(members)} workers of {parent} {line}: "
+                + "; ".join(member(m) for m in members) + ". Resume each that didn't report back with Task.")
     if rec.get("kind") in WORKER or rec.get("role") == "worker":
         lane = f" of lane {rec['lane']}" if rec.get("lane") else ""
         new = f" New agent {rec['new_agent']}." if rec.get("new_agent") else ""
-        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}.{new}"
+        wake = f" Before it stopped, {woke(rec)}." if rec.get("wake") else ""
+        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}.{new}{wake}"
     handle = rec.get("handle") or HOLDERS.get(rec.get("agent"))
     who = f"@{handle}'s coordinator" if handle else (rec.get("name") or "an agent")
     return (f"{lead}*Agent watch:* {who} ({link}, run {rec.get('run')}) {line}."

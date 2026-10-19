@@ -230,3 +230,30 @@ def test_a_renamed_handle_is_rung_by_its_new_name(relay):
                                          "handle": "hash", "at": "2026-10-18T20:06:00Z"}) + "\n"
     relay.once()
     assert relay.posts[0].startswith(relay.slack.tag(relay.slack.entry(relay.REG, "kernels")))
+
+
+def test_workers_that_stopped_together_are_one_post_to_the_lane_naming_each_and_its_wake_up(relay):
+    """INF-126: 14 of proofs' workers stopped within 14 min. One post leads with @proofs and rings its inbox once, naming each
+    worker and the wake-ups two said they set; a lone worker's record carries its wake-up too."""
+    proofs, co = relay.slack.tag(relay.slack.entry(relay.REG, "proofs")), PROOFS_INBOX["holder"]
+    names = ["REC1", "G2-1", "REC2", "G2-7", "ZKS10", "M18b", "G2-4", "INT7", "KSF1", "FIX2595", "G2-3", "G2-2", "G2-6", "G2-8"]
+    members = [{"kind": "worker_idle", "agent": f"bc-{i + 1:08x}-0000-0000-0000-{i + 1:012x}", "name": n, "run": "",
+                "at": f"2026-10-19T{16 + (49 + i) // 60}:{(49 + i) % 60:02d}:00Z", "lane": "proofs", "handle": "proofs"}
+               for i, n in enumerate(names)]
+    members[7].update(wake="Setting my wake-up timer before ending the turn.")
+    members[1].update(wake="A one-off wake-up fires in 15 minutes.", wake_due="2026-10-19T17:05:46Z")
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "workers_failed", "agent": co, "name": "verity: proofs", "run": "", "role": "workers", "lane": "proofs",
+         "handle": "proofs", "owner": "proofs", "count": 14, "minutes": 14, "members": members},
+        {**members[1], "t": "2026-10-19T17:10:00Z"}]) + "\n"
+    relay.once()
+    burst, alone = relay.posts
+    assert burst.startswith(f"{proofs} *Agent watch:* 14 workers of @proofs's coordinator verity: proofs "
+                            f"(<https://cursor.com/agents/{co}|{co}>) stopped within 14 min: REC1 (")
+    assert all(f"{n} (<https://cursor.com/agents/" in burst for n in names) and burst.endswith("with Task.")
+    assert "INT7 (<https://cursor.com/agents/bc-00000008-0000-0000-0000-000000000008|bc-00000008>) idle at 16:56Z; it set its own " \
+           "wake-up (\u201cSetting my wake-up timer before ending the turn.\u201d)" in burst
+    assert "it set its own wake-up (\u201cA one-off wake-up fires in 15 minutes.\u201d, due about 17:05Z)" in burst
+    assert alone.endswith("Before it stopped, it set its own wake-up (\u201cA one-off wake-up fires in 15 minutes.\u201d, due "
+                          "about 17:05Z).")
+    assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 2, "the burst rings its lane once"
