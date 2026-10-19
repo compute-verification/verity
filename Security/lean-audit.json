@@ -741,7 +741,7 @@
     "Models.Nci.Assumptions",
     "Models.Nci.Guarantees"
    ],
-   "except": [],
+   "except": ["Models.Nci.Guarantees.FitRate"],
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   },
   "Models.Pouw.Assumptions": {
@@ -933,6 +933,18 @@
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Models.Hash.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the hash area's definitions, never over a proof"
+  },
+  "Models.Nci.Guarantees.FitRate": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "Models.Nci.Assumptions",
+    "Definitions.Accounting",
+    "Models.Nci.Guarantees.FitRate"
+   ],
+   "except": [],
+   "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
   }
  },
  "reads_exempt": {
@@ -5171,6 +5183,12 @@
    "assumptions": [],
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
+  "Nci.SecurityProofs.FitRate": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.FitRate.{u_1, u_2} : Nci.Guarantees.FitRate"],
+   "assumptions": [],
+   "type_hash": "4ad0e8c3c012b570f1e87d47bbda107dce81f9772c33432b68aabccbf103a0da"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -7701,7 +7719,8 @@
    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedPerProver": "unstated: OverlapFloorKOneSided restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKPerProver": "unstated: OverlapFloorK restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver": "unstated: StagedFloorKOneSided restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
-   "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "unstated: StagedFloorK restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)"
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "unstated: StagedFloorK restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Nci.SecurityProofs.FitRate": "frozen (no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (Security/Models/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7802,7 +7821,8 @@
     "Bandwidth.SecurityProofs.B3CapacityRO",
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
-    "Bandwidth.SecurityProofs.MbwCapacity"
+    "Bandwidth.SecurityProofs.MbwCapacity",
+    "Nci.SecurityProofs.FitRate"
    ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
@@ -8716,7 +8736,8 @@
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B4",
-    "Accounting.SecurityProofs.B4Covered"
+    "Accounting.SecurityProofs.B4Covered",
+    "Nci.SecurityProofs.FitRate"
    ]
   },
   "Definitions.Accounting.Pouw": {
@@ -10717,6 +10738,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -10768,6 +10790,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
@@ -10875,6 +10898,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
@@ -11078,6 +11102,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -11141,7 +11166,7 @@
     "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
     "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitRate"]
   },
   "Definitions.Nci.Info": {
    "digest": "8fb3a35e7925ba55540307fa339b42bb6815b9a48b751456a64f404a260a9898",
@@ -11229,6 +11254,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.LayeredTraining",
@@ -21604,7 +21630,7 @@
     "Nci.Assumptions.Fits": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864",
     "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitRate"]
   },
   "Models.Nci.Assumptions.Info": {
    "digest": "00bdbe965111c5d8b58cba8d227486e05eb84da8d908fcde9586ce5ff5e4b421",
@@ -21712,6 +21738,13 @@
     "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69"
    },
    "guarantees": ["Nci.SecurityProofs.FitBound"]
+  },
+  "Models.Nci.Guarantees.FitRate": {
+   "digest": "2cecfce7569747177d84fadf7d4b8a7d9d8a3dfb95c1235062fdf4b4671eb8d4",
+   "definitions": {
+    "Nci.Guarantees.FitRate": "d54914aa985b553290b88ee1006b760b1ec5a5049c58c21e87a0b2358f7bbf24"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitRate"]
   },
   "Models.Nci.Guarantees.Info": {
    "digest": "88194ec7e2fce7b6006af38386697feeaa1485ed6b2da82b548bbd01386e9f5a",
