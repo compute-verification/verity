@@ -467,7 +467,8 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
+from verity_vllm.check.commit_rules import (HIDDEN_CLASS_BY_FA, REQUIRED_CLASSES_DEFAULT, class_coverage, hidden_classes_required,  # noqa: E402
+                                            required_classes_default)
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
 
@@ -1364,7 +1365,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
             compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
             print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
-        if args.hidden_so and (required_classes_cli or hidden_family):     # MLA / DSA sparse MLA: no hidden class, no FA2 source
+        _hidden_required = hidden_classes_required(required_manifest)
+        if args.hidden_so and _hidden_required is False:
+            # a tap that never fires would fail the identity check and the required classes as an omitted producer
+            if not required_classes_cli:
+                required_classes = tuple(c for c in required_classes if c not in HIDDEN_CLASS_BY_FA.values())
+            print(f"[delta] hidden source NOT attached: the required-value manifest names no {' / '.join(HIDDEN_CLASS_BY_FA.values())} identity "
+                  f"(families {sorted((required_manifest.get('populations') or {}).get('by_family') or {})}); required classes "
+                  f"{list(required_classes)}", flush=True)
+        # MLA / DSA sparse MLA: no hidden class, no FA2 source
+        if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
             from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, make_hidden_source
             # R11 collector-meas: the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
             # R13 hopper: the source class follows the tap build (FA2 v7/v8 -> HiddenM1Source, FA3 v9 -> HiddenM1SourceFA3) and must agree with
@@ -1486,7 +1496,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
                         "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
                         "max_num_batched_tokens": eng.kwargs.get("max_num_batched_tokens"), "max_model_len": eng.kwargs.get("max_model_len")}
-            asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so))
+            asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so) and _hidden_required is not False)
             print(f"[delta] arena sizing (X-02, {kind}): decode block {asz['decode_block_bytes'] >> 20} MiB x{asz['blocks_preallocated']} + prefill block "
                   f"{asz['prefill_block_bytes'] >> 20} MiB "
                   f"(step bound {asz['step_bound_bytes'] >> 20} MiB: prefill {asz['prefill_tokens']} tok -> {asz['prefill_step_bytes'] >> 20} MiB "

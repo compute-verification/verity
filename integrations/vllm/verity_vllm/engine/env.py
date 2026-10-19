@@ -54,6 +54,12 @@ COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACH
 #: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
 #: ``ops/compiled_commit.sh``).
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
+#: ``MODE:PAGED_SO``: the int8 attention's credited read every engine of this process installs at its build (`engine.int8_credited_env`)
+INT8_CREDITED_READ = "VERITY_INT8_CREDITED_READ"
+
+
+def int8_credited_read() -> str | None:
+    return os.environ.get("VERITY_INT8_CREDITED_READ") or None
 
 
 def pin(pins: Mapping[str, str]) -> dict[str, str]:

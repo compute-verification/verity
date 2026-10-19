@@ -4,7 +4,7 @@
     verity-vllm fp8-checkpoint pin --base-role ROLE --role ROLE --repo ID [--hf-home DIR]
                                                                          make one and print its new manifest entry
 
-The integration serves one checkpoint quantization (``program.model.quant_refusal``): vLLM ``Fp8Config`` with
+The integration serves this FP8 checkpoint quantization and the exact-int8 one (``program.model.quant_refusal``): vLLM ``Fp8Config`` with
 ``quant_method: fp8``, ``fmt: e4m3``, ``activation_scheme: dynamic`` and ``weight_block_size: [128, 128]``.  A model whose
 authors publish no release in that format gets one from this recipe, pinned in ``manifests/checkpoints.json`` beside its BF16
 pin (``recipe``, ``fp8_of``).  The recipe is data-free: the weight scales come from the weights alone and the activations are

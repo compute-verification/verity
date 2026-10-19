@@ -86,10 +86,12 @@ def renamed(name: str, rules: dict[str, tuple]) -> str | None:
 
 
 def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revision: str | None) -> dict[str, Any] | None:
-    """The checkpoints.json entry of `ckpt_dir`: the one whose local_path is the dir, else the one of `model` at `revision`."""
+    """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
-    for c in json.load(open(manifest)).get("checkpoints", []):
+    from verity_vllm.config import checkpoint_entries
+
+    for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
         if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \
                 (model and c.get("repo") == model and (not revision or str(c.get("revision", "")).startswith(revision[:10]))):
@@ -109,7 +111,8 @@ def shard_pin(ckpt_dir: str, *, checkpoints_manifest: str | None, model: str | N
     pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None if entry is None else {"repo": entry.get("repo"), "revision": entry.get("revision")},
                            "shards": {}}
     for fn, sha in zip(shards, shas):
-        pinned = ((entry or {}).get("files") or {}).get(fn, {}).get("sha256") if entry else None
+        files = (entry or {}).get("files")
+        pinned = ((files.get(fn) or {}).get("sha256") if isinstance(files, dict) else None) or ((entry or {}).get("safetensors_sha256") or {}).get(fn)
         pin["shards"][fn] = {"sha256": sha, "pinned_sha256": pinned, "pinned": (sha == pinned) if pinned else None}
     return pin
 

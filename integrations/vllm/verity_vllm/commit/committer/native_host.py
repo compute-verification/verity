@@ -692,6 +692,15 @@ def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
 
+def _split_step_names(srcs: list[Any], names: Any, step: int, padding_only: bool) -> tuple[Any, dict[str, tuple[int, int]]]:
+    """The step's names with each call-boundary source's own split off in turn, and every source's mismatches."""
+    bad: dict[str, tuple[int, int]] = {}
+    for src in srcs:
+        names, mine = src.split_step_names(names, step, padding_only)
+        bad.update(mine)
+    return names, bad
+
+
 _MEMTRACE = bool(os.environ.get("VERITY_MEMTRACE"))
 
 
@@ -2046,13 +2055,13 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         padding_tensors_n = 0
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
-        cb_src = next((s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src), None)
+        cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
 
         # no padding, step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
-        step_free, verdicts = not padded_run and rt_src is None and cb_src is None and not (decls and man["fa2_hidden_per_layer"]), {}
+        step_free, verdicts = not padded_run and rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas_all = self._layouts[step]
             cols = metas_all.names if hasattr(metas_all, "scan") else None   # a cached plan's record (plan_cache): its names, no TensorMeta built
@@ -2131,7 +2140,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 moe_bad = {-1: sum(c for n, c in moe_src.items() if n.startswith("moe/"))}      # MoE tensors from no declared source
             n_ids = (1 if "runner.sampler/sampled_token_ids" in pad_ident else 0) if padding_only else names.get("runner.sampler/sampled_token_ids", 0)
             sampler_bad = bool(man["sampler_ids"]) and n_ids != man["sampler_ids"]
-            mod_names, cb_bad = cb_src.split_step_names(mod_names, step, padding_only) if cb_src is not None else (mod_names, {})
+            mod_names, cb_bad = _split_step_names(cb_srcs, mod_names, step, padding_only)
             split_bad = {k: bad for k, bad in (("call_boundaries", cb_bad), ("routes", rt_bad)) if bad}
             ref_names = mod_names if ref_names is None else ref_names
             if padding_only:                                              # (b): set equality of identity names with step 0, not multiplicity

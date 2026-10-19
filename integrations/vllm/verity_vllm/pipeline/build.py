@@ -56,9 +56,10 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/attention.py", "verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py", "verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/fp8.py", "verity_vllm/program/frontend/rules/vllm_bindings/fused_norm.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py", "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/observations.py", "verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
-                         "verity_vllm/program/frontend/rules/vllm_bindings/pins.py", "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/int8.py", "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py", "verity_vllm/program/frontend/rules/vllm_bindings/observations.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/operands.py", "verity_vllm/program/frontend/rules/vllm_bindings/pins.py",
+                         "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
@@ -416,7 +417,7 @@ class _Refused(Exception):
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0) -> None:
-    from verity_vllm.program.frontend.target_profile import ArtifactIdentity, profile_mismatches
+    from verity_vllm.program.frontend.target_profile import ArtifactIdentity, applied_kernels, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
@@ -424,14 +425,15 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         import torch
         from verity_vllm.program.frontend.derive import derive_report
         from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts,
-                                                            observe_target_profile, declared_derived_accounting, clear_observations,
-                                                            observe_allreduce_settings, observe_launch_context)
+                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
         res["target"]["host"] = host_facts()
         t0 = time.time()
         with apply_target_profile(target):  # ONE application of the declared target for config, instantiation, export and derive
+            from verity_vllm.engine.build import register_int8_parts
+            register_int8_parts(target)
             # [R13 hopper] `TargetProfile.engine_args()` = the attention knobs the target applies (`attention_backend`, `attention_config.flash_attn_version`)
             cfg = vm.make_vllm_config(model=model_id or vm.PIN["model"], revision=revision or vm.PIN["revision"], max_model_len=max_model_len,
                                       **target.engine_args(), **(engine_args or {}), tensor_parallel_size=tp)
@@ -479,7 +481,6 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied = read_back_applied()
             applied["attention_backend"] = res["target"]["consulted"].get("attention_backend_knob")
             # [R15 fp8] the kernels vLLM selected: the FP8 linears' (declared by `fp8_block_gemm`), the fused-MoE experts' (by `moe_backend`)
-            from verity_vllm.program.frontend.target_profile import applied_kernels
             applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)

@@ -68,10 +68,11 @@ class Const:
     """[R15 stoch] Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
-    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`)."""
+    read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `bits` a tuple of n values: an
+    `Array<n,Value<width>>` parameter, one instance per value in order (the int8 attention's K scales)."""
 
     width: int
-    bits: int
+    bits: int | tuple[int, ...]
     name: str = ""
 
 

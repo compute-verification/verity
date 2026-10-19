@@ -1,7 +1,8 @@
 """The taps a Commit attaches beside the record's sources: the norm scales (`norm_scale_source`), the router softmax
 (`router_softmax_source`) and a TP rank's vocabulary range (`vocab_range_source`).  On by default; the row passes each one's option only
 when its manifest names the tap's family (`pipeline.row_records.applicable_taps`), and NORM_TAP=0 etc. leave it off, for A/B only.  Whenever
-the manifest names them: the blockwise FP8 GEMM's scale products (`scale_products_source`; the single-rank Commit only).  One entry point
+the manifest names them: the blockwise FP8 GEMM's scale products (`scale_products_source`) and the exact-int8 quantizers' results
+(`int8_source`, which claims its call boundaries from the call-boundary source); the single-rank Commit only.  One entry point
 for the single-rank Commit (`pipeline.commit`: `attach`) and for the rank workers of a TP Commit: `pipeline.tp.commit` hands
 `for_ranks(...)` to `engine.rank_worker.tp2_commit_make` through the RPC, each rank calls it with its own committer and its rows of the
 merged manifest, and `require_on_every_rank` fails the Commit closed unless every rank attached every tap that is on.  Each rank also
@@ -21,8 +22,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, linear_quant_source, moe_align_source, norm_scale_source,
-                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (attention_source, call_boundary_source, int8_source, linear_quant_source, moe_align_source,
+                                         norm_scale_source, route_source, router_softmax_source, scale_products_source,
+                                         vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
@@ -67,6 +69,8 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
                                                          plan=call_boundary_plan)
     required_classes, _src = scale_products_source.attach(com, bool(SP.manifest_sites(manifest)), manifest, required_classes,
                                                           explicit_classes=explicit_classes, model=model)
+    required_classes, _src = int8_source.attach(com, int8_source.applies(manifest), manifest, required_classes,
+                                                explicit_classes=explicit_classes, model=model)
     prescribe_idle_splits(com, manifest)
     return required_classes
 
@@ -104,6 +108,7 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     return [*(cls.short_name for _f, _key, _mod, fam, cls in SOURCES if fam in fams),
             *([call_boundary_source.CallBoundarySource.short_name] if one and call_boundary_source.manifest_sites(manifest) else []),
             *([scale_products_source.ScaleProductsSource.short_name] if one and SP.manifest_sites(manifest) else []),
+            *([int8_source.SHORT_NAME] if one and int8_source.applies(manifest) else []),
             *([attention_source.AttentionSource.short_name] if cmap is not None and attention_source.binds(cmap) else []),
             *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else [])]
 

@@ -88,7 +88,7 @@ def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
     src = inspect.getsource(build.build_engine)
     assert src.index("env0 = engine_env.snapshot()") < src.index("engine_kwargs_for(") < src.index("llm = LLM(**kw)")
     assert "engine_env.set_since(env0))" in src.split("llm = LLM(**kw)")[1].split("eng.effective")[0]
-    assert [f.name for f in dataclasses.fields(build.Engine)][-1] == "environ"
+    assert [f.name for f in dataclasses.fields(build.Engine)][11] == "environ"   # build_engine passes it twelfth
 
 
 def test_the_engine_profile_reads_this_table() -> None:
@@ -116,9 +116,15 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     m.write_text(json.dumps({"checkpoints": [dict(entry, downloaded=False)]}))
     with pytest.raises(SystemExit, match="org/model is not downloaded on this pod"):
         prof.checkpoint_for("ROLE_X", m)
+    made = dict(entry, downloaded=False, recipe={"id": "verity-int8-channel127/v1"})
+    m.write_text(json.dumps({"checkpoints": [made]}))
+    with pytest.raises(SystemExit, match=f"org/model: local snapshot {tmp_path / 'gone'} missing"):
+        prof.checkpoint_for("ROLE_X", m)
     (tmp_path / "gone").mkdir()
     m.write_text(json.dumps({"checkpoints": [entry]}))
     assert prof.checkpoint_for("ROLE_X", m) == entry
+    m.write_text(json.dumps({"checkpoints": [made]}))
+    assert prof.checkpoint_for("ROLE_X", m) == made
 
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
