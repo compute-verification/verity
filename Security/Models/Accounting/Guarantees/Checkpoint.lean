@@ -11,8 +11,11 @@ The statement, over `Accounting.TS.ReceiptGame` and `Accounting.Assumptions.Chec
   mode `s` and check `same`, is (L) at `q^n` (`Accounting.TS.RoundGame.LuckAt`) when `same` forces `n` checkpoint
   events and each of them, given the earlier ones and the mode, holds with probability at most `q`. The game is
   Compose's `tileGame mode right same s t` at `fun c => mode c t`, `fun c => right c t` and `fun c => same c t`, so at
-  `s = .whole` the conclusion is its `GuessLuckAt (q^n)`. At a constant mode it bounds `Pr[same]` by `q^n`, which is
-  the headlines' `WholeLuck` at `q^n` for a round whose unfolded share is positive.
+  `s = .whole` the conclusion is its `GuessLuckAt (q^n)`. At a constant mode it bounds `Pr[same]` by `q^n`, the
+  headlines' `WholeLuck` at `q^n` for a round whose unfolded share is positive. `n` counts the checkpoints every unit
+  in the mode is deficient at: mode whole includes a unit that skips only its last segment, so unsplit it is `n = 1`
+  and the bound is `q`, not `q^KS` (note:20261019T1052Z-draft-rt-luck, RT-LUCK-1). The theorem doesn't move a headline
+  line by itself; what it gives is the chain rule.
 * `CheckpointGuessOfFresh`: in the guess bound's scope, `CheckpointGuessAt` at `q` is a theorem once each set's fresh
   coins move its checkpoint with point mass at most `q`: on coins split into the view and each set's fresh coins, a
   checkpoint event that reads only the view and the coins of the sets up to its own holds, given the earlier ones, with
@@ -38,14 +41,19 @@ def WholeGuessOfCheckpoints : Prop :=
 /-- **In the guess bound's scope, each checkpoint's luck is its set's point mass.** On coins `V × (Fin n → X)`, uniform:
 `v`, the round's other coins, from which the cheater's mode and committed checkpoints are computed, and `x s`, set `s`'s
 fresh coins, all independent (`GuessLuckAt`'s scope: no computed word and no coin read before the skip reads the unit's
-noise, which is its own; the coins are the random-oracle image of the unit's SHA-512 noise derivation). Over a round's
-whole tiles, their sets enumerated tile by tile in an order in which no tile's commitments read a later tile's coins,
-it gives their joint bound; without such an order it doesn't (`Accounting.SecurityProofs.Checkpoint.crossRead`). If
+noise, which is its own). The served coins are this product only through a random-oracle bridge, a named premise not
+yet stated, and only off an additive event of about `T_q·2^-512` a round, on which relative luck fails
+(note:20261019T1052Z-draft-rt-luck, RT-LUCK-3), for one live salt per round (RT-LUCK-5). Over a round's whole tiles,
+their sets enumerated tile by tile in an order fixed before the round's coins in which no tile's commitments read a
+later tile's coins, it gives their joint bound; without such an order it doesn't
+(`Accounting.SecurityProofs.Checkpoint.crossRead`), and an order read from the coins excludes nothing (RT-LUCK-4). If
 checkpoint `s`'s event `E s` (the committed checkpoint after set `s` is the honest one) reads only `v` and the coins of
 the sets `≤ s`, and for every `v` in mode `whole` and every value of the other sets' coins, set `s`'s fresh coins make
 it hold with probability at most `q`, then `CheckpointGuessAt q n E` holds at that mode. For an honest run whose state
 enters set `s` as a function of `v` and the earlier sets' coins, the second hypothesis is the point mass of set `s`'s
-checkpoint over its fresh coins at a known state, a property of the fold and the noise alone. -/
+checkpoint over its fresh coins at a known state, a property of the fold and the noise alone. It fails at a checkpoint
+the unit computes (point mass `1`), so for a mode that includes a suffix skip it applies at the deficient sets only
+(RT-LUCK-1). -/
 def CheckpointGuessOfFresh : Prop :=
   ∀ (V X : Type) [Fintype V] [Fintype X] [Nonempty X] (n : ℕ) (E : ℕ → V × (Fin n → X) → Prop) (whole : V → Prop)
     (q : ℝ),

@@ -13,8 +13,8 @@ inside it. A negative `q` leaves nothing to prove: the first checkpoint's bound 
 other sets' coins fixed, the earlier checkpoints and the mode are fixed too, and set `s`'s coins alone move checkpoint
 `s`.
 
-`crossRead` is why a round's tiles compound only in an order: two tiles that each meet `CheckpointGuessOfFresh`'s
-hypotheses, the other tile's coin as the view, are lucky together as often as each is alone.
+`crossRead` is why a round's tiles compound only in an order, fixed before the round's coins: two tiles that each meet
+`CheckpointGuessOfFresh`'s hypotheses, the other tile's coin as the view, are lucky together as often as each is alone.
 -/
 
 namespace Accounting.SecurityProofs.Checkpoint
@@ -127,7 +127,8 @@ coins `c.1` and `c.2`, each tile's honest checkpoint its own coin. Tile 1 commit
 tile 1's. Each commitment reads only the other tile's coin, so each tile on its own meets `CheckpointGuessOfFresh`'s
 hypotheses with that coin as its view, at its set's point mass `½` (the first conjunct), and keeps its checkpoint
 with probability `½`. The two events are one, so both tiles keep theirs with probability `½`, not `¼`. A bound over a
-round's tiles jointly needs an order in which no tile's commitments read a later tile's coins. -/
+round's tiles jointly needs an order, fixed before the round's coins, in which no tile's commitments read a later
+tile's coins. -/
 theorem crossRead :
     (∀ v : Bool, prob (fun ξ : Bool => v = ξ) = 1 / 2) ∧
       prob (fun c : Bool × Bool => c.2 = c.1) = 1 / 2 ∧ prob (fun c : Bool × Bool => c.1 = c.2) = 1 / 2 ∧

@@ -6,13 +6,14 @@ import Models.Accounting.Assumptions.TS
 FILL-OPT as `Accounting.Assumptions.TS.FillOpt` states it asks every run's filler for the menu's whole `χ*`, so it is
 false at `χ* > 0` for a run that fills less of its window: an honest prover that aborts after a failed round, or one
 whose filler is load dependent (RT-LOGIC-1, RT-LOGIC-2; note:20261019T0515Z-draft-rt-logic). Its per-share form,
-`(1 − μ_x)·filled·χ*(π) ≤ π·n_fill` at every certificate (`FillOptFilled` on #2699), holds for every run whose filler
-runs its `filled` share of one route of the filler menu, facet by facet (`fillFilled_of_route`): at `filled = 1` that
-is `FillOpt` (`fillOpt_of_route`), and at `filled = 0`, an abort, every split run meets it (`fillFilled_zero`).
+`(1 − μ_x)·filled·χ*(π) ≤ π·n_fill` at every certificate (RT-LOGIC-1's fix), holds for every run whose filler runs its
+`filled` share of one route of the filler menu, facet by facet (`fillFilled_of_route`): at `filled = 1` that is
+`FillOpt` (`fillOpt_of_route`), and at `filled = 0`, an abort, every split run meets it (`fillFilled_zero`).
 
 These are proofs-only witnesses about the premise's form, like `Accounting.SecurityProofs.Checkpoint.crossRead`, and
 carry no lock record. They say nothing about a cheater's filler: that it costs at least the menu's `χ*` is FILL-OPT's
-content, which `Accounting.Guarantees.TS.FillOptOfFanIn` gives at the fan-in menu's price.
+content, which `Accounting.Guarantees.TS.FillOptOfFanIn` gives at the fan-in menu's price. No design of record credits
+a filler (#2699's 23c8696410 runs the H200 at `χ* = 0`), so no headline reads either form today.
 -/
 
 namespace Accounting.SecurityProofs.FillRoute
