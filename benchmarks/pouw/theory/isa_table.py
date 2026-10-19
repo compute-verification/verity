@@ -11,7 +11,8 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
   - the floors: every kind `floors.csv` prices is a class, and a side or writer class's words there are at least its
     row's (`ReadsTable` holds a model's side vectors and ω to the row), but for the atomics, which it prices below
     their old value's words (F6);
-  - isa_escape: every candidate `isa_escape.py` closes sits in classes on a priced route, none traced;
+  - isa_escape: every candidate `isa_escape.py` closes sits in classes on a priced route, none traced, and the nine
+    RT-MACHINE's branch adds (DMMA's among them) are placed ahead of landing (`ESCAPE_AHEAD`);
   - completeness evidence for `IsaComplete`: every opcode the CUDA Binary Utilities 13.4 list (§4.3 Hopper, §4.4
     Blackwell and Rubin; last updated 12 Oct 2026) is placed in classes of its device's table (`PLACE`) or read as
     writing no 32-bit word (`NO_WORD`), and an opcode in neither fails, with no list of exceptions; sm_120's is
@@ -79,7 +80,16 @@ ESCAPE = {
     "async copy / TMA bulk copy": "LDGSTS16 TMA512 UBLKCP4K UTMA UTMA512 UTMABIG BULKMAX",
     "ldmatrix / stmatrix": "LDSM_X4 LDSM_X4T STSM_X4 STSM_X4T", "PRMT / FMNMX / LOP3": "ALU VIMNMX",
     "IMAD.WIDE": "IMADW", "uniform datapath": "UNI UNI64",
+    "FP6 MMA": "QMMA16832", "FP64 MMA": "DMMA", "IADD.64 / IMNMX.64 / SEL.64": "ALU64 VIMNMX SEL",
+    "tcgen05.cp": "UTCCP", "tcgen05.shift": "UTCSHIFT", "tcgen05.ld / tcgen05.st": "LDTM_32X32B_X128 LDTM STTM",
+    "block-scaled FP6 MMA": "UTCQMMA_SF_E3M2 UTCQMMA_SF_E2M3", "block-scaled FP4 MMA": "UTCOMMA_SF UTCOMMA_2CTA",
+    "weight decompression engine": "NOROW",
 }
+#: the placements whose candidates are on `cursor/rt-machine-ea24` (RT-MACHINE's, with #2704's B200 word ISA) and not
+#: yet in `isa_escape.py` here, so the check passes before and after they land
+ESCAPE_AHEAD = {"FP6 MMA", "FP64 MMA", "IADD.64 / IMNMX.64 / SEL.64", "tcgen05.cp", "tcgen05.shift",
+                "tcgen05.ld / tcgen05.st", "block-scaled FP6 MMA", "block-scaled FP4 MMA",
+                "weight decompression engine"}
 
 #: CUDA Binary Utilities 13.4, §4.3 "Hopper Instruction Set" and §4.4 "Blackwell and Rubin Instruction Set", by category
 HOPPER = """
@@ -538,9 +548,12 @@ def main() -> int:
     import isa_escape  # noqa: E402
     names = [c["name"] for c in isa_escape.CANDIDATES]
     placed = {n: ESCAPE[p].split() for n in names for p in ESCAPE if n.startswith(p)}
-    checks.check("every isa_escape.py candidate is placed in classes", len(placed) == len(names) == len(ESCAPE),
-                 f"{len(placed)} of {len(names)}")
-    escape_classes = {k for ks in placed.values() for k in ks}
+    ahead = {p for p in ESCAPE if not any(n.startswith(p) for n in names)}
+    checks.check("every isa_escape.py candidate is placed in classes, and each placement names one or is ESCAPE_AHEAD's",
+                 len(placed) == len(names) and ahead <= ESCAPE_AHEAD,
+                 ", ".join(sorted(set(names) - set(placed)) + sorted(ahead - ESCAPE_AHEAD))
+                 or f"{len(placed)} of {len(names)}, {len(ahead)} ahead")
+    escape_classes = {k for ks in ESCAPE.values() for k in ks.split()}
     checks.check("every candidate's classes are rows of a table, on a priced route (none traced)",
                  not off_route(escape_classes, rows), ", ".join(sorted(off_route(escape_classes, rows))) or None)
 
