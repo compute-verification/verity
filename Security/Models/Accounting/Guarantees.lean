@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Actual
 import Models.Accounting.Guarantees.Actual.Threaded
+import Models.Accounting.Guarantees.Actual.WipeBridge
 import Models.Accounting.Guarantees.Actual.WipePool
 import Models.Accounting.Guarantees.Bandwidth
 import Models.Accounting.Guarantees.Bandwidth.Causal
