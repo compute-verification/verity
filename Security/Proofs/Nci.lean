@@ -20,6 +20,7 @@ import Proofs.Nci.Info
 import Proofs.Nci.Fmt
 import Proofs.Nci.Fmt2
 import Proofs.Nci.Training
+import Proofs.Nci.Remote
 import Proofs.Nci.Verdict
 import Proofs.Nci.Activations
 
