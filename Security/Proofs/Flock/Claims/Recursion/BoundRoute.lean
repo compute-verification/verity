@@ -470,8 +470,9 @@ theorem bdDeployed_ans (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
     (bdDeployed rel nextE colsE wE join rowIn final w).ans c = c.bytes := by
   simp only [bdDeployed]
 
-/-- **`KSBoundRoute` from the bridge**: wherever the bridge (`Claims.Recursion.Bridge`, "to be proved") holds at the
-deployed bound record, at every choice the code side makes, `KSBoundRoute`'s premises give `KSBoundDeployed`. The
+/-- **`KSBoundRoute` from the bridge**: wherever the bridge (`Claims.Recursion.Bridge`) holds at the deployed bound
+record, at every choice the code side makes (it does: `bridge_bdDeployed`), `KSBoundRoute`'s premises give
+`KSBoundDeployed`. The
 recursion's KS is `KS_of_flockKS_binds` at the normalized record (`nfBrings`), carried back (`ksA_of_nf`):
 `Inner.KSAbort` at `IVStar` is the bridge's, from (P1) to (P3); `ForksBind` is `forksBind_nf`, from (P4), the readers'
 facts and `InnerAcceptsColl` (`innerAcceptsColl_bound`, from the staging and V*'s parts at the three shapes); every

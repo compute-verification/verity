@@ -59,11 +59,13 @@ eight items:
    `ZKmalRx`), which stops where the statement and the public transcript before the sessions say the honest proof can
    be refused (`StopDeploy.stops`), at the simulator that stops there too and commits to the zero digest as many
    strings at each inner round as the reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁`
-   per string (`εzkStop`). Option (d)'s section is a statement for review, with no proof: `KSBound` and `KSPrivBound`
-   are `KS` and `KSPriv` at the compiled record whose inner view runs the verifier at the representation V* binds
-   (`Bound.IVStar`: the inner session's commit strings and their openings), and `Bridge` states the inner claim they
-   rest on, from Flock's at that representation. `Bound.WeightCovers`' constant is what the bridge's proof pays:
-   `N_I · √(k_I/32)` over `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`.
+   per string (`εzkStop`). In option (d)'s section, `KSBound` and `KSPrivBound` are `KS` and `KSPriv` at the compiled
+   record whose inner view runs the verifier at the representation V* binds (`Bound.IVStar`: the inner session's
+   commit strings and their openings), and `Bridge` states the inner claim they rest on, from Flock's at that
+   representation. The bridge is proved at every bound record whose answers a decoder inverts
+   (`Bound.bridge_of_dec`), the deployed one among them, so the deployment's ∀-form holds from its premises
+   (`RecDeploy.ksBoundRoute`). `Bound.WeightCovers`' constant is what the bridge's proof pays: `N_I · √(k_I/32)` over
+   `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -1052,8 +1054,9 @@ so at `DE` it rests on Flock's table bound there, at plain leaves. -/
 def Bound.PlainKSAbort [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ decI, decOK Bd.DE decI → Inner.KSAbort H (Inner.ofFlock Bd.DE decI)
 
-/-- **The bridge, option (d)'s inner claim (to be proved).** At every inner decoder that meets the list-decoding spec,
-`IVStar`'s KS against provers that may abort (`Inner.KSAbort` at the bound record) follows from three premises:
+/-- **The bridge, option (d)'s inner claim** (proved where a decoder inverts the answers, `Bound.bridge_of_dec`). At
+every inner decoder that meets the list-decoding spec, `IVStar`'s KS against provers that may abort (`Inner.KSAbort` at
+the bound record) follows from three premises:
 
 * (P1) the element-level Flock's KS against aborting provers at plain leaves (`Inner.KSAbort` at `DE`,
   `Bound.PlainKSAbort` at one decoder), which Flock's KS proof is to give through its table bound at `DE`;
@@ -1064,12 +1067,11 @@ The recursion's KS at the bound record (`KSBound`) rests on the bridge and on (P
 message's binding (`LastBinds`), which the recursion's proof reads and the bridge doesn't.
 
 The proof builds, from a prover against `IVStar`, a prover against `DE`. At each round it sends the rows that the
-plurality of `IVStar`'s accepted continuations open there (or the rows of one accepted continuation drawn uniformly),
-and it aborts where the run opens otherwise. Never the first accepted continuation in coin order: a prover can make that
-one the lone deviant, and then `DE`'s prover aborts on almost every run while `IVStar` accepts on almost every run,
-which `B`'s two random runs see with probability about `2/|coins|`. With the plurality, or a random continuation, a run
-that opens one commit string two ways is a collision among `IVStar`'s calls on two runs, which `B`'s fork at `IVStar`
-charges. `IVStar` and `DE` share their rounds, waits, truncation and `κ`, and `E^rep` at the bound record opens `DE`'s
+plurality of `IVStar`'s accepted continuations open there, and it aborts where the run opens otherwise. Never the first
+accepted continuation in coin order: a prover can make that one the lone deviant, and then `DE`'s prover aborts on
+almost every run while `IVStar` accepts on almost every run, which `B`'s two random runs see with probability about
+`2/|coins|`. With the plurality, a run that opens one commit string two ways is a collision among `IVStar`'s calls on
+two runs, which `B`'s fork at `IVStar` charges. `IVStar` and `DE` share their rounds, waits, truncation and `κ`, and `E^rep` at the bound record opens `DE`'s
 columns of the opened view. -/
 def Bridge [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ decI, decOK Bd.DE decI → Bd.Binds → Bd.WeightCovers →

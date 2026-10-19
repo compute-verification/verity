@@ -22,11 +22,11 @@ bound record (`Claims.Recursion.Bound`). Here both are pinned to the deployment:
   (`Hm96.Default512`, as `deployRec`'s). Its rows' digest input, how its last message reads and the element-level
   verifier's steps stay parameters: they are the code side's, which has no element-level verdict yet.
 
-**The guarantee** is `KSBoundDeployed`, and the theorem to prove is its ∀-form, `KSBoundRoute`: at every choice the code
-side makes, the premises P1–P4 at the deployed bound record, Flock's KS at the outer record, and the code facts of the
-staging, V*'s parts and the readers at the bound layout (`VStar.RunPairs`; `VStarB.HeldB`, `VStarB.VstarShowsB`,
-`VStarB.PartChecksB`, `VStarB.PartOpensB`, `VStarB.DecompB`; `ReadersTrue`, `ReadersLogColl` and `ReadersRunPlayed` at
-`LayoutB.readers`) give `KSBoundDeployed`.
+**The guarantee** is `KSBoundDeployed`, and its ∀-form is `KSBoundRoute` (proved: `RecDeploy.ksBoundRoute`): at every
+choice the code side makes, the premises P1–P4 at the deployed bound record, Flock's KS at the outer record, and the
+code facts of the staging, V*'s parts and the readers at the bound layout (`VStar.RunPairs`; `VStarB.HeldB`,
+`VStarB.VstarShowsB`, `VStarB.PartChecksB`, `VStarB.PartOpensB`, `VStarB.DecompB`; `ReadersTrue`, `ReadersLogColl` and
+`ReadersRunPlayed` at `LayoutB.readers`) give `KSBoundDeployed`.
 
 **What reads the last message.** `IVStar` and the opened view read it only through `final`
 (`Bound.ivstar_congr_final`, `Bound.openView_congr_final`), so (P4, `Bound.LastBinds`) is stated modulo `final`.
@@ -202,7 +202,7 @@ def ReadersRunPlayed {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin
 
 /-! ## The guarantee's ∀-form -/
 
-/-- **`KSBoundDeployed`'s ∀-form, the theorem to prove** (option (d)): at the deployment's brings `b` and V*'s bound
+/-- **`KSBoundDeployed`'s ∀-form** (option (d), proved: `ksBoundRoute`): at the deployment's brings `b` and V*'s bound
 layout `L`, at every choice the code side makes (the element-level verifier's steps `nextE`, its columns `colsE` and
 weight `wE`, how a round's rows join, the rows' digest input, how the last message reads, `γ`'s weight at `IVStar`), the
 deployed bound record `Bd` meets `KSBoundDeployed` given:
