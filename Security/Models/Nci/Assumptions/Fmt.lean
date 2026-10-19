@@ -38,7 +38,18 @@ where one activation, through its copies, feeds more than `e · log₂ n / (log�
 subcircuit with many threads (the LM head's forward products, were they counted; an MoE that runs every expert on
 masked copies of its input). At the deployed point (`d = 2048`, `e = 4·10⁴`, E4M3, `log₂ n − μ = 4`) such a value is
 charged at most `4 · 36864 / 4·10⁴ = 3.69` bits against the 7.98 it carries; a reference circuit that recomputed a dense
-layer's activations, which `kappa.py`'s minimal one does not, would be charged 7.37 bits for two copies of each. -/
+layer's activations, which `kappa.py`'s minimal one does not, would be charged 7.37 bits for two copies of each.
+
+**Falsified** (19 Oct 2026, NCI-FALSIFY, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
+art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2) at the deployed point (`d = 2048`, `e = 4·10⁴`,
+E4M3 at rate 4, `S = 2·10⁷`, `b_w = 2.5`), on its weight term and its margin. One step after a checkpoint, an AdamW
+weight lies in an interval `θ` fixes: one token's 16,384 fprop products on a 128 × 128 E4M3 block are charged 40,961.6
+bits against at most 29,113, false for `b_w > 1.78` at σ = 0.006 and over the first 1, 3 and 7 steps at σ = 0.006, 0.01
+and 0.02. A weight quantized for fprop and again for dgrad is two weight gates charged `b_w` each for one weight's
+values: an NVFP4 16 × 16 2D-block weight is charged 1,280 bits against at most 1,269, false for every `b_w > 2.153`.
+llama-3-405b's gate and up projections read each activation 106,496 times, above `e · log₂ n / 4`: its FP8 run is
+charged 2.077·10⁷ bits against at most 1.947·10⁷. `WeightsSupportFmt2` restates it per source, with a fan-out bound in
+place of `μ` and the counted multiplications off weights fewer than `k₀` steps from `θ`. -/
 def WeightsSupportFmt (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w : ℝ) (d e n : ℕ)
     (μ : ℝ) : Prop :=
   ∀ R, SmallInfo c θv Γ S R →

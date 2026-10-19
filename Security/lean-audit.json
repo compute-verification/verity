@@ -266,6 +266,10 @@
    "owner": "@lean",
    "digest": "5531a8506c9ef0c58750f411931ffebae11a2bd30de00621f3d9a9e09331f710"
   },
+  "Nci.Assumptions.WeightsSupportFmt2": {
+   "owner": "@lean",
+   "digest": "8b36a45c57a3aa6012f2dd4f9335d56bd5cf7b151bfd33aa070d22aa09a03405"
+  },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
@@ -5401,6 +5405,12 @@
    "assumptions": [],
    "type_hash": "3ec412beb438ef31a1d608807ca766068f7d9e2d1cfc71c096fff047e308d5ef"
   },
+  "Nci.SecurityProofs.ThreadedContainedInfoFmt2": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedContainedInfoFmt2 : Nci.Guarantees.ThreadedContainedInfoFmt2"],
+   "assumptions": [],
+   "type_hash": "cc1ccac8fbba5d4e3b45976c2fb5cf5d10484968ed7eb17ab5b8535fe9782d63"
+  },
   "Nci.SecurityProofs.ThreadedOfLayered": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedOfLayered : Nci.Guarantees.ThreadedOfLayered"],
@@ -5419,6 +5429,12 @@
    "assumptions": [],
    "type_hash": "13226ee22e48ed7cd38cf48128751054958ce887f4c7531f78a75c7c6d96e9b6"
   },
+  "Nci.SecurityProofs.ThreadedOfStateFmt2": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedOfStateFmt2 : Nci.Guarantees.ThreadedOfStateFmt2"],
+   "assumptions": [],
+   "type_hash": "9038bcc7ef1171eeeebd7af7fc95aa828bb972b68c008f94c27585f24f4774f0"
+  },
   "Nci.SecurityProofs.ThreadedReads": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedReads : Nci.Guarantees.ThreadedReads"],
@@ -5436,6 +5452,12 @@
    "signature": ["Nci.SecurityProofs.ThreadedReadsInfoFmt : Nci.Guarantees.ThreadedReadsInfoFmt"],
    "assumptions": [],
    "type_hash": "b0e528356d0260e4829a1626341ad77a934fb408d696687032705be38beb7643"
+  },
+  "Nci.SecurityProofs.ThreadedReadsInfoFmt2": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ThreadedReadsInfoFmt2 : Nci.Guarantees.ThreadedReadsInfoFmt2"],
+   "assumptions": [],
+   "type_hash": "29c58e0f89f3a259fa223ae3cba558d3829f38a5cc2fd1fa78d08e6b7c10df0b"
   },
   "Nci.SecurityProofs.ThreadedThrottled": {
    "owner": "@lean",
@@ -7875,9 +7897,9 @@
    "Accounting.SecurityProofs.Actual.WipePool": "frozen (no-function): It states the lifetime pool over an abstract run tree of wipes (Accounting.WipePlay.prEv) under the named timed-round premise Accounting.Assumptions.TimedRoundSound, a bound on a probability over the prover's strategies rather than a property of a function's acceptance.",
    "Accounting.SecurityProofs.Actual.WipePoolDelta": "frozen (no-function): It is the lifetime pool at H = ln(1/δ)/k, over the same abstract run tree of wipes (Accounting.WipePlay.prEv) under Accounting.Assumptions.TimedRoundSound, rather than a property of a function's acceptance.",
    "Nci.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
-   "Nci.SecurityProofs.ThreadedReadsInfoFmt": "frozen (no-function): It is about an arbitrary reference circuit and a threading of it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedContainedInfoFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ThreadedOfStateFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedReadsInfoFmt": "falsified (no-function): It rests on WeightsSupportFmt, false at the deployed point (shape.conjectures, 19 Oct 2026, NCI-FALSIFY, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2); it is also about an arbitrary reference circuit and a threading of it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedContainedInfoFmt": "falsified (no-function): It rests on WeightsSupportFmt, false at the deployed point (shape.conjectures, 19 Oct 2026, NCI-FALSIFY, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedOfStateFmt": "falsified (no-function): It rests on WeightsSupportFmt, false at the deployed point (shape.conjectures, 19 Oct 2026, NCI-FALSIFY, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.Guarantees.Remote.HeldOverTime": "unstated: the remote audit's memory line held over time under Identity, for a paced session (the declared time-held line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2000Z-report-held-guarantee)",
    "Accounting.Guarantees.Remote.HeldOverTimeLinks": "unstated: the remote audit's memory line held over time with the boundary links charged, no Identity (the declared link-charged line); its proof, the absent-stretch bound, is open, and it is listed once proved (note:20261018T2000Z-report-held-guarantee)",
    "Accounting.SecurityProofs.Remote.Held": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premises SketchBound and LiveCoins are stated on the trace and not yet derived from Accounting.Guarantees.RateAuditSketch and the session's pooled draw (Accounting.Guarantees.HorizonSampling) (note:20261018T2000Z-report-held-guarantee)",
@@ -7885,7 +7907,10 @@
    "Pouw.Guarantees.Window.ServiceEscapes": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so WindowEps reads the deployed draw with each session a call; stated with WindowEps, and its theorem Pouw.SecurityProofs.Window.ServiceEscapes is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
    "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.Partition.Refines.twoStage_influence": "frozen (obligation,no-function): It takes the two-stage KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/TwoStage.lean:121, :130), open obligations of the backend, as hypotheses, and it is about the abstract two-stage audit rather than a Lean function.",
-   "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance."
+   "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
+   "Nci.SecurityProofs.ThreadedReadsInfoFmt2": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and the sources of its values, under the named WeightsSupportFmt2 (Security/Models/Nci/Assumptions/Fmt2.lean), a restatement of the falsified WeightsSupportFmt not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedContainedInfoFmt2": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it, the sources of its values and a declaration that contains it, under the named WeightsSupportFmt2 (Security/Models/Nci/Assumptions/Fmt2.lean), a restatement of the falsified WeightsSupportFmt not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedOfStateFmt2": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it, the sources of its values and a declaration that contains it, under the named WeightsSupportFmt2 (Security/Models/Nci/Assumptions/Fmt2.lean), a restatement of the falsified WeightsSupportFmt not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7955,6 +7980,10 @@
     "status": "open",
     "test": "benchmarks/nci/tests/test_fit.py::test_reach_at_sequence_threads_kimi_k2",
     "why": "Reach is a predicate on the threading T: at token threads it is false for Kimi K2 (about 32B active, under N* = 87.6B); at sequence threads it is the per-sequence form, whose reuse cost is the T.reuse already in FitBound (FitBoundSlots for ReachSlots, Reach counted in parameter slots). Open at sequence threads, the instance the fit page uses (LEAN-35, F1); its test checks that N* is at most the weights one sequence reaches under kappa.py's MoE routing at Kimi K2's shapes, and more than one token reaches."
+   },
+   "Nci.Assumptions.WeightsSupportFmt": {
+    "status": "falsified",
+    "why": "WeightsSupport with each thread charged by its work at log2 n - mu; false at the deployed point (d = 2048, e = 4e4, E4M3 at rate 4, S = 2e7, b_w = 2.5) on its weight term and its margin (19 Oct 2026, NCI-FALSIFY, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2): one AdamW step after the checkpoint a weight lies in an interval theta fixes, so one token's 16,384 fprop products on a DeepSeek-V3 128 x 128 E4M3 block are charged 40,961.6 bits against <= 29,113 (false for b_w > 1.78 at sigma 0.006, over the first 1, 3 and 7 steps at sigma 0.006, 0.01 and 0.02); an NVFP4 16 x 16 2D-block weight quantized for fprop and again for dgrad is two weight gates, charged 1,280 against <= 1,269 (false for every b_w > 2.153); llama-3-405b's gate+up fan-out 106,496 exceeds e log2 n / rate, and its FP8 run is charged 2.077e7 against <= 1.947e7. Nci.SecurityProofs.ThreadedReadsInfoFmt, ThreadedContainedInfoFmt and ThreadedOfStateFmt rest on it; WeightsSupportFmt2 restates it."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
@@ -10988,12 +11017,15 @@
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
     "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledOn",
@@ -11043,12 +11075,15 @@
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
     "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledOn",
@@ -11432,10 +11467,13 @@
     "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
     "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
     "Nci.SecurityProofs.ThreadedReadsInfo",
-    "Nci.SecurityProofs.ThreadedReadsInfoFmt"
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
   "Definitions.Nci.Layered": {
@@ -11465,6 +11503,23 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Definitions.Nci.Sources": {
+   "digest": "a741d7d35c64641c2ff9e63479087cc68b69f4e0959f86558ace4b402210a7e5",
+   "definitions": {
+    "Nci.Threading.Sources": "0d37e5ffbbb35b0a9f2dcb5bdaff6e2832cff3c57ae2287a77767febd3466cf7",
+    "Nci.Threading.Sources.FanOutBound": "d364a5a88c81d44574549cda1c4eb8bf4e2663c6977243390d873b9e985e8408",
+    "Nci.Threading.Sources.OffFresh": "8b560cf7102de1dd61ff88825bca7bb78d7cff0711eb138e29a3b41226027e15",
+    "Nci.Threading.Sources.fanOut": "c593c30f01724b5715a0334e85b83cf5322f20468a1347000b92228ad1d956a4",
+    "Nci.Threading.Sources.sourcesUsed": "07b373d05ac179efeb0baa65345d193a6b7fa8dba1b33076946ec7be220c329d",
+    "Nci.Threading.Sources.src": "022a52d0383c44e6013e2c6f1595104dcc21b68544806ef1d1808441e4cd4f1a",
+    "Nci.Threading.Sources.step": "ac8b6433210e424a33abf294a4e2777f7f6f444e3845fd5491e26b8e67ed6344"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
+   ]
+  },
   "Definitions.Nci.Support": {
    "digest": "b466f060ad2fdf2d08c1efb55eca1519099dd9e35430c624e678cad47d21d303",
    "definitions": {
@@ -11482,10 +11537,13 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
     "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
     "Nci.SecurityProofs.ThreadedReadsInfo",
-    "Nci.SecurityProofs.ThreadedReadsInfoFmt"
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
   "Definitions.Nci.Threads": {
@@ -11522,12 +11580,15 @@
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
     "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedOfState",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsInfo",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledOn",
@@ -11542,8 +11603,11 @@
    },
    "guarantees": [
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
-    "Nci.SecurityProofs.ThreadedReadsInfoFmt"
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
@@ -21963,6 +22027,17 @@
     "Nci.SecurityProofs.ThreadedReadsInfoFmt"
    ]
   },
+  "Models.Nci.Assumptions.Fmt2": {
+   "digest": "2cd74ce71ba77a1515732f8afb00a76076b7a69f69d4ea8b70ac5547eedc7223",
+   "definitions": {
+    "Nci.Assumptions.WeightsSupportFmt2": "8b36a45c57a3aa6012f2dd4f9335d56bd5cf7b151bfd33aa070d22aa09a03405"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
+   ]
+  },
   "Models.Nci.Assumptions.Info": {
    "digest": "00bdbe965111c5d8b58cba8d227486e05eb84da8d908fcde9586ce5ff5e4b421",
    "definitions": {
@@ -22089,6 +22164,19 @@
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedOfStateFmt",
     "Nci.SecurityProofs.ThreadedReadsInfoFmt"
+   ]
+  },
+  "Models.Nci.Guarantees.Fmt2": {
+   "digest": "5ef4c5272b1b4f5edfa5cb0ea84279aacb9aae9d89b00441a6cd2647a60dba77",
+   "definitions": {
+    "Nci.Guarantees.ThreadedContainedInfoFmt2": "2a8ebe6ed6f79baf8802e59aaeceb0860dab17dcd1dadc3ce8386bcaadf3da18",
+    "Nci.Guarantees.ThreadedOfStateFmt2": "f399151ac82c3bf7a39e9e3672d1b83c0709334f23ee859b46c882bcdf14c0c5",
+    "Nci.Guarantees.ThreadedReadsInfoFmt2": "8c11dd3fe8936def0b08f1fd689435428d5e20bfe14e6a05e21678719c129c15"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
+    "Nci.SecurityProofs.ThreadedOfStateFmt2",
+    "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
   "Models.Nci.Guarantees.Info": {
