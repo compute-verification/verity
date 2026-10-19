@@ -201,6 +201,130 @@ theorem run_replay_known {C : Type} [Inhabited C] (H : Msg → Msg) (V : Verifie
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hl
   exact ⟨j, List.mem_range.1 hj, by simpa using hel⟩
 
+/-! ## `E^rep` at two openings -/
+
+theorem waitAcc_rel₂ {R Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens₁ opens₂ : Seen → List Op) (k : ℕ)
+    (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
+      ((run₁ r).seen.out = .acc → opens₁ (run₁ r).seen = opens₂ (run₂ r).seen)) :
+    ∀ (rs : List R) (acc₁ acc₂ : List Seen), acc₁.length = acc₂.length → acc₁.flatMap opens₁ = acc₂.flatMap opens₂ →
+      ((waitAcc k rs acc₁).eval H run₁).1.length = ((waitAcc k rs acc₂).eval H run₂).1.length ∧
+        ((waitAcc k rs acc₁).eval H run₁).1.flatMap opens₁ = ((waitAcc k rs acc₂).eval H run₂).1.flatMap opens₂
+  | [], _, _, hl, hf => ⟨hl, hf⟩
+  | r :: rs, acc₁, acc₂, hl, hf => by
+    obtain ⟨ho, hop⟩ := h r
+    by_cases hk : k ≤ acc₁.length
+    · have hk' : k ≤ acc₂.length := hl ▸ hk
+      simp only [waitAcc, hk, hk', ↓reduceIte, RP.eval]
+      exact ⟨hl, hf⟩
+    · have hk' : ¬ k ≤ acc₂.length := hl ▸ hk
+      simp only [waitAcc, hk, hk', ↓reduceIte, RP.eval]
+      by_cases hv : (run₁ r).seen.out = .acc
+      · have hv' : (run₂ r).seen.out = .acc := ho.1 hv
+        simp only [hv, hv', ↓reduceIte]
+        exact waitAcc_rel₂ H run₁ run₂ opens₁ opens₂ k h rs _ _ (by simp [hl])
+          (by simp [List.flatMap_append, hf, hop hv])
+      · have hv' : ¬ (run₂ r).seen.out = .acc := fun h' => hv (ho.2 h')
+        simp only [hv, hv', ↓reduceIte]
+        exact waitAcc_rel₂ H run₁ run₂ opens₁ opens₂ k h rs _ _ hl hf
+
+theorem firstWait_rel₂ {R W Op : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (opens₁ opens₂ : Seen → List Op)
+    (k : ℕ) (assemble : List Op → Option W) (check : W → Bool)
+    (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
+      ((run₁ r).seen.out = .acc → opens₁ (run₁ r).seen = opens₂ (run₂ r).seen)) :
+    ∀ rss : List (List R), ((firstWait k opens₁ assemble check rss).eval H run₁).1 =
+      ((firstWait k opens₂ assemble check rss).eval H run₂).1
+  | [] => rfl
+  | rs :: rss => by
+    simp only [firstWait, rp_eval_bind_fst]
+    rw [(waitAcc_rel₂ H run₁ run₂ opens₁ opens₂ k h rs [] [] rfl rfl).2]
+    split
+    · split
+      · rfl
+      · exact firstWait_rel₂ H run₁ run₂ opens₁ opens₂ k assemble check h rss
+    · exact firstWait_rel₂ H run₁ run₂ opens₁ opens₂ k assemble check h rss
+
+/-- **`E^rep` at two openings of two runs gives one result** where the runs accept alike and, where they accept, open
+alike. -/
+theorem erep_rel₂ {D W Op : Type} (H : Msg → Msg) (run₁ run₂ : D → Trace) (m k K : ℕ) (opens₁ opens₂ : Seen → List Op)
+    (assemble : List Op → Option W) (check : W → Bool) (d₀ : D) (ρ : Fin m → Fin K → D)
+    (h : ∀ r, ((run₁ r).seen.out = .acc ↔ (run₂ r).seen.out = .acc) ∧
+      ((run₁ r).seen.out = .acc → opens₁ (run₁ r).seen = opens₂ (run₂ r).seen)) :
+    ((erep m k K opens₁ assemble check d₀ ρ).eval H run₁).1 =
+      ((erep m k K opens₂ assemble check d₀ ρ).eval H run₂).1 := by
+  simp only [erep, RP.eval]
+  by_cases hv : (run₁ d₀).seen.out = .acc
+  · rw [ite_eq_left hv, ite_eq_left ((h d₀).1.1 hv)]
+    exact firstWait_rel₂ H run₁ run₂ opens₁ opens₂ k assemble check h _
+  · rw [ite_eq_right hv, ite_eq_right fun h' => hv ((h d₀).1.2 h')]
+    rfl
+
+/-- **An event at some draw `E^rep` reruns at is at most `1 + m·k` times as likely as at one draw** (Wald's identity at
+the event's indicator as the weight), over a tape, the judged draw and the waits' draws. -/
+theorem Pr_exists_rerun_draws {D W Op : Type} [Fintype D] [Nonempty D] {Ω : Type} [Fintype Ω] (H : Msg → Msg)
+    (run : Ω → D → Trace) (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
+    (Q : Ω → D → Prop) :
+    Pr (fun s : Ω × D × (Fin m → Fin K → D) =>
+      ∃ d ∈ (erep m k K opens assemble check s.2.1 s.2.2).rerunsAt H (run s.1), Q s.1 d) ≤
+      (1 + m * k) * Pr (fun t : Ω × D => Q t.1 t.2) := by
+  classical
+  let w : Ω → D → ℝ := fun ω d => if Q ω d then 1 else 0
+  have hw : ∀ ω d, 0 ≤ w ω d := fun ω d => by simp only [w]; split_ifs <;> norm_num
+  let L : Ω → D × (Fin m → Fin K → D) → ℝ :=
+    fun ω t => (((erepProg m k K opens assemble check t.1 t.2).rerunsAt H (run ω)).map (w ω)).sum
+  have hpt : ∀ s : Ω × D × (Fin m → Fin K → D),
+      (if ∃ d ∈ (erep m k K opens assemble check s.2.1 s.2.2).rerunsAt H (run s.1), Q s.1 d then (1 : ℝ) else 0) ≤
+        L s.1 s.2 := by
+    intro s
+    have hnn : ∀ y ∈ ((erepProg m k K opens assemble check s.2.1 s.2.2).rerunsAt H (run s.1)).map (w s.1), 0 ≤ y := by
+      intro y hy
+      obtain ⟨d, _, rfl⟩ := List.mem_map.1 hy
+      exact hw _ _
+    split_ifs with h
+    · obtain ⟨d, hd, hb⟩ := h
+      have h1 : w s.1 d = 1 := by simp [w, hb]
+      rw [← h1]
+      exact List.single_le_sum hnn _ (List.mem_map.2 ⟨d, hd, rfl⟩)
+    · exact List.sum_nonneg hnn
+  have hPr : Pr (fun t : Ω × D => Q t.1 t.2) = Ex fun ω => Ex (w ω) := by
+    rw [← Ex_ind, Ex_prod]
+  calc Pr (fun s : Ω × D × (Fin m → Fin K → D) =>
+        ∃ d ∈ (erep m k K opens assemble check s.2.1 s.2.2).rerunsAt H (run s.1), Q s.1 d)
+      = Ex (fun s : Ω × D × (Fin m → Fin K → D) =>
+          if ∃ d ∈ (erep m k K opens assemble check s.2.1 s.2.2).rerunsAt H (run s.1), Q s.1 d then (1 : ℝ)
+          else 0) := (Ex_ind _).symm
+    _ ≤ Ex (fun s : Ω × D × (Fin m → Fin K → D) => L s.1 s.2) := Ex_mono hpt
+    _ = Ex fun ω => Ex (L ω) := Ex_prod _
+    _ ≤ Ex fun ω => (1 + m * k) * Ex (w ω) := Ex_mono fun ω => erepProg_cost_exp H _ (hw ω) _ _ _ _ _ _
+    _ = (1 + m * k) * Pr (fun t : Ω × D => Q t.1 t.2) := by rw [Ex_mul_left, hPr]
+
+/-- **The weight's margin pays the bridge's loss**: in `γ = 16·(√(2·k·C) + k)²`, `√(γ·β)` grows by
+`4·√(2k)·(√C' − √C)·√β` from `C` to `C'`, which is at least `N·k·√β` where `√C + N·√(k/32) ≤ √C'`. -/
+theorem sqrt_gamma_gap {k N Cd Ci β : ℝ} (hk : 0 ≤ k)
+    (hW : Real.sqrt Cd + N * Real.sqrt (k / 32) ≤ Real.sqrt Ci) :
+    Real.sqrt (16 * (Real.sqrt (2 * k * Cd) + k) ^ 2 * β) + N * (k * Real.sqrt β) ≤
+      Real.sqrt (16 * (Real.sqrt (2 * k * Ci) + k) ^ 2 * β) := by
+  have h2k : (0 : ℝ) ≤ 2 * k := by linarith
+  have hs : ∀ C : ℝ, Real.sqrt (16 * (Real.sqrt (2 * k * C) + k) ^ 2 * β) =
+      4 * (Real.sqrt (2 * k) * Real.sqrt C + k) * Real.sqrt β := by
+    intro C
+    have hX : 0 ≤ 4 * (Real.sqrt (2 * k * C) + k) :=
+      mul_nonneg (by norm_num) (add_nonneg (Real.sqrt_nonneg _) hk)
+    rw [show 16 * (Real.sqrt (2 * k * C) + k) ^ 2 * β = (4 * (Real.sqrt (2 * k * C) + k)) ^ 2 * β by ring,
+      Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq hX, Real.sqrt_mul h2k C]
+  have h32 : 4 * (Real.sqrt (2 * k) * Real.sqrt (k / 32)) = k := by
+    rw [← Real.sqrt_mul h2k, show 2 * k * (k / 32) = (k / 4) ^ 2 by ring, Real.sqrt_sq (by linarith)]
+    ring
+  rw [hs Cd, hs Ci]
+  have hd : 0 ≤ Real.sqrt Ci - Real.sqrt Cd - N * Real.sqrt (k / 32) := by linarith
+  have key : 4 * (Real.sqrt (2 * k) * Real.sqrt Ci + k) * Real.sqrt β -
+      (4 * (Real.sqrt (2 * k) * Real.sqrt Cd + k) * Real.sqrt β + N * (k * Real.sqrt β)) =
+      4 * Real.sqrt (2 * k) * Real.sqrt β * (Real.sqrt Ci - Real.sqrt Cd - N * Real.sqrt (k / 32)) := by
+    linear_combination (N * Real.sqrt β) * h32
+  have hp : 0 ≤ 4 * Real.sqrt (2 * k) * Real.sqrt β * (Real.sqrt Ci - Real.sqrt Cd - N * Real.sqrt (k / 32)) :=
+    mul_nonneg (mul_nonneg (mul_nonneg (by norm_num) (Real.sqrt_nonneg _)) (Real.sqrt_nonneg _)) hd
+  rw [← key] at hp
+  exact sub_nonneg.1 hp
+
 section Bound
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -416,6 +540,25 @@ theorem Bound.accFacts (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) {Ω :
     rw [hlast]
     simp only [hf, hsnd, zip_range_map _ _ hol, hacc]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+theorem Bound.openView_out (Bd : Bound Coin Col T) (v : Seen) : (Bd.openView v).out = v.out := by
+  unfold Bound.openView
+  split <;> rfl
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+theorem Bound.openView_eq_of_acc (Bd : Bound Coin Col T) {v : Seen} (h : v.out = .acc) :
+    Bd.openView v = ⟨(Bd.openView v).msgs, .acc⟩ := by
+  rw [← h, ← Bd.openView_out v]
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+theorem Bound.opened_getD_lt (Bd : Bound Coin Col T) {os : List (List (Msg × (Fin Bd.saltLen → UInt8)))}
+    {last : Msg} {j : ℕ} (h : j < os.length) :
+    (Bd.opened os last).getD j [] = Bd.join ((os.getD j []).map Prod.fst) := by
+  have h' : j < (os.map fun o => Bd.join (o.map Prod.fst)).length := by simpa using h
+  unfold Bound.opened
+  rw [List.getD_eq_getElem _ _ (by simp; omega), List.getElem_append_left h', List.getElem_map,
+    List.getD_eq_getElem _ _ h]
+
 /-! ## The plurality prover -/
 
 section Plur
@@ -455,6 +598,13 @@ open Classical in
 opens the plurality at every round. -/
 noncomputable def Bound.plurKeep [Fintype A] (ω : Ω) (r : Fin (Bd.DE.V.k x) → Coin) (a : A) : Bool :=
   decide (Bd.gA H x P keep ω (r, a) ∧ Bd.OnPlur H x P keep ω (r, a))
+
+/-- `P`'s run against `IVStar`, as it may abort, opened where it accepts, and aborted elsewhere: what `E^rep` at `DE`
+sees of it. -/
+def Bound.openRun (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) : Trace :=
+  if (abortRun H P Bd.IVStar x keep ω d).out = .acc then
+    ⟨(Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen).msgs, [], [], .acc⟩
+  else abortTrace
 
 variable {Bd H x P keep}
 
@@ -529,8 +679,332 @@ theorem Bound.plurRun [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c,
   · obtain ⟨j, hj, hej⟩ := h3 e he
     exact (hag j hj).2 e hej
 
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
+/-- **`P`'s runs and their openings accept alike**, and an accepted run's opening at the bound record is `DE`'s of
+the run opened. -/
+theorem Bound.openRun_rel (ω : Ω) (d : (Fin (Bd.IVStar.k x) → Coin) × A) :
+    ((abortRun H P Bd.IVStar x keep ω d).seen.out = .acc ↔ (Bd.openRun H x P keep ω d).seen.out = .acc) ∧
+      ((abortRun H P Bd.IVStar x keep ω d).seen.out = .acc →
+        Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen = (Bd.openRun H x P keep ω d).seen) := by
+  by_cases h : (abortRun H P Bd.IVStar x keep ω d).out = .acc
+  · have e : Bd.openRun H x P keep ω d =
+        ⟨(Bd.openView (abortRun H P Bd.IVStar x keep ω d).seen).msgs, [], [], .acc⟩ := ite_eq_left h
+    rw [e]
+    exact ⟨⟨fun _ => rfl, fun _ => h⟩,
+      fun _ => Bd.openView_eq_of_acc (v := (abortRun H P Bd.IVStar x keep ω d).seen) h⟩
+  · have e : Bd.openRun H x P keep ω d = abortTrace := ite_eq_right h
+    rw [e]
+    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTrace, Trace.seen] at h'⟩, fun h' => absurd h' h⟩
+
+/-- **Off the bad runs, the plurality prover's aborting runs show `E^rep` at `DE` what `P`'s runs opened show it**: a
+run on the plurality is kept and is `P`'s run opened (`plurRun`); a run `IVStar` rejects aborts at both. -/
+theorem Bound.openRun_seen [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) (ω : Ω)
+    (d : (Fin (Bd.IVStar.k x) → Coin) × A) (hb : ¬ Bd.BadA H x P keep ω d) :
+    (Bd.openRun H x P keep ω d).seen =
+      (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) ω d).seen := by
+  by_cases hg : Bd.gA H x P keep ω d
+  · have hp : Bd.OnPlur H x P keep ω d := by
+      by_contra hn
+      exact hb ⟨hg, hn⟩
+    have hk : Bd.plurKeep H x P keep ω d.1 d.2 = true := by
+      simp only [Bound.plurKeep, decide_eq_true_eq]
+      exact ⟨hg, hp⟩
+    rw [abortRun_of_keep (H := H) (P := Bd.plurP H x P keep decC) (V := Bd.DE.V) hk]
+    exact ((Bound.plurRun decC hdec ω d hg hp).1.trans
+      ((Bound.openRun_rel (H := H) (P := P) (keep := keep) ω d).2 hg)).symm
+  · have hg' : ¬ (abortRun H P Bd.IVStar x keep ω d).out = .acc := hg
+    have hk : ¬ Bd.plurKeep H x P keep ω d.1 d.2 = true := by
+      simp only [Bound.plurKeep, decide_eq_true_eq]
+      exact fun h => hg h.1
+    have e : Bd.openRun H x P keep ω d = abortTrace := ite_eq_right hg'
+    rw [e]
+    unfold abortRun
+    rw [ite_eq_right hk]
+
+/-- The plurality prover's aborting runs make only calls `P`'s runs, as they abort, make. -/
+theorem Bound.plurAbort_vLog [Fintype A] (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) (ω : Ω)
+    (d : (Fin (Bd.DE.V.k x) → Coin) × A) :
+    ∀ e ∈ (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) ω d).vLog,
+      e ∈ (abortRun H P Bd.IVStar x keep ω d).vLog := by
+  intro e he
+  by_cases hk : Bd.plurKeep H x P keep ω d.1 d.2 = true
+  · have hk' : Bd.gA H x P keep ω d ∧ Bd.OnPlur H x P keep ω d := by
+      simp only [Bound.plurKeep, decide_eq_true_eq] at hk
+      exact hk
+    rw [abortRun_of_keep (H := H) (P := Bd.plurP H x P keep decC) (V := Bd.DE.V) hk] at he
+    exact (Bound.plurRun decC hdec ω d hk'.1 hk'.2).2.2 e he
+  · unfold abortRun at he
+    rw [ite_eq_right hk] at he
+    simp [abortTrace] at he
+
+/-- **`E^rep` at `IVStar` fails at most as `E^rep` at `DE` fails against the plurality prover's aborting runs, plus
+`N_I` times one run's chance to be bad**: off the bad runs `E^rep` reruns at, it sees at `DE` what it sees at
+`IVStar` (`openRun_rel`, `openRun_seen`), and the judged run is the plurality prover's, accepted; a bad rerun costs
+`N_I` times one draw's (`Pr_exists_rerun_draws`). -/
+theorem Bound.PrBadAbort_le [Fintype Ω] [Fintype A] [Nonempty A] (decI : List (ℕ × Col) → List T)
+    (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c) :
+    (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤
+      (Inner.ofFlock Bd.DE decI).PrBadAbort H x (Bd.plurP H x P keep decC) (Bd.plurKeep H x P keep) +
+        (1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) *
+          Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) := by
+  let Jdg : Ω × ((Fin (Bd.IVStar.k x) → Coin) × A) ×
+      (Fin (Bd.DE.waits x) → Fin (Bd.DE.cap x) → (Fin (Bd.IVStar.k x) → Coin) × A) → Prop := fun s =>
+    (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) s.1 s.2.1).out = .acc ∧
+      ¬ (Inner.ofFlock Bd.DE decI).R.ext x ((erep (Bd.DE.waits x) (Bd.DE.k x) (Bd.DE.cap x)
+        (Inner.ofFlock Bd.DE decI).opens ((Inner.ofFlock Bd.DE decI).assemble x)
+        ((Inner.ofFlock Bd.DE decI).check x) s.2.1 s.2.2).eval H
+          (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) s.1)).1
+  let Rbad : Ω × ((Fin (Bd.IVStar.k x) → Coin) × A) ×
+      (Fin (Bd.DE.waits x) → Fin (Bd.DE.cap x) → (Fin (Bd.IVStar.k x) → Coin) × A) → Prop := fun s =>
+    ∃ d ∈ (erep (Bd.DE.waits x) (Bd.DE.k x) (Bd.DE.cap x) (Inner.ofFlock Bd.DE decI).opens
+      ((Inner.ofFlock Bd.DE decI).assemble x) ((Inner.ofFlock Bd.DE decI).check x) s.2.1 s.2.2).rerunsAt H
+        (Bd.openRun H x P keep s.1), Bd.BadA H x P keep s.1 d
+  have e : (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep =
+      Pr fun s : Ω × ((Fin (Bd.IVStar.k x) → Coin) × A) ×
+        (Fin (Bd.DE.waits x) → Fin (Bd.DE.cap x) → (Fin (Bd.IVStar.k x) → Coin) × A) =>
+      (abortRun H P Bd.IVStar x keep s.1 s.2.1).out = .acc ∧
+        ¬ (Inner.ofFlock Bd.DE decI).R.ext x ((erep (Bd.DE.waits x) (Bd.DE.k x) (Bd.DE.cap x)
+          (fun v => (Inner.ofFlock Bd.DE decI).opens (Bd.openView v)) ((Inner.ofFlock Bd.DE decI).assemble x)
+          ((Inner.ofFlock Bd.DE decI).check x) s.2.1 s.2.2).eval H (abortRun H P Bd.IVStar x keep s.1)).1 :=
+    rfl
+  have hYZ : (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤ Pr Jdg + Pr Rbad := by
+    rw [e]
+    refine (Pr_mono fun s hs => ?_).trans (Pr_or_le Jdg Rbad)
+    by_cases hz : Rbad s
+    · exact Or.inr hz
+    · left
+      have hnb : ∀ d ∈ (erep (Bd.DE.waits x) (Bd.DE.k x) (Bd.DE.cap x) (Inner.ofFlock Bd.DE decI).opens
+          ((Inner.ofFlock Bd.DE decI).assemble x) ((Inner.ofFlock Bd.DE decI).check x) s.2.1 s.2.2).rerunsAt H
+            (Bd.openRun H x P keep s.1), ¬ Bd.BadA H x P keep s.1 d := fun d hd hb => hz ⟨d, hd, hb⟩
+      have hrel := fun d => Bound.openRun_rel (Bd := Bd) (H := H) (x := x) (P := P) (keep := keep) s.1 d
+      have h1 := erep_rel₂ H (abortRun H P Bd.IVStar x keep s.1) (Bd.openRun H x P keep s.1) (Bd.DE.waits x)
+        (Bd.DE.k x) (Bd.DE.cap x) (fun v => (Inner.ofFlock Bd.DE decI).opens (Bd.openView v))
+        (Inner.ofFlock Bd.DE decI).opens ((Inner.ofFlock Bd.DE decI).assemble x) ((Inner.ofFlock Bd.DE decI).check x)
+        s.2.1 s.2.2 fun d => ⟨(hrel d).1, fun h => congrArg (Inner.ofFlock Bd.DE decI).opens ((hrel d).2 h)⟩
+      have h2 := RP.eval_congr H (Bd.openRun H x P keep s.1)
+        (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) s.1)
+        (erep (Bd.DE.waits x) (Bd.DE.k x) (Bd.DE.cap x) (Inner.ofFlock Bd.DE decI).opens
+          ((Inner.ofFlock Bd.DE decI).assemble x) ((Inner.ofFlock Bd.DE decI).check x) s.2.1 s.2.2)
+        fun d hd => Bound.openRun_seen decC hdec s.1 d (hnb d hd)
+      have hd₀ : s.2.1 ∈ (erep (Bd.DE.waits x) (Bd.DE.k x) (Bd.DE.cap x) (Inner.ofFlock Bd.DE decI).opens
+          ((Inner.ofFlock Bd.DE decI).assemble x) ((Inner.ofFlock Bd.DE decI).check x) s.2.1 s.2.2).rerunsAt H
+            (Bd.openRun H x P keep s.1) := List.mem_cons_self
+      refine ⟨?_, fun hR => hs.2 ?_⟩
+      · have hs₀ := congrArg Seen.out (Bound.openRun_seen decC hdec s.1 s.2.1 (hnb _ hd₀))
+        exact hs₀.symm.trans ((hrel s.2.1).1.1 hs.1)
+      · rw [h1, h2]
+        exact hR
+  have hY : Pr Jdg =
+      (Inner.ofFlock Bd.DE decI).PrBadAbort H x (Bd.plurP H x P keep decC) (Bd.plurKeep H x P keep) := rfl
+  have hZ : Pr Rbad ≤ (1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) *
+      Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) :=
+    Pr_exists_rerun_draws H (Bd.openRun H x P keep) _ _ _ _ _ _ (Bd.BadA H x P keep)
+  exact hYZ.trans (add_le_add hY.le hZ)
+
+/-- **`B` at the plurality prover's aborting runs finds only collisions `B` at `P`'s finds**: a kept run's calls are
+among `P`'s run's (`plurRun`), and an aborted run makes none. -/
+theorem Bound.PrBAbort_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (decC : Msg → Msg → Coin)
+    (hdec : ∀ x c, decC x (Bd.ans c) = c) :
+    PrBAbort H Bd.DE.V (Bd.plurP H x P keep decC) x (Bd.plurKeep H x P keep) ≤ PrBAbort H Bd.IVStar P x keep := by
+  by_cases hk : 0 < Bd.DE.V.k x
+  · have hk' : 0 < Bd.IVStar.k x := hk
+    simp only [PrBAbort, hk, hk', ↓reduceDIte]
+    unfold Finder.Pr
+    refine Pr_mono fun s hs => ?_
+    obtain ⟨u, v, hs, -⟩ := hs
+    have hl' : ∀ p ∈ (abortRun H P Bd.IVStar x keep s.1.2.1 (s.1.2.2.1, s.2.1)).vLog ++
+        (abortRun H P Bd.IVStar x keep s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, s.2.2)).vLog, H p.1 = p.2 :=
+      fun p hp => (List.mem_append.1 hp).elim (abortRun_vLog H P Bd.IVStar x keep _ _ p)
+        (abortRun_vLog H P Bd.IVStar x keep _ _ p)
+    have hsub : ∀ p ∈ (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep) s.1.2.1
+          (s.1.2.2.1, s.2.1)).vLog ++ (abortRun H (Bd.plurP H x P keep decC) Bd.DE.V x (Bd.plurKeep H x P keep)
+          s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, s.2.2)).vLog,
+        p ∈ (abortRun H P Bd.IVStar x keep s.1.2.1 (s.1.2.2.1, s.2.1)).vLog ++
+          (abortRun H P Bd.IVStar x keep s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2, s.2.2)).vLog :=
+      fun p hp => (List.mem_append.1 hp).elim
+        (fun h => List.mem_append_left _ (Bound.plurAbort_vLog decC hdec _ _ p h))
+        (fun h => List.mem_append_right _ (Bound.plurAbort_vLog decC hdec _ _ p h))
+    obtain ⟨⟨u', v'⟩, huv⟩ :=
+      Option.isSome_iff_exists.1 (findColl_isSome_of_sub H hl' hsub (Option.isSome_iff_exists.2 ⟨(u, v), hs⟩))
+    exact ⟨u', v', huv, findColl_spec H _ hl' u' v' huv⟩
+  · have h0 : PrBAbort H Bd.DE.V (Bd.plurP H x P keep decC) x (Bd.plurKeep H x P keep) = 0 := by
+      simp only [PrBAbort, hk, ↓reduceDIte]
+    rw [h0]
+    exact PrBAbort_nonneg H Bd.IVStar P x keep
+
+/-- **Two accepted runs that share their coins before round `j` and open it differently open one commit string two
+ways**, a collision among `IVStar`'s calls in the two runs: at the last round `final` reads one message, so they open
+alike; before it the round's message is one, so their rows differ at some commit string (`opens_coll`). -/
+theorem Bound.fork_tied (hB : Bd.Binds) (j : Fin (Bd.IVStar.k x)) (ω : Ω)
+    (d d' : (Fin (Bd.IVStar.k x) → Coin) × A)
+    (h : Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkDraw j d d') ∧
+      Bd.fA H x P keep ω d j ≠ Bd.fA H x P keep ω (forkDraw j d d') j) :
+    TiedColl H ((abortRun H P Bd.IVStar x keep ω d).vLog ++
+      (abortRun H P Bd.IVStar x keep ω (forkDraw j d d')).vLog) := by
+  obtain ⟨hg, hg', hne⟩ := h
+  obtain ⟨-, hr⟩ := Bound.gA_run hg
+  obtain ⟨-, hr'⟩ := Bound.gA_run hg'
+  have hacc : (run H P Bd.IVStar x ω d.1).out = .acc := hr ▸ hg
+  have hacc' : (run H P Bd.IVStar x ω (forkDraw j d d').1).out = .acc := hr' ▸ hg'
+  obtain ⟨-, os, last, hf, hlen, hrounds, -, hov⟩ := Bd.accFacts H x P ω d.1 hacc
+  obtain ⟨-, os', last', hf', hlen', hrounds', -, hov'⟩ := Bd.accFacts H x P ω (forkDraw j d d').1 hacc'
+  have hjk : j.val < Bd.DE.V.k x := j.isLt
+  have hfA : Bd.fA H x P keep ω d j = (Bd.opened os last).getD j [] := by
+    unfold Bound.fA
+    rw [hr, hov, List.map_map, getD_range_map _ _ hjk]
+    rfl
+  have hfA' : Bd.fA H x P keep ω (forkDraw j d d') j = (Bd.opened os' last').getD j [] := by
+    unfold Bound.fA
+    rw [hr', hov', List.map_map, getD_range_map _ _ hjk]
+    rfl
+  have hms : ((run H P Bd.IVStar x ω d.1).msgs.map Prod.fst).getD j [] =
+      ((run H P Bd.IVStar x ω (forkDraw j d d').1).msgs.map Prod.fst).getD j [] :=
+    run_fst_getD H P Bd.IVStar x ω j fun i hi => by simp only [forkDraw, forkCoins, hi, ↓reduceIte]
+  by_cases hj1 : j.val + 1 < Bd.DE.V.k x
+  · have hjo : j.val < os.length := by omega
+    have hjo' : j.val < os'.length := by omega
+    obtain ⟨hn, hop, hlog⟩ := hrounds j hjo
+    obtain ⟨hn', hop', hlog'⟩ := hrounds' j hjo'
+    rw [Bd.opened_getD_lt hjo] at hfA
+    rw [Bd.opened_getD_lt hjo'] at hfA'
+    have hL : os.getD j [] ≠ os'.getD j [] := fun e => hne (by rw [hfA, hfA', e])
+    obtain ⟨i, hi, hi', hdi⟩ : ∃ i, ∃ (hi : i < (os.getD j []).length) (hi' : i < (os'.getD j []).length),
+        (os.getD j [])[i] ≠ (os'.getD j [])[i] := by
+      by_contra hno
+      push Not at hno
+      exact hL (List.ext_getElem (hn.trans hn'.symm) hno)
+    rw [hms] at hop hlog
+    obtain ⟨h1, hl1⟩ := (Bd.opensRound_true H hop).2 i hi
+    obtain ⟨h2, hl2⟩ := (Bd.opensRound_true H hop').2 i hi'
+    obtain ⟨u, hu, v, hv, hc⟩ := Bd.opens_coll H hB h1 h2 fun e => hdi e
+    rw [hr, hr']
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hu
+    obtain ⟨q, hq, rfl⟩ := List.mem_map.1 hv
+    exact ⟨p.1, q.1, hc, List.mem_map.2 ⟨p, List.mem_append_left _ (hlog p (hl1 p hp)), rfl⟩,
+      List.mem_map.2 ⟨q, List.mem_append_right _ (hlog' q (hl2 q hq)), rfl⟩⟩
+  · exfalso
+    have hj' : Bd.DE.V.k x - 1 = j.val := by omega
+    rw [hj'] at hf hf'
+    rw [hms, hf'] at hf
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf)
+    exact hne (hfA.trans hfA'.symm)
+
+/-- **A run is bad at most as `k_I · √Pr[B]`**: it is off the plurality at some round `j`, at most as
+`√(Pr[two runs forked at j open round j differently])` (`Pr_plur_fork`), a collision `B`'s fork at `j` finds
+(`fork_tied`); the rounds' roots sum to at most `√k_I · √(Σ_j Pr[B's fork at j]) = k_I · √Pr[B]` (Cauchy–Schwarz). -/
+theorem Bound.Pr_badA_le [Fintype Ω] [Nonempty Ω] [Fintype A] [Nonempty A] (hB : Bd.Binds) :
+    Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) ≤
+      (Bd.DE.V.k x : ℝ) * Real.sqrt (PrBAbort H Bd.IVStar P x keep) := by
+  by_cases hk : 0 < Bd.IVStar.k x
+  · have h1 : Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) ≤
+        ∑ j : Fin (Bd.IVStar.k x), Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A =>
+          Bd.gA H x P keep t.1 t.2 ∧
+            Bd.fA H x P keep t.1 t.2 j ≠ Bd.plurAt H x P keep t.1 j ((List.range j).map (coinSeq t.2.1))) := by
+      refine (Pr_mono fun t ht => ?_).trans (Claims.Pr_exists_le _)
+      obtain ⟨hg, hna⟩ := ht
+      simp only [Bound.OnPlur, not_forall] at hna
+      obtain ⟨j, hj, hne⟩ := hna
+      exact ⟨⟨j, hj⟩, hg, hne⟩
+    have h2 : ∀ j : Fin (Bd.IVStar.k x), Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A =>
+        Bd.gA H x P keep t.1 t.2 ∧
+          Bd.fA H x P keep t.1 t.2 j ≠ Bd.plurAt H x P keep t.1 j ((List.range j).map (coinSeq t.2.1))) ≤
+        Real.sqrt (forkPrA H Bd.IVStar P x keep hk j) := fun j => by
+      have hp := Pr_plur_fork j.val (Bd.gA H x P keep) fun ω d => Bd.fA H x P keep ω d j
+      refine (le_of_eq (Pr_congr fun t => ?_)).trans (hp.trans (Real.sqrt_le_sqrt ?_))
+      · simp only [Bound.plurAt, fork_preCoins]
+      · let e : Ω × ((Fin (Bd.IVStar.k x) → Coin) × A) × ((Fin (Bd.IVStar.k x) → Coin) × A) ≃
+            Ω × (Fin (Bd.IVStar.k x) → Coin) × (Fin (Bd.IVStar.k x) → Coin) × A × A :=
+          { toFun := fun s => (s.1, s.2.1.1, s.2.2.1, s.2.1.2, s.2.2.2)
+            invFun := fun t => (t.1, (t.2.1, t.2.2.2.1), (t.2.2.1, t.2.2.2.2))
+            left_inv := fun _ => rfl
+            right_inv := fun _ => rfl }
+        rw [← Pr_equiv e]
+        exact Pr_fork_le_abort H Bd.IVStar P x keep hk j
+          (fun ω d d' => Bd.gA H x P keep ω d ∧ Bd.gA H x P keep ω (forkDraw j d d') ∧
+            Bd.fA H x P keep ω d j ≠ Bd.fA H x P keep ω (forkDraw j d d') j)
+          fun ω d d' h => Bound.fork_tied hB j ω d d' h
+    have hcs := Real.sum_sqrt_mul_sqrt_le (Finset.univ : Finset (Fin (Bd.IVStar.k x)))
+      (f := fun _ : Fin (Bd.IVStar.k x) => (1 : ℝ)) (g := fun j => forkPrA H Bd.IVStar P x keep hk j)
+      (fun _ => zero_le_one) (fun _ => Pr_nonneg _)
+    simp only [Real.sqrt_one, one_mul, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+      mul_one] at hcs
+    have hβ0 := PrBAbort_nonneg H Bd.IVStar P x keep
+    have hsum : ∑ j, forkPrA H Bd.IVStar P x keep hk j = PrBAbort H Bd.IVStar P x keep * Bd.IVStar.k x := by
+      rw [PrBAbort_eq_avg H Bd.IVStar P x keep hk, div_mul_cancel₀ _ (by exact_mod_cast hk.ne')]
+    have hsk : Real.sqrt (Bd.IVStar.k x : ℝ) * Real.sqrt (Bd.IVStar.k x : ℝ) = Bd.IVStar.k x :=
+      Real.mul_self_sqrt (Nat.cast_nonneg _)
+    calc Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2)
+        ≤ ∑ j : Fin (Bd.IVStar.k x), Real.sqrt (forkPrA H Bd.IVStar P x keep hk j) :=
+          h1.trans (Finset.sum_le_sum fun j _ => h2 j)
+      _ ≤ Real.sqrt (Bd.IVStar.k x) * Real.sqrt (∑ j, forkPrA H Bd.IVStar P x keep hk j) := hcs
+      _ = (Bd.IVStar.k x : ℝ) * Real.sqrt (PrBAbort H Bd.IVStar P x keep) := by
+          rw [hsum, Real.sqrt_mul hβ0]
+          linear_combination Real.sqrt (PrBAbort H Bd.IVStar P x keep) * hsk
+  · have h0 : ¬ 0 < Bd.DE.V.k x := hk
+    refine ((Pr_mono fun t ht => ?_).trans_eq Pr_false).trans
+      (mul_nonneg (Nat.cast_nonneg _) (Real.sqrt_nonneg _))
+    obtain ⟨-, hna⟩ := ht
+    exact hna fun j hj => absurd hj (by omega)
+
 end Plur
+
+/-- **The bridge at a record whose answers a decoder inverts** (`hdec`): `E^rep` at `IVStar` against `P` fails at most
+as `E^rep` at `DE` against the plurality prover's aborting runs, which `Inner.KSAbort` at `DE` bounds, plus
+`N_I · k_I · √Pr[B]` (`PrBadAbort_le`, `Pr_badA_le`); `B` there finds only what `B` at `P` finds (`PrBAbort_le`), and
+`WeightCovers` pays the loss in `√γ` (`sqrt_gamma_gap`). -/
+theorem Bound.bridge_of_dec [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (decC : Msg → Msg → Coin)
+    (hdec : ∀ x c, decC x (Bd.ans c) = c) : Bridge H Bd := by
+  intro decI _ hB hWC hKS x Ω _ _ P A _ _ keep
+  have ha := Bound.PrBadAbort_le (Bd := Bd) (H := H) (x := x) (P := P) (keep := keep) decI decC hdec
+  have hK := hKS x Ω (Bd.plurP H x P keep decC) A (Bd.plurKeep H x P keep)
+  have hb := Bound.PrBAbort_le (Bd := Bd) (H := H) (x := x) (P := P) (keep := keep) decC hdec
+  have hc : Pr (fun t : Ω × (Fin (Bd.IVStar.k x) → Coin) × A => Bd.BadA H x P keep t.1 t.2) ≤
+      (Bd.DE.V.k x : ℝ) * Real.sqrt (PrBAbort H Bd.IVStar P x keep) := Bound.Pr_badA_le hB
+  have hγ : 0 ≤ Flock.γ Bd.DE x := by unfold Flock.γ; positivity
+  have hN : (0 : ℝ) ≤ 1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x := by positivity
+  have hd := sqrt_gamma_gap (N := 1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) (β := PrBAbort H Bd.IVStar P x keep)
+    (Nat.cast_nonneg (Bd.DE.V.k x)) (hWC x)
+  have hsq : Real.sqrt (Flock.γ Bd.DE x *
+      PrBAbort H Bd.DE.V (Bd.plurP H x P keep decC) x (Bd.plurKeep H x P keep)) ≤
+      Real.sqrt (Flock.γ Bd.DE x * PrBAbort H Bd.IVStar P x keep) :=
+    Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hb hγ)
+  have hK' : (Inner.ofFlock Bd.DE decI).PrBadAbort H x (Bd.plurP H x P keep decC) (Bd.plurKeep H x P keep) ≤
+      Flock.κ Bd.DE x + Real.sqrt (Flock.γ Bd.DE x *
+        PrBAbort H Bd.DE.V (Bd.plurP H x P keep decC) x (Bd.plurKeep H x P keep)) := hK
+  have hcN := mul_le_mul_of_nonneg_left hc hN
+  show (Inner.ofFlock Bd.deploy decI).PrBadAbort H x P keep ≤
+    Flock.κ Bd.DE x + Real.sqrt (16 * (Real.sqrt (2 * (Bd.DE.V.k x : ℝ) * Bd.weight x) + Bd.DE.V.k x) ^ 2 *
+      PrBAbort H Bd.IVStar P x keep)
+  have hγE : Flock.γ Bd.DE x =
+      16 * (Real.sqrt (2 * (Bd.DE.V.k x : ℝ) * Bd.DE.weight x) + Bd.DE.V.k x) ^ 2 := rfl
+  rw [hγE] at hsq hK'
+  linarith
 
 end Bound
 
 end Claims.Recursion
+
+namespace RecDeploy
+
+open Claims (Msg Out)
+open FlockDeploy (Coin)
+
+/-- **The bridge at the deployed bound record**, at every choice the code side makes: its answers are a coin's bytes
+(`bdDeployed_ans`), which `FlockDeploy.decCoin` reads back (`coin_bytes_injective`). -/
+theorem bridge_bdDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :
+    Claims.Recursion.Bridge FlockDeploy.sha512 (bdDeployed rel nextE colsE wE join rowIn final w) :=
+  Claims.Recursion.Bound.bridge_of_dec FlockDeploy.sha512 _ FlockDeploy.decCoin fun _ c =>
+    (congrArg (FlockDeploy.decCoin _) (bdDeployed_ans rel nextE colsE wE join rowIn final w c)).trans
+      (Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c)
+
+/-- **`KSBoundRoute`**: `ksBoundRoute_of_bridge` at the bridge, which holds at every choice the code side makes
+(`bridge_bdDeployed`). -/
+theorem ksBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
+    (L : Claims.Recursion.VStarB.LayoutB) : KSBoundRoute rel relO b L :=
+  ksBoundRoute_of_bridge rel relO b L fun nextE colsE wE join rowIn final w =>
+    bridge_bdDeployed rel nextE colsE wE join rowIn final w
+
+end RecDeploy
