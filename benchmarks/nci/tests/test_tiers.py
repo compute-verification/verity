@@ -195,7 +195,7 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
 def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
     """Dark fragments of monitored capacity are counted at peak and unmonitored compute trains like the unconstrained
     developer, so D = 1 / (s + rest / mfu) (audience red team: against a real run at MFU 0.4, D at the defaults is 6.6)."""
-    p = T.DEFAULTS | {"unmonitored": 0.01}
+    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     rest = r["residual"] + r["declared"] + r["cheat"]
     assert r["dampener"] == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
@@ -210,6 +210,6 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
     assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
     assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
-    capped = p | {"residual": 0.9}
+    capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 29.83}
     assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["residual"] == pytest.approx(
         3 * T.evaluate(capped, T.TIERS["T3"])["residual"], rel=0.02)

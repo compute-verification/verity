@@ -60,7 +60,7 @@ RANGES = {
     "floor_steps": (1.0, 1e12, "guess"),
     "K": (2.2e6, 9.1e7, "calibrations kimi-k2-1m-coded, kimi-k2-1m-raw, kimi-k2-11mb-raw"),
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
-    "d": (512.0, 8355.0, "low a guess (fine-grained experts); Kimi K2's experts 2048; dense-70b"),
+    "d": (256.0, 8355.0, "low a guess; ThreadedOfLayered certifies 505 for Kimi K2 at S = 2e7; dense-70b"),
     "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
@@ -98,12 +98,13 @@ BISECT = 16
 SPECS = {s["key"]: s for s in T.SPEC}
 
 SERVED_4GB = SCENARIOS["served today, R_wipe 4 GB"]
+WIPE_30GB = {"pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 29.83}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
 #: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
-    ("defaults", {}, "T4", "mu", "the floor credit's residual is above the cap"),
+    ("30 GB streamed-label wipes", WIPE_30GB, "T4", "mu", "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
     ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
     ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
@@ -111,7 +112,8 @@ CHECKS = [
     ("served today", {"residual": 0.9}, "T3", "mu", "memory caps the residual"),
     ("served today", {"residual": 0.9}, "T4", "mu", "wipes bind before exhaustion"),
     ("served, R_wipe 4 GB", SERVED_4GB, "T4", "mu", "hourly wipes inside a 3.6 h window"),
-    ("side channels 1e7", {"residual": 0.9, "sigma": 1e7}, "T4", "mu", "helpers refill R_wipe; sigma joins lambda_in"),
+    ("side channels 1e7", WIPE_30GB | {"residual": 0.9, "sigma": 1e7, "unfilled_gb": 5.83}, "T4", "mu",
+     "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = e"),
     ("K 1e9", {"K": 1e9}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
     ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),

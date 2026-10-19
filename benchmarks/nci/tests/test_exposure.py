@@ -23,10 +23,10 @@ def test_every_parameter_has_a_range_around_its_default_inside_its_slider():
 def test_the_defaults_give_the_statements_numbers():
     t = X.terms(T.DEFAULTS)
     assert t["R_wipe_gb"] == pytest.approx(166, rel=0.01)
-    assert t["mu"] == pytest.approx(0.1355, rel=0.01)
-    assert t["nu"] == pytest.approx(1.04e-5, rel=0.01)
+    assert t["mu"] == pytest.approx(0.550, rel=0.01)
+    assert t["nu"] == pytest.approx(9.7e-6, rel=0.01)
     assert t["chi"] == pytest.approx(1.62e-3, rel=0.01)
-    assert t["eta_T4"] == pytest.approx(0.136, rel=0.01)
+    assert t["eta_T4"] == pytest.approx(0.508, rel=0.01)
 
 
 @pytest.mark.parametrize("probe", HOLDS, ids=[f"{c[0]}-{c[2]}-{c[3]}" for c in HOLDS])
