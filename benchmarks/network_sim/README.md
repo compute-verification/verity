@@ -402,6 +402,45 @@ The demo stays the size v2 was. At 16 bytes a row read is mostly the hm96 leaf a
 costs what one 256-bit value row did. Rows of B bytes, two per segment, were measured and set aside: they make the demo
 17.1M and the lab's largest window 61.8M, because every segment then opens two rows.
 
+N3 on every link-window, the price of its design's Selection All, is `workload/n3_cost.py`'s (run
+`r20261019-171031-6fa8`, at 8450bbaa73). A port-window small enough is traced whole (`n3_unit.size`); a served one, at
+35,000 frames of 4,096 bytes, doesn't fit in memory, so it is composed from the parts its body calls (`composed`). A
+link-window that recorded no frames needs no N3 unit, so it costs only N2's two head checks, 3,792,156 ANDs at T = 600
+(`N2_LINK_WINDOW`). As built:
+
+| Run | Link-windows | With frames | Port-windows with a unit | N3 a link-window | N3 in all |
+|---|---|---|---|---|---|
+| Simulator, 64-byte frames, 4 buckets a window | 12 | 6 | 10 | 3.4M to 18.1M | 65.4M |
+| Lab run `r20261018-084303-dae6`, 4,096-byte frames | 8 | 8 | 15 | 10.8M to 76.2M | 259.9M |
+
+The simulator's six empty link-windows are its wires'. The lab declares no occupancy profile, so N2 has no verdict on
+its links (above), whatever N3 costs there.
+
+At the shape of llama8b-node1's served rows (`SERVED`, from run `r20261006-035423-2cd5`: T = 600 buckets of 100 ms,
+slots of 4,096 bytes, 1,440 windows a day, busy egress link-windows of 34,499 and 35,386 frames, and 21,372 ingress
+frames for 715,340 egress), each part is traced at its statics and no served value is read. Egress port-windows are
+unsalted with one segment a frame and ingress ones salted with two, as the lab's are, and an event's JSON is guessed at
+256 bytes before its crossing text and 64 after. At the lab's depths the outboxes and the layout are the lab's trees; at
+a day's, every outbox has 2^26 rows and the layout two ports of 2^26 positions.
+
+| Depths | Egress frames | Ingress frames | N3 egress | N3 ingress | N3 a link-window | N3 a day, one link | N3 ÷ N2 |
+|---|---|---|---|---|---|---|---|
+| Lab's | 34,499 | 1,031 | 325.6B | 15.2B | 340.8B | 4.91 × 10^14 | 89,879 |
+| Lab's | 35,386 | 1,057 | 334.0B | 15.6B | 349.6B | 5.03 × 10^14 | 92,188 |
+| A day's | 34,499 | 1,031 | 592.2B | 27.5B | 619.7B | 8.92 × 10^14 | 163,424 |
+| A day's | 35,386 | 1,057 | 607.5B | 28.2B | 635.7B | 9.15 × 10^14 | 167,623 |
+
+N2 is 5.46 × 10^9 ANDs a day on one link. N3 is linear in the frames: a least-squares line through each ladder (7
+points from 2 frames, to 35,386 egress and 16,384 ingress) gives 9.44M ANDs an egress frame at the lab's depths and
+17.2M at a day's, and 14.8M and 26.7M an ingress frame, with the largest residual 3.0%. At the lab's depths a busy
+egress window is 46% row reads, 21.5% the frames root, 16% descriptor reads, 10% segments and 7% frames; at a day's,
+the deeper trees make it 50% row reads and 29% descriptor reads.
+
+`composed` equals the whole trace (`checked`) at the served format, at the lab's depths, on unsalted one-segment
+windows of 2, 3, 64, 257 and 1,024 frames and salted two-segment ones of 2, 3 and 64. The run's next check, a salted
+window of 257 frames, was killed at the run's 32 GiB memory cap, so the busy windows, and every count at a day's depths,
+are composed only. `workload/tests/test_n3_cost.py` holds `composed` to the trace at the demo's format.
+
 The tests (`workload/tests/test_n3_unit.py`, 45 quick and 6 slow, about 100 s) check the following:
 
 - `N3Frame` against `assemble` on every descriptor of the demo's, the simulator's and the lab's windows, honest and
