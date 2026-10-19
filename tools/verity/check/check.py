@@ -81,7 +81,8 @@ doesn't name:
                     cached under $FLOCK_CHECKOUT), so a merge that breaks the Rust build ends the run in minutes; then
                     `circuit-check --all --jobs` the other half, whose workers start only while their measured peaks
                     (`circuit_check/heavy.json`) fit the memory the run has, at most its check slot's mem= (`--mem-gb`, from
-                    slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it: every registered Definition and template
+                    slot.py's CHECK_SLOT_MEM_GB) less `SIBLINGS_GB` when pytest or Lean runs beside it, less pytest's share
+                    alone when no Lean step does (`cc_mem_gb`): every registered Definition and template
                     (`tools/verity/circuit_check`),
                     its report beside the run's result; then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
@@ -982,10 +983,14 @@ AFTER_LEAN = SUITES.AFTER_LEAN
 SIBLINGS_GB = 350
 
 
-def cc_mem_gb(slot_gb: int, beside: bool) -> int:
+def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
     """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
-    `SIBLINGS_GB` leaves, but never under a quarter of the slot."""
-    return max(slot_gb - SIBLINGS_GB, slot_gb // 4) if beside else slot_gb
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (a post-landing run of
+    circuit-check and pytest), what pytest's share of that (`tests_gb`, half, the other half lean-suites') leaves."""
+    if not beside:
+        return slot_gb
+    shared = max(slot_gb - SIBLINGS_GB, slot_gb // 4)
+    return shared if lean else slot_gb - (slot_gb - shared) // 2
 
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
@@ -999,11 +1004,12 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     if only is not None:
         names = {p.partition(":")[0] for p in only}
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
-    beside = only is None or any(x == "pytest" or x.startswith("lean") for x in names)
+    with_lean = only is None or any(x.startswith("lean") for x in names)
+    beside = with_lean or "pytest" in names
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
     slot_gb = int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
     with_cc = only is None or "circuit-check" in names
-    # pytest and lean-suites run at once, each with this share: what circuit-check leaves, halved
+    # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
@@ -1016,7 +1022,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     pytest = [*suites, "--json", str(out / "suites.json"), "--logs", str(out / "suites"), *after_lean, *tail]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check")] if cache else []),
-          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside))] if slot_gb is not None else [])]
+          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else [])]
     build = ["bash", str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
     built = {"pytest": ("pytest", pytest, ROOT), "flock-circuit-build": ("flock-circuit-build", build, ROOT),
