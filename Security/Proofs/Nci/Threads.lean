@@ -87,11 +87,13 @@ theorem threaded_ineq {bw d e cr S Rn X Y q Hb Mt : ℝ} (hbw : 0 < bw) (hd : 0 
           (mul_le_mul_of_nonneg_right (le_max_right _ _) hRX)
     _ = Rn * max e K := by ring
 
-/-- **Theorem 1** (the thread draft, Appendix A). -/
-theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ) (hbw : 0 < b_w)
-    (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e) (hW : Assumptions.WeightsIncompressible c T Γ S b_w b_a)
-    (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
-    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e := by
+/-- Theorem 1's counting, for any measure `Rn ≤ S` of what `R` reads that pays for the weights `R` uses and the thread
+values it reads. -/
+theorem threaded_count {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) {S b_w b_a Rn : ℝ} {d e : ℕ}
+    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
+    (hT : ∀ t, (T.threadReads R t).card < d → (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
+    (hinc : b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
+    b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e := by
   classical
   set L := univ.filter fun t => (T.threadReads R t).card < d with hL_def
   set H := univ.filter fun t => ¬ (T.threadReads R t).card < d with hH_def
@@ -101,7 +103,7 @@ theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a
   have hL : ∑ t ∈ L, ((T.threadMults R t).card : ℝ) ≤ e * ∑ t ∈ L, ((T.threadReads R t).card : ℝ) := by
     rw [mul_sum]
     refine sum_le_sum fun t ht => ?_
-    exact_mod_cast hT R hR t (mem_filter.1 ht).2
+    exact_mod_cast hT t (mem_filter.1 ht).2
   have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * (T.weightsUsed R).card * H.card := by
     have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * (T.weightsUsed R).card)
       fun t _ => by exact_mod_cast card_threadMults_le T R t
@@ -110,7 +112,6 @@ theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a
     have := card_nsmul_le_sum H (fun t => ((T.threadReads R t).card : ℝ)) (d : ℝ)
       fun t ht => by exact_mod_cast not_lt.1 (mem_filter.1 ht).2
     rwa [nsmul_eq_mul, mul_comm] at this
-  have hinc := hW R hR
   push_cast at hinc
   rw [← sum_filter_add_sum_filter_not univ (fun t => (T.threadReads R t).card < d)] at hinc
   have hdr : (0 : ℝ) < d := by exact_mod_cast hd
@@ -118,13 +119,20 @@ theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a
     (X := b_a * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (q := (T.weightsUsed R).card) hbw hdr
     (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _))
     (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _) (by linarith)
-    hR.2.2 ?_ ?_
+    hRS ?_ ?_
   · calc (d : ℝ) * (b_a * H.card) = b_a * (d * H.card) := by ring
       _ ≤ _ := mul_le_mul_of_nonneg_left hHc hba.le
   · rw [hsplit, mul_add]
     have h1 := mul_le_mul_of_nonneg_left hL hba.le
     have h2 := mul_le_mul_of_nonneg_left hH hba.le
     nlinarith
+
+/-- **Theorem 1** (the thread draft, Appendix A). -/
+theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ) (hbw : 0 < b_w)
+    (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e) (hW : Assumptions.WeightsIncompressible c T Γ S b_w b_a)
+    (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
+    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e :=
+  threaded_count T R hbw hba hd (hT R hR) (hW R hR) hR.2.2
 
 /-- **Theorem 1** (the thread draft, Appendix A). -/
 theorem ThreadedReads : Guarantees.ThreadedReads := threaded_reads
