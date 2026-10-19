@@ -31,8 +31,17 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.program.launch_units import admission_order, rows_at
+from verity_vllm.engine.arrivals import admission_order
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
+
+
+def rows_at(req: dict[str, Any], e: int) -> int:
+    a, L, c = int(req["arrive_step"]), int(req["prompt_len"]), int(req["max_tokens"])
+    if e == a:
+        return L - int(req.get("cached", 0))
+    if a < e <= a + c - 1:
+        return 1
+    return 0
 
 
 def start_at(req: dict[str, Any], e: int) -> int:
@@ -54,7 +63,7 @@ def request_launch_context(reqs: list[dict[str, Any]], r: dict[str, Any]) -> lis
 
 def request_launch_batch(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[list[list[int]]]:
     """Per request step s of r: every sequence engine step arrive_step(r) + s schedules, as [rows, start], in admission order
-    (`launch_units.admission_order`).  Without preemption the scheduler keeps its running requests in that order, and vLLM's model
+    (`arrivals.admission_order`).  Without preemption the scheduler keeps its running requests in that order, and vLLM's model
     runner keeps it for the decodes it puts first (`sort_batch_req_ids`), so a decode's index in the launch is its index here."""
     a, c = int(r["arrive_step"]), int(r["max_tokens"])
     reqs = admission_order(reqs)
