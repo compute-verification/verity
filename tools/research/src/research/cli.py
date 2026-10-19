@@ -983,8 +983,9 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
 
 
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
-    """`--on auto` as AUTO_KIND, of a suites.py run of named suites: the memory and time their `[tool.verity.tests]` worker_gb and
-    timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or --max-min."""
+    """`--on auto` as AUTO_KIND, of a suites.py run (named suites, `--changed REV`'s or all): the memory and time their
+    `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or
+    --max-min."""
     timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
     if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
         return
@@ -1000,8 +1001,9 @@ def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[st
         ns.max_min = math.ceil(shape["max_s"] / 60)
         said.append(f"{ns.max_min} min")
     if said:
-        print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {', '.join(shape['suites'])}",
-              file=sys.stderr)
+        of = shape["suites"]
+        of = ", ".join(of) if len(of) <= 6 else f"its {len(of)} suites ({', '.join(of[:3])}, ...)"
+        print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {of}", file=sys.stderr)
 
 
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:

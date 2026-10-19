@@ -342,6 +342,11 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
         (repo / path / "pyproject.toml").write_text(body)
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    (repo / "tools/verity/check").mkdir(parents=True)
+    (repo / "tools/verity/check/suites.py").write_text(
+        "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\nif rev == 'broken':\n    sys.exit(2)\n"
+        "hit = 'none' if rev == 'nothing' else 'verity-vllm, verity/core'\n"
+        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else 2}: {hit}')\n")
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
@@ -353,7 +358,12 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
-            ([], [*suites, "--quick"], (None, None, None)),
+            # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync (INF-98)
+            ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes
+            # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
+            ([], [*suites, "--changed=nothing"], (None, None, None)),
+            ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
             ([], [*suites, "nosuch"], (None, None, None)),
             ([], [*suites, "verity_vllm"], (None, None, None)),             # suites.py's names are normalized: it matches none
