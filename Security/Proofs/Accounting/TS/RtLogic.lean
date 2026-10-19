@@ -200,9 +200,9 @@ def iadd3Warp : Dataflow (Fin 32 × Fin 3) (BitVec 32) where
   earlier i k hk := by simp at hk
   op i v := v (.inl (i, 0)) + v (.inl (i, 1)) + v (.inl (i, 2))
   reads i v v' hv := by
-    have h0 := hv (.inl (i, 0)) (by simp)
-    have h1 := hv (.inl (i, 1)) (by simp)
-    have h2 := hv (.inl (i, 2)) (by simp)
+    have h0 := hv (.inl (i, 0)) (Finset.mem_map.mpr ⟨0, Finset.mem_univ _, rfl⟩)
+    have h1 := hv (.inl (i, 1)) (Finset.mem_map.mpr ⟨1, Finset.mem_univ _, rfl⟩)
+    have h2 := hv (.inl (i, 2)) (Finset.mem_map.mpr ⟨2, Finset.mem_univ _, rfl⟩)
     simp only [h0, h1, h2]
 
 theorem iadd3Warp_n : iadd3Warp.n = 32 := rfl
