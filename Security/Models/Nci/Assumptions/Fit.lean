@@ -5,8 +5,10 @@ import Definitions.Nci.Fit
 
 The fit bound rests on two empirical premises about the reference training circuit `c` and its division into windows,
 measured rather than proved ("The fit bound", Notion, sections 1, 6 and 7): `Reach`, the loss premise F3, and `Fits`,
-the capacity premise F1 with the boundary premise F4, at window scale. `Security/lean-audit.json` lists this module under
-`shape.premises`: each is an assumption about the world, not a conjecture.
+the capacity premise F1 with the boundary premise F4, at window scale. `ReachSlots` and `FitsSlots` are the same
+premises counted in parameter slots (`Threading.Slots`), so that a window spanning several optimizer steps is charged
+once per parameter, not once per version. `Security/lean-audit.json` lists this module under `shape.premises`: each is
+an assumption about the world, not a conjecture.
 -/
 
 namespace Nci.Assumptions
@@ -43,5 +45,34 @@ ensemble, whose members each start the token from its id, or a low-bit boundary 
 def Fits (c : Declaration) (T : Threading c) {k : ℕ} (P : Partition c.D k) (start : Fin T.m → Fin k)
     (b_w w_e : ℝ) : Prop :=
   ∀ j, b_w * (T.weightsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ novelReads c (P.gates j)
+
+/-- **F3 per parameter (empirical)**: every thread that does a counted multiplication uses at least `Nstar` distinct
+parameter slots of `σ` in its counted multiplications. It is `Reach` counted in parameters rather than weight gates: in
+a model that reaches the target loss `L*`, every token's computation depends on at least `N*` updated parameters, at
+whatever optimizer step it runs. A thread that uses one version of each parameter uses as many slots as weights, so
+there it is `Reach`.
+
+It fails where `Reach` does: a token-routed mixture of experts whose tokens each use fewer than `N*` parameters (about
+32B a token for Kimi K2), sequence-routed path composition, retrieval, looped models, a better recipe than the one the
+law is fitted to, or a registered base in `θ` that an update stacks on. -/
+def ReachSlots (c : Declaration) (T : Threading c) (σ : T.Slots) (Nstar : ℕ) : Prop :=
+  ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (σ.threadSlots Finset.univ t).card
+
+/-- **F1 per parameter slot and F4 at window scale (empirical)**: every window `j` of `P` reads at least `b_w` bits of
+novel information for each parameter slot of `σ` it uses and `w_e` bits for each thread it works on but didn't start:
+`b_w · #(slots j uses) + w_e · #(threads j entered) ≤ width(in(P j) \ θ)`.
+
+It is `Fits` with each parameter charged once per window, however many of its versions (optimizer steps) the window
+uses: a window that carries a parameter across steps reads it once, in the version it starts from, and computes the
+later versions itself. F4 is as in `Fits`.
+
+It fails when a window rebuilds a parameter's first version it uses from fewer bits (a registered base or
+initialization in `θ` that the window updates from, low-rank updates, very low-bit codes, or a version it computes from
+fewer bits of activations and gradients, which a window does that holds a slot's every version from its
+initialization), or when a window other than `start t` works on a thread from fewer bits: an ensemble, whose members
+each start the token from its id, or a low-bit boundary code. -/
+def FitsSlots (c : Declaration) (T : Threading c) (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
+    (start : Fin T.m → Fin k) (b_w w_e : ℝ) : Prop :=
+  ∀ j, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ novelReads c (P.gates j)
 
 end Nci.Assumptions

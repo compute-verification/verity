@@ -138,6 +138,9 @@
    "owner": "@lean",
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
   },
+  "Nci.Assumptions.FitsSlots": {
+   "owner": "@lean"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -149,6 +152,9 @@
   "Nci.Assumptions.Reach": {
    "owner": "@lean",
    "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
+  },
+  "Nci.Assumptions.ReachSlots": {
+   "owner": "@lean"
   },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
@@ -3496,6 +3502,9 @@
    "assumptions": [],
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
+  "Nci.SecurityProofs.FitBoundSlots": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -5255,6 +5264,7 @@
    "Nci.SecurityProofs.ContainedMatMul": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.FitBound": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance.",
+   "Nci.SecurityProofs.FitBoundSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance.",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",

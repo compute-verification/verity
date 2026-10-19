@@ -3,25 +3,32 @@ import Models.Nci.Guarantees.Fit
 /-!
 # Proof of the fit bound
 
-The page's section 2 ("The fit bound", Notion). Write `p_j^t` for the weights thread `t` uses in window `j`, `A_t` for
-`p_j^t` at its start window and `B_t` for the sum of `p_j^t` over the windows it entered. A thread's counted
-multiplications in a window number at most `reuse` per weight it uses there (`card_threadMults_le_reuse`).
+The page's section 2 ("The fit bound", Notion), over a slot map `σ` (`Threading.Slots`). Write `p_j^t` for the slots
+thread `t` uses in window `j`, `A_t` for `p_j^t` at its start window and `B_t` for the sum of `p_j^t` over the windows
+it entered. A thread's counted multiplications in a window number at most `reuse` per slot it uses there
+(`card_threadMults_le_reuse_slots`).
 
-* Token side (`token_bound`): `Reach` gives `A_t + B_t ≥ N*` and `Fits` gives `A_t b_w ≤ S`, so a thread's
+* Token side (`token_bound`): `ReachSlots` gives `A_t + B_t ≥ N*` and `FitsSlots` gives `A_t b_w ≤ S`, so a thread's
   multiplications times `N* b_w − S` are at most `reuse · N* b_w B_t`.
-* Window side (`window_ineq`): `Σ_t B_t ≤ Σ_j p_j e_j`, with `e_j` the threads window `j` entered, and `Fits` gives
-  `b_w p_j + w_e e_j ≤ S`, so `4 b_w w_e p_j e_j ≤ S²` by AM–GM.
+* Window side (`window_ineq`): `Σ_t B_t ≤ Σ_j p_j e_j`, with `p_j` the slots window `j` uses and `e_j` the threads it
+  entered, and `FitsSlots` gives `b_w p_j + w_e e_j ≤ S`, so `4 b_w w_e p_j e_j ≤ S²` by AM–GM.
+
+`FitBound` is the case of one slot per weight gate (`idSlots`): for a slot map one-to-one on the weight gates,
+`FitsSlots` is `Fits` and `ReachSlots` is `Reach` (`fitsSlots_iff`, `reachSlots_iff`).
 -/
 
 namespace Nci.SecurityProofs.Fit
 
 open Verity Finset
 
-/-- A thread's counted multiplications in `R` number at most `reuse` per weight it uses in `R`. -/
-theorem card_threadMults_le_reuse {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
-    (T.threadMults R t).card ≤ T.reuse * (T.threadWeights R t).card := by
-  refine card_le_mul_card_image (f := T.weight) _ _ fun w _ => ?_
-  refine le_trans (card_le_card ?_) (T.reuse_le w t)
+/-- A thread's counted multiplications in `R` number at most `reuse` per slot it uses in `R`. -/
+theorem card_threadMults_le_reuse_slots {c : Declaration} {T : Threading c} (σ : T.Slots) (R : Finset (Fin c.D.N))
+    (t : Fin T.m) : (T.threadMults R t).card ≤ T.reuse * (σ.threadSlots R t).card := by
+  have himg : σ.threadSlots R t = (T.threadMults R t).image (σ.slot ∘ T.weight) := by
+    rw [Threading.Slots.threadSlots, Threading.threadWeights, image_image]
+  rw [himg]
+  refine card_le_mul_card_image (f := σ.slot ∘ T.weight) _ _ fun s _ => ?_
+  refine le_trans (card_le_card ?_) (σ.reuse_le s t)
   intro g hg
   rw [mem_filter] at hg ⊢
   rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hg
@@ -33,6 +40,19 @@ theorem threadWeights_subset {c : Declaration} (T : Threading c) (R : Finset (Fi
   intro w hw
   obtain ⟨g, hg, rfl⟩ := mem_image.1 hw
   exact mem_image_of_mem T.weight (mem_filter.1 hg).1
+
+/-- The slots a thread uses in `R` are among those `R` uses. -/
+theorem threadSlots_subset {c : Declaration} {T : Threading c} (σ : T.Slots) (R : Finset (Fin c.D.N)) (t : Fin T.m) :
+    σ.threadSlots R t ⊆ σ.slotsUsed R := by
+  intro s hs
+  obtain ⟨w, hw, rfl⟩ := mem_image.1 hs
+  exact mem_image_of_mem σ.slot (threadWeights_subset T R t hw)
+
+/-- The weights `R` uses are weight gates. -/
+theorem weightsUsed_subset_W {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) : T.weightsUsed R ⊆ T.W := by
+  intro w hw
+  obtain ⟨g, hg, rfl⟩ := mem_image.1 hw
+  exact T.weight_W g (mem_inter.1 hg).1
 
 theorem threadMults_mono {c : Declaration} (T : Threading c) {R R' : Finset (Fin c.D.N)} (h : R ⊆ R')
     (t : Fin T.m) : T.threadMults R t ⊆ T.threadMults R' t := by
@@ -65,32 +85,40 @@ theorem card_M_le {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition c
     exact ⟨t, j, hgj⟩
   calc T.M.card ≤ (univ.biUnion fun t => univ.biUnion fun j => T.threadMults (P.gates j) t).card :=
         card_le_card hsub
-    _ ≤ ∑ t, (univ.biUnion fun j => T.threadMults (P.gates j) t).card := card_biUnion_le
+    _ ≤ ∑ t, (univ.biUnion fun t => univ.biUnion fun j => T.threadMults (P.gates j) t).card := card_biUnion_le
     _ ≤ ∑ t, ∑ j, (T.threadMults (P.gates j) t).card := sum_le_sum fun t _ => card_biUnion_le
 
 /-- The weights a thread uses anywhere are used in some window. -/
-theorem card_threadWeights_univ_le {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition c.D k)
-    (t : Fin T.m) : (T.threadWeights univ t).card ≤ ∑ j : Fin k, (T.threadWeights (P.gates j) t).card := by
-  have hsub : T.threadWeights univ t ⊆ univ.biUnion fun j => T.threadWeights (P.gates j) t := by
-    intro w hw
-    obtain ⟨g, hg, rfl⟩ := mem_image.1 hw
-    rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hg
-    obtain ⟨j, hj⟩ := exists_gates P (T.M_computed hg.1.1)
-    have hgj : g ∈ T.threadMults (P.gates j) t := by
-      rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter]
-      exact ⟨⟨hg.1.1, hj⟩, hg.2⟩
-    exact mem_biUnion.2 ⟨j, mem_univ _, mem_image_of_mem T.weight hgj⟩
+theorem threadWeights_univ_subset {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition c.D k) (t : Fin T.m) :
+    T.threadWeights univ t ⊆ univ.biUnion fun j => T.threadWeights (P.gates j) t := by
+  intro w hw
+  obtain ⟨g, hg, rfl⟩ := mem_image.1 hw
+  rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter] at hg
+  obtain ⟨j, hj⟩ := exists_gates P (T.M_computed hg.1.1)
+  have hgj : g ∈ T.threadMults (P.gates j) t := by
+    rw [Threading.threadMults, mem_filter, Threading.mults, mem_inter]
+    exact ⟨⟨hg.1.1, hj⟩, hg.2⟩
+  exact mem_biUnion.2 ⟨j, mem_univ _, mem_image_of_mem T.weight hgj⟩
+
+/-- The slots a thread uses anywhere are used in some window. -/
+theorem card_threadSlots_univ_le {c : Declaration} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
+    (t : Fin T.m) : (σ.threadSlots univ t).card ≤ ∑ j : Fin k, (σ.threadSlots (P.gates j) t).card := by
+  have hsub : σ.threadSlots univ t ⊆ univ.biUnion fun j => σ.threadSlots (P.gates j) t := by
+    intro s hs
+    obtain ⟨w, hw, rfl⟩ := mem_image.1 hs
+    obtain ⟨j, -, hj⟩ := mem_biUnion.1 (threadWeights_univ_subset T P t hw)
+    exact mem_biUnion.2 ⟨j, mem_univ _, mem_image_of_mem σ.slot hj⟩
   exact (card_le_card hsub).trans card_biUnion_le
 
-/-- A thread's weights in a window count at its start window or at a window it entered. -/
-theorem card_threadWeights_le_split {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition c.D k)
+/-- A thread's slots in a window count at its start window or at a window it entered. -/
+theorem card_threadSlots_le_split {c : Declaration} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (t : Fin T.m) (j : Fin k) :
-    ((T.threadWeights (P.gates j) t).card : ℝ) ≤
-      (if j = start t then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) +
-        (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
+    ((σ.threadSlots (P.gates j) t).card : ℝ) ≤
+      (if j = start t then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) +
+        (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) := by
   by_cases hj : j = start t
   · rw [ite_eq_left hj]
-    have h0 : (0 : ℝ) ≤ (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
+    have h0 : (0 : ℝ) ≤ (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) := by
       split_ifs <;> positivity
     linarith
   · rw [ite_eq_right hj, zero_add]
@@ -99,8 +127,10 @@ theorem card_threadWeights_le_split {c : Declaration} (T : Threading c) {k : ℕ
         simp only [Threading.entered, Threading.visits, mem_filter, mem_univ, true_and]
         exact ⟨hv, fun h => hj h.symm⟩
       exact le_of_eq (ite_eq_left hmem).symm
-    · have hz : T.threadWeights (P.gates j) t = ∅ := by
+    · have hw : T.threadWeights (P.gates j) t = ∅ := by
         rw [Threading.threadWeights, not_nonempty_iff_eq_empty.1 hv, image_empty]
+      have hz : σ.threadSlots (P.gates j) t = ∅ := by
+        rw [Threading.Slots.threadSlots, hw, image_empty]
       simp [hz]
 
 /-- The token side's arithmetic: from `A + B ≥ N`, `A b_w ≤ S < N b_w` and `W ≤ r (A + B)`,
@@ -117,46 +147,46 @@ theorem token_ineq {N bw S A B W r : ℝ} (hS : 0 ≤ S) (hN0 : 0 ≤ N) (hgap :
     _ = r * N * bw * B := by ring
 
 /-- **The token side** (the page's section 2, step 2): a thread's counted multiplications, times `N* b_w − S`, are at
-most `reuse · N* b_w` times the weights it uses in the windows it entered. -/
-theorem token_bound {c : Declaration} (T : Threading c) {k : ℕ} (P : Partition c.D k) (start : Fin T.m → Fin k)
-    (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 < b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) (hR : Assumptions.Reach c T Nstar)
-    (hF : Assumptions.Fits c T P start b_w w_e) (t : Fin T.m) :
+most `reuse · N* b_w` times the slots it uses in the windows it entered. -/
+theorem token_bound {c : Declaration} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
+    (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 < b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
+    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) (hR : Assumptions.ReachSlots c T σ Nstar)
+    (hF : Assumptions.FitsSlots c T σ P start b_w w_e) (t : Fin T.m) :
     (∑ j, ((T.threadMults (P.gates j) t).card : ℝ)) * (Nstar * b_w - S) ≤
       T.reuse * Nstar * b_w *
-        ∑ j, (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
+        ∑ j, (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) := by
   have hS0 : 0 ≤ S := (Nat.cast_nonneg _).trans (hS (start t))
   have hN0 : (0 : ℝ) ≤ Nstar := Nat.cast_nonneg _
   have hr0 : (0 : ℝ) ≤ T.reuse := Nat.cast_nonneg _
   have hB0 : (0 : ℝ) ≤
-      ∑ j, (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) :=
+      ∑ j, (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) :=
     sum_nonneg fun j _ => by split_ifs <;> positivity
   by_cases hwork : (T.threadMults univ t).Nonempty
-  · have hsplit : ∑ j, ((T.threadWeights (P.gates j) t).card : ℝ) ≤
-        ((T.threadWeights (P.gates (start t)) t).card : ℝ) +
-          ∑ j, (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
-      calc ∑ j, ((T.threadWeights (P.gates j) t).card : ℝ)
-          ≤ ∑ j, ((if j = start t then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) +
-              (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0)) :=
-            sum_le_sum fun j _ => card_threadWeights_le_split T P start t j
+  · have hsplit : ∑ j, ((σ.threadSlots (P.gates j) t).card : ℝ) ≤
+        ((σ.threadSlots (P.gates (start t)) t).card : ℝ) +
+          ∑ j, (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) := by
+      calc ∑ j, ((σ.threadSlots (P.gates j) t).card : ℝ)
+          ≤ ∑ j, ((if j = start t then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) +
+              (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0)) :=
+            sum_le_sum fun j _ => card_threadSlots_le_split σ P start t j
         _ = _ := by rw [sum_add_distrib, sum_ite_eq', ite_eq_left (mem_univ _)]
-    have hN : (Nstar : ℝ) ≤ ∑ j, ((T.threadWeights (P.gates j) t).card : ℝ) := by
-      exact_mod_cast (hR t hwork).trans (card_threadWeights_univ_le T P t)
-    have hA : ((T.threadWeights (P.gates (start t)) t).card : ℝ) * b_w ≤ S := by
-      have hp : ((T.threadWeights (P.gates (start t)) t).card : ℝ) ≤ (T.weightsUsed (P.gates (start t))).card :=
-        Nat.cast_le.2 (card_le_card (threadWeights_subset T _ t))
+    have hN : (Nstar : ℝ) ≤ ∑ j, ((σ.threadSlots (P.gates j) t).card : ℝ) := by
+      exact_mod_cast (hR t hwork).trans (card_threadSlots_univ_le σ P t)
+    have hA : ((σ.threadSlots (P.gates (start t)) t).card : ℝ) * b_w ≤ S := by
+      have hp : ((σ.threadSlots (P.gates (start t)) t).card : ℝ) ≤ (σ.slotsUsed (P.gates (start t))).card :=
+        Nat.cast_le.2 (card_le_card (threadSlots_subset σ _ t))
       have h1 := mul_le_mul_of_nonneg_right hp hbw.le
       have h2 := hF (start t)
       have h3 : 0 ≤ w_e * ((T.entered P start (start t)).card : ℝ) := mul_nonneg hwe (Nat.cast_nonneg _)
       have h4 := hS (start t)
       linarith
     have hW : ∑ j, ((T.threadMults (P.gates j) t).card : ℝ) ≤
-        T.reuse * (((T.threadWeights (P.gates (start t)) t).card : ℝ) +
-          ∑ j, (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0)) := by
+        T.reuse * (((σ.threadSlots (P.gates (start t)) t).card : ℝ) +
+          ∑ j, (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0)) := by
       calc ∑ j, ((T.threadMults (P.gates j) t).card : ℝ)
-          ≤ ∑ j, (T.reuse : ℝ) * (T.threadWeights (P.gates j) t).card :=
-            sum_le_sum fun j _ => by exact_mod_cast card_threadMults_le_reuse T _ t
-        _ = T.reuse * ∑ j, ((T.threadWeights (P.gates j) t).card : ℝ) := by rw [mul_sum]
+          ≤ ∑ j, (T.reuse : ℝ) * (σ.threadSlots (P.gates j) t).card :=
+            sum_le_sum fun j _ => by exact_mod_cast card_threadMults_le_reuse_slots σ _ t
+        _ = T.reuse * ∑ j, ((σ.threadSlots (P.gates j) t).card : ℝ) := by rw [mul_sum]
         _ ≤ _ := mul_le_mul_of_nonneg_left hsplit hr0
     exact token_ineq hS0 hN0 hgap hA (hN.trans hsplit) hW hr0
   · have hz : ∀ j, (T.threadMults (P.gates j) t).card = 0 := fun j => by
@@ -188,16 +218,68 @@ theorem fit_ineq {M X Bs PE N r bw we S n : ℝ} (hwe : 0 ≤ we) (hbw : 0 ≤ b
     _ ≤ r * N * (n * S ^ 2) := mul_le_mul_of_nonneg_left hwin (mul_nonneg hr hN)
     _ = n * r * N * S ^ 2 := by ring
 
+/-- The slot map of one slot per weight gate. -/
+def idSlots {c : Declaration} (T : Threading c) : T.Slots where
+  p := c.D.N
+  slot := id
+  reuse_le s t := T.reuse_le s t
+
+theorem idSlots_injOn {c : Declaration} (T : Threading c) : Set.InjOn (idSlots T).slot T.W := by
+  intro a _ b _ h
+  exact h
+
+/-- A slot map under which a thread uses at most one version of each slot meets `Slots.reuse_le` at `T.reuse`. -/
+def slotsOfOneVersion {c : Declaration} (T : Threading c) (n : ℕ) (slot : Fin c.D.N → Fin n)
+    (h : ∀ g ∈ T.M, ∀ g' ∈ T.M, T.thread (T.act g) = T.thread (T.act g') →
+      slot (T.weight g) = slot (T.weight g') → T.weight g = T.weight g') : T.Slots where
+  p := n
+  slot := slot
+  reuse_le s t := by
+    obtain he | ⟨g₀, hg₀⟩ :=
+      (T.M.filter fun g => slot (T.weight g) = s ∧ T.thread (T.act g) = some t).eq_empty_or_nonempty
+    · rw [he, card_empty]
+      exact Nat.zero_le _
+    · rw [mem_filter] at hg₀
+      refine le_trans (card_le_card ?_) (T.reuse_le (T.weight g₀) t)
+      intro g hg
+      rw [mem_filter] at hg ⊢
+      exact ⟨hg.1, h g hg.1 g₀ hg₀.1 (hg.2.2.trans hg₀.2.2.symm) (hg.2.1.trans hg₀.2.1.symm), hg.2.2⟩
+
+/-- With every slot one version (`σ.slot` one-to-one on the weight gates), `R` uses as many slots as weights. -/
+theorem card_slotsUsed {c : Declaration} {T : Threading c} (σ : T.Slots) (hσ : Set.InjOn σ.slot T.W)
+    (R : Finset (Fin c.D.N)) : (σ.slotsUsed R).card = (T.weightsUsed R).card := by
+  rw [Threading.Slots.slotsUsed]
+  exact card_image_of_injOn (hσ.mono (Finset.coe_subset.2 (weightsUsed_subset_W T R)))
+
+/-- With every slot one version, a thread uses as many slots as weights in `R`. -/
+theorem card_threadSlots {c : Declaration} {T : Threading c} (σ : T.Slots) (hσ : Set.InjOn σ.slot T.W)
+    (R : Finset (Fin c.D.N)) (t : Fin T.m) : (σ.threadSlots R t).card = (T.threadWeights R t).card := by
+  rw [Threading.Slots.threadSlots]
+  exact card_image_of_injOn (hσ.mono (Finset.coe_subset.2
+    (Finset.Subset.trans (threadWeights_subset T R t) (weightsUsed_subset_W T R))))
+
+/-- **`FitsSlots` is `Fits` when every slot has one version.** -/
+theorem fitsSlots_iff {c : Declaration} {T : Threading c} (σ : T.Slots) (hσ : Set.InjOn σ.slot T.W) {k : ℕ}
+    (P : Partition c.D k) (start : Fin T.m → Fin k) (b_w w_e : ℝ) :
+    Assumptions.FitsSlots c T σ P start b_w w_e ↔ Assumptions.Fits c T P start b_w w_e := by
+  simp only [Assumptions.FitsSlots, Assumptions.Fits, card_slotsUsed σ hσ]
+
+/-- **`ReachSlots` is `Reach` when every slot has one version.** -/
+theorem reachSlots_iff {c : Declaration} {T : Threading c} (σ : T.Slots) (hσ : Set.InjOn σ.slot T.W) (Nstar : ℕ) :
+    Assumptions.ReachSlots c T σ Nstar ↔ Assumptions.Reach c T Nstar := by
+  simp only [Assumptions.ReachSlots, Assumptions.Reach, card_threadSlots σ hσ]
+
 end Nci.SecurityProofs.Fit
 
 namespace Nci.SecurityProofs
 
 open Verity Finset Nci.SecurityProofs.Fit
 
-/-- **The fit bound** ("The fit bound", Notion, section 2). With no counted multiplication the bound is `0 ≤ …`;
-otherwise some window exists, so `S ≥ 0` and `b_w > 0`, and at `w_e ≤ 0` the left side is not positive. -/
-theorem FitBound : Guarantees.FitBound := by
-  intro c T k P start Nstar S b_w w_e hgap hS hR hF
+/-- **The fit bound over parameter slots** ("The fit bound", Notion, section 2). With no counted multiplication the
+bound is `0 ≤ …`; otherwise some window exists, so `S ≥ 0` and `b_w > 0`, and at `w_e ≤ 0` the left side is not
+positive. -/
+theorem FitBoundSlots : Guarantees.FitBoundSlots := by
+  intro c T σ k P start Nstar S b_w w_e hgap hS hR hF
   have hN0 : (0 : ℝ) ≤ Nstar := Nat.cast_nonneg _
   have hr0 : (0 : ℝ) ≤ T.reuse := Nat.cast_nonneg _
   rcases T.M.eq_empty_or_nonempty with hM | ⟨g, hg⟩
@@ -218,25 +300,35 @@ theorem FitBound : Guarantees.FitBound := by
     exact_mod_cast card_M_le T P
   have htok : (∑ t, ∑ j, ((T.threadMults (P.gates j) t).card : ℝ)) * (Nstar * b_w - S) ≤
       T.reuse * Nstar * b_w *
-        ∑ t, ∑ j, (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) := by
+        ∑ t, ∑ j, (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) := by
     rw [sum_mul, mul_sum]
-    exact sum_le_sum fun t _ => token_bound T P start Nstar S b_w w_e hbw hwe.le hgap hS hR hF t
-  have hB : ∑ t, ∑ j, (if t ∈ T.entered P start j then ((T.threadWeights (P.gates j) t).card : ℝ) else 0) ≤
-      ∑ j, ((T.weightsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card := by
+    exact sum_le_sum fun t _ => token_bound σ P start Nstar S b_w w_e hbw hwe.le hgap hS hR hF t
+  have hB : ∑ t, ∑ j, (if t ∈ T.entered P start j then ((σ.threadSlots (P.gates j) t).card : ℝ) else 0) ≤
+      ∑ j, ((σ.slotsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card := by
     rw [sum_comm]
     refine sum_le_sum fun j _ => ?_
     rw [sum_ite_mem, univ_inter]
-    calc ∑ t ∈ T.entered P start j, ((T.threadWeights (P.gates j) t).card : ℝ)
-        ≤ ∑ _t ∈ T.entered P start j, ((T.weightsUsed (P.gates j)).card : ℝ) :=
-          sum_le_sum fun t _ => Nat.cast_le.2 (card_le_card (threadWeights_subset T _ t))
+    calc ∑ t ∈ T.entered P start j, ((σ.threadSlots (P.gates j) t).card : ℝ)
+        ≤ ∑ _t ∈ T.entered P start j, ((σ.slotsUsed (P.gates j)).card : ℝ) :=
+          sum_le_sum fun t _ => Nat.cast_le.2 (card_le_card (threadSlots_subset σ _ t))
       _ = _ := by rw [sum_const, nsmul_eq_mul]; ring
-  have hwin : 4 * (b_w * w_e) * ∑ j, ((T.weightsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card ≤
+  have hwin : 4 * (b_w * w_e) * ∑ j, ((σ.slotsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card ≤
       k * S ^ 2 := by
     rw [mul_sum]
-    calc ∑ j, 4 * (b_w * w_e) * (((T.weightsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card)
+    calc ∑ j, 4 * (b_w * w_e) * (((σ.slotsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card)
         ≤ ∑ _j : Fin k, S ^ 2 := sum_le_sum fun j _ =>
           window_ineq hbw.le hwe.le (Nat.cast_nonneg _) (Nat.cast_nonneg _) ((hF j).trans (hS j))
       _ = k * S ^ 2 := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
   exact fit_ineq hwe.le hbw.le hN0 hr0 hgap0 hMr htok hB hwin
+
+/-- **The old form follows**: `FitBound` is `FitBoundSlots` at one slot per weight gate (`idSlots`), where `ReachSlots`
+is `Reach` and `FitsSlots` is `Fits`. -/
+theorem fitBound_of_slots (h : Guarantees.FitBoundSlots) : Guarantees.FitBound := by
+  intro c T k P start Nstar S b_w w_e hgap hS hR hF
+  exact h c T (idSlots T) k P start Nstar S b_w w_e hgap hS ((reachSlots_iff _ (idSlots_injOn T) Nstar).2 hR)
+    ((fitsSlots_iff _ (idSlots_injOn T) P start b_w w_e).2 hF)
+
+/-- **The fit bound** ("The fit bound", Notion, section 2), as `FitBoundSlots` at one slot per weight gate. -/
+theorem FitBound : Guarantees.FitBound := fitBound_of_slots FitBoundSlots
 
 end Nci.SecurityProofs
