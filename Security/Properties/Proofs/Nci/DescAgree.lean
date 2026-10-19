@@ -7,8 +7,7 @@ import Properties.Proofs.Nci
 each a named `Prop` here, open:
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
-  root laid out, its input nodes the root's, at most `Desc.ACTIVATIONS` activations, and `Desc.analyze` resolving its
-  references), every gate of the canonical
+  root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of the canonical
   layout is located and reads only earlier gates (`GateOk`), so `NciCheck.circuitOf` lays it out.
 * `NovelExact`: on such a Program, for a division whose IUs are unions of root nodes, the novel reads `Desc.novelWidth`
   counts per IU, from what `Desc.analyze` resolves each root node to read, are `NciCheck.ius`'s, gate by gate.
@@ -489,9 +488,9 @@ open Flock.Program (Prog)
 /-! ## The open statements -/
 
 /-- **Open: the layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
-laid out, its input nodes the root's, its activations at most `Desc.ACTIVATIONS`, and its references resolved by
-`Desc.analyze`), every gate of the canonical layout is located and reads only earlier gates. Without the bound on
-activations it is false: `Prog.gate` walks one step per activation it enters or leaves, at most `Flock.Steps.FUEL`. -/
+laid out, its input nodes the root's, `Desc.walkable`, and its references resolved by `Desc.analyze`), every gate of the
+canonical layout is located and reads only earlier gates. Without `Desc.walkable` it is false: `Prog.gate` walks at most
+`Flock.Steps.FUEL` steps to an operand, and a nested scan of `2^32 × 2^32` identity steps needs `2^64`. -/
 def GatesLocated : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →

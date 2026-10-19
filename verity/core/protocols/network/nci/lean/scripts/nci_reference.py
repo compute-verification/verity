@@ -136,23 +136,25 @@ def root_nodes(program: str) -> tuple[list[bool], list[tuple[int, int]]]:
     return [is_input(n.fn) for n in root.body.nodes], [(offs[k], offs[k + 1]) for k in range(len(root.body.nodes))]
 
 
-#: `NciCheck.Desc.ACTIVATIONS`: the most activations a Program `check_desc` gives a verdict on
-ACTIVATIONS = 2 ** 60
+#: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
+FUEL = 2 ** 62
 
 
-def activations(program) -> int:
-    """`NciCheck.Desc.activations` at the root: the activations of one run, the root's and each composite node member's,
-    once per Definition and multiplied through batches and scans."""
+def walk_bound(program) -> int:
+    """`NciCheck.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
+    member's, once per Definition and multiplied through batches and scans) and the depth `H` they nest to."""
     from verity.ml.circuits.parts import n_members
-    memo: dict[int, int] = {}
+    memo: dict[int, tuple[int, int]] = {}
 
-    def acts(fn) -> int:
+    def of(fn) -> tuple[int, int]:
         if not hasattr(fn, "body"):
-            return 0
+            return 0, 0
         if id(fn) not in memo:
-            memo[id(fn)] = 1 + sum(n_members(n) * acts(n.fn) for n in fn.body.nodes)
+            subs = [(n_members(n), *of(n.fn)) for n in fn.body.nodes]
+            memo[id(fn)] = (1 + sum(m * a for m, a, _ in subs), 1 + max((h for _, _, h in subs), default=0))
         return memo[id(fn)]
-    return acts(program.root)
+    acts, depth = of(program.root)
+    return (acts + 1) * (depth + 2)
 
 
 def expand(inst) -> dict:
@@ -180,7 +182,7 @@ def evaluate_desc(inst) -> dict:
     from verity.ml.circuits.partition_object import order_violation
     if order_violation(program) is not None:
         raise Malformed("not-topological")
-    if activations(program) > ACTIVATIONS:
+    if walk_bound(program) > FUEL // 2:
         raise Malformed("program")
     inp, spans = root_nodes(inst["program"])
     K = len(inp)

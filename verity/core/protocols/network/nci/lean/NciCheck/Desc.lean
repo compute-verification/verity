@@ -51,7 +51,7 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(more activations than `ACTIVATIONS`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
 Definition decoded after it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve: the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`, `theta-duplicate`), then the
 owners (`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -675,15 +675,22 @@ def activations (P : Prog) : Array Nat :=
     let defn := P.defs[d]!
     a.push (if defn.prim then 0 else 1 + defn.body.nodes.foldl (fun s n => s + n.members * a[n.fn]!) 0)) #[]
 
-/-- The most activations a Program this check gives a verdict on has. `Prog.gate` locates an operand in one walk of at
-most `Flock.Steps.FUEL` steps, each into or out of one activation, and a Program of more activations can need more:
-a gate reading the carry of a scan of `2^32` iterations, each a scan of `2^32` identity steps, takes `2^64`, from a
-descriptor of a few hundred bytes. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
-summarizes each Definition once, would give a verdict. -/
-def ACTIVATIONS : Nat := 2 ^ 60
+/-- Per Definition, how deep its activations nest: none for a primitive, else one more than its composite callees'. -/
+def depths (P : Prog) : Array Nat :=
+  (List.range P.defs.size).foldl (fun a d =>
+    let defn := P.defs[d]!
+    a.push (if defn.prim then 0 else 1 + defn.body.nodes.foldl (fun s n => max s a[n.fn]!) 0)) #[]
 
-/-- The root's activations are at most `ACTIVATIONS`, counted callees first. -/
-def walkable (P : Prog) : Bool := calleesFirst P && (activations P)[P.root]! ≤ ACTIVATIONS
+/-- A bound on the steps of `Prog.gate`'s walk to an operand, `(A + 1) · (H + 2)` for the root's `A` activations and
+depth `H`: each step goes down into an activation, up out of one, or to the scan iteration before, and none returns to
+where an earlier one was. -/
+def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
+
+/-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
+can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
+`2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
+summarizes each Definition once, would give a verdict. -/
+def walkable (P : Prog) : Bool := calleesFirst P && walkBound P ≤ Flock.Steps.FUEL / 2
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/

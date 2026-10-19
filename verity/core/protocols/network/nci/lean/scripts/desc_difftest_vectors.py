@@ -199,7 +199,7 @@ def decoys() -> list[dict]:
 def walk(n: int) -> str:
     """A declaration whose one gate reads the carry of a scan of `n` iterations, each a scan of `n` identity steps: no
     other gate, and about `n²` activations, so as many steps to locate the gate's operand. At `n = 2^32` that is past
-    what `Prog.gate` walks (`Steps.FUEL`), and `NciCheck.Desc` refuses it (`ACTIVATIONS`)."""
+    what `Prog.gate` walks (`Steps.FUEL`), and `NciCheck.Desc` refuses it (`walkBound`)."""
     w = 8
     op = vectors.prim((w,), w)
     ret = Tuple(Value(w), Tuple())
@@ -217,7 +217,7 @@ WALKS = (3, 2 ** 32)
 
 def walks() -> list[dict]:
     """Instances on `walk`'s declarations, the input in θ and the Call in IU 0: one `NciCheck.Desc` gives a verdict on,
-    and one past `ACTIVATIONS`, which it refuses."""
+    and one past `walkBound`'s limit, which it refuses."""
     out = []
     for n in WALKS:
         text = walk(n)

@@ -9,7 +9,7 @@ package's files alone, so this test is what says the data is still what the gene
 other test checks that the generator reaches what its docstring says, on the first 400 instances and the first on each
 fixture's descriptor, the third that the data holds the decoys: a root Call or batch of a composite keyed with an input
 id, whose gates are computed, which `NciCheck.Desc` once took for an input node, and the fourth that it holds the walks: a
-gate reading a nested scan's carry, past `NciCheck.Desc.ACTIVATIONS` where `Prog.gate` runs out of steps.
+gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, where `Prog.gate` runs out of steps.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_the_decoys_are_no_input_nodes():
         assert reference.check_desc(m) == reference.check(reference.expand(m))
 
 
-def test_the_walk_past_the_activations_is_refused():
+def test_the_walk_past_the_bound_is_refused():
     """The walks close the data: the reference gives the unrolled check's verdict on the small one, and refuses
     (`program`) the one of about 2^64 activations, whose gate `Prog.gate` can't locate in `Steps.FUEL` steps."""
     first = vectors.total() - len(vectors.walks())
@@ -87,6 +87,9 @@ def test_the_walk_past_the_activations_is_refused():
     assert reference.check_desc(small) == reference.check(reference.expand(small))
     assert "error" not in reference.check_desc(small)
     assert reference.check_desc(big) == {"error": "program"}
-    desc = json.loads(big["program"])
-    program = reference.codec.decode_program(desc, reference.declared(desc))
-    assert reference.activations(program) > reference.ACTIVATIONS > 2 ** 32
+    bound = []
+    for m in made:
+        desc = json.loads(m["program"])
+        bound.append(reference.walk_bound(reference.codec.decode_program(desc, reference.declared(desc))))
+    assert bound[0] == (1 + 3 * (1 + 3) + 1) * (3 + 2)
+    assert bound[1] > 2 ** 64 > reference.FUEL
