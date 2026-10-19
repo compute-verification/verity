@@ -14,7 +14,7 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
   lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
   routes, floors and `N_w`.
 * `flatSkip`, `flat`: ♭ is `Sm90.flat`'s word production, fold and filler, with ε_skip's skippable work at DC-90-ri's
-  0.479984% (`eps_budget.design_skip` on DC-90-ri), at ALU's price; it is honest's program, not `setup`'s floor, which
+  0.581381% (`eps_budget.design_skip` on DC-90-ri), at ALU's price; it is honest's program, not `setup`'s floor, which
   heads some words on honest's lane baseline beside the MMA, so B_♭ is larger and the bound at least the machine
   model's.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 0.003598 + JI90_0 0.966699 + JI90_1
@@ -133,7 +133,7 @@ noncomputable def model : Model (Fin 28) (Fin 15) (Fin 2) Unit Empty (Fin 2) Uni
   d2s.model 28 2 2 machine
 
 /-- ♭'s skippable work a unit on DC-90-ri, at its ALU price. -/
-def flatSkip : Sparse := [(0, 23776785529476034169961021, 49530498467843236765000000)]
+def flatSkip : Sparse := [(0, 115198450441247098043807339, 197920136565986970635000000)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/
 noncomputable def flat : Labelled (Fin 28) :=

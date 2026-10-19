@@ -99,7 +99,7 @@ class Family:
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
 # The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). Without ffill
 # in ♭, `setup`'s floor on DC-90-ri heads 0.3% of its words on honest's lane baseline (IMAD) beside the IGMMA, so ♭
-# there is honest's program, the IGMMA heading every word: a larger B_♭ (199.10 a unit against the floor's 198.91), so
+# there is honest's program, the IGMMA heading every word: a larger B_♭ (199.31 a unit against the floor's 199.11), so
 # the bound is at least the machine model's. It is over 1%.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
