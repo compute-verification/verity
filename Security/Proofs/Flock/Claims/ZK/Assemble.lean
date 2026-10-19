@@ -30,7 +30,7 @@ spec, `encExe`'s round `n` on the session's cut is `0 ::` body `n` of the masked
 `n`, where it sends one, else `[]` (`SimSession`). -/
 theorem encExe_of_sim (hss : SimSession) (nr : Msg → ℕ → ℕ) {x : Msg} (hx : Live x) {w : Claims.Flock.Wit}
     (hw : RZk x w) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) {n : ℕ} (h0 : n ≠ 0) (hnr : ¬ Refused x c n)
-    {s : _root_.Flock.Stmt} {spec : _root_.Flock.SessionSpec}
+    {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) :
     encExe PE x c n ((session nr (tableData PE QE UE)).cutOf x c (wtOf PE x w) τ) =
       if n < (runExe x w (UE.tapeZk τ) c n spec).2.size then 0 :: (runExe x w (UE.tapeZk τ) c n spec).2[n]!
@@ -40,7 +40,7 @@ theorem encExe_of_sim (hss : SimSession) (nr : Msg → ℕ → ℕ) {x : Msg} (h
     hss x hx w hw τ c n hnr s spec hsx
   rw [← hS]
   unfold encExe
-  rw [if_neg h0]
+  rw [ite_eq_right h0]
   first
   | (simp only [hsx]; done)
   | (rw [hsx]; rfl)
@@ -74,9 +74,9 @@ theorem hstep_exe (hpl : PrefixLive) (hss : SimSession) (nr : Msg → ℕ → �
   rw [encExe_of_sim hss nr hx hw τ (padOps ops) (Nat.pos_iff_ne_zero.mp hpos) hnr hsx]
   by_cases hn : ops.length < (liveRun x w (UE.tapeZk τ) ops spec).2.size
   · refine .inl ⟨hn, ?_⟩
-    rw [if_pos (hiff.mp hn), ← hbody hn]
+    rw [ite_eq_left (hiff.mp hn), ← hbody hn]
   · have hle : (liveRun x w (UE.tapeZk τ) ops spec).2.size ≤ ops.length := Nat.le_of_not_lt hn
-    exact .inr ⟨herr hle, hle, if_neg fun h => hn (hiff.mpr h)⟩
+    exact .inr ⟨herr hle, hle, ite_eq_right fun h => hn (hiff.mpr h)⟩
 
 end Masked
 
