@@ -30,6 +30,15 @@ the diff from its tip either way.  The merge commit carries a `Check: <attempt i
 --dry-run), 1 a failure past the gate (git's merge, the push, the sweep, a train's offending ref), 2 usage, 3 refused
 (`research.gates.refuse`: the gate, the push guard, a train or its build).
 
+With --verdicts (opt-in; CI-33) the same refusals hold before any verdict, and in place of a passing attempt of REF, REF is
+admitted when the target's `check.py --plan REF --packs-only --base HEAD` (`PLAN`, `verdict_gate`) shows every part it
+requires passed under its key at REF, each by a pass that a recorded check's verdict pack holds: an attempt of the tool that
+ended, ran the declared command whole or as a shard, and lists that pack, by sha256, among its run files (`pack_refusal`).
+Every Lake package's audit and every step the change requires (`required_steps`) is among those parts, so a skip passes
+nothing; a part with no key (`plan.KEYLESS`) is never passed, and a pass kept only in a machine's cache is cited by nothing.
+The merge commit carries `Verdicts: <attempt id>...`.  It takes no --train or --push: the push guard takes only a passing
+attempt of the tree.
+
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
 
@@ -453,9 +462,10 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     return None
 
 
-def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
-    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
-    merges whose head on ``remote`` moved, or that is stacked on one neither on ``into`` nor below it (`unstacked`)."""
+def _admissible(repo: Path, ref: str, into: str, store, tool: str, log, remote: str):
+    """(commit, history maps) when ``ref`` passes what both gates hold it to before any verdict: the checkout is a clean
+    ``into``, which ``ref`` contains or whose changes it holds already (`tree_identical`), with no replaced history and no
+    pull request moved or stacked (`unstacked`); `Refused` otherwise."""
     commit = _git(repo, "rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
     head = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).stdout.strip()
     if head != into:
@@ -477,6 +487,13 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
                       f"old history back; move the branch onto the rewritten one with `research git remap` and push that")
     if why := unstacked(repo, commit, "HEAD", remote, log):
         raise Refused("; ".join(why))
+    return commit, maps
+
+
+def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
+    """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
+    merges whose head on ``remote`` moved, or that is stacked on one neither on ``into`` nor below it (`unstacked`)."""
+    commit, maps = _admissible(repo, ref, into, store, tool, log, remote)
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
@@ -501,6 +518,112 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
     raise Refused(f"{commit[:12]} changes {', '.join(sorted(set(p for ps in need.values() for p in ps)))}, where `{tool}` must have run "
                   f"{', '.join(need)}; no attempt did ({'; '.join(why)}). Record it with what those steps need (for `check`: "
                   f"`uv run python tools/verity/check/check.py --record --on MACHINE` sends the agreement inputs)")
+
+
+#: `check.py --plan`'s document (`tools/verity/check/plan.py`), which `--verdicts` reads
+PLAN_KIND = "check-plan/v1"
+#: the plan `--verdicts` runs in the target's checkout: the declared command's environment, passes from recorded checks' packs only
+PLAN = ("uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", "tools/verity/check/check.py", "--plan")
+#: the states an attempt whose pack holds passes may end in: a pack holds only passes, so a failed or cancelled check's count
+PACK_STATES = ("done", "failed", "cancelled")
+
+
+def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = ()) -> dict:
+    """The target's `check.py --plan COMMIT --json --packs-only --base BASE` (with `--from RUN` for each of ``also``), run in
+    the checkout ``repo``; `Refused` when it prints no plan."""
+    r = subprocess.run([*PLAN, commit, "--json", "--packs-only", "--base", base, *(x for rid in also for x in ("--from", rid))],
+                       cwd=repo, capture_output=True, text=True)
+    try:
+        doc = json.loads(r.stdout)
+    except ValueError:
+        doc = None
+    if not isinstance(doc, dict):
+        raise Refused(f"`check.py --plan {commit[:12]}` printed no plan (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-400:]}")
+    return doc
+
+
+def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ...]) -> str | None:
+    """Why the verdict pack of sha256 ``sha256`` can't be cited as attempt ``rid``'s, or None: the attempt's record says it is
+    a ``tool`` attempt that ended (`PACK_STATES`), ran the declared ``command`` whole or as a shard (`invocation`), and lists
+    `verdicts.tar.gz` of that sha256 among its run files."""
+    try:
+        doc = store.get_attempt(rid)
+    except Exception as e:  # noqa: BLE001  (a guard never fails open)
+        return f"its attempt can't be read ({type(e).__name__}: {e})"
+    if not isinstance(doc, dict):
+        return "its attempt can't be read"
+    if (name := (doc.get("tool") or {}).get("name")) != tool:
+        return f"it is a `{name}` attempt, not `{tool}`"
+    if (state := (doc.get("status") or {}).get("state")) not in PACK_STATES:
+        return f"it is {state}, not ended"
+    mode, why = invocation(doc.get("argv"), command)
+    if mode not in ("check", "shard"):
+        return why if mode == "refused" else "it combines shards, and holds no pack of its own"
+    art = (doc.get("outputs") or {}).get("run_files")
+    try:
+        rows = {f["path"]: f.get("sha256") for f in store.listing(art)} if art else {}
+    except Exception as e:  # noqa: BLE001  (no listing: nothing to cite)
+        return f"its run files can't be listed ({type(e).__name__}: {e})"
+    if rows.get("verdicts.tar.gz") != sha256:
+        return "its run files hold no verdicts.tar.gz of that sha256"
+    return None
+
+
+def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: tuple[str, ...], need: dict) -> tuple[list[str], str | None]:
+    """(the attempts cited, None) when the plan ``doc`` shows the clean ``commit`` (of ``tree``) with every part it requires
+    passed, each by a pass a recorded ``tool`` check's pack holds (`pack_refusal`), every Lake package's audit among them and
+    every step ``need`` names; else ([], why).  A pass found only in a machine's own cache, or in a pack no attempt published,
+    is cited by nothing and counts as none."""
+    if doc.get("kind") != PLAN_KIND or doc.get("commit") != commit or doc.get("tree") != tree:
+        return [], (f"the plan is a {doc.get('kind')} of {str(doc.get('commit'))[:12]} (tree {str(doc.get('tree'))[:12]}), not a "
+                    f"{PLAN_KIND} of the clean {commit[:12]}")
+    parts = doc.get("parts")
+    if not isinstance(parts, list) or not parts or not all(isinstance(p, dict) and isinstance(p.get("part"), str) for p in parts):
+        return [], "the plan lists no parts this gate can read"
+    by = {p["part"]: p for p in parts}
+    if missing := [s for s in need if s not in by]:
+        return [], f"the plan has no part {', '.join(missing)}, which {commit[:12]}'s change requires"
+    wanted = [p for p in parts if p.get("required", True) or p["part"] in need or p["part"].startswith("lean-audit")]
+    judged: dict[tuple[str, str], str | None] = {}
+    cited, bad = set(), []
+    for p in wanted:
+        if p.get("state") != "passed":
+            bad.append(f"{p['part']} {p.get('state')}" + (f" ({p['why']})" if p.get("why") else ""))
+            continue
+        why = "no pass found in a recorded check's pack"
+        for f in p.get("found") or []:
+            if not isinstance(f, dict) or not f.get("attempt") or not f.get("pack_sha256"):
+                continue
+            k = (f["attempt"], f["pack_sha256"])
+            if k not in judged:
+                judged[k] = pack_refusal(store, *k, tool, command)
+            if judged[k] is None:
+                cited.add(f["attempt"])
+                why = None
+                break
+            why = f"{f['attempt']}: {judged[k]}"
+        if why:
+            bad.append(f"{p['part']} ({why})")
+    if bad:
+        return [], f"{len(bad)} of {len(wanted)} parts have no cited pass under their key: {'; '.join(bad[:8])}" + (
+            f"; and {len(bad) - 8} more" if len(bad) > 8 else "")
+    return sorted(cited), None
+
+
+def verdict_gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin",
+                 plan=None, also: tuple[str, ...] = ()) -> tuple[str, list[str]]:
+    """`--verdicts`: (commit, the attempts cited) when ``ref`` passes what `gate` holds it to before any verdict (`_admissible`)
+    and the target's `check.py --plan` of it shows every part passed by a cited pass (`plan_refusal`), in place of one passing
+    attempt of that commit; `Refused` otherwise.  The steps the change requires (`required_steps`) and every Lake package's
+    audit need a pass under their key: a skip is none."""
+    commit, _maps = _admissible(repo, ref, into, store, tool, log, remote)
+    tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    doc = (plan or run_plan)(repo, commit, head, also)
+    cited, why = plan_refusal(doc, store, commit, tree, tool, declared_command(repo, tool), required_steps(repo, "HEAD", commit, tool))
+    if why:
+        raise Refused(f"{commit[:12]}'s plan isn't fully passed by recorded checks: {why}")
+    return commit, cited
 
 
 ZERO = "0" * 40
@@ -1652,7 +1775,16 @@ def main(argv: list[str]) -> int:
                     "and the train gate, in scratch stores, under this checkout's declaration of --tool; exit 1 unless all are "
                     "refused and the control admitted")
     ap.add_argument("--json", action="store_true", help=f"--canary: print its report as JSON ({CANARY_SCHEMA})")
+    ap.add_argument("--verdicts", action="store_true", help="admit REF when the target's `check.py --plan` of it shows every part "
+                    "passed under its key by a recorded check's verdict pack, cited in a `Verdicts:` trailer, in place of a passing "
+                    "attempt of REF itself (`verdict_gate`); not with --train or --push, since the push guard takes only the latter")
+    ap.add_argument("--verdicts-from", action="append", default=[], metavar="RUN", help="--verdicts: also look passes up in "
+                    "RUN's pack (`check.py --plan --from`), beside the newest recorded checks'")
     a = ap.parse_args(argv)
+    if a.verdicts_from and not a.verdicts:
+        ap.error("--verdicts-from goes with --verdicts")
+    if a.verdicts and (a.train or a.push or a.sweep or a.canary or a.guard_push or a.mirror or a.label_landed):
+        ap.error("--verdicts gates one ref, without --train, --push or another mode")
     from .store.local import LocalStore
 
     repo = Path.cwd()
@@ -1750,13 +1882,19 @@ def main(argv: list[str]) -> int:
         ap.error("several refs need --train")
     a.ref = a.ref[0]
     try:
-        commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote)
+        if a.verdicts:
+            commit, cited = verdict_gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote,
+                                         also=tuple(a.verdicts_from))
+            attempt, trailer = f"the packs of {', '.join(cited)}, part by part", f"Verdicts: {' '.join(cited)}"
+        else:
+            commit, attempt = gate(repo, a.ref, a.into, LocalStore(a.store), a.tool, remote=a.remote)
+            trailer = f"Check: {attempt}"
     except Refused as e:
         return refuse(PROG, str(e))
     if a.dry_run:
         print(f"research merge: {a.ref} ({commit[:12]}) may be merged into {a.into}: `{a.tool}` passed in {attempt}")
         return 0
-    msg = (a.message or f"Merge {a.ref} ({commit[:8]})") + f"\n\nCheck: {attempt}"
+    msg = (a.message or f"Merge {a.ref} ({commit[:8]})") + f"\n\n{trailer}"
     r = _git(repo, "merge", "--no-ff", "-m", msg, commit, check=False)
     if r.returncode:
         print(f"research merge: git merge failed: {(r.stderr or r.stdout).strip()}", file=sys.stderr)
