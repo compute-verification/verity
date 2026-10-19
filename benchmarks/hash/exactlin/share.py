@@ -155,6 +155,7 @@ VLLM_ELEM = re.compile(r"rms_norm|rotary|act_and_mul|silu|layer_norm", re.IGNORE
 PADDING = re.compile(r"CatArrayBatchedCopy")
 FILL = re.compile(r"FillFunctor")
 PREP = re.compile(r"_post_update|_apply_write|_prepare_|_combine_sampled_and_draft|_gather_block_tables|_compute_slot_mapping")
+SAMPLE = re.compile(r"_gumbel_sample|_get_num_sampled|sampl", re.IGNORECASE)
 FORWARD = {"quant", "gemm_i8", "attention", "inductor", "vllm_elem"}
 BUCKETS = ["credited int8 GEMM", "quantizer", "lm_head", "attention", "norms and elementwise", "sampling", "other"]
 
@@ -172,8 +173,17 @@ def assign(names: list[str], graph: list[bool]) -> tuple[list[str], dict]:
 
     An int8 GEMM's quantizer is exactlin_quant_rows (exactlin.row_quant copies x first only when stride(1) != 1), or the
     QUANT_BODY torch kernels before torch._int_mm's padding (a Cat, and the Fill of its zeros, before the GEMM); a torch run
-    right after an attention kernel is attention's (FlashAttention's split-KV decode copies q in and its output out)."""
+    right after an attention kernel is attention's (FlashAttention's split-KV decode copies q in and its output out).
+    lm_head is the GEMM the sampler follows; any other GEMM is an int8 one (cuBLASLt's nvjet names carry no dtype)."""
     b = [base(n) for n in names]
+    for i in reversed([i for i, k in enumerate(b) if k == "lm_head"]):
+        if i + 1 < len(b) and b[i + 1] == "lm_head":
+            continue
+        j = i + 1
+        while j < len(b) and b[j] not in ("lm_head", "gemm_i8", "quant") and not SAMPLE.search(names[j]):
+            j += 1
+        if j == len(b) or not SAMPLE.search(names[j]):
+            b[i] = "gemm_i8"
     cat: list[str | None] = [None] * len(b)
     post, pre, left = [], [], []
     for i, k in enumerate(b):
