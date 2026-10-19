@@ -220,6 +220,8 @@ structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ 
     Cd.binding i = some .run ∧ ∀ j, j < Cd.dag.length → Cd.Reads j i → Cd.call j = Cd.call i
   computed : ∀ i, i < Cd.dag.length →
     (cls i = .admit ∨ cls i = .receipt ∨ cls i = .out ∨ cls i = .inner) → Cd.binding i = none
+  committed : ∀ i, i < Cd.dag.length → Cd.binding i = none →
+    (cls i = .inner ↔ (Cd.dag[i]?).any (fun g => g.commit) = false)
   noised : ∀ i, i < Cd.dag.length → cls i = .receipt → Cd.round (Cd.call i) + 1 ≤ (coinMark Cd).getD i 0
   forms : ∀ i, i < Cd.dag.length → (cls i = .out → F = .zTree) ∧ (cls i = .served → F = .yOpen)
   linked : ∀ i, i < Cd.dag.length → cls i = .receipt → F.Links Cd cls i
