@@ -371,6 +371,11 @@ import Proofs.Flock.Claims.ZK.Stop
   `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under. A device that sends
   the masked prover's round with each pad added back, its plain values, has that round released but its domain frames
   (`roundFree_honest`, `dropDoms`), under the masked prover's pads (`padAt_ofDraws_absPos`).
+* `FrameRounds`: the cut's zerocheck, answered by `asksCut`, sends the binding, `r_skip`'s and `r_outer`'s squeezes,
+  `round1`'s and each residual round's masked values with their coins' squeezes (`zerocheckCut_bodies`, `zcBodies`),
+  and the frame releases the device's zerocheck rounds as those bodies (`roundFree_zcBind`, `roundFree_zcOuter`,
+  `roundFree_zcR1`, `roundFree_zcMl`) where each masked value is the device's value plus the frame's pad at its
+  absorbed position (`zcBodies_frame`), the binding without its pending domain.
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
