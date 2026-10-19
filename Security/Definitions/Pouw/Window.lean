@@ -39,7 +39,9 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
   and `LinkSoundIn` (a call's link term in the window, against the window's committed transcript, a function of the
   window's state);
 * `coll`: the window's collision term, the calls' state terms `g_c` summed along the window's run, in expectation over
-  the draw; `CollCounted` (premise): on average over the oracle, at most a function of the sessions' counted queries;
+  the draw; `CollCounted` (premise): on average over the oracle, at most a function of the sessions' counted queries,
+  meant only for one oracle program's run at each oracle, counted by that program's calls (as stated, over a separate
+  play at each oracle with a free count, it is false at a true count and vacuous at a made-up one);
 * `ServedPass`, `Anchored`, `Served`: what the served pass committed (its anchors and its `-h3` leaves), and a
   transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
@@ -345,7 +347,8 @@ def LinkSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n)
 runs in which the calls before it accept and summed over the calls (`along`), in expectation over the draw. It bounds
 the term at whichever call holds the unit a rule picks, so it is one window-level term, in the place of `coll(R, τ)` in
 gap (4)'s knowledge bound `κ + coll(R, τ)`. At one oracle no count bounds it: a state that holds a collision of the
-oracle makes it about 1. It is bounded on average over the oracle, at the sessions' counted queries (`CollCounted`). -/
+oracle makes it about 1. It is bounded on average over the oracle, at the sessions' counted queries, for one oracle
+program's run at each oracle (`CollCounted`). -/
 noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess c S R) → ℝ≥0∞) (R : Reg)
@@ -356,10 +359,22 @@ noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
 /-- **The window's collision term at the sessions' counted queries** (premise, open; the random-oracle card's, with gap
 (4)'s `ε_id`): for windows indexed by the oracle `H`, uniform on a finite `O` (the window's game, its laws, sessions
 and state terms at each oracle), every prover's plays `σ H` whose sessions make at most `q` oracle calls by the count
-`qs` have collision term at most `f q` on average over the oracle. `qs` is the prover model's count of its sessions'
-calls (gap (4)'s `ProverModel.sessCalls`, which its `Prover.Bounded` counts); a count that undercounts can't meet the
-bound, since a play that holds a collision of every oracle makes `coll` about 1 at each. Its expected instance is the
-random oracle's collision bound, `f q ≈ q²/2^512` times the tables' factors. -/
+`qs` have collision term at most `f q` on average over the oracle.
+
+It holds only where `σ H` is one oracle program's run at `H` and `qs H (σ H)` counts that program's calls. The random
+oracle's collision bound is a statement about one program run against a uniform oracle, and its expected instance is
+that bound, `f q ≈ q²/2^512` times the tables' factors. As stated, `σ` is a separate play at each oracle, which is the
+non-uniform adversary that bound doesn't cover, and `qs` is free:
+* at a true count it is false: the play that at each `H` holds a hardcoded collision of `H` makes 0 calls, and its
+  `coll` is about 1 at every `H`, so the average is about 1, more than `f 0`;
+* at a count that isn't a count of calls it is vacuous: `qs H σ := 0` where `coll` at `σ` is at most `f 0`, and
+  otherwise some `Q` with `f Q ≥ 1`, meets it for every game.
+`qs` is meant to be the prover model's count of its sessions' calls (gap (4)'s `ProverModel.sessCalls`, which its
+`Prover.Bounded` counts), and that field isn't tied to an oracle program either. No guarantee reads `CollCounted`, and
+before the random-oracle card discharges it, it is restated with gap (4)'s session-query tie, one definition for both:
+over an oracle strategy of the window's game, one `QTree` per prover move, with `H` only in the verdict, so the plays
+and their count can depend on `H` only through queries (note:compute-accounting/20261018T2336Z-finding-pw8-rered,
+the recheck's (c)). -/
 def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
     (sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (H : O) → (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess H c S R) → ℝ≥0∞)
