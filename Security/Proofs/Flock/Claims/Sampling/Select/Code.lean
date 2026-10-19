@@ -123,9 +123,8 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
         ∃ draw rest read, Select.select i.rule i.params.verifier.program i.params.verifier.query
             i.params.verifier.workTable i.closure i.source = .ok (draw, rest, read) ∧
           ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
-          ∃ receipt interior symbol pub audit, j = Json.mkObj [("receipt", receipt), ("draw", draw),
-            ("read", Lean.toJson read), ("interior", interior), ("symbol", symbol), ("public", pub),
-            ("audit", audit)] := by
+          ∃ receipt symbol pub audit, j = Json.mkObj [("receipt", receipt), ("draw", draw),
+            ("read", Lean.toJson read), ("symbol", symbol), ("public", pub), ("audit", audit)] := by
   unfold run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
@@ -135,6 +134,6 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
     | exact Or.inr ⟨_, _, by assumption, by assumption, by assumption, by assumption, _, by assumption, _, _, _,
-        by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
+        by assumption, by assumption, _, _, _, _, (Except.ok.inj h).symm⟩
 
 end SampledProofs.Run
