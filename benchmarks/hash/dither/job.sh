@@ -38,6 +38,13 @@ case $BENCH in
     build h1noise h1noise.cu
     "$(dirname "$NVCC")/cuobjdump" -sass "$WORK/h1noise.so" | gzip > "$OUT/env/h1noise.sass.gz"
     CMD="$PY $HERE/h1bench.py --lib $WORK/h1noise.so --out $OUT ${BENCH_ARGS:-}" ;;
+  sass)  # CPU only, no lease: every library built, its SASS and resource usage in $OUT/env
+    for src in kb kb_pg h1noise; do
+      [ "$src" = kb_pg ] && [ "$ARCH" != sm_100a ] && continue
+      build "$src" "$src.cu" $([ "$src" = kb ] && echo "-lcublasLt -Xlinker -rpath=$LIB64")
+      "$(dirname "$NVCC")/cuobjdump" -sass "$WORK/$src.so" | gzip > "$OUT/env/$src.sass.gz"
+    done
+    exit 0 ;;
   *) echo "job.sh: no bench $BENCH" >&2; exit 2 ;;
 esac
 export PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH} CMD
