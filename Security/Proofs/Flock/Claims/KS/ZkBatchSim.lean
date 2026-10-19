@@ -175,6 +175,33 @@ theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Rea
   rcases zkB2_cases (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r with ⟨a, e⟩ | ⟨a, e⟩ <;>
     rw [e, a] at hcap <;> rw [a] <;> unfold zkFront zkBase at hcap <;> omega
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The slot's count is short of both of table `j`'s reps' rounds**: `zkCapDist` is the rep's rounds before
+Ligerito and the cap's round inside it (`zkRdAt_cap`), below the rep's rounds (`zkRd_facts`). -/
+theorem zk_slot_lt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    (j : ℕ) (r : Fin 2) (ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length) :
+    r.val * repRounds true spec sts[zkTbl sts j]! + zkCapDist (zkTabs h0 L hz hk hlay j) ℓ.val <
+      repRounds true spec sts[zkTbl sts j]! + repRounds true spec sts[zkTbl sts j]! := by
+  have hcap := zkRdAt_cap h0 L hz hk hlay (zk_points hs hin hset) j r ℓ
+  obtain ⟨-, hRe, hlt, -⟩ := zkRd_facts h0 L hz hk hlay j
+  have hl := hlt ℓ
+  change _ = zkB2 (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r +
+    zkPre spec sts[zkTbl sts j]! + capRound (zkSchT sts j).k0 (ℓ.val + 1) + 2 at hcap
+  rcases zkB2_cases (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r with ⟨a, e⟩ | ⟨a, e⟩ <;>
+    rw [e, a] at hcap <;> rw [a] <;> unfold zkFront zkBase at hcap <;> omega
+
+end Gen
+
 /-- **`ZkBatchAlign` holds at every message**: the masked simulator's live strategy submits its rounds on
 `zkStreams` (`zkLive_sched`), split at table `j` (`zkStreams_split`), so the simulated strategy follows `SchedC`
 (`schedC_simAtJZ`) at the slot's count (`zk_slot_lt`). -/
@@ -197,8 +224,48 @@ theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x := by
     rw [zkStreams_split hz hjS] at h
     exact h
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **`ZkBatchAlign` holds at every message**: the masked simulator's live strategy submits its rounds on
+`zkStreams` (`zkLive_sched`), split at table `j` (`zkStreams_split`), so the simulated strategy follows `SchedC`
+(`schedC_simAtJZ`) at the slot's count (`zk_slot_lt`). -/
+theorem zkBatchAlign (x : Claims.Msg) : ZkBatchAlign x := by
+  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u _
+  have hkR := zk_slot_lt hs hin hset h0 L hz hk hlay j r ℓ
+  have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
+  have ht : zkTbl sts j = j := by unfold zkTbl; exact ite_eq_left hjS
+  rw [ht] at hkR ⊢
+  rw [zkFront_eq hjS]
+  have hJ : sts.size ≤ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
+    rw [tabsJ_length, zk_tables_length hset]
+  refine schedC_simAtJZ execArith ZkExec.hs512 _ _ _ _ spec.dg _ _ _ (capOf := fun rs j => Exec.capOfRoot rs[j.val]!)
+    (zkN x) _ (fun _ _ _ => rfl) (zkRoot P x ω) _ _ _ _ (fun t => repRounds true spec sts[t]!) _ _ hkR
+    (fromS (fun t => repRounds true spec sts[t]!) (j + 1) (sts.size - (j + 1))) (fun p hp => ?_) fun pts => ?_
+  · have := mem_fromS _ _ _ p hp
+    dsimp only [finJ]
+    omega
+  · have h := zkLive_sched hJ h0 (zk_mPts_le hs hin hset) P ω u pts (zkStreams_length hz hset)
+    rw [zkStreams_split hz hjS] at h
+    exact h
+
+end Gen
+
 /-- **`ZkSlotAlign` holds at every message.** -/
 theorem zkSlotAlign (x : Claims.Msg) : ZkSlotAlign x :=
   zkSlotAlign_of_batch (zkBatchAlign x)
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **`ZkSlotAlign` holds at every message.** -/
+theorem zkSlotAlign (x : Claims.Msg) : ZkSlotAlign x :=
+  zkSlotAlign_of_batch (zkBatchAlign x)
+
+end Gen
 
 end FlockDeploy.KS

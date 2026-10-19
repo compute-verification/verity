@@ -23,6 +23,17 @@ open Flock
 theorem zkSimForkLeCapTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
   zkSimForkLeOn_capTau (zkSimForkLeCap_of (zkForkAlign_of_slot (zkSlotAlign x)) (zkForkClash x)) (zkSimForkLeTau x)
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The fork bound at the caps and `τ`, with no hypothesis.** -/
+theorem zkSimForkLeCapTau (x : Claims.Msg) : ZkSimForkLeOn x fun _ i => IsCapTauZ i :=
+  zkSimForkLeOn_capTau (zkSimForkLeCap_of (zkForkAlign_of_slot (zkSlotAlign x)) (zkForkClash x)) (zkSimForkLeTau x)
+
+end Gen
+
 /-- **KS at the untrimmed masked instance**, at SHA-512 at the deployed relation, from `ExtendJ` at full-width columns
 alone (`TrimBridge.zk_KS_untrim_of_kinds`). -/
 theorem zk_KS_untrim_of_extendJ
@@ -30,5 +41,20 @@ theorem zk_KS_untrim_of_extendJ
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
   TrimBridge.zk_KS_untrim_of_kinds (fun x _ => zkSimForkLeCapTau x) (fun x _ => zkSimForkLePads x)
     (fun x _ => zkViewClashQP x) hext
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **KS at the untrimmed masked instance**, at SHA-512 at the deployed relation, from `ExtendJ` at full-width columns
+alone (`TrimBridge.zk_KS_untrim_of_kinds`). -/
+theorem zk_KS_untrim_of_extendJ
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.KS sha512 (deployZk Readable.relation) :=
+  TrimBridge.zk_KS_untrim_of_kinds (fun x _ => zkSimForkLeCapTau x) (fun x _ => zkSimForkLePads x)
+    (fun x _ => zkViewClashQP x) hext
+
+end Gen
 
 end FlockDeploy.KS

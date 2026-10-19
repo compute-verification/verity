@@ -177,6 +177,22 @@ theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pa
   subst hpst
   simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- The readable statement's `k_log` is table 0's. -/
+theorem parse_kLog {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse zk Readable.relation x = some s)
+    {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf zk x = some (ins, spec, sts))
+    (h0 : 0 < sts.size) : s.kLog = sts[0].c.kLog := by
+  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs
+  obtain ⟨hpst, -, -⟩ := parseBytes_setup hp hset
+  subst hpst
+  simp only [Readable.toReadable, Array.getElem?_eq_getElem h0, Option.map_some, Option.getD_some]
+
+end Gen
+
 /-- **Table 0 of a masked statement in scope**: its layout and its link layout at `PT_LOCAL` (`plain_table0`). -/
 theorem zk_table0 {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readable.relation x = some s)
     (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}

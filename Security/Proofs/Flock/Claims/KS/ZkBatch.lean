@@ -219,6 +219,34 @@ def ZkBatchAlign (x : Claims.Msg) : Prop :=
         (repRounds true spec sts[zkTbl sts j]!) (zkFront spec sts j)
         (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The simulated strategy follows the deployed schedule**: at every masked statement in scope that sets up at a
+draw, every prover and tape, every table `j` and table of columns, every rep `r` and level `ℓ` below the last, the
+simulated strategy after `Commit` (`zkSimAt`) follows `SchedC`: the tables in front by `Lock.PreSched` after their
+coins (`zkFront`), then table `j`, rep 0 first after its `repRounds`, with `r · repRounds + zkCapDist` of its coins
+before the tables after it flip any, short of runs where table `j` opens nothing. -/
+def ZkBatchAlign (x : Claims.Msg) : Prop :=
+  ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
+    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
+    (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (r : Fin 2)
+    (ℓ : Fin (zkTabs h0 L hz hk hlay j).sch.levels.length) (u : zkTape x),
+    ℓ.val + 1 < (zkTabs h0 L hz hk hlay j).sch.levels.length →
+      SchedC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot (zkRoot P x ω)[j]!) (DeadZ j)
+        (r.val * repRounds true spec sts[zkTbl sts j]! + zkCapDist (zkTabs h0 L hz hk hlay j) ℓ.val)
+        (repRounds true spec sts[zkTbl sts j]!) (zkFront spec sts j)
+        (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u)
+
+end Gen
+
 /-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
 `schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
 level. -/
@@ -234,8 +262,41 @@ theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAli
     exact ind_conflictAcc_nul _ _ _ _ _ _ _ _ hb
   · exact slotRSZ_of_ge _ _ _ _ _ _ r.val r.isLt ℓ.val _ _ (by omega)
 
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The slot at the schedule's split count from the schedule**: `ZkFrontAlign` from `ZkBatchAlign` by
+`schedZ_of_schedC` and `slotRSZ_of_batch` at `dist_lockRepZ_zkCap`'s distance, and by `slotRSZ_of_ge` at the last
+level. -/
+theorem zkFrontAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkFrontAlign x := by
+  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u
+  by_cases hℓ : ℓ.val + 1 < (zkTabs h0 L hz hk hlay j).sch.levels.length
+  · obtain ⟨-, -, -, -, -, hl⟩ := zkTabs_facts h0 L hz hk hlay j
+    refine slotRSZ_of_batch _ _ _ _ _ _ r.val r.isLt ℓ.val _ _ _ (DeadZ j) ?_
+      (fun pts => dist_lockRepZ_zkCap _ _ _ hl r.val r.isLt default ℓ.val pts) _
+      (schedZ_of_schedC _ _ _ _ _ _ _ _ _ _ _ (h s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r ℓ u hℓ))
+    intro e b b' hb _
+    rw [take_gamesZC_length]
+    exact ind_conflictAcc_nul _ _ _ _ _ _ _ _ hb
+  · exact slotRSZ_of_ge _ _ _ _ _ _ r.val r.isLt ℓ.val _ _ (by omega)
+
+end Gen
+
 /-- **The slot alignment from the schedule.** -/
 theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
   zkSlotAlign_of_front (zkFrontAlign_of_batch h)
+
+
+namespace Gen
+
+variable [S : ZkSetup]
+
+/-- **The slot alignment from the schedule.** -/
+theorem zkSlotAlign_of_batch {x : Claims.Msg} (h : ZkBatchAlign x) : ZkSlotAlign x :=
+  zkSlotAlign_of_front (zkFrontAlign_of_batch h)
+
+end Gen
 
 end FlockDeploy.KS
