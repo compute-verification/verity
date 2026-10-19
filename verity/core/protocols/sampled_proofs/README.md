@@ -128,7 +128,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 
-Tests: `uv run tools/verity/check/suites.py verity-sampled-proofs`.
+Tests: `uv run tools/verity/check/suites.py protocols/sampled_proofs`.
 
 ## Core API
 
@@ -178,10 +178,11 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   2's `select_proof_units`, all from `OwnRandomness`; and `check_probability`.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
   `weight_binding_plan`.
-- `optimize`: the untrusted planner. From `Candidate`s (cuts of each op type into units), a `CostModel` (per
-  statement, per unit, commitment, replay) and an `Objective` (harm per unit at δ), `frontier` is the certified Pareto
-  frontier of cost against harm. `for_budget` and `for_target` query it, `certify` recomputes a plan's `Certificate`
-  from its sizes, `sensitivity` and `needs_benchmark` name what moves it, and `work_law` registers it as `work:1`.
+- `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per unit, commitment, serve-time
+  `Commitment`s, replay) and an `Objective` (harm per unit at δ, or the envelope of `Policy`s), `frontier` is the
+  certified Pareto frontier of total cost against harm. `for_budget` and `for_target` query it, `weigh` weights block kinds, `overlaps` prices repeated
+  commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
+  and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP within the width rule;
   `pressure` gives the developer hints.
 - `costfit`: C-Flock's cost model fitted from measurements, as a cost-model/v1 record.
@@ -383,7 +384,7 @@ Pinned by `tests/test_one_stage.py` (`test_profile_counts_wrong_units`, `test_th
 
 ### The consumers
 
-`verity.core.protocols.sampled_proofs.consumers` reads any `IntegrityProfile`, whichever protocol produced it, at its
+`consumers` reads any `IntegrityProfile`, whichever protocol produced it, at its
 delta, through its weighted bound `harm_bound`; each application counts delta once.
 
 - `exfiltration_bound(profile, output_bits)` is `harm_bound(output_bits) + location_bits(profile)`, in bits.
@@ -394,8 +395,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
   `n_v` proof units, the most work it can hold. Policies and PoUW pass their own utility to `worst_case`.
 - A unit's output bits or work is one number for every unit, or per stratum a number or `(bits, units)` pairs.
 
-Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
-`verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
+Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
 
 ### The proof service
 
@@ -556,5 +556,4 @@ Pinned by `tests/test_two_stage.py` (`test_own_randomness_is_the_lean_verifiers_
 
 `plan` builds obligations from a call's declared interface (`args`, `returns`), never from `FunctionCall.out`, which
 rescans the circuit on every call. A prescribed input is a sampled gate like any other, and an `UnconditionalObligation`
-is proved on every audit, outside both draws, so its gates are the profile's `covered` families. Pinned by
-`verity/core/protocols/sampled_proofs/tests/test_plan.py`.
+is proved on every audit, outside both draws, so its gates are the profile's `covered` families. Pinned by `tests/test_plan.py`.

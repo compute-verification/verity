@@ -123,12 +123,12 @@ def _lams(root: Shape, n: int, objective: Objective, grid: int) -> list[float]:
         if s.id in seen:
             continue
         seen.add(s.id)
-        harms.append(objective.work * (s.work + s.influence) + objective.bits * s.out_bits)
+        harms.append(objective.harm(s))
         stack.extend(child for _, parts in s.decompositions() for child, _ in parts)
     positive = [h for h in harms if h > 0]
     if not positive:
         raise ValueError(f"nothing under {root.id} does harm under this objective")
-    total = objective.work * (root.work + root.influence) * n + objective.bits * root.out_bits * n
+    total = objective.harm(root) * n
     lo, hi = 1 / (10 * max(total, max(positive))), 1 / min(positive)
     return [lo * (hi / lo) ** (i / (grid - 1)) for i in range(grid)]
 
