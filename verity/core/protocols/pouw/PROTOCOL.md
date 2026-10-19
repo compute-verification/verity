@@ -1325,16 +1325,25 @@ premium is a constant number of units per group (`Compiled.cover`), and the sche
 cover. By default each site is a group, and a site is one call: a layer's QKᵀ batched over its heads and the step's batch
 is one site, so one seed covers the call, not one head.
 
-GRIND (decision 122) sets the attention kinds' cover in (head, request) pairs (`Scheme.pair_cover`, `Compiled.pair_cover`):
-385 for QKᵀ (`QK_PAIRS`, on `DotBf16_v1 .. v3`) and 791 for P·V (`PV_PAIRS`, for the kind ATTN-NOISE plugs), which hold
-the decode grind term under 0.1% at T = 2^128. At one seed a call that is 8B's decode at batch ≥ 13 for QKᵀ and ≥ 25 for
-P·V. Below it the pass refuses the seed group (`cover`): its noise is the live per-round coin of decision 36, not a seed's.
-A pair is a connected component of the group's dots of the kind, its rows joined through the dots they share: at decode
-one (head, request), a query and its keys. Query heads that read one KV head's keys (GQA) are one pair by this count, so
-for a GQA model it refuses more than GRIND's per-query-head table does (8B: batch ≥ 49 for QKᵀ). A bf16 linear on
-`DotBf16` is one pair a call, so it is refused under a scheme that keeps QKᵀ's cover for its family. A seed group never
-spans calls run one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only
-after layer ℓ has run.
+The attention kinds' seed groups are checked by GRIND's bound itself (decision 122; `Scheme.rows`, `Compiled.grind`). A
+kind's `RowNoise` gives the noise bits of one A row and one B row at contraction k: QKᵀ's Q row k + 320 and K row k
+(`QK_ROWS`, on `DotBf16_v1 .. v3`), P·V's P row 224 and V column k (`PV_ROWS`, for the kind ATTN-NOISE plugs). Over the
+group's distinct rows of the kind, each with its bits and its readers among the group's dots, the grind term is
+`grind.visible_premium` (the formula `benchmarks/pouw/grind_price.py`'s table reads) over the group's dots, at
+T = 2^128 and δ = 2^-40. Over 0.1% (`grind.FLAG`) the pass refuses the group (`cover`): its noise is the live per-round coin
+of decision 36, not a seed's. One rule covers both regimes:
+
+- at decode the Q rows bind, so it counts every (query head, request) pair, whatever KV heads they share: one call is 8B's
+  decode at batch ≥ 13 for QKᵀ and ≥ 25 for P·V (70B: 7 and 13), from a context of 64 keys. Over fewer keys a KV head's K
+  rows (k bits) or V columns (L bits), each read by its query heads, bind instead, and the check asks for a larger batch
+  (70B's QKᵀ over 16 keys: 12);
+- at prefill a KV head's K rows and V columns, read by all its query heads, bind, so it counts (KV head, request)
+  components, far fewer the longer the prompt: a 16-token causal prompt needs 166 for QKᵀ (GRIND's table says 171, counting
+  every Q row's readers as the prompt's L keys).
+
+A bf16 linear on `DotBf16` carries QKᵀ's form under a scheme that keeps it for its family. A seed group never spans calls run
+one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only after layer ℓ has
+run.
 
 **Check** (`CompileError.code`):
 
@@ -1342,8 +1351,8 @@ after layer ℓ has run.
 - `edited-arm`, `arm`: a Call isn't the registered arm; `scan`, `operand-inside`: a matmul inside a scan, or on an operand
   computed inside its Definition;
 - `uncovered`: a registered Call or a matmul step left outside every unit;
-- `cover`: a seed group covers fewer units than the scheme's `cover`, or fewer (head, request) pairs of a kind than its
-  `pair_cover`;
+- `cover`: a seed group covers fewer units than the scheme's `cover`, or its dots of a kind with a `RowNoise` carry a grind
+  term over 0.1%;
 - `span`: a seed group holds a call and a call that reads its output;
 - `salt-flow`: the salt reaches anything but a unit's seed;
 - `position`: a unit's seed reads a position or roots other than its own parameters, or at the root a unit batch reads slots

@@ -1,5 +1,5 @@
 import Difftest
-import RemoteAudit.Session
+import RemoteAudit.Registry
 
 /-!
 # The difftest's Lean half
@@ -7,8 +7,9 @@ import RemoteAudit.Session
 The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through `verity_difftest.Port`, over JSON (byte
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
-opening, a leaf's receipt, a window's draws and a registration's digest), and the registration `audit.register` makes
-with its codec seed. `remote-audit-difftest` serves them.
+opening, a leaf's receipt, a window's draws and a registration's digest), the registration `audit.register` makes
+with its codec seed, and the verifier's registry (`registry`: registrations, sessions over them and their events,
+closes, and `registry/v0` both ways). `remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -116,12 +117,10 @@ private def positive (p : Json) (k : String) : V Nat := do
   if n = 0 then throw s!"{k} is a positive integer"
   pure n
 
-/-- A session's events through the verifier: `{"registration", "params", "not_before_ns", "coins", "append_coins",
-"events"}` to every event's result, the outcome and the record. The parameters name whether the prover defers an
-appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
+/-- A session's `{"params", "coins", "append_coins", "not_before_ns"}`. The parameters name whether the prover defers
+an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
 block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1. -/
-def sessionFn (j : Json) : V Json := do
-  let reg ← registrationOf (← J.get j "registration" "input")
+def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
   let params : Session.Params :=
     { deadlineNs := ← positive p "deadline_ns"
@@ -136,8 +135,15 @@ def sessionFn (j : Json) : V Json := do
   if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
   if appendCoins.any (·.size ≠ Codec.COIN_BYTES) then throw "append coins are 32 bytes"
+  pure (params, coins, appendCoins, ← nat j "not_before_ns")
+
+/-- A session's events through the verifier: `{"registration", "params", "not_before_ns", "coins", "append_coins",
+"events"}` to every event's result, the outcome and the record. -/
+def sessionFn (j : Json) : V Json := do
+  let reg ← registrationOf (← J.get j "registration" "input")
+  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
   let events ← (← J.arr j "events" "input").mapM eventOf
-  let (results, s) ← Session.run (Session.State.init params reg coins appendCoins (← nat j "not_before_ns")) events
+  let (results, s) ← Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
   pure (Json.mkObj [("results", .arr (results.map resultJ)),
     ("outcome", match s.outcome with | some o => .str o | none => .null),
     ("record", match s.summary with | some x => summaryJ s.digest x | none => .null)])
@@ -151,6 +157,86 @@ def registerFn (j : Json) : V Json := do
     (← codecOf (← J.get j "codec" "input")) kind (← J.bool j "bind" "input") (← J.str j "layout" "input") (← nat j "rows")
     (← hex j "nonce")
   pure (Json.mkObj [("codec_seed", hexJ r.codecSeed), ("digest", hexJ r.digest)])
+
+/-- A call on the registry. A session names its registration as one drawn earlier in the case, by its place among
+those drawn, or as one given in full. -/
+inductive Op
+  | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
+      (layout : String) (rows : Nat) (nonce : ByteArray)
+  | session (registration : Nat ⊕ Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
+      (notBeforeNs : Nat) (index : Option Int)
+  | event (node : ByteArray) (k : Nat) (e : Session.Event)
+  | close (node : ByteArray)
+  | live (node : ByteArray)
+  | drawn (node : ByteArray)
+
+def opOf (j : Json) : V Op := do
+  match ← J.str j "op" "op" with
+  | "register" =>
+    if ← J.bool j "bind" "op" then throw "a registration that binds PoUW's tile outputs is not covered: the port refuses it"
+    let some kind := Kind.ofName? (← J.str j "receipt" "op") | throw "a receipt kind is sketch-sha512 or block-sha512"
+    pure (.register (← hex j "node") (← nat j "blocks") (← hex j "payload_root") (← codecOf (← J.get j "codec" "op")) kind
+      (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
+  | "session" =>
+    let which ← match ← J.get j "registration" "op" with
+      | .num n => .inl <$> J.asNat (.num n) "registration"
+      | v => .inr <$> registrationOf v
+    let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+    let index ← match ← J.get j "index" "op" with
+      | .null => pure none
+      | v => some <$> J.asInt v "index"
+    pure (.session which params coins appendCoins notBeforeNs index)
+  | "event" => pure (.event (← hex j "node") (← nat j "session") (← eventOf (← J.get j "event" "op")))
+  | "close" => pure (.close (← hex j "node"))
+  | "live" => pure (.live (← hex j "node"))
+  | "drawn" => pure (.drawn (← hex j "node"))
+  | k => throw s!"no registry op {k}"
+
+private def refusedJ : Json := Json.mkObj [("refused", .bool true)]
+
+/-- `audit.Registry` under a given source: `{"source", "registry", "ops"}`, from the registry `registry/v0` reads back
+(`null` for an empty one), to each call's result (`refused` where `Registry` raises `RegistryError`) and the registry
+after them. A session's events go to it by its node and its place among its registration's sessions. -/
+def registryFn (j : Json) : V Json := do
+  let source ← hex j "source"
+  let mut r ← match ← J.get j "registry" "input" with
+    | .null => pure ({} : Registry)
+    | v => Registry.ofJson v
+  let ops ← (← J.arr j "ops" "input").mapM opOf
+  let mut drawn : Array Registration := #[]
+  let mut out : Array Json := #[]
+  for op in ops do
+    match op with
+    | .register node blocks root codec kind layout rows nonce =>
+      let (reg?, r') ← r.register source node blocks root codec kind false layout rows nonce
+      r := r'
+      match reg? with
+      | some reg =>
+        drawn := drawn.push reg
+        out := out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)])
+      | none => out := out.push refusedJ
+    | .session which params coins appendCoins notBeforeNs index =>
+      let reg ← match which with
+        | .inl i => match drawn[i]? with
+          | some reg => pure reg
+          | none => throw s!"no registration drawn at {i}"
+        | .inr reg => pure reg
+      match r.session reg params coins appendCoins notBeforeNs index with
+      | some (k, r') =>
+        r := r'
+        out := out.push (Json.mkObj [("session", toJson k)])
+      | none => out := out.push refusedJ
+    | .event node k e =>
+      let (res, r') ← r.step node k e
+      r := r'
+      out := out.push (match res with | some x => resultJ x | none => refusedJ)
+    | .close node =>
+      let (c, r') ← r.close node
+      r := r'
+      out := out.push (match c with | some c => c.toJson | none => refusedJ)
+    | .live node => out := out.push (match ← r.liveDigest node with | some d => hexJ d | none => .null)
+    | .drawn node => out := out.push (toJson (← r.drawn node))
+  pure (Json.mkObj [("results", .arr out), ("registry", r.toJson)])
 
 def codecDecodeFn (j : Json) : V Json := do
   let codec ← codecOf (← J.get j "codec" "input")
@@ -214,7 +300,7 @@ def drawsFn (j : Json) : V Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
-  ("codec_decode", codecDecodeFn),
+  ("registry", registryFn), ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
   ("leaf_receipt", leafReceiptFn), ("draws", drawsFn)]
 

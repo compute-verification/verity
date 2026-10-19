@@ -1,11 +1,11 @@
-"""Lean is the served window's verifier of record. Each of PoUW's checks on the challenger's path runs its Lean port and
-its Python reference on one input:
+"""Lean is the served window's verifier of record (`verity.core.protocols.pouw.verifier`). Each of PoUW's checks on the
+challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered`);
 * ``registration``: one-stage's R1-R6 against the challenger's own copies (`sampled-proofs-difftest registration`,
   `registration.check`); R7 (registered values) has no Lean form yet, and a PoUW window registers none;
-* ``public``: the service's public-items rule (`service.check_public`), which has no Lean form of its own: R1-R6 decide
-  what it reads of a PoUW registration, so it may refuse only what they refuse (`Record.public`);
+* ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
+  `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
 * ``draw``: the drawn units are the draw coin's (`pouw-check-difftest draw`, `core_check.draw`);
 * ``opening``: a drawn unit's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
@@ -15,8 +15,9 @@ its Python reference on one input:
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
 A disagreement raises `Disagree`, which the challenger turns into the refusal ``lean-python-disagree: <check>``; a failure
-is visible and nothing retries it. `Record(lean=False)` runs the references alone (the witness then holds no Lean
-verdict), which is how the switch is undone.
+is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
+or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
+undone.
 """
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ from typing import Any, Callable, Mapping
 import verity_difftest as D
 
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import verifier as V
 from verity.ml.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
@@ -86,6 +88,14 @@ def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str
             "registered": None, "scheme": scheme, "work_table": None}
 
 
+def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
+    """`sampled-proofs-difftest check_public`'s input for `service.check_public(spec, record)`: the record, the service's
+    scheme, the check's query, the Spec's values (each its name and whether it is registered) and its declared items."""
+    return {"record": dict(record), "scheme": scheme, "query": dict(spec.check.query),
+            "values": [{"name": v.name, "registered": v.registered} for v in spec.values],
+            "public": [i.item for i in spec.public]}
+
+
 def service_answer(accepted: bool, codes: list[str], profile: Mapping[str, Any] | None, registration: str,
                    draw: Mapping[str, Any] | None, delta: str) -> dict:
     """The service's answer (`Core.Answer`) of a stream's outcome: on acceptance its profile (δ as the window's ratio when
@@ -128,12 +138,13 @@ def py_draw(x: dict) -> dict | None:
 
 
 class Record:
-    """Both verdicts of each check, Lean's of record. `lean` False runs the references alone. The servers start at their
-    first check and build their executables (`lake build`) then, unless `exes` names them (``pouw-check``,
-    ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
+    """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
+    `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
+    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
 
-    def __init__(self, lean: bool = True, exes: Mapping[str, str | Path] | None = None) -> None:
-        self.lean, self.exes = lean, dict(exes or {})
+    def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
+        self.lean = V.RECORD_VERDICT == "lean" if lean is None else lean
+        self.exes = dict(exes or {})
         self.witness: list[dict] = []
         self._servers: dict[str, D.Server] = {}
 
@@ -175,17 +186,10 @@ class Record:
                           {"params": params, "record": record}, lambda _: {"codes": list(python())})
         return out["codes"] if "codes" in out else ["registration"]
 
-    def public(self, python: list[str], lean: list[str]) -> list[str]:
-        """The service's public-items rule (`service.check_public`'s codes, `python`) beside R1-R6 (`lean`, `registration`'s
-        codes of record), which decide everything it reads of a PoUW registration: its keys exactly, its roots exactly the
-        challenger's ports, its scheme and query; its declared items are the challenger's own Spec's.  They disagree only
-        when the rule refuses a registration R1-R6 accept; the codes of record are `lean`'s."""
-        same = not python or bool(lean)
-        self._note("public", {"codes": list(python)}, {"codes": list(lean)} if self.lean else None,
-                   same if self.lean else None)
-        if self.lean and not same:
-            raise Disagree("public", {"codes": list(lean)}, {"codes": list(python)})
-        return list(lean) if self.lean else list(python) or list(lean)
+    def public(self, x: dict, python: Callable[[], dict]) -> dict:
+        """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``
+        for an input it can't read; `python` is the reference's call (`service.check_public(...).to_json()`)."""
+        return self._piece("public", "sampled-proofs-difftest", PIECES, "check_public", x, lambda _: python())
 
     def prelude(self, python: str | None, lean: str | None) -> str | None:
         """`served_commit.check`'s own reading of the registration before a unit's opening (`python`: its level in the
@@ -221,4 +225,5 @@ class Record:
         return lean
 
 
-__all__ = ["CHECKS", "DISAGREE", "Disagree", "Record", "core_params", "hexed", "registration_params", "service_answer"]
+__all__ = ["CHECKS", "DISAGREE", "Disagree", "Record", "core_params", "hexed", "public_params", "registration_params",
+           "service_answer"]

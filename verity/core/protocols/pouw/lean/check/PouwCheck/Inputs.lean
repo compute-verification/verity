@@ -2,14 +2,15 @@ import CoreProtocol.Protocol
 import CoreProtocol.Profile
 import Flock.Hash
 import PouwCheck.Json
+import PouwCheck.Tile
 import PouwWindow.Length
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
 
 * `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
-  of tile counts, the window's context, the check query's SHA-512, and the rows' fixed length: stop mode `fixed` and
-  each slot's max_tokens.
+  of tile counts, the window's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
+  that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
 * `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
@@ -86,6 +87,9 @@ def paramsOf (j : Json) : V Params := do
       if 1 ≤ lo ∧ lo ≤ hi then some (lo, hi) else none
     | _ => none
   let some (lo, hi) := range | throw "range is not [lo, hi] with 1 <= lo <= hi"
+  let some tile := tile? template | throw "check.template is not a tile template the verifier pins"
+  unless tile.tileWork == tileWork do throw "check.tile_work is not its pinned template's tile work"
+  unless tile.query == query do throw "query is not its pinned template's query digest"
   let ln := get j "length"
   let maxTokens : Option (List Nat) := do
     guard (keys ln == some lengthParamKeys && get ln "stop" == .str PouwWindow.stopFixed)

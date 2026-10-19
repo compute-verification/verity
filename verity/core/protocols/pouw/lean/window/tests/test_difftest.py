@@ -1,5 +1,6 @@
-"""The window's Lean against `verity.core.protocols.pouw.window`, on the shared harness (`verity_difftest`): one
-`Port` per ported function of `window.py`, served by `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
+"""`verity.core.protocols.pouw.window` held to the window's Lean, PoUW's verifier of record (`pouw.verifier`), on the
+shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
+`pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
 The inputs are drawn by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
 deterministic and shrinks. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers at or below 0; K′'s
@@ -28,6 +29,7 @@ import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
 
+from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
@@ -734,7 +736,7 @@ def k_prime(v: dict) -> int:
 
 def _port(fn: str, reference: Callable[[dict], Any], gen: Callable[[random.Random], dict], **kw) -> D.Port:
     return D.Port(EXE, fn, reference=reference, inputs=st.randoms(use_true_random=False).map(gen), package=LEAN,
-                  rejects=(ValueError,), **kw)
+                  rejects=(ValueError,), of_record=V.RECORD_VERDICT, **kw)
 
 
 PORTS = {
@@ -787,11 +789,12 @@ PORTS = {
                           instance_ts_in), 1000),
     "public_inputs": (_port("public_inputs", public_inputs, public_inputs_in), 500),
     "layout_constants": (D.Port(EXE, "layout_constants", reference=layout_constants, inputs=st.just({}), package=LEAN,
-                                need_rejects=False), 1),
+                                need_rejects=False, of_record=V.RECORD_VERDICT), 1),
     "constants": (D.Port(EXE, "constants", reference=lambda _: {
         "PUBLIC": [list(p) for p in Wd.PUBLIC], "REGISTERED": list(Wd.REGISTERED),
         "LEGACY_REGISTERED": list(Wd.LEGACY_REGISTERED), "KINDS": list(Wd.KINDS), "GRID_BITS": Wd.GRID_BITS,
-        "STOP_FIXED": Wd.STOP_FIXED}, inputs=st.just({}), package=LEAN, need_rejects=False), 1),
+        "STOP_FIXED": Wd.STOP_FIXED}, inputs=st.just({}), package=LEAN, need_rejects=False,
+        of_record=V.RECORD_VERDICT), 1),
 }
 
 server = D.server_fixture(PORTS["constants"][0])
@@ -833,7 +836,7 @@ def test_the_served_windows(run: str, work: dict, k: int, domain: str, server) -
 
 
 @pytest.mark.parametrize("fn", sorted(PORTS))
-def test_the_lean_is_the_python(fn: str, server) -> None:
+def test_the_python_is_the_lean(fn: str, server) -> None:
     port, examples = PORTS[fn]
     SEEN.get(fn, set()).clear()
     D.run(port, examples=examples, server=server)

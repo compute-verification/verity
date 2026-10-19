@@ -131,11 +131,13 @@ def _codes(e: pytest.ExceptionInfo) -> set[str]:
 
 
 def _pub(bca: bytes, bcb: bytes) -> bytes:
-    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header, then instance 0's b || c in port
-    order (the A row, the B row, the tile digest's row)."""
+    """A tile proof's public file as `verity_flock.circuit.write` lays it out: its header (over the circuit the verifier
+    pins for the window's template), then instance 0's b || c in port order (the A row, the B row, the tile digest's
+    row)."""
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
-    return json.dumps({"instances": 1, "frame_v3": {"schemas": schemas}}).encode() + b"\n" + bca + bcb + bytes(128)
+    head = {"circuit_sha512": CC.TILES[SC.template(K).id].circuit, "instances": 1, "frame_v3": {"schemas": schemas}}
+    return json.dumps(head).encode() + b"\n" + bca + bcb + bytes(128)
 
 
 def _unit_pub(advice, priv, t: int) -> bytes:
@@ -643,20 +645,32 @@ def test_r1_r6_of_a_window_are_leans(served):
     record.close()
 
 
+def test_the_record_follows_the_switch(monkeypatch):
+    """`Record()` takes its side of record from `pouw.verifier.RECORD_VERDICT`, and an explicit `lean` overrides it."""
+    assert OR.Record().lean is (OR.V.RECORD_VERDICT == "lean")
+    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "python")
+    assert OR.Record().lean is False and OR.Record(lean=True).lean is True
+    monkeypatch.setattr(OR.V, "RECORD_VERDICT", "lean")
+    assert OR.Record().lean is True and OR.Record(lean=False).lean is False
+
+
 @LEAN
-def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
-    """`service.check_public` has no Lean form: R1-R6 decide what it reads of a PoUW registration, so on generated
-    registrations (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer,
-    anchors and registered values changed, several at once) it refuses only what Lean's R1-R6 refuse, and refuses some."""
+def test_the_public_items_rule_of_a_window_is_leans(served):
+    """The service's public-items rule over a window's Spec is Lean's (`Service.checkPublic`): on generated registrations
+    (keys added and dropped, roots renamed, repeated, dropped or given fields, the scheme, query, leaf layer, anchors and
+    registered values changed, several at once) `service.check_public` gives exactly its verdict, codes and detail, none
+    for the honest record and some for many of the changed ones."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     spec = SC.spec_of(params, ell)
-    prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.law_of(params, ell), SC.ports(params, ell)
-    p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
-    record = OR.Record()
+    record = OR.Record(lean=True)
+
+    def verdict(r: dict) -> dict:
+        return record.public(OR.public_params(spec, r, S.SCHEME), lambda: S.check_public(spec, r).to_json())
+
+    assert verdict(rec) == {"ok": True, "codes": [], "detail": {}}
 
     def mutate(rng: random.Random, r: dict) -> None:
         roots = r.get("roots")
@@ -687,19 +701,17 @@ def test_the_public_items_rule_refuses_only_what_r1_r6_refuse(served):
             case _:
                 r["population"] = rng.choice((n, n + 1, 0))
 
-    refused = both = 0
+    refused = 0
     for seed in range(300):
         rng = random.Random(seed)
         r = json.loads(json.dumps(rec))
         for _ in range(rng.choice((1, 1, 2, 3))):
             mutate(rng, r)
-        py = list(S.check_public(spec, r).codes)
-        lean = record.registration(p, r, lambda r=r: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None,
-                                                             None).codes)
-        assert record.public(py, lean) == lean, (seed, py, lean)
-        refused += bool(py)
-        both += bool(lean)
-    assert refused >= 100 and both >= refused, (refused, both)
+        try:
+            refused += not verdict(r).get("ok")
+        except OR.Disagree as e:
+            raise AssertionError(f"seed {seed}: Python {e.python} where the Lean, of record, gives {e.lean}") from None
+    assert refused >= 100, refused
     assert all(e["same"] for e in record.witness)
     record.close()
 
@@ -920,9 +932,11 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 @pytest.mark.slow
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     """stage_tile.py stages a call's tile and a filler tile of a committed window as `Pc8TileSide` units, each in its own
-    process, on the committer's side rows and salts: each public file's rows are the side trees' leaves, so the opening
+    process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
+    (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
-    which only the staged public file shows; about a minute at K = 128."""
+    or a change to the template or to C-Flock's lowering that moves the circuit off its pin, which only staging shows;
+    about a minute at K = 128."""
     *_, words = served
     params, public, advice, priv = _window(words)
     rec = _register(params, public)
@@ -941,6 +955,9 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
         st = json.loads((out / "stage.json").read_text())
         assert st["definition"] == SC.template(K).id and st["row_schemas"][:2] == [
             [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
+        assert st["circuit_sha512"] == CC.TILES[st["definition"]].circuit, (
+            f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
+            "to the template or to C-Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"

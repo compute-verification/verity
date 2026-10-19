@@ -56,10 +56,10 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   `public_problem` mirrors for the committer), R1-R6, the pass's epoch, the draw, PoUW's check over the stream's outcome
   (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the window's witness (``outcome.json``'s ``of_record``, the opening
-  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` runs
-  beside R1-R6, which decide what it reads of the record, and may refuse only what they refuse (``public``), as `check`'s
-  reading of the registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own
-  state stays Python's.
+  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
+  rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
+  registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
+  Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
   serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
@@ -741,9 +741,9 @@ class Challenger:
             raise _refused(*out["refused"]) if isinstance(out["refused"], list) else _refused("manifest", out["refused"])
         return out["how"]
 
-    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict, public: list[str]) -> None:
-        """One-stage's R1-R6 against the challenger's own copies, as `Stream.register` runs them, of record, with the
-        public-items rule's codes `public` beside them (`Record.public`).  Raises `Refused`."""
+    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
+        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
+        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = D.parse_law(st.spec.selection.text)
         prog = PT.population_program(st.unit, n)
@@ -752,9 +752,11 @@ class Challenger:
                                 OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
                                 dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
                                                           None, None).codes)
-        codes = self._of_record(name, self.record.public, public, codes)
+        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
+                                 lambda: S.check_public(st.spec, rec).to_json())
+        codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
         if codes:
-            raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6, of record" for c in codes}))
+            raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))
 
     def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:
         if self._key is None:
@@ -793,7 +795,7 @@ class Challenger:
             self._salted.add((stream, ell))
         own = ports(self.params, ell)
         st.ready()
-        self.r1_r6(name, st, rec, own, list(S.check_public(st.spec, rec).codes))
+        self.r1_r6(name, st, rec, own)
         reg = st.register(rec, own)
         self.regs[name] = (st, reg)
         self.recorded[name] = bool(recorded)
@@ -1128,7 +1130,7 @@ def cmd_challenger(a) -> int:
         coins = Coins(a.epoch)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=OR.Record(lean=not a.python_record))
+                    record=OR.Record(lean=False if a.python_record else None))
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1183,7 +1185,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   OR.Record(lean=not a.python_record))
+                   OR.Record(lean=False if a.python_record else None))
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps({'requests': n, 'diffs': diffs[:8]})}", flush=True)
     return 0 if not diffs else 1
@@ -1221,7 +1223,7 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    record = OR.Record(lean=not a.python_record)
+    record = OR.Record(lean=False if a.python_record else None)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:

@@ -46,8 +46,11 @@ EXPECT = {
     "params-eps-empty": 'params: eps: "" is not a natural', "params-grid": "params: grid_bits",
     "params-query": "params: query", "params-range": "params: range", "params-range-zero": "params: range",
     "params-eps-other": "public-value: sampling", "params-delta-other": "public-value: sampling",
-    "params-grid-other": ("public-value:", "level:"), "params-tile-other": "public-value: check, work",
-    "params-template-other": "public-value: check", "params-query-other": "query:", "params-range-low": "level:",
+    "params-grid-other": ("public-value:", "level:"),
+    "params-tile-other": "params: check.tile_work is not its pinned template's tile work",
+    "params-template-other": "public-value: check",
+    "params-template-unpinned": "params: check.template is not a tile template the verifier pins",
+    "params-query-other": "params: query is not its pinned template's query digest", "params-range-low": "level:",
     "params-range-high": "level:", "record-format": "commitment: format", "record-program": "commitment: program",
     "record-partition": "commitment: partition", "record-population-type": "commitment: population",
     "record-law-missing": "commitment: law is missing", "record-roots": "commitment: roots",
@@ -216,6 +219,8 @@ OPENING_EXPECT = {
     **{n: _HEADER for n in ("no-newline", "header-not-json", "header-nan", "header-list", "header-utf8")},
     **{n: _COUNT for n in ("instances-missing", "instances-bool", "instances-float", "instances-string")},
     "instances-two": "…instances, not one tile",
+    **{n: "the proof's circuit is not the one the verifier pins" for n in ("circuit-other", "circuit-missing",
+                                                                          "circuit-type")},
     **{n: _ROWS for n in ("schemas-missing", "frame-type", "schemas-type", "schemas-swapped", "schemas-one",
                           "schemas-prefixed")},
     "schemas-unsorted": None, "body-short": "the proof's body holds no A row and B row",
@@ -263,6 +268,21 @@ def test_the_opening_reads_what_served_zk_writes():
     assert CC.window_domain(CC.params(case["params"]), case["record"]).domain_id.hex() == R.served_domain(
         case["record"]["program"], case["record"]["partition"], Wd.PORT, Wd.ENTRY_SCHEMA,
         case["params"]["check"]["entries"], case["params"]["context"])
+
+
+def test_the_pinned_tiles_are_their_templates():
+    """Each pinned template the code still builds has as its query one-stage's query digest of its Definition's instance
+    query: the served window's (`pc8.side_tile`) at the served K and the test window's, with tile work K, and the hiding
+    tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded windows'. The served circuit is tied to
+    the build by benchmarks/pouw's staged-unit test."""
+    from verity.core.protocols.pouw.circuit import pc8
+    from verity.core.protocols.sampled_proofs.one_stage import partition as PT
+    built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True)["tile"]]
+    for d in built:
+        assert CC.TILES[d.id].query == R.query_digest(PT.template_instance_query(d)), d.id
+    assert set(CC.TILES) - {d.id for d in built} == {"Pc8TileLeafH3_v1{K=4096,DEV='sm120'}"}
+    for k in (4096, 128):
+        assert CC.TILES[pc8.side_tile(k).id].tile_work == k
 
 
 def test_canonical_json_is_leans():
