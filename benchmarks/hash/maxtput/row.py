@@ -9,7 +9,8 @@ writes RESULT (research/result/v0.1, every arm's measures, each with its ``arm``
 
     python3 benchmarks/hash/maxtput/row.py --publish RUN... --row 11 --hypothesis TEXT [--workload maxtput] [--branch B]
 
-rebuilds each arm's result from the run's custody (out/maxtput.json, and its result's pin state and bench rc), puts it into the
+waits (up to 30 min) for the run's custody on the store's remote, then rebuilds each arm's result from it (out/maxtput.json, and its
+result's pin state and bench rc), puts it into the
 store (``--kind bench-result/v1``, the result as its meta, as a run's own result) and labels it campaign=hash-loop, sweep=iteration, row, arm=
 <workload>:<arm> (plot.py draws it as workload <workload>, line <arm>), label, source, hardware; the run is labeled the same, with
 arm=<workload>.
@@ -34,6 +35,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -167,9 +169,23 @@ def build(a: argparse.Namespace) -> int:
     return 0 if whole["validation"]["status"] == "passed" else 1
 
 
+def preserved(run: str, tries: int = 30) -> bool:
+    """Custody reaches the store's remote a few minutes after `research run --wait` returns; until then the attempt isn't there."""
+    for i in range(tries):
+        if subprocess.run(["research", "data", "custody", run], capture_output=True, text=True).returncode == 0:
+            return True
+        if i + 1 < tries:
+            time.sleep(60)
+    return False
+
+
 def publish(a: argparse.Namespace) -> int:
     rc = 0
     for run in a.publish:
+        if not preserved(run):
+            print(f"{run}: no custody on the store's remote yet (`research data custody {run}`): nothing published", file=sys.stderr)
+            rc = 1
+            continue
         subprocess.run(["research", "fetch", run], capture_output=True, text=True)
         att = json.loads(research("data", "show", run, "--json"))
         machine = (att.get("execution") or {}).get("machine")
