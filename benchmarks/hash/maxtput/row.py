@@ -24,6 +24,9 @@ cycle's arms run back to back on one card), averaged over cycles, each cycle's i
                            requests/s, TTFT p50
   output_tokens_per_s, requests_per_s, scheduled_tokens_per_s, whole_output_tokens_per_s, ttft_{p50,p99}_ms, tpot_{p50,p99,mean}_ms,
   gpu_util_mean_pct, gpu_util_min_pct, waiting_min, running_mean, kv_usage_mean, finalize_s   the absolutes (means over runs)
+
+Every request arrives at t=0, so TTFT counts from there: under the burst it is the queue wait plus the first token, and --table
+heads it so.
 """
 from __future__ import annotations
 
@@ -229,8 +232,8 @@ def publish(a: argparse.Namespace) -> int:
 
 ARM_ORDER = ("stock", "sha512", "sha512-layer", "blake3")
 COLUMNS = (("out tok/s", "output_tokens_per_s", "{:,.0f}"), ("lost %", "throughput_overhead_pct", "{:.1f}"),
-           ("req/s", "requests_per_s", "{:.1f}"), ("TTFT p50 s", "ttft_p50_ms", "{:.1f}", 1e-3),
-           ("TTFT p99 s", "ttft_p99_ms", "{:.1f}", 1e-3), ("TPOT p50 ms", "tpot_p50_ms", "{:.1f}"),
+           ("req/s", "requests_per_s", "{:.1f}"), ("queue wait + TTFT p50 s", "ttft_p50_ms", "{:.1f}", 1e-3),
+           ("queue wait + TTFT p99 s", "ttft_p99_ms", "{:.1f}", 1e-3), ("TPOT p50 ms", "tpot_p50_ms", "{:.1f}"),
            ("TPOT p99 ms", "tpot_p99_ms", "{:.1f}"), ("TPOT rise %", "tpot_overhead_pct", "{:.1f}"),
            ("waiting min", "waiting_min", "{:.0f}"), ("running mean", "running_mean", "{:.0f}"), ("KV use", "kv_usage_mean", "{:.3f}"),
            ("GPU util %", "gpu_util_mean_pct", "{:.1f}"))
