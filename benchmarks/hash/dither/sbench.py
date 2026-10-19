@@ -533,6 +533,9 @@ def main() -> int:
                 REF_OF[arm] = REF_OF[base]
             if base in TOKENS_GATED:
                 TOKENS_GATED[arm] = TOKENS_GATED[base]
+    missing = sorted({REF_OF[x] for x in arms if x in TOKENS_ONLY and REF_OF[x] not in arms})
+    if a.gate and missing:
+        ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
