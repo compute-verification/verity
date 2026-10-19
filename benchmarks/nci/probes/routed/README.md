@@ -6,10 +6,12 @@ N*/g, and `analysis.py` turns g into D through `benchmarks/nci/fit.py`. The plan
 Notion page [Settling F3: routed-mixture experiments](https://app.notion.com/p/3fe399515d9e81aa98eefdfd7774e90d).
 
 **Not launched.** The probes need a budget line: about 20 GPU-hours central and 73 worst on one 8-GPU RTX PRO 6000 node,
-USD 36–132, plus about 1.6 TB of downloads (OLMo 2 and FlexOlmo are stored in FP32, and are loaded in BF16).
+USD 36–132, plus about 1.6 TB of downloads (OLMo 2 and FlexOlmo are stored in FP32, and are loaded in BF16). The disk
+holds about 200 GB of them at once: each score model's copy is deleted once it is on its GPU.
 
 | Path | Holds |
 | --- | --- |
+| `corpus.py` | the evaluation corpus of the page's section 4: `fetch` each stratum, `mixed`, then `assemble` the tree to publish |
 | `probe.py` | the GPU half: `windows`, `score` (bits per window; Qwen3-MoE routing records and confinement), `codebook`, `analyze`, `selftest` |
 | `analysis.py` | the standard-library half: windows, oracle and prefix composition, the dense-ladder fit, g with bootstrap intervals, D at g, the verdict |
 | `manifest.json` | every model `run.sh` scores (repo, revision, role) and the studies `analyze` fits |
@@ -43,22 +45,34 @@ The verdict, on 95% intervals of g taken across the Besiroglu, Hoffmann and Kapl
 
 ## Running it
 
-1. Build the evaluation corpus on CPU (the page's section 4), publish it with `research data put --kind corpus --tree DIR
- --preserve`, and record its `art:` id on the page before scoring anything.
-2. Cut windows from the corpus (a JSONL of `id`, `stratum` and `text`), and cut calibration windows from a disjoint split
- of about 500 windows:
+1. Build the evaluation corpus on CPU (the page's section 4) with `corpus.py` (its docstring has the commands): every
+ stratum is fetched from documents dated 2026, then `assemble` dedups them, drops any with long n-gram hits in the
+ infini-gram indexes of OLMo 2's and Dolma's training data, and splits equal bytes per stratum into `corpus.jsonl`,
+ `calibration.jsonl` and `mixed.jsonl` (each half of a mixed document from a different stratum). Publish the tree with
+ `research data put --kind corpus --tree DIR --preserve`, and record its `art:` id on the page before scoring anything.
+2. Cut windows from the corpus (a JSONL of `id`, `stratum` and `text`), and cut calibration windows from its disjoint
+ split. Mixed windows (stratum `mixed:A+B`) go in the same file, and `analyze` reports them by stratum only:
 
  ~~~bash
  python benchmarks/nci/probes/routed/probe.py windows corpus.jsonl --out windows.jsonl
+ python benchmarks/nci/probes/routed/probe.py windows mixed.jsonl --out mixed-windows.jsonl
+ cat mixed-windows.jsonl >> windows.jsonl
  python benchmarks/nci/probes/routed/probe.py windows calibration.jsonl --out calibration-windows.jsonl
  ~~~
 
-3. Run the job on a node under a budget line:
+3. Run the job on a node under a budget line. `HF_HOME` needs about 250 GB free; the run fetches into a scratch
+ directory there and deletes it when it exits. Each lane runs on the lane-th device of `CUDA_VISIBLE_DEVICES`, so the
+ job runs under a lease of `GPUS` GPUs:
 
  ~~~bash
- research run --on NODE --cwd source -- env WINDOWS=/abs/windows.jsonl CALIBRATION=/abs/calibration-windows.jsonl \
- HF_HOME=/abs/hf-cache bash benchmarks/nci/probes/routed/run.sh
+ research run --on NODE --project training --source . --cwd source --gpus 8 --timeout 20h --custody-ttl 22h \
+ --send windows.jsonl --send calibration-windows.jsonl -- bash -c 'in=$RESEARCH_RUN_DIR/inputs; \
+ WINDOWS=$in/windows.jsonl CALIBRATION=$in/calibration-windows.jsonl HF_HOME=/abs/hf-scratch \
+ exec bash benchmarks/nci/probes/routed/run.sh'
  ~~~
+
+ `--send` puts each file in `$RESEARCH_RUN_DIR/inputs/`, and the run publishes `$OUT` (scores, routing files,
+ `analysis.json`, `verdict.txt`) as its Attempt.
 
 `run.sh` runs in three phases, then analyzes:
 

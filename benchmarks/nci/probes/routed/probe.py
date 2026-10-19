@@ -147,19 +147,51 @@ def cmd_windows(args) -> None:
     print(f"{n} windows -> {args.out}")
 
 
+def load(args):
+    """The tokenizer, the model on ``args.device`` and the snapshot's commit. With ``--cache`` the checkpoint is
+    fetched there (weights as safetensors only) and loaded under ``--fetch-lock``, so lanes that share a disk fetch one
+    at a time; ``--drop`` then deletes the repo's cache before the lock is released, so the disk holds about one
+    checkpoint at once (don't drop a repo another lane will load)."""
+    import contextlib
+    import fcntl
+    import shutil
+
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    with contextlib.ExitStack() as stack:
+        if args.fetch_lock:
+            fcntl.flock(stack.enter_context(open(args.fetch_lock, "a")), fcntl.LOCK_EX)
+        source, commit = args.model, None
+        # one cache per repo: huggingface_hub 2.x keeps a cache's blobs in a store its repos share, so only dropping
+        # the whole cache frees them
+        cache = Path(args.cache) / args.model.replace("/", "--") if args.cache else None
+        if cache:
+            from huggingface_hub import snapshot_download
+
+            source = snapshot_download(args.model, revision=args.revision, cache_dir=cache,
+                                       allow_patterns=["*.json", "*.safetensors", "*.txt", "*.model", "*.tiktoken"])
+            commit = Path(source).name
+        tok = AutoTokenizer.from_pretrained(source, revision=None if cache else args.revision)
+        model = AutoModelForCausalLM.from_pretrained(source, revision=None if cache else args.revision,
+                                                     dtype=getattr(torch, args.dtype), device_map=args.device).eval()
+        if cache and args.drop:
+            shutil.rmtree(cache)
+    return tok, model, commit
+
+
 def cmd_score(args) -> None:
     import torch
     import transformers
-    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     mode, K = args.confine
     if args.routing_out and mode != "none":
         raise SystemExit("--routing-out records unconfined routing: drop --confine")
     if mode != "none" and not args.routing:
         raise SystemExit(f"--confine {mode}:{K} needs --routing, the file an unconfined --routing-out run wrote")
-    tok = AutoTokenizer.from_pretrained(args.model, revision=args.revision)
-    model = AutoModelForCausalLM.from_pretrained(args.model, revision=args.revision, dtype=getattr(torch, args.dtype),
-                                                 device_map=args.device).eval()
+    if args.drop and not args.cache:
+        raise SystemExit("--drop deletes the --cache copy after loading: give --cache")
+    tok, model, commit = load(args)
     device = next(model.parameters()).device
     recording = args.routing_out is not None
     conf = Confinement(model) if mode != "none" or recording else None
@@ -215,7 +247,8 @@ def cmd_score(args) -> None:
                     "profile": torch.stack(kept["profile"]) if kept["profile"] else None,
                     "cluster": torch.tensor(kept["cluster"]) if kept["cluster"] else None,
                     "layers": len(conf.routers), "experts": conf.routers[0].weight.shape[0]}, args.routing_out)
-    meta = {"model": args.model, "revision": args.revision, "dtype": args.dtype, "confine": f"{mode}:{K}",
+    meta = {"model": args.model, "revision": args.revision, "commit": commit, "dtype": args.dtype,
+            "confine": f"{mode}:{K}",
             "windows": len(wins) - len(too_long), "too_long": too_long, "max_positions": limit,
             "torch": torch.__version__, "transformers": transformers.__version__}
     Path(str(args.out) + ".meta.json").write_text(json.dumps(meta, indent=1) + "\n")
@@ -313,6 +346,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--routing-out", help="record prefix rankings (and clusters, with --codebook) to this file")
     p.add_argument("--profiles", action="store_true", help="also record each window's routing profile")
     p.add_argument("--codebook", help="a codebook file: assign clusters (with --routing-out) or confine (codebook:K)")
+    p.add_argument("--cache", help="fetch the checkpoint into this hub cache and load it from there")
+    p.add_argument("--fetch-lock", help="a file to hold an exclusive lock on while fetching and loading")
+    p.add_argument("--drop", action="store_true", help="delete the repo from --cache once the model is loaded")
     p = sub.add_parser("codebook", help="cluster recorded routing profiles into expert subsets")
     p.add_argument("--routing", required=True)
     p.add_argument("--out", required=True)

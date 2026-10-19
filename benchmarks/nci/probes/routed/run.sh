@@ -9,12 +9,26 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 : "${OUT:?OUT is where scores, routing files and the analysis go (research run sets it)}"
 : "${WINDOWS:?WINDOWS is the evaluation windows file, from probe.py windows}"
 : "${CALIBRATION:?CALIBRATION is the codebook calibration windows file, disjoint from WINDOWS}"
-: "${HF_HOME:?HF_HOME must be a model cache outside the run dir with about 1.6 TB free}"
+: "${HF_HOME:?HF_HOME must be a directory outside the run dir with about 250 GB free}"
 MANIFEST=${MANIFEST:-$HERE/manifest.json}
 GPUS=${GPUS:-8}
 DEVICE=${DEVICE:-cuda}
 DTYPE=${DTYPE:-bfloat16}
 read -r -a PY <<< "${PY:-uv run --no-project --python 3.12 --with torch==2.14.1 --with transformers==5.20.1 --with accelerate==1.15.0 python}"
+IFS=, read -r -a DEVS <<< "${CUDA_VISIBLE_DEVICES:-$(seq -s, 0 $((GPUS - 1)))}"
+if ((${#DEVS[@]} < GPUS)); then
+  echo "GPUS=$GPUS lanes but CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-} has ${#DEVS[@]}: lease $GPUS GPUs or set GPUS" >&2
+  exit 1
+fi
+
+# The 38 checkpoints are about 1.6 TB: each lane fetches and loads one at a time under LOCK into a scratch cache, and a
+# score model's copy is deleted once it is on its GPU, so the disk holds the largest one plus the shared MoE.
+mkdir -p "$HF_HOME"
+SCRATCH=$(mktemp -d -p "$HF_HOME" routed.XXXXXX)
+trap 'rm -rf "$SCRATCH"' EXIT
+CACHE=$SCRATCH/hub
+LOCK=$SCRATCH/fetch.lock
+export HF_XET_CHUNK_CACHE_SIZE_BYTES=0
 
 mkdir -p "$OUT/scores" "$OUT/routing" "$OUT/logs"
 rm -f "$OUT/failed.txt"
@@ -37,9 +51,11 @@ EOF
 
 score() {  # name repo revision role confine
   local name=$1 repo=$2 rev=$3 role=$4 confine=$5
-  local args=(--windows "$WINDOWS")
+  local args=(--windows "$WINDOWS" --cache "$CACHE" --fetch-lock "$LOCK")
   case $role in
-    calibration) args=(--windows "$CALIBRATION" --routing-out "$ROUTING/calibration.pt" --profiles) ;;
+    score) args+=(--drop) ;;
+    calibration) args=(--windows "$CALIBRATION" --cache "$CACHE" --fetch-lock "$LOCK"
+                       --routing-out "$ROUTING/calibration.pt" --profiles) ;;
     record) args+=(--routing-out "$ROUTING/windows.pt" --codebook "$ROUTING/codebook.pt") ;;
     confine) args+=(--confine "$confine" --routing "$ROUTING/windows.pt" --codebook "$ROUTING/codebook.pt") ;;
   esac
@@ -56,7 +72,7 @@ phase() {  # roles...: their models, split round-robin over $GPUS lanes
       awk -v lane=$lane -v n="$GPUS" 'NR % n == lane' "$list" | while read -r name repo rev role confine; do
         [ -s "$OUT/scores/$name.jsonl" ] && continue
         echo "lane $lane: $name ($repo@$rev, $confine)"
-        CUDA_VISIBLE_DEVICES=$lane score "$name" "$repo" "$rev" "$role" "$confine" < /dev/null \
+        CUDA_VISIBLE_DEVICES=${DEVS[lane]} score "$name" "$repo" "$rev" "$role" "$confine" < /dev/null \
           > "$OUT/logs/$name.log" 2>&1 || echo "$name" >> "$OUT/failed.txt"
       done
     ) &
