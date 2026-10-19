@@ -31,7 +31,8 @@ file opens the unit's rows under the registered window root, through its entry a
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.  In a
 certified window, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
 `salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
-before it drew that salt (`salt.committed`).
+before it drew that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
+challenger runs it before it asks the certifier for one, since the certifier reveals a window once.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
@@ -823,23 +824,17 @@ def _check_workload(us: list[dict], roots: dict[int, bytes]) -> None:
         raise Co.DomainError("every weight of the workload is committed, and only those")
 
 
-def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | None, stream: bytes | None,
-                    prover: bytes | None) -> tuple[bytes, str]:
-    """A certified window's pass under the window's `stream` and `prover`: `committed`, what the certifier recorded
-    before it drew the window's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
-    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW window the
-    window's `context` names, the window, the stream and the prover."""
+def _certified_workload(m: dict) -> tuple[list[dict], dict[int, bytes]]:
     schema = m.get("schema")
     if schema != MANIFEST_CERTIFIED:
         if not _str(schema):
             raise Refused("the pass's manifest names no schema")
         raise Co.DomainError(f"schema {schema!r}, not {MANIFEST_CERTIFIED}: the window is certified")
-    us, roots = _workload(m)
-    if type(reveal) is not bytes or len(reveal) != PS.SALT_BYTES:
-        raise Co.DomainError(f"the verifier's reveal is not a {PS.SALT_BYTES}-byte salt")
-    window = PS.window_of(context)
-    if window is None:
-        raise Co.DomainError("the window's context names no PoUW window, whose certifier salt the pass's is")
+    return _workload(m)
+
+
+def _recorded(us: list[dict], roots: dict[int, bytes], committed: bytes | None, stream: bytes | None,
+              prover: bytes | None) -> None:
     _check_workload(us, roots)
     if not (type(stream) is bytes and len(stream) == PS.STREAM_BYTES and type(prover) is bytes
             and len(prover) == PS.PROVER_BYTES):
@@ -850,6 +845,36 @@ def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | Non
     if PS.pouw_record(weights_root(Co.SCHEME, roots), stream, prover) != committed:
         raise Co.DomainError("the pass's weights, stream and prover are not those the certifier recorded before it drew "
                              "the window's salt")
+
+
+def recorded_reason(raw: bytes | None, committed: bytes | None, stream: bytes | None, prover: bytes | None
+                    ) -> str | None:
+    """Why a certified window's pass `raw` is not over the weights, `stream` and `prover` that `committed` binds, what PoUW
+    recorded with the certifier before it drew the window's salt (`salt.committed`); None when it is.  `pass_epoch`'s
+    rule, with the same words, short of the reveal, which a challenger asks for only after this passes: the certifier
+    reveals a window once, so a registration whose stream or prover wasn't recorded gets no reveal."""
+    if raw is None:
+        return "the window names no pass, whose epoch the challenger re-starts from its manifest"
+    try:
+        _recorded(*_certified_workload(_manifest(raw)), committed, stream, prover)
+    except (Co.DomainError, Refused) as e:
+        return str(e)
+    return None
+
+
+def _certified_salt(m: dict, reveal: bytes, context: str, committed: bytes | None, stream: bytes | None,
+                    prover: bytes | None) -> tuple[bytes, str]:
+    """A certified window's pass under the window's `stream` and `prover`: `committed`, what the certifier recorded
+    before it drew the window's salt (`salt.committed`), is `salt.pouw_record` of the pass's weights' root, the stream
+    and the prover, and the pass's salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW window the
+    window's `context` names, the window, the stream and the prover."""
+    us, roots = _certified_workload(m)
+    if type(reveal) is not bytes or len(reveal) != PS.SALT_BYTES:
+        raise Co.DomainError(f"the verifier's reveal is not a {PS.SALT_BYTES}-byte salt")
+    window = PS.window_of(context)
+    if window is None:
+        raise Co.DomainError("the window's context names no PoUW window, whose certifier salt the pass's is")
+    _recorded(us, roots, committed, stream, prover)
     salt = PS.pouw_salt(reveal, window, stream, prover)
     if salt.hex() != m.get("salt"):
         raise Co.DomainError("the pass's salt is not the certifier's for its window, stream and prover")
@@ -1087,4 +1112,5 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]
+           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "unit_draw", "verify_path",
+           "window_domain"]

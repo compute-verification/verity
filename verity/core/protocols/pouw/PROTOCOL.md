@@ -58,7 +58,8 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    (`Proxy(prover_key=…)`, whose id is `salt.prover_id`, over `weights_message` under the stream), only while p's first
    ingress tick (the draw) is ahead (`Proxy.commit_weights`), and the verifier reads it with `salt.committed`
    (`Proxy.committed`, on `reveal`'s conditions). A window with no record made before its draw, or under another stream
-   or prover, is refused. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
+   or prover, is refused, and the challenger checks that first (`core_check.recorded_reason`), asking for the reveal
+   only after. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
    only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW window by
    default), so one registration of p, made after p's work, gets it. `salt.Credits` credits p once per stream and
    prover: its tiles are private, so that is the finest public key, and a second registration under them is refused.

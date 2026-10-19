@@ -371,9 +371,10 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
     made before its draw, it is read back and its pass passes, and a second record for it is refused. Window 1's, made
     after its draw, is refused, so `committed` refuses window 1 and its pass, salted by its own salt, is refused. A pass
     over other weights, salted the same since the salt doesn't read them, is refused, as are a stream or prover other
-    than those recorded, a registration that isn't the window's and a certifier that gives anything but 64 bytes. The
-    certifier's refusals are matched by type and PoUW's by its own words, so neither's wording is pinned to the
-    other's."""
+    than those recorded, a registration that isn't the window's and a certifier that gives anything but 64 bytes.
+    `recorded_reason`, the record's rule short of the reveal, which a challenger runs before it asks for one, refuses
+    what `pass_epoch` refuses of the record, in its words. The certifier's refusals are matched by type and PoUW's by
+    its own words, so neither's wording is pinned to the other's."""
     work, roots = setup()
     root = weights_root(roots)
     record = PS.pouw_record(root, STREAM, PROVER)
@@ -434,6 +435,13 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
     for stream, prover in ((None, PROVER), (STREAM, None), (STREAM[:32], PROVER), (STREAM, PROVER + b"\0")):
         assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == \
             (None, ("coin", "the verifier holds no 64-byte stream digest and 64-byte prover id for the window"))
+
+    assert CC.recorded_reason(raw, got, STREAM, PROVER) is None
+    for r, bound in ((raw, (None, STREAM, PROVER)), (raw, (got, hashlib.sha512(STREAM).digest(), PROVER)),
+                     (raw, (got, STREAM, PROVER[:32])), (None, (got, STREAM, PROVER)),
+                     (json.dumps({**json.loads(raw), "schema": CC.MANIFEST_SCHEMA}).encode(), (got, STREAM, PROVER))):
+        _, (_, why) = CC.pass_epoch(None, r, ctx, reveal=reveal, **dict(zip(("committed", "stream", "prover"), bound)))
+        assert CC.recorded_reason(r, *bound) == why
 
 
 def test_a_certified_window_is_credited_once_per_stream_and_prover():
