@@ -86,7 +86,7 @@ def wordCalls (P : Flock.Program.Prog) : V (Array (Nat × Nat × Flock.Qword.DCu
     let gr ← Flock.Extract.graph P d (full := false)
     if c.owner.size != gr.g.n then throw s!"query-refused: {(P.defs[d]!).key}'s cut leaves a computing gate out"
     let (ob, _) := Flock.Partition.boundaryWidths gr.g c.owner
-    if let some u := (List.range ob.size).find? ((unitClass ob[·]!).isNone) then
+    if let some u := (List.range ob.size).find? (fun u => (unitClass ob[u]!).isNone) then
       throw s!"query-refused: unit {u} of {(P.defs[d]!).key} commits {ob[u]!} bits, more than the widest class, {UNIT_CLASS_MAX}"
   return calls
 
@@ -150,9 +150,9 @@ def templateBits (P : Flock.Program.Prog) (d : Nat) : V Nat := do
   for j in [0:min ws.size defn.body.ret.count] do
     let g ← Flock.Program.resolve P top (defn.body.ret.get j)
     if lo ≤ g && g < lo + defn.gates then own := own.push (g, ws[j]!)
-  let own := own.qsort (·.1 < ·.1)
-  return (List.range own.size).foldl (fun bits i =>
-    if i > 0 && own[i - 1]!.1 == own[i]!.1 then bits else bits + own[i]!.2) 0
+  let sorted := own.qsort (fun a b => a.1 < b.1)
+  return (List.range sorted.size).foldl (fun bits i =>
+    if i > 0 && sorted[i - 1]!.1 == sorted[i]!.1 then bits else bits + sorted[i]!.2) 0
 
 /-- `partition._check_units` on a template query's ranges: refused for a template of no gate, or one whose instance commits
 bits no public class holds (`unitClass`, `templateBits`), each template once. -/
@@ -176,7 +176,7 @@ def checkCalls (P : Flock.Program.Prog) (cs : Array Flock.Qcall.Call) : V Unit :
     if seen.contains c.d then continue
     seen := seen.push c.d
     let bits ← committedBits P c.d (c.c.units.map fun u => (u.lo, u.hi))
-    if let some u := (List.range bits.size).find? ((unitClass bits[·]!).isNone) then
+    if let some u := (List.range bits.size).find? (fun u => (unitClass bits[u]!).isNone) then
       throw s!"query-refused: unit {u} of {(P.defs[c.d]!).key} commits {bits[u]!} bits, more than the widest class, {UNIT_CLASS_MAX}"
 
 /-- The `Q_word` or `Q_call` query's Calls with their units, as `(root-body index, Definition id, units)`: `Q_word` v1 at
