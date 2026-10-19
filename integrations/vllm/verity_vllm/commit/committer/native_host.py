@@ -229,7 +229,7 @@ CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the 
 
 
 def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
-    """[R14 TP-03] rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
+    """TP-03 rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
     (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
     from collections import Counter
 
