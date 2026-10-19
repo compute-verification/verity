@@ -9,15 +9,20 @@ The signal follows the parent THREAD that forked the worker.  The pool forks its
 replacement of a dead worker from its worker-handler thread, which exits in `Pool.terminate()`: the kernel would SIGKILL the
 replacement there, possibly while it holds the task queue's read lock, and `terminate()` would wait on the lock forever.  So a
 replacement keeps only the ppid check.
+
+A daemonic process (a vLLM TP worker) may fork the pool too.  multiprocessing refuses it children because they would outlive it when
+it is terminated, which the signal rules out, so `fork_pool` lifts that refusal while the pool lives.
 """
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import multiprocessing as mp
 import os
 import signal
 import sys
 import threading
+from collections.abc import Iterator
 from multiprocessing.pool import Pool
 
 PR_SET_PDEATHSIG = 1
@@ -40,17 +45,17 @@ def die_with_parent(parent_pid: int, forker: int | None = None) -> None:
         os._exit(1)
 
 
-def fork_pool(processes: int) -> Pool:
-    """`mp.get_context("fork").Pool(processes)` whose workers die with the calling process, a daemonic one included (vLLM's TP
-    workers): multiprocessing refuses a daemon children so that none outlives it, which `die_with_parent` ensures, so the flag is
-    lifted while the pool forks its workers.  A dead worker's replacement, forked later, is still refused under a daemon."""
-    me = mp.current_process()._config
-    daemon = me.pop("daemon", None)
+@contextlib.contextmanager
+def fork_pool(processes: int) -> Iterator[Pool]:
+    """`with mp.get_context("fork").Pool(processes)`, whose workers die with the calling process, also when that process is daemonic."""
+    config = mp.current_process()._config
+    daemon = config.pop("daemon", None)
     try:
-        return mp.get_context("fork").Pool(processes=processes, initializer=die_with_parent, initargs=(os.getpid(), threading.get_ident()))
+        with mp.get_context("fork").Pool(processes=processes, initializer=die_with_parent, initargs=(os.getpid(), threading.get_ident())) as pool:
+            yield pool
     finally:
         if daemon is not None:
-            me["daemon"] = daemon
+            config["daemon"] = daemon
 
 
 #: seconds between the parent's checks for a dead worker: a worker that dies mid-task (an OOM kill) loses its task, and the pool would

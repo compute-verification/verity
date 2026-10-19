@@ -126,15 +126,10 @@ def checkpoint_index(o: Options) -> Any:
 
 
 def registered_roles(p: Any) -> dict[str, dict[str, Any]]:
-    """The rank's Build `weight_roles` (`fp8_ue8m0.build_roles` of each request Program's dir) by registered name: the Program's field
-    less the wrapper prefix its index strips (`p.index.prefix`, as the replay's weights provider does)."""
-    from verity_vllm.check import fp8_ue8m0
+    """The rank's Build `weight_roles` by registered name (`cpu_replay.registered_roles` of its request Programs' dirs, less its index's prefix)."""
+    from verity_vllm.pipeline import cpu_replay as CPU
 
-    roles: dict[str, dict[str, Any]] = {}
-    for v in p.loaded.values():
-        roles.update(fp8_ue8m0.build_roles(v.get("dir")))
-    pre = getattr(p.index, "prefix", "") or ""
-    return {(f[len(pre):] if pre and f.startswith(pre) else f): r for f, r in roles.items()}
+    return CPU.registered_roles((v.get("dir") for v in p.loaded.values()), getattr(p.index, "prefix", "") or "")
 
 
 def _peak_rss() -> int:

@@ -285,6 +285,8 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
 
         com = st["com"]
         p = load(cfg, rank, st.get("world"))
+        if cfg.get("workers") is None:      # the ranks that replay at once on the node: the world's, or K under host slots
+            cfg = dict(cfg, workers=SR.default_workers(min(p.world, int(cfg.get("ranks_at_once") or p.world))))
         xrank_facts(st, p)
         rd = OC.OpenedReader(com, rc)
         man = manifest_of_rank(st.get("manifest_doc"), rank)

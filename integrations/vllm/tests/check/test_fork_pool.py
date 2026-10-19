@@ -1,6 +1,8 @@
-"""Forked replay / export workers die with their parent: a SIGKILLed Commit leaves no worker holding its copy-on-write heap."""
+"""Forked replay / export workers die with their parent: a SIGKILLed Commit leaves no worker holding its copy-on-write heap.  A
+daemonic parent forks them too."""
 from __future__ import annotations
 
+import multiprocessing as mp
 import os
 import select
 import signal
@@ -9,7 +11,7 @@ import sys
 
 import pytest
 
-from verity_vllm.check.replay.fork import die_with_parent
+from verity_vllm.check.replay.fork import die_with_parent, fork_pool
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="PR_SET_PDEATHSIG is Linux-only")
 
@@ -23,14 +25,14 @@ from verity_vllm.check.replay.fork import fork_pool
 def work(_):
     os.write(started_w, b".")
     os.read(block, 1)
-pool = fork_pool(3) if sys.argv[1] == "fork_pool" else mp.get_context("fork").Pool(3)
-pool.map_async(work, range(3))
-n = 0
-while n < 3:
-    n += len(os.read(started, 3 - n))
-print(" ".join(str(p.pid) for p in pool._pool), flush=True)
-sys.stdin.read()
-os.kill(os.getpid(), signal.SIGKILL)
+with fork_pool(3) if sys.argv[1] == "fork_pool" else mp.get_context("fork").Pool(3) as pool:
+    pool.map_async(work, range(3))
+    n = 0
+    while n < 3:
+        n += len(os.read(started, 3 - n))
+    print(" ".join(str(p.pid) for p in pool._pool), flush=True)
+    sys.stdin.read()
+    os.kill(os.getpid(), signal.SIGKILL)
 """
 
 
@@ -96,42 +98,36 @@ def _die(_=None) -> None:
     os.kill(os.getpid(), signal.SIGKILL)
 
 
-def _in_a_daemon(q) -> None:
-    import multiprocessing as mp
+def _square(x: int) -> int:
+    return x * x
 
-    from verity_vllm.check.replay.fork import fork_pool
 
+def _pool_in(conn) -> None:
     try:
-        with pytest.raises(AssertionError, match="daemonic"):
-            mp.get_context("fork").Pool(1)
         with fork_pool(2) as pool:
-            got = pool.map(_pdeathsig, range(4))
-        q.put((os.getpid(), got, mp.current_process().daemon))
-    except BaseException as e:  # noqa: BLE001 -- reported to the test, which fails on it
-        q.put(repr(e))
+            conn.send(pool.map(_square, range(4)))
+        conn.send(mp.current_process().daemon)
+    except Exception as e:  # noqa: BLE001 -- the test names it
+        conn.send(repr(e))
 
 
-def test_a_daemonic_process_forks_a_pool_whose_workers_die_with_it():
-    """vLLM's TP workers are daemonic, and multiprocessing refuses a daemon children: every rank of the GLM-5.3 TP8 B8 Commit's
-    replay fell back to serial (r20261018-221605-e5e7, `--replay-workers 4`)."""
-    import multiprocessing as mp
-
+def test_a_daemonic_process_forks_the_pool_and_is_daemonic_after():
+    """vLLM's TP workers are daemonic, and the replay forks its pool in them: multiprocessing refuses a daemonic process children
+    ("daemonic processes are not allowed to have children"), and the replay ran serially on every rank."""
     ctx = mp.get_context("fork")
-    q = ctx.SimpleQueue()
-    p = ctx.Process(target=_in_a_daemon, args=(q,), daemon=True)
+    r, w = ctx.Pipe(duplex=False)
+    p = ctx.Process(target=_pool_in, args=(w,), daemon=True)
     p.start()
-    got = q.get()
+    w.close()
+    assert r.recv() == [0, 1, 4, 9]
+    assert r.recv() is True
     p.join()
-    assert isinstance(got, tuple), got
-    parent, workers, still_daemon = got
-    assert {sig for _, sig in workers} == {signal.SIGKILL} and parent not in {pid for pid, _ in workers} and still_daemon is True
+    assert p.exitcode == 0
 
 
 def test_a_replacement_worker_sets_no_signal_and_the_pool_terminates():
     """The pool forks a dead worker's replacement from its worker-handler thread, which `terminate()` ends: a signal following that
     thread would kill the replacement inside `terminate()`, maybe holding the task queue's read lock, and `terminate()` would hang."""
-    from verity_vllm.check.replay.fork import fork_pool
-
     with fork_pool(1) as pool:
         first, sig = pool.apply(_pdeathsig)
         assert sig == signal.SIGKILL
