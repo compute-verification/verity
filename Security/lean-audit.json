@@ -465,7 +465,8 @@
   "Definitions.Accounting.Bandwidth",
   "Models.Accounting.Guarantees.Bandwidth",
   "Definitions.Hash",
-  "Models.Hash.Guarantees"
+  "Models.Hash.Guarantees",
+  "Definitions.Population"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
@@ -851,6 +852,11 @@
    "imports": ["Mathlib", "Definitions.NetworkCertifier"],
    "except": [],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Population": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
+   "except": [],
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Models.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Models.NetworkCertifier.Assumptions"],

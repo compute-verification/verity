@@ -8,7 +8,8 @@
   "Proofs.Flock",
   "Proofs.Hash",
   "Proofs.Accounting",
-  "Proofs.Accounting.Bandwidth"
+  "Proofs.Accounting.Bandwidth",
+  "Proofs.Population"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
