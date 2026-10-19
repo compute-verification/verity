@@ -422,9 +422,15 @@ class LmHead:
                 graph = torch.cuda.CUDAGraph()
                 if self.cap is None:
                     self.cap = new_stream()
-                # captured mid-serve, beside the filler's thread: under "global" its CUDA calls invalidate the capture
-                with torch.cuda.graph(graph, stream=self.cap, capture_error_mode="thread_local"):
-                    self.run(xs, commit)
+                # captured mid-serve, beside the filler's thread: under "global" its CUDA calls invalidate the capture.
+                # Not torch.cuda.graph, which empties the allocator's cache first, so that the next prefill would
+                # cudaMalloc vLLM's activations again beside the filler (up to seconds a step).
+                with torch.cuda.stream(self.cap):
+                    graph.capture_begin(capture_error_mode="thread_local")
+                    try:
+                        self.run(xs, commit)
+                    finally:
+                        graph.capture_end()
                 g = self.graphs[key] = (graph, xs)
             g[1].copy_(x2)
             g[0].replay()
