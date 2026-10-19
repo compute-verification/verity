@@ -1,4 +1,4 @@
-"""`row_tables_device`: `row_tables.step_roots` on the GPU and its CPU twin, each held bit for bit to the CPU reference
+"""`row_tables_device`: `row_tables.step_roots` on the GPU (`row_tables_device.step_roots`) and its CPU twin, each held bit for bit to the CPU reference
 (`row_tables.step_roots`, over `verity.ml.commitments.row_table`) on random steps.  The steps cover a row's segment cases (K + 4
 a multiple of 1024 and two past one, codes whose count is not a multiple of 8), one-row and non-power-of-two tables, a one-table
 step, rows out of rank order, tables out of step order, and an engine step past 2^32 (the nonce's second word).  The twin needs a
@@ -69,10 +69,10 @@ def _on(torch, outs: dict) -> dict:
 def test_the_device_path_is_the_cpu_reference(shapes):
     torch = _cuda()
     outs = outputs(shapes, 11)
-    pending = RTB.step_roots(CTX, 2**33 + 5, _on(torch, outs), KEY, device=True)
+    pending = D.step_roots(CTX, 2**33 + 5, _on(torch, outs), KEY)
     assert isinstance(pending, D.Pending)
     assert pending.result() == RTB.step_roots(CTX, 2**33 + 5, outs, KEY)
-    timed = D.launch(CTX, 2**33 + 5, _on(torch, outs), KEY, timing=True)
+    timed = D.step_roots(CTX, 2**33 + 5, _on(torch, outs), KEY, timing=True)
     assert timed.kernel_ms() > 0 and timed.result() == pending.result()
 
 
@@ -86,13 +86,13 @@ def test_the_side_stream_reads_the_codes_the_serving_stream_wrote_before_the_lau
     for op, (_ids, c, s) in dev.items():
         c.copy_(torch.from_numpy(outs[op][1]), non_blocking=True)
         s.copy_(torch.from_numpy(outs[op][2]), non_blocking=True)
-    assert D.launch(CTX, 3, dev, KEY).result() == RTB.step_roots(CTX, 3, outs, KEY)
+    assert D.step_roots(CTX, 3, dev, KEY).result() == RTB.step_roots(CTX, 3, outs, KEY)
 
 
 def test_record_ready_hands_over_the_ready_steps_in_launch_order():
     torch = _cuda()
     steps = {s: outputs(STEPS[s % 3], 20 + s) for s in range(4)}
-    queue = deque(D.launch(CTX, s, _on(torch, o), KEY) for s, o in steps.items())
+    queue = deque(D.step_roots(CTX, s, _on(torch, o), KEY) for s, o in steps.items())
     queue[-1].done.synchronize()
     got: list[RTB.StepRoots] = []
     assert D.record_ready(queue, got.append) == 4 and not queue

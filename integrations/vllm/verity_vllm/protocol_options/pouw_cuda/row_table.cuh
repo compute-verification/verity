@@ -19,11 +19,13 @@ using ncp2::Sha512;
 using ncp2::sha512_compress;
 
 constexpr uint32_t SEG_BYTES = 1024;
-constexpr char FRAME[] = "veritor/protocol/merkle/frame/v3";  // and its NUL: 33 bytes
-constexpr char SEG_TAG[] = "verity/sha512-row-seg/v1";        // 25 with the NUL
-constexpr char SEG_SEGMENT_TAG[] = "verity/sha512-row-seg/v1/segment";  // 33
-constexpr char ROW_SCHEMA[] = "hm96-sha512/row-seg/v1";
-constexpr char ROOTS_SCHEMA[] = "frame-v3-sha512/root/v1";
+// String literals, so device code reads them too: the frame (33 bytes with its NUL), the row-seg tags (25 and 33 with theirs)
+// and the two leaf schemas.
+#define ROWTAB_FRAME "veritor/protocol/merkle/frame/v3"
+#define ROWTAB_SEG_TAG "verity/sha512-row-seg/v1"
+#define ROWTAB_SEG_SEGMENT_TAG "verity/sha512-row-seg/v1/segment"
+#define ROWTAB_ROW_SCHEMA "hm96-sha512/row-seg/v1"
+#define ROWTAB_ROOTS_SCHEMA "frame-v3-sha512/root/v1"
 
 // One table of the step, as the host lays it out (`row_tables_device._tabs`: 14 u64 words).
 struct Tab {
@@ -95,7 +97,7 @@ HD void seg_digest(const int8_t* row, uint32_t K, uint32_t scale, uint32_t j, ui
   uint64_t h[8], w[16];
   iv(h);
   zero(w);
-  put_str(w, SEG_SEGMENT_TAG);
+  put_str(w, ROWTAB_SEG_SEGMENT_TAG);
   put_be(w, 33, j, 8);
   put_be(w, 41, s, 8);
   put_be(w, 49, 8ull * len, 8);
@@ -130,7 +132,7 @@ HD void outer_digest(const uint64_t* dig, uint32_t K, uint32_t s, uint64_t out[8
   uint64_t h[8], w[16];
   iv(h);
   zero(w);
-  put_str(w, SEG_TAG);
+  put_str(w, ROWTAB_SEG_TAG);
   put_be(w, 25, 8ull * (K + 4), 8);
   put_be(w, 33, s, 8);
   put_be(w, 41, SEG_BYTES, 4);
@@ -266,7 +268,7 @@ HD void absorb_uint_part(Sha512& s, uint64_t v) {
 template <int N>
 HD void frame_head(Sha512& s, const char (&tag)[N], const uint64_t did[8]) {
   ncp2::sha512_init(s);
-  absorb_str(s, FRAME, true);
+  absorb_str(s, ROWTAB_FRAME, true);
   absorb_be(s, N - 1, 4);
   absorb_str(s, tag, false);
   absorb_be(s, 64, 8);
@@ -325,7 +327,7 @@ HD void row_leaf(const Tab& t, const Args& a, uint32_t g, const uint64_t* dig, c
   salt(a, g, y);
   commit_string(x, y, hm, ms, bc);
   tree_leaf(bc, ms + 8, tl);
-  frame_leaf(t.did, g - t.row0, ROW_SCHEMA, tl, out);
+  frame_leaf(t.did, g - t.row0, ROWTAB_ROW_SCHEMA, tl, out);
 }
 
 // Level ``l`` >= 1 of a tree of width ``W`` lives at ``W - (W >> (l - 1))`` in its scratch, ``W >> l`` nodes.
