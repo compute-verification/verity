@@ -674,10 +674,8 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
 
     `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any.
 
-    A Boolean Program's Calls are read through their word link (`pipeline.build_instances`): a group's Definition is the word one,
-    and its `bits` the Boolean Definition the Calls are of.  Its unit rule is the word Definition's, so the units, boundaries and
-    committed values are the word Program's whatever the IR; its size is counted in Boolean gates beside (`boolean_gates`, in every
-    group and the totals once any group has `bits`).  A `bits` Definition that does not resolve is an `unresolved` violation."""
+    A Boolean Program's group is its word link's (`pipeline.build_instances`): the word Definition's rule, units and boundaries,
+    and its `bits` Definition's size beside, in each group and the totals (`boolean_gates`, `program_view.bits_gates`)."""
     limits = gate_limits(max_gates)
     memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
     out: list[dict[str, Any]] = []
@@ -689,8 +687,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
         if g.get("where") is not None and len(a["where"]) < 8 and g["where"] not in a["where"]:
             a["where"].append(g["where"])
 
-    from verity_vllm.query.program_view import spec_base, spec_statics
-    boolean = False
+    from verity_vllm.query.program_view import bits_gates
     for g in groups:
         try:
             rule = unit_rule(specialize(g["family"], g["statics"]), X, W, extras, memo=memo, max_gates=limits)
@@ -698,13 +695,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
             rule = _finish(g["definition"], 0, [], [], X, W, extras)
             rule["violations"] = [{"definition": g["definition"], "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"}]
         v = list(rule["violations"])
-        bgates = 0
-        if g.get("bits"):
-            boolean = True
-            try:
-                bgates = int(specialize(spec_base(g["bits"]), spec_statics(g["bits"])).gates)
-            except (KeyError, TypeError, ValueError, AttributeError) as e:
-                v.append({"definition": g["bits"], "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"})
+        bgates = bits_gates(g, specialize, v)
         if not g.get("inputs_committed", True):
             v.append({"definition": g["definition"], "class": "input-not-committed",
                       "why": "the Call reads a Value interior to its module body: a unit would cross Calls"})
@@ -725,7 +716,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
                     **({"bits": g["bits"], "boolean_gates": bgates * k} if g.get("bits") else {})})
     viol = sorted(agg.values(), key=lambda a: (-a["calls"], a["definition"], a["class"]))
     totals = ("calls", "units", "gates", "committed_interior_words") + (("acquired_interior_words",) if acquired is not None else ()) \
-        + (("boolean_gates",) if boolean else ())
+        + (("boolean_gates",) if any("bits" in g for g in out) else ())
     res = {"query": query_id(X, W, extras), "ok": not viol, "violations": viol, "groups": out, **{k: sum(g.get(k, 0) for g in out) for k in totals}}
     if strict and viol:
         raise QueryRuleViolation(f"{query_id(X, W, extras)}: {len(viol)} violation(s): " + "; ".join(_name(x) for x in viol[:12])

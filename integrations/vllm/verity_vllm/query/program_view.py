@@ -490,6 +490,19 @@ def spec_statics(spec: str) -> dict[str, Any]:
     return out
 
 
+def bits_gates(group: dict[str, Any], specialize: Callable[[str, dict], Any], violations: list[dict[str, Any]]) -> int:
+    """The Boolean gates per Call of a `query.word.check_calls` group's `bits` Definition (a Boolean Program's word link), 0 for a
+    group without one; a `bits` that does not resolve is an `unresolved` violation, appended to ``violations``."""
+    bits = group.get("bits")
+    if not bits:
+        return 0
+    try:
+        return int(specialize(spec_base(bits), spec_statics(bits)).gates)
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        violations.append({"definition": bits, "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"})
+        return 0
+
+
 def ports_of_type(t) -> tuple[Port, ...]:
     """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
     from verity.ml.circuits.types import Record, Tuple as TupleT
