@@ -75,6 +75,7 @@ from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; V
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH  # noqa: E402
 from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
+from verity_vllm.pipeline import remote_session as RS  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
@@ -990,6 +991,31 @@ def resolve_staging(args: Options) -> Options:
     return dataclasses.replace(args, window_mb=window, window_slots=slots, bounded_staging=bounded)
 
 
+def staging_environ(args: Options) -> None:
+    """The resolved staging options into the environment the committers read (`resolve_staging`), and the late-read
+    negative's flush points."""
+    os.environ["VERITY_RETAIN"] = args.retain
+    os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
+    if args.window_slots is not None:
+        os.environ["VERITY_WINDOW_SLOTS"] = str(args.window_slots)
+    os.environ["VERITY_STAGING_BOUNDED"] = "1" if args.bounded_staging else "0"
+    if args.bounded_staging:
+        os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
+    if args.retain_exclude:
+        if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
+            raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
+        os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
+    if args.footprint:
+        os.environ["VERITY_FOOTPRINT"] = args.footprint
+        Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
+    if args.late_read:
+        # deliberate late read: the P0 flush after qkv_proj is deferred to the next legal point (past RoPE's in-place q/k rewrite)
+        import verity_vllm.commit.committer.native_collect as _nc
+
+        _nc.GATHER_FLUSH_LEAVES = frozenset(_nc.GATHER_FLUSH_LEAVES - {args.late_read})
+        print(f"[delta] LATE-READ NEGATIVE TEST: gather flush points {sorted(_nc.GATHER_FLUSH_LEAVES)} (dropped {args.late_read!r}); roots must NOT match arm 2", flush=True)
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
@@ -1082,19 +1108,7 @@ class Options:
 
 def main(args: Options, argv: list[str] | None = None) -> None:
     global TL
-    _rs = _rs_rec = None
-    if args.remote_verifier:
-        from verity_vllm.store import remote
-        _in_place = None
-        if args.remote_paged_lib and not args.remote_session_lib:
-            raise SystemExit("--remote-paged-lib reads the store in place: give --remote-session-lib with it")
-        if args.remote_session_lib:
-            from verity_vllm.store.in_place import InPlaceBackend
-            _in_place = InPlaceBackend.for_commit(args.remote_session_lib, args.remote_paged_lib)
-        _rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages or None, weight_blocks=args.remote_weight_blocks,
-                                   kv_lib=args.remote_kv_lib, backend_of=_in_place, out=args.out)
-        if args.only_arm == "control" or args.pairs < 1:
-            raise SystemExit("--remote-verifier audits the Commit's first instrumented run: not without one (--only-arm control, --pairs 0)")
+    _rs = RS.session_of(args)
     if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
         # [R16 sys] route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
         # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
@@ -1187,26 +1201,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
             print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
                   f"({'signature-resolved per launch site' if compiled_kernels.role_maps else 'ABSENT -> name-keyed table'})", flush=True)
-    os.environ["VERITY_RETAIN"] = args.retain
-    os.environ["VERITY_WINDOW_MB"] = str(args.window_mb)
-    if args.window_slots is not None:
-        os.environ["VERITY_WINDOW_SLOTS"] = str(args.window_slots)
-    os.environ["VERITY_STAGING_BOUNDED"] = "1" if args.bounded_staging else "0"
-    if args.bounded_staging:
-        os.environ["VERITY_LEARN_HOST_BUDGET_MB"] = str(int(args.learn_budget_mb))
-    if args.retain_exclude:
-        if not args.bounded_staging or args.retain != "host" or not args.open_after_release:
-            raise SystemExit("--retain-exclude needs --bounded-staging --retain host --open-after-release (the excluded families open by replay)")
-        os.environ["VERITY_RETAIN_EXCLUDE"] = args.retain_exclude
-    if args.footprint:
-        os.environ["VERITY_FOOTPRINT"] = args.footprint
-        Path(args.footprint).parent.mkdir(parents=True, exist_ok=True)
-    if args.late_read:
-        # deliberate late read: the P0 flush after qkv_proj is deferred to the next legal point (past RoPE's in-place q/k rewrite)
-        import verity_vllm.commit.committer.native_collect as _nc
-
-        _nc.GATHER_FLUSH_LEAVES = frozenset(_nc.GATHER_FLUSH_LEAVES - {args.late_read})
-        print(f"[delta] LATE-READ NEGATIVE TEST: gather flush points {sorted(_nc.GATHER_FLUSH_LEAVES)} (dropped {args.late_read!r}); roots must NOT match arm 2", flush=True)
+    staging_environ(args)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1217,7 +1212,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     os.environ.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
-    engine_args = _rs.engine_args(engine_args) if _rs is not None else engine_args
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
     # R10: `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
@@ -1245,7 +1239,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings), execution=va.execution_of_workload(wl))
-    _rs is not None and _rs.target(_ekw["target"])
+    _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --remote-verifier: the session's engine is built here
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # [R16 sys] hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1264,7 +1258,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] HOT: engine reused (job {_HOT['jobs']} of this worker; saves the {eng.build_s:.1f}s build; engine age "
               f"{time.time() - _HOT.get('t_built', time.time()):.0f}s; {eng.cp['repo']} max_num_seqs {eng.kwargs.get('max_num_seqs')})", flush=True)
     else:
-        _rs is not None and _rs.install()
         TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
         eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
                               target=_ekw["target"], execution=_ekw["execution"])     # [R15 EXEC-02 M-0078] the row's execution decides enforce_eager (header: versions.json)
@@ -1291,8 +1284,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] engine attention: vllm_flash_attn_version={fa_version}; required classes {','.join(required_classes)}", flush=True)
     print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
           f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
-    if _rs is not None:
-        print(f"[delta] remote session: the store binder on the engine, {_rs.check(eng.llm, eng.runner)}", flush=True)
+    _rs is not None and _rs.check(eng.llm, eng.runner)
     versions = va.versions_doc(eng)
     versions["served"] = SV.require(eng.llm, wl, _ekw["target"], out)
     flip_weight_rec: dict | None = None                    # --flip-weight NEGATIVE TEST record (set once, before register_weights)
@@ -1922,10 +1914,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             t_run0 = time.perf_counter()
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
             if _lock is not None:
-                _rs_rec = _rs.end()
-                r["remote_session"] = {"audited_steps": _lock.audited, "unaudited_steps": _lock.unaudited, "accepted": _rs_rec["accepted"]}
-                print(f"[delta] remote session over pair {pair}'s {arm} run: {_lock.audited} of its {_lock.audited + _lock.unaudited} engine steps "
-                      f"a pass each, {'ACCEPTED' if _rs_rec['accepted'] else 'REJECTED'}" + (f" ({_rs_rec['error']})" if _rs_rec["error"] else ""), flush=True)
+                r["remote_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
                 if getattr(args, "padded_finalize", False):
                     # [B9.1] the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is
@@ -2594,8 +2583,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                   f"admission_of_record {(_a.get('admission_of_record') or {}).get('governing') if isinstance(_a.get('admission_of_record'), dict) else _a.get('admission_of_record')})", flush=True)
     PO.into_verdict(protocols, verdict, out, _ekw["target"], program_digest=args.program_digest, manifest=required_manifest)
     RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
-    if _rs_rec is not None:
-        verdict["remote_session"] = {k: _rs_rec.get(k) for k in ("verifier", "plan", "accepted", "error", "encode", "memory_map", "run")}
+    RS.into_verdict(_rs, verdict)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
     AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
@@ -2605,11 +2593,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         sys.exit(3)
     print(f"[delta] COMMIT PENDING: {len(pending)}/{verdict['runs_instrumented']} instrumented runs pass every check of this process; their C2 replay runs from {[b['path'] for b in verdict['replay_deferred']['bundles']]}" if pending else
           f"[delta] COMMIT PASS (fail-closed X-03): {verdict['runs_instrumented']} instrumented runs, manifest == bound, 0 errors, openings verified, tokens equal", flush=True)
-    if _rs_rec is not None:
-        print(f"[delta] REMOTE SESSION {'ACCEPTED' if _rs_rec['accepted'] else 'REJECTED'} ({_rs_rec['plan']} at {_rs_rec['verifier']}; "
-              f"map agrees {(_rs_rec['memory_map'] or {}).get('agrees')}): {out / 'remote_session.json'}", flush=True)
-        if not _rs_rec["accepted"]:
-            sys.exit(3)
+    if not RS.accepted(_rs):
+        sys.exit(3)
 
 
 def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: dict, decl: dict | None) -> dict:
