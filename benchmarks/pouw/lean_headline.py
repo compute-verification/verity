@@ -7,7 +7,7 @@ A family's data-sheet instance (`Accounting.TS.Headline.SmNN`, read by `Accounti
 its device's data sheet (`DS-NN`) as `Accounting.TS.Sheet` data, its headline design as a TS model on it, the floor
 program ♭ with ε_skip's skippable work, and π*, the certificate the machine model's LP finds at q* = ½. Every number is
 exact: a census value or a TOML value read as its decimal, and eps_budget's ε_skip as the decimal Python prints.
-`FAMILIES` lists them: sm_120 (H1 + fx1) and sm_80 (Dither-2S at L = 16).
+`FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe certificate (RT-LOGIC-10).
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most
@@ -85,12 +85,7 @@ SM120 = Family(
     (256, 512, 1024, 2048), 2430, "SPEC's P1", {"UNI": 1, "UNI64": 2}, "LDG32", "NOROW", Fraction(656, 100000),
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
-SM80 = Family(
-    "Sm80", "A100", device("sm_80"), "DS-80", "dither-2s-l16", "d2s", "Dither-2S at L = 16",
-    {"DS_alu": ("alu", 64), "DS_fma": ("fma", 64), "DS_xu": ("xu", 16), "DS_shfl": ("shfl", 32)},
-    (64, 512, 1024, 2048, 4096, 16384), 1410, "the data sheet's boost clock", {}, "LDS32", "ALU",
-    Fraction(232, 100000), "an IMMA.16816 at L = 16", "duo's fold on lanes (ALU 2 + IMAD 1 lane instructions a word)")
-FAMILIES = (SM120, SM80)
+FAMILIES = (SM120,)
 
 DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps

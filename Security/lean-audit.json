@@ -2309,12 +2309,6 @@
    "assumptions": [],
    "type_hash": "0707af8f7ef0f1b38f84f251088d19dcca4fd9e8a5e66a965e0d71629a781ef6"
   },
-  "Accounting.SecurityProofs.TS.Sm80SheetHeadline": {
-   "owner": "@compute-accounting",
-   "signature": ["Accounting.SecurityProofs.TS.Sm80SheetHeadline : Accounting.Guarantees.TS.Sm80SheetHeadline"],
-   "assumptions": [],
-   "type_hash": "2e1ed52402571923f9ec8347d4d5ccffc1354e2d155778e16fbbd2a7e7f9fbcf"
-  },
   "Accounting.SecurityProofs.TS.StageBudget": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.TS.StageBudget : Accounting.Guarantees.TS.StageBudget"],
@@ -7473,9 +7467,8 @@
    "Accounting.SecurityProofs.RequirementCreditsSteps": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed and each device of X paces its engine steps inside the window, PouwWork.credits is at least the work of W's gates on X at the whole steps inside it; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
-   "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm80SheetHeadline": "frozen (no-function,world-unlisted): sm_80's headline at 0.232%, kappa = 0, so skipping a fold is its only saving, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-80 and Dither-2S at L = 16 (Definitions.Accounting.Headline.Sm80) with pi* the ALU pipe's facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.232%; the folded one gives 0.147%); A1-A7, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list."
+   "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,496, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4), FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
+   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,652, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -8339,8 +8332,7 @@
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Definitions.Accounting.Headline.Encoding": {
@@ -8371,11 +8363,7 @@
     "Accounting.TS.Headline.labelled": "4d15c0c955724b0182fb7b37f0589ab47a2087a7e52f5ac3a2d63bd72bd7da58",
     "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Definitions.Accounting.Headline.Sm120": {
    "digest": "7d6807dbdccbf6a4190cfddc186da8f8fcebdf58188ac87f91b81093aca70cd2",
@@ -8414,32 +8402,6 @@
     "Accounting.TS.Headline.Sm120Measured.vf3r16": "ab7019168928c20bf4b481e6408d6ca8ee744123e16c05aa164d43fe69946d6b"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"]
-  },
-  "Definitions.Accounting.Headline.Sm80": {
-   "digest": "9ae8a1631f4c24cabea30cd791ca8519a41726c072095ebd52f1a1d09fbb75f3",
-   "definitions": {
-    "Accounting.TS.Headline.Sm80.Pipe": "eb911ef517e03d9f8373237ba621561906cbbf5e034a0b60a213fd8577eb19a8",
-    "Accounting.TS.Headline.Sm80.Pipe.alu": "02ca6e3e0856dec1942d5daa35c800c330718d96374567efb92806815a7df909",
-    "Accounting.TS.Headline.Sm80.Pipe.casesOn": "a27928119ad4a7ac0922d480857a97845894bfc04cf41f7c740353a0b5ce28d4",
-    "Accounting.TS.Headline.Sm80.Pipe.ctorIdx": "a863061c4cd331d84ef886d492845b9c9f7532b94d5fc19bf14cf64f3898c5a2",
-    "Accounting.TS.Headline.Sm80.Pipe.fma": "c7c3e23495350dcc7da8d2d000fec637e36bf1dd9154f5867a53e82e5eb546d7",
-    "Accounting.TS.Headline.Sm80.Pipe.rec": "0920b400ca5d999dacf009782b8b83b2ade3b0900778bafccea2f3ec62d436b7",
-    "Accounting.TS.Headline.Sm80.Pipe.shfl": "fda2dc9ff59d044c0d933bc6b26c3643a5483b1d157b168b3adfc4e95d301976",
-    "Accounting.TS.Headline.Sm80.Pipe.width": "7df9b128fb4951cbfa6b71facb3f8f4de099ff8bdb47fbfbba4a84df059d2ce3",
-    "Accounting.TS.Headline.Sm80.Pipe.xu": "ef0dbacfb875d59a7d4e487c426adfcbef19b01d8c42a008525acc8ae03e893a",
-    "Accounting.TS.Headline.Sm80.checks": "9da94f10ca7d652ba0eee3355584a7240d593953362b3a99300b871a4e180db8",
-    "Accounting.TS.Headline.Sm80.d2s": "1192fc7a2706224c3cc59ee0843369684d8897f1c9c03969cb484809438380c6",
-    "Accounting.TS.Headline.Sm80.ds80": "c962dea946e094dc3980acdc469278c1d610f22e154eb5b1cb080e59a6a60f10",
-    "Accounting.TS.Headline.Sm80.flat": "aecb17278edaf5d52eb5384a4e86305100084b29954ff716cc0a7ebd22a1b1f2",
-    "Accounting.TS.Headline.Sm80.flatFold": "a7df979e19c6f2afa7300061a43ade4ab187f34266414a575e4e25545f81c6bd",
-    "Accounting.TS.Headline.Sm80.flatSkip": "230775ceda18240ea3daf892f79df943637ddee76f61234e87b091cf9bc0a845",
-    "Accounting.TS.Headline.Sm80.flatWords": "df48c612a710b1837f53ffa9d475c6a8d0ab5b498aa059ec3b5f3b9e931e988a",
-    "Accounting.TS.Headline.Sm80.instDecidableEqPipe": "b20a0949d774381f4a886b253fa20a213b3f9acc7f9c50d40642eb576bdf75a9",
-    "Accounting.TS.Headline.Sm80.instFintypePipe": "f1a20177b5a02551fc08c0ec996c921a6680dc794e597cfab78bbac62889d89d",
-    "Accounting.TS.Headline.Sm80.model": "7b64b64df9ef75b1efd2d0d5b51694a420b1f02c900d4be66d9fa59ff650487a",
-    "Accounting.TS.Headline.Sm80.sheet": "6d33f29a33ba9f1da1592fe9a2d32dcc2d1ab9961f3f9e20336f5d594e1aa316"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm80SheetHeadline"]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -9376,7 +9338,6 @@
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
@@ -9410,7 +9371,6 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal"
    ]
@@ -9440,8 +9400,7 @@
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -9525,8 +9484,7 @@
     "Accounting.SecurityProofs.TS.OperandLuckCube",
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.ReceiptHMu": {
@@ -9534,11 +9492,7 @@
    "definitions": {
     "Accounting.TS.ReceiptGame.OperandPointMass": "6df5cc888c4948e81cfd63c48efd7e5cb7c956f25c2a3bf31d645fb38dc3aed3"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Definitions.Accounting.TS.Routes": {
    "digest": "30c8abcb6735ac3215f7f48cfa482adc6e2ae2096c61de3f69ef8282eb1c6166",
@@ -9626,7 +9580,6 @@
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.VectorThresholdD1"
    ]
@@ -9657,8 +9610,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Definitions.Accounting.TS.Slots": {
@@ -9758,11 +9710,7 @@
     "Accounting.TS.Unfolded.round": "7d37232d94dabc302c97bc664c8b1e986e5ee1578f7e8e582682e288e324bb86",
     "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Definitions.Accounting.Tag.PolyHash": {
    "digest": "745bfb72ad4da7469d679c4cb9bc2be42ca7640140c26059793b094d186a1f6f",
@@ -15253,7 +15201,6 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
@@ -20325,8 +20272,7 @@
     "Accounting.SecurityProofs.TS.SheetDIdealFloor",
     "Accounting.SecurityProofs.TS.SheetFacetCeilings",
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
+    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
    ]
   },
   "Models.Accounting.Assumptions.Stages": {
@@ -20384,7 +20330,6 @@
     "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
     "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline",
     "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
@@ -20622,17 +20567,12 @@
    ]
   },
   "Models.Accounting.Guarantees.Headline": {
-   "digest": "1f40c9982f9efe13b8c9286ec22dcbadb54cf96ecdad3ebdc9e2b5cf5f81c838",
+   "digest": "658b7473094633d19fadf3c6e048d228055300dde7e334d3b928876446ca8052",
    "definitions": {
     "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "4a7d7964f9280bd0f273288ca4a3b9400cf6ec47a250e7ade7a8bf384e8bf31e",
-    "Accounting.Guarantees.TS.Sm120SheetHeadline": "a80270e62833e53ab17071e6afadc2d374dea015c28002039c8a62821d9015d1",
-    "Accounting.Guarantees.TS.Sm80SheetHeadline": "056df789b45040b17b1f6cc755e2f4fb718687751ad2d2d212be873e9bd0c89b"
+    "Accounting.Guarantees.TS.Sm120SheetHeadline": "a80270e62833e53ab17071e6afadc2d374dea015c28002039c8a62821d9015d1"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm80SheetHeadline"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
   },
   "Models.Accounting.Guarantees.Joint": {
    "digest": "6c3005740d08578ac0e0fda861dbe77c578ceb28314b3b026ad572fb9ffd9837",
