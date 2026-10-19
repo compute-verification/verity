@@ -62,8 +62,7 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     assert h.fillers == ("0.0703125 FFMA+IMAD a word uncredited, p = 1 (decision 99)",)
     assert any("RT-LOGIC-12" in c for c in h.conditions) and any("RT-LOGIC-12" in c for c in m["sm_100"].conditions)
     s = {x.family: x for x in H.rows("sheet")}
-    assert all(x.floor == "half" for x in s.values())
-    assert all(any(c.startswith("A2u") for c in s[f].conditions) for f in ("sm_89", "sm_90", "sm_100"))
+    assert all(x.floor == "half" for x in s.values()) and any(c.startswith("A2u") for c in s["sm_89"].conditions)
 
 
 def test_cli(capsys):

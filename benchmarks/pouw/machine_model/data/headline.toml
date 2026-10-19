@@ -33,7 +33,7 @@ design = "dither-2s-licpw-redux-p1-l32"
 conditions = ["ffill is credited at p = 1: no check reads its chains (PouwWarpCheck's li absorbs H1's call words only; RT-LOGIC-12, decision 99)",
               "LI-CP-W redux at its lane instructions a word is the cheapest fold (FOLD-OPT, decision 94): on DS-90 ε_machine first rises at 0.992 a word, 5.9% under li's 1.055 (RT-HB-HEAD-2)",
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
-sheet = { vector = "DS-90", conditions = ["A2u: a uniform instruction takes an issue slot (in no vendor document; measured beside a saturated wgmma, r20261019-064443-0ae6)"] }
+sheet = { vector = "DS-90" }
 measured = { vector = "DC-90-ri", conditions = ["over 1%: without ffill in ♭ the cheater puts most words on the uniform datapath; only a check that reads ffill's chains brings DC-90-ri under 1% (RT-HB-HEAD-1)"] }
 
 [family.sm_100]
@@ -42,7 +42,7 @@ design = "dither-2s-licpw-redux-ldtm0-l32"
 conditions = ["the fold credited is the one the checks read, plain LI-CP-W redux (PouwLiAbsorb_v2: no extra keyed round; RT-LOGIC-12)",
               "LI-CP-W redux at its lane instructions a word is the cheapest fold (FOLD-OPT, decision 94): on DS-100 ε_machine first rises at 0.496 a word, 53% under li's 1.055 (RT-HB-HEAD-2)",
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
-sheet = { vector = "DS-100", conditions = ["A2u: a uniform instruction takes an issue slot (in no vendor document; measured beside four tcgen05.mma in flight, r20261019-055605-6cc2)"] }
+sheet = { vector = "DS-100" }
 measured = { vector = "DC-100-ri" }
 
 [family.sm_89]
