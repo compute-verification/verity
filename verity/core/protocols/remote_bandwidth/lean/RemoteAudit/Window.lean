@@ -69,6 +69,22 @@ def Registration.make? (node : ByteArray) (blocks : Nat) (payloadRoot codecSeed 
   if !receipt.rowsOk rows then throw "the sketch rows are not the receipt kind's"
   pure { node, blocks, payloadRoot, codecSeed, codec, receipt, rows, key := Codec.key codecSeed codec }
 
+def CODEC_DOMAIN : String := "verity/remote-bandwidth/codec/v0"
+def NONCE_BYTES : Nat := 32
+
+/-- `audit.register`: the codec seed the verifier draws from its secret `source` and a fresh 32-byte `nonce` once the
+payload root has arrived, `derive(source, CODEC_DOMAIN, {blocks, codec, node, nonce, payload}).stream("codec", 32)`,
+and the registration under it (`Registration.make?`). The receipt kind, `bind`, the layout and the rows are not in
+the seed's context: the store depends on none of them. -/
+def Registration.register (source node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec)
+    (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) : Except String Registration := do
+  if source.size = 0 then throw "the source is a key holder's secret: nonempty bytes"
+  if nonce.size ≠ NONCE_BYTES then throw "a registration's nonce is 32 bytes"
+  let key := FlockSoundness.Randomness.derive source CODEC_DOMAIN [("blocks", .int blocks), ("codec", .str codec.name),
+    ("node", .bytes node), ("nonce", .bytes nonce), ("payload", .bytes payloadRoot)]
+  Registration.make? node blocks payloadRoot (FlockSoundness.Randomness.stream key [.str "codec"] Codec.SEED_BYTES)
+    codec receipt bind layout rows
+
 /-- `Registration.digest`: SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u64be N ‖ payload root ‖ codec seed ‖
 frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(layout) ‖ u32be rows), bind 0. -/
 def Registration.digest (r : Registration) : ByteArray :=
