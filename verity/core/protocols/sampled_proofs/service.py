@@ -85,7 +85,7 @@ from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.program import Program
 from verity.core.protocols.profile import IntegrityProfile
 
-from .one_stage import audit as A, draw as D, partition as P, registration as R, verifier as V
+from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from .two_stage import OwnRandomness, closure_of, draw_first
 
@@ -526,6 +526,14 @@ def _window_key(window: Any) -> bytes | None:
         return None
 
 
+def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
+    """Whether a supplied value reads a position (`{"position": K}`); a form `registration.check` refuses reads none."""
+    try:
+        return any(k == "position" for rows in G.sources(supplied or {}).values() for row in rows for k, _ in row)
+    except ValueError:
+        return False
+
+
 def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
     query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs)."""
@@ -572,7 +580,8 @@ class _Entry:
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
-    #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered)
+    #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
+    #: supplied, pinned)
     copies: tuple[Any, ...] = ()
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
@@ -1117,13 +1126,14 @@ class Stream:
 
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
-                 work_table: Mapping[str, Any] | None = None) -> Registration:
+                 work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
+                 pinned: Mapping[str, str] | None = None) -> Registration:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N, the check's query, the selection rule's law (a
         two-stage rule's `replay`), `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the
-        per-registration copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, as
-        `registration.check` takes them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Under
+        per-registration copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`,
+        `pinned`, as `registration.check` takes them). Under `TwoStage` its roots are the boundary values'. Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1146,9 +1156,9 @@ class Stream:
                 v = _refuse("population", n).verdict
             if v.ok:
                 program, law, earlier = P.population_program(self.unit, n), selection_law(self.spec.selection, n), \
-                    self._earlier(record)
+                    self._earlier(record, supplied)
                 v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
-                            work_table, registered)
+                            work_table, registered, supplied, pinned)
                 if v.ok and count_varies(law):
                     v = _refuse("shapes", {"law": law}).verdict
                 got.update(program=program, law=law, earlier=earlier)
@@ -1170,7 +1180,7 @@ class Stream:
         self._append(reg)
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table,
-                                    (ports, leaf_layer, anchors, earlier, registered)))
+                                    (ports, leaf_layer, anchors, earlier, registered, supplied, pinned)))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -1204,14 +1214,15 @@ class Stream:
         for e in logged.get("registered") or ():
             self._first.setdefault(e["value"], at)
 
-    def _earlier(self, record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    def _earlier(self, record: Mapping[str, Any], supplied: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         """The records of the log that one-stage's R6 and R7 read for `record`, in log order: the last (R6's `previous`),
         every one whose window may equal `record`'s (R6's window: the same `_window_key`, or none), and each registered
         value's first registration (R7's held roots, `registration.held_roots`). Both verifiers of record give the same
         verdict on them as on the whole log. A record whose window has no key, or that has no window, gets the whole
-        log."""
+        log, and so does one whose `supplied` values read a position, which follows every record of the log
+        (`registered.log_base`)."""
         key = _window_key(record["window"]) if isinstance(record, Mapping) and "window" in record else None
-        if key is None:
+        if key is None or _reads_positions(supplied):
             return self._log
         at = {*self._first.values(), *self._irregular, *self._windows.get(key, ())}
         if self._log:
@@ -1410,7 +1421,7 @@ class Stream:
         accepted = rec["accepted"] and (inner_rec is None or inner_rec["accepted"])
         if e.read is not None and rec["verifiers"]["agree"] and (inner_rec is None or inner_rec["verifiers"]["agree"]):
             reg = draw.registration
-            ports, leaf_layer, anchors, earlier, registered = e.copies
+            ports, leaf_layer, anchors, earlier, registered, supplied, pinned = e.copies
             staged = isinstance(self.spec.selection, TwoStage)
             interior = None
             if e.interior is not None:
@@ -1432,7 +1443,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots,
                       interior_values=[(x.name, x.registered) for x in self._values(interior=True)] if staged else (),
-                      interior=interior)
+                      interior=interior, supplied=supplied, pinned=pinned)
             if not v.ok:
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                        "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}

@@ -260,6 +260,17 @@ only inside a proof (`one_stage.registered`).
   from its own program), and a value an earlier record of the log registered keeps that record's root (`held_roots`):
   the log is the only place the verifier holds roots, so a value is committed once whatever the caller passes. 16 is the
   default, so a 16-bit value's domain, entry and root are what they were before `word_bits`.
+- Supplied values (`check(..., supplied=)`, `supplied_root`, the Lean's `Supplied`): a registered value the verifier fills
+  itself, so the prover never chooses it. Each row is the bytes of its sources: `{"port": P}` (the record's `roots` entry
+  of P), `{"value": V}` (a registered entry's root, never a supplied value's), `{"bytes": hex}`, `{"position": "K"}` (K
+  below the record's population, after the log's earlier records' populations, `log_base`, as a big-endian u64, so no
+  two records of one log share a position) and `{"window": coin}` (`window_salt`: SHA-512 of the coin bound to the
+  record's window, a salt per window since R6 takes one record a window). The rows are committed under public salts
+  (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
+  inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
+  (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
+- Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
+  the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
 - Reads at a public position: the verifier derives every unit's reads from its own program (`reads`). A unit's template
   parameter whose leaves are exactly row `r` of a registered value reads row `r`; a parameter that holds part of a row,
   or reads the value in one unit and not in another of its template, is refused. Data-dependent reads are not public
@@ -375,10 +386,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier of record's digest (a list when the drawn
   units were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (`test_profile_counts_wrong_units`, `test_the_record_states_the_one_profile_in_its_recorded_bytes`,
-`test_audit_record_needs_every_check_and_verdict`, `test_audit_record_holds_the_served_draw_and_the_sessions_roots`,
-`test_the_wrong_unit_bound_matches_worst_case_and_scales`, `test_audit_record_under_the_stratified_law`,
-`test_the_subset_bound_is_now_the_exact_count`, `test_a4_under_the_stratified_rule`, `test_audit_record_under_the_work_law`).
+Pinned by `tests/test_one_stage.py`.
 
 ### The consumers
 
@@ -516,11 +524,7 @@ The closest Lean is `TwoStage.lean`'s `effEscape_full` and `twoStage_full_profil
 stage's own acceptance probability, for any first-stage sampling design, `Closure.lean`'s `Law.closure` among them),
 `effEscape_bernoulli_prod`, and `Examples.lean`'s `effEscape_bernoulli`, `two_stage_b_tight`, `naive_two_level_unsound`
 and `late_interior_insecure`; whether they cover `TwoStageLaw.profile` exactly, its largest-RU rule among them, is
-unchecked. Pinned by `tests/test_two_stage.py` (`test_detection_matches_the_per_ru_law_and_the_profile_bounds_it`,
-`test_toy_attack_is_admitted`, `test_the_profile_is_over_replay_units`,
-`test_a_mixed_class_is_profiled_at_its_largest_replay_unit`, `test_bernoulli_is_the_single_unit_law`,
-`test_indices_must_be_distinct_and_classes_known`, `test_a_first_stage_is_any_one_stage_law_and_checks_all_unless_bernoulli`,
-`test_a_one_stage_first_stage_profiles_as_the_one_stage_law_over_replay_units`, `test_a_subset_first_stage_escapes_at_its_profile`).
+unchecked. Pinned by `tests/test_two_stage.py`.
 
 ### The verifier's randomness
 
@@ -543,9 +547,7 @@ proof-unit draw after the interiors are.
   vLLM's legacy replay challenge derives its own (`verity_vllm.commit.challenge.replay_key`,
   under the domain `verity/sampled-proofs/vu-sample/v1`) until its re-baseline.
 
-Pinned by `tests/test_two_stage.py` (`test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes`,
-`test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes`, `test_a_stream_that_runs_out_is_extended_as_lean_does`,
-`test_a_work_draw_carries_its_closure_and_the_profile_counts_the_drawn_rus`, `test_draw_first_refuses_what_lean_refuses`).
+Pinned by `tests/test_two_stage.py`.
 
 ### Verification plans
 
