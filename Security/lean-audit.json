@@ -1055,6 +1055,9 @@
    "assumptions": [],
    "type_hash": "0a39e7949bbfaf219bed8ea794cb61c9d969c72aec4d51d6451736b6201ad9e3"
   },
+  "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh": {
+   "owner": "@compute-accounting"
+  },
   "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints": {
    "owner": "@compute-accounting"
   },
@@ -7441,7 +7444,8 @@
    "Accounting.SecurityProofs.RequirementCreditsSteps": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed and each device of X paces its engine steps inside the window, PouwWork.credits is at least the work of W's gates on X at the whole steps inside it; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
-   "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints": "lemma: the chain rule over a unit's checkpoints (route R-CP), the whole-unit guess at q^n from a per-checkpoint bound q given the earlier checkpoints (CheckpointGuessAt, a named assumption) and the check's pinning of each checkpoint, taken as a hypothesis; it discharges Compose's GuessLuckAt at q^n on tileGame's whole mode."
+   "Accounting.SecurityProofs.Checkpoint.WholeGuessOfCheckpoints": "lemma: the chain rule over a unit's checkpoints (route R-CP), the whole-unit guess at q^n from a per-checkpoint bound q given the earlier checkpoints (CheckpointGuessAt, a named assumption) and the check's pinning of each checkpoint, taken as a hypothesis; it discharges Compose's GuessLuckAt at q^n on tileGame's whole mode.",
+   "Accounting.SecurityProofs.Checkpoint.CheckpointGuessOfFresh": "lemma: the in-scope reduction of route R-CP, CheckpointGuessAt at q from the point mass q of each set's checkpoint over that set's fresh coins with the view and the other sets' coins fixed, on coins that split into the view and each set's fresh coins and a checkpoint event that reads only the view and the sets up to its own, taken as hypotheses; about no function of the code."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

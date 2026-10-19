@@ -1,5 +1,6 @@
 import Models.Accounting.Guarantees.Checkpoint
 import Proofs.Accounting.HMu.Luck
+import Proofs.Pouw.RelativeSecurity
 
 /-!
 # The whole-unit guess from its checkpoints
@@ -7,6 +8,10 @@ import Proofs.Accounting.HMu.Luck
 `prob_prefix_le` is the chain rule: the first `k` checkpoints together with the mode have probability at most `q^k` times
 the mode's, one checkpoint at a time. `WholeGuessOfCheckpoints` reads it at `k = n` on the event `same`, which lies
 inside it. A negative `q` leaves nothing to prove: the first checkpoint's bound then makes the mode null.
+
+`CheckpointGuessOfFresh` splits set `s`'s coins off the rest (`splitAt`) and bounds each slice: with the view and the
+other sets' coins fixed, the earlier checkpoints and the mode are fixed too, and set `s`'s coins alone move checkpoint
+`s`.
 -/
 
 namespace Accounting.SecurityProofs.Checkpoint
@@ -70,5 +75,48 @@ theorem WholeGuessOfCheckpoints : Accounting.Guarantees.Checkpoint.WholeGuessOfC
       (prob_nonneg _)
   rw [hz, mul_zero]
   exact hP.trans ((prob_mono fun c hc => hc.2).trans hz.le)
+
+/-- Set `i`'s coins split off the view and the other sets'. -/
+def splitAt {V X : Type} {n : ℕ} (i : Fin n) : V × (Fin n → X) ≃ (V × ({j // j ≠ i} → X)) × X where
+  toFun p := ((p.1, fun j => p.2 j.1), p.2 i)
+  invFun p := (p.1.1, fun j => if h : j = i then p.2 else p.1.2 ⟨j, h⟩)
+  left_inv p := by
+    rcases p with ⟨v, x⟩
+    refine Prod.ext rfl (funext fun j => ?_)
+    by_cases h : j = i
+    · subst h; simp
+    · simp [h]
+  right_inv p := by
+    rcases p with ⟨⟨v, o⟩, ξ⟩
+    refine Prod.ext (Prod.ext rfl (funext fun j => ?_)) (by simp)
+    simp [j.2]
+
+theorem CheckpointGuessOfFresh : Accounting.Guarantees.Checkpoint.CheckpointGuessOfFresh := by
+  intro V X _ _ _ n E whole q hE hq s hs
+  classical
+  let i : Fin n := ⟨s, hs⟩
+  rw [Pouw.RelativeSecurity.prob_equiv (splitAt (V := V) (X := X) i),
+    Pouw.RelativeSecurity.prob_equiv (splitAt (V := V) (X := X) i)]
+  apply prob_le_of_slices
+  rintro ⟨v, o⟩
+  obtain ⟨ξ0⟩ := ‹Nonempty X›
+  let x0 : Fin n → X := ((splitAt (V := V) i).symm ((v, o), ξ0)).2
+  have hpair : ∀ ξ, (splitAt (V := V) i).symm ((v, o), ξ) = (v, Function.update x0 i ξ) := fun ξ => by
+    refine Prod.ext rfl (funext fun j => ?_)
+    by_cases h : j = i
+    · subst h; simp [splitAt]
+    · simp [splitAt, x0, h]
+  have hpre : ∀ ξ, (∀ r < s, E r (v, Function.update x0 i ξ)) ↔ ∀ r < s, E r (v, x0) := fun ξ =>
+    forall₂_congr fun r hr => hE r (hr.trans hs) v _ _ fun j hj =>
+      Function.update_of_ne (fun h => by subst h; exact absurd hj (by simp [i]; omega)) _ _
+  simp only [hpair]
+  by_cases hW : whole v
+  · by_cases hP : ∀ r < s, E r (v, x0)
+    · rw [prob_eq_one (p := fun ξ => (∀ r < s, E r (v, Function.update x0 i ξ)) ∧ whole v)
+        fun ξ => ⟨(hpre ξ).2 hP, hW⟩, mul_one]
+      exact (prob_mono fun ξ h => h.1).trans (hq s hs v hW x0)
+    · rw [prob_eq_zero fun ξ h => hP ((hpre ξ).1 h.2.1),
+        prob_eq_zero fun ξ h => hP ((hpre ξ).1 h.1), mul_zero]
+  · rw [prob_eq_zero fun ξ h => hW h.2.2, prob_eq_zero fun ξ h => hW h.2, mul_zero]
 
 end Accounting.SecurityProofs.Checkpoint
