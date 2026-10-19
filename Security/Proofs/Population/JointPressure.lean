@@ -17,6 +17,9 @@ escape set and that one halt, each with its own leak.
 * `joint_tail`, `joint_tail_delta`: every claim's bound through the first detection holds at once except with
   probability at most the sum of the claims' tails, `Σ_i δ_i` at `x_i = ℓ_i + ln (1/δ_i) / κ_i`. No independence
   between the claims is needed.
+* `claimCum`, `joint_tail_withheld`: the same with each claim counted as it is paid out. A claim whose count waits for
+  the verdict (credited work, paid at the certificate) is bounded by `tail_cumPrev`, with no per-window term; egress
+  that leaves before its verdict keeps `ℓ_i`.
 * `joint_of_maxRule`: the two together, from the draw's catch probabilities to every claim's bound.
 * `subsetDraw_escape`, `subsetDraw_escape_le`, `pressure_subsetDraw`: a uniform `k`-subset of `N` units misses `b` given
   units with probability `C(N - b, k) / C(N, k) ≤ (1 - k/N)^b`, so a stratum drawn as a uniform `k`-subset meets
@@ -104,6 +107,29 @@ theorem joint_tail_delta {I : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims :
   rw [show -(κ i * (ℓ i + Real.log (1 / δ i) / κ i - ℓ i)) = Real.log (δ i) by
     rw [one_div, Real.log_inv]; field_simp; ring]
   exact Real.exp_log (hδ i hi)
+
+/-- What claim `i` counts through the first detection: when what it counts waits for the verdict (`withheld i`, as
+credited work waits for its certificate), what leaves before the first detection; otherwise (egress that leaves before
+its verdict) what leaves up to and including it. -/
+noncomputable def claimCum [DecidableEq Ω] {I : Type} (withheld : I → Prop) [DecidablePred withheld]
+    (leak : I → List Ω → ℝ)
+    (esc : List Ω → Finset Ω) (i : I) (n : ℕ) (h : List Ω) (cs : Fin n → Ω) : ℝ :=
+  if withheld i then Strategy.cumPrev ⟨leak i, esc⟩ n h cs else Strategy.cum ⟨leak i, esc⟩ n h cs
+
+/-- **Every claim at once, a withheld claim without the per-window term**: as `joint_tail`, with a claim whose count
+waits for the verdict bounded by `tail_cumPrev`, so its tail is `exp (-κ_i x_i)`. -/
+theorem joint_tail_withheld {I : Type} (hμ : IsDist μ) [DecidableEq Ω] {claims : Finset I} {κ ℓ : I → ℝ}
+    (withheld : I → Prop) [DecidablePred withheld] (hκ : ∀ i ∈ claims, 0 ≤ κ i) (leak : I → List Ω → ℝ)
+    (esc : List Ω → Finset Ω) (hP : ∀ i ∈ claims, DetectionPressure μ (κ i) ⟨leak i, esc⟩)
+    (hL : ∀ i ∈ claims, LeakBounded (ℓ i) ⟨leak i, esc⟩) (n : ℕ) (h : List Ω) (x : I → ℝ) :
+    prob μ n (fun cs => ∃ i ∈ claims, x i ≤ claimCum withheld leak esc i n h cs)
+      ≤ ∑ i ∈ claims, Real.exp (-(κ i * (x i - if withheld i then 0 else ℓ i))) :=
+  (prob_exists_le hμ.1 n claims _).trans (sum_le_sum fun i hi => by
+    by_cases hw : withheld i
+    · simp only [claimCum, hw, ↓reduceIte, sub_zero]
+      exact tail_cumPrev hμ (hκ i hi) (hP i hi) n h (x i)
+    · simp only [claimCum, hw, ↓reduceIte]
+      exact tail_cum hμ (hκ i hi) (hP i hi) (hL i hi) n h (x i))
 
 /-- **One draw certifies every claim**: catch probabilities at least the max rule, a window escaping with probability at
 most `Π_{u ∈ B h} (1 - a u)`, and each claim's leak at most its harm over the wrong set and at most `ℓ_i` a window. Then
