@@ -78,7 +78,8 @@ def _make(run: Path, received, headers=range(WORLD)) -> dict:
 def test_a_world_8_all_reduce_is_held_to_its_routed_definition(tmp_path):
     doc = _make(tmp_path / "routed", f32_once)
     p = doc["provenance"]
-    assert p["allreduce_settings"] == {"custom_all_reduce": True, "symmetric_memory": True, "flashinfer": True}
+    assert p["allreduce_settings"] == {"custom_all_reduce": True, "symmetric_memory": True, "flashinfer": True, "batch_invariant": False,
+                                       "nccl_transport": None}
     assert p["all_reduce_definitions"] == {"AllReduceMultimem_v1": 1, "AllReduceMnnvl_v1": 1}
     assert p["pass"] is True and p["n_mismatches"] == 0 and p["collectives_checked"] == 4 and doc["pass"] is True
     assert p["alt_f32_once_equal"] == 2 and p["alt_ascending_equal"] < 2, "the partials tell the chain from the f32 sum"

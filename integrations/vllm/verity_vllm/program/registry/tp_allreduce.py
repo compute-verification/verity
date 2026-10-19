@@ -1,4 +1,5 @@
-"""GLM-5.3's TP8 all-reduces on 8x H200 (vLLM d9105ea80, FlashInfer 0.6.18), as word Definitions.
+"""vLLM's TP all-reduces as word Definitions: GLM-5.3's TP8 ones on 8x H200 (vLLM d9105ea80, FlashInfer 0.6.18), and NCCL's tree
+all-reduce vLLM's batch-invariant mode pins pynccl to, on 4x RTX PRO 6000 with P2P off.
 
     AllReduceMnnvlCoordinate_v1{WORLD,SHOT}   (col: Array<WORLD, bf16>) -> bf16
     AllReduceMnnvl_v1{WORLD,N,SHOT}           (parts: Array<WORLD, Array<N, bf16>>) -> Array<N, bf16>
@@ -10,6 +11,9 @@
                                               (col: Array<WORLD, bf16>) -> bf16
     AllReduceMultimem_v1{WORLD,SIZE,TREES,FTZ}
                                               (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
+    AllReduceNcclTreeCoordinate_v1{WORLD,CHAIN}
+                                              (col: Array<WORLD, bf16>) -> bf16
+    AllReduceNcclTree_v1{WORLD,SIZE,CHAIN}    (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
 
 Which kernel reduces a call (vLLM d9105ea80):
 
@@ -67,6 +71,19 @@ elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The 
 order no source states; `AllReduceMultimem_v1` takes it per owner as TREES, binary trees over the ranks whose nodes are f32 adds
 (IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16.
 
+Under vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``) none of those routes is on: `ParallelConfig` disables the custom
+all-reduce, `override_envs_for_invariance` sets ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` and `CudaCommunicator` leaves FlashInfer's
+all-reduce off, so every call is pynccl's ``ncclAllReduce`` (`BATCH_INVARIANT`, route ``pynccl_comm``), and the same function pins
+NCCL to one channel (``NCCL_MIN_NCHANNELS = NCCL_MAX_NCHANNELS = 1``) of ``NCCL_ALGO=allreduce:tree``, ``NCCL_PROTO=Simple``. Inside
+one node NCCL's tree is a chain (NCCL 2.29.7, torch 2.13's, `graph/connect.cc` `ncclTopoPreset`: a rank's parent is the one before
+it in the channel's intra-node order, the first is the root), and with ``NCCL_P2P_DISABLE=1`` the ranks talk over NCCL's SHM
+transport, whose intra-node search tries the GPUs in PCI order first (`graph/search.cc`, ``FORCED_ORDER_PCI``): CHAIN, root first.
+The reduce runs up the chain from the leaf (`all_reduce.h` `runTreeSplit`: a rank adds its own input to what its child sent) and the
+root broadcasts its sum down, so every rank receives ``x[c0] + (x[c1] + (... + x[c_last]))``, each add `FuncSum<__nv_bfloat16>`'s
+``__hadd2`` (`reduce_kernel.h`, sm_80 and later): one bf16 rounding of the exact sum, which is `Bf16AddF2fp_v1` (the f32 sum of two
+bf16 words rounded again to bf16 rounds once, 24 >= 2 * 8 + 2), NaN 0x7FFF. Neither the chunking nor the call's size changes an
+element's adds.
+
 f32 NaN words are the GPU's (`F32AddFtz_v2`, `F32MulFtz_v2`, `F32FmaFtz_v2`, `F32Add_v2`); every output is F2FP's bf16, whose NaN
 is 0x7FFF.
 """
@@ -86,11 +103,12 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
-           "AllReduceMultimemCoordinate", "AllReduceRmsNormMnnvl", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
-           "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "SETTINGS",
-           "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "eps_bits",
-           "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees",
-           "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "AllReduceMultimemCoordinate", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate", "AllReduceRmsNormMnnvl",
+           "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES", "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES",
+           "MNNVL_ONE_SHOT_BYTES", "NCCL_TREE_RUNS", "RTX_PRO_6000", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
+           "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot",
+           "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free", "ranks",
+           "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -118,12 +136,22 @@ _CUSTOM_OFF_RUNS = CAPTURE_RUNS[:2]
 _DEFAULT_RUNS = CAPTURE_RUNS[2:]
 #: the tree every owner's multimem reduction took in all three runs (including the 7168-wide pass)
 GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
+#: vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``), the setting under which every TP all-reduce is pynccl's
+BATCH_INVARIANT = "batch-invariant"
+#: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition
+RTX_PRO_6000 = ("12.0", 188)
+#: Llama-3.1-70B int8's TP4 capture on vy-nebius-1 (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay of its every all-reduce through
+#: `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls, 1,514,110,976 rank words, GO) and
+#: NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
+NCCL_TREE_RUNS = ("r20261018-213408-ac4a", "r20261018-234106-807f", "r20261018-235000-713a")
 
 
 class Captured(NamedTuple):
     """A route the capture showed: at `setting`, hidden size N, the calls of lo..hi tokens on `route` (``fused``:
     `fused_allreduce_rms_norm`'s FlashInfer call; else the communicator `CudaCommunicator.all_reduce` hands it to) equal
-    `definition` at `statics` on every word, in `runs`."""
+    `definition` at `statics` on every word, in `runs`, over `world` ranks of `device` ((compute capability, SMs)) with NCCL's
+    `transport` between them (``"shm"``: ``NCCL_P2P_DISABLE=1``). A device or transport of None is one the entry is not keyed on
+    (the H200 entries', routes NCCL does not run, keyed on their setting at world 8)."""
     setting: str
     N: int
     route: str
@@ -132,10 +160,14 @@ class Captured(NamedTuple):
     definition: str
     statics: dict
     runs: tuple[str, ...]
+    world: int = 8
+    device: tuple[str, int] | None = None
+    transport: str | None = None
 
 
 #: Every covered route, lo and hi the fewest and most tokens the capture launched on it (its `FUSED_M`, `AR_M`, `DSV4_AR_M` and
-#: `SWITCH_M`, with counts between). NCCL's routes are not here.
+#: `SWITCH_M`, with counts between; the TP4 capture launched 256 and 1, and NCCL's tree reads no size). NCCL's routes at world 8
+#: are not here.
 CAPTURED = (
     Captured("custom-off", 6144, "fused", 1, 42, "AllReduceRmsNormMnnvl_v1", {"FMA": True}, _CUSTOM_OFF_RUNS),
     Captured("custom-off", 6144, "fi_ar_comm", 1, 42, "AllReduceMnnvl_v1", {}, _CUSTOM_OFF_RUNS),
@@ -149,14 +181,27 @@ CAPTURED = (
     Captured("defaults", 7168, "symm_mem_comm", 37, 2048, "AllReduceMultimem_v1",
              {"TREES": (GLM53_H200_TREE,) * 8, "FTZ": False}, _DEFAULT_RUNS),
     Captured("switch", 6144, "ca_comm", 43, 682, "AllReduceCustom_v1", {"STAGE": 2}, CAPTURE_RUNS),
+    Captured(BATCH_INVARIANT, 8192, "pynccl_comm", 1, 256, "AllReduceNcclTree_v1", {"CHAIN": (0, 1, 2, 3)}, NCCL_TREE_RUNS,
+             world=4, device=RTX_PRO_6000, transport="shm"),
 )
 
 
-def covered(setting: str, N: int, route: str, M: int) -> Captured | None:
-    """The `CAPTURED` entry covering a call of M tokens of N bf16 on `route` at `setting`, or None: the call is not covered."""
-    if setting not in SETTINGS:
-        raise ValueError(f"setting {setting!r}: one of {sorted(SETTINGS)}")
-    return next((c for c in CAPTURED if (c.setting, c.N, c.route) == (setting, N, route) and c.lo <= M <= c.hi), None)
+def device_of(compute_capability, sms) -> tuple[str, int]:
+    """(``"major.minor"``, SMs) of a device: its capability as ``"12.0"`` or ``(12, 0)``."""
+    cc = compute_capability if isinstance(compute_capability, str) else ".".join(str(int(x)) for x in compute_capability)
+    return str(cc), int(sms)
+
+
+def covered(setting: str, N: int, route: str, M: int, *, world: int = 8, device=None,
+            transport: str | None = None) -> Captured | None:
+    """The `CAPTURED` entry covering a call of M tokens of N bf16 on `route` at `setting` over `world` ranks of `device`
+    (`device_of`) with NCCL's `transport` (`settings_of`'s ``nccl_transport``), or None: the call is not covered. A fact the
+    caller does not know (None) matches only an entry not keyed on it."""
+    if setting not in SETTINGS and setting != BATCH_INVARIANT:
+        raise ValueError(f"setting {setting!r}: one of {sorted(SETTINGS) + [BATCH_INVARIANT]}")
+    dev = None if device is None else device_of(*device)
+    return next((c for c in CAPTURED if (c.setting, c.N, c.route, c.world) == (setting, N, route, int(world)) and c.lo <= M <= c.hi
+                 and c.device in (None, dev) and c.transport in (None, transport)), None)
 
 
 def ranks(W) -> int:
@@ -539,16 +584,69 @@ def AllReduceMultimem(B, S, parts):
     return outs[0] if len(outs) == 1 else coll_concat(Array(int(S.SIZE), BF16), outs)
 
 
-def settings_of(disable_custom_all_reduce: bool, env) -> dict[str, bool]:
+# ---------------------------------------------------------------------------------------------------------------------------------
+# NCCL's tree all-reduce inside one node
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+
+def nccl_chain(chain, world: int) -> tuple[int, ...]:
+    """CHAIN as NCCL's intra-node tree: the ranks 0..WORLD-1 each once, the root first and the leaf last."""
+    c = tuple(chain)
+    if any(isinstance(r, bool) or not isinstance(r, int) for r in c) or sorted(c) != list(range(world)):
+        raise ValueError(f"CHAIN {chain!r}: NCCL's intra-node chain names the ranks 0..{world - 1}, each once, root first")
+    return c
+
+
+@composite("AllReduceNcclTreeCoordinate", 1, ["WORLD", "CHAIN"], lambda S: ((("col", Array(int(S.WORLD), BF16)),), BF16),
+           conformance="not-yet-established: exercised through the exact-model-tested AllReduceNcclTree_v1 capture at TP4 on "
+                       "RTX PRO 6000 with P2P off, not tested separately (`CAPTURED`, tests/properties/tp4_nccl_tree_replay.py)")
+def AllReduceNcclTreeCoordinate(B, S, col):
+    """One element of NCCL's tree all-reduce down CHAIN (root first): the leaf's word, then each rank up the chain adds its own,
+    ``col[c0] + (col[c1] + (... + col[c_last]))``, each add one bf16 rounding (`Bf16AddF2fp_v1`, ``__hadd2``)."""
+    chain = nccl_chain(S.CHAIN, ranks(S.WORLD))
+    acc = col[chain[-1]]
+    for r in reversed(chain[:-1]):
+        acc = B.call(P.Bf16AddF2fp, col[r], acc)
+    return acc
+
+
+@composite("AllReduceNcclTree", 1, ["WORLD", "SIZE", "CHAIN"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
+           conformance="exact-model-tested: the int8 70B TP4 capture `NCCL_TREE_RUNS` names, on 4 cc 12.0 GPUs (188 SMs) under "
+                       "vLLM's batch invariance with NCCL_P2P_DISABLE=1, every all-reduce of its 32 steps (256 and 1 tokens at "
+                       "N=8192) on every rank (`CAPTURED`, tests/properties/tp4_nccl_tree_replay.py)")
+def AllReduceNcclTree(B, S, parts):
+    """pynccl's ``ncclAllReduce(ncclSum, ncclBfloat16)`` of WORLD ranks' SIZE bf16 on NCCL's intra-node tree (the flattened
+    tensor; no element's adds read its position): one `AllReduceNcclTreeCoordinate_v1` per element."""
+    W = ranks(S.WORLD)
+    return B.batch(bind(AllReduceNcclTreeCoordinate, WORLD=W, CHAIN=nccl_chain(S.CHAIN, W)), parts, axes=(1,))
+
+
+def _int_on(env, name: str) -> bool:
+    """An integer switch as NCCL (``strtol``) and vLLM (``int``) read it: unset, empty or not a number is 0."""
+    try:
+        return int(str(env.get(name, "")).strip() or "0") != 0
+    except ValueError:
+        return False
+
+
+def settings_of(disable_custom_all_reduce: bool, env) -> dict:
     """vLLM's all-reduce switches as `served_route` reads them: the engine's ``disable_custom_all_reduce`` and the process's
-    ``VLLM_ALLREDUCE_USE_SYMM_MEM`` / ``VLLM_ALLREDUCE_USE_FLASHINFER`` (unset is vLLM's default, on)."""
+    ``VLLM_ALLREDUCE_USE_SYMM_MEM`` / ``VLLM_ALLREDUCE_USE_FLASHINFER`` (unset is vLLM's default, on) and ``VLLM_BATCH_INVARIANT``;
+    and ``nccl_transport``, the transport NCCL's routes take between one node's GPUs: ``"shm"`` under ``NCCL_P2P_DISABLE`` (with
+    ``NCCL_SHM_DISABLE`` off), else None, NCCL's own pick."""
     on = lambda name: str(env.get(name, "1")).strip().lower() not in ("0", "false", "no", "off")  # noqa: E731
+    shm = _int_on(env, "NCCL_P2P_DISABLE") and not _int_on(env, "NCCL_SHM_DISABLE")
     return {"custom_all_reduce": not bool(disable_custom_all_reduce), "symmetric_memory": on("VLLM_ALLREDUCE_USE_SYMM_MEM"),
-            "flashinfer": on("VLLM_ALLREDUCE_USE_FLASHINFER")}
+            "flashinfer": on("VLLM_ALLREDUCE_USE_FLASHINFER"), "batch_invariant": _int_on(env, "VLLM_BATCH_INVARIANT"),
+            "nccl_transport": "shm" if shm else None}
 
 
 def served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
-    """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] world-8 all-reduce."""
+    """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] all-reduce: under batch invariance
+    pynccl's at any world (`BATCH_INVARIANT`), else the H200 dispatch at world 8."""
+    if settings.get("batch_invariant"):
+        return BATCH_INVARIANT, "pynccl_comm"
     custom = bool(settings.get("custom_all_reduce"))
     symm = bool(settings.get("symmetric_memory"))
     flashinfer = bool(settings.get("flashinfer"))
@@ -569,12 +667,15 @@ def served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
 
 def offset_free(c: Captured, world: int) -> bool:
     """Whether every element of the covered route is reduced the same way wherever it sits in the call: MNNVL's per-element sum,
-    multimem with one tree for every owner, the custom all-reduce's 1-stage kernel (`custom_owners`)."""
-    if c.definition == "AllReduceMnnvl_v1":
-        return True
-    if c.definition == "AllReduceMultimem_v1":
-        return len(set(multimem_trees(c.statics["TREES"], world))) == 1
-    return c.definition == "AllReduceCustom_v1" and int(c.statics["STAGE"]) == 1
+    NCCL's tree (one chain for every element), multimem with one tree for every owner, the custom all-reduce's 1-stage kernel
+    (`custom_owners`)."""
+    free = {
+        "AllReduceMnnvl_v1": lambda: True,
+        "AllReduceNcclTree_v1": lambda: True,
+        "AllReduceMultimem_v1": lambda: len(set(multimem_trees(c.statics["TREES"], world))) == 1,
+        "AllReduceCustom_v1": lambda: int(c.statics["STAGE"]) == 1,
+    }.get(c.definition)
+    return free is not None and free()
 
 
 def route_binding(c: Captured, world: int, M: int, N: int, rows: int | None = None) -> tuple[object, dict]:
@@ -586,10 +687,13 @@ def route_binding(c: Captured, world: int, M: int, N: int, rows: int | None = No
         raise ValueError(f"route {c.route!r} ({c.definition} {c.statics}) reduces an element by its offset among the launch's {M} "
                          f"tokens, which a call of this request's {rows} rows does not know")
     size = rows * N
-    if c.definition == "AllReduceMnnvl_v1":
-        return AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}
-    if c.definition == "AllReduceMultimem_v1":
-        return AllReduceMultimem, {"WORLD": world, "SIZE": size, **c.statics}
-    if c.definition == "AllReduceCustom_v1":
-        return AllReduceCustom, {"WORLD": world, "SIZE": size, **c.statics}
-    raise ValueError(f"covered route {c.route!r} names unsupported definition {c.definition!r}")
+    binding = {
+        "AllReduceMnnvl_v1": lambda: (AllReduceMnnvl, {"WORLD": world, "N": size, "SHOT": mnnvl_shot(M, N, world)}),
+        "AllReduceMultimem_v1": lambda: (AllReduceMultimem, {"WORLD": world, "SIZE": size, **c.statics}),
+        "AllReduceCustom_v1": lambda: (AllReduceCustom, {"WORLD": world, "SIZE": size, **c.statics}),
+        "AllReduceNcclTree_v1": lambda: (AllReduceNcclTree,
+                                         {"WORLD": world, "SIZE": size, "CHAIN": nccl_chain(c.statics["CHAIN"], world)}),
+    }.get(c.definition)
+    if binding is None:
+        raise ValueError(f"covered route {c.route!r} names unsupported definition {c.definition!r}")
+    return binding()

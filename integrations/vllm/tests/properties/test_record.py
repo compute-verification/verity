@@ -46,6 +46,7 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_fa3_prefill_capture_gpu,
         glm53_fused_rmsnorm_capture_gpu,
         sigmoid_router_capture_gpu,
+        tp4_nccl_tree_replay,
     )
 
     assert len(BY_SCHEMA) == len(REGISTRY) and all(p.claim for p in REGISTRY.values())
@@ -60,6 +61,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["dsv4_indexer_capture"].schema == dsv4_indexer_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_mhc_capture"].schema == dsv4_mhc_capture_gpu.SCHEMA
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == glm53_tp8_allreduce_capture_gpu.SCHEMA
+    assert REGISTRY["tp4_nccl_tree_capture"].schema == tp4_nccl_tree_replay.SCHEMA
     assert REGISTRY["glm53_fa3_prefill_capture"].schema == glm53_fa3_prefill_capture_gpu.SCHEMA
     assert REGISTRY["glm53_fused_rmsnorm_capture"].schema == glm53_fused_rmsnorm_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
