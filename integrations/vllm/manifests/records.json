@@ -2,6 +2,74 @@
  "schema": "verity-vllm/records-index/v1",
  "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.",
  "rows": {
+  "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
+   "record": "art:e81265e7b65773352945b6b85612d6429a0b212353bd18d615281ad0b7940f04",
+   "tier": "heavy",
+   "pinned_from": {
+    "record": "art:e81265e7b65773352945b6b85612d6429a0b212353bd18d615281ad0b7940f04",
+    "build": "art:826e06ff60bf5ede2823cc3a859fb5f9e6c9b867ea0ffc47be17634f7362e5a4",
+    "tree": "cursor/dsv4-build-21f3@473b7dad566b95359ce965f3535cdb371c18add3"
+   },
+   "manifest_digest": "528e2d2b5d9a560eef2081cc31470a34228d2ace942a79dbd65db64e950d489f",
+   "programs": {
+    "0": {
+     "step": "84c39fac2fc2018712751846d53b12b077c6ba8f22b53e95ca24f4c9f541d4724264893b6a8f8b29aa917a46305c740a330f6a9779fa25938c542cc9d2027beb",
+     "workload": "731ee2859c5bffb8cedd3d1fe2ac160532fa87fca0f002b93e73b0d4a1a153cbaca49a096c4e0b58684c2ab122154edda32940e0e7376960c75ba0499a777c6c",
+     "requests": {
+      "build_request_LP256_T31": "0433e49474874f4a3b1ae4bd2f381d73b32881e115df884d565ebc5a67132bcf968660a47395e6a4c33c2d630b653ec6b4a5c619edc2e412693c7435d44980a7"
+     }
+    },
+    "1": {
+     "step": "726b2b36106370d7c18491011fa2bcc332a795ebc201514040b654dc43a7cae975409182887f4ed8c1dc6c995b9fa221cdaaa86c93745ec2786cb3c191d87c52",
+     "workload": "811e1c21916c23b446c0044d39f344fbe7b30457a87660f7a9529390b435e3762390de8f5a766f0059f6d205d8da68dd06445e2887cd97bc108f41c7af2ad23e",
+     "requests": {
+      "build_request_LP256_T31": "b7740fb6b61651e3a7f02831ac96a3bf871998333363b690f21c12e0eeba003b3ac762a1db7e56f05efc476ca98a91efc70a94ce0187a3fe9f266e7127e170e5"
+     }
+    },
+    "2": {
+     "step": "f6af2d5e293703929b99ef4298b951f9e36306189f66214e9abdfe5d77e26d4a55625ea2796f4aed8c358dc2685e4dd266d465db1fa6020156701d5f65a59d24",
+     "workload": "e829a13ea6cdf42b2481bcefb1ae87a35b8655144365fcd4d8816c90756ad394d15d23f75e354b301c73756b1d04930602e77143396d0d2b14fbfec1a6e1d2e4",
+     "requests": {
+      "build_request_LP256_T31": "c73880b2d1bd57800ccb90331f2ea592d1e17a243dc73f8913ba54800d5493a6d10af01e7708598d97dec0edd37df8976281e32eadf93977c728ab123d2d8658"
+     }
+    },
+    "3": {
+     "step": "e1ac0603f83214e323ec2e3c6c7aecc84f12fbd3c852070e05cb331a084f97a31a0f67feb35d7898171ae23431c7f9a5ea4c2ad4be7de4da2c30ea46d2e601b8",
+     "workload": "fa536ce979134c1cdec1742f9c2eb3cba4cadc98814d17627e88bbbea10ccc1c72d2407672fa5605642a28a3732d0da0edde33a64de2848fed1b547d29f007df",
+     "requests": {
+      "build_request_LP256_T31": "1c244b28dce415d9e96e2ba2670da6b026a8ee0d92a894f553bafc3b25a7b22f1029e60833825ce9827c131238a7a7be29e8c9af9dd7619d1f7aef8647ffdce5"
+     }
+    },
+    "4": {
+     "step": "3752a4716cbaf37135c1f7fe8e3155ec62298ec6d157e0c9816f2e9ebe234b2bf170c3c2282c6fbf23999607d2ce344eff79c6c148339a0e07f9019f8db1c2f7",
+     "workload": "194ff48f82ca26218ffb4948924544cf928c612ff97177f87160c53ed076120c9cc654fdc901060807cf58e4c8380d62ff7503695a88ceb3e401d6b2d7e0c481",
+     "requests": {
+      "build_request_LP256_T31": "d306f2df35aa786d08a48c6bc15857a046a5922b6fa6199808ae0bef6f808bff37c4e624a32c44f27e26dd1be41f5b8e0538a3c62dbf779486f929d02075d61d"
+     }
+    },
+    "5": {
+     "step": "cb05ad49790fa6357f187f3d6dffba2aaf24783f7331e0c28b95e7ed4257b25f6c0a791b03767f90bb9c5d130829e16381e62092da99f5fa7c70a262c09d35f2",
+     "workload": "8743b77967842cdb181f38a0ed1ca5bd6df06304e84a18d2299dad0d55bccb8128c65d4ed79ec39cb20e167283740015158ba24695530accba8453bd515e9962",
+     "requests": {
+      "build_request_LP256_T31": "19e3513cb613cb24dc10e8d15df524741e4eaf3b26ae1128de02cd95947116f1535c7e4ac207f1a38bda2eef4774dd2f3b9d747fa5b96d51871e641daefd784e"
+     }
+    },
+    "6": {
+     "step": "083ba88d3a27aae09955219e345f31c03a9d630eb63b6a875da47887958e5a81d409e61ce3d4d4498dc4cb4b5d67ec71dc3a41d6a3a3fec5e599eb07a5b17d66",
+     "workload": "917a5f5535e33c4cb5c5740d2c0e7e5bcf041e475e9b72d4ab8c7de5f8717b70d5addb9f70415ef1d278be62874c7a019fd9a5d53046b53566e8f2bbf57ec746",
+     "requests": {
+      "build_request_LP256_T31": "698add581e51b91754f893326821917b236e22d4d6b43b63043861c205a4ee0fbb0157ea3cc553a52baae05d01281416bed0ece84682c700821e8c70db04280d"
+     }
+    },
+    "7": {
+     "step": "f7b56f581431ed6ff565dd7be13f7cf24d3d12156fbb1b7011188d194be552f82bc3c536cb694b4103e1b9f41a831946d460fe89a00163152e1bfd6cf2765dff",
+     "workload": "8b8bf6935cffe90c7e389605de7b2a6f6d3c943c111b95cea5fba54a2b22484db060e211291fa5fcbcf21e0eca610e3a69460868b6dd614a2b7d301f3bd5ef99",
+     "requests": {
+      "build_request_LP256_T31": "7a67deae480117a825d59fbe228e5b5587b47b40dd35184942b847b36075e56afdfc2aadfe6126399931e96648c31af01ceab77d9512c925ebdf24573fe76255"
+     }
+    }
+   }
+  },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
    "record": "art:440154ed238eaabac0adbbc673560ae4f94aaa8abbed066d3436e1a2d5af807e",
    "tier": "heavy",
