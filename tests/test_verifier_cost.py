@@ -22,13 +22,15 @@ ALLOWED: dict[str, str] = {
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
     "verity/core/service/flock/Flock/Extract.lean":
-        "open (PRF-72): Q_word v1's CallGraph lays out one activation of each distinct Call's Definition, its batch members "
-        "and scan iterations unrolled",
+        "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
+        "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
+        "template queries, which read the root body only)",
     "verity/core/service/flock/Flock/Qcall.lean":
-        "open (PRF-72): Q_call v1's Gates lays out one activation of each distinct Call's Definition, its batch members "
-        "and scan iterations unrolled",
+        "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
+        "Call's Definition, batch members and scan iterations unrolled; no served window names Q_call",
     "verity/core/service/sampled_proofs/SampledProofs/Partition.lean":
-        "open (PRF-72): committedBits lays out one activation of a Q_call unit's Definition, as Flock.Qcall.gates does",
+        "open (PRF-72): committedBits is Q_call's width rule on one activation of a unit's Definition, as "
+        "Flock.Qcall.gates lays it out; served windows name template queries, which never reach it",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
