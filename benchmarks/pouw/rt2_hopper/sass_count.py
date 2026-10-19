@@ -11,7 +11,8 @@ CP_RED2 and CP_RED8, 1, 2 and 8 RED a checkpoint and no REDUX) and its per-lane 
 none for CP_RED8); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
 poll's LDS, and its lane loop exactly R of the lane's op (IMAD for X = 1, LOP3 for X = 2); each `lirate<K,W>` loop holds
 at least 256 IMAD a trip and 256 LOP3 plus its checkpoint's lane XOR, and exactly its checkpoint's REDUX, RED and STG (4
-checkpoints a trip). Exit 1 when a check fails.
+checkpoints a trip); each `lirate_mix<NR,W>` loop (8 units a trip) holds 8 − NR REDUX and STG, 2·NR RED, at least 512
+IMAD and 512 + 4(8 − NR) + 3·NR LOP3. Exit 1 when a check fails.
 
 Run: `python sass_count.py SASS [--json OUT] [--gate]`.
 """
@@ -84,7 +85,7 @@ def main() -> int:
         local = sum(1 for _, op, _ in ins if op.split(".")[0] in ("LDL", "STL"))
         rows[tag] = {"mangled": name, "instructions": len(ins), "loop": len(body), "local": local,
                      "loop_ops": dict(sorted(ops.items())), "loop_base": dict(sorted(base.items()))}
-        if not tag.startswith(("clk<", "li_exact<", "roles<", "lirate<")):
+        if not tag.startswith(("clk<", "li_exact<", "roles<", "lirate<", "lirate_mix<")):
             continue
         if local:
             fails.append(f"{tag}: {local} local-memory accesses (a spill)")
@@ -131,8 +132,19 @@ def main() -> int:
             imad = sum(n for op, n in ops.items() if op == "IMAD")
             if imad < 256:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")
+        if tag.startswith("lirate_mix<"):
+            nr = int(tag[len("lirate_mix<"):-1].split(",")[0])
+            want = (8 - nr, 2 * nr, 8 - nr)
+            got = (base["REDUX"], base["RED"] + base["REDG"], base["STG"])
+            if got != want:
+                fails.append(f"{tag}: {got} REDUX, RED, STG a trip, want {want}")
+            if base["LOP3"] < 512 + 4 * (8 - nr) + 3 * nr:
+                fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {512 + 4 * (8 - nr) + 3 * nr}")
+            imad = sum(n for op, n in ops.items() if op == "IMAD")
+            if imad < 512:
+                fails.append(f"{tag}: {imad} IMAD a trip, want at least 512")
     for tag, r in rows.items():
-        if tag.startswith(("clk<", "li_exact<", "roles<", "lirate<")):
+        if tag.startswith(("clk<", "li_exact<", "roles<", "lirate<", "lirate_mix<")):
             extra = f", lane loop {r['lane_loop_ops']}" if "lane_loop_ops" in r else ""
             print(f"{tag}: {r['instructions']} instructions, loop {r['loop']}: {r['loop_ops']}{extra}")
     for f in fails:

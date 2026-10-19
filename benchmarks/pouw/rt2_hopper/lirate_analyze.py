@@ -6,7 +6,9 @@ instruction for LOP3, IADD3, ISETP, SEL, LEA, SHF and PRMT). A loop bound by iss
 of the two, so `measured / max(issue, alu)` near 1 says each instruction costs what the sheet charges it and nothing
 else; a REDG with a hidden cost (the L2's atomic unit) shows as CK_RED8 above it. The variants' differences are the
 chip's price of moving the checkpoint's lane XOR to memory: CK_RED2 against CK_SEG is RT2-HOPPER-1's (134, 134) route
-against LI-CP-W's (136, 136).
+against LI-CP-W's (136, 136). Each REDG kernel's atomic lane-ops a SM-cycle (128 x REDG a unit over its cycles) is the
+rate the memory side sustained. With `lirmix.jsonl`, each mix of NR in 8 units checkpointed by CK_RED2 against NR = 0
+in the same loop: the cheater's saving within the atomic unit's spare capacity.
 
 Run: `python lirate_analyze.py OUT` (OUT holds lirate.jsonl, and sass.json from the build, or pass `--sass FILE`).
 """
@@ -42,8 +44,28 @@ def main() -> int:
         issue = s["loop"] / 4
         alu = 2 * sum(n for op, n in s["loop_base"].items() if op in ALU) / 4
         bound = max(issue, alu)
+        red = {"ck_red": 1, "ck_red2": 2, "ck_red8": 8}.get(name, 0)
+        atom = f"; {128 * red / cyc:.3f} atomic lane-ops a SM-cycle" if red else ""
         print(f"{name:8s} W={w:2d} ({w // 4} a SMSP): {cyc:8.3f} SMSP-cycles a unit a warp-slot; SASS a unit: issue "
-              f"{issue:6.2f}, ALU {alu:6.2f}; measured / max {cyc / bound:.4f}")
+              f"{issue:6.2f}, ALU {alu:6.2f}; measured / max {cyc / bound:.4f}{atom}")
+    mix = args.out / "lirmix.jsonl"
+    if mix.exists():
+        runs: dict[int, list[float]] = {}
+        for line in mix.read_text().splitlines():
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if r.get("probe") == "lirate_mix" and r["cuda"] == "no error":
+                runs.setdefault(r["red2_of_8"], []).append(r["cyc_unit_slot_med"])
+        base = min(runs.get(0, [float("nan")]))
+        for nr, cs in sorted(runs.items()):
+            cyc = min(cs)
+            s = sass.get(f"lirate_mix<{nr},16>", {})
+            issue = s.get("loop", 0) / 8
+            print(f"mix {nr}/8 CK_RED2, W=16: {cyc:8.3f} SMSP-cycles a unit (reps {min(cs):.3f}-{max(cs):.3f}); SASS issue "
+                  f"{issue:6.2f} a unit; against 0/8: {cyc - base:+.3f} a unit ({(cyc - base) / base:+.4%}); "
+                  f"{256 * nr / 8 / cyc:.3f} atomic lane-ops a SM-cycle")
     return 0
 
 

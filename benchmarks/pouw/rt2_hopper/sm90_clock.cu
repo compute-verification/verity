@@ -435,6 +435,64 @@ __global__ void __launch_bounds__(W * 32, 1) lirate(OpArgs a, uint32_t* cp, uint
   OP_SINK(l.fold() ^ threadIdx.x)
 }
 
+// lirate_mix<NR, W>: 8 units an iteration, the first NR checkpointed by CK_RED2 and the rest by CK_SEG, so NR/8 of the
+// units move their lane XOR to memory. CK_RED2 throughout is bound by the atomic unit (its 32 lanes into one word); a
+// cheater would use only its spare capacity, and this times that mix against NR = 0, LI-CP-W in the same loop.
+template <int NR, int W>
+__global__ void __launch_bounds__(W * 32, 1) lirate_mix(OpArgs a, uint32_t* cp, uint32_t zm) {
+  Lane l(threadIdx.x);
+  const int lane = threadIdx.x & 31;
+  uint32_t* const w = cp + ((size_t)blockIdx.x * W + (threadIdx.x >> 5)) * 1024 + (lane & zm);
+  OP_BEGIN
+  OP_LOOP(it) {
+    uint32_t* const wi = w + ((it & 127) << 3);
+#pragma unroll
+    for (int u = 0; u < 8; u++) {
+#pragma unroll
+      for (int c = 0; c < 64; c++) {
+        l.op<L_LOP3>(c);
+        l.op<L_IMAD>(c);
+      }
+      if (u < NR) li_ck<CK_RED2>(l.r, wi + u, lane);
+      else li_ck<CK_SEG>(l.r, wi + u, lane);
+    }
+  }
+  OP_END
+  OP_SINK(l.fold() ^ threadIdx.x)
+}
+
+template <int NR, int W>
+static int run_lirate_mix(int iters, int reps) {
+  int dev = 0, sms = 0;
+  cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+  OpArgs a{};
+  cudaMalloc(&a.rec, sms * sizeof(OpClk));
+  cudaMalloc(&a.sink, (size_t)sms * W * 32 * sizeof(unsigned));
+  a.iters = iters;
+  uint32_t* cp;
+  cudaMalloc(&cp, (size_t)sms * W * 1024 * 4);
+  cudaMemset(cp, 0, (size_t)sms * W * 1024 * 4);
+  std::vector<OpClk> rec(sms);
+  int bad = 0;
+  for (int r = 0; r < reps; r++) {
+    lirate_mix<NR, W><<<sms, W * 32>>>(a, cp, 0u);
+    cudaError_t e = cudaDeviceSynchronize();
+    cudaMemcpy(rec.data(), a.rec, sms * sizeof(OpClk), cudaMemcpyDeviceToHost);
+    std::vector<double> u(sms);
+    for (int b = 0; b < sms; b++) u[b] = (double)rec[b].cyc / iters / 8 / (W / 4);
+    std::sort(u.begin(), u.end());
+    printf("{\"probe\": \"lirate_mix\", \"red2_of_8\": %d, \"warps\": %d, \"rep\": %d, \"iters\": %d, \"blocks\": %d, "
+           "\"cyc_unit_slot_min\": %.3f, \"cyc_unit_slot_med\": %.3f, \"cyc_unit_slot_max\": %.3f, \"cuda\": \"%s\"}\n",
+           NR, W, r, iters, sms, u[0], u[sms / 2], u[sms - 1], cudaGetErrorString(e));
+    fflush(stdout);
+    bad += e != cudaSuccess;
+  }
+  cudaFree(cp);
+  cudaFree(a.rec);
+  cudaFree(a.sink);
+  return bad;
+}
+
 template <int K, int W>
 static int run_lirate(const char* name, int iters, int reps) {
   int dev = 0, sms = 0;
@@ -484,12 +542,23 @@ int main(int argc, char** argv) {
     const int iters = argc >= 3 ? atoi(argv[2]) : 20000, reps = argc >= 4 ? atoi(argv[3]) : 5;
     return run_lirate_w<8>(iters, reps) + run_lirate_w<16>(iters, reps) ? 1 : 0;
   }
+  if (argc >= 2 && !strcmp(argv[1], "lirmix")) {
+    const int iters = argc >= 3 ? atoi(argv[2]) : 10000, reps = argc >= 4 ? atoi(argv[3]) : 7;
+    int bad = 0;
+    bad += run_lirate_mix<0, 16>(iters, reps);
+    bad += run_lirate_mix<1, 16>(iters, reps);
+    bad += run_lirate_mix<2, 16>(iters, reps);
+    bad += run_lirate_mix<3, 16>(iters, reps);
+    bad += run_lirate_mix<8, 16>(iters, reps);
+    bad += run_lirate_mix<0, 16>(iters, reps);
+    return bad ? 1 : 0;
+  }
   if (argc >= 2 && !strcmp(argv[1], "roles"))
     return run_all_roles(argc >= 3 ? atoi(argv[2]) : 4096, argc >= 4 ? atoi(argv[3]) : 3) ? 1 : 0;
   if (argc >= 5 && !strcmp(argv[1], "clock")) return run_clock(atoi(argv[2]), atoi(argv[3]), atoi(argv[4])) ? 1 : 0;
   // sm90_wgmma.cu's own probes by name (its op_main: --time NAME... [--reps R]), e.g. wgspec_lop3_r256 beside wgU_lop3
   if (argc >= 2 && !strcmp(argv[1], "probe")) return sm90_wgmma_main(argc - 1, argv + 1);
   fprintf(stderr, "usage: sm90_clock exact [U] | clock LOAD(0 wgmma, 1 wgli, 2 wgli_fill, 3 li) ITERS LAUNCHES | roles "
-                  "[ITERS [REPS]] | lirate [ITERS [REPS]] | probe --time NAME...\n");
+                  "[ITERS [REPS]] | lirate [ITERS [REPS]] | lirmix [ITERS [REPS]] | probe --time NAME...\n");
   return 2;
 }

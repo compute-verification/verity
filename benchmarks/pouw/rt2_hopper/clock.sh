@@ -11,8 +11,9 @@
 #       timings for (M′) (msp90.jsonl), then each load's SM clock
 #       read in the kernel and its MACs a clock (clock.jsonl), with NVML sampled every 100 ms (smi.csv) and its clock,
 #       performance and power reports before and after (smi-{before,after}.txt), and wg_spec with each role's own time
-#       (roles.jsonl), and the fold's cycles a unit with the lane alone in each checkpoint placement (lirate.jsonl).
-#       STEPS (default "exact,msp,joint,roles,lirate,clock") picks which of them run.
+#       (roles.jsonl), the fold's cycles a unit with the lane alone in each checkpoint placement (lirate.jsonl) and
+#       with NR of 8 units' checkpoints in memory (lirmix.jsonl). STEPS (default "exact,msp,joint,roles,lirate,lirmix,
+#       clock") picks which of them run.
 # Exit: 0 done, 1 build, gate or a probe failed, 2 no nvcc, no inputs or wrong device.
 set -uo pipefail
 MODE=${1:?usage: clock.sh build | time}
@@ -61,7 +62,7 @@ time)
     --format=csv -lms 100 >"$OUT/smi.csv" 2>&1 &
   smi=$!
   rc=0
-  STEPS=${STEPS:-exact msp joint roles lirate clock}
+  STEPS=${STEPS:-exact msp joint roles lirate lirmix clock}
   STEPS=" ${STEPS//,/ } "
   [[ $STEPS == *" exact "* ]] && { "$B" exact 64 >"$OUT/exact.jsonl" 2>&1 || rc=1; }
   [[ $STEPS == *" msp "* ]] && [ -x "$WORK/msp90" ] && { "$WORK/msp90" >"$OUT/msp90.jsonl" 2>&1 || rc=1; }
@@ -70,6 +71,7 @@ time)
     wgspec_lop3_r64 wgspec_imad_r64 wgmix_lop3_r256 wgmix_imad_r256 --reps 5 >"$OUT/joint.jsonl" 2>&1 || rc=1; }
   [[ $STEPS == *" roles "* ]] && { "$B" roles 4096 3 >"$OUT/roles.jsonl" 2>&1 || rc=1; }
   [[ $STEPS == *" lirate "* ]] && { "$B" lirate 20000 5 >"$OUT/lirate.jsonl" 2>&1 || rc=1; }
+  [[ $STEPS == *" lirmix "* ]] && { "$B" lirmix 10000 7 >"$OUT/lirmix.jsonl" 2>&1 || rc=1; }
   if [[ $STEPS == *" clock "* ]]; then
     : >"$OUT/clock.jsonl"
     # ~0.4 s a launch, 30 launches a load: the light loop first, then the wgmma alone, the design's mixed load, the
