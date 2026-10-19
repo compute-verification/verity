@@ -550,9 +550,12 @@ def _clean_env(tree: Path) -> dict[str, str]:
     return {k: v.replace(str(ROOT), str(tree)) for k, v in e.items()}
 
 
-#: a plan on a node (`--on`): the project its run belongs to, its bound (the tree's environment is synced first where that
-#: machine has none for it yet), and where it writes the plan
-REMOTE_PROJECT, REMOTE_MAX_MIN, REMOTE_OUT = "verity", 30, "out/plan.json"
+#: a plan on a node (`--on`): the project its run belongs to, its bound in seconds (the tree's environment is synced first where
+#: that machine has none for it yet), and where it writes the plan
+REMOTE_PROJECT, REMOTE_TIMEOUT_S, REMOTE_OUT = "verity", 1800, "out/plan.json"
+#: the pool it runs in (`research run --pool`): a research slot at nice 19 beside the merge checks where the machine takes runs
+#: only through slots (vy-nebius-cpu-1), and the command as it is (slot.py with no slots file) where it takes them directly
+REMOTE_POOL = "research"
 #: the run id `research run` prints when it launches one (`research.queue.LAUNCHED_RE`)
 LAUNCHED = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 
@@ -561,7 +564,7 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
                notes: list[str], run=subprocess.run) -> int:
     """`--on MACHINE`: plan ``commit`` on MACHINE, a check node, where the keys are that machine's (its interpreter, base image,
     the tools on its PATH and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
-    `--cwd source`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
+    `--cwd source`, in `REMOTE_POOL`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
     environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  The
     plan comes back from the run's `REMOTE_OUT` to ``out``.  Returns the run's exit, 2 when it launched none."""
     if machine == "auto" or "," in machine:
@@ -580,7 +583,8 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
     _git("worktree", "add", "-q", "--detach", str(tree), commit, repo=ROOT)
     try:
         r = run([sys.executable, "-m", "research", "run", "--on", machine, "--project", REMOTE_PROJECT, "--source", str(tree),
-                 "--cwd", "source", "--max-min", str(REMOTE_MAX_MIN), "--wait", "--declared-output", REMOTE_OUT,
+                 "--cwd", "source", "--pool", REMOTE_POOL, "--as", os.environ.get("RESEARCH_LANE") or "ci",
+                 "--timeout", str(REMOTE_TIMEOUT_S), "--wait", "--declared-output", REMOTE_OUT,
                  *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-lc", cmd],
                 cwd=ROOT, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     finally:
