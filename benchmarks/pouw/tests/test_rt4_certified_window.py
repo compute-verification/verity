@@ -82,13 +82,13 @@ def _prover(seed: bytes):
     return LmsKey(k.params, lms.public_key(k)), lambda m: lms.sign_at(k, next(leaves), m).encode()
 
 
-def _certifier(sid: bytes, key, sign, record: bytes) -> tuple[Proxy, dict[int, bytes]]:
+def _certifier(sid: bytes, key, sign, record: bytes, tag: bytes = b"") -> tuple[Proxy, dict[int, bytes]]:
     """The certifier with PoUW windows 0 and 1, the prover's record taken for both before their salts are drawn, both
     published; and the salts it drew, which the prover's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
-        drawn[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
+        drawn[p] = hashlib.shake_256(tag + b"certifier salt %d" % p).digest(n)
         return drawn[p]
 
     c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
@@ -188,6 +188,55 @@ def test_rows_formed_before_any_salt_are_credited_in_two_certified_windows(tmp_p
     assert len(set(tiles[0])) == M * N == real // 2
     ell = SC.level_of(windows[0]["rec"])
     assert Wd.Work.at(ell, Wd.GRID_BITS).credited > M * N
+
+
+def test_one_windows_rows_are_credited_under_two_streams_at_once(tmp_path):
+    """RT4-INT-9, periods run at once. One prover registers two streams, each behind its own certifier link, and
+    commits the same rows, formed once before any salt, in PoUW window 0 of both. Each stream's window passes its
+    certifier's record and reveal, `pass_epoch` of record and the live draw, every drawn unit's opening passes, and the
+    deployment's shared `Credits` credits window 0 once per stream: one product, two credits in one window, and a period
+    per stream credits it per stream."""
+    key, sign = _prover(b"the prover")
+    prover, credits, tiles = PS.prover_id(key.public), PS.Credits(), []
+    sids = {s: SC.stream_id({"deployment": "served-zk/r-rt4"}, s) for s in ("a", "b")}
+    for s, sid in sids.items():
+        c, drawn = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass("r-rt4")[1]), sid, prover), s.encode())
+        w = _window(0, drawn[0], sid, prover, PRECOMPUTED)
+        live, trusted = _live(tmp_path / f"{s}.json")
+        ch = SC.Challenger(w["params"], live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c,
+                           prover=prover, trusted=trusted, credits=credits)
+        ch.register(s, w["rec"], stream=s, manifest=w["raw"])
+        assert ch.passes == {s: "certifier"}
+        d = ch.select(s)
+        for u in d.units:
+            assert SC.check(w["params"], w["rec"], {"units": list(d.units)}, u, _pub(w["priv"], w["advice"], u),
+                            SC.opening(w["advice"], w["priv"], w["params"], u), record=OR.Record(lean=False)) is None
+        tiles.append([_tile_words(w, t) for t in range(2 * M * N)])
+    assert sids["a"] != sids["b"]
+    assert set(credits._credited) == {(0, sids["a"] + prover), (0, sids["b"] + prover)}
+    assert tiles[0] == tiles[1]
+
+
+def test_a_window_is_credited_when_received_and_its_failure_closes_nothing(tmp_path):
+    """RT4-INT-6. `Credits` takes a certified window's key when the challenger receives it, before its draw coin is
+    open and before any proof. Window 0 is received, drawn and never proved (a visible failure with no outcome), and
+    window 1 of the same stream and prover is received, credited and drawn after it: nothing in the served path holds a
+    period, so no refusal closes its stream's credit. The ledger is per window, which drops failed windows rather than
+    ending the period at the first."""
+    key, sign = _prover(b"the prover")
+    prover, sid = PS.prover_id(key.public), SC.stream_id({"deployment": "served-zk/r-rt4"}, "window")
+    c, drawn = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass("r-rt4")[1]), sid, prover))
+    credits, chs = PS.Credits(), []
+    for p in (0, 1):
+        w = _window(p, drawn[p], sid, prover, PRECOMPUTED)
+        live, trusted = _live(tmp_path / f"w{p}.json")
+        ch = SC.Challenger(w["params"], live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c,
+                           prover=prover, trusted=trusted, credits=credits)
+        ch.register(f"w{p}", w["rec"], manifest=w["raw"])
+        assert (p, sid + prover) in credits._credited and "draw" not in ch.openings
+        assert ch.select(f"w{p}").units
+        chs.append(ch)
+    assert chs[0].sessions == {} and set(credits._credited) == {(0, sid + prover), (1, sid + prover)}
 
 
 def test_a_certified_challenger_takes_any_live_commitment_as_trusted(tmp_path):
