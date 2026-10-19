@@ -159,13 +159,18 @@ def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
 
 
 def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
-    """Refuses a template of no gate, and a `Q_call` unit that commits more than `UNIT_BITS` bits (`_committed_bits`,
-    constants counted, which `Q_call`'s width rule leaves out), each Definition once, as activations of one Definition
-    commit alike."""
+    """Refuses a template of no gate, and a template instance or `Q_call` unit that commits more than `UNIT_BITS` bits
+    (`_committed_bits`, constants counted, which `Q_call`'s width rule leaves out), each Definition once, as activations of
+    one Definition commit alike."""
     if isinstance(part, PO.TemplatePartition):
-        for k, t, _first, n in part.ranges:
-            if n and program.root.body.nodes[k].fn.gates == 0:
+        templates = {t: program.root.body.nodes[k].fn for k, t, _first, n in part.ranges if n}
+        for t, fn in templates.items():
+            if fn.gates == 0:
                 raise QueryRefused(f"template {t} has no gate", {"template": t})
+            (bits,) = _committed_bits(fn, [(0, fn.gates)])
+            if bits > UNIT_BITS:
+                raise QueryRefused(f"an instance of {t} commits {bits} bits, more than {UNIT_BITS}",
+                                   {"template": t, "bits": bits})
         return
     for cut in {cut.fn.id: cut for _k, cut in part.calls}.values():
         fn = cut.fn
