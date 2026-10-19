@@ -44,6 +44,11 @@ import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.Claims.ZK.Round1Enc
 import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Round3Vals
+import Proofs.Flock.Claims.ZK.SimZerocheck
+import Proofs.Flock.Claims.ZK.SimPiopGo
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.PiopSrcVals
+import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -238,10 +243,27 @@ import Proofs.Flock.Claims.ZK.Stop
   value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
   round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
   `hstep` after the third round only.
-* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at layout indices `i` and
-  `64 + i` are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace whose bits are the
-  model's tables (`Composed.honestAt_r1ab`, `Composed.honestAt_r1c`, from `Replay.Zc.r1ab_eq`); a rep's outer coin is
-  read at the round after its first (`Masked.outerAt_eq`).
+* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at `round1_ab`'s and
+  `round1_c`'s layout indices are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace
+  whose bits are the model's tables (`Composed.honestAt_r1ab_exe`, `Composed.honestAt_r1c_exe`, from
+  `Replay.Zc.r1ab_eq`); a rep's outer coin is read at the round after its first (`Masked.outerAt_eq`).
+* `SimZerocheck`: `SimPiop`'s zerocheck: two runs in lockstep (`FlockComplete.GoAlike`), `asksCut`'s squeezes, and the
+  cut's zerocheck against the session's where the cut's masked values are the plain prover's plus their pads
+  (`FlockComplete.zerocheckCut_alike`).
+* `SimPiopGo`: the rest of `SimPiop`'s PIOP in lockstep: the cut's lincheck against the session's
+  (`FlockComplete.lincheckCut_alike`), its ring switch (`FlockComplete.ringSwitchCut_alike`), and the cut's PIOP
+  returning the session's from a source at the cut's coins (`FlockComplete.PiopSrc`, `FlockComplete.piopCut_alike`).
+* `SimPiop`: `Masked.SimPiop` from the deployed source at the opened coins (`Masked.PiopSrcE`, `Masked.simPiop_of`):
+  `repMix 0` and `repMix 1` differ only in the PIOP (`FlockComplete.repMix_zero_one`).
+* `PiopSrcVals`: `Masked.PiopSrcE`'s zerocheck fields: the deployed source masks at the zerocheck's layout indices
+  the plain prover's messages at the opened coins plus the session's pads (`Masked.src_r1ab`, `Masked.src_r1c`,
+  `Masked.src_ml0`, `Masked.src_ml1`, `Masked.src_fa`, `Masked.src_fb`, `Masked.src_fc`), since the model's tables are
+  the session's trace's bits (`Masked.trsE_bits`) and the draw's honest zerocheck is the executable's
+  (`Masked.zcH_exe`).
+* `PiopSrcLc`: `Masked.PiopSrcE`'s lincheck fields: the deployed source masks at the lincheck's layout indices the
+  plain prover's round messages and `z_partial` at `lcCoins` plus the session's pads (`Masked.src_lc0`,
+  `Masked.src_lc1`, `Masked.src_zp`), since the prover's halved columns are the model's `lcU`, `lcV` folded at the round
+  coins (`Replay.Lc.msg_lcMsg`) and the draw's coins are the executable's (`Masked.lcH_exe`).
 * `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
   layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
   levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading

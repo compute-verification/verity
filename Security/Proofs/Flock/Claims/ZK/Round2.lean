@@ -112,8 +112,9 @@ theorem liveRun_round2 (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sha51
         (ω.innerSalt 0 0) : _root_.Flock.V _) = .ok ic := by
       rw [hH]
       exact hi
-    exact FlockComplete.sessionPZk_go_round2 H (fun k => (ops.map fun p => coinOfD p.2).getD k []) spec tabs hm
-      (FlockComplete.MaskRank.masksOf (stsOf x)) trs ω hs hc hrs he hi'
+    have hg := FlockComplete.sessionPZk_go_round2 H (fun k => (ops.map fun p : Msg × Msg => coinOfD p.2).getD k [])
+      spec tabs hm (FlockComplete.MaskRank.masksOf (stsOf x)) trs ω hs hc hrs he hi'
+    exact hg
 
 /-- **Round `2`'s encoding**: table `0`'s rep `0` outer zerocheck point squeeze, `honestPR`'s third body
 (`liveRun_round2`), the header of `m − 13` coins of kind `2` alone; `[]` where table `0`'s extra claims at the link
@@ -167,7 +168,7 @@ theorem honest_round2_exe (H : Msg → Msg) (hH : Claims.hOf H = _root_.Flock.Sh
       | .ok _ => 0 :: Claims.toMsg (_root_.Flock.Transcript.framed ⟨#[], 0, ByteArray.empty⟩ 2
           ((FlockDeploy.tabsOf (stsOf x))[0]!.m - 13)) := by
     unfold enc2
-    simp only [hsx, if_pos hj]
+    simp only [hsx, ite_eq_left hj]
     rw [hpts]
   rcases liveRun_round2 H hH hx w ω ops hl hsx with ⟨⟨e, he⟩, hrun, hn⟩ | ⟨⟨extras, hex⟩, hn, hb⟩
   · exact .inr ⟨hrun, hn, by rw [henc, he]⟩
