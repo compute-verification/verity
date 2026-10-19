@@ -32,7 +32,7 @@ PHASE_PARTS = {"before": "A step (h1c_a_step) and the step's inputs", "admit_tab
                "z_tables": "z tables", "step_trees": "round and step trees", "receipt_trees": "receipt trees",
                "root_read": "root read", "record_host": "record (host)", "forward_wait": "forward wait"}
 PARTS = [
-    ("A table (h1c_a_call)", re.compile(r"h1c_a_call2?_k")),
+    ("A table (h1c_a_call)", re.compile(r"h1c_a_call[23]?_k")),
     ("A step (h1c_a_step) and the step's inputs", re.compile(r"h1c_domains|h1c_a_pre_k|h1c_a_init_k")),
     ("units: seeds", re.compile(r"h1r_seeds|h1_seeds")),
     ("units: noise (separate launch)", re.compile(r"h1s_noise")),

@@ -8,7 +8,8 @@
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
 + `lab[1]` (or `lab[0]` alone).  `Tab.out` points a table's root into another table's leaves (a given table: no data).
-DITHER_A_FORM=2 (or `lib.form(2)`) serves each call's A table through h1c_a_call2_k, its compressions paired.
+DITHER_A_FORM=2 (or `lib.form(2)`) serves each call's A table through h1c_a_call2_k, its compressions paired, and 3
+through h1c_a_call3_k, paired with its messages in registers.
 """
 from __future__ import annotations
 
@@ -227,7 +228,7 @@ class H1C:
         self.dev = dev
 
     def form(self, f: int) -> None:
-        """h1c_a_call's kernel from here on (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired)."""
+        """h1c_a_call's kernel from here on (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired, 3 h1c_a_call3_k)."""
         rc = self.lib.h1c_a_form(f)
         if rc:
             raise RuntimeError(f"h1c_a_form({f}) returned {rc}")

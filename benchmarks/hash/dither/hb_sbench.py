@@ -21,7 +21,8 @@
     dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
                    h1k for the calls a warp-a-unit form underfills, h1u for the rest; gated as dither-1s-hbp is.
 
-Each arm takes sbench's -xl and -a2 suffixes (exactlin's quantizer, the paired A table; gated as the arm is).
+Each arm takes sbench's -xl, -a2 and -a3 suffixes (exactlin's quantizer, the paired A table, its messages in registers;
+gated as the arm is).
 
 sbench's arms run in spawned worker processes, which import this file as their main module before unpickling
 `sbench.worker`, so the change below applies in every worker too. Run by hb_served.sh with HB_DITHER_DIR, the source tree's

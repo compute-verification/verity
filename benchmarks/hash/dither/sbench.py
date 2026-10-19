@@ -62,7 +62,8 @@ Arms:
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
                  kgate.py in the lease before an -xl or exact-fused arm is timed
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
-                 compressions paired); the suffixes compose (ARM-a2-xl), each gated as ARM
+                 compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
+                 the suffixes compose (ARM-a3-xl), each gated as ARM
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -195,11 +196,13 @@ def install_exactlin() -> None:
         exactlin._sbench_installed = True
 
 
-def a_form2() -> None:
-    os.environ["DITHER_A_FORM"] = "2"
+def a_form(f: int):
+    def set_form() -> None:
+        os.environ["DITHER_A_FORM"] = str(f)
+    return set_form
 
 
-SUFFIXES = {"-xl": install_exactlin, "-a2": a_form2}
+SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3)}
 
 
 def suffix_of(arm: str) -> str | None:

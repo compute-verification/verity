@@ -14,7 +14,8 @@
 //                another table's roots, so only its pads
 //   h1c_level    one thread a node of level d of every table (`merkle.tree_levels`); the top one is the table's root
 //   h1c_a_*      a served call's A table in one launch, its row-independent parts once a step (below); h1c_a_form(2)
-//                serves it from h1c_a_call2_k, the same table with each compression on its critical path paired
+//                serves it from h1c_a_call2_k, the same table with each compression on its critical path paired, and
+//                h1c_a_form(3) from h1c_a_call3_k, paired with every message built in registers
 //
 // A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
 #include <cstdint>
@@ -417,6 +418,37 @@ __device__ __forceinline__ void ap_round(u64& a, u64& b, u64& c, u64& d, u64& e,
 }
 // the consumer's half: one block's message words w into h; one copy a kernel
 __device__ __noinline__ void ap_cmp(u64* h, const u64* w) {
+  const int lane = threadIdx.x & 31, p = threadIdx.x >> 5, bar = 1 + 5 * p;
+  u64* base = ap_base(p);
+  u64* x = base + lane;
+#pragma unroll
+  for (int t = 0; t < 16; ++t) {
+    x[32 * (80 + t)] = w[t];
+    x[32 * t] = sh::kSha512K[t] + w[t];
+  }
+  if (lane == 0) base[96 * 32] = 0;
+  ap_arrive(bar, 64);
+  u64 a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+#pragma unroll 1
+  for (int q = 0; q < 5; ++q) {
+    if (q) ap_sync(bar + q, 64);
+    u64 kw[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) kw[i] = x[32 * (16 * q + i)];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) ap_round(a, b, c, d, e, f, g, hh, kw[i]);
+  }
+  h[0] += a;
+  h[1] += b;
+  h[2] += c;
+  h[3] += d;
+  h[4] += e;
+  h[5] += f;
+  h[6] += g;
+  h[7] += hh;
+}
+// ap_cmp inlined, the message and state in registers (h1c_a_call3_k's one site)
+__device__ __forceinline__ void ap_cmp_in(u64 h[8], const u64 w[16]) {
   const int lane = threadIdx.x & 31, p = threadIdx.x >> 5, bar = 1 + 5 * p;
   u64* base = ap_base(p);
   u64* x = base + lane;
@@ -1022,8 +1054,304 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
   ap_stop();
 }
 
+// h1c_a_form(3): h1c_a_call2_k's table, every message built as words in registers and every compression the one inlined
+// ap_cmp_in site of a loop over the lane's blocks (segments, x, h, the frame leaf, then the last block's nodes).  It reads
+// the layout the window's constants give (h1c_a_call refuses form 3 otherwise, a3_layout): the segment, x and h prefixes
+// end on a block, a node prefix leaves one byte pending (an idx below 256 then puts its children at byte 3), a row's leaf
+// frame prefix 41 to 47 (its children at word 5, byte 1 to 7).  Each consumer warp stages its rows' and the levels'
+// prefixes into shared memory first (cs: x's and h's first-block states, its two rows' frame prefixes, M_key y and c,
+// each level's node prefix).
+constexpr int A3_R = 16, A3_N = 80, A3_W = A3_N + 10 * 9;
+__device__ __forceinline__ u64 bswap64(u64 v) { return (u64)bswap32((u32)v) << 32 | bswap32((u32)(v >> 32)); }
+extern "C" __global__ void __launch_bounds__(128) h1c_a_call3_k(const H1Tab* __restrict__ tab, u64* __restrict__ P,
+                                                                const int* __restrict__ S, const int8_t* __restrict__ xq,
+                                                                const float* __restrict__ sa, int8_t* __restrict__ slot,
+                                                                float* __restrict__ scale, int k) {
+  __shared__ u64 dg[AP_ROWS][AP_SEG][8];
+  __shared__ u64 cs[2][A3_W];
+  __shared__ int last;
+  const H1Tab& T = *tab;
+  const int tid = threadIdx.x, lane = tid & 31, wid = tid >> 5;
+  const long long r0 = (long long)blockIdx.x * AP_ROWS;
+  const long long m = S[1];
+  const bool nw = (S[3] & 2) != 0;
+  if (wid >= 2) {
+    ap_serve(wid - 2);
+    return;
+  }
+  ap_stamp(32 + 8 * blockIdx.x);
+  const int half = lane >> 4, j = lane & 15, rb = 2 * wid + half;
+  const long long r = r0 + rb;
+  const bool alive = r < m;
+  const int ns = nseg_of(T.len), depth = T.depth;
+  u64* C = cs[wid];
+  {
+    const u64* R = P + A_ROW + (long long)A_RW * (r0 + 2 * wid + half);
+    if (j < 8) C[j] = P[A_QS + j];
+    else C[j] = P[A_LPS + j - 8];
+    C[A3_R + 32 * half + j] = j < 15 ? R[j] : 0;
+    C[A3_R + 32 * half + 16 + j] = R[SNAP + j];
+    for (int i = lane; i < 10 * depth; i += 32) C[A3_N + i] = P[A_NS + SNAP * (i / 10) + i % 10];
+  }
+  const uint8_t* row = reinterpret_cast<const uint8_t*>(xq + (alive ? r : 0) * k);
+  const uint8_t* tl = reinterpret_cast<const uint8_t*>(sa + (alive ? r : 0));
+  const bool real = alive && j < ns;
+  const int p0 = 1024 * j, L = real ? min(T.len, p0 + 1024) - p0 : 0, nb = real ? (L + 17 + 127) / 128 : 0;
+  const int nf = real ? max(0, min(L, k - p0)) / 128 : 0;
+  const int nq = __reduce_max_sync(0xffffffffu, (unsigned)nb);
+  const int nbx = (64 * ns + 17 + 127) / 128;
+  const bool wany = __any_sync(0xffffffffu, alive);
+  uint4* dst = reinterpret_cast<uint4*>(slot + r * k + p0);
+  u64 hs[8], x[8], c[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) hs[i] = real ? P[A_SS + SNAP * j + i] : 0;
+  uint4 nx[8];
+  if (nf > 0) {
+    const uint4* g = reinterpret_cast<const uint4*>(row + p0);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) nx[i] = __ldg(g + i);
+  }
+  __syncwarp();
+  {
+    const int n0 = (int)(C[A3_R + 8] & 127), n1 = (int)(C[A3_R + 32 + 8] & 127);
+    bool bad = (n0 >> 3) != 5 || !(n0 & 7) || (n1 >> 3) != 5 || !(n1 & 7);
+    for (int lv = 0; lv < depth; ++lv) bad |= (C[A3_N + 10 * lv + 8] & 127) != 1;
+    if (bad) __trap();
+  }
+  const u64* Rh = C + A3_R + 32 * half;
+  enum { PSEG, PX, PH, PF, PN };
+  int ph = PSEG, q = 0, lv = 0;
+  long long i0 = 0, off = 0, live = 0, idx = 0;
+  bool keep = false;
+  const long long width = 1LL << depth;
+  const auto arrive = [&]() {
+    ap_stamp(32 + 8 * blockIdx.x + 3);
+    __threadfence();
+    ap_sync(AP_CONSUMERS, 64);
+    if (tid == 0) last = atomicAdd(reinterpret_cast<unsigned*>(P + A_CNT), 1u) == gridDim.x - 1;
+    ap_sync(AP_CONSUMERS, 64);
+    ap_stamp(32 + 8 * blockIdx.x + 4);
+    if (!last) return false;
+    if (tid == 0 && ap_stamps) ap_stamps[0] = blockIdx.x;
+    __threadfence();
+    ph = PN;
+    q = 0;
+    lv = 0;
+    i0 = 0;
+    off = 0;
+    live = min(width >> 1, (m + 1) >> 1);
+    return true;
+  };
+  // a warp with no live row has no x, h or leaf to hash
+  const auto after_seg = [&]() {
+    if (real)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) dg[rb][j][i] = hs[i];
+    if (!nw) {
+      const int body = max(0, min(1024, k - p0)) / 16;
+      if (alive) {
+        const uint4* g = reinterpret_cast<const uint4*>(row + p0);
+        for (int i = 8 * nf; i < body; ++i) dst[i] = g[i];
+      } else {
+        for (int i = 0; i < body; ++i) dst[i] = make_uint4(0, 0, 0, 0);
+      }
+      if (j == 0) scale[r] = alive ? sa[r] : 0.0f;
+    }
+    ap_stamp(32 + 8 * blockIdx.x + 1);
+    __syncwarp();
+    if (wany) {
+      ph = PX;
+      q = 0;
+      return true;
+    }
+    return arrive();
+  };
+  if (nq == 0 && !after_seg()) {
+    ap_stop();
+    return;
+  }
+#pragma unroll 1
+  for (;;) {
+    u64 w[16], t[8];
+    if (ph == PSEG) {
+      if (q < nf) {
+#pragma unroll
+        for (int i = 0; i < 8; ++i) {
+          w[2 * i] = (u64)bswap32(nx[i].x) << 32 | bswap32(nx[i].y);
+          w[2 * i + 1] = (u64)bswap32(nx[i].z) << 32 | bswap32(nx[i].w);
+        }
+        if (!nw)
+#pragma unroll
+          for (int i = 0; i < 8; ++i) dst[8 * q + i] = nx[i];
+      } else if (q < nb && 128 * q == L && p0 + L <= k) {
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = 0;
+        w[0] = 0x80ull << 56;
+        w[15] = 8ull * (128 + L);
+      } else if (q < nb && p0 == k && L == 4) {
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = 0;
+        w[0] = (u64)bswap32(__float_as_uint(sa[alive ? r : 0])) << 32 | 0x80000000ull;
+        w[15] = 8ull * (128 + 4);
+      } else if (q < nb) {
+        u64 v[16];
+        a_seg_words(v, row, tl, k, p0, L, nb, q);
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = v[i];
+      } else {
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = 0;
+      }
+      if (q + 1 < nf) {
+        const uint4* g = reinterpret_cast<const uint4*>(row + p0 + 128 * (q + 1));
+#pragma unroll
+        for (int i = 0; i < 8; ++i) nx[i] = __ldg(g + i);
+      }
+#pragma unroll
+      for (int i = 0; i < 8; ++i) t[i] = hs[i];
+    } else if (ph == PX) {
+#pragma unroll
+      for (int i = 0; i < 16; ++i) {
+        const int g = 16 * q + i;
+        w[i] = g < 8 * ns ? dg[rb][g >> 3][g & 7] : (g == 8 * ns ? 0x80ull << 56 : 0);
+      }
+      if (q == nbx - 1) w[15] = 8ull * (128 + 64 * ns);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) t[i] = q ? hs[i] : C[i];
+    } else if (ph == PH) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) {
+        w[i] = q ? (i ? 0 : 0x80ull << 56) : x[i] ^ Rh[16 + i];
+        w[8 + i] = q ? (i == 7 ? 8ull * 256 : 0) : Rh[24 + i];
+        t[i] = q ? hs[i] : C[8 + i];
+      }
+    } else if (ph == PF) {
+      // the frame prefix's n pending bytes (n >> 3 == 5), then h at byte n, SHA-512's padding, the length
+      const u64 tot = Rh[8];
+      const int sb = 8 * (int)(tot & 7);
+#pragma unroll
+      for (int i = 0; i < 5; ++i) w[i] = bswap64(Rh[9 + i]);
+      w[5] = (bswap64(Rh[14]) & (~0ull << (64 - sb))) | (x[0] >> sb);
+#pragma unroll
+      for (int i = 1; i < 8; ++i) w[5 + i] = (x[i - 1] << (64 - sb)) | (x[i] >> sb);
+      w[13] = (x[7] << (64 - sb)) | (0x80ull << (56 - sb));
+      w[14] = 0;
+      w[15] = 8 * (tot + 64);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) t[i] = Rh[i];
+    } else {
+      // node idx of level lv: the prefix's pending byte, uint(idx) = 1 then idx, 64, the left child, 64, the right; its
+      // children D at byte 3: D = [64, c 0..7, 64, c 8..15]
+      const u64* N = C + A3_N + 10 * lv;
+      if (q == 0) {
+        idx = i0 + tid;
+        keep = idx < live;
+        const u64* in = T.level + 8 * (off + 2 * (keep ? idx : 0));
+#pragma unroll
+        for (int i = 0; i < 16; ++i) c[i] = __ldcg(in + i);
+        w[0] = (N[9] & 0xFF) << 56 | 1ull << 48 | (u64)(idx & 0xFF) << 40;
+        w[1] = 64ull << 40 | c[0] >> 24;
+#pragma unroll
+        for (int i = 2; i < 9; ++i) w[i] = c[i - 2] << 40 | c[i - 1] >> 24;
+        w[9] = c[7] << 40;
+        w[10] = 64ull << 40 | c[8] >> 24;
+#pragma unroll
+        for (int i = 11; i < 16; ++i) w[i] = c[i - 3] << 40 | c[i - 2] >> 24;
+#pragma unroll
+        for (int i = 0; i < 8; ++i) t[i] = N[i];
+      } else {
+        w[0] = c[13] << 40 | c[14] >> 24;
+        w[1] = c[14] << 40 | c[15] >> 24;
+        w[2] = c[15] << 40 | 0x80ull << 32;
+#pragma unroll
+        for (int i = 3; i < 15; ++i) w[i] = 0;
+        w[15] = 8 * (N[8] + 146);
+#pragma unroll
+        for (int i = 0; i < 8; ++i) t[i] = hs[i];
+      }
+    }
+    ap_cmp_in(t, w);
+    if (ph == PSEG) {
+      if (q < nb)
+#pragma unroll
+        for (int i = 0; i < 8; ++i) hs[i] = t[i];
+      if (++q < nq) continue;
+      if (!after_seg()) break;
+    } else if (ph == PX) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) hs[i] = t[i];
+      if (++q < nbx) continue;
+#pragma unroll
+      for (int i = 0; i < 8; ++i) x[i] = hs[i];
+      ap_stamp(32 + 8 * blockIdx.x + 2);
+      ph = PH;
+      q = 0;
+    } else if (ph == PH) {
+#pragma unroll
+      for (int i = 0; i < 8; ++i) hs[i] = t[i];
+      if (++q < 2) continue;
+#pragma unroll
+      for (int i = 0; i < 8; ++i) x[i] = hs[i];
+      ph = PF;
+      q = 0;
+    } else if (ph == PF) {
+      if (alive && j == 0)
+#pragma unroll
+        for (int i = 0; i < 8; ++i) T.level[8 * r + i] = t[i];
+      if (!arrive()) break;
+    } else {
+      if (q == 0) {
+#pragma unroll
+        for (int i = 0; i < 8; ++i) hs[i] = t[i];
+        q = 1;
+        continue;
+      }
+      if (keep) {
+        u64* o = T.level + 8 * (off + (width >> lv) + idx);
+#pragma unroll
+        for (int i = 0; i < 8; ++i) o[i] = t[i];
+        if (lv == depth - 1)
+#pragma unroll
+          for (int i = 0; i < 8; ++i) T.root[i] = t[i];
+      }
+      q = 0;
+      i0 += 64;
+      if (i0 < live) continue;
+      off += width >> lv;
+      ++lv;
+      i0 = 0;
+      __threadfence_block();
+      ap_sync(AP_CONSUMERS, 64);
+      ap_stamp(lv);
+      if (lv == depth) {
+        if (tid == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
+        break;
+      }
+      live = min(width >> (lv + 1), (m + (2LL << lv) - 1) >> (lv + 1));
+    }
+  }
+  ap_stop();
+}
+
 // -- host ----------------------------------------------------------------------------------------------------------------
-extern "C" int h1c_const(const H1Const* c) { return (int)cudaMemcpyToSymbol(HC, c, sizeof(H1Const)); }
+static H1Const hc_host;
+static bool hc_set = false;
+extern "C" int h1c_const(const H1Const* c) {
+  hc_host = *c;
+  hc_set = true;
+  return (int)cudaMemcpyToSymbol(HC, c, sizeof(H1Const));
+}
+// h1c_a_call3_k's layout: a node prefix (frame, "node", 64, the domain, uint(lv), seven zeros) one byte past a block, a
+// row's leaf frame prefix (frame, "leaf", 64, the domain, uint(i) twice, the schema, 64) 41 to 47 bytes past one for every
+// row below AP_MAXCOUNT (uint(i) one or two bytes)
+static bool a3_layout() {
+  if (!hc_set || (hc_host.frame_len + 96) % 128 != 1) return false;
+  for (int l = 1; l <= 2; ++l) {
+    const int n = (hc_host.frame_len + hc_host.schema_len + 112 + 2 * l) % 128;
+    if (n >> 3 != 5 || !(n & 7)) return false;
+  }
+  return true;
+}
 
 extern "C" int h1c_a_words(int t) { return A_ROW + A_RW * t; }
 
@@ -1045,18 +1373,20 @@ extern "C" int h1c_a_step(H1Tab* tabs_dev, int ntab, u64* pre, int wpt, const in
   return (int)cudaGetLastError();
 }
 
-// h1c_a_call's kernel from here on: 0 h1c_a_call_k, 2 h1c_a_call2_k (paired compressions); set before any capture
+// h1c_a_call's kernel from here on: 0 h1c_a_call_k, 2 h1c_a_call2_k (paired compressions), 3 h1c_a_call3_k (paired, the
+// messages in registers); set before any capture
 static int a_form = 0;
 extern "C" int h1c_a_form(int f) {
-  if (f != 0 && f != 2) return 1;
-  if (f == 2) {
-    const cudaError_t e = cudaFuncSetAttribute(h1c_a_call2_k, cudaFuncAttributeMaxDynamicSharedMemorySize, AP_SMEM);
+  if (f != 0 && f != 2 && f != 3) return 1;
+  if (f == 2 || f == 3) {
+    const cudaError_t e = cudaFuncSetAttribute(f == 2 ? h1c_a_call2_k : h1c_a_call3_k,
+                                               cudaFuncAttributeMaxDynamicSharedMemorySize, AP_SMEM);
     if (e != cudaSuccess) return (int)e;
   }
   a_form = f;
   return 0;
 }
-// h1c_a_call2_k's phase stamps into p (32 + 8 T / AP_ROWS words), or none (null)
+// h1c_a_call2_k's and h1c_a_call3_k's phase stamps into p (32 + 8 T / AP_ROWS words), or none (null)
 extern "C" int h1c_a_stamps(u64* p) { return (int)cudaMemcpyToSymbol(ap_stamps, &p, sizeof(p)); }
 
 // one call's A table (tab: its host copy, tab_dev the device's; pre: its words); xq [M >= m, k] s8 and sa [M] f32 the
@@ -1064,9 +1394,14 @@ extern "C" int h1c_a_stamps(u64* p) { return (int)cudaMemcpyToSymbol(ap_stamps, 
 extern "C" int h1c_a_call(const H1Tab* tab, const H1Tab* tab_dev, u64* pre, const int* S, const int8_t* xq, const float* sa,
                           int8_t* slot, float* scale, int k, cudaStream_t stream) {
   if (k % 16 || tab->len != k + 4 || tab->body != k || nseg_of(tab->len) > A_NSEG || tab->depth > A_DEPTH) return 1;
-  if (a_form == 2) {
+  if (a_form == 2 || a_form == 3) {
     if (tab->count % AP_ROWS || tab->count > AP_MAXCOUNT || nseg_of(tab->len) > AP_SEG) return 2;
-    h1c_a_call2_k<<<(unsigned)(tab->count / AP_ROWS), 128, AP_SMEM, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
+    if (a_form == 3) {
+      if (!a3_layout() || tab->depth > 9) return 3;
+      h1c_a_call3_k<<<(unsigned)(tab->count / AP_ROWS), 128, AP_SMEM, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
+    } else {
+      h1c_a_call2_k<<<(unsigned)(tab->count / AP_ROWS), 128, AP_SMEM, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
+    }
   } else {
     h1c_a_call_k<<<(unsigned)((tab->count + AW - 1) / AW), 32 * AW, 0, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
   }

@@ -11,9 +11,10 @@
              the 128 per-call h1c_build launches of the earlier path (domains, segments, leaves, levels), captured the same
              way
 
-Each h1c_a_form value --forms names (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired) is gated in turn, and
-only if every one passes is each timed, in the same process on the same operands; form 2's phases then come from its
-%globaltimer stamps (`stamps`) on a qkv, a gate_up and a down call alone.
+Each h1c_a_form value --forms names (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired, 3 h1c_a_call3_k, paired
+with its messages in registers) is gated in turn, and only if every one passes is each timed, in the same process on the
+same operands; forms 2's and 3's phases then come from their %globaltimer stamps (`stamps`) on a qkv, a gate_up and a
+down call alone.
 
     python h1agate.py --lib libh1c.so --out OUT [--t 64] [--forms 0,2]
 """
@@ -211,7 +212,7 @@ def timing(c: Calls, reps: int) -> list[dict]:
 
 
 def stamps(c: Calls, m: int, ws=(0, 2, 3), reps: int = 5) -> dict:
-    """h1c_a_call2_k's phases (h1c_a_stamps) for calls ws alone at m live rows, in us from the first block's start: each
+    """h1c_a_call2_k's or h1c_a_call3_k's phases (h1c_a_stamps) for calls ws alone at m live rows, in us from the first block's start: each
     block's segments, x, leaves and arrival, the last block's levels; the call's CUDA-event time beside them."""
     blocks = c.st.t // 4
     buf = torch.zeros(32 + 8 * blocks, dtype=torch.int64, device=c.pre.device)
@@ -285,7 +286,7 @@ def main() -> int:
             lib.form(f)
             print(json.dumps({"t": t, "form": f}), flush=True)
             d["forms"][f]["timing"] = timing(c, a.reps)
-            if f == 2:
+            if f in (2, 3):
                 d["forms"][f]["stamps"] = {m: stamps(c, m) for m in sorted({32, t})}
         (out / "h1a-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
         del st, c
