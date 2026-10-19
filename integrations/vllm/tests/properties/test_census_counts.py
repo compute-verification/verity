@@ -20,11 +20,12 @@ from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.properties import census as CEN
 from verity_vllm.properties import kernel_allowlist as KA
 
-NORM = "fused_add_rms_norm_kernel"
-DECLARES = {"fused_norm": (NORM,), "mm": ("matmul_kernel_persistent",)}
+NORM, ALT, INDEX = "fused_add_rms_norm_kernel", "fused_add_rms_norm_static_fp8_quant_kernel", "index_elementwise_kernel"
+DECLARES = {"fused_norm": (NORM, ALT), "mm": ("matmul_kernel_persistent",), "index": (INDEX,)}
 KINETO = {NORM: "void vllm::fused_add_rms_norm_kernel<c10::BFloat16, 8>(c10::BFloat16*, c10::BFloat16*, c10::BFloat16 const*, "
                 "float, int, int)",
-          "matmul_kernel_persistent": "matmul_kernel_persistent"}
+          "matmul_kernel_persistent": "matmul_kernel_persistent",
+          INDEX: "void at::native::index_elementwise_kernel<128, 4, at::native::gpu_index_kernel<...>>(long, ...)"}
 
 
 def _declaring(fn, kernels):
@@ -61,13 +62,14 @@ def reconcile(monkeypatch):
 
 
 def device_census() -> dict:
-    """What the bare run of the traced log launches: each declared kernel once per declaring event of its step."""
+    """What the bare run of the traced log launches: each declared kernel once per declaring event of its step (`ALT`, the
+    norm's alternative, never)."""
     per_step = {}
     RL.resolve_log("traced", profile(), None, lambda se, sr: per_step.__setitem__(sr.step, (sr, se.roots)))
     steps = []
     for step, (sr, roots) in sorted(per_step.items()):
         _pats, events, _parts = CEN.declared_kernels_of_step(sr.resolutions, roots)
-        kernels = {KINETO[k]: {"count": len(v), "us": 1.0} for k, v in sorted(events.items())}
+        kernels = {KINETO[k]: {"count": len(v), "us": 1.0} for k, v in sorted(events.items()) if k in KINETO}
         steps.append({"step": step, "n_kernels": sum(d["count"] for d in kernels.values()), "kernels": kernels})
     return {"steps": steps}
 
@@ -90,6 +92,16 @@ def test_matching_launch_counts_pass(reconcile):
     assert rep["ok"] and rep["residue_zero"] and rep["counts_equal"]
     assert rep["totals"]["count_mismatches"] == 0 and rep["count_mismatches"] == [] and rep["totals"]["count_exempt"] == {}
     assert rep["steps"][0]["counts"][NORM] == {"census_kernels": 2, "declaring_events": 2, "declaring_parts": 2, "patterns": ["fused_norm"]}
+
+
+def test_infrastructure_and_untaken_alternatives_are_not_counted(reconcile):
+    """The frozen residue allowlist accepts `index_elementwise_kernel` at any count (here the runner's three extra launches
+    beside the one declaring event), and `ALT`, declared beside the norm's kernel, is an alternative no launch took."""
+    rep = reconcile(launched(device_census(), 0, INDEX, 3), "traced")
+    assert rep["ok"] and rep["count_mismatches"] == []
+    c = rep["steps"][0]["counts"]
+    assert (c[INDEX]["census_kernels"], c[INDEX]["declaring_events"], c[INDEX]["infrastructure"]) == (4, 1, 4)
+    assert (c[ALT]["census_kernels"], c[ALT]["declaring_events"]) == (0, 2) and ALT in rep["steps"][0]["declared_never_seen"]
 
 
 @pytest.mark.parametrize("delta", [1, -1])

@@ -31,7 +31,10 @@ whose resolution declares it.  Claiming by name alone lets an untraced launch of
 that leaves no dispatcher event) overwrite a Call's output in place: the fold sees no read-before-write and the residue stays
 zero (note:20261019T0602Z-report-a9-glm-moe-final).  A mismatch is refused by name: the kernel, its device count against its
 declaring events, and the buffers (allocations) those events write.  `kernel_allowlist.LAUNCH_COUNT_ALLOWLIST` exempts a
-declared name with its reason, which the report records.
+declared name with its reason, which the report records.  Two cases are not counted: launches the frozen `KERNEL_ALLOWLIST`
+claims (copies, fills, the runner's metadata kernels), which the residue accepts at any count with or without a declaration,
+and a declared name with no launch in the step, an alternative the step did not take (`fp8_mqa_logits` or
+`fp8_paged_mqa_logits`), which stays in `declared_never_seen`.
 
 Kernel names: Kineto reports demangled CUDA names (`void vllm::fused_add_rms_norm_kernel<c10::BFloat16, 8>(...)`,
 `flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<64, 64, 128, 4, ...>, ...>`, `Memcpy DtoH (Device -> Pinned)`, `Memset
@@ -439,21 +442,24 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                 ambiguous.append({"step": i, "kernel": name, "compute_claims": sorted(comp)})
         never_seen = sorted(set(pats) - seen_declared)
         allow_never_seen = sorted(allow - seen_declared)
+        infrastructure = {n for n in cs["kernels"] if claims_for(n, allow)}
         counts = {}
         step_mismatches = []
         for k in sorted(pats):
-            launched = {n: d["count"] for n, d in cs["kernels"].items() if matches(k, n)}
-            census_count = sum(launched.values())
+            census_count = sum(d["count"] for n, d in cs["kernels"].items() if matches(k, n))
             counts[k] = {"census_kernels": census_count, "declaring_events": len(events[k]), "declaring_parts": parts_n[k],
                          "patterns": sorted(pats[k])}
-            if census_count == len(events[k]):
+            launched = {n: d["count"] for n, d in cs["kernels"].items() if matches(k, n) and n not in infrastructure}
+            if sum(launched.values()) != census_count:
+                counts[k]["infrastructure"] = census_count - sum(launched.values())
+            if not launched or sum(launched.values()) == len(events[k]):
                 continue
             if k in LAUNCH_COUNT_ALLOWLIST:
                 counts[k]["exempt"] = LAUNCH_COUNT_ALLOWLIST[k]
                 count_exempt[k] += 1
                 continue
             evs = declaring_events(sr.resolutions, per_step_roots[i], k)
-            step_mismatches.append({"step": i, "kernel": k, "device_kernels": launched, "device_count": census_count,
+            step_mismatches.append({"step": i, "kernel": k, "device_kernels": launched, "device_count": sum(launched.values()),
                                     "declaring_events": len(events[k]), "patterns": sorted(pats[k]),
                                     "buffers": sorted({a for e in evs for a in e["writes"]}), "events": evs})
         count_mismatches.extend(step_mismatches)
