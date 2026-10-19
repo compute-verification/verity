@@ -181,7 +181,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "verity/ml/kernels/")
+UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "archive/shared/hash_gpu/", "verity/ml/kernels/")
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
