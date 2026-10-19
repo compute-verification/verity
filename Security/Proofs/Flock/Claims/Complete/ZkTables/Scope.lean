@@ -123,9 +123,10 @@ theorem tables_of_setup {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : A
     rw [hpi] at this
     exact this
   have hl : p.tags.merkleLeaf = "hm96-sha512/v1" := by
-    rcases (FailClosed.check_ok hc').1.2.2.2.1 with h | h
-    · exact h
-    · cases hzk.symm.trans h.1
+    rcases (FailClosed.check_ok hc').1.2.2.2.1 with hl | ⟨hz, -⟩
+    · exact hl
+    · rw [hzk] at hz
+      cases hz
   obtain ⟨spec', hset'⟩ := Readable.setup_of_tablesOf htab
   have hset := Ins.setup_read (setupOf_some hsetup).2
   rw [ht] at hset'

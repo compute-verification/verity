@@ -8,7 +8,9 @@ node's registered store the node made. `PROTOCOL.md` has the semantics, the byte
 The verifier's definition is the Lean package `lean/` (`RemoteAudit`; Daniel, 18 Oct: Lean is the definition and the
 verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
-the session's outcome and its record, and the pieces (registration digest, codec, plans, receipts, openings, draws).
+the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
+`k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
+receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
 `Security/Properties/RemoteAudit.lean`.
 
@@ -18,7 +20,6 @@ recorded run in the store replayed through the Lean gets the verdict the Python 
 as the reference, the switch is one reversible line, and the protocol's properties move from `Models/` to
 `Properties/`. What the Lean doesn't check yet that `audit.py` does:
 
-- `Registry`: one live registration a node, and the session's index `k` in it;
 - a registration that binds PoUW's tiles, which the Lean refuses;
 - the record past the summary `RemoteAudit.Session` returns: the coins' commitment, the integrity profile and the
   ledger's terms.

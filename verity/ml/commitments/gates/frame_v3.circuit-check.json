@@ -1,0 +1,25 @@
+{
+ "definitions": {
+  "FrameV3LeafAt_v1{R=1,B=4,SCHEMA='hm96-sha512/row/v2'}": {
+   "and": 157405
+  },
+  "FrameV3Leaf_v1{B=1,SCHEMA='hm96-sha512/row/v2'}": {
+   "and": 155359
+  },
+  "FrameV3Node_v1{B=1}": {
+   "and": 234767
+  },
+  "FrameV3Pick_v1{D=1}": {
+   "and": 1044
+  },
+  "FrameV3Pick_v1{D=2}": {
+   "and": 1561
+  },
+  "FrameV3ReadAt_v1{D=1,B=4,SCHEMA='hm96-sha512/row/v2'}": {
+   "and": 393142
+  },
+  "FrameV3Read_v1{D=1,SCHEMA='hm96-sha512/row/v2'}": {
+   "and": 390555
+  }
+ }
+}

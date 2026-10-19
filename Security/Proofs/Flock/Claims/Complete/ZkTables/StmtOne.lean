@@ -414,12 +414,12 @@ theorem complete_jsonJ (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec prin
   fun h64 => completeJRelS H S h64 hR hPR hLg hIn hPRJ hRJ hCJ hMR h64
 
 /-- **Flock's masked verifier is complete at the deployed relation** for `honestPZk` with error `δcZk H`:
-`complete_zk_relation` with `StmtOkZk` proved (`stmtOkZk`). -/
-theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+`complete_zk_relation`, which proves `StmtOkZk` from `S` itself. -/
+theorem complete_zk_relationS (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec)
     (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) honestPZk (δcZk H) :=
-  FlockComplete.complete_zk_relation H S h64 (stmtOkZk S) hR hPR hLg hIn hMR
+  FlockComplete.complete_zk_relation H S hR hPR hLg hIn hMR
 
 end FlockComplete.ZkTables
