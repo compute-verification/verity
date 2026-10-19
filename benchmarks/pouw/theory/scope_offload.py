@@ -26,8 +26,11 @@ So the word-level numbers are floors on each channel's exposure, not caps. The c
   - COIN-BLOCKED: device memory holding precomputed words. On main every window of a salt shares one interval from the
     salt's release to the deadline (`WorkBetweenSaltAndDeadline`), so early work is counted work. Its word stock is
     also capacity-bound, to a few ms of the GPU's compute.
-  - HOST-TILES: the host CPU/AMX computing whole s8 tiles, bounded by its int8 rate shared across the node's GPUs, not
-    by PCIe. It is neither credited nor bounded by PoUW today (CMP-49).
+  - HOST-TILES: the host CPU computing whole s8 tiles, its words on AMX and their fold on AVX-512, bounded by its cores'
+    measured rates shared across the GPUs beside it, not by PCIe. The machine model's per-GPU eps has no host term; LOC
+    (decision 37) deducts the host at node level at its int8 peak.
+
+Each fraction is read against the 1% target as counted eps, the headline's eps plus the fraction.
 
 The checkable arithmetic: the committed word packs exactly 32 int8*weight products into an s32 with no wrap (verified
 over Z/2^32 and the operand alphabets), and a tile digest carries more MACs a byte than a word even at H1's smallest
@@ -37,11 +40,12 @@ package.
 
 Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib + exact_kit only.
-Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max, and the headline eps (note:20261017T1818Z-draft-axioms secs 2.1, 4.1);
-PCIe5 x16 64 GB/s one way; ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one
-way; RTX PRO 6000 has no NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); device memory 96 / 141 /
-192 GB; H1's smallest tile 4 x 8 at K = 64 (`h1tile.circuit-check.py`); the ~12% host AMX efficiency training's C7
-measured (a relay, note:20261019T0455Z-draft-rt-scope RT-SCOPE-S2).
+Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); the headline eps at the
+sheet reading, `machine-model headline` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;
+ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 900 GB/s one way; RTX PRO 6000 has no
+NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); device memory 96 / 141 / 192 GB; H1's smallest tile
+4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: `benchmarks/host_tiles` runs, cited where they're used; host
+core counts from each run's lscpu, and NVIDIA's DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs).
 """
 from __future__ import annotations
 
@@ -68,8 +72,10 @@ DEVICES = {
     "B200 sm_100": (8192, 148, 1965e6),
 }
 
-# Per device, the headline eps (note:20261017T1818Z-draft-axioms sec 4.1) and device memory in bytes.
-HEADLINE_EPS = {"sm_120 RTX PRO 6000": 0.00585, "H200 sm_90": 0.00716, "B200 sm_100": 0.01032}
+# Per device, the headline eps at the sheet reading (`machine-model headline`, designs dither-c-peel-fx1,
+# dither-2s-licpw-redux-l32, dither-2s-licpw-redux-heavy-l32) and device memory in bytes.
+HEADLINE_EPS = {"sm_120 RTX PRO 6000": 0.00585, "H200 sm_90": 0.00646, "B200 sm_100": 0.00472}
+TARGET = 0.01
 MEMORY_BYTES = {"sm_120 RTX PRO 6000": 96e9, "H200 sm_90": 141e9, "B200 sm_100": 192e9}
 
 # Per device, one-way ingress into one chip (bytes/s) and the channel's model class.
@@ -95,10 +101,20 @@ CHANNELS = {
     ],
 }
 
-# Host int8 compute: dual-socket Granite Rapids AMX, ~1024 int8 MACs/clk/core, 256 cores, 2 GHz, shared by a node's GPUs.
-HOST_MAC_RATE = 256 * 2.0e9 * 1024
-GPUS_PER_NODE = 8
-AMX_MEASURED_EFFICIENCY = 0.12
+# Host AMX words, per core: `ncp_amx` with a snapshot every 32 deep (k_s = 32, one word per 32 MACs a cell), best m, on
+# 24 Xeon 6776P cores of node 2 (r20261012-211331-ae6a, ncp_resident.jsonl and ncp_stream.jsonl, Y stored). Resident is
+# operands blocked in L2, as a large-m (prefill) tile allows; streamed reads Y from DRAM.
+AMX_PER_CORE = {"resident": 1.3879e13 / 24, "streamed": 5.2886e12 / 24}
+# The fold's lane work, per core: LOP3+IMAD chains on AVX-512, best of 10 cores (r20261019-064611-062c, Xeon 8580).
+LANE_PER_CORE = 5.1349e11 / 10
+FOLD_LANES_PER_WORD = 4  # sm_120's fx1 (headline.toml); the H200 and B200 designs' folds aren't sized here
+
+# The hosts beside each device: (name, cores, GPUs sharing them).
+HOSTS = {
+    "sm_120 RTX PRO 6000": [("node 2, 2 x Xeon 6776P", 96, 8)],
+    "H200 sm_90": [("vy-dc-h200 slot, Xeon 8468", 8, 1), ("DGX H200, 2 x Xeon 8480C", 112, 8)],
+    "B200 sm_100": [("vy-dc-b200 slot, Xeon 8580", 10, 1), ("DGX B200, 2 x Xeon 8570", 112, 8)],
+}
 
 
 def mac_rate(device: str) -> float:
@@ -112,10 +128,12 @@ def offload_fraction(bw: float, rate: float) -> float:
     return bw * MAC_PER_WORD / BYTES_PER_WORD / rate
 
 
-def host_tile_fraction(rate: float, efficiency: float) -> float:
-    """WHOLE-TILE: the share of one GPU's credited MACs the host lends when it computes whole tiles at `efficiency` of its
-    int8 peak, split evenly across the node's GPUs. No link term: a tile crosses as one digest."""
-    return HOST_MAC_RATE * efficiency / GPUS_PER_NODE / rate
+def host_tile_fraction(rate: float, cores: int, gpus: int, amx: float, fold_lanes: int = 0) -> float:
+    """WHOLE-TILE: the share of one GPU's credited MACs a host lends computing whole tiles, each word on AMX at `amx`
+    MACs/s a core and then folded on the same core in `fold_lanes` lane instructions, split across the `gpus` beside it.
+    No link term: a tile crosses as one digest. With fold_lanes = 0 it is an upper bound."""
+    seconds_per_word = MAC_PER_WORD / amx + fold_lanes / LANE_PER_CORE
+    return cores * MAC_PER_WORD / seconds_per_word / gpus / rate
 
 
 def macs_per_byte(macs: int, nbytes: int) -> float:
@@ -178,8 +196,11 @@ def main() -> int:
     worst_uncounted = {}
     for device in DEVICES:
         rate = mac_rate(device)
-        checks.check(f"{device}: host AMX is a large fraction of its int8 rate",
-                     0.2 <= HOST_MAC_RATE / rate <= 1.3, f"{HOST_MAC_RATE / rate * 100:.0f}% (compute, pre-delivery)")
+        pcie = offload_fraction(64 * GB, rate)
+        for host, cores, gpus in HOSTS[device]:
+            tiles = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"], FOLD_LANES_PER_WORD)
+            checks.check(f"{device}: {host} doing whole tiles, words and fold, lends more than PCIe's word-level floor",
+                         tiles > pcie, f"{tiles * 100:.3f}% vs {pcie * 100:.3f}% (HOST-TILES is not link-bound)")
         for name, bw, cls in CHANNELS[device]:
             f = offload_fraction(bw, rate)
             rows.append({"device": device, "channel": name, "cls": cls, "gbps": bw / GB, "f_pct": f * 100})
@@ -196,22 +217,34 @@ def main() -> int:
                      f"{pcie * 100:.3f}% -- a floor: whole tiles cross as 64-byte digests")
     checks.check("sm_120 has no NVLink, so no uncounted intra-node channel", "sm_120 RTX PRO 6000" not in worst_uncounted)
     for device in ("H200 sm_90", "B200 sm_100"):
-        f = worst_uncounted[device]
+        f, eps = worst_uncounted[device], HEADLINE_EPS[device]
         checks.check(f"{device}: word-level, NVLink lends >=0.3% of credited MACs, unobserved by any certifier",
                      f >= 0.003, f"{f * 100:.3f}%")
+        checks.check(f"{device}: word-level NVLink alone keeps counted eps under 1%", eps + f < TARGET,
+                     f"{eps * 100:.3f}% + {f * 100:.3f}% = {(eps + f) * 100:.3f}% (a peer doing whole tiles is RT-SCOPE-1)")
 
-    # 5. Whole-tile: the host's exact int8 rate, not PCIe, bounds what it lends. At peak it beats every headline; at
-    #    training's measured AMX efficiency it beats sm_120's and H200's.
-    for device in DEVICES:
+    # 5. Whole-tile: the host's measured rates, not PCIe, bound what it lends. On node 2 it takes sm_120 over 1% counted
+    #    with resident operands even paying the fold; the H200's AMX-only bound doesn't exclude 1%; the B200's does.
+    sm120 = "sm_120 RTX PRO 6000"
+    rate, eps = mac_rate(sm120), HEADLINE_EPS[sm120]
+    _, cores, gpus = HOSTS[sm120][0]
+    upper = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"])
+    folded = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"], FOLD_LANES_PER_WORD)
+    streamed = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["streamed"], FOLD_LANES_PER_WORD)
+    checks.check("sm_120: node 2's host, resident operands, words and fold on each core, takes counted eps over 1%",
+                 eps + folded > TARGET, f"{eps * 100:.3f}% + {folded * 100:.3f}% = {(eps + folded) * 100:.2f}% "
+                 f"(AMX-only bound {upper * 100:.2f}%)")
+    checks.check("sm_120: node 2's host, operands streamed, words and fold, stays under 1% counted",
+                 eps + streamed < TARGET, f"{eps * 100:.3f}% + {streamed * 100:.3f}% = {(eps + streamed) * 100:.2f}%")
+    checks.check("sm_120: node 2's host is over training C7's 0.3% host target on every reading",
+                 min(upper, folded, streamed) > 0.003, f"min {min(upper, folded, streamed) * 100:.3f}%")
+    for device, over in (("H200 sm_90", True), ("B200 sm_100", False)):
         rate, eps = mac_rate(device), HEADLINE_EPS[device]
-        peak = host_tile_fraction(rate, 1.0)
-        checks.check(f"{device}: whole-tile, the host at AMX peak lends more than the headline eps", peak > eps,
-                     f"{peak * 100:.2f}% vs {eps * 100:.3f}% (HOST-TILES)")
-    for device in ("sm_120 RTX PRO 6000", "H200 sm_90"):
-        rate, eps = mac_rate(device), HEADLINE_EPS[device]
-        measured = host_tile_fraction(rate, AMX_MEASURED_EFFICIENCY)
-        checks.check(f"{device}: whole-tile, the host at measured AMX efficiency lends more than the headline eps",
-                     measured > eps, f"{measured * 100:.3f}% vs {eps * 100:.3f}% (HOST-TILES)")
+        for host, cores, gpus in HOSTS[device]:
+            bound = host_tile_fraction(rate, cores, gpus, AMX_PER_CORE["resident"])
+            checks.check(f"{device}: {host}, AMX-only bound, {'does not exclude' if over else 'excludes'} 1% counted",
+                         (eps + bound > TARGET) == over,
+                         f"{eps * 100:.3f}% + {bound * 100:.3f}% = {(eps + bound) * 100:.2f}% (GNR per-core rate)")
 
     # 6. Device memory: its word stock covers under 0.2% of a 1-s window, and on main early work is counted work.
     for device in DEVICES:
@@ -238,9 +271,14 @@ def main() -> int:
         # A "digest" the size of one word over one word's MACs carries no more than a word: the density check notices.
         checks.mutation("a word-sized digest does not beat the word's density",
                         not macs_per_byte(MAC_PER_WORD, BYTES_PER_WORD) > macs_per_byte(MAC_PER_WORD, BYTES_PER_WORD))
-        # Bounding the host by PCIe at word level, the 07:00Z error, puts it under every headline: it misses the finding.
-        word_level_host = [offload_fraction(64 * GB, mac_rate(d)) < HEADLINE_EPS[d] for d in DEVICES]
-        checks.mutation("a word-level PCIe bound on the host would hide HOST-TILES on every device", all(word_level_host))
+        # Bounding the host by PCIe at word level, the 07:00Z error, keeps sm_120 under 1% counted: it misses the finding.
+        pcie_host = offload_fraction(64 * GB, mac_rate(sm120))
+        checks.mutation("a word-level PCIe bound on the host would keep sm_120 under 1% counted",
+                        HEADLINE_EPS[sm120] + pcie_host < TARGET, f"{(HEADLINE_EPS[sm120] + pcie_host) * 100:.3f}%")
+        # A fold priced at no lane work turns the folded estimate into the AMX-only bound: the fold term is not vacuous.
+        checks.mutation("dropping the fold's lane work raises node 2's estimate to the AMX-only bound",
+                        host_tile_fraction(mac_rate(sm120), 96, 8, AMX_PER_CORE["resident"]) > 2 * folded,
+                        f"{upper * 100:.3f}% vs {folded * 100:.3f}%")
 
     return checks.finish()
 
