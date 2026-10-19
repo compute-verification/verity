@@ -12,6 +12,10 @@ plain Flock's:
   - `x` is out of scope (the compiled verifier's own scope check);
   - the inner verifier can't accept the inner statement (`FlockComplete.ready` at SHA-512, the hash the honest prover
     sets up at), read off the statement alone;
+  - an answer before the sessions is not a coin's bytes (`uncoinedAt`): the compiled verifier answers every inner and
+    staging round with `.msg c.bytes`, and the honest prover reads any reply as a coin (`FlockComplete.coinOf`), so a
+    reply that isn't one could carry a bad coin past `badAt`, and recursion completeness (`HonestPre`) reads coin
+    bytes only;
   - an inner zerocheck outer coin is `1` (`badAt`: `FlockComplete.Bad` at the inner statement, its coins read off the
     verifier's answers as the compiled verifier sends them, `.msg c.bytes`), where `pr_bad_le` bounds the probability
     and off which `complete_of` accepts the honest inner proof;
@@ -20,9 +24,10 @@ plain Flock's:
     compiled verifier refuses that part's session (`ract`), and `vstarAt` falls back to the statement at `pick`'s
     rounds, for which the prover holds no witness. Whether the numbers read the coins is left open: the stop covers
     both cases.
-  It reads no `pick`: before the staging round it reads the statement and the inner coins only, so at a statement in
-  scope whose inner statement the inner verifier can accept, the prover runs the inner rounds off a bad coin
-  (`stopsRec_live`, `halted_live`).
+  It reads no `pick`: before the staging round it reads the statement and the verifier's answers only, so at a
+  statement in scope whose inner statement the inner verifier can accept, the prover runs the inner rounds wherever
+  every answer is a coin's bytes and none a bad coin (`stopsRec_live`, `halted_live`). The compiled verifier's own
+  answers are coins' bytes, so `uncoinedAt` costs completeness nothing.
 * **The reference prover** (`refPStop`): `refP`, except that from the first round at whose start the stop holds (read
   before each inner and staging round and after the last, `stopRounds`) it sends the empty message, as `SimStop` does
   (`refPStop_halted`, `refPStop_live`).
@@ -60,6 +65,11 @@ def badAt (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : Prop :=
 /-- The rounds whose starts the stop is read at, and the one after: the inner rounds of `IV` and the staging round. -/
 def stopRounds (IV : Claims.Verifier Coin) (x : Claims.Msg) : ℕ := IV.k (xIOf x) + kS x
 
+/-- **An answer before the sessions is not a coin's bytes**: among the inner and staging rounds of `ms`, the verifier
+answered one with something other than `.msg c.bytes`. -/
+def uncoinedAt (IV : Claims.Verifier Coin) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : Prop :=
+  ∃ p ∈ ms.take (stopRounds IV x), ∀ c : Coin, p.2 ≠ Claims.Out.msg c.bytes
+
 /-- **Some part's staged numbers are not `nums`'** once `ms` has passed the inner and staging rounds: the compiled
 verifier refuses that part's session (`ract`). -/
 def mismatchAt (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) :
@@ -75,12 +85,13 @@ def unreadyAt (IV : Claims.Verifier Coin) (st : Stage) (x : Claims.Msg) (ms : Li
 
 open Classical in
 /-- **The deployed stop** at the statement `x` and the transcript `ms`: out of scope or an inner statement the inner
-verifier can't accept at SHA-512 (read off the statement), an inner zerocheck outer coin at `1`, or a part's staged
-V\* statement the masked verifier can't accept or whose numbers are not the statement's. -/
+verifier can't accept at SHA-512 (read off the statement), an answer before the sessions that is not a coin's bytes,
+an inner zerocheck outer coin at `1`, or a part's staged V\* statement the masked verifier can't accept or whose
+numbers are not the statement's. -/
 noncomputable def stopsRec (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (st : Stage) (x : Claims.Msg)
     (ms : List (Claims.Msg × Claims.Out)) : Bool :=
-  !scopeCheck ivScope x || !FlockComplete.ready FlockDeploy.sha512 (xIOf x) || decide (badAt x ms) ||
-    decide (unreadyAt IV st x ms) || decide (mismatchAt IV st x ms)
+  !scopeCheck ivScope x || !FlockComplete.ready FlockDeploy.sha512 (xIOf x) || decide (uncoinedAt IV x ms) ||
+    decide (badAt x ms) || decide (unreadyAt IV st x ms) || decide (mismatchAt IV st x ms)
 
 /-- **The reference prover with the deployed stop**: `refP`, except that once `stopsRec` has held at the start of a
 round up to `stopRounds` it sends the empty message. -/
@@ -168,33 +179,44 @@ theorem halted_of_statement (IV : Claims.Verifier Coin) (ivScope : Claims.Msg �
 
 /-! ## The stop doesn't fire everywhere in scope -/
 
-/-- **Before the staging round the stop fires only at a bad inner coin**, at a statement in scope whose inner
-statement the inner verifier can accept at SHA-512: the readiness and the numbers of the staged statements are read
-only past the staging round. -/
+/-- **Every answer of `ms` is a coin's bytes**, as the compiled verifier sends them. -/
+def Coined (ms : List (Claims.Msg × Claims.Out)) : Prop := ∀ p ∈ ms, ∃ c : Coin, p.2 = Claims.Out.msg c.bytes
+
+theorem not_uncoinedAt (IV : Claims.Verifier Coin) (x : Claims.Msg) {ms : List (Claims.Msg × Claims.Out)}
+    (hc : Coined ms) : ¬ uncoinedAt IV x ms := fun ⟨p, hp, hn⟩ =>
+  let ⟨c, hpc⟩ := hc p (List.mem_of_mem_take hp)
+  hn c hpc
+
+theorem Coined.take {ms : List (Claims.Msg × Claims.Out)} (hc : Coined ms) (i : ℕ) : Coined (ms.take i) :=
+  fun p hp => hc p (List.mem_of_mem_take hp)
+
+/-- **Before the staging round the stop fires only at an answer that is not a coin's bytes or a bad inner coin**, at a
+statement in scope whose inner statement the inner verifier can accept at SHA-512: the readiness and the numbers of
+the staged statements are read only past the staging round. -/
 theorem stopsRec_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (st : Stage) (x : Claims.Msg)
     (ms : List (Claims.Msg × Claims.Out)) (hs : scopeCheck ivScope x = true)
     (hr : FlockComplete.ready FlockDeploy.sha512 (xIOf x) = true) (hl : ms.length < stopRounds IV x)
-    (hb : ¬ badAt x ms) : stopsRec IV ivScope st x ms = false := by
+    (hc : Coined ms) (hb : ¬ badAt x ms) : stopsRec IV ivScope st x ms = false := by
   have hu : ¬ unreadyAt IV st x ms := fun h => absurd h.1 (by omega)
   have hm : ¬ mismatchAt IV st x ms := fun h => absurd h.1 (by omega)
-  simp [stopsRec, hs, hr, hb, hu, hm]
+  simp [stopsRec, hs, hr, not_uncoinedAt IV x hc, hb, hu, hm]
 
 /-- **The prover with the stop runs the inner rounds**: at a statement in scope whose inner statement the inner
-verifier can accept at SHA-512, before the staging round and where no prefix of the transcript holds a bad inner
-coin, the reference prover hasn't stopped. -/
+verifier can accept at SHA-512, before the staging round, where every answer is a coin's bytes and no prefix of the
+transcript holds a bad inner coin, the reference prover hasn't stopped. -/
 theorem halted_live (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
     (nAt : Claims.Msg → ℕ → ℕ)
     (innerMsg : Claims.Msg → List (Claims.Msg × Claims.Out) → List Claims.Msg → Claims.OC Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out))
     (hs : scopeCheck ivScope x = true) (hr : FlockComplete.ready FlockDeploy.sha512 (xIOf x) = true)
-    (hl : ms.length < stopRounds IV x) (hb : ∀ i ≤ ms.length, ¬ badAt x (ms.take i)) :
+    (hl : ms.length < stopRounds IV x) (hc : Coined ms) (hb : ∀ i ≤ ms.length, ¬ badAt x (ms.take i)) :
     (deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (stopRounds IV x) x ms = false := by
   unfold Claims.Recursion.StopDeploy.halted
   refine List.any_eq_false.2 fun i hi => ?_
   have hi' : i ≤ ms.length := by have := List.mem_range.1 hi; omega
   change ¬ stopsRec IV ivScope b.st x (ms.take i) = true
-  rw [stopsRec_live IV ivScope b.st x (ms.take i) hs hr (by rw [List.length_take]; omega) (hb i hi')]
+  rw [stopsRec_live IV ivScope b.st x (ms.take i) hs hr (by rw [List.length_take]; omega) (hc.take i) (hb i hi')]
   exact Bool.false_ne_true
 
 /-! ## The claim at `deployRecStop` -/
