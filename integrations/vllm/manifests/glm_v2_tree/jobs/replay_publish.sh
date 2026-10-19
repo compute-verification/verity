@@ -7,11 +7,11 @@
 # r20261019-123645-e69d), so a row's ranks split over concurrent jobs on one node, RANKS=0,1,2,3 and RANKS=4,5,6,7 (each fetches
 # its ranks' bundles, replays them, and exits 0 while ranks remain); the job without RANKS then folds the Commit if no RANKS job
 # did, and publishes.
-#   research run --on vy-nebius-cpu-3 --mem-gb 280 --mem-wait 28800 --timeout 16h --custody-ttl 24h --cwd clone --project verity --send bundles.json -- env ROW=... BUILD_ART=art:... MATCH_RUN=... COMMIT_RUN=... TREE_SHA=... BF16_ART=art:... bash integrations/vllm/manifests/glm_v2_tree/jobs/replay_publish.sh
-# env: ROW, BUILD_ART, MATCH_RUN, COMMIT_RUN, TREE_SHA (the Commit's tree), BF16_ART (cap_bf16_v6.sh's capture),
+#   research run --on vy-nebius-cpu-3 --mem-gb 280 --mem-wait 28800 --timeout 16h --custody-ttl 24h --cwd clone --project verity --send bundles.json -- env ROW=... BUILD_ART=art:... MATCH_RUN=... COMMIT_RUN=... BF16_ART=art:... bash integrations/vllm/manifests/glm_v2_tree/jobs/replay_publish.sh
+# env: ROW, BUILD_ART, MATCH_RUN, COMMIT_RUN, BF16_ART (cap_bf16_v6.sh's capture),
 #      [RANKS], [SW=/workspace/cp/circuits/glm-v2/rows], [REF=cursor/glm-v2-21f3], [CK], [REPLAY_WORKERS=24].
 set -uo pipefail
-: "${ROW:?ROW}" "${BUILD_ART:?BUILD_ART}" "${MATCH_RUN:?MATCH_RUN}" "${COMMIT_RUN:?COMMIT_RUN}" "${TREE_SHA:?TREE_SHA}" "${BF16_ART:?BF16_ART}"
+: "${ROW:?ROW}" "${BUILD_ART:?BUILD_ART}" "${MATCH_RUN:?MATCH_RUN}" "${COMMIT_RUN:?COMMIT_RUN}" "${BF16_ART:?BF16_ART}"
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
 REF=${REF:-cursor/glm-v2-21f3}
 SW=${SW:-/workspace/cp/circuits/glm-v2/rows}
@@ -23,8 +23,7 @@ B=$RESEARCH_RUN_DIR/inputs/bundles.json
 [ -s "$B" ] || { echo "no inputs/bundles.json (commit.sh's \$OUT/bundles.json): --send it"; exit 2; }
 [ -e "$CK/.verified" ] || { echo "no verified checkpoint at $CK"; exit 2; }
 [ -s "$D/manifest.json" ] && [ -d "$D/build" ] || { echo "no Build of record in $D: copy it in first"; exit 2; }
-[ "$(cat "$SW/$ROW.tree" 2>/dev/null)" = "$REF@$TREE_SHA" ] && [ "${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}" = "$TREE_SHA" ] ||
-  { echo "$ROW is at $(cat "$SW/$ROW.tree" 2>/dev/null || echo '(no tree file)'); this job runs at ${RESEARCH_SOURCE_SHA:-?} and was given TREE_SHA=$TREE_SHA: a row's jobs run at one tree"; exit 2; }
+source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" || exit 2
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
 [ -f "$C/cred.json" ] || { echo "no custody key at $C"; exit 4; }
 (cd "$TREE/integrations/vllm" && WORK=$W0 VENV=$W0/venv312 HF_HOME=$W0/hf bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$OUT/bootstrap") \
@@ -83,7 +82,7 @@ CONF=(
   --conformance "glm53_bf16_gemm_capture=$BF16_ART"
 )
 cd "$TREE/integrations/vllm"
-$PY -m verity_vllm.pipeline.cli records publish "$D" "$ROW" --build "$BUILD_ART" --tree "$REF@$TREE_SHA" --by circuits --tier heavy \
+$PY -m verity_vllm.pipeline.cli records publish "$D" "$ROW" --build "$BUILD_ART" --tree "$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}" --by circuits --tier heavy \
   --match-run "$MATCH_RUN" --commit-run "$COMMIT_RUN" "${CONF[@]}" 2>&1 | tee "$OUT/publish.out"
 prc=${PIPESTATUS[0]}
 git -C "$TREE" diff -- integrations/vllm/manifests/records.json >"$OUT/records_json.diff"

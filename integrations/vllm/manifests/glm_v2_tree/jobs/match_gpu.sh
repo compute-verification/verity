@@ -15,9 +15,7 @@ TREE=$PWD
 D=$SW/$ROW
 mkdir -p "$SW" || exit 3
 [ -z "$(ls -A "$D/match" 2>/dev/null)" ] || { echo "$D/match is not empty: this row dir already ran a Match"; exit 3; }
-T=$SW/$ROW.tree AT=$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
-if [ -s "$T" ]; then [ "$(cat "$T")" = "$AT" ] || { echo "$ROW is at $(cat "$T"), not $AT: a row's jobs run at one tree (remove $T to restart the row)"; exit 2; }
-else echo "$AT" >"$T"; fi
+source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" first || exit 2
 nvidia-smi --query-gpu=index,memory.used --format=csv,noheader | tee "$OUT/gpus_at_start.txt"
 df -h /workspace | tail -1 | tee "$OUT/disk_at_start.txt"
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody

@@ -6,15 +6,17 @@
 #      (aot_neutrality.out).  A PASS means this tree's AOT Build emits the pinned Programs.
 #   2. `verity-vllm neutrality ROW --tier heavy` (`row run --stages build --build-construction trace --build-programs-only=1`):
 #      this tree's traced Build against the pins (did v2 move a Program in the trace?).
-#   3. only when 1 or 2 did not reproduce the pins: `predict compare` of this tree's predictor against this tree's trace, and the
+#   3. only when 1 or 2 did not reproduce the pins: the trace preserved (trace_art.sh: $OUT/trace_art.txt, the moved row's
+#      `records switch --trace`), and side by side `predict compare` of this tree's predictor against this tree's trace and the
 #      AOT Build again against it (`--aot-trace`), with its digests against the trace's (aot2_vs_trace.json).
+# SKIP_AOT1=1 skips 1 for a row already known to move (every derive of it is refused only after its whole emission).
 # The pinned vLLM imports libcuda.so.1 even on the meta device: on a node without a driver, CUDA_DRIVER_DIR (W/cuda-driver, the H200
 # hosts' 580.173.02 library) goes on LD_LIBRARY_PATH; no device is opened.  The CPU venv and checkpoint metadata are the ones
 # aot_build_rm.sh (WS-E) keeps on vy-glm53-cpu-2 under W.  Row dirs stay on the node (kept 5d).
-# env: ROW, [W (/workspace/cp/circuits)], [BUDGET_GB (100)], [WORKERS (2)], [SKIP_TRACE=1].  cwd: the source root.
+# env: ROW, [W (/workspace/cp/circuits)], [BUDGET_GB (100)], [WORKERS (2)], [SKIP_TRACE=1], [SKIP_AOT1=1].  cwd: the source root.
 # outputs: aot_chain.out, aot_build_summary.json, aot_row.json, aot_neutrality.out; neutrality.out, neutrality.json,
 # build_summary.json, trace.tgz (build_summary.json and every build/rank*/build_*/result.json), rowdir.txt; when moved:
-# comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json.
+# trace_art.txt, comparison.json, compare.err, aot2_chain.out, aot2_build_summary.json, aot2_vs_trace.json.
 set -uo pipefail
 : "${ROW:?ROW}"
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
@@ -64,11 +66,16 @@ aot() {  # aot TAG SWEEP [--aot-trace DIR]: the AOT Build, Programs only, as a v
 }
 
 A1=$SW/aot
-aot aot "$A1"; arc=$?
-"$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --compare --out "$A1" >"$OUT/aot_neutrality.out" 2>&1; anrc=$?
-tail -12 "$OUT/aot_neutrality.out"
-echo "AOT Build against the pinned trace: rc $arc; its digests against the pins: $([ $anrc = 0 ] && echo NEUTRAL || echo MOVED)"
-[ -n "${SKIP_TRACE:-}" ] && { [ $arc = 0 ] && [ $anrc = 0 ] && exit 0; exit 9; }
+if [ -n "${SKIP_AOT1:-}" ]; then
+  arc=skipped anrc=skipped
+  echo "AOT Build against the pinned trace: skipped (SKIP_AOT1)"
+else
+  aot aot "$A1"; arc=$?
+  "$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --compare --out "$A1" >"$OUT/aot_neutrality.out" 2>&1; anrc=$?
+  tail -12 "$OUT/aot_neutrality.out"
+  echo "AOT Build against the pinned trace: rc $arc; its digests against the pins: $([ $anrc = 0 ] && echo NEUTRAL || echo MOVED)"
+fi
+[ -n "${SKIP_TRACE:-}" ] && { [ "$arc" = 0 ] && [ "$anrc" = 0 ] && exit 0; exit 9; }
 
 /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli neutrality "$ROW" --tier heavy --out "$SW" \
   --row-flag=--build-ram-budget-gb=$B >"$OUT/neutrality.out" 2>&1
@@ -80,18 +87,20 @@ for f in stages.txt row.log build_summary.json; do cp "$D/$f" "$OUT/" 2>/dev/nul
 echo "$D" >"$OUT/rowdir.txt"
 grep -q '^build PASS' "$D/stages.txt" 2>/dev/null || { echo "the traced Build did not pass (neutrality rc $nrc): $(grep '^build ' "$D/stages.txt" | tail -1 | cut -c1-300)"; exit 7; }
 (cd "$D" && tar czf "$OUT/trace.tgz" build_summary.json $(ls -d build/rank*/build_*/result.json 2>/dev/null))
-if [ $arc = 0 ] && [ $anrc = 0 ] && [ $nrc = 0 ]; then
+if [ "$arc" = 0 ] && [ "$anrc" = 0 ] && [ $nrc = 0 ]; then
   echo "v2 moves no Program of $ROW: its AOT Build emits the pins, and its trace is them"; exit 0
 fi
+[ $nrc = 0 ] || (ROW=$ROW D=$D bash "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/trace_art.sh") || echo "the trace was not preserved (trace_art.sh)"
 
 /usr/bin/time -v "$PY" -m verity_vllm.pipeline.cli predict compare "$D" --row "$ROW" \
-  --config verity_vllm/engine/profiles/hf_configs/GLM53.config.json --out "$OUT/comparison.json" --workers "${WORKERS:-2}" 2>"$OUT/compare.err"
-crc=$?
+  --config verity_vllm/engine/profiles/hf_configs/GLM53.config.json --out "$OUT/comparison.json" --workers "${WORKERS:-2}" 2>"$OUT/compare.err" &
+cpid=$!
+A2=$SW/aot2
+aot aot2 "$A2" --aot-trace "$D"; a2rc=$?
+wait $cpid; crc=$?
 grep -E "Elapsed|Maximum resident" "$OUT/compare.err"
 "$PY" -c 'import json,sys; d=json.load(open(sys.argv[1])); print("predict compare equal:", d.get("equal"))' "$OUT/comparison.json" 2>/dev/null
 [ "$crc" = 0 ] || { echo "neutrality rc $nrc, predict compare rc $crc: the predictor does not give this tree's trace"; exit 8; }
-A2=$SW/aot2
-aot aot2 "$A2" --aot-trace "$D"; a2rc=$?
 "$PY" - "$D" "$A2/$ROW" "$OUT/aot2_vs_trace.json" <<'EOF'
 import json, sys
 from pathlib import Path

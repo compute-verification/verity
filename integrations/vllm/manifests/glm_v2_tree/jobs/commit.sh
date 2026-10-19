@@ -15,7 +15,7 @@ SW=${SW:-/workspace/cp/circuits/glm-v2/rows}
 TREE=$PWD
 TREE_SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
 D=$SW/$ROW
-[ "$(cat "$SW/$ROW.tree" 2>/dev/null)" = "$REF@$TREE_SHA" ] || { echo "$ROW is at $(cat "$SW/$ROW.tree" 2>/dev/null || echo '(no tree file)'), not $REF@$TREE_SHA: a row's jobs run at one tree"; exit 2; }
+source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" || exit 2
 test -s "$D/manifest.json" || { echo "no manifest.json in $D: copy the Build of record in first"; exit 2; }
 test -s "$D/match/tp2_match.json" || { echo "no match/tp2_match.json in $D: copy the passing Match in first"; exit 2; }
 [ ! -s "$D/commit/summary.json" ] || { echo "$D/commit already holds a Commit (summary.json)"; exit 3; }

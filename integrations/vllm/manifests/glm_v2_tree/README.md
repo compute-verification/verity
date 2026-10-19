@@ -59,14 +59,19 @@ wrote (T1's B1 legs: 104 GB, 1.1M files, about 11 min). The GPU jobs are submitt
 each waits for its GPUs on eu's lease, so a window runs back to back. eu is held only for a window: the lease, and the node, are
 released where a CPU phase sits between (CIR-51).
 
-A row is built, served and judged at one tree, the one its record cites (`records publish --tree` is not checked against the
-stage runs): its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, the copies carry it, and every
-later job of the row refuses another tree. Once the branch moves past a row's tree, that row's later jobs are launched from a
-worktree at it (`git worktree add /tmp/glm-v2-SHA SHA`); a PR head merged after window A starts reaches a row only by rerunning it.
+A row is built, served and judged by one code tree (`records publish --tree` is not checked against the stage runs):
+its first job writes `<row>.tree` (`cursor/glm-v2-21f3@SHA`) beside the row dir, the copies carry it, and every later job
+(`jobs/tree_guard.sh`) runs at that commit or at a descendant that changes only `manifests/records.json` and this directory.
+Only the Build and publish read a row's pins, so a moved row's re-pin may land between its Match GPU legs and its Build of
+record. A PR head merged after a row's first job reaches that row only by rerunning it; its later jobs are launched from a
+worktree at a commit the guard accepts (`git worktree add /tmp/glm-v2-SHA SHA`).
 
 1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row on vy-glm53-cpu-2 (the AOT Build of record:
-   predict emit refused unless equal to the row's `aot.trace` Build, with its manifest), `AOT_TRACE=<the v2 trace>` for a row whose
-   rehearsal moved a Program (that row is re-pinned with its comparison first).
+   predict emit refused unless equal to the row's `aot.trace` Build, with its manifest). A row this tree moves is re-pinned
+   first, since its AOT Build reads its trace and comparison from `records.json`: `trace_compare.sh` (`SKIP_AOT1=1` once the row
+   is known to move) traces it, preserves the trace (`trace_art.sh`), and compares this tree's predictor with it beside an AOT
+   Build against it; `repin.sh ROW RUN` then re-pins the row to the trace and switches it to that comparison, committed as
+   "re-pin ROW", and `build_record.sh` runs at that commit (`AOT_TRACE=<the rehearsal's row dir>` on cpu-2 saves the fetch).
 2. Window A, eu (`gpu_batch.sh a`): the four rows' Match GPU legs (`match_gpu.sh`). They need no Build: the capture's
    `--build-rank` registers a Build's post-load tensors, and GLM-5.3 has no model-level post-load hook (`loader_parity`). T1R takes
    the bf16 v6 capture (`BF16_ART`, from `verity-vllm records capture RUN`) and the G2 point (`benchmarks/served_commit/tp_decode.sh`,

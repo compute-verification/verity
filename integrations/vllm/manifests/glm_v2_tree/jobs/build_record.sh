@@ -16,9 +16,7 @@ TREE=$PWD
 D=$SW/$ROW
 [ ! -e "$D/build_summary.json" ] || { echo "$D already holds a Build"; exit 3; }
 mkdir -p "$SW" || exit 3
-T=$SW/$ROW.tree AT=$REF@${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD)}
-if [ -s "$T" ]; then [ "$(cat "$T")" = "$AT" ] || { echo "$ROW is at $(cat "$T"), not $AT: a row's jobs run at one tree (remove $T to restart the row)"; exit 2; }
-else echo "$AT" >"$T"; fi
+source "$TREE/integrations/vllm/manifests/glm_v2_tree/jobs/tree_guard.sh" && tree_guard "$ROW" "$SW" "$REF" first || exit 2
 SNAP=$W0/hf/hub/models--zai-org--GLM-5.3/snapshots/$REV
 [ -s "$SNAP/config.json" ] && [ -s "$SNAP/model.safetensors.index.json" ] || { echo "no GLM-5.3 metadata at $SNAP"; exit 3; }
 C=$(dirname "$(dirname "$RESEARCH_RUN_DIR")")/requests/$RESEARCH_RUN_ID/custody
