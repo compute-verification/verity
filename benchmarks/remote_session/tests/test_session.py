@@ -675,6 +675,17 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
 
 
+def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_verdicts_from_both_verifiers():
+    """`node.py --overlap-openings`: the prover opens each window as its draws arrive instead of after its last pass,
+    so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
+    and the dropper rejected, with no disagreement."""
+    pace = verifier.pace_of("1:4:40:2", 1.0)
+    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False)
+    assert r["verdict"] == "both" and r["disagreement"] is None and r2["disagreement"] is None
+    assert r["accepted"] and pr["accepted"] and len(r["lean_check_ns"]) == r["windows"] == 12
+    assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
+
+
 def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_snapshot_does_not():
     """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
     group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
