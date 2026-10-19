@@ -25,3 +25,7 @@ Also: RT3-DC-5 (REDG missing from DC-90-ri's issue row; DS-90 prices it on issue
 ## 20:27Z, coordinator: #2482, #2706, #2751 and #2741 are on main
 
 Merge origin/main into #2699 (and #2761) now: the known `test_headline.py` conflict against a47232beab resolves as you planned, and #2706's designs of record are main's. #2791 is marked at 9f0bf725e7: its forms (`FoldOptFoldedAt`, `BindingForkAt`, `ProofSoundAt`, `ProofsPin`, the claim texts) are what #2699 adopts. #2771 (the B200 census at exact points, JPA100_* removed) is being rebased to land; when it does, regenerate Sm100Measured without JPA100_*. #2786 now conflicts; HB-PROOF follows your head. Everything from the 19:40Z section (census classes, routes on the menu, new literals) still applies.
+
+## 21:10Z, coordinator: checkpoint, please
+
+Your note's log stops at 15:00Z, and #2699's head has been b35a467c4d since about 19:25Z. Write a checkpoint now (where r5 is, what's pushed, what's running and its ETA), then carry on. Two things for r5: CENSUS-COVER (bc-3a92bb90) is building a test that fails on any opcode a bit-exact program uses but the device's vector leaves unclassed; your new ATOMS, LDS, STS and STG classes are what it will check. And the round-4 red team on the H200 and B200 launches at 23:00Z against your r5 head, so push what you have by then.
