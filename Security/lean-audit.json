@@ -714,6 +714,12 @@
    "assumptions": [],
    "type_hash": "9f32b1518e7568f66dd5b15626aafc11e36c5056621c7d221b4210b049859b8d"
   },
+  "Accounting.SecurityProofs.Actual.WindowsAt": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Actual.WindowsAt.{u_2, u_3} : Accounting.Guarantees.Actual.WindowsAt"],
+   "assumptions": [],
+   "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
+  },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.B2.{u_1, u_2} : Accounting.Guarantees.B2"],
@@ -5593,7 +5599,8 @@
    "Nci.SecurityProofs.InfoOfState": "frozen (no-function): It is about an arbitrary declaration and a set of its gates whose novel reads are a state and an ingress, not about any verifier's code; a physical premise on a node's windows (Accounting.Guarantees.Actual.Windows) is what would give it an acceptance.",
    "Nci.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
-   "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one."
+   "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
+   "Accounting.SecurityProofs.Actual.WindowsAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5629,8 +5636,11 @@
  },
  "reads": {
   "Definitions.Accounting.Actual": {
-   "digest": "501597b1939d2b6298104b1d71568eb15f3d1be16861e311fb16a0c7b693f6fe",
+   "digest": "babe67dac921e6075033ad773accdd9fb5959f1225fbd8703c27f5c1760f8f24",
    "definitions": {
+    "Accounting.Cuts": "13afad32e3be90cdd3bf337bf435eec1509ed08d9e1e637dbcd75a2b2b3fae91",
+    "Accounting.Cuts.J": "13ecd2c6554a6595c50f0c1f5b2eeeb2e6ecf3f69dee31f98c7456c0eca1248c",
+    "Accounting.Cuts.τ": "d34ec0cb9f96f56d60f50cfcb75b6e0f7d226e17c332f492827f1bcae9036c88",
     "Accounting.Placed": "8e88821bb1082b7132148634f8e1329a4e2b57af20bc00f6c57ad1a0dee06ce0",
     "Accounting.Placed.Faithful": "dd1c3dc448a9eec6faab34e7ee7b67c139aa2282fd3d8aa4667febba871c3bb4",
     "Accounting.Placed.Holding": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab",
@@ -5640,6 +5650,7 @@
     "Accounting.Placed.ingress": "3340b0af72432101da54dfbed17f8014fa047f69c4e7940a355dc5cdcf057c96",
     "Accounting.Placed.region": "9a00e0b16d67d8bb6a52b3d1ecb4337ea0891720392913f218ce04de54c9efb9",
     "Accounting.Placed.state": "947a5efbb5f3e50de4ecc5bf17d54a8105af813f589323646b617947283c8b0e",
+    "Accounting.Placed.stateIn": "e22559e7c65ce97ec45ed2d5b235624cff813317c3bf39f4914035cf41b456b2",
     "Accounting.Placed.t": "18a96559a967f791a812307b287978fd44ff6d3c23193444916713641f88c886",
     "Accounting.Placed.toCircuit": "6dc6235d50e828728aad7f1c9148e590896d9e45e87efd949cfa7943dd049cb6",
     "Accounting.Placed.work": "eb78b65c4ca6a9d95046e9d9f606a3bee05154e7f5448c8559c1ca90561de1db",
@@ -5651,6 +5662,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -6151,6 +6163,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered"
    ]
@@ -7571,6 +7584,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -7635,6 +7649,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.Actual.WindowsAt",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -7736,6 +7751,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.Actual.WindowsAt",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTraining",
@@ -7917,11 +7933,16 @@
    ]
   },
   "Definitions.Nci.Reads": {
-   "digest": "c3c240e59ed9edb472fbe4005f08c7f4b68d4fb7cea86dfa5d35e989587fb439",
+   "digest": "ea861ee96af5b3f36899e1ad16651717b7aede9bf1cdf2273f53e091ed1eac19",
    "definitions": {
-    "Nci.readFactor": "427aa147343137e4df8ca0791a21530052e928f25b6372e268c4d65181ca7385"
+    "Nci.readFactor": "427aa147343137e4df8ca0791a21530052e928f25b6372e268c4d65181ca7385",
+    "Nci.readsIn": "a184dff9a7ff279a3b84710ae806d6ce87cf6bcb709d05b9b44d1361ed5f37af"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Nci.SecurityProofs.UpdatedMatMulReads"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
   },
   "Definitions.Nci.Support": {
    "digest": "b466f060ad2fdf2d08c1efb55eca1519099dd9e35430c624e678cad47d21d303",
@@ -17036,12 +17057,17 @@
    ]
   },
   "Models.Accounting.Guarantees.Actual": {
-   "digest": "b37ea97d0378f3085e9c3151a63dca01ffe0aa5dba3d2319dd394170d5547672",
+   "digest": "1beac18716c243f84629c7971bed42665b32b318c9c4de68668daaea23880891",
    "definitions": {
     "Accounting.Guarantees.Actual.Runtime": "fc51137e65590878b9589eb9f35c83ab5f62cc45f9bff771b2b08b7937cde60b",
-    "Accounting.Guarantees.Actual.Windows": "650149982dfcc10c00acf77ec132181d05eb13496e435fcd1407502178e39753"
+    "Accounting.Guarantees.Actual.Windows": "650149982dfcc10c00acf77ec132181d05eb13496e435fcd1407502178e39753",
+    "Accounting.Guarantees.Actual.WindowsAt": "86e3469901168a52413ecd0a396b7331e17f01a215550ec8245be3bc56008703"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Accounting.SecurityProofs.Actual.Windows"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.Windows",
+    "Accounting.SecurityProofs.Actual.WindowsAt"
+   ]
   },
   "Models.Accounting.Guarantees.Actual.Threaded": {
    "digest": "89b9f4e4d04286c83dd88cb31e7625a4bd39c689fc4d9f7f38c17b2e3fc10f38",

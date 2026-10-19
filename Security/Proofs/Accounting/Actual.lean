@@ -17,16 +17,18 @@ import Proofs.Accounting.Actual.Source
 The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security/Definitions/Accounting/Actual.lean`):
 
 * `Actual/Split.lean`: what a region reads from outside itself is what its location carried in plus what crossed its
-  boundary.
+  boundary, and so in any set of gates.
 * `Actual/Physical.lean`: causality at any latency makes wires run forward in time inside every location; under
   `Links`, ingress and egress are at most `β_X` a tick; compute rate at a pricing of at least one per gate bounds the
-  gates.
-* `Actual/Windows.lean`: `Windows`, the capacity form: the windows divide the developer's region into IUs of at most
-  `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
+  gates; the state is its part in a set of gates plus its part outside.
+* `Actual/Windows.lean`: `WindowsAt`, the capacity form at any cuts and with no memory constraint: the windows divide
+  the developer's region into IUs of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at most the state's
+  part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and `G = univ`, IUs of at
+  most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
-  plus its ingress, from `Windows` pulled back through the containment and NCI's `ThreadedReads` per window;
+  plus its ingress, from `WindowsAt` pulled back through the containment and NCI's `ThreadedReads` per window;
   `ThreadedRate`, at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted
   multiplications a tick; `ThreadedRuntimeDark`, the cap through a partial containment, with every counted
   multiplication the declaration doesn't compute a dark gate.
