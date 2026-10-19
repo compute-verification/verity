@@ -36,6 +36,9 @@ from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment
                                                            weigh)
 
 DELTA = 2.0 ** -40
+#: ε is skipped work, so harm is the work alone: every template the planner draws here does work, and the zero-work ones
+#: sit at their floor outside it (`zero_work_cost`), which the planner would refuse
+WORK = Objective(DELTA, bits=0.0)
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)
 WINDOWS = {"round": 1, "hour": 3600 / 12.6, "day": 86400 / 12.6, "week": 48_000}
 TARGETS = (1e-3, 1e-4)
@@ -204,7 +207,7 @@ def run(v: dict, window: str = "week", *, model_name: str = "llama-3.1-8b", sche
     w = workload(v, WINDOWS[window], m)
     costs = model(v, fit_, w["replay_units"], commitments=serve(v, m, scheme, w, kv=kv), commit=commit,
                   statement=statement)
-    objective = Objective(DELTA)
+    objective = WORK
     cands, alts, hints = candidates(w, costs, objective, cut_grid)
     plans = frontier(cands, costs, objective, grid=grid, exact=False)
     return fit_, w, costs, objective, cands, alts, hints, plans
@@ -239,7 +242,7 @@ def forced(w: dict, grain: int | None) -> list[Candidate]:
 def breakeven(v: dict, model_name: str, scheme: str | None, *, kv: bool = False) -> list[dict]:
     """Per regime, window and ε: B with the linears forced to each grain, and the cheapest grain."""
     m = MODELS[model_name]
-    fit_, objective, rows = fitted(v), Objective(DELTA), []
+    fit_, objective, rows = fitted(v), WORK, []
     for regime, commit, statement in REGIMES:
         for window, rounds in WINDOWS.items():
             w = workload(v, rounds, m)

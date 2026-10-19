@@ -25,10 +25,15 @@ A template's costs are measured (`TemplateCost`) or derived from the model's rat
 rows a proved unit opens (`row_ands`).
 
 **Sweep.**  The note's Lagrangian: one density `lam` on every template (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
-weight of the template's block kind, 1 unless the plan weighs kinds), some templates at their floor only, some proved
-whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a unit
-cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
-`weigh` chooses the kinds' weights at a target, under the same stratified certificate.
+weight of the template's block kind, 1 unless the plan weighs kinds), some templates that change no value (no output bits)
+at their floor only, some proved whole, and the cut per op type and the statement size each the cheapest at that `lam`.
+With no statement cost and a unit cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates,
+`q_s = min(1, ln(1/delta) w_s / C)`.  `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
+
+**Floor.**  A template that changes values never sits at its floor: drawn `floor` of its n_s units whatever the density, a
+wrong unit escapes with 1 - floor / n_s, so its undetected pool grows with the fleet (register row P5).  The default
+objective weighs every unit's output bits beside its work, and a plan that would hold a value-changing template at its
+floor, at zero harm or among the floor-only templates, is refused (`refuse_floor`).
 
 **Policies.**  An objective may carry policies instead (`Policy`: a public cost per unit, an amplification and a target,
 note:proofs/20261018T2305Z-draft-iop-core-objects's tier 2).  A unit's harm is then the largest share of a target it
@@ -240,12 +245,14 @@ class Policy:
 class Objective:
     """The harm a wrong unit does: `work` times its credited work and influence plus `bits` times its output bits, or,
     given `policies`, the largest share of a policy's target it spends, so that a plan certifying harm at most 1 meets
-    every policy (the draw is weighted by the envelope of the policies' costs).  No target: targets and budgets are
-    queries on the frontier.  Every template draws at least `floor` units."""
+    every policy (the draw is weighted by the envelope of the policies' costs).  Both weigh 1 by default, so a unit that
+    changes values does harm whether or not it credits work; `bits=0.0` is the work alone, for populations whose every
+    value-changing template does work (`refuse_floor`).  No target: targets and budgets are queries on the frontier.
+    Every template draws at least `floor` units."""
 
     delta: float
     work: float = 1.0
-    bits: float = 0.0
+    bits: float = 1.0
     floor: int = 1
     policies: tuple[Policy, ...] = ()
 
@@ -285,7 +292,7 @@ class Certificate:
 @dataclass(frozen=True)
 class Plan:
     """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per template, the templates
-    held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
+    held at their floor (none with output bits) and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
     `total` everything), each block kind's weight on the density (1 when absent), and the certificate once certified."""
 
     lam: float
@@ -432,8 +439,23 @@ def _k(c: Candidate, objective: Objective, lam: float, weight: float = 1.0) -> i
     return min(c.units, max(objective.floor, ceil(min(1.0, lam * weight * objective.harm(c)) * c.units)))
 
 
+def refuse_floor(chosen: Iterable[Candidate], objective: Objective, floor_only: frozenset[str] = frozenset(),
+                 full: frozenset[str] = frozenset()) -> None:
+    """Refuse a plan that holds a template with output bits at its floor, either among `floor_only` or at zero harm,
+    where the density never reaches it, unless it is proved whole."""
+    for c in chosen:
+        if c.out_bits and c.template not in full and (c.template in floor_only or not objective.harm(c) > 0):
+            why = "is held at its floor" if c.template in floor_only else "does no harm under this objective"
+            raise ValueError(
+                f"{c.template!r} changes values ({c.out_bits} output bits) but {why}, so {objective.floor} of its "
+                f"{c.units} units would be drawn however many there are: draw it at its harm's density, its output "
+                f"bits weighed (Objective's default bits=1.0, or a policy pricing its bits or its unit), or fold its ops "
+                f"into the dot-product unit that reads them (a covering cut)")
+
+
 def _plan(chosen: Sequence[Candidate], costs: CostModel, objective: Objective, lam: float,
           floor_only: frozenset[str], full: frozenset[str], weights: Mapping[str, float] | None = None) -> Plan:
+    refuse_floor(chosen, objective, floor_only, full)
     weights = dict(weights or {})
     sizes, statement, parts = {}, {}, {"statements": 0.0, "units": 0.0, "commit": 0.0}
     for c in chosen:
@@ -463,8 +485,8 @@ def _by_op(candidates: Sequence[Candidate]) -> dict[str, dict[str, list[Candidat
 def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel, objective: Objective, lam: float,
               promote: float, weights: Mapping[str, float]) -> list[Plan]:
     """The plans the Lagrangian allows at one density: per op type its cheapest cut, then each prefix of the templates
-    ranked by cost saved per unit of harm conceded at their floor, each with and without promoting to full the templates
-    whose whole proof costs at most `promote` of the plan more."""
+    that change no value ranked by cost saved per unit of harm conceded at their floor, each with and without promoting
+    to full the templates whose whole proof costs at most `promote` of the plan more."""
     def k(c: Candidate) -> int:
         return _k(c, objective, lam, weights.get(c.block, 1.0))
 
@@ -478,7 +500,7 @@ def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel
         drop = template_cost(c, costs, k(c))[0] - template_cost(c, costs, min(c.units, objective.floor))[0]
         return drop / (c.units * objective.harm(c))
 
-    ranked = sorted((c for c in chosen if objective.harm(c) > 0 and k(c) > objective.floor),
+    ranked = sorted((c for c in chosen if not c.out_bits and objective.harm(c) > 0 and k(c) > objective.floor),
                     key=lambda c: (-saving(c), c.template))
     plans = []
     for i in range(len(ranked) + 1):
@@ -515,6 +537,7 @@ def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objec
     weights = dict(weights or {})
     if any(not w > 0 for w in weights.values()):
         raise ValueError("a block kind's weight is positive: hold a kind at its floor by its density, not a zero weight")
+    refuse_floor(candidates, objective)
     ops = _by_op(candidates)
     harms = [objective.harm(c) * c.units for c in candidates if objective.harm(c) > 0]
     if not harms:
@@ -754,5 +777,5 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
 
 __all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "Objective", "Plan", "ReplayDomain",
            "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "for_budget", "for_target", "frontier",
-           "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
-           "template_cost", "touched", "weigh", "work_law"]
+           "needs_benchmark", "overlaps", "perturb", "refuse_floor", "replay_cost", "row_ands", "sensitivity",
+           "structure", "template_cost", "touched", "weigh", "work_law"]

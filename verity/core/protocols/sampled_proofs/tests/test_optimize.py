@@ -1,7 +1,7 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
 bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
 between a partition and a covering, serving's commitment (per unit, and the fixed serve-time total with its overlaps), the
-block kinds' weights, and the sensitivity queries."""
+block kinds' weights, the sensitivity queries, and the floor no template that changes values sits at."""
 
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_tab
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, Policy,
                                                            ReplayDomain, TemplateCost, _hit, _log_miss, _miss, certify,
                                                            density_bound, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, replay_cost, row_ands,
-                                                           sensitivity, template_cost, touched, weigh, work_law)
+                                                           needs_benchmark, overlaps, perturb, refuse_floor, replay_cost,
+                                                           row_ands, sensitivity, template_cost, touched, weigh,
+                                                           work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -60,17 +61,17 @@ def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():
 
 
 def test_a_population_without_harm_has_no_frontier():
-    cands = [Candidate("a", "A", 50, 0, 16)]
+    cands = [Candidate("a", "A", 50, 0, 0)]
     with pytest.raises(ValueError, match="nothing to sample"):
         frontier(cands, CostModel({"A": TemplateCost(unit=1.0)}), Objective(0.01))
 
 
 @pytest.fixture(scope="module")
 def achievability():
-    """Three templates of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work."""
+    """Three templates of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work, harm the work."""
     cands = [Candidate("a", "A", 4000, 1, 16), Candidate("b", "B", 500, 8, 16), Candidate("c", "C", 20, 200, 16)]
     costs = CostModel({c.template: TemplateCost(unit=float(c.work)) for c in cands})
-    objective = Objective(2.0 ** -10)
+    objective = Objective(2.0 ** -10, bits=0.0)
     return cands, objective, for_target(cands, costs, objective, 400.0, by="density", grid=41)
 
 
@@ -100,7 +101,7 @@ def test_policies_draw_the_envelope_of_their_rates():
     cert = plan.certificate
     assert cert.density <= 1.0 and set(cert.policies) == {"work", "control"}
     assert cert.policies["work"] <= work.target and cert.policies["control"] <= control.target
-    assert Objective(2.0 ** -10).harm(cands[2]) == 200 and Objective(2.0 ** -10).binding(cands[2]) == ""
+    assert Objective(2.0 ** -10).harm(cands[2]) == 216 and Objective(2.0 ** -10).binding(cands[2]) == ""
 
 
 def test_the_joint_plan_meets_every_policy_and_one_binds(batched):
@@ -148,13 +149,13 @@ def test_work_law_draws_the_plan_sizes(achievability, batched):
 def batched():
     """C-Flock's shape at small scale: G, many cheap units behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
     unit, at most 4096 units a statement); N, units costing 10 per unit of work and no statement cost; M, 64 heavy units
-    that fit one statement."""
+    that fit one statement.  Harm is the work."""
     cands = [Candidate("gemm", "G", 20000, 100, 16, cap=4096),
              Candidate("norm", "N", 1000, 100, 16),
              Candidate("mix", "M", 64, 50000, 16, cap=64)]
     costs = CostModel({"G": TemplateCost(2.0, 0.016, 0.07), "N": TemplateCost(unit=1000.0),
                        "M": TemplateCost(6.2, 0.0, 0.0125)})
-    objective = Objective(2.0 ** -20)
+    objective = Objective(2.0 ** -20, bits=0.0)
     return cands, costs, objective, frontier(cands, costs, objective, grid=41)
 
 
@@ -173,7 +174,7 @@ def test_frontier_is_monotone_and_certified(batched):
 def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
     cands, costs, objective, plans = batched
     sparse = for_target(cands, costs, objective, 4e5, plans=plans)
-    dense = for_target(cands, costs, objective, 2e5, plans=plans)
+    dense = for_target(cands, costs, objective, 1e5, plans=plans)
     assert sparse.statement_size["G"] == 1 and dense.statement_size["G"] == 4096
 
 
@@ -191,13 +192,40 @@ def _uniform_cost(cands, costs, objective, target) -> float:
 
 
 def test_target_plan_skips_the_costly_template_and_beats_a_uniform_rate(batched):
+    """N's units cost 10 per unit of work.  When N returns nothing (no output bits), the plan at 4e5 concedes all of its
+    harm at the floor; when it changes values it is drawn at the density instead, which costs more."""
     cands, costs, objective, plans = batched
     target = 4e5
-    plan = for_target(cands, costs, objective, target, plans=plans)
+    checks = [replace(c, out_bits=0) if c.template == "N" else c for c in cands]
+    skipping = frontier(checks, costs, objective, grid=41)
+    plan = for_target(checks, costs, objective, target, plans=skipping)
     assert plan.certificate.harm <= target
     assert "N" in plan.floor_only and plan.sizes["N"] == 1 and plan.sizes["M"] == 64
-    assert plan.cost["total"] <= min(p.cost["total"] for p in plans if p.certificate.harm <= target)
-    assert plan.cost["total"] < _uniform_cost(cands, costs, objective, target) / 2
+    assert plan.cost["total"] <= min(p.cost["total"] for p in skipping if p.certificate.harm <= target)
+    assert plan.cost["total"] < _uniform_cost(checks, costs, objective, target) / 2
+    drawn = for_target(cands, costs, objective, target, plans=plans)
+    assert drawn.certificate.harm <= target and not drawn.floor_only and drawn.sizes["N"] > 1
+    assert drawn.cost["total"] > plan.cost["total"]
+    assert not any(p.floor_only for p in plans)
+
+
+def test_a_template_that_changes_values_is_refused_at_its_floor(batched):
+    """Register row P5: a template with output bits held at its floor is drawn once however many units it has, so a wrong
+    unit escapes with 1 - 1/n.  A zero-harm one (an elementwise op that credits no work, under the work alone or a work
+    policy alone) and a floor-only one are refused, the fix named; one proved whole is not at its floor."""
+    cands, costs, objective, plans = batched
+    act = Candidate("act", "Act", 1000, 0, 16)
+    with_act = replace(costs, templates={**costs.templates, "Act": TemplateCost(unit=1.0)})
+    fix = r"draw it at its harm's density, its output bits weighed .* or fold its ops into the dot-product unit"
+    with pytest.raises(ValueError, match=r"'Act' changes values \(16 output bits\) but does no harm .*" + fix):
+        frontier(cands + [act], with_act, objective, grid=41)
+    work = Objective(2.0 ** -20, policies=(Policy("work", 4e5, amplification=8.0, work=1.0),))
+    with pytest.raises(ValueError, match="'Act' changes values"):
+        for_target(cands + [act], with_act, work, 1.0, grid=41)
+    held = replace(plans[len(plans) // 2], floor_only=frozenset({"N"}))
+    with pytest.raises(ValueError, match="'N' changes values .* is held at its floor, so 1 of its 1000 units"):
+        for_budget([held], held.cost["total"], candidates=cands, costs=costs, objective=objective)
+    refuse_floor([act], objective, full=frozenset({"Act"}))
 
 
 def test_for_budget_takes_the_least_harm_affordable_plan(batched):
@@ -319,10 +347,20 @@ def test_covering_wins_sparse_and_partition_wins_once_its_form_units_saturate():
     assert all(p.sizes["Form"] == R for p in plans if p.choice["dot"] == "form")
 
 
-def test_without_influence_the_form_unit_looks_free():
-    plans = frontier(_noised(influence=0), _noised_costs(), Objective(2.0 ** -20), grid=61)
-    assert _crossing(plans)[1] <= 4
-    assert all(p.sizes["Form"] == 1 for p in plans if p.choice["dot"] == "form")
+def test_by_default_a_form_unit_without_influence_does_its_output_bits_of_harm():
+    """Without influence the form unit credits no work, so the work alone would hold it at one draw however many rows
+    there are, and is refused.  The default objective weighs its 16 output bits: it is drawn at the density, never at the
+    floor alone, the certificate counts it and reports its leak."""
+    cands, objective = _noised(influence=0), Objective(2.0 ** -20)
+    with pytest.raises(ValueError, match="'Form' changes values"):
+        frontier(cands, _noised_costs(), Objective(2.0 ** -20, bits=0.0), grid=61)
+    assert objective.harm(cands[0]) == 16 and objective.harm(cands[1]) == W + 16
+    plans = frontier(cands, _noised_costs(), objective, grid=61)
+    form = [p for p in plans if p.choice["dot"] == "form"]
+    assert form and not any(p.floor_only for p in plans)
+    assert all(p.sizes["Form"] == min(R, ceil(min(1.0, p.lam * 16) * R)) for p in form if "Form" not in p.full)
+    assert max(p.sizes["Form"] for p in form) == R > min(p.sizes["Form"] for p in form)
+    assert all(p.certificate.leak is not None and at_most(p.certificate.free_compute, p.certificate.harm) for p in plans)
 
 
 def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
@@ -384,7 +422,7 @@ def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
     weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
     cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
     costs = CostModel({"S": TemplateCost(1.0, 0.0, 0.0), "P": TemplateCost(3.0, 0.0, 0.0)})
-    objective, target = Objective(2.0 ** -20), 192.0
+    objective, target = Objective(2.0 ** -20, bits=0.0), 192.0
     flat = for_target(cands, costs, objective, target, grid=21)
     plan = weigh(cands, costs, objective, target, grid=21, factors=(0.5, 2.0), rounds=2)
     assert dict(flat.sizes) == {"S": 29, "P": 16} and not flat.weights
@@ -395,13 +433,20 @@ def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
 
 
 def test_under_the_density_bound_kinds_keep_equal_weights(batched):
-    """The density bound charges the strata's largest harm per unit of risk, so a draw in proportion to harm is already
-    the cheapest: no weight moves."""
+    """The density bound charges the strata's largest harm per unit of risk, so a draw in proportion to harm, with a
+    stratum conceded at its floor where that pays, is already the cheapest: no weight moves.  When N changes values its
+    concession is refused, and at 1e6 a quarter weight on N buys the same draw: one unit at this size, but one that grows
+    with N's units at the same density."""
     cands, costs, objective, _ = batched
+    checks = [replace(c, out_bits=0) if c.template == "N" else c for c in cands]
     for target in (1e6, 5e4):
-        flat = for_target(cands, costs, objective, target, grid=21, exact=False)
-        plan = weigh(cands, costs, objective, target, grid=21, exact=False)
+        flat = for_target(checks, costs, objective, target, grid=21, exact=False)
+        plan = weigh(checks, costs, objective, target, grid=21, exact=False)
         assert not plan.weights and plan.cost["total"] == flat.cost["total"]
+    conceded = for_target(checks, costs, objective, 1e6, grid=21, exact=False)
+    weighed = weigh(cands, costs, objective, 1e6, grid=21, exact=False)
+    assert "N" in conceded.floor_only and not weighed.floor_only and dict(weighed.weights) == {"N": 0.25}
+    assert dict(weighed.sizes) == dict(conceded.sizes) and weighed.certificate.harm <= 1e6
     with pytest.raises(ValueError, match="weight is positive"):
         frontier(cands, costs, objective, weights={"G": 0.0})
 
