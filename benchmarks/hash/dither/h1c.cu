@@ -170,7 +170,7 @@ __device__ void hs_row(Hs& s, const H1Tab& T, long long i, int off, int m) {
   }
 }
 
-__device__ __forceinline__ int nseg_of(int len) { return (len + 1023) / 1024; }
+__host__ __device__ __forceinline__ int nseg_of(int len) { return (len + 1023) / 1024; }
 
 extern "C" __global__ void h1c_domains(H1Tab* __restrict__ tabs, int ntab, const int* __restrict__ step) {
   const int t = blockIdx.x * blockDim.x + threadIdx.x;
