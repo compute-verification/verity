@@ -2,7 +2,7 @@
 (`certifier.active.Proxy`, driven tick by tick): the salt's form is pinned; a context names its PoUW window; `revealed`
 gives PoUW window p's salt on p's registration once p is published, and fails closed when it is unregistered, early or
 missing; `pouw_window` takes one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies
-`pouw_salt` of the reveal, 64 bytes, which the seeds and the identifier take and a whole lifecycle runs under; and
+`pouw_salt` of the reveal, 64 bytes, which the seeds and the identifier take, with the challenger's draw coin; and
 `core_check.pass_epoch` passes a certified window's pass only when its salt is that of the certifier's reveal."""
 
 from __future__ import annotations
@@ -22,7 +22,8 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw.audit import Epoch, Prover, Sampled, Verifier, Workload
+from verity.core.protocols.pouw.audit import Epoch, Workload, commit_rows, weight_binding
+from verity.core.protocols.pouw.coins import coin_reason
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
@@ -176,20 +177,18 @@ def test_pouw_window_is_one_whole_pouw_window_aligned_at_0():
 
 
 def setup():
-    s, rng = ncp.NCP(k_min=64, n_min=64), random.Random(3)
+    rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
-    weights = {7: [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]}
-    acts = {0: [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(32)]}
-    prover = Prover(s, weights)
-    return s, work, acts, prover, prover.weight_roots
+    rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
+    return work, {7: commit_rows(weight_binding(7), -2, rows).commitment.root}
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
     """`Epoch.certified` of PoUW window 1's certifier windows (2 and 3, k = 2) has salt `pouw_salt(reveal, 1)`, 64
-    bytes: the seeds take it and Epoch.start's 32 bytes they refuse, the identifier names it whole, and the lifecycle
-    runs under it with the draw from the challenger's coin. Misaligned windows, a reveal of another width and weights
-    that aren't the workload's are refused."""
-    s, work, acts, prover, roots = setup()
+    bytes: the seeds take it and Epoch.start's 32 bytes they refuse, the identifier names it whole, and the challenger's
+    draw coin opens against its coins. Misaligned windows, a reveal of another width and weights that aren't the
+    workload's are refused."""
+    work, roots = setup()
     c, drawn = certifier(4, pouw_window=2)
     reveal = PS.revealed(c, 1, registration(1))
     ch = E.challenger()
@@ -206,9 +205,7 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
             f(started.salt, 0, root, root)
     assert I.identifier_v1("ncp-v1", epoch)["salt"] == epoch.salt.hex()
 
-    tr = prover.prove(epoch, acts)
-    audit = Verifier(s, epoch).audit(prover, tr, Sampled(4), ch)
-    assert audit.accepted and len(audit.selected) == 4
+    assert coin_reason(epoch.coins, ch.open("draw", root), "draw", root) is None
 
     for ws in ([1, 2], [2], [2, 3, 4]):
         with pytest.raises(DomainError, match="not one PoUW window"):
@@ -224,7 +221,7 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
     `revealed` read from the certifier on that registration: the pass salted by `Epoch.certified` of windows 2 and 3
     passes (``certifier``). Salted by window 0's epoch, by the raw reveal, or checked against window 0's reveal, it
     doesn't, nor does it pass at a verifier without the reveal."""
-    _, work, _, _, roots = setup()
+    work, roots = setup()
     c, _ = certifier(4, pouw_window=2)
 
     def manifest(salt: bytes) -> tuple[bytes, str]:

@@ -12,9 +12,8 @@ generates (honest openings of a call's tile or the filler's, and one mutation ea
 both sides share), compared output for output: null, or the same reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
-`pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's and a certified window's, and
-honest draws, then one mutation each aimed at every refusal), compared output for output: how the salt was had, or the
-same refusal.
+`pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
+mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
 """
 from __future__ import annotations
 
@@ -180,8 +179,8 @@ pass_server = D.server_fixture(PASS)
 
 
 def test_pass_and_draw(pass_server):
-    """Generated passes and draws, then each mutation over a few seeds (`replay`), so every refusal is reached whatever
-    the draw."""
+    """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
+    every refusal is reached whatever the draw."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
     swept = Counter(D.replay(PASS, passes.pass_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
