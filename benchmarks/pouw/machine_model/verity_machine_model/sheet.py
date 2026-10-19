@@ -6,17 +6,21 @@ form or its pipe.
 a quarter of its type's peak (A3), 128 over its pipe's width (A4). `differences` holds them to the census file of the DS
 epoch, `figures` holds each per-clock peak to the figure the document prints at the clock it names, and `lean` prints the
 Lean module that states it all (`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line,
-and a lemma for each figure.
+and a lemma for each figure. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
+headline.py's ε and with A3 read per second at f_max, and `moves` finds how much slower the tensor pipe can be before
+that ε moves.
 """
 from __future__ import annotations
 
 import csv
 import textwrap
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 
+from verity_machine_model import headline as H
+from verity_machine_model.eps import design, eps, machine
 from verity_machine_model.model import model, vector
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -179,6 +183,66 @@ def figures(s: Sheet) -> list[Figure]:
         out.append(Figure(ty, per_mhz * s.clocks[p.clock].value, dense, tol, (dense - tol) / per_mhz,
                           (dense + tol) / per_mhz))
     return out
+
+
+def at_fmax(s: Sheet) -> dict[str, Fraction]:
+    """Each peak read per second at f_max instead of per clock: the dense figure over 2 · SMs · f_max."""
+    return {ty: p.dense[0] * 10**6 / (2 * s.sms.value * s.fmax.value) for ty, p in s.peaks.items()}
+
+
+@dataclass(frozen=True)
+class Reading:
+    family: str
+    design: str
+    q: float
+    sheet: float        # the core ε on the sheet's own lines
+    headline: float     # headline.py's at its sheet reading
+    fmax: float         # with each tensor line at at_fmax's peaks
+
+
+def _tensor(pi, s: Sheet, peaks: dict[str, Fraction]):
+    c = {k: dict(v) for k, v in pi.c.items()}
+    for k, v in s.kinds.items():
+        if v.form:
+            c[k][row("tensor")] = float(v.form.macs / (peaks[v.form.type] / 4))
+    return replace(pi, c=c)
+
+
+def _setting(s: Sheet, data: Path):
+    family = data.name
+    t = H.spec()
+    f = t["family"][family]
+    if f["sheet"]["vector"] != s.vector:
+        raise SystemExit(f"headline.toml's {family} sheet reading is {f['sheet']['vector']}, the sheet's {s.vector}")
+    pi = _tensor(machine(s.vector, data), s, {ty: p.macs for ty, p in s.peaks.items()})
+    return family, design(f["design"], data), pi, float(t["reading"]["sheet"]["q"])
+
+
+def _core(d, pi, q: float, data: Path) -> float:
+    return eps(d, pi, q, data, operands=H.OPERANDS, credit=H.CREDIT).core()
+
+
+def reading(s: Sheet, data: Path) -> Reading:
+    """The headline design's core ε at its sheet reading (headline.toml: q* = ½, operands free, credit ♭) on the
+    sheet's own lines, beside headline.py's, and with A3 read per second at f_max."""
+    family, d, pi, q = _setting(s, data)
+    return Reading(family=family, design=d.name, q=q, sheet=_core(d, pi, q, data),
+                   headline=H.row(family, "sheet").core, fmax=_core(d, _tensor(pi, s, at_fmax(s)), q, data))
+
+
+def moves(s: Sheet, data: Path, top: float = 4.0, steps: int = 30) -> float | None:
+    """The least factor on every tensor line (a tensor pipe that much slower than the sheet's) at which the headline ε
+    moves, to 1/2^steps of `top`; None if it doesn't move by `top`."""
+    _, d, pi, q = _setting(s, data)
+    base = _core(d, pi, q, data)
+    at = lambda x: _core(d, _tensor(pi, s, {ty: p.macs / Fraction(x) for ty, p in s.peaks.items()}), q, data)
+    if abs(at(top) - base) <= 1e-12:
+        return None
+    lo, hi = 1.0, top
+    for _ in range(steps):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if abs(at(mid) - base) <= 1e-12 else (lo, mid)
+    return hi
 
 
 # --- Lean -----------------------------------------------------------------------------------------------------------

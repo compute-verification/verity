@@ -8,7 +8,7 @@ import pytest
 
 from verity_machine_model.cli import main
 from verity_machine_model.model import DEVICES
-from verity_machine_model.sheet import ROOT, differences, figures, lean, sheet
+from verity_machine_model.sheet import ROOT, differences, figures, lean, reading, sheet
 
 SHEETS = ["sm_90", "sm_100"]
 
@@ -25,6 +25,14 @@ def test_peaks_reproduce_the_figures(name):
     failed = [(f.type, float(f.value), float(f.dense), float(f.tol)) for f in figures(s) if not f.holds]
     assert not failed, f"{name}: a per-clock peak at its clock misses the document's figure: {failed}"
     assert all(c.value < s.fmax.value for c in s.clocks.values())
+
+
+@pytest.mark.parametrize("name", SHEETS)
+def test_sheet_prices_the_headline(name):
+    """The headline's sheet reading of the device is the sheet's: its design priced on lines derived from sheet.toml
+    is headline.py's ε, exactly."""
+    r = reading(sheet(DEVICES / name), DEVICES / name)
+    assert r.sheet == r.headline
 
 
 @pytest.mark.parametrize("name", SHEETS)

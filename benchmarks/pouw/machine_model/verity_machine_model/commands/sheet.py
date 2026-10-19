@@ -1,12 +1,18 @@
-"""machine-model sheet [--lean]   a device's data sheet (sheet.toml): its DS lines against the census, its peaks at their clock"""
+"""machine-model sheet [--lean | --eps]
+                                          a device's data sheet (sheet.toml): its DS lines against the census and its
+                                          peaks at their clock; --lean prints its Lean module; --eps prices the
+                                          headline design's sheet reading on the sheet's lines, with A3 read per
+                                          second at f_max, and how much slower the tensor pipe can be before ε moves"""
 from __future__ import annotations
 
-from verity_machine_model.sheet import differences, figures, lean, lines, sheet
+from verity_machine_model.sheet import at_fmax, differences, figures, lean, lines, moves, reading, sheet
 
 
 def add(sub) -> None:
     c = sub.add_parser("sheet")
-    c.add_argument("--lean", action="store_true", help="print the Lean module sheet.toml's `lean` names")
+    g = c.add_mutually_exclusive_group()
+    g.add_argument("--lean", action="store_true", help="print the Lean module sheet.toml's `lean` names")
+    g.add_argument("--eps", action="store_true", help="the headline design's ε on the sheet's lines")
 
 
 def run(args) -> int:
@@ -14,6 +20,17 @@ def run(args) -> int:
     if args.lean:
         print(lean(s, args.data), end="")
         return 0
+    if args.eps:
+        r = reading(s, args.data)
+        m = moves(s, args.data)
+        same = "the same" if r.sheet == r.headline else "DIFFERS"
+        print(f"{s.gpu}, {s.vector}: {r.design} at q* = {r.q:g}, operands free, credit ♭")
+        print(f"  on the sheet's lines: ε {100 * r.sheet:.4f}% (headline {100 * r.headline:.4f}%: {same})")
+        print(f"  A3 read per second at f_max ({', '.join(f'{t} {float(v):.0f}' for t, v in at_fmax(s).items())} "
+              f"MACs/SM-clk): ε {100 * r.fmax:.4f}%")
+        print(f"  ε first moves with every tensor line {m:.3f}× the sheet's" if m is not None
+              else "  ε doesn't move with every tensor line up to 4× the sheet's")
+        return 0 if r.sheet == r.headline else 1
     diff, fs = differences(s, args.data), figures(s)
     n = sum(len(rs) for rs in lines(s).values())
     print(f"{s.gpu}, {s.vector}: {n} lines from sheet.toml, " + ("the census's" if not diff else "differing:"))
