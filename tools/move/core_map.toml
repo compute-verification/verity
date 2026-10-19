@@ -4,7 +4,8 @@
 # `verity/experimental/` goes. The Python verifiers (the protocol packages, the integrity profile and the claims they cite)
 # and core's Lean ports move under `verity/core/`; multiproofs and private circuits, which no verifier imports, join `verity/ml/`.
 # Whole packages move: none is split into prover and verifier halves here. The format is `layout_map.toml`'s; the hand
-# fixups that follow the generated move, as a commit of their own, are `tools/move/fixups/core.py`.
+# fixups that followed the generated move, as a commit of their own, were `tools/move/fixups/core.py`, removed once the
+# move landed (`git show 7d291b14d:tools/move/fixups/core.py`).
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/experimental/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }

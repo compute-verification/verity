@@ -23,7 +23,7 @@ INPUTS = {"x": X}
 def node(n: str) -> Block:
     gpu = Device(f"{n}.gpu", "gpu", rate={"square-1024": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s"),
                                           "mac:bf16": Assumption(f"{n}.gpu.bf16", 1e12, "MAC/s"),
-                                          "cuda:op": Assumption(f"{n}.gpu.ops", 1e12, "op/s")},
+                                          "cuda:gate": Assumption(f"{n}.gpu.gates", 1e14, "gate/s")},
                  memory=Assumption(f"{n}.gpu.hbm", 96 * GB, "bits"),
                  bandwidth=Assumption(f"{n}.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
     dram = Device(f"{n}.dram", "dram", memory=Assumption(f"{n}.dram.size", 512 * GB, "bits"),

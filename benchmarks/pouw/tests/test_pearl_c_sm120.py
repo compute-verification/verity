@@ -39,6 +39,8 @@ RUN = load("pearl_c_sm120_run", HERE / "run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
 HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (HERE / "hash_fast.cuh").read_text()
+#: hash_decode.cuh's variants the cubin builds (pearl_c_sm120.cu's PD_VARIANT_LIST), each its four kernels
+PD_BUILT = [int(v) for v in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SOURCE).group(1))]
 SM120_MAX_DYN = 101376                   # sm_120's opt-in dynamic shared memory per block (99 KB)
 UUID = "GPU-0123abcd-4567-89ef-0123-456789abcdef"
 RTX = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
@@ -231,6 +233,8 @@ KERNEL = r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\('
 #: no pads; the row digests and tile leaves by hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast)
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
+#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, and each served variant's commitment and tile leaves
+PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tiles"))}
 
 
 def form_kernels() -> list[str]:
@@ -248,8 +252,10 @@ def own_kernels() -> list[str]:
 
 
 def kernel_names() -> list[str]:
-    """Every kernel in the cubin: pearl_c_sm120.cu's and hash_h3.cuh's, which it includes."""
-    return own_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE)))
+    """Every kernel in the cubin: pearl_c_sm120.cu's and those of the hashing it includes (hash_h3.cuh, hash_fast.cuh and
+    hash_decode.cuh's variants)."""
+    pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
+    return own_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd
 
 
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
@@ -314,6 +320,14 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 128 * i[1], 1: 64 * i[1], 2: 64}
     if name == "s512_tree_small":
         return {0: 64 * (2 * i[0] - 1), 1: 64}
+    if name.startswith("pd_commit_"):
+        rows, k, _, m = i[:4]
+        return {0: 4 * rows * k, 1: 64 * rows, 2: 64 * (2 * RUN.pow2(rows) - 1), 3: 32 * rows, 4: 32 * rows, 5: 104, 6: 64,
+                7: 32, 8: 128 + 192 * 256 * 64, 9: 16, 10: 32, 11: 32, 12: 32 * m}
+    if name.startswith("pd_tiles_"):
+        return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * -(-i[0] // 64) * (i[1] // 64)}
+    if name == "pd_heads":
+        return {}
     if name == "quant_s5":
         return {0: 4 * i[0] * i[1], 1: 4 * i[0], 2: i[0] * i[1]}
     if name == "plainq":
@@ -424,7 +438,7 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
         track(ev, allocs, maps)
         if ev["op"] == "launch":
             seen.add(ev["name"])
-    assert seen == set(own_kernels()) | H3_LAUNCHED
+    assert seen == set(own_kernels()) | H3_LAUNCHED | PD_LAUNCHED
     for t in rows[3:]:
         assert {"c_ct_vs_pearlc_words_differing", "u_rerun_words_differing", "y_s_vs_pearlc_words_differing"} <= set(t["consistency"])
 
@@ -504,3 +518,13 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert ev["block"] == RUN.RS_FAST_NT and i[1] % (256 if name == "s512_row_segs" else 64) == 0
         if name == "s512_folds":
             assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS
+        if name.startswith("pd_commit_"):
+            assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] == 0
+            assert ev["block"] == 32 * (-(-i[1] // 256 // 32) * 2 + 2) and RUN.PD_PAIR_SMEM <= ev["smem"] <= SM120_MAX_DYN
+        if name.startswith("pd_tiles_"):
+            tiles = -(-i[0] // 64) * (i[1] // 64)
+            if int(name.rsplit("_", 1)[1]) & RUN.PD_GROUP:
+                assert g[0] == -(-i[0] // 64) * -(-(i[1] // 64) // RUN.PD_G) and ev["block"] == 32 * RUN.PD_G
+                assert ev["smem"] == RUN.PD_PAIR_SMEM // 2
+            else:
+                assert g[0] == tiles and ev["block"] == 32 and ev["smem"] == 0

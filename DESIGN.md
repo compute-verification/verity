@@ -44,10 +44,10 @@ integrations/vllm, benchmarks/ (with the census)
 verity/core/: the verifiers, trusted           archive/
   protocols: profile, sampled_proofs,          kept, not developed:
   pouw, pous, certifier; claims                gkr, direct, sp1, vole
-  the Lean ports; service/flock: C-Flock's Lean verifier
+  Lean, the verifier of record, C-Flock's in service/flock
 Security/: the definitions, models and proofs of the guarantees (nci among them)
 ---------------------------------------------------------------------------
-verity/ml/: Python and CUDA; what core's verifiers read of it is on the soundness path
+verity/ml/: Python and CUDA: the provers, and Python that mirrors the Lean
   flock: C-Flock, the proof system
   circuits: evaluation, boolean, Definitions (ops), silicon semantics, targets
   kernels, commitments, crypto, randomness, private_circuits
@@ -79,7 +79,7 @@ The commitment establishes the first, and the proof system's proof the second. A
 
 ### Protocols
 
-Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol is a package under `verity.core.protocols` and imports only the standard library, the parts of `verity.ml` it is allowed, itself and the protocols it builds on (PoUW builds on sampled proofs, and reads the primitive circuits' silicon semantics). Its Lean port lands beside it in `verity/core/`, one verifier at a time.
+Which parts of a circuit are checked, how they are sampled and what must be committed before a challenge are protocol questions, and none of them changes the circuit. Each protocol is a package under `verity.core.protocols` and imports only the standard library, the parts of `verity.ml` it is allowed, itself and the protocols it builds on (PoUW builds on sampled proofs, and reads the primitive circuits' silicon semantics). Its Lean is its definition and verifier of record (Daniel, 18 Oct), switching by the 8 Oct procedure; Python in `verity.ml` mirrors it, held to it by difftest.
 
 ### The accounting layer
 
@@ -104,8 +104,8 @@ An integration makes Verity work end to end with a real system. The vLLM integra
 ## Repository structure
 
 - [`verity/`](verity/README.md): the library, the distribution `verity`, in two parts:
-  - `verity/core/` (`verity.core`): the verifiers, trusted code: the Python verifiers, `verity.core.protocols` (the protocols and the integrity profile an audit returns) and the claims, their Lean ports, and `verity/core/service/flock/`, C-Flock's verifier of record. `Security/Models/` states their guarantees, each open until its proof lands
-  - `verity/ml/` (`verity.ml`): Python and CUDA: `verity.ml.circuits` and the [circuit format](verity/ml/circuits/PROTOCOL.md), with exact hardware semantics (`silicon`), the primitive circuits' Definitions (`ops`) and the targets; `verity.ml.kernels`, the fast code checked against a reference in core or the circuits; `verity.ml.commitments` (commitments to the records), `crypto` and `randomness`; and [`verity/ml/flock/`](verity/ml/flock/README.md), C-Flock, the proof system, whose verifier's specification and scripts are [`verity/ml/flock/verifier/`](verity/ml/flock/verifier/README.md); what core's verifiers read of it is on the soundness path, and the rest (C-Flock's prover, the private circuits) can't affect soundness
+  - `verity/core/` (`verity.core`): the verifiers, trusted code: the protocols (`verity.core.protocols`, with the integrity profile) and claims, in Python and Lean, and `verity/core/service/flock/`, C-Flock's verifier of record. `Security/Models/` states their guarantees, each open until its proof lands
+  - `verity/ml/` (`verity.ml`): Python and CUDA: `verity.ml.circuits` and the [circuit format](verity/ml/circuits/PROTOCOL.md), with exact hardware semantics (`silicon`), the primitive circuits' Definitions (`ops`) and the targets; `verity.ml.kernels`, fast code checked against its Definition; `verity.ml.commitments` (commitments to the records), `crypto` and `randomness`; and [`verity/ml/flock/`](verity/ml/flock/README.md), C-Flock, the proof system, whose verifier's specification and scripts are [`verity/ml/flock/verifier/`](verity/ml/flock/verifier/README.md); what core's Python verifiers read of it is on the soundness path, only shrinking, and the rest (C-Flock's prover, the private circuits) can't affect soundness
 - [`verity/core/protocols/sampled_proofs/`](verity/core/protocols/sampled_proofs/README.md): sampled proofs, as the one-stage audit and two-stage sampling
 - [`verity/core/protocols/pous/`](verity/core/protocols/pous/README.md): proofs of useful space
 - [`verity/core/protocols/pouw/`](verity/core/protocols/pouw/PROTOCOL.md): proofs of useful work
@@ -157,7 +157,7 @@ query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each w
 
 ## Development
 
-Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, `verity.core` may import the parts of `verity.ml` that `ALLOWED` lists, which puts them on the soundness path, and `verity.ml` never imports `verity.core` (apart from a few tests and V*'s builders), nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
+Dependencies point inward: integrations, the proof system and benchmarks depend on `verity`, `verity` imports no other distribution, a verifier imports no `verity.ml` code (a Python one gains no edge into it), and `verity.ml` never imports `verity.core` (apart from a few tests and V*'s builders), nothing outside `infra/` imports `infra/`, and `verity`'s modules depend on each other in one direction:
 
 ~~~text
 ml.circuits  <-  ml.commitments  ->  ml.crypto
@@ -222,7 +222,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Network certificate**: a network certifier's record of what crossed a link (`grid.Record`, committed as a `CommittedRecord`), signed under the certifier's key over its SHA-512 record digest (`certificate.CertifiedRecord`). Certificates never reach the auditor in the clear: they are witness, and the developer proves that its committed circuits are consistent with them.
 - **Memory challenger**: an auditor-trusted device beside a network certifier, the auditor's hardware on a machine the developer doesn't control at the developer's site (never a process on the prover's node), that runs PoUS's timed rounds and signs each one (`verity.core.protocols.pous.memory_challenger`'s `MemoryChallenger`). The per-round on-time bits stay in its signed record; PoUS publishes the audit's verdict.
 - **Challenger**: the auditor's online service. It issues live coins, committed in advance, draws, and keeps the record; the coins the auditor sees come only from it, and it never sees the witness. In C-Flock its live-coin part is the Rust `Server` of the patched checkout. Fiat–Shamir's challenger keeps its own sense.
-- **Verifier**: the auditor's Lean verifier of record, run offline, and the outcome it writes. C-Flock's is written in Lean (`verity/core/service/flock/`), and upstream Flock's Rust verifier is a cross-check. As a party in a protocol's statements, such as the one-stage audit's draw of proof units or a game's `Verifier`, "the verifier" is the auditor's side as a whole.
+- **Verifier**: the auditor's Lean verifier of record, run offline, and the outcome it writes. C-Flock's is `verity/core/service/flock/`, with upstream Flock's Rust verifier as a cross-check. As a party in a protocol's statements, such as the one-stage audit's draw of proof units or a game's `Verifier`, "the verifier" is the auditor's side as a whole.
 - **Selection rule**: which proof units of a registration are proved (`Spec.selection`): all of them, a one-stage sampling design such as `stratified:K`, two-stage sampling, or a timed session's sequential draw. It is drawn from the challenger's randomness; a policy is a condition on declarations, not a draw.
 - **Device model**: the one device the compute, bandwidth and capacity audits are about (`Accounting.Device`): at most S_chip bits of on-chip state and M bits of device memory; per tick, at most BW bits from device memory to the chip, a channel's capacity over each side channel (PCIe from NVMe and the network), and each op class's own rate (tensor-core multiply-adds F, CUDA-core ops, oracle queries). A tick is its unit of time, and a window is T consecutive ticks.
 - **Schedule**: the device's steps, one per tick (`Accounting.Schedule`). A step charges each resource it uses to a resource account, and fits the device when all accounts' charges are within its limit for every resource (`Step.Fits`), so no unit is charged twice. A circuit's run is a schedule's trace (see Value).

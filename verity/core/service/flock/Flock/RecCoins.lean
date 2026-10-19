@@ -139,7 +139,8 @@ def recordDraw (record : String) : Option Json :=
   | .error _ => none
 
 /-- The spec a recursive inner session's record decodes against, `spec` and `st` the inner statement's without a draw and
-`setupAt d` the statement at draw `d`: `spec` for a record without a draw, and for a record whose draw proves every one of
+`setupAt d` the statement at draw `d`: `spec` for a record without a draw (whose session `verify` refuses last in its
+verdict, `RecSetup.innerDrawn`), and for a record whose draw proves every one of
 `st`'s units, in order, the drawn statement's spec (the coin server's full draw, `rec_live.full_draw`, which `verify`
 holds to its own law with `--stratified`, `--program` and `--partition`). The drawn statement has `st`'s units, `m` and
 regions; its header carries the draw, so its Σ and Hello are its own. A draw that leaves a unit out is refused: V*

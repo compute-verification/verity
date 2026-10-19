@@ -3,7 +3,8 @@
 them, `units` null for a unit opened undrawn).
 
 A case is an honest opening (a window of P entries, a call's and the filler's each with small side trees, the unit one
-of their tiles, its proof's public file a header and the two rows' b ‖ c, the registration's entries root over the
+of their tiles, its proof's public file a header (over the template's pinned circuit, `core_check.TILES`) and the two
+rows' b ‖ c, the registration's entries root over the
 entries' leaves), then one mutation (`MUTATIONS`) aimed at one refusal of `core_check.opening`, or at a reading both
 sides must share (hex as `bytes.fromhex` reads it, the header's keys in sorted order).  The windows come from a few
 fixed contexts, so the side trees' pad nodes, which only the generator computes, are computed once per side domain.
@@ -35,8 +36,8 @@ def _side(dom, schema: str, bcs: list[bytes]) -> tuple[bytes, list]:
     return levels[-1][0], levels
 
 
-def _header(schemas: dict, rng: random.Random) -> dict:
-    return {"circuit_sha512": cases._hex(rng), "format": "flock-circuit-inputs", "instances": 1,
+def _header(schemas: dict, circuit: str) -> dict:
+    return {"circuit_sha512": circuit, "format": "flock-circuit-inputs", "instances": 1,
             "frame_v3": {"frame": "frame-v3-sha512", "owner": -1, "schemas": schemas}}
 
 
@@ -79,7 +80,7 @@ def honest(rng: random.Random) -> dict:
         sdom = Wd.side_domain(dom.domain_id, side)
         op[side] = {"index": idx, "path": [x.hex() for x in Wd.side_path(sdom, trees[side][1], idx)]}
     schemas = {"a0": seg, "b0": v2, "o0": v2, "t0": v2}
-    head = _header(schemas, rng)
+    head = _header(schemas, CC.TILES[params["check"]["template"]].circuit)
     pub = json.dumps(head, sort_keys=True).encode() + b"\n" + bcs["a"][i] + bcs["b"][j] + rng.randbytes(3 * CC.BC_BYTES)
     units = None if rng.random() < 0.3 else sorted({unit, *rng.sample(range(1 << 21), rng.randrange(4))})
     return {"params": params, "record": rec, "units": units, "unit": unit, "pub": pub, "opening": op, "header": head,
@@ -102,7 +103,8 @@ MUTATIONS = [
     "window-path-digest", "side-path-type", "side-path-digest", "side-missing", "side-index-type", "side-index-bool",
     "entry-other", "entry-negative-index", "entry-past", "forged-entry", "out-of-range", "kind-none", "no-newline",
     "header-not-json", "header-nan", "header-list", "header-utf8", "instances-missing", "instances-bool",
-    "instances-two", "instances-float", "instances-string", "schemas-missing", "frame-type", "schemas-type",
+    "instances-two", "instances-float", "instances-string", "circuit-other", "circuit-missing", "circuit-type",
+    "schemas-missing", "frame-type", "schemas-type",
     "schemas-swapped", "schemas-one", "schemas-unsorted", "schemas-prefixed", "body-short", "a-index", "b-index",
     "a-row", "b-row", "b-path", "a-path-short", "rows-swapped", "past-side", "params-bad", "commitment-bad",
 ]
@@ -185,6 +187,15 @@ def instance(rng: random.Random, name: str = "honest") -> dict:
     elif name in ("instances-bool", "instances-two", "instances-float", "instances-string"):
         _repub(case, {**head, "instances": {"instances-bool": True, "instances-two": rng.randint(2, 9),
                                             "instances-float": 1.0, "instances-string": "1"}[name]})
+    elif name == "circuit-other":
+        pinned = head["circuit_sha512"]
+        other = next(t.circuit for t in CC.TILES.values() if t.circuit != pinned)
+        _repub(case, {**head, "circuit_sha512": rng.choice([cases._hex(rng), pinned.upper(), other])})
+    elif name == "circuit-missing":
+        _repub(case, {k: v for k, v in head.items() if k != "circuit_sha512"})
+    elif name == "circuit-type":
+        pinned = head["circuit_sha512"]
+        _repub(case, {**head, "circuit_sha512": rng.choice([None, 5, [pinned], {"sha512": pinned}])})
     elif name == "schemas-missing":
         _repub(case, {**head, "frame_v3": {k: v for k, v in head["frame_v3"].items() if k != "schemas"}})
     elif name in ("frame-type", "schemas-type"):

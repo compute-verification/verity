@@ -1,14 +1,16 @@
 """PoUW's check of one audit window as a core protocol (`verity/core/protocols/interface`): the Python
-reference of the Lean port `pouw_check` (`verity/core/protocols/pouw/lean/check`), which the difftest holds to it
-answer for answer.
+reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served window's verifier of record
+(`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
 The proof service registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
-* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme and
-  the public bound on entries), ε and δ as ratio strings, the grid's bits, the declared range of tile counts, the
-  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).
+* **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
+  the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
+  strings, the grid's bits, the declared range of tile counts, the
+  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).  The
+  template is one the verifier pins (`TILES`, Lean's `PouwCheck.tiles`), with that template's tile work and query.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -29,7 +31,9 @@ file opens the unit's rows under the registered window root, through its entry a
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
-and a replay of a recorded draw `COIN_EARLY` too.
+and a replay of a recorded draw `COIN_EARLY` too.  `rounds` is the rule on a live window's round coins
+(`window.rounds_reason`, over the proof service's challenger `sampled_proofs.challenger`): under the challenger's live
+coin commitment, round r's coin opened once, after the r-th round root the verifier recorded.
 
 Every refusal has one reason, the first rule it breaks in the order below; the Lean port writes the same strings.
 """
@@ -40,10 +44,11 @@ import json
 import math
 import re
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
@@ -70,6 +75,34 @@ SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
 OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
 SALT_BYTES = 192
 BC_BYTES = 128
+
+
+class Tile(NamedTuple):
+    tile_work: int
+    query: str
+    circuit: str
+
+
+#: the tile templates the verifier pins (Lean's `PouwCheck.tiles`, of record): each one's work per tile, its check query's
+#: SHA-512, and the SHA-512 of the one circuit a unit's tile proof of it is over (its public file's ``circuit_sha512``)
+TILES = {
+    "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}": Tile(
+        4096,
+        "491c9160f3c0d0c95ef14575e0966bfa9958de58886c3cc46e8008c767118926582acc2199a49dae85a32656cd2b11f90bffc1105aa9d660e98f66f75ccac4af",
+        "39d540c10ed1148526fcdf9d01561fcf68e33427f28f55d2dc2f453c09f68696978a530b2c14054f4720af1710afee8c74331f45b4c9a7c0511bfc1e02017c12"),
+    "Pc8TileSide_v1{K=128,TM=1,TN=1,DEV='sm120'}": Tile(
+        128,
+        "63cd98cb86598a2d67169d1a5ea949957c941b3e11aad61aeb14e99fc1a2d7c7f5b7b19e7349bcae68d0ee7400cfbe89b8a6dd20f14319666eb7a7d81a0a6343",
+        "84315c5940d5c61a4938182d41330c2f4febbf049ca9cdadd58ec9f1f9dd92a13d9e43501b37e9e0f32914e698667907d768ce49c2ba8be026454bdff78baf24"),
+    "Pc8TileHidden_v1{K=4096,TM=1,TN=1,DEV='sm120'}": Tile(
+        4096,
+        "f48d5a1f247cb17063bcea693733db3d26e91be34967645486ea20df1336b4d9ae14aaf242ba4437f0d2a0123aff81f7ab31d18d437f4abe73363a1ac7bf65fb",
+        "5ec6002f654337db2051fd6a98b7ec122a9f33e2d06180012177195674233d7c811c2ffd8ef49bc9a586dcf8e61ee1b16914b9f36e1bd378f9e53d0d40f4926d"),
+    "Pc8TileLeafH3_v1{K=4096,DEV='sm120'}": Tile(
+        4096,
+        "0f93d0dce725a5269061b91a1eb39ad294a1369c6f47814880acc74cef30aad734b0067d1cc7f5347bf9db4279a6519eb0abfa000c581759b14fd0ed5a7f9647",
+        "c4fb8b6c5ce91ad0bc750f315700491911f678ad219cd370baf4359dc751954c9955590eb50304a166e1cc103ffd0d431de31f03c29ad5b6d119a33502b004af"),
+}
 
 
 class Refused(ValueError):
@@ -145,8 +178,10 @@ def params(j: Any) -> dict:
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
-    if not isinstance(c, dict) or sorted(c) != list(CHECK_KEYS):
-        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}")
+    if not isinstance(c, dict) or sorted(set(c) - {Wd.COINS}) != list(CHECK_KEYS):
+        raise Refused(f"check's keys are not {', '.join(CHECK_KEYS)}, and optionally {Wd.COINS}")
+    if Wd.COINS in c and c[Wd.COINS] not in Wd.MODES:
+        raise Refused(f"check.{Wd.COINS} is not {' or '.join(Wd.MODES)}")
     if not (_nat(c["entries"]) and c["entries"] >= 2):
         raise Refused("check.entries is not a natural number of at least 2")
     if c["scheme"] != SCHEME:
@@ -172,6 +207,13 @@ def params(j: Any) -> dict:
     rg = j["range"]
     if not (isinstance(rg, list) and len(rg) == 2 and all(_nat(x) for x in rg) and 1 <= rg[0] <= rg[1]):
         raise Refused("range is not [lo, hi] with 1 <= lo <= hi")
+    t = TILES.get(c["template"])
+    if t is None:
+        raise Refused("check.template is not a tile template the verifier pins")
+    if c["tile_work"] != t.tile_work:
+        raise Refused("check.tile_work is not its pinned template's tile work")
+    if j["query"] != t.query:
+        raise Refused("query is not its pinned template's query digest")
     return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg)}
 
 
@@ -598,6 +640,9 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
         return "the proof's header has no instance count"
     if n != 1:
         return f"the proof has {n} instances, not one tile"
+    t = TILES.get(p["check"]["template"])
+    if t is None or h.get("circuit_sha512") != t.circuit:
+        return "the proof's circuit is not the one the verifier pins for the check's template"
     f = h.get("frame_v3")
     s = f.get("schemas") if isinstance(f, dict) else None
     if not isinstance(s, dict) or [s[k] for k in sorted(s)[:2]] != [schema for _, schema in OPENED]:
@@ -911,6 +956,31 @@ def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: An
     return None
 
 
+# ---- a live window's round coins ---------------------------------------------------------------------------------------
+
+def rounds(coins: Any, roots: Any, openings: Any) -> tuple[str, str] | None:
+    """None when `openings` are a live window's round coins (`window.rounds_reason`): under `coins`, the challenger's live
+    coin commitment (its JSON, `challenger.LiveCommitment`), round r's coin opened once, after `roots[r]`, the r-th round
+    root the verifier recorded (hex), and every recorded round's coin opened; else the refusal (``coin`` or ``rounds``,
+    and why)."""
+    try:
+        c = Ch.LiveCommitment.from_json(coins)
+    except Ch.CoinError as e:
+        return "coin", f"the verifier's coins are malformed: {e}"
+    if not (isinstance(roots, list) and all(_str(r) and _DIGEST.fullmatch(r) for r in roots)):
+        return "rounds", "the round roots are not a list of SHA-512 digests"
+    if not isinstance(openings, list):
+        return "rounds", "the round coins are not a list"
+    os_ = []
+    for i, o in enumerate(openings):
+        try:
+            os_.append(Ch.LiveOpening.from_json(o))
+        except Ch.CoinError as e:
+            return "coin", f"round coin {i}: {e}"
+    why = Wd.rounds_reason(c, [bytes.fromhex(r) for r in roots], os_)
+    return None if why is None else ("coin", why)
+
+
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
     """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
@@ -954,4 +1024,4 @@ def line(a: dict) -> str:
 
 __all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "registered", "unit_draw", "verify_path", "window_domain"]
+           "opening", "params", "pass_epoch", "ratio", "registered", "rounds", "unit_draw", "verify_path", "window_domain"]

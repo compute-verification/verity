@@ -219,7 +219,8 @@ def fold(out: Path) -> bool | None:
                 sr, lk = res["sampled_replay"], res["boundary_linkage"]
                 C2.annotate_unreplayable([sr], xr, pair, set(dd["xrank_families"]))
                 ok, why = c["replay_deferred"]["pre"]
-                ok, why = C2.replay_gates(c, sr, lk, ok, why, rank=int(rk), replay_on=True, required=required)
+                ok, why = C2.replay_gates(c, sr, lk, ok, why, rank=int(rk), replay_on=True, required=required,
+                                          xrank_families=set(dd["xrank_families"]) if xr.get("result") is not None else None)
                 c["commit_pass"], c["commit_fail_reason"] = ok, why
                 c["replay_deferred"]["replayed"] = {k: res.get(k) for k in ("where", "host", "manifest_sha256", "wall_s", "peak_rss_bytes", "utc", "weights_attest")}
                 f_ = next(x for x in fin if int(x["rank"]) == int(rk))

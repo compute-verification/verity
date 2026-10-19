@@ -41,6 +41,7 @@
 #        receive-open          a second registration while the first has no outcome                            REFUSED
 #        select                Lean's draw of K' units over the draw coin's key, opened after the receipt    DRAWN
 #        select-again          a second select of the same registration: no retry redraws                     REFUSED
+#        receive-after-draw    the request's registration on a stream of its own, after the epoch's draw coin  REFUSED
 #        open-u<t>             each drawn unit's proof opens that unit's rows under the window root            ACCEPT
 #        lean-u<t>             the Lean verifier on each drawn unit's --zk session                             ACCEPT
 #        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
@@ -56,7 +57,7 @@
 #        outcome-again         a second outcome of the same registration: final                                 REFUSED
 #        deliver-again         a second delivery of the same draw                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
-#        retry-foreign-proof   a registration on that control's stream after its reject (budget 1)             REFUSED
+#        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
 #        outcome-st-<case>     the first unit's Lean verdict a selftest case's: honest ACCEPT; the tampered    REJECT
 #        replay                the challenger's requests again from its recorded coins, Lean drawing          SAME
 #        replay-twin           the same, stream_subset (Lean's draw's Python twin) drawing                    SAME
@@ -181,6 +182,8 @@ ask select "$(req op select name honest out "$OUT/draw.json")"
 expect select DRAWN "$REPLY"
 ask select-again "$(req op select name honest out "$W/draw-again.json")"
 expect select-again REFUSED "$REPLY"
+ask receive-after-draw "$(req op register name after registration "$R" stream after manifest "$MAN" recorded $REC)"
+expect receive-after-draw REFUSED "$REPLY"
 [ -f "$OUT/draw.json" ] || { log "select FAILED: $(cat "$OUT/select.out")"; exit 3; }
 UNITS=$(jq_ "$OUT/draw.json" "' '.join(map(str, sorted(d['units'])))")
 FILL=$(jq_ "$OUT/request/advice.json" "[e for e in d['entries'] if e['kind'] == 'filler'][0]['lo']")
@@ -361,7 +364,7 @@ expect deliver-again REFUSED "$REPLY"
 U=$OUT/u$U0
 units_json "$OUT/units-foreign-proof.json" "$OUT/other-tile/stage.json" "$OUT/other-tile/pub.bin" "$U/lean-foreign-pub.out" "$OUT/open-foreign-proof.json"
 control foreign-proof REJECT "$OUT/units-foreign-proof.json"
-ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof manifest "$MAN" recorded $REC)"
+ask retry-foreign-proof "$(req op register name retry registration "$R" stream ctl-foreign-proof replay honest)"
 expect retry-foreign-proof REFUSED "$REPLY"
 for c in $HZ_CASES; do
   [ -f "$U/lean-st-$c.out" ] || continue

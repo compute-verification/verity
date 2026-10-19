@@ -180,6 +180,34 @@ def leaves_of(t: Type) -> int:
     return t.leaves
 
 
+def range_widths(t: Type, lo: int, hi: int) -> frozenset:
+    """The widths of leaves [lo, hi) of `t`, computed structurally (never materialises the leaves)."""
+    if not 0 <= lo <= hi <= t.leaves:
+        raise IndexError(f"leaves [{lo}, {hi}) of a {t!r} ({t.leaves} leaves)")
+    if hi == lo:
+        return frozenset()
+    if lo == 0 and hi == t.leaves:
+        return t.width_set()
+    if isinstance(t, Array):
+        L = t.elem.leaves
+        first, last = lo // L, (hi - 1) // L
+        if first == last:
+            return range_widths(t.elem, lo - first * L, hi - first * L)
+        out = range_widths(t.elem, lo - first * L, L) | range_widths(t.elem, 0, hi - last * L)
+        return out | t.elem.width_set() if last - first >= 2 else out
+    fields = [ft for _, ft in t.fields] if isinstance(t, Record) else list(t.fields)  # type: ignore[attr-defined]
+    out: frozenset = frozenset()
+    pos = 0
+    for ft in fields:
+        a, b = max(lo, pos), min(hi, pos + ft.leaves)
+        if a < b:
+            out |= range_widths(ft, a - pos, b - pos)
+        pos += ft.leaves
+        if pos >= hi:
+            break
+    return out
+
+
 def remove_axis(t: Type, axis: int) -> tuple[int, Type]:
     """For `batch(..., axes=...)`: strip array axis `axis` from `t`; return (length, member type)."""
     if axis == 0:

@@ -9,6 +9,8 @@ names a block past its row (index // block_size >= NB) is declined: the kernel r
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity_vllm.program.kernels.dsv4_indices_twin import s32
