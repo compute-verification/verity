@@ -58,12 +58,15 @@ it.
   slot reloaded each trip it is about 15.79 (n = 112, W = 3), under the floor. That route is not built. So FOLD-OPT at
   issue on DS-120 is checked for register-resident folds only, and WIDTH-32 is a load-bearing premise.
 
-Run: `python fold_proof.py [--mutations] [--wide3 [--w32]] [--verdict PATH]`. Stdlib + exact_kit + `fold_opt_fx`
-(and, with `--wide3`, `fold_wide3.c` built with gcc). The `--wide3 --w32` cross-pair search is CPU-hours and goes to a
-CPU node (`research run`); the default in-test search is width 4, pure Python, under a minute.
+Run: `python fold_proof.py [--mutations] [--wide3 [--w32] | --merge VERDICT...] [--verdict PATH]`. Stdlib +
+exact_kit + `fold_opt_fx` (and, with `--wide3`, `fold_wide3.c` built with gcc). `--wide3` (width 4) and
+`--wide3 --w32` are CPU-hours and go to a CPU node (`research run`), each writing its verdict; `--merge` takes those two
+verdicts and adds them to the fast battery, so the merged verdict is the whole result. The default in-test battery is
+width 4, pure Python, about a second.
 """
 from __future__ import annotations
 
+import json
 import random
 import re
 import subprocess
@@ -76,7 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
 
 import fold_opt_fx as fx  # noqa: E402
-from exact_kit.checks import Checks  # noqa: E402
+from exact_kit.checks import SCHEMA, Checks  # noqa: E402
 
 M32 = 0xFFFFFFFF
 LANES = 32                       # a warp instruction advances 32 lanes, one word a lane
@@ -315,10 +318,67 @@ def no_mix_wide3(ck: Checks, width: int) -> None:
         for t1n, t2n in CROSS:
             hit = res[f"x_{t1n}_{t2n}"]
             seen = {k: hit[k] for k in ("found", "sel", "le2", "firsts", "prefixes")}
-            ck.check(f"two chains, width {width}: no program of at most 3 instructions writes the cross pair "
-                     f"({t1n}', {t2n}') as a last two-word instruction (IMAD.WIDE, IADD.64, IMNMX.64) or a last SEL.64, "
-                     "and neither is a word of a program of at most 2 (chain 2's words as operands too)",
+            ck.check(f"two chains, width {width}: {CROSS_TAG} ({t1n}', {t2n}') as a last two-word instruction "
+                     "(IMAD.WIDE, IADD.64, IMNMX.64) or a last SEL.64, and neither is a word of a program of at most 2 "
+                     "(chain 2's words as operands too)",
                      hit["found"] == 0 and hit["sel"] == 0 and hit["le2"] == 0, seen)
+
+
+# ---- §2: the records' merge ----------------------------------------------------------------------------------------------
+
+CROSS_TAG = "no program of at most 3 instructions writes the cross pair"
+CTL_TAG = "fold_wide3.c finds"
+CONTROLS = 14                # wide3's 13 over chain 1's six inputs and the two-chain one over the nine
+
+
+def record_ok(doc: dict, width: int) -> tuple[bool, dict]:
+    """Whether `doc` is a passing `--wide3` verdict of this script at `width`: its four cross-pair checks and its
+    controls all passed. The detail names the script digest it ran at."""
+    checks, args = doc.get("checks", []), doc.get("args", [])
+    cross = [c for c in checks if CROSS_TAG in c["name"] and f"width {width}:" in c["name"]]
+    ctl = [c for c in checks if CTL_TAG in c["name"] and f"width {width}" in c["name"]]
+    ok = (doc.get("schema") == SCHEMA and doc.get("script", {}).get("name") == Path(__file__).name
+          and doc.get("ok") is True and "--wide3" in args and ("--w32" in args) == (width == 32)
+          and len(cross) == len(CROSS) and all(c["ok"] for c in cross)
+          and len(ctl) >= CONTROLS and all(c["ok"] for c in ctl))
+    return ok, {"sha256": doc.get("script", {}).get("sha256", "")[:12], "cross": len(cross), "controls": len(ctl),
+                "counts": doc.get("counts")}
+
+
+def _synthetic_record(width: int) -> dict:
+    checks = [{"name": f"two chains, width {width}: {CROSS_TAG} ({a}', {b}')", "ok": True, "detail": None}
+              for a, b in CROSS]
+    checks += [{"name": f"width {width}: {CTL_TAG} its control c{i}", "ok": True, "detail": None}
+               for i in range(CONTROLS)]
+    return {"schema": SCHEMA, "script": {"name": Path(__file__).name, "sha256": "0" * 64}, "ok": True,
+            "args": ["--wide3", *(["--w32"] if width == 32 else [])], "checks": checks, "counts": {}}
+
+
+def merge_selftest(ck: Checks) -> None:
+    """The merge's predicate, on records of the shape `--wide3` writes: it accepts a passing one at its own width only,
+    and refuses a failed cross pair or a missing control."""
+    ck.check("the records' merge accepts a passing --wide3 record at its own width (4 and 32)",
+             record_ok(_synthetic_record(4), 4)[0] and record_ok(_synthetic_record(32), 32)[0])
+    if ck.mutations:
+        bad = _synthetic_record(32)
+        bad["checks"][1]["ok"] = False
+        ck.mutation("the merge refuses a record with a cross pair found", not record_ok(bad, 32)[0])
+        ck.mutation("the merge refuses a width-4 record offered as the 32-bit one", not record_ok(_synthetic_record(4), 32)[0])
+        short = _synthetic_record(4)
+        short["checks"].pop()
+        ck.mutation("the merge refuses a record missing a control", not record_ok(short, 4)[0])
+
+
+def merge_records(ck: Checks, paths: list[str]) -> None:
+    """The records' merge: the NO-MIX runs' `--wide3` verdicts, one at width 4 and one at 32 bits, each `record_ok` at
+    its width. With §1 and §3's fast battery, the merged verdict is the whole result."""
+    docs = [(Path(p), json.loads(Path(p).read_text(encoding="utf-8"))) for p in paths]
+    for width in (4, 32):
+        mine = [(p, d) for p, d in docs if ("--w32" in d.get("args", [])) == (width == 32)]
+        ok, detail = record_ok(mine[0][1], width) if len(mine) == 1 else (False, {})
+        ck.check(f"NO-MIX at width {width}, from its run's record: every check passed, none of the four cross pairs is "
+                 "written by a program of at most 3 instructions over the nine inputs, every control found", ok,
+                 {"records": [p.name for p, _ in mine], **detail})
 
 
 # ---- §3: the per-unit bound (restriction-lemma counting) and the residual premises ---------------------------------------
@@ -446,6 +506,9 @@ def main() -> int:
         no_mix_wide3(ck, 32 if "--w32" in ck.args else 4)
     else:
         no_mix_pure(ck, width=4)
+        merge_selftest(ck)
+        if "--merge" in ck.args:
+            merge_records(ck, [a for a in ck.args if a != "--merge"])
     per_unit_bound(ck, phi)
     residuals(ck, d)
     whole_block(ck)
