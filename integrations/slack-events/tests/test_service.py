@@ -1,8 +1,9 @@
-"""The deployment's shape: the build's vendored copy is the repository's, the pins Vercel installs are the suite's, and
-vercel.json wires the functions, the queue and the crons the code expects."""
+"""The deployment's shape: the build's vendored copy is the repository's, the pins Vercel installs are the suite's, the
+queue's subscriber is declared as Vercel documents for Python, and vercel.json wires the functions and crons."""
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
 import sys
 import tomllib
@@ -10,11 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import anyio
 from vercel.queue import Message, MessageMetadata, RetryAfter
-from vercel.queue.testing import clear_subscriptions
 
 from conftest import CHAT, LUKE, REPO
-from slack_events import consumer, deps, vendor
+from slack_events import consumer, deps, subscriber, vendor
 
 SUITE = Path(__file__).resolve().parents[1]
 SERVICE = SUITE / "service"
@@ -44,22 +45,31 @@ def test_the_bundled_registry_passes_research_msgs_own_check():
     assert "ask-the-team" in reg["channels"] and any(h["handle"] == "top" for h in reg["handles"])
 
 
-def test_requirements_txt_pins_what_the_suite_tests():
-    pins = (SERVICE / "requirements.txt").read_text().split()
-    project = tomllib.loads((SUITE / "pyproject.toml").read_text())["project"]
-    assert pins == project["dependencies"] and all("==" in p for p in pins)
+def test_the_service_pyproject_pins_what_the_suite_tests_and_declares_the_subscriber():
+    """Vercel installs service/pyproject.toml and reads its `[[tool.vercel.subscribers]]` (the vercel-queue README's
+    push-mode setup): one entry, `module:function`, naming the `@subscribe` function on the topic the app publishes to."""
+    service = tomllib.loads((SERVICE / "pyproject.toml").read_text())
+    suite = tomllib.loads((SUITE / "pyproject.toml").read_text())["project"]
+    pins = service["project"]["dependencies"]
+    assert pins == suite["dependencies"] and all("==" in p for p in pins)
+    assert not any(p.startswith(("upstash", "redis")) for p in pins)
+    [sub] = service["tool"]["vercel"]["subscribers"]
+    assert sub == {"entrypoint": "slack_events.subscriber:on_message"}
+    module, func = sub["entrypoint"].split(":")
+    fn = getattr(importlib.import_module(module), func)
+    assert fn is subscriber.on_message and inspect.iscoroutinefunction(fn.__wrapped__ if hasattr(fn, "__wrapped__") else fn)
+    assert not (SERVICE / "requirements.txt").exists()
 
 
-def test_vercel_json_wires_the_functions_the_queue_and_the_crons():
+def test_vercel_json_wires_the_functions_and_the_crons_and_no_queue_trigger():
     v = json.loads((SERVICE / "vercel.json").read_text())
-    fn = v["functions"]
-    assert fn["api/consume.py"]["experimentalTriggers"] == [{"type": "queue/v2beta", "topic": deps.TOPIC}]
-    assert fn["api/consume.py"]["maxDuration"] < consumer.LEASE_S       # a lease outlives the delivery that holds it
+    assert set(v["functions"]) == {"api/index.py"}
+    assert "experimentalTriggers" not in json.dumps(v)                  # the subscriber's trigger is generated from pyproject
     assert {c["path"]: c["schedule"] for c in v["crons"]} == {"/api/cron/watchdog": "*/5 * * * *",
                                                              "/api/cron/reconcile": "*/10 * * * *"}
     assert v["framework"] is None and v["buildCommand"] == "python3 build.py"
-    assert not (SERVICE / "pyproject.toml").exists()               # Vercel's uv build would read it, and the workspace's
     assert (SERVICE / ".python-version").read_text().strip() == "3.13"
+    assert not (SERVICE / "api" / "consume.py").exists()
 
 
 def test_api_index_serves_every_route(monkeypatch):
@@ -75,18 +85,14 @@ def delivery(payload: dict, n: int) -> Message:
         consumer_group="slack-events"))
 
 
-def test_api_consume_runs_the_consumer_and_turns_retry_into_retry_after(world, monkeypatch):
-    clear_subscriptions()
+def test_the_subscriber_runs_the_consumer_and_turns_retry_into_retry_after(world, monkeypatch):
     monkeypatch.setattr(deps, "production", lambda: world.deps)
-    mod = load(monkeypatch, "consume")
-    try:
-        post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
-        payload = world.event(CHAT, post, "EvQ")
-        assert world.deps.store.claim(consumer.event_key("EvQ"), "processing:other", consumer.LEASE_S)
-        with pytest.raises(RetryAfter):
-            mod.on_message(delivery(payload, 1))
-        world.clock.t += consumer.LEASE_S
-        assert mod.on_message(delivery(payload, 2)) is None
-        assert world.deps.store.get(consumer.event_key("EvQ")) == "done" and len(world.rung("top")) == 1
-    finally:
-        clear_subscriptions()
+    post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    payload = world.event(CHAT, post, "EvQ")
+    world.slack.fail = {"chat.postMessage"}
+    with pytest.raises(RetryAfter) as r:
+        anyio.run(subscriber.on_message, delivery(payload, 1))
+    assert r.value.timeout_seconds == consumer.backoff(1)
+    world.slack.fail = set()
+    assert anyio.run(subscriber.on_message, delivery(payload, 2)) is None
+    assert len(world.rung("top")) == 1

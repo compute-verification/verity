@@ -163,15 +163,6 @@ wheels = [
 ]
 
 [[package]]
-name = "certifi"
-version = "2026.10.18"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7e/eb/a2aa1ac3ea30dd3f30ca57f40232138b6b0040719316ecb85daf61167771/certifi-2026.10.18.tar.gz", hash = "sha256:b9995d97b64d0431a5af837d8ca8cd6238104d1f319f04bd93ea43124d6c861e", size = 135227, upload-time = "2026-10-18T16:21:07.655Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/ba/95dd616042484f7c83a06974388b37b837732740ee70bc5dc715b5fcd55a/certifi-2026.10.18-py3-none-any.whl", hash = "sha256:73191c47aaa79da394e8fee2dbc2ec827432cab56311122c9e47abf79e390f62", size = 134093, upload-time = "2026-10-18T16:21:06.276Z" },
-]
-
-[[package]]
 name = "cluster"
 version = "0.1.0"
 source = { editable = "infra/cluster" }
@@ -516,19 +507,6 @@ wheels = [
 ]
 
 [[package]]
-name = "httpcore"
-version = "1.0.9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "certifi" },
-    { name = "h11" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8", size = 85484, upload-time = "2025-04-24T22:06:22.219Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55", size = 78784, upload-time = "2025-04-24T22:06:20.566Z" },
-]
-
-[[package]]
 name = "httpcore2"
 version = "2.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -539,21 +517,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/30/ff/b53af1b49bb2cb5fa97c92215614b173ca5c1a99ded80e2d52f15a94fa6d/httpcore2-2.14.0.tar.gz", hash = "sha256:4f57a1a8249fe6af589d935cfd456f1d13bbdcb0f0fc72af9142368fc94811d7", size = 69096, upload-time = "2026-10-18T16:29:21.898Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/06/a8d6a8f90d11b76d9086242b6bb0ee4b503473bfc8be34c2d5b067275c22/httpcore2-2.14.0-py3-none-any.whl", hash = "sha256:4c4f64f4b544afeb778c42c0ffb5941b29e671157e90ed3f6dc787c4bca90cd1", size = 84291, upload-time = "2026-10-18T16:29:19.743Z" },
-]
-
-[[package]]
-name = "httpx"
-version = "0.28.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "certifi" },
-    { name = "httpcore" },
-    { name = "idna" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
 ]
 
 [[package]]
@@ -2029,15 +1992,17 @@ wheels = [
 ]
 
 [[package]]
-name = "upstash-redis"
-version = "1.8.0"
+name = "vercel-cache"
+version = "0.7.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "httpx" },
+    { name = "httpx2" },
+    { name = "vercel-headers" },
+    { name = "vercel-internal-telemetry" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/63/98fffe42262376f4b39d371d9b583b33b13c08f662bda05c627827d2c290/upstash_redis-1.8.0.tar.gz", hash = "sha256:5fcd172802f517473b711de2fd1d2d2587c13c816cd2c570ad66fceb4f77e695", size = 47555, upload-time = "2026-08-26T09:50:41.96Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/6e/5c1ef5f9d224896a0deaea34c7eb5b7689143f55d7e4d70b9d4597beaf37/vercel_cache-0.7.6.tar.gz", hash = "sha256:347ffb12cf04bf53bc9c5eacb6d81f0ef8d05625f759fa5eed9ea452500cc67e", size = 9927, upload-time = "2026-10-06T18:38:27.683Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/04/a350e6b9b910c6006826dd63deb45be30fed85b826351588df27671bd92b/upstash_redis-1.8.0-py3-none-any.whl", hash = "sha256:e08f18d9a955b2b224ab8d1611a9782bc21054a83afb3b88df36809ff87096fa", size = 49959, upload-time = "2026-08-26T09:50:40.809Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/79/dd2eb2af08135976ccd7aad56bac64bb83e0e85d6356efd7621c485bb026/vercel_cache-0.7.6-py3-none-any.whl", hash = "sha256:62178b835198b58a2355adb7e88d86fc3441c7f195bf6f4c4d78fa2e89310c8b", size = 10350, upload-time = "2026-10-06T18:38:26.911Z" },
 ]
 
 [[package]]
@@ -2060,6 +2025,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ff/2d/e52e4c5a8cc53843b8749dc09d169a00b5aaa428d98d2c71dee95efcaba2/vercel_internal_core-0.2.2.tar.gz", hash = "sha256:cf20141dd5cb67cdf0892d4f96a4b25dc7cf26469c72c00f26f6fc504c945e6e", size = 20275, upload-time = "2026-10-15T16:22:53.598Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/21/cb413aa5bd2fdec9a9e9976d5c31ec0c5e54060a18d9608eb089b4da67fa/vercel_internal_core-0.2.2-py3-none-any.whl", hash = "sha256:581b02309ec8d6367134c3ecabba5d8169a902677458e228f544dc88dfa05a6b", size = 24767, upload-time = "2026-10-15T16:22:52.748Z" },
+]
+
+[[package]]
+name = "vercel-internal-telemetry"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx2" },
+    { name = "vercel-oidc" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a7/95/34341653e35be8e386aa771af8555d4e3c2ad10e1a94a03206bfd7ccd2ad/vercel_internal_telemetry-0.8.1.tar.gz", hash = "sha256:89730ec0ea8956fcaf28e517bafa9b89ff0cbaea8018b4dd44474d4c8e795250", size = 9174, upload-time = "2026-10-06T18:38:12.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/79/1634653c526f0773cc0dba3e96e1c5d1273d6aba0bd667d90e23d15215fd/vercel_internal_telemetry-0.8.1-py3-none-any.whl", hash = "sha256:cc57659b4dd1c33d6a3618fda06376fe66dbd9b279bb8c64bd60de90e0bc1753", size = 8255, upload-time = "2026-10-06T18:38:11.386Z" },
 ]
 
 [[package]]
@@ -2559,7 +2537,7 @@ source = { virtual = "integrations/slack-events" }
 dependencies = [
     { name = "fastapi" },
     { name = "tzdata" },
-    { name = "upstash-redis" },
+    { name = "vercel-cache" },
     { name = "vercel-queue" },
 ]
 
@@ -2567,7 +2545,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = "==0.149.0" },
     { name = "tzdata", specifier = "==2026.5" },
-    { name = "upstash-redis", specifier = "==1.8.0" },
+    { name = "vercel-cache", specifier = "==0.7.6" },
     { name = "vercel-queue", specifier = "==0.9.2" },
 ]
 
