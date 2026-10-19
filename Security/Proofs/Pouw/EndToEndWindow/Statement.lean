@@ -22,9 +22,11 @@ and decision 107's units, for the window's share `ε` (`0 < ε ≤ 1`, the `ε` 
   transcript is the transcript the registration's commitments bind (`Ccom`) on every run received before the draw
   coin's cutoff, except with probability `ε_id(q, N)` over the oracle and the salt. The extraction reads none of the
   sessions' queries, and a session that opens the registered roots to anything but `Ccom` is the link term inside
-  `WindowBound`'s `β`. `q` counts the sessions' calls too, so `β`'s state terms, which a session state holding a
-  collision of `H` makes about 1, are bounded on average over the oracle by the counted queries on the random-oracle
-  card, as `ε_id` is.
+  `WindowBound`'s `β`. `q` counts the sessions' calls too (`ProverModel.sessCalls`), so that `β`'s state terms, which
+  a session state holding a collision of `H` makes about 1, can be bounded on average over the oracle by the counted
+  queries on the random-oracle card, as `ε_id` is. That bound holds only where the sessions are one oracle program's
+  run at `H`, counted by that program's calls. `sessCalls` is a model field, not yet tied to an oracle program (see
+  `ProverModel`), so no card reads a number for `E[β]` from it until that tie is stated.
 * **The acceptance is the service's at the draw coin's cutoff** (`WindowWork.AcceptsBy`): the sessions accept and the
   challenger received the registration before it released the epoch's draw coin, in its record's order (a window
   received after the draw coin is refused, `late-registration`). The bound is that order, not a time. The wall-clock
@@ -170,9 +172,19 @@ queries, but `Bounded` counts them: a session state that holds a collision of `H
 1, and only a count of the queries that found it bounds them on average over the oracle. The model fixes all five, as it
 fixes the cost; a prover only picks a program.
 A session's strategy is a strategy of the session at `H`, whose type depends on `H`, so no oracle program's output is
-one, and `sessCalls` is tied to the play only through the bound the random-oracle card states at it: a model that
-undercounts can't meet that bound. The window audit is `auditReg Lr (session H s)`: `n` audit units, the law `Lr R` at
-the registration `R`, and the session at the oracle `H` and the salt `s`. -/
+one. `sessCalls` is free: the model picks a separate session play at each oracle and its count, and nothing ties the
+count to the play's queries. So a bound on the sessions' state terms at counted queries (the random-oracle card's,
+through #2593's `Pouw.Window.CollCounted`) holds only for a model whose sessions are one oracle program's run at `H`,
+counted by that program's calls:
+* at a true count it is false: a model whose session play at each `H` holds a hardcoded collision of `H` counts 0
+  session calls, and its `β` is about 1 at every `H`;
+* at a count that isn't a count of calls it is vacuous: a model can report a count large enough that the bound is at
+  least 1 exactly where its play holds a collision.
+`EndToEndWindow` is true at any `sessCalls`, since `β` is its hypothesis; what is open is a number for `E[β]`. Before
+the card states one, `sessCalls` is tied to the play, with `CollCounted`'s restatement and one definition for both: the
+sessions as an oracle strategy of the window's game, one `QTree` per prover move with `H` only in the verdict, and
+`sessCalls` its calls (as `RegQueries` does for the registration). The window audit is `auditReg Lr (session H s)`:
+`n` audit units, the law `Lr R` at the registration `R`, and the session at the oracle `H` and the salt `s`. -/
 structure ProverModel (Q R S : Type) {n : ℕ} (Reg : Type) (Lr : Reg → Law n)
     (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool) where
   Prog : Type
@@ -283,8 +295,10 @@ def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {
 `ε`, the registration's transcript `Ccom`, a play `σ'` and a bound `β(H, s)`: at every oracle and salt, the audit
 accepts `σ'` while the incorrect work of its registration's transcript is at least `ε·W`, `W = ∑_{u < N} W_ref(u)`, with
 probability at most `β(H, s)`. `β` may depend on the oracle, the salt and the prover: no constant bounds it, since a
-play that holds a collision of `H` passes with extraction failing; on average over the oracle it is bounded by the
-counted queries (`Prover.Bounded`). `W` holds PoUW's units only, so a filler, which is no PoUW unit, adds nothing to it.
+play that holds a collision of `H` passes with extraction failing. On average over the oracle it is bounded by the
+counted queries (`Prover.Bounded`) only where the sessions are one oracle program's run at `H`, counted by that
+program's calls, which `ProverModel.sessCalls` doesn't yet tie (see `ProverModel`). `W` holds PoUW's units only, so a
+filler, which is no PoUW unit, adds nothing to it.
 
 Its discharges:
 * `WindowBoundOfService`, at the service's law;
