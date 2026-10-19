@@ -1,6 +1,7 @@
 """[GLM-5.3 fp8] The block-scaled FP8 expert GEMMs of vLLM's fused MoE on Hopper: `fused_moe_kernel` (Triton) with `block_shape`
 [128, 128], as the H200 runs GLM-5.3-FP8 (`quant_method` fp8, `fmt` e4m3, `weight_block_size` [128, 128], `activation_scheme`
-dynamic, no `scale_fmt`) at TP without EP, eager, `VLLM_USE_DEEP_GEMM=0`; GLM-5.3's engine refuses `VLLM_BATCH_INVARIANT` on sm_90
+dynamic, no `scale_fmt`) at TP without EP, eager, at vLLM's sm_90 defaults (DeepGEMM on: the row's target declares no
+`fp8_block_gemm`); GLM-5.3's engine refuses `VLLM_BATCH_INVARIANT` on sm_90
 (no sparse-MLA backend supports it), so its experts launch the tuned configs.  Pinned vLLM 0.28.1rc1.dev472 (d9105ea80), Triton
 3.7.1; line numbers are at that commit.
 
@@ -10,7 +11,8 @@ The path, read from the source:
    activations) and `ep_size == 1`, `_get_priority_backends` moves TRITON to the front (fused_moe/oracle/fp8.py:113-123), so the
    experts are `TritonExperts` (batch invariant: `_supports_batch_invariance`; fused_moe/experts/triton_moe.py).
 2. The block's input is `per_token_group_quant_fp8(x, 128)` (`moe_kernel_quantize_input` -> `_fp8_quantize`, fused_moe/utils.py:239-243;
-   `use_ue8m0` = `is_deep_gemm_e8m0_used()`, False with DeepGEMM off): the kernel `fp8.Fp8GroupQuant_v1` already states.
+   `use_ue8m0` defaults to `is_deep_gemm_e8m0_used()`, True with DeepGEMM and `VLLM_USE_DEEP_GEMM_E8M0` on): the kernel
+   `deepgemm.Fp8GroupQuantUe8m0_v1` already states (`fp8.Fp8GroupQuant_v1` with DeepGEMM off).
 3. `invoke_fused_moe_triton_kernel` (fused_moe/fused_moe.py:763-910) launches `fused_moe_kernel` (fused_moe.py:299-610) twice, w13
    (`mul_routed_weight` False) then w2 (`not apply_router_weight_on_input`, top_k 1; triton_moe.py:505-527), with the config of
    `try_get_optimal_moe_config` (fused_moe.py:1422-1451), `BLOCK_SIZE_K = min(BLOCK_SIZE_K, 128)` (fused_moe.py:844-846) and
@@ -78,6 +80,8 @@ function.  `scales` is [pairs, I/G] row-major (`is_scale_transposed` False, _cus
   SiluMulFp8BlockQuant{I,G}                   (gu: 2I bf16) -> (q: I e4m3, scale: I/G f32): one (token, slot) row
 """
 from __future__ import annotations
+
+__models__ = ("zai-org/GLM-5.3",)
 
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, concat, tuple_of

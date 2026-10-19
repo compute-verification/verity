@@ -9,7 +9,8 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         (Program module path -> the implementation's `named_modules()` path), `segment_steps` at the sampling events
 * stream geometry    -- the FA2 / FA3 M1 launch geometry and word count, the fused-MoE block planes (`moe_geometry` / `moe_identities`)
 * manifest rows      -- the lifted dtypes of the padded construction, the promoted-row observation rule (`promoted_observation`: a pre-flip
-                        v1 manifest's `promoted: true` rows), the committed-name reader and the layout-level `coverage_check`
+                        v1 manifest's `promoted: true` rows); the binder and the layout-level `coverage_check` over these rows are
+                        `verity_vllm.query.manifest.bind`
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
@@ -47,6 +48,12 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
 TP_SHARD_MEMBER = "shard_rank{rank}"
+
+#: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
+#: sampled ids; and the one family of its identities (every value of every engine step).
+SERVED_IDS, SERVED_POSITIONS = "c00.input/ids", "c00.input/positions"
+SERVED_LOGITS, SERVED_SAMPLED = "logits_processor", "runner.sampler/sampled_token_ids"
+SERVED_FAMILY = "served_kernel_values"
 
 _ROW_RE = re.compile(r"\[(\d+)\]$")
 
@@ -315,6 +322,13 @@ def moe_plane_kind(family: str, module: str) -> str | None:
     return None
 
 
+def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
+    """The MoE modules whose block rows are `moe_block_stream` planes, from each row's (family, module): those with router rows, which
+    give the planes their M tokens (`moe_geometry`).  Under any other module a `moe_plane_kind` row is a Call like the rest (DeepSeek-V4's
+    Marlin block, routed by a Definition no plane names)."""
+    return frozenset(m for f, m in rows if moe_plane_kind(f, m) == "router")
+
+
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
@@ -396,6 +410,13 @@ STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 #: the committed logits only with the seed AND the S the mask used (F-stoch-01 is a wrong S).  Emitted iff the Program HAS the `splits`
 #: parameter (R15 static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
+
+#: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
+#: by `MoeAlignRanks_v1` only.  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
+#: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
+#: committed ranks rank each expert's pairs), and the manifest names no identity for it.
+SCHEDULE_PARAM = "schedule"
+SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 
 def has_splits_param(params) -> bool:
@@ -562,150 +583,11 @@ def manifest_digest(identities: list[dict[str, Any]]) -> str:
     return h.hexdigest()
 
 
-def committed_identity(name: str) -> tuple[str, str] | None:
-    """Committed tensor name -> (op_path, output_member) in the manifest vocabulary; None for extra committed data that binds no required
-    identity (`/row4_f32` regenerate baselines)."""
-    if name.startswith(("fa2.m1/", "fa3.m1/")):
-        tap, rest = name.split("/", 1)
-        layer, geo = rest.split("/", 1)
-        return f"{tap}/{layer}", geo
-    if name.startswith("moe/"):
-        _m, layer, plane = name.split("/", 2)
-        return f"moe/{layer}", plane
-    if name.endswith("/row4_f32"):
-        return None
-    if "/" not in name:
-        return name, "out"
-    base, member = name.rsplit("/", 1)
-    return base, member
-
-
-def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
-                   rank: int = 0, max_report: int = 12) -> dict[str, Any]:
-    """Every manifest identity of (`request_id`, `rank`) must have a committed tensor of the same (step, op_path, output_member,
-    invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}.
-    Reports missing identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence
-    is bind's separate check."""
-    from collections import Counter
-
-    if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
-        um = manifest.get("unmodelled") or {}
-        n = len(manifest.get("identities") or [])
-        return {"ok": False, "error": "manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(um.items())),
-                "manifest_digest": manifest.get("manifest_digest"), "checked": n, "missing_n": n, "missing_by_family": {"(unmodelled)": n},
-                "checked_by_family": {}, "families_missing_entirely": sorted(um), "steps_with_missing": [], "missing": [],
-                "committed_unmatched_n": 0, "committed_unmatched": [], "committed_extras_n": 0, "duplicate_names_n": 0, "steps_committed": [], "unmodelled": um}
-    aliases = manifest.get("op_path_aliases") or {}
-    # [R19 int-20] a PROMOTED identity (producer module, `out`) is committed under its first consumer's input name (`<consumer>/in`,
-    # PROMOTED_OBSERVATION_RULE): that name binds the producer identity here; a committed tensor named for the producer module itself (its
-    # forward output -- by definition NOT the promoted value) binds nothing and is counted under `promoted_misbound`
-    promoted_keys = {(str(r["op_path"]), str(r["output_member"])) for r in manifest.get("identities") or [] if r.get("promoted")}
-    rebind: dict[str, tuple[str, str]] = {}
-    if promoted_keys:
-        rebind = {k: (v[0], v[1]) for k, v in promoted_observation(manifest)["names"].items()}
-    misbound: list[str] = []
-    have: dict[tuple, list[int]] = {}
-    extras = 0
-    for step, metas in layouts.items():
-        seen: Counter = Counter()
-        for m in metas:
-            ident = rebind.get(m["name"]) or committed_identity(m["name"])
-            if ident is None:
-                extras += 1
-                continue
-            if ident in promoted_keys and m["name"] not in rebind:
-                misbound.append(m["name"])
-                extras += 1
-                continue
-            op, member = ident
-            if op in aliases:                                  # a collector that names the shared module per layer -> canonical path + invocation
-                op, inv = aliases[op][0], int(aliases[op][1])
-            else:
-                inv = seen[(op, member)]
-                seen[(op, member)] += 1
-            numel = m.get("numel")
-            if numel is None:
-                numel = 1
-                for d in m.get("shape") or []:
-                    numel *= int(d)
-            have.setdefault((int(step), op, member, inv), []).append(int(numel))
-    missing: list[dict[str, Any]] = []
-    by_family_missing: Counter = Counter()
-    by_family_checked: Counter = Counter()
-    matched_keys: set[tuple] = set()
-    for r in manifest["identities"]:
-        if request_id is not None and str(r["request_id"]) not in (str(request_id), "*"):
-            continue
-        if int(r["rank"]) != int(rank):
-            continue
-        if r["family"] == "weights":
-            continue                                       # registered inputs: checked against the weights root registration, not the step layouts
-        by_family_checked[r["family"]] += 1
-        k = (int(r.get("engine_step", r["step"])), r["op_path"], r["output_member"], int(r["invocation"]))
-        lo, hi = r["element_range"]
-        got = have.get(k)
-        seq_short = None
-        if got is None and r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
-            # [R15 B8] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled sequences) names
-            # the padded whole-step geometry; the tap commits per-SEQUENCE planes (`s<i>/g<HB>x<M>x<NB>/<plane>`) at a segmented prefill, or
-            # one whole-launch plane set at decode.  The requirement is op-level per engine step: every co-scheduled sequence has its planes
-            # (>= n_seq distinct `s<i>` prefixes), or the launch is whole (unsegmented members present).  Same rule as binding.coverage_check.
-            seqs, whole, numels = set(), False, []
-            for (st, op, mem, inv), v in have.items():
-                if st == k[0] and op == k[1] and inv == k[3]:
-                    numels += v
-                    if mem.startswith("s") and "/" in mem and mem[1:mem.index("/")].isdigit():
-                        seqs.add(mem[:mem.index("/")])
-                    else:
-                        whole = True
-            if numels and (whole or len(seqs) >= len(r["requests"])):
-                got, hi = numels, None                                       # op-level: covered; matched below
-                for kk in list(have):
-                    if kk[0] == k[0] and kk[1] == k[1] and kk[3] == k[3]:
-                        matched_keys.add(kk)
-            elif numels:
-                got, seq_short = None, f"{len(seqs)} sequence plane sets committed, {len(r['requests'])} co-scheduled sequences declared ({sorted(seqs)})"
-        if not got or (hi is not None and max(got) < int(hi)):
-            missing.append({"family": r["family"], "step": r["step"], "engine_step": k[0], "request_id": r["request_id"], "op_path": r["op_path"],
-                            "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi], "committed_numel": got}
-                           | ({"why": seq_short} if seq_short else {}))
-            by_family_missing[r["family"]] += 1
-        else:
-            matched_keys.add(k)
-    unexpected = [k for k in have if k not in matched_keys]
-    dup = {k: len(v) for k, v in have.items() if len(v) > 1}
-    families_missing_whole = [f for f, n in by_family_checked.items() if by_family_missing.get(f, 0) == n]
-    steps_missing_whole = sorted({int(r["engine_step"]) for r in missing}) if missing else []
-    requests_missing = sorted({str(r["request_id"]) for r in missing}) if missing else []
-    # [R15 B8] global manifests address request-locally, so a layouts-only check cannot see WHICH request a block belongs to; it can and
-    # must see the declared composition's size per engine step: the packed ids member has exactly the declared rows and the sampled-ids
-    # member exactly one slot per co-scheduled sequence -- a request the server never ran shortens both (named per engine step).  The
-    # per-request partition itself is the binding map's `composition_check`.
-    composition: list[dict[str, Any]] = []
-    if manifest.get("global") and manifest.get("engine_steps") and request_id is None:
-        ref = manifest.get("composition_reference") or {}
-        for es in manifest["engine_steps"]:
-            e = int(es["engine_step"])
-            want_rows, want_seq = int(es.get("rows", sum(int(m["rows"]) for m in es["members"]))), int(es.get("n_seq", len(es["members"])))
-            for fam_name, want in (("input_token_ids", want_rows), ("sampled_token_ids", want_seq)):
-                rf = ref.get(fam_name)
-                if not rf:
-                    continue
-                got = have.get((e, rf["op_path"], rf["output_member"], 0))
-                if got is None:
-                    continue                                # the identities loop already reported the member as missing
-                if max(got) != want * int(rf.get("per_row", 1)):
-                    composition.append({"engine_step": e, "member": f"{rf['op_path']}/{rf['output_member']}", "declared": want, "committed": max(got),
-                                        "requests": [m["request_id"] for m in es["members"]]})
-    return {"ok": not missing and not composition, "manifest_digest": manifest["manifest_digest"], "checked": sum(by_family_checked.values()),
-            "missing_n": len(missing), "missing_by_family": dict(by_family_missing), "checked_by_family": dict(by_family_checked),
-            "families_missing_entirely": families_missing_whole, "steps_with_missing": sorted(set(steps_missing_whole) | {c["engine_step"] for c in composition})[:64],
-            "requests_with_missing": requests_missing[:64],
-            "missing": missing[:max_report], "committed_unmatched_n": len(unexpected), "committed_unmatched": [list(k) for k in unexpected[:max_report]],
-            "committed_extras_n": extras, "duplicate_names_n": len(dup), "steps_committed": sorted(int(s) for s in layouts),
-            "composition_mismatch_n": len(composition), "composition_mismatch": composition[:max_report],
-            **({"promoted_observed_as": dict(sorted((k, list(v)) for k, v in rebind.items())), "promoted_misbound_n": len(misbound),
-                "promoted_misbound": sorted(set(misbound))[:max_report]} if promoted_keys else {})}
+def unreturned_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """A manifest's UNRETURNED outputs (`required.Population.unreturned`: no Call reads them, the Program does not return them, no policy
+    requires them): identity rows outside `identities`, with their own digest, so what the word check skipped is auditable."""
+    rows = sorted(rows, key=row_key)
+    return {"unreturned": rows, "unreturned_digest": manifest_digest(rows)}
 
 
 def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
@@ -714,14 +596,16 @@ def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
 
 
 def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>` under programs_root, else any
-    build_request*/result.json declaring exactly (LP, T) (the row's default request Program); never a near shape.  [R16 reqval] the
-    traversal engine streams these (rows never all in memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
+    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under programs_root, else any
+    build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
+    request's Program for a warm one (`prefix_plan.request_shape`).  [R16 reqval] the traversal engine streams these (rows never all in
+    memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
+    from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        pat = os.path.join(programs_root, f"*LP{lp}_T{t}")
+        sh = PP.request_shape(r)
+        pat = os.path.join(programs_root, f"*{PP.shape_name(sh)}")
         hits = sorted(glob.glob(pat))
         if not hits:
             for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
@@ -731,10 +615,10 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                         res = json.load(open(rj))
                     except Exception:  # noqa: BLE001
                         continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
+                    if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
                         break
         if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring LP={lp} T={t})")
+            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring {PP.shape_key(sh)})")
         progs[r["request_id"]] = hits[0]
     return progs
