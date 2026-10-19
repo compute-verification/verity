@@ -15,11 +15,10 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
                         `RegistryUnavailable` (the environment fault a manifest build refuses under)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its TP-04 policy).  Dependency-free (json/gzip/hashlib).
+too, with its TP-04 policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
 import os
@@ -322,6 +321,13 @@ def moe_plane_kind(family: str, module: str) -> str | None:
     return None
 
 
+def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
+    """The MoE modules whose block rows are `moe_block_stream` planes, from each row's (family, module): those with router rows, which
+    give the planes their M tokens (`moe_geometry`).  Under any other module a `moe_plane_kind` row is a Call like the rest (DeepSeek-V4's
+    Marlin block, routed by a Definition no plane names)."""
+    return frozenset(m for f, m in rows if moe_plane_kind(f, m) == "router")
+
+
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
@@ -370,14 +376,10 @@ def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False)
 
 def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
-    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`)."""
-    from verity_vllm.program.compact import expanded_file_args
-    with gzip.open(os.path.join(program_dir, "instances.json.gz"), "rt") as f:
-        inst = json.load(f)
-    for r in (inst.get("rows") or ()) if expand else ():   # a v2 file's argument progressions -> the v1 per-leaf run lists
-        a = r.get("args")
-        if a:
-            r["args"] = expanded_file_args(a)
+    that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
+    (`instances_file.read_instances`): read them, never modify them in place."""
+    from verity_vllm.program.instances_file import read_instances
+    inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
     res = json.load(open(os.path.join(program_dir, "result.json")))
     art = None
     p = os.path.join(program_dir, "artifact.json")

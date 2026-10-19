@@ -33,13 +33,12 @@ Where the config comes from (`find_hf_config(role)`, first hit wins; the source 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import types
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import CHECKPOINTS as MANIFEST
+from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager import with_geometry
@@ -69,8 +68,8 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
     entry of the repo `verity_vllm.engine.engine_profile.CASES[case]` names."""
     if not MANIFEST.exists():
         return None
-    m = json.loads(MANIFEST.read_text())
-    for e in m.get("checkpoints", []):
+    entries = checkpoint_entries(MANIFEST)
+    for e in entries:
         if e.get("role") == role:
             return e
     try:
@@ -79,7 +78,7 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
         return None
     repo = (CASES.get(role) or {}).get("repo")
     if repo:
-        for e in m.get("checkpoints", []):
+        for e in entries:
             if e.get("repo") == repo:
                 return e
     return None
