@@ -33,7 +33,7 @@ declare -A ENVS=(
 declare -A LAUNCH=(
   [vy-dc-h200]="--mem-gb 64"
   [vy-dc-b200]="--mem-gb 64"
-  [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --max-min 120 --preemptible"
+  [vy-nebius-2]="--queue --gpus 1 --gpu-model rtx-pro-6000 --cpus 16 --mem-gb 64 --disk-gb 5 --max-min 120 --preemptible"
 )
 if [ "$MODEL" = qwen3-8b ]; then
   PIN_ART=${PIN_ART-art:25a1a1e2b13beec1f5bf76334932fb89a5460cfb2f5f0c29ce3a456922f9fcb7}
