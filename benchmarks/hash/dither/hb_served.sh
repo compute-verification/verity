@@ -21,9 +21,10 @@
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
 # on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
 # default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
-# hb_sbench.py adds three arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
-# (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); and dither-1s-hb,
-# dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so). The
+# hb_sbench.py adds four arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
+# (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); dither-1s-hb,
+# dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so); and
+# dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too). The
 # dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), from a sent
 # h1v3-SHA.tar.gz (`git archive SHA verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
@@ -47,7 +48,7 @@ DITHER=benchmarks/hash/dither
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
-sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py ${HB_H1U:+"$HB_H1U"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py "$INPUTS"/hb_peel.py ${HB_H1U:+"$HB_H1U"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -94,6 +95,9 @@ case " $* " in *dither-1s-hb*)
     echo "hb_served.sh: dither-1s-hb needs --send benchmarks/hash/dither/hb_one.py and hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
     exit 2; }
   export HB_H1U ;;
+esac
+case " $* " in *dither-1s-hbp*)
+  [ -f "$INPUTS/hb_peel.py" ] || { echo "hb_served.sh: dither-1s-hbp needs --send benchmarks/hash/dither/hb_peel.py too" >&2; exit 2; } ;;
 esac
 cp "$INPUTS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$INPUTS/BUILD.txt"

@@ -16,6 +16,9 @@ reads xq); dither-1s arms' tokens are reported, not gated.
 The workspace (`kh_unit_ws`' noise, the largest linear's `kh_ws_bytes` at T rows) is allocated at the window's first
 call, vLLM's eager profile run; each call's J is set for the row blocks its M can hold live (M is fixed per captured
 graph). The library is h1u.cu built by job.sh on this lane's branch (`HB_H1U`), sent to the run with --send.
+
+`patch(path, peel=True)` is the `dither-1s-hbp` arm: `kh_one_peel` (CA's peel, 11:02Z) in kh_one's place, the same
+receipts and z = A B^T, so y is today's; its gate is hb_peel.py's.
 """
 from __future__ import annotations
 
@@ -30,10 +33,15 @@ from hb_side import auto_j
 class One:
     """`kh_one` over the window's calls: per linear its seed and receipt offsets in the window's plan."""
 
-    def __init__(self, path: str, win: DO.Window):
+    def __init__(self, path: str, win: DO.Window, peel: bool = False):
         h = self.h = C.CDLL(path)
         vp, u32 = C.c_void_p, C.c_uint
         h.kh_one.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
+        if peel and not hasattr(h, "kh_one_peel"):
+            raise RuntimeError(f"{path} has no kh_one_peel")
+        if peel:
+            h.kh_one_peel.argtypes = h.kh_one.argtypes
+        self.fn = h.kh_one_peel if peel else h.kh_one
         h.kh_ws_bytes.restype = C.c_ulonglong
         h.kh_ws_bytes.argtypes = [u32, u32, u32]
         h.kh_noise_blocks.restype = u32
@@ -66,18 +74,18 @@ class One:
         j = auto_j(-(-min(M, win.t) // 32) * (n // 32), self.nb[w], self.sms)
         o = win.plan.offs[w][0]
         self.calls += 1
-        return self.h.kh_one(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
-                             win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
-                             win.plan.out.data_ptr() + 4 * o, self.ws.data_ptr(), j, win.z[w].data_ptr(), z.data_ptr(),
-                             y.data_ptr(), win.ydump[w].data_ptr() if win.ydump else None, s_a.data_ptr(),
-                             s_w.data_ptr(), win.S.data_ptr(), M, st)
+        return self.fn(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
+                       win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
+                       win.plan.out.data_ptr() + 4 * o, self.ws.data_ptr(), j, win.z[w].data_ptr(), z.data_ptr(),
+                       y.data_ptr(), win.ydump[w].data_ptr() if win.ydump else None, s_a.data_ptr(),
+                       s_w.data_ptr(), win.S.data_ptr(), M, st)
 
 
 def launch(self: DO.Window, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
            z: torch.Tensor) -> None:
     one = getattr(self, "hb_one", None)
     if one is None:
-        one = self.hb_one = One(PATH[0], self)
+        one = self.hb_one = One(PATH[0], self, PEEL[0])
     st = torch.cuda.current_stream().cuda_stream
     a, tb = self.pre["a"], self.tab_bytes * w
     if hasattr(self, "apre"):
@@ -99,8 +107,10 @@ def launch(self: DO.Window, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: to
 
 
 PATH: list[str] = []
+PEEL: list[bool] = [False]
 
 
-def patch(path: str) -> None:
+def patch(path: str, peel: bool = False) -> None:
     PATH[:] = [path]
+    PEEL[:] = [peel]
     DO.Window.launch = launch

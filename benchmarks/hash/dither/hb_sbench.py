@@ -11,6 +11,9 @@
                    h1u.cu's kh_one from the .so HB_H1U names) in place of h1o_units; gated as dither-1s is
                    (`dither_one.check` with h1o.so's references on its gate, control, fault and fault_wb steps), its
                    tokens reported against exact's, not gated (it serves the dithered product).
+    dither-1s-hbp  dither-1s-hb peeled (CA's peel, 11:02Z): hb_one's kh_one_peel, whose z is today's A B^T from the same
+                   stream, so y is today's; gated by hb_peel.py (`dither_one.check` with z held to A B^T, y equal to
+                   today's on every call) on the same four captures, and its tokens must equal exact's.
 
 sbench's arms run in spawned worker processes, which import this file as their main module before unpickling
 `sbench.worker`, so the change below applies in every worker too. Run by hb_served.sh with HB_DITHER_DIR, the source tree's
@@ -39,6 +42,13 @@ def build(arm: str, scratch, gpu_mem: float):
         import hb_one
         hb_one.patch(os.environ["HB_H1U"])
         return _build("dither-1s", scratch, gpu_mem)
+    if arm == "dither-1s-hbp":
+        import hb_one
+        import hb_peel
+        hb_one.patch(os.environ["HB_H1U"], peel=True)
+        llm = _build("dither-1s", scratch, gpu_mem)
+        llm.dither_mod = hb_peel
+        return llm
     if arm != "stock-cutlass":
         return _build(arm, scratch, gpu_mem)
     from vllm import LLM
@@ -50,6 +60,7 @@ sbench.build = build
 sbench.REF_OF["dither-hb"] = "exact"
 sbench.REF_OF["dither-1s-hb"] = "exact"
 sbench.TOKENS_GATED["dither-1s-hb"] = False
+sbench.REF_OF["dither-1s-hbp"] = "exact"
 
 if __name__ == "__main__":
     sys.exit(sbench.main())
