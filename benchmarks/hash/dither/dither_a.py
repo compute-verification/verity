@@ -21,8 +21,10 @@ forks, and a piece ends at an attention).  Between steps dither_one's Window bui
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
 is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
-then its y = dequant(z), 0 past m) and the side stream builds each call's leaf table after the call's receipts, its root
-the call's leaf of the z-step tree, so the round over it still comes before the draw.  With ao=True (the arms' -ao) the
+then its y = dequant(z), 0 past m) and the window builds every call's leaf table between steps in the row z tables'
+place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
+the draw; with z="zyc" (-zyc) the side stream builds each call's table instead, after the call's receipts (one build a
+call: about 0.7 ms each on the RTX against 2.9 ms for all 128 batched, zleaf.py).  With ao=True (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change).
@@ -68,10 +70,11 @@ LIB = "dithera"
 UNITS = ("h1r", "kh")
 # z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
 # (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
-# (bf16), 0 past m, which the epilogue writes as one record a unit and the side stream commits per call after the call's
-# receipts (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored and no z table, y only: the leaves'
+# (bf16), 0 past m, which the epilogue writes as one record a unit and the window commits between steps ("zyc": the side
+# stream per call after the call's receipts) (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
+# and no z table, y only: the leaves'
 # cost floor, never credited
-ZMODES = {"none": 0, "row": 1, "zy": 2}
+ZMODES = {"none": 0, "row": 1, "zy": 2, "zyc": 2}
 ZY_KIND = "zy-unit-table"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
@@ -265,11 +268,12 @@ class Side:
         self.cfgs: dict = {}
         self.zy: list[torch.Tensor] = []
         if z != "row":
-            # the window's row z tables are never built; under "zy" each call's leaf table is, on the side stream
+            # the window's row z tables are never built: under "zy" its z/y leaf tables are, between steps in their
+            # place, under "zyc" each call's on the side stream after its receipts
             zset, build = win.pre["z"], win.c.build
             win.c.build = lambda st, step, domains=True: None if st is zset else build(st, step, domains)
             win.z = [torch.empty(0, dtype=torch.int32, device=dev) for _ in win.z]
-        if z == "zy":
+        if z in ("zy", "zyc"):
             self.unit_of = [UNIT] * win.L
             self.zy = [torch.empty(zy_count(win, w, self.unit_of[w]) * zy_bytes(self.unit_of[w]), dtype=torch.uint8,
                                    device=dev) for w in range(win.L)]
@@ -280,6 +284,8 @@ class Side:
                                         out=win.pre["mid"].leaves_addr(2) + 64 * w) for w in range(win.L)])
             self.tb = C.sizeof(H1CM._Tab)
             self.gemm_done = torch.cuda.Event()
+            if z == "zy":
+                win.pre["z"] = self.zyset
         if unit == "kh":
             if not h1u:
                 raise RuntimeError("dither-a's kh unit needs h1u.so (HB_H1U)")
@@ -311,7 +317,7 @@ class Side:
         cfg = EL.pick(M, n, k, self.arch)
         self.cfgs[(n, k, M)] = str(cfg)
         bm, bn, bk, warps, stages, split, tma = cfg
-        if self.z == "zy":
+        if self.zy:
             z, yl = self.zy[w].view(torch.int32), self.zy[w].view(torch.int16)
             ur, uc = self.unit_of[w]
         else:
@@ -372,7 +378,7 @@ class Side:
             self.side.wait_event(self.fork)
             self.gemm(w, xq, s_a, wt, s_w, y)
             rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st)
-        if not rc and self.z == "zy":
+        if not rc and self.z == "zyc":
             # the call's z/y leaves and their tree, after its receipts, once its GEMM has written the records
             self.gemm_done.record(main)
             self.side.wait_event(self.gemm_done)
@@ -398,15 +404,15 @@ class Side:
         self.calls += 1
 
     def leaf_bytes(self) -> dict | None:
-        """Per step under "zy": the bytes the epilogue writes into the records, and the side stream's leaf build reads
-        (the records) and writes (segment digests, leaves, levels), from the tables' shapes."""
-        if self.z != "zy":
+        """Per step under "zy" or "zyc": the bytes the epilogue writes into the records, and the leaf build reads (the
+        records) and writes (segment digests, leaves, levels), from the tables' shapes."""
+        if not self.zy:
             return None
         recs = sum(t.count * t.length for t in self.zyset.tabs)
         segs = sum(t.count * ((t.length + 1023) // 1024) for t in self.zyset.tabs)
         leaves = sum(t.count for t in self.zyset.tabs)
         return {"unit": list(UNIT), "record_bytes": zy_bytes(UNIT), "leaves": leaves, "epilogue_writes": recs,
-                "side_reads": recs + 64 * segs, "side_writes": 64 * segs + 64 * 2 * leaves}
+                "build_reads": recs + 64 * segs, "build_writes": 64 * segs + 64 * 2 * leaves}
 
     def info(self) -> dict:
         return {"form": FORM, "unit": self.unit, "z": self.z, "a_overlap": self.ao, "leaf_bytes_per_step": self.leaf_bytes(),
@@ -542,7 +548,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc: dict = {"which": which, "form": FORM, "complete": True, "s": s, "m": m, "t": t, "poison": f"{DF.POISON:#04x}",
                  "epsilon": "seeded", "unit": SIDE[0].unit if SIDE else None}
     key, W = win.key, win.window
-    zy = bool(SIDE) and SIDE[0].z == "zy"
+    zy = bool(SIDE) and bool(SIDE[0].zy)
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
     a_cpu, s_cpu, z_cpu = {}, {}, {}

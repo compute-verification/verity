@@ -62,9 +62,10 @@ Arms:
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
                  dither-a the second where HB_H1U is set.  Each with -zy commits CA's z/y leaves (one hiding leaf a
-                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the side stream
-                 builds each call's table after its receipts), and with -y commits no z at all (y only: the leaves'
-                 cost floor, never credited; its gate is its tokens).  With -ao last, the A tables run on a stream of
+                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
+                 builds every call's table between steps; -zyc the side stream each call's after its receipts),
+                 and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
+                 tokens).  With -ao last, the A tables run on a stream of
                  their own, each beside the previous call's units (the units of a call still wait on its A table)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
@@ -330,7 +331,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 
 DITHER_A = {f"dither-a{u}{z}{o}": (unit, zm, ao) for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"))
-            for z, zm in (("", "row"), ("-zy", "zy"), ("-y", "none")) for o, ao in (("", False), ("-ao", True))}
+            for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none")) for o, ao in (("", False), ("-ao", True))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
