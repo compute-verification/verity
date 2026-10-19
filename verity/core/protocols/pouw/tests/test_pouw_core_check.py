@@ -325,6 +325,10 @@ PASS_EXPECT = {
     "other-window": ("coin", "the pass's salt is not the certifier's for its window"),
     "other-reveal": ("coin", "the pass's salt is not the certifier's for its window"),
     "raw-reveal": ("coin", "the pass's salt is not the certifier's for its window"),
+    "weights-unrecorded": ("coin", "the verifier holds no weights' root the certifier recorded before it drew the window's "
+                                   "salt"),
+    "weights-after-salt": ("coin", "the pass's weights are not those the certifier recorded before it drew the window's "
+                                   "salt"),
 }
 
 DRAW_EXPECT = {
@@ -356,12 +360,12 @@ def test_every_pass_mutation_hits_its_refusal():
 
 def test_each_honest_pass_is_had_as_it_was_salted():
     """Each kind of honest pass is accepted, and says how its salt was had: by the epoch's coins (either version), a
-    recorded replay's beacon, or the network certifier's reveal."""
+    recorded replay's beacon, or the network certifier's reveal over the weights it recorded before it."""
     want = {"coin": "coin", "recorded-coin": "coin", "beacon": "recorded beacon", "certified": "certifier"}
     for kind, how in want.items():
         for seed in range(6):
             case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
-            assert (case["reveal"] is not None) == (kind == "certified")
+            assert (case["reveal"] is not None) == (case["weights"] is not None) == (kind == "certified")
             assert CC.pass_epoch(*passes.pass_args(case)) == (how, None), (kind, seed)
 
 
