@@ -751,7 +751,11 @@ class Challenger:
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
                  manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
-        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`)."""
+        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  The
+        window reads none of the compiled Program's seed inputs (`circuit.compile`'s `pouw.roots`, `pouw.salt` and
+        `pouw.positions`, which a verifier fills itself): its unit, `Pc8TileSide` over a template population, registers no
+        value, so `Stream.register` gets no ``supplied`` or ``pinned``, and a record that registers a value is refused
+        (``keys``)."""
         self.witness[name] = []
         self.registered(name, rec)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None

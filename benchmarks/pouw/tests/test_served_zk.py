@@ -19,10 +19,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.ml.circuits.program import REGISTRATION
 from verity.ml.commitments.merkle import tree_levels
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
+from verity.core.protocols.pouw.circuit import compile as CP
 from verity.core.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.coins import Challenger as Coins
 from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
@@ -30,6 +32,8 @@ from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import partition as PT
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
@@ -287,6 +291,35 @@ def test_the_challenger_holds_every_item_to_its_own(served):
     reg = _held(ch, "honest", rec)
     assert reg.receipt["registration"] == R.digest(rec) == reg.digest and reg.order == 0
     assert refused(rec) == {"open"}
+
+
+@LEAN
+def test_the_window_takes_no_seed_from_the_prover(served):
+    """CMP-44 (#2605's caller): the window reads none of the compiled Program's seed inputs, which a verifier fills
+    (`compile.ROOTS`, `SALT`, `POSITIONS`): its unit's parameters are side rows, and its population registers no value, so
+    the challenger's stream is handed no supplied or pinned value, and refuses one (the verifier expects none registered).
+    A registration that brings a seed of its own, a `pouw.salt` or `pouw.roots` entry it committed, is refused (``keys``)
+    by both verifiers of record, and the honest record is then received."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    ell = SC.level_of(rec)
+    prog, _, _ = SC.population(K, rec["population"])
+    assert {n for n, _ in SC.template(K).signature()[0]}.isdisjoint({CP.ROOTS, CP.SALT, CP.POSITIONS, "salt", "position",
+                                                                     "roots"})
+    assert REGISTRATION not in prog.bindings
+    ch = _challenger(params)
+    st = ch.stream("supplied", ell, ch._keyed)
+    for given in ({"supplied": {CP.SALT: [[{"window": "ab" * 64}]]}}, {"pinned": {"W": rec["roots"][1]["root"]}}):
+        with pytest.raises(ValueError, match="registered value"):
+            st.register(rec, SC.ports(params, ell), **given)
+    digest = PT.program_digest(prog)
+    for value in (CP.SALT, CP.ROOTS):
+        own = G.Registered.commit(digest, value, [[0] * 32]).entry()
+        with pytest.raises(S.Refused) as e:
+            _held(ch, value, {**rec, "registered": [own]})
+        assert _codes(e) == {"keys"}
+    assert _held(ch, "honest", rec).digest == R.digest(rec)
 
 
 @LEAN
