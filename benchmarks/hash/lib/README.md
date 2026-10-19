@@ -160,6 +160,11 @@ conformance, 431 of 431 cases bit for bit, before its bench timed anything; the 
 | B200 | `r20261018-233514-4e70` | 431 / 431 | 1965 MHz |
 | RTX PRO 6000 | `r20261018-233435-fee4` | 431 / 431 | 2092 MHz |
 
+`002fb139a` adds the empty tree through the one-call commit and `vc_open_launch`, and row-seg digests at served row counts,
+the red team's coverage gaps (`note:hash/20261018T2024Z-finding-redteam-numbers`); no kernel changed. Its conformance is 526
+cases: H200 `r20261019-030642-7179` and RTX PRO 6000 `r20261019-030642-4ad6` 526 of 526; B200's run `r20261019-030642-b002`
+waits on the node's GPU lease.
+
 A commit of a step of 4 KiB rows (`sha512/row/v2` digests, hm96-sha512 leaves, the frame-v3-sha512 tree), the median of
 interleaved reps in ms: `AUTO` and the form it picked, the best arm it replaces among commit_gpu, native_rows and sharaw's
 forms, and their ratio.
@@ -181,8 +186,9 @@ hash_h3 at each shape.
 
 What is not better:
 
-- RTX PRO 6000 at 142 MB: `FOLD` is 0.514–0.516 ms against sharaw's `v1` at 0.502–0.506 across three runs, 1.6–2.5% behind,
-  beyond the noise (the event timer's quantum there is about 2 µs). The cause isn't found. A nibble-table salt on sm_120
+- RTX PRO 6000 at 142 MB: `FOLD` (0.514–0.516 ms) is 2.0–2.8% behind sharaw's `v1` (0.502–0.506) across runs, by the median
+  of the per-rep ratios (×1.028 over 15 interleaved reps in the red team's re-run `r20261019-004059-0ea8`), beyond the noise
+  (the event timer's quantum there is about 2 µs). The cause isn't found. A nibble-table salt on sm_120
   (`c483ad965`) was slower still and is reverted.
 - H200 at 142 MB (`AUTO` 0.810 ms, its `SPEC` arm 0.801, sharaw's `v4_128` 0.801) and B200 at 142 MB (against sharaw's
   `v1n`) are level: the reps' ranges overlap.
