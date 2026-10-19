@@ -22,7 +22,8 @@ routes are open, as are the joint routes at ρ ≥ 2 on every kind (red team RT-
 
 - (a) Exact-integer designs read `Fp8GridExact` and `Fp4GridExact`, the weakest form: exactness inside one grid
   `2^g`, nothing about the window, rounding or order outside it. `p = 24` on sm_120 and B200, `p = 14` on H200. Every
-  MMA of every exact-integer route `fpx.cu`, `egemm.cu` and `pgemm.cu` issue lies inside it, on every input and issue
+  MMA of every exact-integer route the kernels issue (`emu8.cu`, `fpx.cu`, `egemm.cu`, `pgemm.cu`) lies inside it, on
+  every input and issue
   order (`benchmarks/pouw/theory/fp_step_bounds.py`): H200's k3h and e4r at most 7,200 and 8,192 a k32 step from `+0`;
   on sm_120 and B200 k3's binade-started accumulator at 0.985 of `2^24`, the tightest, and B200's k4t at 0.972 with its
   rebase every 7 words (3 at L = 64), the most the premise admits. The routes measured wrong on H200 (k3, k4, k4s, k3z,
