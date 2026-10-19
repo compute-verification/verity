@@ -6,9 +6,9 @@ import Proofs.Accounting.TS.Price
 import Proofs.Accounting.TS.Sheet
 
 /-!
-# RT-LOGIC-12: #2699's B200 fold and H200 filler are priced at work no check reads (red-team witness, not for landing)
+# RT-LOGIC-12 and -13: #2699's B200 fold and H200 filler are priced at work no check reads, and the H200's measured menu is a cut (red-team witness, not for landing)
 
-Builds on #2699's head (`cursor/int-hb-ea24` @ e12b32444a), not on main.
+Builds on #2699's head (`cursor/int-hb-ea24` @ f3c3237e8a; e12b32444a's data are the same), not on main.
 
 * The B200 (`Sm100`, DS-100). The design's fold is li with 3/8 of an extra keyed round a word (ALU 29/1024, IMAD
   7/256, SHFL 3/4096 a word; ♭'s 928 ALU, 896 IMAD, 24 SHFL a unit). The checks read plain li (`PouwLiAbsorb`, in
@@ -20,6 +20,11 @@ Builds on #2699's head (`cursor/int-hb-ea24` @ e12b32444a), not on main.
   words), but no Definition absorbs them. `noFill_bound`: ♭ without its filler is floored at `0.939·B_♭`.
   `not_optPair_noFill`: no labelling of it meets both FOLD-OPT at `N_w` words and FILL-OPT at share 1.
   `not_premises_noFill`: with the same game, `Sm90SheetHeadline`'s two premises fail on it together.
+* The H200 on DC-90-ri (`Sm90Measured`). Its writer kinds are honest's `IGMMA_S8_N256` and `UNI`; the rows price every
+  other tensor form at the scalar coefficient, so `NoSum` carries them. `imma_bound` and `n128_bound`: ♭ moved mostly to
+  mma.sync m16n8k32 s8, or wholly to wgmma s8 at N = 128, is floored at `0.875·B_♭` and `0.72·B_♭`.
+  `not_noSum_at`: `NoSum` fails on any program whose JI90_1 load is below its parts' price there, under every
+  labelling A6, FOLD-OPT and FILL-OPT allow; `not_noSum_imma` and `not_noSum_n128` are its two instances.
 -/
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
@@ -339,7 +344,7 @@ theorem not_premises_noFill (Ω : Type) [Fintype Ω] [Nonempty Ω]
   · rw [h0]
     norm_num
 
-/-! ### RT-LOGIC-13: the H200 on DC-90-ri, where mma.sync's s8 form is off the menu -/
+/-! ### RT-LOGIC-13: the H200 on DC-90-ri, where every tensor form but honest's is off the menu -/
 
 /-- DC-90-ri's row `r` as rationals, by class index. -/
 def dcCoef (r i : ℕ) : ℚ := Sparse.coeff (Sm90Measured.dc90ri.getD r []) i
@@ -385,6 +390,29 @@ theorem imma_bound :
 theorem imma_off_menu : (22, 128) ∈ Sm90.d2s.writers ∧ 22 ∉ Sm90Measured.d2s.writers.map Prod.fst := by
   decide +kernel
 
+/-- ♭ with its words written by honest's instruction at half the tile, wgmma s8 m64n128k32 (`IGMMA_S8_N128`, 2048
+words an instruction): two a unit, with ♭'s fold, filler and skippable work. -/
+def n128All : Sparse :=
+  [(11, 2, 1)] ++ Sm90.flatFold ++ Sm90.flatFill ++ Sm90Measured.flatSkip
+
+theorem n128_rows : ∀ i < 15, dot (dcCoef i) 28 n128All ≤ 72 / 100 * BqDc := by decide +kernel
+
+/-- The model's floor for that program on DC-90-ri is at most `0.72·B_♭`. -/
+theorem n128_bound :
+    Sm90Measured.model.G.bound (Sparse.counts n128All) ≤ 72 / 100 * Sm90Measured.model.bnd Sm90Measured.flat := by
+  rw [dc_bnd]
+  unfold Machine.bound
+  refine ciSup_le fun r => ?_
+  rw [load_counts _ dcRow dc_hG]
+  have h' : ((dot (dcRow r) 28 n128All : ℚ) : ℝ) ≤ ((72 / 100 * BqDc : ℚ) : ℝ) :=
+    Rat.cast_le.mpr (n128_rows r.val r.isLt)
+  push_cast at h'
+  exact h'
+
+/-- `IGMMA_S8_N128` is a writer kind of DS-90's model at 2048 words an instruction, and no writer kind of DC-90-ri's. -/
+theorem n128_off_menu : (11, 2048) ∈ Sm90.d2s.writers ∧ 11 ∉ Sm90Measured.d2s.writers.map Prod.fst := by
+  decide +kernel
+
 /-! The exclusion, at the JI90_1 certificate, where `UNI` costs 0.90 a word and the vector route `(1/2)/32` of a lane
 instruction a word. -/
 
@@ -408,8 +436,7 @@ theorem dc_data :
         dcCoef 6 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 28)) ∧
     (∀ j ∈ Sm90Measured.d2s.vec, v1 ≤ dcCoef 6 (j % 28)) ∧
     (∀ i < 2, phi1 ≤ dot (dcCoef 6) 28 (Sm90Measured.d2s.folds.getD i [])) ∧
-    0 ≤ v1 ∧
-    dot (dcCoef 6) 28 immaAll < 4096 * w1 + 4096 * phi1 + chi1 := by
+    0 ≤ v1 := by
   decide +kernel
 
 theorem dc_a_nonneg : ∀ r k, 0 ≤ Sm90Measured.model.G.a r k := fun r k => by
@@ -517,11 +544,12 @@ theorem dc_fillOpt (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (h : FillOptFilled 
   have := h lam hl
   rwa [mul_one] at this
 
-/-- **`NoSum` fails on that program under every labelling the other premises allow.** With A6 (`SheetWords`), FOLD-OPT
-at all 4096 words, FILL-OPT at share 1 and its 4096 committed words right and fixed (it computes them exactly, so
-`RightFixed` gives all of them at a zero unfolded share), the JI90_1 certificate prices the run's words, fold and
-filler above its whole load there: `IMMA16832_S8`'s words have no head on the menu. -/
-theorem not_noSum_imma (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (hn : A.run.n = Sparse.counts immaAll)
+/-- **`NoSum` fails on any program whose JI90_1 load is below its words', fold's and filler's price there, under
+every labelling the other premises allow.** With A6 (`SheetWords`), FOLD-OPT at all 4096 words, FILL-OPT at share 1
+and its 4096 committed words right and fixed (it computes them exactly, so `RightFixed` gives all of them at a zero
+unfolded share), the JI90_1 certificate prices the run's words, fold and filler above its whole load there. -/
+theorem not_noSum_at (s : Sparse) (hs : dot (dcCoef 6) 28 s < 4096 * w1 + 4096 * phi1 + chi1)
+    (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (hn : A.run.n = Sparse.counts s)
     (hA : A.Split) (hW : SheetWords Sm90Measured.model A) (hF : FoldOptFolded Sm90Measured.model A 4096)
     (hX : FillOptFilled Sm90Measured.model A 1) (hfix : 4096 ≤ A.fixed) : ¬ NoSum A := by
   intro hN
@@ -529,22 +557,34 @@ theorem not_noSum_imma (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (hn : A.run.n =
     scalarRoute_half _ A hA hW (le_of_eq dc_q) (le_of_eq dc_qT) le_rfl
   have key := price_of_parts_folded Sm90Measured.model Sm90Measured.flat A (onFacet ji1) 4096 (isCert_onFacet _)
     dc_wf hA hW.1 hSR (fun u => u.elim) hN hF (dc_fillOpt A hX)
-  have hp : Sm90Measured.model.G.price (onFacet ji1) A.run.n = ((dot (dcRow ji1) 28 immaAll : ℚ) : ℝ) := by
+  have hp : Sm90Measured.model.G.price (onFacet ji1) A.run.n = ((dot (dcRow ji1) 28 s : ℚ) : ℝ) := by
     rw [show Sm90Measured.model.G.price (onFacet ji1) A.run.n = Sm90Measured.model.G.load A.run.n ji1 from
       demandPrice_onFacet ji1 (Sm90Measured.model.G.load A.run.n), hn, load_counts _ dcRow dc_hG]
-  have hlt : ((dot (dcRow ji1) 28 immaAll : ℚ) : ℝ) < ((4096 * w1 + 4096 * phi1 + chi1 : ℚ) : ℝ) :=
-    Rat.cast_lt.mpr dc_data.2.2.2.2
+  have hlt : ((dot (dcRow ji1) 28 s : ℚ) : ℝ) < ((4096 * w1 + 4096 * phi1 + chi1 : ℚ) : ℝ) :=
+    Rat.cast_lt.mpr hs
   push_cast at hlt
   have hmuF : Sm90Measured.model.muF = 0 := rfl
   have hmuX : Sm90Measured.model.muX = 0 := rfl
   rw [hmuF, hmuX, hp] at key
   have hw0 : (0 : ℝ) ≤ w1 := by
-    have : (0 : ℚ) ≤ w1 := div_nonneg dc_data.2.2.2.1 (by norm_num)
+    have : (0 : ℚ) ≤ w1 := div_nonneg dc_data.2.2.2 (by norm_num)
     exact_mod_cast this
   have hw := mul_le_mul hfix dc_wStar hw0 (by linarith)
   have hφ := dc_phiStar
   have hχ := dc_chiStar
   linarith
+
+/-- `NoSum` fails on the IMMA16832 program: its words have no head on the menu. -/
+theorem not_noSum_imma (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (hn : A.run.n = Sparse.counts immaAll)
+    (hA : A.Split) (hW : SheetWords Sm90Measured.model A) (hF : FoldOptFolded Sm90Measured.model A 4096)
+    (hX : FillOptFilled Sm90Measured.model A 1) (hfix : 4096 ≤ A.fixed) : ¬ NoSum A :=
+  not_noSum_at immaAll (by decide +kernel) A hn hA hW hF hX hfix
+
+/-- `NoSum` fails on the N128 program: honest's instruction at half the tile heads no word on the menu. -/
+theorem not_noSum_n128 (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (hn : A.run.n = Sparse.counts n128All)
+    (hA : A.Split) (hW : SheetWords Sm90Measured.model A) (hF : FoldOptFolded Sm90Measured.model A 4096)
+    (hX : FillOptFilled Sm90Measured.model A 1) (hfix : 4096 ≤ A.fixed) : ¬ NoSum A :=
+  not_noSum_at n128All (by decide +kernel) A hn hA hW hF hX hfix
 
 end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 
@@ -557,3 +597,6 @@ end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.imma_bound
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.imma_off_menu
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_noSum_imma
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.n128_bound
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.n128_off_menu
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_noSum_n128
