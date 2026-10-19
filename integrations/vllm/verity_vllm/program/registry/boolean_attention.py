@@ -1,12 +1,16 @@
 """Flash attention on bits: `AttnBlock` / `AttentionHead` / `Attention` v6 (v3's statics), v7 (v2's), v8 (v5's) and v9 (v4's),
-the v3 and v2 bodies (`b1`) and the v5 and v4 bodies (`fa2_check_inf`, `fa3_check_inf`) line for line over Boolean
-Definitions, so their word views are those chains at the same statics.
+the v3 and v2 bodies (`b1`) and the v5 and v4 bodies (`fa2_check_inf`, `fa3_check_inf`) over Boolean Definitions, the same
+operations in the same order, so their word views are those chains at the same statics.
 
 Every word is its bits (`verity.ml.circuits.boolean.word_type`): a bf16 word `Array<16, Value<1>>`, an f32 word `Array<32, Value<1>>`. The
-callees are the Boolean versions of the word chains': `DotBf16_v3{K=D, DOT}` and `DOT` itself (`verity.ml.circuits.ops.boolean.gemm`;
-v6's is `AmpereBF16TcDot16_v3`), `F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2` and the inverse sum
-(v6's `Fa2InvSum_v2`; v7's, v8's and v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`
-(`verity.ml.circuits.ops.boolean.mufu`). The word constants (zero, `_scale_log2_bits(D)`) are written with the constant bits. v4 and v5 are
+callees are the Boolean versions of the word chains' (`DOT`, `verity.ml.circuits.ops.boolean.gemm`, v6's `AmpereBF16TcDot16_v3`;
+`F2fpBf16_v2`, the FTZ f32 operations, `F32Max_v2`, `GuardNegInfZero_v2`, the inverse sum (v6's `Fa2InvSum_v2`; v7's, v8's and
+v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`, `verity.ml.circuits.ops.boolean.mufu`), where a
+row of them shares an operand cut at it (`elementwise.shared_operand`), so that the head computes no value twice: each k16 step
+of q.k and of p.v is an `AttnDotStep` whose shared operand (the query's or p's 16 words, a partial step's zero words folded in)
+is decoded once per row by `AttnDotStepA`; o's rescale and the epilogue's `o * inv` are `ScaleRow*`, the scores' `s * scale -
+max_scaled` is `FmaSubRow*`, the lanes' rescale `FmaRow*`. The constant `_scale_log2_bits(D)` is folded into the gates of the
+Definitions that read it (`F32MulFtzConst`, `FmaSubRowF32FtzConst*`); the zero padding and zero state are the zero bit. v4 and v5 are
 the FA3 / FA2 per-iteration `Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`); v8 is v5's, whose unguarded blocks
 (`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is; v9 is v4's, whose unguarded blocks read it as it
 is for `max * scale` too.
@@ -24,8 +28,10 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, Explicit, array_of, broadcast, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import attention as BA
+from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.ml.circuits.boolean.forms import const_bits
 from verity.ml.circuits.boolean.trace import definition, word_of
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
@@ -69,6 +75,66 @@ def _transpose(vblk: Coll, D: int) -> Coll:
     return Coll(Array(D, A16), concat([strided_view(vblk, 16 * d, 16, 16 * D, 1, 256) for d in range(D)]))
 
 
+def _dot_step_sig(S):
+    return (((("a", Array(S.NV, BF16)), ("b", A16)) + (() if S.FROM_ZERO else (("acc", F32),))), F32)
+
+
+def _dot_step(S):
+    """``DOT(acc, a ++ 0^(16 - NV), b)`` on bits: the k16 step whose `a` holds NV words and then the zero word (the zero bits
+    folded into the gates), from the +0 accumulator when FROM_ZERO."""
+    if not 1 <= S.NV <= 16:
+        raise ValueError(f"AttnDotStep: NV={S.NV} outside 1..16")
+    pad, zero = [const_bits(0, 16)] * (16 - S.NV), const_bits(0, 32)
+
+    def build(C, *els):
+        a, b = els[:S.NV], els[S.NV:S.NV + 16]
+        return S.DOT.build(C, zero if S.FROM_ZERO else els[S.NV + 16], *a, *pad, *b)
+    return build
+
+
+AttnDotStepA, AttnDotStep = EW.shared_specialized(
+    ("AttnDotStepA", "AttnDotStep"), 1, ("DOT", "NV", "FROM_ZERO"), _dot_step, _dot_step_sig, 0,
+    ("the gates of DOT(acc, a ++ 0^(16 - NV), b) that read only a, once per row of steps that share a",
+     "DOT(acc, a ++ 0^(16 - NV), b) on bits, from a's own gates (acc = +0 when FROM_ZERO)"))
+ScaleRowF32FtzScalar, ScaleRowF32FtzElement = EW.shared_operand(
+    ("ScaleRowF32FtzScalar", "ScaleRowF32FtzElement"), 1, BA.F32MulFtz.build, (("x", F32), ("s", F32)), F32, 1,
+    ("the gates of F32MulFtz_v3(x, s) that read only s, once per row", "F32MulFtz_v3(x, s) from s's own gates"))
+ScaleRowF32FtzBf16Scalar, ScaleRowF32FtzBf16Element = EW.shared_operand(
+    ("ScaleRowF32FtzBf16Scalar", "ScaleRowF32FtzBf16Element"), 1,
+    lambda C, x, s: BG.F2fpBf16.build(C, BA.F32MulFtz.build(C, x, s)), (("x", F32), ("s", F32)), BF16, 1,
+    ("the gates of F2fpBf16_v2(F32MulFtz_v3(x, s)) that read only s, once per row",
+     "F2fpBf16_v2(F32MulFtz_v3(x, s)) from s's own gates"))
+F32MulFtzConst = EW.specialized("F32MulFtzConst", 1, ["K"], lambda S: lambda C, x: BA.F32MulFtz.build(C, x, const_bits(S.K, 32)),
+                                lambda S: ((("x", F32),), F32), doc="F32MulFtz_v3(x, K) for the f32 word K, folded")
+FmaSubRowF32FtzConstScalar, FmaSubRowF32FtzConstElement = EW.shared_specialized(
+    ("FmaSubRowF32FtzConstScalar", "FmaSubRowF32FtzConstElement"), 1, ("K",),
+    lambda S: lambda C, a, c: BA.F32FmaSubFtz.build(C, a, const_bits(S.K, 32), c), lambda S: ((("a", F32), ("c", F32)), F32), 1,
+    ("the gates of F32FmaSubFtz_v3(a, K, c) for the f32 word K that read only c, once per row",
+     "F32FmaSubFtz_v3(a, K, c) for the f32 word K, folded, from c's own gates"))
+FmaSubRowF32FtzScalar, FmaSubRowF32FtzElement = EW.shared_operand(
+    ("FmaSubRowF32FtzScalar", "FmaSubRowF32FtzElement"), 1, BA.F32FmaSubFtz.build, (("a", F32), ("bc", Array(2, F32))), F32, 1,
+    ("the gates of F32FmaSubFtz_v3(a, b, c) that read only (b, c), once per row", "F32FmaSubFtz_v3(a, b, c) from (b, c)'s own gates"))
+FmaRowF32FtzScalar, FmaRowF32FtzElement = EW.shared_operand(
+    ("FmaRowF32FtzScalar", "FmaRowF32FtzElement"), 1, BA.F32FmaFtz.build, (("a", F32), ("b", F32), ("c", F32)), F32, 0,
+    ("the gates of F32FmaFtz_v3(a, b, c) that read only a, once per row", "F32FmaFtz_v3(a, b, c) from a's own gates"))
+
+
+def _step_row(B, DOT, nv: int, a: Coll, bs: Coll, acc: Coll | None) -> Coll:
+    """One `AttnDotStep` per member of a row that shares ``a`` (its first ``nv`` words): ``bs`` and ``acc`` hold one member
+    each (``acc`` None: from +0), and a's own gates are computed once."""
+    S = {"DOT": DOT, "NV": nv, "FROM_ZERO": acc is None}
+    ad = B.call(bind(AttnDotStepA, **S), a)
+    if acc is None:
+        return B.batch(bind(AttnDotStep, **S), a, bs, ad, axes=(None, 0, None))
+    return B.batch(bind(AttnDotStep, **S), a, bs, acc, ad, axes=(None, 0, 0, None))
+
+
+def _scale_row(B, xs: Coll, s: Coll, bf16: bool = False) -> Coll:
+    """`F32MulFtz_v3(x, s)` for each x of ``xs`` (with ``bf16``, then `F2fpBf16_v2`), s's own gates once."""
+    scalar, element = (ScaleRowF32FtzBf16Scalar, ScaleRowF32FtzBf16Element) if bf16 else (ScaleRowF32FtzScalar, ScaleRowF32FtzElement)
+    return B.batch(element, xs, s, B.call(scalar, s), axes=(0, None, None))
+
+
 def _block_type(S):
     return (((("q", Array(S.D, BF16)), ("k", Array(S.BN, Array(S.D, BF16))), ("v", Array(S.BN, Array(S.D, BF16))),
               ("m_prev", F32), ("l_prev", Array(4, F32)), ("o_prev", Array(S.D, F32)))),
@@ -88,44 +154,55 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
            guard_max: bool = True, scale_log2: Coll | None = None):
     """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
     ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
-    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v10 to v13's),
+    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v14 to v17's),
     else the constant `_scale_log2_bits(D)`."""
-    if BN % 16 or not 1 <= NVIS <= BN:
-        raise ValueError(f"{name}: BN={BN} must be a multiple of 16 and 1 <= NVIS={NVIS} <= BN")
+    if BN % 16 or D % 16 or not 1 <= NVIS <= BN:
+        raise ValueError(f"{name}: BN={BN} and D={D} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
     if FIRST and not check:
         raise ValueError(f"{name}: the first iteration runs Check_inf (FIRST needs CHECK)")
     c = _Bits(B)
-    dot = bind(BG.DotBf16, K=D, DOT=DOT)
-    s = [B.call(dot, q, k[j]) for j in range(NVIS)]
+    kq = k[0:NVIS].reshape(Array(NVIS, Array(D // 16, A16)))
+    acc = None
+    for t in range(D // 16):
+        acc = _step_row(B, DOT, 16, q[16 * t:16 * t + 16], kq.take(1, t), acc)
+    scores, s = acc, list(acc)
     bmax = s[0]
     for j in range(1, NVIS):
         bmax = B.call(BA.F32Max, bmax, s[j])
     m_new = bmax if FIRST else B.call(BA.F32Max, m_prev, bmax)
     m_use = B.call(BA.GuardNegInfZero, m_new) if check or guard_max else m_new
-    if scale_log2 is None:
-        scale_log2 = c.word(_scale_log2_bits(D), 32)
+    K = _scale_log2_bits(D) if scale_log2 is None else None
+
+    def by_scale(x):
+        return B.call(BA.F32MulFtz, x, scale_log2) if K is None else B.call(bind(F32MulFtzConst, K=K), x)
     if not FIRST:
-        scores_scale = B.call(BM.MufuEx2Ftz, B.call(BA.F32MulFtz, B.call(BA.F32SubFtz, m_prev, m_use if check else m_new), scale_log2))
-    max_scaled = B.call(BA.F32MulFtz, m_use if guard_max else m_new, scale_log2)
-    p = [B.call(BM.MufuEx2Ftz, B.call(BA.F32FmaSubFtz, s[j], scale_log2, max_scaled)) for j in range(NVIS)]
-    lanes: list[Coll] = []
-    for ln in range(4):
-        cols = [j for j in range(NVIS) if _lane(j) == ln]
-        first = p[cols[0]] if cols else c.zeros(F32)
-        acc = first if FIRST else B.call(BA.F32FmaFtz, scores_scale, l_prev[ln], first)
-        for j in cols[1:]:
-            acc = B.call(BA.F32AddFtz, acc, p[j])
-        lanes.append(acc)
+        scores_scale = B.call(BM.MufuEx2Ftz, by_scale(B.call(BA.F32SubFtz, m_prev, m_use if check else m_new)))
+    max_scaled = by_scale(m_use if guard_max else m_new)
+    if K is None:
+        bc = Coll(Array(2, F32), concat([scale_log2.refs, max_scaled.refs]))
+        args = B.batch(FmaSubRowF32FtzElement, scores, bc, B.call(FmaSubRowF32FtzScalar, bc), axes=(0, None, None))
+    else:
+        sub, own = bind(FmaSubRowF32FtzConstElement, K=K), bind(FmaSubRowF32FtzConstScalar, K=K)
+        args = B.batch(sub, scores, max_scaled, B.call(own, max_scaled), axes=(0, None, None))
+    p = list(B.batch(BM.MufuEx2Ftz, args, axes=(0,)))
+    cols = [[j for j in range(NVIS) if _lane(j) == ln] for ln in range(4)]
+    lanes = [p[cs[0]] if cs else c.zeros(F32) for cs in cols]
+    if not FIRST:
+        lanes = list(B.batch(FmaRowF32FtzElement, scores_scale, l_prev, array_of(lanes), B.call(FmaRowF32FtzScalar, scores_scale),
+                             axes=(None, 0, 0, None)))
+    for ln, cs in enumerate(cols):
+        for j in cs[1:]:
+            lanes[ln] = B.call(BA.F32AddFtz, lanes[ln], p[j])
     pb = [B.call(BG.F2fpBf16, x) for x in p]
-    zero16 = c.zeros(BF16) if NVIS < BN else None
-    o = [c.zeros(F32) for _ in range(D)] if FIRST else [B.call(BA.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
+    o = None if FIRST else _scale_row(B, o_prev, scores_scale)
     for ks in range(BN // 16):
         k0 = 16 * ks
         if k0 >= NVIS:
             break
-        prow = Coll(A16, concat([(pb[k0 + j] if k0 + j < NVIS else zero16).refs for j in range(16)]))
-        o = list(B.batch(DOT, array_of(o), prow, _transpose(v[k0:k0 + 16], D), axes=(0, None, 0)))
-    return tuple_of(m_new, array_of(lanes), array_of(o))
+        nv = min(16, NVIS - k0)
+        prow = Coll(Array(nv, BF16), concat([pb[k0 + j].refs for j in range(nv)]))
+        o = _step_row(B, DOT, nv, prow, _transpose(v[k0:k0 + 16], D), o)
+    return tuple_of(m_new, array_of(lanes), o)
 
 
 def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v, *extra):
@@ -152,8 +229,7 @@ def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v, *extra):
         m, l, o = st[0], st[1], st[2]
     total = B.call(BA.F32AddFtz, B.call(BA.F32AddFtz, l[0], l[2]), B.call(BA.F32AddFtz, l[1], l[3]))
     inv = B.call(INV, total)
-    y = B.batch(BA.F32MulFtz, o, inv, axes=(0, None))
-    return B.batch(BG.F2fpBf16, y, axes=(0,))
+    return _scale_row(B, o, inv, bf16=True)
 
 
 def _attention(B, T: int, NH: int, KVH: int, D: int, head, q, kc, vc, *extra):

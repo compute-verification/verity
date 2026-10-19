@@ -1,6 +1,7 @@
 """`boolean_attention`: the v6 chain (`AttnBlock_v6` / `AttentionHead_v6` / `Attention_v6`), the v7 chain on both of its
-profiles (FA2 on mma.sync, FA3 on wgmma), the v8 chain at the served FA2 binding, the v9 chain at FA3's and `Fa3InvSum_v2` are
-Boolean, agree with their word views (the v3, v2, v5 and v4 chains and `Fa3InvSum_v1`) on random words and on words that reach
+profiles (FA2 on mma.sync, FA3 on wgmma), the v8 chain at the served FA2 binding, the v9 chain at FA3's (and v16's block and head,
+v9's with the scale an input) and `Fa3InvSum_v2` are Boolean, agree with their word views (the v3, v2, v5, v4 and v13 chains and
+`Fa3InvSum_v1`) on random words and on words that reach
 every guard (a zero query, signed zeros, subnormals, infinities, NaNs, scores that overflow), and are pinned by gate count and
 program digest."""
 from __future__ import annotations
@@ -25,34 +26,34 @@ from verity_vllm.program.registry import boolean_attention as BAt
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "AttnBlock_v6{D=16,NVIS=5,FIRST=True,BN=16}":
-        (207368, 401776, 20609, "d200254a7d3ce46a14ce23ef8ad8e061efffec62a75cc24413fcfd7c224b00ebe4d674a394488d52c1fe387ec0c3cd02b023bdcbb898894ddd78386cdac39010"),
+        (117848, 240136, 12689, "a0d85fc56f1e8959ca41f131e5a29e1a2b0bbcc1cb4c0ef0fb9280bfbff2a0c60f400efa33900335c8f0e27bbf2120ccd2dc261af727337caac31397e769677b"),
     "AttnBlock_v6{D=16,NVIS=16,FIRST=False,BN=16}":
-        (435868, 848195, 39421, "19a68a87889fefbf58241be6573f710721c42fb4a6b318f86259f38e6a722f37e57d587ce00c4cee995f47162edde9c3aa632d6e4d47bc62d23137e7784034cb"),
+        (385610, 775142, 35861, "c7c87d04180d9bf24c4c1e64448d54a4af94149ef419fd7fe523f19ac50d067ba49b45f564ae067bc68f70ea02b042758d277a63745d14dd0b290f90d15fc379"),
     "AttentionHead_v6{T=20,D=16,BN=16}":
-        (673779, 1306610, 61173, "2d3c6e7d7750e1ce895a04951b38e734add21cdb92ac97bf79d3bbff7e6b4db9a968d657a049bfa3438217a43005cb5db87a8804793471fd2fdd7f2d24f8bc29"),
+        (529826, 1064130, 49293, "d42c58a086758e71631ffbe307b3c9cf4b7c8aa3f793aa5f5ee225657bf515265954bd056dc73aac26ebee19e65eb944176482bdb8fa664120b9abb36a42d400"),
     "Attention_v6{T=20,NH=4,KVH=2,D=16,BN=16}":
-        (2695116, 5226440, 244692, "e897a26225993d378d3b6716689831bdf2a4a814fd8b608c841737f5672c55530743eb8cf098ae6e5338c6eefeb2450042a1fe3c60067a761333eed7d6b34a49"),
+        (2119304, 4256520, 197172, "9d75a0324bdf64a06ec68770b89df675cc8f8175ab3c94c76571615c7f973ec30cbe003a807050ed692fdc059e4007c27e6a2ae51a525dac0ea8f5abd0d833f9"),
     "Fa3InvSum_v2": (947, 4866, 102, "017c77eb48a6d4ed9be9ddaa291fa4c3ae280333540ed06045fef47238963ed59268c32fb069f62910b83e099df8eded6bba977ae659d6b42280ca8d8d653c5d"),
     "AttnBlock_v7{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2}":
-        (423452, 826819, 36253, "d92cfd5e65517fc26f16b0a3b6bb7299cfc03700d6779850414fe1c6d74af9429b77fddb36bdd7f2ae7d1f2ffb9fcf65d894404b4e4ae4c7ab0b1a0f25f93373"),
+        (373082, 753894, 32661, "92eaf649b73843cfd384502cc591f2986b3f174fe3895473ed4f905859ac9644afe7ae72c740168bc78345034ad71c2a0fe80c621b7cc3e1ea773262f9c8313b"),
     "AttentionHead_v7{T=20,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2}":
-        (673779, 1306610, 61173, "fcbc60bd4cefea7e51f103ecef4c26b869a5c78a3e9094ea46036d7f9fcb3e12d7034328b8b67bcbeeb411f111984d40c5c3b2923ceb2b75788f59dd9df353ed"),
+        (529826, 1064130, 49293, "bf5ffb2c7321aa35757d66457de1d24c8c0ac40bf863b1fd1c1285cbb7222fe2d84ba63b1895460efcd5c09b31825ad62fd1043b8247f9a547647540c3a2f9b8"),
     "AttentionHead_v7{T=20,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (653603, 1271874, 56018, "67396264d34ac43bff7968b0d2d50322c3f54dc5445c19c62237f5238039fac575c5f9d2067d02637e32aa0f325040f92ef1d70f073443aea91337c15b1976c9"),
+        (507222, 1022162, 43986, "8634c3ef17b98ad2e7a88d3968683d371a229ef1bb8ab3e5646649ec3ad19ae0281229cd49fe024fd18bce7a1a7439717f9d00ded9dfe40a71a0e6ffbdd78465"),
     "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (2614412, 5087496, 224072, "9a049e528ed3f28990a103a3260f363def50eab4aca79959dedc8b5922e7b16cacb242f3e6ed42fb8f58ea74ca81f37da518638174ddc72bb1055455d602e7e2"),
+        (2028888, 4088648, 175944, "95a408a28d9eb2e7cb17a45d844313019692bbd9566576333ba8aaf7f38c0e279c1a01536d07788b7c90fbc4ab7745c550415d80e0d1758bd4f82c9aa136fd11"),
     "AttnBlock_v8{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (423452, 826819, 36253, "f1ecfec2525794dd9755b9e409d764c99402dd1778d8cdfedaadf4cb06fa23b045c894204bedea2313090e499c2b3b534762ea316dc93d3d5430c18cea9a2ec9"),
+        (373082, 753894, 32661, "599a02a3cca5d8e6a1f3c71408e0e8f91af39749cf71f356c775ce7a41e774a7421675d6585a3f48521987ceb91284a1c405642a65e70bc84435ad8c4d4e055a"),
     "AttentionHead_v8{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}":
-        (1134159, 2213423, 97356, "7868216e8d38841a82216f6fb67f608397b70d32fe9cf0e49e587b56d9127feecc1b458f3936d9951ba8927950191fd6f785db3c059c077f61a02ce9d066d419"),
+        (952372, 1927030, 83204, "eea0421f654d0e763aa401f04de68fe6471a66f033013a0e068e7ce864b9c2b9e9791dd3de84db0457a842b9c87293878a9d894d96f4b6bf1f77b8171f5ea340"),
     "Attention_v8{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0}":
-        (2614412, 5087496, 224100, "087dea9d4ce903e8337db1f85cbb6769183fc623c108572fd04ad85eb21b1c61bc772e40fc2930869cbd989358cb1f14fa1baddf158880ea89e02bb46fc3dec3"),
+        (2028888, 4088648, 175972, "ed2d254617a94c291126d8ff89f85b278f2a2522f361d1869675faf28e7be784935d7fd056db5922a68a23709c8f8e1a9a4e07ae3445c6595a895e8c429553d5"),
     "AttnBlock_v9{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
-        (423389, 826819, 36229, "983b119dad8d4fa90b1eb2c2426dca506af42694a2b22b83009a7241b925b6fff0645d436669de29ceedec9a3c0b77845a30c1b8c5b82cccb219d95c65ad74ae"),
+        (373019, 753894, 32637, "fad98d501500b7c99c1b55730b598afcb2d4f843c13e3676e177a60d9ba45c8938d53127f13a2d80b2a46e647df7b70428e69ea2c76342478bd140d04658986c"),
     "AttentionHead_v9{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=2}":
-        (1134033, 2213423, 97301, "11358d42c31bb8333d9b8cccfb18dd2f401501292b4bb867ca4699bbf7ef780365967ea69bc9c9a38c7ffebd2ebcc6589d3d103946d8c588dfbee5a2c3c676ac"),
+        (952246, 1927030, 83149, "224920413449676c73cc298553a7eb80f05f61a0c211266f5f3bb2800e1288b2ff1ef0fe0fc99dd093fb2cf8d5f20194a51eee8a90026d8e7b38a0f7d0d0d356"),
     "Attention_v9{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}":
-        (2614160, 5087496, 223976, "86e91c2b83eafa2ccb6c95c7660d6b3ecbe6c07f20124a3cd426666531d8a075362018c80240d548e8ad19157cde722475a6b935cb4f0a601fbe0fe3a4f9395f"),
+        (2028636, 4088648, 175848, "21fea7aa3389ddea3ca25b4e5bdd85dc08531f54a4148676102fb92f5c4c101eaef6606639dc50287bdecb43d9bbf228d66f1dc507f1ae836757e664131155c6"),
 }
 
 FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3
@@ -70,11 +71,15 @@ PINNED = [bind(BAt.AttnBlockV6, D=16, NVIS=5, FIRST=True, BN=16), bind(BAt.AttnB
           bind(BAt.AttentionV9, T=20, NH=4, KVH=2, D=16, BN=16, MASKED_FROM=1, **FA3)]
 
 #: one block per mask shape and per state; one and two blocks, a partial last block, BN = 32; GQA with two KV heads; v7 on both
-#: profiles; v8 and v9 with an unguarded block, a head with an unguarded block, and GQA
+#: profiles; v8 and v9 with an unguarded block, a head with an unguarded block, and GQA; v16 (v9 with the scale an input) with a
+#: first block of fewer keys than lanes, an unguarded block and a head
 AGREEMENT = PINNED[:2] + [bind(BAt.AttnBlockV6, D=16, NVIS=9, FIRST=False, BN=32), bind(BAt.AttentionHeadV6, T=5, D=16, BN=16),
                           bind(BAt.AttentionHeadV6, T=16, D=16, BN=16), bind(BAt.AttentionHeadV6, T=40, D=16, BN=32),
                           bind(BAt.AttentionV6, T=20, NH=4, KVH=2, D=16, BN=16)] + PINNED[5:] + [
-    bind(BAt.AttentionHeadV7, T=40, D=16, BN=32, **FA3)]
+    bind(BAt.AttentionHeadV7, T=40, D=16, BN=32, **FA3),
+    bind(BAt.AttnBlockV16, D=16, NVIS=3, FIRST=True, BN=16, DOT=FA3["DOT"], CHECK=True),
+    bind(BAt.AttnBlockV16, D=16, NVIS=16, FIRST=False, BN=16, DOT=FA3["DOT"], CHECK=False),
+    bind(BAt.AttentionHeadV16, T=20, D=16, BN=16, MASKED_FROM=1, **FA3)]
 
 #: bf16 words that reach FA2's guards: signed zeros, subnormals, the normal range's ends, infinities, NaNs, 2^63
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x807F, 0x0080, 0x7F7F, 0xFF7F, 0x7F80, 0xFF80, 0x7FC0, 0xFFC1, 0x5F00, 0xDF00],
@@ -205,7 +210,8 @@ def test_the_switch_maps_its_word_view_to_it(target) -> None:
 def test_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
     lifted = {k: (TR.word_of(x) if k in ("DOT", "INV") else x) for k, x in target.bindings.items()}
-    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, {6: 3, 7: 2, 8: 5, 9: 4}[target.defn.version], lifted)
+    assert (word.defn.name, word.defn.version, word.bindings) == (target.defn.name, {6: 3, 7: 2, 8: 5, 9: 4, 16: 13}[target.defn.version],
+                                                                  lifted)
     inputs = _inputs(word, 96, sum(map(ord, target.id)))
     got = np.asarray(BS.evaluate_words(target, *inputs)).astype(np.uint64)
     ref = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64)
