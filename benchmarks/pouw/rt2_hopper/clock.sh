@@ -11,7 +11,7 @@
 #       timings for (M′) (msp90.jsonl), then each load's SM clock
 #       read in the kernel and its MACs a clock (clock.jsonl), with NVML sampled every 100 ms (smi.csv) and its clock,
 #       performance and power reports before and after (smi-{before,after}.txt), and wg_spec with each role's own time
-#       (roles.jsonl). STEPS (default "exact msp joint roles clock") picks which of them run.
+#       (roles.jsonl). STEPS (default "exact,msp,joint,roles,clock") picks which of them run.
 # Exit: 0 done, 1 build, gate or a probe failed, 2 no nvcc, no inputs or wrong device.
 set -uo pipefail
 MODE=${1:?usage: clock.sh build | time}
@@ -60,7 +60,8 @@ time)
     --format=csv -lms 100 >"$OUT/smi.csv" 2>&1 &
   smi=$!
   rc=0
-  STEPS=" ${STEPS:-exact msp joint roles clock} "
+  STEPS=${STEPS:-exact msp joint roles clock}
+  STEPS=" ${STEPS//,/ } "
   [[ $STEPS == *" exact "* ]] && { "$B" exact 64 >"$OUT/exact.jsonl" 2>&1 || rc=1; }
   [[ $STEPS == *" msp "* ]] && [ -x "$WORK/msp90" ] && { "$WORK/msp90" >"$OUT/msp90.jsonl" 2>&1 || rc=1; }
   # the JP*90 rows' block-timed points beside their exact (until) twins and the tensor alone (RT-BLACKWELL-16's test)
