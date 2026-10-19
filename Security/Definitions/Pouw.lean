@@ -141,8 +141,9 @@ assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProo
 
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
 coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
-`Proofs.Pouw.FpG1` proves the arithmetic. No guarantee reads them: the record's headlines cover g1's windows by their
-own quantifier over committed values.
+g1 on sm_120's record H1: its grids and a round's operand leaves (`H1`). `Proofs.Pouw.FpG1` proves the arithmetic.
+`Models.Accounting.Guarantees.FpG1`'s headlines read H1's leaves; they are the record's at g1's windows, which the
+record's headlines already cover by their own quantifier over committed values.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

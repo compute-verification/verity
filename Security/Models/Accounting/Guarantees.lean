@@ -9,6 +9,7 @@ import Models.Accounting.Guarantees.Capacity
 import Models.Accounting.Guarantees.CoinFlow
 import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
+import Models.Accounting.Guarantees.FpG1
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.Gates
 import Models.Accounting.Guarantees.Headline
