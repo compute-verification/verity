@@ -216,7 +216,7 @@ theorem zkViewTauLogged {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse tru
   obtain ⟨jj, rfl⟩ : ∃ jj : Fin (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length, jj.val = j :=
     ⟨⟨j, hjJ⟩, rfl⟩
   rw [getD_ofFnJ]
-  obtain ⟨-, spec₂, sts₂, sess, sch, tPad, _, _, hj₂, hsA₂, -, hsch, -, -, -, -, -, hp₀, hp₁⟩ :=
+  obtain ⟨-, spec₂, sts₂, sess, sch, tPad, _, _, hj₂, hsA₂, -, hsch, -, -, -, -, -, hp₀, hp₁, -⟩ :=
     Tables.DecodesTable.ok_of_plays (decodesTableR_deploy hs hin hset h0 L hz hk hlay hd
       (viewOf _ spec.mPts spec link c₁ f) jj) ⟨hV.1, rfl⟩ (pend jj) (hpl jj 0) (hpl jj 1)
   have hacc' := run_acc_next sha512 P (V true) x ω r hacc

@@ -131,6 +131,7 @@ import Proofs.Flock.Claims.KS.BatchSched
 import Proofs.Flock.Claims.KS.BatchMove
 import Proofs.Flock.Claims.KS.BatchSim
 import Proofs.Flock.Claims.KS.ZkLiveSched
+import Proofs.Flock.Claims.KS.ZkBatchSim
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
