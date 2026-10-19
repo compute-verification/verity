@@ -380,6 +380,17 @@
       "branch_suffixes": [
         "15ad"
       ]
+    },
+    {
+      "handle": "training",
+      "holder": "Daniel's training agent (bc-b43da88b-5d25-4463-9b8c-da4df6f84207), named 'training'",
+      "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
+      "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
+      "usergroup": "S0CA9EAFKED",
+      "owns": [],
+      "branch_suffixes": [
+        "4207"
+      ]
     }
   ]
 }
