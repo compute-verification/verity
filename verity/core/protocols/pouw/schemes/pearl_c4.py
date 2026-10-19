@@ -80,10 +80,10 @@ per row, and per block-column class (`int8_saving`), with c_L the fast-matmul ca
 count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`; the assessor's 20:00Z ruling). They are the rows
 `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2 charges the masked
 int8 route's saving per drawn tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
-`scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`pearl_c_work.check_opened`),
+`scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`clear_work.check_opened`),
 and D-SK stays.  **R1**: a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by the prover
-(`r1_rows`, through `pearl_c_work.declare`) and checked on drawn tiles (`row_over_debit`, through
-`pearl_c_work.check_opened`); it is still formed, checked and hashed.
+(`r1_rows`, through `clear_work.declare`) and checked on drawn tiles (`row_over_debit`, through
+`clear_work.check_opened`); it is still formed, checked and hashed.
 
 A code is *salt-dead* unless two draws in the noise support give it two values (`salt_dead`), so the forming debit is on
 codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
@@ -1247,7 +1247,7 @@ class PearlC4:
     def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
         """R1's reading (the assessor's FP4 condition 4, 15:18Z): the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
-        excluded; `pearl_c_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
+        excluded; `clear_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
         still formed, checked and hashed; it earns nothing."""
         formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
         units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
@@ -1258,7 +1258,7 @@ class PearlC4:
         return self.row_debit_ratio(record, ops, side, pos) > 1
 
     def r1_rows(self, ctx: Context, a_rows: Sequence[bytes], b_rows: Sequence[bytes], k_kept: int) -> tuple[set[int], set[int]]:
-        """R1 over a whole unit, for an honest prover's declaration (`pearl_c_work.declare`): the A rows and the weight's
+        """R1 over a whole unit, for an honest prover's declaration (`clear_work.declare`): the A rows and the weight's
         B rows that pass the per-row rules but whose F1′ per word passes ρ·(their cell credit) (`r1_row`)."""
         k = ctx.matmul.shape.k
         a, b = ({i for i, row in enumerate(rows)

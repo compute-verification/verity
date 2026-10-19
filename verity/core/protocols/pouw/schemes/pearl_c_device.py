@@ -6,7 +6,7 @@ the peel accumulates into C̃'s word.  Beside them the record holds the promotio
 promoted by one FP32 nearest-even add), the W1 prices (`Prices`) that `wref`, `credit_of`, `job_cost` and the debit read,
 the domain's k bound, and the debit cap ρ (`cap`: a tile whose debit passes ρ times its credited cells' credit is
 rejected, and an accepted unit is credited (1 − ρ)·`creditDevRev1`).  `pearl_c`, `pearl_c_debit`, `pearl_c_u` and
-`pearl_c_work` read the record; nothing else in them names hardware.
+the work law (`clear_work`) read the record; nothing else in them names hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
   Rounds 10-11's W1 prices, k <= 2^16 (the pure-chain freezing bound)

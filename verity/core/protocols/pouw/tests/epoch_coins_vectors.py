@@ -5,20 +5,25 @@ reason in the PR.
 
 A case's challenger draws from `epoch_coins.entropy(seed)`; the weights' root and the transcript's root are
 SHA-256("verity/pouw/epoch-coins-vectors/v1", case, "weights" | "transcript").  A case pins every coin, hm96 salt,
-committed value and path, the root, the epoch's salt (`audit.salt_of`), the generic draw's key (`audit.AUDIT_DOMAIN`) and
-Pearl-C's (`pearl_c_work.draw_key`) under a records root SHA-256(…, case, "records")."""
+committed value and path, the root, the epoch's salt (`audit.salt_of`), and the clear audit's draw keys, the generic
+draw's (`clear_audit.AUDIT_DOMAIN`) and Pearl-C's (`clear_work.draw_key`) under a records root SHA-256(…, case, "records")."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import epoch_coins as E
 from verity.ml.randomness import derive
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw import coins as EC
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+
+# the draw keys are the clear audit's, a reference tool (benchmarks/pouw/clear) imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
+import clear_audit as CA  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 OUT = Path(__file__).with_name("vectors") / "epoch_coins_v1.json"
 #: (case, the challenger's seed, epoch)
@@ -40,9 +45,9 @@ def case_vector(case: str, seed: bytes, epoch: int) -> dict:
         "openings": [salt_coin.to_json(), draw_coin.to_json()],
         "weights_root": weights.hex(), "salt": salt.hex(),
         "transcript_root": transcript.hex(),
-        "audit_key": derive(draw_coin.coin, au.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
+        "audit_key": derive(draw_coin.coin, CA.AUDIT_DOMAIN, {"transcript": transcript, "salt": salt}).value.hex(),
         "records_root": records.hex(),
-        "pearl_c_draw_key": W.draw_key(draw_coin.coin, transcript, records, salt).value.hex(),
+        "pearl_c_draw_key": CW.draw_key(draw_coin.coin, transcript, records, salt).value.hex(),
     }
 
 

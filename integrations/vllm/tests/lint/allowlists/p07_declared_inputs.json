@@ -87,7 +87,6 @@
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_ProjectionFast.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "autotune_configs", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "collect", "detail": "except Exception", "count": 2},
-    {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "export_ptx", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "inductor_cache_dir", "detail": "except Exception"},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "broad-except", "symbol": "kernel_sources", "detail": "except Exception"},
     {"file": "verity_vllm/check/kernel_identity.py", "kind": "environ", "symbol": "inductor_cache_dir", "detail": "TORCHINDUCTOR_CACHE_DIR"},

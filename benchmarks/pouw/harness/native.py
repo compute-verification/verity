@@ -305,13 +305,7 @@ class Device:
 
 #: throttle (clock event) reasons that mean the clock was pulled down by power, heat or the board
 BAD_THROTTLE = {0x4: "sw_power_cap", 0x8: "hw_slowdown", 0x20: "sw_thermal", 0x40: "hw_thermal", 0x80: "hw_power_brake"}
-THROTTLE_NAMES = {0x1: "gpu_idle", 0x2: "applications_clocks_setting", 0x10: "sync_boost", 0x100: "display_clock", **BAD_THROTTLE}
 CLOCK_GRAPHICS, CLOCK_SM, CLOCK_MEM = 0, 1, 2
-
-
-def throttle_names(mask: int) -> list[str]:
-    return [n for bit, n in sorted(THROTTLE_NAMES.items()) if mask & bit] + ([hex(mask & ~sum(THROTTLE_NAMES))]
-                                                                              if mask & ~sum(THROTTLE_NAMES) else [])
 
 
 class Nvml:

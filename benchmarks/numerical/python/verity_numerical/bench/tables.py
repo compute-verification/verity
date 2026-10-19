@@ -30,7 +30,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
-from verity.ml.circuits.targets.target import BF16_HOPPER, FIRST, FP8_ADA_MMA, FP8_HOPPER_WGMMA, NVFP4_SM120, TARGETS, Target
+from verity.ml.circuits.targets.target import FIRST, TARGETS, Target
 from verity_numerical.bench import census, contract
 
 try:  # the label keys are pinned with the store (`research.store.vocab`, tools/research); verity-numerical does not depend on that package
@@ -1107,7 +1107,6 @@ def table2_columns(T: "Tables") -> tuple[str, ...]:
     return (*TABLE2_COLUMNS, *(c.id + AUTH_COLUMN_SUFFIX["included-hash"] for c in committed_candidates(T)))
 TABLE3_COLUMNS = ("Device / target", "Candidate", "Total prover time", "Witness", "Encoding + commitment", "Arithmetic", "Lookup",
                   "ZK additional", "Serialization", "Other")
-_BUCKET_COLUMN = dict(zip(contract.BUCKETS, TABLE3_COLUMNS[3:9]))
 EMPTY = "—"
 UNMEASURED = "…"
 

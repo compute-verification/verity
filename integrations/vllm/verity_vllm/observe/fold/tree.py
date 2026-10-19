@@ -96,9 +96,6 @@ class StepEvents:
         for r in self.roots:
             yield from r.walk()
 
-    def nodes_in_phase(self, phase: str) -> list[TreeNode]:
-        return [r for r in self.roots if r.phase == phase]
-
 
 class TreeError(Exception):
     pass

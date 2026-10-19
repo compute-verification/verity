@@ -68,9 +68,12 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   `low` kinds), and one more when its column holds such a value too: a selection among run-time values is a
   `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves, would compute any
   function of `b` index bits for `b` units. A gather at a fixed index is wiring.
-* **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs (served and tail
-  apart), the limb splits' carries, the committed outputs and the inputs' bits. The counting bounds charge each
-  budgeted gate and each run input the size of its declared interval (`volume`, `chargedBits`).
+* **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs, the limb splits'
+  carries, the committed outputs and the inputs' bits. Its MACs are every s8-family step's, read from the gate whatever
+  its role (`dotMacs`: an H1 + fx1 tile's segment dots and `z` among them), and apart from those the served and the tail
+  ones, by role (`servedMacs`, `tailMacs`), so an H1 + fx1 tile, whose served role is on its receipt's words, has none
+  served. The counting bounds charge each budgeted gate and each run input the size of its declared interval
+  (`volume`, `chargedBits`).
 * **The property.** `Property caps A W`: the stacking property `P(c, R_in, L)` of property/v1 as a predicate on `W`'s
   census and the audit's certified reads: per window, each budgeted class's units within its cap (a rational) per
   certified byte read, no neutral unit and the run inputs within the window's own `R_in` bound, every gate in a
@@ -527,9 +530,10 @@ committed outputs, and its inputs' bits. -/
 structure Census where
   /-- s8-family coordinates -/
   family : ℕ
-  /-- their MACs: `k` each -/
-  macs : ℕ
-  /-- the MACs of served products' main chains (S8-PORT's `served_macs`) -/
+  /-- their MACs, `k` each, whatever their role or site: every dot product the steps compute -/
+  dotMacs : ℕ
+  /-- the MACs of the steps whose role is served (S8-PORT's `served_macs`): a served product's main chain toward its
+  committed words; none of an H1 + fx1 tile's, whose served role is on its receipt's words, which take no MACs -/
   servedMacs : ℕ
   /-- the MACs of tail groups (S8-PORT's `tail_atoms`: 32 an atom) -/
   tailMacs : ℕ
@@ -576,7 +580,7 @@ def Gate.inputBits (b : Binding) (g : Gate ι) : ℕ :=
 /-- **The census** of `C`'s gates at the steps `s` picks. -/
 def census (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] : Census where
   family := countAt C s fun g => match g.op with | .mma .. => 1 | _ => 0
-  macs := countAt C s Gate.macs
+  dotMacs := countAt C s Gate.macs
   servedMacs := countAt C s fun g => if g.role.isServed then g.macs else 0
   tailMacs := countAt C s fun g => if g.role.isTail then g.macs else 0
   affine := countAt C s fun g => match g.op with | .affine .. | .const _ => 1 | _ => 0
