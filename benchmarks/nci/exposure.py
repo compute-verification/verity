@@ -25,8 +25,8 @@ import tiers as T  # noqa: E402
 #: a bound no parameter file, calibration or measurement gives
 RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
-    "residual": (0.0074, 0.9, "PoUW's proved deficit 0.74%; floor credit with filler 1% (modelled); served today 0.9"),
-    "host_share": (0.0, 0.1, "0 once a CPU filler or a physical cap bounds them; two Xeon 6776P AMX 5%; high a guess"),
+    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit at f_max 0.217 (C7 dossier); nothing credited today 1"),
+    "host_share": (0.0, 0.059, "0 once a CPU filler or a physical cap bounds them; two Xeon 6776P BF16 AMX 3.8%; 5.9% the top of the C7 dossier's range"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
     "sigma": (10.0, 1e6, "guess: a shielded rack, to a loud channel"),
@@ -71,9 +71,12 @@ RANGES = {
     "years": (0.25, 3.0, "guess"),
 }
 
+#: compute-accounting's modelled design, where the residual sits below the memory cap
+DESIGN = {"residual": 0.01, "host_share": 0.05}
 SCENARIOS = {
     "defaults": {},
-    "host CPUs bounded": {"host_share": 0.0},
+    "design": DESIGN,
+    "host CPUs bounded": DESIGN | {"host_share": 0.0},
     "served today": {"residual": 0.9},
     "served today, R_wipe 4 GB": {"residual": 0.9, "pous_rounds": 12000.0, "unfilled_gb": 3.05, "pous_floor": 0.0},
 }
@@ -95,9 +98,10 @@ SERVED_4GB = SCENARIOS["served today, R_wipe 4 GB"]
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
-    ("defaults", {}, "T4", "eta", "memory caps nothing: mu > r"),
-    ("host CPUs bounded", {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
-    ("unmonitored 0.1", {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
+    ("defaults", {}, "T4", "mu", "the floor credit's residual is above the cap"),
+    ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
+    ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
+    ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
     ("intake at line rate", {"residual": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
     ("served today", {"residual": 0.9}, "T3", "mu", "memory caps the residual"),
     ("served today", {"residual": 0.9}, "T4", "mu", "wipes bind before exhaustion"),
@@ -105,9 +109,9 @@ CHECKS = [
     ("side channels 1e7", {"residual": 0.9, "sigma": 1e7}, "T4", "mu", "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = e"),
     ("K 1e9", {"K": 1e9}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
-    ("defaults", {}, "T5", "chi", "pool above S_full / 28"),
-    ("batched proving", {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
-    ("1,000 servers", {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
+    ("design", DESIGN, "T5", "chi", "pool above S_full / 28"),
+    ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
+    ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
     ("no dark compute", {"residual": 0.0, "host_share": 0.0, "lag_s": 0.0}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),

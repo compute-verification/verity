@@ -26,7 +26,7 @@ def test_the_defaults_give_the_statements_numbers():
     assert t["mu"] == pytest.approx(0.124, rel=0.01)
     assert t["nu"] == pytest.approx(9.5e-6, rel=0.01)
     assert t["chi"] == pytest.approx(2.7e-4, rel=0.01)
-    assert t["eta_T4"] == pytest.approx(0.06, rel=0.01)
+    assert t["eta_T4"] == pytest.approx(0.125, rel=0.01)
 
 
 @pytest.mark.parametrize("probe", HOLDS, ids=[f"{c[0]}-{c[2]}-{c[3]}" for c in HOLDS])
@@ -53,8 +53,8 @@ def test_the_memory_cap_has_unit_elasticities_once_it_binds():
     assert X.elasticity(p, "residual", "T4") == pytest.approx(0, abs=1e-9)
 
 
-def test_at_the_defaults_eta_is_the_residual():
-    p = T.DEFAULTS
+def test_at_the_design_eta_is_the_residual():
+    p = T.DEFAULTS | X.DESIGN
     r = T.residual_share(p)
     assert X.elasticity(p, "host_share", "T1") == pytest.approx(p["host_share"] / r, rel=0.01)
     assert X.elasticity(p, "pous_rounds", "T4") == 0

@@ -35,7 +35,7 @@ def test_unmonitored_compute_trains_at_full_efficiency():
 
 
 def test_the_residual_voids_the_partial_sum_law():
-    p = T.DEFAULTS
+    p = T.DEFAULTS | {"residual": 0.01, "host_share": 0.05}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["declared"] == pytest.approx(2 / p["kappa"] / r["rho_T"])
 
@@ -158,7 +158,7 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = T.DEFAULTS | {"unmonitored": 0.01}
+    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
     assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
