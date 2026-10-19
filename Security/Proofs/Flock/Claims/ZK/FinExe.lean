@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.Complete.Zk.Level0Opens
 
 /-!
 # The deployed plan's last message is the honest prover's (`FinExe`)
@@ -1705,6 +1707,538 @@ theorem finExe_of_final (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : Si
 theorem finExe_of_rest (hL : LiveEnd) (hSC : SimCommit) (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hT : RepTau)
     (hR : RepOpenRest) : FinExe :=
   finExe_of_final hL hSC h0 h1 h2 (repOpenFinal_of hT hR)
+
+/-! ## Level 0's opened rows and salts
+
+Both reps send the same PIOP (`piopCut_alike` at the cut's source, `piopSrcE`), `piopZk` rounds from `repBase`, and
+open level 0 at the query of Ligerito's round `k₀ + 8` (`FinRep.ligeritoCut_open0`, `L0.ligeritoPZk_opens`): the
+same positions, `q0At`'s. Those are opened positions of the table (`padPos` puts the queried positions first, and at
+most `t_pad` are queried), where the views' rows and salts are the session's (`Round0.exeOf_inl`'s rows,
+`Agrees0.salt`). -/
+
+namespace FinRep
+
+open FlockComplete FlockComplete.Replay FlockComplete.Replay.Lg FlockComplete.L0 Flock.With
+
+section Level0Bridge
+
+variable {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg}
+
+theorem piopPZk_cut (hr : ∀ k, coinOf (resp k) = coin k) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout)
+    (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) (cap root : ByteArray) (extras : Array _root_.Flock.Claim)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    (cutS.st _root_.Flock.Transcript).R (piopPZk (asksCut coin n) st lay h tr cap root extras prior words)
+      (piopPZk (asksS resp) st lay h tr cap root extras prior words) := by
+  unfold piopPZk rankCheckP
+  sim_walk [zerocheckPZk_cut hr, lincheckPZk_cut hr, ringSwitchP_cut hr, cutS_reflT, cutS_refl]
+
+theorem ligeritoCut_cut (hr : ∀ k, coinOf (resp k) = coin k) (hs : _root_.Flock.Hashes FlockComplete.PS)
+    (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : _root_.Flock.F128) (cm0 : Commit)
+    (b : Array _root_.Flock.F128) (lay : _root_.Flock.Zk.PadLayout) (src : RepSrc) :
+    (cutS.st _root_.Flock.Transcript).R (ligeritoCut (asksCut coin n) hs ms sch T cm0 b lay src)
+      (ligeritoCut (asksS resp) hs ms sch T cm0 b lay src) := by
+  unfold ligeritoCut sampleVecP
+  sim_walk [liftT_cut, squeezeP_cut hr, sampleP_cut hr, sampleKP_cut hr, challengeP_cut hr, oodIntroP_cut hr,
+    queryP_cut hr, cutS_reflL, cutS_reflT, cutS_refl]
+
+end Level0Bridge
+
+/-- **The PIOP's exact rounds at `asksS`**: `piopZk` bodies sent and `piopZk` rounds taken. -/
+theorem piopPZk_counts (resp : ℕ → Msg) (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout)
+    (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace) (cap root : ByteArray) (extras : Array _root_.Flock.Claim)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : _root_.Flock.Transcript}
+    {l l' : Array Msg} {o : _root_.Flock.ZerocheckProof × _root_.Flock.LincheckProof × Array (Array _root_.Flock.F128) ×
+      _root_.Flock.F128 × Array _root_.Flock.Switched}
+    (hrun : ((piopPZk (asksS resp) st lay h tr cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
+    l'.size = l.size + piopZk st extras ∧ t'.k = t.k + piopZk st extras := by
+  obtain ⟨l₁, hl₁, hz⟩ := zerocheckPZk_go resp hm st.digest cap root lay h tr t l
+  unfold piopPZk at hrun
+  rw [bind_go hz] at hrun
+  dsimp only at hrun
+  have h' := hrun
+  rw [StateT.run_bind] at h'
+  obtain ⟨_, _, h₁, -⟩ := JsonRT.go_bind_ok h'
+  obtain ⟨full, hfold⟩ := lincheckPZk_fold resp _ _ _ _ _ _ _ _ h₁
+  obtain ⟨l₂, hl₂, hl⟩ := lincheckPZk_go resp st.fold st.m lay h tr _ full _ l₁ hfold
+  rw [bind_go hl] at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨u, t₃⟩, l₃', hk, hrun⟩ := JsonRT.go_bind_ok hrun
+  obtain ⟨ht₃, hl₃⟩ := rankCheckP_go hk
+  subst t₃ l₃'
+  obtain ⟨l₃, hl₃, hrs⟩ := ringSwitchP_go resp tr (_root_.Flock.abcClaims st.m st.kLog _ _ ++ extras)
+    (by simp [_root_.Flock.abcClaims]) _ l₂
+  rw [bind_go hrs] at hrun
+  obtain ⟨he, rfl⟩ := Prod.mk.inj hrun
+  obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj he)
+  have hsz : (_root_.Flock.abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
+    (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
+      extras).size = 2 + extras.size := by simp [_root_.Flock.abcClaims, Nat.add_comm]
+  rw [Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k]
+  unfold piopZk
+  omega
+
+/-- **What every returning run of the prover's step `y` returns** has `Q`. -/
+def LRuns {β : Type} (y : LP FlockComplete.PS β) (Q : β → Prop) : Prop :=
+  ∀ (st : LigState) (t : _root_.Flock.Transcript) (l : Array Msg) (b : β) (st' : LigState) (t' : _root_.Flock.Transcript)
+    (l' : Array Msg), ((y.run st).run t).go l = (.ok ((b, st'), t'), l') → Q b
+
+theorem LRuns.bind {α β : Type} {x : LP FlockComplete.PS α} {f : α → LP FlockComplete.PS β} {Q : β → Prop}
+    (hf : ∀ a, LRuns (f a) Q) : LRuns (x >>= f) Q := by
+  intro st t l b st' t' l' h
+  obtain ⟨a, st₁, t₁, l₁, -, h2⟩ := lp_bind_ok h
+  exact hf a st₁ t₁ l₁ b st' t' l' h2
+
+theorem LRuns.pure {β : Type} {b : β} {Q : β → Prop} (hb : Q b) : LRuns (Pure.pure b : LP FlockComplete.PS β) Q := by
+  intro st t l b' st' t' l' h
+  obtain ⟨rfl, -, -, -⟩ := ok_inj (show (Except.ok ((b, st), t), l) = _ from h)
+  exact hb
+
+/-- **What every returning run of the prover's step `y` from round `k` with `L + k` bodies sent returns** has `Q`
+(`KRuns` without the rounds at the end). -/
+def KPost (L : ℕ) {β : Type} (y : LP FlockComplete.PS β) (k : ℕ) (Q : β → Prop) : Prop :=
+  ∀ (st : LigState) (t : _root_.Flock.Transcript) (l : Array Msg) (b : β) (st' : LigState) (t' : _root_.Flock.Transcript)
+    (l' : Array Msg), t.k = k → l.size = L + k → ((y.run st).run t).go l = (.ok ((b, st'), t'), l') → Q b
+
+theorem KPost.bind {L : ℕ} {α β : Type} {x : LP FlockComplete.PS α} {f : α → LP FlockComplete.PS β} {k₁ k₂ : ℕ}
+    {Qa : α → Prop} {Q : β → Prop} (hx : KRuns L x k₁ k₂ Qa) (hf : ∀ a, Qa a → KPost L (f a) k₂ Q) :
+    KPost L (x >>= f) k₁ Q := by
+  intro st t l b st' t' l' hk hl h
+  obtain ⟨a, st₁, t₁, l₁, h1, h2⟩ := lp_bind_ok h
+  obtain ⟨hk₁, hl₁, hQa⟩ := hx st t l a st₁ t₁ l₁ hk hl h1
+  exact hf a hQa st₁ t₁ l₁ b st' t' l' hk₁ hl₁ h2
+
+theorem KPost.ofL {L : ℕ} {β : Type} {y : LP FlockComplete.PS β} {k : ℕ} {Q : β → Prop} (h : LRuns y Q) :
+    KPost L y k Q :=
+  fun st t l b st' t' l' _ _ e => h st t l b st' t' l' e
+
+theorem KPost.oodPush {L : ℕ} {β : Type} (y : _root_.Flock.F128) {c : PUnit → LP FlockComplete.PS β} {k : ℕ}
+    {Q : β → Prop} (h : KPost L (c ()) k Q) :
+    KPost L (_root_.modify (fun st : LigState => { st with oods := st.oods.push y }) >>= fun _ =>
+      liftT (_root_.Flock.liftTM (_root_.Flock.Transcript.absorbF y)) >>= c) k Q := by
+  intro st t l b st' t' l' hk hl e
+  obtain ⟨a, st₁, t₁, l₁, h1, h2⟩ := lp_bind_ok e
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with oods := st.oods.push y }), t), l) = _ from h1)
+  obtain ⟨u, st₂, t₂, l₂, h3, h4⟩ := lp_bind_ok h2
+  obtain ⟨rfl, rfl, rfl, rfl⟩ :=
+    ok_inj (show (Except.ok (((), { st with oods := st.oods.push y }), ap (pF y) t), l) = _ from h3)
+  exact h _ _ _ b st' t' l' (by rw [ap_k]; exact hk) hl h4
+
+/-- **The cut's Ligerito opens level 0 honestly**: run from round `k` with `L + k` bodies sent, it opens `cm0` at the
+positions of round `k + k₀ + 8`'s coins, as the session's (`L0.ligeritoPZk_opens`); what it sends after that query
+does not change the opening. -/
+theorem ligeritoCut_open0 (resp : ℕ → Msg) (h : ByteArray → ByteArray) (ms : _root_.Flock.MerkleScheme)
+    (sch : _root_.Flock.Schedule) (T : _root_.Flock.F128) (cm0 : Commit) (b : Array _root_.Flock.F128)
+    (lay : _root_.Flock.Zk.PadLayout) (src : RepSrc) (L : ℕ) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
+    (hq : (sch.levels.getD 0 default).q ≠ 0) {t : _root_.Flock.Transcript} {l : Array Msg} (hl : l.size = L + t.k)
+    {P : _root_.Flock.LigeritoProof} {zl : _root_.Flock.Zk.Level0Msgs} {rc : _root_.Flock.Zk.L0Rec}
+    {t' : _root_.Flock.Transcript} {l' : Array Msg}
+    (hrun : ((ligeritoCut (asksS resp) (_root_.Flock.Hashes.ofSha512 h) ms sch T cm0 b lay src).run t).go l =
+      (.ok ((P, zl, rc), t'), l')) :
+    P.initialProof = openP ms cm0 (sch.levels.getD 0 default) (_root_.Flock.positions (sch.levels.getD 0 default)
+      ((Array.range (sch.levels.getD 0 default).q).map (coinOf (resp (L + (t.k + sch.k0 + 8)))))) := by
+  unfold ligeritoCut at hrun
+  rw [bind_go (liftTM_ok (Flock.RecAlgebra.label_eq _ _) l), bind_go (liftTM_ok (Flock.RecAlgebra.absorbF_eq _ _) l),
+    bind_go (liftTM_ok (Flock.RecAlgebra.absorbBytes_eq _ _) l),
+    bind_go (liftTM_ok (Flock.RecAlgebra.label_eq _ _) l)] at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨⟨⟨caps, rproofs, fin, op0, zl', initCh, rho, b0', y0⟩, stF⟩, t₁⟩, l₁, h1, h2⟩ := JsonRT.go_bind_ok hrun
+  obtain ⟨h21, rfl⟩ := Prod.mk.inj h2
+  obtain ⟨hP3, rfl⟩ := Prod.mk.inj (Except.ok.inj h21)
+  obtain ⟨hP, -⟩ := Prod.mk.inj hP3
+  subst hP
+  set k := t.k
+  have key := (?prog : KPost (β := Array (Array ByteArray) × Array _root_.Flock.LevelProof × _root_.Flock.FinalProof ×
+      _root_.Flock.LevelProof × _root_.Flock.Zk.Level0Msgs × Array _root_.Flock.F256 ×
+      (_root_.Flock.F256 × _root_.Flock.F256) × _root_.Flock.F128 × _root_.Flock.F128) L _ k fun r =>
+      r.2.2.2.1 = openP ms cm0 (sch.levels.getD 0 default) (_root_.Flock.positions (sch.levels.getD 0 default)
+        ((Array.range (sch.levels.getD 0 default).q).map (coinOf (resp (L + (k + sch.k0 + 8))))))) _ _ l _ _ _ _
+    (by rfl) hl h1
+  case prog =>
+    refine KPost.bind (KRuns.sampleVec resp hn _) fun z _ => KPost.oodPush _ ?_
+    refine KPost.bind (KRuns.pow _ 2 _) fun _ _ => KPost.bind (KRuns.sample resp _) fun _ _ =>
+      KPost.bind (KRuns.modify _ _) fun _ _ => KPost.bind (KRuns.sendMsg _ _) fun _ _ => ?_
+    refine KPost.bind ((KRuns.loop (σ := Array _root_.Flock.F256 × (_root_.Flock.F256 × _root_.Flock.F256) ×
+      _root_.Flock.Zk.Level0Msgs) _
+      (fun j => k + 1 + 1 + j + if j = sch.k0 then 2 else 0) (fun _ _ => True) sch.k0 ?lane _ trivial).cast
+      (by rw [ite_eq_right (by omega)]) (by rw [ite_eq_left rfl])) fun _ _ => ?_
+    case lane =>
+      intro j hj s _
+      refine (KRuns.sampleK resp _).bind fun _ _ => (KRuns.modify _ _).bind fun _ _ => ?_
+      by_cases hj1 : j + 1 = sch.k0
+      · refine KRuns.ite (fun _ => ?_) (fun hne => absurd (by simp [hj1]) hne)
+        refine (KRuns.get _).bind fun _ _ => ?_
+        refine (KRuns.absorb _ (pKv _) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) _).bind fun _ _ =>
+          (KRuns.absorb _ (pKv _) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) _).bind fun _ _ => ?_
+        refine (KRuns.sampleK resp _).bind fun _ _ => (KRuns.sampleK resp _).bind fun _ _ => ?_
+        refine KRuns.ite (fun _ => KRuns.throwBind _ _ _ _ _) (fun _ => ?_)
+        refine (KRuns.absorb _ (pLabel _) (fun t => Flock.RecAlgebra.label_eq _ t) _).bind fun _ _ =>
+          (KRuns.absorb _ (pKv _) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) _).bind fun _ _ =>
+          (KRuns.absorb _ (pSlice _) (fun t => Flock.RecAlgebra.absorbSlice_eq _ t) _).bind fun _ _ => ?_
+        exact (KRuns.modify _ _).bind fun _ _ => (KRuns.get _).bind fun _ _ => (KRuns.sendMsg _ _).bind fun _ _ =>
+          KRuns.pure ⟨_, rfl, trivial⟩ (by split_ifs <;> omega)
+      · refine KRuns.ite (fun hc => absurd (by simpa using hc) hj1) fun _ => ?_
+        exact (KRuns.sendMsg _ _).bind fun _ _ => KRuns.pure ⟨_, rfl, trivial⟩ (by split_ifs <;> omega)
+    refine KPost.bind (KRuns.get _) fun d _ => KPost.bind (KRuns.commit h ms _ _ _ _) fun cm1 _ => ?_
+    refine KPost.bind (KRuns.absorb _ (pBytes _) (fun t => Flock.RecAlgebra.absorbBytes_eq _ t) _) fun _ _ => ?_
+    refine KPost.bind (KRuns.oodIntro resp _ _ (Nat.succ_ne_zero _) _) fun _ _ =>
+      KPost.bind (KRuns.oodIntro resp _ _ (Nat.succ_ne_zero _) _) fun _ _ => ?_
+    refine KPost.bind (KRuns.query resp _ ms _ cm0 hq _) fun x hx => KPost.ofL ?_
+    refine LRuns.bind fun _ => LRuns.bind fun _ => LRuns.bind fun _ => LRuns.bind fun _ => LRuns.bind fun _ =>
+      LRuns.pure ?_
+    rw [hx]
+    congr 5
+    omega
+  exact key
+
+/-- **The session's rep opens level 0 at round `k₀ + 8` of its Ligerito**: answered by the replies from a fresh
+transcript, after the PIOP's `piopZk` rounds (`ligeritoPZk_opens`); the replay, constraints and inner proof leave the
+Ligerito proof as it is. -/
+theorem repPZk_open0 (resp : ℕ → Msg) (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (tb : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
+    (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
+    {t t' : _root_.Flock.Transcript} (ht : t.k = 0) {l l' : Array Msg} {P : _root_.Flock.Zk.ZkProof}
+    (h : ((repPZk (asksS resp) (_root_.Flock.Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra
+      lanePad salt nonce prior words).run t).go l = (.ok (P, t'), l')) :
+    P.proof.ligerito.initialProof = openP st.merkle cm0 (sch.levels.getD 0 default)
+      (_root_.Flock.positions (sch.levels.getD 0 default) ((Array.range (sch.levels.getD 0 default).q).map
+        (coinOf (resp (l.size + (piopZk st extras + sch.k0 + 8)))))) := by
+  obtain ⟨l₁, hl₁, hz⟩ := zerocheckPZk_go resp hm st.digest (flat cm0.cap) ic.root
+    (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) pads.h tr t l
+  unfold repPZk at h
+  rw [bind_go hz] at h
+  dsimp only at h
+  have h' := h
+  rw [StateT.run_bind] at h'
+  obtain ⟨_, _, h₁, -⟩ := JsonRT.go_bind_ok h'
+  obtain ⟨full, hfold⟩ := lincheckPZk_fold resp _ _ _ _ _ _ _ _ h₁
+  obtain ⟨l₂, hl₂, hl⟩ := lincheckPZk_go resp st.fold st.m (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) pads.h
+    tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) full _ l₁ hfold
+  rw [bind_go hl] at h
+  dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨u, t₃⟩, l₃', hk, h⟩ := JsonRT.go_bind_ok h
+  obtain ⟨ht₃, hl₃⟩ := rankCheckP_go hk
+  subst t₃ l₃'
+  obtain ⟨l₃, hl₃, hrs⟩ := ringSwitchP_go resp tr (_root_.Flock.abcClaims st.m st.kLog
+    (Zc.out st.m (Zc.coinsAt resp l.size) tr)
+    (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
+      extras) (by simp [_root_.Flock.abcClaims]) _ l₂
+  rw [bind_go hrs] at h
+  dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨⟨lg, zl, rec⟩, t₄⟩, l₄, hlg, h⟩ := JsonRT.go_bind_ok h
+  have hsz : (_root_.Flock.abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
+    (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
+      extras).size = 2 + extras.size := by simp [_root_.Flock.abcClaims, Nat.add_comm]
+  have e3 : l₃.size = l.size + piopZk st extras := by unfold piopZk; omega
+  have h0 := (ligeritoPZk_opens resp hsh st.merkle sch _ cm0 _ _ _ _ rep tPad extra lanePad salt nonce l.size hn hk0 hL
+    hq (by rw [Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, ht, hsz, e3]; unfold piopZk; omega) hlg).1
+  rw [bind_go (show ((get : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Transcript).run t₄).go l₄ =
+    (.ok (t₄, t₄), l₄) from rfl)] at h
+  dsimp only at h
+  obtain ⟨⟨rp, x⟩, -, h⟩ := liftV_bind_ok h
+  dsimp only at h
+  obtain ⟨lgc, -, h⟩ := liftV_bind_ok h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨inner, t₅⟩, l₅, -, h⟩ := JsonRT.go_bind_ok h
+  obtain ⟨h5, -⟩ := Prod.mk.inj h
+  obtain ⟨hP, -⟩ := Prod.mk.inj (Except.ok.inj h5)
+  subst hP
+  refine h0.trans ?_
+  unfold posAt cfOf qOff
+  rw [if_pos (by omega)]
+  congr 5
+  rw [Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, ht, hsz]
+  unfold piopZk
+  omega
+
+/-- A source the cut's PIOP reads as `PiopSrc` reads only its masked values and switched vectors, which `eraseS`
+keeps. -/
+theorem piopSrc_of_eraseS {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {st : _root_.Flock.Setup}
+    {lay : _root_.Flock.Zk.PadLayout} {h : Array _root_.Flock.F128} {tr : FlockComplete.Trace} {s : RepSrc}
+    {extras : Array _root_.Flock.Claim} {L : ℕ} (hv : PiopSrc coin n st lay h tr (eraseS s) extras L) :
+    PiopSrc coin n st lay h tr s extras L :=
+  ⟨hv.r1ab, hv.r1c, hv.ml0, hv.ml1, hv.fa, hv.fb, hv.fc, hv.lc, hv.zp, hv.sv⟩
+
+/-- **The cut's rep opens level 0 at round `k₀ + 8` of its Ligerito**, as the session's (`repPZk_open0`): answered by
+`asksCut` from a fresh transcript at a source at the cut's coins (`PiopSrc`), its PIOP is the session's
+(`piopCut_alike`), so takes `piopZk` rounds (`piopPZk_counts` at `asksS`), and its Ligerito opens its level-0
+commitment `cm0` there (`ligeritoCut_open0`). -/
+theorem repCut_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+    (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (ic : InnerCommit) (src : RepSrc)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace)
+    (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hq : (sch.levels.getD 0 default).q ≠ 0)
+    {t t' : _root_.Flock.Transcript} (ht : t.k = 0) {l l' : Array Msg}
+    (hv : PiopSrc coin n st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) h tr src extras l.size)
+    {P : _root_.Flock.Zk.ZkProof}
+    (hrun : ((repCut (asksCut coin n) (_root_.Flock.Hashes.ofSha512 hsh) st sch rep dom cm0 extras ic src prior
+      words).run t).go l = (.ok (P, t'), l')) :
+    P.proof.ligerito.initialProof = openP st.merkle cm0 (sch.levels.getD 0 default)
+      (_root_.Flock.positions (sch.levels.getD 0 default) ((Array.range (sch.levels.getD 0 default).q).map
+        (coinOf (resp (l.size + (piopZk st extras + sch.k0 + 8)))))) := by
+  unfold repCut at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨⟨zp, lp, ss, T, sws⟩, t₃⟩, l₃, h1, h2⟩ := JsonRT.go_bind_ok hrun
+  rw [(piopCut_alike coin n st _ h tr src _ _ extras prior words hm t l hv).eq] at h1
+  obtain ⟨hl₃, ht₃⟩ := piopPZk_counts resp st _ h tr _ _ extras prior words hm
+    (piopPZk_cut (n := n) hr _ _ _ _ _ _ _ _ _ t l _ l₃ h1)
+  dsimp only at h2
+  rw [StateT.run_bind] at h2
+  obtain ⟨⟨⟨lg, zl, rec⟩, t₄⟩, l₄, h3, h4⟩ := JsonRT.go_bind_ok h2
+  have h0 := ligeritoCut_open0 resp hsh st.merkle sch _ cm0 _ _ src l.size hn hk0 hq
+    (by rw [hl₃, ht₃, ht]; omega) (ligeritoCut_cut (n := n) hr _ _ _ _ _ _ _ _ t₃ l₃ _ l₄ h3)
+  dsimp only at h4
+  rw [bind_go (show ((get : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Transcript).run t₄).go l₄ =
+    (.ok (t₄, t₄), l₄) from rfl)] at h4
+  obtain ⟨⟨rp, x⟩, -, h4⟩ := liftV_bind_ok h4
+  dsimp only at h4
+  obtain ⟨lgc, -, h4⟩ := liftV_bind_ok h4
+  rw [StateT.run_bind] at h4
+  obtain ⟨⟨inner, t₅⟩, l₅, -, h4⟩ := JsonRT.go_bind_ok h4
+  obtain ⟨h5, -⟩ := Prod.mk.inj h4
+  obtain ⟨hP, -⟩ := Prod.mk.inj (Except.ok.inj h5)
+  subst hP
+  refine h0.trans ?_
+  rw [ht₃, ht, Nat.zero_add]
+
+/-- **A level-0 commitment's salts are its fitted salts**, at every tree position. -/
+theorem commitRowsP_salts {hs : _root_.Flock.Hashes _root_.Flock.V} {ms : _root_.Flock.MerkleScheme}
+    {lv : _root_.Flock.Level} {rows : Array (Array _root_.Flock.F128)} {salt : ℕ → ByteArray} {cm : Commit}
+    (h : commitRowsP hs ms lv rows salt = .ok cm) :
+    cm.salts = (Array.range (2 ^ lv.d)).map fun q => fitBytes ms.saltBytes (salt q) := by
+  unfold commitRowsP at h
+  obtain ⟨leaves, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨r, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  cases h
+  rfl
+
+/-- **Table `j`'s level-0 row at tree position `p` is the masked prover's** (`Round0.exeOf_inl`'s row): at a layout
+agreeing at round `0`, `encodeRowsZk`'s row `p`, at every coin vector. -/
+theorem row0_exe (P : Composed.LigProver) (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z) {x : Msg}
+    (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (j : Fin (jOf x)) (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
+    ZkView.row0 (((tabC P x j).T (cz j)).col0At (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j) p) =
+      (FlockComplete.encodeRowsZk (lv0 x j) (zkTab x j).tPad
+        ((FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
+          (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask)))[j.val]!)
+        ((z t).extra j.val) ((z t).lanePad j.val))[p.val]! := by
+  obtain ⟨hnL, hL, htp, ht, hd, -⟩ := tabC_z P x j
+  rw [col0At_tabC]
+  refine FlockComplete.row0_eq_encodeRowsZk (lv0 x j) _ _ _ _ (by rw [← hd]; exact p.isLt) hnL hL htp ht _
+    (fun l => ?_) (fun r i => ?_)
+  · show ∑ c, ((tabC P x j).T (cz j)).lanes (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j).1 l c *
+        Composed.eAt (lv0 x j).cols p.val c +
+      ∑ k, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.1 l k * Composed.gAt (lv0 x j).cols p.val k = _
+    simp only [lanes_tabC]
+    exact congrArg (_ + ·) (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.pad x t j l k))
+  · show ∑ c, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.1 r i c * Composed.eAt (lv0 x j).cols p.val c +
+      ∑ k, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.2 r i k * Composed.gAt (lv0 x j).cols p.val k = _
+    exact congrArg₂ (· + ·) (Finset.sum_congr rfl fun c _ => congrArg (· * _) (hA.ext x t j r i c))
+      (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.extPad x t j r i k))
+
+/-- `at0` at an opened position's tree position is its value. -/
+theorem at0_s0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
+    {α : Type} (d : α) (f : Fin (tabC P x j).z.nS → α) (a : Fin (tabC P x j).z.nS) :
+    at0 P x cz j d f (((tabC P x j).T (cz j)).s0 (.inl a)).val = f a := by
+  unfold at0
+  simp only [Fin.isLt, ↓reduceDIte, Fin.eta, Equiv.symm_apply_apply]
+
+/-- **The views' level-0 row and salt at an opened position are the session's**: at the tree position of opened
+position `a`, table `i`'s source from the views reads `encodeRowsZk`'s row there (`row0_exe`) and the tape's level-0
+salt fitted to 192 bytes (`Agrees0.salt`). -/
+theorem srcV_open0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i : ℕ}
+    (hi : i < jOf x) (a : Fin (tabC PE x ⟨i, hi⟩).z.nS) :
+    (srcV x c w τ i).row0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val =
+        (encodeRowsZk (lv0 x ⟨i, hi⟩) (zkTab x ⟨i, hi⟩).tPad
+          (packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m)
+          ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i))[(((tabC PE x ⟨i, hi⟩).T
+            (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val]! ∧
+      (srcV x c w τ i).salt0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val =
+        fitBytes 192 ((UE.tapeZk τ).salt i 0 0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val) := by
+  have hj : i < (FlockDeploy.tabsOf (stsOf x)).size := by simpa [FlockDeploy.tabsOf] using lt_of_jOf ⟨i, hi⟩
+  have e : ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).col0At (wtOf PE x w ⟨i, hi⟩) ((UE.tape x τ).1 ⟨i, hi⟩)
+      (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)) =
+      ((viewsE x c w τ ⟨i, hi⟩).rows a, (viewsE x c w τ ⟨i, hi⟩).xrows a) := by
+    unfold ZkView.Coined.col0At
+    simp only [Equiv.symm_apply_apply]
+    rfl
+  have es : (viewsE x c w τ ⟨i, hi⟩).salts0 a =
+      (UE.tape x τ).2.1 ⟨⟨i, hi⟩, .inl (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a))⟩ := by
+    set_option maxRecDepth 8000 in rfl
+  have hrow := row0_exe PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w τ (czExe PE x c) ⟨i, hi⟩
+    (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a))
+  have hsl := (agrees0_exe PE).salt x τ ⟨i, hi⟩ (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a))
+  show (tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).row0 _ = _ ∧
+    (tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).salt0 _ = _
+  unfold tabSrcView
+  rw [dite_eq_left hi]
+  dsimp only
+  rw [at0_s0, at0_s0]
+  refine ⟨((congrArg ZkView.row0 e).symm.trans hrow).trans ?_, (congrArg ZkView.saltBytes es).trans hsl⟩
+  rw [FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hj]
+  rfl
+
+/-- **A queried position below `L` is opened** (`FinPads.padPos_of_mem`): where at most `t` positions are queried,
+`padPos` places each queried position below `L` at some index below `t`, since it lists them first. -/
+theorem padPos_mem {L t : ℕ} {qs : List ℕ} (hl : qs.length ≤ t) {q : ℕ} (hq : q ∈ qs) (hqL : q < L) :
+    ∃ a : Fin t, Composed.padPos L t qs a = q := by
+  have hFn : ((List.range L).filter fun y => decide (y ∈ qs)).Nodup := List.nodup_range.filter _
+  have hFs : (List.range L).filter (fun y => decide (y ∈ qs)) ⊆ qs := fun y hy => by
+    simpa using (List.mem_filter.1 hy).2
+  have hFl := (hFn.subperm hFs).length_le
+  have hqF : q ∈ (List.range L).filter fun y => decide (y ∈ qs) :=
+    List.mem_filter.2 ⟨List.mem_range.2 hqL, decide_eq_true hq⟩
+  obtain ⟨k, hk, hkq⟩ := List.getElem_of_mem hqF
+  refine ⟨⟨k, by omega⟩, ?_⟩
+  simp only [Composed.padPos]
+  rw [List.getD_eq_getElem _ _ (by rw [List.length_append]; omega), List.getElem_append_left hk]
+  exact hkq
+
+/-- **Table `j`'s rep `r`'s level-0 query positions are opened positions**: each is below `2^d` (`positions_lt_d`),
+queried by the coins (`q0s`, below `2^logLen`), of which there are `2·q = t_pad`, so `padPos` opens it, at the tree
+position of some opened position (`coinedOf_s0_val`). -/
+theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) {p : ℕ}
+    (hp : p ∈ q0At c j r) :
+    p < 2 ^ (lv0 x j).d ∧ ∃ a : Fin (tabC PE x j).z.nS, (((tabC PE x j).T (czExe PE x c j)).s0 (.inl a)).val = p := by
+  obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨-, hL2, -, -, -, -, -⟩ := hdim
+  obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨hrate, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_pad _ _ _ (zkTab x j).hz
+  obtain ⟨hts, hLs, hcs⟩ := tabSizes x j
+  have hseam : FlockSoundness.Refine.LevelSeam (lv0 x j) := hlv 0 (by omega)
+  have hlt : p < 2 ^ (lv0 x j).d := positions_lt_d hseam _ p hp
+  refine ⟨hlt, ?_⟩
+  have hd1 : (lv0 x j).d = (zkTab x j).table.sch.level₀.logCols + 1 := by
+    rw [hcs]
+    unfold lv0
+    omega
+  obtain ⟨e, he, hep⟩ := Array.mem_iff_getElem.1 hp
+  have hsz : (q0At c j r).size = (lv0 x j).q := FlockSoundness.Refine.positions_size _ hseam _
+  have he2 : e < (zkTab x j).table.t / 2 := by
+    show e < (zkTab x j).tPad / 2
+    rw [ht2]
+    unfold lv0 at hsz
+    omega
+  have hmem : p ∈ (Composed.bodyOf (zkTab x j).table (stAt x j)).queries (czExe PE x c j).rest := by
+    show p ∈ (List.ofFn ((czExe PE x c j).rest.q0s 0) ++ List.ofFn ((czExe PE x c j).rest.q0s 1)).map Fin.val
+    have hv : ((czExe PE x c j).rest.q0s r ⟨e, he2⟩).val = p := by
+      show (q0At c j r)[e]! % 2 ^ (zkTab x j).table.sch.level₀.logLen = p
+      rw [getElem!_pos _ e he, hep,
+        Nat.mod_eq_of_lt (lt_of_lt_of_le hlt (Nat.pow_le_pow_right (by norm_num) (by omega)))]
+    refine List.mem_map.2 ⟨_, ?_, hv⟩
+    fin_cases r
+    · exact List.mem_append_left _ (List.mem_ofFn.2 ⟨_, rfl⟩)
+    · exact List.mem_append_right _ (List.mem_ofFn.2 ⟨_, rfl⟩)
+  have hlen : ((Composed.bodyOf (zkTab x j).table (stAt x j)).queries (czExe PE x c j).rest).length ≤
+      (zkTab x j).table.t := by
+    show ((List.ofFn ((czExe PE x c j).rest.q0s 0) ++ List.ofFn ((czExe PE x c j).rest.q0s 1)).map Fin.val).length ≤ _
+    simp only [List.length_map, List.length_append, List.length_ofFn]
+    omega
+  obtain ⟨a, ha⟩ := padPos_mem hlen hmem
+    (show p < 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) by rw [← hd1]; exact hlt)
+  exact ⟨a, (Composed.coinedOf_s0_val PE _ _ _ hts hLs (.inl a)).trans ha⟩
+
+/-- **Level 0's commitment from the views agrees with the session's at the queried positions**: there `fill0`'s row
+and salt are the views' (`srcV_open0`), which are the session's commitment's (`commitRowsP_rows`,
+`commitRowsP_salts`, at `hm96-sha512/v1`'s 192-byte salts). -/
+theorem fill0_open0 {x : Msg} {s spec} (hx : Live x) (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i : ℕ} (hi : i < jOf x) {r : ℕ}
+    (hr : r < 2) {cm0 : Commit}
+    (hcm : commitPZk hsV (FlockDeploy.tabsOf (stsOf x))[i]!.merkle (lv0 x ⟨i, hi⟩) (zkTab x ⟨i, hi⟩).tPad
+      (packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m)
+      ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i) ((UE.tapeZk τ).salt i 0 0) = .ok cm0)
+    {p : ℕ} (hp : p ∈ q0At c ⟨i, hi⟩ ⟨r, hr⟩) :
+    (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).rows[p]! = cm0.rows[p]! ∧
+      (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).salts[p]! = cm0.salts[p]! := by
+  obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
+  have hget : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stAt x ⟨i, hi⟩) := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi')]
+    simp only [FlockDeploy.tabsOf, Array.getElem_map]
+    rfl
+  have hm96 : (FlockDeploy.tabsOf (stsOf x))[i]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
+    rw [hget]
+    exact (hall i hi').2.2
+  have hms : (FlockDeploy.tabsOf (stsOf x))[i]!.merkle.saltBytes = 192 := by
+    rw [hm96]
+    rfl
+  obtain ⟨hlt, a, ha⟩ := q0At_opened c ⟨i, hi⟩ ⟨r, hr⟩ hp
+  obtain ⟨hrow, hsalt⟩ := srcV_open0 x c w τ hi a
+  rw [ha] at hrow hsalt
+  unfold commitPZk at hcm
+  have hrows := commitRowsP_rows hcm
+  have hsalts := commitRowsP_salts hcm
+  refine ⟨?_, ?_⟩
+  · show ((Array.range (2 ^ (lv0 x ⟨i, hi⟩).d)).map (srcV x c w τ i).row0)[p]! = _
+    rw [FlockSoundness.Refine.getElem!_range_map _ hlt, hrow, hrows]
+  · show ((Array.range (2 ^ (lv0 x ⟨i, hi⟩).d)).map (srcV x c w τ i).salt0)[p]! = _
+    rw [FlockSoundness.Refine.getElem!_range_map _ hlt, hsalt, hsalts, FlockSoundness.Refine.getElem!_range_map _ hlt,
+      hms]
+
+end FinRep
+
+/-- **Level 0's opened rows and salts read from the views are the session's** (`FinalRest`'s level-0 half): in a rep's
+context, where the rep read from the views and the session's rep both return, both open level 0 at the coins of
+Ligerito's round `k₀ + 8` after the PIOP (`FinRep.repCut_open0`, `FinRep.repPZk_open0`), the slot `repSlot` names, so
+at `q0At`'s positions, where `fill0` is the session's commitment (`FinRep.fill0_open0`). -/
+theorem repOpenRest_l0 : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
+    ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
+      (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
+      FlockComplete.eraseZ p = FlockComplete.eraseZ q →
+        p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
+          p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts := by
+  intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq _
+  obtain ⟨e', hv, hm, hk6, hx'⟩ := FinRep.repHE_asks hC hq
+  obtain ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, -, he, hl⟩ := hC
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
+  have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
+  have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi'),
+      getElem!_pos (stsOf x) i hi']
+    simp [FlockDeploy.tabsOf]
+  have hQ := FinRep.repPZk_open0 (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0) (hL := hL2)
+    (hq := fun i hi => (hlv i hi).q_ne_zero) (ht := rfl) (h := e')
+  obtain ⟨-, hsv⟩ := piopSrcE x hx w hw τ c (refK x) (not_refused_of_admits hx hA (refK x)) s spec hsx ⟨i, hi⟩
+    ⟨r, hr⟩ extras he
+  dsimp only at hsv
+  rw [← eraseS_srcV hA w τ hi hr, ← hl] at hsv
+  have hP := FinRep.repCut_open0 (coin := fun k i => slotAt c k i) (n := refK x) (resp := FinRep.respOf c)
+    (fun k => FinRep.coinOf_respOf c k) _ _ _ _ _ _ _ _ _ _ _ _ _ (by rw [htab]; exact hm)
+    (by rw [hn7, hsm]; omega) hk0 ((hlv 0 (by omega)).q_ne_zero) rfl (FinRep.piopSrc_of_eraseS hsv) hp
+  rw [htab] at hP
+  have hslot : l.size + (FlockComplete.piopZk (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!) extras +
+      (zkTab x ⟨i, hi⟩).sch.k0 + 8) = repSlot x (2 * i + r) (fun sch => sch.k0 + 8) := by
+    have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * i + r) / 2]!.m =
+        .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := by
+      rw [show (2 * i + r) / 2 = i by omega]
+      exact hv
+    have e6 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).fold.kLog = (stsOf x)[i]!.c.kLog := rfl
+    have e7 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).m = (stsOf x)[i]!.m := rfl
+    rw [repSlot_eq hsx hz, show (2 * i + r) / 2 = i by omega, hl, repBase_eq hsx]
+    unfold FlockComplete.piopZk FlockComplete.piopRoundsZk
+    rw [e6, e7, hx']
+    omega
+  rw [FinRep.coinOf_respOf, hslot] at hP hQ
+  rw [hP, hQ]
+  have key : ∀ p ∈ q0At c ⟨i, hi⟩ ⟨r, hr⟩,
+      (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).rows[p]! = cm0.rows[p]! ∧
+        (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).salts[p]! = cm0.salts[p]! :=
+    fun p hp => FinRep.fill0_open0 hx hsx c w τ hi hr hcm hp
+  unfold FlockComplete.openP
+  refine ⟨Array.map_congr_left fun p hp => (key p hp).1, ?_⟩
+  dsimp only
+  split_ifs
+  · rfl
+  · exact Array.map_congr_left fun p hp => (key p hp).2
 
 end Masked
 
