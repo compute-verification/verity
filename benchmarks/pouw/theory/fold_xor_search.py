@@ -424,14 +424,22 @@ def shared_inputs(rng: random.Random, axis: int, pow2: bool = False) -> list[tup
     return [(a, b) if axis == 0 else (b, a) for a in few for b in many]
 
 
+def axis_inputs() -> list[tuple[int, int]]:
+    """Pairs on the axes x = 0 and y = 0, and powers of two: a first product x·y is 0 on the axes, so there the first
+    results are their addends, nearly constant along an axis, and the next product is nearly one term; off them it is
+    a power of two, so every product by it is a shift."""
+    pts = [(0, 0)] + [p for j in (0, 1, 7, 16, 31) for p in ((0, 1 << j), (1 << j, 0))]
+    return pts + [(1 << a, 1 << b) for a, b in ((0, 0), (3, 29), (16, 16), (31, 1), (20, 5))]
+
+
 def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED,
           edge_only: bool = False, domain: str = "all", fix: tuple = (), by_mult: bool = False,
-          collide: bool = False, pow2: bool = False) -> dict:
+          collide: bool = False, pow2: bool = False, axes: bool = False) -> dict:
     """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
     unknown (a timeout), with the seconds it took. On the nan domain both inputs range over the NaN patterns only
     (`reduce_nan`). With `fix` (one of `splits`), only the programs whose addend sources it names; when that gives a
     `shared_axis` (under `by_mult` or `pow2`), CEGIS starts from `shared_inputs` and looks for counterexamples at those
-    words first; with `collide` it starts from `collision_inputs` instead."""
+    words first; with `collide` it starts from `collision_inputs` instead, and with `axes` from `axis_inputs`."""
     name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
     t0 = time.monotonic()
     rng = random.Random(f"{seed}:{name}:{tname}")
@@ -447,8 +455,9 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
         inputs.append((x, y))
         syn.add(evaluate(prog, bv(x), bv(y)) == target(tname, bv(x), bv(y), K))
 
-    axis = shared_axis(ops, fix, by_mult, pow2) if fix and domain == "all" and not collide else None
-    start = (collision_inputs(ops, fix, rng) if collide and fix and domain == "all" else
+    axis = shared_axis(ops, fix, by_mult, pow2) if fix and domain == "all" and not (collide or axes) else None
+    start = (axis_inputs() if axes and domain == "all" else
+             collision_inputs(ops, fix, rng) if collide and fix and domain == "all" else
              shared_inputs(rng, axis, pow2) if axis is not None else initial_inputs(rng, edge_only, domain))
     for x, y in start:
         add(x, y)
@@ -695,11 +704,12 @@ def anchored_cegis(ops: tuple, fix: tuple = (), c_star: int = SLICES[0], timeout
 
 
 def settle(ops: tuple, tname: str, timeout_ms: int, seed: int, edge_only: bool, domain: str, fix: tuple,
-           by_mult: bool, collide: bool, pow2: bool, slices: tuple = (), free_anchor: bool = False) -> dict:
+           by_mult: bool, collide: bool, pow2: bool, slices: tuple = (), free_anchor: bool = False,
+           axes: bool = False) -> dict:
     """One case by `cegis`, or with `slices` by `anchored_cegis` at each x-slice in turn until one is unsat (its
     record names it), else the last one's record. A case `anchored_cegis` doesn't take is unknown."""
     if not slices:
-        return cegis(ops, tname, timeout_ms, seed, edge_only, domain, fix, by_mult, collide, pow2)
+        return cegis(ops, tname, timeout_ms, seed, edge_only, domain, fix, by_mult, collide, pow2, axes)
     name = label(ops) + (f" /{fix_label(fix)}" if fix else "")
     tried = []
     for c in slices:
@@ -767,7 +777,8 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
            part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
            edge_only: bool = False, via_nan: bool = False, split: bool = False,
            cases: set | None = None, split_mods: bool = False, by_mult: bool = False,
-           collide: bool = False, pow2: bool = False, slices: tuple = (), free_anchor: bool = False) -> dict:
+           collide: bool = False, pow2: bool = False, slices: tuple = (), free_anchor: bool = False,
+           axes: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes. With `via_nan`, each sequence is settled by its `reduce_nan`
     suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown. With `split`,
@@ -815,13 +826,13 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
             futs = {ex.submit(settle, c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2, slices,
-                              free_anchor): (c, f) for c, f in todo}
+                              free_anchor, axes): (c, f) for c, f in todo}
             for fut in as_completed(futs):
                 got(*futs[fut], fut.result())
     else:
         for c, f in todo:
             got(c, f, settle(c, tname, timeout_ms, SEED, edge_only, domain, f, by_mult, collide, pow2, slices,
-                             free_anchor))
+                             free_anchor, axes))
     if split:
         for name, c in cover.items():
             rs = [found[c, fix_label(f)] for f in parts(c)]
@@ -864,6 +875,8 @@ def main() -> int:
                     help="start CEGIS from input pairs the first instruction can't tell apart (`collision_inputs`)")
     ap.add_argument("--pow2", action="store_true",
                     help="share the word a first multiplicand reads, at 0 and powers of two (`shared_inputs`)")
+    ap.add_argument("--axes", action="store_true",
+                    help="start CEGIS from pairs on the axes x = 0 and y = 0 and powers of two (`axis_inputs`)")
     ap.add_argument("--slice", action="store_true",
                     help="settle each case by its x-slices (`anchored_cegis`, `SLICES`): two instructions, the first "
                          "product not reading y")
@@ -890,7 +903,7 @@ def main() -> int:
         cases = set(open(a.cases, encoding="utf-8").read().splitlines()) - {""} if a.cases else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
                    tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only, a.via_nan, a.split, cases,
-                   a.split_mods, a.by_mult, a.collide, a.pow2, SLICES if a.slice else (), a.free_anchor)
+                   a.split_mods, a.by_mult, a.collide, a.pow2, SLICES if a.slice else (), a.free_anchor, a.axes)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)

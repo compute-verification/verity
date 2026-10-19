@@ -271,6 +271,17 @@ def test_an_x_slice_is_unsat_and_finds_slices_that_exist():
 
 
 @pytest.mark.slow
+def test_x_times_y_first_cases_are_unsat_from_the_axes():
+    """Two x·y-first cases whose sub-cases stayed unknown at 300 s from colliding inputs are unsat from `axis_inputs`:
+    one whole (its first product 0 on the axes, so its high half is a constant there), and one of the other's
+    sub-cases (its high half y on x = 0, so the next product by a constant is a shift)."""
+    seq = (("IMAD.HI", (0, 1)), ("IMAD.HI", (3, 4)))
+    assert S.cegis(seq, timeout_ms=10**9, fix=({2: 0, 3: 2},), axes=True)["result"] == "unsat"
+    fix = ({2: 0, 3: 1, **dict.fromkeys(("cx", "inv", "na", "nb", "nc", "np", "sa", "sb"), False)},)
+    assert S.cegis(seq, timeout_ms=10**9, fix=fix, axes=True)["result"] == "unsat"
+
+
+@pytest.mark.slow
 def test_no_one_instruction_program():
     """k = 1: no single menu instruction computes x ^ y ^ K for any K (every sequence unsat)."""
     r = S.search(1)
