@@ -6,8 +6,9 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
-* past TOPK keys the row's top-k order is a field of the `run` input, `DsaTopKOrder_v1` checks it against the row's logits (one
-  of the Program's checks, an output after the source's), and sparse MLA reads `DsaGatherRows_v1`'s rows at it;
+* past TOPK keys the settings of a Waksman network over the row's history are a field of the `run` input, `DsaTopKOrder_v1`
+  checks the order they route (`DsaWaksmanOrder_v1`) against the row's logits (one of the Program's checks, an output after the
+  source's), and sparse MLA reads the rows `DsaWaksmanRows_v1` routes at them;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -548,34 +549,44 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
 
 
-def test_a_row_past_topk_reads_the_runs_order_checks_it_against_its_logits_and_gathers_its_rows(served):
-    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads its order from the `run` input's one field and
-    checks it by `DsaTopKOrder_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when the order is a permutation of the
-    logits' top-2 set), and both layers' `SparseMla_v1{T=2}` read `DsaGatherRows_v1{N=3,TOPK=2}`'s rows at it, in its order."""
+def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_logits_and_reads_its_rows(served):
+    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads the 3 settings of a Waksman network over its 3
+    rows from the `run` input's one field, routes the row indices through them (`DsaWaksmanOrder_v1{N=3,TOPK=2}`) and checks that
+    order by `DsaTopKOrder_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when it is a permutation of the logits' top-2
+    set), and both layers' `SparseMla_v1{T=2}` read the rows `DsaWaksmanRows_v1{N=3,K=2}` routes at the same settings, in that
+    order.  Every one of the 8 settings is evaluated."""
     model = _model(topk=2)
     xs = _inputs(model)
     rep = _derive(model, xs)
     assert rep.program is not None, rep.unsupported
+    assert dsa_topk.waksman_switches(3, 2) == 3
     assert rep.provenance["run_inputs"] == {"param": len(xs), "name": "run", "fields": [
-        {"name": f"{NAMES[0]}/topk[t=2]", "type": repr(Array(2, Value(32))), "offset": 0, "leaves": 2}]}
+        {"name": f"{NAMES[0]}/topk_switches[t=2]", "type": repr(Array(3, Value(1))), "offset": 0, "leaves": 3}]}
     assert rep.provenance["checks"]["accept"] == 1 and len(rep.provenance["checks"]["of"]) == 1
+    routed = bind(dsa_topk.DsaWaksmanOrder, N=3, TOPK=2).id
     check = bind(dsa_topk.DsaTopKOrder, N=3, TOPK=2).id
-    gather = bind(dsa_topk.DsaGatherRows, N=3, TOPK=2, W=L + R).id
+    rows = bind(dsa_topk.DsaWaksmanRows, N=3, K=2, W=L + R, E=16).id
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
-    assert [i for i in _ids(rep) if i in (check, gather, attn2)] == [attn2, attn2, check, gather, attn2, gather, attn2]
+    assert [i for i in _ids(rep) if i in (routed, check, rows, attn2)] == [attn2, attn2, routed, check, rows, attn2, rows, attn2]
     (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"
               and a["preconditions_checked"]["indexer"] and a["preconditions_checked"]["past_topk"]]
     assert app["preconditions_checked"]["past_topk"] == [2]
 
     logits = _index_logits(model, xs)[2]
     assert len(set(logits)) == 3
-    top = sorted(dsa_topk.topk_set(logits, 2))
-    for order in (top, top[::-1]):
-        out = _run(rep, model, xs, order)
-        assert out[-1] == 1 and out[:-1] == _reference(model, xs, orders={2: order}), order
-    (other,) = set(range(3)) - set(top)
-    for order in ([top[0], other], [other, top[1]], [top[0], top[0]], [top[0], 3], [top[1], 0xFFFFFFFF]):
-        assert _run(rep, model, xs, order)[-1] == 0, order
+    top = set(dsa_topk.topk_set(logits, 2))
+    accepted = []
+    for bits in range(8):
+        sw = [bits >> i & 1 for i in range(3)]
+        order = dsa_topk.waksman_apply(sw, [0, 1, 2], 2)
+        out = _run(rep, model, xs, sw)
+        assert out[-1] == int(set(order) == top), (sw, order)
+        if out[-1]:
+            assert out[:-1] == _reference(model, xs, orders={2: order}), order
+            accepted.append(tuple(order))
+    assert sorted(accepted) == sorted({tuple(sorted(top)), tuple(sorted(top, reverse=True))})
+    for order in (sorted(top), sorted(top, reverse=True)):
+        assert _run(rep, model, xs, dsa_topk.waksman_settings(order, 3))[-1] == 1
 
 
 class _LargeMlaAbsorb(nn.Module):
