@@ -1,0 +1,170 @@
+import Definitions.Accounting.HeadlineDc
+import Models.Accounting.Assumptions.Sheet
+import Models.Accounting.Assumptions.Fill
+
+/-!
+# The data-centre families' headline statements (trusted; statements, unproved)
+
+The H200's and B200's headlines in `Models.Accounting.Guarantees.Headline`'s form: one statement per device and
+reading, the family's credited work at least `1 − ε` of its credit, on one device's machine, one design's TS model on it
+and its floor program ♭, all exact data (`Definitions.Accounting.HeadlineDc`, written by
+`benchmarks/pouw/lean_headline_dc.py`). Each `ε` is the exporter's exact bound rounded up at `10^-5`. The hypotheses are
+`Sm120SheetHeadline`'s and `Sm120MeasuredHeadline`'s, with three differences, each stated where it enters:
+
+* **The H200's filler.** Its design runs ffill (a verified filler, receipts pinned), so its model's filler menu is
+  ffill's one route and ♭ fills (`Sm90.flatFill`). FILL-OPT is a hypothesis per word filled (`FillOptFilled`), at the
+  share of words the run fills, `1 − Σ_w e_w/S`. `Uf` gives each round's share `e_w` of words whose fold **or filler**
+  the run skips: ffill's receipt enters LI-CP-W's last checkpoint, so a unit whose filler is skipped passes only by
+  keeping the honest committed value without it, which `WholeLuckAt` bounds as it does a skipped fold. Its pinned
+  check would give that unit no luck at all (`PinnedFillLuckAt` at 0), so `½` is conservative. The bound prices the
+  filler at `χ*` inside `Y = (N_w w* + N_w φ* + χ*)/B_♭`, in both branches.
+* **The measured readings' word premises.** Both measured models are at A6's ½ floors, so A6 (`SheetWords`) stands in
+  for (I2)/(I4) `WordsWritten` and (I3) `ScalarRoute`: it gives the first directly and the second through
+  `SheetScalarRouteHalf` (proved), on any machine. (I1) is `FacetCeilings` on the measured rows (DC-90-ri, DC-100-ri),
+  whose card (`accounting-ts-facet-ceilings`) records sm_120's rows only; (I5) is `NoSum`.
+* **The certificate.** `lamStar` in each data file is the certificate an LP over the Lean menu picks to minimise the
+  bound, made exact; on DC-90-ri and DS-100 it is mixed (`IsCert` takes any). The statements don't name it: the proof
+  does.
+
+Per device:
+
+* The H200 (sm_90) runs `dither-2s-licpw-redux-l32` (Dither-2S, LI-CP-W, ffill). On DC-90-ri the joint rows price
+  every tensor form but honest's IGMMA s8 m64n256k32 at the scalar coefficient (IGMMA_S8_N256 at 62.7 on JI90_0, the
+  bf16, binary and fp8 forms at about 1), a lower bound on their issue cost that no certificate prices above it, so
+  the measured menu is honest's form and the uniform `UNI`, and `NoSum` carries every other form. Over the census's
+  full menu the same certificate search gives `29.3%`.
+* The B200 (sm_100) runs `dither-2s-licpw-redux-heavy-ldtm0-l32` (Dither-2S, LI-CP-W redux heavy fold, no filler),
+  whose ♭ credits none of honest's 8 `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them
+  was all of DC-100-ri's `ε_machine`. Honest still runs them; a lower credit is sound for any program. DS-100's
+  `f_max` (1965 MHz) is the driver's reported maximum: the data sheet gives no clock.
+
+Outside every statement: `S8MmaExact`, that IGMMA s8 (sm_90a) and tcgen05 `kind::i8` (sm_100a) write `C + Σ a_k b_k`
+exactly in s32 on the design's operands. The bounds read classes and words (A6), not values, so they don't read it;
+completeness (honest passes) and A7's reconciliation do. H1-HB's capture of the s8 semantics decides it.
+
+Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins drawn after
+the commitments. The sampled path's `ε_sample` and the Fiat–Shamir premium are separate lines.
+
+The statements:
+
+* `Sm90SheetHeadline`: the H200 at its data sheet (DS-90), at π* = DS_issue: outside an event of probability at most
+  `2^-40`, every accepted window runs at least `1 − 0.728%` of its credit (the unfolded branch binds).
+* `Sm90MeasuredHeadline`: the H200 on DC-90-ri, at a mixed π* (issue, JI90_0, JI90_1): at least `1 − 0.781%` (the
+  folded branch binds).
+* `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue, DS_alu): at least `1 − 0.504%`
+  (unfolded).
+* `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.556%` (unfolded).
+
+None is proved yet: `lean-audit.json` lists them under `shape.frozen` as `unstated` until their proofs land, and
+`FillOptFilled` joins the lock's assumptions with the first proved statement that reads it. #2482's unfolded branch
+drops `χ*` (`χ* ≥ 0`); the H200's proofs need its unfolded branch with the filler charged.
+-/
+
+namespace Accounting.Guarantees.TS
+
+open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity
+
+/-- **The H200's headline at the data sheet**, under full checking with live coins. On DS-90's machine
+(`Sm90.sheet`), `dither-2s-licpw-redux-l32`'s TS model (`Sm90.model`: every census MMA class a writer kind at its
+committed words an instruction, `q = q_T = ½`, `N_w = 4096`, ffill its filler) and its floor program (`Sm90.flat`),
+over `Sm90.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and proof layer `pf` whose
+binding and soundness cost at most `2^-41` over the window, if the labelling splits, A1–A7 hold on every run, FOLD-OPT
+per word folded prices every run's fold at the words it folds and FILL-OPT per word filled its filler at the share it
+fills (its unfolded share `Uf`, the words whose fold or filler it skips), the play's ideal game is the receipt game
+`G`'s, whose openings are pinned (`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view
+(`OperandHMu`), whose receipt luck is at most `½` (`ReceiptLuckAt`, HMU's B′) and whose whole-unit luck is at most `½`
+(`WholeLuckAt`, B′ at a unit whose fold or filler is skipped), the play is the proofs' (`Of`), binding fails with
+probability at most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed
+value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted
+window's time is at least `1 − 728/100000` (`1 − 0.728%`) of the credit `T_cred = B_♭/f_max`. -/
+def Sm90SheetHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+    (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δbind δzk : ℝ),
+    (Sm90.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, SheetClock Sm90.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
+    (∀ x, SheetTensor Sm90.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm90.sheet (Pl.run x).run) →
+    (∀ x, SheetSmem Sm90.sheet (Pl.run x).run) → (∀ x, SheetWords Sm90.model (Pl.run x)) →
+    (∀ x, SheetSemantics Sm90.model (Pl.run x)) →
+    (∀ x, FoldOptFolded Sm90.model (Pl.run x) ((1 - Uf.share x / Sm90.checks) * Sm90.model.Nw)) →
+    (∀ x, FillOptFilled Sm90.model (Pl.run x) (1 - Uf.share x / Sm90.checks)) →
+    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
+    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
+    pf.Pins → RightFixed Pl pf Sm90.model.Nw →
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm90.model.credit Sm90.flat < 1 - 728 / 100000) ≤
+      (1 / 2) ^ 40
+
+/-- **The H200's headline on its measured vector**, under full checking with live coins. On DC-90-ri's machine
+(`Sm90Measured.machine`), `dither-2s-licpw-redux-l32`'s TS model on it (`Sm90Measured.model`: honest's IGMMA s8
+m64n256k32 and `UNI` the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_w = 4096`, ffill its filler) and its floor program
+(`Sm90Measured.flat`), over `Sm90.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and proof
+layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits, (I1)
+`FacetCeilings` holds on DC-90-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run, FOLD-OPT per word folded
+prices every run's fold at the words it folds and FILL-OPT per word filled its filler at the share it fills (its
+unfolded share `Uf`), and the luck and proof premises hold as in `Sm90SheetHeadline`, then outside an event of
+probability at most `2^-40` every accepted window's time is at least `1 − 781/100000` (`1 − 0.781%`) of the credit
+`T_cred = B_♭/f_max`. `NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on
+its joint rows. -/
+def Sm90MeasuredHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+    (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δbind δzk : ℝ),
+    (Sm90.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, FacetCeilings Sm90Measured.machine (Pl.run x).run) →
+    (∀ x, SheetWords Sm90Measured.model (Pl.run x)) → (∀ x, NoSum (Pl.run x)) →
+    (∀ x, FoldOptFolded Sm90Measured.model (Pl.run x)
+      ((1 - Uf.share x / Sm90.checks) * Sm90Measured.model.Nw)) →
+    (∀ x, FillOptFilled Sm90Measured.model (Pl.run x) (1 - Uf.share x / Sm90.checks)) →
+    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
+    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
+    pf.Pins → RightFixed Pl pf Sm90Measured.model.Nw →
+    prob (fun x => Pl.accepts x ∧
+      (Pl.run x).run.time / Sm90Measured.model.credit Sm90Measured.flat < 1 - 781 / 100000) ≤ (1 / 2) ^ 40
+
+/-- **The B200's headline at the data sheet**, under full checking with live coins. On DS-100's machine
+(`Sm100.sheet`), `dither-2s-licpw-redux-heavy-ldtm0-l32`'s TS model (`Sm100.model`: every census MMA class a writer
+kind at its committed words an instruction, `q = q_T = ½`, `N_w = 32768`) and its floor program (`Sm100.flat`,
+crediting no `tcgen05.ld`), over `Sm100.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and
+proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits, A1–A7 hold
+on every run
+and FOLD-OPT per word folded prices every run's fold at the words it folds (its unfolded share `Uf`), and the luck and
+proof premises hold as in `Sm90SheetHeadline`, then outside an event of probability at most `2^-40` every accepted
+window's time is at least `1 − 504/100000` (`1 − 0.504%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
+hypothesis: the design has no filler, so it holds at any run. -/
+def Sm100SheetHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 12) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
+    (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δbind δzk : ℝ),
+    (Sm100.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, SheetClock Sm100.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
+    (∀ x, SheetTensor Sm100.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm100.sheet (Pl.run x).run) →
+    (∀ x, SheetSmem Sm100.sheet (Pl.run x).run) → (∀ x, SheetWords Sm100.model (Pl.run x)) →
+    (∀ x, SheetSemantics Sm100.model (Pl.run x)) →
+    (∀ x, FoldOptFolded Sm100.model (Pl.run x) ((1 - Uf.share x / Sm100.checks) * Sm100.model.Nw)) →
+    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
+    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
+    pf.Pins → RightFixed Pl pf Sm100.model.Nw →
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm100.model.credit Sm100.flat < 1 - 504 / 100000) ≤
+      (1 / 2) ^ 40
+
+/-- **The B200's headline on its measured vector**, under full checking with live coins. On DC-100-ri's machine
+(`Sm100Measured.machine`), `dither-2s-licpw-redux-heavy-ldtm0-l32`'s TS model on it (`Sm100Measured.model`: every
+census MMA class a writer kind, `q = q_T = ½`, `b_T = 0`, `N_w = 32768`) and its floor program (`Sm100Measured.flat`),
+over `Sm100.checks = 48,000` rounds on any finite coins `Ω`: for any window's play `Pl` and proof layer `pf` whose
+binding and soundness cost at most `2^-41` over the window, if the labelling splits, (I1) `FacetCeilings` holds on
+DC-100-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run and FOLD-OPT per word folded prices every run's
+fold at the words it folds (its unfolded share `Uf`), and the luck and proof premises hold as in `Sm90SheetHeadline`,
+then outside an event of probability at most `2^-40` every accepted window's time is at least `1 − 556/100000`
+(`1 − 0.556%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no filler. -/
+def Sm100MeasuredHeadline : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 12) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
+    (Uf : Unfolded Ω Sm100.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm100.checks nπ V) (δbind δzk : ℝ),
+    (Sm100.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (∀ x, FacetCeilings Sm100Measured.machine (Pl.run x).run) →
+    (∀ x, SheetWords Sm100Measured.model (Pl.run x)) → (∀ x, NoSum (Pl.run x)) →
+    (∀ x, FoldOptFolded Sm100Measured.model (Pl.run x)
+      ((1 - Uf.share x / Sm100.checks) * Sm100Measured.model.Nw)) →
+    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
+    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
+    pf.Pins → RightFixed Pl pf Sm100Measured.model.Nw →
+    prob (fun x => Pl.accepts x ∧
+      (Pl.run x).run.time / Sm100Measured.model.credit Sm100Measured.flat < 1 - 556 / 100000) ≤ (1 / 2) ^ 40
+
+end Accounting.Guarantees.TS
