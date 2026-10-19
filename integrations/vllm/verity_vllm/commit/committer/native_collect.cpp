@@ -23,6 +23,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <thread>
 #include <unistd.h>
@@ -50,6 +51,15 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
 extern "C" int verity_rows_leaves_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
                                          const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
                                          uint8_t* hs, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_leaves_form();
+extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                            const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total, uint8_t* out, uint8_t* bc,
+                                            uint8_t* hs, uint8_t* scratch, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_h_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows, const uint8_t* salts,
+                                    const uint8_t* tn, uint64_t first, uint8_t* hs, uint8_t* bc, uint8_t* scratch, uint64_t max_blocks,
+                                    cudaStream_t st);
+extern "C" int verity_rows_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m, uint64_t n_total,
+                                        uint8_t* out, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level, uint64_t first_index,
                                         uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
@@ -300,10 +310,12 @@ struct Collector {
     return win_ptrs[sw->slots[static_cast<size_t>(off / win_bytes)]] + (off % win_bytes);
   }
 
-  // record the complete-events of the windows whose bytes are all covered by ISSUED copies (logical end `upto`); serving thread, compute stream
-  void mark_windows(int64_t upto) {
+  // record the complete-events of the windows whose bytes are all covered by ISSUED copies (logical end `upto`); serving thread, compute
+  // stream (or the side stream, from a side flush)
+  void mark_windows(int64_t upto, cudaStream_t side = nullptr) {
     if (!windowed || !sw) return;
-    cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();
+    if (!side) join_side();
+    cudaStream_t s = side ? side : c10::cuda::getCurrentCUDAStream().stream();
     const int64_t done_w = upto / win_bytes;                          // windows [0, done_w) are fully written
     if (win_marked >= done_w || win_marked >= static_cast<int64_t>(sw->slots.size())) return;
     std::lock_guard<std::mutex> g(win_mu);
@@ -536,6 +548,7 @@ struct Collector {
     step_issue_s = 0.0;
     step_flushes = 0;
     step_win_waits = 0; step_win_wait_s = 0.0;
+    side_next = false;
   }
 
   // A non-contiguous tensor whose memory is a set of equally spaced contiguous rows (e.g. RoPE's q/k views into the qkv buffer:
@@ -582,6 +595,7 @@ struct Collector {
   }
 
   inline void issue(int64_t off, int64_t gap, const at::Tensor& t, int64_t nb, bool skip_copy) {
+    join_side();
     cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();   // the PRODUCER's stream (same thread, same stream as the kernel that made `src`)
     ensure_windows(off + nb);                                        // (no-op unless windowed; may block for the worker)
     double t0 = now_s();
@@ -666,6 +680,7 @@ struct Collector {
   py::tuple end_step() {
     if (!active) throw std::runtime_error("end_step without begin_step");
     if (ring_pos != staged_from) throw std::runtime_error("end_step with staged copies not flushed");
+    join_side();
     active = false;
     if (windowed && sw) {
       // the last (partial) window: one event after everything issued this step
@@ -738,13 +753,14 @@ struct Collector {
     d["plans_dropped"] = plans.dropped(); d["plans_pending_emptied_step"] = plans.pending_emptied_step();
     d["strided_2d"] = tot_strided; d["contiguous_fallback"] = tot_fallback; d["flushes"] = tot_flushes; d["staged"] = tot_staged;
     d["gather_blocks"] = tot_blocks; d["auto_blocks"] = auto_blocks;
+    d["gather_side_flushes"] = tot_side_flushes; d["drain_side"] = side_drain; d["gather_desc_copies"] = tot_desc_copies;
     d["expected"] = tot_expected; d["committed"] = tot_committed;
     d["window_waits"] = win_waits; d["window_wait_s"] = win_wait_s; d["windowed"] = windowed;
     d["refused_after_failure"] = tot_refused;
     return d;
   }
 
-  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_expected = tot_committed = 0; tot_refused = 0; }
+  void reset_stats() { tot_copies = tot_bytes = tot_memsets = tot_misses = tot_learn_steps = tot_strided = tot_fallback = 0; tot_issue_s = 0.0; tot_flushes = 0; tot_staged = 0; tot_blocks = 0; tot_side_flushes = 0; tot_desc_copies = 0; tot_expected = tot_committed = 0; tot_refused = 0; }
   void clear_plans() { plans.clear(); plan = nullptr; }
   void end_run() {             // the committer's reset between runs: the run totals, and the plans the run that ended did not use (freed by
     reset_stats();             // the next run's steps, native_plans.h), and the run's failure
@@ -762,6 +778,9 @@ struct Collector {
   struct GatherDesc { const char* src; char* dst; int64_t nbytes; int64_t width; int64_t pitch; int64_t skip; };
   GatherDesc* ring = nullptr;       // host-mapped pinned ring
   GatherDesc* ring_dev = nullptr;   // its device alias
+  // A device copy of the ring: a flush copies its descriptors there (one H2D on the gather's stream) and the kernel reads them from
+  // device memory, not over PCIe from every block (VERITY_GATHER_DESC_DEV=0, read at enable_gather, keeps the host-mapped reads).
+  GatherDesc* ring_gpu = nullptr;
   int64_t ring_cap = 0, ring_pos = 0, staged_from = 0;
   std::vector<at::Tensor> held;
   int blocks_per_desc = 8;
@@ -779,6 +798,25 @@ struct Collector {
     ring_dev = reinterpret_cast<GatherDesc*>(d);
     ring_cap = capacity;
     ring_pos = staged_from = 0;
+    if (const char* e = std::getenv("VERITY_DRAIN_SIDE")) side_drain = std::string(e) != "0";
+    const char* dd = std::getenv("VERITY_GATHER_DESC_DEV");
+    if (!dd || std::string(dd) != "0") {
+      rc = cudaMalloc(&d, capacity * sizeof(GatherDesc));
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaMalloc(gather descriptors): ") + cudaGetErrorString(rc));
+      ring_gpu = reinterpret_cast<GatherDesc*>(d);
+    }
+  }
+
+  // the n descriptors at ring index start, where the gather on s reads them: copied to the device ring ahead of it on s, or (no device
+  // ring, or s capturing a graph, whose replay must not re-copy a later step's ring) the host-mapped ring itself
+  const GatherDesc* descs_for(int64_t start, int64_t n, cudaStream_t s) {
+    if (!ring_gpu) return ring_dev + start;
+    cudaStreamCaptureStatus cs = cudaStreamCaptureStatusNone;
+    if (cudaStreamIsCapturing(s, &cs) != cudaSuccess || cs != cudaStreamCaptureStatusNone) return ring_dev + start;
+    const cudaError_t rc = cudaMemcpyAsync(ring_gpu + start, ring + start, n * sizeof(GatherDesc), cudaMemcpyHostToDevice, s);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("gather descriptors H2D: ") + cudaGetErrorString(rc));
+    ++tot_desc_copies;
+    return ring_gpu + start;
   }
 
   inline void push_one(const char* src, char* dst, int64_t nb, int64_t width, int64_t pitch, int64_t skip) {
@@ -885,30 +923,70 @@ struct Collector {
     return off;
   }
 
+  // A replayed graph's slots (`stage_slot_plan`, slots only: nothing held, whose storage the allocator could hand to the serving stream)
+  // are gathered on a side stream, so the serving stream's next kernels (the logits GEMM, the sampler) need not wait for the copy. The
+  // serving stream joins it (`join_side`) before its next copy, window mark or step end: a window it completes holds this gather's
+  // bytes, and the next replay rewrites the slots. VERITY_DRAIN_SIDE=0, read at enable_gather, keeps every flush on the serving stream.
+  bool side_drain = true, side_next = false, side_pending = false;
+  cudaStream_t side_s = nullptr;
+  cudaEvent_t side_fork = nullptr, side_done = nullptr;
+  int64_t tot_side_flushes = 0, tot_desc_copies = 0;
+
+  void join_side() {
+    if (!side_pending) return;
+    side_pending = false;
+    cudaError_t rc = cudaStreamWaitEvent(c10::cuda::getCurrentCUDAStream().stream(), side_done, 0);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("cudaStreamWaitEvent(side drain): ") + cudaGetErrorString(rc));
+  }
+
+  cudaStream_t fork_side(cudaStream_t cur) {
+    if (!side_s) {
+      int prio = 0;                                                  // the serving stream's: under VERITY_HI_PRIO, ahead of the hash's blocks
+      cudaError_t rc = cudaStreamGetPriority(cur, &prio);
+      if (rc == cudaSuccess) rc = cudaStreamCreateWithPriority(&side_s, cudaStreamNonBlocking, prio);
+      if (rc == cudaSuccess) rc = cudaEventCreateWithFlags(&side_fork, cudaEventDisableTiming);
+      if (rc == cudaSuccess) rc = cudaEventCreateWithFlags(&side_done, cudaEventDisableTiming);
+      if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain stream: ") + cudaGetErrorString(rc));
+    }
+    cudaError_t rc = cudaEventRecord(side_fork, cur);
+    if (rc == cudaSuccess) rc = cudaStreamWaitEvent(side_s, side_fork, 0);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain fork: ") + cudaGetErrorString(rc));
+    return side_s;
+  }
+
   void flush() {
     const int64_t n = ring_pos - staged_from;
+    const bool side = side_next && windowed && held.empty();
+    side_next = false;
     if (n <= 0) return;
     if (!ring) throw std::runtime_error("gather not enabled");
-    cudaStream_t s = c10::cuda::getCurrentCUDAStream().stream();
+    if (!side) join_side();
+    cudaStream_t cur = c10::cuda::getCurrentCUDAStream().stream();
+    cudaStream_t s = side ? fork_side(cur) : cur;
     double t0 = now_s();
+    const int64_t start = staged_from % ring_cap;
     const int bpd = blocks_for_window();
     win_max_nb = 0;
     tot_blocks += static_cast<int64_t>(bpd) * n;
-    const int64_t start = staged_from % ring_cap;
     if (start + n <= ring_cap) {
-      int rc = verity_gather_launch(ring_dev + start, static_cast<int>(n), bpd, s);
+      int rc = verity_gather_launch(descs_for(start, n, s), static_cast<int>(n), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
     } else {                                                         // ring wrap: two launches
       const int64_t n1 = ring_cap - start;
-      int rc = verity_gather_launch(ring_dev + start, static_cast<int>(n1), bpd, s);
-      if (rc == 0) rc = verity_gather_launch(ring_dev, static_cast<int>(n - n1), bpd, s);
+      int rc = verity_gather_launch(descs_for(start, n1, s), static_cast<int>(n1), bpd, s);
+      if (rc == 0) rc = verity_gather_launch(descs_for(0, n - n1, s), static_cast<int>(n - n1), bpd, s);
       if (rc != 0) throw std::runtime_error(std::string("gather launch: ") + cudaGetErrorString(static_cast<cudaError_t>(rc)));
     }
     step_issue_s += now_s() - t0;
     staged_from = ring_pos;
     held.clear();                       // the reads are enqueued in stream order before any later kernel on this stream
     ++step_flushes; ++tot_flushes;
-    if (windowed) mark_windows(pushed_end);    // every window fully behind the pushed frontier is now in flushed copies
+    if (windowed) mark_windows(pushed_end, side ? s : nullptr);   // every window fully behind the pushed frontier is now in flushed copies
+    if (!side) return;
+    const cudaError_t rc = cudaEventRecord(side_done, s);
+    if (rc != cudaSuccess) throw std::runtime_error(std::string("side drain done: ") + cudaGetErrorString(rc));
+    side_pending = true;
+    ++tot_side_flushes;
   }
 
   // ------------------------------------------------------------------ R11 collector v2: native hook bodies (no Python frames per producer)
@@ -966,6 +1044,7 @@ struct Collector {
         put(p.ids[i], s.narrow(0, 0, rows));                                      // as slot[:rows]
       }
     }
+    side_next = side_drain && fast;
     return static_cast<int64_t>(p.slots.size());
   }
   void clear_slot_plans() { slot_plans.clear(); }
@@ -1808,15 +1887,79 @@ struct StepHasher {
       leaves = at::empty({m, 64}, opt);
       bc = want_bc ? at::empty({m, 128}, opt) : at::empty({0}, opt);
       hs = want_h ? at::empty({m, 64}, opt) : at::empty({0}, opt);
-      int lrc = verity_rows_leaves_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(rows.data_ptr()), static_cast<uint64_t>(stride),
-                                          static_cast<uint64_t>(n_rows), salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr,
-                                          reinterpret_cast<const uint8_t*>(tn.data_ptr()), static_cast<uint64_t>(first), static_cast<uint64_t>(m),
-                                          static_cast<uint64_t>(n_total), reinterpret_cast<uint8_t*>(leaves.data_ptr()),
-                                          want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr,
-                                          static_cast<uint64_t>(rs.max_blocks), st);
+      const auto* rows_p = reinterpret_cast<const uint8_t*>(rows.data_ptr());
+      const uint8_t* salts_p = salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr;
+      const auto* tn_p = reinterpret_cast<const uint8_t*>(tn.data_ptr());
+      auto* out_p = reinterpret_cast<uint8_t*>(leaves.data_ptr());
+      uint8_t* bc_p = want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr;
+      uint8_t* hs_p = want_h ? reinterpret_cast<uint8_t*>(hs.data_ptr()) : nullptr;
+      const int form = verity_rows_leaves_form();
+      if (form < 0) throw std::runtime_error("rows_leaves: VERITY_ROWS_FORM is fused, split or unset");
+      at::Tensor sf = at::empty({form == 2 ? m * 192 : 0}, opt);
+      int lrc = verity_rows_leaves_sf_launch(rs.params.data(), rows_p, static_cast<uint64_t>(stride), static_cast<uint64_t>(n_rows), salts_p, tn_p,
+                                             static_cast<uint64_t>(first), static_cast<uint64_t>(m), static_cast<uint64_t>(n_total), out_p, bc_p, hs_p,
+                                             form == 2 ? reinterpret_cast<uint8_t*>(sf.data_ptr()) : nullptr, static_cast<uint64_t>(rs.max_blocks), st);
       if (lrc != 0) throw std::runtime_error(std::string("rows_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
     }
     return py::make_tuple(leaves, bc, hs);
+  }
+
+  // rows_leaves in two halves, for a step whose length (and so whose frame domain) is not known while its rows are: rows_h hashes the
+  // data positions first .. first + nbytes / stride - 1 to their h (and b || c when want_bc), which needs only the step's salt key (rs
+  // may be any domain's RowStep), and rows_frame turns them into the leaves once the step's RowStep is known.  -> (h [n_rows, 64],
+  // b || c [n_rows, 128] or empty)
+  py::tuple rows_h(const RowStep& rs, at::Tensor rows, int64_t nbytes, int64_t first, at::Tensor tn, int64_t stream_ptr, int64_t stride = 0,
+                   std::optional<at::Tensor> salts_given = std::nullopt, bool want_bc = false) {
+    const at::Tensor salts = salts_given.has_value() ? *salts_given : at::Tensor();
+    if (stride == 0) stride = rs.row_bytes;
+    if (!rows.is_cuda() || rows.scalar_type() != at::kByte || !rows.is_contiguous()) throw std::runtime_error("rows_h: rows must be a contiguous CUDA uint8 tensor");
+    if (stride % 16 || stride < (rs.row_bytes + 15) / 16 * 16 || reinterpret_cast<uintptr_t>(rows.data_ptr()) % 16)
+      throw std::runtime_error("rows_h: rows 16-byte aligned at a stride of whole 16-byte loads covering the row");
+    if (nbytes < 0 || nbytes > rows.numel() || nbytes % stride) throw std::runtime_error("rows_h: nbytes must be a stride multiple within rows");
+    if (!tn.is_cuda() || tn.scalar_type() != at::kByte || !tn.is_contiguous() || tn.numel() != 8192) throw std::runtime_error("rows_h: tn must be the 8 KB CUDA mask table");
+    const int64_t n_rows = nbytes / stride;
+    if (first < 0 || first + n_rows > (int64_t(1) << 32)) throw std::runtime_error("rows_h: positions below 2^32");
+    if (salts.defined() && (!salts.is_cuda() || salts.scalar_type() != at::kByte || !salts.is_contiguous() || salts.numel() < n_rows * 192))
+      throw std::runtime_error("rows_h: salts must be a contiguous CUDA uint8 tensor of 192 bytes per row");
+    at::Tensor hs, bc;
+    {
+      py::gil_scoped_release nogil;
+      c10::InferenceMode inf;
+      cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+      c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, rows.device().index());
+      c10::cuda::CUDAStreamGuard g(cs);
+      const auto opt = at::TensorOptions().dtype(at::kByte).device(rows.device());
+      hs = at::empty({n_rows, 64}, opt);
+      bc = want_bc ? at::empty({n_rows, 128}, opt) : at::empty({0}, opt);
+      at::Tensor sf = at::empty({n_rows * 192}, opt);
+      const int lrc = verity_rows_h_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(rows.data_ptr()), static_cast<uint64_t>(stride),
+                                           static_cast<uint64_t>(n_rows), salts.defined() ? reinterpret_cast<const uint8_t*>(salts.data_ptr()) : nullptr,
+                                           reinterpret_cast<const uint8_t*>(tn.data_ptr()), static_cast<uint64_t>(first), reinterpret_cast<uint8_t*>(hs.data_ptr()),
+                                           want_bc ? reinterpret_cast<uint8_t*>(bc.data_ptr()) : nullptr, reinterpret_cast<uint8_t*>(sf.data_ptr()),
+                                           static_cast<uint64_t>(rs.max_blocks), st);
+      if (lrc != 0) throw std::runtime_error(std::string("rows_h: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    }
+    return py::make_tuple(hs, bc);
+  }
+
+  // The leaves of positions first .. first + m - 1 of a step of n_total leaves from rows_h's h of its positions first .. first + len(hs) - 1
+  // (a pad at every position >= n_total).  -> leaves [m, 64] uint8, rows_leaves' bytes
+  at::Tensor rows_frame(const RowStep& rs, at::Tensor hs, int64_t first, int64_t m, int64_t n_total, int64_t stream_ptr) {
+    if (!hs.is_cuda() || hs.scalar_type() != at::kByte || !hs.is_contiguous() || (hs.numel() && (hs.dim() != 2 || hs.size(1) != 64)))
+      throw std::runtime_error("rows_frame: hs must be a contiguous CUDA uint8 [n, 64]");
+    if (first < 0 || m < 0 || n_total < 0 || first + m > (int64_t(1) << 32)) throw std::runtime_error("rows_frame: positions below 2^32");
+    const int64_t n_h = hs.numel() ? hs.size(0) : 0;
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, hs.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    at::Tensor leaves = at::empty({m, 64}, at::TensorOptions().dtype(at::kByte).device(hs.device()));
+    const int lrc = verity_rows_frame_launch(rs.params.data(), reinterpret_cast<const uint8_t*>(hs.data_ptr()), static_cast<uint64_t>(n_h),
+                                             static_cast<uint64_t>(first), static_cast<uint64_t>(m), static_cast<uint64_t>(n_total),
+                                             reinterpret_cast<uint8_t*>(leaves.data_ptr()), static_cast<uint64_t>(rs.max_blocks), st);
+    if (lrc != 0) throw std::runtime_error(std::string("rows_frame: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    return leaves;
   }
 
   // rows-sha512 absorb: levels 0 .. n_levels-1 of one window's subtree from its leaves (positions first .. first + m - 1, m a power of two
@@ -1921,6 +2064,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
            py::arg("side_stream_ptr"), py::arg("step_event_ptr"), py::arg("keep_mode") = 0, py::arg("keep_dst") = at::Tensor(), py::arg("levels_host") = false, py::arg("levels_dst") = at::Tensor())
       .def("rows_leaves", &StepHasher::rows_leaves, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("m"), py::arg("n_total"),
            py::arg("tn"), py::arg("stream_ptr"), py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false, py::arg("want_h") = false)
+      .def("rows_h", &StepHasher::rows_h, py::arg("rs"), py::arg("rows"), py::arg("nbytes"), py::arg("first"), py::arg("tn"), py::arg("stream_ptr"),
+           py::arg("stride") = 0, py::arg("salts") = py::none(), py::arg("want_bc") = false)
+      .def("rows_frame", &StepHasher::rows_frame, py::arg("rs"), py::arg("hs"), py::arg("first"), py::arg("m"), py::arg("n_total"), py::arg("stream_ptr"))
       .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
            py::arg("host_dsts"))
       .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
@@ -1977,6 +2123,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def_readwrite("slot_fast", &Collector::slot_fast)
       .def_readwrite("auto_blocks", &Collector::auto_blocks)
       .def_readwrite("auto_bytes_per_block", &Collector::auto_bytes_per_block)
+      .def_readwrite("drain_side", &Collector::side_drain)
+      .def("side_stream_for_test", [](Collector& c) { return reinterpret_cast<int64_t>(c.side_s); })
       .def("drain_errors", &Collector::drain_errors)
       .def_readonly("active", &Collector::active)
       .def_readonly("learning", &Collector::learning);

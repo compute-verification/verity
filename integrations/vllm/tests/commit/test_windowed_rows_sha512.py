@@ -1,9 +1,11 @@
 """The windowed worker under ``rows-sha512`` (``commit_scheme``, ``verity_vllm.commit.step_rows``) commits what the reference
 does, on the real collector, window ring and kernels: each step's root is ``step_rows``'s over the step's packed stream (the same
-stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (windows re-hashed from
-host once the step's length is known), a hit run (hashed in place, pad-only windows absorbed after the data windows), with and without
-the levels, and under bounded staging.  Openings of a run that kept no levels come from a replay that took its keys, and verify against
-its 64-byte roots, as the replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds vllm-v1's roots, unchanged.
+stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (each window hashed to
+its rows' h in place, the leaves from them once the step's length is known; re-hashed from host when it keeps bytes), a hit run
+(hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
+Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as the
+replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds
+vllm-v1's roots, unchanged.
 """
 from __future__ import annotations
 
@@ -33,14 +35,15 @@ def committer(mp, **kw) -> NC.NativeCollectCommitter:
 
 
 def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> bytes:
-    """step_rows's step root over the stream `commit_block_offline` packs (each tensor at the next ALIGN offset, zero-padded to 256 B)."""
+    """step_rows's step root over the stream `commit_block_offline` packs (each tensor at the next ALIGN offset, zero-padded to a
+    row), its layout counted in rows."""
     ref = nh.NativeHostCommitter(None, run_id=WR.RUN_ID, program_digest=WR.PD, geo_digest=WR.GEO, retain_values=False, gpu_tree=True)
     stream, metas, first_leaf = bytearray(), [], 0
     for i, (name, t) in enumerate(tensors):
         raw = t.cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
         stream.extend(b"\0" * (-len(stream) % nh.NativeHostCommitter.ALIGN))
-        n_leaves = -(-len(raw) // nh.GPU_CHUNK_BYTES)
-        m = nh.TensorMeta(i, name, nh._dtype_name(t), tuple(t.shape), len(raw), nh.GPU_CHUNK_BYTES, first_leaf, n_leaves)
+        n_leaves = -(-len(raw) // R.ROW_BYTES)
+        m = nh.TensorMeta(i, name, nh._dtype_name(t), tuple(t.shape), len(raw), R.ROW_BYTES, first_leaf, n_leaves)
         m.dev_off = m.stream_off = len(stream)
         stream.extend(raw)
         metas.append(m)
@@ -69,15 +72,77 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
     com = committer(monkeypatch, retain_levels=retain_levels)
     try:
         learn = WR.run(com, SCHED)
-        learn_keys, reup = dict(com.row_keys), com._win_reupload_bytes
+        learn_keys, reup, hfirst = dict(com.row_keys), com._win_reupload_bytes, com._win_hfirst_steps
         hit = WR.run(com, SCHED)
-        assert reup > 0 and com._win_reupload_bytes == 0, "the second run follows the first run's plans (in place, no re-upload)"
+        assert reup == 0 and hfirst == len(SCHED), "a learning step that keeps no bytes hashes its windows to h in place (no re-upload)"
+        assert com._win_reupload_bytes == 0 and com._win_hfirst_steps == 0, "the second run follows the first run's plans (in place)"
         check_run(learn, learn_keys)
         check_run(hit, com.row_keys)
         assert hit.run_root != learn.run_root and not set(learn_keys.values()) & set(com.row_keys.values()), "each run's keys are fresh"
         assert bool(com._gpu_levels) is retain_levels
     finally:
         com.close()
+
+
+class _SlotRunner(WR._Runner):
+    """A replayed graph's step: the per-token tensors land in persistent slots (the captured copies) and are staged from them in one
+    `stage_slot_plan` call and flushed (the source's drain); the rest are acquired one by one, as the logits and the sampled tokens are."""
+
+    def __init__(self, lag: bool = False) -> None:
+        super().__init__()
+        self.slots: list[torch.Tensor] = []
+        self.handle = -1
+        self.lag = lag
+
+    def execute_model(self, scheduler_output, *a, **kw):
+        com, n = self.committer, scheduler_output.total_num_scheduled_tokens
+        per_token = [(nm, t) for nm, t in self.tensors if t.is_contiguous() and t.shape[0] == n and not nm.startswith(("logits", "runner."))]
+        if self.handle < 0:
+            self.slots = [torch.empty((8, *t.shape[1:]), dtype=t.dtype, device=t.device) for _nm, t in per_token]
+            self.handle = com.slot_plan([nm for nm, _t in per_token], self.slots, [1] * len(per_token))
+        for slot, (_nm, t) in zip(self.slots, per_token):
+            slot[:n].copy_(t)
+        com.stage_slot_plan(self.handle, n, n)
+        side = com._nc.side_stream_for_test()
+        if self.lag and side:
+            with torch.cuda.stream(torch.cuda.ExternalStream(side)):
+                torch.cuda._sleep(20_000_000)                       # the gather queued behind it lags the serving stream by milliseconds
+        com._nc.flush()
+        for nm, t in self.tensors:
+            if all(nm != p for p, _t in per_token):
+                com._acquire(nm, t, com._cur)
+
+
+def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
+    """A replayed step's slots gathered on the side stream (VERITY_DRAIN_SIDE, on by default), the serving stream joining it before its
+    next flush, window mark and step end, and the next step rewriting the slots on the serving stream: the same roots as one
+    acquisition per tensor in the same order, also with the side stream held back behind a sleep before each step's gather (from the
+    second step, once it exists), so that a missing join would bind stale or rewritten slots; with VERITY_DRAIN_SIDE=0, the same roots
+    with every flush on the serving stream; and with VERITY_GATHER_DESC_DEV=0 (descriptors read from the host-mapped ring, not copied to
+    the device ring ahead of each gather), the same roots."""
+    for side, lag, desc_dev in ((True, False, True), (False, False, True), (True, True, True), (True, False, False)):
+        monkeypatch.setenv("VERITY_DRAIN_SIDE", "1" if side else "0")
+        monkeypatch.setenv("VERITY_GATHER_DESC_DEV", "1" if desc_dev else "0")
+        com = committer(monkeypatch, retain_levels=False)
+        runner = _SlotRunner(lag)
+        runner.committer, com.runner = com, runner
+        try:
+            for run in ("learn", "hit"):
+                rc = WR.run(com, SCHED)
+                keys, roots = com.row_keys, [s.root for s in rc.steps]
+                want, plain = [], []
+                for i, kv in enumerate(SCHED):
+                    ts = WR.step_tensors(kv)
+                    first = [(nm, t) for nm, t in ts if t.is_contiguous() and t.shape[0] == len(kv) and not nm.startswith(("logits", "runner."))]
+                    want.append(rows_root(i, first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)], keys[i]))
+                    plain.append(rows_root(i, ts, keys[i]))
+                st = rc.extra["native_collect"]
+                assert roots == want, (side, lag, desc_dev, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
+                                       [i for i in range(len(SCHED)) if roots[i] == plain[i]], st)
+                assert st["gather_side_flushes"] == (len(SCHED) if side else 0), st
+                assert (st["gather_desc_copies"] > 0) is desc_dev, st
+        finally:
+            com.close()
 
 
 def test_capped_runs_commit_step_rows_roots(monkeypatch):
@@ -99,7 +164,9 @@ def test_bounded_record_run_commits_step_rows_roots(monkeypatch):
     try:
         com.learn_only = True
         warm = WR.run(com, SCHED)
-        assert len(warm.extra["bounded_staging"]["learned_only_steps"]) == len(SCHED)
+        assert not warm.extra["bounded_staging"]["learned_only_steps"] and com._win_hfirst_steps == len(SCHED), \
+            "learning steps that keep no bytes copy nothing to host, so even over the budget they are committed, not discarded"
+        check_run(warm, com.row_keys)
         com.learn_only = False
         rec = WR.run(com, SCHED)
         bs = rec.extra["bounded_staging"]
