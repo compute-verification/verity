@@ -94,9 +94,11 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-40}" ${LEASE_ARGS:-} -- bash -c '
           done ;;
     esac
   done'
-echo "lease rc $?" >> "$O/rc.txt"
+L=$?
+echo "lease rc $L" >> "$O/rc.txt"
 cat "$O/rc.txt"
 tail -1 "$O/conformance.jsonl" 2>/dev/null | cut -c1-300
 tail -2 "$O/gate.log" 2>/dev/null
 tail -1 "$O/ab.log" 2>/dev/null
 grep -h '"root_ok"' "$O"/pb_*.log 2>/dev/null | cut -c1-400
+exit $L
