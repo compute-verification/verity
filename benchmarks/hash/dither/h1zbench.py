@@ -4,7 +4,12 @@ alone (seeds, noise, unit), against the plain int8 GEMM it replaces: gamma = os 
 kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / plain), and so is H1's noise floor.
 
     python h1zbench.py --lib h1u.so [--variant NAME=h1u_x.so ...] --ref-lib h1zref.so [--noise-lib h1noise.so]
-                       --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused] [--no-ws] [--j10r ARM]
+                       --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused] [--no-ws] [--peel] [--j10r ARM]
+
+--peel adds arm NAME-osp per build: kh_one_peel, CA's peel (11:02Z), whose z is A B^T (y today's) from the same stream
+(z - X c^T - b B^T + 256 xa B^T, xa where X = A + b wraps). Its gates are the os arms' with z held to A B^T instead: the
+anchors' z against the exact A B^T on the CPU (receipts v3's), every shape's z on the selected row blocks against A B^T
+in float64, and both faults unchanged (a perturbed word and a flipped wb bit still move only their own z, y and receipt).
 
 --j10r ARM adds arm ARM-j10r (label arm=ARM-j10r:j10r-unsound, noise=j10r): build ARM's one-stream unit on J10-R's
 call-scale noise (kh_one_j10; CA's RT-ALGO r3), measured only, never served or credited. Its gate is gate_one's on
@@ -67,13 +72,16 @@ def dequantize(z: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor) -> torch.T
 
 
 class OneLib(Lib):
-    """A build's kh_one: fused (ws False) or two-launch."""
+    """A build's kh_one: fused (ws False) or two-launch; peel: kh_one_peel (z = A B^T)."""
 
-    def __init__(self, path: str, ws: bool = True):
+    def __init__(self, path: str, ws: bool = True, peel: bool = False):
         super().__init__(path, ws=True)
         vp, u32 = ctypes.c_void_p, ctypes.c_uint
         self.h.kh_one.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
-        self.two = ws
+        if hasattr(self.h, "kh_one_peel"):
+            self.h.kh_one_peel.argtypes = self.h.kh_one.argtypes
+        self.two, self.peel = ws, peel
+        self.kh_one = self.h.kh_one_peel if peel else self.h.kh_one
         if hasattr(self.h, "kh_one_j10"):
             self.h.kh_one_j10.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
             self.h.kh_j10_ws_bytes.restype = ctypes.c_ulonglong
@@ -83,6 +91,10 @@ class OneLib(Lib):
     def has_one(path: str) -> bool:
         return hasattr(ctypes.CDLL(path), "kh_one")
 
+    @staticmethod
+    def has_peel(path: str) -> bool:
+        return hasattr(ctypes.CDLL(path), "kh_one_peel")
+
     def one(self, oc: "OneCall") -> None:
         c, n, k = oc.c, oc.c.b.shape[0], oc.c.a.shape[1]
         rows, st = c.a.shape[0], torch.cuda.current_stream().cuda_stream
@@ -91,11 +103,11 @@ class OneLib(Lib):
             nb = int(self.h.kh_noise_blocks(k))
             j = auto_j(c.units, nb, torch.cuda.get_device_properties(0).multi_processor_count)
             ws = workspace(int(self.h.kh_ws_bytes(rows, n, k))).data_ptr()
-        rc = self.h.kh_one(c.a.data_ptr(), c.b.data_ptr(), rows, n, k, c.seeds.data_ptr(), None, c.out.data_ptr(), ws, j,
-                           oc.z.data_ptr(), oc.zo.data_ptr(), oc.y.data_ptr(), None, oc.sa.data_ptr(), oc.sw.data_ptr(),
-                           oc.step.data_ptr(), oc.M, st)
+        rc = self.kh_one(c.a.data_ptr(), c.b.data_ptr(), rows, n, k, c.seeds.data_ptr(), None, c.out.data_ptr(), ws, j,
+                         oc.z.data_ptr(), oc.zo.data_ptr(), oc.y.data_ptr(), None, oc.sa.data_ptr(), oc.sw.data_ptr(),
+                         oc.step.data_ptr(), oc.M, st)
         if rc:
-            raise RuntimeError(f"kh_one rc {rc}")
+            raise RuntimeError(f"kh_one{'_peel' if self.peel else ''} rc {rc}")
 
 
 class OneCall:
@@ -403,19 +415,22 @@ def anchors(libs: dict[str, OneLib], ref: Ref, rng: random.Random) -> list[dict]
         ref_s = round(time.time() - t0, 2)
         want_z = torch.from_numpy(((want_z + (1 << 31)) % (1 << 32) - (1 << 31)).astype(np.int32)).cuda()
         want_r = torch.from_numpy(np.array(want_r, dtype=np.uint32).view(np.int32)).cuda()
+        want_ab = torch.from_numpy((a.numpy().astype(np.int64) @ b.numpy().astype(np.int64).T).astype(np.int32)).cuda()
         live_rows = torch.cat([torch.arange(32 * ri, 32 * ri + 32) for ri in range(m // 32) if ri not in dead]).cuda()
         for name, lib in libs.items():
             c = Call(lib, a.cuda(), b.cuda(), salt, ra, rb, base)
             oc = OneCall(lib, c, m, sa, sw)
             oc.poison()
             c.lib.seeds(c.data, c.base, c.units, c.seeds)
-            rc = lib.h.kh_one(c.a.data_ptr(), c.b.data_ptr(), m, n, k, c.seeds.data_ptr(), live.data_ptr(), c.out.data_ptr(),
-                              workspace(int(lib.h.kh_ws_bytes(m, n, k))).data_ptr() if lib.two else None, 1 if lib.two else 0,
-                              oc.z.data_ptr(), oc.zo.data_ptr(), oc.y.data_ptr(), None, sa.data_ptr(), sw.data_ptr(),
-                              oc.step.data_ptr(), m, torch.cuda.current_stream().cuda_stream)
+            rc = lib.kh_one(c.a.data_ptr(), c.b.data_ptr(), m, n, k, c.seeds.data_ptr(), live.data_ptr(), c.out.data_ptr(),
+                            workspace(int(lib.h.kh_ws_bytes(m, n, k))).data_ptr() if lib.two else None, 1 if lib.two else 0,
+                            oc.z.data_ptr(), oc.zo.data_ptr(), oc.y.data_ptr(), None, sa.data_ptr(), sw.data_ptr(),
+                            oc.step.data_ptr(), m, torch.cuda.current_stream().cuda_stream)
             torch.cuda.synchronize()
             r = {"lib": name, "m": m, "n": n, "k": k, "dead_row_blocks": list(dead), "rc": rc, "reference_s": ref_s,
-                 "z_bad": int((oc.z != want_z).sum()), "receipt_bad": int((c.out[:c.units] != want_r).sum()),
+                 "z_against": "A B^T" if lib.peel else "v3",
+                 "z_bad": int((oc.z != (want_ab if lib.peel else want_z)).sum()),
+                 "receipt_bad": int((c.out[:c.units] != want_r).sum()),
                  "seed_bad": gate_seeds(c, list(range(c.units))),
                  "y_equal_dequant": bool(torch.equal(dequantize(oc.z, sa, sw).view(torch.int16), oc.y.view(torch.int16)))}
             r["ok"] = rc == 0 and r["z_bad"] == 0 and r["receipt_bad"] == 0 and r["seed_bad"] == 0 and r["y_equal_dequant"]
@@ -458,8 +473,14 @@ def bench(libs: dict, wlibs: dict, nlibs: dict, ref: Ref, args, name: str, n: in
     out["ref"] = {x: rf[x] for x in ("wb_plus", "wb_minus", "x_wrap", "entries", "wb_density", "x_wrap_density")}
     out["ref"]["row_blocks"] = rsel
     ocs = {arm: OneCall(lib, call if lib is first else call.twin(lib), m, sa, sw) for arm, lib in libs.items()}
+    rf_ab = None
+    if any(lib.peel for lib in libs.values()):
+        zab = torch.full((rows, n), POISON, dtype=torch.int32, device="cuda")
+        zab[rf["rows"]] = (a[rf["rows"]].double() @ b.double().T).to(torch.int32)
+        rf_ab = {**rf, "z": zab}
     for arm, oc in ocs.items():
-        out["gates"][arm] = g = gate_one(oc, picks, ref_t, rf, shift)
+        out["gates"][arm] = g = gate_one(oc, picks, ref_t, rf_ab if oc.lib.peel else rf, shift)
+        g["z_against"] = "A B^T" if oc.lib.peel else "X (B + c)^T"
         print(json.dumps({"linear": name, "m": m, "arm": arm, "gate": {x: g[x] for x in g if x != "picks"}}), flush=True)
     jcs = {}
     if args.j10r and f"{args.j10r}-os" in libs:
@@ -532,6 +553,8 @@ def bench(libs: dict, wlibs: dict, nlibs: dict, ref: Ref, args, name: str, n: in
                          if arm in med and arm[:-3] + "-ws" in med}
     out["j10r_over_os"] = {arm: round(med[arm] / med[arm[:-5] + "-os"], 4) for arm in jcs
                            if arm in med and arm[:-5] + "-os" in med}
+    out["osp_over_os"] = {arm: round(med[arm] / med[arm[:-1]], 4) for arm in ocs
+                          if arm.endswith("-osp") and arm in med and arm[:-1] in med}
     del graphs, ocs, wcs, jcs, call
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
@@ -550,6 +573,8 @@ def main() -> int:
     ap.add_argument("--picks", type=int, default=14)
     ap.add_argument("--fused", action="store_true", help="also time each build's fused one-stream form (arm NAME-osf)")
     ap.add_argument("--no-ws", action="store_true", help="skip the receipts-only arms NAME-ws")
+    ap.add_argument("--peel", action="store_true", help="also time each build's peeled one-stream form (arm NAME-osp, "
+                    "kh_one_peel: z = A B^T), gated against A B^T")
     ap.add_argument("--j10r", metavar="ARM", help="also gate and time build ARM (e.g. h1u-pd2l2) on J10-R's call-scale noise "
                     "(kh_one_j10, arm ARM-j10r): measured only, never served or credited")
     ap.add_argument("--ms", default=",".join(map(str, MS)))
@@ -567,6 +592,11 @@ def main() -> int:
             print(f"h1zbench: {p} has no kh_one", file=sys.stderr)
             return 2
         libs[f"{arm}-os"] = OneLib(p)
+        if args.peel:
+            if not OneLib.has_peel(p):
+                print(f"h1zbench: --peel: {p} has no kh_one_peel", file=sys.stderr)
+                return 2
+            libs[f"{arm}-osp"] = OneLib(p, peel=True)
         if args.fused:
             libs[f"{arm}-osf"] = OneLib(p, ws=False)
         if not args.no_ws:
@@ -623,7 +653,8 @@ def main() -> int:
             r["wall_s"] = round(time.time() - t0, 2)
             doc["shapes"].append(r)
             print(json.dumps({x: r.get(x) for x in ("linear", "m", "units", "plain_us", "fastest_plain", "gamma",
-                                                     "os_over_ws", "ref", "gate_failed", "error", "wall_s")}), flush=True)
+                                                     "os_over_ws", "osp_over_os", "ref", "gate_failed", "error", "wall_s")}),
+                  flush=True)
             (out / "h1z.json").write_text(json.dumps(doc, indent=1))
     layer: dict = {}
     for r in doc["shapes"]:
@@ -641,7 +672,7 @@ def main() -> int:
     for d in layer.values():
         for arm, v in d["arms"].items():
             full = v["linears"] == d["linears"]
-            one = arm.endswith(("-os", "-osf", "-j10r"))
+            one = arm.endswith(("-os", "-osf", "-osp", "-j10r"))
             v["gamma"] = round((v["us"] / d["plain_us"]) if one else 1 + v["us"] / d["plain_us"], 4) if full else None
     doc["per_layer"] = layer
     doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
