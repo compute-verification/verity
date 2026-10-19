@@ -53,7 +53,7 @@ theorem avg_le_prCoin_mul {C : Type} [Fintype C] (D : C → Prop) (f : C → ℝ
   classical
   calc avg f ≤ avg fun ω => (if D ω then 1 else 0) * c := avg_mono fun ω => by
         by_cases hD : D ω
-        · rw [if_pos hD, one_mul]
+        · rw [ite_eq_left hD, one_mul]
           exact h ω
         · rw [h0 ω hD]
           exact zero_le
@@ -103,12 +103,12 @@ theorem prEv_le_exp (H : ℝ) :
             refine avg_le_prCoin_mul (fun ω : Fin k → B => ∀ i, ω i ∉ U) _ _ (fun ω => ?_) (fun ω hω => ?_)
             · show (if pass ω = true then (next ω).prEv (fun x => H ≤ x) (a + unheld U) else 0) ≤ _
               by_cases hp : pass ω = true
-              · rw [if_pos hp]
+              · rw [ite_eq_left hp]
                 exact prEv_le_exp H (next ω) _ (hnext ω)
-              · rw [if_neg hp]
+              · rw [ite_eq_right hp]
                 exact zero_le
             · show (if pass ω = true then (next ω).prEv (fun x => H ≤ x) (a + unheld U) else 0) = 0
-              rw [if_neg fun hp => hω (hU ω hp)]
+              rw [ite_eq_right fun hp => hω (hU ω hp)]
         _ ≤ ENNReal.ofReal (Real.exp (-((k : ℝ) * unheld U))) *
               ENNReal.ofReal (Real.exp ((k : ℝ) * (a + unheld U - H))) :=
             mul_le_mul_left (prCoin_miss_le U) _
@@ -134,10 +134,10 @@ theorem oneWipe_prEv (B : Type) [Fintype B] [Nonempty B] [DecidableEq B] (U : Fi
   rw [← prCoin_miss, oneWipe, prEv_wipe, ← avg_ite_eq_prCoin]
   congr 1
   funext ω
-  rw [prEv_stop, zero_add, if_pos le_rfl]
+  rw [prEv_stop, zero_add, ite_eq_left le_rfl]
   by_cases h : ∀ i, ω i ∉ U
-  · rw [if_pos (decide_eq_true h), if_pos h]
-  · rw [if_neg fun hd => h (of_decide_eq_true hd), if_neg h]
+  · rw [ite_eq_left (decide_eq_true h), ite_eq_left h]
+  · rw [ite_eq_right fun hd => h (of_decide_eq_true hd), ite_eq_right h]
 
 end WipePlay
 
