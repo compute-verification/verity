@@ -16,6 +16,7 @@ import Proofs.Population.Exfiltration
 import Proofs.Population.ExfiltrationBound
 import Proofs.Population.ExfiltrationExamples
 import Proofs.Population.DrawPressure
+import Proofs.Population.ChiPool
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -73,4 +74,8 @@ trusted model the leak is unbounded.
 probability `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`, so it gives detection pressure `k/n` for a leak
 of at most one per wrong unit, and with probability at least `1 - δ` what leaves through the first detection is below
 `ℓ + (n/k) ln (1/δ)`.
+`ChiPool`: the cheating pool with the verdict lag. With the halt `Δ` windows after the first caught window's
+commitment, what leaves through the halt is at most `cum + Δ ℓ`, so under the deployed draw it is below
+`(1 + Δ) ℓ + (n/k) ln (1/δ)` with probability at least `1 - δ`, and at most `j (ℓ + n/k) + Δ ℓ` on average through the
+halt the `j`-th detection triggers.
 -/
