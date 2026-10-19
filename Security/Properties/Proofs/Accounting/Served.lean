@@ -12,7 +12,9 @@ which is its first reader's, since only its own call reads it (`firstRead_cases`
 round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
 `epochScope` each window's of an `EpochTie`. `CoinsFresh` is not vacuous: one salt an epoch fails it over two windows
 (`oneSalt_not_fresh`) and a live epoch a window meets it (`perWindow_fresh`). `Llama31Shape` and `Llama31Rounds` are
-kernel computations.
+kernel computations. `witTie`: `Tie` holds of a circuit with gates (one call, its coin, an A row and a receipt reading
+both), so `TieCommits` isn't true only of the empty circuit; `witEpoch` and `witEpoch_oneSalt` tie two windows of it,
+and refuse them under one coin a round across both.
 -/
 
 namespace Properties.Served
@@ -186,5 +188,79 @@ theorem seededScheduleNotLive : SeededScheduleNotLive := by
   obtain ⟨j', hj', _, h⟩ := firstRead_of_reads Cd hj hR
   have hr := hW2 _ (hW1 j' hj').1
   omega
+
+/-! ## A tied circuit with gates -/
+
+/-- One step of one linear call, one 4 × 8 unit. -/
+def witLayout : Layout where
+  steps := 1
+  rows := 4
+  tileRows := 4
+  tileCols := 8
+  linears := [(32, 8)]
+
+/-- A gate of `op` on `args`, committed or not, at no site. -/
+def witGate (op : Accounting.Gates.Op Unit) (args : List ℕ) (commit : Bool) : Accounting.Gates.Gate Unit :=
+  { op := op, args := args, lo := 0, hi := 0, step := 0, prim := "", site := .other, commit := commit }
+
+/-- `witLayout`'s one call in one live round: its coin, an A row (a run input), and a committed receipt word reading
+both, committed before the draw, the round after its own. -/
+def witCircuit : Declared Unit where
+  dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
+    witGate (.affine 0 [1, 1]) [0, 1] true]
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if i = 2 then 1 else 0
+  seedNames := fun _ _ => false
+  units := 1
+  unit := fun _ => 0
+
+/-- `witCircuit`'s classes: the coin, the A row, the receipt. -/
+def witCls : ℕ → Cls
+  | 0 => .coin
+  | 1 => .act
+  | _ => .receipt
+
+/-- `Tie` holds of a circuit that writes values: the A row its own call reads, the receipt reading the round's coin. -/
+theorem witTie : Tie witLayout .beside witCircuit witCls where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < 3 → (witCls i = .act ∨ witCls i = .served) →
+        witCircuit.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  computed := by decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun _ _ _ => trivial
+  commit := by decide +kernel
+  inner := by decide +kernel
+
+/-- The witness's receipt is committed at coin `1`, its cut, the round after the coin it reads. -/
+theorem wit_receipt_cut : witCircuit.Writes 2 ∧ witCircuit.commitRound 2 = 1 ∧ witCircuit.cutOf 2 = 1 :=
+  ⟨⟨by decide +kernel, by decide +kernel⟩, by decide +kernel, by decide +kernel⟩
+
+theorem wit_layerCommitted : LayerCommitted witCircuit :=
+  tieCommits Unit witLayout .beside witCircuit witCls witTie
+
+/-- Two windows of the witness, a coin a window and round, are a tied epoch. -/
+theorem witEpoch : EpochTie witLayout .beside 2 (fun _ => witCircuit) (fun _ => witCls) (fun w r => (w, r)) :=
+  ⟨fun _ _ => witTie, perWindow_fresh 2 _⟩
+
+/-- The same two windows with one coin a round across both are not. -/
+theorem witEpoch_oneSalt : ¬ EpochTie witLayout .beside 2 (fun _ => witCircuit) (fun _ => witCls) (fun _ r => r) :=
+  fun E => oneSalt_not_fresh (fun r => r) (le_refl 2) (by decide +kernel) E.fresh
 
 end Properties.Served
