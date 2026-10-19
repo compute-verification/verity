@@ -6,7 +6,8 @@ import Properties.Proofs.Nci
 Toward `DescAgree.GatesLocated`: what `Desc.walkable` gives a walk of `Flock.Steps.run`. A walk whose steps each lower a
 potential finishes within any fuel above the potential it starts at (`run_of_potential`), and `Desc.activations` and
 `Desc.depths`, folded callees first, are their recurrences (`activations_get`, `depths_get`). A reference of a sequence
-is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`).
+is its part's element, found by bisection over the parts' starts (`seq_get`, `bisect_spec`), and a strided part's
+elements lie between the corners `Flock.Program.parsePartsIn` checks (`strided_corners`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
@@ -258,5 +259,133 @@ theorem seq_get (ps : Array Part) {k : ℕ} (hk : k < (Seq.ofParts ps).count) :
         simp [Std.Legacy.Range.size]
       simp only [hp, hfor]
       rfl
+
+/-- An affine map on `[0, Z]` lies between its values at the ends. -/
+theorem affine_between (A B : ℤ) {z Z : ℕ} (hz : z ≤ Z) :
+    min A (A + (Z : ℤ) * B) ≤ A + (z : ℤ) * B ∧ A + (z : ℤ) * B ≤ max A (A + (Z : ℤ) * B) := by
+  have hzZ : (z : ℤ) ≤ Z := by exact_mod_cast hz
+  have hz0 : (0 : ℤ) ≤ z := by positivity
+  rcases le_total 0 B with hB | hB
+  · have h1 : (z : ℤ) * B ≤ Z * B := mul_le_mul_of_nonneg_right hzZ hB
+    have h2 : 0 ≤ (z : ℤ) * B := mul_nonneg hz0 hB
+    constructor
+    · exact le_trans (min_le_left _ _) (by linarith)
+    · exact le_trans (by linarith) (le_max_right _ _)
+  · have h1 : (Z : ℤ) * B ≤ z * B := mul_le_mul_of_nonpos_right hzZ hB
+    have h2 : (z : ℤ) * B ≤ 0 := mul_nonpos_of_nonneg_of_nonpos hz0 hB
+    constructor
+    · exact le_trans (min_le_right _ _) (by linarith)
+    · exact le_trans (by linarith) (le_max_left _ _)
+
+theorem foldl_min_le : ∀ (l : List ℤ) (init x : ℤ), (x ∈ l ∨ x = init) → l.foldl min init ≤ x
+  | [], init, x, h => by simp at h; subst h; simp
+  | y :: ys, init, x, h => by
+    simp only [List.foldl_cons]
+    have hm : min init y ≤ x ∨ x ∈ ys := by
+      rcases h with h | h
+      · rcases List.mem_cons.1 h with h | h
+        · left; rw [h]; exact min_le_right _ _
+        · right; exact h
+      · left; rw [h]; exact min_le_left _ _
+    rcases hm with hm | hm
+    · exact le_trans (foldl_min_le ys (min init y) (min init y) (Or.inr rfl)) hm
+    · exact foldl_min_le ys _ x (Or.inl hm)
+
+theorem le_foldl_max : ∀ (l : List ℤ) (init x : ℤ), (x ∈ l ∨ x = init) → x ≤ l.foldl max init
+  | [], init, x, h => by simp at h; subst h; simp
+  | y :: ys, init, x, h => by
+    simp only [List.foldl_cons]
+    have hm : x ≤ max init y ∨ x ∈ ys := by
+      rcases h with h | h
+      · rcases List.mem_cons.1 h with h | h
+        · left; rw [h]; exact le_max_right _ _
+        · right; exact h
+      · left; rw [h]; exact le_max_left _ _
+    rcases hm with hm | hm
+    · exact le_trans hm (le_foldl_max ys (max init y) (max init y) (Or.inr rfl))
+    · exact le_foldl_max ys _ x (Or.inl hm)
+
+/-- **A strided part's elements lie between its corners' values** (`Flock.Program.parsePartsIn` checks only those):
+element `t < c` is `b + (t / inner) · os + (t % inner) · is`, and some corner of the pattern is at most it, some at
+least. -/
+theorem strided_corners (b os is : ℤ) {inner c t : ℕ} (hin : 0 < inner) (ht : t < c) :
+    let q := (c - 1) / inner
+    let last := (c - 1) % inner
+    let corners : List (ℕ × ℕ) := [(0, 0), (0, min inner c - 1), (q, 0), (q, last)] ++
+      (if q > 0 then [(q - 1, inner - 1)] else [])
+    let vals := corners.map fun (x, y) => b + (x : ℤ) * os + (y : ℤ) * is
+    vals.foldl min vals.head! ≤ b + ((t / inner : ℕ) : ℤ) * os + ((t % inner : ℕ) : ℤ) * is ∧
+      b + ((t / inner : ℕ) : ℤ) * os + ((t % inner : ℕ) : ℤ) * is ≤ vals.foldl max vals.head! := by
+  intro q last corners vals
+  have hq : q = (c - 1) / inner := rfl
+  have hl : last = (c - 1) % inner := rfl
+  clear_value q last
+  generalize hx : t / inner = x
+  generalize hyy : t % inner = y
+  have hxq : x ≤ q := by rw [← hx, hq]; exact Nat.div_le_div_right (by omega)
+  have hy : y < inner := by rw [← hyy]; exact Nat.mod_lt _ hin
+  have hdecomp : t = x * inner + y := by
+    rw [← hx, ← hyy, Nat.mul_comm]; exact (Nat.div_add_mod t inner).symm
+  have hc1 : c - 1 = q * inner + last := by
+    rw [hq, hl, Nat.mul_comm]; exact (Nat.div_add_mod (c - 1) inner).symm
+  have hlast : last < inner := by rw [hl]; exact Nat.mod_lt _ hin
+  have hyq : x = q → y ≤ last := by
+    intro hxq'; subst hxq'; omega
+  -- v lies between v(x, 0) and v(x, ymax), and each of those between two corners
+  let v := fun (x y : ℕ) => b + (x : ℤ) * os + (y : ℤ) * is
+  have hmem : ∀ p ∈ corners, v p.1 p.2 ∈ vals := fun p hp => List.mem_map.2 ⟨p, hp, rfl⟩
+  have key : (∃ u ∈ vals, u ≤ v x y) ∧ ∃ u ∈ vals, v x y ≤ u := by
+    have hy1 := affine_between (b + (x : ℤ) * os) is (show y ≤ (if x = q then last else inner - 1) by
+      split_ifs with h <;> [exact hyq h; omega])
+    have hx1 := affine_between b os hxq
+    have hrow : ∀ Y, (Y = last ∧ x = q) ∨ (Y = inner - 1 ∧ x < q) →
+        (∃ u ∈ vals, u ≤ v x Y) ∧ ∃ u ∈ vals, v x Y ≤ u := by
+      rintro Y (⟨hY, hx⟩ | ⟨hY, hxlt⟩) <;> rw [hY]
+      · rw [hx]
+        exact ⟨⟨_, hmem (q, last) (by simp [corners]), le_refl _⟩, _, hmem (q, last) (by simp [corners]), le_refl _⟩
+      · have hq0 : q > 0 := by omega
+        have hcq : min inner c - 1 = inner - 1 := by
+          have : inner ≤ c - 1 := by
+            have : 1 * inner ≤ q * inner := Nat.mul_le_mul_right _ hq0
+            omega
+          rw [Nat.min_eq_left (by omega)]
+        have hm1 : v 0 (inner - 1) ∈ vals := by
+          have := hmem (0, min inner c - 1) (by simp [corners]); rw [hcq] at this; exact this
+        have hm2 : v (q - 1) (inner - 1) ∈ vals := hmem (q - 1, inner - 1) (by simp [corners, hq0])
+        have hb := affine_between (b + ((inner - 1 : ℕ) : ℤ) * is) os (show x ≤ q - 1 by omega)
+        have e : ∀ z : ℕ, v z (inner - 1) = b + ((inner - 1 : ℕ) : ℤ) * is + (z : ℤ) * os := fun z => by
+          simp only [v]; ring
+        rw [e x]
+        refine ⟨⟨min (v 0 (inner - 1)) (v (q - 1) (inner - 1)), ?_, ?_⟩, max (v 0 (inner - 1)) (v (q - 1) (inner - 1)), ?_, ?_⟩
+        · rcases min_choice (v 0 (inner - 1)) (v (q - 1) (inner - 1)) with h | h <;> rw [h] <;> assumption
+        · rw [e 0, e (q - 1)]; simpa using hb.1
+        · rcases max_choice (v 0 (inner - 1)) (v (q - 1) (inner - 1)) with h | h <;> rw [h] <;> assumption
+        · rw [e 0, e (q - 1)]; simpa using hb.2
+    have hcol : (∃ u ∈ vals, u ≤ v x 0) ∧ ∃ u ∈ vals, v x 0 ≤ u := by
+      have hm1 : v 0 0 ∈ vals := hmem (0, 0) (by simp [corners])
+      have hm2 : v q 0 ∈ vals := hmem (q, 0) (by simp [corners])
+      refine ⟨⟨min (v 0 0) (v q 0), ?_, ?_⟩, max (v 0 0) (v q 0), ?_, ?_⟩
+      · rcases min_choice (v 0 0) (v q 0) with h | h <;> rw [h] <;> assumption
+      · simp only [v]; simpa using hx1.1
+      · rcases max_choice (v 0 0) (v q 0) with h | h <;> rw [h] <;> assumption
+      · simp only [v]; simpa using hx1.2
+    obtain ⟨⟨u1, hu1, hu1'⟩, ⟨u2, hu2, hu2'⟩⟩ := hcol
+    obtain ⟨⟨u3, hu3, hu3'⟩, ⟨u4, hu4, hu4'⟩⟩ := hrow (if x = q then last else inner - 1) (by
+      by_cases h : x = q
+      · exact Or.inl ⟨by simp [h], h⟩
+      · exact Or.inr ⟨by simp [h], by omega⟩)
+    have e0 : v x 0 = b + (x : ℤ) * os + ((0 : ℕ) : ℤ) * is := rfl
+    have eY : ∀ Y : ℕ, v x Y = b + (x : ℤ) * os + (Y : ℤ) * is := fun _ => rfl
+    constructor
+    · rcases min_choice (b + (x : ℤ) * os) (b + (x : ℤ) * os + ((if x = q then last else inner - 1 : ℕ) : ℤ) * is)
+        with h | h
+      · exact ⟨u1, hu1, le_trans hu1' (by simp only [v]; simp; rw [h] at hy1; simpa using hy1.1)⟩
+      · exact ⟨u3, hu3, le_trans hu3' (by rw [eY]; rw [h] at hy1; exact hy1.1)⟩
+    · rcases max_choice (b + (x : ℤ) * os) (b + (x : ℤ) * os + ((if x = q then last else inner - 1 : ℕ) : ℤ) * is)
+        with h | h
+      · exact ⟨u2, hu2, le_trans (by simp only [v]; rw [h] at hy1; simpa using hy1.2) hu2'⟩
+      · exact ⟨u4, hu4, le_trans (by rw [eY]; rw [h] at hy1; exact hy1.2) hu4'⟩
+  obtain ⟨⟨u, hu, hu'⟩, ⟨u', hu2, hu2'⟩⟩ := key
+  exact ⟨le_trans (foldl_min_le _ _ _ (Or.inl hu)) hu', le_trans hu2' (le_foldl_max _ _ _ (Or.inl hu2))⟩
 
 end NciCheck.Properties.SecurityProofs.Walk
