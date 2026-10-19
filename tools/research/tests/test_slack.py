@@ -609,6 +609,12 @@ METHOD_SCOPES = {
 }
 
 
+def test_manifest_diff_skips_a_false_default_one_side_omits():
+    live = {"oauth_config": {"pkce_enabled": False, "scopes": {"bot": ["chat:write"]}},
+            "settings": {"is_mcp_enabled": False, "org_deploy_enabled": False, "socket_mode_enabled": True}}
+    repo = {"oauth_config": {"scopes": {"bot": ["chat:write"]}}, "settings": {"org_deploy_enabled": False}}
+    assert slack.manifest_diff(repo, live) == ["- settings.socket_mode_enabled: true"]
+
 def test_the_app_manifest_keeps_the_live_request_urls_and_events():
     """apply replaces the whole manifest, so one without the interactivity URL (the #ask-daniel card buttons) or the event
     subscriptions (the events service) would switch them off (infra caught it on 19 Oct and merged the live blocks in)."""
