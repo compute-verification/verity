@@ -274,7 +274,8 @@ def lifted (c : Cls) : Cls :=
   | .affine | .family => .roundings
   | c => c
 
-def RANGES : Array String := #["Exp2Lut127_v1", "F32Fmaxf_v1", "F32Fminf_v1", "F32ToU32RzByte_v1"]
+def RANGES : Array String :=
+  #["Exp2Lut127_v1", "F32Fmaxf_v1", "F32Fminf_v1", "F32ToU32RzByte_v1", "S32LowByte_v1", "S32LowByte_v2"]
 
 /-! ### The patterns' parsers, over characters -/
 

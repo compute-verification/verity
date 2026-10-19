@@ -89,6 +89,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
+from numbers import Rational
 from typing import Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
@@ -1349,16 +1350,23 @@ def post_seed(record: Record, descriptor: Mapping, ends: Sequence[int], *, audit
     ``program``, W's digest is `audited`, the one-stage audit's `program`; ``values``, each memory-map unit's
     ``val{k}`` row (`map_rows[i]`, under its public row `map_public[i]` and `map_statics`' C, K and V) is W's value leaf
     at ``pos[k]`` of `values`; ``mapped``, `link.mapped(record)`; and ``property``, P(c, R_in, L) at B operand
-    bits.  The census it judges is W's by construction: the Lean reads W and its ends, never a census.  What the Lean
-    refuses (ends that aren't W's steps, a malformed row, steps after an unpaced session's last pass) raises
-    ValueError."""
+    bits.  The census it judges is W's by construction: the Lean reads W and its ends, never a census.  c and R_in are
+    exact, an int, a Fraction or a str, as property/v1 takes them; a float, which would be read at its binary value, is
+    refused.  What the Lean refuses (ends that aren't W's steps, a malformed row, steps after an unpaced session's last
+    pass) raises ValueError."""
+
+    def exact(x: object, what: str) -> str:
+        if isinstance(x, float) or not isinstance(x, (Rational, str)):
+            raise ValueError(f"{what} is exact, an int, a Fraction or a str such as '1/10', not {x!r}")
+        return str(Fraction(x))
+
     kind, out = lean_verdict.call("post_seed", {
         "program": dict(descriptor), "ends": list(ends), "audited": audited, "values": [v.hex() for v in values],
         "map": {k: map_statics[k] for k in ("C", "K", "V")},
         "map_public": [{k: p[k] for k in ("first", "count", "present", "pos")} for p in map_public],
         "map_rows": [{r: v.hex() for r, v in rows.items()} for rows in map_rows],
-        "mapped": link.mapped(record) is True, "c": {k: str(Fraction(v)) for k, v in c.items()},
-        "R_in": str(Fraction(R_in)), "B": B, "block_bytes": record.block_bytes, "lifetime": record.lifetime,
+        "mapped": link.mapped(record) is True, "c": {k: exact(v, f"c[{k!r}]") for k, v in c.items()},
+        "R_in": exact(R_in, "R_in"), "B": B, "block_bytes": record.block_bytes, "lifetime": record.lifetime,
         "paced": paced, "windows": [{"steps": list(w.steps), "receipts": w.receipts, "span_ns": w.span_ns}
                                     for w in record.windows]})
     if kind == "reject":

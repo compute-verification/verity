@@ -336,6 +336,7 @@ def corpus() -> tuple[tuple[str, Any, list[int]], ...]:
         (S.F64MUL, ()), (S.TABLE, ("table",)), (S.U32GE, ()), (S.I32MUL, ()), (S.I32SUB, ()),
         (prims.Bf16ToF32, ()), (S.scalar.F32Fmaxf, ()), (S.RZBYTE, ()))]
     out += [(f"pv-{K}-{steps}", *_whole(S._pv(K, steps), ("v",))) for K, steps in ((64, "maxmin"), (96, "max"), (64, "min"))]
+    out += [(f"lut-pv-{K}", *_whole(S._lut_pv(K))) for K in (132_096, 132_128)]
     return tuple(out)
 
 
@@ -626,10 +627,14 @@ def test_the_verifier_s_call_is_the_lean_s_verdict_on_the_record(server, record,
 
 
 def test_the_verifier_refuses_what_the_lean_refuses(record) -> None:
-    """Ends that aren't W's steps, and a census longer than the record's last pass in an unpaced session."""
+    """Ends that aren't W's steps, and a census longer than the record's last pass in an unpaced session; and, before the
+    Lean, a float c or R_in, which property/v1 refuses since it would be read at its binary value."""
     writers, ends = S.int8_program(S=5)
     with pytest.raises(ValueError, match="step ends"):
         _post_seed(record, writers, ends[:-1] + [ends[-1] + 1])
+    for kw in (dict(R_in=1e5), dict(c={**S.FREE, "roundings": 0.1})):
+        with pytest.raises(ValueError, match="is exact"):
+            _post_seed(record, writers, ends, **kw)
     six, six_ends = S.int8_program(S=6)
     with pytest.raises(ValueError, match="uncovered"):
         _post_seed(record, six, six_ends)

@@ -14,7 +14,8 @@ union's identity; a collection's ranges are segments `[lo, hi)` covering it, at 
 
 What a gate computes (`prim`): a constant its value; an s8-family core step its D when D's bound lies in s32 from its
 operands' ranges (proven, free), else an unproven step at its site; an affine map its exact result when it never wraps
-(free); a gate `RANGES` lists the range its rule derives; every other listed gate one unit of its class when an operand
+over operand ranges within their width's signed reading, never clipped to it (free); a gate `RANGES` lists the range its
+rule derives; every other listed gate one unit of its class when an operand
 depends on a run input, a gather its index bits (counted once per distinct index and kind in a body, by `note`) and one
 `gathers` unit more when its column depends on one too. An unlisted primitive is refused.
 
@@ -53,6 +54,12 @@ def clip (r : Rng) (bound : Int × Int) : Int × Int :=
   | none => bound
 
 def within (r bound : Int × Int) : Bool := bound.1 ≤ r.1 && r.2 ≤ bound.2
+
+/-- `_in`: `r` within `bound`; `bound` when `r` is any word (or empty), none when it leaves `bound`. -/
+def inBound (r : Rng) (bound : Int × Int) : Option (Int × Int) :=
+  match r with
+  | some (r0, r1) => if r0 > r1 then some bound else if within (r0, r1) bound then some (r0, r1) else none
+  | none => some bound
 
 /-- An operand's range in its format; a signed range reaching below 0, read as unsigned, is the whole format. -/
 def operand (r : Rng) (fmt : Int × Int) : Int × Int :=
@@ -103,6 +110,12 @@ def rzByte (x : Rng) : Rng :=
   | none => none
 
 def EXP2_LUT127 : Int × Int := (0, 127)
+
+/-- `S32LowByte`'s s8 code, sext8(y): y itself when y lies in s8, so P's codes keep the LUT's hull. -/
+def lowByte (y : Rng) : Rng :=
+  match y with
+  | some (y0, y1) => if y0 ≤ y1 && within (y0, y1) S8 then some (y0, y1) else none
+  | none => none
 
 /-! ### Tallies -/
 
@@ -256,15 +269,16 @@ private def get! {α} [Inhabited α] (xs : Array α) (i : Nat) (what : String) :
   | some x => pure x
   | none => throw s!"{what}: no operand {i}"
 
-/-- `_affine`: an affine map's exact result range, or none when it isn't one (a product of two non-constants). -/
+/-- `_affine`: an affine map's exact result range, or none when it isn't one (a product of two non-constants) or an
+operand's range leaves its width's signed reading (`inBound`, never clipped to it). -/
 def affineRng (fid : String) (rng : Array Rng) : Except String (Option (Int × Int)) := do
   if fid == "Bf16ToF32_v1" then
-    let x := clip (← get! rng 0 fid) S16
+    let some x := inBound (← get! rng 0 fid) S16 | return none
     return some (x.1 * 65536, x.2 * 65536)
   let a ← get! rng 0 fid
   let b ← get! rng 1 fid
-  let x := clip a S32
-  let y := clip b S32
+  let some x := inBound a S32 | return none
+  let some y := inBound b S32 | return none
   if fid == "I32Add_v1" then return some (x.1 + y.1, x.2 + y.2)
   if fid == "I32Sub_v1" then return some (x.1 - y.2, x.2 - y.1)
   let k := match point a with
@@ -319,6 +333,8 @@ def prim (d : Defn) (dyn : Array Bool) (rng : Array Rng) (where_ : String × Nat
       else if fid == "F32Fminf_v1" then (if rng.size == 2 then pure (fminf rng[0]! rng[1]!) else throw s!"{fid}: 2 operands")
       else if fid == "F32ToU32RzByte_v1" then (if rng.size == 1 then pure (rzByte rng[0]!) else throw s!"{fid}: 1 operand")
       else if fid == "Exp2Lut127_v1" then (if rng.size == 1 then pure (some EXP2_LUT127) else throw s!"{fid}: 1 operand")
+      else if fid == "S32LowByte_v1" || fid == "S32LowByte_v2" then
+        (if rng.size == 1 then pure (lowByte rng[0]!) else throw s!"{fid}: 1 operand")
       else pure none
     return (r, t)
 
