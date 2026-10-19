@@ -30,6 +30,7 @@ import Proofs.Flock.Claims.ZK.OneTape
 import Proofs.Flock.Claims.ZK.Round0
 import Proofs.Flock.Claims.ZK.ExeLayout
 import Proofs.Flock.Claims.ZK.Refusals
+import Proofs.Flock.Claims.ZK.FirstRefusal
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -176,6 +177,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `Masked.outerHit_of`); `β = 0`, a rank-deficient mask slot and `ρ₀, ρ₁`
   dependent are one premise each. `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a
   stopping plan with them in place of `HonestOffOn`.
+* `FirstRefusal`: `β = 0` and `ρ₀, ρ₁` dependent, from the session's first refusal: at a plan reading each rep's `β`
+  and pair coins at the executable's rounds (`Masked.CoinReads`, met by `Masked.withCoins`), a refused one leaves the
+  masked session not returning (`FlockComplete.ZkTables.sessionPZk_pass`), so `honestPR` sends `[]`
+  (`Masked.honestPR_refused`). `Flock.zk_deployZk_masked_exe_reads_gap` is `Flock.zk_deployZk_masked_exe_stop_gap`
+  without those two premises.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree

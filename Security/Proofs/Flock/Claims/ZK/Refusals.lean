@@ -12,7 +12,7 @@ executable refuses at each:
   (`OuterReads`, `outerAt`; any plan with its `rOuter` so read is one, `withOuter`), a refused outer coin is such a hit
   (`outerHit_of`), so `honestPR` sends `[]`;
 * **`β = 0`** (`innerP`), **a rank-deficient mask slot** (`rankCheckP`), **`ρ₀, ρ₁` dependent** (`ligeritoPZk`): throws
-  that end `sessionPZk` with `.error`, which `ZkTables.prog` sends as `[]`.
+  that end `sessionPZk` with `.error`, which `ZkTables.prog` sends as `[]` (`FirstRefusal` discharges `β` and `ρ`).
 
 `honestOffOn_stop_of` is `HonestOffOn` at a stopping plan from the outer coins' reading and one premise per throw, and
 `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a stopping plan with it in place of
