@@ -152,6 +152,9 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   switches by the 8 Oct procedure (the friction skill): until it does, its Python verifier and the ml units it reads stay
   on `SOUNDNESS_PATH`, which only shrinks, and no core → ml import edge is added (`tests/test_boundaries.py`).
 - **Soundness is one theorem** (see Lean below).
+- **Soundness and zero knowledge in Lean; completeness may be Python** (Daniel, 18 Oct). What a guarantee says about a
+  cheating prover, soundness and zero knowledge, is proved in Lean or rests on an auditor-trusted device. That honest
+  serving passes (completeness: the Commit's gates, pre-flights, other prover-side checks) may be checked in Python.
 
 ## Tests
 
