@@ -299,14 +299,15 @@ namespace Claims.ZKMal.Masked
 open FlockSoundness FlockSoundness.Refine
 
 /-- The level-0 facts round `0` reads, as one check per `m`: level 0 exists, its codeword block is `cols + rate`
-with `rate ≥ 1`, its lanes are the schedule's `k₀`, and `t_pad ≤ 2^cols`. -/
+with `rate ≥ 1`, its lanes are the schedule's `k₀`, `t_pad ≤ 2^cols`, and its lanes and columns pack the table's
+`2^(m−7)` words. -/
 def round0Facts (m : ℕ) : Bool :=
   match _root_.Flock.Zk.schedule m with
   | .ok (s, t) =>
     decide (0 < s.levels.size) &&
       decide ((s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate) &&
       decide (1 ≤ (s.levels.getD 0 default).rate) && decide ((s.levels.getD 0 default).lanes = s.k0) &&
-      decide (t ≤ 2 ^ (s.levels.getD 0 default).cols)
+      decide (t ≤ 2 ^ (s.levels.getD 0 default).cols) && decide (s.k0 + (s.levels.getD 0 default).cols + 7 = m)
   | .error _ => true
 
 set_option maxRecDepth 100000 in
@@ -326,13 +327,15 @@ theorem schedOf_level₀ (s : _root_.Flock.Schedule) (h0 : 0 < s.levels.size) :
 theorem zkLevel0 {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flock.Zk.schedule m = .ok (s, t)) :
     (s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate ∧
       1 ≤ (s.levels.getD 0 default).rate ∧ (s.levels.getD 0 default).lanes = s.k0 ∧
-      t ≤ 2 ^ (s.levels.getD 0 default).cols ∧ (schedOf s).level₀ = levelOf (s.levels.getD 0 default) := by
-  have hf := round0Facts_all m (FlockSoundness.Discharge.ZkHidden.schedule_range h).1 (FlockSoundness.Discharge.ZkHidden.schedule_range h).2
+      t ≤ 2 ^ (s.levels.getD 0 default).cols ∧ (schedOf s).level₀ = levelOf (s.levels.getD 0 default) ∧
+      s.k0 + (s.levels.getD 0 default).cols + 7 = m := by
+  have hf := round0Facts_all m (FlockSoundness.Discharge.ZkHidden.schedule_range h).1
+    (FlockSoundness.Discharge.ZkHidden.schedule_range h).2
   unfold round0Facts at hf
   rw [h] at hf
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hf
-  obtain ⟨⟨⟨⟨h0, hd⟩, hr⟩, hl⟩, ht⟩ := hf
-  exact ⟨hd, hr, hl, ht, schedOf_level₀ s h0⟩
+  obtain ⟨⟨⟨⟨⟨h0, hd⟩, hr⟩, hl⟩, ht⟩, hp⟩ := hf
+  exact ⟨hd, hr, hl, ht, schedOf_level₀ s h0, hp⟩
 
 /-! ## Round `0`'s encoding -/
 
@@ -347,7 +350,7 @@ theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
     (zkTab x j).table.t ≤ 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) ∧
       (zkTab x j).table.sch.level₀.logCols + 1 ≤ (zkTab x j).table.sch.level₀.logLen ∧
       (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
-  obtain ⟨-, hr, -, ht, hl⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨-, hr, -, ht, hl, -⟩ := zkLevel0 (zkTab x j).hz
   have hc : (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
     show (schedOf (zkTab x j).sch).level₀.logCols = _
     rw [hl]
@@ -371,6 +374,34 @@ theorem col0At_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Co
   rw [← hc]
   exact Composed.coinedOf_col0At P (zkTab x j).table (stAt x j) c ht hL w b p
 
+/-- **Table `j`'s sizes from its level 0**: `n_L = 2^lanes` witness lanes of `2^cols` columns, `t_pad` padding columns
+(`t_pad ≤ 2^cols`), `2^d` level-0 positions, and the lanes and columns pack the table's `2^(m−7)` words. -/
+theorem tabC_z (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) :
+    (tabC P x j).z.nL = 2 ^ (lv0 x j).lanes ∧ (tabC P x j).z.L = 2 ^ (lv0 x j).cols ∧
+      (tabC P x j).z.tpad = (zkTab x j).tPad ∧ (zkTab x j).tPad ≤ 2 ^ (lv0 x j).cols ∧
+      (tabC P x j).z.nS + (tabC P x j).z.nU = 2 ^ (lv0 x j).d ∧
+      (lv0 x j).lanes + (lv0 x j).cols + 7 = (tabC P x j).S.m := by
+  obtain ⟨hd, hr, hl, ht, h0, hp⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨-, -, hc⟩ := tabSizes x j
+  simp only [lv0] at hc ⊢
+  have hL : (zkTab x j).table.sch.level₀.logLen = ((zkTab x j).sch.levels.getD 0 default).d := by
+    show (schedOf (zkTab x j).sch).level₀.logLen = _
+    rw [h0, hd]
+    rfl
+  refine ⟨?_, ?_, rfl, ht, ?_, ?_⟩
+  · show 2 ^ (schedOf (zkTab x j).sch).k0 = _
+    rw [show (schedOf (zkTab x j).sch).k0 = (zkTab x j).sch.k0 from rfl, ← hl]
+  · show 2 ^ (zkTab x j).table.sch.level₀.logCols = _
+    rw [hc]
+  · show (zkTab x j).tPad + (2 ^ (zkTab x j).table.sch.level₀.logLen - (zkTab x j).tPad) = _
+    rw [hL]
+    have : (zkTab x j).tPad ≤ 2 ^ ((zkTab x j).sch.levels.getD 0 default).d :=
+      le_trans ht (Nat.pow_le_pow_right (by norm_num) (by omega))
+    omega
+  · show _ = (stAt x j).m
+    rw [hl]
+    exact hp
+
 /-- **Table `j`'s level-0 leaf at tree position `q`** of a cut at the coins `cz`: the cut's opened or hidden leaf the
 coins' tree places at `q` (`Coined.s0`), and the empty string past the tree. -/
 noncomputable def leafAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
@@ -383,9 +414,10 @@ noncomputable def leafAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Compose
 
 /-- **Round `0`'s encoding**: the link message of the tables' level-0 caps, each built from the cut's level-0 leaves by
 tree position with SHA-512 nodes (`FlockComplete.layerOf`), the shape of `honestPR`'s first message
-(`FlockComplete.honestPR_first`). -/
+(`FlockComplete.honestPR_first`); the empty message where the statement sets up no session (`ZkTables.prog`). -/
 noncomputable def enc0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (cut : ∀ j, ((tabC P x j).T (cz j)).tab.Cut) : Msg :=
+  if (FlockDeploy.setupOf true x).isNone then [] else
   0 :: FlockDeploy.linkBody (List.ofFn fun j => FlockComplete.flat
       (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) (lv0 x j).d (leafAt P x cz cut j)
         ((lv0 x j).d - (lv0 x j).cap)))
