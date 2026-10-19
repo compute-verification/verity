@@ -216,7 +216,7 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
   $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
 - `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first draws anything, that exceeds
   $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
-  `TwoStageLaw.profile` at $m = n_v$) would give. Nested sampling dilutes;
+  the retired Python `TwoStageLaw.profile`, ASK-25, at $m = n_v$) would give. Nested sampling dilutes;
 - `late_interior_insecure`: with the interior committed after the fine draw (`twoStageLate`), a faulty chain is accepted
   with probability 1.
 
