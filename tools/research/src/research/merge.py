@@ -37,7 +37,8 @@ ended, ran the declared command whole or as a shard, and lists that pack, by sha
 Every Lake package's audit and every step the change requires (`required_steps`) is among those parts, so a skip passes
 nothing; a part with no key (`plan.KEYLESS`) is never passed, and a pass kept only in a machine's cache is cited by nothing.
 The merge commit carries `Verdicts: <attempt id>...`.  It takes no --train or --push: the push guard takes only a passing
-attempt of the tree.
+attempt of the tree.  The plan's keys hold the machine it runs on (Python, the base image, the tools on the PATH), so it finds
+the checks' passes only run on the kind of machine they ran on.
 
 After a history rewrite (`commitmap`: an accepted `commit-map/v1` in the store), an attempt of an old commit counts for its image when
 the rewrite kept the tree, and REF is refused when it holds a commit the rewrite replaced: merging old history would bring it back.
