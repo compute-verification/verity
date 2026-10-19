@@ -28,6 +28,7 @@ import Proofs.Flock.Claims.ZK.MaskTape
 import Proofs.Flock.Claims.ZK.MaskFamily
 import Proofs.Flock.Claims.ZK.OneTape
 import Proofs.Flock.Claims.ZK.Round0
+import Proofs.Flock.Claims.ZK.ExeLayout
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -161,6 +162,13 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`Masked.zkLevel0`). Round `0`'s encoding `Masked.enc0` reads no coin (`Masked.enc0_causal`) and is `honestPR`'s
   first message where `hOf H` is SHA-512, at a layout agreeing with the executable's tape at round `0`
   (`Masked.honest_round0`, `Masked.Agrees0`).
+* `ExeLayout`: the layout at the executable's indices (`Masked.TapeLayout.exe`): a cell per table holding each
+  `TapeZk` field as an array at its executable indices (`Masked.ExeCell`), each statement reading its tables'
+  coordinates at the indices its sizes give, with fibers of one size (`Masked.fibersEq_exeRead`), levels ≥ 1's salts
+  by level and position (`Masked.hiIdx`); the masked prover's tape read from the cells (`Masked.exeTape`, PoW nonces
+  `0`). The layout agrees with it at round `0` (`Masked.agrees0_exe`), so `HonestPreOn` there is its rounds after the
+  first (`Masked.honestPreOn_exe_of_pos`, `RefSession.HonestPreOnPos`), and `Flock.zk_deployZk_masked_exe_gap` is
+  `Flock.zk_deployZk_masked_layout_gap` at this layout with round `0` discharged.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
