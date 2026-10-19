@@ -14,7 +14,9 @@ negatives.
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
-- `a7.sh`: run A7's entry point, on the same builds. A7 is the requirement's plan and memory-map units
+- `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each drawn receipt are
+  proved, not opened, by the opening unit (`a7_check3.py`, `verity.ml.commitments.gates.block_check`) in a second
+  statement. A7 is the requirement's plan and memory-map units
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves

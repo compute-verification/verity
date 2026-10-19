@@ -27,12 +27,16 @@
                                                         # (policy.py); exit 1 drift, 3 a value unread, 2 a bad description
   cluster policy override KEY VALUE --until T --by WHO --reason R [--log L] [--apply] [--json]   # on KEY's node: KEY is
                                                         # VALUE until T (UTC); a dry run without --apply; exit 2 refused
+  cluster policy apply [--description D] [--on N|all] [--key K] [--apply --as WHO --reason R] [--json]   # the change that
+                                                        # converges each key that differs, a plan unless --apply writes it
+                                                        # over SSH and reads it back (policy_apply.py); exit 1 a change
+                                                        # left or a key skipped, 3 a key unknown, 4 an apply that failed
 
 A snapshot is `{"node", "now", "allocations": [...], "queue": [...], "done": [...], "has": [...], "held_locks": [...],
 "last_busy": {alloc: t}, "idle_s": {kind: s}}`, in the shapes `model.allocation_to_dict` and `model.job_to_dict` write.
 Only `agent` and `kueue-shadow` read a clock or touch a node (`agent.py`, `kueue_shadow.py`; the shadow writes only its own
 Kueue objects), and `status`, `usage` and `policy diff`, which only read them; `policy override --apply` writes nothing but
-its log. `shadow replay` runs the same planner over a day's copied logs.
+its log, and `policy apply --apply` only the policy files its appliers name and the node's log. `shadow replay` runs the same planner over a day's copied logs.
 """
 from __future__ import annotations
 
@@ -170,6 +174,14 @@ def main(argv: list[str] | None = None) -> int:
             pp.add_argument("--by", required=True, help="the handle who decided it")
             pp.add_argument("--reason", required=True)
             pp.add_argument("--apply", action="store_true", help="record it (else print what would be recorded)")
+    pa = posub.add_parser("apply", help="the change that converges each key that differs; --apply writes it on the node")
+    pa.add_argument("--description", default=str(Path(__file__).parents[2] / "descriptions" / "nebius.toml"))
+    pa.add_argument("--json", action="store_true")
+    pa.add_argument("--on", dest="node", choices=("nebius-1", "nebius-2", "all"), default="all")
+    pa.add_argument("--key", help="only this key and the keys under it (exit 2 when there are none)")
+    pa.add_argument("--apply", action="store_true", help="write it and read it back (else print the plan)")
+    pa.add_argument("--as", dest="by", metavar="HANDLE", help="with --apply: the handle who decided it")
+    pa.add_argument("--reason", help="with --apply: why, recorded with each change in the node's log")
     a = ap.parse_args(renamed(argv, {"--node": "--on"}))
 
     if a.cmd == "usage":
@@ -184,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
             return policy.main_show(a.description, a.node, a.json, a.key, a.log)
         if a.pcmd == "override":
             return policy.main_override(a.description, a.key, a.value, a.until, a.by, a.reason, a.log, a.apply, a.json)
+        if a.pcmd == "apply":
+            from . import policy_apply
+            return policy_apply.main_apply(a.description, a.node, a.key, a.apply, a.by, a.reason, a.json)
         return policy.main_diff(a.description, a.node, a.json)
 
     if a.cmd == "status":
