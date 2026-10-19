@@ -29,13 +29,17 @@ A decision that waits in a note or a thread waits forever: every ask gets a card
 
 Write it to this template, in Notion-flavored Markdown: inline math as ``$`\gamma \le 0.01`$`` (the backticks inside the
 dollars are required), display math in `$$` blocks, tables in `<table header-row="true">`, no Slack mrkdwn. `research msg ask-daniel --page` refuses a
-page that lacks a section or reorders them.
+page that lacks a section or reorders them, and adds the yellow reply callout if the page has none. A page made with the
+Notion MCP needs it too.
 
 ~~~markdown
 <callout icon="❓" color="gray_bg">
 	**Question.** One or two sentences.
 	**Recommendation.** The option, and a one-line reason.
 	**If you don't answer.** "<the default option> applies at <time PDT, day>." or, blocking: "Nothing happens; <what waits>."
+</callout>
+<callout icon="✍️" color="yellow_bg">
+	**Your reply.** Write below this line: a decision, a question or a change. Top relays it to the lane, which answers under your text starting with its handle.
 </callout>
 ## The problem
 Two to four short paragraphs: what is being decided, why now, what goes wrong without a decision.
@@ -98,7 +102,7 @@ once you've read the page as Daniel will), Asked by (your agent's URL), Card ID,
 - **See what changed:** `research msg ask-daniel pages --as <you>` lists your asks' pages edited in the last day (`--hours H`)
   with Status, Decision and the newest comment. Run it on every wake, and keep a 30-minute timer while you have an open ask.
   Top relays decisions and comments to your inbox too, but don't wait on it.
-- **A comment** from Daniel: revise the page, reply to the comment, add a line under "Updates since the card", and set Status
+- **A comment** from Daniel, or his text in the yellow "Your reply" callout: revise the page, reply to the comment (under his callout text), add a line under "Updates since the card", and set Status
   back to Waiting on Daniel if he set Revising. Start a reply with your handle (`@memory-accounting:`): the Notion MCP writes as
   Daniel's own account.
 - **A decision** is the page's Status: **Approved** takes the recommendation; **Decided otherwise** takes what he wrote in

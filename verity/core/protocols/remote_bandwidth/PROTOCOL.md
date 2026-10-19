@@ -13,9 +13,10 @@ The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (s
 input from serving) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
-side is also Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
-`RemoteAudit.Session`, the session's bookkeeping call for call), held to `audit.py` by `lean/tests/`' difftest, which
-compares every event's result, the outcome and the record. It refuses a registration that binds PoUW's tiles.
+definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
+`RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record; `audit.py` is still the verifier
+of record (`README.md`). The Lean refuses a registration that binds PoUW's tiles.
 
 ## 1. What an accepted session certifies
 
@@ -55,11 +56,12 @@ opened like any other, but not credited.
 The protocol bounds the first four, prices \(\mu_{\text{rebuild}}\) from the record's codec (its name and parameters)
 at a stated squaring ceiling, passes \(\mu_{\text{host}}\) and \(\mu_{\text{link}}\) through (the record can't bound
 them; a protocol carries no policy parameter), and reads \(\mu_{\text{carrier}}\) off the property's verdict. `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
-codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.597 ×
+codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.67 ×
 `kv.cu`'s 1.499·10^10 squarings a second at 1,024 bits for each RTX PRO 6000 with its share of the host
-(ra-squaring-ceiling, #1887; 1.567 × 5.13·10^10 at 512 bits), 1.915·10^11 for the node's eight. There, and at the
-node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is 0.062% under the default codec, 0.093% at k = 2 and
-0.31% under p512/k2 (`timing.SQUARINGS_PER_S`, `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
+(ra-squaring-ceiling's rule, #1887, on `kv.cu`'s FOLD 6, Daniel's card e2a13d4a; 1.567 × 5.13·10^10 at 512 bits),
+2.003·10^11 for the node's eight. There, and at the node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is
+0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
+`timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
 \(C \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4):
@@ -80,10 +82,10 @@ charged \(A\) and the rest of the pass in flight at its challenge, where the ses
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
-`timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.885–0.917% in the worst
+`timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.888–0.920% in the worst
 window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\)
 (0.0083%), with its whole γ (0.66%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ with
-\(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about 372 GB over every tier (44 GB a GPU) no \(T\) meets 1%
+\(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about 373 GB over every tier (44 GB a GPU) no \(T\) meets 1%
 (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s and 11,091 openings every
 window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.26–1.35%, and at 1 s and 2,773 its
 \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–11%.
@@ -114,9 +116,10 @@ DDR5-6400), which no measured kernel reaches, so at spec every reading also carr
 \(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.82–5.85% for the worst
 stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions so far are one GPU's, over
 an 85 GiB store: both honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window
-(#2005, #2028; verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). At one GPU's constants they read 0.0997
-and 0.0999 at spec and 0.0659 and 0.0661 measured. At the node's \(S_{\text{chip}}\) and \(C_{\text{sq}}\) they
-certify 416.10 and 416.01 TB of the 433.9 TB their receipts claim over 300 s (431.4 TB at one GPU's), and their γ
+(#2005, #2028; verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). As the verifier recorded them, at one
+GPU's constants and the 1.597× ceiling then stated, they read 0.0997 and 0.0999 at spec and 0.0659 and 0.0661
+measured. At the node's \(S_{\text{chip}}\) and \(C_{\text{sq}}\) they certify 415.99 and 415.90 TB of the 433.9 TB
+their receipts claim over 300 s (431.4 TB at one GPU's as recorded), and their γ
 against the node's \(R\) is 0.898 at spec and 0.893 measured, nearly all of it the idle node. Either reading's \(R\)
 is the verifier's, never the prover's: a node's own calibration can only raise it, because every term but the timing
 term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more
@@ -816,6 +819,43 @@ as the core protocol interface provides for a protocol whose acceptance isn't on
 profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term, the session's
 and each window's, from it plus the node's capacities.
 
+### Declared outputs
+
+A session's outputs are these, and only these (decided 18 Oct, 17:10Z, under proofs' rule that a protocol publishes
+its structure, its outputs, the verifier's coins and draws, and hiding commitments):
+
+- **The verdict**, per window and for the session: accepted, or the failure that ended it (one of `FAILURES`, at the
+  window it ended in).
+- **γ**, per window (\(\gamma_t\)) and over the session, each against both \(R\): the node's specified read bandwidth,
+  the headline, and its measured one (§1, "Which \(R\) is the headline"). The session's is read both ways, per window at
+  \(W\delta\) and over the horizon at \(\delta\) (§10), each with its failure probability. γ is over the registered
+  store only: a receipt of a block appended after the codec seed is drawn and opened like any other but not credited
+  (`credit_post_seed` is None, so \(\mu_{\text{carrier}}\) is 0), and γ doesn't depend on what the workload appends.
+  A paced session's windows, for γ, are its stretches. A paced session is one whose windows are each a group of at
+  most \(k\) passes under a live coin of its own, every pass reading every registered block, with the groups taken a
+  stretch of about \(T\) at a time and the last stretch closing the session: its reads back the credited span's end,
+  and it is not credited.
+- **The memory line**, a session total only, in three forms, each with its ε and δ: the registered bytes the session
+  shows held in node memory are at least \((1 - \varepsilon) N b\), except with probability δ.
+  - *Snapshot*: the registered blocks in node memory at the start of each credited pass, averaged over those passes.
+  - *Time-held*: the registered blocks in node memory at each instant of the credited span, averaged over the span.
+    Only a paced session has one.
+  - *Link-charged*: the time-held line with the node's boundary links charged as carrying blocks back into node
+    memory at their ceiling, which drops Identity.
+
+  Every form charges the blocks the node could re-encode from their payloads (its squaring ceiling at the record's
+  codec) and read from its own disks (their measured read ceiling), and its on-chip storage \(S_{\text{chip}}\). δ is
+  the horizon's error plus the sketch's (`timing.sketch_failure`).
+
+\(R\), \(S_{\text{chip}}\), the squaring ceiling and the disks' and links' ceilings are the verifier's: the node's
+stated or measured capacities, protocol structure, never the prover's report (§1).
+
+Everything else that follows the workload is a value, not public: the blocks the session appended and released and
+the chain over its appends, each pass's plan, its post-seed reads \(a_{t,i}\), its step and its root's arrival, and any
+memory line per window or by kind (weights, KV, host). Each window's receipts \(U_t\) stay public, since its draws are
+over them. Until `public()` is trimmed to match (after #2519, which keeps `stale` out of it), it still carries
+`appended`, `released` and each window's `post_seed`.
+
 ## 8. What deployment changes, and what is open
 
 - **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
@@ -1142,32 +1182,32 @@ a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. 
 
 | \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.062% | 0.885–0.917% | 5.817–5.847% | 10 | 0.0083% | 0.657–0.660% |
-| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.58% | 0.117% | 0.062% | 1.073–1.105% | 5.995–6.025% | 10 | 0.0083% | 0.897–0.900% |
-| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.21% | 0.120% | 0.062% | 1.766–1.797% | 6.653–6.683% | 10 | 0.0083% | 1.654–1.657% |
-| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.062% | 5.562–5.592% | 10.261–10.289% | 10 | 0.0079% | 5.345–5.348% |
-| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.38% | 0.115% | 0.062% | 1.256–1.350% | 6.169–6.258% | 30 | 0.0083% | 0.657–0.660% |
-| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.58% | 0.117% | 0.062% | 1.508–1.602% | 6.408–6.497% | 30 | 0.0083% | 0.897–0.900% |
-| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.20% | 0.120% | 0.062% | 2.031–2.124% | 6.905–6.993% | 30 | 0.0083% | 1.654–1.657% |
-| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.16–1.18% | 0.115–0.118% | 0.062% | 4.922–6.661% | 9.653–11.305% | 600 | 0.0017% | 1.647–1.650% |
-| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.35–0.36% | 0.105–0.106% | 0.062% | 9.438–11.031% | 13.944–15.457% | 600 | 0.0017% | 0.651–0.654% |
-| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.062% | 0.984–1.004% | 5.910–5.930% | 6 | 0.042% | 0.696–0.700% |
+| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.888–0.920% | 5.819–5.849% | 10 | 0.0083% | 0.660–0.663% |
+| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.58% | 0.117% | 0.065% | 1.076–1.107% | 5.998–6.028% | 10 | 0.0083% | 0.900–0.903% |
+| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.21% | 0.120% | 0.065% | 1.768–1.799% | 6.656–6.685% | 10 | 0.0083% | 1.657–1.660% |
+| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.565–5.595% | 10.263–10.292% | 10 | 0.0079% | 5.348–5.351% |
+| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.38% | 0.115% | 0.065% | 1.259–1.353% | 6.172–6.261% | 30 | 0.0083% | 0.660–0.663% |
+| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.58% | 0.117% | 0.065% | 1.511–1.604% | 6.411–6.500% | 30 | 0.0083% | 0.900–0.903% |
+| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.20% | 0.120% | 0.065% | 2.034–2.127% | 6.908–6.996% | 30 | 0.0083% | 1.657–1.660% |
+| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.16–1.18% | 0.115–0.118% | 0.065% | 4.925–6.664% | 9.655–11.308% | 600 | 0.0017% | 1.650–1.653% |
+| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.35–0.36% | 0.105–0.106% | 0.065% | 9.441–11.033% | 13.947–15.460% | 600 | 0.0017% | 0.654–0.657% |
+| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.986–1.007% | 5.913–5.932% | 6 | 0.042% | 0.699–0.703% |
 
 At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\) at the measured \(R\):
-0.885–0.917% with 94 GB a GPU over every tier, and 1.07–1.11% at 62 GB a GPU. At spec it is 5.8% at best, the
+0.888–0.920% with 94 GB a GPU over every tier, and 1.08–1.11% at 62 GB a GPU. At spec it is 5.8% at best, the
 measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone is 5.56–5.59%, host DRAM's idle
 4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
 (0.25%) and not for the whole \(\gamma_t\), which is 1.26% at best. At \(T\) = 90 s with 11,091 a window it is
-0.98–1.00%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
+0.99–1.01%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
 nearly all \(\mu_{\text{timing}}\): the window's idle ends, which the record states exactly.
 
 **The store floor.** No \(T\) brings every window under 1% on too small a store. As \(T\) grows, a window's
 \(\mu_{\text{sample}}\) (at 555 openings a second) and its ends vanish, and its \(\gamma_t\) tends to
 \((g + (S_{\text{chip}} + \Lambda)/R + \mu_{\text{rebuild}}(t_{\text{pass}} + g))/(t_{\text{pass}} + g)\),
 where \(t_{\text{pass}}\) is the store's read at \(R\) and \(\Lambda\) a pass's `named_bits` and `slack_log2` in bytes,
-whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 371.9 GB over every tier
-(44.3 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
-at \(g\) = 50 µs, no \(T\) meets 1% below 449.6 GB (53.6 GB a GPU). The suite checks the closed form against `ledger`
+whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 373.2 GB over every tier
+(44.5 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
+at \(g\) = 50 µs, no \(T\) meets 1% below 451.1 GB (53.7 GB a GPU). The suite checks the closed form against `ledger`
 on a 20-minute window, 2% either side of it.
 
 **The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (Daniel,
@@ -1176,9 +1216,9 @@ on a 20-minute window, 2% either side of it.
 \(\mu_{\text{chip}}\) (the node's \(S_{\text{chip}}\) over its store, 0.39% at 94 GB a GPU over every tier) exceeds
 0.15% by itself, and λ (37.9 bits a 4 KiB block, 0.116%) does with \(\mu_{\text{rebuild}}\). Neither λ nor
 \(\mu_{\text{chip}}\) shrinks with more openings or longer windows. The whole γ meets 0.15% at no
-\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.156–0.159%: the
+\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.159–0.162%: the
 chain's steady state (0.082% at \(g\) = 50 µs and 61 ms passes, 0.086–0.089% with the session's ends),
-\(\mu_{\text{rebuild}}\) (0.062%) and the pooled \(\mu_{\text{sample}}\).
+\(\mu_{\text{rebuild}}\) (0.065%) and the pooled \(\mu_{\text{sample}}\).
 
 **What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 789 GB over every tier and 61 ms
 passes). λ is AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, bounded by \(q^k/k!\), which takes no assumption:
@@ -1216,8 +1256,8 @@ into the next pass. That needs three things:
   (unmeasured). That adds 0.04–0.17% to the steady state.
 
 At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon's whole γ is 0.66% (0.74% bounded
-by \(q^k\)). 16 KiB receipts make it 0.57%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
-from 0.885% to 0.80% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
+by \(q^k\)). 16 KiB receipts make it 0.58%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
+from 0.888% to 0.80% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
 steady state and \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them

@@ -43,6 +43,41 @@ def outside_a_run(monkeypatch):
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def outside_a_slot(monkeypatch):
+    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once."""
+    monkeypatch.delenv("CHECK_SLOT", raising=False)
+
+
+def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
+    """19 Oct: a `research run --pool` job whose command was itself `slot.py ... --`: the inner slot.py queued behind its own outer
+    lock, and vy-nebius-cpu-1's research pool stood still until it was cancelled."""
+    (tmp_path / "slots").write_text("a 0\nb 1\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    ran = {}
+    def execvp(f, argv):
+        ran.update(direct=argv)
+        raise Exec
+
+    def execvpe(f, argv, env):
+        ran.update(slotted=argv, slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvp", execvp)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    held = _hold(tmp_path / "check-a.lock")
+    monkeypatch.setenv("CHECK_SLOT", "a")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran == {"direct": ["true"]}, "inside held slot a: CMD runs at once, in it"
+    os.close(held)
+    ran.clear()
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: NOW, sleep=lambda _s: None)
+    assert ran.get("slotted") == ["true"] and ran["slot"] == "a", "CHECK_SLOT=a with a's lock free is stale: it takes a slot"
+
+
 def _hold(path: Path) -> int:
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)

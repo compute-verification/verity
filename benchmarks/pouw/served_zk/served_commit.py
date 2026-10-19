@@ -2,7 +2,8 @@
 judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
-  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P]   the verifier's own parameters of the window
+  python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --registration-deadline S]
+                                                                              the verifier's own parameters of the window
   python served_commit.py commit PASS_DIR PARAMS OUT [--calls N | --call I ...]   the committer: the window, salted and committed
   python served_commit.py register COMMIT_DIR PARAMS OUT [--extra ITEM=JSON]  the committer: the record, the public items only
   python served_commit.py edit REGISTRATION OUT KEY=JSON ...                  a control's registration, a field changed
@@ -50,10 +51,10 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   `public_problem` mirrors for the committer), R1-R6, the pass's epoch, the draw, PoUW's check over the stream's outcome
   (`core_check.case`) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the window's witness (``outcome.json``'s ``of_record``, the opening
-  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  `service.check_public` runs
-  beside R1-R6, which decide what it reads of the record, and may refuse only what they refuse (``public``), as `check`'s
-  reading of the registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own
-  state stays Python's.
+  verdict's ``witness``), and a disagreement refuses as ``lean-python-disagree: <check>``.  The service's public-items
+  rule is Lean's too (``public``, `Service.checkPublic` beside `service.check_public`), and `check`'s reading of the
+  registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
+  Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger, whose commitment it publishes before the epoch (``LOG/coins.json``); with ``--state`` its entropy is the
   serving controller's (`e2e.state_entropy`), so the pass's salt coin is one it opens.  A window's registration names its
@@ -62,8 +63,10 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
   only when the request says it is a recorded replay.  `select` opens the epoch's draw coin after the registration (its
   digest), once, with no retry, and the draw's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
-  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  The challenger records each
-  opening (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
+  --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  A window is received within
+  the registration deadline of the salt coin's release and before the epoch's draw coin is released, or it is refused
+  (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
+  (``LOG/openings.jsonl``), and `replay` re-runs its requests from those records, byte for byte.
 - **The check** reads a proof's public file (``pub.bin``): instance 0's b ‖ c of its A row and B row must be the unit's rows,
   each by its frame-v3 path to its entry's side root, and the entry by its path to the registered window root.  The
   opening hands the verifier the drawn units' entries: a development shortcut, until position reads in gates (the joint
@@ -121,6 +124,11 @@ BUDGET = 1
 #: the window's proof deadline (`Check.proof_deadline`), seconds on the challenger's clock from the draw, unless the
 #: parameters give ``proof_deadline``: a day
 PROOF_DEADLINE = 86400.0
+#: the window's registration deadline (`Check.registration_deadline`, `Pouw.AcceptsBy`'s td), seconds on the challenger's
+#: clock from the epoch's salt coin's release, unless ``params --registration-deadline`` gives another: an hour
+REGISTRATION_DEADLINE = 3600.0
+NO_DEADLINE = ("the window's parameters name no registration_deadline, so the service would accept a window EndToEndWindow "
+               "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
 #: the frame's owner, as C-Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -194,11 +202,14 @@ def law_of(params: dict, ell: int) -> dict:
     return items_of(params, ell, None)["sampling"]["law"]
 
 
-def spec_of(params: dict, ell: int) -> S.Spec:
+def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
     """P1's Spec of a window at level `ell`: the entries and W committed, subset:K′ of the level, the tile template's
-    Program and query as the check, and `LAYOUT` declared.  With ``registration_deadline`` in `params` (seconds on the
-    challenger's clock from the epoch's salt coin's release), the check carries it: `Pouw.AcceptsBy`'s td.  Its proof
+    Program and query as the check, and `LAYOUT` declared.  The check carries ``registration_deadline`` from `params`
+    (seconds on the challenger's clock from the epoch's salt coin's release, `Pouw.AcceptsBy`'s td), and parameters
+    without one raise `ValueError` (`NO_DEADLINE`) unless `predates_deadline`, a recorded window's replay.  Its proof
     deadline is ``proof_deadline`` in `params`, else `PROOF_DEADLINE`."""
+    if params.get("registration_deadline") is None and not predates_deadline:
+        raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
                   selection=S.Law(f"subset:{law_of(params, ell)['k']}"),
@@ -639,14 +650,23 @@ class Challenger:
     fixes one law and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
     registration it accepted is held by name.  A control stream `replay`s an earlier draw and opens no coin, so a
     control's verdicts are judged on the honest draw's units.  The window's Check has a proof deadline (`spec_of`): a
-    drawn window whose proof isn't delivered by it is `late`.  Under a
-    ``registration_deadline`` the salt coin's opening reads the clock (its release), and each stream records the epoch's
-    salt at that release (`Stream.salt_released`) before its first registration, so a window received later than the
-    deadline, or before the salt is open, is refused (`late-registration`) and earns no credit.  Without one the clock
-    decides only the proof deadline; it counts the challenger's reads of it unless `clock` is given."""
+    drawn window whose proof isn't delivered by it is `late`.  It has a registration deadline too, and `params` without
+    ``registration_deadline`` are refused (`NO_DEADLINE`): the salt coin's opening reads the clock (its release), and
+    each stream records the epoch's salt at that release (`Stream.salt_released`) before its first registration, so a
+    window received later than the deadline, or before the salt is open, is refused (`late-registration`) and earns no
+    credit.  A window received after the epoch's draw coin was released is refused as `late-registration` too: the
+    record's order is each root's receipt before the coin's release.  A control (`replay`) opens no coin and is exempt.
+    `predates_deadline` replays a record whose parameters predate the deadline as it ran, untimed.  The clock counts the
+    challenger's reads of it unless `clock` is given."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
-                 clock: Callable[[], float] | None = None, record: OR.Record | None = None) -> None:
+                 clock: Callable[[], float] | None = None, record: OR.Record | None = None,
+                 predates_deadline: bool = False) -> None:
+        if (params.get("registration_deadline") is None) != predates_deadline:
+            raise ValueError(NO_DEADLINE if not predates_deadline else
+                             "the window's parameters carry a registration_deadline: only a record that predates it replays "
+                             "without one")
+        self.predates_deadline = predates_deadline
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
         self.record = OR.Record() if record is None else record
         self.core = core_params(params)
@@ -675,7 +695,7 @@ class Challenger:
         if why is not None:
             raise _refused("coin", f"the {label}'s {why}")
         self.openings[label] = o
-        if label == "salt" and self.params.get("registration_deadline") is not None:
+        if label == "salt" and not self.predates_deadline:
             self.salt_released_at = self.clock()
         return o
 
@@ -712,9 +732,9 @@ class Challenger:
             raise _refused(*out["refused"]) if isinstance(out["refused"], list) else _refused("manifest", out["refused"])
         return out["how"]
 
-    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict, public: list[str]) -> None:
-        """One-stage's R1-R6 against the challenger's own copies, as `Stream.register` runs them, of record, with the
-        public-items rule's codes `public` beside them (`Record.public`).  Raises `Refused`."""
+    def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
+        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
+        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = D.parse_law(st.spec.selection.text)
         prog = PT.population_program(st.unit, n)
@@ -723,9 +743,11 @@ class Challenger:
                                 OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
                                 dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
                                                           None, None).codes)
-        codes = self._of_record(name, self.record.public, public, codes)
+        public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
+                                 lambda: S.check_public(st.spec, rec).to_json())
+        codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
         if codes:
-            raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6, of record" for c in codes}))
+            raise S.Refused(Verdict(False, tuple(codes), {c: "R1-R6 and the public-items rule, of record" for c in codes}))
 
     def _keyed(self, law: Mapping[str, Any], n: int) -> list[int]:
         if self._key is None:
@@ -734,7 +756,8 @@ class Challenger:
 
     def stream(self, name: str, ell: int, sampler: Callable[[Mapping[str, Any], int], list[int]]) -> S.Stream:
         if (name, ell) not in self.streams:
-            self.streams[name, ell] = S.Stream(spec_of(self.params, ell), template(self.params["k"]), budget=self.budget,
+            self.streams[name, ell] = S.Stream(spec_of(self.params, ell, self.predates_deadline), template(self.params["k"]),
+                                               budget=self.budget,
                                                delta=float(Fraction(self.params["delta"])), challenger=f"{CHALLENGER}/{name}",
                                                clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
@@ -751,20 +774,24 @@ class Challenger:
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
                  manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
-        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`)."""
+        """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  A
+        window received after the epoch's draw coin was released is refused (`late-registration`)."""
         self.witness[name] = []
+        if replay is None and not self.predates_deadline and "draw" in self.openings:
+            raise _refused("late-registration", f"received after the epoch's draw coin was released (opened after "
+                                                f"registration {self.openings['draw'].after.hex()[:32]}): a window "
+                                                f"registers before the draw coin")
         self.registered(name, rec)
         how = self.pass_epoch(manifest, recorded, name) if replay is None else None
         ell = level_of(rec)
         sampler = self._keyed if replay is None else (lambda law, n, d=self._drawn(replay): d.units)
         st = self.stream(stream, ell, sampler)
-        if (self.params.get("registration_deadline") is not None and self.salt_released_at is not None
-                and (stream, ell) not in self._salted):
+        if not self.predates_deadline and self.salt_released_at is not None and (stream, ell) not in self._salted:
             st.salt_released(self.openings["salt"].coin, self.salt_released_at)
             self._salted.add((stream, ell))
         own = ports(self.params, ell)
         st.ready()
-        self.r1_r6(name, st, rec, own, list(S.check_public(st.spec, rec).codes))
+        self.r1_r6(name, st, rec, own)
         reg = st.register(rec, own)
         self.regs[name] = (st, reg)
         self.recorded[name] = bool(recorded)
@@ -941,13 +968,14 @@ def _weights(man: dict, calls: list[dict]) -> list[int]:
 
 
 def cmd_params(a) -> int:
-    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, and the
-    model's k = n = K weights give |W|."""
+    """The verifier's own parameters, from the served request it audits: its run and manifest name the window, the
+    model's k = n = K weights give |W|, and the registration deadline is the window's td."""
     _, man, sha, calls = _pass(Path(a.pass_dir))
     rows = sum(next(u["n"] for u in calls if int(u["weight"]) == w) for w in _weights(man, calls))
     deployment = f"served-zk/{man.get('run')}"
     params = {"context": f"{deployment}/{sha}", "deployment": deployment, "k": K, "eps": a.eps, "delta": a.delta,
-              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows}
+              "grid_bits": Wd.GRID_BITS, "range": list(RANGE), "entries": a.entries, "w_rows": rows,
+              "registration_deadline": a.registration_deadline}
     Path(a.out).write_text(json.dumps(params, sort_keys=True))
     print(json.dumps(params), flush=True)
     return 0
@@ -1093,7 +1121,7 @@ def cmd_challenger(a) -> int:
         coins = Coins(a.epoch)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=OR.Record(lean=not a.python_record))
+                    record=OR.Record(lean=False if a.python_record else None))
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1123,11 +1151,14 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
            ) -> list[str]:
     """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
     coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
-    a request wrote; empty when the replay is byte-identical."""
+    a request wrote; empty when the replay is byte-identical.  A record whose parameters predate the registration
+    deadline replays as it ran (`Challenger`'s `predates_deadline`): the deadline is in the Spec's digest, which keys the
+    draw, so it can't be added to a recorded window."""
     coins = Recorded(CoinCommitment.from_json(_json(log / "coins.json")),
                      [CoinOpening.from_json(json.loads(x)) for x in
                       ((log / "openings.jsonl").read_text().splitlines() if (log / "openings.jsonl").exists() else ()) if x])
-    ch, diffs = Challenger(params, coins, sampler, record=record), []
+    ch = Challenger(params, coins, sampler, record=record, predates_deadline=params.get("registration_deadline") is None)
+    diffs = []
     for i, x in enumerate((log / "requests.jsonl").read_text().splitlines()):
         entry = json.loads(x)
         line, was, wrote = entry["request"], entry["reply"], None
@@ -1148,9 +1179,10 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   OR.Record(lean=not a.python_record))
+                   OR.Record(lean=False if a.python_record else None))
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
-    print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps({'requests': n, 'diffs': diffs[:8]})}", flush=True)
+    out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
+    print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
     return 0 if not diffs else 1
 
 
@@ -1186,7 +1218,7 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    record = OR.Record(lean=not a.python_record)
+    record = OR.Record(lean=False if a.python_record else None)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:
@@ -1263,6 +1295,8 @@ def main(argv=None) -> int:
     p.add_argument("--eps", default=EPS)
     p.add_argument("--delta", default=DELTA)
     p.add_argument("--entries", type=int, default=ENTRIES)
+    p.add_argument("--registration-deadline", type=float, default=REGISTRATION_DEADLINE,
+                   help="seconds on the challenger's clock from the salt coin's release (default: REGISTRATION_DEADLINE)")
     p = sub.add_parser("commit")
     for x in ("pass_dir", "params", "out"):
         p.add_argument(x)

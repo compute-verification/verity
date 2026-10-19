@@ -1227,6 +1227,25 @@ def test_an_oom_kill_is_named_with_the_run_its_scope_held_and_who_sent_it_even_a
         M.oom_kills(mctx(root, blind, memo))
 
 
+def test_an_oom_kill_in_a_queue_runs_cluster_scope_names_the_run_from_the_scope_and_its_requests_sender(tmp_path):
+    """INF-50: a `--queue` run is a cluster-RUN.scope under the user manager, not a session scope; a kill there names the run
+    even when no pass saw the scope, and the sender its request records."""
+    rid = "r20261018-105651-b36a"
+    root = machine_root(tmp_path, {})
+    queued = root / M.USER_SLICE.lstrip("/") / M.QUEUE_SCOPES / f"cluster-{rid}.scope"
+    queued.mkdir(parents=True)
+    (queued / "memory.current").write_text(f"{192 * 2**30}\n")
+    assert M.run_scopes(mctx(root)) == {f"cluster-{rid}.scope": {"run": rid, "bytes": 192 * 2**30}}
+    req = root / M.REQUESTS.lstrip("/") / rid
+    req.mkdir(parents=True)
+    (req / "request.json").write_text(json.dumps({"submitted_by": "https://cursor.com/agents/bc-q", "command": ["uv"]}))
+    memcg = f"/user.slice/user-1001.slice/user@1001.service/app.slice/cluster-{rid}.scope"
+    line = (f"1792324443.1 host kernel: oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=cluster-{rid}.scope,"
+            f"mems_allowed=0-1,oom_memcg={memcg},task_memcg={memcg},task=python,pid=2924379,uid=1001\n")
+    (f,) = M.oom_kills(mctx(root, Run((has("journalctl"), (0, line, "")))))
+    assert f"run {rid}, sent by https://cursor.com/agents/bc-q" in f.text and "no research run" not in f.text
+
+
 def test_disk_forecast_pages_when_the_fitted_line_reaches_the_watermark_within_6_hours_and_names_the_biggest_live_runs(
         tmp_path, monkeypatch):
     rid, quiet = "r20261008-000440-0c41", "r20261008-002727-b62e"

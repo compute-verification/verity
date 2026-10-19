@@ -24,7 +24,6 @@ import json
 import os
 import socket
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 from . import canon, ids

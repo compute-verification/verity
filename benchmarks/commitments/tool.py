@@ -25,25 +25,20 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--leaves", type=int, default=1 << 16)
     ap.add_argument("--leaf-bytes", type=int, default=256)
     ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--impl", default="python")
     ap.add_argument("--out", default=None)
     ns, _ = ap.parse_known_args(argv)
     default = {"frame-v3", "frame-v3-sha256-row", "vllm-v1"}
     every = default | {"frame-v3-blake3-row", "frame-v3-sha512", "frame-v3-sha512-row", "vllm-v1-sha512"}
     schemes = sorted(default if not ns.scheme else every if "all" in ns.scheme else set(ns.scheme))
-    out = {"scheme": ",".join(schemes), "leaves": ns.leaves, "leaf_bytes": ns.leaf_bytes, "reps": ns.reps}
-    if ns.impl != "python":            # the plain references keep their derivation keys
-        out["impl"] = ns.impl
-    return out
+    return {"scheme": ",".join(schemes), "leaves": ns.leaves, "leaf_bytes": ns.leaf_bytes, "reps": ns.reps}
 
 
 COMMIT_COST = Tool(
     name="commit_cost",
     version="1",
     command=["python", "benchmarks/commitments/commit_cost.py"],
-    closure=["benchmarks/commitments/**", *package_paths(TREE, "verity.ml.commitments", "**"), *package_paths(TREE, "verity", "errors.py"),
-             "verity/ml/kernels/hash_gpu/**"],
-    key_params=["scheme", "leaves", "leaf_bytes", "impl"],
+    closure=["benchmarks/commitments/**", *package_paths(TREE, "verity.ml.commitments", "**"), *package_paths(TREE, "verity", "errors.py")],
+    key_params=["scheme", "leaves", "leaf_bytes"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse,
 )
