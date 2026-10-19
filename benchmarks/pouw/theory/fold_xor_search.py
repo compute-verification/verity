@@ -205,7 +205,7 @@ def op_name(op) -> str:
 def skeleton(ops: tuple):
     """The symbolic program for a sequence of opcodes: per instruction its operand selectors (an index into the values
     so far, or the last index for its own constant), constants and modifiers; and the constraints on the selectors.
-    An IMAD.HI is (op, (a, b)), its multiplicands' sources fixed (the search enumerates them): a symbolic 32 × 32
+    An integer form is (op, (a, b)), its multiplicands' sources fixed (the search enumerates them): a symbolic 32 × 32
     product under a selector is what z3 can't refute, and with x and y concrete at each input a fixed source makes the
     product concrete, or a constant times a concrete word."""
     prog, cons, pool = [], [], 2
@@ -215,8 +215,6 @@ def skeleton(ops: tuple):
         if not isinstance(op, str):
             slots[0], slots[1] = (op[1][0], slots[0][1]), (op[1][1], slots[1][1])
         cons += [z3.ULE(s, pool) for s, _ in slots if not isinstance(s, int)]
-        if name in ("IMAD", "IDP.4A"):
-            cons.append(z3.ULE(slots[0][0], slots[1][0]))          # a·b = b·a (the modifiers swap with them)
         prog.append((name, slots, modifiers(name, tag)))
         pool += OUTS[name]
     return prog, cons
@@ -290,8 +288,9 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
 
 
 def sequences(k: int, fp: bool) -> list[tuple]:
-    """Every sequence of k opcodes, the last an integer form (an FP lane's result never is x ⊕ y ⊕ K), each IMAD.HI
-    with each unordered pair of multiplicand sources (a·b = b·a, the signedness swapping with them)."""
+    """Every sequence of k opcodes, the last an integer form (an FP lane's result never is x ⊕ y ⊕ K), each integer
+    form with each pair of multiplicand sources: unordered for IMAD, IMAD.HI and IDP.4A (a·b = b·a, their sign and
+    negation modifiers swapping with them), ordered for IDP.2A (halves times bytes)."""
     inner = INT_OPS + (FP_OPS if fp else ())
     out = []
     for names in itertools.product(*([inner] * (k - 1) + [INT_OPS])):
@@ -299,18 +298,19 @@ def sequences(k: int, fp: bool) -> list[tuple]:
         for n in names:
             pools.append(pool)
             pool += OUTS[n]
-        choices = [[(n, ab) for ab in itertools.combinations_with_replacement(range(p + 1), 2)] if n == "IMAD.HI"
+        choices = [[(n, ab) for ab in itertools.product(range(p + 1), repeat=2)] if n == "IDP.2A"
+                   else [(n, ab) for ab in itertools.combinations_with_replacement(range(p + 1), 2)] if n in INT_OPS
                    else [n] for n, p in zip(names, pools)]
         out += list(itertools.product(*choices))
     return out
 
 
 def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
-           part: str = "all") -> dict:
+           part: str = "all", shard: tuple[int, int] = (0, 1)) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes."""
     seqs = [s for s in sequences(k, fp)
-            if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)]
+            if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
     res = []
 
     def done(r):
@@ -327,7 +327,7 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
         for s in seqs:
             done(cegis(s, tname, timeout_ms))
     tally = {r: sum(1 for x in res if x["result"] == r) for r in ("unsat", "FOUND", "unknown")}
-    return {"k": k, "fp": fp, "part": part, "target": tname, "sequences": len(seqs), "tally": tally,
+    return {"k": k, "fp": fp, "part": part, "shard": list(shard), "target": tname, "sequences": len(seqs), "tally": tally,
             "proved": tally["unsat"] == len(seqs), "results": res}
 
 
@@ -343,11 +343,13 @@ def main() -> int:
     ap.add_argument("--stream", help="append each sequence's result to this file as a JSON line")
     ap.add_argument("--part", default="all", choices=("all", "int", "fp"),
                     help="only the sequences without (int) or with (fp) an FP form, to split a run across machines")
+    ap.add_argument("--shard", default="0/1", help="i/n: every n-th sequence from the i-th")
     a = ap.parse_args()
     out, rc = [], 0
     stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
     for k in range(a.from_k, a.k + 1):
-        r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part)
+        r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
+                   tuple(int(v) for v in a.shard.split("/")))
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)

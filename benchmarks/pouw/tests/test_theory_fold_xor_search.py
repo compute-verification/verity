@@ -66,7 +66,7 @@ def test_forms_compute_what_they_model():
 def test_no_one_instruction_program():
     """k = 1: no single menu instruction computes x ^ y ^ K for any K (every sequence unsat)."""
     r = S.search(1)
-    assert r["proved"] and r["sequences"] == 9, r["tally"]
+    assert r["proved"] and r["sequences"] == 27, r["tally"]
 
 
 @pytest.mark.slow
