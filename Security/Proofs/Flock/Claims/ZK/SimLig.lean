@@ -919,13 +919,13 @@ theorem simLig_of (h : LigSrcE) : SimLig := by
     (h x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl zp lp ss T sws t' l' hp)
 
 /-- **The replies the opened coins read as**: round `k`'s coin's bytes, the zero coin's past the pre-final rounds. -/
-noncomputable def respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
+noncomputable def ligRespE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
   (if h : k < refK x then c ⟨k, h⟩ else default).bytes
 
-theorem coinOf_respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) :
-    FlockComplete.coinOf (respE c k) = fun i => slotAt c k i := by
+theorem coinOf_ligRespE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) :
+    FlockComplete.coinOf (ligRespE c k) = fun i => slotAt c k i := by
   funext i
-  unfold respE slotAt
+  unfold ligRespE slotAt
   rw [FlockComplete.JsonRT.coinOf_bytes]
   split_ifs
   · rfl
@@ -933,21 +933,22 @@ theorem coinOf_respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ)
     split <;> rfl
 
 /-- **Table `j`'s rep `r` switched vectors at the opened coins**: the session's ring switch's, in closed form at the
-replies `respE c` from the rep's first round (`piopPZk_exact`). -/
+replies `ligRespE c` from the rep's first round (`piopPZk_exact`). -/
 noncomputable def swsE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim) : Array _root_.Flock.Switched :=
   FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
       (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog
       (FlockComplete.Replay.Zc.out (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
-        (FlockComplete.Replay.Zc.coinsAt (respE c) (repBase x (2 * j.val + r.val))) (trsE x w (UE.tapeZk τ))[j.val]!)
+        (FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val))) (trsE x w (UE.tapeZk τ))[j.val]!)
       (FlockComplete.Replay.Lc.out (FlockDeploy.tabsOf (stsOf x))[j.val]!.fold (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
         (trsE x w (UE.tapeZk τ))[j.val]!
         (FlockComplete.Replay.Zc.out (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
-          (FlockComplete.Replay.Zc.coinsAt (respE c) (repBase x (2 * j.val + r.val))) (trsE x w (UE.tapeZk τ))[j.val]!)
-        (FlockComplete.Replay.Lc.coinsAt (respE c)
+          (FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val)))
+          (trsE x w (UE.tapeZk τ))[j.val]!)
+        (FlockComplete.Replay.Lc.coinsAt (ligRespE c)
           (repBase x (2 * j.val + r.val) + 3 + ((FlockDeploy.tabsOf (stsOf x))[j.val]!.m - 6))
           ((FlockDeploy.tabsOf (stsOf x))[j.val]!.fold.kLog - 6))) ++ extras)
-    (FlockComplete.Replay.Rs.coinsAt (respE c)
+    (FlockComplete.Replay.Rs.coinsAt (ligRespE c)
       (repBase x (2 * j.val + r.val) + 3 + ((FlockDeploy.tabsOf (stsOf x))[j.val]!.m - 6) + 3 +
         ((FlockDeploy.tabsOf (stsOf x))[j.val]!.fold.kLog - 6)) (2 + extras.size))
 
@@ -1100,12 +1101,12 @@ theorem tabsOf_stAt (x : Msg) (j : Fin (jOf x)) :
   simp [FlockDeploy.tabsOf, stAt]
 
 /-- **`LigSrcE` from the source at the coins** (`LigHypE`): the deployed rep's PIOP, answered by `asksCut`, returns as
-it does at `asksS (respE c)` (`piopPZk_cut_ok`), so it sent `piopZk` bodies from `repBase`, landing at `repSlot … 0`,
+it does at `asksS (ligRespE c)` (`piopPZk_cut_ok`), so it sent `piopZk` bodies from `repBase`, landing at `repSlot … 0`,
 and returned `swsE` (`piopPZk_exact`). -/
 theorem ligSrcE_of (h : LigHypE) : LigSrcE := by
   intro x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl zp lp ss T sws t' l' hp
-  have hr : ∀ k < n, FlockComplete.coinOf (respE c k) = (fun k i => slotAt c k i) k := fun k _ => coinOf_respE c k
-  have hp' := FlockComplete.LigLock.piopPZk_cut_ok _ n (respE c) hr _ _ _ _ _ _ _ _ _ hp
+  have hr : ∀ k < n, FlockComplete.coinOf (ligRespE c k) = (fun k i => slotAt c k i) k := fun k _ => coinOf_ligRespE c k
+  have hp' := FlockComplete.LigLock.piopPZk_cut_ok _ n (ligRespE c) hr _ _ _ _ _ _ _ _ _ hp
   have hst := tabsOf_stAt x j
   obtain ⟨h25, -, hsm, -, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
   have hm : 14 ≤ (FlockDeploy.tabsOf (stsOf x))[j.val]!.m := by
@@ -1749,26 +1750,26 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
   set A := _root_.Flock.abcClaims (stAt x j).m (stAt x j).c.kLog zc lc with hA
   have hA2 : A.size = 2 := rfl
   set L := repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 3 + ((stAt x j).c.kLog - 6) with hL
-  set cs := FlockComplete.Replay.Rs.coinsAt (respE c) L (2 + extras.size) with hcs
-  have hzc' : FlockComplete.Replay.Zc.coinsAt (respE c) (repBase x (2 * j.val + r.val)) = zcE c j r := by
+  set cs := FlockComplete.Replay.Rs.coinsAt (ligRespE c) L (2 + extras.size) with hcs
+  have hzc' : FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val)) = zcE c j r := by
     unfold FlockComplete.Replay.Zc.coinsAt
-    simp only [coinOf_respE]
+    simp only [coinOf_ligRespE]
     rfl
-  have hlc' : FlockComplete.Replay.Lc.coinsAt (respE c) (repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6))
+  have hlc' : FlockComplete.Replay.Lc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6))
       ((stAt x j).c.kLog - 6) = lcE c j r := by
     unfold FlockComplete.Replay.Lc.coinsAt
-    simp only [coinOf_respE]
+    simp only [coinOf_ligRespE]
     rfl
   have hsws : swsE x c w τ j r extras = FlockComplete.Replay.Rs.sws (A ++ extras) cs := by
     unfold swsE
     rw [hst]
     show FlockComplete.Replay.Rs.sws (_root_.Flock.abcClaims (stAt x j).m (stAt x j).c.kLog
       (FlockComplete.Replay.Zc.out (stAt x j).m
-        (FlockComplete.Replay.Zc.coinsAt (respE c) (repBase x (2 * j.val + r.val))) tr)
+        (FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val))) tr)
       (FlockComplete.Replay.Lc.out (stAt x j).circuitFold (stAt x j).m tr
         (FlockComplete.Replay.Zc.out (stAt x j).m
-          (FlockComplete.Replay.Zc.coinsAt (respE c) (repBase x (2 * j.val + r.val))) tr)
-        (FlockComplete.Replay.Lc.coinsAt (respE c) (repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6))
+          (FlockComplete.Replay.Zc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val))) tr)
+        (FlockComplete.Replay.Lc.coinsAt (ligRespE c) (repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6))
           ((stAt x j).c.kLog - 6))) ++ extras) cs = _
     rw [hzc', hlc']
   have hcl : (A ++ extras).size = 2 + extras.size := by rw [Array.size_append, hA2]
@@ -1846,15 +1847,15 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
       FlockSoundness.Refine.fOf (slotAt c (repSlot x (2 * j.val + r.val) (fun _ => 0) - 1) k.val)
     unfold FlockComplete.Replay.Rs.gamma
     rw [FlockSoundness.Refine.getElem!_range_map _ hk, hcs]
-    show FlockSoundness.Refine.fOf (FlockComplete.coinOf (respE c (L + (2 + extras.size))) k.val) = _
-    rw [coinOf_respE, hslot]
+    show FlockSoundness.Refine.fOf (FlockComplete.coinOf (ligRespE c (L + (2 + extras.size))) k.val) = _
+    rw [coinOf_ligRespE, hslot]
   · funext i
     show FlockSoundness.Refine.fOf (cs.rpp k.val)[i.val]! = FlockSoundness.Refine.fOf (slotAt c
       (repBase x (2 * j.val + r.val) + (6 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6) + k.val)) i.val)
     unfold FlockComplete.Replay.Rs.Coins.rpp
     rw [FlockSoundness.Refine.getElem!_range_map _ i.isLt, hcs]
-    show FlockSoundness.Refine.fOf (FlockComplete.coinOf (respE c (L + k.val)) i.val) = _
-    rw [coinOf_respE, hL]
+    show FlockSoundness.Refine.fOf (FlockComplete.coinOf (ligRespE c (L + k.val)) i.val) = _
+    rw [coinOf_ligRespE, hL]
     rw [show repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 3 + ((stAt x j).c.kLog - 6) + k.val =
       repBase x (2 * j.val + r.val) + (6 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6) + k.val) by omega]
   · refine eqAt_congr_fin' (by rw [hmL]; rfl) _ _ (fun i ha hb => ?_) y

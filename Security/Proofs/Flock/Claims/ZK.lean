@@ -63,6 +63,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.FinExe
 import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.Worker
