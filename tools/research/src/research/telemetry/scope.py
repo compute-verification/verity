@@ -12,9 +12,10 @@ systemd scopes:
 The run's *own* scopes are its queue scope (named for its run id) and every gpu-lease scope whose gpu-lease process is the run's.
 A Sweep's targets are every process in those scopes and, wherever they are, the run's processes: the workload leader's descendants,
 its process group and session, and every process whose environment names the run dir (RESEARCH_RUN_DIR, which the runner exports to
-its workload).  Never a target: the runner and what it runs besides the workload (its sampler).  A process is the runner's when its
-parent chain reaches, before the leader, this process's own ancestors, the leader's ancestors or a `research run ... --id <run>`
-process.  A session scope is not the run's own, so there only the run's processes are targets.
+its workload).  Never a target: the runner and what it runs besides the workload (its sampler), and the ancestors of the runner and of
+this process.  A process is the runner's when its parent chain reaches, before the leader, this process, the leader's parent or a
+`research run ... --id <run>` process; an ancestor of theirs claims nothing (systemd --user, the subreaper the run's orphaned workers
+are reparented to, is one).  A session scope is not the run's own, so there only the run's processes are targets.
 
 `end`: SIGTERM to every target, a grace (GRACE_S) for them to exit, SIGKILL to the rest (re-read first, so a reused pid is never
 signalled), then the run's own scopes are confirmed empty (CONFIRM_S).  The record names the scopes, what each signal reached and what
@@ -127,11 +128,13 @@ class Sweep:
         st = {p: s for p in self.pids() if (s := self.stat(p)) is not None and s["state"] not in ("Z", "X")}
         lead = self.stat(self.leader)
         leader = self.leader if lead is not None and lead["starttime_ticks"] == self.leader_start else None
-        keep: set[int] = set()
-        for start in (os.getpid(), lead["ppid"] if leader and lead else 0):
-            p = start
-            while p > 1 and p not in keep:
-                keep.add(p)
+        # the runner (the leader's parent) and this process claim their descendants; their ancestors are only spared themselves, since
+        # one of them (systemd --user, a subreaper) is where the run's orphaned workers are reparented
+        roots = {os.getpid(), *([lead["ppid"]] if leader is not None and lead else [])}
+        spare: set[int] = set()
+        for p in roots:
+            while p > 1 and p not in spare:
+                spare.add(p)
                 p = (self.stat(p) or {}).get("ppid", 0)
 
         def side(p: int) -> str:
@@ -140,7 +143,7 @@ class Sweep:
             while p > 1 and hops < 4096:
                 if p == leader:
                     return "workload"
-                if p in keep or self._is_runner(p):
+                if p in roots or self._is_runner(p):
                     return "runner"
                 s = st.get(p) or self.stat(p)
                 if s is None:
@@ -150,6 +153,8 @@ class Sweep:
 
         ours: dict[int, str] = {}
         for p, s in st.items():
+            if p in spare:
+                continue
             if leader is not None and p == leader:
                 ours[p] = "workload"
                 continue
@@ -169,7 +174,7 @@ class Sweep:
                     self.own[cg] = f"gpu-lease {m['pid']}'s scope, the run's lease"
         for cg in self.own:
             for p in cgroup_procs(self.root, cg):
-                if p not in ours and p in st and side(p) != "runner":
+                if p not in ours and p in st and p not in spare and side(p) != "runner":
                     ours[p] = "scope"
         return {p: st[p] for p in ours}
 
