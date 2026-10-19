@@ -41,8 +41,16 @@ def die_with_parent(parent_pid: int, forker: int | None = None) -> None:
 
 
 def fork_pool(processes: int) -> Pool:
-    """`mp.get_context("fork").Pool(processes)` whose workers die with the calling process."""
-    return mp.get_context("fork").Pool(processes=processes, initializer=die_with_parent, initargs=(os.getpid(), threading.get_ident()))
+    """`mp.get_context("fork").Pool(processes)` whose workers die with the calling process, a daemonic one included (vLLM's TP
+    workers): multiprocessing refuses a daemon children so that none outlives it, which `die_with_parent` ensures, so the flag is
+    lifted while the pool forks its workers.  A dead worker's replacement, forked later, is still refused under a daemon."""
+    me = mp.current_process()._config
+    daemon = me.pop("daemon", None)
+    try:
+        return mp.get_context("fork").Pool(processes=processes, initializer=die_with_parent, initargs=(os.getpid(), threading.get_ident()))
+    finally:
+        if daemon is not None:
+            me["daemon"] = daemon
 
 
 #: seconds between the parent's checks for a dead worker: a worker that dies mid-task (an OOM kill) loses its task, and the pool would
