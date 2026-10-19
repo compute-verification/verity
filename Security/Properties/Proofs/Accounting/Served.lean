@@ -30,7 +30,7 @@ theorem stepOf_lt {L : Layout} {c : ℕ} (hc : c < L.steps * L.calls) : L.stepOf
 theorem round_lt {ι : Type} {L : Layout} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls} (T : Tie L F Cd cls) (i : ℕ)
     (hi : i < Cd.dag.length) : Cd.round (Cd.call i) < Cd.rounds := by
   have hc := T.inRange i hi
-  have hc' : Cd.call i < L.steps * L.calls := T.calls ▸ hc
+  have hc' : Cd.call i < L.steps * L.calls := by rw [← T.calls]; exact hc
   rw [T.round _ hc, T.rounds]
   exact stepOf_lt hc'
 
