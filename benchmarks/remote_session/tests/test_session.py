@@ -149,9 +149,10 @@ class TickingBackend(prover.CpuBackend):
 
 def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int = audit.LIFETIME,
-        layout: list | None = None, host_bytes: int = 0, verdict: str = verifier.VERDICT, then=None,
-        transcript: Path | None = None, **kv):
-    """The verifier's sessions and the prover's over one registration, under `verdict`; `then(v)` once they end."""
+        layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
+        then=None, transcript: Path | None = None, **kv):
+    """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
+    `paces` if given; `then(v)` once they end."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, blocks, random.Random(7), read_bytes_per_s=read_bytes_per_s, tiers=tiers,
@@ -175,8 +176,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         v.register()
         allowance = v.allowance(v.ping(4))
         out, not_before = [], None
-        for k in range(sessions):
-            r = v.session(k, allowance, not_before)
+        for k in range(len(paces) if paces else sessions):
+            r = v.session(k, allowance, not_before, paces[k] if paces else None)
             out.append(r)
             not_before = r.get("end_ns", clock.now())
         th.join()
@@ -341,13 +342,47 @@ def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does
         checks.close(wait=True)
 
 
+def logged_appends(monkeypatch) -> list:
+    """Each append the serving trace's records make, (step, first, count, root), in order."""
+    out, record = [], prover.ServingTrace.record
+
+    def logging(self, s, window, freed, writes, rekey=True):
+        n = len(self.appends)
+        change = record(self, s, window, freed, writes, rekey)
+        out.extend((s, a.first, a.count, a.root) for a in self.appends[n:])
+        return change
+
+    monkeypatch.setattr(prover.ServingTrace, "record", logging)
+    return out
+
+
+def heads_follow_the_steps(record: dict, appends: list) -> bool:
+    """Whether each pass's public head is the chain through `appends` of the steps below its own and the record's
+    chain is through them all, as the memory-map unit checks it (`RequirementLink.mapped`)."""
+
+    def chain(below: int) -> str | None:
+        head = None
+        for s, first, count, root in appends:
+            if s < below:
+                head = audit.append_head(head, first, count, root)
+        return None if head is None else head.hex()
+
+    pub, windows = record["public"], record["profile"]["windows"]
+    return pub["appends"] == chain(audit.STEP_LIMIT) and all(
+        h == chain(s) for w, hs in zip(windows, pub["heads"], strict=True) for s, h in zip(w["steps"], hs, strict=True))
+
+
 def test_kv_pages_past_the_lifetime_are_re_keyed_and_a_prover_that_keeps_them_is_rejected(monkeypatch):
     """Under L = 1 window, sent with the session, every appended page is stale in the window after the one it joined.
     The honest prover re-keys each before that window's first pass (writes its payload again in its slot, at a fresh
-    index) and is accepted. One that never re-keys is rejected at that pass's root (`lifetime`)."""
+    index) and is accepted, each pass's head the chain through the appends of the steps below its own, those of the
+    queued passes each boundary discards among them. One that never re-keys is rejected at that pass's root
+    (`lifetime`)."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    appends = logged_appends(monkeypatch)
     (r,), (p,) = run("kv:2", samples=8, kv_every=4, kv_pool=8, lifetime=1)
     assert r["accepted"] and p["accepted"] and r["record"]["public"]["lifetime"] == 1
+    assert appends and heads_follow_the_steps(r["record"], appends) and p["discarded"] > 0
     kv = p["kv"]
     assert kv["lifetime"] == 1 and kv["rekeyed"] > 0 and kv["appended"] == 2 * kv["steps"] + kv["rekeyed"]
     monkeypatch.setattr(prover.ServingTrace, "stale", lambda self, window: [])
@@ -399,11 +434,14 @@ def test_a_pipelined_session_with_serving_up_to_k_steps_past_its_passes_is_accep
     under L = 1 are re-keyed at each window's first pass: the session is accepted, no pass read a block serving had
     overwritten, serving ran more steps than there were passes, every pass read with serving at most k steps past its
     own and some at exactly k, and the fence held serving once: at the first step, whose write overwrites the pool's
-    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there)."""
+    filler in place and waits on its own step's pass (the filler the next k + 1 steps write is freed there).  Each
+    pass's head is the chain through the appends of the steps below its own, the steps serving ran past among them."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    appends = logged_appends(monkeypatch)
     (r,), (p,) = run("kv:1", windows=2, samples=16, kv_every=1, kv_pool=8, lifetime=1, ahead=k, fill=True,
                      kv_headroom=k + 1)
     assert r["accepted"] and p["accepted"] and r["failure"] is None and p["misread"] == []
+    assert appends and heads_follow_the_steps(r["record"], appends)
     a, kv = p["ahead"], p["kv"]
     assert all(0 <= lead <= k for lead in a["leads"]) and max(a["leads"]) == k and a["fence_waits"] == 1
     assert len(a["leads"]) == sum(p["passes"]) + p["discarded"] < a["steps"]
@@ -444,9 +482,11 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
     credited only on the property's verdict, then less its carriers; the share and residual are of the node's HBM.
-    Unlabelled, the whole registered store is filler and no weights are credited."""
+    Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
+    here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
     seen = {}
     memory = verifier.memory
 
@@ -502,9 +542,11 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
     """With the node's host DRAM given, the memory line is also by kind against HBM and DRAM: a store of 8 weights
     blocks and 4 of filler in HBM, then 4 of filler in host memory, every pass reading all 16, credits each kind what
     every pass held less the window's lost blocks, and in all every held block less them once, KV nothing without a
-    verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's."""
+    verdict; each share is of HBM plus DRAM, the residual what the total leaves, and the line is its worst window's.
+    The node has no on-chip storage here."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
+    monkeypatch.setattr(timing, "CHIP_BYTES", 0)
     seen, memory = {}, verifier.memory
 
     def keep(*a, **kw):
@@ -541,11 +583,12 @@ def test_the_node_line_credits_each_kind_against_the_nodes_hbm_and_host_dram(mon
 def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot(monkeypatch):
     """Both forms of the memory line on a store of 8 weights blocks and 8 of filler, every pass reading all 16, at 200
     draws a window of its ~320 receipts, so f_t ≈ 0.14.  At every pass (the worst-pass form) a window loses f_t·U_t
-    ≈ 44 blocks, more than the store, and credits nothing.  On average a window loses f_t·U_t/P_t ≈ 2 blocks, its
-    rebuilds and the chip's block, so it credits the weights less those; with the rebuilds spread over its passes, less
-    again only f_t·N and the chip.  The node line carries both forms and both rebuild readings, the line's error
-    counts AuditRO's slack a pass beside δ, and a recorded session recomputes the same average line
-    (`recorded_memory`)."""
+    ≈ 44 blocks, its rebuilds and the chip's block, more than the store, and credits nothing.  On average a window
+    loses f_t·U_t/P_t ≈ 2 blocks, its rebuilds and the chip's block, so it credits the weights less those; with the
+    rebuilds spread over its passes, less again only f_t·N and the chip.  The node line carries both forms and both
+    rebuild readings, the line's error counts AuditRO's slack a pass beside δ, and a recorded session recomputes the
+    same line in both forms (`recorded_memory`), a record written before the worst-pass form charged the chip
+    included."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     monkeypatch.setattr(timing, "SQUARINGS_PER_S", {"p512": 0.0})
     seen, memory = {}, verifier.memory
@@ -570,7 +613,8 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert max(floors) > 0.1
     for w, x, f in zip(record.windows, m["windows"], floors):
         rebuilt, a = w.span_ns / span / 2, x["average"]
-        assert x["lost_blocks"] == pytest.approx(f * w.receipts + rebuilt) and w.receipts == 16 * w.passes
+        assert x["lost_blocks"] == pytest.approx(f * w.receipts + rebuilt + 1) and w.receipts == 16 * w.passes
+        assert x["chip_blocks"] == 1
         assert x["credited"]["weights"] == max(0.0, 8 * B - x["lost_blocks"] * B)
         assert a["form"] == verifier.AVERAGE and a["held"] == {"weights": 8 * B, "hbm": 16 * B, "host": 0}
         assert a["wrong_blocks"] == pytest.approx(f * 16) and a["rebuild_blocks"] == pytest.approx(rebuilt)
@@ -614,8 +658,97 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
         return x == pytest.approx(y) if isinstance(x, float) else x == y
 
     again = verifier.recorded_memory({"ledger": {"memory": m}, "record": r["record"]}, chip_bytes=B, host_bytes=host)
-    assert all(same(x["average"], y["average"]) for x, y in zip(again["windows"], m["windows"]))
+    keys = ("chip_blocks", "lost_blocks", "epsilon", "credited", "average")
+    assert all(same({k: x[k] for k in keys}, {k: y[k] for k in keys}) for x, y in zip(again["windows"], m["windows"]))
     assert same(again["average"], avg) and same(again["node"]["average"], a)
+    old = m | {"windows": [{k: v for k, v in x.items() if k not in ("chip_blocks", "average")}
+                           | {"lost_blocks": x["lost_blocks"] - 1} for x in m["windows"]]}
+    then = verifier.recorded_memory({"ledger": {"memory": old}, "record": r["record"]}, chip_bytes=B, host_bytes=host)
+    assert all(same({k: x[k] for k in keys}, {k: y[k] for k in keys}) for x, y in zip(then["windows"], m["windows"]))
+    assert same(then["node"], again["node"])
+
+
+@pytest.mark.parametrize("k", [1, 3])
+def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dropper_is_still_rejected(k):
+    pace = verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)
+    assert pace["groups"] == 4 and pace["draws"] == 10
+    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace])
+    assert r["accepted"] and pr["accepted"] and r["windows"] == 4 * 3
+    seen = r["windows_seen"]
+    assert [w["passes"] for w in seen] == [k] * 12 and pr["discarded"] == 0
+    for g in range(1 if k > 1 else 2, len(seen)):
+        # A group's coin leaves once the group before has k − 1 roots, or for k = 1 (one coin ahead) once the one
+        # before that has its root.
+        assert seen[g]["released_ns"] >= seen[g - 1]["arrivals_ns"][k - 2] if k > 1 else \
+            seen[g]["released_ns"] >= seen[g - 2]["arrivals_ns"][-1]
+    pl = r["ledger"]["paced"]
+    assert len(pl["stretches"]) == 2 and pl["groups"] == 4
+    assert {pl["snapshot"]["form"], pl["time"]["form"]} == {verifier.AVERAGE, verifier.TIME_HELD}
+    assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
+
+
+def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_snapshot_does_not():
+    """Two stretches of four groups of two passes over N blocks, every pass reading all of them: stretching one
+    group's interval (a burst then idle until its deadline) lowers the time-held credit by its absent block-time,
+    rebuilds at 2·L_max each and the wrong receipts at Δ_g/n_g (L_max/n in the group after the stretch), and the
+    snapshot's only by the rebuilds its longer reads allow; a block in from the disks or a link counts as a rebuild."""
+    N, b = 1000, 4096
+    held = {"weights": 600 * b, "hbm": N * b, "host": 0}
+    mem = {"windows": [{"held": held, "average": {"held": held}} for _ in range(12)]}
+
+    def seen(stretch: int) -> list[dict]:
+        out, t = [], 0
+        for g in range(12):
+            span = 10 * (stretch if g == 5 else 1)
+            out.append({"released_ns": t, "passes": 2, "arrivals_ns": [t + span // 2, t + span]})
+            t += span
+        return out
+
+    def line(stretch: int, rebuild_per_ns: float = 0.0, wrong: float = 0.0, ingress_per_ns: float = 0.0) -> dict:
+        return verifier.paced_line(mem, seen(stretch), groups=4, wrong=wrong, blocks=N, rebuild_per_ns=rebuild_per_ns,
+                                   chip_bytes=0, block_bytes=b, node_bytes=10 * N * b, ingress_per_ns=ingress_per_ns)
+
+    even, burst = line(1, 1e-3, 50.0), line(9, 1e-3, 50.0)
+    assert even["snapshot"]["lost_blocks"] == pytest.approx(burst["snapshot"]["lost_blocks"] - 1e-3 * (80 + 2 * 80) / 8)
+    s = burst["stretches"][1]
+    assert s["span_ns"] == 10 * 4 + 80 and s["l_max_ns"] == 90
+    assert s["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 1e-3 * (120 + 180) / 120)
+    assert s["wrong_absent_blocks"] == pytest.approx(50 * 90 / 2 / 120)
+    assert burst["time"]["weights_bytes"] < even["time"]["weights_bytes"] <= 600 * b
+    assert line(1)["time"]["weights_bytes"] == line(1)["snapshot"]["weights_bytes"] == 600 * b
+    linked = line(9, 1e-3, 50.0, ingress_per_ns=2e-3)["stretches"][1]
+    assert linked["ingress_blocks"] == pytest.approx(2e-3 * (120 + 180))
+    assert linked["rebuild_absent_blocks"] == pytest.approx(2 * 90 * 3e-3 * (120 + 180) / 120)
+    assert linked[verifier.AVERAGE]["lost_blocks"] == pytest.approx((50 + 3e-3 * 300) / 8)
+
+
+def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
+    """The paced line pays each absent stretch with a wrong read or a rebuild, which needs every pass to read every
+    registered block: a group whose least pass leaves one out, in either tier and in the closing stretch too, is
+    refused with the group and its count, and a paced session whose KV steps free registered slots carries that
+    refusal in its ledger."""
+    N, b = 1000, 4096
+    seen = [{"released_ns": 10 * g, "passes": 2, "arrivals_ns": [10 * g + 5, 10 * g + 10]} for g in range(12)]
+    whole = {"weights": 600 * b, "hbm": 700 * b, "host": 300 * b}
+
+    def line(at: int = 0, short: dict | None = None, groups: int = 12) -> dict:
+        held = [whole | (short or {}) if g == at else whole for g in range(groups)]
+        return verifier.paced_line({"windows": [{"held": h, "average": {"held": h}} for h in held]}, seen, groups=4,
+                                   wrong=0.0, blocks=N, rebuild_per_ns=0.0, chip_bytes=0, block_bytes=b,
+                                   node_bytes=10 * N * b)
+
+    assert line()["time"]["weights_bytes"] == line()["snapshot"]["weights_bytes"] == 600 * b
+    with pytest.raises(ValueError, match="group 2's least pass read 990 of the 1000 registered blocks"):
+        line(2, {"hbm": 690 * b})
+    with pytest.raises(ValueError, match="group 10's least pass read 999 of the 1000 registered blocks"):
+        line(10, {"host": 299 * b})
+    with pytest.raises(ValueError, match="a memory window for each group: 11 for 12"):
+        line(groups=11)
+
+    (r,), (p,) = run("kv:2", paces=[verifier.pace_of("1:4:40:2", 1.0)], kv_every=1, kv_pool=8)
+    assert r["accepted"] and p["accepted"] and r["released"] > 0
+    assert min(x["held"]["hbm"] for x in r["ledger"]["memory"]["windows"]) < 16 * rcodec.BLOCK_BYTES
+    assert "least pass read" in r["ledger"]["paced"]["refused"]
 
 
 def test_an_engines_arena_puts_each_weight_at_a_block_boundary_and_refuses_what_does_not_fit():

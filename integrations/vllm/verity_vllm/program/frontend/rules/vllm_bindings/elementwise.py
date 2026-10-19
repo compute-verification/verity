@@ -8,9 +8,10 @@ from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, scalar_kind, shape
+from verity_vllm.program.frontend.rules.common import call_args, dtype_is, from_rows, rows_of, scalar_kind, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
+from verity_vllm.program.registry.dsv4_moe import limit_bits
 
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------
@@ -69,6 +70,20 @@ class ScalarTensorMulRule(OpRule):
         ctx.record(self, node, {"N": N, "rows": len(rows), "scalar_shape": list(shape(ctx, sc))}, emitted=f"{fn.id} x{len(rows)}")
 
 
+def _and_mul_operands(node, ctx):
+    """An `act_and_mul` kernel's `(out!, x[.., 2I])`: x a bf16 row value, out an allocation (or value) of [.., I]."""
+    out, x = node.args[:2]
+    r = _row_value(ctx, x, "x")
+    if r:
+        return r
+    if not isinstance(ctx.val(out), (Alloc, Coll)):
+        return "out is not an allocation/value"
+    xs, os_ = shape(ctx, x), shape(ctx, out)
+    if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
+        return f"out {os_} vs x {xs}"
+    return True
+
+
 class GeluTanhAndMulRule(InPlaceRule):
     """`_C.gelu_tanh_and_mul(out!, x[.., 2I])` -> `gelu_tanh_mul{I}` (GeluTanhMul_v1) per row; `out` is rebound (mirrors SiluAndMul)."""
     modes = frozenset({"profile"})
@@ -84,16 +99,7 @@ class GeluTanhAndMulRule(InPlaceRule):
         return ("gelu_tanh_bf16",) if any(n.op == "call_function" and n.target in ts for n in ep.graph.nodes) else ()
 
     def applies(self, node, ctx):
-        out, x = node.args[:2]
-        r = _row_value(ctx, x, "x")
-        if r:
-            return r
-        if not isinstance(ctx.val(out), (Alloc, Coll)):
-            return "out is not an allocation/value"
-        xs, os_ = shape(ctx, x), shape(ctx, out)
-        if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
-            return f"out {os_} vs x {xs}"
-        return True
+        return _and_mul_operands(node, ctx)
 
     def emit(self, node, ctx):
         out, x = node.args[:2]
@@ -107,6 +113,41 @@ class GeluTanhAndMulRule(InPlaceRule):
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
         ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
+
+
+class SiluAndMulWithClampRule(InPlaceRule):
+    """`_C.silu_and_mul_with_clamp(out!, x[.., 2I], limit, alpha, beta)` -> `silu_mul_clamp{I,LIMIT}` (SiluMulClamp_v1) per row; `out`
+    is rebound (mirrors SiluAndMul). SwiGLU-OAI's sigmoid scale and up bias (alpha != 1, beta != 0) have no Definition and are refused."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("SiluAndMulWithClamp[vllm]", 1, "in-place-binding",
+                    applies_to="_C.silu_and_mul_with_clamp(Tensor! out, x[.., 2I], float limit, float alpha=1., float beta=0.)",
+                    preconditions=("x is bf16 [.., 2I]", "out is an unwritten allocation (or value) [.., I]",
+                                   "limit is a positive finite bf16 value", "alpha = 1.0 and beta = 0.0"),
+                    evidence_domain="structural; numerics: SiluMulClamp_v1 (vLLM act_and_mul_kernel with HAS_CLAMP)")
+
+    def targets(self):
+        return targets_for("silu_and_mul_with_clamp")
+
+    def applies(self, node, ctx):
+        a = call_args(node)
+        if (a["alpha"], a["beta"]) != (1.0, 0.0):
+            return f"numerics_unregistered: alpha {a['alpha']}, beta {a['beta']}; SiluMulClamp_v1 is the clamp at alpha 1.0, beta 0.0"
+        try:
+            limit_bits(a["limit"])
+        except ValueError as e:
+            return f"numerics_unregistered: {e}"
+        if not ctx.vocab.has("silu_mul_clamp"):
+            return "numerics_unregistered: the vocabulary has no silu_mul_clamp (SiluMulClamp_v1{I,LIMIT})"
+        return _and_mul_operands(node, ctx)
+
+    def emit(self, node, ctx):
+        a = call_args(node)
+        rows, lead = rows_of(ctx.coll(a["input"]))
+        I, LIMIT = rows[0].type.n // 2, float(a["limit"])
+        fn = ctx.kind("silu_mul_clamp", node, I=I, LIMIT=LIMIT)
+        outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
+        ctx.rebind(a["result"], from_rows(outs, lead), self, what="out")
+        ctx.record(self, node, {"I": I, "LIMIT": LIMIT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 class Bf16ScalarChainRule(OpRule):
     """bf16 row-wise ops with a static Python-float constant: `aten.div.Tensor(x, C)` -> `bf16_div_scalar{N,C}`,

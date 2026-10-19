@@ -6,7 +6,7 @@ so each one's word view is its `_v1` at the same statics (`elementwise.on_bits`)
     MarlinMxfp4Step(FromZero)_v2{DOT}                ([acc], x: 32 bf16, q, s) -> f32       word view: MarlinMxfp4Step(FromZero)_v1
     MarlinMoeSchedule_v2{KT,NT,GRID}                 (blk, par: i32) -> NT x (KT-1) bits    word view: MarlinMoeSchedule_v1
     MarlinMxfp4Coordinate(W)_v2{K,TK,DOT}
-    GatherE2m1x{E}_v2, GatherE8m0x{E}_v2, MoeExpertE2m1Row_v2{E,K}, MoeExpertE8m0Row_v2{E,K}
+    GatherE2m1Pairx{E}_v2, GatherE8m0x{E}_v2, MoeExpertE2m1Row_v2{E,K}, MoeExpertE8m0Row_v2{E,K}
     MarlinMoeExpertCoordinate(W)_v2{E,K,TK,DOT}, MarlinMoeExpertGemm(W)_v2{E,K,N,TK,TN,GRID,DOT}
 
     MarlinMxfp4Step(FromZero)Activation_v1{DOT}      (x: bf16) -> 20 1-bit words             the step's gates that read only x[j]
@@ -38,6 +38,8 @@ word Definitions' cuts are n 1-bit words.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition, word_of
@@ -57,7 +59,7 @@ BIT = BL.BIT
 BF16 = Array(16, BIT)
 F32 = I32 = Array(32, BIT)
 E2M1 = Array(4, BIT)
-E8M0 = Array(8, BIT)
+E2M1X2 = E8M0 = Array(8, BIT)
 CUT = Array(1, BIT)
 
 
@@ -233,9 +235,9 @@ MarlinMxfp4CoordinateWV2 = EW.on_bits("MarlinMxfp4CoordinateW", 2, _COORD, MM.co
                                       _coordinate_w, MM.MarlinMxfp4CoordinateW, lifted=["DOT"])
 
 
-def gather_e2m1(vocab: int):
-    """`GatherE2m1x{V}_v2`: `GatherE2m1x{V}_v1` on bits."""
-    return BFM._gather("GatherE2m1", vocab, E2M1, MM.E2M1_FILL, MM.gather_e2m1(vocab))
+def gather_e2m1_pair(vocab: int):
+    """`GatherE2m1Pairx{V}_v2`: `GatherE2m1Pairx{V}_v1` on bits."""
+    return BFM._gather("GatherE2m1Pair", vocab, E2M1X2, MM.E2M1_FILL, MM.gather_e2m1_pair(vocab))
 
 
 def gather_e8m0(vocab: int):
@@ -244,8 +246,10 @@ def gather_e8m0(vocab: int):
 
 
 def _row_e2m1(B, S, e, slab):
-    """`MoeExpertE2m1Row_v1`'s body on bits: one `GatherE2m1x{E}_v2` per k."""
-    return B.batch(gather_e2m1(S.E), e, X.columns(slab, S.E, S.K, E2M1), axes=(None, 0))
+    """`MoeExpertE2m1Row_v1`'s body on bits: one `GatherE2m1Pairx{E}_v2` per byte, whose bits, least significant first, are its
+    low nibble's code then its high nibble's, so the K/2 bytes are the K codes in k order with no gate."""
+    MM.check_packed(S.K)
+    return B.batch(gather_e2m1_pair(S.E), e, X.columns(slab, S.E, S.K // 2, E2M1X2), axes=(None, 0)).reshape(Array(S.K, E2M1))
 
 
 def _row_e8m0(B, S, e, slab):
@@ -253,7 +257,8 @@ def _row_e8m0(B, S, e, slab):
     return B.batch(gather_e8m0(S.E), e, X.columns(slab, S.E, S.K, E8M0), axes=(None, 0))
 
 
-MoeExpertE2m1RowV2 = EW.on_bits("MoeExpertE2m1Row", 2, ["E", "K"], X.row_sig(E2M1, I32), _row_e2m1, MM.MoeExpertE2m1Row)
+MoeExpertE2m1RowV2 = EW.on_bits("MoeExpertE2m1Row", 2, ["E", "K"], MM.packed_row_sig(E2M1, E2M1X2, I32), _row_e2m1,
+                                MM.MoeExpertE2m1Row)
 MoeExpertE8m0RowV2 = EW.on_bits("MoeExpertE8m0Row", 2, ["E", "K"], X.row_sig(E8M0, I32), _row_e8m0, MM.MoeExpertE8m0Row)
 
 
@@ -275,10 +280,10 @@ def _pair_coordinate_w(B, S, x, cut, e, g, wq, ws):
 
 _PAIR = ["E", "K", "TK", "DOT"]
 MarlinMoeExpertCoordinateV2 = EW.on_bits("MarlinMoeExpertCoordinate", 2, _PAIR,
-                                         MM.pair_coordinate_sig(False, E2M1, E8M0, BF16, I32, CUT), _pair_coordinate,
+                                         MM.pair_coordinate_sig(False, E2M1X2, E8M0, BF16, I32, CUT), _pair_coordinate,
                                          MM.MarlinMoeExpertCoordinate, lifted=["DOT"])
 MarlinMoeExpertCoordinateWV2 = EW.on_bits("MarlinMoeExpertCoordinateW", 2, _PAIR,
-                                          MM.pair_coordinate_sig(True, E2M1, E8M0, BF16, I32, CUT), _pair_coordinate_w,
+                                          MM.pair_coordinate_sig(True, E2M1X2, E8M0, BF16, I32, CUT), _pair_coordinate_w,
                                           MM.MarlinMoeExpertCoordinateW, lifted=["DOT"])
 
 
@@ -313,7 +318,7 @@ def _activation(B, S, x) -> tuple[Coll, Coll]:
 
 
 def _column_sig(routed: bool):
-    pair = MM.pair_coordinate_sig(routed, E2M1, E8M0, BF16, I32, CUT)
+    pair = MM.pair_coordinate_sig(routed, E2M1X2, E8M0, BF16, I32, CUT)
 
     def sig(S):
         (x, cut, *mid, wq, ws), ret = pair(S)
@@ -352,7 +357,7 @@ def _gemm(B, S, x, e, blk, par, wq, ws):
     """`MarlinMoeExpertGemm_v1`'s body on bits, each column a `MarlinMoeExpertColumn_v1` over the activation gates made once."""
     col = bind(MarlinMoeExpertColumn, E=S.E, **MM.coordinate(S))
     lead = (x, *_activation(B, S, x), e)
-    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), col, lead, blk, par, wq, ws, BF16, E2M1, E8M0)
+    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), col, lead, blk, par, wq, ws, BF16, E2M1X2, E8M0)
 
 
 def _gemm_w(B, S, x, e, g, blk, par, wq, ws):
@@ -361,10 +366,10 @@ def _gemm_w(B, S, x, e, g, blk, par, wq, ws):
     col = bind(MarlinMoeExpertColumnW, E=S.E, **MM.coordinate(S))
     gb = B.call(BG.F2fpBf16, g)
     lead = (x, *_activation(B, S, x), e, gb, B.call(BDN.Bf16MulScalarTensorScalar, gb))
-    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), col, lead, blk, par, wq, ws, BF16, E2M1, E8M0)
+    return MM.pair_rows(B, S, bind(MarlinMoeScheduleV2, **MM.schedule_of(S)), col, lead, blk, par, wq, ws, BF16, E2M1X2, E8M0)
 
 
-MarlinMoeExpertGemmV2 = EW.on_bits("MarlinMoeExpertGemm", 2, MM.GEMM_STATICS, MM.gemm_sig(False, E2M1, E8M0, BF16, F32, I32), _gemm,
+MarlinMoeExpertGemmV2 = EW.on_bits("MarlinMoeExpertGemm", 2, MM.GEMM_STATICS, MM.gemm_sig(False, E2M1X2, E8M0, BF16, F32, I32), _gemm,
                                    MM.MarlinMoeExpertGemm, lifted=["DOT"])
-MarlinMoeExpertGemmWV2 = EW.on_bits("MarlinMoeExpertGemmW", 2, MM.GEMM_STATICS, MM.gemm_sig(True, E2M1, E8M0, BF16, F32, I32), _gemm_w,
+MarlinMoeExpertGemmWV2 = EW.on_bits("MarlinMoeExpertGemmW", 2, MM.GEMM_STATICS, MM.gemm_sig(True, E2M1X2, E8M0, BF16, F32, I32), _gemm_w,
                                     MM.MarlinMoeExpertGemmW, lifted=["DOT"])

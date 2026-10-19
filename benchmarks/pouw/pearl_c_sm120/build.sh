@@ -11,7 +11,7 @@
 #   check/               fixture.py's inputs and expected buffers (needs verity and numpy)
 #   run.py, toolchain.txt (nvcc --version and the full nvcc command line), source.txt (the verity commit), MANIFEST.sha256
 # Usage: bash benchmarks/pouw/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA names the toolkit, default
-#        /usr/local/cuda-13.0)
+#        /usr/local/cuda-13.0; CUBIN_ONLY=1 stops after the SASS gate, with the cubin, ptxas.txt and sass.json, and needs no uv)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 CUDA=${CUDA:-/usr/local/cuda-13.0}; OUT=${1:-/tmp/pearl-c-sm120-ship}
@@ -24,6 +24,7 @@ case " ${FLAGS[*]} " in *ftz*|*fast-math*|*fast_math*) echo "an FTZ or fast-math
 PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$OUT/pearl_c_sm120.cubin" > "$OUT/pearl_c_sm120.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/pearl_c_sm120.sass" "$OUT/sass.json"
 rm "$OUT/pearl_c_sm120.sass"
+[ -n "${CUBIN_ONLY:-}" ] && exit 0
 (cd "$ROOT" && uv run python benchmarks/pouw/pearl_c_sm120/fixture.py "$OUT/check")
 cp "$HERE/run.py" "$OUT/"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o pearl_c_sm120.cubin pearl_c_sm120.cu"; } > "$OUT/toolchain.txt"

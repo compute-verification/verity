@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import math
 
 import numpy as np

@@ -8,6 +8,10 @@ staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's c
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE]
 
+``stage`` refuses an inner session whose record holds no draw (`rec_live.inner_draw`, exit 2): the verifier refuses every
+session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
+(``rec_live --draw``).
+
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
 table's shape as its setup derives it (`shape`), each rep's coins (its stream's rounds), the fold points they give
 (`rec_algebra.fold_points`, ``points``), the extra claims at the link points and the comb at the fold points (``fold.json``,
@@ -279,9 +283,9 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
 
 
 def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace, chain: O.Chain, coefs: dict, claim, out: Path,
-                  evaluate: bool = True, claim_own: dict | None = None) -> dict:
+                  evaluate: bool = True, claim_own: dict | None = None, version: int = 1) -> dict:
     """R's levels as RecOpen statements on the chain (their units `rec_outer.stacked_name`, their tops
-    ``rec-top-stacked-L<level>``) and its registered opening
+    ``rec-top-stacked-L<level>``, their population programs at ``version``) and its registered opening
     (`rec_residuals.stage_opening`): the stacked stream's messages (`opening_messages`), ``claim`` the prover's
     ``rec-claim``, which RecSparse reads too (``claim_own`` the verifier's entry of it, which each ``claim<k>`` names), and
     the chain's rows either side of R's openings."""
@@ -289,7 +293,7 @@ def stage_stacked(public: dict, private: dict, program: str, sr: SimpleNamespace
     for lv in O.levels(sr.qs):
         tops = O.TopValue.build(program, lv["level"], {STACKED_REP: sr.tops[lv["level"]]}, f"rec-top-stacked-L{lv['level']}")
         levels[f"L{lv['level']}"] = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops,
-                                            name=O.stacked_name(lv["LANES"], lv["H"]))
+                                            name=O.stacked_name(lv["LANES"], lv["H"]), version=version)
     regs, own = opening_messages(public, private, sr.sh, program)
     if claim_own is not None:
         own |= {f"claim{k}": claim_own for k in range(sr.sh.claims)}
@@ -435,14 +439,16 @@ def _copy_verifier(src: Path, dst: Path) -> None:
 
 
 def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, algebra: bool = True, forge: str | None = None,
-          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None) -> dict:
+          evaluate: bool = True, pts: dict | None = None, salts: Path | None = None, cap=None, sparse: tuple | None = None,
+          version: int = 1) -> dict:
     """V*'s statements over the inner session ``inner``: the levels ``levels`` (None: every level) and, with ``algebra``, the
     algebra, honest under ``out``; with ``forge``, that forgery's statements alone under ``out/forged-<forge>`` (the module
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
     session whose V* is not the cap's shape (`rec_shape.check`) before staging. ``sparse``: the bucket's `rec_sparse.Shape`
     and META's range of the hidden circuit; the sparse phase's RecSparse statement over both reps (`sparse_reps`), its
     messages read as the firewall committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``; with
-    R in the session, `stage_stacked` under ``out/stacked``.
+    R in the session, `stage_stacked` under ``out/stacked``. ``version``: the levels' population programs'
+    (`rec_outer.stage`; 0 restages levels recorded before v1).
     Returns what each statement costs and holds, and the verifier's own seconds."""
     inner, out = Path(inner), Path(out)
     t = {}
@@ -495,7 +501,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
             tops = O.TopValue.build(program, lv["level"], {rep: t_[lv["level"]] for rep, t_ in ts.items()})
             if forge == "top":
                 lv = {**lv, "queries": [forged_query(lv["queries"][0])[0], *lv["queries"][1:]]}
-            s = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops)
+            s = O.stage(lv, out / f"L{lv['level']}", chain, coefs, tops, version=version)
             if forge in ("top", "top-salt"):
                 res["forged_top"] = forge_top(out / f"L{lv['level']}", lv, tops, forge)
             if forge in ("coef", "dirs"):
@@ -519,7 +525,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
         if sr is not None:
             t0 = time.perf_counter()
             res["stacked"] = stage_stacked(public, private, program, sr, chain, coefs, sm[0]["claim"], out / "stacked", evaluate,
-                                           sm[1]["claim"])
+                                           sm[1]["claim"], version)
             res["stacked"]["stage_s"] = round(time.perf_counter() - t0, 1)
     if algebra:
         a0, a1 = zip(*(chain.rep_ends(r) for r in range(2)))
@@ -574,6 +580,11 @@ def main(argv=None) -> int:
         pts["points_s"] = round(time.perf_counter() - t0, 2)
         print(json.dumps(pts))
         return 0
+    try:
+        RL.inner_draw((Path(a.inner) / "session" / "session.json").read_text())
+    except ValueError as e:
+        print(json.dumps({"refused": str(e)}), flush=True)
+        return 2
     levels = None if a.levels == "all" else [] if a.levels == "none" else [int(x) for x in a.levels.split(",")]
     pts = json.loads(Path(a.points).read_text()) if a.points else None
     fold = json.loads(Path(a.fold).read_text())
