@@ -10,12 +10,17 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
 * **Units** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
   `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries,
-  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that every unit
-  commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value commit up to `W`
-  bits, and such a program is refused. `ranges`, `units` and `strata` read their units in canonical order (node order,
+  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that a `Q_word`
+  or `Q_call` unit commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value
+  commit up to `W` bits and `Q_call`'s counts computing gates only, so a program with a wider unit (for `Q_call`, its
+  Definition's activation's committed bits, constants and Input gates counted) is refused, as is one with a template of
+  no gate. A template query has no width rule. `ranges`, `units` and `strata` read their units in canonical order (node order,
   then member, for a template query; Call order, then the Call's own, for `Q_word` and `Q_call`), and `unit_gates` gives
   each unit's root gates.
-* **Programs**: `population_program` (instances of one template) and `mixed_population_program` (of several).
+* **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
+  `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
+  templates by descriptor id. v0 of each, which names only the counts, is kept for the records made with it
+  (`POPULATION_VERSIONS`).
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
 unit index on the prover's word.
@@ -26,14 +31,15 @@ import hashlib
 from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.cut import boundary_widths
+from verity.ml.circuits.cut import boundary_widths, call_scope
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.codec import descriptor_id, program_digest
+from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
-from verity.ml.circuits.program import Program
+from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array, Tuple, Value
 
 _PRE_CANONICAL = {"program", "query"}
 Q_WORD = ("Q_word", 1)
@@ -41,11 +47,25 @@ Q_WORD = ("Q_word", 1)
 UNIT_BITS = 16
 
 
-def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]]) -> Program:
-    """`TemplatePopulations{counts}`: one batch per member `(template, n)`, in order; member j's parameters are `j.<name>`,
-    arrays over its instances, and the result is the tuple of the batches' results."""
+#: The population programs' versions, the builders' default first. v1 names its templates (each one's descriptor id) in its
+#: binding record beside the counts, so the Definition's identity determines its body. v0 names the counts alone, so two
+#: populations of equal counts over different templates share its id; it stays buildable for the records made with it.
+POPULATION_VERSIONS = (1, 0)
+
+
+def _population_version(version: int) -> int:
+    if version not in POPULATION_VERSIONS:
+        raise ValueError(f"no population program v{version}: the versions are {POPULATION_VERSIONS}")
+    return version
+
+
+def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]], *, version: int = 1) -> Program:
+    """`TemplatePopulations_v1{templates, counts}`: one batch per member `(template, n)`, in order; member j's parameters are
+    `j.<name>`, arrays over its instances, and the result is the tuple of the batches' results. `templates` are the members'
+    descriptor ids, in order. `version=0` builds `TemplatePopulations_v0{counts}` (`POPULATION_VERSIONS`)."""
     if not members or any(n < 1 for _, n in members):
         raise ValueError("every member has at least one instance")
+    _population_version(version)
     sigs = [t.signature() for t, _ in members]
 
     def signature(S):
@@ -59,16 +79,19 @@ def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]
             at += len(ps)
         return coll_concat(signature(S)[1], outs)
 
-    defn = CompositeDefinition("TemplatePopulations", 0, ("counts",), signature, body,
+    named = {} if version == 0 else {"templates": tuple(descriptor_id(t) for t, _ in members)}
+    defn = CompositeDefinition("TemplatePopulations", version, (*named, "counts"), signature, body,
                                doc="independent instances of " + ", ".join(f"{n} x {t.id}" for t, n in members), register=False)
-    return Program(bind(defn, counts=tuple(n for _, n in members)))
+    return Program(bind(defn, **named, counts=tuple(n for _, n in members)))
 
 
-def population_program(template: SpecializedDefinition, n: int) -> Program:
-    """`TemplateInstances{N=n}`: `n` independent instances of `template` as one batch, every parameter an array over
-    instances. Instance i of the batch is instance i of the input set it is built for."""
+def population_program(template: SpecializedDefinition, n: int, *, version: int = 1) -> Program:
+    """`TemplateInstances_v1{template, N=n}`: `n` independent instances of `template` as one batch, every parameter an array
+    over instances; `template` is its descriptor id. Instance i of the batch is instance i of the input set it is built for.
+    `version=0` builds `TemplateInstances_v0{N=n}` (`POPULATION_VERSIONS`)."""
     if n < 1:
         raise ValueError("a population has at least one instance")
+    _population_version(version)
     params, ret = template.signature()
 
     def signature(S):
@@ -77,9 +100,10 @@ def population_program(template: SpecializedDefinition, n: int) -> Program:
     def body(B, S, *args):
         return B.batch(template, *args, axes=(0,) * len(args))
 
-    defn = CompositeDefinition("TemplateInstances", 0, ("N",), signature, body,
+    named = {} if version == 0 else {"template": descriptor_id(template)}
+    defn = CompositeDefinition("TemplateInstances", version, (*named, "N"), signature, body,
                                doc=f"{n} independent instances of {template.id}", register=False)
-    return Program(bind(defn, N=n))
+    return Program(bind(defn, **named, N=n))
 
 
 def partition(program: Program, query: Mapping[str, Any]) -> dict[str, Any]:
@@ -111,24 +135,66 @@ def _check_word(part: PO.Partition) -> None:
                                {"definition": fid, "unit": wide[0], "bits": ob[wide[0]]})
 
 
+def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
+    """Per unit `[lo, hi)` of one activation of `fn` (its local gates, as `Q_call` numbers them), the bits it commits: the
+    summed declared widths of its gates that are Input gates, or that a later gate of the activation reads or the
+    activation returns, constants included. Nothing outside an activation reads its gates but through its returns, so in
+    any program this bounds the claims' `Prog.Boundary` count, as `Q_call`'s width rule bounds its computing gates'."""
+    c, call = call_scope(fn)
+    lo, n = call.offset, fn.gates
+    width, inp, last = [0] * n, [False] * n, [-1] * n
+    for j in range(n):
+        g = c.gate(lo + j)
+        width[j], inp[j] = (g.prim.ret.w if isinstance(g.prim.ret, Value) else 0), is_input(g.prim)
+        for o in g.operands:
+            if lo <= o < lo + j:
+                last[o - lo] = j
+    for r in ([0] if not hasattr(fn, "body") else (resolve(call, r) - lo for r in fn.body.ret)):
+        if 0 <= r < n:
+            last[r] = n
+    return [sum(width[g] for g in range(a, b) if inp[g] or last[g] >= b) for a, b in units]
+
+
+def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
+    """Refuses a template of no gate, and a `Q_call` unit that commits more than `UNIT_BITS` bits (`_committed_bits`,
+    constants counted, which `Q_call`'s width rule leaves out), each Definition once, as activations of one Definition
+    commit alike."""
+    if isinstance(part, PO.TemplatePartition):
+        for k, t, _first, n in part.ranges:
+            if n and program.root.body.nodes[k].fn.gates == 0:
+                raise QueryRefused(f"template {t} has no gate", {"template": t})
+        return
+    for cut in {cut.fn.id: cut for _k, cut in part.calls}.values():
+        fn = cut.fn
+        bits = _committed_bits(fn, [(lo, hi) for lo, hi, _path in cut.units])
+        wide = next((u for u, b in enumerate(bits) if b > UNIT_BITS), None)
+        if wide is not None:
+            raise QueryRefused(f"unit {wide} of {fn.id} commits {bits[wide]} bits, more than {UNIT_BITS}",
+                               {"definition": fn.id, "unit": wide, "bits": bits[wide]})
+
+
 def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition | PO.Partition | PO.CallPartition:
     """`query` applied to `program` by core, once core accepts the query's form; `QueryRefused` when the query is malformed,
     is not one applied here (a template query, `Q_word` v1 at `X = 16` or `Q_call` v1 at `X <= 16`), does not apply to the
-    program (core's refusals, a program that is not topological among them), or is `Q_word` with a unit of more than
-    `UNIT_BITS` bits."""
+    program (core's refusals, a program that is not topological among them), or has a unit of more than `UNIT_BITS` bits
+    (`_check_word`, `_check_units`) or a template of no gate."""
     obj = PO.build(program, query)
     v, q = PO.validate(obj), obj["query"]
     if not v.ok:
         raise QueryRefused(f"not a {FORMAT} query ({', '.join(v.codes)}): {q!r}", {"query": q, "codes": list(v.codes)})
     kind, x = (q["name"], q["version"]), q["params"].get("X")
     if kind in (PO.Q_TEMPLATE_INSTANCE, PO.Q_TEMPLATE_INSTANCES):
-        return PO.evaluate(program, q)
+        part = PO.evaluate(program, q)
+        _check_units(program, part)
+        return part
     if kind == Q_WORD and x == UNIT_BITS:
         part = PO.evaluate(program, q)
         _check_word(part)
         return part
     if kind == PO.Q_CALL and x <= UNIT_BITS:
-        return PO.evaluate(program, q)
+        part = PO.evaluate(program, q)
+        _check_units(program, part)
+        return part
     raise QueryRefused(f"one-stage applies the template queries, Q_word v1 at X = {UNIT_BITS} and Q_call v1 at "
                        f"X <= {UNIT_BITS}, not {q['name']} v{q['version']} at X = {x}", {"query": q})
 
@@ -188,5 +254,5 @@ def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, in
 
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "mixed_population_program", "partition",
-           "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
+           "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "UNIT_BITS"]

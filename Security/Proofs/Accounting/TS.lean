@@ -1,7 +1,14 @@
+import Proofs.Accounting.TS.FanIn
+import Proofs.Accounting.TS.FoldFanIn
+import Proofs.Accounting.TS.LowBit
 import Proofs.Accounting.TS.Price
 import Proofs.Accounting.TS.Rounds
 import Proofs.Accounting.TS.Facets
+import Proofs.Accounting.TS.Receipt
 import Proofs.Accounting.TS.Tensor
+import Proofs.Accounting.TS.Sheet
+import Proofs.Accounting.TS.ProofsSound
+import Proofs.Accounting.TS.Fork
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -9,8 +16,10 @@ import Proofs.Pouw.RelativeSecurity
 
 Each guarantee of `Models.Accounting.Guarantees.TS` as `Accounting.SecurityProofs.TS.G` (the gap list:
 note:20261017T0801Z-draft-lean-stmt). One file per prover group: the price lemmas (`TS/Price.lean`), the round lemmas
-(`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`); this
-file keeps the theorems built from them (EPS1-SPEC §2.2, §2.4, §2.7).
+(`TS/Rounds.lean`), Lemma 1 with Corollaries D1 and D2 (`TS/Facets.lean`), T1 and Lemma 2 (`TS/Tensor.lean`), the
+fan-in count with FOLD-OPT and FILL-OPT from it (`TS/FanIn.lean`), the fan-in floor of a fold of binding steps and
+of duo's and fx1's runs (`TS/FoldFanIn.lean`), the low bit of a one-register fold and of li (`TS/LowBit.lean`); this file keeps the theorems built from them
+(EPS1-SPEC §2.2, §2.4, §2.7).
 
 All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `price_of_rd`, or from the parts,
 `price_of_parts`), then `π·n ≤ B(n)` (`price_le_bound`) and `B(n) ≤ f_max·T(M)` (`TimeBound`), and `identity` reads
@@ -203,6 +212,16 @@ theorem DIdealFloor : Accounting.Guarantees.TS.DIdealFloor := by
         prob_or_le _ _
     _ ≤ S * (δbind + nπ * δzk) + δ' := add_le_add hE hB
     _ = δ := by rw [hδ']; ring
+
+/-- Theorem D-ideal (2.7♭) on the data-sheet machine: `DIdealFloor`, its (I1) from `facetCeilings_of_sheet`, (I2)/(I4)
+and (I3) from A6 (`scalarRoute_half`), (I5) from A7. -/
+theorem SheetDIdealFloor : Accounting.Guarantees.TS.SheetDIdealFloor := by
+  intro K P T L U F X _ _ _ _ _ _ _ _ _ _ Sh Z Fl Ω _ S Pl lam p δ δbind δzk nπ hG h hZ hS hp0 hp1 hδ hSplit hq
+    hqT hb h1 h2 h3 h4 h5 h6 h7 hF hX hL hPS
+  refine DIdealFloor Z Fl Ω S Pl lam p δ δbind δzk nπ h hZ hS hp0 hp1 hδ hSplit (fun x => ?_) (fun x => (h6 x).1)
+    (fun x => scalarRoute_half Z _ (hSplit x) (h6 x) hq hqT hb) (fun x => (h7 x).2) (fun x => (h7 x).1) hF hX hL hPS
+  rw [hG]
+  exact facetCeilings_of_sheet Sh _ (run_nonneg_of_split (hSplit x)) (h1 x) (h2 x) (h3 x) (h4 x) (h5 x)
 
 /-- Lemma C: `budget_tail`, `price_of_parts`, `identity`, `TimeBound`. -/
 theorem CompilerC : Accounting.Guarantees.TS.CompilerC := by

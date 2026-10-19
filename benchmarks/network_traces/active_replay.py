@@ -20,6 +20,20 @@ events, in canonical order, anchored at the release) and runs `Audit.check_link`
 records and on the committed ones. It also checks that the proxy's records are `run_shaper`'s on the ready buckets the
 proxy saw, that its hand times are the rule's, and that the peer's digest of each window of the wire is the records'.
 
+**The salt** (`run_virtual(salt=True)`, and `mockdc.py run --salt`): the proxy's per-window salt is on, so each window's
+ingress record holds the salt's frame and the server receives the salt on a connection of its own, logging each
+window's commitment, never the salt. Once the run's records are published the proxy answers the verifier's "reveal"
+call with every window's salt (`salts.json`), and the audit's `salt` section reads each commitment against it
+(`active.check_salts`, on the raw ingress records), counts the salt frames in each ingress record and in the egress
+records, and checks that no egress frame holds a salt or its commitment and that the server received each salt.
+
+**Maintenance** (`outage_plan`, and `mockdc.py`'s `maintenance` strategy): the block's certifier is down for one
+window. The block is drained for it, so no request is enqueued in it, and the plan is refused if anything of the
+windows before would still be in flight there. The proxy serves the windows before (`Proxy(windows=w)`) and closes the
+link; nothing listens on the link for the outage window, so no record is published for it; then a proxy back from
+maintenance (`Proxy(start=w + 1, position=p)`) serves the rest, and the peer connects again. The proxy log joins the
+two. The certifier's audit has no verdict for the outage window, and its comparisons with `run_shaper` leave it out.
+
 Latencies are in ms: shaping is hand minus ready, queueing release minus hand, first frame the first frame's release
 minus its anchor (`replay.py`'s) and minus the trace's send time. `model` beside each is `replay.replay_configuration`
 on the same configuration of the trace, lane F's replay model.
@@ -89,12 +103,17 @@ from verity.core.protocols.certifier.active import (
     DATA,
     HEADER,
     LAST,
+    SALT,
+    SALT_FRAME_BYTES,
     Events,
     InlineExecutor,
     Proxy,
     VirtualClock,
+    check_salts,
     decode_frame,
     encode_frame,
+    fresh_salt,
+    salt_commitment,
     worker,
 )
 from verity.core.protocols.certifier.lean_audit import Audit
@@ -527,6 +546,51 @@ def covert_symbols(plan: dict, buckets: int) -> tuple[list[int], int]:
     return covert.control_symbols(plan["windows"], covert.stream_seed(plan.get("seed", 0), plan["name"])), margin
 
 
+def outage_plan(plan: dict, setup: Setup, window: int = 1) -> dict:
+    """The plan of a block whose certifier is down for maintenance in window `window` and back after it: the block is
+    drained for that window (no request is enqueued in it, so the server writes nothing in it), and the proxy back
+    from maintenance (`Proxy(start=window + 1, position=...)`) takes the Program's frames from `outage["position"]` on
+    and the peer's requests from ingress bucket `outage["bucket"]` on. It is refused if anything of the windows before
+    would still be in flight in the outage window: a request not yet released, or a frame not yet ready, handed or
+    released."""
+    e, i = setup.egress_params, setup.ingress_params
+    T, windows = e.buckets, plan["windows"]
+    if "sync_rule" in plan:
+        raise ValueError("an online prover declares from window 0 on: an outage plan takes syncs fixed before the run")
+    if not 0 < window < windows - 1:
+        raise ValueError(f"the outage is in one of windows 1 … {windows - 2}, after a window and before one")
+    requests = [q for q in plan["requests"] if q["enqueue"] // i.buckets != window]
+    kept = {q["stream"] for q in requests}
+    sessions = [s for s in plan["sessions"] if s[1] in kept]
+    release = model_releases(requests, i, windows, e.bucket_ms)
+    lo, hi = window * T, (window + 1) * T
+    before = {s: r for s, r in plan["model_release"].items() if int(s) in kept}
+    if {str(s): r for s, r in release.items()} != before:
+        raise ValueError(f"draining window {window} moves another request's release: one was still queued in it")
+    if any(release.get(q["stream"], windows * T) >= lo for q in requests if q["enqueue"] < window * i.buckets):
+        raise ValueError(f"a request of the windows before {window} is released in it or later")
+    frames, ready = model_frames(sessions, release, windows * T)
+    syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
+    hands = handing_buckets(frames, syncs, T)
+    if any(f.anchor < lo and max(r, h) >= lo for f, r, h in zip(frames, ready, hands)):
+        raise ValueError(f"a frame of the windows before {window} is ready or handed in it or later")
+    quiet = next(r for r in run_shaper(frames, ready, syncs, Certifier(setup.egress_link, e)) if r.window == window)
+    if any(row_count(row) for row in quiet.grid):
+        raise ValueError(f"a frame of the windows before {window} is released in it")
+    return plan | {"requests": requests, "sessions": sessions,
+                   "model_release": {str(k): v for k, v in release.items()},
+                   "outage": {"window": window, "position": sum(f.anchor < lo for f in frames),
+                              "bucket": (window + 1) * i.buckets}}
+
+
+def served(plan: dict) -> list[tuple[int, int]]:
+    """The windows the block's certifier serves, as runs [start, end): every window, or, for an outage plan, the
+    windows before the outage and the windows after it."""
+    if (o := plan.get("outage")) is None:
+        return [(0, plan["windows"])]
+    return [(0, o["window"]), (o["window"] + 1, plan["windows"])]
+
+
 # The three processes.
 
 def peak_rss_mb() -> float:
@@ -575,7 +639,11 @@ class Server:
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
         try:
-            head = await reader.readuntil(b"\r\n\r\n")
+            first = await reader.readexactly(1)
+            if first[0] == SALT:
+                await read_salts(first, reader, self.log, self.notify)
+                return
+            head = first + await reader.readuntil(b"\r\n\r\n")
             length = int(re.search(rb"content-length: (\d+)", head, re.IGNORECASE).group(1))
             body = json.loads(await reader.readexactly(length))
         except (asyncio.IncompleteReadError, ConnectionError):
@@ -618,6 +686,22 @@ class Server:
     def close(self) -> None:
         for w in self.writers:
             w.close()
+
+
+async def read_salts(first: bytes, reader: asyncio.StreamReader, log: dict, notify) -> None:
+    """The salt stream's connection, from its first byte: each salt frame's window and the commitment of the salt it
+    carries go to `log["salts"]`, never the salt itself."""
+    frame = first + await reader.readexactly(SALT_FRAME_BYTES - 1)
+    while True:
+        _, _, payload = decode_frame(frame)
+        log.setdefault("salts", []).append([int.from_bytes(payload[:8], "big"), salt_commitment(payload[8:]).hex()])
+        notify()
+        try:
+            frame = await reader.readexactly(SALT_FRAME_BYTES)
+        except asyncio.IncompleteReadError as e:
+            if e.partial:
+                raise
+            return
 
 
 async def _http_body(reader: asyncio.StreamReader, head: bytes):
@@ -665,7 +749,11 @@ class LiveServer:
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.writers.add(writer)
         try:
-            head = await reader.readuntil(b"\r\n\r\n")
+            first = await reader.readexactly(1)
+            if first[0] == SALT:
+                await read_salts(first, reader, self.log, self.notify)
+                return
+            head = first + await reader.readuntil(b"\r\n\r\n")
             length = int(re.search(rb"content-length: (\d+)", head, re.IGNORECASE).group(1))
             body = json.loads(await reader.readexactly(length))
         except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
@@ -762,27 +850,46 @@ def read_events(path: Path) -> list[tuple[int, str, int, int, bytes]]:
 
 class Peer:
     """The client outside the boundary: `send` writes each request's link frames at its send time, `read` reads the wire
-    to its end, keeping a SHA-256 per window and each bucket's arrival after its tick."""
+    to its end, keeping a SHA-256 per window and each bucket's arrival after its tick. For an outage plan it connects
+    once for each run of windows the certifier serves (`phases`)."""
 
     def __init__(self, plan: dict, params: dict, clock=time.monotonic, sleep=asyncio.sleep, notify=lambda: None):
         self.clock, self.sleep, self.notify = clock, sleep, notify
         self.B, self.tau = params["frame_bytes"], params["bucket_ms"] / 1000
         self.bucket_bytes = params["allocation"] * self.B
         self.window_bytes = params["buckets"] * self.bucket_bytes
+        self.window_s = params["buckets"] * self.tau
         self.by_time = defaultdict(list)
         for q in plan["requests"]:
             self.by_time[q["send_ms"]].append(q)
         self.live_model = plan.get("live_model")
+        self.outage = plan.get("outage")
         self.instants_sent = self.frames_sent = self.bytes = 0
         self.log = {"send_late_ms": [], "window_sha256": [], "bucket_lag_ms": []}
 
-    async def send(self, writer: asyncio.StreamWriter, origin: float) -> None:
+    def phases(self) -> list[tuple[int, range | None]]:
+        """The peer's connections: the window each one's wire starts at, and the ingress buckets of the requests it
+        sends (all, with None)."""
+        if self.outage is None:
+            return [(0, None)]
+        b = self.outage["bucket"]
+        return [(0, range(b)), (self.outage["window"] + 1, range(b, sys.maxsize))]
+
+    def origin_of(self, origin: float, start: int) -> float:
+        """The origin a connection's wire counts its buckets from, for one whose wire starts at window `start` after
+        the windows already read: the run's, shifted by the windows the link was dead for."""
+        return origin + (start - self.bytes // self.window_bytes) * self.window_s
+
+    async def send(self, writer: asyncio.StreamWriter, origin: float, enqueued: range | None = None) -> None:
         for t in sorted(self.by_time):
+            qs = [q for q in self.by_time[t] if enqueued is None or q["enqueue"] in enqueued]
+            if not qs:
+                continue
             deadline = origin + t / 1000
             if (delay := deadline - self.clock()) > 0:
                 await self.sleep(delay)
             self.log["send_late_ms"].append(round((self.clock() - deadline) * 1000, 3))
-            data = b"".join(request_frames(q["stream"], self.request(q), self.B) for q in self.by_time[t])
+            data = b"".join(request_frames(q["stream"], self.request(q), self.B) for q in qs)
             writer.write(data)
             self.instants_sent += 1
             self.frames_sent += len(data) // self.B
@@ -841,20 +948,33 @@ class Publisher:
                 f.result()
 
 
-def proxy_log(proxy: Proxy) -> dict:
-    return {"lateness_ms": {k: [round(x * 1000, 3) for x in v] for k, v in proxy.lateness.items()},
-            "syncs": [[s.delta, str(s.rho)] for s in proxy.shaper.syncs],
-            "frames": proxy.frames, "hands": proxy.shaper.hands, "link_frames_read": proxy.link_frames_read,
-            "streams": len(proxy.streams), "slack_ms": proxy.slack * 1000,
+def proxy_log(proxies: Sequence[Proxy]) -> dict:
+    """The run's proxy log: one proxy's, or, for an outage plan, the proxies before and after the outage joined, each
+    list in order and each count summed, with the windows each served (`served`)."""
+    last = proxies[-1]
+    salts = {} if last.salt is None else {"salts": {"released": sum(p.salts_released for p in proxies),
+                                                    "delivered": sum(p.salts_delivered for p in proxies)}}
+    served_by = {} if len(proxies) == 1 else {"served": [[p.start, p.windows] for p in proxies]}
+    return {"lateness_ms": {k: [round(x * 1000, 3) for p in proxies for x in p.lateness[k]] for k in last.lateness},
+            "syncs": [[s.delta, str(s.rho)] for s in last.shaper.syncs],
+            "frames": [f for p in proxies for f in p.frames], "hands": [h for p in proxies for h in p.shaper.hands],
+            "link_frames_read": sum(p.link_frames_read for p in proxies),
+            "streams": sum(len(p.streams) for p in proxies), "slack_ms": last.slack * 1000,
             "forwards": [[st.window, None if st.delivered is None else round((st.delivered - st.deadline) * 1000, 3)]
-                         for st in proxy.streams.values() if st.deadline is not None],
-            "prover": None if proxy.choices is None else proxy.choices.log} | _usage()
+                         for p in proxies for st in p.streams.values() if st.deadline is not None],
+            "prover": None if last.choices is None else last.choices.log} | salts | served_by | _usage()
 
 
-def write_logs(out: Path, proxy: Proxy | None = None, server: Server | None = None, peer: Peer | None = None) -> None:
-    if proxy is not None:
+def revealed(proxies: Sequence[Proxy]) -> dict[str, str]:
+    """Every served window's salt, as the verifier's `reveal` calls give them once the run's records are published."""
+    return {str(w): p.reveal(w).hex() for p in proxies for w in range(p.start, p.windows)}
+
+
+def write_logs(out: Path, proxies: Sequence[Proxy] = (), server: Server | None = None,
+               peer: Peer | None = None) -> None:
+    if proxies:
         with gzip.open(out / "proxy.json.gz", "wt") as fh:
-            json.dump(proxy_log(proxy), fh)
+            json.dump(proxy_log(proxies), fh)
     if server is not None:
         (out / "server.json").write_text(json.dumps(server.log | _usage()))
         if isinstance(server, LiveServer):
@@ -863,15 +983,23 @@ def write_logs(out: Path, proxy: Proxy | None = None, server: Server | None = No
         (out / "peer.json").write_text(json.dumps(peer.dump() | _usage()))
 
 
-def server_process(plan: dict, params: dict, conn, out: str) -> None:
+def server_process(plan: dict, params: dict, conn, out: str, host: str = "127.0.0.1", port: int = 0) -> None:
     _quiet_runtime()
-    asyncio.run(_server(plan, params, conn, Path(out)))
+    asyncio.run(_server(plan, params, conn, Path(out), host, port))
 
 
-async def _server(plan: dict, params: dict, conn, out: Path) -> None:
+# The server, the proxy and the peer each talk to their parent over `conn` (anything with `send` and a blocking `recv`):
+# each sends one value once it is listening or connected, then receives the origin; the server receives one more value
+# before it stops. Each listens on, or connects to, `host`; a `port` of 0 is any free one, which the listener sends.
+# A proxy with its salt on receives "reveal" once its run's records are published, the verifier's call, and sends back
+# every window's salt (`revealed`). Under an outage plan the proxy stops listening once the windows before the outage
+# are served, and listens again half a window before the windows after it, on the same port; the peer connects again a
+# quarter of a window before them.
+
+async def _server(plan: dict, params: dict, conn, out: Path, host: str = "127.0.0.1", port: int = 0) -> None:
     loop = asyncio.get_running_loop()
     server = LiveServer(plan, params) if "upstream" in params else Server(plan, params)
-    listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+    listening = await asyncio.start_server(server.handle, host, port)
     conn.send(listening.sockets[0].getsockname()[1])
     await server.serve(await loop.run_in_executor(None, conn.recv))
     await loop.run_in_executor(None, conn.recv)
@@ -942,54 +1070,99 @@ def _stopper():
 
 
 def proxy_process(plan: dict, setup_report: dict, upstream: tuple[str, int], conn, out: str,
-                  stalls: Sequence[tuple[int, float]] = ()) -> None:
+                  stalls: Sequence[tuple[int, float]] = (), host: str = "127.0.0.1", port: int = 0) -> None:
     _quiet_runtime()
     pause = _stopper() if stalls else None
-    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause))
+    asyncio.run(_proxy(plan, Setup(setup_report), upstream, conn, Path(out), stalls, pause, host, port))
+
+
+def phase_args(plan: dict, start: int, end: int) -> dict:
+    """The arguments of the proxy that serves windows `start` … `end` − 1 of an outage plan (none otherwise)."""
+    if "outage" not in plan:
+        return {}
+    return {"windows": end, "start": start, "position": plan["outage"]["position"] if start else 0}
 
 
 async def _proxy(plan: dict, setup: Setup, upstream: tuple[str, int], conn, out: Path,
-                 stalls: Sequence[tuple[int, float]] = (), pause=None) -> None:
+                 stalls: Sequence[tuple[int, float]] = (), pause=None, host: str = "127.0.0.1", port: int = 0,
+                 salt: bool = False) -> None:
     publish = Publisher(out, setup)
     advice = prover_args(plan, setup)
-    done = asyncio.get_running_loop().create_future()
-    holder: dict = {}
+    syncs = advice.pop("syncs")
+    window_s = setup.egress_params.buckets * setup.egress_params.bucket_ms / 1000
+    proxies: list[Proxy] = []
+    for k, (start, end) in enumerate(served(plan)):
+        done = asyncio.get_running_loop().create_future()
+        holder: dict = {}
 
-    async def on_link(reader, writer) -> None:
-        await holder["proxy"].run(reader, writer)
-        done.set_result(None)
+        async def on_link(reader, writer, holder=holder, done=done) -> None:
+            if "link" in holder:  # one link: a second connection is never the peer's
+                writer.close()
+                return
+            holder["link"] = writer
+            await holder["proxy"].run(reader, writer)
+            done.set_result(None)
 
-    listening = await asyncio.start_server(on_link, "127.0.0.1", 0)
-    conn.send(listening.sockets[0].getsockname()[1])
-    origin = conn.recv()
-    proxy = holder["proxy"] = Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set,
-                                    advice.pop("syncs"), origin=origin, publish=publish, egress_link=setup.egress_link,
-                                    ingress_link=setup.ingress_link, **advice)
-    if stalls:
-        proxy._changed = Stalls(proxy, stalls, pause)
-    await done
-    listening.close()
+        def make() -> Proxy:
+            return Proxy(upstream, setup.egress_params, setup.ingress_params, setup.sync_set, syncs, origin=origin,
+                         publish=publish, egress_link=setup.egress_link, ingress_link=setup.ingress_link,
+                         salt=fresh_salt if salt else None, **advice, **phase_args(plan, start, end))
+
+        if k == 0:
+            listening = await asyncio.start_server(on_link, host, port)
+            port = listening.sockets[0].getsockname()[1]
+            conn.send(port)
+            origin = conn.recv()
+            proxy = holder["proxy"] = make()
+        else:
+            await asyncio.sleep(origin + (start - 0.5) * window_s - time.monotonic())
+            proxy = holder["proxy"] = make()
+            listening = await asyncio.start_server(on_link, host, port)
+        if stalls and k == 0:
+            proxy._changed = Stalls(proxy, stalls, pause)
+        proxies.append(proxy)
+        await done
+        listening.close()
     publish.close()
-    write_logs(out, proxy=proxy)
+    write_logs(out, proxies)
     if stalls:
-        (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
+        (out / "stalls.json").write_text(json.dumps(proxies[0]._changed.done))
+    if salt:
+        if (call := conn.recv()) != "reveal":
+            raise ValueError(f"a salted proxy's last call is 'reveal', not {call!r}")
+        conn.send(revealed(proxies))
 
 
-def peer_process(plan: dict, params: dict, link_port: int, conn, out: str) -> None:
+def peer_process(plan: dict, params: dict, link_port: int, conn, out: str, host: str = "127.0.0.1") -> None:
     _quiet_runtime()
-    asyncio.run(_peer(plan, params, link_port, conn, Path(out)))
+    asyncio.run(_peer(plan, params, link_port, conn, Path(out), host))
 
 
-async def _peer(plan: dict, params: dict, link_port: int, conn, out: Path) -> None:
+async def _peer(plan: dict, params: dict, link_port: int, conn, out: Path, host: str = "127.0.0.1") -> None:
     peer = Peer(plan, params)
-    reader, writer = await asyncio.open_connection("127.0.0.1", link_port, limit=1 << 22)
+    reader, writer = await asyncio.open_connection(host, link_port, limit=1 << 22)
     conn.send("connected")
     origin = conn.recv()
-    sending = asyncio.create_task(peer.send(writer, origin))
-    await peer.read(reader, origin)
-    sending.cancel()
-    writer.close()
+    for k, (start, enqueued) in enumerate(peer.phases()):
+        if k:
+            await asyncio.sleep(origin + (start - 0.25) * peer.window_s - time.monotonic())
+            reader, writer = await _reconnect(host, link_port, origin + start * peer.window_s)
+        sending = asyncio.create_task(peer.send(writer, origin, enqueued))
+        await peer.read(reader, peer.origin_of(origin, start))
+        sending.cancel()
+        writer.close()
     write_logs(out, peer=peer)
+
+
+async def _reconnect(host: str, port: int, by: float):
+    """The link again, once the proxy back from maintenance listens: refused connections are retried until `by`."""
+    while True:
+        try:
+            return await asyncio.open_connection(host, port, limit=1 << 22)
+        except ConnectionRefusedError:
+            if time.monotonic() >= by:
+                raise
+            await asyncio.sleep(0.01)
 
 
 def wire_params(setup: Setup) -> dict:
@@ -1057,13 +1230,16 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
 
 
 def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None,
-                stalls: Sequence[tuple[int, float]] = ()) -> dict:
+                stalls: Sequence[tuple[int, float]] = (), salt: bool = False) -> dict:
     """One configuration on an injected clock: the same sockets, proxy, server and peer in one event loop, the clock
     moved to each instant something is due (a tick, a server batch, a send) once everything due before it is done.
     With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving. A stall
-    (`stalls`, test-only) moves the clock past the pause at once, before anything else runs."""
+    (`stalls`, test-only) moves the clock past the pause at once, before anything else runs. With `salt`, the proxy's
+    salt is on, and `salts.json` holds what `reveal` gives once the run is over. Under an outage plan the first
+    proxy's link is closed with its last window, and at the outage window's first instant the proxy back from
+    maintenance takes the peer's second connection."""
     out.mkdir(parents=True, exist_ok=True)
-    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls))
+    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls, salt))
     (out / "processes.json").write_text(json.dumps({"exit": {"server": 0, "proxy": 0, "peer": 0}, "origin": 0.0,
                                                     "clock": "virtual"}))
     return {"server": 0, "proxy": 0, "peer": 0}
@@ -1075,32 +1251,52 @@ def virtual_process(plan: dict, report: dict, out: Path, stalls: Sequence[tuple[
 
 
 async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None,
-                   stalls: Sequence[tuple[int, float]] = ()) -> None:
+                   stalls: Sequence[tuple[int, float]] = (), salt: bool = False) -> None:
     e, i = setup.egress_params, setup.ingress_params
     params = wire_params(setup) | ({"upstream": list(upstream)} if upstream else {})
     clock = VirtualClock(-1.0)
-    holder: dict = {}
+    proxies: list[Proxy] = []
 
     def notify() -> None:
-        holder["proxy"]._changed.set()
+        proxies[-1]._changed.set()
 
     server = (LiveServer if upstream else Server)(plan, params, clock, clock.sleep, notify)
     peer = Peer(plan, params, clock, clock.sleep, notify)
     listening = await asyncio.start_server(server.handle, "127.0.0.1", 0)
     publish = Publisher(out, setup, threaded=False)
     advice = prover_args(plan, setup, background=False)
-    proxy = holder["proxy"] = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, advice.pop("syncs"),
-                                    origin=0.0, clock=clock, sleep=clock.sleep, publish=publish,
-                                    egress_link=setup.egress_link, ingress_link=setup.ingress_link, **advice)
-    if stalls:
-        proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
-    accepted: asyncio.Future = asyncio.get_running_loop().create_future()
-    link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
-                                      "127.0.0.1", 0)
-    reader, writer = await asyncio.open_connection(*link.sockets[0].getsockname()[:2], limit=1 << 22)
-    running = await accepted
-    tasks = [asyncio.create_task(peer.send(writer, 0.0)), asyncio.create_task(peer.read(reader, 0.0)),
-             asyncio.create_task(server.serve(0.0))]
+    syncs = advice.pop("syncs")
+    runs = served(plan)
+    phases = peer.phases()
+
+    async def connect(k: int) -> tuple:
+        """The proxy of the k-th run of served windows, the peer's link to it, and the run and the peer's tasks."""
+        (start, end), (_, enqueued) = runs[k], phases[k]
+        proxy = Proxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0, clock=clock,
+                      sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
+                      ingress_link=setup.ingress_link, salt=fresh_salt if salt else None, **advice,
+                      **phase_args(plan, start, end))
+        if stalls and k == 0:
+            proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
+        proxies.append(proxy)
+        accepted: asyncio.Future = asyncio.get_running_loop().create_future()
+        link = await asyncio.start_server(lambda r, w: accepted.set_result(asyncio.create_task(proxy.run(r, w))),
+                                          "127.0.0.1", 0)
+        reader, writer = await asyncio.open_connection(*link.sockets[0].getsockname()[:2], limit=1 << 22)
+        running = await accepted
+        return link, writer, running, [asyncio.create_task(peer.send(writer, 0.0, enqueued)),
+                                       asyncio.create_task(peer.read(reader, peer.origin_of(0.0, start)))]
+
+    async def disconnect(link, writer, running, tasks) -> None:
+        await running
+        await tasks[1]
+        tasks[0].cancel()
+        writer.close()
+        link.close()
+
+    phase = 0
+    current = await connect(phase)
+    serving = asyncio.create_task(server.serve(0.0))
     horizon = plan["windows"] * e.buckets
     tau_e, tau_i = e.bucket_ms / 1000, i.bucket_ms / 1000
     instants = sorted({t * tau_e for t in range(horizon)} | {t * tau_i for t in range(plan["windows"] * i.buckets)}
@@ -1108,34 +1304,46 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
     sends = sorted(t / 1000 for t in peer.by_time)
     end = (horizon - 1) * tau_e
 
+    def ticks(x: float, tau: float, buckets: int) -> int:
+        n = math.floor(x / tau + 1e-9) + 1 if x >= 0 else 0
+        return sum(max(0, min(n, b * buckets) - a * buckets) for a, b in runs)
+
+    def total(f) -> int:
+        return sum(f(p) for p in proxies)
+
     def settled(x: float) -> bool:
-        ticks_e = min(horizon, math.floor(x / tau_e + 1e-9) + 1) if x >= 0 else 0
-        ticks_i = min(plan["windows"] * i.buckets, math.floor(x / tau_i + 1e-9) + 1) if x >= 0 else 0
+        ticks_e = total(lambda p: len(p.lateness["egress"]))
         batches = min(horizon - 1, math.floor((x - tau_e / 2) / tau_e + 1e-9) + 1) if x >= tau_e / 2 else 0
-        return (len(proxy.lateness["egress"]) >= ticks_e and len(proxy.lateness["ingress"]) >= ticks_i
+        return (ticks_e >= ticks(x, tau_e, e.buckets)
+                and total(lambda p: len(p.lateness["ingress"])) >= ticks(x, tau_i, i.buckets)
                 and getattr(server, "processed", horizon) + 1 >= batches and getattr(server, "open", 0) == 0
                 and not any(d <= x + 1e-9 for d in getattr(server, "held", ()))
                 and peer.instants_sent >= bisect.bisect_right(sends, x + 1e-9)
-                and proxy.link_frames_read >= peer.frames_sent and server.log["requests"] >= proxy.requests_released
-                and len(proxy.frames) >= server.log["events"]
-                and peer.bytes >= len(proxy.lateness["egress"]) * e.allocation * e.frame_bytes)
+                and total(lambda p: p.link_frames_read) >= peer.frames_sent
+                and server.log["requests"] >= total(lambda p: p.requests_released)
+                and len(server.log.get("salts", ())) >= total(lambda p: p.salts_released)
+                and total(lambda p: len(p.frames)) >= server.log["events"]
+                and peer.bytes >= ticks_e * e.allocation * e.frame_bytes)
 
     for x in instants:
         if x > end + 1e-9:
             break
+        if phase + 1 < len(runs) and x >= runs[phase][1] * e.buckets * tau_e - 1e-9:
+            await disconnect(*current)
+            phase += 1
+            current = await connect(phase)
         clock.advance(x + 1e-9)
-        await proxy.until(lambda p, x=x: settled(x))
-    await running
-    await tasks[1]
-    tasks[0].cancel()
-    writer.close()
+        await proxies[-1].until(lambda _, x=x: settled(x))
+    await disconnect(*current)
+    await serving
     listening.close()
-    link.close()
     server.close()
     publish.close()
-    write_logs(out, proxy, server, peer)
+    write_logs(out, proxies, server, peer)
     if stalls:
-        (out / "stalls.json").write_text(json.dumps(proxy._changed.done))
+        (out / "stalls.json").write_text(json.dumps(proxies[0]._changed.done))
+    if salt:
+        (out / "salts.json").write_text(json.dumps(revealed(proxies)))
 
 
 # The audit.
@@ -1236,8 +1444,10 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
     hands = log["hands"]
     model_release = {int(k): v for k, v in plan["model_release"].items()}
     stream_of = {p: frames[p].payload[1:5] for p in range(len(frames))}
+    unserved = {plan["outage"]["window"]} if "outage" in plan else set()
     comparisons = {
-        "records_are_run_shapers": ref == sorted((r for r in out_records), key=lambda r: r.window),
+        "records_are_run_shapers": [r for r in ref if r.window not in unserved] ==
+            sorted((r for r in out_records), key=lambda r: r.window),
         "hands_are_the_rules": hands == [h for h in rule if h < horizon],
         "hands_max_diff_from_rule": max((abs(a - b) for a, b in zip(hands, rule)), default=0),
         "frames_read": len(log["frames"]), "frames_meant": len(frames),
@@ -1321,11 +1531,37 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
         timing |= {"server_first_event_ms": percentiles_ms(server["first_event_ms"]),
                    "server_failed": len(server["failed"]), "server_failures": server["failed"][:20],
                    "server_cut_at_horizon": server["cut_at_horizon"], "server_requests": server["requests"]}
-    return {"config": plan["name"], "windows": windows, "rows": rows, "comparisons": comparisons, "timing": timing,
-            "egress": {"real": real, "slots": slots, "frames": len(frames)},
-            "hist": {k: {str(x): n for x, n in v.items()} for k, v in hist.items()},
-            "ingress_delivery": {str(x): n for x, n in delivery.items()},
-            "lateness_ms": lateness}
+    out = {"config": plan["name"], "windows": windows, "rows": rows, "comparisons": comparisons, "timing": timing,
+           "egress": {"real": real, "slots": slots, "frames": len(frames)},
+           "hist": {k: {str(x): n for x, n in v.items()} for k, v in hist.items()},
+           "ingress_delivery": {str(x): n for x, n in delivery.items()},
+           "lateness_ms": lateness}
+    if (path := run / "salts.json").exists():
+        out["salt"] = audit_salt(setup, {int(w): bytes.fromhex(s) for w, s in json.loads(path.read_text()).items()},
+                                 in_records, out_records, server, windows, audit())
+    return out
+
+
+def audit_salt(setup: Setup, salts: dict[int, bytes], in_records: Sequence[Record], out_records: Sequence[Record],
+               server: dict, windows: int, audit) -> dict:
+    """The audit's read of a salted run's commitments (`check_salts`, on the raw ingress records and the salts
+    `reveal` gave), and where the salt frames went: their count in each window's ingress record and in the egress
+    records, whether any egress frame holds a salt or its commitment, and whether the server received each window's
+    salt."""
+    verdicts = check_salts(audit, setup.ingress_link, in_records, windows, salts)
+    commitments = {w: salt_commitment(s) for w, s in salts.items()}
+
+    def salt_frames(r: Record) -> int:
+        return sum(decode_frame(f)[0] == SALT for row in r.grid for f in row[: row_count(row)])
+
+    egress = [f for r in out_records for row in r.grid for f in row[: row_count(row)]]
+    return {"accepted": all(v.accepted for v in verdicts),
+            "violations": [[v.window, v.violation] for v in verdicts if not v.accepted],
+            "ingress_salt_frames": [salt_frames(r) for r in sorted(in_records, key=lambda r: r.window)],
+            "egress_salt_frames": sum(salt_frames(r) for r in out_records),
+            "egress_holds_salt": any(x in f for f in egress for x in (*salts.values(), *commitments.values())),
+            "block_received": sorted(map(tuple, server.get("salts", []))) ==
+                              [(w, commitments[w].hex()) for w in sorted(salts)]}
 
 
 def select(traces: Sequence[Path], setup: Setup, windows: int, lo: int, hi: int) -> list[tuple[Path, str]]:

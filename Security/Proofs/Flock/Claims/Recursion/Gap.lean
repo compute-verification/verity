@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.Inner
 import Proofs.Flock.Claims.Recursion.Abort
+import Proofs.Flock.Claims.Recursion.Registered
 
 /-!
 # `InnerKS` does not follow from `Inner.KS` and the code facts; `Inner.KSAbort` excludes the deployment
@@ -43,7 +44,7 @@ def gI : Inner Bool Unit where
 /-- The outer statement: a circuit with no gates and no outputs, so every witness is in its relation. -/
 def gs₀ : Flock.Stmt :=
   ⟨0, 0, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
-    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false⟩⟩
+    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩⟩
 
 /-- The outer verifier: one round, accepting at its coin `false`. -/
 def gVO : Verifier Bool := ⟨fun _ => 1, fun _ _ cs => .ret (if cs.getD 0 true = false then .acc else .rej)⟩
@@ -80,7 +81,7 @@ def gVerdict (h : Msg) (as : List Msg) (cs : List Bool) : Out :=
 def gV : Verifier Bool := ⟨fun _ => 2, fun _ as cs => .query [] fun h => .ret (gVerdict h as cs)⟩
 
 /-- The recursion's statement: the empty inner statement, no circuit commitment. -/
-def gStmt : Stmt := ⟨[], (0, 0, 0), none, ⟨0, 0, 0, 0, false, none, none, false⟩⟩
+def gStmt : Stmt := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, []⟩
 
 /-- The compiled verifier's deployment: one outer session, its view the run's second round. -/
 noncomputable def gD (H : Msg → Msg) : Deploy Bool where
@@ -88,7 +89,8 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   parse := fun _ => some gStmt
   scopeCheck := fun _ => false
   kS := fun _ => 0
-  stage := fun _ _ => .ret []
+  nC := fun _ => 0
+  stage := fun _ _ _ => .ret []
   vstar := fun _ _ => [[]]
   nS := fun _ => 1
   session := fun _ _ v => ⟨v.msgs.drop 1, v.out⟩
@@ -100,6 +102,7 @@ noncomputable def gD (H : Msg → Msg) : Deploy Bool where
   mask := fun _ _ => 0
   Tape := Unit
   P := fun _ => ⟨fun _ _ _ => .ret []⟩
+  δc := fun _ _ => 1
 
 /-! ## The compiled verifier's runs -/
 
@@ -429,6 +432,15 @@ theorem gPrBe (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : T
     simp at huv
   · rfl
 
+theorem gPrBr (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (x : Msg) : PrBr H (gD H) gI gDO decO P x = 0 := by
+  unfold PrBr
+  split
+  · refine le_antisymm ((Pr_mono fun s h => ?_).trans_eq Pr_false) (Pr_nonneg _)
+    obtain ⟨u, v, huv, -⟩ := h
+    simp only [Br, setupCalls_eq_nil H (gD H) (fun _ => rfl), List.append_nil, findCollIn, reduceCtorEq] at huv
+  · rfl
+
 theorem gNums_k : gNums.k = 400 := by
   unfold Nums.k
   have : 4 * gNums.N₀ / Real.exp 1 = ((400 : ℕ) : ℝ) := by
@@ -465,14 +477,14 @@ theorem gκ (H : Msg → Msg) (x : Msg) : κ (gD H) gI x = 2 * gNums.κ := by
 theorem gNotKS (H : Msg → Msg) : ¬ KS H (gD H) gI gDO := by
   intro hK
   have h := hK gDecO gDecOK [] Unit (gP H)
-  rw [gPrB, gPrBe, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, gκ] at h
+  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
-/-- **The recursion's KS fails at the errors its proof gives**, as `B` and `Be` find nothing there either. -/
+/-- **The recursion's KS fails at the errors its proof gives**, as `B`, `Be` and `Br` find nothing there either. -/
 theorem gNotKSA (H : Msg → Msg) : ¬ KSA H (gD H) gI gDO := by
   intro hK
   have h := hK gDecO gDecOK [] Unit (gP H)
-  rw [gPrB, gPrBe, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, gκ] at h
+  rw [gPrB, gPrBe, gPrBr, mul_zero, mul_zero, Real.sqrt_zero, add_zero, add_zero, add_zero, gκ] at h
   linarith [gPrBad_ge H gDecO, gNums_κ_lt]
 
 /-! ## `Inner.KSAbort` fails -/

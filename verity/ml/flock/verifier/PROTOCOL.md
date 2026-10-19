@@ -1372,6 +1372,10 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   - When a tail stage returns the outputs: the unit range need not be a power of two and the units return none; that stage's
     only output group is one 16-bit port per output word (`16 · words` a power of two); and the `Out` region is that group,
     free bits `[0, log2(16 · words))` and the stage range's slot bits, valued at each VU's output words (u16 LE).
+  - A repeated last stage (`per_vu` above 1, a second repeated unit type) returns them as `out_net_ports` of `[slot, port]`
+    pairs, a plain port meaning slot 0: one pair per output word, each a 16-bit output port of a slot of the stage below its
+    `per_vu`, no pair twice. Only a statement with hidden outputs may (its output rows hash each word at its slot's port,
+    `HmOut.outCol`); with public outputs the `Out` region pins one slot per VU, so pairs are refused there.
   - Any range may be packed except those a region reads (`hm96`, `out_net`, the mask).
   - A leaf cut wires a unit's cut input from a row word: bit `t < 16` copies the word's message bit (as a unit leaf does),
     the higher bits the forced-zero row. Each wires its port once, and Δ lists them after the unit leaf wiring, before the
@@ -1580,11 +1584,14 @@ stays `NON_ZK_PROOF`. Its `pads` (and `tables`, for `J > 1`) name the prover's r
 statements (`Tags.osMasks`, Daniel's decision 4), ChaCha20 streams of the prover's seed for those pinned `@cec3e347` and
 earlier. **Agreement:** README.
 
-Each table's statement must have upstream's mask shape (`Zk.shapeOk`), and, which upstream does not check, its Δ and its
-regions avoid the mask slot (`Zk.maskFree`, D12): no pair of `da` or `db` has a row or a column in the mask range's
-word-aligned span, and every region fixes, at each of the span's words, an in-block word bit (`i + 7 < k_log`, not
-free) that differs from the word's bit `i`. Otherwise the verifier refuses: `zk: a pair of Δ or a region meets the mask
-slot`. The zero-knowledge proof covers no such statement: a region or a wire there would read the masks.
+Each table's statement must have upstream's mask shape (`Zk.shapeOk`): a mask slot of at least `2^13` bits
+(`Zk.SLOT_LOG_MIN`, the least slot the bound on the rank check's refusals covers; below it the verifier refuses
+`slot_log = 12: --zk needs a mask slot of slot_log >= 13`), and at least `128 · 4 + 64` mask words over the blocks.
+Its Δ and its regions must also, which upstream does not check, avoid the mask slot (`Zk.maskFree`, D12): no pair of
+`da` or `db` has a row or a column in the mask range's word-aligned span, and every region fixes, at each of the span's
+words, an in-block word bit (`i + 7 < k_log`, not free) that differs from the word's bit `i`. Otherwise the verifier
+refuses: `zk: a pair of Δ or a region meets the mask slot`. The zero-knowledge proof covers no such statement: a region
+or a wire there would read the masks.
 
 ### 16.15 The forms the soundness proof covers
 
@@ -1598,18 +1605,29 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 
 1. an hm96-sha512 row statement (§16.10 on): `<name>, a statement before hm96-sha512 rows`;
 2. untyped (§16.11): `<name>, a typed statement`;
-3. retained rounds (§6.2) and `hm96-sha512/v1` leaves (`<name>, a statement without retained rounds`, `... with <leaf>
-   leaves`);
-4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`;
+3. retained rounds (§6.2) and `hm96-sha512/v1` leaves, or, at a statement with hidden outputs without `--zk`, plain
+   SHA-512 leaves (§16.16, `ProvedScope.leafOk`): `<name>, a statement without retained rounds`, `... with <leaf>
+   leaves`, `... with <leaf> leaves under --zk`;
+4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`; and at most
+   `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
+   than 65536`;
 5. no public input ports: `public input ports (--public-inputs)`;
 6. no shared-row public file, except in a `--zk` session of a statement with hidden outputs whose verifier holds its
    own registered reads (`--registered F`, `ProvedScope.sharedRowsOk`; with it, §16.10's registered check opens every
    table row): `a shared-row public file (header shared_rows)`;
-7. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
+7. wherever the wires feed the unit or the outputs (the unit reads more than one input group, or a tail stage returns
+   the outputs: `ProvedScope.wiresFeed`), an order of the wires that fills every slot's input ports from the leaves, each
+   slot reading only port bits among its inputs (`ProvedScope.wiresAcyclic`): `a slot no order of the wires computes from
+   the leaves: a cycle through wires, an input port no wire fills, or a read of an input column that is not a port bit`;
+8. `Layout.scopeOk` of the circuit: a unit reading one input group (`a unit reading <g> input groups`) that returns the
    outputs (`a circuit whose outputs a tail stage computes (META out_net)`), of at most `2^32` rows, whose computed rows
    read only port bits among its inputs (`a unit row reading an input column that is not a port bit`), and every row a
    `sha512/row/v1` row of `16 · words` bits in at least one chunk (`a row that is not a sha512/row/v1 row of 16 · words
-   bits in at least one chunk`). Under hidden outputs (§16.13) the check is `Layout.scopeOkH`: the same unit, and every
+   bits in at least one chunk`). Under hidden outputs (§16.13) the check is `ProvedScope.scopeOkI`, the general instance
+   form: the unit repeated, reading any number of committed input groups, and any number of stages the verifier
+   evaluates, each reading wires from earlier outputs, any of them returning the outputs, a repeated last stage from any
+   of its slots (`out_net_ports` of `[slot, port]` pairs, §16.10; rule 7 orders them); the unit
+   of at most `2^32` rows reading only port bits as above, and every
    row a `sha512/row/v1` row as above, or every row, in any mix, either an unsegmented `sha512/row/v2` row (§16.14) of
    `16 · words` bits whose last bytes and SHA-512's 17 bytes of padding fit its `hm96` slot's block
    (`128 · chunks ≤ 2 · words` and `2 · words + 17 ≤ 128 · (chunks + 1)`, `ProvedScope.v2Row`) or a `sha512/row-seg/v1`
@@ -1620,7 +1638,7 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    chunk nor all unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows
    of 16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each`). A
    PoUW tile's rows, row-seg A rows and v2 B rows, are such a mix (`ZkHidden.witnessMix_scope`).
-8. every table's `m` at least `25` under `--zk`, else `22` (`ProvedScope.sizesOk`, the claims' `InScope` bound):
+9. every table's `m` at least `25` under `--zk`, else `22` (`ProvedScope.sizesOk`, the claims' `InScope` bound):
    `m = <m>, below <22|25> without --zk|under --zk`. A table's `m` is its drawn statement's, so `verify` checks it on the
    session's tables right after `ProvedScope.check`. Each verifier's own schedule refuses a smaller `m` first (§15's
    `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
@@ -1642,10 +1660,17 @@ population with no closure is refused after that, once every check has passed (`
 population's (`HmRow.drawn`), and V*'s statement check pins the circuit, so a V* part's numbers (its rounds, table
 error, `N₀` and weight) are the ones its circuit and population fix. The verdict is
 `refused: <why>: a V* session draws every unit of its population, the only draw the recursion's proof covers`, `<why>`
-`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`.
+`the draw is subset:<k> of <n> units over <N>, not every one of <N>` or `the draw's law is not subset`. A recursive
+session (the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without `--rec-inner` is refused at the same
+point, whatever its draw (`RecSetup.noInner`), since V*'s checks and the full-draw refusal run under the verifier's inner
+shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) without the verifier's own inner shape
+(--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
+without it` (one line).
 
 The soundness package proves `scopeOk` and `scopeOkH` the computable checks (`FailClosed.scopeOk_eq`, `scopeOkH_eq`), and `FailClosed.*`'s headlines
-are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. `FailClosed.flock_verify_sound` is
+are over `Verifies` (accepted and in scope) with no hypothesis on the statement's form. Under hidden outputs a circuit
+the wires don't feed passes `scopeOkH`, and the headlines at the unit's program (`keyProg`) cover it; one they feed
+passed `wiresAcyclic`, and the headlines at the template instance's program (`instProg`, `FailClosed.Inst`) cover it. `FailClosed.flock_verify_sound` is
 the one theorem: at every statement, with or without `--zk` and `--registered F`, it states the headline of the
 statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; under `--zk`, one table or several; under
 `--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`, whose
@@ -1673,10 +1698,15 @@ needs none. `Tags.withPlainLeaves` changes three things.
   (`Setup.openedSalts`, set on every hm96-row statement); `631567f7`'s unsalted openings carry none. Every level's leaf and
   node are SHA-512 (`merkle_hash` 2).
 
-The verifier identifies the statement (`statement` prints its identity and digest), but `verify` refuses any
-statement whose leaf scheme is that object (`Tags.plainLeaves`), with or without `--zk`, until a soundness headline
-covers it: every hidden-output headline needs `merkleLeaf = "hm96-sha512/v1"`. The statement is ZK off, and upstream's
-`--zk` refuses it too.
+The verifier identifies the statement (`statement` prints its identity and digest), and `verify` without `--zk` checks
+its sessions as §16.13's: §16.15's rule 3 admits plain SHA-512 leaves at a statement with hidden outputs
+(`ProvedScope.leafOk`). The hidden-output headlines cover it, each stated at the model leaf of the statement's leaf
+scheme (`Refine.leafOfId`: `leafPlain`, `leaf c _ = SHA-512(enc(c))`, for these leaves). A leaf enters the soundness
+proof only through its binding, and two columns with one plain leaf are a SHA-512 collision of their encodings, charged
+to the same collision finder (`cr/sha-512`, `ecr/sha-512`) as an `hm96-sha512/v1` leaf's; nothing in the proof reads the
+salt. `verify --zk` refuses the statement (`Tags.plainLeaves`): `--zk`'s hiding needs `hm96-sha512/v1` leaves, the
+statement is ZK off, and upstream's `--zk` refuses it too. A statement with public outputs and plain leaves stays refused
+under rule 3.
 
 **A registered description.** When the inner statement is a private circuit's (its description, the circuit's `op`,
 `src` and `out` bits, one row port every instance reads), the developer registers the description's rows once (§16.10's
@@ -1766,7 +1796,10 @@ expectation):
   `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
-  `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier.
+  `verity/ml/flock/tests/test_lean_zk_mask.py` runs it on the Lean verifier. So, too, under `--zk`, a mask slot below
+  `2^13` bits (§16.14, `Zk.SLOT_LOG_MIN`), which the Lean verifier and the live prover's `zk_shape_ok` refuse and the
+  pinned upstream build does not; every deployed circuit has `mask_log = 14`, no vector exercises it, and
+  `test_lean_zk_mask.py` runs it on the Lean verifier.
 - **D13:** a unit net named `rec-open/…` or `rec-open-stacked/…` is the verifier's V* opening net (`Flock.RecOpen`,
   §16.10). Upstream takes the unit's net as the file gives it. The spec refuses such a unit whose name is not
   `rec-open/l<LANES>-h<H>` (or `rec-open-stacked/l<LANES>-h<H>`) at valid parameters, one whose port bits are not the

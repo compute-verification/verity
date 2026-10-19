@@ -11,9 +11,9 @@ symbols, which name `config.json` keys and the tensor-parallel size, so nothing 
 `inventory(model)` of a live serving rank): every (path pattern, class) the inventory lists has exactly one module entry and
 every entry is listed, each entry's layers are the inventory's, each tap names an inventory module and reads tensors of the
 shape the inventory gives that rank, every kernel expectation (`expect`) holds, every Definition a Program cites is
-registered, and the map's row counts (`row_counts`) read a positions tap and, at every layer of a tap they count, the ratio the
-config gives that layer (`layer_ratio`).  `check_target` holds the device and the process-wide switches the inventory was built under against the map's
-target.  Reading a map and expanding one step's taps (`identities`, `committer_names`, `counts`) is `verity_vllm.commit.capture_map`,
+registered, every capture it names (`captures`) is a registered property, and the map's row counts (`row_counts`) read a
+positions tap and, at every layer of a tap they count, the ratio the config gives that layer (`layer_ratio`).  `check_target`
+holds the device and the process-wide switches the inventory was built under against the map's target.  Reading a map and expanding one step's taps (`identities`, `committer_names`, `counts`) is `verity_vllm.commit.capture_map`,
 which the committer's sources read too.  A tap marked `target_only` runs only on the map's target device (its kernels have no
 build for the devices the inventory and the tests run on).
 
@@ -34,6 +34,7 @@ from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, T
                                             tap_layers, tap_value_id)
 from verity_vllm.commit.identity import NAMED_LAYERS
 from verity_vllm.config import option
+from verity_vllm.properties.record import REGISTRY as PROPERTIES
 
 
 def _walk(rec: dict[str, Any], path: str) -> Any:
@@ -205,6 +206,7 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
             for d in p["definitions"]:
                 if d not in registry:
                     problems.append(f"program {pid}: Definition {d} is not registered")
+        problems += [f"program {pid}: capture {c!r} is not a registered property" for c in p.get("captures") or () if c not in PROPERTIES]
     used = {t["program"] for t in cmap["taps"]}
     for pid in programs.keys() - used:
         alt = programs[pid].get("alternative_to")

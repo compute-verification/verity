@@ -1382,3 +1382,13 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
     posted = (tmp_path / "posted").read_text()
     assert "registered no run (exit 137)" in posted and "exited 137 before launching a run" in posted, posted
     assert "check: verdicts: gathering" in posted, posted
+
+
+def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_it(tmp_path, monkeypatch):
+    """CI-64: a train's Lean check passes a package whose only failures are record differences, and drive commits the
+    regenerated locks as it lands. A tree whose lean_audit.py predates `--regenerate` runs as it always did."""
+    monkeypatch.setattr(CHECK, "LEAN_JOBS", tmp_path)
+    (tmp_path / "lean_audit.py").write_text("ap.add_argument('--fresh')\n")
+    assert not CHECK.lean_regenerates()
+    (tmp_path / "lean_audit.py").write_text('ap.add_argument("--regenerate", action="store_true")\n')
+    assert CHECK.lean_regenerates()

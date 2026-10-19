@@ -7,6 +7,7 @@
     mufu         the MUFU operations as Boolean Definitions, every table read a plain And/Xor/Not circuit
     elementwise  element-wise FP32, BF16 and I32 arithmetic as Boolean Definitions
     cast         the bf16 -> f32 widening as a Boolean Definition
+    s8           the exact s8 matmul family on bits: the u8 x s8 step, S8Dot_v2, LimbSplit_v2 and its four limb steps
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min and the E4M3 and E2M1 casts as Boolean Definitions
                  (and names the IEEE f32 arithmetic of `elementwise` and the bf16 widening of `cast`)
 

@@ -770,6 +770,8 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
     assert read(None, 4, None, ff(4, RAM)) == ("ram", 0.5)
     assert S.fold_reading(None, 4, None, ff(4, RAM))["why"] == ["undeclared: read as ram"]
     assert read("ram", 4, "", ff(4, RAM)) == ("ram", 0.5) and read("duo", 2, None, ff(2, DUO)) == ("duo", 1.0)
+    assert S.fold_reading("duo", 2, None, ff(2, DUO))["provisional"] == S.FOLDS["duo"]["provisional"]
+    assert S.fold_reading("ram", 4, None, ff(4, RAM))["provisional"] is None
     assert read("xor-in", 4, "-DPFILL_BITS -DPFILL_XIN", ff(4, XIN)) == ("xor-in", 0.5)
     assert read("xor-in", 4, None, ff(4, XIN)) == ("xor-in", 0.5)  # a build that recorded no flags
     r = S.fold_reading("xor-in", 4, "-DPFILL_BITS", ff(4, XIN))
@@ -814,7 +816,8 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
     and addends at rotations no fold lists read as ram; each of the three is provisional, which the filler's certified
     status and the score's flags carry. All three read at Theorem K's proved half, 0.45, with 0.9 if P2-FF r10's
     select-charging lemma lands as the entry's secondary readout, never its fraction (coordinator 13:09Z, RS-E-REF r7);
-    ram and duo have no such readout."""
+    ram and duo have no such readout. duo reads in full and provisionally (its binding is proved up to four words);
+    ram reads proved."""
     def ff(nc, body):
         return S.fold_facts({"dscore": nvd((f"_Z7dfill_kILi{nc}EEvmmyiiPy", True, body))}, nc)
 
@@ -862,6 +865,12 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
     assert (ram_e["fraction"], ram_e["if_fold"], duo_e["fraction"], duo_e["if_fold"]) == (0.45, None, 0.9, None)
     ram = S.certified_v5(ram_e)
     assert ram["filler"]["status"] == "proved" and not S.score(all_points(), ram)["flags"]
+    # duo's binding is proved for runs of one to four words only (coordinator 16:50Z): provisional, and flagged
+    duo = S.certified_v5(duo_e)
+    assert duo["filler"]["fraction"] == 0.9
+    assert duo["filler"]["status"] == f"provisional (fold duo: {S.FOLDS['duo']['provisional']})"
+    assert "DuoQuadNoKernel" in duo["filler"]["status"] and "projected form" in duo["filler"]["status"]
+    assert [f for f in S.score(all_points(), duo)["flags"] if "provisional (fold duo" in f]
 
 
 def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():

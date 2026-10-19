@@ -74,8 +74,11 @@ def reading() -> dict[str, Any]:
         usage, _ = _int_or_kind(*_read(d / ("memory.current" if v2 else "memory.usage_in_bytes")))
         if limit is None or usage is None:
             continue
-        inactive = _kv_file(_read(d / "memory.stat")[0]).get("inactive_file" if v2 else "total_inactive_file", 0)
-        in_use = max(0, usage - inactive)
+        stat = _kv_file(_read(d / "memory.stat")[0])
+        # File-backed page cache, active or not, is reclaimable (shmem sits on the anon lists): 17 Oct, vy-glm53-eu counted 454 GB
+        # of active_file (checkpoint weights already read) as used and refused a run with all 8 GPUs idle (INF-54).
+        cache = sum(stat.get(k, 0) for k in (("inactive_file", "active_file") if v2 else ("total_inactive_file", "total_active_file")))
+        in_use = max(0, usage - cache)
         if best is None or limit - in_use < best["limit"] - best["in_use"]:
             best = {"limit": limit, "in_use": in_use, "source": str(d), "cgroup": "v2" if v2 else "v1"}
     if best is not None:
@@ -159,10 +162,22 @@ def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
     return out
 
 
+def reserved_bytes(res: list[dict[str, Any]]) -> float:
+    """The live reservations' outstanding bytes, each run's counted once (its largest): a run that reserves with `research run
+    --mem-gb` and then takes a check slot holds two files for one tree of processes (17 Oct, cpu-3: 96 + 279 GB for
+    r20261017-162016-cb2e refused a 96 GB job with 390 GB free, INF-51)."""
+    by: dict[str, float] = {}
+    for x in res:
+        if x["live"]:
+            k = x.get("run_id") or x["file"]
+            by[k] = max(by.get(k, 0.0), x["outstanding"])
+    return sum(by.values())
+
+
 def snapshot(ramlock_dir: Path) -> dict[str, Any]:
     r = reading()
     res = reservations(ramlock_dir)
-    reserved = sum(x["outstanding"] for x in res if x["live"])
+    reserved = reserved_bytes(res)
     return {"limit_gb": round(r["limit"] / GB, 1), "in_use_gb": round(r["in_use"] / GB, 1), "reserved_gb": round(reserved / GB, 1),
             "available_gb": round((r["limit"] - r["in_use"] - reserved) / GB, 1), "source": r["source"], "cgroup": r["cgroup"],
             "ramlock_dir": str(ramlock_dir), "reservations": res}

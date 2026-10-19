@@ -13,8 +13,8 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   `Bits_fails`; over Flock (`Flock.ksD` inside, `κ_I < 1/4`), `KSFlock_fails` and `BitsFlock_fails`.
   `ScopeMatches_fails`: its scope is empty and its check takes everything.
 * `compR`: the compiled verifier rejects after one round, and every statement parses as `recStmt`, in scope, under an
-  inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at
-  `δ_c < 1`. `Nontrivial_fails`: a recorded run is rejected.
+  inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at its
+  error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
 * `effR`: the run always accepts, but its one V* session's view never does, so the outer extractor's wait reruns all
   `K = 2` of its draws where `Efficient`'s expected count allows `k = 1`. `Efficient_fails`: `E*` reruns `3` times on
   every coin, above the expected bound `N_I · (1 + m′·k) = 2`. The worst-case conjunct holds at every record (each
@@ -71,7 +71,8 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
   parse _ := none
   scopeCheck _ := true
   kS _ := 0
-  stage _ _ := .ret []
+  nC _ := 0
+  stage _ _ _ := .ret []
   vstar _ _ := []
   nS _ := 0
   session _ _ v := v
@@ -83,14 +84,16 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
   mask _ _ := 0
   Tape := Unit
   P _ := silentP
+  δc _ _ := 0
 
-/-- A recursion statement in scope: an inner table at `m = 22`, `k_log = 6`, one region and four claims, and a RecSparse
-phase at `NU = 1`, `ℓ = 6`. -/
+/-- A recursion statement in scope: a dense inner table at `m = 22`, `k_log = 6`, one region and four claims, with no
+RecSparse phase and no V* session. -/
 def recStmt : Recursion.Stmt where
   inner := []
-  innerDims := (22, 6, 1)
+  innerDims := none
   circ := none
-  form := ⟨22, 6, 1, 4, false, some (1, 6, 0, 0), some (max 22 (1 + pLog 6), 2), true⟩
+  form := ⟨22, 6, 1, 4, false, none, none, false⟩
+  draws := []
 
 /-- The toy record of `Complete` and `Nontrivial`: the compiled verifier rejects, and every statement parses as
 `recStmt`. -/
@@ -128,10 +131,8 @@ carries: `Sim`'s inner round. -/
 def zeroP (Coin : Type) : Prover ((Fin 1 → Fin 1 → UInt8) × Unit) :=
   ⟨fun _ _ ω => (zvR Coin none).zeroCommit (ω.1 0)⟩
 
-theorem recStmt_inScope : Recursion.InScope recStmt := by
-  have hp : pLog 6 ≤ 14 := by unfold pLog; have := Nat.log_le_self 2 (2 * 6 + 1); omega
-  refine ⟨rfl, rfl, rfl, le_rfl, by decide, le_rfl, rfl, rfl, 1, 6, 0, rfl, le_rfl, le_rfl, le_rfl, rfl, ?_⟩
-  omega
+theorem recStmt_inScope : Recursion.InScope recStmt :=
+  ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
 
 /-! ## `ksR`'s extraction and numbers -/
 
@@ -176,6 +177,40 @@ theorem ksR_expectedCR {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Ms
   unfold ExpectedCR
   rw [ksR_be_pr]
   exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
+/-- `ksR`'s setup makes no evaluation. -/
+theorem ksR_setupCalls (H : Msg → Msg) (xs : List Msg) : setupCalls H (ksR Coin) xs = [] := by
+  simp only [setupCalls, List.flatMap_eq_nil_iff, List.map_eq_nil_iff]
+  exact fun _ _ => rfl
+
+omit [DecidableEq Col] in
+/-- `Br` finds nothing at `ksR`: the outer witnesses record no call, and its setup makes no evaluation. -/
+theorem ksR_br_pr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg)
+    (hk : 0 < (ksR Coin).V.k x) : (Br H (ksR Coin) I DO decO P x hk).Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro ?_]
+  · exact Pr_false
+  · rintro ⟨u, v, h, -⟩
+    simp only [Br, ksR_setupCalls, List.append_nil, findCollIn, reduceCtorEq] at h
+
+omit [DecidableEq Col] in
+theorem ksR_prBr {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (I : Recursion.Inner Coin W)
+    (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω) (x : Msg) :
+    PrBr H (ksR Coin) I DO decO P x = 0 := by
+  unfold PrBr
+  split_ifs with hk
+  · exact ksR_br_pr H I DO decO P x hk
+  · rfl
+
+omit [DecidableEq Col] in
+theorem ksR_strictBirthday_br {W : Type} {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
+    (I : Recursion.Inner Coin W) (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (P : Prover Ω)
+    (x : Msg) (hk : 0 < (ksR Coin).V.k x) : StrictBirthday H (Br H (ksR Coin) I DO decO P x hk) := by
+  intro q _
+  rw [ksR_br_pr]
+  positivity
 
 omit [DecidableEq Col] in
 theorem ksR_prBad {W : Type} (H : Msg → Msg) (R : Rel W) (E : Extractor Coin W (ksR Coin).V) (x : Msg)
@@ -404,16 +439,16 @@ theorem sim_out_nil (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS []
     {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (c : (Sim D (zeroI Coin) SO).C []) :
     (Sim D (zeroI Coin) SO).out H Vs θ [] c = [] := by
   unfold Simulator.out Sim
-  simp only [simInner, zeroI, accI, simRounds, spBind, hk]
-  rw [simOuter_zero SO [] _ [] _ c.2 hn]
+  simp only [simInner, simStage, zeroI, accI, simRounds, spBind, hk]
+  rw [simOuter_zero SO [] _ [] _ c.2.2 hn]
   rfl
 
-theorem zk_εzk (D : Recursion.Deploy Coin) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
+theorem zk_εzk (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0) (t : ℕ) (δ₁ : ℝ) :
     Recursion.εzk D (zeroI Coin) t δ₁ [] = 0 := by
   have : IsEmpty (Fin (D.nS [])) := by rw [hn]; exact Fin.isEmpty'
   unfold Recursion.εzk
   rw [Finset.univ_eq_empty, Finset.sum_empty]
-  simp [zeroI]
+  simp [zeroI, hk]
 
 theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) :
     ZKMal.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
@@ -450,7 +485,8 @@ theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (
     let q := fun y : Fin 1 → UInt8 => Ev (zeroT H (fun as => ((Vs.next x as θ).eval H).1) y)
     refine (Pr_fst (α := Fin 1 → Fin 1 → UInt8) (β := Unit) fun y => q (y 0)).trans (Eq.trans ?_
       (Pr_fst (α := Fin ((accI Coin).V.k (xI (zvR Coin circ) x)) → Fin (zvR Coin circ).saltLen → UInt8)
-        (β := (s : Fin ((zvR Coin circ).nS x)) → (SO x s).C) fun y => q (y ⟨0, Nat.one_pos⟩)).symm)
+        (β := (Fin ((zvR Coin circ).kS x) → Fin ((zvR Coin circ).nC x) → Fin (zvR Coin circ).saltLen → UInt8) ×
+          ((s : Fin ((zvR Coin circ).nS x)) → (SO x s).C)) fun y => q (y ⟨0, Nat.one_pos⟩)).symm)
     exact ZKMal.Pr_equiv (α := Fin 1 → Fin 1 → UInt8)
       (β := Fin ((accI Coin).V.k (xI (zvR Coin circ) x)) → Fin (zvR Coin circ).saltLen → UInt8) (Equiv.refl _)
       fun y => q (y ⟨0, Nat.one_pos⟩)
@@ -459,7 +495,8 @@ theorem zkmalR_zeroP (circ : Option Msg) (R : Rel Flock.Wit) (H : Msg → Msg) (
     have : IsEmpty (Fin ((zvR Coin circ).nS x)) := Fin.isEmpty'
     unfold Recursion.εzk
     simp only [Finset.univ_eq_empty, Finset.sum_empty, zero_add]
-    exact mul_nonneg (mul_nonneg zero_le_two (Nat.cast_nonneg _)) δ₁.2
+    exact mul_nonneg (mul_nonneg zero_le_two
+      (add_nonneg (Nat.cast_nonneg _) (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))) δ₁.2
   calc _ = (0 : ℝ) := by simp only [e, sub_self, abs_zero]
     _ ≤ _ := by simp only [hγ, zero_mul, add_zero]; exact hε
 
@@ -475,14 +512,14 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 theorem KS_fails (H : Msg → Msg) : ¬ Recursion.KS H (ksR Coin) (accI Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   norm_num [accI] at h1
 
 /-- **The recursion's private `KS` fails** at `ksR`, `accI` and `Flock.ksD` outside. -/
 theorem KSPriv_fails (H : Msg → Msg) : ¬ KSPriv H (ksR Coin) (accI Coin) (Flock.ksD Coin) := by
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noRPriv _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   norm_num [accI] at h1
 
 /-- **The recursion's `KS` over Flock fails** at `ksR`, `Flock.ksD` inside and outside. -/
@@ -490,7 +527,7 @@ theorem KSFlock_fails (H : Msg → Msg) : ¬ KSFlock H (ksR Coin) (Flock.ksD Coi
   intro h
   have h1 := h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) []
     Unit silentP
-  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_κ] at h1
+  rw [ksR_prBad H _ _ [] (ksR_noR _ []), ksR_prB, ksR_prBe, ksR_prBr, ksR_κ] at h1
   have := Flock.ksD_κ (Coin := Coin) []
   simp only [mul_zero, Real.sqrt_zero, add_zero] at h1
   change 1 ≤ Claims.Flock.κ (Flock.ksD Coin) [] at h1
@@ -508,12 +545,14 @@ theorem Bits_fails (H : Msg → Msg) : ¬ Recursion.Bits H (ksR Coin) (accI Coin
   bits_bound_fails H _ _ _ (ksR_noR _ []) (accI_lam_pos []) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1 le_rfl (calls_silentP_accV H [])
       (strictBirthday_B_accV H silentP []) (ksR_expectedCR H _ _ _ silentP [])
+      (ksR_strictBirthday_br H _ _ _ silentP [])
 
 /-- **The recursion's `Bits` over Flock fails** at `ksR`, `Flock.ksD` inside and outside. -/
 theorem BitsFlock_fails (H : Msg → Msg) : ¬ BitsFlock H (ksR Coin) (Flock.ksD Coin) (Flock.ksD Coin) := fun h =>
   bits_bound_fails H _ _ _ (ksR_noR _ []) (ksD_lam_pos _ []) <|
     h (fun _ => [()]) (Flock.listWithin_unit _ _ _) (fun _ => [()]) (Flock.listWithin_unit _ _ _) [] Unit silentP 1
       le_rfl (calls_silentP_accV H []) (strictBirthday_B_accV H silentP []) (ksR_expectedCR H _ _ _ silentP [])
+      (ksR_strictBirthday_br H _ _ _ silentP [])
 
 /-- **The recursion's `Efficient` fails** at `effR`, `accI` and `Flock.ksD` outside: `E*` reruns `3` times on every
 coin, above the expected bound `N_I · (1 + m′·k) = 2`. -/
@@ -543,11 +582,10 @@ theorem ScopeMatches_fails : ¬ Recursion.ScopeMatches (ksR Coin) (accI Coin) :=
   simp [ksR] at hs
 
 omit [Nonempty Coin] in
-/-- **The recursion's `Complete` fails** at `compR`, whose reference prover is silent, at every `δ_c < 1`. -/
-theorem Complete_fails (δc : Msg → ℝ) (x : Msg) (hδ : δc x < 1) :
-    ¬ Recursion.Complete constH (compR Coin) (accI Coin) δc :=
-  Witness.Complete_fails (compR Coin).P _ _ δc (w := ⟨[]⟩) ⟨recStmt, rfl, trivial, recStmt_inScope⟩
-    ⟨recStmt, rfl, rfl, trivial⟩ hδ
+/-- **The recursion's `Complete` fails** at `compR`, whose reference prover is silent, at its error `δ_c = 0`. -/
+theorem Complete_fails : ¬ Recursion.Complete constH (compR Coin) (accI Coin) :=
+  Witness.Complete_fails (compR Coin).P _ _ ((compR Coin).δc constH) (x := []) (w := ⟨[]⟩)
+    ⟨recStmt, rfl, trivial, recStmt_inScope⟩ ⟨recStmt, rfl, rfl, trivial⟩ (by norm_num [compR, ksR])
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **The recursion's `Nontrivial` fails** at `compR`, which rejects the recorded run. -/
@@ -562,7 +600,7 @@ theorem ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty �
     (SO : ℕ → Msg → ℕ → OSim) :
     ¬ Recursion.ZK H (zkR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
   ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨recStmt, rfl, rfl, trivial⟩ Nat.one_pos
-    (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
+    (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
     (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -573,7 +611,7 @@ theorem ZKPriv_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonemp
     ¬ ZKPriv H (zkPR Coin) (zeroI Coin) (zkO Coin) (fun _ => ZKMal.quietP N Ω []) SO := fun h =>
   ZKMal.not_zkmalR_of_out H _ _ [] _ _ _ [] ⟨[]⟩ ⟨{ recStmt with circ := some [] }, rfl, rfl, trivial⟩
     Nat.one_pos
-    (by rw [zk_εzk _ rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
+    (by rw [zk_εzk _ rfl rfl]; norm_num) (fun c => by rw [sim_out_nil _ rfl rfl]; nofun)
     (h.2 1 Nat.one_pos 1 (hm96Hiding_one _ _))
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
