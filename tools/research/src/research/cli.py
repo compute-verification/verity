@@ -7,7 +7,9 @@
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
-                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given)
+                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
+                                                 # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
+                                                 # on whole cores of its own, waiting on the node while none are free
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -279,7 +281,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
-    if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
+    if ns.on == "auto" and (why := _auto_placement(ns, harness_opts, command)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
     if ns.claimed:
@@ -955,11 +957,12 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
-def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
+def _auto_placement(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> str | None:
     """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
-    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), and the workload runs in the shipped tree
-    unless --cwd says otherwise (its environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in
-    place; a reason when it can't."""
+    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), except that a suites.py run of named
+    suites takes the memory and time their `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size) where it
+    gives no --mem-gb, or no --timeout or --max-min. The workload runs in the shipped tree unless --cwd says otherwise (its
+    environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
     if not ns.source:
@@ -973,6 +976,21 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
+    timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
+    if ns.queue_kind == AUTO_KIND and (ns.mem_gb is None or not timed):
+        from . import suite_size
+
+        if shape := suite_size.size(Path(ns.source), command, ns.cpus):
+            said = []
+            if ns.mem_gb is None and "mem_gb" in shape:
+                ns.mem_gb = shape["mem_gb"]
+                said.append(f"{ns.mem_gb} GB")
+            if not timed and "max_s" in shape:
+                ns.max_min = math.ceil(shape["max_s"] / 60)
+                said.append(f"{ns.max_min} min")
+            if said:
+                print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {', '.join(shape['suites'])}",
+                      file=sys.stderr)
     print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
     return None
 
