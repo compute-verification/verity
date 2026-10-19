@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import re
 import sys
 from dataclasses import asdict, dataclass
@@ -251,7 +252,9 @@ def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = Tr
     e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
     B0 = max(load(r, n0) for r in pi.rows)
     flat = next(r for r in pi.rows if load(r, n0) == B0)
-    eps_skip = exact(B_.design_skip(d, data=fam.data, vector=vector).eps_time)
+    # design_skip's float sums run in string-hash order, so its last bits vary with PYTHONHASHSEED: read it at 1e-12,
+    # rounded up (a larger ε_skip only raises the bound), so every run writes the same data.
+    eps_skip = Fraction(math.ceil(B_.design_skip(d, data=fam.data, vector=vector).eps_time * 10 ** 12), 10 ** 12)
     lanes = [k for k in pi.cuda if c[k].get(flat)]
     skip = min(lanes, key=lambda k: max(c[k].get(r, Fraction(0)) / c[k][flat] for r in pi.rows))
     ns = {skip: eps_skip / (1 - eps_skip) * B0 / c[skip][flat]}

@@ -131,7 +131,7 @@ noncomputable def model : Model (Fin 28) (Fin 15) (Fin 2) Unit Empty (Fin 2) Uni
   d2s.modelFill 28 2 2 machine Sm90.flatFill
 
 /-- ♭'s skippable work a unit on DC-90-ri, at its FFMA price. -/
-def flatSkip : Sparse := [(3, 3167651450413488762716503063228208, 3253254383979070885857087714838693)]
+def flatSkip : Sparse := [(3, 633530290148491424466903568, 650650876795497839510646503)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/
 noncomputable def flat : Labelled (Fin 28) :=

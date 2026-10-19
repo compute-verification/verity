@@ -125,7 +125,7 @@ def flatWords : Sparse := [(14, 1, 1)]
 def flatFold : Sparse := [(0, 68, 1), (20, 64, 1), (26, 3, 1)]
 
 /-- ♭'s skippable work a unit, at FFMA's price. -/
-def flatSkip : Sparse := [(3, 1863696948824044715, 1987146917594316933)]
+def flatSkip : Sparse := [(3, 931848474435, 993573458797)]
 
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin 28) := labelled 28 flatWords flatFold flatFill flatSkip
