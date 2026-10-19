@@ -4,6 +4,8 @@
 1. **Weights.**  Each weight is committed as its rows along k; `weights_root` binds every weight root.
 2. **Salt.**  The challenger opens the epoch's salt coin after it recorded the weights' root, and the salt is
    ``derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": root, "weights": weights_root})`` (`Epoch.start`).
+   A certified epoch is one PoUW window of the network certifier's, its salt ``salt.pouw_salt(reveal, p)`` from the
+   certifier's salt for window p, 64 bytes (`Epoch.certified`).
 3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
@@ -45,6 +47,7 @@ from verity.ml.randomness import derive
 
 from .coins import Challenger, CoinCommitment, CoinOpening, coin_reason
 from .protocol import Certificate, Context, DomainError, Matmul, PoUWScheme, Tile, tagged
+from .salt import pouw_salt, pouw_window
 
 SALT_DOMAIN = "verity/pouw/salt/v1"
 EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
@@ -204,6 +207,16 @@ class Epoch:
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
+
+    @classmethod
+    def certified(cls, workload: Workload, weight_roots: Mapping[int, bytes], windows: Sequence[int], k: int,
+                  reveal: bytes, coins: CoinCommitment | None = None) -> Epoch:
+        """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
+        refused unless whole and aligned at 0: `salt.pouw_window`), whose salt is `salt.pouw_salt(reveal, p)`, 64 bytes:
+        `reveal` is p's certifier salt as `salt.revealed` read it. `coins`, when given, is the commitment the epoch's draw
+        coin opens against."""
+        _check_weights(workload, weight_roots)
+        return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k)), coins)
 
 
 def _check_weights(workload: Workload, weight_roots: Mapping[int, bytes]) -> None:
