@@ -134,54 +134,26 @@ theorem firstS_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead :
         exact .sendSend m (ih (.table s upd hf hs hk L) hi hQ)
 
 /-- **`FollowR` through the pushing chooser**: the rest follows the primed prover of `τ`. -/
-theorem followR_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead : γ × α → Prop} {h : Game γ}
-    {g' : Game α} {σ : Strategy (interleave h g')} {τ : Strategy g'} (hF : Lock.FollowR Dead h g' σ τ) :
+theorem followR_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead : γ × α → Prop} {Dead' : α → Prop}
+    {b : Option ℕ} {h : Game γ} {g' : Game α} {σ : Strategy (interleave h g')} {τ : Strategy g'}
+    (hF : Lock.FollowR Dead Dead' b h g' σ τ) :
     ∀ {i : I} {g : Game α} (L : Lock (Cap D) D get R i g g'), Pushed get i →
-      Lock.FollowR Dead h g (Lock.oracleStrat pushC (Lock.rightSame h L) σ) (Lock.oracleStrat pushC L τ) := by
+      Lock.FollowR Dead Dead' b h g (Lock.oracleStrat pushC (Lock.rightSame h L) σ) (Lock.oracleStrat pushC L τ) := by
   have hR' : ∀ i (a b : γ × α), a.1 = b.1 ∧ R i a.2 b.2 → Pushed get i → a = b :=
     fun i a b hr hp => Prod.ext hr.1 (hR i _ _ hr.2 hp)
   induction hF with
   | dead hσ =>
       intro i g L hi
       exact .dead fun x hx => hσ x (reach_push hR' _ _ hi hx)
-  | @hret c g' σ =>
+  | spent hs =>
       intro i g L hi
-      have e : Strategy.ofMap (fun b => (c, b)) g (Lock.oracleStrat pushC (Lock.rightSame (.ret c) L) σ) =
-          Lock.oracleStrat pushC L (Strategy.ofMap (fun b => (c, b)) g' σ) :=
-        ofMap_oracleStrat_map _ _ _ L σ
-      rw [← e]
-      exact .hret _
-  | iret =>
-      intro i g L hi
-      cases L with
-      | ret hr => exact .iret
-  | hsendCoin m _ ih =>
-      intro i g L hi
-      cases L with
-      | coin _ L =>
-        push_unfold
-        exact .hsendCoin m (ih (.coin _ L) hi)
-  | hsendSend m _ ih =>
-      intro i g L hi
-      cases L with
-      | send _ L =>
-        push_unfold
-        exact .hsendSend m (ih (.send _ L) hi)
-      | table s upd hf hs hk L =>
-        push_unfold
-        exact .hsendSend m (ih (.table s upd hf hs hk L) hi)
+      exact .spent fun hτ x hx => hs (fun y hy => hτ y (reach_push' hR L _ hi hy)) x (reach_push hR' _ _ hi hx)
   | icoinS _ ih =>
       intro i g L hi
       cases L with
       | coin _ L =>
         push_unfold
         exact .icoinS fun c => ih c (L c) hi
-  | icoinC _ ih =>
-      intro i g L hi
-      cases L with
-      | coin _ L =>
-        push_unfold
-        exact .icoinC fun c => ih c (L c) hi
   | isendS m₂ _ ih =>
       intro i g L hi
       cases L with
@@ -191,15 +163,6 @@ theorem followR_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead 
       | table s upd hf hs hk L =>
         push_unfold
         exact .isendS (fun _ => m₂) (ih (L (fun _ => m₂) m₂) (pushed_upd hs hk hi m₂))
-  | isendC m₂ _ ih =>
-      intro i g L hi
-      cases L with
-      | send _ L =>
-        push_unfold
-        exact .isendC m₂ (ih (L m₂) hi)
-      | table s upd hf hs hk L =>
-        push_unfold
-        exact .isendC (fun _ => m₂) (ih (L (fun _ => m₂) m₂) (pushed_upd hs hk hi m₂))
 
 /-- **`FollowL` through the pushing chooser**: the lockstep's game follows the primed prover of `τ`. -/
 theorem followL_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead : α × γ → Prop} {Dead' : α → Prop}
@@ -283,15 +246,15 @@ theorem followL_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead 
         push_unfold
         exact .hsendC m₂ (ih (.coin _ L) hi)
 
-/-- **`PreSched` through the pushing chooser** along `batchPush`: each game in front advances and then moves by
-sends as the compiled prover's does, and where the games in front pause the rest is pushed. -/
+/-- **`PreSched` through the pushing chooser** along `batchPush`: each game in front advances and then waits as the
+compiled prover's does, and where the games in front pause the rest is pushed. -/
 theorem preSched_push {i : I} {g g' : Game α} (L : Lock (Cap D) D get (fun i a b => Pushed get i → a = b) i g g')
-    (post : List (Game α)) (hi : Pushed get i) {Q : (List α → Prop) → Strategy (batch (g' :: post)) → Prop}
+    (post : List (Game α)) {k : ℕ} (hi : Pushed get i) {Q : (List α → Prop) → Strategy (batch (g' :: post)) → Prop}
     {Q' : (List α → Prop) → Strategy (batch (g :: post)) → Prop}
     (hQ : ∀ Dead σ', Q Dead σ' → Q' Dead (Lock.oracleStrat pushC (batchPush (Pushed get) L post []) σ')) :
     ∀ (pre : List (Game α)) {Dead : List α → Prop} {n : ℕ} {σ : Strategy (batch (pre ++ g' :: post))},
-      Lock.PreSched g' post pre Dead Q n σ →
-        Lock.PreSched g post pre Dead Q' n (Lock.oracleStrat pushC (batchPush (Pushed get) L post pre) σ)
+      Lock.PreSched g' post k pre Dead Q n σ →
+        Lock.PreSched g post k pre Dead Q' n (Lock.oracleStrat pushC (batchPush (Pushed get) L post pre) σ)
   | [], Dead, _, σ, ⟨hn, hq⟩ => ⟨hn, hQ Dead σ hq⟩
   | h :: pre, Dead, _, σ, ⟨n₀, n₁, hn, hF⟩ => by
       refine ⟨n₀, n₁, hn, ?_⟩
@@ -302,7 +265,7 @@ theorem preSched_push {i : I} {g g' : Game α} (L : Lock (Cap D) D get (fun i a 
         ofMap_oracleStrat_map _ _ _ _ σ
       refine (congrArg (Lock.FirstS _ _ n₀ h _) e).mpr (firstS_push (fun _ _ _ hr hp => hr hp) hF _ hi ?_)
       rintro h' σ' ⟨e', τ, hR, hP⟩
-      have hP' : Lock.PreSched g' post pre (fun outs => ∀ c, Dead (c :: outs)) Q n₁ τ := hP
+      have hP' : Lock.PreSched g' post k pre (fun outs => ∀ c, Dead (c :: outs)) Q n₁ τ := hP
       exact ⟨rfl, Lock.oracleStrat pushC (batchPush (Pushed get) L post pre) τ,
         followR_push (fun _ _ _ hr hp => hr hp) hR _ hi, preSched_push L post hi hQ pre hP'⟩
 

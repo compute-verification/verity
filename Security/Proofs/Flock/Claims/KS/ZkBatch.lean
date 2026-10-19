@@ -7,10 +7,10 @@ import Proofs.Flock.Claims.KS.PushSched
 `slotRSZ_of_sched` asks that the primed prover play each table in front of the session's to its end before the next,
 and the session's table to its end before the ones after it. The masked simulator does neither: after its live rounds
 it sends every table's final messages and openings (`simEndJ`). Its schedule is `Lock.PreSched`: each table in front
-advances until only sends are left in it, after its coins, and later moves only by sends; then the session's table
-follows its own strategy, rep 0 first, while the tables after it send at any time; once it is past the slot, the
-strategy may play anything that keeps the table's dead runs dead (`Lock.FollowL`), as the simulator does when it sends
-the table's openings after the later tables' coins. The count is the same:
+advances until only sends are left in it, after its coins, and then waits until the session's table is past the slot
+(`Lock.FollowR`); then the session's table follows its own strategy, rep 0 first, while the tables after it send at any
+time; once it is past the slot, the strategy may play anything that keeps the table's dead runs dead (`Lock.FollowL`),
+as the simulator does when it sends the table's openings after the later tables' coins. The count is the same:
 
 * `ind_conflictAcc_nul`: `advRSZ`'s event is `0` at a run whose session table opens nothing (`nulOpZ`), as every
   dead branch of the simulator does;
@@ -82,7 +82,7 @@ def SchedZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D)
     (Dead : List (OutZC 𝔽 D Sl) → Prop) (k n₀ n : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
     Prop :=
-  ∀ pts, Lock.PreSched (tabAfterZCP A Hs T cap₀ pts) (post.map (· pts)) (pre.map (· pts)) Dead
+  ∀ pts, Lock.PreSched (tabAfterZCP A Hs T cap₀ pts) (post.map (· pts)) k (pre.map (· pts)) Dead
     (TabFollowZ A Hs T cap₀ post pts k n₀) n (pushStrat A Hs T cap₀ pre post σ pts)
 
 /-- **The slot from a schedule whose tables pause**: `SlotRSZ` after `n + (r · n₀ + c) + 1` coins, `c` a distance of
@@ -129,7 +129,7 @@ def SchedC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts
     (pre post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (cap₀ : Model.Cap D)
     (Dead : List (OutZC 𝔽 D Sl) → Prop) (k n₀ n : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
     Prop :=
-  ∀ pts, Lock.PreSched (tabAfterZC A Hs T cap₀ pts) (post.map (· pts)) (pre.map (· pts)) Dead
+  ∀ pts, Lock.PreSched (tabAfterZC A Hs T cap₀ pts) (post.map (· pts)) k (pre.map (· pts)) Dead
     (TabFollowC A Hs T cap₀ post pts k n₀) n (σ pts)
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
