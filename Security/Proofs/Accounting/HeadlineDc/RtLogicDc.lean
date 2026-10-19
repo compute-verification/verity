@@ -2,6 +2,8 @@ import Definitions.Accounting.HeadlineDc
 import Models.Accounting.Assumptions.Fill
 import Models.Accounting.Assumptions.TS
 import Proofs.Accounting.Headline.Encoding
+import Proofs.Accounting.TS.Price
+import Proofs.Accounting.TS.Sheet
 
 /-!
 # RT-LOGIC-12: #2699's B200 fold and H200 filler are priced at work no check reads (red-team witness, not for landing)
@@ -383,6 +385,167 @@ theorem imma_bound :
 theorem imma_off_menu : (22, 128) ∈ Sm90.d2s.writers ∧ 22 ∉ Sm90Measured.d2s.writers.map Prod.fst := by
   decide +kernel
 
+/-! The exclusion, at the JI90_1 certificate, where `UNI` costs 0.90 a word and the vector route `(1/2)/32` of a lane
+instruction a word. -/
+
+abbrev ji1 : Fin 15 := 6
+
+/-- The vector classes' least coefficient on JI90_1. -/
+def v1 : ℚ := dcCoef 6 0
+
+/-- A lower bound on `w*` at JI90_1: the vector route's `(1/2)/32·v1`. -/
+def w1 : ℚ := v1 / 64
+
+def phi1 : ℚ := dot (dcCoef 6) 28 (Sm90.d2s.folds.getD 0 [])
+
+def chi1 : ℚ := dot (dcCoef 6) 28 Sm90.flatFill
+
+theorem dc_Bpos : (0 : ℚ) < BqDc := by decide +kernel
+
+theorem dc_data :
+    (∀ i < 2, 0 < (Sm90Measured.d2s.writers.getD i (0, 0)).2 ∧
+      w1 * (Sm90Measured.d2s.writers.getD i (0, 0)).2 ≤
+        dcCoef 6 ((Sm90Measured.d2s.writers.getD i (0, 0)).1 % 28)) ∧
+    (∀ j ∈ Sm90Measured.d2s.vec, v1 ≤ dcCoef 6 (j % 28)) ∧
+    (∀ i < 2, phi1 ≤ dot (dcCoef 6) 28 (Sm90Measured.d2s.folds.getD i [])) ∧
+    0 ≤ v1 ∧
+    dot (dcCoef 6) 28 immaAll < 4096 * w1 + 4096 * phi1 + chi1 := by
+  decide +kernel
+
+theorem dc_a_nonneg : ∀ r k, 0 ≤ Sm90Measured.model.G.a r k := fun r k => by
+  rw [dc_hG]
+  exact Rat.cast_nonneg.mpr (coeff_nonneg _ _)
+
+theorem dc_Nw : Sm90Measured.model.Nw = 4096 := by
+  show ((4096 : ℕ) : ℝ) = 4096
+  norm_num
+
+theorem dc_q : Sm90Measured.model.q = 1 / 2 := by
+  show ((1 / 2 : ℚ) : ℝ) = 1 / 2
+  norm_num
+
+theorem dc_qT : Sm90Measured.model.qT = 1 / 2 := by
+  show ((1 / 2 : ℚ) : ℝ) = 1 / 2
+  norm_num
+
+theorem dc_wf : Sm90Measured.model.Wf Sm90Measured.flat := by
+  refine ⟨dc_a_nonneg, ?_, ?_, ?_, fun t => ?_, ?_, ?_, le_rfl, fun u => u.elim, fun φ r => ?_, fun ψ r => ?_,
+    le_rfl, ?_, le_rfl, ?_⟩
+  · show (0 : ℝ) < ((1980 : ℕ) : ℝ)
+    norm_num
+  · rw [dc_Nw]
+    norm_num
+  · rw [dc_bnd]
+    exact_mod_cast dc_Bpos
+  · show (0 : ℝ) < ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)
+    exact_mod_cast (dc_data.1 t.val t.isLt).1
+  · rw [dc_q]
+    norm_num
+  · rw [dc_qT]
+    norm_num
+  · show 0 ≤ Sm90Measured.model.G.load (Sparse.counts (Sm90Measured.d2s.folds.getD φ.val [])) r
+    exact load_counts_nonneg _ dc_a_nonneg _ _
+  · show 0 ≤ Sm90Measured.model.G.load (Sparse.counts Sm90.flatFill) r
+    exact load_counts_nonneg _ dc_a_nonneg _ _
+  · show (0 : ℝ) ≤ 1
+    norm_num
+  · show (0 : ℝ) ≤ 1
+    norm_num
+
+theorem dc_vecMin : (v1 : ℝ) ≤ Sm90Measured.model.vecMin ji1 := by
+  have : Nonempty ↥Sm90Measured.model.vec :=
+    ⟨⟨idx 28 0, List.mem_toFinset.mpr (List.mem_map.mpr ⟨0, by decide, rfl⟩)⟩⟩
+  unfold Model.vecMin
+  refine le_ciInf fun k => ?_
+  obtain ⟨j, hj, hk⟩ := List.mem_map.mp (List.mem_toFinset.mp k.2)
+  rw [dc_hG, ← hk]
+  exact Rat.cast_le.mpr (dc_data.2.1 j hj)
+
+theorem dc_wStar : (w1 : ℝ) ≤ Sm90Measured.model.wStar (onFacet ji1) := by
+  have hvec : (w1 : ℝ) ≤ 1 / 2 / 32 * Sm90Measured.model.vecMin ji1 := by
+    have h : (w1 : ℝ) = 1 / 2 / 32 * (v1 : ℝ) := by
+      unfold w1
+      push_cast
+      ring
+    rw [h]
+    exact mul_le_mul_of_nonneg_left dc_vecMin (by norm_num)
+  have : Nonempty (Head (Fin 2) Unit Empty) := ⟨.vector⟩
+  unfold Model.wStar
+  refine le_ciInf fun h => ?_
+  rw [demandPrice_onFacet]
+  cases h with
+  | writer t =>
+    have hw := dc_data.1 t.val t.isLt
+    show (w1 : ℝ) ≤ (dcCoef 6 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 28) : ℝ) /
+        ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℝ)
+    rw [le_div_iff₀ (by exact_mod_cast hw.1)]
+    have h : ((w1 * ((Sm90Measured.d2s.writers.getD t.val (0, 0)).2 : ℚ) : ℚ) : ℝ) ≤
+        ((dcCoef 6 ((Sm90Measured.d2s.writers.getD t.val (0, 0)).1 % 28) : ℚ) : ℝ) :=
+      Rat.cast_le.mpr hw.2
+    push_cast at h
+    linarith
+  | vector =>
+    show (w1 : ℝ) ≤ Sm90Measured.model.q / 32 * Sm90Measured.model.vecMin ji1
+    rw [dc_q]
+    exact hvec
+  | table l =>
+    show (w1 : ℝ) ≤ max (Sm90Measured.model.qT / 32 * Sm90Measured.model.vecMin ji1)
+      (Sm90Measured.model.bT * Sm90Measured.model.G.a ji1 (Sm90Measured.model.bytes l))
+    refine le_trans ?_ (le_max_left _ _)
+    rw [dc_qT]
+    exact hvec
+  | side u => exact u.elim
+
+theorem dc_phiStar : (phi1 : ℝ) ≤ Sm90Measured.model.phiStar (onFacet ji1) := by
+  unfold Model.phiStar
+  refine le_ciInf fun φ => ?_
+  rw [demandPrice_onFacet]
+  show (phi1 : ℝ) ≤ Sm90Measured.model.G.load (Sparse.counts (Sm90Measured.d2s.folds.getD φ.val [])) ji1
+  rw [load_counts _ dcRow dc_hG]
+  exact Rat.cast_le.mpr (dc_data.2.2.1 φ.val φ.isLt)
+
+theorem dc_chiStar : (chi1 : ℝ) ≤ Sm90Measured.model.chiStar (onFacet ji1) := by
+  unfold Model.chiStar
+  refine le_ciInf fun ψ => ?_
+  rw [demandPrice_onFacet]
+  show (chi1 : ℝ) ≤ Sm90Measured.model.G.load (Sparse.counts Sm90.flatFill) ji1
+  rw [load_counts _ dcRow dc_hG]
+  exact le_rfl
+
+theorem dc_fillOpt (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (h : FillOptFilled Sm90Measured.model A 1) :
+    FillOpt Sm90Measured.model A := fun lam hl => by
+  have := h lam hl
+  rwa [mul_one] at this
+
+/-- **`NoSum` fails on that program under every labelling the other premises allow.** With A6 (`SheetWords`), FOLD-OPT
+at all 4096 words, FILL-OPT at share 1 and its 4096 committed words right and fixed (it computes them exactly, so
+`RightFixed` gives all of them at a zero unfolded share), the JI90_1 certificate prices the run's words, fold and
+filler above its whole load there: `IMMA16832_S8`'s words have no head on the menu. -/
+theorem not_noSum_imma (A : Anatomy (Fin 28) (Fin 2) Unit Empty) (hn : A.run.n = Sparse.counts immaAll)
+    (hA : A.Split) (hW : SheetWords Sm90Measured.model A) (hF : FoldOptFolded Sm90Measured.model A 4096)
+    (hX : FillOptFilled Sm90Measured.model A 1) (hfix : 4096 ≤ A.fixed) : ¬ NoSum A := by
+  intro hN
+  have hSR : ScalarRoute Sm90Measured.model A :=
+    scalarRoute_half _ A hA hW (le_of_eq dc_q) (le_of_eq dc_qT) le_rfl
+  have key := price_of_parts_folded Sm90Measured.model Sm90Measured.flat A (onFacet ji1) 4096 (isCert_onFacet _)
+    dc_wf hA hW.1 hSR (fun u => u.elim) hN hF (dc_fillOpt A hX)
+  have hp : Sm90Measured.model.G.price (onFacet ji1) A.run.n = ((dot (dcRow ji1) 28 immaAll : ℚ) : ℝ) := by
+    rw [show Sm90Measured.model.G.price (onFacet ji1) A.run.n = Sm90Measured.model.G.load A.run.n ji1 from
+      demandPrice_onFacet ji1 (Sm90Measured.model.G.load A.run.n), hn, load_counts _ dcRow dc_hG]
+  have hlt : ((dot (dcRow ji1) 28 immaAll : ℚ) : ℝ) < ((4096 * w1 + 4096 * phi1 + chi1 : ℚ) : ℝ) :=
+    Rat.cast_lt.mpr dc_data.2.2.2.2
+  push_cast at hlt
+  have hmuF : Sm90Measured.model.muF = 0 := rfl
+  have hmuX : Sm90Measured.model.muX = 0 := rfl
+  rw [hmuF, hmuX, hp] at key
+  have hw0 : (0 : ℝ) ≤ w1 := by
+    have : (0 : ℚ) ≤ w1 := div_nonneg dc_data.2.2.2.1 (by norm_num)
+    exact_mod_cast this
+  have hw := mul_le_mul hfix dc_wStar hw0 (by linarith)
+  have hφ := dc_phiStar
+  have hχ := dc_chiStar
+  linarith
+
 end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.plain_bound
@@ -393,3 +556,4 @@ end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_premises_noFill
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.imma_bound
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.imma_off_menu
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_noSum_imma
