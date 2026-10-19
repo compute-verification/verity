@@ -10,6 +10,10 @@ banded arm's gate holds it to CA's banded reference itself (#2866, `banded.bande
                          (j10rtx.BandH1R), the CPU units' rows from their band leader's seed_j (j10b_ref.rows_of: in
                          dither_one.h1v3_unit and hb_peel.peel_cpu), and CA's banded_reference on the same units in place
                          of H1V3's tree (per-unit noise, which a non-leader doesn't use; CA's reference at G = 1 is it).
+    dither-a-hbk*-bG     (H200, B200) a dither-a arm on the hbk unit (ASK-71's option A, form=ASK-71 A (provisional)) with
+                         kh_one_band at G in its side unit's kh_one place, from the same .so. Gated as its base
+                         (dither_a.check: commitments, z = int_mm, y, the no-write control and the fault), with the
+                         same three swaps in dither_a's check: h1r_launch_band at G, leader rows, CA's banded_reference.
     dither-1s-mix-cpeel-bG[s][p]  (RTX PRO 6000) dither-1s-mix-cpeel on j10rtx.BandWindow (h1o_band_launch; s: block2's
                          rows staged, p: the units as the band-rows pass's programmatic dependents), gated by
                          j10rtx.band_check and, on the gate step, j10rtx.noise_check of the band workspace.
@@ -159,6 +163,75 @@ class RTXBand:
         return v
 
 
+def da_band_of(arm: str) -> tuple[str, int] | None:
+    """`BASE-bG` for a dither-a arm BASE on the hbk unit that commits z: (BASE, G), else None."""
+    base, _, g = arm.rpartition("-b")
+    unit, z, _ = sbench.DITHER_A.get(base, (None, None, None))
+    ok = g.isdigit() and int(g) >= 1 and unit == "hbk" and z != "none"
+    return (base, int(g)) if ok else None
+
+
+class DABand:
+    """`llm.dither_mod` of dither-a-hbk*-bG: dither_a's check and verdict on banded noise, as HBBand's for hb_peel."""
+    CG = None
+
+    def __init__(self, g: int):
+        import dither_a as DA
+        self.g, self.LIB_ENV = g, DA.LIB_ENV
+
+    def check(self, win, lib: str, which: str) -> dict:
+        import dither_a as DA
+        import dither_one as DO
+        from j10rtx import BandH1R
+
+        from verity.core.protocols.pouw.circuit import seeds as SD
+        lead, cell = layout(win, win.caps.get(which, {}).get("s", 0), self.g)
+        unit0, itself0, h1r0 = DO.h1v3_unit, DO.h1v3_itself, DA.H1R
+
+        def unit(a32, b32, salt, pos, roots):
+            with leader_rows(SD.seed(salt, lead(pos), *roots)):
+                out = unit0(a32, b32, salt, pos, roots)
+            out["band_leader_position"] = lead(pos)
+            return out
+
+        def ca(units: list[dict]) -> dict:
+            return JB.ca_reference([{**x, **cell(x["position"])} for x in units])
+
+        BandH1R.G = self.g
+        DA.H1R, DO.h1v3_unit, DO.h1v3_itself = BandH1R, unit, ca
+        try:
+            doc = DA.check(win, lib, which)
+        finally:
+            DA.H1R, DO.h1v3_unit, DO.h1v3_itself = h1r0, unit0, itself0
+        if which == "gate":
+            hv, cu = doc.get("h1v3", {}), doc.get("vs_h1v3_cpu", [])
+            doc["ca_reference_ok"] = bool(hv.get("tree") and not hv.get("error") and hv.get("peeled") and cu and all(
+                x.get("h1v3_receipt_equal") and x.get("h1v3_z_equal") for x in cu))
+            doc["ok"] = doc["ok"] and doc["ca_reference_ok"]
+            doc["cpu_units_nonleader"] = sum(
+                JB.leader(x["unit"], win.nk[x["call"]][0] // 32, self.g) != x["unit"] for x in cu)
+        doc["noise"], doc["band"] = JB.CA_LABEL, self.g
+        return doc
+
+    def gate_verdict(self, *caps) -> dict:
+        import dither_a as DA
+        return DA.gate_verdict(*caps)
+
+
+class BandH:
+    """A dither_a Side's h1u library with kh_one_band at g (mode 0) in kh_one's place."""
+
+    def __init__(self, h, g: int):
+        if not hasattr(h, "kh_one_band"):
+            raise RuntimeError("the hbk .so has no kh_one_band: rebuild h1u.cu at kernels-j10's branch")
+        h.kh_one_band.argtypes = [*h.kh_one.argtypes[:-1], C.c_uint, C.c_int, C.c_void_p]
+        fn, self._h = h.kh_one_band, h
+        self.kh_one = lambda *a: fn(*a[:-1], g, 0, a[-1])
+
+    def __getattr__(self, name: str):
+        return getattr(self._h, name)
+
+
 def band_one(base, g: int):
     """hb_one.One with kh_one_peel_band at g (mode 0: the noise launch, then the units) in kh_one_peel's place."""
     class BandOne(base):
@@ -174,7 +247,22 @@ def band_one(base, g: int):
 
 
 def build(arm: str, scratch, gpu_mem: float):
-    hb, rtx = band_of(arm, HBK), band_of(arm, MIX)
+    hb, rtx, da = band_of(arm, HBK), band_of(arm, MIX), da_band_of(arm)
+    if da:
+        base, g = da
+        if not JB.ca_tree():
+            raise RuntimeError(f"{arm}: no CA tree: send banded-{JB.CA_SHA}.tar.gz")
+        import dither_a as DA
+
+        class BandSide(DA.Side):
+            def __init__(self, *a, **kw):
+                super().__init__(*a, **kw)
+                self.h = BandH(self.h, g)
+
+        DA.Side = BandSide
+        llm = _build(base, scratch, gpu_mem)
+        llm.dither_mod = DABand(g)
+        return llm
     if hb:
         g, flags = hb
         if flags:
@@ -206,11 +294,13 @@ def build(arm: str, scratch, gpu_mem: float):
 
 def main() -> int:
     arms = sys.argv[sys.argv.index("--arms") + 1].split(",") if "--arms" in sys.argv else []
-    banded = [a for a in arms if band_of(sbench.base_arm(a), HBK) or band_of(sbench.base_arm(a), MIX)]
+    banded = [a for a in arms if band_of(sbench.base_arm(a), HBK) or band_of(sbench.base_arm(a), MIX)
+              or da_band_of(sbench.base_arm(a))]
     for a in banded:
         b = sbench.base_arm(a)
         sbench.REF_OF[b] = "exact"
-    HS.TOKENS_EVERY_REP = (*HS.TOKENS_EVERY_REP, *(sbench.base_arm(a) for a in banded if band_of(sbench.base_arm(a), HBK)))
+    HS.TOKENS_EVERY_REP = (*HS.TOKENS_EVERY_REP, *(sbench.base_arm(a) for a in banded
+                                                   if band_of(sbench.base_arm(a), HBK) or da_band_of(sbench.base_arm(a))))
     out = Path(sys.argv[sys.argv.index("--out") + 1])
     out.mkdir(parents=True, exist_ok=True)
     (out / "j10served.json").write_text(json.dumps({
