@@ -526,13 +526,13 @@ def wide3_controls(width: int, cols):
     x1 = [mnmx64(z[i], y[i], kx[i], w[i], 0, width) for i in range(nv)]
     v2 = [((x1[i][0] << 2) + a[i]) & mask for i in range(nv)]
     out["ctl_mnmx_first"] = split([add64(v2[i], x1[i][1], m1[i], y[i], 0, width) for i in range(nv)])
-    # IMNMX.64 last
+    # IMNMX.64 last, and SEL.64, over (v1:v2) and (v2:v1), so both pairs read the second instruction's word; the SEL.64
+    # takes each pair at half the points, by the first such pattern no IMNMX.64 form computes
     v1 = [(y[i] - w[i] + kx[i]) & mask for i in range(nv)]
     v2 = [(v1[i] * m1[i] + z[i]) & mask for i in range(nv)]
-    out["ctl_mnmx_last"] = split([mnmx64(v2[i], v1[i], y[i], a[i], 3, width) for i in range(nv)])
-    # SEL.64 of (v1:v2) and (w:z) under the first point pattern no IMNMX.64 form computes
-    pa, pb = [(v2[i], v1[i]) for i in range(nv)], [(z[i], w[i]) for i in range(nv)]
-    for pat in range(1, 1 << nv):
+    pa, pb = [(v2[i], v1[i]) for i in range(nv)], [(v1[i], v2[i]) for i in range(nv)]
+    out["ctl_mnmx_last"] = split([mnmx64(*pa[i], *pb[i], 1, width) for i in range(nv)])
+    for pat in (p for p in range(1 << nv) if bin(p).count("1") == nv // 2):
         t = [pa[i] if pat >> i & 1 else pb[i] for i in range(nv)]
         if not any(all(mnmx64(*pa[i], *pb[i], v, width) == t[i] for i in range(nv)) for v in range(4)):
             out["sel_free"] = split(t)

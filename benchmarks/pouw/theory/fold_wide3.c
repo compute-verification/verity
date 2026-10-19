@@ -35,8 +35,9 @@
 #define MAXN 24
 #define MAXJ 16
 #define MAXW 4
-/* -DDROP=k (fold_opt_fx.py's mutations) removes one way to a last instruction: 1 IADD.64; 2 IMNMX.64 and SEL.64 over a
-   second-instruction word; 3 IMAD.WIDE with p or q a second-instruction word; 4 IMAD.WIDE with p and q before it. */
+/* -DDROP=k (fold_opt_fx.py's mutations) removes one part of the search: 1 a last IADD.64; 2 a last IMNMX.64 or SEL.64
+   over a second-instruction word; 3 a last IMAD.WIDE with p or q a second-instruction word; 4 a last IMAD.WIDE with p
+   and q before it; 5 a second instruction's words in le2; 6 IADD.64 and IMNMX.64 as a first or second instruction. */
 #ifndef DROP
 #define DROP 0
 #endif
@@ -183,7 +184,7 @@ static void each_instruction(const uint64_t *pool, int n, Emit emit, void *ctx) 
                         }
                     }
                     x.a = a; x.b = b; x.c = c; x.d = d; x.nw = 2;
-                    for (int k = 0; k < 10; k++) {
+                    for (int k = 0; k < (DROP == 6 ? 2 : 10); k++) {
                         x.form = k < 2 ? WIDE : k < 6 ? ADD64 : MNMX64;
                         x.imm = k < 2 ? k : k < 6 ? k - 2 : k - 6;
                         x.w[0] = lo[k]; x.w[1] = hi[k];
@@ -523,7 +524,7 @@ int main(void) {
                 }
                 Prefix P = {x1, x2, pool, n1, n2, P1.sig};
                 for (int k = n1; k < n2; k++) sig_add(&P.sig, pool[k]);
-                if (x2)
+                if (x2 && DROP != 5)
                     for (int j = 0; j < NJ; j++)
                         if (find(pool + n1, n2 - n1, t1[j]) >= 0 || find(pool + n1, n2 - n1, t2[j]) >= 0)
                             hit(2, j, &P, NULL, 0);
