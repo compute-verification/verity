@@ -490,12 +490,12 @@ theorem answer_alg (cfg : Cfg) (s : Masker) (c : Array F128) {s' : Masker} (hi :
 namespace LeanRelease
 
 /-- **The release at a round the frame takes**: where the frame takes the stream's coins for `h`'s last round
-(`answered`) and then the device round, the release is the round's bytes. -/
+(`answered`) and then the device round, the release is the round's bytes, tagged `0`. -/
 theorem release_of_roundFree {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
     (v : Msg) {m : Masker} {n : ℕ} {out : ByteArray} {s' : Masker} {fr : Array ℕ} (hA : L.answered x ρ h = .ok m)
     (hn : L.coins x h.length = n)
     (hr : roundFree (L.cfg x ρ h) { m with stopped := st } ⟨v.toArray⟩ n = .ok (out, s', fr)) :
-    L.release x ρ h st v = out.data.toList := by
+    L.release x ρ h st v = 0 :: out.data.toList := by
   have hs : L.step x ρ h st v = .ok (out, s') := by
     unfold step
     rw [hA]
@@ -517,7 +517,7 @@ theorem release_zcBind {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h 
     L.release x ρ h st
         (encs [.label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap, .label LABEL_ZC.toUTF8] ++
           (Frame.sq 2 6).enc) =
-      encs (zcBind digest cap (L.cfg x ρ h).root) ++ (Frame.sq 2 6).enc := by
+      0 :: (encs (zcBind digest cap (L.cfg x ρ h).root) ++ (Frame.sq 2 6).enc) := by
   obtain ⟨out, fr, hr, ho⟩ := roundFree_zcBind (L.cfg x ρ h) { m with stopped := st } digest cap hc hon hd hi hdg
     hcap hb
   rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
@@ -528,7 +528,8 @@ theorem release_zcOuter {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h
     (hc : ∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size)
     (hon : m.on = true) (hi : m.inner = none) (hk : L.coins x h.length ≠ 0) (hn : L.coins x h.length < 2 ^ 64)
     (hb : m.pos ≤ (L.cfg x ρ h).order.size) :
-    L.release x ρ h st (encs [] ++ (Frame.sq 2 (L.coins x h.length)).enc) = (Frame.sq 2 (L.coins x h.length)).enc := by
+    L.release x ρ h st (encs [] ++ (Frame.sq 2 (L.coins x h.length)).enc) =
+      0 :: (Frame.sq 2 (L.coins x h.length)).enc := by
   obtain ⟨out, fr, hr, ho⟩ := roundFree_zcOuter (L.cfg x ρ h) { m with stopped := st } _ hc hon hi hk hn hb
   rw [release_of_roundFree L x ρ h st _ hA rfl hr, ho]
 
@@ -540,7 +541,7 @@ theorem release_zcR1 {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : 
     (hon : m.on = true) (hi : m.inner = none) (hpos : m.pos = 0) (hb : 128 ≤ (L.cfg x ρ h).order.size)
     (hn : L.coins x h.length = 1) :
     L.release x ρ h st (encs (zcR1 dv) ++ (Frame.sq 1 1).enc) =
-      encs (maskFrames (maskVal (L.cfg x ρ h) st) 0 (zcR1 dv)) ++ (Frame.sq 1 1).enc := by
+      0 :: (encs (maskFrames (maskVal (L.cfg x ρ h) st) 0 (zcR1 dv)) ++ (Frame.sq 1 1).enc) := by
   obtain ⟨out, fr, hr, ho⟩ := roundFree_zcR1 (L.cfg x ρ h) { m with stopped := st } dv hc hon hi hpos hb
   rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
 
@@ -552,7 +553,7 @@ theorem release_zcMl {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : 
     (hon : m.on = true) (hi : m.inner = none) (hpos : m.pos = 128 + 2 * i)
     (hb : 128 + 2 * i + 2 ≤ (L.cfg x ρ h).order.size) (hn : L.coins x h.length = 1) :
     L.release x ρ h st (encs (zcMl dv i) ++ (Frame.sq 1 1).enc) =
-      encs (maskFrames (maskVal (L.cfg x ρ h) st) (128 + 2 * i) (zcMl dv i)) ++ (Frame.sq 1 1).enc := by
+      0 :: (encs (maskFrames (maskVal (L.cfg x ρ h) st) (128 + 2 * i) (zcMl dv i)) ++ (Frame.sq 1 1).enc) := by
   obtain ⟨out, fr, hr, ho⟩ := roundFree_zcMl (L.cfg x ρ h) { m with stopped := st } dv i hc hon hi hpos hb
   rw [release_of_roundFree L x ρ h st _ hA hn hr, ho]
 
@@ -566,10 +567,11 @@ theorem release_on {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : Li
     (hk : k = 2 ∨ (k = 1 ∧ L.coins x h.length = 1)) (h0 : ¬ (L.coins x h.length = 0 ∧ k = 2))
     (hn : L.coins x h.length < 2 ^ 64) (hb : m.pos + nAbs fs ≤ (L.cfg x ρ h).order.size) :
     L.release x ρ h st (encs fs ++ (Frame.sq k (L.coins x h.length)).enc) =
-      encs (maskFrames (maskVal (L.cfg x ρ h) st) m.pos fs) ++ (Frame.sq k (L.coins x h.length)).enc := by
+      0 :: (encs (maskFrames (maskVal (L.cfg x ρ h) st) m.pos fs) ++ (Frame.sq k (L.coins x h.length)).enc) := by
   obtain ⟨out, fr, hr, ho⟩ := roundFree_on (L.cfg x ρ h) { m with stopped := st } fs k _ hc hon hi hm hp hk h0 hn hb
   rw [release_of_roundFree L x ρ h st _ hA rfl hr, ho]
 
 end LeanRelease
+
 
 end Claims.ZKServer
