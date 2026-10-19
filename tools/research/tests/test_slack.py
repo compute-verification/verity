@@ -1372,6 +1372,14 @@ def test_groups_sync_disables_a_retired_names_group_and_leaves_other_groups_alon
     assert "disable" not in out
 
 
+def test_groups_sync_never_sets_a_groups_members(fake, registry, capsys):
+    """Agent-role groups are routing labels with no members, so a mention notifies no person (Daniel, 19 Oct: the old groups
+    had him as their only member). sync creates and updates without a member list and never calls usergroups.users.*."""
+    fake.groups = [{"id": "SINFRA", "name": "infra", "handle": "infra", "description": "old", "date_delete": 0}]
+    assert run(capsys, "groups", "sync", "--apply")[0] == 0
+    calls = [(m, p) for m, p in fake.calls if m.startswith("usergroups.")]
+    assert calls and not any(m.startswith("usergroups.users.") or "users" in p for m, p in calls)
+
 def test_groups_sync_renames_a_renamed_handles_group_in_place(fake, registry, routes_dirs, capsys):
     """The registry's group id wins over the handle: a renamed handle keeps its group (its id in old checkouts' tags and
     in its holder's subscriptions), and the old name's closed route doesn't get that group disabled."""
