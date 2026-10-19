@@ -3,6 +3,8 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
 
     python forms_gap.py            RT-HOPPER-1: the measured reading with IGMMA_S8_N256_RS offered beside the honest form
     python forms_gap.py --sheet    RT-HOPPER-2/3: DS-90's ε against the fold's cost and against A2u's uniform issue cost
+    python forms_gap.py --b1       RT-HOPPER-1/2: BGMMA_B1_N256 offered at split 8 (the least: t binary products separate
+                                   at most 2^t values of an s8 operand) and 64 (bit planes); DS-90 prices it on issue alone
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -38,12 +40,26 @@ exact = "s8.s8 into s32, A from registers, B from shared memory"
 """
 
 
-def scratch(root: Path, *, rs: bool) -> Path:
-    """A copy of sm_90's data under `root`; with `rs`, a forms.toml offering the RS form and each honest naming its form."""
+def b1(split: int) -> str:
+    return f"""[IGMMA_S8_N256]
+shape = [16, 256, 32]
+split = 1
+exact = "s8.s8 into s32"
+
+[BGMMA_B1_N256]
+shape = [16, 256, 256]
+split = {split}
+exact = "b1 and.popc: s8 operands in bit planes, {split} b1 products an s8 product"
+"""
+
+
+def scratch(root: Path, *, rs: bool, forms: str = FORMS) -> Path:
+    """A copy of sm_90's data under `root`; with `rs`, a forms.toml (`forms`, by default the honest form and the RS form)
+    and each honest naming its form."""
     d = root / "sm_90"
     shutil.copytree(SM90, d)
     if rs:
-        (d / "forms.toml").write_text(FORMS)
+        (d / "forms.toml").write_text(forms)
         for p in (d / "honest").glob("*.toml"):
             t = p.read_text()
             p.write_text(re.sub(r'^(class = "IGMMA_S8_N256")$', r'\1\nform = "IGMMA_S8_N256"', t, flags=re.M))
@@ -96,11 +112,25 @@ def sheet() -> None:
             print(line(f"DS-90+UP q*=0.5 UNI 0 q*_U {qu}", eps(d, "DS-90", 0.5, "--q-uniform", str(qu))))
 
 
+def b1_gap() -> None:
+    with tempfile.TemporaryDirectory() as t:
+        for split in (8, 64):
+            d = scratch(Path(t) / f"b1-{split}", rs=True, forms=b1(split))
+            for r in (None, 0.9, 0.75, 0.5):
+                fold = ("--fold-cost", str(r)) if r else ()
+                print(line(f"DS-90 q*=0.5 +b1 split {split} fold {r or 'today'}", eps(d, "DS-90", 0.5, *fold)))
+            print(line(f"DC-90-ri q*=1.22 +b1 split {split}", eps(d, "DC-90-ri", 1.22)))
+        d = scratch(Path(t) / "base", rs=False)
+        for r in (0.75, 0.5):
+            print(line(f"DS-90 q*=0.5 honest form only fold {r}", eps(d, "DS-90", 0.5, "--fold-cost", str(r))))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sheet", action="store_true", help="DS-90's cliffs in the fold's cost and in A2u")
+    ap.add_argument("--b1", action="store_true", help="ε with BGMMA_B1_N256, which DS-90 prices on issue alone, offered")
     a = ap.parse_args()
-    sheet() if a.sheet else forms_gap()
+    sheet() if a.sheet else b1_gap() if a.b1 else forms_gap()
     return 0
 
 
