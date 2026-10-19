@@ -69,6 +69,22 @@ def test_a_call_boundary_port_binds_the_one_row_of_its_module_body_its_definitio
     assert two.bind(0, [f"{ATT}/attn_mqa"]) == [(ATT, "attn_mqa", 0, "unbound")], "two sparse MLA rows for one tensor: neither"
 
 
+def test_labels_declaring_one_port_bind_its_rows_in_commit_order_and_a_lone_call_its_unqualified_module():
+    """DeepSeek-V4-Pro's mHC as its manifest of record spells it: layer 1's attention and FFN post_pre are two fused post_pre Calls
+    (`<layer>/<fx node>`, contested), layer 0's FFN post_pre the layer's one (`<layer>`); the taps commit residual (port 0) per side."""
+    pp = frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"})
+    residual = Port(pp, "0", call_boundary=True)
+    l0, l1 = "model.layers.0", "model.layers.1"
+    rows = [row(l0, "pre.0", spec="MhcPreBroadcast_v1", port="0", cid=1), row(l0, "post_pre.0", spec="MhcPostPreTf32_v1", port="0", cid=5),
+            row(f"{l1}/mhc_fused_post_pre_tilelang_2", "post_pre.0", spec="MhcFusedPostPre_v1", port="0", cid=9),
+            row(f"{l1}/mhc_fused_post_pre_tilelang_7", "post_pre.0", spec="MhcFusedPostPre_v1", port="0", cid=14)]
+    b = Binder(rows, ports={"hc_attn_residual": residual, "hc_ffn_residual": residual})
+    assert b.bind(0, [f"{l0}/pre.0", f"{l0}/hc_ffn_residual", f"{l1}/hc_attn_residual", f"{l1}/hc_ffn_residual"]) == [
+        (l0, "pre.0", 0, "label"), (l0, "post_pre.0", 0, "port"),
+        (f"{l1}/mhc_fused_post_pre_tilelang_2", "post_pre.0", 0, "port"), (f"{l1}/mhc_fused_post_pre_tilelang_7", "post_pre.0", 0, "port")]
+    assert b.bind(0, [f"{l1}/hc_ffn_residual"]) == [(l1, "hc_ffn_residual", 0, "unbound")], "one side for two Calls: neither"
+
+
 def test_a_label_binds_the_member_it_equals_at_its_occurrence():
     b = Binder([row("model.embed_tokens", "part_rank3"), row("model.embed_tokens", "in", family="input_token_ids"),
                 row("runner.sampler", "sampled_token_ids", step=1), row("moe/L3", "topk_ids", family="moe_stream")])

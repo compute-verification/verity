@@ -437,6 +437,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
             "dsv4_qnorm_rope_kv_insert": DQ.DSV4_INSERT, "dsv4_compress_c4": DC.DSV4_COMPRESSOR,
             "dsv4_compress_c128": DC.DSV4_COMPRESSOR, "dsv4_inv_rope_quant_head": {"CHUNKS": 4, "QG": 128, "ROPE": 64},
+            "dsv4_indexer_compress": {"D": 128, "ROPE": 64, "EPS": 1e-6},
             "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
             "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
             "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
