@@ -400,6 +400,20 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
+[[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (n2 sat at 80% with 3.5 TiB collectable, 19 Oct)
+path = "/etc/systemd/system/vy-retention-gc.service"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc.timer"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
 [[file]]
 path = "/etc/systemd/system/vy-store-evict.service.d/timed.conf"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_timed.conf"
