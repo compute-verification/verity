@@ -27,6 +27,22 @@ recorded, in order: coin i opened after root i, each once, none before its root 
 coin opened.  `LiveRecord` is the verifier's side of one family: it records a root and only then asks for that root's
 coin, and logs both on its clock.
 
+**The challenger's record** is the verifier's trusted coin commitment.  Before any coin opens, the challenger signs its
+commitment with its LMS key over SHA-512 (`LiveChallenger.sign_record`) and writes the record on its own host
+(`write_record`):
+
+    record  = {commitment, host, signature}                       host: the auditor machine the challenger runs on
+    message = SHA-512([RECORD_ROLE] || I || [[host]] || [identity_digest_sha512(COMMITMENT_TAG, commitment)])
+
+each [x] a u64 big-endian length then x, and I the key's identifier (its public key's first 16 bytes): the LMS role
+digest's form (`verity.ml.crypto.lms`).  The verifier reads the record from the challenger's file, never from the prover's
+bundle, and checks it under its own challenger's key (`ChallengerKey`: the LMS parameters and public key):
+`trusted_commitment` returns the commitment, or raises naming why the record is missing, malformed or unsigned, so a client
+that trusts no other commitment fails closed.  `record_reason` is that check and `trusted_reason` adds that a commitment the
+prover presents is the record's.  This module verifies no signature itself (a verifier imports no `verity.ml` code beyond
+its frozen edges): the caller hands in `verify`, LMS at the key's parameters, and the Lean of record verifies on its own
+(`Lms.verify`).
+
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library and
 `verity.ml.commitments`, so any client calls it as it is.
@@ -35,11 +51,14 @@ its round coins, round r's opened after round r's root.  The module reads only t
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
+import string
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
@@ -59,6 +78,16 @@ COMMITMENT_FORM = ("a live coin commitment is {epoch, families, root, scheme}: f
                    "lowercase hex")
 OPENING_FORM = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex "
                 "and a path of SHA-512 digests")
+RECORD_ROLE = "verity/challenger-record/v1"
+COMMITMENT_TAG = "verity/challenger/commitment/v1"
+#: an LMS public key over SHA-512: I (16 bytes) || T[1] (64)
+PUBLIC_BYTES = 80
+_HOST = frozenset(string.ascii_letters + string.digits + "-._")
+RECORD_FORM = ("a challenger record is {commitment, host, signature}: a live coin commitment, a host of ASCII letters, "
+               "digits, '-', '.' and '_', and lowercase hex")
+KEY_FORM = ("a challenger key is {H, W, public}: LMS over SHA-512 (N = 64) with W in 1, 2, 4, 8 and 1 <= H <= 30, and its "
+            "80-byte public key in lowercase hex")
+NO_RECORD = "no challenger record: the verifier holds no coin commitment its challenger recorded and signed"
 
 
 class CoinError(ValueError):
@@ -223,13 +252,134 @@ def order_reason(commitment: LiveCommitment, label: str, roots: Sequence[bytes],
     return None
 
 
+def _host(s: Any) -> bool:
+    return type(s) is str and s != "" and all(c in _HOST for c in s)
+
+
+def _field(b: bytes) -> bytes:
+    return len(b).to_bytes(8, "big") + b
+
+
+def record_message(I: bytes, host: str, commitment: LiveCommitment) -> bytes:
+    """What a challenger's record signs (module docstring), under the key whose identifier is `I`."""
+    if len(I) != 16:
+        raise CoinError(f"an LMS identifier is 16 bytes, not {len(I)}")
+    digest = identity_digest_sha512(COMMITMENT_TAG, commitment.to_json())
+    return hashlib.sha512(_field(RECORD_ROLE.encode()) + I + _field(_field(host.encode())) + _field(digest)).digest()
+
+
+@dataclass(frozen=True, slots=True)
+class ChallengerKey:
+    """The verifier's key for its own challenger: LMS over SHA-512 at (64, `W`, `H`), and the public key `public`."""
+
+    W: int
+    H: int
+    public: bytes
+
+    def __post_init__(self) -> None:
+        if (type(self.W) is not int or self.W not in (1, 2, 4, 8) or type(self.H) is not int or not 1 <= self.H <= 30
+                or type(self.public) is not bytes or len(self.public) != PUBLIC_BYTES):
+            raise CoinError(KEY_FORM)
+
+    def to_json(self) -> dict:
+        return {"H": self.H, "W": self.W, "public": self.public.hex()}
+
+    @classmethod
+    def from_json(cls, doc: Any) -> ChallengerKey:
+        if not isinstance(doc, dict) or sorted(doc) != ["H", "W", "public"] or _hex(doc["public"]) is None:
+            raise CoinError(KEY_FORM)
+        return cls(doc["W"], doc["H"], _hex(doc["public"]))
+
+
+@dataclass(frozen=True, slots=True)
+class ChallengerRecord:
+    """The challenger's record of an epoch's coin commitment, signed on host `host` before any coin opened."""
+
+    commitment: LiveCommitment
+    host: str
+    signature: bytes
+
+    def to_json(self) -> dict:
+        return {"commitment": self.commitment.to_json(), "host": self.host, "signature": self.signature.hex()}
+
+    @classmethod
+    def from_json(cls, doc: Any) -> ChallengerRecord:
+        if not isinstance(doc, dict) or sorted(doc) != ["commitment", "host", "signature"]:
+            raise CoinError(RECORD_FORM)
+        signature = _hex(doc["signature"])
+        if not _host(doc["host"]) or signature is None:
+            raise CoinError(RECORD_FORM)
+        return cls(LiveCommitment.from_json(doc["commitment"]), doc["host"], signature)
+
+
+#: `verify(key, message, signature)`: whether `signature` signs `message` under LMS at `key`'s parameters
+#: (`verity.ml.crypto.lms.verify` over `Params(64, key.W, key.H)`), false for a signature that doesn't decode.
+Verify = Callable[[ChallengerKey, bytes, bytes], bool]
+
+
+def record_reason(key: ChallengerKey, record: Any, verify: Verify) -> str | None:
+    """Why `record` (its JSON, None when the verifier has none) is not a challenger record signed under `key`; None when
+    it is."""
+    if record is None:
+        return NO_RECORD
+    try:
+        r = ChallengerRecord.from_json(record)
+    except CoinError as e:
+        return f"the challenger record is malformed: {e}"
+    try:
+        ok = verify(key, record_message(key.public[:16], r.host, r.commitment), r.signature) is True
+    except ValueError:
+        ok = False
+    if not ok:
+        return "the challenger record's signature does not verify under the verifier's challenger key"
+    return None
+
+
+def trusted_reason(key: ChallengerKey, record: Any, commitment: LiveCommitment, verify: Verify) -> str | None:
+    """Why `commitment`, a coin commitment the prover presents, is not the one in the challenger's record (`record_reason`
+    under `key`); None when it is."""
+    why = record_reason(key, record, verify)
+    if why is not None:
+        return why
+    trusted = ChallengerRecord.from_json(record).commitment
+    if commitment != trusted:
+        return (f"coin commitment {commitment.root.hex()[:16]} is not the one the verifier's challenger recorded "
+                f"({trusted.root.hex()[:16]})")
+    return None
+
+
+def write_record(path: str | os.PathLike, record: ChallengerRecord) -> None:
+    """Write the challenger's record to `path` on its own host, once: a record that exists is refused."""
+    with open(path, "x", encoding="utf-8") as f:
+        f.write(json.dumps(record.to_json(), sort_keys=True) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
+def trusted_commitment(path: str | os.PathLike, key: ChallengerKey, verify: Verify) -> LiveCommitment:
+    """The verifier's trusted coin commitment: the record at `path`, the file the challenger wrote on its own host (never
+    the prover's bundle), checked under the verifier's challenger key (`record_reason`).  A missing, malformed or unsigned
+    record raises `CoinError` naming why."""
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        doc = None
+    except (OSError, ValueError) as e:
+        raise CoinError(f"the challenger record at {path} is unreadable: {e}") from e
+    why = record_reason(key, doc, verify)
+    if why is not None:
+        raise CoinError(why if doc is not None else f"{why} (none at {path})")
+    return ChallengerRecord.from_json(doc).commitment
+
+
 class LiveChallenger:
-    """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` (the
-    operating system's generator by default) and commits to them at construction, before the epoch; `open` releases coin
-    (`label`, `index`) once, after the verifier recorded `after`."""
+    """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
+    commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
+    recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
+    Lean verifier of record's read of it (`IO.getRandomBytes`, A3)."""
 
     def __init__(self, scheme: str, epoch: int, families: Sequence[tuple[str, int]],
-                 entropy: Callable[[int], bytes] = os.urandom) -> None:
+                 entropy: Callable[[int], bytes]) -> None:
         families = tuple(tuple(f) for f in families)
         why = layout_problem(scheme, epoch, families)
         if why is not None:
@@ -246,6 +396,19 @@ class LiveChallenger:
                                 {p: live_leaf(scheme, *c) for p, c in enumerate(self._coins)}, lambda _: scheme)
         self.commitment = LiveCommitment(scheme, epoch, families, self._tree.commitment.root)
         self._opened: set[tuple[str, int]] = set()
+        self.record: ChallengerRecord | None = None
+
+    def sign_record(self, host: str, public: bytes, sign: Callable[[bytes], bytes]) -> ChallengerRecord:
+        """The challenger's record of its commitment, signed once and before any coin opens: `sign(message)` signs with
+        the LMS key whose public key is `public`, on host `host`."""
+        if self._opened:
+            raise CoinError("a challenger signs its record before any coin opens, and a coin is open")
+        if self.record is not None:
+            raise CoinError("the challenger's record is signed once")
+        if not _host(host) or type(public) is not bytes or len(public) != PUBLIC_BYTES:
+            raise CoinError(RECORD_FORM)
+        self.record = ChallengerRecord(self.commitment, host, bytes(sign(record_message(public[:16], host, self.commitment))))
+        return self.record
 
     def open(self, label: str, index: int, after: bytes) -> LiveOpening:
         position = self.commitment.position(label, index)
@@ -295,6 +458,7 @@ class LiveRecord:
         return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
 
 
-__all__ = ["BINDING", "COIN_BYTES", "COMMITMENT_FORM", "MAX_COINS", "OPENING_FORM", "CoinError", "LiveChallenger",
-           "LiveCommitment", "LiveOpening", "LiveRecord", "layout_problem", "live_domain", "live_leaf", "live_reason",
-           "order_reason"]
+__all__ = ["BINDING", "COIN_BYTES", "COMMITMENT_FORM", "COMMITMENT_TAG", "KEY_FORM", "MAX_COINS", "NO_RECORD", "OPENING_FORM",
+           "PUBLIC_BYTES", "RECORD_FORM", "RECORD_ROLE", "ChallengerKey", "ChallengerRecord", "CoinError", "LiveChallenger",
+           "LiveCommitment", "LiveOpening", "LiveRecord", "Verify", "layout_problem", "live_domain", "live_leaf", "live_reason",
+           "order_reason", "record_message", "record_reason", "trusted_commitment", "trusted_reason", "write_record"]

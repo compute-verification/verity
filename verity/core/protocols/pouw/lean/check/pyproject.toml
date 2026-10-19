@@ -18,8 +18,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and what it imports (`window.py`, `coins.py`, `audit.py` and `protocol.py`, the proof service's challenger, and what
 # they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
 # above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
-# requires (PoUW's commitments, the proof service's Lean, core's identity and randomness, C-Flock's verifier with its
-# configuration).
+# requires (PoUW's commitments, the proof service's Lean with the LMS verifier, core's identity and randomness, C-Flock's
+# verifier with its configuration).
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
@@ -33,5 +33,8 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/core/protocols/interface", "verity/core/protocols/pouw/lean/window",
           "verity/core/protocols/pouw/lean/commit", "verity/core/primitives/identity", "verity/core/primitives/randomness",
+          "verity/core/primitives/lms/lean/lakefile.toml", "verity/core/primitives/lms/lean/lake-manifest.json",
+          "verity/core/primitives/lms/lean/lean-toolchain", "verity/core/primitives/lms/lean/Lms.lean",
+          "verity/core/primitives/lms/lean/Lms",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock"]

@@ -18,6 +18,11 @@ path = "../../protocols/interface"
 name = "flock_verifier"
 path = "../flock"
 
+# The proof service's challenger signs its record with LMS (`SampledProofs.ChallengerRecord`).
+[[require]]
+name = "lms"
+path = "../../primitives/lms/lean"
+
 [[require]]
 name = "verity_difftest"
 path = "../../difftest/lean"

@@ -1,18 +1,24 @@
 """The proof service's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
 once, after the root the verifier recorded for it; the verifier refuses a coin opened twice, one opened before its root
 was recorded, a foreign epoch's or another challenger's, a coin that isn't the one asked for, and a recorded root whose
-coin was never opened.  The layouts are any client's: named by no protocol."""
+coin was never opened.  The layouts are any client's: named by no protocol.  The verifier trusts only the commitment in
+the challenger's signed record, read from the challenger's file under its own key: a commitment the prover presents, a
+record the prover signed and a missing record are refused."""
 
 from __future__ import annotations
 
 import dataclasses
+import functools
+import json
 import random
 
 import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
+from verity.ml.crypto import lms
 
 LABEL = "commit"
+HOST = "vy-nebius-cpu-1"
 
 
 def entropy(seed: str):
@@ -181,8 +187,143 @@ def test_a_label_may_name_its_client():
     assert C.live_reason(ch.commitment, o, "vllm/positions", 0, b"r" * 64) is None
 
 
-def test_a_fresh_challenger_draws_from_the_operating_system():
-    a, b = (C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)]) for _ in range(2))
+def test_a_challenger_draws_only_from_the_entropy_it_is_given():
+    """No default source: a challenger built without one is refused, so none reads the operating system itself."""
+    with pytest.raises(TypeError, match="entropy"):
+        C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)])
+    a, b = (C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)], entropy(s)) for s in "ab")
     assert a.commitment.root != b.commitment.root and len(a.commitment.root) == 64
     with pytest.raises(ValueError, match="returned other than"):
         C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)], lambda n: bytes(n - 1))
+
+
+# ---- the challenger's signed record ---------------------------------------------------------------------------------
+
+@functools.cache
+def lms_key(seed: int) -> lms.PrivateKey:
+    return lms.keygen(lms.Params(64, 4, 2), bytes([seed]) * 64)
+
+
+def lms_verify(key: C.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    p = lms.Params(64, key.W, key.H)
+    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+
+
+def verifier_key(seed: int = 0) -> C.ChallengerKey:
+    k = lms_key(seed)
+    return C.ChallengerKey(k.params.W, k.params.H, lms.public_key(k))
+
+
+def signed(tmp_path, seed: str = "s") -> tuple[C.LiveChallenger, C.ChallengerKey, object]:
+    """The challenger on its host: it commits to its coins, signs the commitment at its key's next leaf before any coin
+    opens, and writes the record to its own file; with the verifier's key for it and the file's path."""
+    k = lms_key(0)
+    pub, state_path = lms.public_key(k), tmp_path / "challenger.lms"
+    lms.LeafState.create(state_path, pub, k.params.H)
+    state = lms.LeafState(state_path, pub, k.params.H)
+    ch = C.LiveChallenger("verity/test/coins/v1", 7, [("other", 2), (LABEL, 3)], entropy(seed))
+    record = ch.sign_record(HOST, pub, lambda m: lms.sign(k, state, m).encode())
+    state.close()
+    path = tmp_path / "challenger-record.json"
+    C.write_record(path, record)
+    return ch, verifier_key(), path
+
+
+def test_coins_check_against_the_commitment_the_challenger_signed(tmp_path):
+    """The honest run: the verifier reads the challenger's record from its file, trusts its commitment, and every coin
+    opened after its root checks against it."""
+    ch, key, path = signed(tmp_path)
+    trusted = C.trusted_commitment(path, key, lms_verify)
+    assert trusted == ch.commitment and ch.record.host == HOST
+    rec = C.LiveRecord(ch, LABEL)
+    for i in range(3):
+        rec.record(bytes([i]) * 64)
+    assert C.order_reason(trusted, LABEL, rec.roots, rec.openings) is None
+    assert C.trusted_reason(key, json.loads(path.read_text()), ch.commitment, lms_verify) is None
+    assert json.loads(path.read_text()) == ch.record.to_json()
+
+
+def test_a_commitment_the_prover_supplies_is_refused(tmp_path):
+    """The prover's own commitment over the same layout, its coins, a record whose root it rewrote and a record it signed
+    with a key of its own are each refused: only the challenger's key signs the trusted root."""
+    ch, key, path = signed(tmp_path)
+    doc = json.loads(path.read_text())
+    prover = C.LiveChallenger("verity/test/coins/v1", 7, [("other", 2), (LABEL, 3)], entropy("prover"))
+    assert C.trusted_reason(key, doc, prover.commitment, lms_verify) == (
+        f"coin commitment {prover.commitment.root.hex()[:16]} is not the one the verifier's challenger recorded "
+        f"({ch.commitment.root.hex()[:16]})")
+    prec = C.LiveRecord(prover, LABEL)
+    prec.record(b"\x00" * 64)
+    assert C.order_reason(C.trusted_commitment(path, key, lms_verify), LABEL, prec.roots, prec.openings) == \
+        "commit coin 0: coin does not open against the epoch's coin commitment"
+
+    unsigned = "the challenger record's signature does not verify under the verifier's challenger key"
+    rewritten = {**doc, "commitment": prover.commitment.to_json()}
+    assert C.trusted_reason(key, rewritten, prover.commitment, lms_verify) == unsigned
+    other, unopened = lms_key(1), C.LiveChallenger("verity/test/coins/v1", 7, [("other", 2), (LABEL, 3)], entropy("prover"))
+    forged = unopened.sign_record(HOST, lms.public_key(other), lambda m: lms.sign_at(other, 0, m).encode())
+    assert forged.commitment == prover.commitment
+    assert C.trusted_reason(key, forged.to_json(), prover.commitment, lms_verify) == unsigned
+    assert C.trusted_reason(verifier_key(1), doc, ch.commitment, lms_verify) == unsigned
+    for bad in ({**doc, "host": "vy-nebius-2"}, {**doc, "signature": doc["signature"][:-2]},
+                {**doc, "commitment": {**doc["commitment"], "epoch": 8}}):
+        assert C.record_reason(key, bad, lms_verify) == unsigned
+    rewritten_path = tmp_path / "rewritten.json"
+    rewritten_path.write_text(json.dumps(rewritten))
+    with pytest.raises(C.CoinError, match="^the challenger record's signature does not verify"):
+        C.trusted_commitment(rewritten_path, key, lms_verify)
+
+
+def test_a_missing_challenger_record_is_refused(tmp_path):
+    """No record, an unreadable one and a malformed one each fail closed: the verifier then trusts no commitment."""
+    ch, key, _ = signed(tmp_path)
+    with pytest.raises(C.CoinError, match=f"^{C.NO_RECORD} \\(none at .*nowhere.json\\)$"):
+        C.trusted_commitment(tmp_path / "nowhere.json", key, lms_verify)
+    assert C.trusted_reason(key, None, ch.commitment, lms_verify) == C.NO_RECORD
+    (tmp_path / "torn.json").write_text('{"commitment": ')
+    with pytest.raises(C.CoinError, match="^the challenger record at .*torn.json is unreadable"):
+        C.trusted_commitment(tmp_path / "torn.json", key, lms_verify)
+    with pytest.raises(C.CoinError, match="^the challenger record at .* is unreadable"):
+        C.trusted_commitment(tmp_path, key, lms_verify)
+    (tmp_path / "empty.json").write_text("{}")
+    with pytest.raises(C.CoinError, match="^the challenger record is malformed: a challenger record is"):
+        C.trusted_commitment(tmp_path / "empty.json", key, lms_verify)
+
+
+def test_the_challenger_signs_its_record_once_and_before_any_coin_opens(tmp_path):
+    k = lms_key(0)
+    pub, sign = lms.public_key(k), (lambda m: lms.sign_at(k, 0, m).encode())
+    ch = C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)], entropy("o"))
+    ch.open(LABEL, 0, b"\x00" * 64)
+    with pytest.raises(C.CoinError, match="before any coin opens"):
+        ch.sign_record(HOST, pub, sign)
+    ch = C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)], entropy("o"))
+    for host, public in (("", pub), ("a b", pub), (HOST, pub[:-1]), (HOST, pub.hex())):
+        with pytest.raises(C.CoinError, match="^a challenger record is"):
+            ch.sign_record(host, public, sign)
+    record = ch.sign_record(HOST, pub, sign)
+    with pytest.raises(C.CoinError, match="signed once"):
+        ch.sign_record(HOST, pub, sign)
+    C.write_record(tmp_path / "r.json", record)
+    with pytest.raises(FileExistsError):
+        C.write_record(tmp_path / "r.json", record)
+
+
+def test_the_key_and_record_forms_round_trip_and_refuse_what_they_dont_read(tmp_path):
+    ch, key, path = signed(tmp_path)
+    assert C.ChallengerKey.from_json(key.to_json()) == key
+    assert C.ChallengerRecord.from_json(ch.record.to_json()) == ch.record
+    kd = key.to_json()
+    for bad in ({**kd, "W": 3}, {**kd, "H": 0}, {**kd, "H": True}, {**kd, "public": kd["public"][:-2]},
+                {**kd, "public": kd["public"].upper()}, {**kd, "N": 64}, [kd]):
+        with pytest.raises(C.CoinError, match="^a challenger key is"):
+            C.ChallengerKey.from_json(bad)
+    rd = ch.record.to_json()
+    for bad in ({**rd, "host": "a/b"}, {**rd, "host": 1}, {**rd, "signature": rd["signature"].upper()},
+                {k: v for k, v in rd.items() if k != "host"}, [rd]):
+        with pytest.raises(C.CoinError, match="^a challenger record is"):
+            C.ChallengerRecord.from_json(bad)
+    with pytest.raises(C.CoinError, match="^a live coin commitment is"):
+        C.ChallengerRecord.from_json({**rd, "commitment": {}})
+    with pytest.raises(C.CoinError, match="an LMS identifier is 16 bytes"):
+        C.record_message(b"\x00" * 15, HOST, ch.commitment)
