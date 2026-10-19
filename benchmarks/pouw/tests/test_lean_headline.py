@@ -14,8 +14,8 @@ spec.loader.exec_module(H)
 
 
 def test_the_committed_instances_are_the_exporters():
-    """Security/Definitions/Accounting/Headline/Sm120.lean, Sm120Measured.lean and Sm80.lean are what lean_headline.py
-    writes from the data, π* included."""
+    """Security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
+    the data, π* included."""
     assert H.main(["--check"]) == 0
 
 
@@ -44,15 +44,3 @@ def test_the_measured_instance_meets_its_reading():
     assert m.unfolded < m.folded == m.bound
     assert H.exact_logs(m) < float(m.bound) < float(H.EPS_M) and H.EPS_M == Fraction(591, 100000)
 
-
-def test_the_sm80_instance_meets_its_headline():
-    """On DS-80 π* is the ALU pipe alone and ♭'s bound is its ALU count; the first writer kind issues nothing there, so
-    w* = κ = 0, the folded branch of the bound Sm80SheetHeadline's proof reads off the identity, 1 − N_w φ*/B_♭ at
-    φ* = 1/8, is ε_skip, and the unfolded one, `1 − 16/B_♭ · (1 − 41/48000)`, binds at most 0.232%."""
-    i = H.instance(H.SM80)
-    n = {k: i.nw.get(k, 0) + i.nf.get(k, 0) + i.ns.get(k, 0) for k in {*i.nw, *i.nf, *i.ns}}
-    assert i.pistar == "DS_alu" and i.B == H.load(i, "DS_alu", n)
-    assert H.coef(i, "DS_alu", i.writers[0][0]) == 0 and i.kappa == 0 and i.Nw == 128
-    assert [H.load(i, "DS_alu", f) for f in i.folds] == [Fraction(1, 8)]
-    assert i.folded == 1 - 16 / i.B == i.eps_skip
-    assert i.bound == i.unfolded == 1 - 16 / i.B * (1 - Fraction(41, 48000)) <= i.fam.eps == Fraction(232, 100000)

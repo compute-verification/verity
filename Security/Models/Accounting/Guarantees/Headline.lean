@@ -38,8 +38,8 @@ the larger of two branches':
 * the folded branch's `ε_jl` at `p = 7/8`;
 * the unfolded branch's `(N_w w* + N_w φ*)/B_♭ · ln(1/δ′)/(ln 2 · S)`.
 
-The unfolded branch binds on sm_120's sheet (`0.656%`) and on sm_80 (`0.232%`). On sm_120's measured vector the folded
-branch binds (`0.591%`). `ProofLayer.Pins` is met by main's circuit Definitions since PIN (#2417).
+The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vector the folded branch binds
+(`0.591%`). `ProofLayer.Pins` is met by main's circuit Definitions since PIN (#2417).
 
 The statements:
 
@@ -47,10 +47,9 @@ The statements:
   event of probability at most `2^-40`, every accepted window runs at least `1 − 0.656%` of its credit.
 * `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: outside
   an event of probability at most `2^-40`, every accepted window runs at least `1 − 0.591%` of its credit.
-* `Sm80SheetHeadline`: sm_80 (A100) at its data sheet, Dither-2S at L = 16 at SCALAR-ROUTE's ½ floors: outside an
-  event of probability at most `2^-40`, every accepted window runs at least `1 − 0.232%` of its credit. Words cost
-  nothing at its certificate (`κ = 0`), so skipping a fold is the only saving, and the unfolded branch is its whole
-  luck term.
+
+sm_80 has no headline: FOLD-OPT is false at its ALU-pipe certificate, which doesn't price duo's `IMAD.HI.U32` rotate
+route on the FMA pipe (RT-LOGIC-10).
 -/
 
 namespace Accounting.Guarantees.TS
@@ -117,36 +116,5 @@ def Sm120MeasuredHeadline : Prop :=
     pf.Pins → RightFixed Pl pf Sm120Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40
-
-/-- **sm_80's headline at the data sheet**, under full checking with live coins. On DS-80's machine (`Sm80.sheet`),
-Dither-2S at L = 16's TS model (`Sm80.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm80.flat`), at the
-ALU pipe's certificate (`Sm80.piStar`), over `Sm80.checks = 48,000` rounds on any finite coins `Ω`: for any window's
-play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling
-splits, A1–A7 hold on every run and FOLD-OPT per word folded prices every run's fold at the words it folds (its
-unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned (`Pinned`), whose
-deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck premise), whose
-receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at most `½`
-(`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with probability at
-most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`)
-and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at
-least `1 − 232/100000` (`1 − 0.232%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: Dither-2S has
-no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
-
-`w* = 0` at the ALU facet, so `κ = 0` and `ε_jl = 0`: words cost nothing at the certificate, and skipping a fold is the
-only saving. The whole-unit luck charges it: the unfolded branch is the whole luck term. -/
-def Sm80SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm80.checks (Fin 35) (Fin 23) Unit Empty) (G : ReceiptGame Ω Sm80.checks)
-    (Uf : Unfolded Ω Sm80.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm80.checks nπ V) (δbind δzk : ℝ),
-    (Sm80.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
-    (∀ x, SheetClock Sm80.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
-    (∀ x, SheetTensor Sm80.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm80.sheet (Pl.run x).run) →
-    (∀ x, SheetSmem Sm80.sheet (Pl.run x).run) → (∀ x, SheetWords Sm80.model (Pl.run x)) →
-    (∀ x, SheetSemantics Sm80.model (Pl.run x)) →
-    (∀ x, FoldOptFolded Sm80.model (Pl.run x) ((1 - Uf.share x / Sm80.checks) * Sm80.model.Nw)) →
-    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
-    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
-    pf.Pins → RightFixed Pl pf Sm80.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm80.model.credit Sm80.flat < 1 - 232 / 100000) ≤
-      (1 / 2) ^ 40
 
 end Accounting.Guarantees.TS
