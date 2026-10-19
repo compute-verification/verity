@@ -13,7 +13,7 @@ waits (up to 30 min) for the run's custody on the store's remote, then rebuilds 
 result's pin state and bench rc), puts it into the
 store (``--kind bench-result/v1``, the result as its meta, as a run's own result) and labels it campaign=hash-loop, sweep=iteration, row, arm=
 <workload>:<arm> (plot.py draws it as workload <workload>, line <arm>), label, source, hardware; the run is labeled the same, with
-arm=<workload>.
+arm=<workload>. ``row.py --table [--row 11]`` prints every published maxtput* arm of the row from the store, one line per run and arm.
 
 Measures, over the timed runs (phase ``measure``); a commit arm's ratios are against the stock engine of the same cycle (each
 cycle's arms run back to back on one card), averaged over cycles, each cycle's in ``runs``:
@@ -227,6 +227,43 @@ def publish(a: argparse.Namespace) -> int:
     return rc
 
 
+ARM_ORDER = ("stock", "sha512", "sha512-layer", "blake3")
+COLUMNS = (("out tok/s", "output_tokens_per_s", "{:,.0f}"), ("lost %", "throughput_overhead_pct", "{:.1f}"),
+           ("req/s", "requests_per_s", "{:.1f}"), ("TTFT p50 s", "ttft_p50_ms", "{:.1f}", 1e-3),
+           ("TTFT p99 s", "ttft_p99_ms", "{:.1f}", 1e-3), ("TPOT p50 ms", "tpot_p50_ms", "{:.1f}"),
+           ("TPOT p99 ms", "tpot_p99_ms", "{:.1f}"), ("TPOT rise %", "tpot_overhead_pct", "{:.1f}"),
+           ("waiting min", "waiting_min", "{:.0f}"), ("running mean", "running_mean", "{:.0f}"), ("KV use", "kv_usage_mean", "{:.3f}"),
+           ("GPU util %", "gpu_util_mean_pct", "{:.1f}"))
+
+
+def table(a: argparse.Namespace) -> int:
+    """Every published maxtput* arm of row ROW as a markdown table, from the store (its results and their labels)."""
+    lines = []
+    for x in json.loads(research("data", "select", "--kind", "bench-result/v1", "--label", "campaign=hash-loop",
+                                 "--label", f"row={a.row}", "--json")):
+        got = sorted(json.loads(research("data", "labels", x["id"], "--json")), key=lambda e: e.get("ts", ""))
+        labels = {e["key"]: e["value"] for e in got}
+        workload, _, arm = labels.get("arm", "").partition(":")
+        if not workload.startswith("maxtput") or labels.get("kernel_outcome") == "voided":
+            continue
+        meta = x["manifest"]["meta"]
+        fp = meta.get("workload_fingerprint") or {}
+        eng = fp.get("engine") or {}
+        head = {m["name"]: m["value"] for m in meta["measurements"]}
+        cells = [labels.get("hardware", "?"), eng.get("model", fp.get("model", "?")), f"{workload}:{arm}", meta["run_id"],
+                 (fp.get("pin") or {}).get("state", "?"), ",".join(eng.get("attention_impls") or []),
+                 f"{eng.get('kv_bytes', 0) / 1e9:.1f}", meta["validation"]["status"]]
+        for _, key, form, *scale in COLUMNS:
+            v = head.get(key)
+            cells.append("" if v is None else form.format(v * (scale[0] if scale else 1)))
+        lines.append((labels.get("hardware", ""), workload, ARM_ORDER.index(arm) if arm in ARM_ORDER else 9, meta["run_id"], cells))
+    heads = ["GPU", "model", "workload:arm", "run", "pin", "attention", "KV GB", "validation", *(c[0] for c in COLUMNS)]
+    print("| " + " | ".join(heads) + " |\n|" + "---|" * len(heads))
+    for *_, cells in sorted(lines):
+        print("| " + " | ".join(cells) + " |")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", type=Path, nargs="?")
@@ -234,6 +271,7 @@ def main() -> int:
     ap.add_argument("--pin-rc", type=int, default=None)
     ap.add_argument("--to", type=Path, default=None)
     ap.add_argument("--publish", nargs="+", metavar="RUN")
+    ap.add_argument("--table", action="store_true", help="print row ROW's published maxtput* arms as a markdown table")
     ap.add_argument("--row", default="11")
     ap.add_argument("--hypothesis", default="max throughput: native compiled vLLM at saturation against the Commit's arms")
     ap.add_argument("--workload", default="maxtput", help="the `arm` label's workload: maxtput (Qwen3-8B), maxtput-llama31-8b")
@@ -243,8 +281,10 @@ def main() -> int:
     a = ap.parse_args()
     if a.publish:
         return publish(a)
+    if a.table:
+        return table(a)
     if a.out is None:
-        ap.error("OUT, or --publish RUN...")
+        ap.error("OUT, --publish RUN... or --table")
     a.to = a.to or Path(os.environ.get("RESEARCH_RUN_DIR", a.out.parent)) / "result.json"
     return build(a)
 
