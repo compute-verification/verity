@@ -6,8 +6,10 @@ declares `int8_exact`.  The engine core is in-process (`VLLM_ENABLE_V1_MULTIPROC
 model loader.  The checkpoint is `engine.int8_checkpoint`'s: `quantization_config.quant_method` names the method, every linear
 weight is int8 [N, K] with a float32 `weight_scale` [N, 1].
 
-Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix; nothing else is quantized (the embedding
-and `lm_head` are vocabulary embeddings, attention keeps its KV cache unquantized).  The method computes
+Every linear layer (`LinearBase`) gets an `Int8PlainLinearMethod` with its own prefix, and so does the LM head (`ParallelLMHead`)
+when `modules_to_not_convert` is `[]` (recipe v2), not `["lm_head"]` (v1, where it stays bf16): the logits processor calls the
+method's `apply` and takes its bf16 logits.  Nothing else is quantized (the embedding is a gather, attention keeps its KV cache
+unquantized).  The method computes
 `engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  Loading
 refuses a weight outside [-127, 127] and a scale that is not finite and positive; a layer refuses tensor parallelism (a row-parallel
 shard would take each row's activation scale over its own K slice, not the row's), a bias, K or N not a multiple of 8, K > MAX_K, and
@@ -22,7 +24,9 @@ import torch
 from vllm.model_executor.layers.linear import LinearBase, LinearMethodBase, register_weight_loader_v2_supported_method
 from vllm.model_executor.layers.quantization import register_quantization_config
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
+from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
 from vllm.model_executor.parameter import ChannelQuantScaleParameter, ModelWeightParameter
+from vllm.model_executor.utils import set_weight_attrs
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
@@ -48,6 +52,13 @@ class Int8PlainLinearMethod(LinearMethodBase):
         if n % 8 or k % 8 or k > E.MAX_K:
             raise ValueError(f"{self.prefix}: [{n}, {k}] needs N and K multiples of 8 and K <= {E.MAX_K}")
         loader = extra_weight_attrs["weight_loader"]
+        if isinstance(layer, ParallelLMHead):
+            # the head loads through `VocabParallelEmbedding.weight_loader(param, w)`, which reads `output_dim` off plain Parameters
+            for name, t in (("weight", torch.empty(n, k, dtype=torch.int8)), ("weight_scale", torch.empty(n, 1, dtype=torch.float32))):
+                p = torch.nn.Parameter(t, requires_grad=False)
+                set_weight_attrs(p, {"output_dim": 0, "weight_loader": loader, **({"input_dim": 1} if name == "weight" else {})})
+                layer.register_parameter(name, p)
+            return
         layer.register_parameter("weight", ModelWeightParameter(data=torch.empty(n, k, dtype=torch.int8), input_dim=1, output_dim=0,
                                                                 weight_loader=loader))
         layer.register_parameter("weight_scale", ChannelQuantScaleParameter(data=torch.empty(n, 1, dtype=torch.float32), output_dim=0,
@@ -76,12 +87,17 @@ class Int8PlainLinearMethod(LinearMethodBase):
 
 
 class Int8ExactConfig(QuantizationConfig):
-    """`quantization_config` {quant_method: NAME, weight_max: 127}: every linear layer on `Int8PlainLinearMethod`."""
+    """`quantization_config` {quant_method: NAME, weight_max: 127, modules_to_not_convert: ["lm_head"] | []}: every linear layer on
+    `Int8PlainLinearMethod`, and the LM head too under `[]`."""
 
-    def __init__(self, weight_max: int):
+    def __init__(self, weight_max: int, modules_to_not_convert: list[str] | None = None):
         super().__init__()
         if weight_max != E.W_MAX:
             raise ValueError(f"{NAME}: weight_max {weight_max!r} is not {E.W_MAX}")
+        kept = ["lm_head"] if modules_to_not_convert is None else list(modules_to_not_convert)
+        if kept not in (["lm_head"], []):
+            raise ValueError(f"{NAME}: modules_to_not_convert {kept!r} is neither ['lm_head'] nor []")
+        self.lm_head = not kept
 
     def get_name(self) -> str:
         return NAME
@@ -99,10 +115,12 @@ class Int8ExactConfig(QuantizationConfig):
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> "Int8ExactConfig":
-        return cls(int(cls.get_from_keys(config, ["weight_max"])))
+        return cls(int(cls.get_from_keys(config, ["weight_max"])), cls.get_from_keys_or(config, ["modules_to_not_convert"], None))
 
     def get_quant_method(self, layer: torch.nn.Module, prefix: str) -> Int8PlainLinearMethod | None:
-        return Int8PlainLinearMethod(prefix) if isinstance(layer, LinearBase) else None
+        if isinstance(layer, LinearBase) or (self.lm_head and isinstance(layer, ParallelLMHead)):
+            return Int8PlainLinearMethod(prefix)
+        return None
 
 
 @cache

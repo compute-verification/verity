@@ -21,7 +21,8 @@ when every byte of a weight is registered and its rows are whole blocks, two mod
 embedding  (one shard) only the rows of the call's token ids, decoded into the scratch as a [rows, H] table, and the call
            handed each id's row in it: the same gather (`VocabParallelEmbedding` at tp 1 is `F.embedding(ids, weight)`)
 lm_head    the logits processor handed a stand-in LM head whose `quant_method.apply` decodes the weight a scratch of rows at
-           a time and runs the head's own `apply` on each, its logits written into theirs; any other attribute is the head's
+           a time and runs the head's own `apply` on each (with those rows of an int8 head's plain `weight_scale`), its logits
+           written into theirs; any other attribute is the head's
 ~~~
 
 The pieces' bits are the whole call's when the GEMM computes each logit alone, as cuBLAS does for these shapes on the RTX PRO
@@ -95,11 +96,14 @@ class _Head:
         u, w, row = self._uses, self._w, self._row
         qm, src, (V, H) = self._head.quant_method, u.home[id(w.param)], w.param.shape
         flat, step, stream, out = u._flat(src), u.scratch.numel() // row, u.stream(), None
+        scale = getattr(self._head, "weight_scale", None)
         for a in range(0, V, step):
             b = min(V, a + step)
             u.decode(flat[a * row:b * row], u.scratch[:(b - a) * row], w.first_word + a * row // w.word_bytes, stream)
-            y = qm.apply(types.SimpleNamespace(weight=u.scratch[:(b - a) * row].view(src.dtype).view(b - a, H)), x,
-                         None if bias is None else bias[a:b])
+            rows = {"weight": u.scratch[:(b - a) * row].view(src.dtype).view(b - a, H)}
+            if scale is not None:                                  # the int8 head's per-row scales, plain beside its weight
+                rows["weight_scale"] = scale[a:b]
+            y = qm.apply(types.SimpleNamespace(**rows), x, None if bias is None else bias[a:b])
             out = y.new_empty((*y.shape[:-1], V)) if out is None else out
             out[..., a:b] = y
         return out
