@@ -1629,7 +1629,7 @@ def test_a_quiet_handles_runs_are_not_rung(tmp_path):
 
 def test_the_shipped_nodes_file_keeps_ci_quiet():
     cfg = json.loads((W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch_nodes.json").read_text())
-    assert cfg["quiet_handles"] == ["ci"] and cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2"]
+    assert cfg["quiet_handles"] == ["ci"] and cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"]
 
 
 def test_a_node_that_doesnt_answer_is_said_once_an_hour_and_caught_up_when_it_does(tmp_path, capsys):
@@ -1656,5 +1656,5 @@ def test_a_node_that_doesnt_answer_is_said_once_an_hour_and_caught_up_when_it_do
 def test_the_deployed_nodes_file_names_the_nebius_nodes_and_an_ssh_argv():
     root = W.Path(__file__).resolve().parents[3]
     cfg = W.read_json(root / "infra/control/agent_watch_nodes.json")
-    assert cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2"] and cfg["every_s"] >= 60
+    assert cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"] and cfg["every_s"] >= 60
     assert cfg["ssh"][0] == "ssh" and all(isinstance(a, str) for a in cfg["ssh"]) and "BatchMode=yes" in cfg["ssh"]
