@@ -274,10 +274,11 @@ the claim and reports state. The runner's argv carries the workload's command, s
 launcher.log and keeps supervising, so the run still records its end and
 publishes. Stop a run with `research cancel RUN --reason TEXT` from any VM: SIGTERM to its workload's process group
 (status.json `pgid`), recorded first as a manual cancel, so the run
-classifies `CANCELLED_MANUAL` (on the machine: `kill -TERM -<pgid>`). A run still held ahead of its runner (`disk-hold`,
-`cpu-hold`) is withdrawn instead: its hold ends, and refused.json records fault `Withdrawn` (`research.withdraw`). Never SIGKILL the runner: one killed during
+classifies `CANCELLED_MANUAL` (on the machine: `kill -TERM -<pgid>`). Never SIGKILL the runner: one killed during
 its custody upload leaves the run without custody and its minted key on disk. `--exclusive` refuses if any run is live, and
 any launch refuses if an exclusive holder is live.
+A run still held ahead of its runner (`disk-hold`, `cpu-hold`) has no workload yet: `research cancel` withdraws it, ending
+the hold once it is the run's, and refused.json records fault `Withdrawn` (`research.withdraw`).
 
 The shipped tree is extracted with extraction mtimes (`tar -m`), not the commit time `git archive` stamps: a build dir shared
 across commits (Cargo's `/workspace/sp1-target`) judges freshness by mtime, and with commit times an older commit shipped after a

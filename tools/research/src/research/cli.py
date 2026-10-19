@@ -1203,8 +1203,7 @@ def cmd_fetch(argv: list[str]) -> int:
 
 def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
-                                                                     "workload's process group, recorded as a manual cancel (remote.cancel); a run "
-                                                                     "still held for disk or cores is withdrawn (research.withdraw)")
+                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
