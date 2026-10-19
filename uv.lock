@@ -2077,6 +2077,7 @@ dependencies = [
     { name = "verity-difftest" },
     { name = "verity-exact-kit" },
     { name = "verity-vllm" },
+    { name = "z3-solver" },
 ]
 
 [package.metadata]
@@ -2089,6 +2090,7 @@ requires-dist = [
     { name = "verity-difftest", editable = "verity/core/difftest" },
     { name = "verity-exact-kit", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "integrations/vllm" },
+    { name = "z3-solver", specifier = ">=4.13" },
 ]
 
 [[package]]
