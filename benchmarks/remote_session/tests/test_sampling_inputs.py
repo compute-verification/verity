@@ -1,6 +1,6 @@
-"""`sampling_inputs`' closed form for the paced line's sampling term is `paced_line`'s arithmetic on uniform sessions, with
-the wrong receipts spilling past one group and not; that arithmetic is a stretch worked by hand; and a region's solution
-meets the constraints it was solved under."""
+"""`sampling_inputs`' closed form for the paced line's sampling term is `paced_line`'s arithmetic on uniform sessions,
+with the wrong receipts spilling past one group and not; that arithmetic is a stretch worked by hand; and a region's
+solution meets the constraints it was solved under."""
 from __future__ import annotations
 
 import sys
@@ -35,10 +35,11 @@ def test_a_region_solution_meets_its_constraints():
     p = {"blocks": 130_023_424, "gpus": 8, "shard_bytes": 62 * 2 ** 30, "weights_bytes": 524_204_113_920,
          "c_s": 0.057, "xi": 2.638e6, "chip": 743_590.5, "codec_loss": None}
     prices = {"fit": 0.544, "floor": 0.08, "fit_deployed": 1.09, "floor_deployed": 0.16}
-    line = si.solve(p, prices, 0.01, theta=600.0, line_rule=True)
-    loose = si.solve(p, prices, 0.01, theta=600.0, line_rule=False)
-    for s in (line, loose):
-        assert s["eps_held"] <= 0.01 * (1 + 1e-12) and s["o"] == pytest.approx(s["d"] * s["r"] / s["k"])
-    assert 4 * p["xi"] * line["k"] / (line["r"] * p["blocks"]) <= 0.01 * (1 + 1e-12)
-    cost = {id(s): s["passes_gpus"] + s["proving_gpus_fit"] for s in (line, loose)}
-    assert cost[id(loose)] <= cost[id(line)] and loose["rebuild_held"] > line["rebuild_held"]
+    for flight in (2, 1):
+        line = si.solve(p, prices, 0.01, theta=600.0, line_rule=True, flight=flight)
+        loose = si.solve(p, prices, 0.01, theta=600.0, line_rule=False, flight=flight)
+        for s in (line, loose):
+            assert s["eps_held"] <= 0.01 * (1 + 1e-12) and s["o"] == pytest.approx(s["d"] * s["r"] / s["k"])
+        assert 2 * flight * p["xi"] * line["k"] / (line["r"] * p["blocks"]) <= 0.01 * (1 + 1e-12)
+        cost = {id(s): s["passes_gpus"] + s["proving_gpus_fit"] for s in (line, loose)}
+        assert cost[id(loose)] <= cost[id(line)] and loose["rebuild_held"] > line["rebuild_held"]

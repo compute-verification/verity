@@ -1,6 +1,6 @@
-"""The remote bandwidth audit's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the memory
-line's ε against the openings proved, the pass rate and pacing, and the window; the rebuilds the plan leaves in the line;
-and the serving cost of passes and of proved openings, at three served operating points.
+"""The remote bandwidth audit's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
+memory line's ε against the openings proved, the pass rate and pacing, and the window; the rebuilds the plan leaves in
+the line; and the serving cost of passes and of proved openings, at three served operating points.
 
     python sampling_inputs.py --verifier VERIFIER_JSON --cost-model COST_MODEL_JSON --out DIR
 
@@ -10,19 +10,22 @@ the closed form below against the same arithmetic on uniform sessions, and only 
 `COST_MODEL_JSON` is a `sampled_proofs.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
 
 With o openings proved a second, d of them a group of k passes at r passes a second, and β = B/d, where
-B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span Θ, as a
-fraction of the store's N blocks:
+B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span
+Θ, as a fraction of the store's N blocks:
 
     sampling, snapshot        B / S_Θ                                     S_Θ the openings drawn over Θ
     sampling, held over time  (B/o + min(1, β)·(L_max − k/r)) / Θ
     rebuilds, held over time  2·L_max·(X_r + I)·(Θ + 2·L_max) / (Θ·N)
 
-Θ is a stretch, as the recorded line reads each (`paced_line` charges every stretch the session's whole pooled wrong count
-and cites the worst), or the whole session, with the wrong count charged once (the pooled reading, the same arithmetic
-over one stretch of every credited group). The sampling terms place the wrong receipts `audit.pooled` allows where they
-cost most: one group's worth in the group after Θ at L_max/k a receipt, the rest at 1/r. The rebuild term ends an absence
-of up to 2·L_max at every rebuild and ingress the ceilings allow. In the recorded sessions two groups are in flight (each
-group's coin leaves before the root of the group before it arrives), so L_max = 2k/r + c, with c measured.
+Θ is a stretch, as the recorded line reads each (`paced_line` charges every stretch the session's whole pooled wrong
+count and cites the worst), or the whole session, with the wrong count charged once (the pooled reading, the same
+arithmetic over one stretch of every credited group). The sampling terms place the wrong receipts `audit.pooled` allows
+where they cost most: one group's worth in the group after Θ at L_max/k a receipt, the rest at 1/r. The rebuild term
+ends an absence of up to 2·L_max at every rebuild and ingress the ceilings allow.
+
+L_max = f·k/r + c with f groups in flight. The recorded sessions run their passes back to back with two in flight (each
+group's coin leaves before the root of the group before it arrives), so f = 2 there, with c measured. f = 1 is a coin
+sent on a timer at r/k a second once the root before it is in, which no session has run: modeled, with the same c.
 """
 from __future__ import annotations
 
@@ -50,11 +53,13 @@ FLOOR_GPU_S = 0.0799
 """An opening's GPU device phase at a full statement, firewall on: note:20261018T1937Z-report-zk-openings
 (r20261018-211523-93ec), measured."""
 DEPLOYED_EXTRA_ANDS = (45.4e6 - 20.3e6) + 5e6
-"""p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: the same note's caveats, modeled."""
+"""p1024/k3/masked's decode over p512/k2's, and the deployed trees' depths, per opening: the same note's caveats,
+modeled."""
 MEMSAT = {"run": "r20261018-222953-fbf1", "plain": 4260.0, "codec": 3271.0,
-          "arms": [(65.84, 5.91e-3, 0.9689, 1999.0), (29.81, 6.18e-3, 0.9862, 2669.0), (14.90, 3.87e-3, 0.9934, 3083.0)]}
-"""int8 Llama-3.1-8B on one GPU at saturation (note:hash/20261018T1935Z-draft-memsat): output tokens/s plain and with the
-codec, and per receipts arm (passes/s, serving s a pass, γ at spec R, tokens/s)."""
+          "arms": [(65.84, 5.91e-3, 0.9689, 1999.0), (29.81, 6.18e-3, 0.9862, 2669.0),
+                   (14.90, 3.87e-3, 0.9934, 3083.0)]}
+"""int8 Llama-3.1-8B on one GPU at saturation (note:hash/20261018T1935Z-draft-memsat): output tokens/s plain and with
+the codec, and per receipts arm (passes/s, serving s a pass, γ at spec R, tokens/s)."""
 
 
 def groups_of(seen: list[dict]) -> SimpleNamespace:
@@ -131,7 +136,8 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
         if len(stretches) != len(paced["stretches"]):
             raise SystemExit(f"session {i}: {len(stretches)} stretches against the ledger's {len(paced['stretches'])}")
         for m, (a, b) in enumerate(zip(stretches, paced["stretches"])):
-            for key in ("span_ns", "passes", "l_max_ns", "rebuild_blocks", "rebuild_absent_blocks", "wrong_absent_blocks"):
+            for key in ("span_ns", "passes", "l_max_ns", "rebuild_blocks", "rebuild_absent_blocks",
+                        "wrong_absent_blocks"):
                 agree(f"session {i} stretch {m} {key}", a[key], b[key])
             agree(f"session {i} stretch {m} held", a["held_lost_blocks"], b["held over time"]["lost_blocks"])
             agree(f"session {i} stretch {m} snapshot", a["snapshot_lost_blocks"], b["held on average"]["lost_blocks"])
@@ -182,8 +188,8 @@ def check_closed_form() -> list[dict]:
 
 
 def opening_prices(cost_model: dict) -> dict:
-    """GPU-s an opening at a full statement: the one fit's (`costfit`'s rates) at the measured unit and the deployed one,
-    and the device floor at both."""
+    """GPU-s an opening at a full statement: the one fit's (`costfit`'s rates) at the measured unit and the deployed
+    one, and the device floor at both."""
     fitted = costfit.from_record(cost_model)
     m = fitted.model()
     ands = [o["ands"] for o in cost_model["observations"] if o["template"].startswith("BlockOpeningCheck_v1")]
@@ -226,9 +232,9 @@ def points(recorded: list[dict]) -> dict:
     }
 
 
-def line_at(p: dict, *, o: float, d: float, k: float, r: float, theta: float) -> dict:
+def line_at(p: dict, *, o: float, d: float, k: float, r: float, theta: float, flight: int = 2) -> dict:
     """The module's closed form at an operating point: the line's terms as fractions of the store, and the line."""
-    l_max = 2 * k / r + p["c_s"]
+    l_max = flight * k / r + p["c_s"]
     snap, held = closed(o=o, d=d, k=k, r=r, l_max=l_max, theta=theta)
     N = p["blocks"]
     rebuild = 2 * l_max * p["xi"] * (theta + 2 * l_max) / (theta * N)
@@ -246,11 +252,12 @@ def costs(p: dict, prices: dict, *, o: float, r: float) -> dict:
             **{f"proving_gpus_{name}": o * prices[name] for name in ("fit", "floor", "fit_deployed", "floor_deployed")}}
 
 
-def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, price: str = "fit") -> dict | None:
+def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, flight: int = 2,
+          price: str = "fit") -> dict | None:
     """The cheapest (r, k, d) whose held-over-time sampling term over Θ is at most ε, and, under `line_rule`, whose
-    rebuild excess over L_max's floor c, 4·(X_r + I)·k / (r·N), is at most ε too. For each (k, d), r is the least that
-    meets them: k/r ≤ ε·N/(4·(X_r + I)), and k/r·(β + min(1, β)) + min(1, β)·c ≤ ε·Θ."""
-    tau = eps * p["blocks"] / (4 * p["xi"]) if line_rule else math.inf
+    rebuild excess over L_max's floor c, 2·f·(X_r + I)·k / (r·N), is at most ε too. For each (k, d), r is the least that
+    meets them: k/r ≤ ε·N/(2·f·(X_r + I)), and k/r·(β + min(1, β)·(f − 1)) + min(1, β)·c ≤ ε·Θ."""
+    tau = eps * p["blocks"] / (2 * flight * p["xi"]) if line_rule else math.inf
     t_s = p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
     best = None
     for k in range(1, 9):
@@ -259,7 +266,7 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, p
             room = eps * theta - min(1.0, beta) * p["c_s"]
             if room <= 0:
                 continue
-            r = k * max(1 / tau, (beta + min(1.0, beta)) / room)
+            r = k * max(1 / tau, (beta + min(1.0, beta) * (flight - 1)) / room)
             if r * t_s > 1:
                 continue
             o = d * r / k
@@ -269,8 +276,8 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, p
     if best is None:
         return None
     _, k, d, r, o = best
-    return {"eps": eps, "theta_s": theta, "line_rule": line_rule, "price": price, "k": k, "d": d, "r": r, "o": o,
-            **line_at(p, o=o, d=d, k=k, r=r, theta=theta), **costs(p, prices, o=o, r=r)}
+    return {"eps": eps, "theta_s": theta, "line_rule": line_rule, "flight": flight, "price": price, "k": k, "d": d,
+            "r": r, "o": o, **line_at(p, o=o, d=d, k=k, r=r, theta=theta, flight=flight), **costs(p, prices, o=o, r=r)}
 
 
 def pct(x: float, digits: int = 3) -> str:
@@ -287,7 +294,8 @@ def main() -> None:
     ap.add_argument("--verifier", type=Path, required=True)
     ap.add_argument("--cost-model", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--ingress-bytes-per-s", type=float, default=2.8e9, help="the node's disks, as the record charged them")
+    ap.add_argument("--ingress-bytes-per-s", type=float, default=2.8e9,
+                    help="the node's disks, as the record charged them")
     ap.add_argument("--window", type=float, default=60.0, help="T, s")
     ap.add_argument("--horizon", type=float, default=600.0, help="the pooled reading's session, s")
     a = ap.parse_args()
@@ -304,7 +312,8 @@ def main() -> None:
     md.append(table(["session", "T", "groups x draws", "passes/s", "L_max", "c", "wrong (pooled)",
                      "worst stretch: ε snapshot / held", "rebuild held", "pooled over the session: ε snapshot / held",
                      "session span"],
-                    [[x["session"], f"{x['t_ms'] / 1e3:g} s", f"{x['groups']} x {x['draws']}", f"{x['passes_per_s']:.2f}",
+                    [[x["session"], f"{x['t_ms'] / 1e3:g} s", f"{x['groups']} x {x['draws']}",
+                      f"{x['passes_per_s']:.2f}",
                       f"{x['l_max_s'] * 1e3:.1f} ms", f"{x['c_s'] * 1e3:.1f} ms", f"{x['wrong']:.4g}",
                       f"{pct(x['worst']['eps_snapshot'])} / {pct(x['worst']['eps_held'])}",
                       pct(x["worst"]["rebuild_held"]),
@@ -330,35 +339,41 @@ def main() -> None:
     md.append(f"\n## The region: ε held over time pooled over {H:g} s, cheapest at the one fit's price\n")
     region = []
     for name, p in pts.items():
-        for eps in (0.005, 0.01, 0.02):
-            for line_rule in (True, False):
-                s = solve(p, prices, eps, theta=H, line_rule=line_rule)
-                if s is not None:
-                    s.update(point=name, window_s=T, per_window=closed(o=s["o"], d=s["d"], k=s["k"], r=s["r"],
-                                                                       l_max=s["l_max_s"], theta=T)[1])
-                    if eps == 0.01 and (line_rule or name not in chosen):
-                        chosen[name] = s
-                region.append(s or {"point": name, "eps": eps, "line_rule": line_rule, "infeasible": True})
-        s = solve(p, prices, 0.01, theta=T, line_rule=True)
-        region.append(dict(s, point=name, window_s=T, per_window=s["eps_held"], reading="a window") if s else
-                      {"point": name, "eps": 0.01, "line_rule": True, "reading": "a window", "infeasible": True})
+        for flight in (2, 1):
+            for eps in (0.005, 0.01, 0.02) if name != "8B x1" else (0.01,):
+                for line_rule in (True, False):
+                    s = solve(p, prices, eps, theta=H, line_rule=line_rule, flight=flight)
+                    if s is not None:
+                        s.update(point=name, window_s=T, per_window=closed(o=s["o"], d=s["d"], k=s["k"], r=s["r"],
+                                                                           l_max=s["l_max_s"], theta=T)[1])
+                        if eps == 0.01 and flight == 2 and (line_rule or name not in chosen):
+                            chosen[name] = s
+                    region.append(s or {"point": name, "eps": eps, "line_rule": line_rule, "flight": flight,
+                                        "infeasible": True})
+            s = solve(p, prices, 0.01, theta=T, line_rule=True, flight=flight)
+            region.append(dict(s, point=name, window_s=T, per_window=s["eps_held"], reading="a window") if s else
+                          {"point": name, "eps": 0.01, "line_rule": True, "flight": flight, "reading": "a window",
+                           "infeasible": True})
     rows = []
     for s in region:
+        head = [s["point"], s["flight"], pct(s["eps"]), "line" if s["line_rule"] else "ε only",
+                s.get("reading", "pooled")]
         if s.get("infeasible"):
-            rows.append([s["point"], pct(s["eps"]), "line" if s["line_rule"] else "ε only", s.get("reading", "pooled"),
-                         "infeasible"] + [""] * 11)
+            rows.append(head + ["infeasible"] + [""] * 11)
             continue
-        rows.append([s["point"], pct(s["eps"]), "line" if s["line_rule"] else "ε only", s.get("reading", "pooled"),
-                     f"{s['r']:.3g}", s["k"], s["d"], f"{s['o']:.3g}", f"{s['o'] * T:,.0f}", f"{s['l_max_s'] * 1e3:.0f} ms",
+        rows.append(head + [f"{s['r']:.3g}", s["k"], s["d"], f"{s['o']:.3g}", f"{s['o'] * T:,.0f}",
+                     f"{s['l_max_s'] * 1e3:.0f} ms",
                      pct(s["eps_held"]), pct(s["per_window"]), pct(s["rebuild_held"]),
                      f"{pct(s['serving_share'])} ({s['passes_gpus']:.2f})",
                      f"{s['proving_gpus_fit']:.2f} / {s['proving_gpus_floor']:.2f}",
                      f"{s['proving_gpus_fit_deployed']:.2f} / {s['proving_gpus_floor_deployed']:.2f}"])
-    md.append(table(["point", "ε*", "rule", "reading", "passes/s r", "k", "draws a group d", "openings/s o",
+    md.append(table(["point", "groups in flight", "ε*", "rule", "reading", "passes/s r", "k", "draws a group d",
+                     "openings/s o",
                      f"openings a {T:g}-s window", "L_max", "ε held (reading)", "ε held a window", "rebuilds held",
                      "pass serving a GPU (GPUs)", "proving GPUs, fit / floor", "deployed unit, fit / floor"], rows))
 
-    md.append(f"\n## Pass rate at each point's 1% openings rate (the line rule's, else ε only's), pooled over {H:g} s\n")
+    md.append(f"\n## Pass rate at each point's 1% openings rate (the line rule's, else ε only's), pooled over "
+              f"{H:g} s\n")
     sweep = []
     for name, rates in (("32B x8", (1.0, 2.0, 4.0, 8.0, r32, 16.0)), ("8B x8", (8.0, 14.90, 29.81, 65.84, 100.0)),
                         ("8B x1", (14.90, 29.81, 65.84))):
@@ -366,19 +381,23 @@ def main() -> None:
         for r in rates:
             k = max(1, math.ceil(r / o))
             d = o * k / r
-            ln, c = line_at(p, o=o, d=d, k=k, r=r, theta=H), costs(p, prices, o=o, r=r)
+            two, one = (line_at(p, o=o, d=d, k=k, r=r, theta=H, flight=f) for f in (2, 1))
             meas = [arm for arm in MEMSAT["arms"] if arm[0] == r] if name.startswith("8B") else []
-            sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **ln, **c,
+            sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **two, "one_in_flight": one,
+                          **costs(p, prices, o=o, r=r),
                           "reads_over_R": r * p["blocks"] * BLOCK / timing.SPEC_BYTES_PER_S,
                           "measured": {"serving_share": meas[0][0] * meas[0][1], "gamma_spec": meas[0][2],
                                        "tokens_per_s": meas[0][3]} if meas else None})
-    rows = [[x["point"], f"{x['r']:.4g}", x["k"], f"{x['d']:.3g}", f"{x['l_max_s'] * 1e3:.0f} ms",
+    rows = [[x["point"], f"{x['r']:.4g}", x["k"], f"{x['d']:.3g}",
+             f"{x['l_max_s'] * 1e3:.0f} / {x['one_in_flight']['l_max_s'] * 1e3:.0f} ms",
              pct(x["serving_share"]) + (f" ({pct(x['measured']['serving_share'])} measured)" if x["measured"] else ""),
              pct(x["reads_over_R"]) + (f" (1 − γ {pct(1 - x['measured']['gamma_spec'])})" if x["measured"] else ""),
-             pct(x["eps_held"]), pct(x["rebuild_held"]), pct(x["chip"]),
-             f"{x['credited_bytes'] / 1e9:.1f} GB"] for x in sweep]
-    md.append(table(["point", "passes/s", "k", "draws a group", "L_max", "pass serving a GPU", "reads / R (≥ 1 − γ)",
-                     "ε held, pooled", "rebuilds held", "chip", "weights credited, held over time"], rows))
+             f"{pct(x['eps_held'])} / {pct(x['one_in_flight']['eps_held'])}",
+             f"{pct(x['rebuild_held'])} / {pct(x['one_in_flight']['rebuild_held'])}", pct(x["chip"]),
+             f"{x['credited_bytes'] / 1e9:.1f} / {x['one_in_flight']['credited_bytes'] / 1e9:.1f} GB"] for x in sweep]
+    md.append(table(["point", "passes/s", "k", "draws a group", "L_max, 2 / 1 in flight", "pass serving a GPU",
+                     "reads / R (≥ 1 − γ)", "ε held, pooled, 2 / 1", "rebuilds held, 2 / 1", "chip",
+                     "weights credited, held over time, 2 / 1"], rows))
 
     md.append("\n## Serve-time commitments at each point's 1% region (the line rule's, else ε only's), modeled\n")
     serve = []
@@ -390,11 +409,13 @@ def main() -> None:
                "receipt_bytes_per_s": s["r"] * p["blocks"] * 64, "receipt_leaves_per_s": s["r"] * p["blocks"] / 16,
                "pass_roots_per_s": s["r"], "coins_per_s": 2 * s["r"] / s["k"], "openings_per_s": s["o"]}
         serve.append(row)
-    md.append(table(["point", "r", "k", "tokens/s (32B: offered; 8B: codec less passes)", "store, once", "receipts a s (a token)",
+    md.append(table(["point", "r", "k", "tokens/s (32B: offered; 8B: codec less passes)", "store, once",
+                     "receipts a s (a token)",
                      "receipt leaves a s", "pass roots a s", "coins a s (32 B)", "openings a s (a token)"],
                     [[x["point"], f"{x['r']:.3g}", x["k"], f"{x['tokens_per_s']:,.0f}",
                       f"{x['store_bytes'] / 1e9:.1f} GB, {x['payload_leaves']:,} leaves",
-                      f"{x['receipt_bytes_per_s'] / 1e9:.2f} GB ({x['receipt_bytes_per_s'] / x['tokens_per_s'] / 1e6:.2f} MB)",
+                      f"{x['receipt_bytes_per_s'] / 1e9:.2f} GB "
+                      f"({x['receipt_bytes_per_s'] / x['tokens_per_s'] / 1e6:.2f} MB)",
                       f"{x['receipt_leaves_per_s']:,.0f}", f"{x['pass_roots_per_s']:.3g}", f"{x['coins_per_s']:.3g}",
                       f"{x['openings_per_s']:.3g} ({x['openings_per_s'] / x['tokens_per_s']:.2g})"] for x in serve]))
 
