@@ -1,0 +1,363 @@
+"""FOLD-XOR's search: no program of k instructions drawn from DS-100's IMAD- and FP-pipe forms on sm_100a computes
+z = x ⊕ y ⊕ K on full 32-bit words, for any constant K (note:20261019T0740Z-draft-rt-fold, FOLD-XOR).
+
+The premise it checks. Priced at k + 1 IMAD-pipe instructions a LOP3, the B200 sheet's headline is under 1% for every
+k ≥ 3 (`fold_xor.py`'s curve: 0.9425% at 4). So "ε < 1%" rests on "li's XOR has no IMAD- or FP-pipe program of 3 or
+fewer instructions", and this search turns that into a checked fact.
+
+The menu is `fold_xor.py`'s: the opcodes `facet_break.loads.class_of` routes to class IMAD or FFMA, the two classes
+DS-100 prices on the IMAD and FP pipes. Each is covered by a modelled form whose behaviour contains the hardware's
+(`COVER`, checked against `class_of`), so a program the search rules out is ruled out on the device. Every modifier
+below is a free choice of the search, per instruction:
+- IMAD: d = ±(a·b) + c' mod 2^32, where c' is c, −c or ~c, plus 0 or 1. It covers IMAD.MOV, IMAD.IADD, IMAD.SHL and
+  IMUL, which are IMAD with constant operands, SASS's −b (−(a·b)), −c and ~c, and IMAD.X: its carry-in is a
+  predicate, and no instruction on the menu writes one (ISETP, FSETP and IADD3 are class ALU), so on the menu it is
+  PT or !PT, the 0 or 1.
+- IMAD.HI: both halves of the 64-bit s = ±(a'·b') + C' mod 2^64, where a' is a or −a and b' is b or −b (32-bit), each
+  sign- or zero-extended on its own, and C' is the 64-bit register pair {c_hi:c_lo} (each half a register or a
+  constant, the convention `fold_xor.py`'s 78 uses: {0, c} and {0, B'}), its negation or complement, plus 0 or 1.
+  hi32(s) is IMAD.HI's result, and the pair is IMAD.WIDE's and IMUL.WIDE's, so those are covered too.
+- IDP.4A: d = c + Σ_i a.b_i·b.b_i over the 4 bytes, and IDP.2A: d = c + a.h0·b.b_{2s} + a.h1·b.b_{2s+1} (.LO s = 0,
+  .HI s = 1), signed or unsigned independently in a and b.
+- FFMA2 (FADD2, FMUL2): two FFMA lanes in one instruction, each with its own operands. A lane is IEEE binary32
+  fma(±|a|, ±|b|, ±|c|) under any rounding mode (RN, RZ, RM, RP and RNA), with .FTZ (subnormal operands and result to
+  sign-preserving zero), .SAT (to [0, 1], NaN to +0, and −0 to either zero) and .FMZ (0 times anything is 0, its sign
+  +0 or the operands' xor), and a NaN result is the canonical 0x7FFFFFFF. It covers FFMA, and FADD and FMUL, which
+  are FFMA with b = 1.0 and c = −0.0.
+- Off the menu, as `fold_xor.py` checks: HFMA2 (class HFMA2) has no DS-100 row, nor IMAD.WIDE (IMADW), which the
+  IMAD.HI form covers anyway.
+
+An operand is any earlier value (x, y or a result) or a free 32-bit constant; K is free too. The output is the last
+instruction's result: a program whose output is earlier is a shorter program, and k = 0 is x or y, so "no program of
+1, ..., k instructions" is "none of k or fewer". The last instruction is never FP: x ⊕ y ⊕ K takes every 32-bit value
+(fix y, and x ranges over all), the non-canonical NaN patterns among them, and an FP lane returns only 0x7FFFFFFF.
+
+The search. For each sequence of opcodes, CEGIS over z3's bit-vectors and floats: find wiring, modifiers, constants and
+K that compute x ⊕ y ⊕ K on a set of inputs, then look for an input where that program is wrong and add it. When no
+program fits the inputs found (unsat), none of that sequence computes it on all inputs: that is the proof, with no
+sampled constant anywhere. A program that is right on every input would be reported as FOUND, refuting the premise.
+`--target add` and `--target mulhi` are the search finding programs that exist (x + y + K, hi32(x·y) + K), so it
+isn't vacuous.
+
+Run: `python fold_xor_search.py --k 3 [--jobs N] [--no-fp] [--timeout-ms T] [--json PATH] [--target xor|add|mulhi]`.
+Exit 0 when every sequence is unsat (the bound holds), 1 when one is FOUND, 2 when one is unknown (a timeout).
+Stdlib and z3.
+"""
+from __future__ import annotations
+
+import argparse
+import itertools
+import json
+import random
+import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+import z3
+
+M32 = 0xFFFFFFFF
+SEED = 0xF0D5
+INT_OPS = ("IMAD", "IMAD.HI", "IDP.4A", "IDP.2A")
+FP_OPS = ("FFMA2",)
+#: operand slots and results of each modelled form
+SLOTS = {"IMAD": 3, "IMAD.HI": 4, "IDP.4A": 3, "IDP.2A": 3, "FFMA2": 6}
+OUTS = {"IMAD": 1, "IMAD.HI": 2, "IDP.4A": 1, "IDP.2A": 1, "FFMA2": 2}
+#: every opcode DS-100 prices on the IMAD and FP pipes, and the modelled form that covers it (see the docstring)
+COVER = {
+    "IMAD": "IMAD", "IMAD.MOV.U32": "IMAD", "IMAD.IADD": "IMAD", "IMAD.SHL.U32": "IMAD", "IMAD.X": "IMAD",
+    "IMUL": "IMAD", "IMAD.HI": "IMAD.HI", "IMAD.HI.U32": "IMAD.HI", "IMAD.HI.X": "IMAD.HI", "IMUL.HI": "IMAD.HI",
+    "IMUL.WIDE": "IMAD.HI", "IMUL.WIDE.U32": "IMAD.HI",
+    "IDP.4A.S8.S8": "IDP.4A", "IDP.4A.U8.U8": "IDP.4A", "IDP.4A.S8.U8": "IDP.4A", "IDP.4A.U8.S8": "IDP.4A",
+    "IDP.2A.LO.S16.S8": "IDP.2A", "IDP.2A.LO.U16.U8": "IDP.2A", "IDP.2A.HI.S16.S8": "IDP.2A",
+    "IDP.2A.HI.U16.U8": "IDP.2A",
+    "FFMA": "FFMA2", "FADD": "FFMA2", "FMUL": "FFMA2", "FFMA2": "FFMA2", "FADD2": "FFMA2", "FMUL2": "FFMA2",
+    "FFMA.FTZ": "FFMA2", "FADD.FTZ.SAT": "FFMA2", "FMUL.FMZ": "FFMA2", "FFMA.RZ": "FFMA2",
+}
+OFF_MENU = ("IMAD.WIDE.U32", "IMAD.WIDE", "HFMA2", "HADD2", "HMUL2")
+F32 = z3.Float32()
+CANON_NAN = 0x7FFFFFFF
+
+
+def bv(v: int):
+    return z3.BitVecVal(v & M32, 32)
+
+
+def mux(sel, opts):
+    if isinstance(sel, int):
+        return opts[sel]
+    out = opts[-1]
+    for i in range(len(opts) - 2, -1, -1):
+        out = z3.If(sel == i, opts[i], out)
+    return out
+
+
+# ---- the modelled forms ----------------------------------------------------------------------------------------------
+
+def ext(v, hi: int, lo: int, signed):
+    part = z3.Extract(hi, lo, v)
+    pad = 32 - (hi - lo + 1)
+    return z3.If(signed, z3.SignExt(pad, part), z3.ZeroExt(pad, part))
+
+
+def _addend(c, m, width: int):
+    """SASS's c operand of an IMAD form: c, −c or ~c, plus .X's carry-in (a constant 0 or 1 on the menu)."""
+    one = z3.BitVecVal(1, width)
+    c = z3.If(m["nc"], -c, c)
+    return c - z3.If(m["inv"], one, 0) + z3.If(m["cx"], one, 0)
+
+
+def imad(o, m):
+    p = o[0] * o[1]
+    return [z3.If(m["np"], -p, p) + _addend(o[2], m, 32)]
+
+
+def imad_hi(o, m):
+    """Both halves of the 64-bit a·b + {c_hi:c_lo}: the high one is IMAD.HI's, and the pair is IMAD.WIDE's and
+    IMUL.WIDE's (off the menu, covered anyway)."""
+    a = z3.If(m["na"], -o[0], o[0])
+    b = z3.If(m["nb"], -o[1], o[1])
+    a = z3.If(m["sa"], z3.SignExt(32, a), z3.ZeroExt(32, a))
+    b = z3.If(m["sb"], z3.SignExt(32, b), z3.ZeroExt(32, b))
+    p = a * b
+    s = z3.If(m["np"], -p, p) + _addend(z3.Concat(o[3], o[2]), m, 64)
+    return [z3.Extract(31, 0, s), z3.Extract(63, 32, s)]
+
+
+def idp4a(o, m):
+    acc = o[2]
+    for i in range(4):
+        acc = acc + ext(o[0], 8 * i + 7, 8 * i, m["sa"]) * ext(o[1], 8 * i + 7, 8 * i, m["sb"])
+    return [acc]
+
+
+def idp2a(o, m):
+    lo = [o[2]]
+    for half in range(2):
+        b0 = z3.If(m["hi"], ext(o[1], 8 * (half + 2) + 7, 8 * (half + 2), m["sb"]),
+                   ext(o[1], 8 * half + 7, 8 * half, m["sb"]))
+        lo.append(ext(o[0], 16 * half + 15, 16 * half, m["sa"]) * b0)
+    return [lo[0] + lo[1] + lo[2]]
+
+
+def _flush(f, on):
+    zero = z3.If(z3.fpIsNegative(f), z3.fpMinusZero(F32), z3.fpPlusZero(F32))
+    return z3.If(z3.And(on, z3.fpIsSubnormal(f)), zero, f)
+
+
+def lane(a, b, c, m, p: str):
+    """One FFMA lane: binary32 fma of the operands as floats, under the lane's modifiers; the result's bits."""
+    args = []
+    for v, n in ((a, "a"), (b, "b"), (c, "c")):
+        f = _flush(z3.fpBVToFP(v, F32), m["ftz" + p])
+        f = z3.If(m[f"abs{n}{p}"], z3.fpAbs(f), f)
+        args.append(z3.If(m[f"neg{n}{p}"], z3.fpNeg(f), f))
+    one = z3.FPVal(1.0, F32)
+    fa, fb, fc = args
+    fmz = z3.And(m["fmz" + p], z3.Or(z3.fpIsZero(fa), z3.fpIsZero(fb)))
+    zs = z3.And(m["fmzx" + p], z3.Xor(z3.fpIsNegative(fa), z3.fpIsNegative(fb)))
+    fa = z3.If(fmz, z3.If(zs, z3.fpMinusZero(F32), z3.fpPlusZero(F32)), fa)
+    fb = z3.If(fmz, one, fb)
+    r = _flush(z3.fpFMA(m["rm" + p], fa, fb, fc), m["ftz" + p])
+    low = z3.If(z3.And(m["satz" + p], z3.fpIsZero(r)), r, z3.fpPlusZero(F32))
+    sat = z3.If(z3.Or(z3.fpIsNaN(r), z3.fpIsZero(r), z3.fpLT(r, z3.fpPlusZero(F32))), low,
+                z3.If(z3.fpGT(r, one), one, r))
+    r = z3.If(m["sat" + p], sat, r)
+    return z3.If(z3.fpIsNaN(r), bv(CANON_NAN), z3.fpToIEEEBV(r))
+
+
+def ffma2(o, m):
+    return [lane(o[0], o[1], o[2], m, "0"), lane(o[3], o[4], o[5], m, "1")]
+
+
+FORMS = {"IMAD": imad, "IMAD.HI": imad_hi, "IDP.4A": idp4a, "IDP.2A": idp2a, "FFMA2": ffma2}
+
+
+def modifiers(op: str, tag: str) -> dict:
+    B = lambda n: z3.Bool(f"{tag}_{n}")
+    signs = {n: B(n) for n in ("np", "nc", "inv", "cx")}
+    if op == "IMAD":
+        return signs
+    if op == "IMAD.HI":
+        return {"sa": B("sa"), "sb": B("sb"), "na": B("na"), "nb": B("nb"), **signs}
+    if op == "IDP.4A":
+        return {"sa": B("sa"), "sb": B("sb")}
+    if op == "IDP.2A":
+        return {"sa": B("sa"), "sb": B("sb"), "hi": B("hi")}
+    if op == "FFMA2":
+        m = {}
+        for p in "01":
+            m["rm" + p] = z3.Const(f"{tag}_rm{p}", z3.RNE().sort())
+            for n in ("ftz", "sat", "satz", "fmz", "fmzx", "absa", "absb", "absc", "nega", "negb", "negc"):
+                m[n + p] = B(n + p)
+        return m
+    return {}
+
+
+# ---- the program skeleton and its evaluation --------------------------------------------------------------------------
+
+def label(ops: tuple) -> str:
+    return " ".join(op if isinstance(op, str) else f"{op[0]}{list(op[1])}" for op in ops)
+
+
+def op_name(op) -> str:
+    return op if isinstance(op, str) else op[0]
+
+
+def skeleton(ops: tuple):
+    """The symbolic program for a sequence of opcodes: per instruction its operand selectors (an index into the values
+    so far, or the last index for its own constant), constants and modifiers; and the constraints on the selectors.
+    An IMAD.HI is (op, (a, b)), its multiplicands' sources fixed (the search enumerates them): a symbolic 32 × 32
+    product under a selector is what z3 can't refute, and with x and y concrete at each input a fixed source makes the
+    product concrete, or a constant times a concrete word."""
+    prog, cons, pool = [], [], 2
+    for i, op in enumerate(ops):
+        tag, name = f"i{i}", op_name(op)
+        slots = [(z3.BitVec(f"{tag}_s{j}", 4), z3.BitVec(f"{tag}_c{j}", 32)) for j in range(SLOTS[name])]
+        if not isinstance(op, str):
+            slots[0], slots[1] = (op[1][0], slots[0][1]), (op[1][1], slots[1][1])
+        cons += [z3.ULE(s, pool) for s, _ in slots if not isinstance(s, int)]
+        if name in ("IMAD", "IDP.4A"):
+            cons.append(z3.ULE(slots[0][0], slots[1][0]))          # a·b = b·a (the modifiers swap with them)
+        prog.append((name, slots, modifiers(name, tag)))
+        pool += OUTS[name]
+    return prog, cons
+
+
+def evaluate(prog, x, y):
+    pool = [x, y]
+    for op, slots, m in prog:
+        vals = [mux(s, pool + [c]) for s, c in slots]
+        pool += FORMS[op](vals, m)
+    return pool[-1]
+
+
+def target(name: str, x, y, K):
+    if name == "xor":
+        return x ^ y ^ K
+    if name == "add":
+        return x + y + K
+    if name == "mulhi":
+        return z3.Extract(63, 32, z3.ZeroExt(32, x) * z3.ZeroExt(32, y)) + K
+    raise SystemExit(f"unknown target {name}")
+
+
+def initial_inputs(rng: random.Random) -> list[tuple[int, int]]:
+    edge = [(0, 0), (M32, M32), (0, M32), (M32, 0), (1, 0), (0, 1), (0x55555555, 0xAAAAAAAA), (1 << 31, 0)]
+    return edge + [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(4)]
+
+
+def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED) -> dict:
+    """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
+    unknown (a timeout)."""
+    rng = random.Random(f"{seed}:{label(ops)}:{tname}")
+    prog, cons = skeleton(ops)
+    K = z3.BitVec("K", 32)
+    syn = z3.Solver()
+    if timeout_ms:
+        syn.set("timeout", timeout_ms)
+    syn.add(cons)
+    inputs = []
+
+    def add(x: int, y: int):
+        inputs.append((x, y))
+        syn.add(evaluate(prog, bv(x), bv(y)) == target(tname, bv(x), bv(y), K))
+
+    for x, y in initial_inputs(rng):
+        add(x, y)
+    X, Y = z3.BitVec("X", 32), z3.BitVec("Y", 32)
+    general = evaluate(prog, X, Y) != target(tname, X, Y, K)
+    free = [v for _, slots, m in prog for s, c in slots for v in (s, c) if not isinstance(v, int)]
+    free += [v for _, _, m in prog for v in m.values()]
+    while True:
+        r = syn.check()
+        if r == z3.unsat:
+            return {"ops": label(ops), "result": "unsat", "inputs": len(inputs)}
+        if r != z3.sat:
+            return {"ops": label(ops), "result": "unknown", "inputs": len(inputs), "stage": "synthesis"}
+        mdl = syn.model()
+        fix = [(v, mdl.eval(v, model_completion=True)) for v in free + [K]]
+        ver = z3.Solver()
+        if timeout_ms:
+            ver.set("timeout", timeout_ms)
+        ver.add(z3.substitute(general, *fix))
+        rv = ver.check()
+        if rv == z3.unsat:
+            return {"ops": label(ops), "result": "FOUND", "inputs": len(inputs),
+                    "program": {str(v): str(val) for v, val in fix}}
+        if rv != z3.sat:
+            return {"ops": label(ops), "result": "unknown", "inputs": len(inputs), "stage": "verification"}
+        cx = ver.model()
+        add(cx.eval(X, model_completion=True).as_long(), cx.eval(Y, model_completion=True).as_long())
+
+
+def sequences(k: int, fp: bool) -> list[tuple]:
+    """Every sequence of k opcodes, the last an integer form (an FP lane's result never is x ⊕ y ⊕ K), each IMAD.HI
+    with each unordered pair of multiplicand sources (a·b = b·a, the signedness swapping with them)."""
+    inner = INT_OPS + (FP_OPS if fp else ())
+    out = []
+    for names in itertools.product(*([inner] * (k - 1) + [INT_OPS])):
+        pools, pool = [], 2
+        for n in names:
+            pools.append(pool)
+            pool += OUTS[n]
+        choices = [[(n, ab) for ab in itertools.combinations_with_replacement(range(p + 1), 2)] if n == "IMAD.HI"
+                   else [n] for n, p in zip(names, pools)]
+        out += list(itertools.product(*choices))
+    return out
+
+
+def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None) -> dict:
+    """Every sequence of k opcodes; each result is also written to `stream` (JSON lines) as it finishes."""
+    seqs = sequences(k, fp)
+    res = []
+
+    def done(r):
+        res.append(r)
+        if stream:
+            stream.write(json.dumps({"k": k, "fp": fp, **r}) + "\n")
+            stream.flush()
+
+    if jobs > 1:
+        with ProcessPoolExecutor(jobs) as ex:
+            for f in as_completed([ex.submit(cegis, s, tname, timeout_ms) for s in seqs]):
+                done(f.result())
+    else:
+        for s in seqs:
+            done(cegis(s, tname, timeout_ms))
+    tally = {r: sum(1 for x in res if x["result"] == r) for r in ("unsat", "FOUND", "unknown")}
+    return {"k": k, "fp": fp, "target": tname, "sequences": len(seqs), "tally": tally,
+            "proved": tally["unsat"] == len(seqs), "results": res}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--k", type=int, default=3)
+    ap.add_argument("--from-k", type=int, default=1, help="search every k from this one up to --k")
+    ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--no-fp", action="store_true")
+    ap.add_argument("--timeout-ms", type=int, default=0)
+    ap.add_argument("--target", default="xor", choices=("xor", "add", "mulhi"))
+    ap.add_argument("--json")
+    ap.add_argument("--stream", help="append each sequence's result to this file as a JSON line")
+    a = ap.parse_args()
+    out, rc = [], 0
+    stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
+    for k in range(a.from_k, a.k + 1):
+        r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream)
+        out.append(r)
+        print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
+              flush=True)
+        for x in r["results"]:
+            if x["result"] != "unsat":
+                print(f"  {x['result']}: {x['ops']} {x.get('program', '')}", flush=True)
+        if r["tally"]["FOUND"]:
+            rc = 1
+        elif r["tally"]["unknown"] and rc == 0:
+            rc = 2
+    if a.json:
+        with open(a.json, "w", encoding="utf-8") as f:
+            json.dump(out, f, indent=1)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())
