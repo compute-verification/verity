@@ -19,6 +19,11 @@ position `p` commits `row0 (col0At w b p)`. Here, at every coin vector of a `--z
   `t_pad ≤ 2^cols`, and is the model schedule's level 0 (one `decide +kernel` per `m`, `round0Facts_all`).
 * `FlockComplete.wordOf_packed`, `FlockComplete.zOf_traces`: a table's lanes, the model's packed words of its share of
   the witness, are `packed`'s entries of the executable's trace of that share.
+* `Claims.ZKMal.Masked.enc0`: round `0`'s encoding, the link message of each table's level-0 cap built from the cut's
+  level-0 leaves by tree position (`leafAt`, through the coins' tree `s0`), the shape of `honestPR_first`.
+* `Claims.ZKMal.Masked.enc0_causal`: round `0` reads no coin. A cut's leaf at tree position `q` is the leaf at `q`
+  whatever the coins' tree (`leafAt_cutAt`), and a level-0 leaf's digest is the same at every coin vector
+  (`digOf_inl`, from `coinedOf_col0At` and `coinedOf_lanes`).
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -190,6 +195,20 @@ theorem coinedOf_col0At (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedO
       simp only [hE, hG]
       rfl
 
+/-- **A `--zk` table's lanes read no coin**: at every coin vector, lane `l`'s column `col` is the packed word
+`l + n_L·col` of the witness with its mask slot (`innerOf`). -/
+theorem coinedOf_lanes (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest) :
+    ((coinedOf P Tz st).T c).lanes =
+      fun w u l col => wordOf (zWith st w u) (l.val + (coinedOf P Tz st).z.nL * col.val) :=
+  rfl
+
+/-- `colAt` reads a table only through its lanes. -/
+theorem colAt_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} {T T' : ZkView.Coined K W Hi VL z}
+    (h : T.lanes = T'.lanes) (cols : ℕ) (w : W) (b : ZkView.Base z Hi) (p : ℕ) :
+    colAt T cols w b p = colAt T' cols w b p := by
+  unfold colAt
+  rw [h]
+
 end FlockSoundness.Discharge.Composed
 
 /-! ## A masked level-0 row from its column -/
@@ -314,5 +333,109 @@ theorem zkLevel0 {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flo
   simp only [Bool.and_eq_true, decide_eq_true_eq] at hf
   obtain ⟨⟨⟨⟨h0, hd⟩, hr⟩, hl⟩, ht⟩ := hf
   exact ⟨hd, hr, hl, ht, schedOf_level₀ s h0⟩
+
+/-! ## Round `0`'s encoding -/
+
+open FlockSoundness.Discharge
+
+/-- Level 0 of table `j`'s `--zk` schedule. -/
+noncomputable def lv0 (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Level := (zkTab x j).sch.levels.getD 0 default
+
+/-- **A `--zk` table's level-0 sizes** as `Composed.coinedOf_col0At` reads them: `t_pad ≤ 2^(cols+1)` and
+`cols + 1 ≤ logLen`, at `cols` level 0's. -/
+theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
+    (zkTab x j).table.t ≤ 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) ∧
+      (zkTab x j).table.sch.level₀.logCols + 1 ≤ (zkTab x j).table.sch.level₀.logLen ∧
+      (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
+  obtain ⟨-, hr, -, ht, hl⟩ := zkLevel0 (zkTab x j).hz
+  have hc : (zkTab x j).table.sch.level₀.logCols = (lv0 x j).cols := by
+    show (schedOf (zkTab x j).sch).level₀.logCols = _
+    rw [hl]
+    rfl
+  have hL : (zkTab x j).table.sch.level₀.logLen = (lv0 x j).cols + (lv0 x j).rate := by
+    show (schedOf (zkTab x j).sch).level₀.logLen = _
+    rw [hl]
+    rfl
+  refine ⟨?_, ?_, hc⟩
+  · rw [hc]
+    exact le_trans ht (Nat.pow_le_pow_right (by norm_num) (Nat.le_succ _))
+  · rw [hc, hL]
+    exact Nat.add_le_add_left hr _
+
+/-- **Table `j`'s level-0 column at tree position `p`** is `colAt` at `ω_p`, at every coin vector. -/
+theorem col0At_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
+    (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
+    ((tabC P x j).T c).col0At w b p = Composed.colAt ((tabC P x j).T c) (lv0 x j).cols w b p.val := by
+  obtain ⟨ht, hL, hc⟩ := tabSizes x j
+  rw [← hc]
+  exact Composed.coinedOf_col0At P (zkTab x j).table (stAt x j) c ht hL w b p
+
+/-- **Table `j`'s level-0 leaf at tree position `q`** of a cut at the coins `cz`: the cut's opened or hidden leaf the
+coins' tree places at `q` (`Coined.s0`), and the empty string past the tree. -/
+noncomputable def leafAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (cut : ∀ j, ((tabC P x j).T (cz j)).tab.Cut) (j : Fin (jOf x)) (q : ℕ) : ByteArray :=
+  if hq : q < (tabC P x j).z.nS + (tabC P x j).z.nU then
+    match ((tabC P x j).T (cz j)).s0.symm ⟨q, hq⟩ with
+    | .inl a => (cut j).leaves0.1 a
+    | .inr u => (cut j).leaves0.2 u
+  else ByteArray.empty
+
+/-- **Round `0`'s encoding**: the link message of the tables' level-0 caps, each built from the cut's level-0 leaves by
+tree position with SHA-512 nodes (`FlockComplete.layerOf`), the shape of `honestPR`'s first message
+(`FlockComplete.honestPR_first`). -/
+noncomputable def enc0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (cut : ∀ j, ((tabC P x j).T (cz j)).tab.Cut) : Msg :=
+  0 :: FlockDeploy.linkBody (List.ofFn fun j => FlockComplete.flat
+      (FlockComplete.layerOf (fun l r => _root_.Flock.Sha512.hash (l ++ r)) (lv0 x j).d (leafAt P x cz cut j)
+        ((lv0 x j).d - (lv0 x j).cap)))
+    (List.replicate (jOf x) ByteArray.empty)
+
+/-- **A cut's level-0 leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree. -/
+theorem leafAt_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) {q : ℕ}
+    (hq : q < (tabC P x j).z.nS + (tabC P x j).z.nU) :
+    leafAt P x cz (cutAt (tabC P x) cz wt ω lv) j q = lv ⟨j, .inl ⟨q, hq⟩⟩ := by
+  unfold leafAt
+  rw [dite_eq_left_of_eq_true (eq_true hq)]
+  show (match ((tabC P x j).T (cz j)).s0.symm ⟨q, hq⟩ with
+    | .inl a => lv ⟨j, .inl (((tabC P x j).T (cz j)).s0 (.inl a))⟩
+    | .inr u => lv ⟨j, .inl (((tabC P x j).T (cz j)).s0 (.inr u))⟩) = _
+  rcases h : ((tabC P x j).T (cz j)).s0.symm ⟨q, hq⟩ with a | u
+  · have e : ((tabC P x j).T (cz j)).s0 (.inl a) = ⟨q, hq⟩ := by rw [← h, Equiv.apply_symm_apply]
+    simp only [e]
+  · have e : ((tabC P x j).T (cz j)).s0 (.inr u) = ⟨q, hq⟩ := by rw [← h, Equiv.apply_symm_apply]
+    simp only [e]
+
+/-- **A level-0 leaf's digest is the same at every coin vector** (`col0At_tabC`). -/
+theorem digOf_inl (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
+    (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
+    digOf (tabC P x) cz wt ω ⟨j, .inl p⟩ = digOf (tabC P x) cz' wt ω ⟨j, .inl p⟩ := by
+  have hl : ((tabC P x j).T (cz j)).lanes = ((tabC P x j).T (cz' j)).lanes :=
+    (Composed.coinedOf_lanes P (zkTab x j).table (stAt x j) (cz j)).trans
+      (Composed.coinedOf_lanes P (zkTab x j).table (stAt x j) (cz' j)).symm
+  unfold digOf
+  simp only [ZkView.Coined.content]
+  rw [col0At_tabC, col0At_tabC, Composed.colAt_congr hl]
+
+/-- **Round `0` reads no coin** (`RoundPlan.Causal` at round `0`): its encoding of the cut at any coins, at the
+simulator's leaves `H(dig ⊕ b, c)`, is the same at every coin vector. -/
+theorem enc0_causal (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC P x j).z) → ZkView.Bits × ByteArray) :
+    enc0 P x cz (cutAt (tabC P x) cz wt ω fun l => ZkView.leafH (digOf (tabC P x) cz wt ω l + (p l).1, (p l).2)) =
+      enc0 P x cz' (cutAt (tabC P x) cz' wt ω fun l =>
+        ZkView.leafH (digOf (tabC P x) cz' wt ω l + (p l).1, (p l).2)) := by
+  have h : ∀ j, leafAt P x cz (cutAt (tabC P x) cz wt ω fun l =>
+        ZkView.leafH (digOf (tabC P x) cz wt ω l + (p l).1, (p l).2)) j =
+      leafAt P x cz' (cutAt (tabC P x) cz' wt ω fun l =>
+        ZkView.leafH (digOf (tabC P x) cz' wt ω l + (p l).1, (p l).2)) j := fun j => funext fun q => by
+    by_cases hq : q < (tabC P x j).z.nS + (tabC P x j).z.nU
+    · rw [leafAt_cutAt P x cz wt ω _ j hq, leafAt_cutAt P x cz' wt ω _ j hq, digOf_inl P x cz cz' wt ω j]
+    · simp only [leafAt, hq, ↓reduceDIte]
+  unfold enc0
+  simp only [h]
 
 end Claims.ZKMal.Masked
