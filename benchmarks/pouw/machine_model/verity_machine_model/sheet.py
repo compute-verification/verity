@@ -59,11 +59,12 @@ class Form:
     n: int
     k: int
     warps: int          # the warps whose instructions issue one MMA: a wgmma's warpgroup 4, mma.sync and tcgen05.mma 1
+    sparse: bool = False  # 2:4 sparse, k its logical k
 
     @property
     def macs(self) -> Fraction:
-        """Dense MACs one warp instruction does."""
-        return Fraction(self.m * self.n * self.k, self.warps)
+        """Dense MACs one warp instruction does: a 2:4 sparse form's are half its logical m · n · k (A3)."""
+        return Fraction(self.m * self.n * self.k, self.warps * (2 if self.sparse else 1))
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,7 @@ def sheet(data: Path) -> Sheet:
     t = tomllib.loads(p.read_text())
     kinds = {}
     for k, v in t["kinds"].items():
-        form = Form(v["type"], v["m"], v["n"], v["k"], v["warps"]) if "type" in v else None
+        form = Form(v["type"], v["m"], v["n"], v["k"], v["warps"], v.get("sparse", False)) if "type" in v else None
         kinds[k] = Kind(form, v.get("pipe"))
         if form and kinds[k].pipe:
             raise SystemExit(f"{p}: {k} has a tensor form and a pipe; a class has one or neither")
@@ -374,10 +375,12 @@ def lean(s: Sheet, data: Path) -> str:
             *(f"  | .{q} => {width[q]}" for q in pipes), ""]
     out += [*_doc("Each class's tensor form: its operand type and its dense MACs a warp instruction, m · n · k over the "
                   "warps that issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread "
-                  "`tcgen05.mma`); `none` off the tensor pipe."), "def Kind.form : Kind → Option (Ty × ℝ)"]
+                  "`tcgen05.mma`), and for a 2:4 sparse form, whose k is its logical k, half that (A3: twice the dense "
+                  "peak on logical k); `none` off the tensor pipe."), "def Kind.form : Kind → Option (Ty × ℝ)"]
     for k in kinds:
         f = s.kinds[k].form
-        out.append(f"  | .{k} => " + (f"some (.{f.type}, {f.m} * {f.n} * {f.k} / {f.warps})" if f else "none"))
+        half = " / 2" if f and f.sparse else ""
+        out.append(f"  | .{k} => " + (f"some (.{f.type}, {f.m} * {f.n} * {f.k}{half} / {f.warps})" if f else "none"))
     out += ["", *_doc("The pipe each class issues to; `none` on the tensor pipe or issue only."),
             "def Kind.pipe : Kind → Option Pipe"]
     for k in kinds:

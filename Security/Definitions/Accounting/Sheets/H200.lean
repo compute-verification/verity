@@ -31,8 +31,11 @@ inductive Kind
   | FFMA
   | HGMMA_BF16_N128
   | HGMMA_BF16_N256
+  | HGMMA_BF16_N256_SP
   | HGMMA_F16_N256
+  | HGMMA_F16_N256_SP
   | HGMMA_TF32_N256
+  | HGMMA_TF32_N256_SP
   | HMMA16816_BF16
   | HMMA16816_F16
   | HMMA1688_TF32
@@ -41,6 +44,7 @@ inductive Kind
   | IGMMA_S8_N192
   | IGMMA_S8_N256
   | IGMMA_S8_N256_RS
+  | IGMMA_S8_N256_SP
   | IGMMA_S8_N32
   | IGMMA_S8_N64
   | IGMMA_S8_N8
@@ -50,16 +54,19 @@ inductive Kind
   | IMMA16832_S8
   | QGMMA_E4M3_N128
   | QGMMA_E4M3_N256
+  | QGMMA_E4M3_N256_SP
   | QGMMA_E5M2_N256
+  | QGMMA_E5M2_N256_SP
   | SHFL
   | UNI
   deriving DecidableEq
 
 instance : Fintype Kind :=
-  Fintype.ofList [.ALU, .BGMMA_B1_N256, .BMMA168256_B1, .FFMA, .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_F16_N256,
-    .HGMMA_TF32_N256, .HMMA16816_BF16, .HMMA16816_F16, .HMMA1688_TF32, .IGMMA_S8_N128, .IGMMA_S8_N16, .IGMMA_S8_N192,
-    .IGMMA_S8_N256, .IGMMA_S8_N256_RS, .IGMMA_S8_N32, .IGMMA_S8_N64, .IGMMA_S8_N8, .IGMMA_U8S8_N256, .IMAD,
-    .IMMA16816_S8, .IMMA16832_S8, .QGMMA_E4M3_N128, .QGMMA_E4M3_N256, .QGMMA_E5M2_N256, .SHFL, .UNI]
+  Fintype.ofList [.ALU, .BGMMA_B1_N256, .BMMA168256_B1, .FFMA, .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_BF16_N256_SP,
+    .HGMMA_F16_N256, .HGMMA_F16_N256_SP, .HGMMA_TF32_N256, .HGMMA_TF32_N256_SP, .HMMA16816_BF16, .HMMA16816_F16,
+    .HMMA1688_TF32, .IGMMA_S8_N128, .IGMMA_S8_N16, .IGMMA_S8_N192, .IGMMA_S8_N256, .IGMMA_S8_N256_RS, .IGMMA_S8_N256_SP,
+    .IGMMA_S8_N32, .IGMMA_S8_N64, .IGMMA_S8_N8, .IGMMA_U8S8_N256, .IMAD, .IMMA16816_S8, .IMMA16832_S8, .QGMMA_E4M3_N128,
+    .QGMMA_E4M3_N256, .QGMMA_E4M3_N256_SP, .QGMMA_E5M2_N256, .QGMMA_E5M2_N256_SP, .SHFL, .UNI]
     (by intro k; cases k <;> decide)
 
 /-- The Nsight Compute pipes the `DS-90` classes issue to. -/
@@ -176,8 +183,8 @@ def Pipe.width : Pipe → ℝ
   | .uniform => widthUniform
 
 /-- Each class's tensor form: its operand type and its dense MACs a warp instruction, m · n · k over the warps that
-issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread `tcgen05.mma`); `none` off the tensor
-pipe. -/
+issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread `tcgen05.mma`), and for a 2:4 sparse
+form, whose k is its logical k, half that (A3: twice the dense peak on logical k); `none` off the tensor pipe. -/
 def Kind.form : Kind → Option (Ty × ℝ)
   | .ALU => none
   | .BGMMA_B1_N256 => none
@@ -185,8 +192,11 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .FFMA => none
   | .HGMMA_BF16_N128 => some (.bf16, 64 * 128 * 16 / 4)
   | .HGMMA_BF16_N256 => some (.bf16, 64 * 256 * 16 / 4)
+  | .HGMMA_BF16_N256_SP => some (.bf16, 64 * 256 * 32 / 2 / 4)
   | .HGMMA_F16_N256 => some (.f16, 64 * 256 * 16 / 4)
+  | .HGMMA_F16_N256_SP => some (.f16, 64 * 256 * 32 / 2 / 4)
   | .HGMMA_TF32_N256 => some (.tf32, 64 * 256 * 8 / 4)
+  | .HGMMA_TF32_N256_SP => some (.tf32, 64 * 256 * 16 / 2 / 4)
   | .HMMA16816_BF16 => some (.bf16, 16 * 8 * 16 / 1)
   | .HMMA16816_F16 => some (.f16, 16 * 8 * 16 / 1)
   | .HMMA1688_TF32 => some (.tf32, 16 * 8 * 8 / 1)
@@ -195,6 +205,7 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .IGMMA_S8_N192 => some (.s8, 64 * 192 * 32 / 4)
   | .IGMMA_S8_N256 => some (.s8, 64 * 256 * 32 / 4)
   | .IGMMA_S8_N256_RS => some (.s8, 64 * 256 * 32 / 4)
+  | .IGMMA_S8_N256_SP => some (.s8, 64 * 256 * 64 / 2 / 4)
   | .IGMMA_S8_N32 => some (.s8, 64 * 32 * 32 / 4)
   | .IGMMA_S8_N64 => some (.s8, 64 * 64 * 32 / 4)
   | .IGMMA_S8_N8 => some (.s8, 64 * 8 * 32 / 4)
@@ -204,7 +215,9 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .IMMA16832_S8 => some (.s8, 16 * 8 * 32 / 1)
   | .QGMMA_E4M3_N128 => some (.e4m3, 64 * 128 * 32 / 4)
   | .QGMMA_E4M3_N256 => some (.e4m3, 64 * 256 * 32 / 4)
+  | .QGMMA_E4M3_N256_SP => some (.e4m3, 64 * 256 * 64 / 2 / 4)
   | .QGMMA_E5M2_N256 => some (.e5m2, 64 * 256 * 32 / 4)
+  | .QGMMA_E5M2_N256_SP => some (.e5m2, 64 * 256 * 64 / 2 / 4)
   | .SHFL => none
   | .UNI => none
 
@@ -216,8 +229,11 @@ def Kind.pipe : Kind → Option Pipe
   | .FFMA => none
   | .HGMMA_BF16_N128 => none
   | .HGMMA_BF16_N256 => none
+  | .HGMMA_BF16_N256_SP => none
   | .HGMMA_F16_N256 => none
+  | .HGMMA_F16_N256_SP => none
   | .HGMMA_TF32_N256 => none
+  | .HGMMA_TF32_N256_SP => none
   | .HMMA16816_BF16 => none
   | .HMMA16816_F16 => none
   | .HMMA1688_TF32 => none
@@ -226,6 +242,7 @@ def Kind.pipe : Kind → Option Pipe
   | .IGMMA_S8_N192 => none
   | .IGMMA_S8_N256 => none
   | .IGMMA_S8_N256_RS => none
+  | .IGMMA_S8_N256_SP => none
   | .IGMMA_S8_N32 => none
   | .IGMMA_S8_N64 => none
   | .IGMMA_S8_N8 => none
@@ -235,7 +252,9 @@ def Kind.pipe : Kind → Option Pipe
   | .IMMA16832_S8 => none
   | .QGMMA_E4M3_N128 => none
   | .QGMMA_E4M3_N256 => none
+  | .QGMMA_E4M3_N256_SP => none
   | .QGMMA_E5M2_N256 => none
+  | .QGMMA_E5M2_N256_SP => none
   | .SHFL => some .shfl
   | .UNI => some .uniform
 
@@ -261,8 +280,11 @@ def tensorLine : Kind → ℝ
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 64
   | .HGMMA_BF16_N256 => 128
+  | .HGMMA_BF16_N256_SP => 128
   | .HGMMA_F16_N256 => 128
+  | .HGMMA_F16_N256_SP => 128
   | .HGMMA_TF32_N256 => 128
+  | .HGMMA_TF32_N256_SP => 128
   | .HMMA16816_BF16 => 4
   | .HMMA16816_F16 => 4
   | .HMMA1688_TF32 => 4
@@ -271,6 +293,7 @@ def tensorLine : Kind → ℝ
   | .IGMMA_S8_N192 => 96
   | .IGMMA_S8_N256 => 128
   | .IGMMA_S8_N256_RS => 128
+  | .IGMMA_S8_N256_SP => 128
   | .IGMMA_S8_N32 => 16
   | .IGMMA_S8_N64 => 32
   | .IGMMA_S8_N8 => 4
@@ -280,7 +303,9 @@ def tensorLine : Kind → ℝ
   | .IMMA16832_S8 => 4
   | .QGMMA_E4M3_N128 => 64
   | .QGMMA_E4M3_N256 => 128
+  | .QGMMA_E4M3_N256_SP => 128
   | .QGMMA_E5M2_N256 => 128
+  | .QGMMA_E5M2_N256_SP => 128
   | .SHFL => 0
   | .UNI => 0
 
@@ -292,8 +317,11 @@ def aluLine : Kind → ℝ
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
+  | .HGMMA_BF16_N256_SP => 0
   | .HGMMA_F16_N256 => 0
+  | .HGMMA_F16_N256_SP => 0
   | .HGMMA_TF32_N256 => 0
+  | .HGMMA_TF32_N256_SP => 0
   | .HMMA16816_BF16 => 0
   | .HMMA16816_F16 => 0
   | .HMMA1688_TF32 => 0
@@ -302,6 +330,7 @@ def aluLine : Kind → ℝ
   | .IGMMA_S8_N192 => 0
   | .IGMMA_S8_N256 => 0
   | .IGMMA_S8_N256_RS => 0
+  | .IGMMA_S8_N256_SP => 0
   | .IGMMA_S8_N32 => 0
   | .IGMMA_S8_N64 => 0
   | .IGMMA_S8_N8 => 0
@@ -311,7 +340,9 @@ def aluLine : Kind → ℝ
   | .IMMA16832_S8 => 0
   | .QGMMA_E4M3_N128 => 0
   | .QGMMA_E4M3_N256 => 0
+  | .QGMMA_E4M3_N256_SP => 0
   | .QGMMA_E5M2_N256 => 0
+  | .QGMMA_E5M2_N256_SP => 0
   | .SHFL => 0
   | .UNI => 0
 
@@ -323,8 +354,11 @@ def imadLine : Kind → ℝ
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
+  | .HGMMA_BF16_N256_SP => 0
   | .HGMMA_F16_N256 => 0
+  | .HGMMA_F16_N256_SP => 0
   | .HGMMA_TF32_N256 => 0
+  | .HGMMA_TF32_N256_SP => 0
   | .HMMA16816_BF16 => 0
   | .HMMA16816_F16 => 0
   | .HMMA1688_TF32 => 0
@@ -333,6 +367,7 @@ def imadLine : Kind → ℝ
   | .IGMMA_S8_N192 => 0
   | .IGMMA_S8_N256 => 0
   | .IGMMA_S8_N256_RS => 0
+  | .IGMMA_S8_N256_SP => 0
   | .IGMMA_S8_N32 => 0
   | .IGMMA_S8_N64 => 0
   | .IGMMA_S8_N8 => 0
@@ -342,7 +377,9 @@ def imadLine : Kind → ℝ
   | .IMMA16832_S8 => 0
   | .QGMMA_E4M3_N128 => 0
   | .QGMMA_E4M3_N256 => 0
+  | .QGMMA_E4M3_N256_SP => 0
   | .QGMMA_E5M2_N256 => 0
+  | .QGMMA_E5M2_N256_SP => 0
   | .SHFL => 0
   | .UNI => 0
 
@@ -354,8 +391,11 @@ def shflLine : Kind → ℝ
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
+  | .HGMMA_BF16_N256_SP => 0
   | .HGMMA_F16_N256 => 0
+  | .HGMMA_F16_N256_SP => 0
   | .HGMMA_TF32_N256 => 0
+  | .HGMMA_TF32_N256_SP => 0
   | .HMMA16816_BF16 => 0
   | .HMMA16816_F16 => 0
   | .HMMA1688_TF32 => 0
@@ -364,6 +404,7 @@ def shflLine : Kind → ℝ
   | .IGMMA_S8_N192 => 0
   | .IGMMA_S8_N256 => 0
   | .IGMMA_S8_N256_RS => 0
+  | .IGMMA_S8_N256_SP => 0
   | .IGMMA_S8_N32 => 0
   | .IGMMA_S8_N64 => 0
   | .IGMMA_S8_N8 => 0
@@ -373,7 +414,9 @@ def shflLine : Kind → ℝ
   | .IMMA16832_S8 => 0
   | .QGMMA_E4M3_N128 => 0
   | .QGMMA_E4M3_N256 => 0
+  | .QGMMA_E4M3_N256_SP => 0
   | .QGMMA_E5M2_N256 => 0
+  | .QGMMA_E5M2_N256_SP => 0
   | .SHFL => 4
   | .UNI => 0
 
@@ -385,8 +428,11 @@ def uniformLine : Kind → ℝ
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
+  | .HGMMA_BF16_N256_SP => 0
   | .HGMMA_F16_N256 => 0
+  | .HGMMA_F16_N256_SP => 0
   | .HGMMA_TF32_N256 => 0
+  | .HGMMA_TF32_N256_SP => 0
   | .HMMA16816_BF16 => 0
   | .HMMA16816_F16 => 0
   | .HMMA1688_TF32 => 0
@@ -395,6 +441,7 @@ def uniformLine : Kind → ℝ
   | .IGMMA_S8_N192 => 0
   | .IGMMA_S8_N256 => 0
   | .IGMMA_S8_N256_RS => 0
+  | .IGMMA_S8_N256_SP => 0
   | .IGMMA_S8_N32 => 0
   | .IGMMA_S8_N64 => 0
   | .IGMMA_S8_N8 => 0
@@ -404,7 +451,9 @@ def uniformLine : Kind → ℝ
   | .IMMA16832_S8 => 0
   | .QGMMA_E4M3_N128 => 0
   | .QGMMA_E4M3_N256 => 0
+  | .QGMMA_E4M3_N256_SP => 0
   | .QGMMA_E5M2_N256 => 0
+  | .QGMMA_E5M2_N256_SP => 0
   | .SHFL => 0
   | .UNI => 49027679 / 25000000
 

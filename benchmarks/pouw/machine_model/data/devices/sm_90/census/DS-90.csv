@@ -8,10 +8,16 @@ HGMMA_BF16_N128,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HGMMA_BF16_N128,DS_tensor,,,64,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HGMMA_BF16_N256,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HGMMA_BF16_N256,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
+HGMMA_BF16_N256_SP,DS_issue,,,1,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
+HGMMA_BF16_N256_SP,DS_tensor,,,128,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
 HGMMA_F16_N256,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HGMMA_F16_N256,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
+HGMMA_F16_N256_SP,DS_issue,,,1,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
+HGMMA_F16_N256_SP,DS_tensor,,,128,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
 HGMMA_TF32_N256,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HGMMA_TF32_N256,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
+HGMMA_TF32_N256_SP,DS_issue,,,1,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
+HGMMA_TF32_N256_SP,DS_tensor,,,128,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
 HMMA16816_BF16,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HMMA16816_BF16,DS_tensor,,,4,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 HMMA16816_F16,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
@@ -28,6 +34,8 @@ IGMMA_S8_N256,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 IGMMA_S8_N256,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 IGMMA_S8_N256_RS,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 IGMMA_S8_N256_RS,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
+IGMMA_S8_N256_SP,DS_issue,,,1,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
+IGMMA_S8_N256_SP,DS_tensor,,,128,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
 IGMMA_S8_N32,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 IGMMA_S8_N32,DS_tensor,,,16,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 IGMMA_S8_N64,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
@@ -46,8 +54,12 @@ QGMMA_E4M3_N128,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 QGMMA_E4M3_N128,DS_tensor,,,64,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 QGMMA_E4M3_N256,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 QGMMA_E4M3_N256,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
+QGMMA_E4M3_N256_SP,DS_issue,,,1,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
+QGMMA_E4M3_N256_SP,DS_tensor,,,128,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
 QGMMA_E5M2_N256,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 QGMMA_E5M2_N256,DS_tensor,,,128,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
+QGMMA_E5M2_N256_SP,DS_issue,,,1,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
+QGMMA_E5M2_N256_SP,DS_tensor,,,128,,DS-90,DS-90,note:20261019T0511Z-draft-mm-sheets note:20261019T0533Z-draft-rt-h200-emp
 SHFL,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 SHFL,DS_shfl,,,4,,DS-90,DS-90,note:20261017T1818Z-draft-axioms
 UNI,DS_issue,,,1,,DS-90,DS-90,note:20261017T1818Z-draft-axioms

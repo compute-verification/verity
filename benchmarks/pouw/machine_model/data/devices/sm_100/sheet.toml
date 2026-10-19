@@ -74,7 +74,7 @@ sheet = 4500
 sparse = false
 tol = 50
 clock = "implied"
-grade = "data sheet per second; per clock derived at the implied clock; no class"
+grade = "data sheet per second; per clock derived at the implied clock; its classes unmeasured"
 source = "Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS' (PTX ISA 9.4 .kind::f8f6f4: e2m3, e3m2); the CUDA C++ Programming Guide 12.9 §18.9.1 lists no FP6"
 
 [peaks.f16]
@@ -110,8 +110,8 @@ sheet = 9000
 sparse = false
 tol = 500
 clock = "implied"
-grade = "data sheet per second; per clock derived at the implied clock; no class"
-source = "Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and the census no FP4 class"
+grade = "data sheet per second; per clock derived at the implied clock; its classes unmeasured"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and the census measures no FP4 class"
 
 # Each Nsight Compute pipe's results an SM clock (A4).
 [pipes.alu]
@@ -140,7 +140,12 @@ source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with
 # tcgen05.mma, so its whole m·n·k is one warp instruction's, PTX ISA 9.4 §9.7.18.10, which the device-average counts
 # A3 reads spread over the SM's four SMSPs; Nsight Compute §2.3.6: 'one issuing thread can drive work across the four
 # warp schedulers'), a pipe, or neither (issue only: FFMA at 128 results a clock is the issue ceiling, tcgen05.ld
-# (LDTM) moves TMEM to registers on no row of the sheet).
+# (LDTM) moves TMEM to registers on no row of the sheet). Every tensor type with a peak has an M128 N256 class
+# (RT-B200-EMP-2, note:20261019T0520Z-draft-rt-b200-emp; the census measures none of them): kind::f16 BF16, kind::tf32,
+# kind::f8f6f4 with E5M2, E2M3, E3M2 and E2M1 operands, kind::mxf8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 at twice
+# f8f6f4's K (PTX ISA 9.4 §9.7.18.10.10.1), and kind::i8 2:4 sparse (`sparse`: k its logical k, its dense MACs half
+# m · n · k). Each is at its dense i8 twin's 512 but FP4 in kind::f8f6f4: K 32 at the FP4 peak is 256, since A3 per
+# type bounds it no tighter (no document gives f8f6f4's rate with E2M1 operands).
 [kinds]
 ALU = { pipe = "alu" }
 FFMA = {}
@@ -158,13 +163,23 @@ LDTM_32X32B_X4 = {}
 LDTM_32X32B_X64 = {}
 SHFL = { pipe = "shfl" }
 UNI = { pipe = "uniform" }
+UTCHMMA_BF16_M128_N256 = { type = "bf16", m = 128, n = 256, k = 16, warps = 1 }
 UTCHMMA_F16_M128_N256 = { type = "f16", m = 128, n = 256, k = 16, warps = 1 }
+UTCHMMA_TF32_M128_N256 = { type = "tf32", m = 128, n = 256, k = 8, warps = 1 }
 UTCIMMA_M128_N128 = { type = "s8", m = 128, n = 128, k = 32, warps = 1 }
 UTCIMMA_M128_N256 = { type = "s8", m = 128, n = 256, k = 32, warps = 1 }
+UTCIMMA_M128_N256_SP = { type = "s8", m = 128, n = 256, k = 64, warps = 1, sparse = true }
 UTCIMMA_M128_N32 = { type = "s8", m = 128, n = 32, k = 32, warps = 1 }
 UTCIMMA_M128_N64 = { type = "s8", m = 128, n = 64, k = 32, warps = 1 }
 UTCIMMA_M64_N128 = { type = "s8", m = 64, n = 128, k = 32, warps = 1 }
 UTCIMMA_M64_N256 = { type = "s8", m = 64, n = 256, k = 32, warps = 1 }
 UTCIMMA_M64_N64 = { type = "s8", m = 64, n = 64, k = 32, warps = 1 }
+UTCOMMA_MXF4NVF4_M128_N256 = { type = "fp4", m = 128, n = 256, k = 64, warps = 1 }
+UTCOMMA_MXF4_M128_N256 = { type = "fp4", m = 128, n = 256, k = 64, warps = 1 }
+UTCQMMA_E2M1_M128_N256 = { type = "fp4", m = 128, n = 256, k = 32, warps = 1 }
+UTCQMMA_E2M3_M128_N256 = { type = "fp6", m = 128, n = 256, k = 32, warps = 1 }
+UTCQMMA_E3M2_M128_N256 = { type = "fp6", m = 128, n = 256, k = 32, warps = 1 }
 UTCQMMA_E4M3_M128_N128 = { type = "e4m3", m = 128, n = 128, k = 32, warps = 1 }
 UTCQMMA_E4M3_M128_N256 = { type = "e4m3", m = 128, n = 256, k = 32, warps = 1 }
+UTCQMMA_E5M2_M128_N256 = { type = "e5m2", m = 128, n = 256, k = 32, warps = 1 }
+UTCQMMA_MXF8F6F4_E4M3_M128_N256 = { type = "e4m3", m = 128, n = 256, k = 32, warps = 1 }
