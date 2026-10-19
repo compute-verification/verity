@@ -2008,7 +2008,237 @@ theorem repCut_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp 
   refine h0.trans ?_
   rw [ht₃, ht, Nat.zero_add]
 
+/-- **A level-0 commitment's salts are its fitted salts**, at every tree position. -/
+theorem commitRowsP_salts {hs : _root_.Flock.Hashes _root_.Flock.V} {ms : _root_.Flock.MerkleScheme}
+    {lv : _root_.Flock.Level} {rows : Array (Array _root_.Flock.F128)} {salt : ℕ → ByteArray} {cm : Commit}
+    (h : commitRowsP hs ms lv rows salt = .ok cm) :
+    cm.salts = (Array.range (2 ^ lv.d)).map fun q => fitBytes ms.saltBytes (salt q) := by
+  unfold commitRowsP at h
+  obtain ⟨leaves, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨r, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  cases h
+  rfl
+
+/-- **Table `j`'s level-0 row at tree position `p` is the masked prover's** (`Round0.exeOf_inl`'s row): at a layout
+agreeing at round `0`, `encodeRowsZk`'s row `p`, at every coin vector. -/
+theorem row0_exe (P : Composed.LigProver) (L : TapeLayout P)
+    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (hA : Agrees0 P L z) {x : Msg}
+    (w : Claims.Flock.Wit) (t : Fin Claims.Flock.zkTableCap → L.Cell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (j : Fin (jOf x)) (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
+    ZkView.row0 (((tabC P x j).T (cz j)).col0At (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j) p) =
+      (FlockComplete.encodeRowsZk (lv0 x j) (zkTab x j).tPad
+        ((FlockComplete.tablesP (FlockDeploy.tabsOf (stsOf x)) (FlockComplete.ZkTables.traces (stsOf x)
+          (FlockComplete.ZkTables.maskWOf x w ((TapePlan.ofLayout L z).tapeZk t).mask)))[j.val]!)
+        ((z t).extra j.val) ((z t).lanePad j.val))[p.val]! := by
+  obtain ⟨hnL, hL, htp, ht, hd, -⟩ := tabC_z P x j
+  rw [col0At_tabC]
+  refine FlockComplete.row0_eq_encodeRowsZk (lv0 x j) _ _ _ _ (by rw [← hd]; exact p.isLt) hnL hL htp ht _
+    (fun l => ?_) (fun r i => ?_)
+  · show ∑ c, ((tabC P x j).T (cz j)).lanes (wtOf P x w j) (((TapePlan.ofLayout L z).tape x t).1 j).1 l c *
+        Composed.eAt (lv0 x j).cols p.val c +
+      ∑ k, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.1 l k * Composed.gAt (lv0 x j).cols p.val k = _
+    simp only [lanes_tabC]
+    exact congrArg (_ + ·) (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.pad x t j l k))
+  · show ∑ c, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.1 r i c * Composed.eAt (lv0 x j).cols p.val c +
+      ∑ k, (((TapePlan.ofLayout L z).tape x t).1 j).2.1.2.2 r i k * Composed.gAt (lv0 x j).cols p.val k = _
+    exact congrArg₂ (· + ·) (Finset.sum_congr rfl fun c _ => congrArg (· * _) (hA.ext x t j r i c))
+      (Finset.sum_congr rfl fun k _ => congrArg (· * _) (hA.extPad x t j r i k))
+
+/-- `at0` at an opened position's tree position is its value. -/
+theorem at0_s0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
+    {α : Type} (d : α) (f : Fin (tabC P x j).z.nS → α) (a : Fin (tabC P x j).z.nS) :
+    at0 P x cz j d f (((tabC P x j).T (cz j)).s0 (.inl a)).val = f a := by
+  unfold at0
+  simp only [Fin.isLt, ↓reduceDIte, Fin.eta, Equiv.symm_apply_apply]
+
+/-- **The views' level-0 row and salt at an opened position are the session's**: at the tree position of opened
+position `a`, table `i`'s source from the views reads `encodeRowsZk`'s row there (`row0_exe`) and the tape's level-0
+salt fitted to 192 bytes (`Agrees0.salt`). -/
+theorem srcV_open0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i : ℕ}
+    (hi : i < jOf x) (a : Fin (tabC PE x ⟨i, hi⟩).z.nS) :
+    (srcV x c w τ i).row0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val =
+        (encodeRowsZk (lv0 x ⟨i, hi⟩) (zkTab x ⟨i, hi⟩).tPad
+          (packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m)
+          ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i))[(((tabC PE x ⟨i, hi⟩).T
+            (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val]! ∧
+      (srcV x c w τ i).salt0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val =
+        fitBytes 192 ((UE.tapeZk τ).salt i 0 0 (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)).val) := by
+  have hj : i < (FlockDeploy.tabsOf (stsOf x)).size := by simpa [FlockDeploy.tabsOf] using lt_of_jOf ⟨i, hi⟩
+  have e : ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).col0At (wtOf PE x w ⟨i, hi⟩) ((UE.tape x τ).1 ⟨i, hi⟩)
+      (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a)) =
+      ((viewsE x c w τ ⟨i, hi⟩).rows a, (viewsE x c w τ ⟨i, hi⟩).xrows a) := by
+    unfold ZkView.Coined.col0At
+    simp only [Equiv.symm_apply_apply]
+    rfl
+  have es : (viewsE x c w τ ⟨i, hi⟩).salts0 a =
+      (UE.tape x τ).2.1 ⟨⟨i, hi⟩, .inl (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a))⟩ := by
+    set_option maxRecDepth 8000 in rfl
+  have hrow := row0_exe PE (TapeLayout.exe PE) exeTape (agrees0_exe PE) w τ (czExe PE x c) ⟨i, hi⟩
+    (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a))
+  have hsl := (agrees0_exe PE).salt x τ ⟨i, hi⟩ (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).s0 (.inl a))
+  show (tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).row0 _ = _ ∧
+    (tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).salt0 _ = _
+  unfold tabSrcView
+  rw [dite_eq_left hi]
+  dsimp only
+  rw [at0_s0, at0_s0]
+  refine ⟨((congrArg ZkView.row0 e).symm.trans hrow).trans ?_, (congrArg ZkView.saltBytes es).trans hsl⟩
+  rw [FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hj]
+  rfl
+
+/-- **A queried position below `L` is opened** (`FinPads.padPos_of_mem`): where at most `t` positions are queried,
+`padPos` places each queried position below `L` at some index below `t`, since it lists them first. -/
+theorem padPos_mem {L t : ℕ} {qs : List ℕ} (hl : qs.length ≤ t) {q : ℕ} (hq : q ∈ qs) (hqL : q < L) :
+    ∃ a : Fin t, Composed.padPos L t qs a = q := by
+  have hFn : ((List.range L).filter fun y => decide (y ∈ qs)).Nodup := List.nodup_range.filter _
+  have hFs : (List.range L).filter (fun y => decide (y ∈ qs)) ⊆ qs := fun y hy => by
+    simpa using (List.mem_filter.1 hy).2
+  have hFl := (hFn.subperm hFs).length_le
+  have hqF : q ∈ (List.range L).filter fun y => decide (y ∈ qs) :=
+    List.mem_filter.2 ⟨List.mem_range.2 hqL, decide_eq_true hq⟩
+  obtain ⟨k, hk, hkq⟩ := List.getElem_of_mem hqF
+  refine ⟨⟨k, by omega⟩, ?_⟩
+  simp only [Composed.padPos]
+  rw [List.getD_eq_getElem _ _ (by rw [List.length_append]; omega), List.getElem_append_left hk]
+  exact hkq
+
+/-- **Table `j`'s rep `r`'s level-0 query positions are opened positions**: each is below `2^d` (`positions_lt_d`),
+queried by the coins (`q0s`, below `2^logLen`), of which there are `2·q = t_pad`, so `padPos` opens it, at the tree
+position of some opened position (`coinedOf_s0_val`). -/
+theorem q0At_opened {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) {p : ℕ}
+    (hp : p ∈ q0At c j r) :
+    p < 2 ^ (lv0 x j).d ∧ ∃ a : Fin (tabC PE x j).z.nS, (((tabC PE x j).T (czExe PE x c j)).s0 (.inl a)).val = p := by
+  obtain ⟨-, -, -, -, ht2, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x j).hz
+  obtain ⟨-, hL2, -, -, -, -, -⟩ := hdim
+  obtain ⟨hd, -, -, -, -, -⟩ := zkLevel0 (zkTab x j).hz
+  obtain ⟨hrate, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_pad _ _ _ (zkTab x j).hz
+  obtain ⟨hts, hLs, hcs⟩ := tabSizes x j
+  have hseam : FlockSoundness.Refine.LevelSeam (lv0 x j) := hlv 0 (by omega)
+  have hlt : p < 2 ^ (lv0 x j).d := positions_lt_d hseam _ p hp
+  refine ⟨hlt, ?_⟩
+  have hd1 : (lv0 x j).d = (zkTab x j).table.sch.level₀.logCols + 1 := by
+    rw [hcs]
+    unfold lv0
+    omega
+  obtain ⟨e, he, hep⟩ := Array.mem_iff_getElem.1 hp
+  have hsz : (q0At c j r).size = (lv0 x j).q := FlockSoundness.Refine.positions_size _ hseam _
+  have he2 : e < (zkTab x j).table.t / 2 := by
+    show e < (zkTab x j).tPad / 2
+    rw [ht2]
+    unfold lv0 at hsz
+    omega
+  have hmem : p ∈ (Composed.bodyOf (zkTab x j).table (stAt x j)).queries (czExe PE x c j).rest := by
+    show p ∈ (List.ofFn ((czExe PE x c j).rest.q0s 0) ++ List.ofFn ((czExe PE x c j).rest.q0s 1)).map Fin.val
+    have hv : ((czExe PE x c j).rest.q0s r ⟨e, he2⟩).val = p := by
+      show (q0At c j r)[e]! % 2 ^ (zkTab x j).table.sch.level₀.logLen = p
+      rw [getElem!_pos _ e he, hep,
+        Nat.mod_eq_of_lt (lt_of_lt_of_le hlt (Nat.pow_le_pow_right (by norm_num) (by omega)))]
+    refine List.mem_map.2 ⟨_, ?_, hv⟩
+    fin_cases r
+    · exact List.mem_append_left _ (List.mem_ofFn.2 ⟨_, rfl⟩)
+    · exact List.mem_append_right _ (List.mem_ofFn.2 ⟨_, rfl⟩)
+  have hlen : ((Composed.bodyOf (zkTab x j).table (stAt x j)).queries (czExe PE x c j).rest).length ≤
+      (zkTab x j).table.t := by
+    show ((List.ofFn ((czExe PE x c j).rest.q0s 0) ++ List.ofFn ((czExe PE x c j).rest.q0s 1)).map Fin.val).length ≤ _
+    simp only [List.length_map, List.length_append, List.length_ofFn]
+    omega
+  obtain ⟨a, ha⟩ := padPos_mem hlen hmem
+    (show p < 2 ^ ((zkTab x j).table.sch.level₀.logCols + 1) by rw [← hd1]; exact hlt)
+  exact ⟨a, (Composed.coinedOf_s0_val PE _ _ _ hts hLs (.inl a)).trans ha⟩
+
+/-- **Level 0's commitment from the views agrees with the session's at the queried positions**: there `fill0`'s row
+and salt are the views' (`srcV_open0`), which are the session's commitment's (`commitRowsP_rows`,
+`commitRowsP_salts`, at `hm96-sha512/v1`'s 192-byte salts). -/
+theorem fill0_open0 {x : Msg} {s spec} (hx : Live x) (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i : ℕ} (hi : i < jOf x) {r : ℕ}
+    (hr : r < 2) {cm0 : Commit}
+    (hcm : commitPZk hsV (FlockDeploy.tabsOf (stsOf x))[i]!.merkle (lv0 x ⟨i, hi⟩) (zkTab x ⟨i, hi⟩).tPad
+      (packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m)
+      ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i) ((UE.tapeZk τ).salt i 0 0) = .ok cm0)
+    {p : ℕ} (hp : p ∈ q0At c ⟨i, hi⟩ ⟨r, hr⟩) :
+    (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).rows[p]! = cm0.rows[p]! ∧
+      (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).salts[p]! = cm0.salts[p]! := by
+  obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
+  have hget : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stAt x ⟨i, hi⟩) := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi')]
+    simp only [FlockDeploy.tabsOf, Array.getElem_map]
+    rfl
+  have hm96 : (FlockDeploy.tabsOf (stsOf x))[i]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
+    rw [hget]
+    exact (hall i hi').2.2
+  have hms : (FlockDeploy.tabsOf (stsOf x))[i]!.merkle.saltBytes = 192 := by
+    rw [hm96]
+    rfl
+  obtain ⟨hlt, a, ha⟩ := q0At_opened c ⟨i, hi⟩ ⟨r, hr⟩ hp
+  obtain ⟨hrow, hsalt⟩ := srcV_open0 x c w τ hi a
+  rw [ha] at hrow hsalt
+  unfold commitPZk at hcm
+  have hrows := commitRowsP_rows hcm
+  have hsalts := commitRowsP_salts hcm
+  refine ⟨?_, ?_⟩
+  · show ((Array.range (2 ^ (lv0 x ⟨i, hi⟩).d)).map (srcV x c w τ i).row0)[p]! = _
+    rw [FlockSoundness.Refine.getElem!_range_map _ hlt, hrow, hrows]
+  · show ((Array.range (2 ^ (lv0 x ⟨i, hi⟩).d)).map (srcV x c w τ i).salt0)[p]! = _
+    rw [FlockSoundness.Refine.getElem!_range_map _ hlt, hsalt, hsalts, FlockSoundness.Refine.getElem!_range_map _ hlt,
+      hms]
+
 end FinRep
+
+/-- **Level 0's opened rows and salts read from the views are the session's** (`FinalRest`'s level-0 half): in a rep's
+context, where the rep read from the views and the session's rep both return, both open level 0 at the coins of
+Ligerito's round `k₀ + 8` after the PIOP (`FinRep.repCut_open0`, `FinRep.repPZk_open0`), the slot `repSlot` names, so
+at `q0At`'s positions, where `fill0` is the session's commitment (`FinRep.fill0_open0`). -/
+theorem repOpenRest_l0 : ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
+    ∀ p q t l', (repVE x w τ c spec i hi r cm0 extras ic).go l = (.ok (p, t), l') →
+      (repHE x w τ c spec i hi r cm0 extras ic).go l = (.ok (q, t), l') →
+      FlockComplete.eraseZ p = FlockComplete.eraseZ q →
+        p.proof.ligerito.initialProof.rows = q.proof.ligerito.initialProof.rows ∧
+          p.proof.ligerito.initialProof.salts = q.proof.ligerito.initialProof.salts := by
+  intro x w τ c spec i hi r cm0 extras ic l hC p q t l' hp hq _
+  obtain ⟨e', hv, hm, hk6, hx'⟩ := FinRep.repHE_asks hC hq
+  obtain ⟨hx, hw, hA, ⟨s, hsx⟩, hr, hcm, -, he, hl⟩ := hC
+  obtain ⟨-, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hv
+  obtain ⟨hn7, hL2, -, -, -, -, -⟩ := hdim
+  have hi' : i < (stsOf x).size := lt_of_jOf ⟨i, hi⟩
+  have htab : (FlockDeploy.tabsOf (stsOf x))[i]! = _root_.Flock.Setup.ofCircuit (stsOf x)[i]! := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) i (by simpa [FlockDeploy.tabsOf] using hi'),
+      getElem!_pos (stsOf x) i hi']
+    simp [FlockDeploy.tabsOf]
+  have hQ := FinRep.repPZk_open0 (hm := hm) (hn := by rw [hn7, hsm]; omega) (hk0 := hk0) (hL := hL2)
+    (hq := fun i hi => (hlv i hi).q_ne_zero) (ht := rfl) (h := e')
+  obtain ⟨-, hsv⟩ := piopSrcE x hx w hw τ c (refK x) (not_refused_of_admits hx hA (refK x)) s spec hsx ⟨i, hi⟩
+    ⟨r, hr⟩ extras he
+  dsimp only at hsv
+  rw [← eraseS_srcV hA w τ hi hr, ← hl] at hsv
+  have hP := FinRep.repCut_open0 (coin := fun k i => slotAt c k i) (n := refK x) (resp := FinRep.respOf c)
+    (fun k => FinRep.coinOf_respOf c k) _ _ _ _ _ _ _ _ _ _ _ _ _ (by rw [htab]; exact hm)
+    (by rw [hn7, hsm]; omega) hk0 ((hlv 0 (by omega)).q_ne_zero) rfl (FinRep.piopSrc_of_eraseS hsv) hp
+  rw [htab] at hP
+  have hslot : l.size + (FlockComplete.piopZk (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!) extras +
+      (zkTab x ⟨i, hi⟩).sch.k0 + 8) = repSlot x (2 * i + r) (fun sch => sch.k0 + 8) := by
+    have hz : _root_.Flock.Zk.schedule (stsOf x)[(2 * i + r) / 2]!.m =
+        .ok ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := by
+      rw [show (2 * i + r) / 2 = i by omega]
+      exact hv
+    have e6 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).fold.kLog = (stsOf x)[i]!.c.kLog := rfl
+    have e7 : (_root_.Flock.Setup.ofCircuit (stsOf x)[i]!).m = (stsOf x)[i]!.m := rfl
+    rw [repSlot_eq hsx hz, show (2 * i + r) / 2 = i by omega, hl, repBase_eq hsx]
+    unfold FlockComplete.piopZk FlockComplete.piopRoundsZk
+    rw [e6, e7, hx']
+    omega
+  rw [FinRep.coinOf_respOf, hslot] at hP hQ
+  rw [hP, hQ]
+  have key : ∀ p ∈ q0At c ⟨i, hi⟩ ⟨r, hr⟩,
+      (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).rows[p]! = cm0.rows[p]! ∧
+        (fill0 x c w τ i (lv0 x ⟨i, hi⟩) cm0).salts[p]! = cm0.salts[p]! :=
+    fun p hp => FinRep.fill0_open0 hx hsx c w τ hi hr hcm hp
+  unfold FlockComplete.openP
+  refine ⟨Array.map_congr_left fun p hp => (key p hp).1, ?_⟩
+  dsimp only
+  split_ifs
+  · rfl
+  · exact Array.map_congr_left fun p hp => (key p hp).2
 
 end Masked
 
