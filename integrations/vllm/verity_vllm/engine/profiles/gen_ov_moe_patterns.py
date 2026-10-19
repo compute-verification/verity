@@ -57,10 +57,6 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
 MOE_OP_PREFIX = "moe_forward"
 
-#: Device kernels of the fused-MoE block on the pinned vLLM (Triton function names / CUDA kernel tokens), for the census reader.
-MOE_KERNELS_EXPECTED = ("topk_softmax", "moe_align_block_size", "fused_moe_kernel", "silu_and_mul", "moe_sum")
-
-
 def _view(v: Any) -> dict[str, Any]:
     return {"shape": list(v.shape), "dtype": v.dtype, "strides": list(v.strides), "offset": v.offset, "alloc": v.alloc}
 
@@ -383,14 +379,18 @@ class MoEFusedExperts:
         return unsupported(node, f"no profile pattern resolves the router's gate GEMM inside {op_name(node.op)}", child_id=gate.id)
 
     def _tiling(self, node: TreeNode, launch: TreeNode, ctx: StepContext) -> Unsupported | None:
-        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages)."""
+        """None when the launch's tiling is the profile's pinned one (`fused_pins`, warps, stages) or a tuned tile the Build accepts
+        (`targets.moe_tuned_tile_refusal`)."""
         e = launch.enter
         consts = dict(e.constexprs)
         bad = {k: (consts.get(k), v) for k, v in self.fused_pins.items() if consts.get(k) != v}
         if bad or e.num_warps != self.fused_num_warps or e.num_stages != self.fused_num_stages:
+            why = T.moe_tuned_tile_refusal(target_of(ctx)[0], consts.get("BLOCK_SIZE_K"))
+            if why is None:
+                return None
             return unsupported(node, "fused_moe_kernel tiling differs from the pinned profile",
                                mismatches={k: {"observed": o, "pinned": p} for k, (o, p) in bad.items()},
-                               num_warps=e.num_warps, num_stages=e.num_stages)
+                               num_warps=e.num_warps, num_stages=e.num_stages, tuned=why)
         return None
 
     def _fused(self, node: TreeNode, launch: TreeNode, ctx: StepContext, *, expect_weighted: bool, expect_top_k: int, E: int, K: int, N: int,

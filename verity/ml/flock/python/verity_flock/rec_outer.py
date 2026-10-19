@@ -211,10 +211,11 @@ class Chain:
 
 
 def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
-          link_rows: bool = False, name: str | None = None) -> dict:
+          link_rows: bool = False, name: str | None = None, version: int = 1) -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
     prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops;
-    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`). The openings' positions are the ones the
+    ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's
+    (`partition.population_program`; 0 restages a level recorded before v1). The openings' positions are the ones the
     verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -225,7 +226,7 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
         raise ValueError(f"level {level['level']}: openings of hm96-sha512/v1 leaves; RecOpen opens plain SHA-512 leaves "
                          f"(flock-leaf/sha512-unsalted)")
     defn = R.definition(LANES, H)
-    program_ = P.population_program(defn, n)
+    program_ = P.population_program(defn, n, version=version)
     query = P.template_instance_query(defn)
     part = P.partition(program_, query)
     prog = P.program_sha512(program_)

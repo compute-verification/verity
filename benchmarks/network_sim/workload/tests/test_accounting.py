@@ -31,7 +31,9 @@ def audited(dp, run_inputs, deviation=None):
 def test_the_accounting_layer_evaluates_the_programs_own_values_and_counts_its_gates():
     ctx, run_inputs, dp = adapted()
     t = ctx.model.evaluate(dict(ctx.model.inputs(1)))
-    assert D.evaluate(ctx.model.program, A.parameters(ctx.model, 1)) == t
+    got, program = D.evaluate(ctx.model.program, A.parameters(ctx.model, 1)), ctx.model.program
+    assert all(t[g] == x for g, x in got.items())
+    assert {g for v in D.values(program) for g in A.gates(program, v)} <= set(got)
     total = Counter()
     for w in D.work(ctx.model.program).values():
         total.update(w)

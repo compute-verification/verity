@@ -91,7 +91,6 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
             rep["errors"].append(err)
         else:
             rep["checked"] += 1
-    files = m.payload.files if m.payload and m.payload.type == "tree" else []
     for h, size in m.blobs():
         key = object_key(h)
         head = r.head(key)

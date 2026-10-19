@@ -1,10 +1,12 @@
 import Properties.Proofs.Nci.Lemmas
+import Properties.Proofs.Nci.Desc
 
 /-!
 # The NCI check's properties, proved
 
 Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemmas about its steps
-(`Properties.Proofs.Nci.Lemmas`).
+(`Properties.Proofs.Nci.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
+`Properties.Proofs.Nci.Desc`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs
@@ -43,11 +45,16 @@ theorem verdict_iff_wellFormed (j : Json) : (∃ out, evaluate j = .ok out) ↔ 
     obtain ⟨dv, hd⟩ := (divisionOf_isOk hc _ _).2 ⟨ht, hs, ho, he⟩
     exact ⟨_, (evaluate_ok j _).2 ⟨i, P, c, dv, (parse_ok j i).2 hi, hP, hc, hd, rfl⟩⟩
 
+theorem refusal_error (e : String) : (refusal e).getObjVal? "error" = .ok (.str e) := by
+  unfold refusal
+  rcases fixOf e with _ | m <;> rfl
+
 theorem check_error (j : Json) (k : String) :
     (check j).getObjVal? "error" = .ok (.str k) ↔ evaluate j = .error k := by
   unfold check
   rcases h : evaluate j with e | out
-  · show Except.ok (Json.str e) = _ ↔ _
+  · show (refusal e).getObjVal? "error" = _ ↔ _
+    rw [refusal_error]
     simp [eq_comm]
   · obtain ⟨i, P, c, dv, -, -, -, -, rfl⟩ := (evaluate_ok j out).1 h
     show Except.error _ = _ ↔ _
@@ -268,5 +275,16 @@ theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s
     fun g hg => absurd hg (by omega), fun t ht => absurd ht (by simp), by simp [h0], fun g hg => absurd hg (by omega), ?_⟩
   rintro ⟨g, u, hg, -⟩
   exact absurd hg (by simp)
+
+/-! ## The description-sized check -/
+
+/-- **`NciCheck.Desc.sizes` is the unrolled tally.** On a division that is the expansion of the root nodes' IUs `own`
+(root node `k` holding gates `[offs[k], offs[k + 1])`, `offs` from `0` to the circuit's `N`, each of them in IU
+`own[k]`), the description-sized check's size of each IU is the one `NciCheck.tally` counts gate by gate. -/
+theorem sizes_eq_tally (c : Circuit) (d : Division) (offs : Array ℕ) (own : Array (Option ℕ))
+    (h0 : offs[0]! = 0) (hN : offs[own.size]! = c.N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
+    (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → d.owner[g]! = own[k]!) (u : ℕ) (hu : u < d.n) :
+    (NciCheck.Desc.sizes offs own d.n)[u]! = (tally c d)[u]!.1 := by
+  rw [Desc.sizes_eq_count offs own d.n c.N (fun g => d.owner[g]!) h0 hN hmono hexp u hu, ((tally_spec c d).2 u hu).1]
 
 end NciCheck.Properties.SecurityProofs

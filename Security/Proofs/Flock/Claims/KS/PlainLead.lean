@@ -113,7 +113,8 @@ theorem leadsAfter_simAt (hfin : ∀ proofs, fin ⟨0, Nat.one_pos⟩ 0 proofs =
       (simAt A Hc E Lf t ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP) := by
   subst hP
   intro pts
-  have hA := Sim.All.mono (R' := fun b _ => pL b) (D' := DeadAt (fun _ cap pend os => tableOutL Hc E Lf cap pend os))
+  have hA := Sim.All.mono (R' := fun b _ => pL b)
+    (D' := DeadAt (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun j => repsOf (D := D) A ([t].get j)))
     (fun _ _ h => h.1) (fun _ _ h => h) _
     (all_simSession (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun _ o => ok o) dfltOutL pL opn dg dec one
       fin capOf N (fun j => repsOf (D := D) A ([t].get j))

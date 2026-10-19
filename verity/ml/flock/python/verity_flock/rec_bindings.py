@@ -9,7 +9,7 @@ never read from the prover's circuit file.
 by its descriptor id (`circuit.program_digests`), the value the Lean verifier compares META's with but does not encode
 itself. The template's Definition is the program's own, decoded (`codec.decode_program`) and bound again from its registered
 family (`RecOpen`, `InnerRepCheck`) at the decoded statics; the bound template is checked to rebuild the verifier's program
-(`population_program` of it at the program's ``N``) before its digest is taken.
+(`population_program` of it at the program's ``N`` and version, v1 or an old statement's v0) before its digest is taken.
 """
 from __future__ import annotations
 
@@ -26,7 +26,9 @@ from . import rec_open as _rec_open  # noqa: F401  (registers RecOpen)
 from . import rec_residuals as _rec_residuals  # noqa: F401  (registers InnerRepCheck)
 from . import rec_sparse as _rec_sparse  # noqa: F401  (registers RecSparse)
 
-POPULATION = re.compile(r"TemplateInstances_v0\{N=([1-9][0-9]*)\}")
+#: `population_program`'s program function at each version: v1 names its template, v0 (an old statement's) its count alone
+POPULATION = {1: re.compile(r'TemplateInstances_v1\{template=".*",N=([1-9][0-9]*)\}'),
+              0: re.compile(r"TemplateInstances_v0\{N=([1-9][0-9]*)\}")}
 
 
 def bindings(partition: dict, program: dict) -> dict:
@@ -45,14 +47,15 @@ def bindings(partition: dict, program: dict) -> dict:
     family = REGISTRY.defs.get(entry.get("id"))
     if family is None:
         raise ValueError(f"the template {entry.get('id')!r} is no registered family")
-    m = POPULATION.fullmatch(program.get("program_fn", ""))
+    fn = program.get("program_fn", "")
+    version, m = next(((v, m) for v, pat in POPULATION.items() if (m := pat.fullmatch(fn))), (None, None))
     if m is None:
-        raise ValueError(f"the program's function {program.get('program_fn')!r} is not TemplateInstances_v0{{N}}")
+        raise ValueError(f"the program's function {fn!r} is not TemplateInstances_v1{{template,N}} or TemplateInstances_v0{{N}}")
     template = bind(family, **decode_program(program, REGISTRY).defs[tid].bindings)
     if descriptor_id(template) != tid:
         raise ValueError(f"the template bound again is {descriptor_id(template)!r}, not {tid!r}")
-    if program_digest(P.population_program(template, int(m[1]))) != prog:
-        raise ValueError(f"the program is not population_program of {entry['id']} at N={m[1]}")
+    if program_digest(P.population_program(template, int(m[1]), version=version)) != prog:
+        raise ValueError(f"the program is not population_program v{version} of {entry['id']} at N={m[1]}")
     return {"partition": P.digest(partition), "program": prog, "program_digests": {tid: program_digest(Program(template))}}
 
 
