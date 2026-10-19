@@ -13,10 +13,12 @@ every expansion: the description-sized check against the unrolled one, on the sa
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
 across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
-composites, root batches and scans) for `PER_FIXTURE` instances each. θ is no input node, every one, the registered ones or a
-random set. A division puts every Call in one IU, each in its own, runs of consecutive Calls or a random assignment, and
-a Call without gates in any IU or none. `Γ` and `α` are set as `difftest_vectors` sets them, at, below or above the
-division's largest IU and NCI. About a third of the instances are malformed, each in one way `NciCheck.Desc` refuses.
+composites, root batches and scans) for `PER_FIXTURE` instances each, then `difftest_vectors.pinned()`'s two (θ every
+input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
+where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
+its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
+set as `difftest_vectors` sets them, at, below or above the division's largest IU and NCI. About a third of the
+instances are malformed, each in one way `NciCheck.Desc` refuses.
 """
 from __future__ import annotations
 
@@ -52,14 +54,7 @@ COUNT = 3000
 PER_FIXTURE = 24
 TRANSPOSED = 0.25
 FIXTURES = Path(verity.ml.circuits.__file__).resolve().parent / "tests"
-MALFORMED = ["instance", "params", "program", "not-topological", "theta-unknown", "theta-not-input", "theta-duplicate",
-             "owner-length", "owner-entry", "input-in-iu", "gate-in-no-iu", "empty-iu"]
-
-
-def _registered_nodes(text: str) -> list[int]:
-    desc = json.loads(text)
-    nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    return [k for k, n in enumerate(nodes) if desc["callees"][n["fn"]].startswith("RegisteredInput")]
+MALFORMED = vectors.MALFORMED
 
 
 def division(rng, calls: list[int]) -> tuple[str, list[int]]:
@@ -175,14 +170,15 @@ def instance(seed: int) -> dict:
     else:
         name, text = fixtures()[(seed - COUNT) // PER_FIXTURE]
         kind = f"fixture:{name}"
-    inp, spans = reference.root_nodes(text)
+    inp, reg, spans = reference.root_nodes(text)
     K = len(inp)
     inputs = [k for k in range(K) if inp[k]]
+    registered = [k for k in inputs if reg[k]]
     calls = [k for k in range(K) if not inp[k] and spans[k][1] > spans[k][0]]
     empty = [k for k in range(K) if not inp[k] and spans[k][1] == spans[k][0]]
     theta_kind = rng.choice(["none", "all", "registered", "random"])
-    theta = {"none": [], "all": inputs, "registered": _registered_nodes(text),
-             "random": [k for k in inputs if rng.random() < 0.5]}[theta_kind]
+    theta = {"none": [], "all": inputs, "registered": registered,
+             "random": [k for k in registered if rng.random() < 0.5]}[theta_kind]
     theta = rng.sample(theta, len(theta))
     how, labels = division(rng, calls)
     owner: list = ["input"] * K
@@ -192,8 +188,8 @@ def instance(seed: int) -> dict:
         owner[k] = rng.choice(["input", rng.randint(0, max(labels, default=0))])
     inst = {"program": text, "theta": theta, "owner": owner, "gamma": 0, "alpha": [0, 1]}
     N = spans[-1][1] if spans else 0
-    w, _, _ = reference.circuit(text)
-    probe = reference.check_desc(inst | {"gamma": N, "alpha": [sum(w) + 1, 1]})
+    w, _, _, _ = reference.circuit(text)
+    probe = reference.check_desc(inst | {"theta": [k for k in theta if reg[k]], "gamma": N, "alpha": [sum(w) + 1, 1]})
     ius = probe["ius"]
     biggest = max((s for s, _ in ius), default=0)
     crit = max((Fraction(r, s) for s, r in ius), default=Fraction(0))
@@ -201,24 +197,28 @@ def instance(seed: int) -> dict:
     inst["alpha"] = vectors._alpha(rng, crit)
     bad = rng.choice(MALFORMED) if rng.random() < 0.35 else None
     if bad:
-        _break(rng, inst, bad, inp, spans)
+        _break(rng, inst, bad, inp, reg, spans)
     return {"instance": inst, "shape": kind, "theta_kind": theta_kind, "division": how, "malformed": bad}
 
 
-def _break(rng, inst: dict, bad: str, inp: list[bool], spans: list[tuple[int, int]]) -> None:
+def _break(rng, inst: dict, bad: str, inp: list[bool], reg: list[bool], spans: list[tuple[int, int]]) -> None:
     """Make `inst` malformed in the way `bad` names."""
     K = len(inp)
     owner, theta = inst["owner"], inst["theta"]
     calls = [k for k in range(K) if not inp[k] and spans[k][1] > spans[k][0]]
     inputs = [k for k in range(K) if inp[k] and spans[k][1] > spans[k][0]]
+    registered = [k for k in inputs if reg[k]]
+    per_run = [k for k in range(K) if inp[k] and not reg[k]]
     if bad in ("instance", "params", "program", "not-topological"):
-        vectors._break(rng, inst, bad, [])
+        vectors._break(rng, inst, bad, [], [])
     elif bad == "theta-unknown":
         theta.insert(rng.randint(0, len(theta)), rng.choice([K, K + rng.randint(1, 5), -1, "0", None, 1.5]))
     elif bad == "theta-not-input" and calls:
         theta.insert(rng.randint(0, len(theta)), rng.choice(calls))
-    elif bad == "theta-duplicate" and inputs:
-        k = rng.choice(theta or inputs)
+    elif bad == "theta-not-registered" and per_run:
+        theta.insert(rng.randint(0, len(theta)), rng.choice(per_run))
+    elif bad == "theta-duplicate" and registered:
+        k = rng.choice(theta or registered)
         if not theta:
             theta.append(k)
         theta.insert(rng.randint(0, len(theta)), k)
@@ -251,20 +251,21 @@ NAMES = ("instances", "expanded", "python")
 
 
 def total() -> int:
-    """How many instances the audit's data has: the random ones and every fixture's."""
-    return COUNT + PER_FIXTURE * len(fixtures())
+    """How many instances the audit's data has: the random ones, every fixture's, and `difftest_vectors.pinned()`'s."""
+    return COUNT + PER_FIXTURE * len(fixtures()) + len(vectors.pinned())
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
-    """The three files for instances 0 … count − 1 (all of them, `total()`, by default) under ``out/desc_difftest``."""
-    count = total() if count is None else count
+    """The three files for instances 0 … count − 1, then `difftest_vectors.pinned()`'s (all of them, `total()`, by
+    default) under ``out/desc_difftest``."""
+    pins = [p["instance"] for p in vectors.pinned()]
+    count = total() - len(pins) if count is None else count
     d = out / "desc_difftest"
     d.mkdir(parents=True, exist_ok=True)
     paths = {f"desc_difftest/{n}.jsonl": d / f"{n}.jsonl" for n in NAMES}
     files = [open(paths[f"desc_difftest/{n}.jsonl"], "w") for n in NAMES]
     try:
-        for seed in range(count):
-            inst = instance(seed)["instance"]
+        for inst in [*(instance(seed)["instance"] for seed in range(count)), *pins]:
             res = reference.check_desc(inst)
             for f, obj in zip(files, (inst, expanded(inst, res), res), strict=True):
                 f.write(line(obj))

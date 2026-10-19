@@ -12,8 +12,8 @@ difftest (`NciCheck.DescDifftest`) checks both on the same declarations, the old
 
 The fields are `NciCheck.Check`'s (`program`, `theta`, `owner`, `gamma`, `alpha`), read by `NciCheck.parse`, with two read
 per root node instead of per gate:
-* `theta`: θ as root nodes, each an input node (§5.2 of `verity/ml/circuits/PROTOCOL.md`), none twice. θ is every gate of
-  those nodes.
+* `theta`: θ as root nodes, each an input node (§5.2 of `verity/ml/circuits/PROTOCOL.md`) bound at registration
+  (`RegisteredInput<w>_v1`), none twice. θ is every gate of those nodes.
 * `owner`: one entry per root node: `"input"` for an input node, and `u` for a Call (any other root node), every gate of
   which is in IU `u`. A root node without gates (a batch of none, or a Call of a Definition without gates) holds no gate of
   any IU, so its entry is only read for its form.
@@ -50,8 +50,8 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (a reference the layout can't resolve: the output of a scan
-of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`, `theta-duplicate`), then the
-owners (`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
+of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`, `theta-not-registered`: an
+input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
 -/
@@ -665,11 +665,13 @@ def evaluate (j : Json) : Except String Json := do
   let offs := body.offsets
   let gatesOf (k : Nat) : Nat := offs[k + 1]! - offs[k]!
   let inp := body.nodes.map (isInputNode P)
+  let reg := body.nodes.map fun n => isRegisteredId (P.defs[n.fn]!).key
   let mut theta := Array.replicate K false
   for t in i.theta do
     let some k := natOf? t | throw "theta-unknown"
     if k ≥ K then throw "theta-unknown"
     if !inp[k]! then throw "theta-not-input"
+    if !reg[k]! then throw "theta-not-registered"
     if theta[k]! then throw "theta-duplicate"
     theta := theta.set! k true
   if i.owner.size != K then throw "owner-length"
@@ -700,10 +702,10 @@ def evaluate (j : Json) : Except String Json := do
   let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- `evaluate`, with a refusal as `{"error": code}`. -/
+/-- `evaluate`, with a refusal as `NciCheck.refusal` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => Json.mkObj [("error", Json.str code)]
+  | .error code => refusal code
 
 end NciCheck.Desc

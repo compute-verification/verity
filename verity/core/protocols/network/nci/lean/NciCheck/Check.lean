@@ -23,7 +23,10 @@ An instance is one JSON object:
   (`input_reads`), so an input node with operands is refused (`program`; descriptor v1's input primitives take no
   parameters, so the decoder admits none, but the check does not rely on it). Nothing here reads a gate's operation or
   the outputs, and neither does `novelReads`.
-* `theta`: θ, a list of gate ids (canonical root-scoped gate indices), each an input gate, none twice.
+* `theta`: θ, a list of gate ids (canonical root-scoped gate indices), each an input gate bound at registration
+  (`RegisteredInput<w>_v1`, binding `registration` in `Flock.Program.inputId?`), none twice. The baseline is what the
+  developer committed before the run, so an input bound per run (`Input<w>_v1`) is refused (`theta-not-registered`):
+  in θ it would make any value the run brings, recommitted, free to read.
 * `owner`: the division, one entry per gate as Flock's partition check takes it (`Flock.Partition.Owner`): `"input"` for
   an input gate, which is in no IU, and `u` for a computed gate of IU `u`. This is the definition's `Partition.unit`,
   with `none` written `"input"`, so a gate in two IUs has no encoding. The IUs are `0 … n - 1`, `n` one more than the
@@ -35,9 +38,11 @@ An instance is one JSON object:
 `evaluate` refuses a malformed instance with the first failing code, in the order checked: `instance` (a field missing
 or of the wrong JSON kind), `params` (`Γ` or `α`), `program` (the decoder refuses it), then gate by gate `program` or
 `not-topological`, then θ entry by
-entry (`theta-unknown`: not a gate id, `theta-not-input`, `theta-duplicate`), then the owners (`owner-length`: not one
-per gate, so an id outside the circuit or a gate left out; then gate by gate `owner-entry`: neither `"input"` nor a
-natural, `input-in-iu`, `gate-in-no-iu`), then `empty-iu`.
+entry (`theta-unknown`: not a gate id, `theta-not-input`, `theta-not-registered`: an input bound per run,
+`theta-duplicate`), then the owners (`owner-length`: not one per gate, so an id outside the circuit or a gate left out;
+then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`, `gate-in-no-iu`), then `empty-iu`.
+`check` writes a refusal as `{"error": code}`, with a `message` giving the fix where one is the declaration's to make
+(`fixOf`).
 -/
 
 namespace NciCheck
@@ -49,19 +54,25 @@ def natOf? : Json → Option Nat
   | .num n => if n.exponent == 0 && n.mantissa ≥ 0 then some n.mantissa.toNat else none
   | _ => none
 
+/-- Whether a primitive id is an input bound at registration, `RegisteredInput<w>_v1` (`Flock.Program.inputId?`). -/
+def isRegisteredId (id : String) : Bool :=
+  (Flock.Program.inputId? id).map (·.1) == some Flock.Program.REGISTRATION
+
 /-- `D` as the definition reads it, gate by gate: the width of its value, whether it is an input gate, and the gates its
-operands name (repeats kept: only the set is read). -/
+operands name (repeats kept: only the set is read); and, which the definition doesn't read but θ does, whether it is an
+input bound at registration. -/
 structure Circuit where
   w : Array Nat
   isInput : Array Bool
+  registered : Array Bool
   reads : Array (Array Nat)
 
 def Circuit.N (c : Circuit) : Nat := c.w.size
 
-/-- Gate `g` of the Program's canonical circuit: its width, whether it is an input gate, and its operands. Refused
-(`program`) where its primitive can't be located, returns more than one value, or is an input node with operands, and
-(`not-topological`) where it reads a gate not before it. -/
-def gateOf (P : Flock.Program.Prog) (g : Nat) : Except String (Nat × Bool × Array Nat) := do
+/-- Gate `g` of the Program's canonical circuit: its width, whether it is an input gate, whether it is one bound at
+registration, and its operands. Refused (`program`) where its primitive can't be located, returns more than one value, or
+is an input node with operands, and (`not-topological`) where it reads a gate not before it. -/
+def gateOf (P : Flock.Program.Prog) (g : Nat) : Except String (Nat × Bool × Bool × Array Nat) := do
   let (p, ops, _) ← match P.gate g with
     | .ok x => pure x
     | .error _ => throw "program"
@@ -70,14 +81,15 @@ def gateOf (P : Flock.Program.Prog) (g : Nat) : Except String (Nat × Bool × Ar
   let inp := Flock.Program.isInputId defn.key
   if inp && !ops.isEmpty then throw "program"
   if ops.any (· ≥ g) then throw "not-topological"
-  return (w, inp, ops)
+  return (w, inp, isRegisteredId defn.key, ops)
 
-def Circuit.push (c : Circuit) : Nat × Bool × Array Nat → Circuit
-  | (w, inp, ops) => { w := c.w.push w, isInput := c.isInput.push inp, reads := c.reads.push ops }
+def Circuit.push (c : Circuit) : Nat × Bool × Bool × Array Nat → Circuit
+  | (w, inp, reg, ops) =>
+    { w := c.w.push w, isInput := c.isInput.push inp, registered := c.registered.push reg, reads := c.reads.push ops }
 
 /-- The Program's canonical circuit, gate by gate, refused at the first gate `gateOf` refuses. -/
 def circuitOf (P : Flock.Program.Prog) : Except String Circuit :=
-  (List.range (P.defs[P.root]!).gates).foldlM (fun c g => c.push <$> gateOf P g) ⟨#[], #[], #[]⟩
+  (List.range (P.defs[P.root]!).gates).foldlM (fun c g => c.push <$> gateOf P g) ⟨#[], #[], #[], #[]⟩
 
 /-- θ and the division, checked: θ as a set of gates, each gate's IU (`none` for an input gate), and the number of IUs. -/
 structure Division where
@@ -90,6 +102,7 @@ def thetaStep (c : Circuit) (s : Std.HashSet Nat) (t : Json) : Except String (St
   let some g := natOf? t | throw "theta-unknown"
   if g ≥ c.N then throw "theta-unknown"
   if !c.isInput[g]! then throw "theta-not-input"
+  if !c.registered[g]! then throw "theta-not-registered"
   if s.contains g then throw "theta-duplicate"
   return s.insert g
 
@@ -198,10 +211,23 @@ def evaluate (j : Json) : Except String Json := do
   let r := ius c d
   return verdict c.N r (failure i.gamma i.num i.den r)
 
-/-- `evaluate`, with a refusal as `{"error": code}`. -/
+/-- The fix a refusal's `message` gives, for a code whose fix is the declaration's to make. -/
+def fixOf : String → Option String
+  | "theta-not-registered" => some ("theta names an input bound per run (Input<w>_v1), and the baseline holds only " ++
+      "what was committed at registration: declare that parameter registered (RegisteredInput<w>_v1, the Program's " ++
+      "`registered`) or drop it from theta")
+  | _ => none
+
+/-- A refusal as JSON: `{"error": code}`, with its `message` where `fixOf` has one. -/
+def refusal (code : String) : Json :=
+  Json.mkObj (("error", Json.str code) :: match fixOf code with
+    | some m => [("message", Json.str m)]
+    | none => [])
+
+/-- `evaluate`, with a refusal as `refusal` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => Json.mkObj [("error", Json.str code)]
+  | .error code => refusal code
 
 end NciCheck
