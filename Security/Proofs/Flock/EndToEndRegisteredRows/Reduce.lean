@@ -1,6 +1,7 @@
 import Proofs.Flock.EndToEndRegisteredRows.Statement
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.Soundness.Registered.ReadsAt
+import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
 
 /-!
 # `EndToEndRegisteredRows` from the rows' extraction bound
@@ -81,6 +82,69 @@ def RowsLinkLe : Prop :=
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+
+/-- **The rows' extraction bound.** The registered reads' leaves are the public file's at every registration
+(`layShHJ`'s `regLeaf` reads only `pub`), so `rd.Off` is one proposition at every registration. Where it holds, the
+rows' disjunct is empty and the bound is `EndToEndRegisteredDrawn`'s first conjunct. Where it fails, the registrant's
+openings `wo` open the registered commitments at every read, and the bound is `ZkLink.zk_flock_drawnC_rows` at "wrong"
+`wrongRegZ ∪ rowsWrongZ`, through `execRefinesZK_tables_drawn` and `ksAvgZC_le_strict`, as
+`zk_session_soundHJR_custody_drawn_reg` is `zk_flock_drawnC_reg`'s. -/
+theorem rowsLinkLe : RowsLinkLe := by
+  intro n Reg own I ht c hc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw
+    hM ρ hρ hr t' ht' τ qF qS L G P vb wo σ Xv hCR hA2 hRows
+  have hcs : ∀ (R R' : Reg) p, (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).regLeaf R p =
+      (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).regLeaf R' p := fun _ _ _ => rfl
+  have hoffc : ∀ R R' : Reg, rd.Off R → rd.Off R' := by
+    intro R R' h
+    obtain ⟨p, hp, hne⟩ := h
+    exact ⟨p, hp, fun h' => hne ((hcs R R' p).trans h')⟩
+  by_cases hoff : rd.Off (reg σ)
+  · have hD := (Flock.SecurityProofs.EndToEndRegisteredDrawn n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀ d₀
+      y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2).1
+    refine (prob_mono (q := fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
+        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv) ?_ G τ).trans
+      (hD.trans (le_add_right le_rfl))
+    intro o h
+    obtain ⟨hA, u, hu, hW | ⟨hno, -⟩⟩ := h
+    · exact ⟨hA, u, hu, hW⟩
+    · exact absurd (hoffc _ o.1 hoff) hno
+  have hon : ∀ p, rd.isRead p → vb.com (wo p) = vb.cs (reg σ) p := by
+    intro p hp
+    have hl : (layShHJ (Reg := Reg) dj y₀ ht hc hscope hU (pub := pub)).regLeaf (reg σ) p = rd.leaf p := by
+      by_contra h
+      exact hoff ⟨p, hp, h⟩
+    refine Prod.ext rfl ?_
+    show Binding.ExplicitLeaf.leaf (ZkBind.HmRowsZX.scheme (rsZHJS dj y₀ ht hc hscope hU hpub) p) (rd.wv p) (rd.ws p) = _
+    unfold ZkBind.HmRowsZX.scheme
+    split_ifs with hrow
+    · exact hl.symm
+    · exact absurd (rd.read_row p hp) hrow
+  let W := wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∪
+    rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo Xv
+  refine le_trans (prob_mono (q := fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ W) ?_ G τ) ?_
+  · intro o h
+    obtain ⟨hA, u, hu, hW | ⟨-, -, g, hg, hrd, hne⟩⟩ := h
+    · exact ⟨acceptsZK_of_R hA, u, hu, Finset.mem_union_left _ hW⟩
+    · exact ⟨acceptsZK_of_R hA, u, hu, Finset.mem_union_right _
+        ((mem_rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo).2 ⟨g, hg, hrd, hne⟩)⟩
+  refine (execRefinesZK_tables_drawn execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg
+    (decAtZJ (planZHJ dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+    (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
+      (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
+        fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+    (fun S => ∃ u ∈ S, u ∈ W)).trans ?_
+  refine (prob_mono (q := fun o : Bool × Finset (Fin n) => o.1 = true ∧ ¬ Disjoint W o.2)
+    (fun o h => ⟨h.1, Finset.not_disjoint_iff.2 (let ⟨u, hu, hw⟩ := h.2; ⟨u, hw, hu⟩)⟩) _ _).trans ?_
+  refine (zk_flock_drawnC_rows execArith hs512 _ (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo
+    (ZkSession.loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
+    (Discharge.Layout.keyProg_readsOwn c hU n _)
+    hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) ht' σ).trans ?_
+  unfold rowsBoundZC
+  split_ifs with h3
+  · calc _ = _ + _ + _ := (add_assoc _ _ _).symm
+      _ ≤ _ := add_le_add (add_le_add (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)
+          le_rfl) le_rfl
+  · exact (h3 ⟨hA2, hRows, hon⟩).elim
 
 /-- **`EndToEndRegisteredRows` from the rows' extraction bound.** -/
 theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.EndToEndRegisteredRows := by
