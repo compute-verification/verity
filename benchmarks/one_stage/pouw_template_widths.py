@@ -77,6 +77,8 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--literal-max", type=int, default=400_000)
     ap.add_argument("--cone-max", type=int, default=3_000_000)
+    ap.add_argument("--literal-s", type=float, default=120)
+    ap.add_argument("--recut-s", type=float, default=600)
     a = ap.parse_args()
     t0 = time.time()
     by_mod = sidecar_targets()

@@ -30,11 +30,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import signal
 import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 sys.setrecursionlimit(100000)
@@ -73,6 +75,24 @@ def pins() -> tuple[dict[str, int], dict[str, int]]:
 
 
 PIECE_ANDS, DEF_ANDS = pins()
+
+
+class OverBudget(Exception):
+    pass
+
+
+@contextmanager
+def budget(seconds: float) -> Iterator[None]:
+    """Raise `OverBudget` in the block after ``seconds`` (a walk's cost is its operands' leaves, which gates don't bound)."""
+    def ring(_sig, _frame):
+        raise OverBudget(f"over {seconds} s")
+    old = signal.signal(signal.SIGALRM, ring)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
 
 
 def width(prim) -> int:
@@ -211,7 +231,8 @@ def deep(fn, rec: dict, a: argparse.Namespace, *, recut_too: bool) -> None:
     t = time.time()
     if fn.gates <= a.literal_max and "bits_literal" not in rec and "literal_error" not in rec:
         try:
-            rec.update(literal(fn))
+            with budget(a.literal_s):
+                rec.update(literal(fn))
             if rec["bits_literal"] != rec["bits"]:
                 rec["disagree"] = True
         except Exception as e:  # noqa: BLE001
@@ -222,10 +243,14 @@ def deep(fn, rec: dict, a: argparse.Namespace, *, recut_too: bool) -> None:
         except Exception as e:  # noqa: BLE001
             rec["descriptor_id"] = f"error: {e!r}"[:200]
         try:
-            rec["recut"] = recut(fn, returned(fn))
+            with budget(a.recut_s):
+                rec["recut"] = recut(fn, returned(fn))
         except Exception as e:  # noqa: BLE001
             rec["recut"] = {"error": repr(e)[:300]}
     rec["deep_s"] = round(rec.get("deep_s", 0) + time.time() - t, 2)
+    if recut_too:
+        print(f"[deep] {fn.id[:100]} gates {fn.gates} bits {rec.get('bits')} {rec.get('verdict', '')[:40]} "
+              f"recut {'units16' in (rec.get('recut') or {})} {rec['deep_s']} s", file=sys.stderr, flush=True)
 
 
 def candidates(root_fn) -> dict[str, tuple[object, list[str], int]]:
@@ -267,10 +292,12 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--parts", default=None, help="comma-separated parts (step, request_..., workload); default all")
     ap.add_argument("--ranks", default=None)
-    ap.add_argument("--literal-max", type=int, default=400_000)
-    ap.add_argument("--literal-cheap", type=int, default=20_000, help="every template this small gets the ported rule")
-    ap.add_argument("--cone-max", type=int, default=3_000_000)
-    ap.add_argument("--deep-per-family", type=int, default=3, help="specs per (family, how) given the rule and the re-cut")
+    ap.add_argument("--literal-max", type=int, default=20_000)
+    ap.add_argument("--literal-cheap", type=int, default=2_000, help="every template this small gets the ported rule")
+    ap.add_argument("--cone-max", type=int, default=1_000_000)
+    ap.add_argument("--literal-s", type=float, default=20, help="the ported rule's budget per template")
+    ap.add_argument("--recut-s", type=float, default=120, help="the re-cut's budget per template")
+    ap.add_argument("--deep-per-family", type=int, default=2, help="specs per (family, how) given the rule and the re-cut")
     a = ap.parse_args()
     t0 = time.time()
     want_parts = set(a.parts.split(",")) if a.parts else None
