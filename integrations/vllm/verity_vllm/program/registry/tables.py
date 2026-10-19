@@ -16,7 +16,9 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
 registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
 [LO, HI) read from the registered `tanh_rn`, as C-Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words
-are read lazily (`verity.ml.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.
+are read lazily (`verity.ml.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.  No rule binds either: the
+Boolean versions of `TanhF32Rn_v1` and `GeluTanhMul_v1` compute both tables' entries by arithmetic (`registry.boolean_tanh`:
+`TanhF32Rn_v3`, `GeluTanhMul_v4`), so a Program on bits reads neither.
 """
 from __future__ import annotations
 

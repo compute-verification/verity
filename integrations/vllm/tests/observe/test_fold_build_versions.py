@@ -51,8 +51,8 @@ SELECTING = {"DOT": tuple(TG.DOTS.values()), "INV": (P.Fa2InvSum, Fa3InvSum), "S
              "CONSTRUCTION": TargetProfile.SAMPLER_CONSTRUCTIONS,
              "TARGET": (TargetProfile.default(), TargetProfile.default().with_overrides(batch_invariant=False))}
 
-_GEMMA2_RV = ("Gemma-2 only: its fold refuses GeluTanhMul_v3 under registered_values by name (gen_dense_gemma2_patterns), so no "
-              "registered-values Gemma-2 fold completes")
+_GEMMA2_RV = ("Gemma-2 only: its fold refuses this op's constant form under registered_values by name (gen_dense_gemma2_patterns), "
+              "so no registered-values Gemma-2 fold completes")
 #: Definition id -> why the fold may name it at another version than the Build (rule 1), or not name it (rule 2)
 ALLOWED = {
     "AddScalarBf16_v3": _GEMMA2_RV,

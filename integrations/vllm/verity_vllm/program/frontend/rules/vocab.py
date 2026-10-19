@@ -251,11 +251,9 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
     from verity_vllm.program.registry import dense as DN
-    from verity_vllm.program.registry import tables as _tables
     kinds = {
         "scale_tensor": lambda N: ir_bind(b1.Bf16MulScalarTensor, N=N),
         "gelu_tanh_mul": lambda I: ir_bind(DN.GeluTanhMul, I=I),
-        "gelu_tanh_mul_table": lambda I: ir_bind(_tables.GeluTanhMulV3, I=I),
         "attention_softcap": lambda T, NH, KVH, D, CAP: ir_bind(DN.AttentionSoftcap, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D), CAP=CAP),
         "bf16_div_scalar": lambda N, C: ir_bind(DN.Bf16DivScalar, N=N, C=C),
         "bf16_mul_scalar": lambda N, C: ir_bind(DN.Bf16MulScalar, N=N, C=C),
@@ -283,7 +281,6 @@ def _dense_kinds() -> tuple[dict, dict]:
     notes = {
         "scale_tensor": "Bf16MulScalarTensor_v1{N}: aten.mul.Tensor(bf16 row, 0-d bf16 tensor) — f32 multiply, cvt.rn.bf16.f32",
         "gelu_tanh_mul": "GeluTanhMul_v1{I}: vLLM _C.gelu_tanh_and_mul (act_and_mul_kernel<bf16, gelu_tanh_kernel, act_first>)",
-        "gelu_tanh_mul_table": "GeluTanhMul_v3{I}(gu, gelu_tanh_bf16): GeluTanhMul_v1 with the activation read from the registered table",
         "attention_softcap": "AttentionSoftcap_v1{T,NH,KVH,D,BN=fa2_kblock_n(D),CAP}: FA2 causal GQA with Is_softcap (MUFU.TANH on the scores)",
         "bf16_div_scalar": "Bf16DivScalar_v1{N,C}: aten.div.Tensor(bf16, C) — f32(x) * RN32(1/C), cvt.rn.bf16.f32",
         "bf16_mul_scalar": "Bf16MulScalar_v1{N,C}: aten.mul.Tensor(bf16, C) — f32 multiply, cvt.rn.bf16.f32",
