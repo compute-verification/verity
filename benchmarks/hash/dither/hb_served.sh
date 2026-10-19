@@ -9,6 +9,8 @@
 #                      usage, and BUILD.txt: the source commit and arch, and per library the sha256 of the files nvcc -M names
 #   run ARCH [ARGS]    (vy-dc-h200 sm_90a, vy-dc-b200 sm_100a) sbench.py through hb_sbench.py on one leased GPU for at most
 #                      14 minutes, every shipped library checked against the source's files first; ARGS go to sbench.py
+#                      (HB_SCRIPT=h1agate.py, or another script of this directory, runs it in hb_sbench.py's place with
+#                      the same libraries, environment and lease)
 #
 #   git worktree add --detach /tmp/rtx-src <rtx commit>
 #   research run --on vy-nebius-2 --preemptible --queue --phase cpu --cpus 4 --mem-gb 8 --disk-gb 1 --project verity \
@@ -175,7 +177,9 @@ if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
 cd integrations/vllm
-printf '%s\n' "$PY $HB/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
+SCRIPT=$HB/hb_sbench.py
+[ -n "${HB_SCRIPT:-}" ] && SCRIPT=$ROOT/$DITHER/$HB_SCRIPT
+printf '%s\n' "$PY $SCRIPT --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
 # an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${HB_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
@@ -198,7 +202,7 @@ GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- b
   r=$?
   kill "$smi" 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.after.csv"
-  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$HB/hb_sbench.py" --out "$OUT" --scratch "$S" "$@"
+  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$SCRIPT" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 echo "hb_served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
