@@ -970,7 +970,7 @@ end FlockComplete.CutEq
 
 ZKR1's `Round1Pads` (on `cursor/claims-zk-prover-faithful-c7a9`), here under `Cx`: a rep's pads leaf at tree position `p`
 commits a column that reads no coin (`Cx.digOf_pads`), and a cut's pads leaf at `q` is the leaf at `q`
-(`Cx.leafAtP_cutAt`). `treeEquiv` is irreducible here: unfolding it decides its `∃ e, …` over the tree's size.
+(`Cx.padLeafCut_cutAt`). `treeEquiv` is irreducible here: unfolding it decides its `∃ e, …` over the tree's size.
 -/
 
 namespace FlockSoundness.Discharge.Composed.Cx
@@ -1161,6 +1161,268 @@ theorem digOf_pads (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.
   rw [colPAt_tabC, colPAt_tabC]
 
 end Claims.ZKMal.Masked.Cx
+
+/-! ## The honest clear values read their coins in order -/
+
+namespace FlockSoundness.Discharge.Composed.Cx
+
+open Flock Model ZkSession ZkView ZK Refine
+
+local notation "𝔽" => FlockLevel3.GF128
+local notation "𝕂" => FlockLevel3.GF256
+
+theorem foldN_congr {ρ ρ' : ℕ → 𝔽} (u : ℕ → 𝔽) :
+    ∀ {j : ℕ}, (∀ i < j, ρ i = ρ' i) → Zerocheck.foldN ρ j u = Zerocheck.foldN ρ' j u
+  | 0, _ => rfl
+  | j + 1, h => by
+    simp only [Zerocheck.foldN]
+    rw [foldN_congr u fun i hi => h i (by omega), h j (by omega)]
+
+theorem ofFn_get!_congr {α : Type} [Inhabited α] {n : ℕ} {f f' : Fin n → α} {i : ℕ}
+    (h : ∀ a : Fin n, a.val < i → f a = f' a) : ∀ i' < i, (Array.ofFn f)[i']! = (Array.ofFn f')[i']! := by
+  intro i' hi'
+  by_cases hn : i' < n
+  · rw [getElem!_pos _ i' (by simpa using hn), getElem!_pos _ i' (by simpa using hn), Array.getElem_ofFn,
+      Array.getElem_ofFn]
+    exact h ⟨i', hn⟩ hi'
+  · rw [getElem!_neg _ i' (by simpa using hn), getElem!_neg _ i' (by simpa using hn)]
+
+theorem range_map_get! {α : Type} [Inhabited α] (n i : ℕ) {g g' : ℕ → α} (h : i < n → g i = g' i) :
+    ((Array.range n).map g)[i]! = ((Array.range n).map g')[i]! := by
+  by_cases hi : i < n
+  · rw [getElem!_pos _ i (by simpa using hi), getElem!_pos _ i (by simpa using hi)]
+    simp [h hi]
+  · rw [getElem!_neg _ i (by simpa using hi), getElem!_neg _ i (by simpa using hi)]
+
+section Honest
+
+variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c c' : CoinsZK (RestOf Tz st)) (r : Fin 2)
+  (zw : Witness Tz.S.m) {L : ℕ} (R : Fin 2 → Fin L → 𝔽)
+
+theorem zcH_r1 (hO : c.rest.rOuter r = c'.rest.rOuter r) :
+    (zcH Tz st c r zw).round1ab = (zcH Tz st c' r zw).round1ab ∧
+      (zcH Tz st c r zw).round1c = (zcH Tz st c' r zw).round1c := by
+  simp only [zcH, Zerocheck.honest, rF, hO, and_self]
+
+theorem zcH_round (hO : c.rest.rOuter r = c'.rest.rOuter r) (hz : c.rest.zc r = c'.rest.zc r) {i : ℕ}
+    (hρ : ∀ a : Fin (st.m - 6), a.val < i → c.rest.rho r a = c'.rest.rho r a) :
+    (zcH Tz st c r zw).rounds[i]! = (zcH Tz st c' r zw).rounds[i]! := by
+  simp only [zcH, Zerocheck.honest, rF, zcF, hO, hz]
+  refine range_map_get! _ _ fun _ => ?_
+  have h := ofFn_get!_congr hρ
+  have hc : ∀ i' < i, Zerocheck.coin (rhoF Tz st c r) i' = Zerocheck.coin (rhoF Tz st c' r) i' :=
+    fun i' hi' => congrArg FlockLevel3.GF128.of (h i' hi')
+  simp only [Zerocheck.roundMsg, foldN_congr _ hc]
+
+theorem zcH_final (hO : c.rest.rOuter r = c'.rest.rOuter r) (hz : c.rest.zc r = c'.rest.zc r)
+    (hρ : c.rest.rho r = c'.rest.rho r) :
+    (zcH Tz st c r zw).finalA = (zcH Tz st c' r zw).finalA ∧ (zcH Tz st c r zw).finalB = (zcH Tz st c' r zw).finalB ∧
+      (zcH Tz st c r zw).finalC = (zcH Tz st c' r zw).finalC := by
+  simp only [zcH, Zerocheck.honest, rF, zcF, rhoF, hO, hz, hρ, and_self]
+
+theorem take_ofFn_congr {n : ℕ} {f f' : Fin n → F128} (g : F128 → 𝔽) {j : ℕ}
+    (h : ∀ a : Fin n, a.val < j → f a = f' a) :
+    ((Array.ofFn f).toList.map g).take j = ((Array.ofFn f').toList.map g).take j := by
+  apply List.ext_getElem (by simp)
+  intro i h1 h2
+  simp only [List.getElem_take, List.getElem_map, Array.getElem_toList, Array.getElem_ofFn]
+  simp only [List.length_take, List.length_map, Array.length_toList, Array.size_ofFn] at h1
+  rw [h ⟨i, by omega⟩ (by simp only; omega)]
+
+theorem lay_fa : (layOf Tz st).fa = 128 + 2 * (st.m - 6) := rfl
+theorem lay_fb : (layOf Tz st).fb = 129 + 2 * (st.m - 6) := by
+  show 128 + 2 * (st.m - 6) + 1 = _
+  omega
+theorem lay_fc : (layOf Tz st).fc = 130 + 2 * (st.m - 6) := by
+  show 128 + 2 * (st.m - 6) + 2 = _
+  omega
+theorem lay_zp (i : ℕ) : (layOf Tz st).zp i = 131 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + i := by
+  show 128 + 2 * (st.m - 6) + 2 + 1 + 2 * (st.c.kLog - 6) + 0 + i = _
+  omega
+theorem lay_lgMsg (j t : ℕ) :
+    (layOf Tz st).lgMsg j t = 196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * j + t := by
+  show 128 + 2 * (st.m - 6) + 2 + 1 + 2 * (st.c.kLog - 6) + 0 + 64 + 1 + 4 * j + t = _
+  omega
+theorem lay_lgE (i t : ℕ) :
+    (layOf Tz st).lgE i t = 196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0 + 2 * i + t := by
+  show 128 + 2 * (st.m - 6) + 2 + 1 + 2 * (st.c.kLog - 6) + 0 + 64 + 1 + 4 * Tz.sch.k0 + 2 * i + t = _
+  omega
+theorem lay_hab : (layOf Tz st).hab = 200 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0 := by
+  show 128 + 2 * (st.m - 6) + 2 + 1 + 2 * (st.c.kLog - 6) + 0 + 64 + 1 + 4 * Tz.sch.k0 + 4 = _
+  omega
+
+theorem honestAt_r1 (hO : c.rest.rOuter r = c'.rest.rOuter r) {k : ℕ} (hk : k < 128) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  obtain ⟨h1, h2⟩ := zcH_r1 Tz st c c' r zw hO
+  unfold honestAt
+  by_cases h64 : k < 64
+  · simp only [ite_eq_left h64, h1]
+  · simp only [ite_eq_right h64, ite_eq_left hk, h2]
+
+theorem honestAt_ml (hO : c.rest.rOuter r = c'.rest.rOuter r) (hz : c.rest.zc r = c'.rest.zc r) {i : ℕ}
+    (hρ : ∀ a : Fin (st.m - 6), a.val < i → c.rest.rho r a = c'.rest.rho r a) (hi : i < st.m - 6) {k : ℕ}
+    (hk1 : 128 + 2 * i ≤ k) (hk2 : k < 130 + 2 * i) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  have h := zcH_round Tz st c c' r zw hO hz hρ
+  have e : (k - 128) / 2 = i := by omega
+  have := lay_fa Tz st
+  unfold honestAt
+  simp only [ite_eq_right (show ¬ k < 64 by omega), ite_eq_right (show ¬ k < 128 by omega),
+    ite_eq_left (show k < (layOf Tz st).fa by omega), e, h]
+
+theorem honestAt_f (hO : c.rest.rOuter r = c'.rest.rOuter r) (hz : c.rest.zc r = c'.rest.zc r)
+    (hρ : c.rest.rho r = c'.rest.rho r) {k : ℕ} (hk1 : 128 + 2 * (st.m - 6) ≤ k) (hk2 : k < 131 + 2 * (st.m - 6)) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  obtain ⟨h1, h2, h3⟩ := zcH_final Tz st c c' r zw hO hz hρ
+  have := lay_fa Tz st
+  have := lay_fb Tz st
+  have := lay_fc Tz st
+  unfold honestAt
+  simp only [ite_eq_right (show ¬ k < 64 by omega), ite_eq_right (show ¬ k < 128 by omega),
+    ite_eq_right (show ¬ k < (layOf Tz st).fa by omega)]
+  by_cases ha : k = (layOf Tz st).fa
+  · simp only [ite_eq_left ha, h1]
+  by_cases hb : k = (layOf Tz st).fb
+  · simp only [ite_eq_right ha, ite_eq_left hb, h2]
+  simp only [ite_eq_right ha, ite_eq_right hb, ite_eq_left (show k = (layOf Tz st).fc by omega), h3]
+
+/-- Past the zerocheck: the lincheck's and later regions. -/
+theorem honestAt_past (k : ℕ) (hk : 131 + 2 * (st.m - 6) ≤ k) :
+    honestAt Tz st c r zw R k =
+      let lay := layOf Tz st
+      if k < lay.zp 0 then
+        (if (k - lay.fc - 1) % 2 = 0 then (lcH Tz st c r zw ((k - lay.fc - 1) / 2)).1
+          else (lcH Tz st c r zw ((k - lay.fc - 1) / 2)).2)
+      else if k < lay.zp 64 then zpH Tz st c r zw (k - lay.zp 0)
+      else if k < lay.lgMsg 0 0 then
+        ∑ y ∈ Finset.range (2 ^ (Tz.S.m - 7)), eqAt (oodPoint Tz st c r (k - lay.lgOod 0)) y * wordOf zw y
+      else if k < lay.lgE 0 0 then
+        let j := (k - lay.lgMsg 0 0) / 4
+        let t := (k - lay.lgMsg 0 0) % 4
+        let m := laneMsg Tz st c r zw j
+        let x := if t < 2 then m.1 else m.2
+        if t % 2 = 0 then (coords execArith x).1 else (coords execArith x).2
+      else if k < lay.hab then
+        let i := (k - lay.lgE 0 0) / 2
+        let e := ∑ col : Fin L, execArith.embed (seqOf R i col) * bFold Tz st c r col.val
+        if (k - lay.lgE 0 0) % 2 = 0 then (coords execArith e).1 else (coords execArith e).2
+      else 0 := by
+  have := lay_fa Tz st
+  have := lay_fb Tz st
+  have := lay_fc Tz st
+  unfold honestAt
+  simp only [ite_eq_right (show ¬ k < 64 by omega), ite_eq_right (show ¬ k < 128 by omega),
+    ite_eq_right (show ¬ k < (layOf Tz st).fa by omega), ite_eq_right (show ¬ k = (layOf Tz st).fa by omega),
+    ite_eq_right (show ¬ k = (layOf Tz st).fb by omega), ite_eq_right (show ¬ k = (layOf Tz st).fc by omega)]
+
+theorem honestAt_lc (hz : c.rest.zc r = c'.rest.zc r) (ha : c.rest.lcAlpha r = c'.rest.lcAlpha r)
+    (hb : c.rest.lcBeta r = c'.rest.lcBeta r) (hρ : c.rest.rho r = c'.rest.rho r) {j : ℕ}
+    (ht : ∀ a : Fin (st.c.kLog - 6), a.val < j → c.rest.ts r a = c'.rest.ts r a) (hj : j < st.c.kLog - 6) {k : ℕ}
+    (hk1 : 131 + 2 * (st.m - 6) + 2 * j ≤ k) (hk2 : k < 133 + 2 * (st.m - 6) + 2 * j) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  have h : lcH Tz st c r zw j = lcH Tz st c' r zw j := by
+    simp only [lcH, Lincheck.lcMsg, zcF, rhoF, hz, ha, hb, hρ, tsF, take_ofFn_congr fOf ht]
+  have := lay_fc Tz st
+  have := lay_zp Tz st 0
+  have e : (k - (layOf Tz st).fc - 1) / 2 = j := by omega
+  rw [honestAt_past Tz st c r zw R k (by omega), honestAt_past Tz st c' r zw R k (by omega)]
+  simp only [ite_eq_left (show k < (layOf Tz st).zp 0 by omega), e, h]
+
+theorem honestAt_zp (hρ : c.rest.rho r = c'.rest.rho r) (ht : c.rest.ts r = c'.rest.ts r) {k : ℕ}
+    (hk1 : 131 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) ≤ k) (hk2 : k < 195 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6)) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  have h : zpH Tz st c r zw = zpH Tz st c' r zw := funext fun i => by simp only [zpH, tsF, rhoF, hρ, ht]
+  have := lay_zp Tz st 0
+  have := lay_zp Tz st 64
+  rw [honestAt_past Tz st c r zw R k (by omega), honestAt_past Tz st c' r zw R k (by omega)]
+  simp only [ite_eq_right (show ¬ k < (layOf Tz st).zp 0 by omega), ite_eq_left (show k < (layOf Tz st).zp 64 by omega), h]
+
+theorem honestAt_ood (hp : c.rest.oodPt r = c'.rest.oodPt r) {k : ℕ}
+    (hk : k = 195 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6)) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  have h : ∀ i, oodPoint Tz st c r i = oodPoint Tz st c' r i := fun i => by unfold oodPoint; rw [hp]
+  have := lay_zp Tz st 0
+  have := lay_zp Tz st 64
+  have := lay_lgMsg Tz st 0 0
+  rw [honestAt_past Tz st c r zw R k (by omega), honestAt_past Tz st c' r zw R k (by omega)]
+  simp only [ite_eq_right (show ¬ k < (layOf Tz st).zp 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).zp 64 by omega),
+    ite_eq_left (show k < (layOf Tz st).lgMsg 0 0 by omega), h]
+
+/-- What level 0's basis reads: the ring switch's coins, the claims' points and the out-of-domain sample. -/
+structure B0Agree : Prop where
+  link : c.rest.link = c'.rest.link
+  rOuter : c.rest.rOuter r = c'.rest.rOuter r
+  rho : c.rest.rho r = c'.rest.rho r
+  ts : c.rest.ts r = c'.rest.ts r
+  rpp : c.rest.rpp r = c'.rest.rpp r
+  rsGamma : c.rest.rsGamma r = c'.rest.rsGamma r
+  oodPt : c.rest.oodPt r = c'.rest.oodPt r
+  ood : c.rest.ood r = c'.rest.ood r
+
+theorem laneB0_congr (h : B0Agree Tz st c c' r) : laneB0 Tz st c r = laneB0 Tz st c' r := by
+  have hx : ∀ k, claimX Tz st c r k = claimX Tz st c' r k := fun k => by
+    simp only [claimX, abX, lcT, zcRho, zcReq, h.ts, h.rho, h.rOuter, h.link]
+  have hp : ∀ i, oodPoint Tz st c r i = oodPoint Tz st c' r i := fun i => by unfold oodPoint; rw [h.oodPt]
+  funext y
+  simp only [laneB0, openB, hx, hp, h.rpp, h.rsGamma, h.ood]
+
+theorem laneF_congr {j : ℕ} (hl : ∀ i < j, laneCh Tz st c r i = laneCh Tz st c' r i) :
+    laneF Tz st c r zw j = laneF Tz st c' r zw j := by
+  induction j with
+  | zero => rfl
+  | succ j ih => simp only [laneF, ih fun i hi => hl i (by omega), hl j (by omega)]
+
+theorem laneB_congr (h0 : laneB0 Tz st c r = laneB0 Tz st c' r) {j : ℕ}
+    (hl : ∀ i < j, laneCh Tz st c r i = laneCh Tz st c' r i) : laneB Tz st c r j = laneB Tz st c' r j := by
+  induction j with
+  | zero => exact h0
+  | succ j ih => simp only [laneB, ih fun i hi => hl i (by omega), hl j (by omega)]
+
+theorem laneCh_congr {j : ℕ} (hl : ∀ a : Fin Tz.sch.k0, a.val < j → c.rest.lane r a = c'.rest.lane r a) :
+    ∀ i < j, laneCh Tz st c r i = laneCh Tz st c' r i := fun i hi => by
+  unfold laneCh seqOf
+  split_ifs with h
+  · rw [hl ⟨i, h⟩ hi]
+  · rfl
+
+theorem honestAt_msg (h0 : B0Agree Tz st c c' r) {j : ℕ}
+    (hl : ∀ a : Fin Tz.sch.k0, a.val < j → c.rest.lane r a = c'.rest.lane r a) (hj : j < Tz.sch.k0) {k : ℕ}
+    (hk1 : 196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * j ≤ k)
+    (hk2 : k < 200 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * j) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  have hc := laneCh_congr Tz st c c' r hl
+  have h : laneMsg Tz st c r zw j = laneMsg Tz st c' r zw j := by
+    simp only [laneMsg, laneF_congr Tz st c c' r zw hc, laneB_congr Tz st c c' r (laneB0_congr Tz st c c' r h0) hc]
+  have := lay_zp Tz st 0
+  have := lay_zp Tz st 64
+  have := lay_lgMsg Tz st 0 0
+  have := lay_lgE Tz st 0 0
+  have e : (k - (layOf Tz st).lgMsg 0 0) / 4 = j := by omega
+  rw [honestAt_past Tz st c r zw R k (by omega), honestAt_past Tz st c' r zw R k (by omega)]
+  simp only [ite_eq_right (show ¬ k < (layOf Tz st).zp 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).zp 64 by omega),
+    ite_eq_right (show ¬ k < (layOf Tz st).lgMsg 0 0 by omega), ite_eq_left (show k < (layOf Tz st).lgE 0 0 by omega), e, h]
+
+theorem honestAt_E (h0 : B0Agree Tz st c c' r) (hl : c.rest.lane r = c'.rest.lane r) {k : ℕ}
+    (hk1 : 196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0 ≤ k)
+    (hk2 : k < 200 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  have hc := laneCh_congr Tz st c c' r (j := Tz.sch.k0) fun a _ => congrFun hl a
+  have h : bFold Tz st c r = bFold Tz st c' r := by
+    funext col
+    simp only [bFold, laneB_congr Tz st c c' r (laneB0_congr Tz st c c' r h0) hc]
+  have := lay_zp Tz st 0
+  have := lay_zp Tz st 64
+  have := lay_lgMsg Tz st 0 0
+  have := lay_lgE Tz st 0 0
+  have := lay_hab Tz st
+  rw [honestAt_past Tz st c r zw R k (by omega), honestAt_past Tz st c' r zw R k (by omega)]
+  simp only [ite_eq_right (show ¬ k < (layOf Tz st).zp 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).zp 64 by omega),
+    ite_eq_right (show ¬ k < (layOf Tz st).lgMsg 0 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).lgE 0 0 by omega),
+    ite_eq_left (show k < (layOf Tz st).hab by omega), h]
+
+end Honest
+
+end FlockSoundness.Discharge.Composed.Cx
 
 namespace Claims.ZKMal.Masked
 
