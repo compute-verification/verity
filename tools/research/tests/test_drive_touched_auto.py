@@ -74,7 +74,7 @@ def test_the_run_is_research_run_on_auto_from_a_worktree_of_exactly_the_commit_w
     assert job[:3] == ["exec", "python3", "$RESEARCH_RUN_DIR/inputs/quick_tier.py"]
     assert job[3:8] == ["--head", commit, "--base", base, "--"]
     assert job[8:] == ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", "tools/verity/check/suites.py",
-                       "--jobs", "16"]                       # the job's quota, not the share's affinity suites.py would read
+                       "--quick", "--jobs", "16"]                       # the job's quota, not the share's affinity suites.py would read
     assert not wt.exists() and _no_worktree_left(world, world.dev)
 
 
@@ -88,7 +88,8 @@ def test_local_is_passed_only_to_a_suites_py_that_takes_it_and_base_is_resolved_
     for commit in (old, new):
         Q.touched_suites(world.dev, commit, f"{commit}~1", Q.RemoteSuites(launch=launch))
     (o, n) = (_job(c["argv"]) for c in launch.calls)
-    assert o[-3:] == ["tools/verity/check/suites.py", "--jobs", "16"] and n[-4:] == ["tools/verity/check/suites.py", "--jobs", "16", "--local"]
+    assert o[-4:] == ["tools/verity/check/suites.py", "--quick", "--jobs", "16"]
+    assert n[-5:] == ["tools/verity/check/suites.py", "--quick", "--jobs", "16", "--local"]
     assert n[n.index("--base") + 1] == _git(world.dev, "rev-parse", f"{new}~1")
     assert _no_worktree_left(world, world.dev)
 
