@@ -17,7 +17,8 @@ What is left at `τ` splits as at the caps:
 * `ZkTauClash`: two accepting runs of `P` at the masked simulator's coins whose decoded live outcomes have `TauForkEvZ`
   collide among the verifier's calls in the two.
 
-`zkAdvTau_le_of` and `zkSimForkLeTau_of` put these together.
+`zkAdvTau_le_of` and `zkSimForkLeTau_of` put these together. `ZkTauPair` proves the clash (`zkTauClash`), so the bound
+rests on the alignment alone (`zkSimForkLeTau_of_align`).
 -/
 
 namespace FlockDeploy.KS
