@@ -35,6 +35,10 @@
   "Flock.Firewall.Contract.FirewallComputes": {
    "owner": "@firewall-contract",
    "digest": "0c8b7fe474f4820e1d04fd025d2f6f5b1f83032f66704316d3f21d62dfe4682b"
+  },
+  "Flock.Firewall.Contract.Holds": {
+   "owner": "@firewall-contract",
+   "digest": "a139e61f09c1b477e998dc5d05c672b6205c3c0f83f253756a553acb3d401b8d"
   }
  },
  "meaning": ["Flock"],
