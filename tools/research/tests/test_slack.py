@@ -1165,7 +1165,8 @@ def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on
     assert (m1, p1, auth, version) == ("POST", "/v1/pages", "Bearer ntn-dummy-not-a-secret", slack.NOTION_VERSION)
     db = json.loads(registry.read_text())["channels"]["ask-daniel"]["pages"]
     assert made["parent"] == {"type": "data_source_id", "data_source_id": db["data_source"]}
-    assert made["markdown"] == PAGE_MD and made["markdown_version"] == "v2"
+    assert made["markdown"] == PAGE_MD.replace("## The problem\n", slack.REPLY_CALLOUT + "## The problem\n", 1)
+    assert made["markdown_version"] == "v2"
     props = made["properties"]
     assert props["Ask"]["title"][0]["text"]["content"] == "Test: does the #ask-daniel card render correctly?"
     assert props["Status"] == {"status": {"name": "Waiting on Daniel"}} and props["Lane"] == {"select": {"name": "infra"}}
@@ -1176,6 +1177,12 @@ def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on
     assert (m2, p2) == ("PATCH", "/v1/pages/p-1") and patch["properties"]["Card ID"]["rich_text"][0]["text"]["content"] == "42"
     assert patch["properties"]["Slack card"] == {"url": f"https://computeverification.slack.com/archives/{ASK}/p1790800000000100"}
     assert "ntn-dummy-not-a-secret" not in out + err
+
+
+def test_the_reply_callout_sits_above_the_problem_once():
+    ours = slack.with_reply(PAGE_MD)
+    assert ours.index("**Your reply.**") < ours.index("## The problem") and ours.index("**Question.**") < ours.index("**Your reply.**")
+    assert slack.with_reply(ours) == ours
 
 
 def test_page_checks_the_template_and_the_area_before_anything_is_sent(route, notion, registry, tmp_path, capsys):
