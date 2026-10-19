@@ -13,6 +13,9 @@ import Models.Accounting.Guarantees.Isa
 * `sheetWords_of_table`: A6 from the rows' words: a writer kind's class at most `ω`, a vector class at most 64.
 * `Sm120Sheet`, `Sm90Sheet`, `Sm100Sheet`: each device's discipline decided row by row, over the shared classes
   (`sync_ok`, `base_ok`) and its own; its absent families are vacuous.
+* `sm120_lane`, `sm90_lane`, `sm100_lane`: a vector or table word's head (`Fits`) is a lane or warp class, decided, so
+  no load, LDSM, texture fetch, atomic or tensor-memory load heads one; the wide ones (LDS.128, LDG.E.ENL2.256,
+  LDTM.32x32b.x128) are side units at their own words (A6's docstring, FPX-MACHINE's A6-WIDE).
 * `dmma_exact`, `utcomma_decompose`: RT-ISA-1's and RT-ISA-4's routes, their verdicts decided; `gmma_twin`,
   `tc05_twin`: the census form that prices a form writes its words on its pipe.
 -/
@@ -178,6 +181,20 @@ theorem ne_of_fam {r : Row} {f g : Family} (h : r.fam = f) (hfg : f ≠ g) : r.f
   rw [h]
   exact hfg
 
+theorem sync_route (s : Sync) : s.row.route = .writer := by cases s <;> rfl
+theorem gmma_route (g : Gmma) : g.row.route = .writer := by cases g <;> rfl
+theorem tc05_route (t : Tc05) : t.row.route = .writer := by cases t <;> rfl
+theorem tmem_route (m : Tmem) : m.row.route = .side := by cases m <;> rfl
+
+/-- A vector class outside the tensor cores is a lane or warp class: no memory, bulk or texture class is on the lane
+route. -/
+theorem base_lane (c : Base) : c.row.route = .lane → c.row.fam = .lane ∨ c.row.fam = .warp := by
+  cases c <;> decide +kernel
+
+theorem lane_of_route {r : Row} {g : Route} (h : r.route = g) (hg : g ≠ .lane) :
+    r.route = .lane → r.fam = .lane ∨ r.fam = .warp :=
+  fun h' => absurd (h.symm.trans h') hg
+
 /-- RT-ISA-1: DMMA (mma.sync .f64), on every device's table, forms exact int8 products into an exact word. -/
 theorem dmma_exact : Sync.DMMA.row.verdict = .exact := by decide +kernel
 
@@ -210,6 +227,12 @@ theorem sm120_fam :
       ne_of_fam (sync_fam s) (by decide)⟩
   | .base c => (base_fam c).2
 
+/-- On sm_120 no access heads a vector or table word: a class on the lane route is a lane or warp class. -/
+theorem sm120_lane :
+    ∀ k : Sm120, (Sm120.row k).route = .lane → (Sm120.row k).fam = .lane ∨ (Sm120.row k).fam = .warp
+  | .sync s => lane_of_route (sync_route s) (by decide)
+  | .base c => base_lane c
+
 /-- **A6 and A7 on sm_120.** -/
 theorem Sm120Sheet : Accounting.Guarantees.Isa.Sm120Sheet := by
   intro R T L U F X _ _ _ σ Z A H hread hsplit hcomp hlab hmma hlane huni hmem hbulk htex hwarp
@@ -228,6 +251,12 @@ theorem sm90_fam : ∀ k : Sm90, (Sm90.row k).fam ≠ .tcgen05 ∧ (Sm90.row k).
   | .sync s => ⟨ne_of_fam (sync_fam s) (by decide), ne_of_fam (sync_fam s) (by decide)⟩
   | .gmma g => ⟨ne_of_fam (gmma_fam g) (by decide), ne_of_fam (gmma_fam g) (by decide)⟩
   | .base c => (base_fam c).2.2
+
+/-- On sm_90a no access heads a vector or table word: a class on the lane route is a lane or warp class. -/
+theorem sm90_lane : ∀ k : Sm90, (Sm90.row k).route = .lane → (Sm90.row k).fam = .lane ∨ (Sm90.row k).fam = .warp
+  | .sync s => lane_of_route (sync_route s) (by decide)
+  | .gmma g => lane_of_route (gmma_route g) (by decide)
+  | .base c => base_lane c
 
 /-- **A6 and A7 on sm_90a.** -/
 theorem Sm90Sheet : Accounting.Guarantees.Isa.Sm90Sheet := by
@@ -248,6 +277,15 @@ theorem sm100_fam : ∀ k : Sm100, (Sm100.row k).fam ≠ .wgmma
   | .tc05 t => ne_of_fam (tc05_fam t) (by decide)
   | .tmem m => ne_of_fam (tmem_fam m) (by decide)
   | .base c => (base_fam c).2.1
+
+/-- On sm_100a no access heads a vector or table word: a class on the lane route is a lane or warp class, and
+tcgen05.ld (LDTM, up to 128 words a lane) is a side unit's. -/
+theorem sm100_lane :
+    ∀ k : Sm100, (Sm100.row k).route = .lane → (Sm100.row k).fam = .lane ∨ (Sm100.row k).fam = .warp
+  | .sync s => lane_of_route (sync_route s) (by decide)
+  | .tc05 t => lane_of_route (tc05_route t) (by decide)
+  | .tmem m => lane_of_route (tmem_route m) (by decide)
+  | .base c => base_lane c
 
 /-- **A6 and A7 on sm_100a.** -/
 theorem Sm100Sheet : Accounting.Guarantees.Isa.Sm100Sheet := by

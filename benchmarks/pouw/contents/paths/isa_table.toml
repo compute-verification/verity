@@ -1,4 +1,4 @@
 order = 335
 path = "`theory/isa_table.py`"
 runs_on = "CPU"
-what = "the Lean instruction table (A7 as data) against DS-120's, sm_90's and sm_100's censuses, floors.csv and `isa_escape.py`'s candidates, and every opcode of the CUDA Binary Utilities' Hopper and Blackwell lists and of RT-ISA's SASS census (`machine_model/data/rt_isa_corpus.json`) placed in a class or read as writing no word, an unclassed one failing, and RT-MACHINE-2's triage (`machine_model/data/rt_machine_triage.json`) agreeing (IsaComplete's evidence)"
+what = "the Lean instruction table (A7 as data) against DS-120's, sm_90's and sm_100's censuses, floors.csv and `isa_escape.py`'s candidates, and every opcode of the CUDA Binary Utilities' Hopper and Blackwell lists and of RT-ISA's SASS census (`machine_model/data/rt_isa_corpus.json`) placed in a class or read as writing no word, an unclassed one failing, and RT-MACHINE-2's triage (`machine_model/data/rt_machine_triage.json`) agreeing (IsaComplete's evidence), and no load, texture, surface or tensor-memory opcode in a vector class (A6-WIDE)"

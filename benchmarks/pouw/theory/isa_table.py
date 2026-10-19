@@ -22,6 +22,10 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
     of the 175 Blackwell opcodes A7's menu didn't name: each is placed on a priced route or writes no word, a traced
     class only for a mover, an opcode it finds can multiply (`TRIAGE_PRICED`) placed, and its opcodes absent on sm_120
     are the tensor core memory list, outside sm_120's table;
+  - A6-WIDE (note:20261019T0457Z-draft-fpx-machine): no opcode of the lists' access categories (`ACCESS`: loads,
+    LDSM, atomics, texture, surface and tensor-memory copies, the wide destinations among them) is in a vector class,
+    whose heads A6 bounds at two words a lane, but MATCH (`ACCESS_LANE`: VOTE's row, one word a lane); Lean decides the
+    same of the table's rows (`sm120_lane`, `sm90_lane`, `sm100_lane`);
   - the same against what the libraries emit: RT-ISA's SASS census (`CORPUS_ART`, 88 binaries under CUDA 13.0,
     derived to `machine_model/data/rt_isa_corpus.json`), every base on each device placed, read as writing no word or
     named undocumented (`UNDOCUMENTED`: ARRIVES and F2FP), its word flag against the map's no-word reading
@@ -273,6 +277,13 @@ TRIAGE = DATA / "rt_machine_triage.json"
 TRIAGE_PRICED = {"PRICED-LANE-MAC", "LOW-PRECISION", "PRICED-UNIFORM", "REDUCER"}
 TRIAGE_CLASSES = TRIAGE_PRICED | {"NO-MULTIPLY", "MOVER", "MEMORY", "CONTROL", "ABSENT-ON-SM120"}
 
+#: the documented lists' access categories: a load, LDSM, an atomic, a texture or surface access or a tensor-memory
+#: copy writes memory's content, so none heads a vector or table word (A6-WIDE, note:20261019T0457Z-draft-fpx-machine)
+ACCESS = ("Load/Store", "Tensor Memory Access", "Tensor Core Memory", "Texture", "Surface")
+#: the access-category opcodes in a vector class, each with its class: MATCH, filed under Load/Store, reads no memory
+#: and writes one word a lane (a lane mask), VOTE's row
+ACCESS_LANE = {"MATCH": "VOTE"}
+
 
 def opcode_list(text: str) -> dict[str, list[str]]:
     """A documented list, category to mnemonics."""
@@ -426,6 +437,14 @@ def lane_widths_ok(rows: dict[str, tuple[str, int]], forms: dict[str, list], pai
                     for k, f in pair.items()))
 
 
+def access_on_lane(lists: dict[str, dict[str, list[str]]], place: dict[str, set[str]],
+                   rows: dict[str, tuple[str, int]]) -> set[str]:
+    """The documented access opcodes placed in a vector class, whose heads A6 bounds at two words a lane: a wide load
+    there (LDS.128 and LDSM.x4 at 4 words a lane, LDG.E.ENL2.256 at 8, LDTM.32x32b.x128 at 128) would break it."""
+    return {op for by_cat in lists.values() for cat in ACCESS for op in by_cat.get(cat, [])
+            if any(rows[c][0] == "lane" for c in place.get(op, ()))}
+
+
 def write_triage(src: Path) -> None:
     """Derive the fixture from RT-MACHINE-2's artifact, fetched to `src` (`research data fetch TRIAGE_ART --to src`)."""
     import json
@@ -571,6 +590,13 @@ def main() -> int:
     checks.check("the opcodes the triage finds absent on sm_120 are Blackwell's tensor core memory list",
                  absent == set(lists["Sm100"][NOT_SM120]), " ".join(sorted(absent ^ set(lists["Sm100"][NOT_SM120])))
                  or f"{len(absent)} opcodes")
+    on_lane = access_on_lane(lists, place, rows)
+    n_access = len({op for by_cat in lists.values() for cat in ACCESS for op in by_cat.get(cat, [])})
+    checks.check("no load, atomic, texture, surface or tensor-memory opcode heads a vector or table word (A6-WIDE): "
+                 "each is in side, traced or writer classes, but ACCESS_LANE's at one word a lane",
+                 on_lane == set(ACCESS_LANE)
+                 and all(place[op] == {c} and rows[c] == ("lane", 32) for op, c in ACCESS_LANE.items()),
+                 ", ".join(sorted(on_lane ^ set(ACCESS_LANE))) or f"{n_access} access opcodes")
 
     if checks.mutations:
         without = {**sources, "Classes.lean": sources["Classes.lean"].replace("| BMMA168256 | IMMAS4 | DMMA",
@@ -612,6 +638,8 @@ def main() -> int:
         checks.mutation("a triaged lane multiply read as writing no word (FMUL32I) is caught",
                         triage_disagree(tri, {k: v for k, v in place.items() if k != "FMUL32I"}, rows,
                                         set(no_word) | {"FMUL32I"}) == {"FMUL32I"})
+        checks.mutation("a load placed in a vector class (LDS in ALU) is caught",
+                        access_on_lane(lists, {**place, "LDS": {"ALU"}}, rows) - set(ACCESS_LANE) == {"LDS"})
 
     return checks.finish()
 
