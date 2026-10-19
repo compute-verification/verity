@@ -41,6 +41,7 @@ Rust's tree over these draws to `padsRoot`.
 -/
 import Flock.Zk
 import Flock.ZkLigerito
+import Flock.Firewall.Coins
 
 namespace Flock.Firewall.Frame
 
@@ -515,19 +516,8 @@ def start (j : Json) : V (Zk.PadLayout × Option MaskSlot) := do
     | .error _ => pure none
   return (l, mask)
 
-/-- `n` bytes of `h`. Each read that returns nothing ends the input, so `n` reads that each return a byte or more
-suffice. -/
-def readExact (h : IO.FS.Stream) (n : Nat) : IO ByteArray := go n .empty
-where
-  go : Nat → ByteArray → IO ByteArray
-    | 0, acc =>
-      if acc.size ≥ n then pure acc
-      else throw (IO.userError s!"frame: {acc.size} bytes after {n} reads of a {n}-byte round")
-    | fuel + 1, acc => do
-      if acc.size ≥ n then return acc
-      let b ← h.read (n - acc.size).toUSize
-      if b.isEmpty then throw (IO.userError s!"frame: input closed {acc.size} bytes into a {n}-byte round")
-      go fuel (acc ++ b)
+/-- `n` bytes of `h` (`Coins.readExact`). -/
+def readExact (h : IO.FS.Stream) (n : Nat) : IO ByteArray := Coins.readExact "frame" h n
 
 /-- `flock-firewall frame`: one rep's draws, refusals and release, served on stdin and stdout, its draws read from `get`.
 The first line starts the rep (`start`): the frame draws `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
