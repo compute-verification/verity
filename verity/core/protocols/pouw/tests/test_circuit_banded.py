@@ -1,4 +1,4 @@
-"""`circuit.h1tile`'s banded noise (J10): at a band of one tile it is today's per-tile noise and keys; along a band the row
+"""`circuit.banded`: `h1tile`'s banded noise (J10): at a band of one tile it is today's per-tile noise and keys; along a band the row
 noise is one, across bands and row blocks it is fresh, and the column noise and fold keys stay each tile's own. The pinned
 digests are the vectors a kernel's banded derivation is held to."""
 from __future__ import annotations
@@ -8,6 +8,7 @@ import random
 
 import pytest
 
+from verity.core.protocols.pouw.circuit import banded as BD
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import seeds as SD
 
@@ -43,27 +44,32 @@ def test_band_of_one_is_per_tile_noise():
         for J in range(5):
             rows, cols = H.noise(SD.seed(SALT, POS[I][J], *ROOTS), LAY)
             keys = H.fold_keys(SD.receipt_seed(SALT, POS[I][J], *ROOTS), LAY)
-            assert H.banded_noise(SALT, POS, ROOTS, LAY, I, J, 1) == (rows, cols, keys)
+            assert BD.banded_noise(SALT, POS, ROOTS, LAY, I, J, 1) == (rows, cols, keys)
+
+
+def test_row_and_col_noise_are_noise():
+    seed = SD.seed(SALT, 3, *ROOTS)
+    assert (BD.row_noise(seed, LAY), BD.col_noise(seed, LAY)) == H.noise(seed, LAY)
 
 
 def test_band_of_one_reference():
     rng = random.Random(10)
     a, b = _codes(rng, 32, 64), _codes(rng, 32, 64)
-    assert H.banded_reference(a, b, SALT, POS, ROOTS, 1, 3, 1) == H.reference(a, b, SALT, POS[1][3], ROOTS)
+    assert BD.banded_reference(a, b, SALT, POS, ROOTS, 1, 3, 1) == H.reference(a, b, SALT, POS[1][3], ROOTS)
 
 
 def test_rows_shared_along_a_band_and_fresh_across():
     g = 2
-    tiles = {(I, J): H.banded_noise(SALT, POS, ROOTS, LAY, I, J, g) for I in range(2) for J in range(5)}
+    tiles = {(I, J): BD.banded_noise(SALT, POS, ROOTS, LAY, I, J, g) for I in range(2) for J in range(5)}
     for (I, J), (rows, cols, keys) in tiles.items():
-        J0 = H.band_start(J, g)
-        assert rows == H.row_noise(SD.seed(SALT, POS[I][J0], *ROOTS), LAY)
-        assert cols == H.col_noise(SD.seed(SALT, POS[I][J], *ROOTS), LAY)
+        J0 = BD.band_start(J, g)
+        assert rows == BD.row_noise(SD.seed(SALT, POS[I][J0], *ROOTS), LAY)
+        assert cols == BD.col_noise(SD.seed(SALT, POS[I][J], *ROOTS), LAY)
         assert keys == H.fold_keys(SD.receipt_seed(SALT, POS[I][J], *ROOTS), LAY)
         for (I2, J2), (rows2, cols2, keys2) in tiles.items():
             if (I2, J2) == (I, J):
                 continue
-            assert (rows == rows2) == (I == I2 and J0 == H.band_start(J2, g))
+            assert (rows == rows2) == (I == I2 and J0 == BD.band_start(J2, g))
             assert cols != cols2 and keys != keys2
     # the last band (column tile 4) is short and its own
     assert tiles[(0, 4)][0] != tiles[(0, 3)][0]
@@ -72,23 +78,22 @@ def test_rows_shared_along_a_band_and_fresh_across():
 def test_banded_reference_reads_the_band_rows():
     rng = random.Random(11)
     a, b = _codes(rng, 32, 64), _codes(rng, 32, 64)
-    z1, r1 = H.banded_reference(a, b, SALT, POS, ROOTS, 0, 1, 1)
-    z2, r2 = H.banded_reference(a, b, SALT, POS, ROOTS, 0, 1, 2)
+    z1, r1 = BD.banded_reference(a, b, SALT, POS, ROOTS, 0, 1, 1)
+    z2, r2 = BD.banded_reference(a, b, SALT, POS, ROOTS, 0, 1, 2)
     assert z1 == z2 and r1 != r2
-    rows, cols, keys = H.banded_noise(SALT, POS, ROOTS, LAY, 0, 1, 2)
-    assert (z2, r2) == H._run(a, b, rows, cols, keys, None)
+    assert BD.banded_reference(a, b, SALT, POS, ROOTS, 0, 0, 2)[1] == H.reference(a, b, SALT, POS[0][0], ROOTS)[1]
 
 
 def test_band_start():
-    assert [H.band_start(J, 64) for J in (0, 63, 64, 127, 128)] == [0, 0, 64, 64, 128]
-    assert [H.band_start(J, 3) for J in range(7)] == [0, 0, 0, 3, 3, 3, 6]
+    assert [BD.band_start(J, 64) for J in (0, 63, 64, 127, 128)] == [0, 0, 64, 64, 128]
+    assert [BD.band_start(J, 3) for J in range(7)] == [0, 0, 0, 3, 3, 3, 6]
     for g in (0, 65):
         with pytest.raises(ValueError):
-            H.band_start(0, g)
+            BD.band_start(0, g)
     with pytest.raises(ValueError):
-        H.band_start(-1, 2)
+        BD.band_start(-1, 2)
     with pytest.raises(ValueError):
-        H.banded_noise(SALT, POS, ROOTS, LAY, 2, 0, 2)
+        BD.banded_noise(SALT, POS, ROOTS, LAY, 2, 0, 2)
 
 
 #: (I, J, g) -> SHA-256 of `_digest`'s serialization of `banded_noise` at LAY on POS
@@ -106,10 +111,10 @@ PINNED_WORDS = {"dither0": 985616073, "u0": [217, 26, 27, 63], "keys0": [6314285
 
 def test_pinned_vectors():
     for (I, J, g), want in PINNED.items():
-        assert _digest(*H.banded_noise(SALT, POS, ROOTS, LAY, I, J, g)) == want, (I, J, g)
-    rows, cols, keys = H.banded_noise(SALT, POS, ROOTS, LAY, 1, 3, 2)
+        assert _digest(*BD.banded_noise(SALT, POS, ROOTS, LAY, I, J, g)) == want, (I, J, g)
+    rows, cols, keys = BD.banded_noise(SALT, POS, ROOTS, LAY, 1, 3, 2)
     rng = random.Random(12)
     a, b = _codes(rng, 32, 64), _codes(rng, 32, 64)
     got = {"dither0": H._value(rows[0][0][:32]), "u0": cols[0][1][:4], "keys0": keys[0][:2],
-           "receipt": H.banded_reference(a, b, SALT, POS, ROOTS, 1, 3, 2)[1]}
+           "receipt": BD.banded_reference(a, b, SALT, POS, ROOTS, 1, 3, 2)[1]}
     assert got == PINNED_WORDS

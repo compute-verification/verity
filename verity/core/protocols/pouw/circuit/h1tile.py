@@ -24,10 +24,7 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
 `SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree.
-`reference` is the unit on words. `banded_noise` and `banded_reference` are the same unit under one noise seed a call
-(J10, approved for the luck claims by Daniel on 19 Oct, ASK-66; not yet the unit's gates). A tile reads its row noise from
-the seed of its band's first tile, at most `BAND_MAX` column tiles wide, and its column noise and fold keys from its own
-position. At a band of one tile this is `noise` and `fold_keys`.
+`reference` is the unit on words.
 """
 from __future__ import annotations
 
@@ -174,29 +171,18 @@ def _value(bits: Sequence[int]) -> int:
     return sum((b & 1) << i for i, b in enumerate(bits))
 
 
-def row_noise(seed_j: bytes, lay: Layout) -> list:
-    """seed_j's row noise: per row of the tile, (dither bits, digit coins)."""
+def noise(seed_j: bytes, lay: Layout) -> tuple[list, list]:
+    """The unit's noise from seed_j: per row (dither bits, digit coins), per column (coin bits, U's int8 encodings)."""
     k, m = lay.k, lay.m
     rows = []
     for i in range(lay.r):
         s = _stream(seed_j, lay.row(i), lay.row_bits)
         rows.append((s[:k], [s[k + 32 * d:k + 32 * d + 32] for d in range(m - 1)]))
-    return rows
-
-
-def col_noise(seed_j: bytes, lay: Layout) -> list:
-    """seed_j's column noise: per column of the tile, (coin bits, U's int8 encodings)."""
-    k = lay.k
     cols = []
     for j in range(lay.c):
         s = _stream(seed_j, lay.col(j), lay.col_bits)
         cols.append((s[:k], [u129(_value(s[k + 8 * t:k + 8 * t + 8])) for t in range(32)]))
-    return cols
-
-
-def noise(seed_j: bytes, lay: Layout) -> tuple[list, list]:
-    """The unit's noise from seed_j: per row (dither bits, digit coins), per column (coin bits, U's int8 encodings)."""
-    return row_noise(seed_j, lay), col_noise(seed_j, lay)
+    return rows, cols
 
 
 def fold_keys(sigma_r: bytes, lay: Layout) -> list[list[int]]:
@@ -214,12 +200,7 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
     `pairs` (the full grid in row-major order by default)."""
     lay = Layout(len(a), len(b), len(a[0]))
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
-    return _run(a, b, rows, cols, fold_keys(SD.receipt_seed(salt, position, *roots), lay), pairs)
-
-
-def _run(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], rows: list, cols: list, keys: list[list[int]],
-         pairs: Sequence[tuple[int, int]] | None) -> tuple[list[int], list[int]]:
-    lay = Layout(len(a), len(b), len(a[0]))
+    keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     ks, m = lay.ks, lay.m
     cp = [[0, 0] for _ in range(lay.sets)]
     for ln in range(lay.lanes):
@@ -239,55 +220,6 @@ def _run(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], rows: list, col
     if pairs is None:
         pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
     return [SG.seg_dot(0, a[i], b[j]) for i, j in pairs], [w & M32 for s in cp for w in s]
-
-
-# -- banded noise (J10) ------------------------------------------------------------------------------------------------------
-
-#: the widest band `Accounting.Guarantees.TS.GridTemplateMoment` prices at the one-tile rate, in column tiles
-BAND_MAX = 64
-
-
-def band_start(J: int, g: int) -> int:
-    """The first column tile of tile column J's band. A call's column tiles are cut into bands of g from column tile 0, the
-    last band holding what remains."""
-    if not 1 <= g <= BAND_MAX:
-        raise ValueError(f"a band is 1 to {BAND_MAX} column tiles, not {g}")
-    if J < 0:
-        raise ValueError(f"a column tile index is >= 0, not {J}")
-    return J - J % g
-
-
-def banded_noise(salt: bytes, positions: Sequence[Sequence[int]], roots: tuple[bytes, bytes], lay: Layout, I: int, J: int,
-                 g: int) -> tuple[list, list, list[list[int]]]:
-    """Tile (I, J)'s noise and fold keys under one noise seed a call, banded at g column tiles (J10; its coin is the Lean
-    `Accounting.TS.CallCoin` of one row block by one band): (rows, cols, keys) in `row_noise`'s, `col_noise`'s and
-    `fold_keys`' forms.
-
-    `positions[I][J]` is tile (I, J)'s unit position (`compile.Compiled.positions`), and `roots` the call's seed group's.
-
-    * Rows: the row noise of the seed at the position of the band's first tile, (I, `band_start`(J, g)). Every tile of a
-      band reads the same row noise; tiles in other bands or row blocks read other seeds.
-    * Columns: the column noise of the tile's own seed, `seeds.seed` at (I, J), as `h1tile.noise` derives it.
-    * Keys: `fold_keys` of the tile's own σ_R, as `reference` derives them.
-
-    At g = 1 each tile reads its own seed only, which is `noise` and `fold_keys` at its own position. The band's rows read
-    counter blocks [0, r·RB) of the band seed and every column reads blocks from r·RB on of its own tile's seed (`Layout.row`,
-    `Layout.col`), so no noise block serves two purposes."""
-    J0 = band_start(J, g)
-    if not 0 <= I < len(positions) or not J < len(positions[I]):
-        raise ValueError(f"tile ({I}, {J}) is outside the call's {len(positions)}-row-block grid of positions")
-    own = positions[I][J]
-    rows = row_noise(SD.seed(salt, positions[I][J0], *roots), lay)
-    cols = col_noise(SD.seed(salt, own, *roots), lay)
-    return rows, cols, fold_keys(SD.receipt_seed(salt, own, *roots), lay)
-
-
-def banded_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes,
-                     positions: Sequence[Sequence[int]], roots: tuple[bytes, bytes], I: int, J: int, g: int,
-                     pairs: Sequence[tuple[int, int]] | None = None) -> tuple[list[int], list[int]]:
-    """Tile (I, J)'s unit on words under `banded_noise`: `reference` with its noise and keys from the banded derivation."""
-    rows, cols, keys = banded_noise(salt, positions, roots, Layout(len(a), len(b), len(a[0])), I, J, g)
-    return _run(a, b, rows, cols, keys, pairs)
 
 
 # -- the unit ----------------------------------------------------------------------------------------------------------------
@@ -409,6 +341,5 @@ def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
 if SG is not None:
     C.register(scheme())
 
-__all__ = ["BAND_MAX", "FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME",
-           "band_start", "banded_noise", "banded_reference", "col_noise", "fold_keys", "noise", "reference", "row_noise",
-           "scheme", "u129"]
+__all__ = ["FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise",
+           "reference", "scheme", "u129"]
