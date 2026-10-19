@@ -269,6 +269,7 @@ def test_the_walkthrough_runs_as_shown(capsys):
     program, acc, acc12, ledger = walkthrough()
     assert acc.sound and sum(b.credited for b in acc.blocks) == sum(n for w in work(program).values() for n in w.values())
     assert all(b.credited > 0 for b in acc.blocks)        # each stage is credited to the block it ran on
+    assert acc.export_bits == 1024 and acc.uncovered == ["world-leaf"]   # h and y leave their blocks, uncharged
     assert acc12.sound and acc12.input_bits == {"x": 512, "temperature": 16}
     assert ledger.sound and len(ledger.epochs) == 3
     out = capsys.readouterr().out

@@ -25,7 +25,11 @@ concludes:
 For the whole datacenter it gives where each held store could have been (`located`: the devices that could have
 answered its sample by the deadline, and none when the prover could rebuild the sample in time), the covert budget (the profile's
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
-everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
+everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
+covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
+the committed bits that crossed a certified boundary out of a block, by port. They count as novel information read by
+their receivers once the declaration's certifiers cover every link (Daniel, 19 Oct); until then the export is reported
+as not applicable, with the uncovered links named.
 
 Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
 of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
@@ -45,7 +49,7 @@ from dataclasses import dataclass, field
 from .binding import Profile
 from .claims import Carried, Claim, Computed, Entered, Held, Read, Refused, Scheduled
 from .memory import answer_time, regen_time
-from .physical import Assumption, Datacenter
+from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
 #: the premise that no undeclared compute is reachable from a block (compute accounting's option (a))
@@ -112,6 +116,22 @@ class Account:
     #: what the claims credit each unit, by resource and interval, and what each unit can give a tick (`capacity`)
     credits: list[Credit] = field(default_factory=list)
     capacity: dict[tuple[str, str], float] = field(default_factory=dict)
+    #: the committed bits each egress port carried out of its block (`Profile.exported`)
+    exported: dict[Port, float] = field(default_factory=dict)
+    #: the links the declaration leaves uncovered (`Datacenter.uncovered_links`), by their ends
+    uncovered: list[str] = field(default_factory=list)
+
+    @property
+    def export_bits(self) -> float:
+        """The export, λ_out: the committed bits that crossed a certified boundary out of a block, novel information
+        read by their receivers. Charged only when the declaration's certifiers cover every link (`export_charged`)."""
+        return sum(self.exported.values())
+
+    @property
+    def export_charged(self) -> bool:
+        """Whether the export is charged: only once network certifiers cover every link (Daniel, 19 Oct), and not
+        applicable while `uncovered` names any."""
+        return not self.uncovered
 
     @property
     def overcredited(self) -> list[tuple[str, str, Interval, float, float]]:
@@ -140,6 +160,11 @@ class Account:
                      f"{self.timing_bits:g} timing advice + {sum(self.input_bits.values())} inputs ({inputs or 'none'})"
                      + (f" + {self.refused_bits:.3g} on refused windows" if self.refused_bits else "")
                      + "".join(f" + {v:.3g} held by {b} in maintenance" for b, v in self.serviced.items()))
+        if self.exported:
+            ports = ", ".join(f"{p!r}: {v:g}" for p, v in sorted(self.exported.items(), key=lambda kv: repr(kv[0])))
+            lines.append(f"export: {self.export_bits:g} committed bits out of blocks ({ports}), " + (
+                "charged as novel information read by their receivers" if self.export_charged else
+                f"not applicable while no certifier covers {', '.join(self.uncovered)}"))
         for s, where in self.located.items():
             lines.append(f"store {s}: held on {where[0]}" if len(where) == 1 else
                          f"store {s}: held on one of {', '.join(where)}" if where else
@@ -257,7 +282,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    refused_bits,
                    sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
                    {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
-                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc))
+                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc),
+                   dict(profile.exported), [f"{l.a}-{l.b}" for l in dc.uncovered_links()])
 
 
 def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:

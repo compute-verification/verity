@@ -256,6 +256,53 @@ def test_an_honest_run_is_credited_and_its_only_freedom_is_timing_advice(setup):
     assert acc.input_bits == {"x": 512} and acc.located == {"labels@b.gpu": ["b.gpu"]}
 
 
+def certified(tick: float = 1e-3) -> Datacenter:
+    """The test datacenter with the outside world behind a certifier of its own: every link off a block ends at a
+    trusted device."""
+    dc = datacenter(tick)
+    up = dc.link("world", "leaf").capacity
+    dc.fabric.append(Device("world.cert", "certifier"))
+    dc.links = [l for l in dc.links if "world" not in (l.a, l.b)] + [Link("world", "world.cert", up),
+                                                                     Link("world.cert", "leaf", up)]
+    return dc
+
+
+def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncovered():
+    """A link is covered when a trusted device ends it, a certifier or the challenger, and a link inside a block is the
+    block's own. The test datacenter's world reaches the leaf switch directly, so that link is uncovered, and so is a
+    bypass from a block to the leaf; with the world behind a certifier of its own, every link is covered."""
+    dc = datacenter()
+    assert [(l.a, l.b) for l in dc.uncovered_links()] == [("world", "leaf")]
+    dc.links.append(Link("a.gpu", "leaf", Assumption("bypass", 1e9, "bit/s")))
+    assert [(l.a, l.b) for l in dc.uncovered_links()] == [("world", "leaf"), ("a.gpu", "leaf")]
+    assert certified().validate() == [] and certified().uncovered_links() == []
+
+
+def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_every_link(setup):
+    """Training's red team, W6: the covert budget is only what goes beyond the committed computation, so committed
+    values leaving a block were free, and something off the block can read them. The export, λ_out, is the committed
+    bits that cross a certified boundary out of a block, to another block or outside, by egress port and within the
+    epoch, read from the declared crossings: h out of a and y out of b, 512 bits each, and not x, which comes in.
+    Daniel (19 Oct): it counts as novel information read by its receivers once network certifiers cover every link,
+    and not before. The test datacenter's world-to-leaf link is uncovered, so the export is reported and not
+    applicable; with the world behind a certifier, the same run's export is charged. The covert budget is the same in
+    both."""
+    dc, p = setup
+    out = {Port("a.cert", "egress"): 512.0, Port("b.cert", "egress"): 512.0}
+    assert p.public(Plan(EPOCH)).exported == out
+    assert p.public(Plan(Interval(0, 7))).exported == {Port("a.cert", "egress"): 512.0}   # y is read at tick 7
+    accounts = []
+    for q in (p, staged(certified())):
+        profile = q.public(Plan(EPOCH))
+        accounts.append(account(audit(run(q, INPUTS, Plan(EPOCH)), profile), profile))
+    leaf, covered = accounts
+    assert leaf.sound and leaf.exported == out and leaf.export_bits == 1024 and not leaf.export_charged
+    assert leaf.uncovered == ["world-leaf"] and "not applicable while no certifier covers world-leaf" in repr(leaf)
+    assert covered.sound and covered.exported == out and covered.export_charged and covered.uncovered == []
+    assert "charged as novel information read by their receivers" in repr(covered)
+    assert leaf.covert_bits == covered.covert_bits == 4 * 4 * 7 + 512
+
+
 @pytest.mark.parametrize("deviate, why", [
     (lambda: Deviation(extra={(Port("a.cert", "egress"), 2): 1}), "occupancy differs"),
     (lambda: Deviation(hold={(Port("b.cert", "egress"), 7): 9}), "occupancy differs"),
