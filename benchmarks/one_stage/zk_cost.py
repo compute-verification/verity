@@ -293,21 +293,25 @@ def fit(a) -> int:
                     "staged_ands": {K: next(r["ands"] for (k_, _), r in stages.items() if k_ == K) for K in ks}, "fits": {}}
 
     def put(name, rows, names):
-        if len(rows) > len(names):
+        # a single K makes "one" and "ands" one column, and --draws c makes c and k one: such a fit has no solution
+        if len(rows) > len(names) and np.linalg.matrix_rank(np.array([r[0] for r in rows], float) /
+                                                            np.abs([r[0] for r in rows]).max(axis=0)) == len(names):
             result["fits"][name] = wls(rows, names)
 
     for K in ks:
         put(f"stage/K{K}", [([1, c], r["stage_s"]) for (k_, c), r in stages.items() if k_ == K], ["one", "c"])
+        whole = all(r["c"] == r["k"] for r in proves if r["K"] == K)
+        ck, ckn = (lambda r: [1, r["k"]], ["one", "k"]) if whole else (lambda r: [1, r["c"], r["k"]], ["one", "c", "k"])
         vs = [r for r in verifies if r["K"] == K]
-        put(f"verify/K{K}", [([1, r["c"], r["k"]], r["wall_s"]) for r in vs], ["one", "c", "k"])
-        put(f"verify_cpu/K{K}", [([1, r["c"], r["k"]], r["user_s"] + r["sys_s"]) for r in vs], ["one", "c", "k"])
+        put(f"verify/K{K}", [(ck(r), r["wall_s"]) for r in vs], ckn)
+        put(f"verify_cpu/K{K}", [(ck(r), r["user_s"] + r["sys_s"]) for r in vs], ckn)
         for arm in arms:
             cold = [r for r in proves if r["K"] == K and r["arm"] == arm and r["mode"] == "cold"]
-            put(f"cold/{arm}/K{K}", [([1, r["c"], r["k"]], r["wall_s"]) for r in cold], ["one", "c", "k"])
+            put(f"cold/{arm}/K{K}", [(ck(r), r["wall_s"]) for r in cold], ckn)
             put(f"setup/{arm}/K{K}", [([1, r["c"]], r["wall_s"] - r["lives"][0]["e2e_s"]) for r in cold], ["one", "c"])
             timed_ = [(r, x) for r in proves if r["K"] == K and r["arm"] == arm and r["mode"] == "warm"
                       for x in r["lives"] if not x["warm"]]
-            put(f"session/{arm}/K{K}", [([1, r["c"], r["k"]], x["e2e_s"]) for r, x in timed_], ["one", "c", "k"])
+            put(f"session/{arm}/K{K}", [(ck(r), x["e2e_s"]) for r, x in timed_], ckn)
     def features(K: int, c: int, k: int) -> list[float]:
         return [1, unit_ands(K), unit_ands(K) * c, unit_ands(K) * k]
 
