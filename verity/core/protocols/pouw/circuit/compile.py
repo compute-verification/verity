@@ -37,7 +37,8 @@
   `pouw.roots` (its group's), so no unit chooses its position and no two units share one (``position``); a unit derives one seed
   (``seed``) and its z reads none of it (``noise-in-z``), or under a one-stream scheme (`Scheme.stream`) each z leaf is
   recombined from words its receipt folds (``stream``: z reads the seed through the recombination, the wrap correction and
-  the dither peel); served values reach a unit only through its z (``separator``); every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
+  the dither peel); served values reach a unit only through its z (``separator``); every node outside the units meets
+  `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
 The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
@@ -249,9 +250,9 @@ class Scheme:
     name: str
     tile: tuple[int, int]
     units: Mapping[str, Callable[[Dot, Tile], Any]]
+    stream: tuple[Any, ...] = field(default=(), kw_only=True)
     cover: int = 1
     rows: Mapping[str, RowNoise] = field(default_factory=lambda: dict(ROWS))
-    stream: tuple[Any, ...] = ()
 
     def unit(self, dot: Dot, tile: Tile) -> Any:
         f = self.units.get(dot.family, self.units.get(ANY))
@@ -264,7 +265,7 @@ class Scheme:
         """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `rows`, the form's
         `RowNoise` (`PV_ROWS` for P·V), where a matched row is visible."""
         return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover,
-                      {**self.rows, **({kind: rows} if rows is not None else {})}, self.stream)
+                      {**self.rows, **({kind: rows} if rows is not None else {})})
 
 
 #: the schemes the pass compiles to, by name (protocol structure, keyed by silicon target in the registration). Separate from

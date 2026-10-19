@@ -45,7 +45,7 @@ receipt's cone reads.
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
 `SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree;
-`SCHEME_V3` and `PouwH1Tile3` the same. `reference` is the unit on words (``stream=True``: v3's).
+`SCHEME_V3` (`scheme_v3`) and `PouwH1Tile3` the same. `reference` is the unit on words (``stream=True``: v3's).
 """
 from __future__ import annotations
 
@@ -603,20 +603,22 @@ class _Unit:
         return bind(self.defn, EXACT=dot.exact, R=tile.r, C=tile.c, PAIRS=tile.pairs)
 
 
-def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME, defn: Any = PouwH1Tile) -> C.Scheme:
-    """H1 + fx1 as a compile-pass scheme at `tile` (register it with `compile.register`); `defn` `PouwH1Tile3` for the one
-    stream (`SCHEME_V3`), whose z the pass checks is recombined from folded words."""
-    f = _Unit(name, defn)
-    stream = STREAM if defn is PouwH1Tile3 else ()
-    return C.Scheme(name, tile, {kind: f for kind in KINDS}, stream=stream)
+def scheme(tile: tuple[int, int] = (32, 32), name: str = SCHEME) -> C.Scheme:
+    """H1 + fx1 as a compile-pass scheme at `tile` (register it with `compile.register`)."""
+    f = _Unit(name)
+    return C.Scheme(name, tile, {kind: f for kind in KINDS})
+
+
+def scheme_v3(tile: tuple[int, int] = (32, 32), name: str = SCHEME_V3) -> C.Scheme:
+    """The one stream (`PouwH1Tile3`) as a compile-pass scheme at `tile`, whose z the pass checks is made by `STREAM` from
+    folded words."""
+    f = _Unit(name, PouwH1Tile3)
+    return C.Scheme(name, tile, {kind: f for kind in KINDS}, stream=STREAM)
 
 
 if SG is not None:
     C.register(scheme())
-    C.register(scheme(name=SCHEME_V3, defn=PouwH1Tile3))
+    C.register(scheme_v3())
 
-__all__ = ["FOLD", "KINDS", "Layout", "ONE_STREAM", "PouwH1Tile", "PouwH1Tile3", "PouwOneStream2", "PouwOneStream2Word",
-           "PouwOneStream3", "PouwOneStream3Word", "PouwU129", "PouwU129Word", "PouwWrapBits", "PouwWrapBitsWord", "PouwWrapSeg",
-           "PouwWrapSegWord", "PouwPeelSeg", "PouwPeelSegWord", "PouwXWrap", "PouwXWrapWord", "SCHEME", "SCHEME_V3", "STREAM",
-           "col_wrap", "fold_keys", "lane_sets", "noise", "one_stream", "peel_seg", "reference", "row_wrap", "scheme",
-           "stream_cell", "u129", "wrap_bits", "wrap_seg", "x_wrap"]
+__all__ = ["FOLD", "KINDS", "Layout", "PouwH1Tile", "PouwU129", "PouwU129Word", "SCHEME", "fold_keys", "noise", "reference",
+           "scheme", "u129"]
