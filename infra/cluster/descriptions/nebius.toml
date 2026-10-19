@@ -69,8 +69,10 @@ gpus = [
 
 # Verity on node 2 (decision 1 at Daniel's default): idle capacity only, preemptible, never in a window, GPUs included.
 # CPUs, memory and job caps are pous infra's interim terms (research-notes, 20260930T1629Z).
-# Its CPUs sit inside check slots a and b: a guest runs at nice 19 in the user slice (0-119 since vy-device-cores), so it takes
-# only what the checks leave idle (infra, 12 Oct). Renewed to the VM's stop (22 Oct 15:00Z, INF-57, 19 Oct).
+# Its CPUs sit inside check slots a (0-63) and b (64-119), so no core of it is outside a check's. A guest's CPU job claims
+# `cpus` of them in whole cores of its own (`research cpu-hold`, waiting while none are free) at nice 0; nice never made it
+# yield to a check, which runs in a session scope beside user@.service (every queued run and fill job), weighted the same. A
+# guest's GPU job's runner keeps all of them at nice 19. Renewed to the VM's stop (22 Oct 15:00Z, INF-57, 19 Oct).
 [[shares]]
 project = "verity"
 node = "vy-nebius-2"
