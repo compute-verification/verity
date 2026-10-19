@@ -29,7 +29,8 @@ file opens the unit's rows under the registered window root, through its entry a
 `pass_epoch` is the rule on the pass a window is received from (`served_commit.Challenger.pass_epoch`, which calls it):
 its manifest re-starts its epoch under the challenger's own coin commitment, and the window's context names it.  In a
 certified window, whose verifier holds the network certifier's reveal for it (`salt.revealed`), the pass's salt must be
-`salt.pouw_salt` of that reveal and the PoUW window the context names.
+`salt.pouw_salt` of that reveal and the PoUW window the context names, and its weights those the certifier recorded
+before it drew that salt (`salt.committed`).
 `draw` is the rule on the window's draw (`Challenger.select`'s): the epoch's draw coin opens after the registration,
 and the drawn units are Lean's ``Draw.subset`` of the key it derives.  Both read the coin versions in `COIN_VERSIONS`,
 and a replay of a recorded draw `COIN_EARLY` too.
@@ -816,9 +817,10 @@ def _check_workload(us: list[dict], roots: dict[int, bytes]) -> None:
         raise Co.DomainError("every weight of the workload is committed, and only those")
 
 
-def _certified_salt(m: dict, reveal: bytes, context: str) -> tuple[bytes, str]:
-    """A certified window's pass: its salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW window the
-    window's `context` names."""
+def _certified_salt(m: dict, reveal: bytes, context: str, weights: bytes | None) -> tuple[bytes, str]:
+    """A certified window's pass: its weights' root is `weights`, the one the certifier recorded before it drew the
+    window's salt (`salt.committed`), and its salt is `salt.pouw_salt` of `reveal`, the certifier's salt for the PoUW
+    window the window's `context` names."""
     schema = m.get("schema")
     if schema != MANIFEST_CERTIFIED:
         if not _str(schema):
@@ -831,17 +833,22 @@ def _certified_salt(m: dict, reveal: bytes, context: str) -> tuple[bytes, str]:
     if window is None:
         raise Co.DomainError("the window's context names no PoUW window, whose certifier salt the pass's is")
     _check_workload(us, roots)
+    if type(weights) is not bytes or len(weights) != PS.WEIGHTS_ROOT_BYTES:
+        raise Co.DomainError("the verifier holds no weights' root the certifier recorded before it drew the window's salt")
+    if weights_root(Co.SCHEME, roots) != weights:
+        raise Co.DomainError("the pass's weights are not those the certifier recorded before it drew the window's salt")
     salt = PS.pouw_salt(reveal, window)
     if salt.hex() != m.get("salt"):
         raise Co.DomainError("the pass's salt is not the certifier's for its window")
     return salt, "certifier"
 
 
-def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None, context: str = "") -> tuple[bytes, str]:
+def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None, context: str = "",
+                weights: bytes | None = None) -> tuple[bytes, str]:
     """`manifest_epoch`: the pass's epoch salt re-started from its manifest, and how it was had.  Raises `DomainError`
     (the coin rule's) or `Refused` (a manifest it can't read)."""
     if reveal is not None:
-        return _certified_salt(m, reveal, context)
+        return _certified_salt(m, reveal, context, weights)
     schema = m.get("schema")
     if schema == MANIFEST_CERTIFIED:
         raise Co.DomainError(f"the pass's manifest is {MANIFEST_CERTIFIED}, salted by the network certifier: only a "
@@ -891,18 +898,19 @@ def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None
     return salt, how
 
 
-def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False,
-               reveal: bytes | None = None) -> tuple[str | None, tuple[str, str] | None]:
+def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False, reveal: bytes | None = None,
+               weights: bytes | None = None) -> tuple[str | None, tuple[str, str] | None]:
     """How the pass's salt was had (``coin``, ``recorded beacon`` in a replay of a recorded pass, or ``certifier``) and
     None, or None and the refusal (``coin`` or ``manifest``, and why): its manifest `raw` re-starts its epoch under
     `coins`, the challenger's own coin commitment (its JSON), and the window's `context` names it by its SHA-512.  A
     certified window's verifier holds `reveal`, the certifier's salt for the PoUW window the context names, as
-    `salt.revealed` read it; its window passes only a pass salted by it (`MANIFEST_CERTIFIED`, the salt
-    `salt.pouw_salt(reveal, p)`), and a certified pass passes only there."""
+    `salt.revealed` read it, and `weights`, the weights' root the certifier recorded before it drew that salt, as
+    `salt.committed` read it; its window passes only a pass salted by it (`MANIFEST_CERTIFIED`, the salt
+    `salt.pouw_salt(reveal, p)`) over those weights, and a certified pass passes only there."""
     if raw is None:
         return None, ("coin", "the window names no pass, whose epoch the challenger re-starts from its manifest")
     try:
-        _, how = _epoch_salt(_manifest(raw), coins, recorded, reveal, context)
+        _, how = _epoch_salt(_manifest(raw), coins, recorded, reveal, context, weights)
     except Co.DomainError as e:
         return None, ("coin", str(e))
     except Refused as e:

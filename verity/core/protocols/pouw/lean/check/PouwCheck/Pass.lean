@@ -34,6 +34,7 @@ def MANIFEST_RECORDED : String := "verity-vllm/pouw-pearl-c-run/v1"
 def MANIFEST_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
 def WINDOW_SEGMENT : String := "pouw-window"
 def SALT_BYTES : Nat := 64
+def WEIGHTS_ROOT_BYTES : Nat := 64
 def COINS_RECORDED : String := "verity/pouw/epoch-coins/v2"
 def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
 def U64 : Int := 2 ^ 64
@@ -190,9 +191,11 @@ def windowOf (context : String) : Option Nat :=
 /-- `salt.pouw_salt`: the salt PoUW applies in window `p`, SHA-512(reveal ‖ u64be(p)). -/
 def pouwSalt (reveal : ByteArray) (p : Nat) : ByteArray := Flock.Sha512.hash (reveal ++ PouwCommit.be8 p)
 
-/-- `_certified_salt`: a certified window's pass, whose salt is `pouwSalt` of the certifier's reveal for the PoUW window
-the window's context names. -/
-def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) : R (ByteArray × String) := do
+/-- `_certified_salt`: a certified window's pass, whose weights' root is `weights`, the one the certifier recorded before
+it drew the window's salt, and whose salt is `pouwSalt` of the certifier's reveal for the PoUW window the window's
+context names. -/
+def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (weights : Option ByteArray) :
+    R (ByteArray × String) := do
   let schema := at? m "schema"
   if schema != .str MANIFEST_CERTIFIED then
     let .str s := schema | manifest "the pass's manifest names no schema"
@@ -201,14 +204,18 @@ def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) : R (ByteAr
   if reveal.size != SALT_BYTES then coin s!"the verifier's reveal is not a {SALT_BYTES}-byte salt"
   let some p := windowOf context | coin "the window's context names no PoUW window, whose certifier salt the pass's is"
   checkWorkload us roots
+  let some w := weights.filter (·.size == WEIGHTS_ROOT_BYTES)
+    | coin "the verifier holds no weights' root the certifier recorded before it drew the window's salt"
+  if weightsRootAt 64 "verity/pouw/weights/v1" roots != w then
+    coin "the pass's weights are not those the certifier recorded before it drew the window's salt"
   let salt := pouwSalt reveal p
   if at? m "salt" != .str (Flock.hexOf salt) then coin "the pass's salt is not the certifier's for its window"
   pure (salt, "certifier")
 
 /-- `_epoch_salt`: the pass's salt re-started from its manifest, and how it was had. -/
-def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteArray) (context : String) :
-    R (ByteArray × String) := do
-  if let some r := reveal then return (← certifiedSalt m r context)
+def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteArray) (context : String)
+    (weights : Option ByteArray) : R (ByteArray × String) := do
+  if let some r := reveal then return (← certifiedSalt m r context weights)
   let schema := at? m "schema"
   if schema == .str MANIFEST_CERTIFIED then
     coin (s!"the pass's manifest is {MANIFEST_CERTIFIED}, salted by the network certifier: only a certified window's " ++
@@ -244,16 +251,17 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
   if at? m "salt" != .str (Flock.hexOf salt) then coin s!"the pass's salt is not its {how}'s and the weights'"
   pure (salt, how)
 
-/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A certified window's verifier holds `reveal`. -/
+/-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A certified window's verifier holds `reveal`
+and `weights`, the weights' root the certifier recorded before it drew that salt. -/
 def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool)
-    (reveal : Option ByteArray) : R String := do
+    (reveal : Option ByteArray) (weights : Option ByteArray) : R String := do
   let some raw := raw | coin "the window names no pass, whose epoch the challenger re-starts from its manifest"
   let m ← match String.fromUTF8? raw with
     | some s => match Json.parse s with
       | .ok j@(.obj _) => pure j
       | _ => manifest "the pass's manifest is not a JSON object"
     | none => manifest "the pass's manifest is not a JSON object"
-  let (_, how) ← epochSalt m coins recorded reveal context
+  let (_, how) ← epochSalt m coins recorded reveal context weights
   if Flock.hexOf (Flock.Sha512.hash raw) != ((context.splitOn "/").getLast?.getD "") then
     manifest "the pass is not the one the window's parameters name"
   pure how

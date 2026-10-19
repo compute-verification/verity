@@ -11,6 +11,9 @@ published. PoUW doesn't import the certifier: `revealed` reads any object with t
 * `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
   isn't p's (unregistered), when the certifier refuses (a receipt that isn't the registration's: unregistered; before
   t_d: early; a salt never drawn, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
+* `committed(certifier, p, registration)` is the weights' root the certifier recorded for p before it drew p's salt, or
+  `Unrevealed` (uncommitted): the salt binds no weights, so a certified window passes only weights recorded before
+  its salt (`core_check.pass_epoch`). Today's certifier records none, so every certified window is refused.
 * `pouw_salt(reveal, p)` is the salt PoUW applies in window p, the one function that states its form.
 * `pouw_window(windows, k)` is the PoUW window certifier windows make up, refusing any that aren't one whole, aligned
   PoUW window.
@@ -29,12 +32,15 @@ if TYPE_CHECKING:
 
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
 SALT_BYTES = 64
+#: `audit.weights_root`, a SHA-512 `tagged`
+WEIGHTS_ROOT_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
 _NAT = re.compile(r"0|[1-9][0-9]*")
 
 
 class Unrevealed(DomainError):
-    """A PoUW window whose certifier salt the verifier doesn't have: unregistered, early or missing."""
+    """A PoUW window whose certifier salt, or weights recorded before it, the verifier doesn't have: unregistered,
+    early, missing or uncommitted."""
 
 
 def _window(window: Any) -> int:
@@ -95,6 +101,27 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
     return salt
 
 
+def committed(certifier: Any, window: int, registration: Registration | None) -> bytes:
+    """The weights' root (`audit.weights_root`, 64 bytes) the certifier recorded for PoUW window `window` before it drew
+    the window's salt, `certifier.committed(window, registration)`, given the window's registration. It fails closed
+    (`Unrevealed`): unregistered, as `revealed`; uncommitted, when the certifier records no weights (today's
+    `certifier.active.Proxy` doesn't), refuses (none recorded before the draw), or gives anything but 64 bytes."""
+    if registered(registration) != _window(window):
+        raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
+    record = getattr(certifier, "committed", None)
+    if not callable(record):
+        raise Unrevealed(f"uncommitted: the certifier records no weights before it draws PoUW window {window}'s salt")
+    try:
+        root = record(window, registration)
+    except (RuntimeError, ValueError) as e:
+        raise Unrevealed(f"uncommitted: the certifier recorded no weights before PoUW window {window}'s salt: {e}") \
+            from None
+    if type(root) is not bytes or len(root) != WEIGHTS_ROOT_BYTES:
+        raise Unrevealed(f"uncommitted: the certifier's weights' root for PoUW window {window} is not "
+                         f"{WEIGHTS_ROOT_BYTES} bytes")
+    return root
+
+
 def pouw_window(windows: Sequence[int], k: int) -> int:
     """The PoUW window certifier windows `windows` make up, k certifier windows each: p when they are p·k … p·k + k − 1
     in order, one whole PoUW window aligned at 0; else `DomainError`."""
@@ -107,5 +134,5 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["SALT_BYTES", "Unrevealed", "WINDOW_SEGMENT", "context", "pouw_salt", "pouw_window", "registered", "revealed",
-           "window_of"]
+__all__ = ["SALT_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_salt",
+           "pouw_window", "registered", "revealed", "window_of"]

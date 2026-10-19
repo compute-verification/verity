@@ -15,7 +15,8 @@ harness (`verity/core/difftest`):
 * `registered` (`params`, `commitment`, as `opening` reads them): PoUW's rule over the registration
   (`core_check.registered`), as `{"reason"}`, null when it holds.
 * `pass` (`coins` the challenger's commitment as JSON or null, `raw` the manifest's bytes as hex or null, `context`,
-  `recorded`, and `reveal`, a certified window's certifier salt as hex, null or absent otherwise):
+  `recorded`, and `reveal` and `weights`, a certified window's certifier salt and the weights' root the certifier
+  recorded before it, as hex, null or absent otherwise):
   `core_check.pass_epoch`, as `{"how"}` or `{"refused": [code, why]}`.
 * `draw` (`coins`, `recorded`, `opening`, `stream`, `registration`, `receipt`, `k`, `population`, `units`, each as
   `core_check.draw` takes it): null, or `{"refused": [code, why]}`.
@@ -54,18 +55,21 @@ def flag (j : Json) (k : String) : Except String Bool := do
   let .bool b ← get j k | throw s!"the input's {k} is not a boolean"
   pure b
 
+/-- An optional hex field: absent or null is none. -/
+def hexOrNull (j : Json) (k : String) : Except String (Option ByteArray) :=
+  match (PouwWindow.pyGet? j k).getD .null with
+  | .null => pure Option.none
+  | .str s => some <$> PouwCommit.pyFromHex s
+  | _ => throw s!"the input's {k} is malformed"
+
 def passOf (j : Json) : Except String Json := do
   let raw ← match ← get j "raw" with
     | .null => pure Option.none
     | .str s => some <$> PouwCommit.pyFromHex s
     | _ => throw "the input's raw is malformed"
   let .str context ← get j "context" | throw "the input's context is not a string"
-  let reveal ← match (PouwWindow.pyGet? j "reveal").getD .null with
-    | .null => pure Option.none
-    | .str s => some <$> PouwCommit.pyFromHex s
-    | _ => throw "the input's reveal is malformed"
   refusal (fun how => Json.mkObj [("how", how)])
-    (passEpoch (← get j "coins") raw context (← flag j "recorded") reveal)
+    (passEpoch (← get j "coins") raw context (← flag j "recorded") (← hexOrNull j "reveal") (← hexOrNull j "weights"))
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j
