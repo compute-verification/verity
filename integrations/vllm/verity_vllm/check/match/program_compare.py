@@ -417,7 +417,9 @@ class Prog(PeerReads, PX.PrefixInput):
 
 
 def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
-    desc = json.load(gzip.open(os.path.join(d, "descriptor.json.gz")))
+    """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
+    from verity_vllm.program.boolean import word_descriptor
+    desc = json.load(gzip.open(word_descriptor(d)))
     rep = json.load(open(os.path.join(d, "derive-report.json")))
     prov = rep.get("provenance", rep)
     src = prov.get("source") if isinstance(prov.get("source"), dict) else {}

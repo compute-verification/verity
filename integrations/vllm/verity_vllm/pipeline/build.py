@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
-from verity_vllm.program.boolean import derived
+from verity_vllm.program.boolean import derived, write_word
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
@@ -587,10 +587,12 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                       "correspondence_digest": corr_digest,
                       "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
                                          "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
-    # a Boolean Program written through its word link (`build_instances`): the histogram of the rows' Definitions, and its own beside
+    # a Boolean Program written through its word link (`build_instances`): the histogram of the rows' Definitions, and its own beside;
+    # its word Program beside its descriptor, for the readers in word units (`program.boolean.word_descriptor`)
     res["spec_histogram"] = _spec_histogram(getattr(program, "word", None) or program)
     if getattr(program, "word", None) is not None:
         res["boolean_spec_histogram"] = _spec_histogram(program)
+        res["program"]["word_digest"] = write_word(out, program, rep.provenance["ir"]["word_digest"])
     res["rules_applied"] = rep.provenance["rules_applied"]
     res["n_applications"] = len(rep.provenance["applications"])
     res["weights"] = {"n_fields": len(rep.provenance["weights"]), "roles": rep.provenance.get("weight_roles")}

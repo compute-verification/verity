@@ -5,7 +5,9 @@ node index and word leaf.  The Build writes the Boolean Program's instance seque
 (`pipeline.build_instances`: the word Definition `trace.word_of` names, checked against the word node, with the Boolean Definition
 as the row's `bits`), so `ProgramView`, the population, the protocol declarations (`SAMPLING_EVENTS`, ...) and the word check read
 the word Program's Calls: the same units, boundaries and committed values whichever IR the Program is in.  The word check counts the
-Boolean Program's size in Boolean gates beside its word gates.  The row is a tiny registered-values greedy serve of B0.
+Boolean Program's size in Boolean gates beside its word gates.  The Build writes the word Program beside the Boolean one
+(`program.boolean.write_word`), and the workload composition and the Match read the dir through it (`word_descriptor`).  The row is
+a tiny registered-values greedy serve of B0.
 """
 from __future__ import annotations
 
@@ -20,7 +22,8 @@ torch = pytest.importorskip("torch")
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.correspondence.runtime import correspondence_digest  # noqa: E402
-from verity_vllm.pipeline import manifest as MF  # noqa: E402
+from verity_vllm.check.match import program_compare as PC  # noqa: E402
+from verity_vllm.pipeline import components as CO, manifest as MF  # noqa: E402
 from verity_vllm.pipeline.build import _spec_histogram  # noqa: E402
 from verity_vllm.pipeline.build_instances import write_instances  # noqa: E402
 from verity_vllm.program import boolean as BB  # noqa: E402
@@ -42,7 +45,10 @@ def _write(d: Path, rep) -> str:
     res = {"program": {"digest": digest, "function": program.fn.id, "correspondence_digest": correspondence_digest(desc)},
            "target": {"declared": {"compute_capability": [8, 0]}},
            "spec_histogram": _spec_histogram(getattr(program, "word", None) or program)}
+    if getattr(program, "word", None) is not None:
+        res["program"]["word_digest"] = BB.write_word(d, program, rep.provenance["ir"]["word_digest"])
     (d / "result.json").write_text(json.dumps(res))
+    (d / "derive-report.json").write_text(json.dumps(rep.to_json(), default=str))
     return digest
 
 
@@ -129,3 +135,38 @@ def test_the_word_check_cuts_the_word_definitions_and_counts_boolean_gates_besid
     assert all(g["boolean_gates"] == gates[g["bits"]] * g["calls"] for g in b["groups"])
     assert b["boolean_gates"] == sum(g["boolean_gates"] for g in b["groups"]) > b["gates"]
     assert MF.word_record(b, strict=False)["boolean_gates"] == b["boolean_gates"]
+
+
+def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(row, tmp_path):
+    """The word Program beside the Boolean one is the word derive's, and the workload composition (`pipeline.components`) and the
+    Match (`program_compare.load_derived`) read it: the same component and the same Program as the word dir's, the Boolean
+    digest still the dir's recorded one.  A word descriptor that is not the recorded word digest is refused."""
+    import shutil
+
+    from verity.ml.circuits.defs import REGISTRY
+    from verity_vllm.program import workload as W
+
+    _word, bits, dirs, digests = row
+    b = str(dirs["boolean"])
+    assert bits.provenance["ir"]["word_digest"] == digests["word"]
+    assert BB.word_descriptor(b).name == BB.WORD_DESCRIPTOR and BB.word_descriptor(dirs["word"]).name == "descriptor.json.gz"
+    descs = {ir: CO.load_desc(str(dirs[ir])) for ir in dirs}
+    assert program_digest(descs["boolean"]) == digests["word"]
+    prov = CO.component_provenance(b, descs["boolean"])
+    assert prov["refusal"] is None and (prov["recorded_digest"], prov["word_digest"]) == (digests["boolean"], digests["word"])
+    comps = {ir: W.request_component(descs[ir], REGISTRY) for ir in dirs}
+    assert comps["boolean"].program_digest == comps["word"].program_digest == digests["word"]
+    assert comps["boolean"].local_offsets_sha256 == comps["word"].local_offsets_sha256
+    progs = {ir: PC.load_derived(str(dirs[ir]), ir) for ir in dirs}
+    assert progs["boolean"].digest == progs["word"].digest
+    assert [r["spec"] for r in progs["boolean"].inst] == [r["spec"] for r in progs["word"].inst]
+
+    stale = tmp_path / "stale"
+    shutil.copytree(b, stale)
+    shutil.copy(dirs["word"] / "descriptor.json.gz", stale / BB.WORD_DESCRIPTOR)
+    res = json.loads((stale / "result.json").read_text())
+    res["program"]["word_digest"] = "0" * 128
+    (stale / "result.json").write_text(json.dumps(res))
+    assert "is not the Program derive_step built" in CO.component_provenance(str(stale), CO.load_desc(str(stale)))["refusal"]
+    with pytest.raises(ValueError, match="not the derive's word digest"):
+        BB.write_word(tmp_path, bits.program, "0" * 128)

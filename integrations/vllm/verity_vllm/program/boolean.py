@@ -19,7 +19,9 @@ only where every Definition that body Calls has one (`registry.boolean_sigma`).
 each of the Boolean version of its Definition, over parameters and values whose every w-bit word is an element
 ``Array<w, Value<1>>`` (`boolean.bit_type`).  Word leaf j of a collection is element j of its bit form, so node indices and the
 runtime correspondence carry over unchanged.  `derived(report)` is a word derivation's report with its Program on bits, which
-the Build takes when `TargetProfile.ir == "boolean"`; the default (word) derives exactly as before.
+the Build takes when `TargetProfile.ir == "boolean"`; the default (word) derives exactly as before.  The Build writes a lifted
+Program's word Program beside it (`WORD_DESCRIPTOR`), and the readers that work in word units (the workload composition, the
+Match) read a derive dir through `word_descriptor`.
 
 `purity(program)` lists every Definition a Program reaches that is not Boolean (a word-id MUFU sub-Call inside a Boolean
 version counts): zero when the Program is bits throughout.  `dry_run(program)` reads a word Program and reports what its Boolean
@@ -48,6 +50,29 @@ from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
 from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
+#: a Boolean derive dir's word Program, the one its Program is σ-checked against node by node (its digest the derive report's
+#: ``ir.word_digest``, result.json's ``program.word_digest``)
+WORD_DESCRIPTOR = "word_descriptor.json.gz"
+
+
+def word_descriptor(d: str | Path) -> Path:
+    """Derive dir ``d``'s descriptor in word units: its word Program's (`WORD_DESCRIPTOR`) for a Boolean derive, else its own."""
+    p = Path(d) / WORD_DESCRIPTOR
+    return p if p.exists() else Path(d) / "descriptor.json.gz"
+
+
+def write_word(d: str | Path, program, word_digest: str) -> str:
+    """Write a lifted Program's word Program into derive dir ``d`` (`WORD_DESCRIPTOR`) and return its digest, refused unless it is
+    ``word_digest`` (the derive's ``ir.word_digest``)."""
+    from verity.ml.circuits.codec import encode_program, program_digest
+
+    desc = encode_program(program.word)
+    digest = program_digest(desc)
+    if digest != word_digest:
+        raise ValueError(f"the word Program's descriptor is {digest[:16]}, not the derive's word digest {word_digest[:16]}")
+    with gzip.open(Path(d) / WORD_DESCRIPTOR, "wb") as f:
+        f.write(json.dumps(desc, sort_keys=True).encode())
+    return digest
 
 
 class NoBooleanVersion(LookupError):
