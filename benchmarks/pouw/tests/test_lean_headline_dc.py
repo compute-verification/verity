@@ -65,13 +65,28 @@ def test_folds_meet_fold_opt_at_pi_star():
             assert _price(x, rt3, alu) < nphi["rt3"], fam.ns
 
 
+ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-xt"]
+
+
+def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
+    """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
+    (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), and π* prices each class each of them
+    issues above 0, so no route folds for free at the certificate FOLD-OPT is asked at."""
+    for fam in H.FAMILIES:
+        for v in (fam.sheet, fam.measured):
+            x = H.reading(fam, v).data
+            assert x.fold_names == ROUTES, (fam.ns, v)
+            free = {k for f in x.folds for k, n in f.items() if n and _price(x, x.lam, {k: Fraction(1)}) <= 0}
+            assert not free, (fam.ns, v, free)
+
+
 def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
-    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which heads a share
-    of its words on honest's lane baseline (dp4a) once ffill is out of it, so the measured file states its own word
-    production; the reading is over 1% (RT-HB-HEAD-1)."""
+    coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which folds on the
+    MIO routes beside CP_SEG4U and so writes every word on the IGMMA, as on DS-90 (the measured file states no word
+    production of its own); the reading is over 1% (RT-HB-HEAD-1)."""
     r, s = H.reading(H.SM90, "DC-90-ri"), H.reading(H.SM90, "DS-90")
     assert [k for k, _ in r.data.writers] == ["IGMMA_S8_N256", "UNI"] and r.menu == "honest"
     assert 0.01 < r.machine_core <= r.bound
     assert H.reading(H.SM90, "DC-90-ri", full=True).bound > 0.1
-    assert "dp4a" in r.data.words_mix and r.data.nw != s.data.nw and "def flatWords" in H.render_measured(H.SM90, r, s)
+    assert "dp4a" not in r.data.words_mix and "def flatWords" not in H.render_measured(H.SM90, r, s)

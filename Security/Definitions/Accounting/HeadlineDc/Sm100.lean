@@ -7,21 +7,22 @@ Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 
-* `classes`: the 26 instruction classes of the DS-100 census, in the order `Fin 26` indexes them.
+* `classes`: the 36 instruction classes of the DS-100 census, in the order `Fin 36` indexes them.
 * `ds100`, `sheet`: the B200's data sheet (DS-100): f_max 1965 MHz (the driver's reported maximum (the data sheet gives
   no clock)); each tensor class's dense MACs a warp instruction (sm_100's tcgen05 MMA whole (`m·n·k`), its mma.sync as
   m16n8) and its operand type's dense MACs an SM clock; the Nsight Compute pipes ALU, IMAD and SHFL with their
   Programming Guide widths; no shared-memory row (DS-100 prices none). Its machine reproduces every DS-100 coefficient.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` as a TS model on the sheet's machine: writer kinds every census MMA
   class (ω = m·n, its destination's 32-bit words a warp) and the uniform `UNI` (2, a UR pair: RT-HOPPER-7); the vector
-  classes CUDA's lane classes; the fold routes the design's fold and its 2 other bit-exact programs (cp-seg4, cp-seg4u:
-  the checkpoint's routes, RT2-HOPPER-9 and -11) on lanes, and alone on the uniform datapath at the least of their
-  counts; the table level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's
-  floors `q = q_T = ½`, `b_T = 0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
+  classes CUDA's lane classes; the fold routes the design's fold and its 9 other bit-exact programs (cp-seg4, cp-seg4u,
+  cp-ats, cp-ats2, cp-ats8, cp-red, cp-red2, cp-red8, cp-xt: the checkpoint's bit-exact loops, RT2-HOPPER-9, -11 and
+  RT3-DC-1, -4) on lanes, and alone on the uniform datapath at the least of their counts; the table level's bytes
+  counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T =
+  0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
 * `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
-  routes' cheapest mix, by share of the words: cp-seg4 19/32, cp-seg4u 13/32), no filler, and ε_skip's skippable work at
-  FFMA's price, 0.688979% of ♭'s bound (`eps_budget.design_skip` on DS-100).
-* `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.500000 + DS_alu 0.500000).
+  routes' cheapest mix, by share of the words: cp-red2 65/72, cp-red8 7/72), no filler, and ε_skip's skippable work at
+  FFMA's price, 0.698060% of ♭'s bound (`eps_budget.design_skip` on DS-100).
+* `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.666667 + DS_alu 0.333333).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
 
@@ -31,11 +32,12 @@ open Accounting.TS
 
 /-- The DS-100 census's instruction classes, in index order. -/
 def classes : List String := [
-  "ALU", "FFMA", "IMAD", "IMMA16816_S8", "IMMA16832_S8", "LDTM_16X128B_X8", "LDTM_16X256B_X4", "LDTM_16X64B_X16",
-  "LDTM_32X32B_X1", "LDTM_32X32B_X128", "LDTM_32X32B_X16", "LDTM_32X32B_X32", "LDTM_32X32B_X4", "LDTM_32X32B_X64",
-  "SHFL", "UNI", "UTCHMMA_F16_M128_N256", "UTCIMMA_M128_N128", "UTCIMMA_M128_N256", "UTCIMMA_M128_N32",
-  "UTCIMMA_M128_N64", "UTCIMMA_M64_N128", "UTCIMMA_M64_N256", "UTCIMMA_M64_N64", "UTCQMMA_E4M3_M128_N128",
-  "UTCQMMA_E4M3_M128_N256"]
+  "ALU", "ATOMS32", "FFMA", "IMAD", "IMMA16816_S8", "IMMA16832_S8", "LDS128", "LDTM_16X128B_X8", "LDTM_16X256B_X4",
+  "LDTM_16X64B_X16", "LDTM_32X32B_X1", "LDTM_32X32B_X128", "LDTM_32X32B_X16", "LDTM_32X32B_X32", "LDTM_32X32B_X4",
+  "LDTM_32X32B_X64", "NOROW", "REDG32", "REDUX", "SHFL", "STG128", "STG32", "STS128", "STS32", "UNI",
+  "UTCHMMA_F16_M128_N256", "UTCIMMA_M128_N128", "UTCIMMA_M128_N256", "UTCIMMA_M128_N32", "UTCIMMA_M128_N64",
+  "UTCIMMA_M64_N128", "UTCIMMA_M64_N256", "UTCIMMA_M64_N64", "UTCQMMA_E4M3_M128_N128", "UTCQMMA_E4M3_M128_N256",
+  "VIADD"]
 
 /-- The Nsight Compute pipes the sheet rates (A4). -/
 inductive Pipe
@@ -58,43 +60,52 @@ def Pipe.width : Pipe → ℕ
 def ds100 : SheetData Pipe where
   fmax := 1965
   macs := [
-    0, 0, 0, 2048, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 524288, 524288, 1048576, 131072, 262144, 262144, 524288,
-    131072, 524288, 1048576]
+    0, 0, 0, 0, 2048, 4096, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 524288, 524288, 1048576, 131072,
+    262144, 262144, 524288, 131072, 524288, 1048576, 0]
   peak := [
-    0, 0, 0, 8192, 8192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4096, 8192, 8192, 8192, 8192, 8192, 8192, 8192, 8192, 8192]
+    0, 0, 0, 0, 8192, 8192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4096, 8192, 8192, 8192, 8192, 8192,
+    8192, 8192, 8192, 8192, 0]
   pipe := [
-    some .alu, none, some .imad, none, none, none, none, none, none, none, none, none, none, none, some .shfl, none,
-    none, none, none, none, none, none, none, none, none, none]
+    some .alu, none, none, some .imad, none, none, none, none, none, none, none, none, none, none, none, none, none,
+    none, none, some .shfl, none, none, none, none, none, none, none, none, none, none, none, none, none, none, none,
+    none]
   width := Pipe.width
   smem := [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 /-- The data sheet over the census's classes. -/
-noncomputable def sheet : Sheet (Fin 26) Pipe := ds100.sheet 26
+noncomputable def sheet : Sheet (Fin 36) Pipe := ds100.sheet 36
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s design data: writer kinds as (class, ω), vector classes, fold routes. -/
 def d2s : DesignData where
   writers := [
-    (3, 128),  -- IMMA16816_S8
-    (4, 128),  -- IMMA16832_S8
-    (16, 32768),  -- UTCHMMA_F16_M128_N256
-    (17, 16384),  -- UTCIMMA_M128_N128
-    (18, 32768),  -- UTCIMMA_M128_N256
-    (19, 4096),  -- UTCIMMA_M128_N32
-    (20, 8192),  -- UTCIMMA_M128_N64
-    (21, 8192),  -- UTCIMMA_M64_N128
-    (22, 16384),  -- UTCIMMA_M64_N256
-    (23, 4096),  -- UTCIMMA_M64_N64
-    (24, 16384),  -- UTCQMMA_E4M3_M128_N128
-    (25, 32768),  -- UTCQMMA_E4M3_M128_N256
-    (15, 2)  -- UNI
+    (4, 128),  -- IMMA16816_S8
+    (5, 128),  -- IMMA16832_S8
+    (25, 32768),  -- UTCHMMA_F16_M128_N256
+    (26, 16384),  -- UTCIMMA_M128_N128
+    (27, 32768),  -- UTCIMMA_M128_N256
+    (28, 4096),  -- UTCIMMA_M128_N32
+    (29, 8192),  -- UTCIMMA_M128_N64
+    (30, 8192),  -- UTCIMMA_M64_N128
+    (31, 16384),  -- UTCIMMA_M64_N256
+    (32, 4096),  -- UTCIMMA_M64_N64
+    (33, 16384),  -- UTCQMMA_E4M3_M128_N128
+    (34, 32768),  -- UTCQMMA_E4M3_M128_N256
+    (24, 2)  -- UNI
   ]
-  vec := [1, 2, 0, 14]  -- FFMA, IMAD, ALU, SHFL
+  vec := [2, 3, 0, 19]  -- FFMA, IMAD, ALU, SHFL
   folds := [
-    [(0, 17, 1024), (2, 1, 64), (14, 3, 4096)],
-    [(0, 17, 1024), (2, 1, 64), (14, 9, 16384)],
-    [(0, 67, 4096), (2, 1, 64), (14, 17, 16384), (15, 1, 4096)],
-    [(15, 537, 512)]]
+    [(0, 17, 1024), (3, 1, 64), (19, 3, 4096)],
+    [(0, 17, 1024), (3, 65, 4096), (18, 1, 4096), (20, 1, 16384)],
+    [(0, 67, 4096), (3, 1, 64), (18, 1, 2048), (20, 1, 16384), (24, 1, 4096)],
+    [(0, 17, 1024), (1, 1, 4096), (3, 1, 64), (6, 1, 16384), (20, 1, 16384), (22, 1, 16384)],
+    [(0, 67, 4096), (1, 1, 2048), (3, 1, 64), (6, 1, 16384), (20, 1, 16384), (22, 1, 16384)],
+    [(0, 1, 64), (1, 1, 512), (3, 1, 64), (6, 1, 16384), (20, 1, 16384), (22, 1, 16384)],
+    [(0, 17, 1024), (3, 1, 64), (17, 1, 4096)],
+    [(0, 67, 4096), (3, 1, 64), (17, 1, 2048)],
+    [(0, 1, 64), (3, 1, 64), (17, 1, 512)],
+    [(0, 137, 8192), (3, 1, 64), (6, 1, 16384), (21, 1, 131072), (23, 1, 4096)],
+    [(24, 133, 128)]]
   bytes := 0  -- ALU
   q := 1 / 2
   qT := 1 / 2
@@ -104,26 +115,26 @@ def d2s : DesignData where
 def flatFill : Sparse := []
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the data sheet's machine. -/
-noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 4) Unit :=
-  d2s.model 26 13 4 sheet.machine
+noncomputable def model : Model (Fin 36) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 11) Unit :=
+  d2s.model 36 13 11 sheet.machine
 
 /-- ♭'s word production a unit: the MMA and the operand floor. -/
-def flatWords : Sparse := [(18, 1, 1)]
+def flatWords : Sparse := [(27, 1, 1)]
 
-/-- ♭'s fold a unit: the lane fold for 32768 words, the fold routes' cheapest mix, by share of the words: cp-seg4 19/32,
-cp-seg4u 13/32. -/
-def flatFold : Sparse := [(0, 2163, 4), (2, 512, 1), (14, 49, 2), (15, 13, 4)]
+/-- ♭'s fold a unit: the lane fold for 32768 words, the fold routes' cheapest mix, by share of the words: cp-red2 65/72,
+cp-red8 7/72. -/
+def flatFold : Sparse := [(0, 1601, 3), (3, 512, 1), (17, 62, 3)]
 
 /-- ♭'s skippable work a unit, at FFMA's price. -/
-def flatSkip : Sparse := [(1, 14902624017519, 1986220412374)]
+def flatSkip : Sparse := [(2, 745063066358, 99301939663)]
 
 /-- The floor program ♭, labelled. -/
-noncomputable def flat : Labelled (Fin 26) := labelled 26 flatWords flatFold flatFill flatSkip
+noncomputable def flat : Labelled (Fin 36) := labelled 36 flatWords flatFold flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : SheetRow Pipe → ℝ
-  | .issue => 1 / 2
-  | .pipe .alu => 1 / 2
+  | .issue => 666666667 / 1000000000
+  | .pipe .alu => 333333333 / 1000000000
   | _ => 0
 
 /-- The checks a window. -/
