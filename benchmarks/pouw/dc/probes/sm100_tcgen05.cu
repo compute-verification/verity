@@ -780,9 +780,9 @@ static const OpProbe PROBES[] = {
     {.name = "bulkcp", .kernel = (const void*)bulkcp, .tpb = 32, .expect = "UBLKCP*=8", .words = 1024, .iters = 1024},
     {.name = "bulkred", .kernel = (const void*)bulkred, .tpb = 32, .expect = "UBLKRED*=8", .words = 1024, .iters = 1024},
     {.name = "tcliU_base", .kernel = (const void*)tcliU_base, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tcliU_floor", .kernel = (const void*)tcliU_floor, .tpb = 512, .expect = UI ";LOP3.LUT=272,IMAD=256,REDUX*=4,SHFL.BFLY=8", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcliU_redux", .kernel = (const void*)tcliU_redux, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=68,IMAD=64,REDUX*=1", .warps = "1;8", .iters = 2048, .until = 2},
     {.name = "tcliU_reduce", .kernel = (const void*)tcliU_reduce, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=73,IMAD=64,SHFL.BFLY=5", .warps = "1;8", .iters = 2048, .until = 2},
-    {.name = "tcliU_floor", .kernel = (const void*)tcliU_floor, .tpb = 512, .expect = UI ";LOP3.LUT=272,IMAD=256,REDUX*=4,SHFL.BFLY=8", .warps = "1;12", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

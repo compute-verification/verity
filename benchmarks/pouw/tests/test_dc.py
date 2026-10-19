@@ -457,8 +457,9 @@ def test_emp_prices_every_loop_on_ds90_facets(tmp_path):
 
 def test_uniform_write_census_is_idempotent(tmp_path):
     """--write replaces UNI's measured lines in place and the UP row, puts UP in the current vector's rows once, and
-    census.py --write keeps both. The data sheet's UNI,DS_issue (A2u) and DC-90-ri's refit of JI90_0 aren't uniform.py's
-    and stay; JI90_0's new line keeps its `until`, so the refit still replaces it on DC-90-ri."""
+    census.py --write keeps both. The data sheet's UNI,DS_issue (A2u), in census.csv or in its own census/DS-90.csv, and
+    DC-90-ri's refit of JI90_0 aren't uniform.py's and stay; JI90_0's new line keeps its `until`, so the refit still
+    replaces it on DC-90-ri."""
     import shutil
     un, census = _load("uniform"), _load("census")
     dev = tmp_path / "sm_90"
@@ -467,26 +468,32 @@ def test_uniform_write_census_is_idempotent(tmp_path):
            "rows": {"UP": {"c": 1.96}, "issue": {"c": 1.0, "limit": 1.2, "set_by": "uh_64i"},
                     "JI90_0": {"c": 0.5}, "A": {"c": 0.0, "limit": 0.9, "set_by": "uh_64i"}}}
     before = (dev / "census.csv").read_text().splitlines()
+    old = [ln.split(",") for ln in before if ln.startswith("UNI,")]
+    until = next(f[7] for f in old if f[1] == "JI90_0" and not f[6])
+    others = [",".join(f) for f in old if f[6] or f[1].startswith("DS_")]
+    assert until and "UNI,JI90_0,,,0.0001862,,DC-90-ri,,r20261017-204843-4803" in others
     for _ in range(2):
         un.write_census(dev, res, "r20261017-000000-abcd")
     cen = (dev / "census.csv").read_text().splitlines()
-    assert [ln for ln in cen if ln.startswith("UNI,")] == [
-        "UNI,UP,,,1.96,,,,r20261017-000000-abcd", "UNI,issue,,,1,,,,r20261017-000000-abcd",
-        "UNI,JI90_0,,,0.5,,,DC-90,r20261017-000000-abcd", "UNI,JI90_0,,,0.0001862,,DC-90-ri,,r20261017-204843-4803",
-        "UNI,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms"]
+    uni = [ln for ln in cen if ln.startswith("UNI,")]
+    assert uni == ["UNI,UP,,,1.96,,,,r20261017-000000-abcd", "UNI,issue,,,1,,,,r20261017-000000-abcd",
+                   f"UNI,JI90_0,,,0.5,,,{until},r20261017-000000-abcd", *others]
+    sheet = [dev / "census.csv", dev / "census" / "DS-90.csv"]
+    assert any(ln.startswith("UNI,DS_issue,") for p in sheet if p.exists() for ln in p.read_text().splitlines())
     first = next(i for i, ln in enumerate(before) if ln.startswith("UNI,"))
     assert cen[:first] == before[:first] and cen[first].startswith("UNI,UP,")
     assert sum(ln.startswith("UP,") for ln in (dev / "rows.csv").read_text().splitlines()) == 1
     import tomllib
     assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
-    assert sum(ln["kind"] == "UNI" for ln in census.kept(dev, "census.csv")) == 5
+    assert sum(ln["kind"] == "UNI" for ln in census.kept(dev, "census.csv")) == len(uni)
     assert sum(r["row"] == "UP" for r in census.kept(dev, "rows.csv")) == 1
 
 
 def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     """census.py --write replaces its own rows and drops a joint row its hull no longer has (JPA90_7 here), and keeps
-    every other line and row in the directory: the data sheet's DS_* and TMAB as well as uniform.py's UNI and UP. A row
-    whose old description extends the generated one keeps its note."""
+    every other line and row in the directory: a data-sheet line in census.csv (written here where the data sheet has
+    its own census/DS-90.csv), TMAB, and uniform.py's UNI and UP. A row whose old description extends the generated one
+    keeps its note."""
     import shutil
     census = _load("census")
     dev = tmp_path / "sm_90"
@@ -494,10 +501,16 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
     with open(dev / "census.csv", newline="") as f:
         before = list(csv.DictReader(f))
+    sheet = {**before[0], "kind": "ALU", "row": "DS_alu", "rate": "", "noise": "", "cycles": "2", "u": "", "since": "",
+             "until": "", "runs": "note:20261017T1818Z-draft-axioms"}
+    if sheet not in before:
+        with open(dev / "census.csv", "a", newline="") as f:
+            csv.DictWriter(f, fieldnames=list(before[0]), lineterminator="\n").writerow(sheet)
+        before.append(sheet)
     with open(dev / "rows.csv", newline="") as f:
         rows_before = list(csv.DictReader(f))
     foreign = [ln for ln in before if ln["kind"] == "UNI" or not census.OWN_ROW.fullmatch(ln["row"])]
-    assert {ln["row"] for ln in foreign} >= {"DS_issue", "DS_tensor"}
+    assert sheet in foreign and any(ln["kind"] == "UNI" for ln in foreign)
     gen_rows = census.census(census.Device("sm90", [run]))[1]
     gen_m = next(r for r in gen_rows if r["row"] == "M")["description"]
     stale = {**before[0], "row": "JPA90_7", "cycles": "1", "rate": "", "noise": "", "u": ""}
