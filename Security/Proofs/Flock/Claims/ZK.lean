@@ -184,11 +184,14 @@ import Proofs.Flock.Claims.ZK.Stop
   stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
   (`LeanRelease.release_eq_abort_of_liveRefine`). The frame's coin refusal reads no tape (`LeanRelease.refusesCoins_tape`),
   and `RefSession.withStops` is a session with the stop where a rule of the coins says, keeping the session's six Props;
-  where that rule is the frame's refusals wherever the openings pass (`LeanRelease.StopsAt`), its `StopRefine` is proved
-  (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and `FillRefine` follow from the transport's refusal of a
-  failed opening and the per-round byte equality at the worker's and the stand-in rounds
+  where that rule is the frame's refusals up to the protocol's last coin wherever the openings pass
+  (`LeanRelease.StopsAt`), its `StopRefine` is proved (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and
+  `FillRefine` follow from the transport's refusal of a failed opening, the frame's end past the last coin
+  (`LeanRelease.EndsAt`) and the per-round byte equality at the worker's and the stand-in rounds
   (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of
-  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`).
+  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`). A transport
+  that reads the history only through the decoded coins (`LeanRelease.ReadsCoins`) gives the rule and `StopsAt`
+  (`LeanRelease.stopsAt_of_readsCoins`).
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
