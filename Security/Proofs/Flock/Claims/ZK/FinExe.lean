@@ -1892,6 +1892,122 @@ theorem ligeritoCut_open0 (resp : ℕ → Msg) (h : ByteArray → ByteArray) (ms
     omega
   exact key
 
+/-- **The session's rep opens level 0 at round `k₀ + 8` of its Ligerito**: answered by the replies from a fresh
+transcript, after the PIOP's `piopZk` rounds (`ligeritoPZk_opens`); the replay, constraints and inner proof leave the
+Ligerito proof as it is. -/
+theorem repPZk_open0 (resp : ℕ → Msg) (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (tb : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
+    (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0)
+    {t t' : _root_.Flock.Transcript} (ht : t.k = 0) {l l' : Array Msg} {P : _root_.Flock.Zk.ZkProof}
+    (h : ((repPZk (asksS resp) (_root_.Flock.Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra
+      lanePad salt nonce prior words).run t).go l = (.ok (P, t'), l')) :
+    P.proof.ligerito.initialProof = openP st.merkle cm0 (sch.levels.getD 0 default)
+      (_root_.Flock.positions (sch.levels.getD 0 default) ((Array.range (sch.levels.getD 0 default).q).map
+        (coinOf (resp (l.size + (piopZk st extras + sch.k0 + 8)))))) := by
+  obtain ⟨l₁, hl₁, hz⟩ := zerocheckPZk_go resp hm st.digest (flat cm0.cap) ic.root
+    (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) pads.h tr t l
+  unfold repPZk at h
+  rw [bind_go hz] at h
+  dsimp only at h
+  have h' := h
+  rw [StateT.run_bind] at h'
+  obtain ⟨_, _, h₁, -⟩ := JsonRT.go_bind_ok h'
+  obtain ⟨full, hfold⟩ := lincheckPZk_fold resp _ _ _ _ _ _ _ _ h₁
+  obtain ⟨l₂, hl₂, hl⟩ := lincheckPZk_go resp st.fold st.m (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) pads.h
+    tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) full _ l₁ hfold
+  rw [bind_go hl] at h
+  dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨u, t₃⟩, l₃', hk, h⟩ := JsonRT.go_bind_ok h
+  obtain ⟨ht₃, hl₃⟩ := rankCheckP_go hk
+  subst t₃ l₃'
+  obtain ⟨l₃, hl₃, hrs⟩ := ringSwitchP_go resp tr (_root_.Flock.abcClaims st.m st.kLog
+    (Zc.out st.m (Zc.coinsAt resp l.size) tr)
+    (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
+      extras) (by simp [_root_.Flock.abcClaims]) _ l₂
+  rw [bind_go hrs] at h
+  dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨⟨lg, zl, rec⟩, t₄⟩, l₄, hlg, h⟩ := JsonRT.go_bind_ok h
+  have hsz : (_root_.Flock.abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
+    (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
+      extras).size = 2 + extras.size := by simp [_root_.Flock.abcClaims, Nat.add_comm]
+  have e3 : l₃.size = l.size + piopZk st extras := by unfold piopZk; omega
+  have h0 := (ligeritoPZk_opens resp hsh st.merkle sch _ cm0 _ _ _ _ rep tPad extra lanePad salt nonce l.size hn hk0 hL
+    hq (by rw [Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, ht, hsz, e3]; unfold piopZk; omega) hlg).1
+  rw [bind_go (show ((get : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Transcript).run t₄).go l₄ =
+    (.ok (t₄, t₄), l₄) from rfl)] at h
+  dsimp only at h
+  obtain ⟨⟨rp, x⟩, -, h⟩ := liftV_bind_ok h
+  dsimp only at h
+  obtain ⟨lgc, -, h⟩ := liftV_bind_ok h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨inner, t₅⟩, l₅, -, h⟩ := JsonRT.go_bind_ok h
+  obtain ⟨h5, -⟩ := Prod.mk.inj h
+  obtain ⟨hP, -⟩ := Prod.mk.inj (Except.ok.inj h5)
+  subst hP
+  refine h0.trans ?_
+  unfold posAt cfOf qOff
+  rw [if_pos (by omega)]
+  congr 5
+  rw [Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, ht, hsz]
+  unfold piopZk
+  omega
+
+/-- A source the cut's PIOP reads as `PiopSrc` reads only its masked values and switched vectors, which `eraseS`
+keeps. -/
+theorem piopSrc_of_eraseS {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {st : _root_.Flock.Setup}
+    {lay : _root_.Flock.Zk.PadLayout} {h : Array _root_.Flock.F128} {tr : FlockComplete.Trace} {s : RepSrc}
+    {extras : Array _root_.Flock.Claim} {L : ℕ} (hv : PiopSrc coin n st lay h tr (eraseS s) extras L) :
+    PiopSrc coin n st lay h tr s extras L :=
+  ⟨hv.r1ab, hv.r1c, hv.ml0, hv.ml1, hv.fa, hv.fb, hv.fc, hv.lc, hv.zp, hv.sv⟩
+
+/-- **The cut's rep opens level 0 at round `k₀ + 8` of its Ligerito**, as the session's (`repPZk_open0`): answered by
+`asksCut` from a fresh transcript at a source at the cut's coins (`PiopSrc`), its PIOP is the session's
+(`piopCut_alike`), so takes `piopZk` rounds (`piopPZk_counts` at `asksS`), and its Ligerito opens its level-0
+commitment `cm0` there (`ligeritoCut_open0`). -/
+theorem repCut_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
+    (hsh : ByteArray → ByteArray) (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (ic : InnerCommit) (src : RepSrc)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (h : Array _root_.Flock.F128) (tr : FlockComplete.Trace)
+    (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hq : (sch.levels.getD 0 default).q ≠ 0)
+    {t t' : _root_.Flock.Transcript} (ht : t.k = 0) {l l' : Array Msg}
+    (hv : PiopSrc coin n st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) h tr src extras l.size)
+    {P : _root_.Flock.Zk.ZkProof}
+    (hrun : ((repCut (asksCut coin n) (_root_.Flock.Hashes.ofSha512 hsh) st sch rep dom cm0 extras ic src prior
+      words).run t).go l = (.ok (P, t'), l')) :
+    P.proof.ligerito.initialProof = openP st.merkle cm0 (sch.levels.getD 0 default)
+      (_root_.Flock.positions (sch.levels.getD 0 default) ((Array.range (sch.levels.getD 0 default).q).map
+        (coinOf (resp (l.size + (piopZk st extras + sch.k0 + 8)))))) := by
+  unfold repCut at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨⟨zp, lp, ss, T, sws⟩, t₃⟩, l₃, h1, h2⟩ := JsonRT.go_bind_ok hrun
+  rw [(piopCut_alike coin n st _ h tr src _ _ extras prior words hm t l hv).eq] at h1
+  obtain ⟨hl₃, ht₃⟩ := piopPZk_counts resp st _ h tr _ _ extras prior words hm
+    (piopPZk_cut (n := n) hr _ _ _ _ _ _ _ _ _ t l _ l₃ h1)
+  dsimp only at h2
+  rw [StateT.run_bind] at h2
+  obtain ⟨⟨⟨lg, zl, rec⟩, t₄⟩, l₄, h3, h4⟩ := JsonRT.go_bind_ok h2
+  have h0 := ligeritoCut_open0 resp hsh st.merkle sch _ cm0 _ _ src l.size hn hk0 hq
+    (by rw [hl₃, ht₃, ht]; omega) (ligeritoCut_cut (n := n) hr _ _ _ _ _ _ _ _ t₃ l₃ _ l₄ h3)
+  dsimp only at h4
+  rw [bind_go (show ((get : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Transcript).run t₄).go l₄ =
+    (.ok (t₄, t₄), l₄) from rfl)] at h4
+  obtain ⟨⟨rp, x⟩, -, h4⟩ := liftV_bind_ok h4
+  dsimp only at h4
+  obtain ⟨lgc, -, h4⟩ := liftV_bind_ok h4
+  rw [StateT.run_bind] at h4
+  obtain ⟨⟨inner, t₅⟩, l₅, -, h4⟩ := JsonRT.go_bind_ok h4
+  obtain ⟨h5, -⟩ := Prod.mk.inj h4
+  obtain ⟨hP, -⟩ := Prod.mk.inj (Except.ok.inj h5)
+  subst hP
+  refine h0.trans ?_
+  rw [ht₃, ht, Nat.zero_add]
+
 end FinRep
 
 end Masked
