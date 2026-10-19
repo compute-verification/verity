@@ -79,8 +79,12 @@ theorem keyedLayer_binding (n : ℕ) : (keyedLayer n).BindingAt 0 := by
   obtain ⟨_, i, hi⟩ := h
   exact hi (keyedLayer_committed n x w i).symm
 
-theorem keyedLayer_fork (n : ℕ) (w : Fin (n + 1)) :
-    prob (fun p : Paths Bool (n + 1) × Paths Bool (n + 1) => (keyedLayer n).Forked w p.1 p.2) ≤ 0 := by
+/-- The fork form at `δ_fork` in every round: `BindingOfFork`'s right side at most `δ_fork`. -/
+def ForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ) : Prop :=
+  ∀ w, prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) ≤ δfork
+
+theorem keyedLayer_fork (n : ℕ) : ForkAt (keyedLayer n) 0 := by
+  intro w
   refine le_of_eq (prob_zero fun p h => ?_)
   obtain ⟨_, _, i, hi⟩ := h
   exact hi rfl
@@ -98,8 +102,7 @@ theorem keyedLayer_pins (n : ℕ) : (keyedLayer n).Pins := by
 `δ_bind = 0` and its fork form at `δ_fork = 0`, proof soundness at `δ_ZK = 0` and pinning, with
 `S·(δ_bind + n_π·δ_ZK)` and `S·(√δ_fork + n_π·δ_ZK)` both within `2^-41`. -/
 theorem keyedLayer_meets_budget (n : ℕ) :
-    ∃ δbind δfork δzk : ℝ, (keyedLayer n).BindingAt δbind ∧
-      (∀ w, prob (fun p : Paths Bool (n + 1) × Paths Bool (n + 1) => (keyedLayer n).Forked w p.1 p.2) ≤ δfork) ∧
+    ∃ δbind δfork δzk : ℝ, (keyedLayer n).BindingAt δbind ∧ ForkAt (keyedLayer n) δfork ∧
       (keyedLayer n).SoundAt δzk ∧ (keyedLayer n).Pins ∧
       ((n + 1 : ℕ) : ℝ) * (δbind + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧
       ((n + 1 : ℕ) : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 := by
@@ -111,8 +114,7 @@ theorem keyedLayer_meets_budget (n : ℕ) :
 
 /-- `keyedLayer_meets_budget` at the sm_120 and DC headlines' `S = 48,000`. -/
 theorem keyedLayer_meets_budget_dc :
-    ∃ δbind δfork δzk : ℝ, (keyedLayer 47999).BindingAt δbind ∧
-      (∀ w, prob (fun p : Paths Bool 48000 × Paths Bool 48000 => (keyedLayer 47999).Forked w p.1 p.2) ≤ δfork) ∧
+    ∃ δbind δfork δzk : ℝ, (keyedLayer 47999).BindingAt δbind ∧ ForkAt (keyedLayer 47999) δfork ∧
       (keyedLayer 47999).SoundAt δzk ∧ (keyedLayer 47999).Pins ∧
       (48000 : ℝ) * (δbind + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 ∧
       (48000 : ℝ) * (Real.sqrt δfork + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 := by

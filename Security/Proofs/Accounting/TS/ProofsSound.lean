@@ -47,6 +47,6 @@ theorem ProofsSoundOfPinned : Accounting.Guarantees.TS.ProofsSoundOfPinned := by
     have hU : ∀ w i, ¬ pf.Unsound x w i := fun w i h =>
       hE ⟨w, Finset.mem_univ _, Or.inr ⟨i, Finset.mem_univ _, h⟩⟩
     have hrel := rel_committed pf x (hOf.1 x hx) hM hU
-    exact ⟨hOf.2 x hrel, hRF x hx (hPin _ hrel)⟩
+    exact ⟨hOf.2 x hrel, hRF x hx (hPin x _ hrel)⟩
 
 end Accounting.SecurityProofs.TS
