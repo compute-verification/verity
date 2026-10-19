@@ -778,6 +778,88 @@ theorem eraseS_srcV {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
   rw [dite_eq_left hr, dite_eq_left hr]
   exact eraseS_upd _ _ _ _ _ _ rfl rfl rfl rfl rfl
 
+/-- **`maskRankOk_compose`'s converse**: where the plan's points `pts`, `A`'s, have full rank over the words `ws` read
+with `getD`, the executable's rank check passes on `A`. -/
+theorem maskRankOk_of_composed {A : Array (List _root_.Flock.F128)} {ws : List ℕ} {k : ℕ}
+    {pts : Fin k → List _root_.Flock.F128} (hk : A.size = k) (hp : ∀ i : Fin k, pts i = A[i.val]!)
+    (h : Composed.MaskRankOk pts fun x : Fin ws.length => ws.getD x.val 0) :
+    FlockComplete.MaskRank.maskRankOk A ws = true := by
+  subst hk
+  unfold FlockComplete.MaskRank.maskRankOk
+  simp only [decide_eq_true_eq]
+  intro a
+  obtain ⟨u, hu⟩ := h fun i => FlockLevel3.GF128.of (a i)
+  refine ⟨fun x => decide (u x = 1), fun i => ?_⟩
+  apply (show Function.Injective FlockLevel3.GF128.of from fun _ _ h => h)
+  rw [FlockComplete.MaskRank.of_sumSel, ← congrFun hu i]
+  refine Finset.sum_congr rfl fun x _ => ?_
+  dsimp only
+  rw [hp i, getElem!_pos A i.val i.isLt, List.getD_eq_getElem _ _ x.isLt]
+  rcases (by decide : ∀ z : ZMod 2, z = 0 ∨ z = 1) (u x) with h0 | h1
+  · rw [h0]
+    simp
+  · rw [h1]
+    simp
+
+/-- **Full rank survives dropping points**: the rank check passing on `A ++ B` passes on `A`. -/
+theorem maskRankOk_of_append {A B : Array (List _root_.Flock.F128)} {ws : List ℕ}
+    (h : FlockComplete.MaskRank.maskRankOk (A ++ B) ws = true) : FlockComplete.MaskRank.maskRankOk A ws = true := by
+  unfold FlockComplete.MaskRank.maskRankOk at h ⊢
+  simp only [decide_eq_true_eq] at h ⊢
+  intro a
+  obtain ⟨f, hf⟩ := h fun i => if hi : i.val < A.size then a ⟨i.val, hi⟩ else 0
+  refine ⟨f, fun i => ?_⟩
+  have e := hf ⟨i.val, by rw [Array.size_append]; omega⟩
+  rw [dite_eq_left i.isLt] at e
+  refine Eq.trans ?_ e
+  congr 1
+  funext j
+  simp only [Fin.getElem_fin]
+  rw [Array.getElem_append_left i.isLt]
+
+/-- **Where every table admits, no refusal shows** (`Refused`): every outer coin, read by the plan at its slot
+(`pointReads_czExe`), is not `1`; every `β` and pair, read at their rounds (`coinReads_czExe`), passes; and every rank
+check passes, the plan's points being the executable's (`pointsOf_reads`) and full rank of all four giving full rank of
+rep `0`'s two (`maskRankOk_of_composed`, `maskRankOk_of_append`). -/
+theorem not_refused_of_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
+    (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (n : ℕ) : ¬ Refused x c n := by
+  have hJ : jOf x = (stsOf x).size := by
+    unfold jOf
+    exact ite_eq_left_of_eq_true _ _ (eq_true hx)
+  rintro (⟨j, hj, r, hr, -, e, he, h1⟩ | ⟨j, hj, r, hr, ⟨-, -, -, -, hbad⟩ | ⟨-, hρ⟩ | ⟨-, hβ⟩⟩)
+  · have hjJ : j < jOf x := hJ ▸ hj
+    rw [getElem!_pos (stsOf x) j hj] at he
+    refine (hA ⟨j, hjJ⟩).2.2.2 ⟨r, hr⟩ _ (List.mem_ofFn.2 ⟨⟨e, he⟩, ?_⟩) h1
+    rw [(pointReads_czExe PE x c ⟨j, hjJ⟩ ⟨r, hr⟩).2.2]
+  · have hjJ : j < jOf x := hJ ▸ hj
+    obtain ⟨s, spec, hsx⟩ := setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+    have hfull : FlockComplete.MaskRank.maskRankOk (ptsOpen c (stsOf x)[j] (2 * j) ++
+        ptsOpen c (stsOf x)[j] (2 * j + 1)) (Composed.maskWordsOf (stsOf x)[j]) = true := by
+      refine maskRankOk_of_composed (k := _root_.Flock.Zk.RANK_POINTS) (by rfl) (fun k => ?_) ((hA ⟨j, hjJ⟩).2.1)
+      refine pointsOf_reads ((czExe PE x c ⟨j, hjJ⟩).rest :
+          Composed.RestOf (zkTab x ⟨j, hjJ⟩).table (stAt x ⟨j, hjJ⟩))
+        (fun r n e => slotAt c (repBase x (2 * j + r) + n) e)
+        (fun r => (pointReads_czExe PE x c ⟨j, hjJ⟩ r).1) (fun r => (pointReads_czExe PE x c ⟨j, hjJ⟩ r).2.1)
+        (fun r => ?_) k
+      rw [(pointReads_czExe PE x c ⟨j, hjJ⟩ r).2.2]
+      funext i
+      unfold outerAt slotAt
+      rw [outerSlot_eq hsx]
+    unfold RankBad at hbad
+    rw [getElem!_pos (stsOf x) j hj] at hbad
+    rcases (by omega : r = 0 ∨ r = 1) with rfl | rfl
+    · rw [ite_eq_right_of_eq_false _ _ (eq_false (by norm_num)), Array.empty_append, Nat.add_zero,
+        maskRankOk_of_append hfull] at hbad
+      cases hbad
+    · rw [ite_eq_left_of_eq_true _ _ (eq_true rfl), hfull] at hbad
+      cases hbad
+  · have hjJ : j < jOf x := hJ ▸ hj
+    rw [← (coinReads_czExe PE x c ⟨j, hjJ⟩ ⟨r, hr⟩).2, (hA ⟨j, hjJ⟩).2.2.1 ⟨r, hr⟩] at hρ
+    cases hρ
+  · have hjJ : j < jOf x := hJ ▸ hj
+    rw [← (coinReads_czExe PE x c ⟨j, hjJ⟩ ⟨r, hr⟩).1, (hA ⟨j, hjJ⟩).1 ⟨r, hr⟩] at hβ
+    cases hβ
+
 end Masked
 
 end Claims.ZKMal
