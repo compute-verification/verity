@@ -366,8 +366,8 @@ class Row:
     def target_family(self, *extra: str, out: str) -> tuple[int, str]:
         """The target-family preflight (``target-family``): the row id's device class, the declared target and the device
         (or the Build that came out) are one family.  Its line goes to row.log."""
-        rc, line = self.output(self.cli("target-family", "--row", self.row, "--workload", self.wl, "--stages", self.stages, *extra,
-                                        "--out", out))
+        rc, line = self.output(self.cli("target-family", "--row", self.row, "--workload", self.wl, "--stages", self.stages,
+                                        "--match-phase", self.cm.match_phase, *extra, "--out", out))
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
         return rc, line
