@@ -344,14 +344,15 @@ theorem lead_of_dead (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {β : Type
 
 /-- **No accepted live outcome below**: everything the table reaches is a dead branch's, answered with `nul`. -/
 theorem lead_noAcc (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {β : Type} {pL : β → Prop}
-    {pg : List OutT → Prop} {L : Game β} {gs : Fin 1 → Fin 2 → Game P} (d : Sim pL pg L (posOf out caps gs))
-    (hA : Sim.All (fun b _ => pL b) (DeadAt out) d) (s : Strategy L) (hno : ∀ b, Lock.Reach L s b → ¬ pL b)
+    {pg : List OutT → Prop} {L : Game β} {gs : Fin 1 → Fin 2 → Game P} {m : ℕ}
+    {G : Fin 1 → (Fin 2 → Fin m → 𝔽) → Fin 2 → Game P} (d : Sim pL pg L (posOf out caps gs))
+    (hA : Sim.All (fun b _ => pL b) (DeadAt out G) d) (s : Strategy L) (hno : ∀ b, Lock.Reach L s b → ¬ pL b)
     {n : ℕ} :
     Lock.Lead (KgJ out 0 (caps 0)) Dead n (gs 0 0) (gs 0 1)
       (unB (tabG out caps gs 0) ((Sim.mapDead (answerWith nul) d).strategy s)) :=
   .dead fun c hc => by
     rcases reach_mapDead (answerWith nul) d hA s [c] (reach_unB _ _ c hc) with
-      ⟨b, hb, hp⟩ | ⟨_, σ, ⟨caps', gs', hinh, rfl⟩, hr⟩
+      ⟨b, hb, hp⟩ | ⟨_, σ, ⟨caps', _, gs', hinh, _, rfl⟩, hr⟩
     · exact absurd hp (hno b hb)
     · exact dead_of_outN out nul hnul (reach_answerWith nul (allInh_posOf out caps' hinh) σ [c] hr)
 
@@ -466,6 +467,7 @@ variable {P OutT Cp Op : Type} [Nonempty Op] {mPts : ℕ} (out : Fin 1 → Cp �
   (dg : ByteArray → ByteArray) (dec : Fin 1 → ℕ → ByteArray → List Msg) (one : Fin 1 → ℕ → Bool)
   (fin : Fin 1 → Fin 2 → Array ByteArray → List Msg) (caps : Fin 1 → Cp) (rootB : Array ByteArray)
   (pts : Fin 2 → Fin mPts → 𝔽) (nul : Op) {Dead : OutT → Prop}
+  {G : Fin 1 → (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game P}
 
 /-- **The live strategy's next `r₀` rounds are rep 0's, and the rest rep 1's**: it does not stop, nor run out of
 rounds, before rep 0's `r₀` are in. -/
@@ -509,7 +511,7 @@ theorem lead_zero (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) (hfin : ∀ p
     (rs : Fin 1 → Fin 2 → List Flock.Round) (gs : Fin 1 → Fin 2 → Game P) (h : ∀ j r, AllInh (gs j r))
     (hI : InvJ out ok pL opn caps ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs))
     (Pr : Strategy ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts))) (hS : SchedL dg rootB pts n rs 0 Pr)
-    (hA : Sim.All (fun b _ => pL b) (DeadAt out)
+    (hA : Sim.All (fun b _ => pL b) (DeadAt out G)
       (simRJ out ok dflt pL opn dg dec one fin caps rootB pts n rs gs h hI)) :
     Lock.Lead (KgJ out 0 (caps 0)) Dead 0 (gs 0 0) (gs 0 1) (unB (tabG out caps gs 0)
       ((Sim.mapDead (answerWith nul) (simRJ out ok dflt pL opn dg dec one fin caps rootB pts n rs gs h hI)).strategy
@@ -532,13 +534,14 @@ theorem lead_coinJ (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {n : ℕ} {r
         (restJ dec one fin (addRoundJ rs 0 0 (roundOf dg b k c))) →
       Sim pL (AllOk ok dflt) (roundL dg rootB pts n rs 0 0 b k c) (posOf out caps gs'))
     (τ : Strategy (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs 0 0 b k))) {r' : ℕ}
-    (hnext : ∀ c (g : Game P) h' hI', Sim.All (fun b _ => pL b) (DeadAt out) (next c (upd (twoReps g₁ g₂) 0 0 g) h' hI') →
+    (hnext : ∀ c (g : Game P) h' hI',
+      Sim.All (fun b _ => pL b) (DeadAt out G) (next c (upd (twoReps g₁ g₂) 0 0 g) h' hI') →
       Lock.Lead (KgJ out 0 (caps 0)) Dead r' g g₂ (unB (tabG out caps (upd (twoReps g₁ g₂) 0 0 g) 0)
         ((Sim.mapDead (answerWith nul) (next c (upd (twoReps g₁ g₂) 0 0 g) h' hI')).strategy (τ c)))) :
     ∀ (g' : Game P) (hg : AllInh g')
       (hI : InvJ out ok pL opn caps (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs 0 0 b k))
         (upd (twoReps g₁ g₂) 0 0 g') (upd (restJ dec one fin rs) 0 0 (midJ dec one fin rs 0 0))),
-      Sim.All (fun b _ => pL b) (DeadAt out)
+      Sim.All (fun b _ => pL b) (DeadAt out G)
         (coinJ out ok dflt pL opn dg dec one fin caps rootB pts n rs 0 0 b k (twoReps g₁ g₂) h next g' hg hI) →
       Lock.Lead (KgJ out 0 (caps 0)) Dead (r' + 1) g' g₂ (unB (tabG out caps (upd (twoReps g₁ g₂) 0 0 g') 0)
         ((Sim.mapDead (answerWith nul)
@@ -576,10 +579,11 @@ theorem lead_round (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) {n : ℕ} {r
         (restJ dec one fin (addRoundJ rs 0 0 (roundOf dg b k c))) →
       Sim pL (AllOk ok dflt) (roundL dg rootB pts n rs 0 0 b k c) (posOf out caps gs'))
     (τ : Strategy (.coin (Fin k → 𝔽) (roundL dg rootB pts n rs 0 0 b k))) {r' : ℕ}
-    (hnext : ∀ c (g : Game P) h' hI', Sim.All (fun b _ => pL b) (DeadAt out) (next c (upd (twoReps g₁ g₂) 0 0 g) h' hI') →
+    (hnext : ∀ c (g : Game P) h' hI',
+      Sim.All (fun b _ => pL b) (DeadAt out G) (next c (upd (twoReps g₁ g₂) 0 0 g) h' hI') →
       Lock.Lead (KgJ out 0 (caps 0)) Dead r' g g₂ (unB (tabG out caps (upd (twoReps g₁ g₂) 0 0 g) 0)
         ((Sim.mapDead (answerWith nul) (next c (upd (twoReps g₁ g₂) 0 0 g) h' hI')).strategy (τ c))))
-    (hA : Sim.All (fun b _ => pL b) (DeadAt out)
+    (hA : Sim.All (fun b _ => pL b) (DeadAt out G)
       (roundJ out ok dflt pL opn dg dec one fin caps rootB pts n rs 0 0 b k (twoReps g₁ g₂) h hI next)) :
     Lock.Lead (KgJ out 0 (caps 0)) Dead (r' + 1) g₁ g₂ (unB (tabG out caps (twoReps g₁ g₂) 0)
       ((Sim.mapDead (answerWith nul)
@@ -606,7 +610,7 @@ theorem lead_simRJ (hnul : ∀ cap pend, Dead (out 0 cap pend nul)) (hfin : ∀ 
     ∀ (n : ℕ) (rs : Fin 1 → Fin 2 → List Flock.Round) (gs : Fin 1 → Fin 2 → Game P) (h : ∀ j r, AllInh (gs j r))
       (hI : InvJ out ok pL opn caps ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts)) gs (restJ dec one fin rs))
       (Pr : Strategy ((liveRoundsJ dg 1 n rs).bind (KLJ rootB pts))) (r₀ : ℕ), SchedL dg rootB pts n rs r₀ Pr →
-      Sim.All (fun b _ => pL b) (DeadAt out) (simRJ out ok dflt pL opn dg dec one fin caps rootB pts n rs gs h hI) →
+      Sim.All (fun b _ => pL b) (DeadAt out G) (simRJ out ok dflt pL opn dg dec one fin caps rootB pts n rs gs h hI) →
       Lock.Lead (KgJ out 0 (caps 0)) Dead r₀ (gs 0 0) (gs 0 1) (unB (tabG out caps gs 0)
         ((Sim.mapDead (answerWith nul) (simRJ out ok dflt pL opn dg dec one fin caps rootB pts n rs gs h hI)).strategy
           Pr)) := by
