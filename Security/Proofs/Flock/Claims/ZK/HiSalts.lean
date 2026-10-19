@@ -12,9 +12,10 @@ salts.
 * `hiSalt_exe`: at the executable's layout, the salts the model hands table `j`'s rep `r` (`Base`'s last field, as
   `Coined.randOf` and the view read it) are, at every level `l ≥ 1` and position `p` of its tree, the masked prover's
   tape's `salt j r l p` (`exeTape`); `hiSalt_exe_eq` as functions, empty off the schedule.
-* `ofSalts`: the Ligerito prover of a prover `Pc` that reads salts by level and position, reading them at `hiIdx`;
-  `ofSalts_exe`: at the executable's layout it sends what `Pc` sends on the tape's salts, once `Pc` reads only the
-  schedule's levels ≥ 1 and their positions (`SaltsOn`).
+* `ofSalts`: the Ligerito prover of a prover `Pc` that reads salts by level and position, reading them at `hiIdx`.
+  At the executable's layout it sends what `Pc` sends on the tape's salts on the schedule, empty off it
+  (`ofSalts_exe_on`), so on the tape's salts once `Pc` reads only the schedule's levels ≥ 1 and their positions
+  (`ofSalts_exe`, `SaltsOn`).
 -/
 
 namespace Claims.ZKMal
@@ -134,6 +135,17 @@ def SaltsOn (Pc : SaltProver) : Prop :=
 def ofSalts (Pc : SaltProver) : Composed.LigProver :=
   fun Tz st c r L y hi => Pc Tz st c r L y (hiSalt Tz.sch.levels hi)
 
+/-- **At the executable's layout the later rounds' prover reads the tape's salts on the schedule**: `ofSalts Pc` on table
+`j`'s rep `r` salts sends what `Pc` sends on the masked prover's tape's (`exeTape`'s `salt j r`) at the schedule's levels
+≥ 1 and their positions, empty off them. -/
+theorem ofSalts_exe_on (Pc : SaltProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
+    (j : Fin (jOf x)) (c : Composed.CoinsZK (Composed.RestOf (zkTab x j).table (stAt x j))) (r : Fin 2) (L : ℕ)
+    (y : Fin L → 𝕂) :
+    ofSalts Pc (zkTab x j).table (stAt x j) c r L y (hiTape (ofSalts Pc) x t j r) =
+      Pc (zkTab x j).table (stAt x j) c r L y fun l p =>
+        if HiAt (zkTab x j).table.sch.levels l p then (exeTape t).salt j.val r.val l p else ByteArray.empty :=
+  congrArg (Pc (zkTab x j).table (stAt x j) c r L y) (hiSalt_exe_eq (ofSalts Pc) x t j r)
+
 /-- **At the executable's layout the later rounds' prover reads the tape's salts**: `ofSalts Pc` on table `j`'s rep `r`
 salts sends what `Pc` sends on the masked prover's tape's (`exeTape`'s `salt j r`), once `Pc` reads only the schedule's
 levels ≥ 1 and their positions. -/
@@ -142,9 +154,8 @@ theorem ofSalts_exe (Pc : SaltProver) (hPc : SaltsOn Pc) (x : Msg) (t : Fin Clai
     (y : Fin L → 𝕂) :
     ofSalts Pc (zkTab x j).table (stAt x j) c r L y (hiTape (ofSalts Pc) x t j r) =
       Pc (zkTab x j).table (stAt x j) c r L y ((exeTape t).salt j.val r.val) := by
-  show Pc _ _ c r L y (hiSalt _ (hiTape (ofSalts Pc) x t j r)) = _
-  refine hPc _ _ c r L y _ _ fun l p h => ?_
-  exact hiSalt_exe (ofSalts Pc) x t j r h
+  rw [ofSalts_exe_on]
+  exact hPc _ _ c r L y _ _ fun l p h => if_pos h
 
 end Masked
 
