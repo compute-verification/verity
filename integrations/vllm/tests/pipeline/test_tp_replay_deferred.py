@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import itertools
 import json
+import struct
 import types
 from pathlib import Path
 
@@ -122,6 +123,83 @@ def test_a_ranks_shards_open_against_its_committed_root_and_another_ranks_do_not
     _, wc_full = CPU.open_weights(tmp_path, t1, t1["root"], ck, threads=2)
     assert wc_full["opened"] == 1 and {u["name"] for u in wc_full["unopened"]} == {QKV, "model.layers.0.mlp.down_proj.weight"}, \
         "composed as the whole tensor, a shard is not a tensor of the checkpoint"
+
+
+def _safetensors(path, tensors):
+    """A safetensors file of `tensors` (name -> (safetensors dtype, array))."""
+    hdr, off, blobs = {}, 0, []
+    for name, (dt, a) in tensors.items():
+        b = np.ascontiguousarray(a).tobytes()
+        hdr[name] = {"dtype": dt, "shape": list(a.shape), "data_offsets": [off, off + len(b)]}
+        off += len(b)
+        blobs.append(b)
+    h = json.dumps(hdr).encode()
+    path.write_bytes(struct.pack("<Q", len(h)) + h + b"".join(blobs))
+
+
+def test_a_ranks_deepgemm_linears_and_absorbed_kv_b_open_as_vllm_rewrites_them_at_load(tmp_path):
+    """GLM-5.3's served block-FP8 linears are vLLM's ue8m0 requant of the rank's shard, and MLA's W_UK_T / W_UV the bf16 split of the
+    requantised kv_b_proj (`fp8_ue8m0`).  Composed as the Build's roles name them (its Program fields less the index's wrapper prefix),
+    every registered tensor of the rank opens against the committed root; without the roles the four requantised fields differ from
+    the checkpoint's words and the absorbed two have no checkpoint tensor (GLM-5.3 B1 TP8's rank 0: 978 and 156 of 2275)."""
+    from verity_vllm.check import fp8_ue8m0 as FU
+
+    G, NH, DN, DV, L, Q, rank = 128, 2, 128, 128, 256, 256, 1
+    rng = np.random.default_rng(5)
+
+    def e4m3(n, k):
+        w = rng.integers(0, 256, (n, k), dtype=np.uint8)
+        return np.where((w & 0x7F) == 0x7F, w & 0xF0, w).astype(np.uint8)     # no NaN words
+
+    def scale(n, k):
+        return rng.uniform(1e-4, 3e-3, (n // G, k // G)).astype(np.float32)
+
+    A = "model.layers.0.self_attn"
+    ckt = {f"{A}.q_b_proj.weight": ("F8_E4M3", e4m3(Q, L)), f"{A}.q_b_proj.weight_scale_inv": ("F32", scale(Q, L)),
+           f"{A}.kv_b_proj.weight": ("F8_E4M3", e4m3(NH * (DN + DV), L)), f"{A}.kv_b_proj.weight_scale_inv": ("F32", scale(NH * (DN + DV), L)),
+           "model.norm.weight": ("BF16", rng.integers(0, 1 << 16, (L,), dtype=np.uint16))}
+    ckd = tmp_path / "ck"
+    ckd.mkdir()
+    (ckd / "config.json").write_text(json.dumps({"quantization_config": {"weight_block_size": [G, G]}, "qk_nope_head_dim": DN, "v_head_dim": DV}))
+    _safetensors(ckd / "model.safetensors", ckt)
+
+    def shard(name):
+        a = ckt[name][1]
+        n = a.shape[0] // WORLD
+        return a[rank * n:(rank + 1) * n]
+
+    qw, qs = FU.requant(shard(f"{A}.q_b_proj.weight"), shard(f"{A}.q_b_proj.weight_scale_inv").view(np.uint32), G)
+    kw, ks = FU.requant(shard(f"{A}.kv_b_proj.weight"), shard(f"{A}.kv_b_proj.weight_scale_inv").view(np.uint32), G)
+    served = {f"{A}.q_b_proj.weight": ("float8_e4m3fn", qw), f"{A}.q_b_proj.weight_scale_inv": ("float32", qs),
+              f"{A}.kv_b_proj.weight": ("float8_e4m3fn", kw), f"{A}.kv_b_proj.weight_scale_inv": ("float32", ks),
+              f"{A}.W_UK_T": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UK_T")),
+              f"{A}.W_UV": ("bfloat16", FU.absorbed(kw, ks, G, NH // WORLD, DN, DV, "W_UV")),
+              "model.norm.weight": ("bfloat16", ckt["model.norm.weight"][1])}
+    names, roots = [], []
+    for name, (dt, a) in served.items():
+        raw = np.ascontiguousarray(a).reshape(-1).view(np.uint8)
+        names.append([name, dt, list(a.shape), int(raw.size)])
+        roots.append(CPU.tensor_root(raw, CHUNK))
+    geo = bytes(32)
+    tree = {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
+            "chunk": CHUNK, "geo_digest": geo.hex(), "extra": {}}
+
+    pre = "inner.model."
+    wr = {f"{pre}{A}.q_b_proj.weight": {"role": "fp8_w_requant_ue8m0"}, f"{pre}{A}.q_b_proj.weight_scale_inv": {"role": "fp8_ws_requant_ue8m0"},
+          f"{pre}{A}.W_UK_T": {"role": "mla.absorb"}, f"{pre}{A}.W_UV": {"role": "mla.absorb"}, f"{pre}model.norm.weight": {"role": "rmsnorm.weight"}}
+    build = tmp_path / "build" / "rank1" / "build_request_LP4_T1"
+    build.mkdir(parents=True)
+    (build / "derive-report.json").write_text(json.dumps({"provenance": {"weight_roles": wr}}))
+    roles = TPR.registered_roles(types.SimpleNamespace(loaded={"r0": {"dir": str(build)}}, index=types.SimpleNamespace(prefix=pre)))
+    assert set(roles) == set(served) - {f"{A}.kv_b_proj.weight", f"{A}.kv_b_proj.weight_scale_inv"}
+
+    ck = WR.CheckpointIndex(str(ckd), verify_shards=False)
+    words, wc = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=4, tp={"world": WORLD, "rank": rank}, roles=roles)
+    assert wc["equal"] is True and wc["opened"] == len(served) and wc["mismatched_n"] == 0 and wc["unopened_n"] == 0, wc
+    assert np.array_equal(words[f"{A}.W_UV"].reshape(-1), served[f"{A}.W_UV"][1].reshape(-1))
+    _, bare = CPU.open_weights(tmp_path, tree, tree["root"], ck, threads=4, tp={"world": WORLD, "rank": rank})
+    assert sorted(m["name"] for m in bare["mismatched"]) == sorted(n for n in served if "_proj." in n), bare
+    assert sorted(u["name"] for u in bare["unopened"]) == [f"{A}.W_UK_T", f"{A}.W_UV"], bare
 
 
 # ------------------------------------------------------------------------------------------------ the gates: in place == deferred + fold
@@ -317,7 +395,7 @@ def stubbed(monkeypatch):
     """The rank's Programs, its checkpoint and its C2 stood in for: what `replay_rank` hands each of them is recorded."""
     seen: dict = {}
     wc = {"equal": True, "opened": 0, "servable": 0, "committed_root": "ab" * 32, "opened_by_source": {}, "unopened_n": 0, "wall_s": 0.0, "why": None}
-    monkeypatch.setattr(RR, "load", lambda cfg, rank, world: seen.update(load=(cfg, rank, world)) or types.SimpleNamespace(rank=rank))
+    monkeypatch.setattr(RR, "load", lambda cfg, rank, world: seen.update(load=(cfg, rank, world)) or types.SimpleNamespace(rank=rank, loaded={}, index=types.SimpleNamespace(prefix="")))
     monkeypatch.setattr(WR, "CheckpointIndex", lambda *a, **k: "ck")
     monkeypatch.setattr(CPU, "open_weights", lambda bdir, tree, root, ck, **k: seen.update(open=(root, k)) or ({}, dict(wc)))
 
@@ -337,7 +415,7 @@ def test_a_rank_replays_its_bundle_with_the_commits_seed_against_its_own_shards(
     assert TPR.main(o) == 4, "rank 0 is still to replay"
     cfg, rank, world = stubbed["load"]
     assert (rank, world) == (1, WORLD) and cfg["seed"] == SEED and cfg["programs"] == REPLAY_CFG["programs"]
-    assert stubbed["open"] == ("ab" * 32, {"threads": 8, "tp": {"world": WORLD, "rank": 1}})
+    assert stubbed["open"] == ("ab" * 32, {"threads": 8, "tp": {"world": WORLD, "rank": 1}, "roles": {}})
     _p, _cfg, k = stubbed["evaluate"]
     assert isinstance(k["committed"], OC.OpenedReader) and k["run_root"] == d.rc.run_root and k["bmap"] == _bmap(1, d.rc.run_root.hex())
     assert k["weights_check"]["self_consistent"] is True and k["weights_check"]["pinned"] is None and k["manifest_doc"] == json.loads(d.man.read_text())
