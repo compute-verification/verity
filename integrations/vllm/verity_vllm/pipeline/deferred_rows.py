@@ -66,12 +66,13 @@ def window_of_record(bundle: str | os.PathLike, row_dir: str, partition_file: st
 
 
 def opened_weights(r: SimpleNamespace, checkpoint: Any = None, threads: int = 8) -> Callable:
-    """The replay's weights provider over the bundle's tensors (and ``checkpoint``'s), opened against the committed weights root."""
+    """The replay's weights provider over the bundle's tensors (and ``checkpoint``'s, as vLLM rewrites them at load by the Build's
+    `weight_roles`), opened against the committed weights root."""
     k0 = next(iter(r.programs))
     prefix = ProgramIndex(r.programs[k0], program_dir=r.program_dirs[k0]).prefix
     tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
     root = (r.row["commit"].get("weight_registration") or {}).get("root")
-    words, wc = CPU.open_weights(r.bdir, tree, root, checkpoint, threads=threads)
+    words, wc = CPU.open_weights(r.bdir, tree, root, checkpoint, threads=threads, roles=CPU.registered_roles(r.program_dirs.values(), prefix))
     if not wc["equal"]:
         raise CPU.Refused(f"the bundle's weights: {wc['why']}")
     return CPU.provider(words, prefix, set())

@@ -41,7 +41,7 @@ import re
 import shutil
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -172,6 +172,17 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
     if tensor_root(raw, int(tree["chunk"])) != bytes.fromhex(tree["tensor_roots"][i]):
         return src, None, "tensor root != the committed tensor root", True
     return src, raw, None, True
+
+
+def registered_roles(program_dirs: Iterable[str | None], prefix: str = "") -> dict[str, dict[str, Any]]:
+    """The Build's `weight_roles` (`fp8_ue8m0.build_roles` of each Program dir) by registered name: the Program's field less the
+    wrapper prefix its index strips (`ProgramIndex.prefix`, as the replay's weights provider does)."""
+    from verity_vllm.check import fp8_ue8m0
+
+    roles: dict[str, dict[str, Any]] = {}
+    for d in program_dirs:
+        roles.update(fp8_ue8m0.build_roles(d))
+    return {(f[len(prefix):] if prefix and f.startswith(prefix) else f): r for f, r in roles.items()}
 
 
 def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, threads: int = 8,
