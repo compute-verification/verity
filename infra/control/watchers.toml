@@ -41,7 +41,8 @@ name = "monitors-relay"
 argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--node1", "n1",
         "--machine-alerts", "vy-nebius-1=n1:/workspace/monitoring/watchdog/alerts",
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
-        "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
+        "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json",
+        "--only", "drift", "unpreserved", "failed-checks", "node-heartbeat", "fixtures-public"]   # asks off 22:40Z 19 Oct (infra): false unanswered-ask floods, Daniel paged; back on once traffic counts handle replies and reads Linear
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
 
 # node 1's stall alerts in #agent-coordination, ringing the owners, and its Kueue quota changes (n1_alerts.py; tmux `n1-alerts`)
