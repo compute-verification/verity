@@ -123,13 +123,17 @@ STATUS = [
     ("Declared compute, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption budget "
      "is on paper. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
     ("Memory cap on the residual", "Actual.Windows and ThreadedReads are proved; the composition is on paper and needs "
-     "reads counted by information rather than width (open)."),
+     "reads counted by information rather than width (open). It also needs declared ingress held to alpha Phi, which holds "
+     "only once the per-window count check is a gated unit in the ZK flow (NET-35); until then ingress is line rate "
+     "(ingress_x about 6.5e5) and memory caps nothing."),
     ("Memory a wipe leaves", "The slack of 1/19 is proved (SecureErasureMeetsFamily, ideal primitive, isolation; in no "
      "lock). Unwipeable memory is declared, not measured. No theorem bounds help during a wipe; the helper term is an "
      "attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit; no bound at every instant, which the memory cap needs."),
-    ("Cheated proof steps", "Per-round audit bounds are proved; the cumulative harm budget and the per-block-cap thread "
-     "theorem are on paper. The deployed verifier's sampling claims are stated, not proved."),
+    ("Cheated proof steps", "Per-round audit bounds are proved; the cumulative harm budget (PoUW's proved supermartingale is "
+     "the template), the per-block-cap thread theorem and a draw rate fixed against a public N are not. At a 1% total "
+     "budget today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
+     "zero-work templates at a floor of one per window (floor_steps)."),
     ("Unmonitored compute", "No bound: it trains at full efficiency."),
 ]
 
