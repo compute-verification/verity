@@ -9,9 +9,10 @@ def _pouw_roots() -> list[Any]:
     """`PouwH1Tile_v1` and `PouwH1Tile_v3` at their smallest tile, one lane (4 × 8) at K = 64 (KS = 2, one digit word), on
     the s8 accumulator on bits: the seed, 13 noise blocks, the lane's four fx1 sets, and z (v1: 32 exact dots; v3: 32
     `PouwOneStream2` of the folded O' and D_1, each through two `PouwWrapSeg` of its row's X and its column's
-    `PouwWrapBits`). They grow linearly in lanes and in KS. None where `circuit.segment` (E2E-120) is not on the tree, which
-    is where `PouwH1Tile` is registered. `PouwU129`, the one-stream recombinations and the wrap pieces are catalog roots
-    (primitives and static-free composites)."""
+    `PouwWrapBits`, then two `PouwPeelSeg` of its row's X, dither bits and `PouwXWrap` bits and its column's B and coin
+    bits). They grow linearly in lanes and in KS. None where `circuit.segment` (E2E-120) is not on the tree, which is where
+    `PouwH1Tile` is registered. `PouwU129`, the one-stream recombinations, the wrap pieces and the peel pieces are catalog
+    roots (primitives and static-free composites)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.core.protocols.pouw.circuit import h1tile as H

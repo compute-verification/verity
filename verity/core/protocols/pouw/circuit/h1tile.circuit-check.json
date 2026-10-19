@@ -6,6 +6,9 @@
   "PouwOneStream3_v2": {
    "and": 41
   },
+  "PouwPeelSeg_v2": {
+   "and": 1563
+  },
   "PouwU129_v2": {
    "and": 14
   },
@@ -14,6 +17,9 @@
   },
   "PouwWrapSeg_v2": {
    "and": 614
+  },
+  "PouwXWrap_v2": {
+   "and": 8
   }
  },
  "pieces": {
@@ -23,6 +29,9 @@
   "PouwOneStream3_v1": {
    "and": 41
   },
+  "PouwPeelSeg_v1": {
+   "and": 1563
+  },
   "PouwU129_v1": {
    "and": 14
   },
@@ -31,6 +40,9 @@
   },
   "PouwWrapSeg_v1": {
    "and": 626
+  },
+  "PouwXWrap_v1": {
+   "and": 8
   }
  }
 }

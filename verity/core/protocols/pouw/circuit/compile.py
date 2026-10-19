@@ -36,8 +36,8 @@
   and roots parameters whole, and at the root each unit batch reads its own slots of `pouw.positions` and its site's of
   `pouw.roots` (its group's), so no unit chooses its position and no two units share one (``position``); a unit derives one seed
   (``seed``) and its z reads none of it (``noise-in-z``), or under a one-stream scheme (`Scheme.stream`) each z leaf is
-  recombined from words its receipt folds (``stream``: z is then the served product of the noised operands); served values reach a unit only through its z (``separator``);
-  every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
+  recombined from words its receipt folds (``stream``: z reads the seed through the recombination, the wrap correction and
+  the dither peel); served values reach a unit only through its z (``separator``); every node outside the units meets `cut.WIDTH_RULE` (``width``). `Compiled.check_gates` adds the gate-level cut (no value
   computed in two units), the separator and the width rule by reachability, for a Program small enough to flatten.
 
 The Program is the verifier's, rebuilt from (served Program, scheme, groups): `rebuild`, `Compiled.check_descriptor`
@@ -241,10 +241,10 @@ class Scheme:
     `CompileError` ("scheme") for a dot or tile it doesn't take.
 
     `stream`, for a one-stream scheme (`h1tile.SCHEME_V3`): the Definitions that make a cell's z from the words its receipt
-    folds (`h1tile.STREAM`: the recombinations and the wrap correction). Such a unit's z is the served product of the
-    noised operands, so it reads the seed by design, and the unit check's ``noise-in-z`` rule gives way to ``stream``: every
+    folds (`h1tile.STREAM`: the recombinations, the wrap correction and the dither peel). Such a unit's z is made from the
+    noised words, so it reads the seed by design, and the unit check's ``noise-in-z`` rule gives way to ``stream``: every
     z leaf is the output of a call of one of them, and every leaf such a call reads is either another such call's output or
-    read by the receipt's own cone. The served values are then that product, not the Call's."""
+    read by the receipt's own cone. That z is the Call's value is the stream Definitions' arithmetic, not this check's."""
 
     name: str
     tile: tuple[int, int]

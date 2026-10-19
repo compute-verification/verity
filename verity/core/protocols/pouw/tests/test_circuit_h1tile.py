@@ -207,13 +207,47 @@ def _sx8(v):
     return v - 256 if v & 0x80 else v
 
 
-def _served(a, b, position=0):
-    """X Ŵᵀ, cgemm.cu's served product, straight from the unit's noise: X = A + b mod 2^8 and Ŵ = B + c, as integers."""
+def _served(a, b):
+    """A Bᵀ, the served linear's product (vLLM's `_int_mm`), as integers."""
+    return [sum(_sx8(x) * _sx8(w) for x, w in zip(ai, bj)) for ai in a for bj in b]
+
+
+def _noised(a, b, position=0):
+    """X Ŵᵀ, the MMAs' product of the noised operands: X = A + b mod 2^8 (the int8 the MMA reads) and Ŵ = B + c."""
     lay = H.Layout(len(a), len(b), len(a[0]))
     rows, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
     X = [[_sx8((v + rows[i][0][t]) & 0xFF) for t, v in enumerate(a[i])] for i in range(lay.r)]
     W = [[_sx8(v) + cols[j][0][t] for t, v in enumerate(b[j])] for j in range(lay.c)]
     return [sum(x * w for x, w in zip(X[i], W[j])) for i in range(lay.r) for j in range(lay.c)]
+
+
+def _full(rng, n, k):
+    """Full-range int8 rows with A = 127 every 7th entry, so X = A + b wraps (xa) wherever the dither bit is set."""
+    rows = _rows(rng, n, k, -128, 127)
+    for row in rows:
+        row[3::7] = [127] * len(row[3::7])
+    return rows
+
+
+def _cells(a, b, position=0):
+    """Each cell's folded O' and D words, and the peel's and the wrap's inputs: X, wb, (b, xa) by row, (B, c) by column."""
+    lay = H.Layout(len(a), len(b), len(a[0]))
+    rows, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
+    words = {}
+    for ln in range(lay.lanes):
+        sets = H.lane_sets(a, b, rows, cols, lay, ln)
+        for e in range(32):
+            words[(lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)])] = (
+                sets[lay.ks][e], [d[e] for d in sets[lay.ks + 1:]])
+    X = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)]
+    wbs = [H.col_wrap(b[j], cols[j]) for j in range(lay.c)]
+    pis = [(rows[i][0][:lay.k], H.row_wrap(a[i], rows[i])) for i in range(lay.r)]
+    pjs = [(b[j], cols[j][0][:lay.k]) for j in range(lay.c)]
+    return words, X, wbs, pis, pjs
+
+
+def _z(words, X, wbs, pis, pjs):
+    return {(i, j): H.stream_cell(*words[(i, j)], X[i], wbs[j], pis[i], pjs[j]) for i, j in words}
 
 
 def test_v3_is_registered_beside_v1():
@@ -234,37 +268,58 @@ def _wraps(r, b, position=0):
 
 @pytest.mark.parametrize("r,c,k", [(32, 32, 64), (4, 8, 4096), (4, 8, 14336)])
 def test_one_stream_is_the_served_product(r, c, k):
-    """v3's z, O' - sum_d 128^d D_d of each cell's folded words plus the wrap correction, is X Ŵᵀ exactly (as s32) on
-    random full-range int8 A and B (m = 2 at K <= 4096, m = 3 at 14336), where W' wraps both ways; and its receipt is v1's:
-    the same words, folded the same way."""
+    """v3's z, O' - sum_d 128^d D_d of each cell's folded words plus the wrap correction less the dither peel, is A Bᵀ
+    exactly (as s32), v1's z, on random full-range int8 A and B (m = 2 at K <= 4096, m = 3 at 14336), where W' wraps both
+    ways and X = A + b wraps at A = 127; and its receipt is v1's: the same words, folded the same way."""
     rng = random.Random(k)
-    a, b = _rows(rng, r, k, -128, 127), _rows(rng, c, k, -128, 127)
+    a, b = _full(rng, r, k), _rows(rng, c, k, -128, 127)
     z3, rc3 = H.reference(a, b, SALT, 0, ROOTS, stream=True)
     z1, rc1 = H.reference(a, b, SALT, 0, ROOTS)
     assert H.Layout(r, c, k).m == (3 if k > 4096 else 2)
     assert min(_wraps(r, b)) > 0
-    assert [_s32(v) for v in z3] == _served(a, b)
-    assert rc3 == rc1 and z3 != z1
+    lay = H.Layout(r, c, k)
+    rows = H.noise(SD.seed(SALT, 0, *ROOTS), lay)[0]
+    assert all(sum(H.row_wrap(a[i], rows[i])) > 0 for i in range(r))
+    assert [_s32(v) for v in z3] == _served(a, b) != _noised(a, b)
+    assert rc3 == rc1 and z3 == z1
 
 
 def test_the_wrap_correction_is_needed():
-    """At B's edges (127, -128, ±110) z is X Ŵᵀ; without the correction (the recombination alone) some cell's is not, and
-    where B + c + U never wraps ([-64, 62] under U in ±64) the correction is zero."""
+    """At B's edges (127, -128, ±110) z is A Bᵀ; without the wrap correction (wb taken as 0) some cell's is not, and where
+    B + c + U never wraps ([-64, 62] under U in ±64) the correction is zero."""
     k = 64
-    lay = H.Layout(4, 8, k)
     a = [[v & 0xFF for v in row] for row in ([[127] * k, [-128] * k, [126] * k, [-127] * k])]
-    rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
     for edge, wraps in (([127, -128], True), ([110, -110], True), ([62, -64], False)):
         b = [[v & 0xFF for v in row] for row in ([[edge[0]] * k, [edge[1]] * k] * 4)]
         assert [_s32(v) for v in H.reference(a, b, SALT, 0, ROOTS, stream=True)[0]] == _served(a, b)
-        bare = {}
-        for ln in range(lay.lanes):
-            sets = H.lane_sets(a, b, rows, cols, lay, ln)
-            for e in range(32):
-                bare[(lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)])] = H.one_stream(
-                    sets[lay.ks][e], [d[e] for d in sets[lay.ks + 1:]])
+        words, X, wbs, pis, pjs = _cells(a, b)
+        bare = _z(words, X, [[0] * k for _ in wbs], pis, pjs)
         plain = [_s32(bare[(i, j)]) for i in range(4) for j in range(8)]
         assert (plain != _served(a, b)) == wraps and (sum(_wraps(4, b)) > 0) == wraps
+
+
+def test_the_dither_peel_is_needed():
+    """Without the peel z is X Ŵᵀ, the noised operands' product, not A Bᵀ; with the peel but no X wrap term (xa taken as
+    0) exactly the rows where A = 127 meets a set dither bit are off, cell (i, j) by -256 sum_t xa(i, t) B(j, t)."""
+    rng = random.Random(14)
+    k = 4096
+    a, b = _full(rng, 4, k), _rows(rng, 8, k, -128, 127)
+    a[0] = [rng.randrange(-126, 127) & 0xFF for _ in range(k)]
+    words, X, wbs, pis, pjs = _cells(a, b)
+    lay = H.Layout(4, 8, k)
+    unpeeled = {}
+    for (i, j), (op, d) in words.items():
+        v = H.one_stream(op, d)
+        for s in range(0, k, 32):
+            v = H.wrap_seg(v, X[i][s:s + 32], wbs[j][s:s + 32])
+        unpeeled[(i, j)] = _s32(v)
+    assert [unpeeled[(i, j)] for i in range(4) for j in range(8)] == _noised(a, b) != _served(a, b)
+    no_xa = _z(words, X, wbs, [(bd, [0] * k) for bd, _xa in pis], pjs)
+    ab = dict(zip([(i, j) for i in range(4) for j in range(8)], _served(a, b)))
+    assert sum(pis[0][1]) == 0 and all(sum(pis[i][1]) > 0 for i in range(1, lay.r))
+    for (i, j), v in no_xa.items():
+        off = -256 * sum(_sx8(w) for w, x in zip(b[j], pis[i][1]) if x)
+        assert _s32(v) == ab[(i, j)] + off and (off != 0) == (i != 0)
 
 
 def test_wrap_bits_on_bits_is_the_word():
@@ -277,6 +332,35 @@ def test_wrap_bits_on_bits_is_the_word():
         want = 1 if s > 127 else 2 if s < -128 else 0
         got = evaluate(H.PouwWrapBits, [(b >> i) & 1 for i in range(8)], [c], [(u >> i) & 1 for i in range(8)])
         assert list(got) == [want & 1, want >> 1] and list(evaluate(H.PouwWrapBits.word, b, c, u)) == [want]
+
+
+def test_x_wrap_on_bits_is_the_word():
+    """`PouwXWrap_v2` is its word, [A = 127] AND b, on every A and b."""
+    for a in range(256):
+        for b in (0, 1):
+            want = int(a == 0x7F and b == 1)
+            assert list(evaluate(H.PouwXWrap, [(a >> i) & 1 for i in range(8)], [b])) == [want]
+            assert list(evaluate(H.PouwXWrap.word, a, b)) == [want]
+
+
+def _mask(bits):
+    return sum(v << e for e, v in enumerate(bits))
+
+
+def test_peel_seg_on_bits_is_the_word():
+    """`PouwPeelSeg_v2` is its word on random and edge operands: acc - sum_e (c_e x_e + bd_e w_e - 256 xa_e w_e)."""
+    rng = random.Random(15)
+    edge = [0, 0x7F, 0x80, 0xFF]
+    for _ in range(96):
+        acc = rng.choice([0, H.M32, 1 << 31, rng.getrandbits(32)])
+        x, w = ([rng.choice(edge + [rng.randrange(256)]) for _ in range(32)] for _ in range(2))
+        bd, xa, c = ([rng.randrange(2) for _ in range(32)] for _ in range(3))
+        got = evaluate(H.PouwPeelSeg, [(acc >> i) & 1 for i in range(32)], [(v >> i) & 1 for v in x for i in range(8)],
+                       bd, xa, [(v >> i) & 1 for v in w for i in range(8)], c)
+        want = H.peel_seg(acc, x, bd, xa, w, c)
+        assert _words(list(got)) == [want] == list(evaluate(H.PouwPeelSeg.word, acc, *x, *map(_mask, (bd, xa)), *w, _mask(c)))
+        assert want == (acc - sum(_sx8(xe) * ce + _sx8(we) * (be - 256 * ae)
+                                  for xe, be, ae, we, ce in zip(x, bd, xa, w, c))) & H.M32
 
 
 def test_wrap_seg_on_bits_is_the_word():
@@ -299,20 +383,11 @@ def test_a_flipped_wrap_bit_moves_only_its_z():
     `test_the_receipt_never_reads_wb`). Kernels' gate mirrors this fault."""
     rng = random.Random(13)
     k = 4096
-    lay = H.Layout(4, 8, k)
-    a, b = _rows(rng, 4, k, -128, 127), _rows(rng, 8, k, -128, 127)
-    rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
-    X = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(k)] for i in range(4)]
-    wbs = [H.col_wrap(b[j], cols[j]) for j in range(8)]
-    words = {}
-    for ln in range(lay.lanes):
-        sets = H.lane_sets(a, b, rows, cols, lay, ln)
-        for e in range(32):
-            words[(lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)])] = (
-                sets[lay.ks][e], [d[e] for d in sets[lay.ks + 1:]])
+    a, b = _full(rng, 4, k), _rows(rng, 8, k, -128, 127)
+    words, X, wbs, pis, pjs = _cells(a, b)
 
     def z(w):
-        return {(i, j): H.stream_cell(*words[(i, j)], X[i], w[j]) for i in range(4) for j in range(8)}
+        return _z(words, X, w, pis, pjs)
 
     base = z(wbs)
     assert [base[(i, j)] for i in range(4) for j in range(8)] == H.reference(a, b, SALT, 0, ROOTS, stream=True)[0]
@@ -329,9 +404,45 @@ def test_a_flipped_wrap_bit_moves_only_its_z():
     assert flips >= 24 * 4 - 4
 
 
+def test_a_flipped_dither_bit_moves_only_its_z():
+    """Flipping one dither bit as the peel reads it moves exactly the cells it enters: a column's coin bit c(j, t) each
+    z(i, j) of column j by -/+ X(i, t) (set/cleared), a row's dither bit b(i, t) each z(i, j) of row i by -/+ B(j, t), or by
+    ±255 B(j, t) where A(i, t) = 127 (its X wrap bit flips with it), and no other cell. Kernels' gate mirrors this fault."""
+    rng = random.Random(16)
+    k = 4096
+    a, b = _full(rng, 4, k), _rows(rng, 8, k, -128, 127)
+    words, X, wbs, pis, pjs = _cells(a, b)
+    base = _z(words, X, wbs, pis, pjs)
+    assert [base[(i, j)] for i in range(4) for j in range(8)] == H.reference(a, b, SALT, 0, ROOTS, stream=True)[0]
+    moves = 0
+    for n in range(32):
+        if n % 2:
+            j, t = rng.randrange(8), rng.randrange(k)
+            c = list(pjs[j][1])
+            c[t] ^= 1
+            flipped = list(pjs)
+            flipped[j] = (pjs[j][0], c)
+            moved = _z(words, X, wbs, pis, flipped)
+            step = -1 if c[t] else 1
+            want = {(i, jj): (v + step * _sx8(X[i][t])) & H.M32 if jj == j else v for (i, jj), v in base.items()}
+        else:
+            i, t = rng.randrange(4), 3 + 7 * rng.randrange(k // 7) if n % 4 == 0 else rng.randrange(k)
+            bd = list(pis[i][0])
+            bd[t] ^= 1
+            xa = H.row_wrap(a[i], (bd,))
+            flipped = list(pis)
+            flipped[i] = (bd, xa)
+            moved = _z(words, X, wbs, flipped, pjs)
+            step = (-1 if bd[t] else 1) * (-255 if a[i][t] == 127 else 1)
+            want = {(ii, j): (v + step * _sx8(b[j][t])) & H.M32 if ii == i else v for (ii, j), v in base.items()}
+        assert moved == want
+        moves += sum(moved[p] != base[p] for p in base)
+    assert moves >= 16 * 4 + 16 * 8 - 8
+
+
 def test_the_receipt_never_reads_wb():
-    """In v3's body no wrap bit or wrap correction is in the receipt's cone: the receipt is v1's sets alone, and wb reaches
-    only z."""
+    """In v3's body no wrap bit, wrap correction, X wrap bit or dither peel is in the receipt's cone: the receipt is v1's
+    sets alone, and they reach only z."""
     v3 = bind(H.PouwH1Tile3, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48)
     body = v3.body
     lz = v3.signature()[1].fields[0][1].leaves
@@ -343,7 +454,8 @@ def test_the_receipt_never_reads_wb():
             todo += [i for a in body.nodes[k].args for s, i, _lo, _hi in runs(a.refs) if s == "n"]
     fns = {getattr(body.nodes[k].fn, "defn", body.nodes[k].fn) for k in cone}
     made = {getattr(nd.fn, "defn", nd.fn) for nd in body.nodes}
-    assert {H.PouwWrapBits, H.PouwWrapSeg} <= made and not fns & {H.PouwWrapBits, H.PouwWrapSeg}
+    pieces = {H.PouwWrapBits, H.PouwWrapSeg, H.PouwXWrap, H.PouwPeelSeg}
+    assert pieces <= made and not fns & pieces
 
 
 def test_a_tampered_word_moves_z():
@@ -393,7 +505,8 @@ BAD = CompositeDefinition("H1TestStreamBeside", 1, ("EXACT", "R", "C", "PAIRS"),
 def test_the_stream_check():
     """The unit check takes v3 under a one-stream scheme and refuses it under a plain one (its z reads the seed), refuses v1
     under a one-stream scheme (its z is a product of its own), refuses a unit recombining an exact product it doesn't fold,
-    and refuses v3 under a stream without the wrap correction (z is then `PouwWrapSeg`'s output, not a recombination)."""
+    and refuses v3 under a stream without the dither peel (z is then `PouwPeelSeg`'s output, not a recombination) or
+    without the wrap correction too."""
     v3 = bind(H.PouwH1Tile3, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48)
     C._check_unit(v3, True, STREAM)
     for unit, stream, code, why in ((v3, (), "noise-in-z", "z is the exact product"),
@@ -401,6 +514,8 @@ def test_the_stream_check():
                                      "not a recombination"),
                                     (bind(BAD, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48), STREAM, "stream",
                                      "which the receipt doesn't fold"),
+                                    (v3, (*H.ONE_STREAM.values(), H.PouwWrapSeg, H.PouwWrapBits), "stream",
+                                     "not a recombination"),
                                     (v3, tuple(H.ONE_STREAM.values()), "stream", "not a recombination")):
         with pytest.raises(C.CompileError) as e:
             C._check_unit(unit, True, stream)
@@ -410,20 +525,20 @@ def test_the_stream_check():
 @compiles
 @pytest.mark.slow
 def test_h1_tile_v3_is_its_reference():
-    """A 4 × 16 grid at K = 64 compiles under `SCHEME_V3` to one `PouwH1Tile_v3`; on random rows its served outputs are
-    `reference(stream=True)`'s z (X Ŵᵀ on full-range B, where W' wraps, not the served Program's A Bᵀ) and its receipt
-    v1's. Slow (about 180 s): the only test of v3's gates, wrap correction included, as `test_h1_tile_is_its_reference` is
-    v1's."""
+    """A 4 × 16 grid at K = 64 compiles under `SCHEME_V3` to one `PouwH1Tile_v3`; on random full-range rows (W' and X
+    wrap) its served outputs are the served Program's, A Bᵀ, and `reference(stream=True)`'s z, and its receipt v1's. Slow
+    (about 200 s): the only test of v3's gates, wrap correction and dither peel included, as `test_h1_tile_is_its_reference`
+    is v1's."""
     served = Program(bind(GRID, R=4, C=16, K=64))
     c = C.compile(served, H.SCHEME_V3)
     (u,) = c.units
     assert u.defn.base_id == "PouwH1Tile_v3"
     rng = random.Random(9)
-    a, b = _rows(rng, 4, 64, -128, 127), _rows(rng, 16, 64, -128, 127)
+    a, b = _full(rng, 4, 64), _rows(rng, 16, 64, -128, 127)
     args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]
     got = list(evaluate(c.program.fn, *args, *c.inputs(SALT, [ROOTS])))
     S = c.served_leaves
     z, rc = H.reference(a, b, SALT, 0, ROOTS, stream=True)
-    assert _words(got[:S]) == z and [_s32(v) for v in z] == _served(a, b)
+    assert _words(got[:S]) == z == _words(list(evaluate(served.fn, *args))) and [_s32(v) for v in z] == _served(a, b)
     assert _words(got[S:]) == rc == H.reference(a, b, SALT, 0, ROOTS)[1]
-    assert _words(list(evaluate(served.fn, *args))) != z
+    assert sum(_wraps(4, b)) > 0

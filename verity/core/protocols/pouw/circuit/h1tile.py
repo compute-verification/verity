@@ -24,16 +24,23 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
 **The one-stream unit**, `PouwH1Tile_v3` (`SCHEME_V3`, `eps1-sm120-h1fx1-os`), is v1 with z taken from the words the
 receipt folds instead of a product of its own: each cell's z is cgemm.cu's served output O = O' - sum_d 128^d D_d
 (`PouwOneStream2` at m = 2, `PouwOneStream3` at m = 3) from the cell's lane's O' and D_1 .. D_(m-1), plus the exact wrap
-correction 256 X (wb⁺ - wb⁻)ᵀ (`PouwWrapSeg` over each segment of K), mod 2^32. Its noise, lanes, sets and receipt are
-v1's bit for bit. W' = B + c + U is int8, so it wraps where B + c + U leaves [-128, 127]: wb⁺ = [B + c + U > 127] and
-wb⁻ = [B + c + U < -128], each column's from its B (registered) and its noise, computed in the tile (`PouwWrapBits`), never
-supplied. Since T_last = X W'ᵀ with W' = Ŵ + U - 256 wb⁺ + 256 wb⁻, O' = T_last - A_0 Uᵀ and D_d = A_d Uᵀ, with
-sum_d 128^d A_d the residue sums of X, z is the served product of the noised operands, X Ŵᵀ with X = A + b (the int8 the
-MMA reads) and Ŵ = B + c, exact in s32 for every int8 B (not A Bᵀ: the served linear is cgemm.cu's dithered one,
-`cgemm_ref.check`'s ``O_is_served``). So z exists only through the MMAs whose words are credited, and B and the noise: a
-kernel serving y = dequant(z) serves the receipted words. The compile pass replaces its ``noise-in-z`` rule for a
-one-stream scheme (`compile.Scheme.stream`, here `STREAM`) with ``stream``: every z leaf is made by those Definitions from
-leaves the receipt's cone reads.
+correction 256 X (wb⁺ - wb⁻)ᵀ (`PouwWrapSeg` over each segment of K), minus the dither peel X cᵀ + (b - 256 xa) Bᵀ
+(`PouwPeelSeg` over each segment), mod 2^32. Its noise, lanes, sets and receipt are v1's bit for bit.
+
+* **Wrap.** W' = B + c + U is int8, so it wraps where B + c + U leaves [-128, 127]: wb⁺ = [B + c + U > 127] and
+  wb⁻ = [B + c + U < -128], each column's from its B (registered) and its noise, computed in the tile (`PouwWrapBits`),
+  never supplied. Since T_last = X W'ᵀ with W' = Ŵ + U - 256 wb⁺ + 256 wb⁻, O' = T_last - A_0 Uᵀ and D_d = A_d Uᵀ, with
+  sum_d 128^d A_d the residue sums of X, the recombination plus the correction is X Ŵᵀ, the product of the noised operands
+  X = A + b (the int8 the MMA reads) and Ŵ = B + c, for every int8 B.
+* **Peel.** X = A + b wraps too, at A = 127 with b = 1 (X = -128): xa = [A = 127] AND b, each row's from its A and its
+  dither bits, computed in the tile (`PouwXWrap`). With X = A + b - 256 xa, X Ŵᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ (the
+  same as - b Bᵀ - A cᵀ - b cᵀ + 256 xa Ŵᵀ), so z is A Bᵀ, the served product, exact in s32 for every int8 A and B, and
+  equal to v1's z.
+
+So z exists only through the MMAs whose words are credited, and A, B and the noise: a kernel serving y = dequant(z)
+serves the receipted words. The compile pass replaces its ``noise-in-z`` rule for a one-stream scheme
+(`compile.Scheme.stream`, here `STREAM`) with ``stream``: every z leaf is made by those Definitions from leaves the
+receipt's cone reads.
 
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
@@ -46,7 +53,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, add, compress_columns, const_bits, or_reduce
+from verity.ml.circuits.boolean.forms import NOT, ONE, OR, add, and_reduce, compress_columns, const_bits, or_reduce
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat
@@ -269,8 +276,74 @@ PouwWrapSeg = definition("PouwWrapSeg", 2, _wrap_seg_bits,
                          (("acc", U32), ("x", Array(32, I8)), ("wb", Array(32, Array(2, BIT)))), U32, word=PouwWrapSegWord,
                          conformance="protocol-defined",
                          doc="acc + 256 sum_e x_e (wb⁺_e - wb⁻_e) mod 2^32 on bits: PouwWrapSeg_v1")
-#: what a one-stream z is made of: the recombinations and the wrap correction
-STREAM = (PouwOneStream2, PouwOneStream3, PouwWrapSeg, PouwWrapBits)
+def x_wrap(a: int, b: int) -> int:
+    """X = A + b's int8 wrap at one entry: 1 where A = 127 and its dither bit b is set (X = -128), else 0."""
+    return int((a & 0xFF) == 0x7F and b & 1)
+
+
+def peel_seg(acc: int, x: Sequence[int], bd: Sequence[int], xa: Sequence[int], w: Sequence[int], c: Sequence[int]) -> int:
+    """acc - sum_e (c_e x_e + bd_e w_e - 256 xa_e w_e) mod 2^32 over one segment: the dither peel of a cell's one stream,
+    x the int8 encodings of X, w of B, bd and c the row's and the column's dither bits, xa `x_wrap`'s. Since
+    X = A + b - 256 xa and Ŵ = B + c, X Ŵᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ."""
+    return (acc - sum(_sx(xe) * (ce & 1) + _sx(we) * ((be & 1) - 256 * (ae & 1))
+                      for xe, be, ae, we, ce in zip(x, bd, xa, w, c))) & M32
+
+
+PouwXWrapWord = PrimitiveDefinition("PouwXWrap", 1, (("a", Value(8)), ("b", Value(1))), Value(1), x_wrap,
+                                    conformance="protocol-defined")
+
+
+@primitive("PouwPeelSeg", 1, [("acc", Value(32)), ("x", Array(32, Value(8))), ("bd", Value(32)), ("xa", Value(32)),
+                              ("w", Array(32, Value(8))), ("c", Value(32))], Value(32), conformance="protocol-defined")
+def PouwPeelSegWord(acc: int, *v: int) -> int:
+    """acc - sum_e (c_e x_e + bd_e w_e - 256 xa_e w_e) mod 2^32 (`peel_seg`), bd, xa and c a bit an entry."""
+    bd, xa, c = ([m >> e & 1 for e in range(32)] for m in (v[32], v[33], v[66]))
+    return peel_seg(acc, v[:32], bd, xa, v[34:66], c)
+
+
+def _x_wrap_bits(C_, a, b):
+    return [C_.AND(C_.AND(b[0], NOT(a[7])), and_reduce(C_, list(a[:7])))]
+
+
+def _signed_row(cols: list[list], g: Sequence, shift: int, neg: bool) -> int:
+    """Add ±2^shift times the int8 g into `cols`, each negative-weight bit as its complement; the constant it leaves."""
+    k = 0
+    for i, v in enumerate(g):
+        if (i == 7) != neg:
+            cols[shift + i].append(NOT(v))
+            k -= 1 << shift + i
+        else:
+            cols[shift + i].append(v)
+    return k
+
+
+def _peel_seg_bits(C_, acc, *v):
+    """Each entry's -c x, -bd w and +256 xa w as gated int8 rows, their negative-weight bits complemented against one
+    constant, in one carry-save tree with acc's bits."""
+    x, (bd, xa), w, (c,) = v[:32], v[32:34], v[34:66], v[66:]
+    cols: list[list] = [[] for _ in range(32)]
+    for i, b in enumerate(acc):
+        cols[i].append(b)
+    k = 0
+    for xe, be, ae, we, ce in zip(x, bd, xa, w, c):
+        k += _signed_row(cols, [C_.AND(b, ce) for b in xe], 0, True)
+        k += _signed_row(cols, [C_.AND(b, be) for b in we], 0, True)
+        k += _signed_row(cols, [C_.AND(b, ae) for b in we], 8, False)
+    for i, b in enumerate(const_bits(k & M32, 32)):
+        if b.c:
+            cols[i].append(b)
+    return compress_columns(C_, cols)[:32]
+
+
+PouwXWrap = definition("PouwXWrap", 2, _x_wrap_bits, (("a", I8), ("b", BIT)), BIT, word=PouwXWrapWord,
+                       conformance="protocol-defined", doc="[A = 127] AND b on bits: PouwXWrap_v1")
+PouwPeelSeg = definition("PouwPeelSeg", 2, _peel_seg_bits,
+                         (("acc", U32), ("x", Array(32, I8)), ("bd", Array(32, BIT)), ("xa", Array(32, BIT)),
+                          ("w", Array(32, I8)), ("c", Array(32, BIT))), U32, word=PouwPeelSegWord,
+                         conformance="protocol-defined",
+                         doc="acc - sum_e (c_e x_e + bd_e w_e - 256 xa_e w_e) mod 2^32 on bits: PouwPeelSeg_v1")
+#: what a one-stream z is made of: the recombinations, the wrap correction and the dither peel
+STREAM = (PouwOneStream2, PouwOneStream3, PouwWrapSeg, PouwWrapBits, PouwPeelSeg, PouwXWrap)
 
 
 # -- the reference -----------------------------------------------------------------------------------------------------------
@@ -327,12 +400,20 @@ def col_wrap(b_j: Sequence[int], col: tuple) -> list[int]:
     return [wrap_bits(v, col[0][t], col[1][t % 32]) for t, v in enumerate(b_j)]
 
 
-def stream_cell(op: int, d: Sequence[int], x_i: Sequence[int], wb_j: Sequence[int]) -> int:
+def row_wrap(a_i: Sequence[int], row: tuple) -> list[int]:
+    """Row i's X wrap bits at every entry of K (`x_wrap` of A and its dither bit)."""
+    return [x_wrap(v, row[0][t]) for t, v in enumerate(a_i)]
+
+
+def stream_cell(op: int, d: Sequence[int], x_i: Sequence[int], wb_j: Sequence[int], peel_i: tuple, peel_j: tuple) -> int:
     """A cell's v3 z: `one_stream` of its O' and D words, then `wrap_seg` over each segment of its row's X and its column's
-    wrap bits; X Ŵᵀ mod 2^32 for every B."""
+    wrap bits (X Ŵᵀ), then `peel_seg` over each segment with its row's (dither bits, X wrap bits) `peel_i` and its column's
+    (B, coin bits) `peel_j`: A Bᵀ mod 2^32 for every int8 A and B."""
     z = one_stream(op, d)
     for s in range(0, len(x_i), 32):
         z = wrap_seg(z, x_i[s:s + 32], wb_j[s:s + 32])
+    for s in range(0, len(x_i), 32):
+        z = peel_seg(z, x_i[s:s + 32], *(v[s:s + 32] for v in (*peel_i, *peel_j)))
     return z
 
 
@@ -341,11 +422,13 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
               stream: bool = False) -> tuple[list[int], list[int]]:
     """The unit on words: (z, receipt) for A's r rows and B's c rows (int8 encodings), its salt, position and roots, z at
     `pairs` (the full grid in row-major order by default). `stream`: v3's z, each cell's `one_stream` of its lane's O' and
-    D words with its wrap correction (`stream_cell`); else v1's, the exact A Bᵀ cell."""
+    D words with its wrap correction and its dither peel (`stream_cell`); else v1's, the exact A Bᵀ cell. Both are A Bᵀ."""
     lay = Layout(len(a), len(b), len(a[0]))
     rows, cols = noise(SD.seed(salt, position, *roots), lay)
     xs = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)] if stream else None
     wbs = [col_wrap(b[j], cols[j]) for j in range(lay.c)] if stream else None
+    pis = [(rows[i][0][:lay.k], row_wrap(a[i], rows[i])) for i in range(lay.r)] if stream else None
+    pjs = [(b[j], cols[j][0][:lay.k]) for j in range(lay.c)] if stream else None
     keys = fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     ks = lay.ks
     cp = [[0, 0] for _ in range(lay.sets)]
@@ -360,7 +443,8 @@ def reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: byte
                     cp[s][h] ^= v
         for e in range(32 if stream else 0):
             cell = (lay.rows(ln)[SG.row_slot(e)], lay.cols(ln)[SG.col_slot(e)])
-            served[cell] = stream_cell(sets[ks][e], [d[e] for d in sets[ks + 1:]], xs[cell[0]], wbs[cell[1]])
+            served[cell] = stream_cell(sets[ks][e], [d[e] for d in sets[ks + 1:]], xs[cell[0]], wbs[cell[1]],
+                                       pis[cell[0]], pjs[cell[1]])
     if pairs is None:
         pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
     z = [served[p] for p in pairs] if stream else [SG.seg_dot(0, a[i], b[j]) for i, j in pairs]
@@ -401,9 +485,9 @@ def _xor(B: Any, words: list[Coll]) -> Coll:
     return words[0]
 
 
-def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> tuple[list, dict, list, list]:
+def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> tuple[list, dict, list, list, list]:
     """The receipt's refs; per cell (i, j) its lane's O' and D_1 .. D_(m-1) words, as the receipt folds them; each row's X;
-    and each column's (B, coin bits, U repeated over K), W''s addends."""
+    each column's (B, coin bits, U repeated over K), W''s addends; and each row's (A, dither bits), X's."""
     lay = _layout(S)
     k, ks = lay.k, lay.ks
     seed_j, sigma_r = SD.unit_seeds_call(B, salt, position, roots, True)
@@ -413,10 +497,11 @@ def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
     def bits(first: int, n: int) -> Coll:
         return Coll(Array(n, BIT), concat([blocks[first + t].refs for t in range(-(-n // SD.BLOCK_BITS))]).slice(0, n))
 
-    X, A = [], []
+    X, A, XIN = [], [], []
     for i in range(lay.r):
         nz = bits(lay.row(i), lay.row_bits)
         X.append(B.batch(SG.PouwI8AddBit, a[i], nz[0:k], axes=(0, 0)))
+        XIN.append((a[i], nz[0:k]))
         A.append(_digits(B, X[-1], [nz[k + 32 * d:k + 32 * d + 32] for d in range(lay.m - 1)], lay))
     W, U, NU, WIN = [], [], [], []
     for j in range(lay.c):
@@ -447,7 +532,7 @@ def _sets(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
             cps[s].append((B.call(SG.PouwXinFinal, state[0:256]), B.call(SG.PouwXinFinal, state[256:512])))
         for e in range(32):
             words[(R[rs[e]], Cs[cs[e]])] = [op[e]] + [d[e] for d in D]
-    return [_xor(B, [w[h] for w in ws]).refs for ws in cps for h in range(2)], words, X, WIN
+    return [_xor(B, [w[h] for w in ws]).refs for ws in cps for h in range(2)], words, X, WIN, XIN
 
 
 def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
@@ -457,15 +542,19 @@ def _body(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: C
 
 
 def _body_v3(B: Any, S: Any, a: Coll, b: Coll, salt: Coll, position: Coll, roots: Coll) -> Coll:
-    receipt, words, X, WIN = _sets(B, S, a, b, salt, position, roots)
+    receipt, words, X, WIN, XIN = _sets(B, S, a, b, salt, position, roots)
     lay = _layout(S)
     f = ONE_STREAM[lay.m]
     wb = {j: B.batch(PouwWrapBits, *WIN[j], axes=(0, 0, 0)) for j in sorted({j for _i, j in S.PAIRS})}
+    xa = {i: B.batch(PouwXWrap, *XIN[i], axes=(0, 0)) for i in sorted({i for i, _j in S.PAIRS})}
     z = []
     for i, j in S.PAIRS:
         acc = B.call(f, *words[(i, j)])
         for s in range(lay.ks):
             acc = B.call(PouwWrapSeg, acc, X[i][32 * s:32 * s + 32], wb[j][32 * s:32 * s + 32])
+        for s in range(lay.ks):
+            seg = slice(32 * s, 32 * s + 32)
+            acc = B.call(PouwPeelSeg, acc, X[i][seg], XIN[i][1][seg], xa[i][seg], WIN[j][0][seg], WIN[j][1][seg])
         z.append(acc.refs)
     return Coll(_signature(S)[1], concat(z + receipt))
 
@@ -486,8 +575,8 @@ PouwH1Tile3 = CompositeDefinition(
     "PouwH1Tile", 3, ("EXACT", "R", "C", "PAIRS"), _signature, _body_v3, conformance="protocol-defined",
     register=SG is not None,
     doc="The one-stream H1 + fx1 tile (`circuit.h1tile`): v1's noise, sets and receipt, and z on each cell of PAIRS its "
-        "lane's O' - sum_d 128^d D_d plus its wrap correction 256 X (wb⁺ - wb⁻)ᵀ mod 2^32, the served product X Ŵᵀ of the "
-        "noised operands for every int8 B (EXACT's type, never called).",
+        "lane's O' - sum_d 128^d D_d plus its wrap correction 256 X (wb⁺ - wb⁻)ᵀ, less its dither peel "
+        "X cᵀ + (b - 256 xa) Bᵀ, mod 2^32: the served product A Bᵀ for every int8 A and B (EXACT's type, never called).",
     **({"ports": _unit_ports} if _ports is not None else {}))
 
 
@@ -528,5 +617,6 @@ if SG is not None:
 
 __all__ = ["FOLD", "KINDS", "Layout", "ONE_STREAM", "PouwH1Tile", "PouwH1Tile3", "PouwOneStream2", "PouwOneStream2Word",
            "PouwOneStream3", "PouwOneStream3Word", "PouwU129", "PouwU129Word", "PouwWrapBits", "PouwWrapBitsWord", "PouwWrapSeg",
-           "PouwWrapSegWord", "SCHEME", "SCHEME_V3", "STREAM", "col_wrap", "fold_keys", "lane_sets", "noise", "one_stream",
-           "reference", "scheme", "stream_cell", "u129", "wrap_bits", "wrap_seg"]
+           "PouwWrapSegWord", "PouwPeelSeg", "PouwPeelSegWord", "PouwXWrap", "PouwXWrapWord", "SCHEME", "SCHEME_V3", "STREAM",
+           "col_wrap", "fold_keys", "lane_sets", "noise", "one_stream", "peel_seg", "reference", "row_wrap", "scheme",
+           "stream_cell", "u129", "wrap_bits", "wrap_seg", "x_wrap"]
