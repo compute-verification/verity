@@ -528,7 +528,7 @@ def wide3_controls(width: int, cols):
     out["ctl_mnmx_first"] = split([add64(v2[i], x1[i][1], m1[i], y[i], 0, width) for i in range(nv)])
     # IMNMX.64 last, and SEL.64, over (v1:v2) and (v2:v1), so both pairs read the second instruction's word; the SEL.64
     # takes each pair at half the points, by the first such pattern no IMNMX.64 form computes
-    v1 = [(y[i] - w[i] + kx[i]) & mask for i in range(nv)]
+    v1 = [y[i] ^ w[i] ^ kx[i] for i in range(nv)]
     v2 = [(v1[i] * m1[i] + z[i]) & mask for i in range(nv)]
     pa, pb = [(v2[i], v1[i]) for i in range(nv)], [(v1[i], v2[i]) for i in range(nv)]
     out["ctl_mnmx_last"] = split([mnmx64(*pa[i], *pb[i], 1, width) for i in range(nv)])
@@ -537,9 +537,9 @@ def wide3_controls(width: int, cols):
         if not any(all(mnmx64(*pa[i], *pb[i], v, width) == t[i] for i in range(nv)) for v in range(4)):
             out["sel_free"] = split(t)
             break
-    # IADD.64's high word over a first instruction's word, a word of a second instruction
+    # IADD.64's high word over a first instruction's word, a word of a second instruction and of no first one
     v1 = [y[i] ^ w[i] ^ kx[i] for i in range(nv)]
-    hi = [add64(v1[i], y[i], z[i], a[i], 0, width)[1] for i in range(nv)]
+    hi = [add64(v1[i], v1[i], z[i], y[i], 0, width)[1] for i in range(nv)]
     out["le2_add64_hi"] = (hi, hi)
     return out
 
@@ -727,7 +727,8 @@ def main() -> int:
             for lab, res in ctl.items():
                 if lab != "fx1":
                     key = count[lab.split("_")[0]]
-                    checks.check(f"fold_wide3.c finds its control {lab} ({key})", res[key] > 0, res["witnesses"][:1])
+                    wit = [x for x in res["witnesses"] if x[0] == {"found": "F", "sel": "S", "le2": "L"}[key]]
+                    checks.check(f"fold_wide3.c finds its control {lab} ({key})", res[key] > 0, wit[:1])
             checks.check("fold_wide3.c's first instructions are this file's (6 inputs)",
                          ctl["fx1"]["firsts"] == _new_word_sets(w4, small),
                          (ctl["fx1"]["firsts"], _new_word_sets(w4, small)))
@@ -742,6 +743,24 @@ def main() -> int:
                          big["found"] == 0 and ctl["fx1"]["found"] == 0, seen)
             checks.check("width-4 exhaustive: nor as a last SEL.64's under any predicate",
                          big["sel"] == 0 and ctl["fx1"]["sel"] == 0, seen)
+            if "--mutations" in checks.args:
+                # 7.-12. Each part of the search is needed: built without it (-DDROP), fold_wide3.c misses the controls
+                #    only that part reaches.
+                parts = ((1, "a last IADD.64", ("ctl_add64_pre", "ctl_add64_live", "ctl_mnmx_first")),
+                         (2, "a last IMNMX.64 or SEL.64 over a second-instruction word", ("ctl_mnmx_last", "sel_free")),
+                         (3, "a last IMAD.WIDE with p or q a second-instruction word",
+                          ("ctl_lop3_imad", "ctl_wide_leahi", "ctl_lea_maj")),
+                         (4, "a last IMAD.WIDE with p and q before it", ("ctl_pre_chi", "ctl_pre_clo")),
+                         (5, "a second instruction's words in le2", ("le2_add64_hi",)),
+                         (6, "IADD.64 and IMNMX.64 before the last instruction", ("ctl_add64_first", "ctl_mnmx_first")))
+                jobs = wide3_controls(w4, small)
+                for drop, what, labs in parts:
+                    exe_d = Path(tmp) / f"fold_wide3_drop{drop}"
+                    subprocess.run(["gcc", "-O2", "-fopenmp", f"-DDROP={drop}", "-o", str(exe_d), str(src)], check=True)
+                    got = width_wide3(exe_d, w4, small, {lab: jobs[lab] for lab in labs})
+                    left = {lab: got[lab][count[lab.split("_")[0]]] for lab in labs}
+                    checks.mutation(f"fold_wide3.c without {what} misses {', '.join(labs)}", not any(left.values()),
+                                    left)
 
     # --- the lower bound. The two outputs are live and neither is a single instruction (above), so, as #2240, a length-2
     # program (whose two values would be the two outputs) is impossible: fx1 needs >= 3. The 4th instruction is the
