@@ -397,3 +397,49 @@ def test_workers_that_stopped_together_are_one_post_to_the_lane_naming_each_and_
     assert alone.endswith("Before it stopped, it set its own wake-up (\u201cA one-off wake-up fires in 15 minutes.\u201d, due "
                           "about 17:05Z).")
     assert [r["thread_ts"] for r in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 2, "the burst rings its lane once"
+
+
+def test_a_run_its_own_lane_cancelled_and_a_relaunch_declined_are_posted_quietly_and_ring_no_one(relay):
+    """INF-141 (b): a run its lane cancelled ended rc=143 by its own hand: no "resume it", no ring, no handle tagged. A relaunch
+    the watch declined (the worker reported back) is the same: on record in the channel, nothing for anyone to do."""
+    w = "bc-6f3f0e29-409b-53b4-9bb0-5f9d68b71c23"
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "run_ended", "agent": w, "name": "SALT-WIRE: salt tag", "run": "r20261019-182846-7d10", "handle": "proofs",
+         "role": "worker", "node": "vy-nebius-cpu-2", "what": "quick", "rc": 143, "state": "failed", "after": "1 h 35 min",
+         "at": "2026-10-19T20:04:18Z", "lane": "proofs", "quiet": True, "cancelled_by": "ubuntu",
+         "cancel_reason": "superseded at SALT-WIRE's final head (research cancel by ubuntu)"},
+        {"kind": "not_relaunched", "agent": w, "name": "STRAND: land #2822", "run": "", "role": "worker", "lane": "proofs",
+         "handle": "proofs", "since": "2026-10-19T20:13:52Z", "ended_run": "r20261019-200828-85fc", "quiet": True,
+         "why": "its last message reads as a report back (\u201c\u2026Nothing changed: #2822's head stays\u201d)"}]) + "\n"
+    relay.once()
+    cancel, declined = relay.posts
+    assert cancel == (f"*Agent watch:* run r20261019-182846-7d10 (quick) of worker SALT-WIRE: salt tag "
+                      f"(<https://cursor.com/agents/{w}|{w}>) ended rc=143 after 1 h 35 min on vy-nebius-cpu-2, cancelled by its "
+                      "own lane (ubuntu: \u201csuperseded at SALT-WIRE's final head (research cancel by ubuntu)\u201d): nothing "
+                      "to resume.")
+    assert declined.startswith("*Agent watch:* worker STRAND: land #2822 (") and declined.endswith(
+        "was idle after its run r20261019-200828-85fc ended, and the watch did not relaunch it: its last message reads as a "
+        "report back (\u201c\u2026Nothing changed: #2822's head stays\u201d).")
+    assert rings(relay) == [] and relay.ring_runs == []
+
+
+def test_a_listed_workers_run_end_says_the_watch_resumes_it(relay):
+    """A relaunched worker is an agent the API lists: its coordinator can't Task it, and the watch starts a run on it."""
+    rec = {"kind": "run_ended", "agent": "bc-7", "name": "proofs worker ZKS10 (relaunch of 1111)", "run": "r1", "handle": "proofs",
+           "role": "worker", "node": "n", "what": "x", "rc": 0, "state": "done", "after": "1 s", "listed": True}
+    relay.log_text["text"] = json.dumps(rec) + "\n"
+    relay.once()
+    assert relay.posts[0].endswith("; the watch starts a run on it with the result if it is still idle in 10 min.")
+    assert relay.ring_runs[0][-2:] == ["--to", "@proofs"]
+
+
+def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):
+    """INF-141 (a): the sent-set beside the offset keeps each line posted; a relay restarted from offset 0 (a lost or reset
+    offset file, a new pod tree) skips every line it already posted and posts only the new one."""
+    relay.log_text["text"] = line("run-1") + "\n" + line("run-2") + "\n"
+    relay.once()
+    relay.OFFSET.unlink()
+    relay.log_text["text"] += line("run-3") + "\n"
+    relay.once()
+    assert [p.split("run ")[1].split(")")[0] for p in relay.posts] == ["run-1", "run-2", "run-3"]
+    assert relay.OFFSET.read_text() == "3" and len(json.loads(relay.sent_path().read_text())) == 3

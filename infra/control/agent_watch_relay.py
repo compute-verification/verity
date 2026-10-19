@@ -14,6 +14,9 @@ sender's handle (a coordinator's own, a worker's launcher's, for a run whose sen
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. The runs of one read whose sender
 no handle owns are one post that leads with @infra, naming each run's sender, rung as an alert. A record this relay can't render
 (a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to @infra, never as a sentence of ?s.
+A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined) is posted with no handle and
+rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
+reset, never posts it again.
 A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
 worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
@@ -29,6 +32,7 @@ usage (the watchers' `agent-watch-relay` loop on the control pod, infra/control/
 `research msg ring-run` (main since #2754), $SLACK_BOT_TOKEN set, $RESEARCH_SLACK_REGISTRY when not run from a checkout,
 $AGENT_WATCH_OFFSET the offset's file, default ~/agent-watch/offset):
   python3 infra/control/agent_watch_relay.py [--once] [--dry-run]"""
+import hashlib
 import json
 import os
 import re
@@ -46,6 +50,7 @@ EVENTS = "/data/agent-watch/events.jsonl"
 BELLS = "/data/agent-watch/doorbells.json"
 BELLS_WINDOW_S = 24 * 3600
 OFFSET = Path(os.environ.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
+SENT_KEEP_S = 3 * 86400     # the sent-set beside OFFSET (`sent_path`) keeps each line posted this long
 EVERY_S = 2 * 60
 DRY = "--dry-run" in sys.argv
 REG = slack.load_registry(slack.registry_path())
@@ -74,6 +79,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "idle_after_run": "sat idle after its run {ended_run} ended ({result}), with nothing resuming it for {minutes} min; the "
                          "watch {action}",
        "relaunch": "needs a fresh launch ({reason}); the watch {action}",
+       "not_relaunched": "was idle after its run {ended_run} ended, and the watch did not relaunch it: {why}",
        "workers_failed": "stopped within {minutes} min"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
@@ -127,6 +133,8 @@ def rung(rec: dict) -> str | None:
     one whose lane is unknown goes to @infra (`UNROUTED`), who finds that coordinator; so does a record `text` can't render."""
     if not renderable(rec):
         return UNROUTED
+    if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined
+        return None
     if rec.get("kind") in TOP:
         return "top"
     handles = {h["handle"] for h in REG.get("handles") or []}
@@ -191,6 +199,14 @@ def text(rec: dict) -> str:
         return f"{lead}*Agent watch:* agent {name} ({link}) {line}.{again}"
     if rec.get("kind") == "run_ended":
         run = f"run {rec.get('run')} ({rec.get('what') or '?'})"
+        if rec.get("quiet"):
+            who = (f"worker {name} ({link})" if rec.get("role") == "worker" else f"{name} ({link})" if rec.get("agent")
+                   else f"lane {rec.get('handle') or '?'}")
+            return (f"*Agent watch:* {run} of {who} {line}, cancelled by its own lane ({rec.get('cancelled_by') or '?'}: "
+                    f"\u201c{str(rec.get('cancel_reason') or '')[:160]}\u201d): nothing to resume.")
+        if rec.get("role") == "worker" and rec.get("listed"):
+            return (f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; the watch starts a run on it with the "
+                    "result if it is still idle in 10 min.")
         if rec.get("role") == "worker":
             return f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task.{unknown(rec)}"
         if rec.get("role") == "coordinator":
@@ -294,6 +310,7 @@ def once() -> None:
     except slack.SlackError as e:
         log(f"doorbells not read: {e}")
     done = int(OFFSET.read_text()) if OFFSET.exists() else 0
+    sent = {k: v for k, v in load_sent().items() if isinstance(v, (int, float)) and v >= time.time() - SENT_KEEP_S}
     *lines, _ = pod(f"cat {EVENTS} 2>/dev/null || true").split("\n")   # a line still being written waits a pass
     if len(lines) < done:
         log(f"{EVENTS} has {len(lines)} lines, fewer than the {done} posted: replaced, so posting it from the top")
@@ -303,7 +320,10 @@ def once() -> None:
             rec = json.loads(ln)
         except ValueError:
             rec = {"kind": "garbled", "line": ln[:RAW_MAX]}
-        if rec.get("kind") == "unreadable" and not rec.get("since"):   # a goal run's id, often brief: posted if it lasts
+        key = hashlib.sha256(ln.encode()).hexdigest()
+        if key in sent:
+            log(f"line {done + 1} was posted before ({time.strftime('%H:%M:%SZ', time.gmtime(sent[key]))}): not again")
+        elif rec.get("kind") == "unreadable" and not rec.get("since"):   # a goal run's id, often brief: posted if it lasts
             pass
         elif rec.get("kind") == "ready_to_wake" and "409" in str(rec.get("action", "")):
             pass    # Cursor refuses a run on an agent waiting on background work; an hourly post of that changes nothing
@@ -312,6 +332,8 @@ def once() -> None:
         else:
             api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"))
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
+            sent[key] = time.time()
+            save_sent(sent)
             if to := rung(rec):
                 try:
                     if rec.get("kind") == "run_ended" and rec.get("role") != "unknown" and renderable(rec):
@@ -323,6 +345,27 @@ def once() -> None:
         done += 1
         OFFSET.parent.mkdir(parents=True, exist_ok=True)
         OFFSET.write_text(str(done))
+
+
+def sent_path() -> Path:
+    """Each line posted (its sha256) -> when, beside OFFSET: a restart, or an offset lost or reset, never posts a line again."""
+    return OFFSET.with_name(OFFSET.name + ".sent.json")
+
+
+def load_sent() -> dict:
+    try:
+        d = json.loads(sent_path().read_text())
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def save_sent(sent: dict) -> None:
+    p = sent_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(sent, sort_keys=True))
+    tmp.replace(p)
 
 
 def main() -> int:
