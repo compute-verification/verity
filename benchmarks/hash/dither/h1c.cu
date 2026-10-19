@@ -13,7 +13,8 @@
 //                frame leaf (rank, rank, "hm96-sha512/row-seg/v1", h); a pad above the count; a given table's leaves are
 //                another table's roots, so only its pads
 //   h1c_level    one thread a node of level d of every table (`merkle.tree_levels`); the top one is the table's root
-//   h1c_a_*      a served call's A table in one launch, its row-independent parts once a step (below)
+//   h1c_a_*      a served call's A table in one launch, its row-independent parts once a step (below); h1c_a_form(2)
+//                serves it from h1c_a_call2_k, the same table with each compression on its critical path paired
 //
 // A row is `body` bytes at data + i stride, then len - body bytes at tail + i tail_stride (an A or B row's f32 scale).
 #include <cstdint>
@@ -384,6 +385,98 @@ __device__ __forceinline__ void hb_init(Hb& s, uint8_t* b) {
   s.n = 0;
   s.tot = 0;
 }
+
+// Paired compressions (h1c_a_call2_k), pouw-decode's pd_pcmp (pd.cuh at 4dca175d7a): pair p is consumer warp p and producer
+// warp 2 + p, sharing AP_WORDS of dynamic shared memory, x[t][lane] for t < 96 (t < 80 the round inputs K_t + W_t, the
+// consumer's for t < 16 and the producer's after; 80 + t the message's W_t, t < 16) and a stop word.  The consumer stores
+// its message and runs the rounds in five chunks of 16 while the producer computes the schedule a chunk ahead: barrier
+// 1 + 5 p the message, 2 + 5 p .. 5 + 5 p the chunks from 16, 32, 48 and 64 ready, 64 threads each.  Every lane of both
+// warps takes part in every compression, each lane its own.
+constexpr int AP_WORDS = 96 * 32 + 8;
+constexpr int AP_SMEM = 2 * 8 * AP_WORDS;
+constexpr int AP_ROWS = 4, AP_SEG = 16, AP_MAXCOUNT = 512, AP_CONSUMERS = 11;
+__device__ __forceinline__ void ap_sync(int id, int n) { asm volatile("barrier.sync %0, %1;" ::"r"(id), "r"(n) : "memory"); }
+__device__ __forceinline__ void ap_arrive(int id, int n) {
+  asm volatile("barrier.arrive %0, %1;" ::"r"(id), "r"(n) : "memory");
+}
+__device__ __forceinline__ u64* ap_base(int p) {
+  extern __shared__ __align__(16) u64 ap_smem[];
+  return ap_smem + AP_WORDS * p;
+}
+__device__ __forceinline__ void ap_round(u64& a, u64& b, u64& c, u64& d, u64& e, u64& f, u64& g, u64& h, u64 kw) {
+  const u64 t1 = h + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + kw;
+  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  h = g;
+  g = f;
+  f = e;
+  e = d + t1;
+  d = c;
+  c = b;
+  b = a;
+  a = t1 + t2;
+}
+// the consumer's half: one block's message words w into h; one copy a kernel
+__device__ __noinline__ void ap_cmp(u64* h, const u64* w) {
+  const int lane = threadIdx.x & 31, p = threadIdx.x >> 5, bar = 1 + 5 * p;
+  u64* base = ap_base(p);
+  u64* x = base + lane;
+#pragma unroll
+  for (int t = 0; t < 16; ++t) {
+    x[32 * (80 + t)] = w[t];
+    x[32 * t] = sh::kSha512K[t] + w[t];
+  }
+  if (lane == 0) base[96 * 32] = 0;
+  ap_arrive(bar, 64);
+  u64 a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+#pragma unroll 1
+  for (int q = 0; q < 5; ++q) {
+    if (q) ap_sync(bar + q, 64);
+    u64 kw[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) kw[i] = x[32 * (16 * q + i)];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) ap_round(a, b, c, d, e, f, g, hh, kw[i]);
+  }
+  h[0] += a;
+  h[1] += b;
+  h[2] += c;
+  h[3] += d;
+  h[4] += e;
+  h[5] += f;
+  h[6] += g;
+  h[7] += hh;
+}
+// the producer warp of pair p: each message's schedule, until its consumer's ap_stop
+__device__ void ap_serve(int p) {
+  const int lane = threadIdx.x & 31, bar = 1 + 5 * p;
+  u64* base = ap_base(p);
+  u64* x = base + lane;
+  for (;;) {
+    ap_sync(bar, 64);
+    if (*reinterpret_cast<volatile u64*>(base + 96 * 32)) return;
+    u64 w[16];
+#pragma unroll
+    for (int t = 0; t < 16; ++t) w[t] = x[32 * (80 + t)];
+#pragma unroll
+    for (int q = 1; q < 5; ++q) {
+#pragma unroll
+      for (int t = 0; t < 16; ++t) {
+        const u64 w15 = w[(t + 1) & 15], w2 = w[(t + 14) & 15];
+        w[t] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(t + 9) & 15] +
+                (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
+      }
+#pragma unroll
+      for (int i = 0; i < 16; ++i) x[32 * (16 * q + i)] = sh::kSha512K[16 * q + i] + w[i];
+      ap_arrive(bar + q, 64);
+    }
+  }
+}
+__device__ __forceinline__ void ap_stop() {  // a consumer warp: its producer returns
+  const int p = threadIdx.x >> 5;
+  if ((threadIdx.x & 31) == 0) ap_base(p)[96 * 32] = 1;
+  ap_arrive(1 + 5 * p, 64);
+}
+
 // one block, not inlined: every flush site shares one compression's code
 __device__ __noinline__ void hb_block(u64* h, const uint8_t* b) {
   u64 w[16], v[8];
@@ -396,19 +489,32 @@ __device__ __noinline__ void hb_block(u64* h, const uint8_t* b) {
 #pragma unroll
   for (int j = 0; j < 8; ++j) h[j] = v[j];
 }
+// PR: the flush is a paired compression (ap_cmp), so every lane of the consumer warp streams the same lengths
+template <int PR = 0>
 __device__ __forceinline__ void hb_flush(Hb& s) {
-  hb_block(s.h, s.b);
+  if constexpr (PR != 0) {
+    u64 w[16];
+    const u32* q = reinterpret_cast<const u32*>(s.b);
+#pragma unroll
+    for (int k = 0; k < 16; ++k) w[k] = (u64)bswap32(q[2 * k]) << 32 | bswap32(q[2 * k + 1]);
+    ap_cmp(s.h, w);
+  } else {
+    hb_block(s.h, s.b);
+  }
   s.n = 0;
 }
+template <int PR = 0>
 __device__ __forceinline__ void hb_u8(Hb& s, u32 v) {
   s.b[s.n] = (uint8_t)v;
   ++s.tot;
-  if (++s.n == 128) hb_flush(s);
+  if (++s.n == 128) hb_flush<PR>(s);
 }
+template <int PR = 0>
 __device__ __forceinline__ void hb_be(Hb& s, u64 x, int nbytes) {
-  for (int i = nbytes - 1; i >= 0; --i) hb_u8(s, (u32)(x >> (8 * i)));
+  for (int i = nbytes - 1; i >= 0; --i) hb_u8<PR>(s, (u32)(x >> (8 * i)));
 }
 // one big-endian word at any offset
+template <int PR = 0>
 __device__ __forceinline__ void hb_put8(Hb& s, u64 v) {
   if ((s.n & 7) == 0) {
     u32* q = reinterpret_cast<u32*>(s.b + s.n);
@@ -419,15 +525,16 @@ __device__ __forceinline__ void hb_put8(Hb& s, u64 v) {
 #pragma unroll
     for (int i = 0; i < 8; ++i) p[i] = (uint8_t)(v >> (56 - 8 * i));
   } else {
-    hb_be(s, v, 8);
+    hb_be<PR>(s, v, 8);
     return;
   }
   s.n += 8;
   s.tot += 8;
-  if (s.n == 128) hb_flush(s);
+  if (s.n == 128) hb_flush<PR>(s);
 }
+template <int PR = 0>
 __device__ __forceinline__ void hb_words(Hb& s, const u64* x, int nw) {
-  for (int k = 0; k < nw; ++k) hb_put8(s, x[k]);
+  for (int k = 0; k < nw; ++k) hb_put8<PR>(s, x[k]);
 }
 __device__ __forceinline__ void hb_bytes(Hb& s, const uint8_t* p, int n) {
   for (int i = 0; i < n; ++i) hb_u8(s, p[i]);
@@ -446,19 +553,20 @@ __device__ __forceinline__ void hb_frame(Hb& s, const char* tag, int tl) {
   hb_be(s, (u64)tl, 4);
   for (int i = 0; i < tl; ++i) hb_u8(s, (u32)(uint8_t)tag[i]);
 }
+template <int PR = 0>
 __device__ __forceinline__ void hb_final(Hb& s, u64* out) {
   const u64 bits = 8 * s.tot;
   s.b[s.n++] = 0x80;
   if (s.n > 112) {
     while (s.n < 128) s.b[s.n++] = 0;
-    hb_flush(s);
+    hb_flush<PR>(s);
   }
   while (s.n & 3) s.b[s.n++] = 0;
   for (; s.n < 120; s.n += 4) *reinterpret_cast<u32*>(s.b + s.n) = 0;
   u32* q = reinterpret_cast<u32*>(s.b);
   q[30] = bswap32((u32)(bits >> 32));
   q[31] = bswap32((u32)bits);
-  hb_flush(s);
+  hb_flush<PR>(s);
 #pragma unroll
   for (int j = 0; j < 8; ++j) out[j] = s.h[j];
 }
@@ -479,9 +587,11 @@ __device__ __forceinline__ void hb_load(Hb& s, const u64* o, uint8_t* b) {
   for (int i = 0; 4 * i < s.n; ++i) reinterpret_cast<u32*>(b)[i] = ib[i];
 }
 
-// node idx of level lv (its first block from the step's prefix), children read through L2 (another block wrote them)
+// node idx of level lv (its first block from the step's prefix), children read through L2 (another block wrote them);
+// a paired lane with no node (keep false) hashes node idx's message and writes nothing
+template <int PR = 0>
 __device__ __forceinline__ void a_node(Hb& s, uint8_t* b, const u64* P, const H1Tab& T, int lv, long long idx,
-                                       long long off) {
+                                       long long off, bool keep = true) {
   const long long width = 1LL << T.depth;
   const u64* in = T.level + 8 * (off + 2 * idx);
   u64* o = T.level + 8 * (off + (width >> lv) + idx);
@@ -491,14 +601,15 @@ __device__ __forceinline__ void a_node(Hb& s, uint8_t* b, const u64* P, const H1
   hb_load(s, P + A_NS + SNAP * lv, b);
   int l = 1;
   while (l < 8 && (idx >> (8 * l))) ++l;
-  hb_u8(s, (u32)l);  // uint(idx)'s length's low byte: the prefix holds its other seven
-  hb_be(s, (u64)idx, l);
-  hb_put8(s, 64);
-  hb_words(s, c, 8);
-  hb_put8(s, 64);
-  hb_words(s, c + 8, 8);
+  hb_u8<PR>(s, (u32)l);  // uint(idx)'s length's low byte: the prefix holds its other seven
+  hb_be<PR>(s, (u64)idx, l);
+  hb_put8<PR>(s, 64);
+  hb_words<PR>(s, c, 8);
+  hb_put8<PR>(s, 64);
+  hb_words<PR>(s, c + 8, 8);
   u64 out[8];
-  hb_final(s, out);
+  hb_final<PR>(s, out);
+  if (!keep) return;
 #pragma unroll
   for (int k = 0; k < 8; ++k) o[k] = out[k];
   if (lv == T.depth - 1)
@@ -507,18 +618,19 @@ __device__ __forceinline__ void a_node(Hb& s, uint8_t* b, const u64* P, const H1
 }
 
 // row i's leaf from its x (h = SHA-512(leaf_prefix || x ^ M_key y || c), then the frame leaf from the row's prefix)
+template <int PR = 0>
 __device__ __forceinline__ void a_leaf(Hb& s, uint8_t* b, const u64* P, long long i, const u64 x[8], u64 out[8]) {
   const u64* R = P + A_ROW + (long long)A_RW * i;
   u64 mk[8], h[8];
 #pragma unroll
   for (int k = 0; k < 8; ++k) mk[k] = x[k] ^ R[SNAP + k];
   hb_load(s, P + A_LPS, b);
-  hb_words(s, mk, 8);
-  hb_words(s, R + SNAP + 8, 8);
-  hb_final(s, h);
+  hb_words<PR>(s, mk, 8);
+  hb_words<PR>(s, R + SNAP + 8, 8);
+  hb_final<PR>(s, h);
   hb_load(s, R, b);
-  hb_words(s, h, 8);
-  hb_final(s, out);
+  hb_words<PR>(s, h, 8);
+  hb_final<PR>(s, out);
 }
 
 extern "C" __global__ void __launch_bounds__(32) h1c_a_init_k(const H1Tab* __restrict__ tabs, u64* __restrict__ pre, int wpt) {
@@ -748,6 +860,144 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
   if (threadIdx.x == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
 }
 
+// segment block q of a row (the bytes after the segment's prefix block: L of them, then SHA-512's padding) as message words;
+// row's bytes below k, the tail's (sa's) at k and above
+__device__ __forceinline__ void a_seg_words(u64 w[16], const uint8_t* row, const uint8_t* tl, int k, int p0, int L, int nb,
+                                            int q) {
+#pragma unroll 1
+  for (int t = 0; t < 16; ++t) {
+    u64 v = 0;
+    for (int i = 0; i < 8; ++i) {
+      const int o = 128 * q + 8 * t + i, p = p0 + o;
+      const u32 c = o < L ? (p < k ? row[p] : tl[p - k]) : (o == L ? 0x80u : 0u);
+      v = v << 8 | c;
+    }
+    w[t] = v;
+  }
+  if (q == nb - 1) w[15] = 8ull * (128 + L);
+}
+
+// one call, paired (h1c_a_form(2)): h1c_a_call_k's table.  Block x is rows AP_ROWS x .. + 3 on two pairs (warps 0 and 2,
+// 1 and 3): consumer warp p's half-warp h is row AP_ROWS x + 2 p + h, its lane j segment j (the block steps every lane
+// through as many compressions as its longest segment, a lane past its own dropping a dummy's); then each half's x, h and
+// frame leaf, all its lanes on the same message and lane 0's kept; the last block to arrive builds the nodes over live
+// rows, 64 lanes at a time.  T.count a multiple of AP_ROWS and at most AP_MAXCOUNT (a node index fits a byte), at most
+// AP_SEG segments a row.
+extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __restrict__ tab, u64* __restrict__ P,
+                                                                const int* __restrict__ S, const int8_t* __restrict__ xq,
+                                                                const float* __restrict__ sa, int8_t* __restrict__ slot,
+                                                                float* __restrict__ scale, int k) {
+  __shared__ __align__(16) uint8_t bf[64 * HB];
+  __shared__ u64 dg[AP_ROWS][AP_SEG][8];
+  __shared__ int last;
+  const H1Tab& T = *tab;
+  const int tid = threadIdx.x, lane = tid & 31, wid = tid >> 5;
+  const long long r0 = (long long)blockIdx.x * AP_ROWS;
+  const long long m = S[1];
+  const bool nw = (S[3] & 2) != 0;
+  if (!nw) {
+    for (int rr = 0; rr < AP_ROWS; ++rr) {
+      const long long r = r0 + rr;
+      const bool alive = r < m;
+      uint4* dst = reinterpret_cast<uint4*>(slot + r * k);
+      const uint4* src = reinterpret_cast<const uint4*>(xq + (alive ? r : 0) * k);
+      for (int i = tid; i < k / 16; i += 128) dst[i] = alive ? src[i] : make_uint4(0, 0, 0, 0);
+      if (tid == 0) scale[r] = alive ? sa[r] : 0.0f;
+    }
+  }
+  if (wid >= 2) {
+    ap_serve(wid - 2);
+    return;
+  }
+  const int half = lane >> 4, j = lane & 15, rb = 2 * wid + half;
+  const long long r = r0 + rb;
+  const bool alive = r < m;
+  const int ns = nseg_of(T.len);
+  const uint8_t* row = reinterpret_cast<const uint8_t*>(xq + (alive ? r : 0) * k);
+  const uint8_t* tl = reinterpret_cast<const uint8_t*>(sa + (alive ? r : 0));
+  uint8_t* b = bf + tid * HB;
+  {
+    const bool real = alive && j < ns;
+    const int p0 = 1024 * j, L = real ? min(T.len, p0 + 1024) - p0 : 0, nb = real ? (L + 17 + 127) / 128 : 0;
+    const int nq = __reduce_max_sync(0xffffffffu, (unsigned)nb);
+    u64 hs[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) hs[i] = real ? P[A_SS + SNAP * j + i] : 0;
+    const auto fast = [&](int q) { return q < nb && 128 * q + 128 <= L && p0 + 128 * q + 128 <= k; };
+    uint4 nx[8];
+    if (fast(0)) {
+      const uint4* g = reinterpret_cast<const uint4*>(row + p0);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) nx[i] = __ldg(g + i);
+    }
+#pragma unroll 1
+    for (int q = 0; q < nq; ++q) {
+      u64 w[16];
+      if (fast(q)) {
+#pragma unroll
+        for (int i = 0; i < 8; ++i) {
+          w[2 * i] = (u64)bswap32(nx[i].x) << 32 | bswap32(nx[i].y);
+          w[2 * i + 1] = (u64)bswap32(nx[i].z) << 32 | bswap32(nx[i].w);
+        }
+      } else if (q < nb) {
+        a_seg_words(w, row, tl, k, p0, L, nb, q);
+      } else {
+#pragma unroll
+        for (int i = 0; i < 16; ++i) w[i] = 0;
+      }
+      if (fast(q + 1)) {
+        const uint4* g = reinterpret_cast<const uint4*>(row + p0 + 128 * (q + 1));
+#pragma unroll
+        for (int i = 0; i < 8; ++i) nx[i] = __ldg(g + i);
+      }
+      u64 t[8];
+#pragma unroll
+      for (int i = 0; i < 8; ++i) t[i] = hs[i];
+      ap_cmp(t, w);
+      if (q < nb)
+#pragma unroll
+        for (int i = 0; i < 8; ++i) hs[i] = t[i];
+    }
+    if (real)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) dg[rb][j][i] = hs[i];
+  }
+  __syncwarp();
+  if (__any_sync(0xffffffffu, alive)) {
+    Hb s;
+    u64 x[8], out[8];
+    hb_load(s, P + A_QS, b);
+    hb_words<1>(s, &dg[rb][0][0], 8 * ns);
+    hb_final<1>(s, x);
+    a_leaf<1>(s, b, P, r, x, out);
+    if (alive && j == 0)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) T.level[8 * r + i] = out[i];
+  }
+  __threadfence();
+  ap_sync(AP_CONSUMERS, 64);
+  if (tid == 0) last = atomicAdd(reinterpret_cast<unsigned*>(P + A_CNT), 1u) == gridDim.x - 1;
+  ap_sync(AP_CONSUMERS, 64);
+  if (last) {
+    __threadfence();
+    const long long width = 1LL << T.depth;
+    long long off = 0;
+    Hb s;
+    for (int lv = 0; lv < T.depth; ++lv) {
+      const long long nodes = width >> (lv + 1), live = min(nodes, (m + (2LL << lv) - 1) >> (lv + 1));
+      for (long long i0 = 0; i0 < live; i0 += 64) {
+        const long long idx = i0 + tid;
+        a_node<1>(s, b, P, T, lv, idx < live ? idx : 0, off, idx < live);
+      }
+      off += width >> lv;
+      __threadfence_block();
+      ap_sync(AP_CONSUMERS, 64);
+    }
+    if (tid == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
+  }
+  ap_stop();
+}
+
 // -- host ----------------------------------------------------------------------------------------------------------------
 extern "C" int h1c_const(const H1Const* c) { return (int)cudaMemcpyToSymbol(HC, c, sizeof(H1Const)); }
 
@@ -771,12 +1021,29 @@ extern "C" int h1c_a_step(H1Tab* tabs_dev, int ntab, u64* pre, int wpt, const in
   return (int)cudaGetLastError();
 }
 
+// h1c_a_call's kernel from here on: 0 h1c_a_call_k, 2 h1c_a_call2_k (paired compressions); set before any capture
+static int a_form = 0;
+extern "C" int h1c_a_form(int f) {
+  if (f != 0 && f != 2) return 1;
+  if (f == 2) {
+    const cudaError_t e = cudaFuncSetAttribute(h1c_a_call2_k, cudaFuncAttributeMaxDynamicSharedMemorySize, AP_SMEM);
+    if (e != cudaSuccess) return (int)e;
+  }
+  a_form = f;
+  return 0;
+}
+
 // one call's A table (tab: its host copy, tab_dev the device's; pre: its words); xq [M >= m, k] s8 and sa [M] f32 the
 // call's operands, slot [T, k] and scale [T] the table's rows
 extern "C" int h1c_a_call(const H1Tab* tab, const H1Tab* tab_dev, u64* pre, const int* S, const int8_t* xq, const float* sa,
                           int8_t* slot, float* scale, int k, cudaStream_t stream) {
   if (k % 16 || tab->len != k + 4 || tab->body != k || nseg_of(tab->len) > A_NSEG || tab->depth > A_DEPTH) return 1;
-  h1c_a_call_k<<<(unsigned)((tab->count + AW - 1) / AW), 32 * AW, 0, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
+  if (a_form == 2) {
+    if (tab->count % AP_ROWS || tab->count > AP_MAXCOUNT || nseg_of(tab->len) > AP_SEG) return 2;
+    h1c_a_call2_k<<<(unsigned)(tab->count / AP_ROWS), 128, AP_SMEM, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
+  } else {
+    h1c_a_call_k<<<(unsigned)((tab->count + AW - 1) / AW), 32 * AW, 0, stream>>>(tab_dev, pre, S, xq, sa, slot, scale, k);
+  }
   return (int)cudaGetLastError();
 }
 extern "C" int h1c_sizes(int* out) {

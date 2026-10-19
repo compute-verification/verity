@@ -1,16 +1,20 @@
 """`h1c.cu`'s served-call A tables (`h1c_a_init`, `h1c_a_step`, `h1c_a_call`) gated on Llama-3.1-8B's 128 linears against
 `served_h1/commit.py` and against `h1c_build` on the same slots, then timed against the per-call `h1c_build` they replace.
 
-    gate     T = 64 slots, step s, m live rows: each call's operands xq [M, K] (M > m, rows >= m random too, which the
-             slot must not take) and sa [M]; the slots, scales and A levels poisoned with 0xA5 first; per call the slot
-             rows (< m xq's, >= m zero), the scales (< m sa's, >= m 0) and the A root = `commit.s8_table`'s over the slots
-             and = `h1c_build`'s; no poison left in any A level; at (s, m) = (7, 37), then captured as one CUDA graph (the
-             step's part and the 128 calls) and replayed at (8, 64), (9, 1) and (10, 32) with step and m written in place;
-             a control: one xq byte of one live row flipped moves that call's root and no other
-    time     the graph's 128 calls (and the step's part alone) replayed between CUDA events at m = 32 and 64, against the
-             128 per-call h1c_build launches of the earlier path (domains, segments, leaves, levels), captured the same way
+    gate     T = 64 slots (--t), step s, m live rows: each call's operands xq [M, K] (M = T + 8, rows >= m random too,
+             which the slot must not take) and sa [M]; the slots, scales and A levels poisoned with 0xA5 first; per call
+             the slot rows (< m xq's, >= m zero), the scales (< m sa's, >= m 0) and the A root = `commit.s8_table`'s over
+             the slots and = `h1c_build`'s; no poison left in any A level; at (s, m) = (7, 37), then captured as one CUDA
+             graph (the step's part and the 128 calls) and replayed at (8, T), (9, 1), (10, 32) and (12, T - 3) with step
+             and m written in place; a control: one xq byte of one live row flipped moves that call's root and no other
+    time     the graph's 128 calls (and the step's part alone) replayed between CUDA events at m = 32, 64 and T, against
+             the 128 per-call h1c_build launches of the earlier path (domains, segments, leaves, levels), captured the same
+             way
 
-    python h1agate.py --lib libh1c.so --out OUT
+Each h1c_a_form value --forms names (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired) is gated in turn, and
+only if every one passes is each timed, in the same process on the same operands.
+
+    python h1agate.py --lib libh1c.so --out OUT [--t 64] [--forms 0,2]
 """
 from __future__ import annotations
 
@@ -38,15 +42,15 @@ T, MX = 64, 72
 class Calls:
     """The 128 calls' operands and the A tables' window and step buffers."""
 
-    def __init__(self, lib: H1C, st: Step, dev):
+    def __init__(self, lib: H1C, st: Step, dev, mx: int = MX):
         self.lib, self.st, self.L = lib, st, len(st.lin)
         self.tb = C.sizeof(H1CM._Tab)
         self.words = lib.lib.h1c_a_words(st.t)
         self.pre = torch.zeros(self.L * self.words, dtype=torch.int64, device=dev)
         self.S = torch.zeros(4, dtype=torch.int32, device=dev)
         self.step = torch.zeros(2, dtype=torch.int32, device=dev)
-        self.xq = [torch.zeros(MX, k, dtype=torch.int8, device=dev) for _, _, k in st.lin]
-        self.sa = [torch.zeros(MX, dtype=torch.float32, device=dev) for _ in st.lin]
+        self.xq = [torch.zeros(mx, k, dtype=torch.int8, device=dev) for _, _, k in st.lin]
+        self.sa = [torch.zeros(mx, dtype=torch.float32, device=dev) for _ in st.lin]
         rc = lib.lib.h1c_a_init(C.addressof(st.calls.host), st.calls.dev.data_ptr(), self.L, self.pre.data_ptr(), self.words,
                                 torch.cuda.current_stream().cuda_stream)
         if rc:
@@ -145,28 +149,14 @@ def timed(g: torch.cuda.CUDAGraph, reps: int) -> list[float]:
     return out
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--lib", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--reps", type=int, default=9)
-    a = ap.parse_args()
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    dev = torch.device("cuda")
-    key = os.urandom(64)
-    window = os.environ.get("RESEARCH_RUN_ID") or "gate"
-    lib = H1C(a.lib, key, dev)
-    st = Step(lib, window, T, linears(), dev, receipts=False)
-    c = Calls(lib, st, dev)
-    c.fill(1)
-    doc: dict = {"gpu": torch.cuda.get_device_name(), "t": T, "m_rows_of_xq": MX}
-
-    c.set(7, 37)
+def gate(c: Calls, window: str, key: bytes) -> dict:
+    t = c.st.t
+    doc: dict = {}
+    c.set(7, min(37, t))
     c.poison()
     c.run_step()
     c.run_calls()
-    doc["eager"] = check(c, window, key, 7, 37)
+    doc["eager"] = check(c, window, key, 7, min(37, t))
     print(json.dumps({"eager": doc["eager"]}), flush=True)
 
     before = c.roots()
@@ -185,21 +175,18 @@ def main() -> int:
         c.run_step()
         c.run_calls()
     replays = []
-    for s, m in ((8, 64), (9, 1), (10, 32)):
+    for s, m in ((8, t), (9, 1), (10, 32), (12, t - 3)):
         c.set(s, m)
         c.poison()
         g.replay()
         replays.append(check(c, window, key, s, m))
         print(json.dumps({"replay": replays[-1]}), flush=True)
     doc["graph_replay"] = replays
-    ok = doc["eager"]["ok"] and all(doc["control"].values()) and all(r["ok"] for r in replays)
-    doc["gate_ok"] = ok
-    (out / "h1a-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
-    if not ok:
-        print("h1agate: GATE FAILED", flush=True)
-        return 2
-    del g
+    doc["gate_ok"] = doc["eager"]["ok"] and all(doc["control"].values()) and all(r["ok"] for r in replays)
+    return doc
 
+
+def timing(c: Calls, reps: int) -> list[dict]:
     gs, gc, go = torch.cuda.CUDAGraph(), torch.cuda.CUDAGraph(), torch.cuda.CUDAGraph()
     with torch.cuda.graph(gs):
         c.run_step()
@@ -207,17 +194,58 @@ def main() -> int:
         c.run_calls()
     with torch.cuda.graph(go):
         c.run_old()
-    timing = []
-    for m in (32, 64):
+    rows = []
+    for m in sorted({32, 64, c.st.t}):
         c.set(11, m)
-        ms = {"step_part": timed(gs, a.reps), "calls": timed(gc, a.reps), "old_calls": timed(go, a.reps)}
+        ms = {"step_part": timed(gs, reps), "calls": timed(gc, reps), "old_calls": timed(go, reps)}
         row = {"m": m, **{f"{k}_ms": round(statistics.median(v), 4) for k, v in ms.items()},
                "call_us": round(1e3 * statistics.median(ms["calls"]) / c.L, 2),
                "old_call_us": round(1e3 * statistics.median(ms["old_calls"]) / c.L, 2),
                **{f"{k}_ms_all": [round(x, 4) for x in v] for k, v in ms.items()}}
-        timing.append(row)
+        rows.append(row)
         print(json.dumps({"time": {k: v for k, v in row.items() if not k.endswith("_all")}}), flush=True)
-    doc["timing"] = timing
+    return rows
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lib", default=os.environ.get("DITHER_H1C"))
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--scratch", default=None, help="unused (sbench.sh's SBENCH_SCRIPT passes it)")
+    ap.add_argument("--reps", type=int, default=9)
+    ap.add_argument("--t", default=str(T), help="the window's slots (each A table's rows), one or more: 64,256")
+    ap.add_argument("--forms", default="0", help="h1c_a_form values, each gated, then each timed, in this process")
+    a = ap.parse_args()
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    dev = torch.device("cuda")
+    key = os.urandom(64)
+    window = os.environ.get("RESEARCH_RUN_ID") or "gate"
+    lib = H1C(a.lib, key, dev)
+    forms = [int(f) for f in a.forms.split(",")]
+    doc: dict = {"gpu": torch.cuda.get_device_name(), "by_t": {}}
+    for t in (int(x) for x in a.t.split(",")):
+        st = Step(lib, window, t, linears(), dev, receipts=False)
+        c = Calls(lib, st, dev, t + 8)
+        c.fill(t)
+        d = doc["by_t"][t] = {"t": t, "m_rows_of_xq": t + 8, "forms": {}}
+        for f in forms:
+            lib.form(f)
+            print(json.dumps({"t": t, "form": f}), flush=True)
+            d["forms"][f] = gate(c, window, key)
+        d["gate_ok"] = all(x["gate_ok"] for x in d["forms"].values())
+        (out / "h1a-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
+        if not d["gate_ok"]:
+            print("h1agate: GATE FAILED", flush=True)
+            return 2
+        for f in forms:
+            lib.form(f)
+            print(json.dumps({"t": t, "form": f}), flush=True)
+            d["forms"][f]["timing"] = timing(c, a.reps)
+        (out / "h1a-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
+        del st, c
+        torch.cuda.empty_cache()
+    doc["gate_ok"] = True
     (out / "h1a-gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     return 0
 

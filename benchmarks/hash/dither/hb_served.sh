@@ -177,7 +177,7 @@ fi
 cd integrations/vllm
 printf '%s\n' "$PY $HB/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
 # an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
-case " $* " in *exact-fused*|*-xl[\ ,]*) KGATE=1 ;; *) KGATE=0 ;; esac
+case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${HB_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 read -r -a lease <<< "${LEASE:---max-min 14}"
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"

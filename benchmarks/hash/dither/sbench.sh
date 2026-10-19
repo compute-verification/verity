@@ -64,7 +64,7 @@ elif [ -n "${DITHER_NCU:-}" ]; then
         --section ComputeWorkloadAnalysis --section InstructionStats -o "$OUT/ncu" -f)
 fi
 # an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
-case " $* " in *exact-fused*|*-xl[\ ,]*) KGATE=1 ;; *) KGATE=0 ;; esac
+case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &

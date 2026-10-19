@@ -61,6 +61,8 @@ Arms:
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
                  kgate.py in the lease before an -xl or exact-fused arm is timed
+    ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
+                 compressions paired); the suffixes compose (ARM-a2-xl), each gated as ARM
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -185,13 +187,6 @@ def kernels_of(llm) -> dict:
     return seen
 
 
-XL = "-xl"
-
-
-def base_arm(arm: str) -> str:
-    return arm[:-len(XL)] if arm.endswith(XL) and arm.startswith("dither") else arm
-
-
 def install_exactlin() -> None:
     sys.path.insert(0, str(HERE.parent / "exactlin"))
     import exactlin
@@ -200,11 +195,32 @@ def install_exactlin() -> None:
         exactlin._sbench_installed = True
 
 
+def a_form2() -> None:
+    os.environ["DITHER_A_FORM"] = "2"
+
+
+SUFFIXES = {"-xl": install_exactlin, "-a2": a_form2}
+
+
+def suffix_of(arm: str) -> str | None:
+    if arm.startswith("dither"):
+        for s in SUFFIXES:
+            if arm.endswith(s):
+                return s
+    return None
+
+
+def base_arm(arm: str) -> str:
+    s = suffix_of(arm)
+    return base_arm(arm[:-len(s)]) if s else arm
+
+
 def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
-    if base_arm(arm) != arm:
-        install_exactlin()
-        return build(base_arm(arm), scratch, gpu_mem)
+    s = suffix_of(arm)
+    if s:
+        SUFFIXES[s]()
+        return build(arm[:-len(s)], scratch, gpu_mem)
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
     if arm == "stock-cutlass":
