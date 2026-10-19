@@ -63,10 +63,11 @@ inductive Pipe
   | alu
   | imad
   | shfl
+  | uniform
   deriving DecidableEq
 
 instance : Fintype Pipe :=
-  Fintype.ofList [.alu, .imad, .shfl] (by intro p; cases p <;> decide)
+  Fintype.ofList [.alu, .imad, .shfl, .uniform] (by intro p; cases p <;> decide)
 
 /-- The tensor operand types with a dense peak. -/
 inductive Ty
@@ -132,26 +133,35 @@ def Ty.peak : Ty → ℝ
   | .bf16 => peakBf16
   | .tf32 => peakTf32
 
-/-- A4, the alu pipe: 64 results an SM clock. Grade: Programming Guide and Nsight Compute. Source: CUDA C++ Programming
-Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer add 64, compare/minimum/maximum 64, bitwise AND/OR/XOR 64, shift 64
-(results a clock a multiprocessor); Nsight Compute Kernel Profiling Guide §2.3.6: alu executes 'most bit manipulation
-and logic instructions ... integer instructions, excluding IMAD and IMUL'. -/
+/-- A4, the alu pipe: 64 results an SM clock, 2 SMSP-cycles a warp instruction. Grade: Programming Guide and Nsight
+Compute. Source: CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer add 64, compare/minimum/maximum
+64, bitwise AND/OR/XOR 64, shift 64 (results a clock a multiprocessor); Nsight Compute Kernel Profiling Guide §2.3.6:
+alu executes 'most bit manipulation and logic instructions ... integer instructions, excluding IMAD and IMUL'. -/
 def widthAlu : ℝ := 64
 
-/-- A4, the imad pipe: 64 results an SM clock. Grade: Programming Guide. Source: CUDA C++ Programming Guide 12.9 §6.4.1
-Table 7, CC 9.0: '32-bit integer multiply, multiply-add, extended-precision multiply-add' 64; Nsight Compute §2.3.6:
-IMUL and IMAD on FMA Heavy. -/
+/-- A4, the imad pipe: 64 results an SM clock, 2 SMSP-cycles a warp instruction. Grade: Programming Guide. Source: CUDA
+C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: '32-bit integer multiply, multiply-add, extended-precision
+multiply-add' 64; Nsight Compute §2.3.6: IMUL and IMAD on FMA Heavy. -/
 def widthImad : ℝ := 64
 
-/-- A4, the shfl pipe: 32 results an SM clock. Grade: Programming Guide. Source: CUDA C++ Programming Guide 12.9 §6.4.1
-Table 7, CC 9.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles. -/
+/-- A4, the shfl pipe: 32 results an SM clock, 4 SMSP-cycles a warp instruction. Grade: Programming Guide. Source: CUDA
+C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles. -/
 def widthShfl : ℝ := 32
+
+/-- A4, the uniform pipe: 65.2693 results an SM clock, 1.96111 SMSP-cycles a warp instruction. Grade: measured only (no
+vendor document states the uniform datapath's rate). Source: Nsight Compute §2.3.6 defines the uniform pipe ('a scalar
+unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at
+0.4999 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.96110716 SMSP-cycles each (r20261017-095350-02ff,
+r20261017-103944-a0bf, r20261017-112709-e43e, r20261017-113207-6aa4, r20261017-113541-675b); the width counts a uniform
+instruction as a warp instruction's 32 results, as the pipe row reads a width. -/
+def widthUniform : ℝ := 3200000000 / 49027679
 
 /-- A4: each pipe's results an SM clock. -/
 def Pipe.width : Pipe → ℝ
   | .alu => widthAlu
   | .imad => widthImad
   | .shfl => widthShfl
+  | .uniform => widthUniform
 
 /-- Each class's tensor form: its operand type and its dense MACs a warp instruction, m · n · k over the warps that
 issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread `tcgen05.mma`); `none` off the tensor
@@ -215,7 +225,7 @@ def Kind.pipe : Kind → Option Pipe
   | .QGMMA_E4M3_N256 => none
   | .QGMMA_E5M2_N256 => none
   | .SHFL => some .shfl
-  | .UNI => none
+  | .UNI => some .uniform
 
 /-- **The H200's data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the tensor pipe), its pipe,
 each pipe's width, and no shared-memory class (no LDS kind in the census, so A5 bounds nothing here). -/
@@ -355,6 +365,37 @@ def shflLine : Kind → ℝ
   | .SHFL => 4
   | .UNI => 0
 
+/-- `census/DS-90.csv`'s `DS_uniform` lines, SMSP-cycles a warp instruction; 0 for a class with none. -/
+def uniformLine : Kind → ℝ
+  | .ALU => 0
+  | .BGMMA_B1_N256 => 0
+  | .BMMA168256_B1 => 0
+  | .FFMA => 0
+  | .HGMMA_BF16_N128 => 0
+  | .HGMMA_BF16_N256 => 0
+  | .HGMMA_F16_N256 => 0
+  | .HGMMA_TF32_N256 => 0
+  | .HMMA16816_BF16 => 0
+  | .HMMA16816_F16 => 0
+  | .HMMA1688_TF32 => 0
+  | .IGMMA_S8_N128 => 0
+  | .IGMMA_S8_N16 => 0
+  | .IGMMA_S8_N192 => 0
+  | .IGMMA_S8_N256 => 0
+  | .IGMMA_S8_N256_RS => 0
+  | .IGMMA_S8_N32 => 0
+  | .IGMMA_S8_N64 => 0
+  | .IGMMA_S8_N8 => 0
+  | .IGMMA_U8S8_N256 => 0
+  | .IMAD => 0
+  | .IMMA16816_S8 => 0
+  | .IMMA16832_S8 => 0
+  | .QGMMA_E4M3_N128 => 0
+  | .QGMMA_E4M3_N256 => 0
+  | .QGMMA_E5M2_N256 => 0
+  | .SHFL => 0
+  | .UNI => 49027679 / 25000000
+
 /-- **`DS-90`'s census** (`census/DS-90.csv`): SMSP-cycles a warp instruction of each class holds each row; every class
 holds issue for 1, and a class with no line on a row holds it not at all. -/
 def census : SheetRow Pipe → Kind → ℝ
@@ -363,9 +404,18 @@ def census : SheetRow Pipe → Kind → ℝ
   | .pipe .alu, k => aluLine k
   | .pipe .imad, k => imadLine k
   | .pipe .shfl, k => shflLine k
+  | .pipe .uniform, k => uniformLine k
   | .smem, _ => 0
 
-/-- The issue row: every class holds it for 1, on the sheet as in the census. -/
+/-- The issue row: every class holds it for 1, on the sheet as in the census. A2 (a SMSP issues one warp instruction a
+SMSP-cycle). Grade: Programming Guide. Source: CUDA C++ Programming Guide 12.9 §18.8.1 (CC 9.0): '4 warp schedulers ...
+at every instruction issue time, each scheduler issues one instruction for one of its assigned warps'. A2u (a uniform
+instruction, `UNI`, takes that slot too). Grade: measured only (no vendor document states it). Source: no vendor
+document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA
+Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma:
+each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP,
+dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot
+beside a saturated lane stream (the census's UNI issue line, DC-90). -/
 theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by
   simp [Sheet.machine, census]
 
@@ -386,6 +436,10 @@ theorem machine_imad (k : Kind) : sheet.machine.a (.pipe .imad) k = census (.pip
 theorem machine_shfl (k : Kind) : sheet.machine.a (.pipe .shfl) k = census (.pipe .shfl) k := by
   cases k <;> norm_num [Sheet.machine, sheet, census, shflLine, Kind.pipe, Pipe.width, widthShfl]
 
+/-- The uniform pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
+theorem machine_uniform (k : Kind) : sheet.machine.a (.pipe .uniform) k = census (.pipe .uniform) k := by
+  cases k <;> norm_num [Sheet.machine, sheet, census, uniformLine, Kind.pipe, Pipe.width, widthUniform]
+
 /-- The shared-memory row: no class holds it. -/
 theorem machine_smem (k : Kind) : sheet.machine.a .smem k = census .smem k := by
   simp [Sheet.machine, sheet, census]
@@ -399,6 +453,7 @@ theorem machine_eq_census : sheet.machine.a = census := by
   | .pipe .alu => exact machine_alu k
   | .pipe .imad => exact machine_imad k
   | .pipe .shfl => exact machine_shfl k
+  | .pipe .uniform => exact machine_uniform k
   | .smem => exact machine_smem k
 
 /-- The `tensor` clock is under f_max. -/

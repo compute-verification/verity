@@ -213,14 +213,18 @@ def test_sm89_census_is_well_formed():
 @pytest.mark.parametrize("d", sorted(p for p in DEVICES.glob("sm_*") if (p / "model.toml").is_file()),
                          ids=lambda p: p.name)
 def test_datasheet_vector(d):
-    """A device's DS-NN reads its datasheet rows alone, every kind on DS_issue at one SMSP-cycle, and no data-sheet line
-    prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip beats is a wrong
-    peak, a wrong form's MACs or a wrong pipe)."""
+    """A device's DS-NN reads its datasheet rows, and where it has one DS_uniform, the measured UP line exactly (no
+    document states the uniform datapath's rate: RT-MACHINE-4); every kind is on DS_issue at one SMSP-cycle, and no
+    data-sheet line prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip
+    beats is a wrong peak, a wrong form's MACs or a wrong pipe)."""
     rs, m = rows(d), model(d)
     v = vector(f"DS-{d.name[3:]}", d)
-    assert {r for r in rs if rs[r].status == "datasheet"} == set(v.rows) and "DS_issue" in v.rows
+    assert {r for r in rs if rs[r].status == "datasheet"} == set(v.rows) - {"DS_uniform"} and "DS_issue" in v.rows
     c = census(m, v.epoch, d)
     assert all(row["DS_issue"] == pytest.approx(m.cycle_u) for row in c.values())
+    if "DS_uniform" in v.rows:
+        assert rs["DS_uniform"].status == "measured"
+        assert {k for k, row in c.items() if "DS_uniform" in row} == {"UNI"} and c["UNI"]["DS_uniform"] == c["UNI"]["UP"]
     with open(d / "census.csv", newline="") as f:
         alone = {}
         for x in csv.DictReader(f):

@@ -17,6 +17,19 @@ value = 132
 grade = "whitepaper (H100 SXM5), and measured"
 source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132"
 
+# A2: a SMSP issues at most one warp instruction a SMSP-cycle, so every class holds DS_issue for 1. A2u: a uniform
+# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both, as `Sheet.machine`'s issue
+# row is.
+[issue]
+slots = 1
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §18.8.1 (CC 9.0): '4 warp schedulers ... at every instruction issue time, each scheduler issues one instruction for one of its assigned warps'"
+
+[uniform_issue]
+slots = 1
+grade = "measured only (no vendor document states it)"
+source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP, dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
+
 [clocks.tensor]
 mhz = 1830
 grade = "whitepaper (H100 SXM5)"
@@ -95,9 +108,16 @@ width = 32
 grade = "Programming Guide"
 source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles"
 
+# The uniform datapath has no rate in any document (RT-MACHINE-4), so its width is the census's measured UP line:
+# 128 over 1.96110716 SMSP-cycles a uniform instruction.
+[pipes.uniform]
+width = "3200000000/49027679"
+grade = "measured only (no vendor document states the uniform datapath's rate)"
+source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at 0.4999 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.96110716 SMSP-cycles each (r20261017-095350-02ff, r20261017-103944-a0bf, r20261017-112709-e43e, r20261017-113207-6aa4, r20261017-113541-675b); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
+
 # Each DS-90 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: a wgmma's warpgroup is 4,
 # each warp's instruction a quarter of it; PTX ISA 9.4 §9.7.17), a pipe, or neither (issue only: FFMA at 128 results a
-# clock is the issue ceiling; UNI the uniform datapath, A2u; b1 has no peak on any sheet).
+# clock is the issue ceiling; b1 has no peak on any sheet).
 [kinds]
 ALU = { pipe = "alu" }
 BGMMA_B1_N256 = {}
@@ -126,4 +146,4 @@ QGMMA_E4M3_N128 = { type = "e4m3", m = 64, n = 128, k = 32, warps = 4 }
 QGMMA_E4M3_N256 = { type = "e4m3", m = 64, n = 256, k = 32, warps = 4 }
 QGMMA_E5M2_N256 = { type = "e5m2", m = 64, n = 256, k = 32, warps = 4 }
 SHFL = { pipe = "shfl" }
-UNI = {}
+UNI = { pipe = "uniform" }

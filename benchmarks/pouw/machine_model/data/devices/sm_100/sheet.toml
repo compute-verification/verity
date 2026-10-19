@@ -17,6 +17,19 @@ value = 148
 grade = "measured only"
 source = "no NVIDIA document read gives the B200's SM count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs'); the device reports 148 (sm_100/table.toml)"
 
+# A2: a SMSP issues at most one warp instruction a SMSP-cycle, so every class holds DS_issue for 1. A2u: a uniform
+# datapath instruction (UNI) takes that slot as a lane instruction does. `slots` is 1 for both, as `Sheet.machine`'s issue
+# row is.
+[issue]
+slots = 1
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §18.9.1 (CC 10.x), the sentence of §18.8.1: '4 warp schedulers ... at every instruction issue time, each scheduler issues one instruction for one of its assigned warps'"
+
+[uniform_issue]
+slots = 1
+grade = "measured only (no vendor document states it)"
+source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.4 lists the uniform opcodes CC 10.0 to 12.0 share; measured at saturation beside 4 tcgen05.mma in flight: with the uniform chain in, issue stays at 0.998 to 0.9996 warp instructions a SMSP-cycle and each uniform instruction displaces 0.95 to 1.10 lane instructions, with no dual issue (RT-B200-EMP, dc/probes/sm100_a2u.cu, r20261019-055605-6cc2, note:20261019T0520Z-draft-rt-b200-emp), and 0.924 of a slot beside a saturated lane stream (the census's UNI issue line, DC-100)"
+
 [clocks.implied]
 mhz = 1854
 grade = "none (derived: no document states it)"
@@ -113,11 +126,18 @@ width = 32
 grade = "Programming Guide"
 source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 10.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles"
 
+# The uniform datapath has no rate in any document (RT-MACHINE-4), so its width is the census's measured UP line:
+# 128 over 1.9572915 SMSP-cycles a uniform instruction.
+[pipes.uniform]
+width = "256000000/3914583"
+grade = "measured only (no vendor document states the uniform datapath's rate)"
+source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest form alone (uz_128x) at 0.5009 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.9572915 SMSP-cycles each (r20261017-095350-0a80, r20261017-103944-35c5, r20261017-112709-ec87, r20261017-113207-4cb8, r20261017-113541-9d33); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
+
 # Each DS-100 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: one thread issues a
 # tcgen05.mma, so its whole m·n·k is one warp instruction's, PTX ISA 9.4 §9.7.18.10, which the device-average counts
 # A3 reads spread over the SM's four SMSPs; Nsight Compute §2.3.6: 'one issuing thread can drive work across the four
 # warp schedulers'), a pipe, or neither (issue only: FFMA at 128 results a clock is the issue ceiling, tcgen05.ld
-# (LDTM) moves TMEM to registers on no row of the sheet, UNI the uniform datapath, A2u).
+# (LDTM) moves TMEM to registers on no row of the sheet).
 [kinds]
 ALU = { pipe = "alu" }
 FFMA = {}
@@ -134,7 +154,7 @@ LDTM_32X32B_X32 = {}
 LDTM_32X32B_X4 = {}
 LDTM_32X32B_X64 = {}
 SHFL = { pipe = "shfl" }
-UNI = {}
+UNI = { pipe = "uniform" }
 UTCHMMA_F16_M128_N256 = { type = "f16", m = 128, n = 256, k = 16, warps = 1 }
 UTCIMMA_M128_N128 = { type = "s8", m = 128, n = 128, k = 32, warps = 1 }
 UTCIMMA_M128_N256 = { type = "s8", m = 128, n = 256, k = 32, warps = 1 }

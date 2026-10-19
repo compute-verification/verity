@@ -2,8 +2,9 @@
 reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
 form or its pipe.
 
-`lines` derives the DS lines from it, exactly: issue 1 for every class (A2), a tensor form's MACs a warp instruction over
-a quarter of its type's peak (A3), 128 over its pipe's width (A4). `differences` holds them to the census file of the DS
+`lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
+form's MACs a warp instruction over a quarter of its type's peak (A3), 128 over its pipe's width (A4; the uniform pipe's
+is the measured UP line, which no document states). `differences` holds them to the census file of the DS
 epoch, `figures` holds each per-clock peak to the figure the document prints at the clock it names, and `lean` prints the
 Lean module that states it all (`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line,
 and a lemma for each figure. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
@@ -79,6 +80,8 @@ class Sheet:
     lean: str
     fmax: Const         # MHz
     sms: Const
+    issue: Const        # A2: the slots a warp instruction takes, 1
+    uniform_issue: Const  # A2u: the slots a uniform instruction takes, 1
     clocks: dict[str, Const]
     peaks: dict[str, Peak]
     pipes: dict[str, Const]
@@ -101,10 +104,15 @@ def sheet(data: Path) -> Sheet:
         if form and kinds[k].pipe:
             raise SystemExit(f"{p}: {k} has a tensor form and a pipe; a class has one or neither")
     s = Sheet(name=t["name"], gpu=t["gpu"], vector=t["vector"], lean=t["lean"], fmax=_const(t["fmax"], "mhz"),
-              sms=_const(t["sms"], "value"), clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
+              sms=_const(t["sms"], "value"), issue=_const(t["issue"], "slots"),
+              uniform_issue=_const(t["uniform_issue"], "slots"),
+              clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
               peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
                               v["grade"], v["source"]) for ty, v in t["peaks"].items()},
               pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds)
+    if s.issue.value != 1 or s.uniform_issue.value != 1:
+        raise SystemExit(f"{p}: [issue] and [uniform_issue] take 1 slot, as Sheet.machine's issue row does; price A2u "
+                         f"at another share with `sheet --eps --uni`")
     for k, v in kinds.items():
         if v.form and v.form.type not in s.peaks:
             raise SystemExit(f"{p}: {k}'s type {v.form.type} has no [peaks.{v.form.type}]")
@@ -349,7 +357,8 @@ def lean(s: Sheet, data: Path) -> str:
     out += [*_doc("A3: each type's dense MACs an SM clock."), "def Ty.peak : Ty → ℝ",
             *(f"  | .{ty} => {peak[ty]}" for ty in types), ""]
     for q, w in s.pipes.items():
-        out += [*_doc(f"A4, the {q} pipe: {_dec(w.value)} results an SM clock. Grade: {w.grade}. Source: {w.source}."),
+        out += [*_doc(f"A4, the {q} pipe: {_dec(w.value)} results an SM clock, {_dec(128 / w.value)} SMSP-cycles a "
+                      f"warp instruction. Grade: {w.grade}. Source: {w.source}."),
                 f"def {width[q]} : ℝ := {_num(w.value)}", ""]
     out += [*_doc("A4: each pipe's results an SM clock."), "def Pipe.width : Pipe → ℝ",
             *(f"  | .{q} => {width[q]}" for q in pipes), ""]
@@ -398,7 +407,10 @@ def lean(s: Sheet, data: Path) -> str:
     # One lemma a row, so that each row's case split has a declaration's heartbeats to itself: the whole census in one
     # proof ran out of them (r20261019-053835-0e45).
     unfold = ["Sheet.machine", "sheet", "census"]
-    out += [*_doc("The issue row: every class holds it for 1, on the sheet as in the census."),
+    out += [*_doc(f"The issue row: every class holds it for 1, on the sheet as in the census. A2 (a SMSP issues one warp "
+                  f"instruction a SMSP-cycle). Grade: {s.issue.grade}. Source: {s.issue.source}. A2u (a uniform "
+                  f"instruction, `UNI`, takes that slot too). Grade: {s.uniform_issue.grade}. Source: "
+                  f"{s.uniform_issue.source}."),
             "theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k := by",
             "  simp [Sheet.machine, census]", ""]
     out += [*_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),

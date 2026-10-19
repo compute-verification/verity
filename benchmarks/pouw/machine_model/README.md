@@ -423,7 +423,9 @@ each shared-memory instruction, whatever its width, since a broadcast load reads
 DS-NN` prices a design on the axioms alone. The current vector is the measured one, and every row is some vector's.
 sm_120's is `DS-120`, an epoch of its own after VF whose lines close where they open, so it moves no other vector.
 sm_90's `DS-90` and sm_100's `DS-100` are the same, after DC-90 and DC-100, in `data/devices/sm_90/census/DS-90.csv` and
-`data/devices/sm_100/census/DS-100.csv`. Their constants are each directory's `sheet.toml`, with the document that
+`data/devices/sm_100/census/DS-100.csv`. Each also reads one measured row, `DS_uniform`: no document states the
+uniform datapath's rate, so the sheet's uniform pipe is the census's UP line. Their constants are each directory's
+`sheet.toml`, with the document that
 states each one and its grade (note:20261019T0511Z-draft-mm-sheets): `machine-model --device sm_90 sheet` derives every
 DS line from it, checks it against the census file and checks each per-clock peak against the figure its document prints
 at the clock it's quoted at. `sheet --lean` prints the Lean module `sheet.toml` names
