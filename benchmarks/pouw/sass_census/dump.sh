@@ -9,6 +9,8 @@
 #   census.json    `sass_count.py merge` of them all, a device family each; summary.txt its totals
 #
 #   research run --on vy-nebius-2 --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]
+# MAXBYTES skips binaries larger than it: a fast first pass that leaves out cuBLASLt (whose one cuobjdump pass is serial
+# and holds the merge until it ends), for a first count while the full dump runs.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -34,6 +36,7 @@ done | sort -u >"$WORK/candidates"
 # One copy of each binary (the same wheel sits in several venvs), and only binaries with device code.
 : >"$OUT/corpus.tsv"
 while read -r f; do
+  [ -z "${MAXBYTES:-}" ] || [ "$(stat -c %s "$f")" -le "$MAXBYTES" ] || continue
   archs=$("$CUOBJDUMP" -lelf "$f" 2>/dev/null | grep -o 'sm_[0-9]*[a-z]\?' | sort -u | tr '\n' ' ')
   [ -n "$archs" ] || archs=$("$CUOBJDUMP" -sass "$f" 2>/dev/null | grep -m1 -o 'sm_[0-9]*[a-z]\?')
   [ -n "$archs" ] || continue
