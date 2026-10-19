@@ -1,14 +1,17 @@
 """RT-ALGO round 2: bit-exact checks of the credited-word algebra of three targets (note:20261019T0618Z-draft-rt-algo-r2).
 
-- (c) The prefix barrier in the served layout. The served unit's receipt is 2 (KS + m) words over KS + m sets; the KS
-  prefix sets are running partials, while T_(KS-1), O' and D_1 .. D_(m-1) are final-only (invariant under a reordering of
-  the segments). The credit rule counts K = 32 KS MACs a cell, the prefix sets' worth, so the m digit sets carry none. A
-  tile of all-zero A rows still does real noised work (X = b), which a dead-tile gate that reads A's bytes would zero.
+- (c) The prefix barrier in the compiled unit. The unit's receipt is 2 (KS + m) words over KS + m sets; T_0 .. T_(KS-2)
+  are running partials, while T_(KS-1), O' and D_1 .. D_(m-1) are final-only (invariant under a reordering of the
+  segments). The credit rule counts K = 32 KS MACs a cell, the prefix sets' worth: T_(KS-1), 1/KS of it, is credited and
+  final-only, and the m digit sets carry none. A tile of all-zero A rows still does real noised work (X = b), which a
+  dead-tile gate that reads A's bytes zeroes.
 - (a) Attention. The H1 scheme has no unit for attention's `DotBf16`. On a near-zero P row the residue identity collapses
   a full P̃·X contraction to 32 MACs, but a running-partial word adds one segment, one entry a residue, so it saves nothing.
 - (b) FP-native. A one-coin entry with an even coefficient is a single square (FP-ADIC's ½ cap). A two-coin entry is a
-  single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉ (17 at s32), so two coins reach c = 1 only below that; mod 8 two c = 4
-  entries are one product. e4m3 reaches v₂(c) = 28, and those products overflow s32.
+  single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉, and mod 8 two c = 4 entries are one product: both inside what
+  FP-NATIVE's `AdmWrap` (e + e′ < m) excludes. On design A's grids (e4m3i with its coin rule; E2M1×2 at integer block
+  scales to 15) e + e′ <= 20 < 32, and e4m3i's coin at 448 leaves E4M3. A run that may shift a word certifies two of
+  design A's entries with one product at any gap (Proposition Q's halving, generalized), cell-pure as Proposition Q is.
 
 `collect()` returns (passed, failed); the CLI prints them.
 """
@@ -72,17 +75,23 @@ def check_final_words_are_order_invariant(rng):
 
 
 def check_credit_is_prefix_worth():
-    """The credit rule counts K = 32 KS MACs a cell (#2639's `credit.tally`, Cr = sum count N K), the prefix sets' worth,
-    so the m digit sets are uncredited: at Llama-3.1-8B's K their share of the sets is at or above the headline 0.656%.
-    This is the rule's formula; #2639 gives no useful-work credit until the same-GEMM gate."""
-    rows = []
+    """The credit rule counts K = 32 KS MACs a cell (#2639's `credit.tally`, Cr = sum count N K), the prefix sets' worth.
+    Of those KS sets, T_(KS-1) is final-only (c2), so 1/KS of the credit rests on the fresh-coin barrier alone; the m digit
+    sets are uncredited. Over Llama-3.1-8B's seven linears, weighted by MACs, the final-only share is near the headline
+    0.656%. This is the rule's formula; #2639 gives no useful-work credit until the same-GEMM gate."""
+    rows, last = [], {}
     for K, want_m in ((4096, 2), (14336, 3)):
         ks = K // 32
         m = SG.n_digits(ks)
         if 32 * ks != K or m != want_m:
             return False, f"K={K}: KS={ks}, m={m}, want m={want_m}"
-        rows.append(f"K={K}: KS={ks}, m={m}, digit sets {m / (ks + m):.2%}")
-    return True, "; ".join(rows)
+        last[K] = 1 / ks
+        rows.append(f"K={K}: KS={ks}, m={m}, final-only credited set 1/{ks} = {1 / ks:.2%}, digit sets {m / (ks + m):.2%}")
+    linears = {"q": (4096, 4096), "k": (4096, 1024), "v": (4096, 1024), "o": (4096, 4096),
+               "gate": (4096, 14336), "up": (4096, 14336), "down": (14336, 4096)}
+    macs = {s: k * n for s, (k, n) in linears.items()}
+    weighted = sum(macs[s] * last[linears[s][0]] for s in linears) / sum(macs.values())
+    return True, "; ".join(rows) + f"; Llama-3.1-8B linears by MACs {weighted:.2%}"
 
 
 def check_zero_rows_do_noised_work(rng):
@@ -158,8 +167,9 @@ def check_one_coin_even_is_square():
 
 
 def check_two_coin_threshold():
-    """Two coins on one side, c·β·(b + b′): a single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉. At s32 that is 17, so the
-    two-coin design's c = 1 holds only for v₂(Δ_A·Δ_W) <= 16."""
+    """Two coins on one side, c·β·(b + b′): a single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉, i.e. e + e′ >= m + 1 with
+    e = e′ = v₂(c). That is where one word falls; FP-NATIVE's SAT has a row of two cells fall already at e + e′ = m, so
+    `AdmWrap`'s e + e′ < m is the line, and this threshold is inside what it excludes."""
     for m in range(2, 7):
         t = math.ceil((m + 1) / 2)
         for e in range(m + 1):
@@ -187,17 +197,85 @@ def check_two_coin_one_product_mod8():
     return True, f"one product = target + affine (a0={a0}, a={a}) at all {len(pts)} bit points"
 
 
-def check_e4m3_reaches_threshold():
-    """On e4m3 (finest gap 1), a side's gap is 2^u, u = 0 .. 14, so v₂(c) = u_A + u_W reaches 28 >= 17; those
-    high-binade products also overflow s32 (above 2^31)."""
-    vals = sorted({(m / 8) * 2.0 ** -6 if e == 0 else (1 + m / 8) * 2.0 ** (e - 7)
-                   for e in range(16) for m in range(8) if not (e == 15 and m == 7)} - {0.0})
-    fine = min(q - p for p, q in zip(vals, vals[1:]))
-    us = {round(math.log2((q - p) / fine)) for p, q in zip(vals, vals[1:])}
-    top = (vals[-1] / fine) ** 2
-    if max(us) != 14 or 2 * max(us) < 17 or top <= 2 ** 31:
-        return False, f"u {min(us)}..{max(us)}, max product 2^{math.log2(top):.2f}"
-    return True, f"u per side {min(us)}..{max(us)}, v2(c) up to {2 * max(us)}; max product 2^{math.log2(top):.2f} > 2^31"
+def _v2(x):
+    return (x & -x).bit_length() - 1
+
+
+def _e4m3i():
+    """E4M3's integer values (e4m3fn: no infinities, S.1111.111 is NaN), both signs."""
+    pos = {int(v) for v in ((m / 8) * 2.0 ** -6 if e == 0 else (1 + m / 8) * 2.0 ** (e - 7)
+                            for e in range(16) for m in range(8) if not (e == 15 and m == 7)) if v == int(v)}
+    return sorted(pos | {-v for v in pos})
+
+
+def check_e4m3i_design_a_admissible():
+    """Design A on e4m3i (FP-NATIVE's FP8-A1): P̃ = ⌊P⌋ + Δ_P β with Δ_P the gap above ⌊P⌋, X̃ = RN(X) + Δ_X (b + b′ − 1)
+    with Δ_X the coarser side's gap. Both coins' coefficient is Δ_P Δ_X, so e = e′ = max v₂(Δ_P Δ_X) = 10 and
+    e + e′ = 20 < 32: `AdmWrap` holds at s32. At the top the coin leaves the grid: ⌊P⌋ = 448 and RN(X) = ±448 step to
+    480, which E4M3 can't hold (a completeness cap, ±416)."""
+    g = _e4m3i()
+    on = set(g)
+    up = {x: y - x for x, y in zip(g, g[1:])}
+    down = {y: y - x for x, y in zip(g, g[1:])}
+    dp = {x: up[x] for x in g if x in up}
+    dx = {x: max(up.get(x, 0), down.get(x, 0)) for x in g}
+    off_p = [x for x in g if x not in up]
+    off_x = [x for x in g if x - dx[x] not in on or x + dx[x] not in on]
+    e = max(_v2(dp[p]) + _v2(dx[x]) for p in dp for x in g if x not in off_x)
+    if (max(g), e, sorted(off_p), sorted(off_x)) != (448, 10, [448], [-448, 448]) or 2 * e >= 32:
+        return False, f"max {max(g)}, e={e}, P off-grid at {off_p}, X off-grid at {off_x}"
+    return True, (f"{len(g)} levels to ±448; e = e' = {e}, e + e' = {2 * e} < 32; "
+                  f"coin leaves E4M3 at P = 448 and X = ±448 (to 480)")
+
+
+def check_fp4_design_a_admissible():
+    """Design A on E2M1×2 at integer block scales (FP-NATIVE's FP4-A2, FPX-DESIGN's nvi): a coin's coefficient is
+    Δ_P s_P Δ_X s_X. With scales to 15, e + e′ = 2 (2 + 3 + 2 + 3) = 20 < 32; `AdmWrap` at s32 needs
+    v₂(s_P) + v₂(s_X) <= 11, which integer UE4M3 scales uncapped (64 = 2^6 .. 256 = 2^8) break."""
+    pos = sorted({0, 1, 2, 3, 4, 6, 8, 12})
+    gaps = [y - x for x, y in zip(pos, pos[1:])]
+    worst = 2 * (max(_v2(d) for d in gaps) + max(_v2(s) for s in range(1, 16)))
+    e_uncapped = 2 * (max(_v2(d) for d in gaps) + _v2(256))
+    if (worst, 2 * worst) != (10, 20) or 2 * e_uncapped < 32:
+        return False, f"e at scales to 15: {worst}; uncapped: {e_uncapped}"
+    return True, f"scales to 15: e = e' = {worst}, e + e' = {2 * worst} < 32; a 256 scale both sides: e + e' = {2 * e_uncapped}"
+
+
+def _prop_q_pair(c1, c2, M, v):
+    """(N - affine) >> v mod 2^M for N = (s1 − s2)(s1 + s2), against design A's two entries' bilinear part, at all 64 bit
+    points; also N's largest magnitude."""
+    q1, q2 = c1 << (v - 1), c2 << (v - 1)
+    top = 0
+    for B1, b1, p1, B2, b2, p2 in itertools.product((0, 1), repeat=6):
+        s1, s2 = B1 + q1 * (b1 + p1), B2 - q2 * (b2 + p2)
+        n = (s1 - s2) * (s1 + s2)
+        top = max(top, abs(n))
+        aff = B1 + q1 * q1 * (b1 + p1) - B2 - q2 * q2 * (b2 + p2)
+        if (n - aff) % (1 << v):
+            return False, top
+        if ((n - aff) >> v) % (1 << M) != (c1 * (B1 * b1 + B1 * p1) + c2 * (B2 * b2 + B2 * p2)) % (1 << M):
+            return False, top
+    return True, top
+
+
+def check_design_a_prop_q():
+    """Proposition Q's halving (note:20261016T0208Z-draft-fullfloor-s-r4 §1), generalized to design A: two entries with
+    coin pairs (β_k, b_k), (β_k, b′_k) of coefficient c_k and no b b′ pair are one product N = (s1 − s2)(s1 + s2),
+    s1 = β1 + q1 (b1 + b1′), s2 = β2 − q2 (b2 + b2′), q_k = c_k 2^(v−1): (N − affine) >> v is their bilinear part mod 2^M
+    once v >= M + 1 − 2 v₂(c), the b b′ terms landing on 2^M. At e4m3i's c = 2^5 and M = 32, v = 23 and N fits s64; on a
+    block's coin part (range [0, 2L c], lifted mod 2^7 at L = 32, c = 1), v = 8 and N fits FP32. One mutation: v one
+    short fails. s mixes row i's β with column l's b, so the products are cell-pure, as Proposition Q's are."""
+    out = []
+    for c1, c2, M in ((32, 32, 32), (32, 128, 32), (1, 1, 7)):
+        v = M + 1 - 2 * min(_v2(c1), _v2(c2))
+        ok, top = _prop_q_pair(c1, c2, M, v)
+        if not ok:
+            return False, f"c=({c1},{c2}) M={M} v={v}: not the bilinear part"
+        bad, _ = _prop_q_pair(c1, c2, M, v - 1)
+        if bad:
+            return False, f"c=({c1},{c2}) M={M}: v={v - 1} also certifies"
+        out.append(f"c=({c1},{c2}) mod 2^{M}: v={v}, |N| < 2^{top.bit_length()}")
+    return True, "; ".join(out)
 
 
 def collect(seed: int = 20261019):
@@ -212,7 +290,9 @@ def collect(seed: int = 20261019):
         ("b1 one-coin even entry is a square", check_one_coin_even_is_square),
         ("b2 two-coin square threshold", check_two_coin_threshold),
         ("b3 two-coin L=2 one product mod 8", check_two_coin_one_product_mod8),
-        ("b4 e4m3 reaches the threshold", check_e4m3_reaches_threshold),
+        ("b4 e4m3i design A admissible at s32", check_e4m3i_design_a_admissible),
+        ("b5 FP4 design A admissible at s32", check_fp4_design_a_admissible),
+        ("b6 design A pairs under a shift", check_design_a_prop_q),
     ]
     passed, failed = [], []
     for name, fn in checks:
