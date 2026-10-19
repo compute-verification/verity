@@ -62,9 +62,11 @@ released where a CPU phase sits between (CIR-51).
 1. CPU, before window B (any order, overlapping window A): `build_record.sh` per row on vy-glm53-cpu-2 (the AOT Build of record:
    predict emit refused unless equal to the row's `aot.trace` Build, with its manifest), `AOT_TRACE=<the v2 trace>` for a row whose
    rehearsal moved a Program (that row is re-pinned with its comparison first).
-2. Window A, eu (`gpu_batch.sh a`): the bf16 v6 capture (`cap_bf16_v6.sh`, 1 GPU; then `verity-vllm records capture RUN` gives
-   `BF16_ART`), the four rows' Match GPU legs (`match_gpu.sh`), the G2 point (`benchmarks/served_commit/tp_decode.sh`, `ARM=rows-4k`:
-   rows-sha512's 4 KiB rows, stock against Commit in one TP8 engine, TTFT, prefill and decode TPOT per batch 1, 8, 32). Stop eu.
+2. Window A, eu (`gpu_batch.sh a`): the four rows' Match GPU legs (`match_gpu.sh`). They need no Build: the capture's
+   `--build-rank` registers a Build's post-load tensors, and GLM-5.3 has no model-level post-load hook (`loader_parity`). T1R takes
+   the bf16 v6 capture (`BF16_ART`, from `verity-vllm records capture RUN`) and the G2 point (`benchmarks/served_commit/tp_decode.sh`,
+   `ARM=rows-4k`: rows-sha512's 4 KiB rows, stock against Commit in one TP8 engine, TTFT, prefill and decode TPOT per batch 1, 8, 32)
+   on eu first; `gpu_batch.sh t1r` (`cap_bf16_v6.sh`, then the G2 point) runs them only if those did not hold. Stop eu.
 3. CPU: each row's legs copied eu -> the Build's node (its `match.sha256`), then `match_cpu.sh` (MATCH_PHASE=cpu, `--build-run`
    the Build of record, `--send match.sha256`); then the row dir (its `rowdir.sha256` and the Match's files) copied to eu.
 4. Window B, eu (`gpu_batch.sh b ROWS.env`): each row's Commit (`commit.sh`: rows-sha512 under `verity/tp-run-root/v2`,
@@ -88,6 +90,6 @@ GPU time (wall of the GPU job, which holds all 8 GPUs but for the capture):
 | Commit B8 stochastic | 8 | ~110 min | never run; B8 greedy's |
 | Commit B32 | 8 | ~4 h | never run; its bundles ~4x B8's |
 
-Window A is about 2.1 node-hours and window B about 8.6, so about 10.7 node-hours (85 GPU-hours) in all, of which 6.7 are
-estimates (the capture, B32's two jobs, B8 stochastic's Commit). Those Commits ran under vllm-v1; rows-sha512's cost at TP8 is what
-the G2 point measures.
+Window A (the four legs) is about 1.8 node-hours and window B about 8.6, so about 10.4 node-hours (83 GPU-hours), of which
+6.5 are estimates (B32's two jobs, B8 stochastic's Commit); T1R's capture and G2 point add about 0.3 if `t1r` runs them. The
+measured Commits ran under vllm-v1; rows-sha512's cost at TP8 is what the G2 point measures.
