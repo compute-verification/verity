@@ -98,7 +98,6 @@ from verity_vllm.check.verdict import match_verdict
 TIER_A_K = 3
 #: G5 — served tokens must be reproduced at step 0 and at least this many decode steps (KV transitions in between).
 MIN_DECODE_TOKEN_STEPS = 2
-MIN_DECODE_REPLAYS = MIN_DECODE_TOKEN_STEPS   # name kept for the diagnostic full-replay detail
 #: G5 — at least this many connected chained slices must pass.
 CHAIN_MIN_SLICES = 1
 #: G5 — the regimes every specialization present in both must be sampled in (tier a strata).
@@ -794,37 +793,6 @@ def gate_G4(run: RunArtifacts) -> GateResult:
 # G5 — composition exactness (tier b replay of step 0 and every decode snapshot step)
 # ---------------------------------------------------------------------------------------------------------
 
-_LINKAGE_KEYS = ("n_from_earlier_steps", "n_earlier_step_operands", "n_operands_from_earlier_steps", "from_earlier_steps",
-                 "n_cross_step_operands", "kv_linkage")
-
-
-def _kv_linkage(rep: dict) -> tuple[bool | None, str]:
-    """(consumed something produced in an earlier step?, how it was determined); (None, ...) when not exposed."""
-    for k in _LINKAGE_KEYS:
-        if k in rep:
-            v = rep[k]
-            if isinstance(v, bool):
-                return v, k
-            if isinstance(v, (int, float)):
-                return v > 0, k
-            if isinstance(v, str):
-                return v.lower() in ("pass", "true", "yes"), k
-            if isinstance(v, dict) and "status" in v:
-                return v["status"] == "pass", k
-    src = rep.get("sources")
-    if isinstance(src, dict):
-        for k in ("earlier_steps", "earlier_step", "cross_step", "kv"):
-            if k in src and isinstance(src[k], (int, float)):
-                return src[k] > 0, f"sources.{k}"
-    return None, "not exposed by replay report"
-
-
-def _control_step_tokens(control: dict[str, list[int]] | None, step: int) -> list[int] | None:
-    if not control:
-        return None
-    return sorted(seq[step] for seq in control.values() if step < len(seq))
-
-
 @_gate("G5")
 def gate_G5(run: RunArtifacts) -> GateResult:
     """Composition exactness (D82): exhaustive provenance/structure, sampled numerical semantics.
@@ -1382,10 +1350,6 @@ FOLD_SUMMARY_FIELDS: dict[str, str] = {
 }
 
 
-def fold_summary_doc() -> str:
-    return "\n".join(f"- `{k}`: {v}" for k, v in FOLD_SUMMARY_FIELDS.items())
-
-
 __all__ = [
     "TIER_A_K", "MIN_DECODE_TOKEN_STEPS", "CHAIN_MIN_SLICES", "REGIMES", "COS_SIN_MAX_ULP", "DIAG_MAX_LINEAR_RESIDUAL", "GATES", "GATE_NAMES", "HOLDOUT_GATES",
     "STRUCTURAL_GATES", "INTEGRITY_GATES", "REF_INTEGRITY_RULE", "ALL_GATES", "QUERY_USE_SCHEMA", "QUERY_USE_KIND",
@@ -1393,5 +1357,5 @@ __all__ = [
     "GateResult", "ArtifactError", "RunArtifacts", "load_profile_config",
     "gate_G1", "gate_G2", "gate_G3", "gate_G4", "gate_G5", "gate_G6", "gate_G7", "gate_G8", "gate_R1", "fold_integrity", "quarantine_specs",
     "evaluate_gates", "verdict", "gates_json", "write_gates", "gates_markdown",
-    "strip_T", "diag_structure", "diag_family_match", "diag_overhead", "diagnostics", "fold_summary_doc",
+    "strip_T", "diag_structure", "diag_family_match", "diag_overhead", "diagnostics",
 ]

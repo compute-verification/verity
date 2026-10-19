@@ -155,14 +155,6 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
 ]
 
-#: fields of runs.jsonl's `commit` block that are MEASUREMENTS / EXECUTION LABELS, not verdict facts (listed so the completeness test can
-#: tell "not a decision" from "lost")
-MEASUREMENT_FIELDS = frozenset({
-    "bytes_bound", "finalize_s", "leaves", "persistent_bytes", "root_ready_delay_s", "spans_bytes", "spans_calls", "spans_total_s", "steps",
-    "t_ready_minus_last_step_s", "temporary_bytes_peak", "tensors", "weight_registration", "extra",
-})
-
-
 # ---------------------------------------------------------------------------------------------------------------------- the records
 
 @dataclass

@@ -806,8 +806,6 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
 # ---------------------------------------------------------------------------------------------------------------------
 # Data path (a): increment A telemetry (events*.jsonl spans + alloc/free marks; resources*.jsonl cgroup/process rows).
 # ---------------------------------------------------------------------------------------------------------------------
-ALLOC_MARK = {"kind": "mark", "name": "alloc", "fields": ["obj", "bytes", "alloc_id", "stage"]}
-FREE_MARK = {"kind": "mark", "name": "free", "fields": ["obj", "alloc_id", "stage"]}
 
 
 def observe_increment_a(attempt_dir: str) -> dict[str, Any]:

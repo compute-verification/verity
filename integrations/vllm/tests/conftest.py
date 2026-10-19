@@ -6,7 +6,9 @@ and a strict mark that passed there would fail `check`. Fix the test or the code
 """
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -68,10 +70,20 @@ def pytest_configure(config) -> None:
     torch.exp(torch.zeros(1))
 
 
+#: Tests whose setup and call took over 5 s (the seconds beside each), which `slow` marks so that `--quick` leaves them to the
+#: full suite: those of the full run r20261018-214339-1952, and those of the quick tier r20261019-050331-542f (7 workers on 8
+#: CPUs). Add what the runner reports as over 5 s without the mark, or mark the test itself.
+SLOW = Path(__file__).with_name("slow_tests.json")
+
+
+@pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items) -> None:
+    slow = json.loads(SLOW.read_text())
     for item in items:
         if reason := KNOWN_FAILURES.get(item.nodeid):
             item.add_marker(pytest.mark.xfail(reason=f"known failure on main: {reason}", strict=False))
+        if item.nodeid in slow:
+            item.add_marker(pytest.mark.slow)
 
 
 @pytest.fixture(autouse=True)

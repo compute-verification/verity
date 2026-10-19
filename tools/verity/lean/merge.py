@@ -20,8 +20,8 @@ regenerate the record on the merged tree (`check.py --update`), as without the d
 a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
-and `except` as lists, `why` as a list of its `; ` clauses (`layers`). The roots (`roots`), which two branches that each add a
-module to build both change, merge as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
+and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
+`claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
 `.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
 that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
@@ -60,7 +60,7 @@ WIDTH = 120
 SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`)
-NESTED = {"upstream", "shape"}
+NESTED = {"upstream", "shape", "claims"}
 MISSING = object()
 
 
@@ -82,13 +82,24 @@ def keys(section: str, a: dict, b: dict) -> list:
     return sorted(ks) if section in SORTED else ks
 
 
+def names(o, a, b) -> bool:
+    """Whether the three sides are lists of names (`roots`, `meaning`, `claims.modules`, `shape.premises`...), which merge as
+    lists (`items`): two branches that each add a module to one merge."""
+    def ok(x):
+        return isinstance(x, list) and all(isinstance(i, str) for i in x)
+    return ok(a) and ok(b) and (o is MISSING or ok(o))
+
+
 def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1) -> dict:
-    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too."""
+    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too, and lists of names merge
+    as lists."""
     out = {}
     for k in keys(path, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
             v = entries(f"{path}[{k}]", {} if x is MISSING else x, y, z, why, depth - 1)
+        elif depth > 1 and names(x, y, z):
+            v = items([] if x is MISSING else x, y, z)
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
         if v is not MISSING:
@@ -206,7 +217,7 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
             v = guarantees({} if o is MISSING else o, a, b, why)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
-        elif k == "roots" and isinstance(a, list) and isinstance(b, list) and (o is MISSING or isinstance(o, list)):
+        elif names(o, a, b):
             v = items([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)

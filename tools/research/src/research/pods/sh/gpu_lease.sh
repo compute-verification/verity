@@ -75,6 +75,17 @@
 # poll falls back to the rules above, keeping its place in the queue.
 # A lease's owner lines are written as soon as its locks are taken (the UUIDs and the memory scope are looked up before), so a
 # held lock never shows the previous holder's line for longer than that.
+#
+# Foreign memory (INF-86): a free lock is not a free GPU.  A run's process that outlives its lease (vLLM's TP rank workers, which
+# hold no lock, after a cancel: vy-glm53-eu, 19 Oct 01:20Z, ~94 GB per GPU) leaves the GPU's memory taken, and the next holder fails
+# for lack of it.  So before a GPU is granted, `nvidia-smi --query-compute-apps` must show no process on it using more than
+# $GPU_LEASE_FOREIGN_MIB MiB (default 1024) that is foreign: neither a lease holder's (a lock owner pid among its ancestors, as
+# gpu_adopt.py judges) nor this request's own (one of gpu-lease's ancestors).  Such a GPU is not granted; the request waits (or, without
+# --wait, exits 75), its finding goes to $GPU_LEASE_LOG (default $GPU_LEASE_DIR/lease.log) once per change and to
+# $GPU_LEASE_DIR/<i>.foreign, which `status` shows (`foreign <i> ...`) and node 1's n1_lease.py copies into n1-lease.json.
+# An nvidia-smi that doesn't answer within $GPU_LEASE_SMI_TIMEOUT_S seconds (default 10), or fails, never holds grants up: the
+# GPUs are granted as before, and the log says `unverified`.  $GPU_LEASE_SMI names the nvidia-smi to ask; where GPU_LEASE_COUNT
+# fakes the GPUs (tests), nothing is asked unless it is set.
 
 set -u
 dir=${GPU_LEASE_DIR:-/run/gpu-lease}
@@ -298,26 +309,137 @@ status() {
     [ -n "$owner" ] && age=$(minutes_since "$owner")
     echo "$i $state${owner:+ $age$owner}"
   done
+  for i in $(gpu_indices); do
+    [ -r "$dir/$i.foreign" ] || continue
+    while IFS= read -r owner; do
+      f=$(echo "$owner" | sed -n 's/^pid=\([0-9]*\) .*/\1/p')
+      [ -n "$f" ] && [ -d "/proc/$f" ] && echo "foreign $i $owner"
+    done < "$dir/$i.foreign"
+  done
   for f in $(live_waiters); do
     owner=$(cat "$f" 2>/dev/null)
     echo "waiting $(minutes_since "$owner")$owner"
   done
 }
 
-take() {
-  # take N from CANDIDATES: TAKEN = the indices, their lock descriptors left open; 1 (holding nothing) when fewer than N are free
+take_free() {
+  # take N from CANDIDATES less $2... (indices): TAKEN = the indices, their lock descriptors left open; 1 (holding nothing) when
+  # fewer than N are free
   local want=$1 i fd
+  shift
   TAKEN=() FDS=()
   for i in "${CANDIDATES[@]}"; do
     [ "${#TAKEN[@]}" -lt "$want" ] || break
+    case " $* " in *" $i "*) continue ;; esac
     exec {fd}>>"$dir/$i.lock" || continue
     if flock -n -x "$fd"; then TAKEN+=("$i") FDS+=("$fd"); else exec {fd}>&-; fi
   done
   if [ "${#TAKEN[@]}" -lt "$want" ]; then
-    for fd in "${FDS[@]}"; do exec {fd}>&-; done
-    TAKEN=() FDS=()
+    drop_taken
     return 1
   fi
+}
+
+drop_taken() {
+  local fd
+  for fd in "${FDS[@]}"; do exec {fd}>&-; done
+  TAKEN=() FDS=()
+}
+
+take() {
+  # take N free GPUs from CANDIDATES, none with foreign memory on it (foreign_gpus); 1 (holding nothing) when there aren't N
+  local want=$1 g
+  local -a busy=()
+  take_free "$want" || return 1
+  foreign_gpus || return 0
+  [ "${#FOREIGN[@]}" -gt 0 ] || return 0
+  for g in "${FOREIGN[@]}"; do busy+=("${g%% *}"); done
+  drop_taken
+  take_free "$want" "${busy[@]}"
+}
+
+ppid_of() {
+  local s
+  s=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  s=${s##*) }
+  set -- $s
+  echo "$2"
+}
+
+smi_apps() {
+  # nvidia-smi's compute apps, `pid, used_memory, gpu_uuid` per line; 1 when it fails or gives no answer within
+  # $GPU_LEASE_SMI_TIMEOUT_S: a wedged nvidia-smi (a GPU fallen off the bus) can sit in the kernel past any signal, so it is left
+  # behind, never waited on
+  local f=$dir/.smi.$$ k=0 lim
+  rm -f "$f.out" "$f.rc"
+  ( timeout -k 2 "${GPU_LEASE_SMI_TIMEOUT_S:-10}" "${GPU_LEASE_SMI:-nvidia-smi}" --query-compute-apps=pid,used_memory,gpu_uuid \
+      --format=csv,noheader > "$f.out" 2> /dev/null; echo "$?" > "$f.rc" ) > /dev/null 2>&1 &
+  lim=$((${GPU_LEASE_SMI_TIMEOUT_S:-10} * 10 + 30))
+  while [ ! -s "$f.rc" ]; do
+    [ "$k" -lt "$lim" ] || { disown $! 2> /dev/null; return 1; }
+    sleep 0.1
+    k=$((k + 1))
+  done
+  wait $! 2> /dev/null
+  [ "$(cat "$f.rc")" = 0 ] || { rm -f "$f.out" "$f.rc"; return 1; }
+  cat "$f.out"
+  rm -f "$f.out" "$f.rc"
+}
+
+foreign_gpus() {
+  # FOREIGN: one "INDEX pid=P mem=M MiB user=U cmd=..." per process of more than $GPU_LEASE_FOREIGN_MIB MiB on a candidate GPU that
+  # neither a lease holder (a lock owner pid among its ancestors; the locks this request holds aside) nor this request (one of
+  # gpu-lease's ancestors) owns; each GPU's finding is in $dir/<i>.foreign, and is logged once per change.  1 (FOREIGN empty)
+  # when nothing was asked (GPU_LEASE_COUNT without GPU_LEASE_SMI, or no nvidia-smi), or nvidia-smi gave no answer: logged
+  # `unverified`, and the GPUs are granted as before
+  local apps line p m u i fd owner q own=" " held=" " note k
+  FOREIGN=()
+  if [ -n "${GPU_LEASE_COUNT:-}" ] && [ -z "${GPU_LEASE_SMI:-}" ]; then return 1; fi
+  command -v "${GPU_LEASE_SMI:-nvidia-smi}" > /dev/null 2>&1 || return 1
+  if ! apps=$(smi_apps); then
+    note="unverified: ${GPU_LEASE_SMI:-nvidia-smi} gave no answer in ${GPU_LEASE_SMI_TIMEOUT_S:-10} s, so GPUs ${TAKEN[*]} go to pid $$ unchecked"
+    echo "gpu-lease: $note" >&2
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $note (n=$n, who=${who// /_}, run=${RESEARCH_RUN_ID:--})" >> "${GPU_LEASE_LOG:-$dir/lease.log}"
+    return 1
+  fi
+  for i in $(gpu_indices); do
+    case " ${TAKEN[*]} " in *" $i "*) continue ;; esac
+    exec {fd}>>"$dir/$i.lock" || continue
+    if flock -n -s "$fd"; then exec {fd}>&-; continue; fi
+    exec {fd}>&-
+    owner=$(sed -n 's/^pid=\([0-9]*\) .*/\1/p' "$dir/$i.owner" 2>/dev/null)
+    [ -n "$owner" ] && held+="$owner "
+  done
+  q=$$
+  while [ -n "$q" ] && [ "$q" -gt 1 ]; do own+="$q "; q=$(ppid_of "$q") || break; done
+  while IFS=, read -r p m u; do
+    p=${p//[!0-9]/} m=${m//[!0-9]/} u=${u// /}
+    [ -n "$p" ] && [ -n "$m" ] && [ "$m" -gt "${GPU_LEASE_FOREIGN_MIB:-1024}" ] || continue
+    i=$(echo "$table" | awk -v u="$u" '$2 == u {print $1}')
+    case " ${CANDIDATES[*]} " in *" $i "*) ;; *) continue ;; esac
+    case "$own" in *" $p "*) continue ;; esac
+    q=$p k=0
+    while [ -n "$q" ] && [ "$q" -gt 1 ] && [ "$k" -lt 64 ]; do
+      case "$held" in *" $q "*) continue 2 ;; esac
+      q=$(ppid_of "$q") || break
+      k=$((k + 1))
+    done
+    [ -d "/proc/$p" ] || continue
+    FOREIGN+=("$i pid=$p mem=${m}MiB user=$(stat -c %U "/proc/$p" 2>/dev/null || echo '?') cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | cut -c1-120)")
+  done <<< "$apps"
+  for i in "${CANDIDATES[@]}"; do
+    note=$(printf '%s\n' "${FOREIGN[@]}" | awk -v i="$i" '$1 == i {sub(/^[0-9]+ /, ""); print}')
+    if [ -z "$note" ]; then rm -f "$dir/$i.foreign"; continue; fi
+    echo "$note" | sed "s/ cmd=/ seen=$(date -u +%Y-%m-%dT%H:%M:%SZ) cmd=/" > "$dir/.$i.foreign.$$" &&
+      chmod 666 "$dir/.$i.foreign.$$" 2> /dev/null; mv -f "$dir/.$i.foreign.$$" "$dir/$i.foreign"
+  done
+  note=$(printf '%s; ' "${FOREIGN[@]}")
+  if [ "${#FOREIGN[@]}" -gt 0 ] && [ "$note" != "${said_foreign:-}" ]; then
+    echo "gpu-lease: not granting a GPU a foreign process holds memory on: ${note%; }" >&2
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) foreign: ${note%; } (not granted to pid $$, n=$n, who=${who// /_}, run=${RESEARCH_RUN_ID:--})" \
+      >> "${GPU_LEASE_LOG:-$dir/lease.log}"
+  fi
+  said_foreign=$note
 }
 
 report_usage() {

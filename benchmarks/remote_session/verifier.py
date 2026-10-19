@@ -173,9 +173,10 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
     Held at every pass (`WORST_PASS`, the worst pass's): each window's passes each read the distinct blocks of their
     plan (`plans`, a list of each window's, as `Session` received them) inside the window's span, so at every pass the
     node held them, but for the receipts the pooled event leaves wrong (`audit.floors`, f_t of the window's U_t, every
-    window's at once except with the record's δ) and the blocks its GPUs could re-encode from their payloads in the
-    span instead (`rebuild`, its squarings at `codec.encode_squarings` a block).  Those lost blocks could all fall in
-    one pass, so they come off every pass, and the held bytes a window credits are its least pass's, less them all.
+    window's at once except with the record's δ), the blocks its GPUs could re-encode from their payloads in the
+    span instead (`rebuild`, its squarings at `codec.encode_squarings` a block), and the blocks its on-chip storage
+    holds at the pass instead of HBM (`chip_bytes`, `chip_blocks`).  Those lost blocks could all fall in one pass, so
+    they come off every pass, and the held bytes a window credits are its least pass's, less them all.
 
     Held on average (`AVERAGE`, each window's `average` and the session's `average`, `averaged`): the mean of the
     window's passes, less f_t·U_t/P_t, the rebuilds and `chip_bytes` of the node's on-chip storage.
@@ -196,7 +197,7 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
         raise ValueError("the rebuild model is of another codec than the record's")
     b, labels = record.block_bytes, regions is not None
     regions = regions if labels else (("filler", "hbm", 0, record.blocks),)
-    per_ns = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9
+    per_ns, chip = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9, chip_bytes / b
     windows = []
     for w, ps, f in zip(record.windows, plans, audit.floors(record)):
         carrier = credit_post_seed.carrier_bytes(w.receipts * b) if credit_post_seed is not None else 0.0
@@ -209,14 +210,14 @@ def memory(record: audit.Record, plans, regions, *, hbm_bytes: int, rebuild: aud
                 by["weights"] += o if kind == "weights" and tier == "hbm" else 0
             kv = post * b - min(carrier, post * b) if credit_post_seed is not None else 0.0
             passes.append((by, post, kv))
-        lost = f * w.receipts + per_ns * w.span_ns
+        lost = f * w.receipts + per_ns * w.span_ns + chip
         held = {"weights": min(p[0]["weights"] for p in passes) * b, "kv": min(p[1] for p in passes) * b,
                 "hbm": min(p[0]["hbm"] for p in passes) * b, "host": min(p[0]["host"] for p in passes) * b}
         basis = min(p[0]["hbm"] * b + p[2] for p in passes)
         mean = {k: sum(p[0][k] for p in passes) * b / w.passes for k in ("weights", "hbm", "host")}
         windows.append({
-            "window": w.window, "passes": w.passes, "span_ns": w.span_ns, "floor": f, "lost_blocks": lost,
-            "held": held, "read": {"weights": sum(p[0]["weights"] for p in passes) * b, "kv": sum(w.post_seed) * b},
+            "window": w.window, "passes": w.passes, "span_ns": w.span_ns, "floor": f, "chip_blocks": chip,
+            "lost_blocks": lost, "held": held, "read": {"weights": sum(p[0]["weights"] for p in passes) * b, "kv": sum(w.post_seed) * b},
             "basis": basis, "epsilon": min(1.0, lost * b / basis) if basis > 0 else 1.0,
             "credited": {"hbm": max(0.0, basis - lost * b), "weights": max(0.0, held["weights"] - lost * b),
                          "kv": max(0.0, min(p[2] for p in passes) - lost * b),
@@ -251,19 +252,27 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
     """An accepted session's memory line in both forms, from its record in `verifier.json` (`Verifier.session`'s),
     for one written before the average form (`averaged`): each window's mean held per pass is its read weights over its
     passes, and its registered receipts over its passes less its least host tier for HBM, exact while every pass reads
-    the same host blocks; KV, credited on no verdict, is none.  The rebuilds are the recorded lost blocks less f_t·U_t.
-    With `host_bytes`, the node line too (`node_line`)."""
+    the same host blocks; KV, credited on no verdict, is none.  The rebuilds are the recorded lost blocks less f_t·U_t
+    and the recorded chip blocks (none in a record written before the worst-pass form charged the chip), and both
+    forms charge `chip_bytes`.  With `host_bytes`, the node line too (`node_line`)."""
     mem, pub = session["ledger"]["memory"], session["record"]["public"]
     if mem["kv_credited"]:
         raise ValueError("a record that credits KV keeps each pass's KV, which a recorded window doesn't")
     b, windows = mem["block_bytes"], []
     for x, receipts, post in zip(mem["windows"], pub["receipts"], pub["post_seed"]):
         p, wrong = x["passes"], x["floor"] * receipts
+        rebuilt = x["lost_blocks"] - wrong - x.get("chip_blocks", 0.0)
+        lost = wrong + rebuilt + chip_bytes / b
         hbm = (receipts - post) * b / p - x["held"]["host"]
         mean = {"weights": x["read"]["weights"] / p, "hbm": hbm, "host": x["held"]["host"]}
-        windows.append(x | {"average": {"window": x["window"], **averaged(
-            mean, 0.0, wrong_blocks=wrong / p, rebuild_blocks=x["lost_blocks"] - wrong, passes=p,
-            chip_bytes=chip_bytes, block_bytes=b)}})
+        windows.append(x | {
+            "chip_blocks": chip_bytes / b, "lost_blocks": lost,
+            "epsilon": min(1.0, lost * b / x["basis"]) if x["basis"] > 0 else 1.0,
+            "credited": {"hbm": max(0.0, x["basis"] - lost * b), "weights": max(0.0, x["held"]["weights"] - lost * b),
+                         "kv": 0.0, "kv_read": 0.0},
+            "average": {"window": x["window"], **averaged(
+                mean, 0.0, wrong_blocks=wrong / p, rebuild_blocks=rebuilt, passes=p, chip_bytes=chip_bytes,
+                block_bytes=b)}})
     out = summed(windows, hbm_bytes=mem["hbm_bytes"], block_bytes=b, delta=mem["delta"], labels=mem["labels"],
                  kv_credited=False, chip_bytes=chip_bytes)
     if (error := memory_error(session["ledger"])) is not None:

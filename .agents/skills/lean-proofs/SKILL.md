@@ -27,6 +27,10 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Proofs/Flock/Level3/` and `Proofs/Flock/Soundness/`. A property of code, stated against its Lean functions, is
   `Properties.<Protocol>`, proved in `Properties.Proofs.<Protocol>` (package `security_properties`, which may require
   `security` and the code, never `security_proofs`). No new package: an area is a directory in each tree.
+- **Lean is the definition and the verifier of record** (Daniel, 18 Oct; `AGENTS.md` "Design rules"). A verifier is
+  Lean code and imports nothing from `verity.ml`; the Python that mirrors it, for the prover's speed, is held to it by
+  difftest (`verity/core/difftest/`). A protocol whose Python verifier is still of record switches by the 8 Oct
+  procedure (`.agents/skills/friction/SKILL.md`), which moves its properties from `Models/` to `Properties/`.
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
@@ -44,8 +48,8 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
   rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
-- **A reviewer or red-team subagent works in its own worktree**, under AGENTS.md's checkout rule (Lanes): a checkout in
-  another agent's tree switches that agent's files under it.
+- **A reviewer or red-team subagent is a cloud worker** (AGENTS.md "Lanes"), so it works in its own checkout: a checkout
+  in another agent's tree switches that agent's files under it.
 
 ## Build, iterate, check
 
@@ -61,8 +65,11 @@ Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib)
 update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
 proofs peaks at 15–24 GB of memory, so `check.py` and the fast path refuse a package that pins ArkLib on a machine with
 less than 24 GiB (memory and swap, within its cgroup) and print the fast path's line on a node; a 16 GB agent VM runs
-it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). Give a queued job
-`--mem-gb 32`.
+it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). A whole-Security audit
+(`Security`, which audits Security/Proofs beside it) needs more: with 48 replay threads it peaked at 189 GiB, in its kernel
+replays, and died at 64 and 96 GiB (r20261018-175656-1c85). `check.py` now gives a heavy replay one thread per 4 GiB and
+runs heavy replays one at a time, and refuses that audit below 64 GiB. For a record, use the fast path, which skips the
+replay; a queued `check.py --build` of Security takes `--kind lean-audit`, which brings its memory.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
 your own, use the fast path on a shared machine. Don't run `check.py --build --update` from a fresh tree there: that took

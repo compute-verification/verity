@@ -38,6 +38,7 @@ from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import row_records as R
+from verity_vllm.pipeline import row_stages as S
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_stages import SingleRow
 
@@ -345,6 +346,16 @@ def test_a_rows_derives_run_in_parallel_by_default(tmp_path, monkeypatch):
     r, _ran = _derive_row(tmp_path / "budget", monkeypatch, cpus=4, environ={"BUILD_RAM_BUDGET_GB": str(budget)})
     r.derive_all(60)
     assert next(e for e in _timeline(r) if e["stage"] == "build.jobs")["jobs"] == 2
+
+
+def test_a_derive_on_the_boolean_ir_gets_its_scale_and_build_timeout_overrides_it(tmp_path, monkeypatch):
+    r, _ran = _derive_row(tmp_path, monkeypatch, cpus=1)
+    assert (r.derive_timeout(256, 31), r.derive_timeout(512, 62)) == (900, 3600)
+    r.tgt = json.dumps({"compute_capability": [12, 0], "ir": "boolean"})
+    assert (r.derive_timeout(256, 31), r.derive_timeout(512, 62)) == (900 * S.BOOLEAN_DERIVE_SCALE, S.CAP)
+    r, _ran = _derive_row(tmp_path / "flag", monkeypatch, "--build-timeout", "77", cpus=1)
+    r.tgt = json.dumps({"ir": "boolean"})
+    assert r.derive_timeout(256, 31) == 77
 
 
 def test_the_extra_shapes_derive_longest_first(tmp_path, monkeypatch):

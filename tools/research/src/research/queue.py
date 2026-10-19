@@ -20,9 +20,14 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    tools/research/tests/test_pythonpath.py, or `pytest --collect-only` in a suite
                                                    whose inputs its change touches; --no-preflight skips it (the lander's)
-    research queue drive --on MACHINE [--max-running N] [--train-size N] [--marked-after TS] [--first N,...] [--defer STEPS] [--regenerate-locks] [--dry-run]
+    research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
+                         [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): land what passed, sync,
-                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest
+                                                   check `next` in trains with train.sh, eject what one PR broke, tell @ci the rest.
+                                                   --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
+                                                   fresh each tick, so a change to them is a reviewed commit (drive's of record:
+                                                   tools/verity/check/drive.toml); a flag given here overrides the file's, the
+                                                   effective flags print once a tick, and --config-from-tree reads this file system's
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -61,8 +66,9 @@ gate).  `--no-preflight` skips it, for the lander.
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
 order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
-merged again), and a `main` that moved outside the queue rebuilds `next` on it.  A PR whose head contains another open PR's head
-goes in after it and waits while that one waits.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
+runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
+PR whose head contains another open PR's head goes in after it and waits while that one waits.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
@@ -91,6 +97,8 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import contextlib
+import dataclasses
+import difflib
 import fcntl
 import hashlib
 import importlib.util
@@ -117,6 +125,9 @@ BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
 #: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
 RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
+#: drive's flags of record (`DriveFlags`, `--config`)
+DRIVE_FLAGS = "tools/verity/check/drive.toml"
+MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
@@ -132,6 +143,8 @@ AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
+#: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
+CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 
 
 class QueueError(Exception):
@@ -245,6 +258,99 @@ class Rules:
         if cut is not None and not (isinstance(cut, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cut)):
             raise QueueError(f"{source}: marked_after {cut!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
         return cls(doc.get("hold_label", "hold"), source, cut)
+
+
+@dataclass(frozen=True)
+class DriveFlags:
+    """`research queue drive`'s flags: the defaults, then what `--config` reads (`DRIVE_FLAGS` on `main`, so a change to them is
+    a reviewed commit and the next tick takes it), then each flag the command line gives (`override`)."""
+    on: str | None = None
+    max_running: int = 2
+    train_size: int = 4
+    marked_after: str | None = None
+    defer: tuple[str, ...] = ()
+    regenerate_locks: bool = False
+    first: tuple[int, ...] = ()
+
+    @classmethod
+    def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
+        try:
+            doc = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as e:
+            raise QueueError(f"{source}: not TOML: {e}") from None
+        keys = [f.name for f in dataclasses.fields(cls)]
+        for k in doc:
+            if k not in keys:
+                near = difflib.get_close_matches(k, keys, n=1)
+                raise QueueError(f"{source}: unknown key {k!r}{f' (did you mean {near[0]!r}?)' if near else ''}: drive reads "
+                                 f"only {', '.join(keys)}; rename or remove it")
+
+        def bad(k: str, want: str) -> QueueError:
+            return QueueError(f"{source}: {k} = {doc[k]!r}: {want}")
+
+        def names(k: str) -> tuple[str, ...]:
+            v = doc[k]
+            if not (isinstance(v, list) and all(isinstance(x, str) and re.fullmatch(r"[\w.-]+", x) for x in v)):
+                raise bad(k, "a list of names, as [\"a\", \"b\"]")
+            return tuple(v)
+
+        got: dict = {}
+        if "on" in doc:
+            if not (on := names("on")):
+                raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
+            got["on"] = ",".join(on)
+        for k in ("max_running", "train_size"):
+            if k in doc:
+                if type(doc[k]) is not int or doc[k] < 1:
+                    raise bad(k, "a whole number, 1 or more")
+                got[k] = doc[k]
+        if "marked_after" in doc:
+            if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
+                raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
+            got["marked_after"] = doc["marked_after"]
+        if "defer" in doc:
+            got["defer"] = names("defer")
+        if "regenerate_locks" in doc:
+            if not isinstance(doc["regenerate_locks"], bool):
+                raise bad("regenerate_locks", "true or false")
+            got["regenerate_locks"] = doc["regenerate_locks"]
+        if "first" in doc:
+            if not (isinstance(doc["first"], list) and all(type(n) is int and n > 0 for n in doc["first"])):
+                raise bad("first", "a list of PR numbers, as [1858, 1860]")
+            got["first"] = tuple(doc["first"])
+        return cls(**got)
+
+    def override(self, a: argparse.Namespace) -> "DriveFlags":
+        """These flags with each one ``a`` (the command line) gives explicitly in its place."""
+        given = {k: getattr(a, k) for k in ("on", "max_running", "train_size", "marked_after", "regenerate_locks")
+                 if getattr(a, k) is not None}
+        if a.defer is not None:
+            given["defer"] = tuple(x for x in a.defer.split(",") if x)
+        if a.first is not None:
+            given["first"] = tuple(int(n) for n in a.first.split(",") if n)
+        return dataclasses.replace(self, **given)
+
+    def line(self) -> str:
+        return " ".join(f"{k}={','.join(map(str, v)) if isinstance(v, tuple) else v}"
+                        for k, v in dataclasses.asdict(self).items())
+
+
+def drive_flags(path: str, clone: Path | None) -> tuple[DriveFlags, str]:
+    """The flags in ``path`` at `main` in the queue's ``clone`` (fetched), or in the file itself when ``clone`` is None
+    (`--config-from-tree`); with where they came from."""
+    if clone is None:
+        try:
+            return DriveFlags.parse(Path(path).read_text(), path), path
+        except OSError as e:
+            raise QueueError(f"--config {path}: {e.strerror}") from None
+    if Path(path).is_absolute() or path.startswith(".."):
+        raise QueueError(f"--config {path}: a path from the repository's root, read at `main` (or --config-from-tree for this file)")
+    sha = _out(clone, "rev-parse", "refs/remotes/origin/main")
+    r = _git(clone, "show", f"{sha}:{path}", check=False)
+    if r.returncode:
+        raise QueueError(f"--config {path}: `main` ({sha[:12]}) has no such file: land it first, or pass --config-from-tree")
+    where = f"{path} at main {sha[:12]}"
+    return DriveFlags.parse(r.stdout, where), where
 
 
 def label_target(pr: int, head: str) -> str:
@@ -382,6 +488,12 @@ class Queue:
         self.frozen: set[int] = set()
         #: why a ready PR stays off `next` for now, or None (`Driver.warming`: a cold-forcing PR whose circuit-check is pre-warmed)
         self.warming: Callable[[PR], str | None] | None = None
+        #: why `sync` keeps `next` on its base this time (`hold`), from the queue's state; `Driver` sets its own, since its tick
+        #: asks `Driver.held` before it syncs
+        self.holding: Callable[[dict], str | None] = self._held
+        #: `research status` of run ids (`drive.run_states`), and the clock, for `_held`
+        self.run_states: Callable[[Path, list[str]], dict] | None = None
+        self.now: Callable[[], float] = time.time
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
@@ -588,11 +700,41 @@ class Queue:
                 return c
         return None
 
+    def _held(self, state: dict) -> str | None:
+        """`hold` with drive's launches (`drive.launched` in ``state``): a member's check runs while a run of its launch is active
+        and hasn't failed yet, or every run exited 0 within `PUBLISH_GRACE_S` (its attempt may not be in the store yet: drive
+        lands it next)."""
+        from .drive import ACTIVE, PUBLISH_GRACE_S, _utc, run_states
+
+        launched = (state.get("drive") or {}).get("launched") or {}
+        if not launched:
+            return None
+        read = self.run_states or run_states
+
+        def running(commit: str, base: str) -> bool:
+            if not (ids := (launched.get(commit) or {}).get("ids")):
+                return False
+            states = read(self.workdir, list(ids))
+            if any(len(s) > 3 and s[0] in ACTIVE and s[3] for s in states.values()):
+                return False
+            if any(s[0] in ACTIVE for s in states.values()):
+                return True
+            ended = [_utc(s[2]) if len(s) > 2 else None for s in states.values()]
+            return (bool(states) and all(s[1] == 0 for s in states.values())
+                    and self.now() - max((e for e in ended if e is not None), default=0) < PUBLISH_GRACE_S)
+
+        return hold(self.workdir, self.branch, running)
+
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
+        """Rebuild `next` (see the module's `next`), unless a running check holds it on its base (`holding`): then nothing on it
+        changes, and (its members as built, {}) is returned."""
         self._clone()
         state = self.load_state()
         prs = [p for p in self.github.open_prs() if p.base == "main"]
         prs, waiting = self.fetch_prs(prs)
+        if why := self.holding(state):
+            self.log(f"research queue: {why}")
+            return built_on(self.workdir, f"refs/remotes/origin/{self.branch}")[1], {}
         chain = self.chain()
         entries = self.entries(prs, state)
         entries.update(waiting)
@@ -806,6 +948,54 @@ def chain_of(repo: Path, base: str, ref: str) -> list[Member]:
             return []                                   # a commit the queue didn't make: rebuild from `main`
         out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
     return out
+
+
+def changed(repo: Path, base: str, commit: str) -> set[str]:
+    return set(_out(repo, "diff", "--name-only", "--no-renames", base, commit).split())
+
+
+def built_on(repo: Path, ref: str) -> tuple[str, list[Member]]:
+    """(the base ``ref`` was built on, its members oldest first), whether or not `main` has moved since; ("", []) when ``ref`` is
+    missing or none of its first-parent chain is in `main`."""
+    if _git(repo, "rev-parse", "--verify", "-q", ref, check=False).returncode:
+        return "", []
+    # not `merge-base`: a member stacked on a PR that has since landed on `main` gives a second, wrong common ancestor
+    # (12 Oct 10:53Z: #1847 on #1793, after the e2e train's merge commit, emptied the chain and cancelled a disjoint check)
+    base = next((c for c in _out(repo, "rev-list", "--first-parent", ref).split()
+                 if not _git(repo, "merge-base", "--is-ancestor", c, "origin/main", check=False).returncode), "")
+    if not base:
+        return "", []
+    out = []
+    for rec in filter(None, (x.strip() for x in _out(repo, "log", "--first-parent", "--reverse",
+                                                      "--format=%H%x00%B%x1e", f"{base}..{ref}").split("\x1e"))):
+        commit, body = rec.split("\x00", 1)
+        t = dict(TRAILER_RE.findall(body))
+        if not {"PR", "Head", "Owner"} <= set(t):
+            return base, []
+        out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
+    return base, out
+
+
+def hold(repo: Path, branch: str, running: Callable[[str, str], bool]) -> str | None:
+    """Why `branch` stays on its base, or None: a check of one of its members is running (``running(commit, base)``) and `main`
+    moved by files none of that train's members change, and by no check tooling (`CHECK_TOOLING`).  A rebuild on the new `main`
+    would waste that check, and drive lands the train onto the moved `main` once it passes.  Every sync keeps it (19 Oct 08:16Z:
+    `research queue eject 2727` rebuilt 118 PRs onto a `main` drive was holding `next` off, which would have cancelled every
+    running train)."""
+    base, chain = built_on(repo, f"refs/remotes/origin/{branch}")
+    main = _out(repo, "rev-parse", "origin/main")
+    if not chain or main == base:
+        return None
+    moved = changed(repo, base, main)
+    if any(p.startswith(CHECK_TOOLING) for p in moved):
+        return None
+    for m in reversed(chain):
+        if running(m.commit, base):
+            if moved & changed(repo, base, m.commit):
+                return None
+            return (f"`main` moved to {main[:12]} by files `{branch}` doesn't change while {m.commit[:12]}'s check runs: "
+                    f"`{branch}` stays on {base[:12]} until it ends")
+    return None
 
 
 def touched_by(repo: Path, members: list[Member], files: list[str]) -> list[str]:
@@ -1137,8 +1327,9 @@ PREFLIGHT_BUDGET_S = 60.0
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (infra's hook threshold)
 PREFLIGHT_MIN_FREE = 0.25
-#: the temporary worktrees' prefix, `<tmp>/research-preflight-<pid>-*`: one whose process is gone is swept (a kill skips `finally`)
-PREFLIGHT_PREFIX = "research-preflight-"
+#: the temporary worktrees' prefix (`merged_worktree`), `<tmp>/research-merged-<pid>-*`: one whose process is gone is swept (a kill
+#: skips `finally`)
+MERGED_PREFIX = "research-merged-"
 #: prints the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2], as JSON
 _TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import suites as S; "
             "print(json.dumps([s.path for s in S.touched(S.discover(), S.members(), sys.argv[1], sys.argv[2], S.locked())]))")
@@ -1155,17 +1346,191 @@ def free_memory() -> float | None:
 _SUMMARY_RE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - (.*))?$", re.M)
 _LOCK_STALE = "needs to be updated"
 
+#: where a touched-suites run on a node writes its report and logs, under its run dir (`quick_tier`'s `out/`): drive reads them
+TOUCHED_REPORT, TOUCHED_LOGS = "out/suites.json", "out/logs"
+#: drive's touched-suites run (`RemoteSuites`): queued with `research run --on auto` onto vy-nebius-2's Verity share, outside the
+#: check slots (18 Oct: in a priority check slot through slot.py, those runs waited 21-93 min for a 560 GB slot and ran 27-48 min,
+#: competing with the trains for six slots); 16 CPUs, 160 GB (suites.py gives a parallel suite a worker per 9 GB of the cgroup's
+#: memory, so 64 GB left one at most 7 workers of the 16), 120 min (the slowest touched run took 48 min in a slot), `--jobs 16`
+TOUCHED_ON, TOUCHED_CPUS, TOUCHED_MEM_GB, TOUCHED_MAX_MIN = "auto", 16, 160, 120
+#: the gate's class in the cluster queue: capture (600) ranks above every lane's agent-test (work, 500;
+#: infra/cluster/descriptions/nebius.toml), so a landing never waits behind lanes' pre-mark runs (19 Oct, infra and top)
+TOUCHED_CLASS = "capture"
+#: what `research run` prints of a run it launched
+LAUNCHED_RE = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
+
+
+@dataclass
+class Touched:
+    """What `touched_suites` gave.  ``failed``: each failed suite in `suites.py --json`'s shape (`quick_tier.ROW_KEYS`, status
+    failed, with each failing test's summary line under `summary`), as drive reads a remote run's from its `TOUCHED_REPORT` once it
+    ends; ``suites``: those that ran here; ``ids``: the runs launched; ``notes``: what kept a suite or a launch from running;
+    ``tail``: the launch's output."""
+    suites: list[str] = field(default_factory=list)
+    failed: list[dict] = field(default_factory=list)
+    ids: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    tail: str = ""
+
+
+def failed_row(suite: str, failures: dict[str, str]) -> dict:
+    """Suite ``suite``'s failures, {node id: its summary line}, as `suites.py --json` reports a failed suite."""
+    return {"name": suite, "suite": suite, "status": "failed", "failed_tests": list(failures), "log": None,
+            "summary": list(failures.values())}
+
+
+def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]], py: str, cwd: Path,
+                    args: list[str]) -> dict[str, str] | str:
+    """{node id: its summary line} of what failed in `pytest ARGS` in ``cwd`` (empty: passed), or why it didn't run."""
+    r, why = run([py, "-P", "-m", "pytest", "-q", "-p", "no:cacheprovider", *args], cwd)
+    if r is None:
+        return why
+    if r.returncode in (0, 5):                                   # 5: nothing collected
+        return {}
+    found = {m.group(1): m.group(0) for m in _SUMMARY_RE.finditer(r.stdout)}
+    return found or {f"exit {r.returncode}": f"pytest exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}"}
+
+
+@contextlib.contextmanager
+def merged_worktree(repo: Path, commit: str, root: Path | None = None):
+    """A detached worktree of ``repo`` at ``commit`` in a temporary directory under ``root`` (`MERGED_PREFIX`), removed with it
+    whatever happens; one a dead process left is swept first."""
+    root = Path(root or tempfile.gettempdir())
+    root.mkdir(parents=True, exist_ok=True)
+    for d in root.glob(f"{MERGED_PREFIX}*"):
+        pid = d.name.removeprefix(MERGED_PREFIX).split("-", 1)[0]
+        if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
+            shutil.rmtree(d, ignore_errors=True)
+    _git(repo, "worktree", "prune", check=False)
+    tmp = Path(tempfile.mkdtemp(prefix=f"{MERGED_PREFIX}{os.getpid()}-", dir=root))
+    wt = tmp / "tree"
+    try:
+        _git(repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        yield wt
+    finally:
+        _git(repo, "worktree", "remove", "--force", str(wt), check=False)
+        shutil.rmtree(tmp, ignore_errors=True)
+        _git(repo, "worktree", "prune", check=False)
+
+
+@dataclass
+class LocalSuites:
+    """`touched_suites` here, as the preflight runs them: `pytest ARGS` (`--collect-only`) in each suite `suites.py`'s own `touched`
+    selects (run with the tree's ``python``; `PREFLIGHT_UNCOLLECTED` left out), or in ``suites`` alone when given, ``jobs`` at once,
+    each through ``run`` (the caller's budget); none while under `PREFLIGHT_MIN_FREE` of memory is available."""
+    python: str
+    run: Callable[[list[str], Path], tuple[subprocess.CompletedProcess | None, str]]
+    jobs: int = PREFLIGHT_JOBS
+    free: Callable[[], float | None] = free_memory
+    suites: list[str] | None = None
+    args: tuple[str, ...] = ("--collect-only",)
+
+    def __call__(self, wt: Path, commit: str, base: str) -> Touched:
+        out = Touched()
+        suites = self.suites
+        if suites is None:
+            r, why = self.run([self.python, "-P", "-c", _TOUCHED, base, _out(wt, "rev-parse", f"{commit}^{{tree}}")], wt)
+            try:
+                suites = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
+            except (ValueError, IndexError):
+                suites = None
+            if suites is None:
+                out.notes.append(f"no suite collected: `suites.py` couldn't say which the change touches "
+                                 f"({why or (r.stderr or r.stdout).strip()[-200:]})")
+                suites = []
+            out.notes += [f"{s} not collected: {PREFLIGHT_UNCOLLECTED[s]}" for s in suites if s in PREFLIGHT_UNCOLLECTED]
+            suites = [s for s in suites if s not in PREFLIGHT_UNCOLLECTED]
+        todo = [s for s in suites if (wt / s).is_dir()]
+        if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
+            out.notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the train's check "
+                             "still collects them")
+            todo = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
+            for s, res in zip(todo, pool.map(lambda s: pytest_failures(self.run, self.python, wt / s, list(self.args)), todo)):
+                if isinstance(res, str):
+                    out.notes.append(f"collect:{s} not checked: {res}")
+                    continue
+                out.suites.append(s)
+                if res:
+                    out.failed.append(failed_row(s, res))
+        if self.suites is None:
+            out.notes.append(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else ""))
+        return out
+
+
+def _launch_env(argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, cwd=cwd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                          env={**os.environ, **env, "GIT_TERMINAL_PROMPT": "0"})
+
+
+@dataclass
+class RemoteSuites:
+    """`touched_suites` on a node: a `research run --on auto` (`TOUCHED_ON`, the `agent-test` queue on vy-nebius-2, outside the
+    check slots) of the worktree's tree (`--source`, `--cwd source`), sized ``cpus``, ``mem_gb`` and ``max_min``, whose job is
+    `quick_tier.py` (sent with the run: the head checked, the store required, the run's own environment kept from the tests)
+    running `suites.py --quick --changed BASE --jobs CPUS` (the slow tests run in the post-landing run, `drive --defer pytest`,
+    whose failure reverts the PR it implicates: 19 Oct, Daniel through circuits, a gate measured in minutes), with `--local` where
+    that tree's suites.py has it (on 18 Oct the share's affinity was 48 CPUs around a 16-CPU job, and suites.py planned 43
+    processes); its report is
+    `TOUCHED_REPORT`, its logs `TOUCHED_LOGS`.  It returns once the run is launched, with the run id `research run` printed;
+    ``env`` is added to the launch's environment."""
+    on: str = TOUCHED_ON
+    cpus: int = TOUCHED_CPUS
+    mem_gb: float = TOUCHED_MEM_GB
+    max_min: int = TOUCHED_MAX_MIN
+    env: dict[str, str] = field(default_factory=dict)
+    launch: Callable[[list[str], Path, dict[str, str]], subprocess.CompletedProcess] = _launch_env
+
+    def argv(self, wt: Path, head: str, base: str) -> list[str]:
+        job = Path(quick_tier.__file__)
+        runner = wt / SUITES
+        local = ["--local"] if runner.is_file() and '"--local"' in runner.read_text() else []
+        args = ["--head", head, "--base", base, "--", *QUICK_TIER, "--jobs", str(self.cpus), *local]
+        return [sys.executable, "-m", "research", "run", "--on", self.on, "--source", str(wt), "--cwd", "source",
+                "--class", TOUCHED_CLASS, "--cpus", str(self.cpus), "--mem-gb", f"{self.mem_gb:g}",
+                "--max-min", str(self.max_min),
+                "--send", str(job), "--require-result", "--declared-output", "out/*",
+                "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
+
+    def __call__(self, wt: Path, commit: str, base: str) -> Touched:
+        head, base = _out(wt, "rev-parse", "HEAD"), _out(wt, "rev-parse", f"{base}^{{commit}}")
+        r = self.launch(self.argv(wt, head, base), wt, self.env)
+        said = f"{r.stdout}\n{r.stderr}"
+        ids = list(dict.fromkeys(LAUNCHED_RE.findall(said)))
+        out = Touched(ids=ids, tail=said.strip()[-600:])
+        if not ids:
+            out.notes.append(f"`research run --on {self.on}` launched no run (exit {r.returncode}): {said.strip()[-300:]}")
+        return out
+
+
+def touched_suites(repo: Path, commit: str, base: str, how: LocalSuites | RemoteSuites, *, wt: Path | None = None,
+                   root: Path | None = None) -> Touched:
+    """The suites the change from ``base`` to ``commit`` (a merged tree) touches, run at ``commit`` by ``how``: here, within the
+    caller's budget (`LocalSuites`: the preflight, a PR's head merged onto `next`), or as a run on a node (`RemoteSuites`: drive,
+    a train's commit against `main`).  In ``wt`` when given (checked out at ``commit``), else in a temporary worktree of ``repo``
+    at ``commit`` (`merged_worktree`), removed once ``how`` returns: a remote run has shipped its tree by then.  The failures
+    come back in `suites.py --json`'s shape: here in `Touched.failed`, from a node in the run's `TOUCHED_REPORT` once it ends.
+    A worktree that can't be made is a note, and nothing runs."""
+    if wt is not None:
+        return how(wt, commit, base)
+    try:
+        with merged_worktree(repo, commit, root) as tree:
+            return how(tree, commit, base)
+    except QueueError as e:
+        why = f"no worktree of {commit[:12]}: {e}"
+        return Touched(notes=[why], tail=why)
+
 
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, or `pytest --collect-only` in a suite whose inputs
-    the change touches (`suites.py`'s own `touched`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
+    the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; or (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each.  17 Oct's train breakers were each one of these (memory accounting's thread in #agent-coordination).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
-    it.  The checks of (b) run in a temporary worktree of the caller's repository at the merge, with its own environment
+    it.  The checks of (b) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), with its own environment
     (`sync`; ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever
     happens.  A failure that `next` has too (a pin already stale there, a fixture this machine never fetched) isn't the PR's:
     each failed check runs again at `next` in the same worktree, within the same budget, and only what fails on the merge alone
@@ -1263,23 +1628,14 @@ class Preflight:
             return []
         tree = r.stdout.split()[0]
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._sweep()
-        tmp = Path(tempfile.mkdtemp(prefix=f"{PREFLIGHT_PREFIX}{os.getpid()}-", dir=self.root))
-        wt = tmp / "tree"
         deadline = self.clock() + self.budget_s
-        try:
-            _git(self.repo, "worktree", "add", "-q", "--detach", str(wt), commit)
+        with merged_worktree(self.repo, commit, self.root) as wt:
             failed = self._checks(wt, base, tree, None, notes, deadline)
             if not any(failed.values()):
                 return []
             _git(wt, "checkout", "-q", "--detach", "--force", base)
             _git(wt, "clean", "-qffdx", "-e", "/.venv")
             again = self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline)
-        finally:
-            _git(self.repo, "worktree", "remove", "--force", str(wt), check=False)
-            shutil.rmtree(tmp, ignore_errors=True)
-            _git(self.repo, "worktree", "prune", check=False)
         out = []
         for name, fails in failed.items():
             if fails and name not in again:
@@ -1305,13 +1661,6 @@ class Preflight:
         return (f"`pytest --collect-only` in {where} fails on the merged tree: {shown}: a test reads what another queued PR "
                 f"changes or what only an unlanded PR adds; make it read what `main` and `next` hold, or wait for that PR")
 
-    def _sweep(self) -> None:
-        for d in self.root.glob(f"{PREFLIGHT_PREFIX}*"):
-            pid = d.name.removeprefix(PREFLIGHT_PREFIX).split("-", 1)[0]
-            if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
-                shutil.rmtree(d, ignore_errors=True)
-        _git(self.repo, "worktree", "prune", check=False)
-
     def _run(self, argv: list[str], cwd: Path, deadline: float) -> tuple[subprocess.CompletedProcess | None, str]:
         """``argv`` in ``cwd`` with what's left of the budget, outside the caller's environment (`quick_tier.CALLER_ENV`,
         pytest's own variables); and why it didn't finish."""
@@ -1326,16 +1675,6 @@ class Preflight:
             return None, f"still running when the {self.budget_s:g} s budget ran out"
         except OSError as e:
             return None, f"{argv[0]} didn't start ({e})"
-
-    def _pytest(self, py: str, cwd: Path, args: list[str], deadline: float) -> dict[str, str] | str:
-        """{node id: its summary line} of what failed (empty: passed), or why it didn't run."""
-        r, why = self._run([py, "-P", "-m", "pytest", "-q", "-p", "no:cacheprovider", *args], cwd, deadline)
-        if r is None:
-            return why
-        if r.returncode in (0, 5):                                   # 5: nothing collected
-            return {}
-        found = {m.group(1): m.group(0) for m in _SUMMARY_RE.finditer(r.stdout)}
-        return found or {f"exit {r.returncode}": f"pytest exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}"}
 
     def _checks(self, wt: Path, base: str, tree: str, only: set[str] | None, notes: list[str],
                 deadline: float) -> dict[str, dict[str, str]]:
@@ -1366,35 +1705,16 @@ class Preflight:
                     notes.append(f"the merged tree's tests not run: `{' '.join(self.sync)}` failed ({text})")
                 return out
         py = self.python or str(wt / ".venv" / "bin" / "python")
+        run = lambda argv, cwd: self._run(argv, cwd, deadline)                         # noqa: E731
         for d, files in PREFLIGHT_TESTS:
             if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
-                got(f"tests:{d}", self._pytest(py, wt / d, present, deadline))
-        if only is None:
-            r, why = self._run([py, "-P", "-c", _TOUCHED, base, tree], wt, deadline)
-            try:
-                suites = json.loads(r.stdout.strip().splitlines()[-1]) if r is not None and r.returncode == 0 else None
-            except (ValueError, IndexError):
-                suites = None
-            if suites is None:
-                notes.append(f"no suite collected: `suites.py` couldn't say which the change touches "
-                             f"({why or (r.stderr or r.stdout).strip()[-200:]})")
-                suites = []
-            for s in suites:
-                if s in PREFLIGHT_UNCOLLECTED:
-                    notes.append(f"{s} not collected: {PREFLIGHT_UNCOLLECTED[s]}")
-            suites = [s for s in suites if s not in PREFLIGHT_UNCOLLECTED]
-        else:
-            suites = [n.partition(":")[2] for n in only if n.startswith("collect:")]
-        todo = [s for s in suites if (wt / s).is_dir()]
-        if todo and (f := self.free()) is not None and f < PREFLIGHT_MIN_FREE:
-            notes.append(f"no suite collected: {f:.0%} of memory available, under {PREFLIGHT_MIN_FREE:.0%}; the train's check "
-                         "still collects them")
-            todo = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(self.jobs, len(todo) or 1))) as pool:
-            for s, res in zip(todo, pool.map(lambda s: self._pytest(py, wt / s, ["--collect-only"], deadline), todo)):
-                got(f"collect:{s}", res)
-        if only is None:
-            notes.append(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else ""))
+                got(f"tests:{d}", pytest_failures(run, py, wt / d, present))
+        names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
+        res = touched_suites(self.repo, tree, base, LocalSuites(py, run, self.jobs, self.free, names), wt=wt)
+        notes += res.notes
+        failed = {row["suite"]: dict(zip(row["failed_tests"], row["summary"])) for row in res.failed}
+        for s in res.suites:
+            out[f"collect:{s}"] = failed.get(s, {})
         return out
 
 
@@ -1582,19 +1902,25 @@ def main(argv: list[str]) -> int:
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s")
-    ap.add_argument("--max-running", type=int, default=2, help="drive: the most checks of `next` its launches keep running at once; "
-                                                                      "report: of merge groups")
-    ap.add_argument("--train-size", type=int, default=4, help="drive: PRs per checked train on `next`")
-    ap.add_argument("--regenerate-locks", action="store_true",
+    ap.add_argument("--max-running", type=int, help="drive: the most checks of `next` its launches keep running at once (default 2); "
+                                                    "report: of merge groups")
+    ap.add_argument("--train-size", type=int, help="drive: PRs per checked train on `next` (default 4)")
+    ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: land a train whose Lean check passed by regenerating lock records with those locks committed on "
                          "top (`Regenerated:`), which `research merge`'s gate accepts on the train's check (CI-64)")
-    ap.add_argument("--defer", default="", metavar="STEP[,STEP...]",
-                    help="drive: land a train once every other step passed, these still running; one that then fails reverts it")
+    ap.add_argument("--defer", metavar="STEP[,STEP...]",
+                    help="drive: land a train once every other step passed; one post-landing run at a time checks these on "
+                         "`main`'s tip, and a failure reverts the PR it implicates, else every landing since the last verified tip, "
+                         "or nothing when no landing since touches what failed")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
-    ap.add_argument("--first", metavar="N[,N...]", default="", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
-                                                                    "order, ahead of members that keep their place (a fix the next "
-                                                                    "train needs)")
+    ap.add_argument("--first", metavar="N[,N...]", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
+                                                        "order, ahead of members that keep their place (a fix the next "
+                                                        "train needs)")
+    ap.add_argument("--config", metavar="PATH",
+                    help=f"drive: read its flags from PATH (`DriveFlags`, e.g. {DRIVE_FLAGS}) at `main` in the queue's clone, "
+                         "fresh each tick; a flag given here overrides the file's")
+    ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head)")
     ap.add_argument("--title", help="open: the PR's title")
@@ -1622,8 +1948,12 @@ def main(argv: list[str]) -> int:
             return 1
     if a.first and not re.fullmatch(r"\d+(,\d+)*", a.first):
         ap.error(f"--first {a.first!r}: PR numbers separated by commas")
-    if a.marked_after and not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", a.marked_after):
+    if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
+    if (a.config or a.config_from_tree) and a.command != "drive":
+        ap.error("--config and --config-from-tree are for drive only")
+    if a.config_from_tree and not a.config:
+        ap.error("--config-from-tree needs --config PATH")
     if a.dry_run and a.command not in ("sync", "land", "drive", "report"):
         ap.error(f"--dry-run is for sync, land, drive and report only: `{a.command}` would act for real")
     if a.command == "ready" and bool(a.on) + a.local + a.mark != 1:
@@ -1632,7 +1962,7 @@ def main(argv: list[str]) -> int:
         ap.error("--no-preflight is for ready only")
     if a.command == "judge" and not a.pr:
         ap.error("judge needs the quick tier's run id")
-    if a.command in ("drive", "report") and not a.on:
+    if a.command in ("drive", "report") and not a.on and not a.config:
         ap.error(f"{a.command} needs --on MACHINE (train.sh's: a machine, or `auto`) for the checks it launches")
     if a.command in ("ready", "judge") and not a.by:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
@@ -1660,10 +1990,22 @@ def main(argv: list[str]) -> int:
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
-                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in a.first.split(",") if n),
+                  auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
         lock = _lock(a.workdir)  # noqa: F841
+        flags = DriveFlags().override(a)
+        if a.config:
+            if not a.config_from_tree:
+                q._clone()
+                q.fetch()
+            base, where = drive_flags(a.config, None if a.config_from_tree else q.workdir)
+            flags = base.override(a)
+            if not flags.on:
+                raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {where}, or pass --on MACHINE")
+            q.first, a.marked_after = flags.first, flags.marked_after
+            labels.since = a.marked_after
+            q.log(f"research queue drive: flags from {where}: {flags.line()}")
         if not a.marked_after:
             if a.rules is None:
                 q._clone()
@@ -1686,13 +2028,13 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             from .drive import Driver
 
-            Driver(q, on=a.on, max_running=a.max_running, train_size=a.train_size,
-                   defer=frozenset(x for x in a.defer.split(",") if x), regenerate_locks=a.regenerate_locks).tick(dry_run=a.dry_run)
+            Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
+                   regenerate_locks=flags.regenerate_locks).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses
 
-            Reporter(q, on=a.on, statuses=Statuses(repo), max_running=a.max_running).tick(dry_run=a.dry_run)
+            Reporter(q, on=a.on, statuses=Statuses(repo), max_running=flags.max_running).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

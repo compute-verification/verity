@@ -57,10 +57,6 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 #: The op name prefix of the MoE custom op(s) (`vllm.moe_forward.default`, `vllm.moe_forward_shared.default`).
 MOE_OP_PREFIX = "moe_forward"
 
-#: Device kernels of the fused-MoE block on the pinned vLLM (Triton function names / CUDA kernel tokens), for the census reader.
-MOE_KERNELS_EXPECTED = ("topk_softmax", "moe_align_block_size", "fused_moe_kernel", "silu_and_mul", "moe_sum")
-
-
 def _view(v: Any) -> dict[str, Any]:
     return {"shape": list(v.shape), "dtype": v.dtype, "strides": list(v.strides), "offset": v.offset, "alloc": v.alloc}
 

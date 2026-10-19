@@ -84,10 +84,16 @@ note:20261015T0553Z-draft-gpu-model-m1-v2)."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1,
 note:20261015T0705Z-draft-bandwidth-core-redteam)."""
-GPU_SQUARINGS_PER_S = {"p1024": 1.597 * 1.499e10, "p512": 1.567 * 5.13e10}
+GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
 """Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form
 on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs
-(ra-squaring-ceiling #1887).  The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024."""
+(ra-squaring-ceiling #1887).  The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024.  At
+1,024 bits the best form is `kv.cu`'s FOLD 6 at ILP 1, 2.044e10 a second (1.364× the reference, #2489), so s =
+1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42), as Daniel's
+card e2a13d4a set it (ASK-8, default applied 18 Oct, MEM-43).  A higher ceiling only raises μ_rebuild, from 0.062% to
+0.065% of the node's measured R (γ +0.003 points), so the raise is the conservative direction.  The MOV/SEL-free form
+is modeled, not built, and stays below the conservative reading, Karatsuba's own model (s = 1.68, 1.885× with the
+host)."""
 SQUARINGS_PER_S = {width: GPUS * rate for width, rate in GPU_SQUARINGS_PER_S.items()}
 """C_sq, the node's stated squaring ceiling per width, the sum over its devices: each GPU at s times the reference and
 the host at s·h times the 8 GPUs' reference, above its IFMA bound h."""

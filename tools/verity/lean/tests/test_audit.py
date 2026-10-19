@@ -681,6 +681,23 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
     assert A.build_threads(heavy, env, have_gib=4) == 1
     assert A.build_threads(light, env, have_gib=4) is None
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
+    assert A.replay_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.REPLAY_GIB_PER_THREAD)
+    assert A.replay_threads(light, env, have_gib=4) is None
+
+
+def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
+    """A whole-Security audit holds the proving package's facts beside the replay (30–50 GiB in r20261018-175656-1c85), so
+    auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and the package alone the build's
+    floor."""
+    proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
+    for p in (proofs, spec):
+        p.mkdir()
+    (proofs / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "Arklib"}]}))
+    (spec / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../Proofs"]}))
+    assert A.memory_refusal([proofs], 32) is None
+    why = A.memory_refusal([spec, proofs], 32)
+    assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
+    assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
 
 
 PLUGGED = '''name = "Dep"
@@ -718,7 +735,8 @@ def test_the_dependencies_plugins_are_named_once_each():
 def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it_no_more(tmp_path):
     """INF-62: Lake 4.34 links a plugin twice when a module-system library and a classic one load it, as ArkLib's `ArkLib` and
     `ArkLibTest` load `ArkLibLintPlugin:shared`, and the two links of one file race (three proofs builds failed so on 18 Oct).
-    Linked alone first (`plugin_targets`), the build finds it up to date and links nothing."""
+    Whether a plain build schedules the second link depends on Lake's scheduling, so the test checks only the fix: linked
+    alone first (`plugin_targets`), the build finds it up to date and links nothing."""
     dep, root = tmp_path / "dep", tmp_path / "root"
     (dep / "scripts").mkdir(parents=True)
     root.mkdir()
@@ -733,10 +751,6 @@ def test_a_plugin_two_libraries_load_is_linked_alone_first_so_the_build_links_it
     for d in (dep, root):
         (d / "lean-toolchain").write_text(toolchain)
     lake = lambda *a: subprocess.run(["lake", *a], cwd=root, capture_output=True, text=True, env=A.lake_env())
-    twice = tmp_path / "twice"
-    shutil.copytree(tmp_path, twice, ignore=lambda d, n: ["twice"] if Path(d) == tmp_path else [])
-    plain = subprocess.run(["lake", "build"], cwd=twice / "root", capture_output=True, text=True, env=A.lake_env())
-    assert plain.stdout.count("Built Plug:shared") == 2, "the double link this guards against"
     (root / ".lake" / "packages").mkdir(parents=True)
     (root / ".lake" / "packages" / "Dep").symlink_to(dep)
     assert A.plugin_targets(root) == ["@Dep/Plug:shared"]
@@ -1647,6 +1661,58 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     assert any(f.startswith("reads: Core.SecurityProofs.inline read Core.SecurityProofs.twice in CoreProofs, outside the spec")
                for f in A.audit(spec, out, replay=False, runs=False, log=lambda *_: None)["failures"]), \
         "a statement reading a proof package's definition fails: that package requires the spec, so it is no spec of it"
+
+
+@pytest.mark.parametrize("spec", [True, False])
+def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_in_reading(tmp_path, monkeypatch, spec):
+    """A spec's `proved_in` reading (`proved`) waits for its provers' builds and reads them, and the kernel replay, the
+    dependency scans and digests and the upstream scan read only the package's own facts, which `proved` returns unchanged
+    beside its pins: each starts before `proved`, is given the package's own facts, and its result is judged as before (a
+    recorded dependency digest that differs still fails). A package without `proved_in` has no wait to fill: its replay
+    starts after its facts and the rest run in turn, as their Python would contend with the audits on the critical path."""
+    pkg = tmp_path / "spec"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    A.dump(pkg, {"roots": ["P"], "upstream": {"scan": {}}, "dependencies": {"mathlib": "d0"}} |
+           ({"proved_in": ["../proofs"]} if spec else {}))
+    own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": ["own.olean"],
+           "pins": {}}
+    order, given = [], {}
+
+    class Recording(A.ThreadPoolExecutor):
+        def submit(self, fn, *args, **kw):
+            if fn is A.timed:
+                order.append(getattr(args[0], "__name__", str(args[0])))
+            return super().submit(fn, *args, **kw)
+
+    def proved(pkg, policy, facts, work, moved, ready):
+        order.append("proved")
+        return [], facts | {"pins": {"P.g": {"kind": "theorem"}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
+
+    def stub(name, result):
+        def f(*args):
+            given[name] = args
+            return result
+        f.__name__ = name
+        return f
+
+    monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
+    monkeypatch.setattr(A, "facts_of", lambda *a: own)
+    monkeypatch.setattr(A, "proved", proved)
+    monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
+    monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", (["unchecked: a hit"], 7)))
+    monkeypatch.setattr(A, "dependency_digests", stub("dependency_digests", {"mathlib": "d1"}))
+    monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
+    assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
+    assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
+    assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
+    assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}
+    assert {"audit", "dependency-sources", "upstream", "dependencies", "replay"} <= set(rep["seconds"])
 
 
 def _runs(tmp_path, monkeypatch, entry, exit=0):

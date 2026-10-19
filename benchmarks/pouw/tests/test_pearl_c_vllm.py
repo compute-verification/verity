@@ -29,8 +29,6 @@ from verity.core.protocols.pouw.audit import (
     ROW_SCHEMA,
     TILE_SCHEMA,
     Epoch,
-    Prover,
-    Verifier,
     Workload,
     activation_binding,
     commit_rows,
@@ -48,6 +46,11 @@ from verity.core.protocols.pouw.schemes import pearl_c as C
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+
+# the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
+import clear_work as CW  # noqa: E402
+from clear_audit import Prover, Verifier  # noqa: E402
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -112,7 +115,7 @@ def test_screen_decides_the_per_row_rules_as_row_passes():
     alpha, aux = stats(words)
     fails, unsure = PPD.screen(x, alpha, aux)
     got = PPD.excluded(fails, unsure, x)
-    want = tuple(i for i, row in enumerate(words) if not PW.row_passes([int(v) for v in row]))
+    want = tuple(i for i, row in enumerate(words) if not CW.row_passes([int(v) for v in row]))
     assert got == want and 1 in got and 2 in got and 4 in got and 0 not in got
 
 
@@ -129,7 +132,7 @@ def test_an_unsure_row_is_decided_exactly():
     x = torch.from_numpy(words.view(np.float32).copy())
     fails, unsure = PPD.screen(x, *stats(words))
     assert bool(unsure[0]) and not bool(fails[0])
-    assert PPD.excluded(fails, unsure, x) == (() if PW.row_passes([int(v) for v in words[0]]) else (0,))
+    assert PPD.excluded(fails, unsure, x) == (() if CW.row_passes([int(v) for v in words[0]]) else (0,))
 
 
 # ---- the per-call keys --------------------------------------------------------------------------------------------
@@ -428,7 +431,7 @@ def bf16_file(rows: list[bytes]) -> bytes:
 def honest_pass(tmp_path, request):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
-    salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so pearl_c_work can't
+    salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
     audit it).  The key is fixed: -h3's row seeds follow A's salted roots, and under some keys
     (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject."""
     scheme = request.param
@@ -447,7 +450,7 @@ def honest_pass(tmp_path, request):
     epoch = Epoch.start(work, prover.weight_roots, *coins)
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
-    records = PW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
+    records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={0: 20})
     assert records[0].excluded_a == (5,)
     (tmp_path / "calls").mkdir()
@@ -491,10 +494,10 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source, coins=published(path))
-    want = PW.audit_replay(s, epoch, prover, tr, splits, records, 0, PW.RecordedDraw(1, source), 3)
+    want = CW.audit_replay(s, epoch, prover, tr, splits, records, 0, CW.RecordedDraw(1, source), 3)
     assert got["accepted"] and want.audit.accepted, got.get("line") or got.get("error")
     assert tuple(got["tiles"]) == want.audit.selected and got["exclusion_tiles"] == 1
-    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: pearl_c_work's tiles (3 drawn, 1 for excluded rows)")
+    assert got["line"].startswith(f"ACCEPT {s.name} pouw:{s.name}: clear_work's tiles (3 drawn, 1 for excluded rows)")
     assert got["transcript"] == f"{RUN}:{path} sha256:{got['transcript_sha256']}" and got["transcript"] in got["line"]
     assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7]) == 0
     assert VR.main([str(path), *coins_args(path), "--jobs", "1", "--commit", "0" * 7, "--expect-reject"]) == 1
@@ -624,14 +627,14 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
     assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
-    assert PW._debit_cap is SD._DEBIT_CAP and PW.D.chain_debit is SD._CHAIN_DEBIT
+    assert CW._debit_cap is SD._DEBIT_CAP and CW.D.chain_debit is SD._CHAIN_DEBIT
     (got,) = json.loads((out / "summary.json").read_text())["passes"]
     assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
     assert set(got["strata"]) == {"m32-k128-n16", "m16-k128-n32"} and got["tiles_total"] == tr.commitment.count
     assert got["strata"]["m32-k128-n16"]["credited_macs"] == (20 - 1) * 16 * 128
     tiles = [json.loads(line) for line in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
     assert len(tiles) == got["sampled"] and got["measured"] == sum("share" in t for t in tiles) > 0
-    refs = Verifier(PW._TileRuleView(s), epoch).refs
+    refs = Verifier(CW._TileRuleView(s), epoch).refs
     for t in (t for t in tiles if "share" in t):
         ref, rec = refs[t["tile"]], records[t["matmul"]]
         op = prover.open(epoch, ref.id)
@@ -640,14 +643,14 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         ctx = Context(epoch.salt, u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
         ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
         rows, cols = rec.credited(ref.tile)
-        debit, cap = PW._debit_cap(s, rec, ref.tile, ops, rows, cols)
-        credit = PW.cell_credit(s, rec) * len(rows) * len(cols)
+        debit, cap = CW._debit_cap(s, rec, ref.tile, ops, rows, cols)
+        credit = CW.cell_credit(s, rec) * len(rows) * len(cols)
         assert (t["debit_exact"], t["ratio"], t["credit_exact"]) == (str(debit), float(debit / cap), str(credit))
         assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
         pos_a, pos_b = {i: p for p, i in enumerate(ref.tile.rows)}, {j: p for p, j in enumerate(ref.tile.cols)}
         a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
-        assert (t["atoms"], t["later_zero_promotions"]) == PW.D.chain_debit(a_codes, b_codes, s.device)
-        assert t["ok"] == (PW.check_opened(s, rec, ref.tile, a, b, ops) is None)
+        assert (t["atoms"], t["later_zero_promotions"]) == CW.D.chain_debit(a_codes, b_codes, s.device)
+        assert t["ok"] == (CW.check_opened(s, rec, ref.tile, a, b, ops) is None)
     assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
 
 
@@ -659,7 +662,7 @@ def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_pa
     out = tmp_path / "out"
     assert SD.main([str(path), *coins_args(path), "--per-input", "1", "--census-max", "4", "--draws", "3", "--jobs", "1", "--out", str(out)]) == 0
     doc = json.loads((out / "inputs.json").read_text())
-    refs = Verifier(PW._TileRuleView(s), epoch).refs
+    refs = Verifier(CW._TileRuleView(s), epoch).refs
     assert doc["m"] == len(doc["inputs"]) == 2 and doc["delta_per_input"] == 0.05 / 2
     for row in doc["inputs"]:
         ids = [r.id for r in refs if r.matmul == row["matmul"]]
@@ -699,20 +702,20 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
     fails = [t for t in lines if not t["ok"]]
     assert sum(bool(t.get("cross_checked")) for t in lines) == 4 and all(t["openings_ok"] for t in lines)
     # an honest row can exceed its own cap (-h3's row cap, k 128 here), and the served path volunteers no rows
-    assert all("the row cap" in t["reason"] for t in fails) and (not fails or PW.row_cap(s))
+    assert all("the row cap" in t["reason"] for t in fails) and (not fails or CW.row_cap(s))
     for row in doc["inputs"]:
         failures = sum(t["matmul"] == row["matmul"] for t in fails)
         assert row["method"] == "fresh" and row["drawn"] == 4 and row["failures"] == failures
         assert row["upper"] == SD.clopper_pearson_upper(failures, 4, 0.025) and row["bound_method"].startswith("fresh")
     t = lines[0]
-    ref = Verifier(PW._TileRuleView(s), epoch).refs[t["tile"]]
+    ref = Verifier(CW._TileRuleView(s), epoch).refs[t["tile"]]
     op = prover.open(epoch, ref.id)
     a, b = [opened_value(s.commitment_hash, o.value) for o in op.a], [opened_value(s.commitment_hash, o.value) for o in op.b]
     u = epoch.workload.matmuls[ref.matmul]
     ctx = Context(bytes.fromhex(t["salt"]), u, tr.activation_roots[ref.matmul], epoch.weight_roots[u.weight])
     ops = s.encode(ctx, s.noise(ctx), a, b, ref.tile)
     rows, cols = records[ref.matmul].credited(ref.tile)
-    debit, cap = PW._debit_cap(s, records[ref.matmul], ref.tile, ops, rows, cols)
+    debit, cap = CW._debit_cap(s, records[ref.matmul], ref.tile, ops, rows, cols)
     assert t["debit_exact"] == str(debit) and t["ratio"] == float(debit / cap)
     again = tmp_path / "again"
     resume = ["--resume", str(out / f"{path.parent.name}.fresh-tiles.jsonl")]
@@ -984,14 +987,14 @@ def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejec
     rng, seen = np.random.default_rng(3), set()
     for trial in range(8):
         a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
-        want = PW.D.chain_debit(a, b, s.device)
+        want = CW.D.chain_debit(a, b, s.device)
         assert FT.chain_debit(a, b, s.device) == want
         seen.add(want[1] > 0)
         assert want[0] > 0
     assert seen == {True, False}
     a[0][5] = 0x7F
     with pytest.raises(Exception) as want:
-        PW.D.chain_debit(a, b, s.device)
+        CW.D.chain_debit(a, b, s.device)
     with pytest.raises(type(want.value), match=str(want.value)):
         FT.chain_debit(a, b, s.device)
 
@@ -1009,14 +1012,14 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
 
     def run():
         ops = s.encode(ctx, s.noise(ctx), a, b, tile)
-        return ops, s.checked(ctx, ops), PW.D.chain_debit(ops.a.codes, ops.b.codes, s.device)
+        return ops, s.checked(ctx, ops), CW.D.chain_debit(ops.a.codes, ops.b.codes, s.device)
 
-    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, PW.D.chain_debit, type(s).checked, C.blake3)
+    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, CW.D.chain_debit, type(s).checked, C.blake3)
     undo = FT.install(s)
-    assert C.form_v1 is FT.form_v1 and PW.D.chain_debit is FT.chain_debit
+    assert C.form_v1 is FT.form_v1 and CW.D.chain_debit is FT.chain_debit
     fast = run()
     undo()
-    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, PW.D.chain_debit, type(s).checked, C.blake3) == before
+    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, CW.D.chain_debit, type(s).checked, C.blake3) == before
     ref = run()
     for side in ("a", "b"):
         for field in ("codes", "alpha", "beta", "s", "rho", "ep", "x"):
@@ -1063,7 +1066,7 @@ def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
     rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
     codes = lambda r: [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
                                          for _ in range(r - 1)]
-    debit, cap = PW.tile_cap(s, rec, codes(rows), codes(cols))
+    debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols))
     credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
     assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
     got = SD.tile_numbers(s, debit, cap)
@@ -1177,6 +1180,22 @@ def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes
     assert E2E.pass_capacity(128, ns) == (PPD.LEAF_CAPACITY, 2 * PPD.FLAG_ROWS)
     E2E.configure(types.SimpleNamespace(batch=1, prompt=64))
     assert E2E.decode_key() == "decode_b1" and E2E.CAPTURE_SIZES == [1]
+
+
+def test_a_prefill_point_off_8192_tokens_names_its_key():
+    """``--prefill`` off the panel's 8,192 tokens keys the prefill row by its length, so `panel_rows.py` (``prefill_8192``)
+    never reads it as the panel's prefill row."""
+    E2E = load("pearl_c_vllm_e2e_prefill", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64, prefill=2560))
+    assert (E2E.prefill_key(), E2E.PREFILL) == ("prefill_2560", 2560)
+    assert E2E.SHAPES == {"prefill_2560": "e2e-llama31-8b-vllm-m2560", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+    assert len(E2E.prompts(1)["prefill"][0]) == 2560
+    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
+    assert set(t["pearlc"]["timing"]) == {"prefill_2560_s", "prefill_2560_gemm_s", "decode_b32_step_s", "decode_b32_step_gemm_s"}
+    assert set(t["pearlc"]["reps"]) == {"prefill_2560", "decode_b32"} and list(E2E.split(t)) == ["prefill_2560", "decode_b32_step"]
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
 
 
 def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tmp_path):
@@ -1316,6 +1335,61 @@ def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypat
         "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
 
 
+def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segment_launchs_step(monkeypatch):
+    """hash_fast.cuh's segment kernels are their step's, and a ``s512_folds`` launch, which A's row digests and the tile leaves
+    both run, is the step of the segment launch before it on its stream.  A Triton ``kernel``, which stock FP8 launches too, isn't
+    the records' screen (``screen``, ``scatter``)."""
+    monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    assert [SP.category(k) for k in ("s512_row_segs", "s512_tile_segs", "s512_heads", "s512_folds", "lines", "s512_seeds", "scatter",
+                                     "kernel")] == [
+        "pearlc:row_digests", "pearlc:tile_hash", "pearlc:setup", "pearlc:folds", "pearlc:lines_a", "pearlc:seeds", "pearlc:screen",
+        "other"]
+    rows = [(0, 1, "s512_row_segs", 7), (1, 2, "s512_tile_segs", 9), (2, 3, "s512_folds", 7), (3, 4, "s512_folds", 9),
+            (4, 5, "s512_folds", 11), (5, 6, "s512_tile_segs", 7), (6, 7, "s512_folds", 7)]
+    assert [r[4] for r in SP._folds(rows)] == ["pearlc:row_digests", "pearlc:tile_hash", "pearlc:row_digests", "pearlc:tile_hash",
+                                               "pearlc:folds", "pearlc:tile_hash", "pearlc:tile_hash"]
+
+
+def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monkeypatch, tmp_path):
+    """A pass's end (its transcript tree, after the generate) is timed apart from the generate, its tree kernels counted as the
+    transcript tree's; the decode step's split is (dn − d1) / 64 of both."""
+    import sqlite3
+    monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    ms, g = 1_000_000, 5 << 24
+    names = ["s512_row_segs", "s512_folds", "s512_tile_segs", "gemm_pearlc", "form_s5", "flash_fwd", "s512_pads", "s512_nodes",
+             "lines", "screen"]
+    db = tmp_path / "p.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.executemany("INSERT INTO StringIds VALUES (?, ?)", list(enumerate(names)))
+    con.execute("CREATE TABLE NVTX_EVENTS (start INTEGER, end INTEGER, text TEXT, globalTid INTEGER, textId INTEGER)")
+    nvtx = [(90, 260, "pass"), (100, 200, "gen|pearlc|prefill|1"), (300, 315, "pass"), (300, 310, "gen|pearlc|d1|1"),
+            (400, 530, "pass"), (400, 500, "gen|pearlc|dn|1"), (600, 700, "gen|pearlc|prefill|0")]
+    con.executemany("INSERT INTO NVTX_EVENTS VALUES (?, ?, ?, ?, NULL)", [(s * ms, e * ms, t, g) for s, e, t in nvtx])
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER, end INTEGER, shortName INTEGER, globalPid INTEGER, "
+                "streamId INTEGER)")
+    k = [(110, 111, 0, 7), (111, 111.5, 1, 7), (120, 122, 2, 9), (122, 122.5, 1, 9), (130, 134, 3, 7), (135, 136, 4, 7),
+         (140, 141, 5, 7), (150, 150.5, 8, 7), (151, 151.25, 9, 7),
+         (210, 210.5, 6, 7), (211, 212, 7, 7),                       # the prefill pass's end
+         (305, 306, 3, 7), (311, 312, 7, 7),                         # d1, and its pass's end
+         (405, 469, 3, 7), (510, 575, 7, 7)]                         # dn, and its pass's end
+    con.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, ?, ?)", [(int(s * ms), int(e * ms), n, g, st) for s, e, n, st in k])
+    con.commit()
+    doc = SP.analyze(db)
+    pre = doc["phases"]["pearlc"]["prefill"]
+    assert pre["n"] == 1 and pre["pass_end_ms"] == pytest.approx(60.0)
+    assert pre["by_category_ms"] == pytest.approx({"pearlc:row_digests": 1.5, "pearlc:tile_hash": 2.5, "pearlc:gemm": 4.0, "pearlc:forming": 1.0,
+                                                   "attention": 1.0, "pearlc:lines_a": 0.5, "pearlc:screen": 0.25})
+    assert pre["pass_end_by_category_ms"] == pytest.approx({"pearlc:a_tree": 1.5})
+    assert pre["hash_split_ms"] == pytest.approx({"tile_leaves": 2.5, "a_rows": 2.0, "transcript_tree": 1.5, "screen": 0.25,
+                                                  "forming_gemm": 5.0, "hashing": 6.25})
+    step = doc["phases"]["pearlc"]["step"]
+    assert step["pass_end_ms"] == pytest.approx((30 - 5) / 64) and step["by_category_ms"]["pearlc:gemm"] == pytest.approx(63 / 64)
+    assert step["hash_split_ms"]["transcript_tree"] == pytest.approx(1.0) and step["hash_split_ms"]["hashing"] == pytest.approx(1.0)
+
+
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
     from verity_vllm.protocol_options import pouw_pearl_c_device as PPD2
     PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
@@ -1419,14 +1493,14 @@ def edge_rows(k: int = 1024) -> tuple:
 
 def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(monkeypatch):
     """The Triton kernel under Triton's CPU interpreter, on rows at the rules' edges: its excluded rows are `screen`'s and
-    `pearl_c_work.row_passes`'s."""
+    `clear_work.row_passes`'s."""
     interpreted_triton(monkeypatch)
     words, x, alpha, aux = edge_rows()
     fused = torch.zeros((12, 2), dtype=torch.uint8)
     PPD.screen_into(fused, x, alpha, aux, fused=True)
     ref = torch.zeros((12, 2), dtype=torch.uint8)
     PPD.screen_into(ref, x, alpha, aux, fused=False)
-    want = tuple(i for i, row in enumerate(words) if not PW.row_passes([int(v) for v in row]))
+    want = tuple(i for i, row in enumerate(words) if not CW.row_passes([int(v) for v in row]))
     assert PPD.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
     assert torch.equal(fused, ref)
 

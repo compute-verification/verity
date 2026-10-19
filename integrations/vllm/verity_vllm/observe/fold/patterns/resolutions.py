@@ -48,10 +48,6 @@ def members(r: Resolution) -> list[Resolution]:
     return list(parts_of(r))
 
 
-def is_group(r: Resolution) -> bool:
-    return isinstance(r, (ComputeGroup, TransparentGroup, Group))
-
-
 def attribution_for(ctx: StepContext, rows: int, phase: str) -> tuple[tuple[str, int], ...]:
     """(request_id, position) per row when the row count identifies the rows (token rows, or logits rows)."""
     if rows == len(ctx.start.rows) and phase != "sample":

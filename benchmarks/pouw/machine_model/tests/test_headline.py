@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 from verity_machine_model import headline as H
 from verity_machine_model.cli import main
-from verity_machine_model.eps import design
+from verity_machine_model.eps import design, eps, machine, uniform_issue_charged
 from verity_machine_model.model import DATA, device
 
 # (ε_skip, ε_machine, ε_luck, ε, γ, the floor it needs, ε at p = 1): credit ♭, operands free, ε_mand 0 everywhere
@@ -59,7 +60,29 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_p1_reading():
     assert "at p = 1 (dither-2s-licpw-redux-p1-l32): ε 1.162%" in h.conditions
     assert any("ffill_ref.receipt" in c and "has not run" in c for c in h.conditions)
     s = {x.family: x for x in H.rows("sheet")}
-    assert all(x.floor == "half" for x in s.values()) and any(c.startswith("A2u") for c in s["sm_89"].conditions)
+    assert all(x.floor == "half" for x in s.values())
+
+
+def test_a_sheet_row_that_prices_the_uniform_route_by_a2u_states_it():
+    """No data sheet gives a uniform rate, so a DS vector that charges a uniform instruction on `DS_issue` prices the
+    uniform route by A2u alone (in no vendor document): its row says so, computed, not hand-written per family."""
+    a2u = H.spec()["reading"]["sheet"]["a2u"]
+    s = {x.family: x for x in H.rows("sheet")}
+    assert {f for f, x in s.items() if a2u in x.conditions} == {"sm_120", "sm_100", "sm_90", "sm_89"}
+    assert not any(c.startswith("A2u") for c in s["sm_80"].conditions)   # DS-80 has no uniform line: route closed
+    assert not any(c.startswith("A2u") for x in H.rows("measured") for c in x.conditions)
+
+
+def test_without_a2u_the_sheet_uniform_route_is_free():
+    """Why the row states A2u: DS-120 with the uniform classes off `DS_issue` prices the uniform route at nothing, and
+    the cheater writes every word there."""
+    dd = device("sm_120")
+    d, pi = design(H.spec()["family"]["sm_120"]["design"], dd), machine("DS-120", dd)
+    c = {k: ({r: (0.0 if r == "DS_issue" else v) for r, v in rs.items()} if k.startswith("UNI") else rs)
+         for k, rs in pi.c.items()}
+    free = eps(d, replace(pi, c=c), 0.5, dd, operands=H.OPERANDS, credit=H.CREDIT)
+    assert uniform_issue_charged(pi) and not uniform_issue_charged(replace(pi, c=c))
+    assert free.machine_eps == pytest.approx(1.0) and free.cheat.words["uniform"] == pytest.approx(1.0)
 
 
 def test_cli(capsys):
