@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "fluid": true,
-  "buildCommand": "python3 build.py",
+  "buildCommand": "python3 build.py && mkdir -p public",
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
