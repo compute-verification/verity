@@ -110,7 +110,7 @@ def capture_words(store, m: dict, late: dict | None) -> np.ndarray:
     ev = (late or {}).get(len(m["output_views"]) - 1)
     s = next((x for x in store.by_alloc.get(view.alloc, []) if x.event == ev and store.covers(x, view)), None) if ev is not None \
         else store.find(view, at=m["event"])
-    return np.asarray(a8.view_words(store, s, view, m, "out", 0), dtype=np.uint64)
+    return np.asarray(store.extract(s, view), dtype=np.uint64)
 
 
 def rows_eval(defn, rows_spec, rows: dict) -> np.ndarray:
