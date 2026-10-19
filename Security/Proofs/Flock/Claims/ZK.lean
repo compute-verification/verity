@@ -45,6 +45,7 @@ import Proofs.Flock.Claims.ZK.SplitInner
 import Proofs.Flock.Claims.ZK.InnerSlotTriple
 import Proofs.Flock.Claims.ZK.InnerLeaf
 import Proofs.Flock.Claims.ZK.InnerY
+import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Claims.ZK.InnerTauVal
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
