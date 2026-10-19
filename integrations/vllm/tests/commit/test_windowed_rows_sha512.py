@@ -1,9 +1,10 @@
 """The windowed worker under ``rows-sha512`` (``commit_scheme``, ``verity_vllm.commit.step_rows``) commits what the reference
 does, on the real collector, window ring and kernels: each step's root is ``step_rows``'s over the step's packed stream (the same
-stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (windows re-hashed from
-host once the step's length is known), a hit run (hashed in place, pad-only windows absorbed after the data windows), with and without
-the levels, and under bounded staging.  Openings of a run that kept no levels come from a replay that took its keys, and verify against
-its 64-byte roots; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds vllm-v1's roots, unchanged.
+stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (each window hashed to
+its rows' h in place, the leaves from them once the step's length is known; re-hashed from host when it keeps bytes), a hit run
+(hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
+Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots; a tampered row,
+salt or path does not.  ``test_windowed_retain_levels`` holds vllm-v1's roots, unchanged.
 """
 from __future__ import annotations
 
@@ -70,9 +71,10 @@ def test_learning_and_hit_runs_commit_step_rows_roots(monkeypatch, retain_levels
     com = committer(monkeypatch, retain_levels=retain_levels)
     try:
         learn = WR.run(com, SCHED)
-        learn_keys, reup = dict(com.row_keys), com._win_reupload_bytes
+        learn_keys, reup, hfirst = dict(com.row_keys), com._win_reupload_bytes, com._win_hfirst_steps
         hit = WR.run(com, SCHED)
-        assert reup > 0 and com._win_reupload_bytes == 0, "the second run follows the first run's plans (in place, no re-upload)"
+        assert reup == 0 and hfirst == len(SCHED), "a learning step that keeps no bytes hashes its windows to h in place (no re-upload)"
+        assert com._win_reupload_bytes == 0 and com._win_hfirst_steps == 0, "the second run follows the first run's plans (in place)"
         check_run(learn, learn_keys)
         check_run(hit, com.row_keys)
         assert hit.run_root != learn.run_root and not set(learn_keys.values()) & set(com.row_keys.values()), "each run's keys are fresh"
