@@ -34,6 +34,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `figures.py` | the dampener's talk figures, to the evidence store |
 | `statement.py` | every number the Notion page "The compute dampener: claims, model and tiers" quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
+| `probes/routed/` | the routed-mixture probes that measure F3's routing gain g on released models (experiments A and B1); not launched, see its README |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
 `governance`, `integration-measures`, `efficiency-metrics`, `strategy-local`, `strategy-lowrank-sparse`,

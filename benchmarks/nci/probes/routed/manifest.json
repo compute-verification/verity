@@ -1,0 +1,131 @@
+{
+ "about": "The models run.sh scores and the studies analysis.py fits, for experiments A and B1 of the Notion page 'Settling F3: routed-mixture experiments'. N and P are safetensors totals (tied embeddings once); D is training tokens. role: score (phase 1, the windows), calibration (phase 1, the calibration windows, routing profiles kept), record (phase 2, routing and codebook clusters kept), confine (phase 3).",
+ "models": {
+  "olmo-32b": {"repo": "allenai/OLMo-2-0325-32B", "revision": "main"},
+  "olmo-32b-2t": {"repo": "allenai/OLMo-2-0325-32B", "revision": "stage1-step238000-tokens1997B"},
+  "olmo-32b-1t": {"repo": "allenai/OLMo-2-0325-32B", "revision": "stage1-step119000-tokens999B"},
+  "flexolmo": {"repo": "allenai/FlexOlmo-7x7B-1T", "revision": "main"},
+  "moe-calibration": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "calibration"},
+  "qwen3-14b": {"repo": "Qwen/Qwen3-14B-Base", "revision": "main"},
+  "olmo-13b": {"repo": "allenai/OLMo-2-1124-13B", "revision": "main"},
+  "olmo-13b-4t": {"repo": "allenai/OLMo-2-1124-13B", "revision": "stage1-step476848-tokens4001B"},
+  "olmo-13b-2t": {"repo": "allenai/OLMo-2-1124-13B", "revision": "stage1-step238000-tokens1997B"},
+  "olmo-13b-1t": {"repo": "allenai/OLMo-2-1124-13B", "revision": "stage1-step119000-tokens999B"},
+  "olmo-13b-0.5t": {"repo": "allenai/OLMo-2-1124-13B", "revision": "stage1-step60000-tokens504B"},
+  "flex-math": {"repo": "allenai/Flex-math-2x7B-1T", "revision": "main"},
+  "flex-code": {"repo": "allenai/Flex-code-2x7B-1T", "revision": "main"},
+  "flex-pes2o": {"repo": "allenai/Flex-pes2o-2x7B-1T", "revision": "main"},
+  "flex-creative": {"repo": "allenai/Flex-creative-2x7B-1T", "revision": "main"},
+  "flex-news": {"repo": "allenai/Flex-news-2x7B-1T", "revision": "main"},
+  "flex-reddit": {"repo": "allenai/Flex-reddit-2x7B-1T", "revision": "main"},
+  "qwen3-8b": {"repo": "Qwen/Qwen3-8B-Base", "revision": "main"},
+  "flex-public": {"repo": "allenai/Flex-public-7B-1T", "revision": "main"},
+  "olmo-7b": {"repo": "allenai/OLMo-2-1124-7B", "revision": "main"},
+  "olmo-7b-2t": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step477000-tokens2001B"},
+  "olmo-7b-1.5t": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step357000-tokens1498B"},
+  "olmo-7b-1t": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step238000-tokens999B"},
+  "olmo-7b-0.5t": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step119000-tokens500B"},
+  "olmo-7b-c1": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step922000-tokens3868B"},
+  "olmo-7b-c2": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step923000-tokens3872B"},
+  "olmo-7b-c3": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step924000-tokens3876B"},
+  "olmo-7b-c4": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step925000-tokens3880B"},
+  "olmo-7b-c5": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step926000-tokens3884B"},
+  "olmo-7b-c6": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step927000-tokens3889B"},
+  "olmo-7b-c7": {"repo": "allenai/OLMo-2-1124-7B", "revision": "stage1-step928000-tokens3893B"},
+  "qwen3-4b": {"repo": "Qwen/Qwen3-4B-Base", "revision": "main"},
+  "qwen3-1.7b": {"repo": "Qwen/Qwen3-1.7B-Base", "revision": "main"},
+  "olmo-1b": {"repo": "allenai/OLMo-2-0425-1B", "revision": "main"},
+  "olmo-1b-2t": {"repo": "allenai/OLMo-2-0425-1B", "revision": "stage1-step950000-tokens1993B"},
+  "olmo-1b-1t": {"repo": "allenai/OLMo-2-0425-1B", "revision": "stage1-step480000-tokens1007B"},
+  "olmo-1b-0.5t": {"repo": "allenai/OLMo-2-0425-1B", "revision": "stage1-step240000-tokens504B"},
+  "qwen3-0.6b": {"repo": "Qwen/Qwen3-0.6B-Base", "revision": "main"},
+  "moe-full": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "record"},
+  "moe-prefix-16": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "prefix:16"},
+  "moe-prefix-32": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "prefix:32"},
+  "moe-prefix-64": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "prefix:64"},
+  "moe-codebook-8": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "codebook:8"},
+  "moe-codebook-16": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "codebook:16"},
+  "moe-codebook-32": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "codebook:32"},
+  "moe-codebook-64": {"repo": "Qwen/Qwen3-30B-A3B-Base", "revision": "main", "role": "confine", "confine": "codebook:64"}
+ },
+ "studies": {
+  "A": {
+   "scores": ["olmo-1b-0.5t", "olmo-1b-1t", "olmo-1b-2t", "olmo-1b", "olmo-7b-0.5t", "olmo-7b-1t", "olmo-7b-1.5t",
+              "olmo-7b-2t", "olmo-7b", "olmo-13b-0.5t", "olmo-13b-1t", "olmo-13b-2t", "olmo-13b-4t", "olmo-13b",
+              "olmo-32b-1t", "olmo-32b-2t", "olmo-32b", "olmo-7b-c1", "olmo-7b-c2", "olmo-7b-c3", "olmo-7b-c4",
+              "olmo-7b-c5", "olmo-7b-c6", "olmo-7b-c7", "flex-public", "flex-math", "flex-code", "flex-pes2o",
+              "flex-creative", "flex-news", "flex-reddit", "flexolmo"],
+   "ladder": {
+    "olmo-1b-0.5t": {"N": 1.485e9, "D": 0.504e12, "unannealed": true},
+    "olmo-1b-1t": {"N": 1.485e9, "D": 1.007e12, "unannealed": true},
+    "olmo-1b-2t": {"N": 1.485e9, "D": 1.993e12, "unannealed": true},
+    "olmo-1b": {"N": 1.485e9, "D": 4.05e12},
+    "olmo-7b-0.5t": {"N": 7.299e9, "D": 0.500e12, "unannealed": true},
+    "olmo-7b-1t": {"N": 7.299e9, "D": 0.999e12, "unannealed": true},
+    "olmo-7b-1.5t": {"N": 7.299e9, "D": 1.498e12, "unannealed": true},
+    "olmo-7b-2t": {"N": 7.299e9, "D": 2.001e12, "unannealed": true},
+    "olmo-7b": {"N": 7.299e9, "D": 3.95e12},
+    "olmo-13b-0.5t": {"N": 13.72e9, "D": 0.504e12, "unannealed": true},
+    "olmo-13b-1t": {"N": 13.72e9, "D": 0.999e12, "unannealed": true},
+    "olmo-13b-2t": {"N": 13.72e9, "D": 1.997e12, "unannealed": true},
+    "olmo-13b-4t": {"N": 13.72e9, "D": 4.001e12, "unannealed": true},
+    "olmo-13b": {"N": 13.72e9, "D": 5.3e12},
+    "olmo-32b-1t": {"N": 32.23e9, "D": 0.999e12, "unannealed": true},
+    "olmo-32b-2t": {"N": 32.23e9, "D": 1.997e12, "unannealed": true},
+    "olmo-32b": {"N": 32.23e9, "D": 6.36e12}
+   },
+   "compositions": {
+    "flex-oracle": {"members": ["flex-public", "flex-math", "flex-code", "flex-pes2o", "flex-creative", "flex-news",
+                                "flex-reddit"], "routing": "oracle", "P": 11.63e9, "D_train": 1.3e12, "decides": "A"},
+    "flex-prefix": {"members": ["flex-public", "flex-math", "flex-code", "flex-pes2o", "flex-creative", "flex-news",
+                                "flex-reddit"], "routing": "prefix", "P": 11.63e9, "D_train": 1.3e12},
+    "control-oracle": {"members": ["olmo-7b-c1", "olmo-7b-c2", "olmo-7b-c3", "olmo-7b-c4", "olmo-7b-c5", "olmo-7b-c6",
+                                   "olmo-7b-c7"], "routing": "oracle", "P": 7.299e9, "D_train": 3.88e12}
+   },
+   "singles": {
+    "flexolmo": {"P": 33.27e9, "D_train": 1.3e12},
+    "flex-public": {"P": 7.299e9, "D_train": 1.0e12}
+   }
+  },
+  "A-annealed": {
+   "data_term": false,
+   "scores": ["olmo-1b", "olmo-7b", "olmo-13b", "olmo-32b", "flex-public", "flex-math", "flex-code", "flex-pes2o",
+              "flex-creative", "flex-news", "flex-reddit"],
+   "ladder": {
+    "olmo-1b": {"N": 1.485e9, "D": 4.05e12},
+    "olmo-7b": {"N": 7.299e9, "D": 3.95e12},
+    "olmo-13b": {"N": 13.72e9, "D": 5.3e12},
+    "olmo-32b": {"N": 32.23e9, "D": 6.36e12}
+   },
+   "compositions": {
+    "flex-oracle": {"members": ["flex-public", "flex-math", "flex-code", "flex-pes2o", "flex-creative", "flex-news",
+                                "flex-reddit"], "routing": "oracle", "P": 11.63e9, "D_train": 1.3e12}
+   },
+   "singles": {
+    "flex-public": {"P": 7.299e9, "D_train": 1.0e12}
+   }
+  },
+  "B1": {
+   "scores": ["qwen3-0.6b", "qwen3-1.7b", "qwen3-4b", "qwen3-8b", "qwen3-14b", "moe-full", "moe-prefix-16",
+              "moe-prefix-32", "moe-prefix-64", "moe-codebook-8", "moe-codebook-16", "moe-codebook-32",
+              "moe-codebook-64"],
+   "ladder": {
+    "qwen3-0.6b": {"N": 0.596e9, "D": 36e12},
+    "qwen3-1.7b": {"N": 1.721e9, "D": 36e12},
+    "qwen3-4b": {"N": 4.022e9, "D": 36e12},
+    "qwen3-8b": {"N": 8.191e9, "D": 36e12},
+    "qwen3-14b": {"N": 14.77e9, "D": 36e12}
+   },
+   "singles": {
+    "moe-full": {"P": 30.53e9, "D_train": 36e12},
+    "moe-prefix-16": {"P": 5.165e9, "D_train": 36e12},
+    "moe-prefix-32": {"P": 8.789e9, "D_train": 36e12},
+    "moe-prefix-64": {"P": 16.04e9, "D_train": 36e12},
+    "moe-codebook-8": {"P": 3.353e9, "D_train": 36e12, "code_bits": 4, "decides": "B1"},
+    "moe-codebook-16": {"P": 5.165e9, "D_train": 36e12, "code_bits": 4, "decides": "B1"},
+    "moe-codebook-32": {"P": 8.789e9, "D_train": 36e12, "code_bits": 4, "decides": "B1"},
+    "moe-codebook-64": {"P": 16.04e9, "D_train": 36e12, "code_bits": 4, "decides": "B1"}
+   }
+  }
+ }
+}
