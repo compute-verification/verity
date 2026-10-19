@@ -1918,6 +1918,31 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
         assert KEY not in written and KEY not in "".join(capsys.readouterr()), "the key is never written or printed"
 
 
+def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_newest_note_names(tmp_path):
+    """SALT-WIRE's relaunch (20:43Z 19 Oct): its workers.d entry named no branch, and its fresh launch read "Your branches: none
+    recorded", though its note opened with "Branch `cursor/ca-salt-wire-ea24`, stacked on #2817 (`cursor/net45-...`)". 17 of 18
+    workers.d entries name no branch, so the note's branches are named, the first written as the new worker's."""
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
+    launch_api = FakeLaunchApi()
+    api, clock, w, _, roots = nodes_setup(tmp_path, launch_api=launch_api)
+    p = note(tmp_path / "notes", "zk-port", "20261019T1400Z-draft-salt-wire.md", W1_)
+    p.write_text(p.read_text() + "Branch `cursor/ca-salt-wire-ea24`, stacked on #2817 (`cursor/net45-reveal-deadline-061a` @\n"
+                 "77a862af94); rebased on `cursor/ca-salt-wire-ea24`'s base.\n")
+    W.os.utime(p, (T0 - 60, T0 - 60))
+    api.workers[W1_] = worker("IDLE", W.iso(T0 - 600))
+    (tmp_path / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
+    ended = run_end_for(tmp_path, roots, clock, w, W1_)
+    while clock.t < ended + W.RESUME_S + W.BURST_QUIET_S + W.WORKER_RELAUNCH_S + 300:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    ((_, body),) = launch_api.posts
+    assert ("Your branches: none recorded; its newest note names cursor/ca-salt-wire-ea24, cursor/net45-reveal-deadline-061a; "
+            "fetch the one you work on") in body["prompt"]["text"]
+    new = json.loads((tmp_path / "workers.d" / "zk-port-bc-77777777-7777-7777-7777-777777777777.json").read_text())
+    assert new["branch"] == "cursor/ca-salt-wire-ea24"
+
+
 def test_a_coordinator_past_its_restarts_is_relaunched_from_its_handover_note_with_the_key(tmp_path, capsys):
     gen3 = f"bc-{W.uuid.uuid5(W.COORDINATORS, 'circuits/3')}"
     assert W.generation("circuits", gen3) == 3 and W.generation("circuits", CO) is None

@@ -108,8 +108,8 @@ worker that sent it, else the coordinator of the lane's handle. An agent whose t
 the run ended is **idle_after_run** `RESUME_S` after it: the watch starts a run on it that carries the run's result (with
 the background wait cancelled, as for a wake, when that is what refuses it), and a refused one is tried again each sweep as
 a continue run is. A worker can't be started, so its coordinator is rung (the record's `owner`) and, if the worker is still
-idle `WORKER_RELAUNCH_S` later, it is **relaunch**ed: a fresh agent (`POST /v1/agents`) told its branches and given its newest
-note. A coordinator the watch can't resume (erroring, a continue refused for 30 min, a cancel the API refuses) is relaunched
+idle `WORKER_RELAUNCH_S` later, it is **relaunch**ed: a fresh agent (`POST /v1/agents`) told its branches (with none recorded,
+the `cursor/...` branches its newest note names) and given its newest note. A coordinator the watch can't resume (erroring, a continue refused for 30 min, a cancel the API refuses) is relaunched
 from the newest handover note under `lanes/<handle>/` with `launch_coordinator.py launch --predecessor` at its next
 generation, its inbox thread as the pairing thread. Each is relaunched at most once every `RELAUNCH_EVERY_S`. Relaunching
 needs a key the GitHub broker trusts (Daniel's user key; a service account's agents can't push), which the watch reads,
@@ -199,6 +199,8 @@ HANDOVER = (
     "watch could not resume it. It is left as it was: once you hold the inbox, ask @top to archive it. Its newest handover "
     "note ({note}) follows.\n\n{text}")
 NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to this many characters
+#: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
+NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
 MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
@@ -1429,12 +1431,14 @@ class Watch:
         mine = [(mtime, p) for p, mtime, fm in recent_notes(self.notes, t) if agent in AGENT_RE.findall(fm.get("origin", ""))]
         note = max(mine)[1] if mine else None
         new, key = None, self.launch_key()
+        named = [] if w.get("branches") else list(dict.fromkeys(NOTE_BRANCH_RE.findall(note_text(note))))
         if key is None:
             action = f"not relaunched: no launch key in {self.launch_env} (relaunching is off until it exists)"
         else:
             text = WORKER_RELAUNCH.format(old=agent, lane=lane or "?", handle=handle or "?", runs=ended_runs(runs),
                                           mins=int((t - min(x["ended"] for x in runs)) // 60),
-                                          branches=", ".join(w.get("branches") or []) or "none recorded",
+                                          branches=", ".join(w.get("branches") or []) or "none recorded"
+                                          + (f"; its newest note names {', '.join(named)}" if named else ""),
                                           note=note.name if note else "none in the last 12 h", text=note_text(note))
             body = {"name": f"verity: {lane or 'worker'} (relaunch of {agent[-4:]})", "prompt": {"text": text},
                     "env": {"type": "cloud", "name": ENV_NAME}, "model": MODEL}
@@ -1449,7 +1453,8 @@ class Watch:
                 launcher = next((a for a, h in self.coords.items() if h == handle), "")
                 write_atomic(self.log.with_name("workers.d") / f"{lane or 'worker'}-{new}.json",
                              (json.dumps({"agent_id": new, "lane": lane, "launched_by": launcher, "relaunch_of": agent,
-                                          **({"branch": w["branches"][0]} if w.get("branches") else {})}) + "\n").encode())
+                                          **({"branch": b} if (b := (w.get("branches") or named or [None])[0]) else {})})
+                              + "\n").encode())
         self.record("relaunch", Run(agent, "", str(w.get("name") or "")), role="worker", lane=lane, reason=(
             f"idle since {iso(w.get('updated', t))} after its run {', '.join(x['run'] for x in runs)} ended, and not resumed "
             f"{WORKER_RELAUNCH_S // 60} min after its coordinator was rung"), action=action, note=note.name if note else "",
