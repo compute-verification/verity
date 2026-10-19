@@ -104,8 +104,10 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   added, or an inbox reopened or closed, since. A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
-  inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what
-  missed (COMM-30).
+  inbox, a Linear comment included, and so does the end of a run you launched (`from runs, run R rc N (AGENT): ...`, which
+  the control pod rings with `research msg ring-run`). End your turn while a run goes on: the agent watch wakes you 10
+  minutes after any unread doorbell (an idle-time wake only for a lane that registers a recurring timer with infra).
+  comms' daily review replays every post against the doorbells rung and chases what missed (COMM-30).
 - **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
   changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
   comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear

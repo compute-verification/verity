@@ -221,7 +221,7 @@ def origin_groups(path: Path) -> set[str]:
 
 
 FRESH_EVERY_S = 1800                                             # a routed post fetches origin/main at most this often
-ROUTED = ("send", "ask", "announce", "reply", "close", "deliver", "linear")   # the subcommands that ring doorbells
+ROUTED = ("send", "ask", "announce", "reply", "close", "deliver", "linear", "ring-run")   # the subcommands that ring doorbells
 
 
 def routing_registry(reg: dict, path: Path, now: float | None = None) -> dict:
@@ -1686,6 +1686,42 @@ def cmd_deliver(ns: argparse.Namespace, reg: dict) -> int:
     return 0
 
 
+def run_holder(reg: dict, routes: Routes, agent: str) -> str | None:
+    """The handle whose open inbox route names `agent` as its holder or one of its posters, else whose registry `holder`
+    names it; None when no handle does (a worker: its launcher passes --to)."""
+    for r in routes.all().values():
+        if not r.get("closed") and agent in (r.get("holder"), *r.get("posters", [])):
+            return r["name"]
+    return next((h["handle"] for h in reg["handles"] if agent in (h.get("holder") or "")), None)
+
+
+def cmd_ring_run(ns: argparse.Namespace, reg: dict) -> int:
+    """Ring the inbox of the lane that launched a run, once the run has ended: `from runs, run R rc N (AGENT): TEXT`.  The
+    control pod calls it on each run's end (`request.json`'s submitted_by, the record's rc), so a coordinator that ended its
+    turn while the run went on is woken by the agent watch, not by polling.  Once per run: a run already rung is skipped."""
+    m = AGENT_ID_RE.search(ns.agent or "")
+    agent = m[0] if m else (ns.agent or "")
+    routes = routes_of(ns)
+    name = (ns.to or "").lstrip("@") or run_holder(reg, routes, agent)
+    if not name:
+        raise SlackError(f"no handle holds {agent or '(no agent)'}: a worker's run names its launcher, so pass --to @LANE")
+    to, r = routes.resolve(name)
+    if why := unreachable(name, to, r):
+        raise SlackError(f"@{name}: {why}")
+    api, ch = client(ns), r.get("channel") or channel_id(ns, reg, FRONT_DOOR)
+    head = f"from runs, run {ns.run} rc {ns.rc}"
+    since = f"{_now().timestamp() - 2 * 86400:.6f}"
+    if not api.dry_run and any(is_doorbell(m, reg) and (m.get("text") or "").startswith(head + " ")
+                               for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"], oldest=since)):
+        print(f"@{to}: run {ns.run} was rung already", file=sys.stderr)
+        return 0
+    body = plain(ns.text or "finished")[:DOORBELL_MAX]
+    api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
+             unfurl_media="false", text=f"{head} ({agent or '-'}): {body}")
+    print(f"route @{to}: rang for run {ns.run}", file=sys.stderr)
+    return 0
+
+
 def cmd_verify_author(ns: argparse.Namespace, reg: dict) -> int:
     """Fail closed: exit 0 only when the message, fetched from Slack by channel and ts, has an author the registry names.
     With --dry-run the event's own fields are judged (a test of the allowlist, not of a real post)."""
@@ -3000,6 +3036,12 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("deliver", "ring the doorbells for a post no client delivered (a person's typed post)")
     p.add_argument("--ts", required=True, help="the post's ts")
     p.add_argument("--thread", default=None, metavar="TS", help="its thread's root ts, when it is a reply")
+    p = cmd("ring-run", "ring the launching lane's inbox when a run has ended (the control pod calls it)")
+    p.add_argument("--run", required=True, metavar="RUN_ID")
+    p.add_argument("--rc", required=True, help="the run's exit code, or its verdict word")
+    p.add_argument("--agent", default=None, metavar="BC_ID|URL", help="the launching agent (request.json's submitted_by)")
+    p.add_argument("--to", default=None, metavar="@LANE", help="the lane to ring, when the agent holds no handle (a worker)")
+    p.add_argument("--text", default=None, help="one line: what finished, or where its result is")
     p = cmd("verify-author", "exit 0 only when the post's author is in the registry")
     p.add_argument("--event", required=True, help="the message event as JSON, @PATH or - (stdin)")
     p.add_argument("--why", action="store_true", help="print the verdict on stderr")
@@ -3042,7 +3084,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
             reg = routing_registry(reg, path)
         return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
                 "pickup": cmd_pickup, "roster": cmd_roster, "match": cmd_match,
-                "verify-author": cmd_verify_author, "deliver": cmd_deliver, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
+                "verify-author": cmd_verify_author, "deliver": cmd_deliver, "ring-run": cmd_ring_run, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close,
                 "watch": cmd_watch, "linear": cmd_linear, "retract": cmd_retract}[ns.cmd](ns, reg)
     except SlackError as e:

@@ -2579,3 +2579,20 @@ def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_giv
     assert [m["text"].split("\n")[0] for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]] == ["the node is free"]
     error[0] = "channel_not_found"
     assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "again")[0] == 2
+
+
+def test_ring_run_rings_the_launching_lanes_inbox_once_per_run(fake, registry, routes_dirs, capsys, monkeypatch):
+    """The control pod rings a run's end: the lane whose route holds the launching agent, or `--to` for a worker, once."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    rc, _, err = run(capsys, "ring-run", "--run", "r20261019-051500-ab12", "--rc", "0", "--agent", "bc-circuits",
+                     "--text", "TP8 decode point done")
+    assert rc == 0 and "route @circuits: rang for run r20261019-051500-ab12" in err
+    assert [m["text"] for m in bells(fake, box)] == ["from runs, run r20261019-051500-ab12 rc 0 (bc-circuits): TP8 decode point done"]
+    assert run(capsys, "ring-run", "--run", "r20261019-051500-ab12", "--rc", "0", "--agent", "bc-circuits")[0] == 0
+    assert len(bells(fake, box)) == 1                                                  # the pod may call it twice
+    rc, _, err = run(capsys, "ring-run", "--run", "r20261019-051600-cd34", "--rc", "1", "--agent", "bc-01234567")
+    assert rc == 2 and "pass --to @LANE" in err                                        # a worker holds no handle
+    assert run(capsys, "ring-run", "--run", "r20261019-051600-cd34", "--rc", "1", "--agent", "bc-01234567",
+               "--to", "@circuits")[0] == 0
+    assert len(bells(fake, box)) == 2 and bells(fake, box)[-1]["text"].startswith("from runs, run r20261019-051600-cd34 rc 1 (bc-01234567): ")
