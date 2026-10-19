@@ -329,10 +329,10 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
 def test_two_registrations_of_one_window_are_salted_apart():
     """Two registrations of PoUW window 1 behind one certifier, of the same weights and the same operands, differing only
     in their stream or only in their prover, get different salts, and so a different seed and receipt seed at every
-    matmul index: a tile computed once is no other registration's. Each one's pass is refused at the other's verifier,
-    whichever the certifier recorded. The certifier reveals the window once, so its second registration gets no salt at
-    all. The window is global, so the salts of two certifiers (two proxies' lifetimes, each drawing fresh) differ too,
-    with no epoch bound."""
+    matmul index: to a unit that reads its seed, a tile computed once is no other registration's. Each one's pass is
+    refused at the other's verifier, whichever the certifier recorded. The certifier reveals the window once, so its
+    second registration gets no salt at all. Each certifier draws its own salts, so two certifiers' salts for window 1
+    (two proxies' lifetimes, each counting from its origin) differ too, with no epoch bound."""
     work, roots = setup()
     root = weights_root(roots)
     other_stream, other_prover = hashlib.sha512(b"another stream").digest(), PS.prover_id(prover_key(b"another")[0].public)

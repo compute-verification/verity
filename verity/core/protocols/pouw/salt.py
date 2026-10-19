@@ -89,8 +89,9 @@ def pouw_salt(reveal: bytes, window: int, stream: bytes, prover: bytes) -> bytes
 
     `stream` and `prover` are recorded with the certifier before it draws the window's salt (`pouw_record`), so two
     registrations of one window are salted apart, and the prover can't grind its seeds over them once it holds the salt.
-    The window is global, the certifier's PoUW window on its trusted clock, whose salt the certifier draws once from
-    fresh randomness, so no epoch is bound beside it."""
+    The window is the certifier's PoUW window, counted from its origin on its trusted clock, whose salt it draws once
+    from fresh randomness, so no epoch is bound beside it. A proxy started again counts from 0 with fresh salts, so the
+    stream a window is registered under names the certifier's run."""
     if type(reveal) is not bytes or len(reveal) != SALT_BYTES:
         raise DomainError(f"the certifier's salt is {SALT_BYTES} bytes")
     return hashlib.sha512(SALT_TAG + reveal + _window(window).to_bytes(8, "big") + _bound(stream, prover)).digest()
