@@ -61,8 +61,9 @@ MMA_KIND_TOKEN = {"IMMA": "IMMA", "HMMA": "HMMA", "QMMA": "QMMA", "OMMA": "OMMA"
 #: the cheapest int8/FP word an unpriced form could head, by base opcode (the red-team's "smallest escape")
 ESCAPE = {
     "DMMA": "an int8xint8 product is exact in f64 (|a*b|<2^24), so one DMMA.8 heads 8 exact int8 MACs a warp "
-            "instruction; with no f64 tensor peak the sheet prices it at 0. On the B200 it runs 64 f64 MACs a SM-clock "
-            "(1/128 of tcgen05 i8) and shares the tensor pipe (t + s < 1 beside a saturated tcgen05; unpriced.cu)",
+            "instruction; with no f64 tensor peak the sheet prices it at 0. Measured, it runs 64 f64 MACs a SM-clock on "
+            "the B200 (1/128 of tcgen05 i8) and 128 on the H200 (DMMA.16x8x16, 1/32 of wgmma s8), and on both it shares "
+            "the tensor pipe (t + s < 1 beside a saturated tcgen05 or wgmma; unpriced.cu, unpriced90.cu)",
     "BMMA": "an int8 product is 64 AND-popc bit-planes (D=64); native b1 MMA with no sheet peak is priced at 0, but a "
             "generous 8x-TOPS b1 is only 0.125x int8 (isa_escape DECOMPOSE); emulated on sm_120 (killed)",
     "FFMA2": "two FP32 FMAs an instruction at two issue slots and two FMA-pipe cycles (unpriced.cu on the B200: beside "
