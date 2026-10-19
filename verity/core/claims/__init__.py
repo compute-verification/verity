@@ -292,6 +292,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
           "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
           "A7 semantics (PTX ISA)", "measured"),
+    # The FP MMA premise (Security/Models/Accounting/Assumptions/FpMma.lean, note:20261019T0457Z-draft-fpx-machine):
+    # measured only, so completeness and γ read it and no floor's soundness does (decision 96)
+    Entry("accounting-fp-grid-exact", "assumption",
+          "FP-GRID: an FP8 or block-scaled FP4 MMA step whose accumulator and products lie on one grid 2^g, their "
+          "magnitudes summing below 2^(g+p), writes the exact sum (p = 24 on sm_120 and B200, 14 on H200)",
+          "FP small-grid exactness (measured)", "measured"),
+    Entry("accounting-fp-zero", "assumption", "FP-ZERO: an FP MMA step's zero result is the +0 word",
+          "FP +0 (measured)", "measured"),
+    Entry("accounting-fp-model", "assumption",
+          "FP-MODEL: an FP MMA step computes its bit-exact model of record (sm_120 E4M3, NVF4 and MXF4; Hopper E4M3 "
+          "fitted on H100; none on B200 for FP8)", "FP bit-exact model (measured)", "measured"),
     Entry("accounting-ts-fold-opt", "assumption",
           "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
           "certificate π", "FOLD-OPT", "conjectured"),
