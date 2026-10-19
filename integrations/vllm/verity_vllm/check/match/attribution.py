@@ -30,10 +30,12 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     # [R16 global, F-fp8-GM1 / M-0823] the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
     # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  [R15 stoch] the request-owned inputs are the prompts
     # (one per header request) + the seeds (compare.Prog.seed_index).  A layout that does not hold is a G2 failure by name, not a guess.
+    _seed_index_all = dict(getattr(B, "seed_index", {}))
     _peer_index_all = dict(getattr(B, "peer_index", {}))   # [R17 D90] TP rank fold: peers node -> request index (one per request)
     weights_nodes_error = None
     try:
-        weights_nodes = frozenset(BD.request_inputs(B, hdr_reqs)[3])
+        weights_nodes = frozenset(BD.weights_input_nodes(B, len(hdr_reqs), len(_seed_index_all), len(_peer_index_all),
+                                                         len(getattr(B, "witness_index", {}))))
     except ValueError as e:
         weights_nodes, weights_nodes_error = frozenset(), str(e)   # G5 fails by name below; every weight read is then a cross-request read
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}

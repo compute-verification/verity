@@ -144,10 +144,6 @@ class Prog(PeerReads, PX.PrefixInput):
         # Input node -> its name; a read canonicalises as ("WIT", name, lo, hi), never as an unnamed weight.  Set by `load_derived`.
         self.witness_fields: dict[int, str] = {}
         self.witness_index: dict[int, int] = {}    # fold side: witness Input node -> request index (batch_decomp ownership)
-        # fold side, under a batch: a shared launch's keys parameter (Input node -> witness name), and per launch (`e<step>.<j>`) and
-        # member request index the linked words its witness reserves there: (witness name, word offset, slot, pairs)
-        self.launch_witness: dict[int, str] = {}
-        self.linked: dict[str, dict[int, tuple[str, int, int, int]]] = {}
         self.supplied_fields: dict[int, list[tuple[int, str, int]]] = {}   # `supplied_inputs`, set by the loaders
         self.supplied_owner: dict[int, int | None] = {}
         self.split_statics = split_selects.as_fold_selects(self.inst)       # a select specialised on S compares as the fold's
@@ -551,14 +547,8 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         node = int(ent["param"])
         if node not in p.inputs:
             raise ValueError(f"{d}: witness parameter {ent.get('name')!r} (index {node}) is not an Input node of the Program")
-        if ent.get("request_index") is None:
-            p.launch_witness[node] = ent["witness"]
-            continue
         p.witness_fields[node] = ent["witness"]
-        p.witness_index[node] = ri = int(ent["request_index"])
-        for f in ent.get("fields") or []:
-            if f.get("form") == "linked":
-                p.linked.setdefault(f["launch"], {})[ri] = (ent["witness"], int(f["offset"]), int(f["slot"]), int(f["pairs"]))
+        p.witness_index[node] = int(ent["request_index"])
     p.tp = pj.get("tp")
     w_nodes = SI.load_oracle_supplied(p, pj, d)   # a `registered_values` fold's supplied parameters
     del pj, desc   # [R16 global] the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode

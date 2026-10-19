@@ -146,15 +146,10 @@ class WeightField:
 class Witness:
     """Row i consumes the next leaves, as many as its parameter has, of request `keys[i]`'s `name` witness parameter
     (`Profile.witnesses`), allocated in issue order: a value of the run no input states and the circuit checks rather than computes
-    (the Marlin align's key per pair, the GPU's sorted position).  No device view.
-
-    With `members`, the row is a launch's that several requests share (`keys` = its id, `e<step>.<j>`): it takes the next leaves of the
-    run's `launch_<name>` parameter, and each member (request, slot, pairs) reserves its next pairs + 1 leaves of its own `name`
-    parameter, the words its request Program reads at that launch (its pairs' blocks, then the block count)."""
+    (the Marlin align's key per pair, the GPU's sorted position).  No device view."""
 
     name: str
     keys: tuple[str, ...]
-    members: tuple[tuple[str, int, int], ...] = ()
 
 
 Operand = Shared | PerRow | Gather | GatherMany | Pieces | Const | Param | Collective | Supplied | WeightField | Witness
@@ -227,8 +222,6 @@ class Compute:
     # (the block-scaled FP8 GEMM reads `weight` and `weight_scale_inv`); the fold records it as `operand_roots` in instances.jsonl and
     # cb_a.compare names each weight range by it (the hint can only name one).  Empty = unchanged single-weight behaviour.
     roots: tuple[str | None, ...] = ()
-    #: the shared launch (`e<step>.<j>`) this Compute is the unit of: its instances are no request's and record `launch`
-    launch: str = ""
 
 
 @dataclass(frozen=True)
@@ -355,8 +348,6 @@ class Profile:
     weights_type: Any = None
     # the witness parameters `Witness` operands read, one per request and name (the Marlin align's `schedule`)
     witnesses: tuple[str, ...] = ()
-    # those of them a launch several requests share reads (`Witness.members`): under a batch, one `launch_<name>` parameter each
-    launch_witnesses: tuple[str, ...] = ()
 
 
 class ResolutionError(Exception):

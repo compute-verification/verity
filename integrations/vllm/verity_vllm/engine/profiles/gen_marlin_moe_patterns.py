@@ -21,11 +21,8 @@ to the Build's rules in `_forward_impl`'s order:
 
 The experts read their weights Record fields whole (`WeightField`): what Marlin reads is `process_weights_after_loading`'s repacked
 codes and permuted scales, no word of which is a leaf of its field.  The (TK, TN, GRID) are `vllm_marlin_moe.served_config`'s at the
-launch's tokens and BM `fused_marlin_moe`'s.  `moe_align_block_size` sorts every pair of the launch, so under a batch a request's blocks
-read the other requests' routing: a launch several requests share is computed once, as the workload Program's launch unit is
-(`program.launch_units`), its align over every pair with the launch's keys (`launch_<schedule>`) and no request's (`Compute.launch`
-`e<step>.<j>`), and each member, in launch order, reserves the linked words of its `schedule` its request Program reads there instead
-(`Witness.members`): the blocks at its slot, then the block count.
+launch's tokens and BM `fused_marlin_moe`'s.  One request a step only: `moe_align_block_size` sorts every pair of the launch, so under a
+batch a request's blocks read the other requests' routing, which the launch-level schedule unit states.
 """
 
 from __future__ import annotations
@@ -64,23 +61,7 @@ MARLIN_NONE = ("b_bias_or_none", "a_scales", "global_scale", "b_zeros_or_none", 
 MARLIN_FLAGS = {"b_type_id": MXFP4_TYPE_ID, "is_full_k": True, "use_atomic_add": False, "use_fp32_reduce": True, "is_zp_float": False,
                 "thread_k": -1, "thread_n": -1, "blocks_per_sm": -1}
 SCHEDULE = "schedule"
-#: the step's shared launches (`StepContext.scratch`): align event id -> its ordinal j in the step, the launch being `e<step>.<j>`
-LAUNCHES = "marlin_moe_launches"
 LAYER = re.compile(r"model\.layers\.(\d+)\.")
-
-
-def launch_members(rows: list[tuple[str, int]], topk: int) -> tuple[tuple[str, int, int], ...] | str:
-    """The requests of a launch over the step's token `rows`, in launch order: (request, slot, pairs), its slot the pairs before it;
-    a reason when a request's rows are not contiguous, as its pairs would then be no one slot."""
-    out: list[tuple[str, int, int]] = []
-    for r, _pos in rows:
-        if out and out[-1][0] == r:
-            out[-1] = (r, out[-1][1], out[-1][2] + topk)
-        elif any(m[0] == r for m in out):
-            return f"request {r!r}'s token rows are not contiguous in the launch, so its pairs are no one slot of its schedule"
-        else:
-            out.append((r, out[-1][1] + out[-1][2] if out else 0, topk))
-    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -116,9 +97,10 @@ class MoEMarlinSharedExperts:
         if isinstance(io, Unsupported):
             return io
         hidden, outs = io
-        members = launch_members(ctx.start.rows, C["TOPK"])
-        if isinstance(members, str):
-            return unsupported(node, members)
+        reqs = sorted({r for r, _ in ctx.start.rows})
+        if len(reqs) != 1:
+            return unsupported(node, "the launch routes several requests' tokens: moe_align_block_size sorts every pair of the launch, so a "
+                                     "request's blocks read the others' routing (the launch-level schedule unit)", requests=reqs)
         layer = LAYER.match(f"{node.enter.module or ''}.")
         if layer is None:
             return unsupported(node, f"{SHARED_OP} is not under a decoder layer's module", module=node.enter.module)
@@ -142,7 +124,7 @@ class MoEMarlinSharedExperts:
                           hint, C["NUM_EXPERTS"], C["H"], self.gate_spec, self.name)
         if isinstance(gate, Unsupported):
             return gate
-        routed = self._routed(node, ctx, sc, hidden, outs, weights, ids, members, hint)
+        routed = self._routed(node, ctx, sc, hidden, outs, weights, ids, reqs[0], hint)
         if isinstance(routed, Unsupported):
             return routed
         kernels = [*sc.mms, sc.silu, sc.router, sc.align, sc.up, sc.rsilu, sc.down, sc.msum] + ([sc.gate] if sc.gate is not None else [])
@@ -260,10 +242,9 @@ class MoEMarlinSharedExperts:
         return [(at, Compute(spec, M, (PerRow(x), Shared(b)), (PerRow(w), PerRow(ids)), (at,), hint=f"{hint}/router", kernels=(K_TOPK,),
                              attribution=tuple(ctx.start.rows), pattern=self.name, roots=(None, bname)))], (x, bname, w, ids)
 
-    def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, weights: ViewDesc, ids: ViewDesc, members: tuple, hint: str,
-                ) -> list[tuple[int, Any]] | Unsupported:
-        """The align's schedule, w13, the clamped activation, w2 and moe_sum over the (token, slot) pairs.  The align takes its one
-        request's keys, or at a launch several requests share, the launch's, and is the launch's unit."""
+    def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, weights: ViewDesc, ids: ViewDesc, req: str,
+                hint: str) -> list[tuple[int, Any]] | Unsupported:
+        """The align's schedule, w13, the clamped activation, w2 and moe_sum over the (token, slot) pairs."""
         C = self.config
         E, TOPK, H, I, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
         P, tp = M * TOPK, target_of(ctx)[0]
@@ -283,18 +264,11 @@ class MoEMarlinSharedExperts:
         except ValueError as e:
             return unsupported(node, str(e))
         at = sc.align.id
-        if len(members) == 1:
-            key, unit = Witness(SCHEDULE, (members[0][0],)), ""
-        else:
-            seen = ctx.scratch.setdefault(LAUNCHES, {})
-            unit = f"e{ctx.start.step}.{seen.setdefault(at, len(seen))}"
-            key = Witness(SCHEDULE, (unit,), members)
         out: list[tuple[int, Any]] = [
-            (at, Compute(ranks, 1, (Shared(ids_flat), key, Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(P)),))),
-                         (Shared(rank), Shared(start)), (at,), hint=f"{hint}/moe_align_block_size/rank", kernels=K_ALIGN_KERNELS, pattern=self.name,
-                         launch=unit)),
+            (at, Compute(ranks, 1, (Shared(ids_flat), Witness(SCHEDULE, (req,)), Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(P)),))),
+                         (Shared(rank), Shared(start)), (at,), hint=f"{hint}/moe_align_block_size/rank", kernels=K_ALIGN_KERNELS, pattern=self.name)),
             (at, Compute(blocks, 1, (Shared(ids_flat), Shared(rank), Shared(start)), (Shared(blk), Shared(par)), (at,),
-                         hint=f"{hint}/moe_align_block_size", kernels=K_ALIGN_KERNELS, pattern=self.name, launch=unit))]
+                         hint=f"{hint}/moe_align_block_size", kernels=K_ALIGN_KERNELS, pattern=self.name))]
         prev = hidden
         for launch, K, N, routed in ((sc.up, H, 2 * I, False), (sc.down, I, H, True)):
             if routed:
@@ -374,4 +348,4 @@ class MoEMarlinSharedExperts:
         return spec, A, y, *names
 
 
-__all__ = ["MARLIN_FLAGS", "MARLIN_NONE", "MXFP4_TYPE_ID", "MoEMarlinSharedExperts", "SCHEDULE", "launch_members"]
+__all__ = ["MARLIN_FLAGS", "MARLIN_NONE", "MXFP4_TYPE_ID", "MoEMarlinSharedExperts", "SCHEDULE"]

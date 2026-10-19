@@ -581,8 +581,7 @@ def _mhc_profile(role: str, cfg: dict[str, Any], src: dict[str, Any], C: dict[st
                            "marlin_served": MHC.MARLIN_SERVED.pattern},
     }
     return Profile(id=profile_id(role, C, world), patterns=patterns, config=C, weight_field=make_weight_field(cfg, C), accepted=False,
-                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype, witnesses=(SCHEDULE,) if world > 1 else (),
-                   launch_witnesses=(SCHEDULE,) if world > 1 else ())
+                   kernel_allowlist=base.KERNEL_ALLOWLIST, notes=notes, weights_type=wtype, witnesses=(SCHEDULE,) if world > 1 else ())
 
 
 def build_profile(role: str, world: int = 1, *, moe_construction: str | None = None, fused_moe_pins: dict[str, Any] | None = None,
