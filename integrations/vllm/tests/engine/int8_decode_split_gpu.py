@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "verity-vllm/int8-decode-split/v3"
+SCHEMA = "verity-vllm/int8-decode-split/v4"
 CLASSES = ("int8_linear", "lm_head", "int8_attention", "bf16_gemm", "other", "unattributed")
 LINEAR_OPS = ("verity_int8::row_quant", "verity_int8::scaled_mm")
 BF16_GEMMS = ("aten::mm", "aten::addmm", "aten::matmul", "aten::linear")
@@ -84,7 +84,8 @@ def profiled(llm: Any, prompt: list[int], max_tokens: int) -> dict[str, Any]:
     device: dict[str, float] = {}
     for evt in prof.events():
         if evt.device_type == DeviceType.CUDA:
-            device[evt.name] = device.get(evt.name, 0.0) + evt.time_range.elapsed_us()
+            if evt.name != HEAD_SCOPE:      # the range's own device annotation spans the head's kernels
+                device[evt.name] = device.get(evt.name, 0.0) + evt.time_range.elapsed_us()
             continue
         for k in getattr(evt, "kernels", ()):
             c = classify(evt)
