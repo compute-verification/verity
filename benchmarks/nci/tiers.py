@@ -60,10 +60,10 @@ T_AUDIT = 0.3635
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
-#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max (the credit
-#: certifies floor time and honest kernels run 1.72x the floor, so 21.7% of a training window's device time stays
-#: uncredited; the C7 dossier's central value; 1% needs eight conditions, and today nothing in a training window is
-#: credited) and the host CPUs at their BF16 AMX datasheet peak (two Xeon 6776Ps, 3.8% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
+#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max, 1 - (1 - eps)
+#: ((1 - phi)/q_sched + phi)/q_clock = 0.326: honest kernels run 1.72x the floor at the nodes' locked clock (run
+#: r20261017-123922-e558), diluted by the training window's filler (the C7 dossier; 0.217 with an attested clock; 1%
+#: needs eight conditions; today nothing in a training window is credited) and the host CPUs at their BF16 AMX datasheet peak (two Xeon 6776Ps, 3.8% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
 #: MEM-51) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
@@ -71,7 +71,7 @@ BLOCK_NAME_BITS = 25
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.217, "host_share": 0.038,
+    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.038,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
@@ -89,7 +89,7 @@ DEFAULTS = {
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at f_max 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (BF16 AMX 3.8%, measured 0.4-0.9%; 0 once a CPU filler or a physical cap bounds them)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},

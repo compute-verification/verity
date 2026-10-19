@@ -25,7 +25,7 @@ import tiers as T  # noqa: E402
 #: a bound no parameter file, calibration or measurement gives
 RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
-    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit at f_max 0.217 (C7 dossier); nothing credited today 1"),
+    "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.326 at the locked clock, 0.217 attested (C7 dossier); nothing credited today 1"),
     "host_share": (0.0, 0.059, "0 once a CPU filler or a physical cap bounds them; two Xeon 6776P BF16 AMX 3.8%; 5.9% the top of the C7 dossier's range"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
