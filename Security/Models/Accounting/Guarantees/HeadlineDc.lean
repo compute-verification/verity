@@ -45,10 +45,26 @@ completeness (honest passes) and A7's reconciliation do. H1-HB's capture of the 
 Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins drawn after
 the commitments. The sampled path's `ε_sample` and the Fiat–Shamir premium are separate lines.
 
+**The window these numbers are for.** Each statement is typed at `SmX.checks = 48,000` rounds, every round live and
+fully checked (no service draw, so no `K_d`), and `RightFixed` charges each round an equal `1/S` share of the window's
+words (`r = 1`). It says nothing about a window of any other shape, and no served window has this one. The same bound
+at `S` rounds in place of 48,000 needs at least 11,400 (H200 sheet), 19,100 (H200 measured), 7,018 (B200 sheet) and
+7,711 (B200 measured) equal live rounds for `ε < 1%`, and is above 100% at 18 rounds. Unequal rounds pay their
+max-over-mean share (RT-INT-2's `r`, an estimate, not a statement): at `r = 2.87` and 48,000 rounds the H200's
+measured reading would be 1.05%.
+
+**The premises the sheet numbers lean on hardest.** A2 (`SheetDispatch`) includes A2u, that a uniform-datapath
+instruction takes an issue slot, which no vendor document states. It is measured on both devices: the H200 beside a
+saturated wgmma, the B200 beside four `tcgen05.mma` in flight. Without it, the uniform route takes the sheet readings
+to about 94% (H200) and 100% (B200). FOLD-OPT (`FoldOptFolded`, conjectured) has 12.6% of slack on DS-90: the H200's
+sheet reading holds while LI-CP-W's fold costs at least 0.922 issue slots a word, and with only the proved fan-in
+floor it is 26.9% to 53.4%.
+
 The statements:
 
 * `Sm90SheetHeadline`: the H200 at its data sheet (DS-90), at π* = DS_issue: outside an event of probability at most
-  `2^-40`, every accepted window runs at least `1 − 0.728%` of its credit (the unfolded branch binds).
+  `2^-40`, every accepted window of 48,000 equal live rounds runs at least `1 − 0.728%` of its credit (the unfolded
+  branch binds).
 * `Sm90MeasuredHeadline`: the H200 on DC-90-ri, at a mixed π* (issue, JI90_0, JI90_1): at least `1 − 0.781%` (the
   folded branch binds).
 * `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue, DS_alu): at least `1 − 0.504%`
@@ -103,7 +119,10 @@ prices every run's fold at the words it folds and FILL-OPT per word filled its f
 unfolded share `Uf`), and the luck and proof premises hold as in `Sm90SheetHeadline`, then outside an event of
 probability at most `2^-40` every accepted window's time is at least `1 − 781/100000` (`1 − 0.781%`) of the credit
 `T_cred = B_♭/f_max`. `NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on
-its joint rows. -/
+its joint rows. Two of them would move the reading if they were on it: the register-sourced IGMMA form, whose
+coefficient fitted from the H200's probes gives about 1.64% in the machine model, and DMMA, which at the scalar
+coefficient heads a word for about 0.0077 against honest's 0.0153 (at its tensor-pipe coefficient, about 0.031, it
+moves nothing). -/
 def Sm90MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δbind δzk : ℝ),
