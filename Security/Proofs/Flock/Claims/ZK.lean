@@ -67,6 +67,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.FinExe
+import Proofs.Flock.Claims.ZK.FinPads
 import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.FinTau
 import Proofs.Flock.Claims.ZK.Worker
@@ -336,6 +337,8 @@ import Proofs.Flock.Claims.ZK.Stop
 * `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids, `RepTau` and the opened positions' fields
   `RepOpenRest` (`Masked.finExe_of_rest`); the rep count and rep 0's claim points (`Masked.repExact`,
   `Masked.repPoints`).
+* `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
+  are the session's.
 * `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
 * `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
   shared phases, at the rep's `ε` slot's coins.
