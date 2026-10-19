@@ -93,7 +93,9 @@ theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x
         (if Rf x (S.pad cs) (refK x) = true then stop else _) else
         (if Rf x (S.pad cs) (refK x) = true then stop else _)) = stop
     rw [if_neg h]
-    split <;> rw [if_pos hR]
+    by_cases hA : S.Admits x (S.pad cs)
+    · rw [if_pos hA, if_pos hR]
+    · rw [if_neg hA, if_pos hR]
 
 end Claims.ZKMal.RefSession
 
