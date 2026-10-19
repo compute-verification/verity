@@ -1,4 +1,4 @@
 order = 30
 path = "`dc/`"
 runs_on = "H200, B200 (CPU: build and gate)"
-what = "TENSOR's M3/M4 probes on sm_90a wgmma and sm_100a tcgen05, the scalar pipes, and the honest Dither GEMM with its duo fold on both (`run.sh sm90` or `sm100`; the run plan and B300 are its README)"
+what = "TENSOR's M3/M4 probes on sm_90a wgmma and sm_100a tcgen05, the scalar pipes, and the honest Dither GEMM with its duo fold on both (`run.sh sm90` or `sm100`; the run plan and B300 are its README); `emp.sh`, RT-H200-EMP's split runner: sm_90a probes built and gated on a CPU node, timed on the H200 under one lease"
