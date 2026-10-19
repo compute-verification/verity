@@ -8,7 +8,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
   `delta` (an exact ratio in (0, 1)); with `registered` not null, also `parameters`, its program function's `[[name,
-  type], ...]`, which the descriptor does not carry (`Registered.params`);
+  type], ...]`, which the descriptor does not carry (`Registered.params`); and, when it expects values registered, it may
+  add `supplied`, the ones it fills itself (`Supplied.sources`: `{value: [[{"port" | "value" | "bytes" | "position" |
+  "window": string}, ...], ...]}`), and `pinned`, the roots it held before the record for others (`{value: root}`, each
+  of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), each refused with any other form or when
+  it expects none registered;
 * **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
@@ -102,7 +106,9 @@ private def logRecord (j : Json) : V Json := do
 
 def paramsOfJson (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
-  exactly j (if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS) "the parameters"
+  let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
+  let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
+  exactly j (if (field? j "pinned").isSome then keys.push "pinned" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
   let law ← rule (getD j "law")
@@ -134,11 +140,25 @@ def paramsOfJson (j : Json) : V Params := do
       | some w => pure (v, w)
       | none => throw s!"registered: the words of {v} are not a natural number"
     pure (registered, ← Registered.params program.desc (getD j "parameters"))
+  let supplied ← match field? j "supplied" with
+    | none => pure #[]
+    | some s => do
+      if registered.isEmpty then throw "supplied values are registered values: the verifier expects none registered"
+      Supplied.sources s
+  let pinned ← match field? j "pinned" with
+    | none => pure #[]
+    | some (.obj kvs) => do
+      if registered.isEmpty then throw "pinned roots are registered values' roots: the verifier expects none registered"
+      kvs.toArray.mapM fun (v, r) => match r with
+        | .str r => if registered.any (·.1 == v) && !supplied.any (·.1 == v) && r.length == 128 && isHex r then
+            pure (v, r) else throw s!"pinned value {v}: not a registered value it doesn't fill, pinned to 64 bytes"
+        | _ => throw s!"pinned value {v}: its root is not a string"
+    | some _ => throw "pinned roots are not an object"
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   return { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition, registered,
-                         params }, delta }
+                         params, supplied, pinned }, delta }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
