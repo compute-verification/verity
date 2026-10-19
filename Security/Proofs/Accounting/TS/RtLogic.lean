@@ -16,6 +16,8 @@ package's build and its Lean check never see it; it is elaborated with `lake env
   has `issued = 64`, above `FanIn`'s per-lane ALU cap of 8; read per lane it meets the cap (RT-LOGIC-4).
 * `sheet_tensor_free`: a class with MACs and no sheet peak costs nothing on the data-sheet machine's tensor row
   (RT-LOGIC-6).
+* `bound_smul`, `credit_scaled`, `dispatch_total`: the credit scales with the floor's normalization, and A2 per SMSP
+  holds for a circuit's totals only with cycles summed over the SMSPs (RT-LOGIC-8).
 -/
 
 namespace Accounting.SecurityProofs.TS.RtLogic
@@ -245,6 +247,55 @@ theorem sheet_tensor_free {K P : Type} [DecidableEq P] (S : Sheet K P) (k : K) (
     S.machine.a .tensor k = 0 := by
   simp [Sheet.machine, h]
 
+/-! ## Units: the credit scales with the floor's normalization -/
+
+section Units
+
+variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U] [Fintype F] [Fintype X]
+
+/-- **The bound is linear in the counts**: `B(c·n) = c·B(n)` for `c ≥ 0`. -/
+theorem bound_smul (G : Machine K R) (n : K → ℝ) {c : ℝ} (hc : 0 ≤ c) :
+    G.bound (fun k => c * n k) = c * G.bound n := by
+  simp only [Machine.bound, Machine.load]
+  rw [Real.mul_iSup_of_nonneg hc]
+  congr 1
+  funext r
+  rw [Finset.mul_sum]
+  exact Finset.sum_congr rfl fun k _ => by ring
+
+/-- A labelled program with every part scaled by `c`. -/
+def scaled (c : ℝ) (P : Labelled K) : Labelled K :=
+  ⟨fun k => c * P.nw k, fun k => c * P.nf k, fun k => c * P.nx k, fun k => c * P.ns k⟩
+
+/-- **The credit scales with the floor**: `T_cred(c·♭) = c·T_cred(♭)`. A floor summed over a circuit's words, where
+the TS model divides by the SMSPs, is `N_SMSP` times the credit: 752 on sm_120 (RT-LOGIC-8). -/
+theorem credit_scaled (Z : Model K R T L U F X) (P : Labelled K) {c : ℝ} (hc : 0 ≤ c) :
+    Z.credit (scaled c P) = c * Z.credit P := by
+  have e : (scaled c P).n = fun k => c * P.n k := by
+    funext k
+    simp only [Labelled.n, scaled]
+    ring
+  unfold Model.credit Model.bnd
+  rw [e, bound_smul Z.G P.n hc, mul_div_assoc]
+
+end Units
+
+/-- **A2 per SMSP against a circuit's totals**: 752 SMSPs each issuing a warp instruction every cycle for `C > 0`
+cycles meet A2 one by one, but their total `752·C` is above the `C` cycles each SMSP counts. A run whose counts are
+the circuit's totals (Compose's `Fits`) meets A2 only with its cycles summed over the SMSPs (RT-LOGIC-8). -/
+theorem dispatch_total {C : ℝ} (hC : 0 < C) :
+    SheetDispatch ({ n := fun _ : Unit => C, cycles := C, clock := 1 } : Run Unit) ∧
+      ¬ SheetDispatch ({ n := fun _ : Unit => 752 * C, cycles := C, clock := 1 } : Run Unit) ∧
+      SheetDispatch ({ n := fun _ : Unit => 752 * C, cycles := 752 * C, clock := 1 } : Run Unit) := by
+  refine ⟨?_, ?_, ?_⟩
+  · simp [SheetDispatch]
+  · simp only [SheetDispatch, Fintype.univ_unit, Finset.sum_singleton, not_le]
+    linarith
+  · simp [SheetDispatch]
+
+#print axioms bound_smul
+#print axioms credit_scaled
+#print axioms dispatch_total
 #print axioms toy_not_foldOpt
 #print axioms toy_not_fillOpt
 #print axioms DIdealFloorGuarded
