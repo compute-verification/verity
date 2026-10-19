@@ -23,7 +23,7 @@
   per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on the H100, 34 on sm_120) and fs per debited
   element (64 and 40), and an add per later +0 promotion (32 and 8).
 * The cap ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
-  exceeds ρ times its credited cells' credit, their share of the unit's `creditDevRev1` (`pearl_c_work.tile_cap`), is
+  exceeds ρ times its credited cells' credit, their share of the unit's `creditDevRev1` (`clear_work.tile_cap`), is
   rejected (`pearlCTilesDevRev1`'s `capOK`, per tile: `Tile.lean`'s `tileShare`).
 
 Each takes the scheme's device (`pearl_c_device`, the H100 by default): its atom, G and prices.  The module constants are

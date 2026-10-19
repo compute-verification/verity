@@ -42,13 +42,18 @@ FLAT = [("AllReduceMultimem_v1", TA.AllReduceMultimem, {"WORLD": W, "SIZE": M * 
         ("AllReduceMnnvl_v1", TA.AllReduceMnnvl, {"WORLD": W, "N": M * NC, "SHOT": 2})]
 
 
-@pytest.mark.parametrize("family,defn,statics", FLAT, ids=lambda x: x if isinstance(x, str) else "")
+W4 = 4
+NCCL = [(XC.NCCL_TREE_FAMILY, TA.AllReduceNcclTree, {"WORLD": W4, "SIZE": M * NC, "CHAIN": chain}) for chain in ((0, 1, 2, 3), (2, 0, 3, 1))]
+
+
+@pytest.mark.parametrize("family,defn,statics", FLAT + NCCL, ids=lambda x: x if isinstance(x, str) else "")
 def test_routed_expected_is_the_definition_at_the_picked_rows(family, defn, statics) -> None:
-    parts = _bf16(np.random.default_rng(len(family) + statics.get("SHOT", 0)), (W, M, NC))
-    want = _definition(defn, statics, parts.reshape(W, -1)).reshape(M, NC)
+    world = statics["WORLD"]
+    parts = _bf16(np.random.default_rng(len(family) + statics.get("SHOT", 0)), (world, M, NC))
+    want = _definition(defn, statics, parts.reshape(world, -1)).reshape(M, NC)
     (got,) = XC.routed_expected(family, statics, parts[:, ROWS], ROWS)
     assert (got == want[ROWS]).all()
-    if family != "AllReduceMnnvl_v1":                     # the flat routes read row * N + col of the call's M * N words
+    if family not in ("AllReduceMnnvl_v1", XC.NCCL_TREE_FAMILY):   # the owner routes read row * N + col of the call's M * N words
         with pytest.raises(ValueError, match="past SIZE"):
             XC.routed_expected(family, statics, np.zeros((W, 1, NC), np.uint16), [M])
 
@@ -93,19 +98,20 @@ def test_spec_key_of_the_glm53_fused_norm_as_its_program_spells_it() -> None:
 # --- check_picks over eight ranks' dumps -----------------------------------------------------------------------------------------
 
 def _dumps(family, statics, *, fused: bool = False, flip: int | None = None, spec_of=None, binds=lambda r: True, drop=None, route_why=None):
+    world = W if statics is None else statics["WORLD"]
     if fused:
         parts, res, w, statics = _fused(1, True)
         defn, N = TA.AllReduceRmsNormMnnvl, 256
         out = XC.routed_expected(XC.FUSED_FAMILY, statics, parts[:, ROWS], ROWS, res[ROWS], w)
     else:
-        parts = _bf16(np.random.default_rng(3), (W, M, NC))
+        parts = _bf16(np.random.default_rng(3), (world, M, NC))
         defn, N = {"AllReduceMultimem_v1": TA.AllReduceMultimem, "AllReduceCustom_v1": TA.AllReduceCustom,
-                   "AllReduceMnnvl_v1": TA.AllReduceMnnvl}[family], NC
-        out = (_definition(defn, statics, parts.reshape(W, -1)).reshape(M, N)[ROWS],)
+                   "AllReduceMnnvl_v1": TA.AllReduceMnnvl, XC.NCCL_TREE_FAMILY: TA.AllReduceNcclTree}[family], NC
+        out = (_definition(defn, statics, parts.reshape(world, -1)).reshape(M, N)[ROWS],)
     spec = bind(defn, **statics).id
     site = "model.layers.2.post_attention_layernorm"
     dumps = {}
-    for r in range(W):
+    for r in range(world):
         part = parts[r, ROWS].copy()
         if flip == r:
             part[0] ^= 0x8000                         # a partial row that is not the collective's input
@@ -122,12 +128,13 @@ def _dumps(family, statics, *, fused: bool = False, flip: int | None = None, spe
     return dumps
 
 
-@pytest.mark.parametrize("family,defn,statics", FLAT, ids=lambda x: x if isinstance(x, str) else "")
+@pytest.mark.parametrize("family,defn,statics", FLAT + NCCL[:1], ids=lambda x: x if isinstance(x, str) else "")
 def test_an_honest_routed_pick_is_equal_and_a_flipped_partial_is_a_named_mismatch(family, defn, statics) -> None:
-    r = XC.check_picks(_dumps(family, statics), world=W)
+    world = statics["WORLD"]
+    r = XC.check_picks(_dumps(family, statics), world=world)
     assert r["result"] is True and r["equal"] == r["picks"] == 1 and r["by_family"][family]["equal"] == 1
     assert r["by_stratum"]["model.layers.2.post_attention_layernorm|all_reduce|decode"]["families"] == [family]
-    bad = XC.check_picks(_dumps(family, statics, flip=5), world=W)
+    bad = XC.check_picks(_dumps(family, statics, flip=world - 3), world=world)
     m = bad["mismatches"][0]
     assert bad["result"] is False and bad["mismatch_n"] == 1 and m["family"] == family
     assert not all(m["received_equals_definition_per_rank"].values()) and m["received_equal_across_ranks"] is True
@@ -178,6 +185,23 @@ def test_route_of_names_the_definition_the_switches_take_at_glm53() -> None:
     assert XD.route_of(s, 4, N, 2) is None
     assert "no entry" in XD.route_of(TA.settings_of(False, {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}), 4096, N, W)["why"]
     assert "no captured setting" in XD.route_of(TA.settings_of(True, {"VLLM_ALLREDUCE_USE_FLASHINFER": "0"}), 4, N, W)["why"]
+
+
+def test_route_of_names_nccl_s_tree_at_tp4_on_the_rtx_pro_6000_over_shm() -> None:
+    """Batch-invariant pynccl over SHM on 4 RTX PRO 6000 is the tree down (0, 1, 2, 3); another GPU, P2P on or a world no capture
+    covers keeps the AllReduce_v2 chain (None), and world 8 under batch invariance is named uncovered."""
+    s, N = TA.settings_of(True, {"VLLM_BATCH_INVARIANT": "1", "NCCL_P2P_DISABLE": "1"}), 8192
+    for M in (1, 256):
+        r = XD.route_of(s, M, N, W4, device=TA.RTX_PRO_6000)
+        assert r == {"spec": f"AllReduceNcclTree_v1{{WORLD=4,SIZE={M * N},CHAIN=(0,1,2,3)}}", "family": XC.NCCL_TREE_FAMILY,
+                     "statics": {"WORLD": 4, "SIZE": M * N, "CHAIN": (0, 1, 2, 3)}, "fused": False}, r
+    assert XD.route_of(s, 1, N, W4, device=((12, 0), 188))["family"] == XC.NCCL_TREE_FAMILY
+    assert XD.route_of(s, 1, N, W4, types.SimpleNamespace(variance_epsilon=1e-5), device=TA.RTX_PRO_6000)["fused"] is False
+    p2p = TA.settings_of(True, {"VLLM_BATCH_INVARIANT": "1"})
+    for args in ((s, 1, N, W4), (s, 1, N, W4, None, ("9.0", 132)), (p2p, 1, N, W4, None, TA.RTX_PRO_6000), (s, 1, 4096, W4, None, TA.RTX_PRO_6000),
+                 (s, 257, N, W4, None, TA.RTX_PRO_6000), (s, 1, N, 3, None, TA.RTX_PRO_6000)):
+        assert XD.route_of(*args) is None, args
+    assert "world=8" in XD.route_of(s, 1, N, W, device=TA.RTX_PRO_6000)["why"]
 
 
 def test_the_residual_is_the_previous_calls_new_residual_and_the_embedding_first() -> None:

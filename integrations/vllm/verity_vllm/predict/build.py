@@ -28,7 +28,6 @@ not read by the Build, Match or Commit (`program.frontend.inputs_trace` lists `v
 from __future__ import annotations
 
 import hashlib
-import re
 import time
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -39,6 +38,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
 
 BUILDER_ID = "predict-build/derived/v1"
@@ -59,10 +59,12 @@ _FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPE
                "layer_norms", "extra_layer_norms")
 #: the activations of the gated MLP: the `*Mul` kind's role per `hidden_act`
 _ACTS = {"silu": "silu_mul", "gelu_pytorch_tanh": "gelu_tanh_mul"}
-
-
-class Unexpressible(Exception):
-    """φ asks for a structure the vocabulary cannot express.  The message names the fact precisely."""
+#: the engine environment a Program reads only as `tp_allreduce.settings_of` (above two ranks; two ranks' AllReduce2 is route-free)
+#: or not at all (the transport: `pipeline.build` records NCCL_P2P_DISABLE, never consults it); the target's own are `TargetProfile.env()`
+_ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER", "NCCL_P2P_DISABLE")
+#: the engine args a component Program does not read but through `settings_of` (the scheduler's: a component is one request's)
+_ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched_tokens", "max_num_seqs", "enable_prefix_caching",
+                  "enable_chunked_prefill")
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,13 @@ class ModelShape:
     @property
     def QKV(self) -> int:
         return (self.NH + 2 * self.KVH) * self.D
+
+    @property
+    def nodes_per_row_layer(self) -> int:
+        """About how many root nodes one row adds per layer: 14, plus the q/k/v bias, the q/k RMSNorms, the MoE block's three per pair
+        and Gemma-2's four unfused norm chains' thirty."""
+        return 14 + self.qkv_bias + {"head": self.NH + self.KVH, "all": 2}.get(self.qk_norm, 0) + (3 * self.TOPK + 2 if self.E else 0) + \
+            30 * self.norm_chain
 
 
 def model_shape(hf: dict) -> ModelShape:
@@ -178,8 +187,7 @@ def model_shape(hf: dict) -> ModelShape:
         facts.append(str(e))
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    cls = re.match(r"\w+", ff["vllm_class"]).group(0)
-    return ModelShape(arch=family, model_class=cls, H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
+    return ModelShape(arch=family, model_class=served_class(ff["vllm_class"]), H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
                       D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
                       max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
                       qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
@@ -211,32 +219,19 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
     return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, I=C.I // world)
 
 
-def _arr(shape: tuple[int, ...], w: int) -> Type:
-    t: Type = Value(w)
-    for n in reversed(shape):
-        t = Array(int(n), t)
-    return t
-
-
-def _arr_shape(t: Type) -> tuple[int, ...]:
-    shape = []
-    while isinstance(t, Array):
-        shape.append(t.n)
-        t = t.elem
-    return tuple(shape)
-
-
 def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
     """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
     (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
     family scales it, the one shared rotary `cos_sin_cache` [max_pos, rot] bf16, each attention layer's four f32 scalar scales).  The
-    field names are informational: the descriptor carries types only.  Under `world` ranks each is one rank's shard (`rank_shape`)."""
+    field names are informational (the descriptor carries types only) and, as every decoder's (`predict.dsa`, `predict.dsv4`), the
+    vLLM model's own (`model.layers.0.…`, `lm_head.weight`), never the prefix of the module a trace wraps it in.  Under `world`
+    ranks each is one rank's shard (`rank_shape`)."""
     bf = lambda *s: _arr(s, 16)  # noqa: E731
     V = C.V // world
     C = rank_shape(C, world)
-    out: list[tuple[str, Type]] = [("model.model.embed_tokens.weight", bf(V, C.H))]
+    out: list[tuple[str, Type]] = [("model.embed_tokens.weight", bf(V, C.H))]
     for L in range(C.NL):
-        p = f"model.model.layers.{L}."
+        p = f"model.layers.{L}."
         out.append((p + "self_attn.qkv_proj.weight", bf(C.QKV, C.H)))
         if C.qkv_bias:
             out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
@@ -253,30 +248,24 @@ def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
         out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
         if C.extra_norms:
             out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]
-    out.append(("model.model.norm.weight", bf(C.H)))
+    out.append(("model.norm.weight", bf(C.H)))
     if not C.tie:
-        out.append(("model.lm_head.weight", bf(V, C.H)))
+        out.append(("lm_head.weight", bf(V, C.H)))
     if C.embed_scale:
-        out.append(("model.model.normalizer", bf(1)))
-    out.append(("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
+        out.append(("model.normalizer", bf(1)))
+    out.append(("model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
     for L in range(C.NL):
-        out += [(f"model.model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
+        out += [(f"model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
     return out
-
-
-def _ptypes(spec) -> tuple:
-    params, _ = spec.signature()
-    return tuple(t for _, t in params)
 
 
 class _Specs:
     """The vocabulary's kinds for C on the declared target, bound once each (the same objects the rules' `ctx.kind` returns)."""
 
     def __init__(self, C: ModelShape, target, world: int = 1, rank: int = 0, M: int = 1) -> None:
-        from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOC
         from verity_vllm.program.frontend import targets as TG
         VS, C = C.V // world, rank_shape(C, world)
-        self.C, self.tp, self.TG, self.voc = C, target, TG, VOC
+        self.C, self.tp, self.TG = C, target, TG
         self.accepted = TG.uses_accepted_kinds(target)
         self.dot = TG.tensor_core_dot(target)
         if world == 1:
@@ -306,7 +295,6 @@ class _Specs:
             self.moe()
         self.rope_q, self.rope_k = self.kind("rope", NHEADS=C.NH, D=C.D), self.kind("rope", NHEADS=C.KVH, D=C.D)
         self.silu = self.kind(_ACTS[C.act], I=C.I)
-        self.token_select = self.kind("token_select", V=C.V)
         if C.norm_chain:
             self.chain = {r: self.kind(r, N=C.H) for r in ("square_bf16", "square_f32", "mean_triton", "add_widened_bf16", "scale_row_bf16",
                                                            "scale_row_f32", "mul_vec_f32", "narrow_f32_bf16")}
@@ -319,7 +307,6 @@ class _Specs:
             self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_cap), self.kind("bf16_tanh", N=C.V),
                         self.kind("bf16_mul_scalar", N=C.V, C=C.final_cap)]
         self._attn: dict[tuple, Any] = {}
-        self._const: dict[tuple, Any] = {}
 
     def moe(self) -> None:
         """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
@@ -344,26 +331,7 @@ class _Specs:
         self.expert_down = self.kind("moe_expert_gemm_w" + sfx, E=C.E, K=C.I, N=C.H, **extra)
         self.moe_sum = self.kind("moe_sum", TOPK=C.TOPK, H=C.H)
 
-    def stochastic_select(self, S):
-        """`GumbelTopPTokenSelect[vllm]`'s kind: the select over a derived `splits` operand, or at the single request's constant S."""
-        if S == "derived":
-            return self.kind("token_select_stochastic", V=self.C.V, CONSTRUCTION=self.tp.effective_sampler_construction())
-        return self.kind("token_select_stochastic_split", V=self.C.V, S=int(S))
-
-    def const(self, W: int, BITS: int):
-        key = (W, BITS)
-        if key not in self._const:
-            self._const[key] = self.kind("const", W=W, BITS=BITS)
-        return self._const[key]
-
-    def kind(self, role: str, **statics):
-        try:
-            fn = self.voc.kind(role, **statics)
-        except self.TG.UnregisteredTarget as e:
-            raise Unexpressible(f"numerics_unregistered: {e}") from None
-        if fn is None:
-            raise Unexpressible(f"vocabulary {self.voc.name!r} has no kind for role {role!r} with {statics}")
-        return fn
+    kind = staticmethod(kind)
 
     def gemm(self, K: int, N: int):
         return self.kind("gemm", K=K, N=N) if self.accepted else self.kind("gemm_dot", K=K, N=N, DOT=self.dot)
@@ -421,11 +389,11 @@ class BuildResult:
 class _Model:
     """The forward of the model class over one call's rows, emitted into `B` with the per-layer K/V history carried across calls
     (the implicit KV cache the attention rule makes explicit).  C is one rank's shape (`rank_shape`); a tensor-parallel rank's
-    collectives read `peers`, the other rank's partials, one Input per collective in call order."""
+    collectives read `peers`, the other ranks' partials."""
 
-    def __init__(self, B: Builder, specs: _Specs, W: Coll, C: ModelShape, peers: list[Coll] = (), rank: int = 0) -> None:
+    def __init__(self, B: Builder, specs: _Specs, W: Coll, C: ModelShape, peers: _Peers) -> None:
         self.B, self.S, self.W, self.C = B, specs, W, C
-        self.peers, self.rank, self.n_peer = list(peers), rank, 0
+        self.peers, self.rank = peers, peers.rank
         n = 0
         self.embed = W[n]
         n += 1
@@ -451,15 +419,12 @@ class _Model:
         return self.B.call(fn, *args)
 
     def collective(self, fn, own: list[Coll]) -> list[Coll]:
-        """`fn` (`AllReduce2` / `AllGather2`) per row over this rank's partial and the next peer Input's row, in rank order
-        (`rules.vllm_bindings.collectives`), or the rows themselves on one rank."""
-        if not self.peers:
+        """`fn` (`AllReduce2` / `AllGather2`) per row over the ranks' rows in rank order (`rules.vllm_bindings.collectives`), or the
+        rows themselves on one rank."""
+        if self.peers.world == 1:
             return own
-        peer, n = self.peers[self.n_peer], own[0].type.leaves
-        self.n_peer += 1
         p = _ptypes(fn)[0]
-        parts = [(x.refs, peer.refs.slice(i * n, (i + 1) * n)) for i, x in enumerate(own)]
-        return [self.call(fn, Coll(p, concat(list(a if self.rank == 0 else a[::-1])))) for a in parts]
+        return [self.call(fn, Coll(p, r)) for r in self.peers.rows([x.refs for x in own])]
 
     def norm_all_heads(self, parts: list[tuple]) -> list[list]:
         """The q and k norms over all heads (`OlmoeAttention._apply_qk_norm`), each part (rows, width, gather, norm, weight): each
@@ -574,7 +539,7 @@ class _Model:
         """The fused-MoE block over the rows `x` as `rules.vllm_moe` binds its launches: each row's router logits and top-k, then
         each (token, slot) pair p = t * TOPK + k in pair order: the w13 expert GEMM (expert id ids[t][k]), the activation, the w2
         expert GEMM with the routed weight w[t][k]; then each row's sum of its TOPK down rows."""
-        S, C, M, K = self.S, self.C, len(x), self.C.TOPK
+        S, M, K = self.S, len(x), self.C.TOPK
         pr, pt, pu, pa, pw, pm = (_ptypes(fn) for fn in (S.router, S.topk, S.expert_up, S.silu, S.expert_down, S.moe_sum))
         lg = [self.call(S.router, Coll(pr[0], x[t].refs), Coll(pr[1], lw["gate_w"].refs)) for t in range(M)]
         r = [self.call(S.topk, Coll(pt[0], lg[t].refs)) for t in range(M)]
@@ -593,38 +558,21 @@ class _Model:
         out = [self.call(fn, Coll(ph[0], r.slice(h * D, (h + 1) * D)), Coll(ph[1], weight.refs)) for r in rows for h in range(heads)]
         return [concat([out[i * heads + h].refs for h in range(heads)]) for i in range(len(rows))]
 
-    def sample(self, hidden_row: Coll, event: int, pos: int, policy: "_Stochastic | None" = None) -> Coll:
-        """The token of sampling event `event` from the logits of `hidden_row` (at position `pos`): greedy `TokenSelect`, or the seeded
-        temperature + top-p select with its per-row constants in operand order (top_p, pos, temperature[, S])."""
+    def sample(self, hidden_row: Coll, event: int, pos: int, policy: _Stochastic | None = None) -> Coll:
+        """The token of sampling event `event` from the logits of `hidden_row` (at position `pos`), gathered across the ranks and
+        soft-capped where the family caps them (`common.select_token`)."""
         S = self.S
         pl = _ptypes(S.logits)
         lg = self.collective(S.all_gather, [self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))])[0]
         for fn in S.cap if self.C.final_cap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
-        if policy is None:
-            return self.call(S.token_select, Coll(_ptypes(S.token_select)[0], lg.refs))
-        fn = S.stochastic_select(policy.S)
-        pt = _ptypes(fn)
-        top_p = self.call(S.const(32, policy.top_p_bits))
-        pos_c = self.call(S.const(64, int(pos) & 0xFFFFFFFFFFFFFFFF))
-        temp = self.call(S.const(32, policy.temperature_bits))
-        splits = policy.splits.refs.slice(event, event + 1) if policy.S == "derived" else self.call(S.const(32, int(policy.S))).refs
-        return self.call(fn, Coll(pt[0], lg.refs), Coll(pt[1], top_p.refs), Coll(pt[2], policy.seed.refs), Coll(pt[3], pos_c.refs),
-                         Coll(pt[4], temp.refs), Coll(pt[5], splits))
+        return select_token(lambda fn, *refs: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs))), kind, lg.refs, self.C.V,
+                            S.tp, event, pos, policy)
 
 
-@dataclass(frozen=True)
-class _Stochastic:
-    """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
-    temperature and top_p, and S: "derived" (an Input entry per event) or the single request's constant split count."""
-    seed: Coll
-    splits: Coll | None
-    S: Any
-    temperature_bits: int
-    top_p_bits: int
-
-
-def _check_phi(phi: Phi) -> None:
+def _check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, str]) -> None:
+    """Refuse φ outside a decoder's domain (worlds, execution, checkpoint dtype) or the samplers the vocabulary has."""
+    worlds, execution, dtype = domain
     facts = []
     s = phi.sampling or {}
     if s.get("kind", "greedy") == "stochastic":
@@ -635,18 +583,99 @@ def _check_phi(phi: Phi) -> None:
     elif s.get("kind", "greedy") != "greedy":
         facts.append(f"sampling {s.get('kind')!r} (greedy or seeded top-p)")
     world = int((phi.tp or {}).get("world", 1))
-    if world not in (1, 2):
-        facts.append(f"tensor parallel world {world} (TP1 and TP2, the worlds a Build has traced)")
-    elif world == 2 and s.get("kind", "greedy") != "greedy":
-        facts.append("stochastic sampling under tensor parallelism (the with-peers wrapper takes the prompt and the peers only)")
+    if world not in worlds:
+        facts.append(f"tensor parallel world {world} ({' and '.join(f'TP{w}' for w in worlds)}, the worlds a Build has traced)")
     if phi.profile != "b1-eager-v3":
         facts.append(f"numerics profile {phi.profile!r}")
-    if phi.execution != "bi-eager":
+    if phi.execution != execution:
         facts.append(f"execution {phi.execution!r}")
-    if (phi.model or {}).get("dtype", "bfloat16") != "bfloat16":
-        facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} (bf16 only)")
+    if (phi.model or {}).get("dtype", "bfloat16") != dtype:
+        facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({dtype} only)")
+    facts += _engine_facts(phi, world)
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
+
+
+def _engine_facts(phi: Phi, world: int) -> list[str]:
+    """What of φ's engine the Program would not be the prediction of: a target whose execution label is not the row's, an env
+    switch the target sets to another value or none models (`_ENV_MODELLED`), an engine arg the target applies at another value, the
+    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`)."""
+    tp, eng = phi.target_profile(), dict(phi.engine or {})
+    facts = [] if tp.execution_label == phi.execution else [
+        f"a target labelled {tp.execution_label!r} (batch invariant {tp.batch_invariant}) for the {phi.execution!r} row"]
+    target_env = tp.env()
+    for k, v in sorted((eng.pop("env", None) or {}).items()):
+        if k in target_env and str(v) != target_env[k]:
+            facts.append(f"env {k}={v} under a target that sets {target_env[k]!r}")
+        elif k not in target_env and k not in _ENV_MODELLED:
+            facts.append(f"env {k}={v} (the switches modelled: the target's {sorted(target_env)} and {list(_ENV_MODELLED)})")
+    want = {**tp.engine_args(), "enforce_eager": tp.compilation is None, "tensor_parallel_size": world}
+    for k, v in sorted(eng.items()):
+        if k in want and v != want[k]:
+            facts.append(f"engine arg {k}={v!r} where the {phi.execution!r} target applies {want[k]!r}")
+        elif k not in want and k not in _ARGS_MODELLED:
+            facts.append(f"engine arg {k}={v!r} (not modelled)")
+    return facts
+
+
+def decoder(phi: Phi, M: int = 1, history: int = 0):
+    """φ's decoder at launches of M rows over a history of `history` keys: the family's constructor (`FAMILY_FACTS[...]["arch"]`), a
+    DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
+    Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
+    collective order, `schedule_words(rows)` (when it has one) the schedule words a pass reads, `model(B, W, peers)` the forward and
+    the sampler."""
+    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
+    if ff.get("arch") == "dsa-moe":
+        from .dsa import Net
+    elif ff.get("arch") == "mhc-moe":
+        from .dsv4 import Net
+    else:
+        Net = _Decoder
+    _check_phi(phi, Net.DOMAIN)
+    return Net(phi, M, history)
+
+
+class _Decoder:
+    """The dense or fused-MoE Llama-family decoder (`ModelShape`) under the bi-eager profile, on one rank or two."""
+
+    DOMAIN = ((1, 2), "bi-eager", "bfloat16")
+
+    def __init__(self, phi: Phi, M: int, history: int) -> None:
+        C = model_shape(phi.hf_config)
+        if C.window is not None and history > C.window:
+            raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
+        self.world, self.rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
+        self.C, self.specs = C, _Specs(C, phi.target_profile(), self.world, self.rank, M)
+        self.model_class, self.NL, self.nodes_per_row_layer = C.model_class, C.NL, C.nodes_per_row_layer
+
+    def leaves(self) -> list[tuple[str, Type]]:
+        return weight_leaves(self.C, self.world)
+
+    def peer_shapes(self, r: int) -> list[tuple[int, int]]:
+        """`vllm_meta.WithPeers` over a pass of r rows: the embedding's all-reduce, each layer's q / k all-gathers (a norm over all heads)
+        and o / down all-reduces, then the sampled row's logits all-gather."""
+        R, C = self.specs.C, self.C
+        layer = ([(r, R.NH * R.D), (r, R.KVH * R.D)] if R.qk_norm == "all" else []) + [(r, C.H)] * 2
+        return [(r, C.H)] + layer * C.NL + [(1, C.V // self.world)]
+
+    def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
+        return _Model(B, self.specs, W, self.specs.C, peers)
+
+
+def launch_batch(phi: Phi, LP: int, T: int) -> list | None:
+    """The batch each call of φ's (LP, T) request runs in where its kernel choices read the launch (`launch_context.batch_dispatch`:
+    a target without batch invariance co-scheduling several requests), as the Build is given it (`launch_context.shape_contexts`);
+    None for a request that is its own launch.  Requests of the shape co-scheduled differently have no one Program."""
+    from verity_vllm.pipeline import launch_context as LC
+    w = {"requests": phi.requests, "engine": {"target": {"batch_invariant": phi.target_profile().batch_invariant}}}
+    if not LC.batch_dispatch(w):
+        return None
+    batch = LC.shape_contexts(w).get((int(LP), int(T)))
+    if batch is None or batch == "conflict":
+        raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
+                            f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")
+    return batch
 
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
@@ -654,47 +683,47 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples)."""
     t0 = time.time()
-    _check_phi(phi)
+    net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
-    C = model_shape(phi.hf_config)
-    history = pos0 + M if wrapper == "step" else int(LP) + int(T)
-    if C.window is not None and history > C.window:
-        raise Unexpressible(f"vocabulary cannot express: a history of {history} keys under the sliding window of {C.window} keys")
-    target = phi.target_profile()
     world, rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
-    specs = _Specs(C, target, world, rank, M)
-    leaves = weight_leaves(C, world)
-    wrec = Record(*leaves)
+    wrec = Record(*net.leaves())
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
+    passes = [n] + [1] * (events - 1)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
         if phi.sampling["splits"] == "derived":
             params.append(("splits", Array(events, I32)))
+    words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
+    if words:
+        params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
     n_user = len(params)
     if world > 1:
-        # `vllm_meta.WithPeers`: per forward pass the embedding's all-reduce, each layer's q / k all-gathers (a norm over all heads)
-        # and o / down all-reduces over its rows, then the sampled row's logits all-gather
-        R, passes = specs.C, [n] + [1] * (events - 1)
-        layer = lambda r: ([(r, R.NH * R.D), (r, R.KVH * R.D)] if R.qk_norm == "all" else []) + [(r, C.H)] * 2  # noqa: E731
-        shapes = [s for r in passes for s in [(r, C.H)] + layer(r) * C.NL + [(1, C.V // world)]]
+        # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order
+        shapes = [s for r in passes for s in net.peer_shapes(r) for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     params.append(("weights", wrec))
     params = tuple(params)
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
     W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
-    peers = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)]
+    schedule = Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, words)) if words else None
+    peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)], world, rank, schedule)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    model = _Model(B, specs, W, specs.C, peers, rank)
+    model = net.model(B, W, peers)
+    if (batch := launch_batch(phi, LP, T) if wrapper == "request" else None) is not None:
+        if not getattr(model, "reads_launch", False):
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
+                                f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
+        model.launch = _Launch(batch)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     if wrapper == "step":
         hid = model.forward(rows, pos0)
@@ -704,23 +733,25 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         hid = model.forward(rows, 0)
         toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
         for s in range(int(T)):
+            if batch is not None:
+                model.launch.step = s + 1
             hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
             toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
         out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
-    if model.n_peer != len(peers):
-        raise AssertionError(f"{model.n_peer} collectives read {len(peers)} peer Inputs")
+    if peers.n != len(peers.inputs) or peers.k != words:
+        raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
     src_class, derive_name = WRAPPERS[(wrapper, kind)]
     if world > 1:
-        src_class = f"verity-vllm/with-peers/v1[{src_class}]"
-    name = f"{derive_name}[{C.model_class}]"
+        src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
+    name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
     from verity_vllm.program.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
-                               doc=f"predicted ahead of time by verity_vllm.predict.build ({BUILDER_ID})", conformance="predicted: not a record",
+                               doc=f"predicted ahead of time by verity_vllm.predict.build ({BUILDER_ID})", conformance="predicted: a switched row's, checked by its trace (predict.aot)",
                                register=False)
     sd = bind(defn, SRC=src_static)
     sd.set_body(body)

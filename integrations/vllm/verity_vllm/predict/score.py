@@ -14,7 +14,8 @@ compared with what the Build traced:
 
 A unit the vocabulary cannot express is scored `unexpressible` with the fact that stops it; a unit over `max_rows` (LP + T) is
 `over_budget`; a Build dir without a Program (the Build refused or failed) is `no_trace`.  Outputs go wherever `--out` says and
-`score` refuses an output path inside the rows root: a prediction is never written into a Build row.
+`score` refuses an output path inside the rows root: a score is never written into a Build row (a switched row's AOT Build is
+`aot.emit`'s, run by its own Build stage).
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from dataclasses import dataclass
 from verity_vllm.config import UsageError, option
 
 from . import inventory as INV
-from .build import Unexpressible, _check_phi, build_program, model_shape
+from .build import Unexpressible, build_program, decoder
 from .phi import Phi
 
 SCHEMA = "verity-predict/score/v1"
@@ -52,9 +53,11 @@ def hf_config_path(hf_home: str, repo: str, revision: str) -> str:
     return os.path.join(hf_home, "models--" + repo.replace("/", "--"), "snapshots", revision, "config.json")
 
 
-def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
-    """φ from a row's declared inputs: never a Build output (the traced Programs are what φ's prediction is scored against)."""
+def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = None, config: str | None = None) -> Phi:
+    """φ from a row's declared inputs: never a Build output (the traced Programs are what φ's prediction is scored against).  The
+    checkpoint's `config.json` is `config`, else the pinned snapshot's under `hf_home`."""
     from verity_vllm.config import DTYPES, RowEngine, RowId
+    from verity_vllm.engine.profiles.devices import device_name_of_row
     from verity_vllm.target_family import declared_profile
     rid = RowId.parse(rec["row"])
     w = rec.get("workload")
@@ -62,7 +65,7 @@ def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
         raise Unexpressible(f"row {rec['row']}: no declared workload manifest at {rec.get('workload_path')}")
     repo = w.get("model")
     rev = _checkpoint_revision(repo, checkpoints) or RowEngine.of(w).revision
-    cp = hf_config_path(hf_home, repo, rev)
+    cp = config or hf_config_path(str(hf_home), repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
     hf = json.load(open(cp))
@@ -70,8 +73,11 @@ def phi_of(rec: dict, *, hf_home: str, checkpoints: dict | None = None) -> Phi:
              "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}
             for i, q in enumerate(w.get("requests") or [])]
     target = declared_profile(rec["row"], w)
+    if (device := device_name_of_row(rec["row"])) is not None:
+        target["device_name"] = device
+    eng = RowEngine.of(w)
     phi = Phi(model={"repo": repo, "revision": rev, "hf_config": hf, "dtype": DTYPES.get(rid.dtype, rid.dtype)}, target=target,
-              tp={"world": rid.world, "rank": 0}, engine=dict(RowEngine.of(w).args),
+              tp={"world": rid.world, "rank": 0}, engine={**eng.args, **({"env": dict(eng.env)} if eng.env else {})},
               workload={"requests": reqs}, execution=rid.execution, profile=target.get("numerics_profile") or "b1-eager-v3")
     phi.sampling = sampling_of(w, phi)
     return phi
@@ -100,7 +106,7 @@ def sampling_of(w: dict, phi: Phi) -> dict:
 def phi_key(phi: Phi) -> str:
     """What the predicted step / request Program depends on (the workload's requests do not enter a component)."""
     k = {"model": {k: v for k, v in phi.model.items()}, "target": phi.target, "tp": phi.tp, "sampling": phi.sampling,
-         "execution": phi.execution, "profile": phi.profile}
+         "engine": phi.engine, "execution": phi.execution, "profile": phi.profile}
     return hashlib.sha256(json.dumps(k, sort_keys=True).encode()).hexdigest()[:16]
 
 
@@ -161,23 +167,31 @@ def _workload_task(task: dict) -> dict:
     return out
 
 
-def predict_workload(phi: Phi) -> dict:
-    """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
-    lag the declared target resolves (`TargetProfile.lag()`)."""
+def request_component(r, canon: dict):
+    """A predicted request Program as GP-01's component (`program.workload.request_component`), its definitions shared through
+    `canon` (one dict a composition)."""
     from verity.ml.circuits.defs import REGISTRY
-    from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
     from verity_vllm.program.registry.catalog import load as load_registry
     load_registry()
+    params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
+    return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+
+
+def predict_workload(phi: Phi, comps: dict | None = None, canon: dict | None = None) -> dict:
+    """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
+    lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built under `canon`
+    (`request_component`), by (LP, T), so a caller that has each request's Program need not hold them all."""
+    from verity_vllm.pipeline.global_program import request_id_of
+    from verity_vllm.program import workload as W
     reqs = phi.requests
     if any(int(r.get("n") or 1) != 1 for r in reqs):
         raise Unexpressible("a request with n > 1 (parallel sampling) in the workload")
-    canon: dict = {}
-    comps = {}
+    canon = {} if canon is None else canon
+    comps = dict(comps or {})
     for LP, T in phi.request_shapes():
-        r = build_program(phi, "request", LP=LP, T=T)
-        params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
-        comps[(LP, T)] = W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+        if (LP, T) not in comps:
+            comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T), canon)
     wreqs = []
     for i, q in enumerate(reqs):
         lp, cap = int(q["prompt_len"]), int(q["max_tokens"])
@@ -288,13 +302,11 @@ def _map_path(p: str | None, path_map: list[tuple[str, str]]) -> str | None:
 
 
 def mem_estimate_mb(C, request_rows: list[int]) -> int:
-    """A unit's peak resident memory, over-estimated: the root's nodes (about 14 per row and layer, plus the q/k/v bias, the q/k
-    RMSNorms, the MoE block's three per pair and Gemma-2's four unfused norm chains' thirty) at 6 KB each, and the attention reads
-    of the earlier rows' keys (rows²/2 per layer) at 0.4 KB each.  Measured: a Qwen3-4B request of LP+T = 79 peaks at 814 MB
-    (estimated 1.2 GB)."""
-    per = 14 + C.qkv_bias + {"head": C.NH + C.KVH, "all": 2}.get(C.qk_norm, 0) + (3 * C.TOPK + 2 if C.E else 0) + 30 * C.norm_chain
+    """A unit's peak resident memory, over-estimated: the root's nodes (the decoder's `nodes_per_row_layer` per row and layer) at
+    6 KB each, and the attention reads of the earlier rows' keys (rows²/2 per layer) at 0.4 KB each.  Measured: a Qwen3-4B request
+    of LP+T = 79 peaks at 814 MB (estimated 1.2 GB)."""
     rows = sum(request_rows)
-    return int(250 + 0.006 * rows * C.NL * per + 0.0002 * C.NL * sum(r * r for r in request_rows))
+    return int(250 + 0.006 * rows * C.NL * C.nodes_per_row_layer + 0.0002 * C.NL * sum(r * r for r in request_rows))
 
 
 def _child(fn, task: dict, conn) -> None:
@@ -435,8 +447,7 @@ def plan(inv: dict, *, hf_home: str, checkpoints: dict | None, max_rows: int, ro
             row["context_digest"] = phi.digest()
             pk = phi_key(phi)
             try:
-                _check_phi(phi)
-                C = model_shape(phi.hf_config)
+                C = decoder(phi)
                 pre = None
             except Unexpressible as e:
                 pre = str(e)
@@ -649,7 +660,7 @@ def _refuse_inside(out: str | None, roots: list[str]) -> None:
     o = os.path.realpath(out)
     for r in roots:
         if r and (o == os.path.realpath(r) or o.startswith(os.path.realpath(r).rstrip("/") + "/")):
-            raise UsageError(f"--out {out} is inside the rows root {r}: a prediction is never written into a Build row")
+            raise UsageError(f"--out {out} is inside the rows root {r}: a score is never written into a Build row")
 
 
 @dataclass(frozen=True, kw_only=True)

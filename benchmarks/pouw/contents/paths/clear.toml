@@ -1,0 +1,4 @@
+order = 125
+path = "`clear/`"
+runs_on = "CPU"
+what = "PoUW's clear lifecycle, a reference tool and not a verifier: `clear_audit.py` (the prover, the draws, the tile check and the work profile, in the clear) and `clear_work.py` (Pearl-C's work law and its audit over core's records), which the schemes' tests, the replays (`pearl_c4/replay.py`, `pearl_c_vllm/verify_run.py`) and the Lean draws' difftest run"

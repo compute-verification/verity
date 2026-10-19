@@ -3,8 +3,8 @@
     python tests/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}`. The outcome is the checkout's
-`verity.core.protocols.pouw`: `{"ok": v}`, `{"reason": text}` for a coin `coin_reason` refuses, `{"error": type}` when it
-raises. The Lean is PoUW's verifier of record (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
+`verity.core.protocols.pouw` (the draws: its clear audit's, ``benchmarks/pouw/clear``): `{"ok": v}`, `{"reason": text}` for
+a coin `coin_reason` refuses, `{"error": type}` when it raises. The Lean is PoUW's verifier of record (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
 file (`runs` in `lean-audit.json`, which pins its SHA-256), which fails on any case whose Python outcome is not the
 Lean's, and `tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
 refusal, and runs the Lean on it.
@@ -16,9 +16,9 @@ size, missing or short salt keys); openings of those trees, honest and tampered 
 path and value lengths); epoch coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
 them), epochs and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a draw
-with no coin commitment; the audit, draw and replay keys and `draw_after`; and `Sampled.select`'s and `pearl_c_work.draw`'s
-work-weighted draws, each run as written with only its tickets given (`tickets` patched), over ticket lists with zeros,
-totals past 64 bits, none, or all zero.
+with no coin commitment; the audit, draw and replay keys and `draw_after`; and the clear audit's work-weighted draws
+(``benchmarks/pouw/clear``: `Sampled.select`'s and `clear_work.draw`'s), each run as written with only its tickets given
+(`tickets` patched), over ticket lists with zeros, totals past 64 bits, none, or all zero.
 """
 from __future__ import annotations
 
@@ -44,10 +44,14 @@ def _outcome(f) -> dict:
 def generate(seed: int = 0) -> list[dict]:
     from verity.core.protocols.pouw import audit, coins
     from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, tagged
-    from verity.core.protocols.pouw.schemes import pearl_c_work as pcw
     from verity.ml.randomness import derive
     from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                        VerificationLimits, verify_opening)
+
+    # the clear audit's draws are a reference tool's (benchmarks/pouw/clear, not a package) in the checkout `audit` is from
+    sys.path.insert(0, str(Path(audit.__file__).resolve().parents[4] / "benchmarks" / "pouw" / "clear"))
+    import clear_audit as CA
+    import clear_work as CW
 
     rng = random.Random(seed)
     cases: list[dict] = []
@@ -280,7 +284,7 @@ def generate(seed: int = 0) -> list[dict]:
         def draw() -> dict:
             c = None if cj is None else coins.CoinCommitment.from_json(cj)
             o = coins.CoinOpening.from_json(oj)
-            coin, why = audit.draw_coin(SimpleNamespace(coins=c), SimpleNamespace(open=lambda _label, _after: o), after)
+            coin, why = CA.draw_coin(SimpleNamespace(coins=c), SimpleNamespace(open=lambda _label, _after: o), after)
             return {"ok": coin.hex()} if why is None else {"reason": why}
         add("draw_coin", {"commitment": cj, "opening": oj, "after": after.hex()}, refusable(draw))
 
@@ -315,12 +319,12 @@ def generate(seed: int = 0) -> list[dict]:
 
         def key() -> str:
             if which == "audit":
-                return derive(source, audit.AUDIT_DOMAIN, {"transcript": tr, "salt": salt}).value.hex()
+                return derive(source, CA.AUDIT_DOMAIN, {"transcript": tr, "salt": salt}).value.hex()
             if which == "draw":
-                return pcw.draw_key(source, tr, rd, salt).value.hex()
+                return CW.draw_key(source, tr, rd, salt).value.hex()
             if which == "replay":
-                return pcw.replay_key(pcw.RecordedDraw(rnd, source), tr, rd, salt).value.hex()
-            return pcw.draw_after(tr, rd).hex()
+                return CW.replay_key(CW.RecordedDraw(rnd, source), tr, rd, salt).value.hex()
+            return CW.draw_after(tr, rd).hex()
         add("key", {"which": which, "source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(),
                     "round": rnd}, _outcome(key))
 
@@ -340,9 +344,9 @@ def generate(seed: int = 0) -> list[dict]:
         source, tr, salt, tk, t = rng.randbytes(rng.choice([32] * 12 + [0])), rng.randbytes(64), rng.randbytes(32), tickets(), t_draws()
 
         def sampled() -> list[int]:
-            with mock.patch.object(audit, "tickets", lambda _scheme, _workload, _refs: list(tk)):
+            with mock.patch.object(CA, "tickets", lambda _scheme, _workload, _refs: list(tk)):
                 epoch = SimpleNamespace(salt=salt, workload=None)
-                return list(audit.Sampled(t).select(None, epoch, SimpleNamespace(commitment=SimpleNamespace(root=tr)), source, [], None))
+                return list(CA.Sampled(t).select(None, epoch, SimpleNamespace(commitment=SimpleNamespace(root=tr)), source, [], None))
         add("sampled", {"source": source.hex(), "transcript": tr.hex(), "salt": salt.hex(), "tickets": tk, "t": t}, _outcome(sampled))
 
     for _ in range(COUNTS["pearl_draw"]):
@@ -350,8 +354,8 @@ def generate(seed: int = 0) -> list[dict]:
         tk, t = tickets(), t_draws()
 
         def pearl() -> list[int]:
-            with mock.patch.object(pcw, "tickets", lambda _scheme, _records: [(i, None, w) for i, w in enumerate(tk)]):
-                return [i for i, _ in pcw.draw(None, [], pcw.draw_key(source, tr, rd, salt), t)]
+            with mock.patch.object(CW, "tickets", lambda _scheme, _records: [(i, None, w) for i, w in enumerate(tk)]):
+                return [i for i, _ in CW.draw(None, [], CW.draw_key(source, tr, rd, salt), t)]
         add("pearl_draw", {"source": source.hex(), "transcript": tr.hex(), "records": rd.hex(), "salt": salt.hex(), "tickets": tk,
                            "t": t}, _outcome(pearl))
     return cases

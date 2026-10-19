@@ -43,9 +43,14 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
     peer_ranks = [r for r in range(tp) if r != rank]                       # [lane vllm-tp-n] world-1 peers per collective, in rank order
     n_peer = len(probe) * len(peer_ranks)
     peer_names = user[len(user) - n_peer:]
+    sched = (res["tp"].get("schedule") or {}).get("record") or []
+    n_own = len(user) - n_peer - (1 if sched else 0)
     apps = [a for a in rep.provenance["applications"] if a.get("collective")]      # the collective rules tag their applications (kind), in call order
     if len(apps) != len(probe):
         raise RuntimeError(f"tp_links: {len(apps)} collective rule applications vs {len(probe)} probed collectives")
+    aligns = [a for a in rep.provenance["applications"] if a.get("schedule")]      # the align rule tags its applications, in call order
+    if len(aligns) != len(sched):
+        raise RuntimeError(f"tp_links: {len(aligns)} align rule applications vs {len(sched)} probed align calls")
     links = []
     for k, (p, a) in enumerate(zip(probe, apps)):
         peers = [{"rank": pr, "input": peer_names[k * len(peer_ranks) + j], "operand": f"part_rank{pr}", "collective_k": k} for j, pr in enumerate(peer_ranks)]
@@ -59,7 +64,7 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
            "model_root": model_root,
            "module_vocabulary": "link.module_path: the traced wrapper's named_modules() path + ' (Class)'; link.module: the same module in the "
                                 "recorder's model.named_modules() vocabulary = module_path minus model_root (recorded by object identity)",
-           "prompt_inputs": user[:len(user) - n_peer], "peer_inputs": peer_names,
+           "prompt_inputs": user[:n_own], "peer_inputs": peer_names,
            "peer_input_layout": "peer input k*(world-1)+j of rank r := the j-th other rank's (rank order) partial of collective k",
            "binding": "each peer input of collective k of rank r := part_rank(p) of collective k of rank p (that rank's committed partial); the received "
                       "collective output of rank r is AllReduce/AllGather(part_rank0, .., part_rank{world-1}) in rank order — never a fresh trusted input"
@@ -67,8 +72,16 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
            "weight_shards": "the `weights` record of this Program holds THIS rank's shards (shapes in result.tp.sharded_params); the rank's "
                             "weight root commits to the shard, the run root binds every rank's weight root (rank-tagged)",
            "links": links}
+    if sched:
+        doc["schedule_input"] = user[n_own]
+        doc["schedule"] = [{**r, "node": a["node"], "module": module_in_model_vocabulary(a.get("module_path"), model_root)}
+                           for r, a in zip(sched, aligns)]
+        doc["schedule_binding"] = ("align call k's keys are schedule_input[offset : offset + pairs], shaped as its router ids: each pair's "
+                                   "position in the sorted_token_ids that call's moe_align_block_size wrote on this rank's GPU, a witness "
+                                   "(registry.marlin_moe.MoeAlignRanks then MoeAlignBlocks give a schedule the kernel can produce "
+                                   "for any key)")
     json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
-    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": len(user) - n_peer, "file": "tp_links.json"}
+    return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": n_own, "file": "tp_links.json"}
 
 
 def read_tp_links(path: str) -> dict:

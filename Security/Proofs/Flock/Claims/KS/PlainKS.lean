@@ -1,23 +1,22 @@
 import Proofs.Flock.Claims.KS.PlainBound
+import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 
 /-!
 # The deployed plain verifier's KS from the live sessions' bound at table 0
 
-`plain_KS_of_live`: `Flock.KS` at SHA-512 at `deployPlain` at the deployed relation, from two premises:
-
-* `PlainLive x` at every statement some run accepts: at table 0's data, every prover has escapes at the plain fork
-  rounds and, at each tape and each table of full-width columns, live strategies whose verdict bounds the deployed runs
-  accepting on the table, a decoder right for that verdict, and escapes' events bounding their `Adv` and self-clash
-  (`PlainLiveAt`, the hypothesis `plain_tableBoundθAt_of_live` reads);
-* `Extendθ` at full-width columns, which carries the bound to tables with unopened positions.
+`plain_KS_of_live`: `Flock.KS` at SHA-512 at the trimmed record `deployPlainTrim` at the deployed relation, from one
+premise, `PlainLive x` at every statement some run accepts: at table 0's data, every prover has escapes at the plain
+fork rounds and, at each tape and each table of full-width columns, live strategies whose verdict bounds the deployed
+runs accepting on the table, a decoder right for that verdict, and escapes' events bounding their `Adv` and self-clash
+(`PlainLiveAt`, the hypothesis `plain_tableBoundθAt_of_live` reads).
 
 Everything else is proved here at a statement some run accepts, which parses in scope and sets up one table
 (`plain_one`): table 0's layout and link layout (`Readable.tableAt`, `stmtOf_linkLayout`), its `fast100` schedule with
 two levels and level 0's lanes (`fast100_plainSched`, `Integrate.model_sched`), and that a table that does not extract
 is not committed to its model statement (`plain_not_committed`). `plain_tableBoundθ_live` is the bound at full-width
-columns, the form a trimmed record without `Extendθ` reads.
+columns, the form the trimmed record reads (`plain_KS_trim`).
 -/
 
 namespace FlockDeploy.KS
@@ -180,13 +179,10 @@ theorem plain_tableBoundθ_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V fal
   plain_tableBoundθ_of_acc Readable.relation (wide false)
     fun x _ _ _ _ hno hs hin hset => plain_tableBoundθAt_live hs hin hset (hl x hno)
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound at the
-statements some run accepts and `Extendθ` at full-width columns. -/
-theorem plain_KS_of_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLive x)
-    (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
-    Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_table Readable.relation (plain_hone Readable.relation)
-    (plain_tableBoundθ_of_extend Readable.relation (plain_colsOk sha512 Readable.relation) hext
-      (plain_tableBoundθ_live hl))
+/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from the live
+sessions' bound at the statements some run accepts. -/
+theorem plain_KS_of_live (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLive x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_trim Readable.relation (plain_tableBoundθ_live hl)
 
 end FlockDeploy.KS

@@ -24,7 +24,7 @@ open Lean (Json)
 def CALL_X : Nat := 32
 /-- `partition_object.PARAM_MAX`: the largest X. -/
 def PARAM_MAX : Nat := 65536
-/-- `partition._MAX_LISTED`: the pairs a report lists. -/
+/-- `partition.MAX_LISTED`: the pairs a report lists. -/
 def MAX_LISTED : Nat := 64
 
 /-- A refusal of the query, as core's `QueryInapplicable` detail: thrown as `query-inapplicable: <detail JSON>`. -/

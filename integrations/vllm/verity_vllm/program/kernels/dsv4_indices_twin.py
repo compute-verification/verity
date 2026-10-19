@@ -9,6 +9,8 @@ INT32_MIN + WINDOW - 1) is declined: the kernel writes memory the row does not h
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity_vllm.program.kernels.kernel_registry import Declined, register

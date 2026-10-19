@@ -2,7 +2,8 @@
 parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
 parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
 (`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
-whole `flock-circuit` file (`circuit.compose`) under drawn bindings. Big outputs are compared as digest and size;
+whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's draw
+(`rec_live.inner_draw`) against the verifier's (`RecSetup.innerDrawn`). Big outputs are compared as digest and size;
 `test_*_file_is_byte_equal` compares whole files.
 
 The bindings (`partition`, `program`, `program_digests`) are core's descriptor codec's and are inputs here: the reference's
@@ -27,6 +28,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
+from verity_flock import rec_live as RL
 from verity_flock import rec_open as R
 from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
@@ -307,6 +309,14 @@ def inner_circuit_holo(v) -> dict:
     return inner_circuit(v, holo=True)
 
 
+def inner_draw(v) -> dict:
+    record = _str(_obj(v, ("record",))["record"])
+    try:
+        return {"draw": RL.inner_draw(record)}
+    except ValueError as e:
+        return {"refused": str(e)}
+
+
 # --- the inputs: valid ones and the readers' and builders' refusals -------------------------------------------------------------
 
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
@@ -432,6 +442,15 @@ DIGESTS = st.dictionaries(st.text(max_size=12), st.text(HEX, max_size=64), max_s
 #: `compose`'s inputs under bindings that are digests (`test_inner_circuit_agrees` replays ones that are not)
 INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, "program": DIGEST,
                                "program_digests": DIGESTS})
+
+
+#: an inner session's record: a draw (any JSON value), one null or absent, and text that is no JSON object
+_REST = st.dictionaries(st.sampled_from(["verdict", "streams"]), JSON, max_size=2)
+RECORDS = st.one_of(
+    st.builds(lambda d, rest: json.dumps({**rest, "unit_draw": d}, ensure_ascii=False), JSON, _REST),
+    _REST.map(lambda rest: json.dumps(rest, ensure_ascii=False)), JSON.map(lambda j: json.dumps(j, ensure_ascii=False)),
+    st.sampled_from(["", "{", "not json", "NaN", '{"unit_draw": NaN}']))
+INNER_DRAW = st.fixed_dictionaries({"record": RECORDS}) | st.fixed_dictionaries({"record": JSON}) | JSON
 
 
 def port(fn: str, reference, inputs) -> D.Port:
@@ -615,6 +634,18 @@ def test_rec_open_unit_agrees(server):
         assert D.replay(p, {"LANES": 8, "H": h}, server)[0] == "output", h
     stats = D.run(p, examples=30, seed=SEED, server=server)
     assert stats.outputs >= 1 and stats.rejects >= 10, stats
+
+
+def test_inner_draw_agrees(server):
+    """`rec_live.inner_draw`, by which `rec_vstage stage` refuses an undrawn inner session, reads an inner session's record
+    as the verifier does (`RecSetup.innerDrawn`): the same draw, or the same refusal word for word."""
+    p = port("inner_draw", inner_draw, INNER_DRAW)
+    drawn = {"law": "subset", "population": 2, "k": 2, "units": [0, 1]}
+    assert D.replay(p, {"record": json.dumps({"unit_draw": drawn})}, server) == ("output", D.canonical({"draw": drawn}))
+    for r in ("{}", json.dumps({"unit_draw": None}), "[]", "not json"):
+        assert D.replay(p, {"record": r}, server) == ("output", D.canonical({"refused": RL.NO_INNER_DRAW})), r
+    stats = D.run(p, examples=80, seed=SEED, server=server)
+    assert stats.outputs >= 20 and stats.rejects >= 3, stats
 
 
 # --- the circuit files ----------------------------------------------------------------------------------------------------------
