@@ -12,15 +12,20 @@ stated under (the 1.22 reading rests on Theorem C, unproved). An FP route adds:
 - `plain`: MMAs (FP8-slot equivalents) beside the folded one, unfolded, so they enter γ only: an FP16 GEMM's second
   slot (1), the FP4 g1 GEMM's other three block-scaled products (3), C1's extra limb products (k4 and k4t: 3; k3h: 2;
   k9: 3.5), or the 2SP peel's served GEMM beside its twin (1).
-- the extraction (`fold_add`): lane instructions a word that turn FP32 accumulators into integers. The folded word's
-  (one add, from a running sum or a reset at a magic base) and the served sum, read every RB words, RB the words the
-  binade at 1.5 * 2^23 holds on any data: e4m3i120 (k32 words <= 32 * 121^2 = 2^18.84) RB 8, e4m3i352 (<= 2^21.9)
+- `fold_add`: lane instructions a word added to the base's fold. `keep`, a part of it every route pays (fx1's keyed
+  IMAD on sm_120's Dither-2S), and the rest the extraction, which turns FP32 accumulators into integers: the folded
+  word's (one add, from a running sum or a reset at a magic base) and the served sum, read every RB words, RB the words
+  the binade at 1.5 * 2^23 holds on any data: e4m3i120 (k32 words <= 32 * 121^2 = 2^18.84) RB 8, e4m3i352 (<= 2^21.9)
   RB 1. These are estimated lane counts, not measured.
 
-Where int8 runs at the FP8 rate (sm_120, H200, B200), the int8 MMA writes the C1 rows' and the FP-unit g1 rows' words
-with no extraction, so the cheater's floor is the int8 twin's and those rows' printed ε is too low there (RT-FP-1, -3,
--5, note:20261019T0546Z-draft-rt-fp). Their ε stands only where int8 is slow (B300, which has no sheet yet); on the
-other three, credit the int8 twin (`fpx-g1s-*`, the record) and read the FP route's cost in γ only.
+The extraction is the honest FP route's and no cheater's: a cheater that writes the words on lanes, or on the int8 MMA,
+never extracts, but the model charges a design's fold to every route and to its floor. So V's own ε is over-credited on
+every device, B300 included, where the cheater puts 81-98% of its words on lanes (RT-FP-1, -3, -5, -14,
+note:20261019T0546Z-draft-rt-fp). Each V with an extraction is therefore also written as `V-x0`, the same design with
+`keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its credit, the floor the words cost with no
+extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's own ε beside the bound
+1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a cheater that doesn't
+extract, at V's L. RT-FP's overcredit.py prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
 
 g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fair live coin b of 1 and centred:
 R + b - 1/2. The one GEMM of the integers R + b is int8 Dither-2S's on fair coins, folded and served (its rank-one
@@ -32,13 +37,15 @@ FP-NATIVE's FP8-A1 (`fpx-a1-*`: weights the level below plus a coin at its gap, 
 its gap times b + b' - 1, note:20261019T0525Z-draft-fp-native) is 2SP with its twin and served GEMM one: each k32
 word restarts from +0 and is exact in FP32 (32 * 448^2 < 2^23), so it pays 2SP's extraction a word and no second GEMM.
 Its operands don't fit s8, its floor reads Lemma R2 (a paper proof), and no red team has looked for a cheaper route to
-its words, so its ε is printed at its own floor. H200 can't run it (the 14-bit window).
+its words; like every extraction, its own is credited to no one (`fpx-a1-*-x0`). H200 can't run it (the 14-bit
+window).
 
 An FP4 word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
 carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; on int8 units an FP4 design's
 γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). The skip term is the base's, at the base's ♭: a
 larger fold raises ♭, so this overstates ε_skip.
 """
+import json
 import shutil
 import subprocess
 import sys
@@ -68,15 +75,15 @@ VARIANTS = [
          title="FP-NATIVE's FP8-A1 on e4m3i: one dithered FP8 GEMM, served and credited",
          summary="each k32 word from +0, converted (one instruction), the served sum one add a word: 2SP's extraction, "
                  "with no second GEMM"),
-    dict(device="sm_120", name="fpx-g1s-fx1", base="dither-2s", plain=0.0, fold_add={"IMAD": 1.0},
+    dict(device="sm_120", name="fpx-g1s-fx1", base="dither-2s", plain=0.0, fold_add={"IMAD": 1.0}, keep={"IMAD": 1.0},
          title="g1 on int8 units (RTX PRO 6000): Dither-2S on R + b with fx1's keyed IMAD a word",
          summary="E4M3 integers to 120 (FP8) or E2M1x2 at integer block scales to 10 (FP4), nearest levels moved by a "
                  "fair coin of 1; one IMMA GEMM, folded and served centred"),
     dict(device="sm_120", name="fpx-g1s-fp8-fp", base="dither-2s", plain=1.0, fold_add={"IMAD": 1.6, "ALU": 0.6},
-         title="FP8 g1 on FP units: one FP16 GEMM of R + b (e4m3i120), fx1",
+         keep={"IMAD": 1.0}, title="FP8 g1 on FP units: one FP16 GEMM of R + b (e4m3i120), fx1",
          summary="the word one add at a magic base, the served sum read every 8 words"),
     dict(device="sm_120", name="fpx-g1s-fp4-fp", base="dither-2s", plain=3.0, fold_add={"IMAD": 1.75, "ALU": 0.75},
-         title="FP4 g1 on FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale, fx1",
+         keep={"IMAD": 1.0}, title="FP4 g1 on FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale, fx1",
          summary="four block-scaled k64 FP4 products a word, u and b at unit scale"),
     # sm_90 (H200): wgmma E4M3 keeps a 14-bit adder window, so E4M3 integers past ±16 are exact only in FP16
     dict(device="sm_90", name="fpx-c1-k3h", base="dither-2s-licpw-redux-l32", plain=2.0,
@@ -160,18 +167,44 @@ def write_variant(v: dict, data: Path) -> None:
     (data / "designs" / f"{v['name']}.toml").write_text("\n".join(lines) + "\n")
 
 
+def x0(v: dict) -> dict | None:
+    """V with no extraction (`keep` for `fold_add`), the design its credit is read from; None if V extracts nothing."""
+    keep = v.get("keep", {})
+    if v["fold_add"] == keep:
+        return None
+    return v | {"name": f"{v['name']}-x0", "fold_add": keep, "title": f"{v['title']}: its credit, with no extraction",
+                "summary": f"{v['name']}'s words at the cost of a route that doesn't extract (lanes or the int8 MMA)"}
+
+
+CREDIT_HEAD = ("| device | reading | design | γ (V) | credited ε (V-x0) | V-x0's ♭ | V's ♭ | V's own ε | "
+               "ε_machine at V's ♭ ≥ |\n|---|---|---|---|---|---|---|---|---|")
+
+
+def credit_row(dev: str, reading: str, v: dict, j: dict, c: dict | None) -> str:
+    """One design's line in credit.md: from V's JSON `j` and V-x0's `c` (None: V credits its own floor)."""
+    own, flo = j["core"], j["baseline"]["cycles_per_mma"]
+    if c is None:
+        return f"| {dev} | {reading} | {v['name']} | {j['gamma']:.2f} | {100 * own:.3f}% | {flo:.2f} | {flo:.2f} | — | — |"
+    t = min(c["cheat"]["cycles_per_mma"], c["baseline"]["cycles_per_mma"]) * c["L"] / j["L"]
+    return (f"| {dev} | {reading} | {v['name']} | {j['gamma']:.2f} | {100 * c['core']:.3f}% | "
+            f"{c['baseline']['cycles_per_mma']:.2f} | {flo:.2f} | {100 * own:.3f}% | **{100 * (1 - t / flo):.1f}%** |")
+
+
 def main(out: Path) -> int:
     out.mkdir(parents=True, exist_ok=True)
     head = tomllib.loads((DATA / "headline.toml").read_text())
     with (out / "headline.txt").open("w") as f:
         rc = subprocess.run(["machine-model", "headline"], stdout=f, stderr=subprocess.STDOUT).returncode
+    credit = [CREDIT_HEAD]
     for dev, src in DEVICES.items():
         data = out / "data" / dev
         shutil.copytree(src, data, ignore=shutil.ignore_patterns("devices") if dev == "sm_120" else None)
         mine = [v for v in VARIANTS if v["device"] == dev]
-        for v in mine:
+        pairs = [(v, x0(v)) for v in mine]
+        written = mine + [c for _, c in pairs if c is not None]
+        for v in written:
             write_variant(v, data)
-        names = sorted({v["base"] for v in mine}) + [v["name"] for v in mine]
+        names = sorted({v["base"] for v in mine}) + [v["name"] for v in written]
         fam, q = head["family"][dev], {r: x["q"] for r, x in head["reading"].items()}
         readings = [(r, fam[r]["vector"], q[r]) for r in q] + [("measured-half", fam["measured"]["vector"], q["sheet"])]
         with (out / f"{dev}.txt").open("w") as f:
@@ -181,10 +214,20 @@ def main(out: Path) -> int:
                 f.write(f"=== {dev} {reading}: {' '.join(cmd[3:])}\n")
                 f.flush()
                 rc = rc or subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT).returncode
-                for v in mine:
+                got = {}
+                for v in written:
                     cmd = ["machine-model", "--data", str(data), "eps", v["name"], *at, "--json"]
-                    with (out / f"{dev}_{reading}_{v['name']}.json").open("w") as g:
-                        rc = rc or subprocess.run(cmd, stdout=g, stderr=subprocess.DEVNULL).returncode
+                    p = subprocess.run(cmd, capture_output=True, text=True)
+                    (out / f"{dev}_{reading}_{v['name']}.json").write_text(p.stdout)
+                    rc = rc or p.returncode
+                    got[v["name"]] = json.loads(p.stdout) if p.returncode == 0 else None
+                for v, c in pairs:
+                    if got[v["name"]] is not None and (c is None or got[c["name"]] is not None):
+                        credit.append(credit_row(dev, reading, v, got[v["name"]], c and got[c["name"]]))
+    credit += ["", ("γ is V's (the honest FP route, extraction paid); the credited ε is V-x0's, at V-x0's floor ♭ "
+                    "(cycles an MMA). V's own ε credits V's ♭, which the last column bounds from below with V-x0's "
+                    "cheapest route at V's L; — where V extracts nothing. Each ε is core (skip, machine, luck).")]
+    (out / "credit.md").write_text("\n".join(credit) + "\n")
     return rc
 
 
