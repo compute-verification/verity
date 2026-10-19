@@ -35,6 +35,23 @@ ROOT_32 = ("111850c621f50137b50e36ee9e22fe8cefd28761e8b7ad98b175eaf0e8c7413d"
            "27364f184783f7680bf638c9b039154a53ef8908faba261a4eb208c22552c40f")
 
 
+#: each unit's seed group: the row of `pouw.roots` it reads
+GROUPS = (0, 0, 1, 1, 1, 0)
+SEEDED = bind(CompositeDefinition(
+    "RegisteredTestSeeded", 0, ("BITS",),
+    lambda S: ((("x", Array(2, Value(8))), ("w", Array(2, Value(8))), ("roots", Array(2, _digest(S.BITS)))), Value(8)),
+    lambda B, S, x, w, roots: B.call(XOR8, B.call(XOR8, x[0], w[0]), B.call(XOR8, x[1], w[1])), register=False))
+#: the verifier's sources of each seed group's roots: the served port x's root and W's registered root
+SUPPLIED = {"pouw.roots": [[{"port": "x"}, {"value": "W"}], [{"value": "W"}, {"port": "x"}]]}
+#: `supplied_salts("ab" * 64, "pouw.roots", 2)`' row 1, its first 32 bytes
+SUPPLIED_SALT_1 = "09c18346b8d4a7e4a3f0cf7eb02a7460033e89c2e5733eaa24b2b2b53f036839"
+
+
+def _digest(bits: int) -> Array:
+    """A SHA-512 digest as PoUW's seeds read it: 16 leaves of 32 bits, or 512 of one."""
+    return Array(16, Value(32)) if bits == 32 else Array(512, Value(1))
+
+
 def _program(pos=POS, rows: int = len(TABLE), body=None, w: int = 8) -> Program:
     def sig(S):
         return (("x", Array(len(pos), Array(2, Value(8)))), ("W", Array(rows, Array(2, Value(w))))), Array(len(pos), Value(8))
@@ -352,3 +369,291 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
         r = decide(verdicts)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts
+
+
+# -- supplied values ---------------------------------------------------------------------------------------------------------
+
+def _seeded(bits: int = 32) -> Program:
+    """Units that read a row of x, a row of the registered table W and their seed group's row of `pouw.roots`, a pair of
+    digests, as PoUW's compiled units read theirs."""
+    unit = bind(SEEDED, BITS=bits)
+
+    def sig(S):
+        return (("x", Array(len(POS), Array(2, Value(8)))), ("W", Array(len(TABLE), Array(2, Value(8)))),
+                ("pouw.roots", Array(max(GROUPS) + 1, Array(2, _digest(bits))))), Array(len(POS), Value(8))
+
+    def body(B, S, x, W, roots):
+        return coll_concat(sig(S)[1], [B.call(unit, x[i], W[p], roots[g]) for i, (p, g) in enumerate(zip(POS, GROUPS))])
+
+    return Program(bind(CompositeDefinition(f"RegisteredTestSeededProgram{bits}", 0, (), sig, body, register=False)))
+
+
+def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
+    """A v2 record of `_seeded(bits)` registering W and `pouw.roots`, the latter as the verifier fills it from the record
+    (`supplied_value`) unless `roots` (a `Registered`) says otherwise, with R7's arguments."""
+    prog = _seeded(bits)
+    q = P.template_instance_query(bind(SEEDED, BITS=bits).id)
+    part, n = P.partition(prog, q), P.units(prog, q)
+    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
+             for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
+    served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
+    w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
+    base = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry()], **kw)
+    sup = G.sources(SUPPLIED)["pouw.roots"]
+    roots = roots or G.supplied_value(prog, "pouw.roots", sup, base, ["pouw.roots"])
+    rec = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()], **kw)
+    words = 2 * _digest(bits).leaves
+    check = {"program": prog, "query": q, "law": LAW, "scheme": SCHEME, "ports": ports,
+             "registered": {"W": 2, "pouw.roots": words}, "supplied": SUPPLIED}
+    return rec, check, w, roots
+
+
+def test_a_supplied_value_is_the_records_roots_as_its_leaves():
+    """The verifier fills each seed group's row with the bytes of the roots its sources name, read as the parameter's leaves
+    (each big-endian 32-bit half, least significant leaf first: PoUW's `seeds.leaves`), and commits the rows under public
+    salts: a function of the record alone, which the prover reproduces."""
+    assert G.bytes_leaves(bytes.fromhex("12345678" "01020304"), 32) == [0x12345678, 0x01020304]
+    assert G.bytes_leaves(bytes.fromhex("12345678"), 16) == [0x5678, 0x1234]
+    assert G.bytes_leaves(bytes.fromhex("80000001"), 1) == [1] + [0] * 30 + [1]
+    for bad in ((b"\0" * 3, 32), (b"\0" * 4, 3), (b"\0" * 4, 64)):
+        with pytest.raises(ValueError):
+            G.bytes_leaves(*bad)
+    salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
+    assert salts[1][:32].hex() == SUPPLIED_SALT_1
+    assert salts[1] == hashlib.shake_256(b"verity/one-stage/supplied-salt/v0\0" + b"ab" * 64 + b"\0pouw.roots\0"
+                                         + (1).to_bytes(4, "little")).digest(192)
+    for bits in (32, 1):
+        rec, check, w, roots = _seeded_case(bits)
+        x, wr = bytes.fromhex("ab" * 64), w.root
+        rows = G.supplied_rows(check["program"], "pouw.roots", G.sources(SUPPLIED)["pouw.roots"], rec, ["pouw.roots"])
+        assert rows == [G.bytes_leaves(x + wr, bits), G.bytes_leaves(wr + x, bits)] == [list(r) for r in roots.rows]
+        assert roots.salts == tuple(G.supplied_salts(P.program_digest(check["program"]), "pouw.roots", 2))
+        assert roots.entry()["words"] == check["registered"]["pouw.roots"] and roots.word_bits == (32 if bits == 32 else 16)
+        assert G.supplied_root(check["program"], "pouw.roots", G.sources(SUPPLIED)["pouw.roots"], rec,
+                               G.registered_entries(check["program"], check["registered"])["pouw.roots"],
+                               ["pouw.roots"]) == roots.root.hex()
+        assert R.check(rec, **check).ok, bits
+        # its reads are a registered value's: each unit's row is its seed group's
+        assert G.reads(check["program"], check["query"], check["registered"])["roots"] == {"value": "pouw.roots",
+                                                                                         "rows": list(GROUPS)}
+
+
+def test_r7_refuses_a_supplied_value_the_prover_chose():
+    """CMP-38: a record whose `pouw.roots` is any other root than the one the verifier fills from the record is refused,
+    whether its rows are other roots (all zero, as the witness fixes them), the right rows under fresh salts, or the right
+    commitment of a record whose x root moved since."""
+    rec, check, w, roots = _seeded_case()
+    prog, words = check["program"], check["registered"]["pouw.roots"]
+    zero = G.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2, word_bits=32)
+    zero_public = G.Registered.commit(P.program_digest(prog), "pouw.roots", [[0] * words] * 2,
+                                      G.supplied_salts(P.program_digest(prog), "pouw.roots", 2), word_bits=32)
+    fresh = G.Registered.commit(P.program_digest(prog), "pouw.roots", roots.rows, word_bits=32)
+    for other in (zero, zero_public, fresh):
+        bad, _, _, _ = _seeded_case(roots=other)
+        assert R.check(bad, **check).codes == ("R7-supplied",)
+    moved, _, _, _ = _seeded_case(x_root="ee" * 64, roots=roots)
+    assert R.check(moved, **check).codes == ("R7-supplied",)
+    assert R.check(_seeded_case(x_root="ee" * 64)[0], **check).ok
+
+
+def test_r7_refuses_a_supplied_value_it_cannot_fill():
+    """A source naming nothing the record holds, a supplied value's own root, bytes that are not lowercase hex, rows of the
+    wrong count or width, or a supplied value the verifier does not expect registered: each is `R7-supplied`."""
+    rec, check, _, _ = _seeded_case()
+    for sup in ({"pouw.roots": [[{"port": "y"}, {"value": "W"}]] * 2},
+                {"pouw.roots": [[{"port": "x"}, {"value": "pouw.roots"}]] * 2},
+                {"pouw.roots": [[{"port": "x"}, {"bytes": "AB" * 64}]] * 2},
+                {"pouw.roots": [[{"port": "x"}, {"bytes": ""}]] * 2},
+                {"pouw.roots": [[{"port": "x"}, {"bytes": "abc"}]] * 2},
+                {"pouw.roots": [[{"port": "x"}, {"value": "W"}]]},
+                {"pouw.roots": [[{"port": "x"}]] * 2},
+                {**SUPPLIED, "V": [[{"port": "x"}]]}):
+        assert R.check(rec, **{**check, "supplied": sup}).codes == ("R7-supplied",), sup
+    # the verifier's own bytes are a source like any root: the right ones pass
+    x = {"pouw.roots": [[{"bytes": "ab" * 64}, {"value": "W"}], [{"value": "W"}, {"bytes": "ab" * 64}]]}
+    assert R.check(rec, **{**check, "supplied": x}).ok
+
+
+def test_a_supplied_value_is_the_records_own_not_the_logs():
+    """R7-held is for a value committed once: a supplied value moves with the record's roots, so a later record whose x
+    root moved registers another `pouw.roots`, held to the root it fills from its own record."""
+    first, check, w, _ = _seeded_case()
+    served = [{**r, "root": "ee" * 64} if r["port"] == "x" else r for r in first["roots"]]
+    later = {**first, "roots": served, "window": {**SERVED, "row": 8}, "previous": R.digest(first),
+             "registered": [w.entry()]}
+    roots = G.supplied_value(check["program"], "pouw.roots", G.sources(SUPPLIED)["pouw.roots"], later, ["pouw.roots"])
+    later["registered"] = [w.entry(), roots.entry()]
+    assert later["registered"][1]["root"] != first["registered"][1]["root"]
+    assert R.check(later, **check, log=[first]).ok
+    stale = {**later, "registered": first["registered"]}
+    assert R.check(stale, **check, log=[first]).codes == ("R7-supplied",)
+
+
+def test_supplied_values_are_a_v2_verifiers_in_one_form():
+    rec, check, _, _ = _seeded_case()
+    for bad in ([], {"pouw.roots": [{"port": "x"}]}, {"pouw.roots": [[{"port": "x", "value": "W"}]]},
+                {"pouw.roots": [[{"root": "x"}]]}, {"pouw.roots": [[{"port": 1}]]}, {"pouw.roots": [["x"]]}):
+        with pytest.raises(ValueError):
+            R.check(rec, **{**check, "supplied": bad})
+    v1 = {k: x for k, x in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
+    with pytest.raises(ValueError, match="none registered"):
+        R.check(v1, **{**check, "registered": None})
+
+
+#: the verifier's coin, and each seed group's row of `pouw.roots` filled from the window salt and positions, the bytes
+#: PoUW's `pouw.salt` and `pouw.positions` take
+COIN = "c0" * 64
+MIXED = {"pouw.roots": [[{"window": COIN}] + [{"position": "0"}] * 8, [{"position": "5"}] * 8 + [{"window": COIN}]]}
+#: the verifier's binding (its stream's digest and the identity it registered the prover under), and a window naming it
+BINDING = {"stream": "5a" * 64, "prover": "b0" * 32}
+BOUND = {**SERVED, **BINDING}
+#: `window_salt(COIN, BOUND, BINDING)`, its first 32 bytes
+WINDOW_SALT_0 = "4b8a2d020b9e146946769ecd04fb9ba6bd3b689b9a625e8334287acce768ef37"
+
+
+def _u64(p: int) -> bytes:
+    return p.to_bytes(8, "big")
+
+
+def _mixed_case(base, sup=MIXED, log=(), window=BOUND, binding=BINDING):
+    """`base` (a `_seeded_case`) as a record after `log` for `window`, its `pouw.roots` filled from `sup` as a verifier
+    bound to `binding` fills it, with R7's arguments."""
+    rec, check, w, _ = base
+    rec = {**rec, "window": dict(window), "previous": R.digest(log[-1]) if log else None, "registered": [w.entry()]}
+    roots = G.supplied_value(check["program"], "pouw.roots", G.sources(sup)["pouw.roots"], rec, ["pouw.roots"], list(log),
+                             binding=binding)
+    return ({**rec, "registered": [w.entry(), roots.entry()]},
+            {**check, "supplied": sup, "log": list(log), "binding": binding}, roots)
+
+
+def test_a_position_follows_the_logs_units():
+    """W-a: a position source is K after every unit of the log's earlier records, as a u64 big-endian, so a unit served
+    again in a later record takes another position and so another seed (the red team's replay, two calls of one A and B
+    at one position under one salt, gets no second receipt); a record that names the positions it would have had first,
+    or a source past its own units, is `R7-supplied`."""
+    assert G.log_base([]) == 0 and G.log_base([{"population": 6}, {"population": 3}]) == 9
+    for bad in ([{"population": -1}], [{"population": True}], [{}], [{"population": 1.0}], ["r"]):
+        with pytest.raises(ValueError):
+            G.log_base(bad)
+    base = _seeded_case()
+    first, check, roots = _mixed_case(base)
+    salt = G.window_salt(bytes.fromhex(COIN), BOUND, BINDING)
+    assert [list(r) for r in roots.rows] == [G.bytes_leaves(salt + _u64(0) * 8, 32), G.bytes_leaves(_u64(5) * 8 + salt, 32)]
+    assert R.check(first, **check).ok
+    window = {**BOUND, "row": 8}
+    later, check, again = _mixed_case(base, log=[first], window=window)
+    salt = G.window_salt(bytes.fromhex(COIN), window, BINDING)
+    assert [list(r) for r in again.rows] == [G.bytes_leaves(salt + _u64(6) * 8, 32), G.bytes_leaves(_u64(11) * 8 + salt, 32)]
+    assert R.check(later, **check).ok
+    replay = G.supplied_value(check["program"], "pouw.roots", G.sources(MIXED)["pouw.roots"], later, ["pouw.roots"],
+                              binding=BINDING)
+    assert R.check({**later, "registered": [later["registered"][0], replay.entry()]}, **check).codes == ("R7-supplied",)
+    for k in ("6", "01", "-1", "", "x"):
+        sup = {"pouw.roots": [[{"window": COIN}] + [{"position": k}] * 8] * 2}
+        assert R.check(later, **{**check, "supplied": sup}).codes == ("R7-supplied",), k
+    assert R.check(later, **{**check, "log": [{**first, "population": "6"}]}).codes == ("R6-previous", "R7-supplied")
+
+
+def test_a_window_salt_is_the_coin_bound_to_the_stream_prover_and_window():
+    """W-c: a window source is SHA-512 of `WINDOW_SALT`, the verifier's coin, its binding (its stream's digest and its
+    prover's identity) and the record's window as canonical JSON: one salt a prover, stream and window, as R6 takes one
+    record a window, and never the prover's. A record filled under another window or coin is `R7-supplied`, a window
+    outside the canonical domain fills nothing, and neither does a verifier with no binding."""
+    coin = bytes.fromhex(COIN)
+    salt = G.window_salt(coin, BOUND, BINDING)
+    assert salt == hashlib.sha512(b"verity/one-stage/window-salt/v1\0" + coin + b"\0" + b"5a" * 64 + b"\0" + b"b0" * 32
+                                  + b"\0" + canonical_json(BOUND)).digest()
+    assert salt.hex()[:64] == WINDOW_SALT_0
+    assert len({salt, G.window_salt(coin, {**BOUND, "row": 8}, BINDING), G.window_salt(b"\1", BOUND, BINDING),
+                G.window_salt(coin, BOUND, {**BINDING, "stream": "5b" * 64}),
+                G.window_salt(coin, BOUND, {**BINDING, "prover": "b1" * 32})}) == 5
+    for bad in ([], "served", {**BOUND, "row": 1.5}, {**BOUND, "run": "r\u00e9"}, {**BOUND, "row": 2**53}):
+        with pytest.raises(ValueError):
+            G.window_salt(coin, bad, BINDING)
+    with pytest.raises(ValueError, match="no binding"):
+        G.window_salt(coin, BOUND, None)
+    rec, check, _ = _mixed_case(_seeded_case())
+    assert R.check(rec, **check).ok
+    assert R.check({**rec, "window": {**BOUND, "row": 9}}, **check).codes == ("R7-supplied",)
+    other = {"pouw.roots": [[{"window": "c1" * 64} if "window" in s else s for s in r] for r in MIXED["pouw.roots"]]}
+    assert R.check(rec, **{**check, "supplied": other}).codes == ("R7-supplied",)
+    for bad in ({**BOUND, "row": 1.5}, {**BOUND, "run": "r\u00e9"}):
+        assert R.check({**rec, "window": bad}, **check).codes == ("R7-supplied",)
+    for coin in ("", "C0" * 64, "c0c"):
+        sup = {"pouw.roots": [[{"window": coin}, {"window": COIN}]] * 2}
+        assert R.check(rec, **{**check, "supplied": sup}).codes == ("R7-supplied",), coin
+
+
+def test_a_tile_replayed_across_streams_in_one_window_is_refused():
+    """Two streams, or two provers, in one window under one coin: each one's positions run from its own log, so a window
+    salt of the coin and the window alone would seed a tile alike in both, and a tile proved for one could be registered
+    again in the other. The salt binds the verifier's stream and prover, and R6 holds the record's window to name them:
+    stream A's record (or prover P's) is refused by stream B's verifier (or prover Q's) as it stands (`R6-stream` or
+    `R6-prover`, and `R7-supplied`) and relabeled to B's binding (`R7-supplied`: its seeds are A's), while B's own record
+    of the same window passes with other seeds. A verifier with no binding fills no window salt, and a binding in any
+    other form is refused before the record is read."""
+    base = _seeded_case()
+    rec, check, roots = _mixed_case(base)
+    assert R.check(rec, **check).ok
+    for k, theirs in (("stream", "5b" * 64), ("prover", "b1" * 32)):
+        other = {**BINDING, k: theirs}
+        assert R.check(rec, **{**check, "binding": other}).codes == (f"R6-{k}", "R7-supplied"), k
+        relabeled = {**rec, "window": {**rec["window"], k: theirs}}
+        assert R.check(relabeled, **{**check, "binding": other}).codes == ("R7-supplied",), k
+        own, own_check, own_roots = _mixed_case(base, window={**BOUND, k: theirs}, binding=other)
+        assert R.check(own, **own_check).ok
+        assert own_roots.root != roots.root and own_roots.rows != roots.rows
+    assert R.check(rec, **{**check, "binding": None}).codes == ("R7-supplied",)
+    unbound = {**rec, "window": SERVED}
+    assert R.check(unbound, **check).codes == ("R6-stream", "R6-prover", "R7-supplied")
+    for bad in ({"stream": "5a" * 64}, {**BINDING, "run": "r"}, {**BINDING, "stream": "5A" * 64},
+                {**BINDING, "stream": "5a" * 63}, {**BINDING, "prover": ""}, {**BINDING, "prover": "b0b"},
+                {**BINDING, "prover": 1}, ["stream", "prover"]):
+        with pytest.raises(ValueError):
+            R.check(rec, **{**check, "binding": bad})
+
+
+def test_r7_holds_a_pinned_value_to_its_pin():
+    """W-d: a value the verifier pinned before the record (the weights' root recorded before the salt, which root(B)
+    must be) is held to that root, ahead of the log's; a pin of a value it doesn't expect registered or fills itself, of
+    no 64-byte lowercase root, or with no value registered is refused before the record is read."""
+    rec, check, w, _ = _seeded_case()
+    assert R.check(rec, **check, pinned={"W": w.root.hex()}).ok
+    assert R.check(rec, **check, pinned={"W": "ee" * 64}).codes == ("R7-held",)
+    later = {**rec, "window": {**SERVED, "row": 8}, "previous": R.digest(rec)}
+    assert R.check(later, **check, log=[rec]).ok
+    assert R.check(later, **check, log=[rec], pinned={"W": "ee" * 64}).codes == ("R7-held",)
+    for bad in ({"V": "ee" * 64}, {"pouw.roots": "ee" * 64}, {"W": "EE" * 64}, {"W": "ee"}, {"W": 1}, ["W"]):
+        with pytest.raises(ValueError):
+            R.check(rec, **check, pinned=bad)
+    v1 = {k: x for k, x in rec.items() if k != "registered"} | {"format": "verity/registration/v1"}
+    with pytest.raises(ValueError):
+        R.check(v1, **{**check, "registered": None, "supplied": None}, pinned={})
+
+
+#: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
+
+
+def test_pouw_roots_reads_an_arow_row_table_root():
+    """AROW: a row table the record registers as a port (one `hm96-sha512/row-seg/v1` leaf per token row) is read as any
+    port's root, so the verifier fills `pouw.roots` from it, and a record whose row table moved after `pouw.roots` was
+    fixed is `R7-supplied`."""
+    _, check, w, _ = _seeded_case()
+    prog, q = check["program"], check["query"]
+    part = P.partition(prog, q)
+    dom = R.served_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
+    ports = {**check["ports"], ROW_TABLE: {"leaves": 5, "domain": dom}}
+    sup = {"pouw.roots": [[{"port": ROW_TABLE}, {"value": "W"}]] * 2}
+    check = {**check, "ports": ports, "supplied": sup}
+
+    def record(table_root, roots=None):
+        served = [{"port": p, "root": table_root if p == ROW_TABLE else "ab" * 64, **ports[p]} for p in ports]
+        base = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry()])
+        roots = roots or G.supplied_value(prog, "pouw.roots", G.sources(sup)["pouw.roots"], base, ["pouw.roots"])
+        return R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()]), roots
+
+    rec, roots = record("5e" * 64)
+    assert [list(r) for r in roots.rows] == [G.bytes_leaves(bytes.fromhex("5e" * 64) + w.root, 32)] * 2
+    assert R.check(rec, **check).ok
+    assert R.check(record("5f" * 64, roots)[0], **check).codes == ("R7-supplied",)

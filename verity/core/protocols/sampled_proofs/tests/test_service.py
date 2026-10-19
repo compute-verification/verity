@@ -124,6 +124,34 @@ def test_round_trip_register_select_deliver_outcome():
     assert body["audit"]["accepted"] and body["audit"]["integrity_profile"]["evidence"]["sessions"] == [SESSION]
 
 
+def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
+    """A stream given the identity its challenger registered the prover under names it in its digest and binds every
+    registration to the stream and the prover (`Stream.binding`, `registration.check`'s): a record whose window names
+    both runs round to an accepted outcome, by both verifiers of record, while the same record in another prover's
+    stream, in the same window, is refused (`R6-stream`, `R6-prover`), as is one whose window names neither. A prover
+    identity that is not lowercase hex bytes makes no stream."""
+    def stream(prover):
+        return S.Stream(_spec(), PAIR, budget=2, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
+                        clock=Clock(), prover=prover)
+
+    a, b, plain = stream("a0" * 32), stream("b0" * 32), _stream()
+    assert len({a.digest, b.digest, plain.digest}) == 3 and plain.binding is None
+    assert a.binding == {"stream": a.digest, "prover": "a0" * 32}
+    assert a.digest == S._sha512({"format": S.STREAM, "spec": _spec().digest(), "budget": 2, "delta": DELTA,
+                                  "challenger": "challenger-test", "prover": "a0" * 32})
+    rec = _record()
+    mine = {**rec, "window": {**rec["window"], **a.binding}}
+    assert _refused(lambda: b.register(mine, _ports(6))) == ("R6-stream", "R6-prover")
+    assert _refused(lambda: a.register(rec, _ports(6))) == ("R6-stream", "R6-prover")
+    draw = a.select(a.register(mine, _ports(6)))
+    assert a.deliver(draw, [SESSION]) is None
+    out = a.outcome(draw, _lean(), {"statement": "stub"})
+    assert out.accepted and out.verdict.ok and a.records[0]["stream"] == a.digest
+    for bad in ("A0" * 32, "a0a", ""):
+        with pytest.raises(ValueError):
+            stream(bad)
+
+
 def test_the_draw_is_the_challengers_coins_and_nothing_else():
     def drawn(coins):
         stream = _stream(coins=coins)

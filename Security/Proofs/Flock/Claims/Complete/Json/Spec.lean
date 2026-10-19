@@ -8,14 +8,15 @@ import Proofs.Flock.Claims.Complete.Prover.Print
 /-!
 # What the record's round trip needs from the JSON library
 
-`Json.parse`, `Json`'s `==` and the verifier's `canon` are `partial` definitions: Lean runs them, and no proof unfolds
-them. So the session record's round trip (the prover's `printJ`, a total printer of `Json.compress`'s bytes, then
-`Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s `parse`) is proved from their specification, the spec's
-`Claims.JsonSpec printJ canon`, a named assumption the record's theorems take as a hypothesis, over alike (`Same`),
-printable (`Good`) and well-formed (`Wf`) values (`Definitions/Claims/Json.lean`). Here are the lemmas on alike values
-the proofs read: alike leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same
-missing keys (`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check
-(`drawEq`) passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
+`Json.parse` and `Json`'s `==` are `partial` definitions: Lean runs them, and no proof unfolds them (the verifier's
+`canon` is total, and the spec's two fields on it are proved: `Canon.lean`). So the session record's round trip (the
+prover's `printJ`, a total printer of `Json.compress`'s bytes, then `Record.decodeWith`'s, `liveOf`'s and `recordDraw`'s
+`parse`) is proved from their specification, the spec's `Claims.JsonSpec printJ canon`, a named assumption the record's
+theorems take as a hypothesis, over alike (`Same`), printable (`Good`) and well-formed (`Wf`) values
+(`Definitions/Claims/Json.lean`). Here are the lemmas on alike values the proofs read: alike leaves are equal, and alike
+objects have alike values at each key (`Same.getObjVal`) and the same missing keys (`Same.getObjVal_none`), and alike
+values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`) passes on them. The record's numbers
+are all `Lean.toJson` of naturals, so printable.
 -/
 
 namespace FlockComplete.JsonRT
