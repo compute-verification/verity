@@ -17,7 +17,7 @@ from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
 from verity.ml.circuits.ops import fp32, prims, scalar
-from verity.ml.circuits.ports import In, Out, PortError, Ports
+from verity.ml.circuits.ports import In, Leaves, Out, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, Strided, array_of, concat, tuple_of
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
@@ -190,9 +190,12 @@ BOUND = (-(1 << 20), 1 << 20)
 
 def test_a_run_inputs_declared_bound_is_refused():
     """No declared `In(bound)` is taken on trust (18 Oct): evaluation doesn't enforce a run input's bound, so a run input whose
-    port bounds it far from the s32 edge is refused when its Program is built (`E_PORT_BOUND`), and never judged as bounded."""
-    with pytest.raises(PortError, match="E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c'"):
+    port bounds it far from the s32 edge, whole or on some of its leaves, is refused when its Program is built (`E_PORT_BOUND`),
+    and never judged as bounded."""
+    with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestInt8Program_v1: parameter 'c' leaves \[0, 1\)"):
         int8_program(acc0="input", ports=Ports(params={"c": In(bound=BOUND)}))
+    with pytest.raises(ValueError, match=r"E_PORT_BOUND: program function TestFromInputLeaf_v1: parameter 'c' leaves \[0, 1\)"):
+        _from("TestFromInputLeaf", lambda B, c: c[0], C0)
 
 
 def _rem(a, b):
@@ -207,13 +210,14 @@ DIV = stand_in("I32Div", (("a", S32), ("b", S32)), ports=Ports(ret=Out(interval=
 REM = stand_in("I32Rem", (("a", S32), ("b", S32)), ports=Ports(transfer=_rem))
 FIRST = comp("TestFirst", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0], ports=Ports(ret=Out(interval=BOUND)))
 SILENT = comp("TestFirstSilent", (("c", Array(2, S32)),), S32, lambda B, _S, c: c[0])
+C0 = Ports(params={"c": Leaves(((0, 1, In(bound=BOUND)),))})
 RANGE = stand_in("TestRangeS32", (("a", S32),), ports=Ports(ret=Out(interval=BOUND)))
 
 
-def _from(name: str, start) -> P.Analysis:
+def _from(name: str, start, ports=None) -> P.Analysis:
     """Two s8 steps from the accumulator `start` makes of the run input c (two s32 words)."""
     fn = comp(name, (("c", Array(2, S32)), ("x", Array(64, S8)), ("w", Array(64, S8))), S32,
-              lambda B, _S, c, x, w: B.call(_step(64), start(B, c), x, w))
+              lambda B, _S, c, x, w: B.call(_step(64), start(B, c), x, w), ports=ports)
     program = Program(fn, registered=("w",))
     return P.analyze(program, census(program, [len(program.root.body.nodes)]))
 
@@ -237,7 +241,7 @@ def test_a_producers_declared_interval_narrows_its_value(label, start, proven):
 def test_a_declared_return_over_a_run_input_is_refused():
     """A Definition's declared return holds by its body: over a run input's leaf, which spans its width, it is refused when
     the Program is built, so a composite's declaration never stands in for a bound on the run input it reads."""
-    with pytest.raises(PortError, match="E_PORT_INTERVAL: TestFirst_v1 declares Out"):
+    with pytest.raises(ValueError, match="E_PORT_INTERVAL: TestFirst_v1 declares Out"):
         _from("TestFromCompositeUnchecked", lambda B, c: B.call(FIRST, c))
 
 
