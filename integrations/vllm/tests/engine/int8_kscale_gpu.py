@@ -77,7 +77,7 @@ def run(a: argparse.Namespace) -> dict:
     entry, how = pin(a)
     tok = AutoTokenizer.from_pretrained(entry["local_path"])
     wins, rec = W.build(methodology.CALIBRATION["set"], methodology.CALIBRATION["ctx"], *W.encoder(tok), Path(a.data), calibration=True)
-    W.check("llama3", methodology.CALIBRATION["set"], methodology.CALIBRATION["ctx"], wins, calibration=True)
+    W.check(a.tokenizer_family, methodology.CALIBRATION["set"], methodology.CALIBRATION["ctx"], wins, calibration=True)
     print(f"[kscale] pin {entry['revision']} ({how}); windows {rec}", flush=True)
     target = TargetProfile.from_device().with_overrides(int8_exact="linears")
     with tempfile.TemporaryDirectory() as scratch:
@@ -113,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--role", default="LLAMA31_8B_INT8")
     ap.add_argument("--repo", default="verity-int8/Llama-3.1-8B-INT8")
     ap.add_argument("--hf-home", default=os.environ.get("HF_HOME"))
+    ap.add_argument("--tokenizer-family", default="llama3", choices=sorted(W.lock()),
+                    help="the windows.lock.json family the calibration windows are checked against (qwen2.5 for Qwen2.5 and Qwen3)")
     ap.add_argument("--engine-args", default="{}", help='JSON engine arguments over the defaults, e.g. \'{"gpu_memory_utilization": 0.95}\' '
                     "for a model whose int8 weights fill most of the GPU (Llama-3.1-70B)")
     ap.add_argument("--at", required=True)
