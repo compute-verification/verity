@@ -134,6 +134,62 @@ def test_the_word_view_adds() -> None:
         BS.evaluate_words(ADDER, x | (1 << W), y)
 
 
+def test_a_boolean_definition_takes_its_word_definitions_kernel(monkeypatch) -> None:
+    """ADDER's twin names x + y as its word Definition, whose kernel declines odd x: evaluate_batch packs each element's bits
+    into a word, runs that kernel, unpacks its output, and evaluates the declined rows bit-sliced, never gate by gate."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.evaluation.batch import _KERNELS, _WORD
+
+    add = PrimitiveDefinition("BitsTestAddWord", 1, (("x", Value(W)), ("y", Value(W))), Value(W + 1), lambda x, y: x + y,
+                              register=False)
+    twin = CompositeDefinition("BitsTestWordAdder", 1, (),
+                               lambda S: ((("x", Array(W, BIT)), ("y", Array(W, BIT))), Array(W + 1, BIT)), _adder, register=False)
+    twin.word = add
+    spec = bind(twin)
+    rng = np.random.default_rng(4)
+    x, y = (_bits(rng, 200, Array(W, BIT)) for _ in range(2))
+    want = BS.evaluate_bits(spec, x, y)
+    batches, bit_rows = [], []
+
+    def kernel(a, b):
+        batches.append(len(a))
+        return a.astype(np.uint16) + b, a % 2 == 1
+
+    def bits(t, *arrays):
+        bit_rows.append(arrays[0].shape[0])
+        return BS.evaluate_bits(t, *arrays)
+
+    E.register_kernel(add, kernel)
+    try:
+        k = E.word_kernel(spec)
+        assert (k.key, k.name) == ("BitsTestWordAdder_v1", "numpy") and E.kernels(spec) == {}
+        monkeypatch.setattr(E.batch, "evaluate", lambda *a, **kw: pytest.fail("the reference ran"))
+        monkeypatch.setattr(E.batch, "evaluate_bits", bits)
+        assert np.array_equal(E.evaluate_batch(spec, x, y), want)
+        assert batches == [200] and bit_rows == [int(x[:, 0].sum())]
+    finally:
+        del _KERNELS[add.id]
+        _WORD.clear()
+
+
+def test_gemm_v3_runs_on_gemm_v2s_kernel(monkeypatch) -> None:
+    """The BF16 GEMM on bits takes the word GEMM's numpy kernel; the s8 accumulator's word Definition has no kernel, so it
+    stays bit-sliced."""
+    from verity.ml.circuits.ops.boolean import gemm as BG
+
+    gemm = bind(BG.Gemm, K=32, N=4, **BG.GEMM_AMPERE)
+    assert E.word_kernel(gemm).name == "numpy"
+    assert E.word_kernel(bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)) is None
+    rng = np.random.default_rng(5)
+    bf16 = lambda n: (np.float32(rng.uniform(-1, 1, n)).view(np.uint32) >> 16).astype(np.uint16)  # noqa: E731
+    x, w = bf16((3, 32)), bf16((3, 4, 32))
+    want = BS.evaluate_words(gemm, x, w)
+    unpack = lambda a: ((a[..., None] >> np.arange(16, dtype=np.uint16)) & 1).astype(np.uint8)  # noqa: E731
+    monkeypatch.setattr(E.batch, "evaluate_bits", lambda *a: pytest.fail("evaluated bit-sliced"))
+    got = E.evaluate_batch(gemm, unpack(x), unpack(w))
+    assert np.array_equal(BS._to_words(got.reshape(3, -1), [16] * 4), want)
+
+
 def test_evaluate_batch_routes_a_boolean_composite(monkeypatch) -> None:
     spec = bind(_random(0))
     params, _ = spec.signature()

@@ -17,7 +17,8 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement
   and `--rec-rows`. `parse` and `scopeCheck` are the deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
   `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
-  plain verifier sets the inner statement up and its statement check passes, `innerOk`, and there is one part per V*
+  plain verifier sets the inner statement up, its statement check passes and it carries a draw, `innerOk`, and there is
+  one part per V*
   statement of the verifier's inner shape, `RecVStar.statements`), as the verifier's inner
   shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
   (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
@@ -43,7 +44,7 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
 `next_rej`, `next_coin` and `next_sess` are the steps; `next_decide_sha512` is the acceptance theorem: at a session's
 decision, the compiled verifier accepts the session exactly when it is the session's last round and the deployed
 `Zk.verify` at the part's recursive setup accepts the record and proof files with the custody checks
-(`FlockDeploy.checks`) and the verdict's full-draw refusal (`fullDrawO`, `RecSetup.fullDraw`), the part's statement
+(`FlockDeploy.checks`) and the verdict's last refusals (`fullDrawO`: `RecSetup.fullDraw`, `RecSetup.innerDrawn`), the part's statement
 being the one the prover staged (`ract_sess`). `next_acc`: the whole run
 accepts only at the last session's last round, where the outer verifier accepts.
 
@@ -141,16 +142,19 @@ structure XR where
   shape : RecVStar.Inner
   dims : RecVStar.Inner
 
-/-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`) and
-its statement check passes (`Readable.Read.check`, `ProvedScope.check`). Its draw is not asked for: the recursion's inner
-session holds none. -/
+/-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`), its
+statement check passes (`Readable.Read.check`, `ProvedScope.check`), and it carries a draw, the inner session's record's
+(`Raw.draw`): the recursion's inner session is drawn (#2468), and the compiled verifier refuses a session over an inner
+session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`). -/
 def innerOk (inner : Claims.Msg) : Except String Unit :=
   match FlockDeploy.setupOf false inner with
-  | some (s, _, _) => s.read.check
+  | some (s, _, _) => do
+    s.read.check
+    if s.read.draw.isNone then throw RecSetup.noInnerDraw
   | none => .error "rec: Flock's verifier does not set the inner statement up"
 
 /-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`)
-and pass Flock's own setup and statement check (`innerOk`), the verifier's own inner shape reads
+and pass Flock's own setup and statement check with a draw (`innerOk`), the verifier's own inner shape reads
 (`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape. -/
 def readX (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
@@ -538,7 +542,7 @@ noncomputable def refP (IV : Claims.Verifier Coin) (b : Brings) (w : Claims.Floc
 `hComplete`); on a V* session it runs at the recursive outer record `deployZkRec`, whose statements set up at the
 recursive setup (`setupO`), and is to be complete there, with error `δ`. -/
 def OuterRef (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (δ : Claims.Msg → ℝ) : Prop :=
-  Claims.Flock.Complete H (deployZkRec rel) FlockComplete.honestPZk δ
+  FlockComplete.CompleteWith H (deployZkRec rel) FlockComplete.honestPZk δ
 
 /-! ## The completeness error -/
 
@@ -709,7 +713,7 @@ theorem next_acc (H : Claims.Msg → Claims.Msg) (h : ((next IV st x as cs).eval
 outer verifier decides, the compiled verifier accepts the session (`.acc` at the last session, `.msg []` before it)
 exactly when this is the session's last round and the deployed `flock-verify verify --zk` with part `s`'s recursive
 inputs, `Zk.verify` at the statement's recursive setup (`actO_decide`, `RecIns.setup`), accepts the record and proof
-files with the custody checks and the full-draw refusal; else it refuses. The statement is the part's as the prover
+files with the custody checks and the verdict's last refusals; else it refuses. The statement is the part's as the prover
 staged it (`ract_sess`). -/
 theorem next_decide_sha512 {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs' : List Coin} {i : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}

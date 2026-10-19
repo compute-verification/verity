@@ -138,7 +138,7 @@ def ZkInnerAccepts : Prop :=
     ∀ v, Plays fOf (ZkLink.innerGameC hs512.H hs512.Ep hs512.Lp hs512.Lτ T.dom T.np T.nP T.q T.pos rows T.tr
         (toDig pr.root))
       [⟨𝔽 × 𝔽, (fOf pr.rho, fOf pr.sigma)⟩, ⟨Dig, toDig pr.tauCommit⟩, ⟨Fin (T.np + T.nP) → 𝔽, vecOf (T.np + T.nP) pr.y⟩]
-      (consumed t.rounds t.k t'.k) v → v (innerOpensOf pr)
+      (consumed t.rounds t.k t'.k) v → v.1 (innerOpensOf pr)
 
 /-- **A `--zk` rep's result accepts** (live PROTOCOL.md §1–§7, PROTOCOL.md §14). At the `--zk` schedule under
 `hm96-sha512/v1`, at a compiled table whose dimensions (`ZkTabSeam`), pads and inner code (`ZkTabLay`) are the

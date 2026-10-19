@@ -464,11 +464,6 @@ def e2m1_encode_ints(v: np.ndarray) -> np.ndarray:
     return out
 
 
-def ue4m3_pow2(e_field: int) -> int:
-    """UE4M3 code for 2^(e_field-7) (mantissa field 0): the exact power-of-two scales of the layout check."""
-    return e_field << 3
-
-
 def to_bf16_bits(x: np.ndarray) -> np.ndarray:
     u = f32_bits(x).astype(np.uint64)
     lsb = (u >> 16) & 1

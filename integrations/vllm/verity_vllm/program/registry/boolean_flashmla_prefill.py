@@ -15,6 +15,8 @@ reads are decoded once.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 from verity.ml.circuits.boolean.forms import NOT, ZERO, and_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import bind

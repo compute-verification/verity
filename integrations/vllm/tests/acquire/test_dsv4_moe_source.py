@@ -8,6 +8,8 @@ the wrong tensor (the w2 launch's output as act, the w13 launch's input as up); 
 call that does not take `dsv4_topk` bound anyway; a router bound twice; and a launch whose flags would bind planes under swapped names."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import sys
 import types
 
