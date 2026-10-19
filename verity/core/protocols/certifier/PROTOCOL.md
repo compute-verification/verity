@@ -144,8 +144,10 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
-- **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests and
-  the charge (log2 #Σ_sync per window, 7 bits at 16 × 8), both bound by the spec's context with the link, the run,
+- **Public:** the population, the window, the value's leaf count, domain and salted root, the parameters digests, the
+  charge (log2 #Σ_sync per window, 7 bits at 16 × 8) and the occupancy profile (`LinkWindows.occupancy`: for each end,
+  each window's T counts as the Program and the placement fix them, or none for an end the Program reads rather than
+  predicts), all bound by the spec's context with the link, the run,
   the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused.
@@ -155,7 +157,11 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   that reads the opening: it accepts when the opening reproduces the registered root (so each head leaf holds its
   record's head) and the audit accepts both
   records under the certifier's key in its session (`LinkWindows.certifier_session`; `check_link` against the Program's grid under the declared syncs,
-  `check_ingress_link` on the status and parameters). The outcome passes the opening's root as the session's, which
+  `check_ingress_link` on the status and parameters), and each head's counts are the profile's for its end and window
+  (`LinkWindows.declares`; a window past the profile is a reject). The count check needs no frame's bytes, so it is the
+  part of the grid check a proof of the unit can make without the content, and the only grid check on ingress: an
+  equality of 32·T bits a head, 32·T − 1 ANDs (19,199 at T = 600). It runs on every link-window, and N3, which holds its
+  N frames to the head's root, so to Σ n_t, runs on drawn ones. The outcome passes the opening's root as the session's, which
   one-stage's audit holds to the registered one. An unset deadline bit is a `no-verdict` there, so a reject; a proof
   after `proof_deadline` is the service's `late`.
 
