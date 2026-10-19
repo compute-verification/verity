@@ -882,7 +882,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
     committed KV values the circuit wrote to block \(j\), under the layout: each of those values opens under its
     value commitment's root (the vLLM Commit's hiding leaves). So the receipted block is the circuit's KV, not bytes
     the prover chose.
-  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit output limit. The record and
+  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit size class, the least public one. The record and
     `ledger` read only verdicts, and nothing an opening carries leaves the unit.
 
   The formats already hide: payload blocks and receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and

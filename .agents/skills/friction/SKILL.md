@@ -109,6 +109,13 @@ Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (2:59 PM PDT, ASK-61, provisional): a proof unit's outputs are bounded by public power-of-two size
+  classes from 16 to 262,144 bits (option A), not the literal 16-bit limit, because 22 of the measured template
+  families are wider than 1,024 bits and the widest is 262,144 (`Gemm_v2{K=2048,N=16384}`). A unit's class is a public
+  property of its Definition, the least class that holds its committed bits, and its output bits count in leakage. The
+  bound is one constant (`Claims.Sampling.unitClassMax`, mirrored as the verifier's `UNIT_CLASS_MAX` in Lean and
+  Python), so setting it back to 16 is a one-line reversal. Rolled out as AGENTS.md "Everything zero-knowledge" and
+  DESIGN.md "Proof unit".
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
   he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
   cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.

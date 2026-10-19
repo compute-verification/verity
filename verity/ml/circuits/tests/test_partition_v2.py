@@ -4,7 +4,7 @@ the advice root of `verity.ml.commitments.advice`), v1's numbering in query mode
 `partition_v2_vectors.json`.  `python verity/ml/circuits/tests/test_partition_v2.py --write` rewrites it.
 
 The program is v1's pinned program (`partition_vectors.json`) on 16-bit values: the same Calls on BF16 instead of I32 and F32,
-since the width limit of 16 bits out refuses every unit of v1's that returns a 32-bit value."""
+since v2's default width (`WIDTH`, 16 bits out, the least public size class) refuses every unit of v1's that returns a 32-bit value."""
 from __future__ import annotations
 
 import dataclasses
@@ -234,7 +234,7 @@ def test_each_global_predicate_refuses(program, label, edit, pedit, code):
 
 
 def test_the_width_limit_refuses_every_unit_returning_a_32_bit_value():
-    """At most 16 bits out, with no exception for one wider value: on v1's program, whose values are all 32 bits, every unit
+    """At most `WIDTH` = 16 bits out, with no exception for one wider value: on v1's program, whose values are all 32 bits, every unit
     with an output is refused, though `Q_word{16, 32}` admits each as one value of at most W bits and v1 verifies it."""
     P = _v1_program()
     assert PO.verify(PO.build(P), P).ok

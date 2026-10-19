@@ -338,8 +338,8 @@ class Prover:
 EGRESS_UNIT_BITS = 8 << 20
 """The public egress count's unit: one MiB."""
 EGRESS_MAX_UNITS = (1 << 15) - 1
-"""A proof unit's outputs are at most 16 bits, the verdict's one and the count's 15, so the count saturates at 32 GiB
-less one MiB."""
+"""The verdict's unit stays in the least public size class, 16 bits: the verdict's one and the count's 15, so the count
+saturates at 32 GiB less one MiB."""
 
 
 def egress_units(egress_bits: int) -> int:

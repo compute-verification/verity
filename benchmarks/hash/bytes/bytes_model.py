@@ -191,7 +191,7 @@ CHANGES = (
            "proofs; circuits", "none; the attention unit gains a 128-element norm and rotation a key (about its QK^T dot again)",
            saves=Q_ROPE + K_ROPE,
            note="the epilogue form (the qkv unit outputs rotated q, k) saves the same bytes but makes a q or k unit compute "
-                "its head's 128 dots, since a unit outputs 16 bits"),
+                "its head's 128 dots, since each of its units outputs 16 bits"),
     Change("qk-rope+v-store", "bytes", "the above, and V read from memory accounting's KV store (4 KiB token-layer "
            "hm96-sha512/row/v2 blocks), not the Commit", "memory-accounting (the store); proofs (attention opens store "
            "leaves); circuits", "every value committed: V by the store, so only where the store runs; zero knowledge: the "
