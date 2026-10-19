@@ -58,7 +58,7 @@ eight items:
    `KS` and `KSPriv` at the compiled record whose inner view runs the verifier at the representation V* binds
    (`Bound.IVStar`: the inner session's commit strings and their openings), and `Bridge` states the inner claim they
    rest on, from Flock's at that representation. `Bound.WeightCovers`' constant is the draft's, fixed by the bridge's
-   proof before freezing.
+   proof before freezing (its docstring states the loss that proof is expected to pay, about `N_I · k_I · √Pr[B]`).
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -923,7 +923,13 @@ def Bound.Binds (Bd : Bound Coin Col T) : Prop := Function.Injective Bd.rowIn
 /-- **(P3) `γ`'s weight covers the openings**: at each statement, `√C_IVStar ≥ √C_DE + √(2·n_open)`. So `B`'s fork at
 `IVStar` charges two kinds of collision: the element-level Flock's, and those of two runs that open one of the
 `n_open` commit strings two ways, two calls each. A draft constant, which the bridge's proof fixes before the statement
-freezes. -/
+freezes.
+
+The loss the bridge's proof is expected to pay is about `N_I · k_I · √Pr[B]`, with `N_I = 1 + m′·k` `E^rep`'s expected
+reruns. At each rerun, the run departs from the one `DE`'s prover sends at some round with probability at most
+`√Pr[a fork there opens one commit string two ways]`, and those roots sum over the `k_I` rounds to at most
+`k_I · √Pr[B]` (Cauchy–Schwarz, `B`'s guess being uniform). In `γ = 16·(√(2·k_I·C) + k_I)²` that asks
+`√C_IVStar − √C_DE ≥ N_I · √k_I / (4√2)`, which `√(2·n_open)` covers only where `2·n_open ≥ N_I² · k_I / 32`. -/
 def Bound.WeightCovers (Bd : Bound Coin Col T) : Prop :=
   ∀ x, Real.sqrt (Bd.DE.weight x) + Real.sqrt (2 * Bd.nOpen x) ≤ Real.sqrt (Bd.weight x)
 
