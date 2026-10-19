@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # exactlin's gate, then its kernel-level timing (kbench.py), on one leased GPU of node 2 for at most KBENCH_MAX_MIN (30)
-# minutes; KSCRIPT=kgate.py runs the gate alone.  Extra arguments go to the script (e.g. --reps 15 --shapes decode).
+# minutes; KSCRIPT=kgate.py runs the gate alone, KSCRIPT=ksweep.py the GEMM config sweep.  Extra arguments go to the
+# script (e.g. --reps 15 --shapes decode).
 #   research run --on vy-nebius-2 --project verity --campaign exactlin --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-exactlin -- bash benchmarks/hash/exactlin/kbench.sh
 set -uo pipefail

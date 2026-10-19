@@ -63,11 +63,12 @@ def E():
     return int8_exact
 
 
-def activations(m: int, k: int, seed: int) -> torch.Tensor:
+def activations(m: int, k: int, seed: int, special: bool = True) -> torch.Tensor:
+    """bf16 [m, k]; with `special` (and m > 1) rows 0.. are the SPECIAL edge rows."""
     g = torch.Generator(device="cuda").manual_seed(seed)
     ch = torch.exp(torch.randn(k, generator=g, device="cuda"))
     x = torch.randn(m, k, generator=g, device="cuda") * ch
-    for i, kind in enumerate(SPECIAL[:max(0, m - 1)] if m > 1 else ()):
+    for i, kind in enumerate(SPECIAL[:max(0, m - 1)] if m > 1 and special else ()):
         if kind == "zero":
             x[i] = 0
         elif kind == "all_absmax":
@@ -161,8 +162,20 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
     return doc
 
 
-def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None) -> dict:
+_WORK: list = []
+
+
+def work() -> "X.Workspace":
+    if not _WORK:
+        _WORK.append(X.Workspace("cuda"))
+    return _WORK[0]
+
+
+def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None) -> dict:
+    """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves)."""
     e = E()
+    cfg = cfg or X.pick(m, n, k)
+    wk = work()
     x = activations(m, k, seed)
     w, s_w = weights(n, k, seed)
     xq_ref, s_ref = e.quantize_rows(x)
@@ -172,18 +185,19 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     y = torch.empty_like(y_ref)
     y2 = torch.empty_like(y_ref)
     torch.cuda.synchronize()
-    doc: dict = {"layer": ",".join(names or []), "m": m, "n": n, "k": k, "seed": seed}
+    doc: dict = {"layer": ",".join(names or []), "m": m, "n": n, "k": k, "seed": seed, "cfg": str(cfg)}
     poison(xq, s, y)
     poison(y2)
     torch.cuda.synchronize()
     before = torch.cuda.memory_allocated()
     kq = X.quant_rows(x, xq, s)
-    km = X.scaled_mm(xq, s, w, s_w, y)
-    X.scaled_mm(xq_ref, s_ref, w, s_w, y2)
+    km = X.scaled_mm(xq, s, w, s_w, y, cfg, wk)
+    X.scaled_mm(xq_ref, s_ref, w, s_w, y2, cfg, wk)
     torch.cuda.synchronize()
     doc["alloc_eager_bytes"] = torch.cuda.memory_allocated() - before
     doc["fused"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     doc["fused_mm"] = {"y_diff": diff(y2, y_ref)}
+    doc["workspace_zero_after"] = int((wk.ws != 0).sum()) + int((wk.cnt != 0).sum())
     poison(xq, s, y)
     torch.cuda.synchronize()
     doc["control"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
@@ -192,10 +206,11 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     with torch.cuda.graph(g):
         before = torch.cuda.memory_allocated()
         X.quant_rows(x, xq, s)
-        X.scaled_mm(xq, s, w, s_w, y)
+        X.scaled_mm(xq, s, w, s_w, y, cfg, wk)
         doc["alloc_capture_bytes"] = torch.cuda.memory_allocated() - before
     poison(xq, s, y)
-    g.replay()
+    for _ in range(3):
+        g.replay()
     torch.cuda.synchronize()
     doc["graph"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     del g
@@ -208,6 +223,7 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
         doc["special"] = sp
     doc["ptx"] = [X.ptx_check(kq), X.ptx_check(km)]
     doc["ok"] = (all(v == 0 for v in doc["fused"].values()) and doc["fused_mm"]["y_diff"] == 0
+                 and doc["workspace_zero_after"] == 0
                  and all(v == 0 for v in doc["graph"].values()) and all(v > 0 for v in doc["control"].values())
                  and doc["alloc_eager_bytes"] == 0 and doc["alloc_capture_bytes"] == 0 and all(p["ok"] for p in doc["ptx"]))
     if with_stock:

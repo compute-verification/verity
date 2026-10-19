@@ -34,7 +34,8 @@ import kgate  # noqa: E402
 
 ITEM_MS = 10.0
 ARMS = ("exact", "stock", "fused")
-PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant", "fused_mm")
+PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant", "fused_mm", "fused_vllm_tiles")
+WORK = X.Workspace("cuda") if torch.cuda.is_available() else None
 
 
 def nvml():
@@ -65,11 +66,14 @@ def arm_fn(arm: str, x, ws, xq, s, y):
             for w, sw in ws:
                 q, sa, _ = ops.scaled_int8_quant(x)
                 triton_scaled_mm(q, w.t(), sa, sw, torch.bfloat16)
-    elif arm == "fused":
+    elif arm in ("fused", "fused_vllm_tiles"):
+        m, k = x.shape
+        cfg = X.pick(m, ws[0][0].shape[0], k) if arm == "fused" else X.default_cfg(m, ws[0][0].shape[0], k)
+
         def f():
             for w, sw in ws:
                 X.quant_rows(x, xq, s)
-                X.scaled_mm(xq, s, w, sw, y)
+                X.scaled_mm(xq, s, w, sw, y, cfg, WORK)
     elif arm.startswith("stock_"):
         from vllm import _custom_ops as ops
         from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import triton_scaled_mm
@@ -84,28 +88,27 @@ def arm_fn(arm: str, x, ws, xq, s, y):
                     triton_scaled_mm(q0, w.t(), s0, sw, torch.bfloat16, use_td=td)
     else:
         X.quant_rows(x, xq, s)
+        m, k = x.shape
+        cfg = X.pick(m, ws[0][0].shape[0], k)
 
         def f():
             for w, sw in ws:
                 if arm == "fused_quant":
                     X.quant_rows(x, xq, s)
                 else:
-                    X.scaled_mm(xq, s, w, sw, y)
+                    X.scaled_mm(xq, s, w, sw, y, cfg, WORK)
     return f
 
 
-def shape_row(n: int, k: int, m: int, reps: int, clock, arms=ARMS, names: list[str] | None = None) -> dict:
-    name = ",".join(names or [])
-    l2 = torch.cuda.get_device_properties(0).L2_cache_size
-    copies = max(2, math.ceil(3 * l2 / (n * k)))
-    x = kgate.activations(m, k, 7 + m)
-    ws = [kgate.weights(n, k, 100 + i) for i in range(copies)]
-    xq = torch.empty((m, k), dtype=torch.int8, device="cuda")
-    s = torch.empty(m, dtype=torch.float32, device="cuda")
-    y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
+def copies_for(n: int, k: int) -> int:
+    return max(2, math.ceil(3 * torch.cuda.get_device_properties(0).L2_cache_size / (n * k)))
+
+
+def timed(fns: dict, reps: int, clock, calls: int) -> tuple[dict, dict, dict]:
+    """Each fn captured in a CUDA graph and replayed in items of about ITEM_MS, the fns alternating item by item (order
+    rotated each rep); median microseconds a call (`calls` calls a graph), every item's, and the SM clocks around each."""
     graphs, per = {}, {}
-    for arm in arms:
-        f = arm_fn(arm, x, ws, xq, s, y)
+    for arm, f in fns.items():
         side = torch.cuda.Stream()
         side.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(side):
@@ -125,6 +128,7 @@ def shape_row(n: int, k: int, m: int, reps: int, clock, arms=ARMS, names: list[s
         torch.cuda.synchronize()
         per[arm] = max(1, round(ITEM_MS / max(e0.elapsed_time(e1), 1e-3)))
         graphs[arm] = g
+    arms = tuple(fns)
     us = {arm: [] for arm in arms}
     clocks = {arm: [] for arm in arms}
     for r in range(reps):
@@ -139,14 +143,28 @@ def shape_row(n: int, k: int, m: int, reps: int, clock, arms=ARMS, names: list[s
             e1.record()
             torch.cuda.synchronize()
             c1 = clock()
-            us[arm].append(1e3 * e0.elapsed_time(e1) / (per[arm] * copies))
+            us[arm].append(1e3 * e0.elapsed_time(e1) / (per[arm] * calls))
             clocks[arm].append([c0, c1])
-    med = {arm: statistics.median(v) for arm, v in us.items()}
+    del graphs
+    return {arm: statistics.median(v) for arm, v in us.items()}, us, {"clocks": clocks, "replays_per_item": per}
+
+
+def shape_row(n: int, k: int, m: int, reps: int, clock, arms=ARMS, names: list[str] | None = None,
+              special: bool = False) -> dict:
+    name = ",".join(names or [])
+    copies = copies_for(n, k)
+    x = kgate.activations(m, k, 7 + m, special=special)
+    ws = [kgate.weights(n, k, 100 + i) for i in range(copies)]
+    xq = torch.empty((m, k), dtype=torch.int8, device="cuda")
+    s = torch.empty(m, dtype=torch.float32, device="cuda")
+    y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
+    med, us, meta = timed({arm: arm_fn(arm, x, ws, xq, s, y) for arm in arms}, reps, clock, copies)
+    clocks, per = meta["clocks"], meta["replays_per_item"]
     row = {"layer": name, "m": m, "n": n, "k": k, "copies": copies, "replays_per_item": per, "us_per_call": med,
            "us_all": {a: [round(v, 3) for v in us[a]] for a in arms}, "sm_clock_mhz": clocks,
            **({"exact_over_stock": med["exact"] / med["stock"], "fused_over_stock": med["fused"] / med["stock"],
                "fused_over_exact": med["fused"] / med["exact"]} if set(ARMS) <= set(arms) else {})}
-    del graphs, x, ws, xq, s, y
+    del x, ws, xq, s, y
     torch.cuda.empty_cache()
     return row
 
@@ -159,6 +177,7 @@ def main() -> int:
     ap.add_argument("--skip-gate", action="store_true")
     ap.add_argument("--arms", default=",".join(ARMS), help=f"of {ARMS + PARTS}")
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(kgate.MODELS)}")
+    ap.add_argument("--special-rows", action="store_true", help="time on the gate's edge rows too (default: plain rows)")
     a = ap.parse_args()
     arms = tuple(a.arms.split(","))
     models = tuple(a.models.split(","))
@@ -175,7 +194,7 @@ def main() -> int:
     ms = kgate.MS if a.shapes == "all" else kgate.DECODE_MS
     rows = []
     for n, k, m, names in kgate.shapes_of(models, ms):
-        row = shape_row(n, k, m, a.reps, clock, arms, names)
+        row = shape_row(n, k, m, a.reps, clock, arms, names, a.special_rows)
         rows.append(row)
         print(json.dumps({k: v for k, v in row.items() if k not in ("us_all", "sm_clock_mhz")}), flush=True)
         with open(out / "rows.jsonl", "a") as f:
@@ -190,6 +209,7 @@ def main() -> int:
             step[model][arm] = {"us_per_layer_m32": per_layer, "ms_per_step_m32": spec["layers"] * per_layer / 1e3}
     from vllm.triton_utils import use_tensor_descriptor
     summary = {"device": torch.cuda.get_device_name(), "reps": a.reps, "arms": arms, "models": models,
+               "special_rows": a.special_rows, "configs": {f"{n}x{k}": v for (n, k), v in X.CONFIGS.items()},
                "vllm_use_tensor_descriptor_default": bool(use_tensor_descriptor(None)), "item_ms": ITEM_MS, "decode_step_b32": step,
                "rows": [{k: v for k, v in r.items() if k not in ("us_all", "sm_clock_mhz")} for r in rows]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
