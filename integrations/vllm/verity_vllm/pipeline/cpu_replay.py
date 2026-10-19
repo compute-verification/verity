@@ -317,9 +317,11 @@ def weights_attest(c: dict[str, Any], wc: dict[str, Any], consumed: set[str], wo
 def decide(row: dict[str, Any], ctx: dict[str, Any], wc: dict[str, Any], b: dict[str, Any], consumed: set[str],
            words: dict[str, np.ndarray], extra: Any) -> None:
     """The run's value correspondence and verdict with the replay on the record (in the in-process Commit's component order)."""
+    from verity_vllm.check.cublas_route_pin import stamp
     from verity_vllm.check.verdict import commit_verdict
 
     c = row["commit"]
+    stamp(c)
     vc = c["value_correspondence"]
     comps = vc["components"]
     for k in ("weights_pin", "replay"):

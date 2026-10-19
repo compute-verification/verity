@@ -18,7 +18,7 @@ Program's Definition on nearly every word and its Commit passed.
 
 Now each rank records what decides its cuBLAS routes (`engine_of_record.cublas`: the device, torch, the mapped cuBLAS, the
 reduced-precision flags, the preferred backend, the workspace variables), and the TP verdict refuses a rank whose Program binds a
-family only the pin binds unless those are the pin's scan's (`c2.route_pin_gate`, `bf16_gemm_check.ROUTE_CONDITIONS`), an
+family only the pin binds unless those are the pin's scan's (`check.cublas_route_pin`, `bf16_gemm_check.ROUTE_CONDITIONS`), an
 unrecorded fact by name too; and the replay evaluates those families (`kernels.cublas_gemm_rows`).
 
 No engine, no torch: the route is a table, the arithmetic numpy models, the gates pure functions of the record."""
@@ -27,7 +27,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity_vllm.pipeline.tp.c2 import c2_and_pin_gates, replay_gates, route_pin_gate
+from verity_vllm.check.cublas_route_pin import route_pin_gate
+from verity_vllm.pipeline.tp.c2 import c2_and_pin_gates, replay_gates
 from verity_vllm.program.registry import bf16_gemm_check as BC
 
 #: vLLM's batch-invariant cuBLAS configuration on cc 9.0 (determinism/batch_invariant.py), the capture's `split_k_off` variant

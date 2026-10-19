@@ -131,6 +131,7 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "identity_check", "where": "runs.jsonl commit.extra", "new": "program_source_identity/identity_layout (X-03)"},
     {"old": "classes", "where": "runs.jsonl commit", "new": "required_value_coverage/required_classes (the declaration read back)"},
     {"old": "sampled_replay", "where": "runs.jsonl commit; commit/sampled_replay_p*.json", "new": "local_replay/sampled_replay, /seed_of_record, /population_gaps, /population_scope"},
+    {"old": "cublas_route_pin", "where": "runs.jsonl commit (check.cublas_route_pin.stamp)", "new": "local_replay/cublas_route_pin"},
     {"old": "boundary_linkage", "where": "runs.jsonl commit; commit/sampled_replay_p*.json", "new": "boundary_linkage/ordered_linkage"},
     {"old": "linkage", "where": "prose", "new": "boundary_linkage"},
     {"old": "weights_pin", "where": "runs.jsonl commit", "new": "checkpoint_binding/weights_of_record"},
@@ -391,6 +392,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     wp = commit.get("weights_pin")
     if isinstance(wp, dict) and wp.get("result") is False:
         return False, f"weights of record: {wp.get('why') or 'served weights differ from the checkpoint of record'}"
+    rp = commit.get("cublas_route_pin")
+    if isinstance(rp, dict) and rp.get("ok") is False:
+        return False, rp.get("why") or "cuBLAS route pin: served off the pin's scan's conditions"
     if isinstance(bnd, dict) and (bnd.get("population") or bnd.get("coverage")):
         _oc = oc if isinstance(oc, dict) else ((vc.get("oracle_compare") if isinstance(vc, dict) else None) or
                                                (_comps.get("oracle_compare") if isinstance(_comps, dict) else None))

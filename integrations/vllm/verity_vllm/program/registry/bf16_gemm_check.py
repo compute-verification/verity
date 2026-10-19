@@ -18,7 +18,11 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
   `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
   under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
-  TP Commit's verdict refuses for a rank that binds one of the `ROUTE_DEFINITIONS` (`pipeline.tp.c2.route_pin_gate`).
+  Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
+  (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
+  reruns under it, on an H200: `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models glm53,dsv4-pro`
+  with `--only linear,f32out --scan-m 1:2048`, then `--only router --scan-m 17:2048`; its cases' `routes`, its `switch` facts and the
+  device's are then copied into `cublas_routes.json` (no tool writes it).
 
 NaN payloads are not part of any comparison (`mla_check._words_equal`): the GPU's FFMA and FADD write 0x7FFFFFFF, numpy keeps
 an operand's.

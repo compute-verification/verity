@@ -1,6 +1,6 @@
 """A TP Commit's C2 of record per rank, and the Commit's side of a deferred replay: the gates that put a rank's sampled replay, boundary
-linkage, population reconciliation, cuBLAS route pin and weights pin into its verdict (`replay_gates`, `route_pin_gate`, `pin_gate`,
-`c2_and_pin_gates`), the components
+linkage, population reconciliation, cuBLAS route pin and weights pin into its verdict (`replay_gates`, `pin_gate`, `c2_and_pin_gates`;
+the route pin is `check.cublas_route_pin.route_pin_gate`, a TP1 run's too), the components
 folded over the ranks (`sampled_replay_components`, `query_population_component`, `annotate_value_correspondence`), and `seal`, which
 seals every rank's replay bundle of a deferred Commit (`tp-commit --replay-deferred`) and writes `replay_deferred.json`.  `pipeline.tp.commit`
 decides in place with them, `pipeline.tp.commit_replay` from the ranks' replays on CPU.  A Commit defers only at a world where deferral
@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline import replay_bundle as RB
 
 DEFERRED = "replay_deferred.json"
@@ -83,34 +84,6 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
         block["fail"] = f"NOT reconciled against Q(P) with a required manifest supplied: {why}"
         return block, f"C2 population (rank {rank}, F-r17b-38): {block['fail']}"
     return block, None
-
-
-def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | None]:
-    """The cuBLAS route pin of THIS rank's Program against the process that served it.  A Program that binds a Definition only the pin
-    binds (`bf16_gemm_check.ROUTE_DEFINITIONS`, in the replay's population or its unreplayable families) computes cuBLAS's routes as the
-    pin's scan saw them, which hold only under the scan's conditions (`ROUTE_CONDITIONS`); the rank's facts of record
-    (`engine_of_record.cublas`, measured in its process) must be those, else FAIL naming each departure, an unrecorded fact one too.
-    Returns (record block | None when no such family is bound, FAIL text | None)."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-
-    sr = sr if isinstance(sr, dict) else {}
-    fams: dict[str, int] = {}
-    for f, n in (((sr.get("population") or {}).get("by_family")) or {}).items():
-        fams[f] = fams.get(f, 0) + int(n or 0)
-    for u in sr.get("unreplayable") or []:
-        f = str(u.get("family")).split(" (")[0]
-        fams[f] = fams.get(f, 0) + int(u.get("n") or 0)
-    bound = BC.route_bound(fams)
-    if not bound:
-        return None, None
-    departures = BC.route_departures(sr.get("engine_of_record"))
-    block = {"rule": "a rank whose Program binds bf16_gemm_check.ROUTE_DEFINITIONS served under bf16_gemm_check.ROUTE_CONDITIONS (the route "
-                     "pin's scan), every fact measured in the rank's process; a departure or an unrecorded fact = the rank FAILs by name",
-             "rank": int(rank), "families": bound, "pin": BC.CUBLAS_ROUTES["run"], "departures": departures, "ok": not departures}
-    if not departures:
-        return block, None
-    named = ", ".join(f"{f} x{n}" for f, n in bound.items())
-    return block, f"cuBLAS route pin (rank {rank}): {named} bound at the routes of {BC.CUBLAS_ROUTES['run']}, served otherwise: {'; '.join(departures)}"
 
 
 def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, *, rank: int, replay_on: bool, required: bool) -> tuple[bool, str | None]:
