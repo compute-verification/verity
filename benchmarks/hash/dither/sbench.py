@@ -31,6 +31,8 @@ Arms:
                  (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
                  tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
                  its tokens are not exact's (reported, not gated)
+    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate (#2684's
+                 `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -152,14 +154,18 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             llm.dither_stats = win.stats
             llm.dither_win = win
         return llm
-    if arm == "dither-1s":
+    if arm in ("dither-1s", "dither-1s-credit"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         import dither_one as DO
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         a = engine_args(gpu_mem)
-        DO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], gate=True)
+        credit = os.environ["DITHER_CREDIT_GATE"] if arm == "dither-1s-credit" else None
+        if credit:
+            a["enforce_eager"] = True
+        DO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], gate=True,
+                 credit=credit)
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         llm.dither_stats, llm.dither_win, llm.dither_mod = win.stats, win, DO
@@ -167,8 +173,9 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     raise ValueError(arm)
 
 
-REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact"}
-TOKENS_GATED = {"dither-1s": False}   # an arm that serves another value: its tokens are compared, not required equal
+REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact"}
+# an arm that serves another value: its tokens are compared, not required equal
+TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False}
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
@@ -243,6 +250,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     with torch.inference_mode():
                         res["check"], res["control"], res["fault"] = (mod.check(win, lib, n) for n in mod.CAPTURES)
                     res["verdict"] = mod.gate_verdict(res["check"], res["control"], res["fault"])
+                    if getattr(mod, "CG", None) is not None:
+                        res["credit_2684"] = mod.credit_doc()
                 res["check_s"] = round(time.perf_counter() - t0, 1)
             conn.send(res)
         elif cmd["op"] == "sat":

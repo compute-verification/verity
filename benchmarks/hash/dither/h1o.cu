@@ -41,6 +41,7 @@ struct H1OStep {
 struct OutEpi {
   static constexpr bool ON = true;
   int* z;
+  int* zo;  // [M, N] s32: the op's z output (rows < M of the slot's z), what the credit gate reads beside y
   __nv_bfloat16* y;
   __nv_bfloat16* ydump;
   const float* sa;
@@ -57,8 +58,11 @@ struct OutEpi {
     }
     if (row < M) {
       uint4* yr = reinterpret_cast<uint4*>(y + (long long)row * n + 32 * cj);
+      uint4* zr = reinterpret_cast<uint4*>(zo + (long long)row * n + 32 * cj);
 #pragma unroll
       for (int i = 0; i < 4; ++i) yr[i] = make_uint4(0, 0, 0, 0);
+#pragma unroll
+      for (int i = 0; i < 8; ++i) zr[i] = make_uint4(0, 0, 0, 0);
     }
   }
   __device__ void fault(int u, int lane, int s, int (&acc)[2][4][4]) const {
@@ -78,6 +82,7 @@ struct OutEpi {
           const int z0 = acc[mi][ni][2 * eh], z1 = acc[mi][ni][2 * eh + 1];
           if (!(flags & F_NW_TILES)) *reinterpret_cast<int2*>(z + (long long)row * n + col) = make_int2(z0, z1);
           if (row < M) {
+            *reinterpret_cast<int2*>(zo + (long long)row * n + col) = make_int2(z0, z1);
             __nv_bfloat162 yv;
             yv.x = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z0), s_a), sw[col]));
             yv.y = __float2bfloat16_rn(__fmul_rn(__fmul_rn(__int2float_rn(z1), s_a), sw[col + 1]));
@@ -107,7 +112,7 @@ template <int NW>
 __global__ void __launch_bounds__(32 * NW, 3) h1o_units_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                           const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                           const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
-                                                          u64 nt0, u64 nt1, u64 nt2) {
+                                                          int* __restrict__ zo, u64 nt0, u64 nt1, u64 nt2) {
   __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
   __shared__ u64 sd[NW][24];
   __shared__ u32 nzs[NW][2][32 * NZ];
@@ -119,7 +124,7 @@ __global__ void __launch_bounds__(32 * NW, 3) h1o_units_k(const H1O* __restrict_
   if (v >= C.units) return;
   C.a = xq;
   C.lda = F->k;
-  const OutEpi ep{F->z[p], y, F->ydump, sa, sw, F->n, M, st.m, st.flags};
+  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags};
   h1r_unit<2, OutEpi>(C, v, lane, smem[wid][0], smem[wid][1], sd[wid], nzs[wid][0], F->seeds, nt0, nt1, nt2, F->out[p],
                       (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
@@ -187,9 +192,10 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
 
 constexpr int NWO = 4;
 
-// one served call: xq [M, K] s8 and sa [M] f32 (row_quant's), sw [N] f32 (the layer's), y [M, N] bf16 (the call's output);
-// F (the call's entry) and S on the device.  The weights are the call table's.  The A table and the seeds run between
-// the two launches: h1o_slot_launch, then the caller's h1c_build and h1r_launch(version 0), then h1o_units_launch.
+// one served call: xq [M, K] s8 and sa [M] f32 (row_quant's), sw [N] f32 (the layer's), y [M, N] bf16 and zo [M, N] s32
+// (the call's outputs); F (the call's entry) and S on the device.  The weights are the call table's.  The A table and the
+// seeds run between the two launches: h1o_slot_launch, then the caller's h1c_build and h1r_launch(version 0), then
+// h1o_units_launch.
 extern "C" int h1o_slot_launch(const H1O* F, const H1OStep* S, int t, const int8_t* xq, const float* sa, cudaStream_t stream) {
   if (t % 32) return 1;
   h1o_slot_k<<<(unsigned)(t / 4), 128, 0, stream>>>(F, S, xq, sa);
@@ -197,12 +203,12 @@ extern "C" int h1o_slot_launch(const H1O* F, const H1OStep* S, int t, const int8
 }
 
 extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
-                                int M, const float* sw, void* y, cudaStream_t stream) {
+                                int M, const float* sw, void* y, int* zo, cudaStream_t stream) {
   if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0) return 1;
   u64 nt[3];
   tag3("verity/pouw/noise/v1", nt);
   h1o_units_k<NWO><<<(unsigned)((units + NWO - 1) / NWO), 32 * NWO, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y,
-                                                                                nt[0], nt[1], nt[2]);
+                                                                                zo, nt[0], nt[1], nt[2]);
   return (int)cudaGetLastError();
 }
 

@@ -96,7 +96,7 @@ class Window:
         self.o = C.CDLL(h1o_path)
         self.o.h1o_slot_launch.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p]
         self.o.h1o_units_launch.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p,
-                                            C.c_int, C.c_void_p, C.c_void_p, C.c_void_p]
+                                            C.c_int, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
         if self.o.h1o_struct_bytes(0) != C.sizeof(_O) or self.o.h1o_struct_bytes(1) != 16:
             raise RuntimeError("h1o.cu's structs differ from dither_one's")
         self.call_bytes = self.r.lib.h1r_call_bytes()
@@ -175,7 +175,8 @@ class Window:
                           body=4 * n, length=4 * n, lab=("z/", f"/{w}"), out=mid.leaves_addr(2) + 64 * w))
         return {"round": rnd, "mid": mid, "a": c.set(at), "admit": c.set(st), "z": c.set(zt)}
 
-    def launch(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
+    def launch(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+               z: torch.Tensor) -> None:
         n, k = self.nk[w]
         st = torch.cuda.current_stream().cuda_stream
         fw = self.F.data_ptr() + self.fsize * w
@@ -187,7 +188,7 @@ class Window:
                                          self.salt.data_ptr(), self.step_base.data_ptr(), self.plan.seeds.data_ptr(),
                                          self.plan.out.data_ptr(), 0, 0, st)
         rc = rc or self.o.h1o_units_launch(fw, self.S.data_ptr(), self.units[w], n, k, xq.data_ptr(), s_a.data_ptr(),
-                                           int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), st)
+                                           int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(), st)
         if rc:
             raise RuntimeError(f"dither1 call {w} (M={xq.shape[0]}): a launch returned {rc}")
         self.calls += 1
@@ -277,23 +278,49 @@ def _window(dev) -> Window:
     return WIN
 
 
-@torch.library.custom_op(f"{LIB}::one_mm", mutates_args=())
-def one_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int) -> torch.Tensor:
+# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: #2684's trace counts an op without a
+# Python definition as one GEMM, and its two fresh results, z and y, as written by it.
+_LIB = torch.library.Library(LIB, "DEF")
+_LIB.define("one_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int idx) -> (Tensor, Tensor)")
+
+
+def _one_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, idx: int):
+    z = torch.empty((xq.shape[0], w.shape[0]), dtype=torch.int32, device=xq.device)
     y = torch.empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16, device=xq.device)
     if xq.shape[0]:
-        _window(xq.device).launch(idx, xq.contiguous(), s_a.contiguous(), s_w.reshape(-1), y)
-    return y
+        _window(xq.device).launch(idx, xq.contiguous(), s_a.contiguous(), s_w.reshape(-1), y, z)
+    return z, y
 
 
-@one_mm.register_fake
+_LIB.impl("one_mm", _one_mm_cuda, "CUDA")
+
+
+@torch.library.register_fake(f"{LIB}::one_mm")
 def _one_mm_fake(xq, s_a, w, s_w, idx):
-    return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
+    return (xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.int32),
+            xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16))
 
 
-def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = False) -> None:
-    """Every int8-exact linear through ``dither1::one_mm`` (call before the engine is built, in its process)."""
+CREDIT: dict = {}
+CG = None
+
+
+def credit_doc() -> dict:
+    """#2684's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
+    return {"calls": CREDIT.get("calls", 0), "credited": CREDIT.get("credited", 0),
+            "reasons": dict(CREDIT.get("reasons", {})), "kernels": dict(CREDIT.get("kernels", {})),
+            "sample": CREDIT.get("sample", [])}
+
+
+def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = False, credit: str | None = None) -> None:
+    """Every int8-exact linear through ``dither1::one_mm`` (call before the engine is built, in its process).  ``credit``,
+    the path of #2684's `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
+    op's z) is tallied in `CREDIT` (an eager engine: a compiled one never runs `apply` per call)."""
+    from collections import Counter
+
     from verity_vllm.engine import int8_ops
     from verity_vllm.engine import int8_vllm as IV
+    global CG
     CFG.update(t=t, h1c=h1c, h1o=h1o, key=key or os.urandom(64), gate=gate)
     IV.register()
     orig_pw = IV.Int8PlainLinearMethod.process_weights_after_loading
@@ -312,7 +339,33 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
         if x2.shape[0] == 0:
             return x.new_empty(*lead, n)
         xq, s_a = int8_ops.row_quant(x2)
-        return torch.ops.dither1.one_mm(xq, s_a, layer.weight, layer.weight_scale, self.dither_idx).reshape(*lead, n)
+        z, y = torch.ops.dither1.one_mm(xq, s_a, layer.weight, layer.weight_scale, self.dither_idx)
+        if CG is not None:
+            self.dither_z = z
+        return y.reshape(*lead, n)
+
+    if credit:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("credit_gate_2684", credit)
+        CG = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(CG)
+        CREDIT.update(calls=0, credited=0, reasons=Counter(), kernels=Counter(), sample=[])
+        served = apply
+
+        def apply(self, layer, x, bias=None):
+            self.dither_z = None
+            with CG.Trace(self.prefix) as tr:
+                y = served(self, layer, x, bias)
+            v = CG.verdict(tr, y, self.dither_z)
+            CREDIT["calls"] += 1
+            CREDIT["credited"] += int(v["credit"])
+            if v["credit"]:
+                CREDIT["kernels"][v["kernel"]] += 1
+            else:
+                CREDIT["reasons"][v["reason"]] += 1
+            if len(CREDIT["sample"]) < 3:
+                CREDIT["sample"].append(v)
+            return y
 
     IV.Int8PlainLinearMethod.process_weights_after_loading = process_weights_after_loading
     IV.Int8PlainLinearMethod.apply = apply

@@ -21,6 +21,10 @@ done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
 grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -4
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
+# CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
+CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
+git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
+  && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PATH=$(dirname "$PY"):$PATH
