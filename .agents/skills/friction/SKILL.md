@@ -109,6 +109,8 @@ Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (11:11 AM PDT): the lane whose budget line pays for a machine stops it when its work there ends; the idle
+  stop is a backstop (AGENTS.md "Working principles", lane contract §3c).
 - 2026-10-19 (9:37 AM PDT): writing for a person goes in Notion or cites what they can open, never a `note:` id
   (AGENTS.md "Where writing goes", lane contract §5c).
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;

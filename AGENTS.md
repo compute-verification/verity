@@ -317,7 +317,9 @@ your way, fix it at the source if the fix is clearly yours. Record each ruling y
 
 A guard never fails open, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
 results may depend on one. Pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
-`budgets.toml`), and runs preserve their results from the pod.
+`budgets.toml`), and runs preserve their results from the pod. The lane whose budget line pays for a machine owns its
+use, and stops it when its work there ends; `research run --on` starts it again, and infra's idle stop is only a backstop
+(Daniel, 19 Oct).
 
 Never print a secret's value.
 
