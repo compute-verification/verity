@@ -798,10 +798,87 @@ def evaluate(args) -> int:
     return 0
 
 
+# --- pin: the repository's fixtures from one run's out/ ----------------------------------------------------------------------
+
+PIN_SELECTION = (
+    "Selection (deterministic): for each kind, from every asserted family of the run (``specials`` is record-only and left out), "
+    "the families in plan order and in each the candidates in f8_model.candidates order: the first device word of the "
+    "family's recorded mismatches (summary.json ``examples``) that a candidate misses, unless a record already selected for "
+    "that kind refutes it; then the first ``uniform`` records of the family's uniform sample (fixture.json).  Each record "
+    "once.  Every selected word equals sm120_gs32_w26_f133's (the run's 0-mismatch candidate); pin asserts it.  ``c`` is the "
+    "accumulator the first step reads (+0 on enable_input_d = 0 tiles); ``a``/``b`` are 32 codes a step, ``sa``/``sb`` one "
+    "UE8M0 byte a step (kind::mxf8f6f4 only)."
+)
+
+
+def _codes(h: str) -> np.ndarray:
+    return np.frombuffer(bytes.fromhex(h), np.uint8)
+
+
+def replay(rec: dict, cand: "FM.Candidate") -> tuple[int, bool]:
+    """One fixture record under ``cand``: (word, in_domain)."""
+    a, b = _codes(rec["a"])[None, :], _codes(rec["b"])[None, :]
+    sa = _codes(rec["sa"])[None, :] if rec.get("sa") else None
+    sb = _codes(rec["sb"])[None, :] if rec.get("sb") else None
+    w, d = FM.chain(cand, np.array([int(rec["c"], 16)], np.uint32), a, b, sa, sb, a.shape[1] // K_STEP)
+    return int(w[0]), bool(d[0])
+
+
+def pin(args) -> int:
+    src = Path(args.run_out)
+    summary = json.loads((src / "summary.json").read_text())
+    uniform_recs = json.loads((src / "fixture.json").read_text())["records"]
+    capture_doc = json.loads((src / "capture.json").read_text())
+    truth = "sm120_gs32_w26_f133"
+    out: dict[str, list[dict]] = {}
+    for kind, fams in summary["families"].items():
+        kk, fa, fb = KINDS[kind]
+        cands = FM.candidates(fa, fb, kk == 1)
+        chosen: list[dict] = []
+        seen: set[tuple] = set()
+
+        def take(rec: dict, fam: str) -> None:
+            r = {"family": fam, "c": rec["c"].upper(), "a": rec["a"], "b": rec["b"],
+                 "sa": rec["sa"] if kk == 1 else "", "sb": rec["sb"] if kk == 1 else "", "d": rec["d"].upper()}
+            key = (r["c"], r["a"], r["b"], r["sa"], r["sb"])
+            if key in seen:
+                return
+            word, dom = replay(r, cands[truth])
+            assert dom and word == int(r["d"], 16), (kind, r)
+            seen.add(key)
+            chosen.append(r)
+
+        refuted: set[str] = set()
+        for fam, res in fams.items():
+            if fam in RECORD_ONLY:
+                continue
+            for name in cands:
+                if name == truth or name in refuted or not res["examples"].get(name):
+                    continue
+                take(res["examples"][name][0], fam)
+                refuted |= {n for n, c in cands.items() if replay(chosen[-1], c)[0] != int(chosen[-1]["d"], 16)}
+            for rec in [r for r in uniform_recs if r["kind"] == kind and r["family"] == fam][: args.uniform]:
+                take(rec, fam)
+        out[kind] = chosen
+    gpu = (src / "gpu.csv").read_text().strip().splitlines()[-1] if (src / "gpu.csv").exists() else ""
+    nvcc = (src / "nvcc.txt").read_text().strip().splitlines()[-2:] if (src / "nvcc.txt").exists() else []
+    prov = {"run": args.run, "device": f"{capture_doc['identity']['name']} (cc {capture_doc['identity']['cc']})",
+            "nvidia_smi": gpu, "nvcc": " / ".join(nvcc), "host": capture_doc["host"], "seed": summary["plan"]["seed"], "bulk_seed": summary["plan"]["bulk_seed"],
+            "totals": {k: v[truth] for k, v in summary["totals"].items()}, "selection": PIN_SELECTION}
+    doc = {"schema": "verity/tc-capture-sample/v0", "provenance": {**prov, "uniform": args.uniform}, "kinds": out}
+    Path(args.out).write_text(json.dumps(doc, indent=0) + "\n")
+    for kind, recs in out.items():
+        print(kind, len(recs), flush=True)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("gen", "capture", "eval"))
-    ap.add_argument("--scratch", required=True)
+    ap.add_argument("phase", choices=("gen", "capture", "eval", "pin"))
+    ap.add_argument("--scratch")
+    ap.add_argument("--run-out", help="pin: a run's out/ (summary.json, fixture.json, capture.json)")
+    ap.add_argument("--run", help="pin: that run's id")
+    ap.add_argument("--uniform", type=int, default=2, help="pin: uniform records a family")
     ap.add_argument("--out", default=os.environ.get("OUT", "."))
     ap.add_argument("--lib")
     ap.add_argument("--seed", type=int, default=SEED)
@@ -812,7 +889,9 @@ def main(argv=None) -> int:
     ap.add_argument("--bulk-models", default="", help="comma list of extra candidates scored on bulk (sm_120's always is)")
     ap.add_argument("--bulk-all-models", action="store_true")
     args = ap.parse_args(argv)
-    return {"gen": gen, "capture": capture, "eval": evaluate}[args.phase](args)
+    if args.phase != "pin" and not args.scratch:
+        ap.error(f"{args.phase} needs --scratch")
+    return {"gen": gen, "capture": capture, "eval": evaluate, "pin": pin}[args.phase](args)
 
 
 if __name__ == "__main__":

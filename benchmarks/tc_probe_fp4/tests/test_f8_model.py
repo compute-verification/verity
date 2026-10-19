@@ -122,3 +122,23 @@ def test_a_misrouted_kind_fails_its_gate_and_the_others_are_still_captured(tmp_p
                                 bulk_all_models=False)) == 0
     totals = json.loads((out / "summary.json").read_text())["totals"]
     assert set(totals) == {"f8_e4m3"} and totals["f8_e4m3"]["sm120_gs32_w26_f133"]["mismatches"] == 0
+
+
+B200_CAPTURE = HERE / "tests" / "fixtures" / "tc-sm100-f8-2026-10-19.json"
+
+
+@pytest.mark.parametrize("kind", list(S.KINDS))
+def test_b200_capture_records_are_sm120s_step_and_refute_every_other_candidate(kind):
+    """The B200's captured words of every kind (r20261019-081000-ad35, ``f8_sm100.py pin``): sm_120's QMMA step reproduces
+    each, and every other candidate misses one, except the floors a plain kind can't see (any floor <= -126 is its words)."""
+    kk, fa, fb = S.KINDS[kind]
+    records = json.loads(B200_CAPTURE.read_text())["kinds"][kind]
+    cands = FM.candidates(fa, fb, kk == 1)
+    misses = dict.fromkeys(cands, 0)
+    for r in records:
+        for name, cand in cands.items():
+            word, dom = S.replay(r, cand)
+            assert dom, r
+            misses[name] += word != int(r["d"], 16)
+    unrefuted = {name for name, n in misses.items() if n == 0}
+    assert unrefuted == ({"sm120_gs32_w26_f133"} if kk == 1 else {"sm120_gs32_w26_f133", "gs32_w26_f126", "gs32_w26_f149"})
