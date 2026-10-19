@@ -549,7 +549,7 @@ def main() -> int:
     names = [c["name"] for c in isa_escape.CANDIDATES]
     placed = {n: ESCAPE[p].split() for n in names for p in ESCAPE if n.startswith(p)}
     ahead = {p for p in ESCAPE if not any(n.startswith(p) for n in names)}
-    checks.check("every isa_escape.py candidate is placed in classes, and each placement names one or is ESCAPE_AHEAD's",
+    checks.check("every isa_escape.py candidate is placed in classes, each placement naming one or ESCAPE_AHEAD's",
                  len(placed) == len(names) and ahead <= ESCAPE_AHEAD,
                  ", ".join(sorted(set(names) - set(placed)) + sorted(ahead - ESCAPE_AHEAD))
                  or f"{len(placed)} of {len(names)}, {len(ahead)} ahead")
