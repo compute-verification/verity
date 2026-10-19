@@ -383,8 +383,9 @@ def payloads_of(store, j: int) -> bytes:
 class UnitsLink:
     """`audit.RequirementLink` on A7's units: it holds when the units' audit is accepted, every drawn unit's public and ok
     rows open, every witness row is bound to its canonical commitment, and v0's bridge holds the canonical plans and map
-    to the session's own. `mapped` holds of the chain `appends` the map units' writes make (`units_appends`), once every
-    map unit is drawn and proved (`proved`). `epsilon` and `delta` are what the units' draw established (`uncertified`):
+    to the session's own. `mapped` holds of a record whose chain is the one `appends` the map units' writes make
+    (`units_appends`), once every map unit is drawn and proved (`proved`); it doesn't yet check the record's per-pass
+    heads and stale bounds (`audit.WindowRecord.heads`, `stale`). `epsilon` and `delta` are what the units' draw established (`uncertified`):
     the most share of the linked credit the wrong units it allows can carry, at the audit's delta; until they are set,
     the link credits nothing."""
     holds: bool
@@ -398,8 +399,8 @@ class UnitsLink:
     def read_bits(self, step: int) -> int:
         return self.req.read_bits(step)
 
-    def mapped(self, appends: bytes | None) -> bool:
-        return self.holds and self.proved and appends == self.appends
+    def mapped(self, record: audit.Record) -> bool:
+        return self.holds and self.proved and record.appends == self.appends
 
 
 def units_appends(m: dict, pub_args: list[dict], registration: bytes) -> bytes | None:
@@ -744,7 +745,7 @@ def main() -> int:
     link = UnitsLink(holds=units_ok and session_ok and bridge["ok"] and all(v["ok"] for v in checks.values()), density_bits=VW,
                      req=req, appends=units_appends(map_m, map_m["args"], rs.registration), proved=proved)
     rrec = rs.session.record()
-    mapped = link.mapped(rrec.appends)
+    mapped = link.mapped(rrec)
     common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
     uncert = uncertified(result, rrec, rs.view, store, req, link, common, members)
     if uncert.get("credit_bytes"):
@@ -851,20 +852,21 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     plan_m, map_m = members
     req_steps = req.steps
 
-    # the plan unit's clause: a wrong block in the plan
+    # the plan unit's clause: a wrong block in the plan. The unit asks for exactly the read blocks; the one-sided
+    # `PlanMatches` allows the extra block as filler
     def plan_case(name: str, pick) -> None:
         for s in range(req_steps):
             extra = pick(s)
             if extra is None:
                 continue
             bad = sorted(set(plans[s]) | {extra})
-            assert not RQ.plan_matches(req, layout, bad, RQ.BLOCK_BITS, s)
+            assert RQ.plan_matches(req, layout, bad, RQ.BLOCK_BITS, s)
             args = dict(plan_m["args"][s], count=len(bad), plan=bad + [0] * (sp.P - len(bad)))
             f = _forged(plan_m, s, args)
             rs = remote_session(req, layout, store, plans, salts, extra={s: [extra]})
             br = v0_bridge(rs.view, canons, sp, sm, req_steps)
             neg[name] = {"refused": f["ok_output"] == 0 and f["satisfied"] and not f["opens_to_1"], "step": s, "block": extra,
-                         "unit": f, "plan_matches": False, "honest_canon_bridge_refuses": not br["ok"]}
+                         "unit": f, "plan_matches": True, "honest_canon_bridge_refuses": not br["ok"]}
             return
         neg[name] = {"refused": False, "why": "no step has such a block"}
 
@@ -959,7 +961,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
             why = None
         except ValueError as e:
             why = str(e)
-        neg[name] = {"refused": not link.mapped(r.appends) and r.appends != link.appends and "memory-map unit" in (why or ""),
+        neg[name] = {"refused": not link.mapped(r) and r.appends != link.appends and "memory-map unit" in (why or ""),
                      "session_accepted": True, "chain_is_the_units'": r.appends == link.appends, "ledger": why}
 
     t_last = steps_w[-1]
@@ -977,8 +979,8 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     same = rs.accepted and rs.session.record().appends == link.appends
     neg["append-before-its-production-step (v0 bridge)"] = {
         "refused": rs.accepted and not br["ok"], "step": t_early, "detail": br["detail"],
-        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: the record "
-        "carries no per-pass head, so under zero knowledge this needs the remote audit's record to carry each pass's"}
+        "chain_is_the_units'": same, "note": "the chain fixes the appends, not the passes between them: under zero "
+        "knowledge this is `mapped`'s, against the record's per-pass heads (`WindowRecord.heads`)"}
     try:
         audit.ledger(rrec, **common, requirement=replace(link, appends=hashlib.sha512(b"another chain").digest()))
         neg["ledger-on-a-link-whose-units-make-other-appends"] = {"refused": False}
