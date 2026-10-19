@@ -118,23 +118,14 @@ __device__ __forceinline__ void absorb(u32 st[16], const int p[2][4][4], u32* o,
   if (lane == 0 && !nowrite) *reinterpret_cast<uint2*>(o + 2 * s) = make_uint2(wy, wz);
 }
 
-// the seeds of every live unit: seeds[(seed0 + u) * 2 + kind] (8 words), kind 0 seed_j, 1 σ_R
-extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncalls, const u64* __restrict__ salt,
-                                     const u64* __restrict__ step_base, u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2,
-                                     u64* __restrict__ seeds) {
-  const int c = blockIdx.y;
-  if (c >= ncalls) return;
-  const H1Call C = calls[c];
-  const int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= 2 * C.units) return;
-  const int u = i >> 1, kind = i & 1;
-  if (!C.live[u / C.ncb]) return;
-  const u64 p = C.base + (step_base ? *step_base : 0ULL) + u;
-  u64 w[16], s[8];
+// the seed at position p under tag (t0, t1, t2): SHA-512 of the 224-byte message, position XORed into every word
+__device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __restrict__ salt, u64 t0, u64 t1, u64 t2,
+                                          u64 s[8]) {
+  u64 w[16];
   w[0] = p;
-  w[1] = (kind ? rt0 : st0) ^ p;
-  w[2] = (kind ? rt1 : st1) ^ p;
-  w[3] = (kind ? rt2 : st2) ^ p;
+  w[1] = t0 ^ p;
+  w[2] = t1 ^ p;
+  w[3] = t2 ^ p;
 #pragma unroll
   for (int j = 0; j < 8; ++j) w[4 + j] = salt[j] ^ p;
 #pragma unroll
@@ -151,6 +142,21 @@ extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncall
   w[14] = 0;
   w[15] = 224 * 8;
   sh::sha512_compress(s, w);
+}
+
+// the seeds of every live unit: seeds[(seed0 + u) * 2 + kind] (8 words), kind 0 seed_j, 1 σ_R
+extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncalls, const u64* __restrict__ salt,
+                                     const u64* __restrict__ step_base, u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2,
+                                     u64* __restrict__ seeds) {
+  const int c = blockIdx.y;
+  if (c >= ncalls) return;
+  const H1Call C = calls[c];
+  const int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= 2 * C.units) return;
+  const int u = i >> 1, kind = i & 1;
+  if (!C.live[u / C.ncb]) return;
+  u64 s[8];
+  unit_seed(C, C.base + (step_base ? *step_base : 0ULL) + u, salt, kind ? rt0 : st0, kind ? rt1 : st1, kind ? rt2 : st2, s);
   u64* o = seeds + ((long long)(C.seed0 + u) * 2 + kind) * 8;
 #pragma unroll
   for (int j = 0; j < 8; ++j) o[j] = s[j];
@@ -231,6 +237,7 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
 // NoEpi: the receipts alone.
 struct NoEpi {
   static constexpr bool ON = false;
+  static constexpr bool SEEDS = false;  // with SEEDS, lanes 0 and 1 derive the unit's seed_j and σ_R (E::seed), not read them
   __device__ bool a_ok(int) const { return true; }
   __device__ void dead(int, int, int) const {}
   __device__ void fault(int, int, int, int (&)[2][4][4]) const {}
@@ -277,7 +284,11 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
     return;
   }
   const int g = lane >> 2, q = lane & 3;
-  if (lane < 16) sdw[lane] = seeds[(long long)(C.seed0 + u) * 16 + lane];
+  if constexpr (E::SEEDS) {
+    if (lane < 2) ep.seed(C, u, lane, sdw + 8 * lane);
+  } else if (lane < 16) {
+    sdw[lane] = seeds[(long long)(C.seed0 + u) * 16 + lane];
+  }
   __syncwarp();
   const u64* sj = sdw;
   const u64* sr = sdw + 8;

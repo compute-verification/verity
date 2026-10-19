@@ -4,15 +4,14 @@
 // whose words are receipted are the MMAs that serve: no other product of A and B is computed.  wb⁺ = [B + c + U > 127] and
 // wb⁻ = [B + c + U < -128] come from B and the noise in the unit (never an input), so z = X (B + c)^T exactly for every
 // int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the window's
-// salt and root(A_j), root(B_j) (`h1r_seeds`, the 17 Oct seeded regime), so a call needs its A table's root before its
-// units and nothing from a later round.  A served call is, on the caller's stream, plain launches into caller-owned
+// salt and root(A_j), root(B_j) (`unit_seed`, the 17 Oct seeded regime), so a call needs its A table's root before its
+// units and nothing from a later round.  A served call is two plain launches on the caller's stream into caller-owned
 // buffers, the step read from the device (`H1OStep`), so a CUDA graph captured once serves every step:
-//   h1o_slot     a warp a slot row: the call's A slot rows < m (xq's bytes), rows >= m zero, and their scales (0 above m)
-//   (h1c)        the A table of the slot, its root where the call's seeds read it (`h1c_build` on that one table)
-//   h1r_seeds    the call's units' seed_j and σ_R
-//   h1o_units    a warp a unit (`h1r_unit<2, OutEpi>`): the receipt, then z and y of the unit's cells; A rows >= m read as
-//                the canonical empty row (zero); a dead unit (its row block holds no admitted row) writes zero receipts
-//                and zero z and y
+//   (h1c_a_call) the call's A slot rows (rows < m xq's bytes and scales, rows >= m the canonical empty row) and their
+//                table, its root where the units' seeds read it (h1c.cu; its row-independent parts once a step)
+//   h1o_units    a warp a unit (`h1r_unit<2, OutEpi>`): its seed_j and σ_R, the receipt, then z and y of the unit's cells;
+//                A rows >= m read as the canonical empty row (zero); a dead unit (its row block holds no admitted row)
+//                writes zero receipts and zero z and y
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
 // and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
@@ -45,6 +44,7 @@ struct H1OStep {
 
 struct OutEpi {
   static constexpr bool ON = true;
+  static constexpr bool SEEDS = true;
   int* z;
   int* zo;  // [M, N] s32: the op's z output (rows < M of the slot's z), what the credit gate reads beside y
   __nv_bfloat16* y;
@@ -53,8 +53,17 @@ struct OutEpi {
   const float* sw;
   int n, M, m, flags;
   uint8_t* wbs;  // the warp's wb operand, 32 * XS bytes of shared memory
+  const u64* salt;       // the window's salt (8 words)
+  const u64* step_base;  // the step's first position
+  u64 st0, st1, st2, rt0, rt1, rt2;  // the seed and receipt tags
 
   __device__ bool a_ok(int row) const { return row < m; }
+  __device__ void seed(const H1Call& C, int u, int kind, u64* o) const {
+    u64 s[8];
+    unit_seed(C, C.base + *step_base + u, salt, kind ? rt0 : st0, kind ? rt1 : st1, kind ? rt2 : st2, s);
+#pragma unroll
+    for (int j = 0; j < 8; ++j) o[j] = s[j];
+  }
   __device__ void wb_fault(int u, int lane, int s, u32 (&P)[8]) const {
     if ((flags & F_FAULT_WB) && u == 0 && lane == 0 && s == 0) P[0] ^= 0x80u;
   }
@@ -103,25 +112,13 @@ struct OutEpi {
   }
 };
 
-__global__ void h1o_slot_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S, const int8_t* __restrict__ xq,
-                           const float* __restrict__ sa) {
-  const H1OStep st = *S;
-  if (st.flags & F_NW_TILES) return;
-  const int lane = threadIdx.x & 31, row = blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5);
-  const int T = F->t, K = F->k, p = st.parity;
-  if (row >= T) return;
-  const bool alive = row < st.m;
-  uint4* dst = reinterpret_cast<uint4*>(F->slot[p] + (long long)row * K);
-  const uint4* src = reinterpret_cast<const uint4*>(xq + (long long)(alive ? row : 0) * K);
-  for (int i = lane; i < K / 16; i += 32) dst[i] = alive ? src[i] : make_uint4(0, 0, 0, 0);
-  if (lane == 0) F->scale[p][row] = alive ? sa[row] : 0.0f;
-}
-
 template <int NW>
 __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                           const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                           const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
-                                                          int* __restrict__ zo, u64 nt0, u64 nt1, u64 nt2) {
+                                                          int* __restrict__ zo, const u64* __restrict__ salt,
+                                                          const u64* __restrict__ step_base, u64 nt0, u64 nt1, u64 nt2,
+                                                          u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2) {
   __shared__ __align__(16) uint8_t smem[NW][2][32 * XS];
   __shared__ __align__(16) uint8_t wbsm[NW][32 * XS];
   __shared__ u64 sd[NW][24];
@@ -134,7 +131,8 @@ __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict_
   if (v >= C.units) return;
   C.a = xq;
   C.lda = F->k;
-  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, wbsm[wid]};
+  const OutEpi ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, wbsm[wid], salt, step_base,
+                  st0, st1, st2, rt0, rt1, rt2};
   h1r_unit<2, OutEpi>(C, v, lane, smem[wid][0], smem[wid][1], sd[wid], nzs[wid][0], F->seeds, nt0, nt1, nt2, F->out[p],
                       (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
@@ -221,22 +219,19 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
 constexpr int NWO = 4;
 
 // one served call: xq [M, K] s8 and sa [M] f32 (row_quant's), sw [N] f32 (the layer's), y [M, N] bf16 and zo [M, N] s32
-// (the call's outputs); F (the call's entry) and S on the device.  The weights are the call table's.  The A table and the
-// seeds run between the two launches: h1o_slot_launch, then the caller's h1c_build and h1r_launch(version 0), then
-// h1o_units_launch.
-extern "C" int h1o_slot_launch(const H1O* F, const H1OStep* S, int t, const int8_t* xq, const float* sa, cudaStream_t stream) {
-  if (t % 32) return 1;
-  h1o_slot_k<<<(unsigned)(t / 4), 128, 0, stream>>>(F, S, xq, sa);
-  return (int)cudaGetLastError();
-}
-
+// (the call's outputs); F (the call's entry), S, the window's salt and the step's base position on the device.  The
+// weights are the call table's.  The caller's h1c_a_call (the slot and its A table) runs first.
 extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
-                                int M, const float* sw, void* y, int* zo, cudaStream_t stream) {
-  if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0) return 1;
-  u64 nt[3];
+                                int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
+                                cudaStream_t stream) {
+  if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base) return 1;
+  u64 nt[3], st[3], rt[3];
   tag3("verity/pouw/noise/v1", nt);
-  h1o_units_k<NWO><<<(unsigned)((units + NWO - 1) / NWO), 32 * NWO, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y,
-                                                                                zo, nt[0], nt[1], nt[2]);
+  tag3("verity/pouw/seed/v2", st);
+  tag3("verity/pouw/receipt/v1", rt);
+  h1o_units_k<NWO><<<(unsigned)((units + NWO - 1) / NWO), 32 * NWO, 0, stream>>>(
+      F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base, nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1],
+      rt[2]);
   return (int)cudaGetLastError();
 }
 

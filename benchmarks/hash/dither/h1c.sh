@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# h1c.cu built for sm_120a on the CPU, then h1cgate.py on one leased GPU for at most 25 minutes: the served window's tables
-# on a full step against commit.py, then their timing.  Extra arguments go to h1cgate.py.
+# h1c.cu built for sm_120a on the CPU, then h1cgate.py (or H1C_GATE, e.g. h1agate.py: the served calls' A tables) on one
+# leased GPU for at most 25 minutes: the served window's tables on a full step against commit.py, then their timing.  Extra
+# arguments go to the gate.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/h1c.sh
 set -uo pipefail
@@ -18,7 +19,8 @@ grep -A2 "h1c_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PYTHONPATH=$ROOT:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 echo "h1c: asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --max-min 25 -- timeout 1450 "$PY" benchmarks/hash/dither/h1cgate.py --lib "$S/libh1c.so" --out "$OUT" "$@"
+gpu-lease 1 --wait --max-min 25 -- timeout 1450 "$PY" "benchmarks/hash/dither/${H1C_GATE:-h1cgate.py}" --lib "$S/libh1c.so" \
+  --out "$OUT" "$@"
 rc=$?
 echo "h1c: exited $rc at $(date -u +%H:%M:%SZ)"
 exit "$rc"

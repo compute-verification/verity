@@ -10,10 +10,12 @@ call commits its A table on the device before its units and nothing waits on a l
     DO.hook(llm)
 
 The window: its B tables at install, then one live round whose coin gives the epoch salt (`h1tile.live_salt` of the
-round over the B roots).  A linear call (`dither1::one_mm`), on the forward's stream: its A slot (`h1o_slot`), its A table
-(`h1c`, the root where its seeds read it), its seeds (`h1r_seeds`), its units (`h1o_units`: receipts, z, y).  After step s's
-forward: its admit and z tables, the a-step, admit-step and z-step trees, the round over them, and the receipt trees,
-then the round root recorded (`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
+round over the B roots).  Before step s's forward, the A tables' parts that read the step but no row (`h1c_a_step`:
+domains, salts, prefixes, and the leaves and nodes over rows >= m alone).  A linear call (`dither1::one_mm`), on the
+forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root where its seeds read it), then its units
+(`h1o_units`: each unit's seeds, receipt, z and y).  After step s's forward: its admit and z tables, the a-step,
+admit-step and z-step trees, the round over them, and the receipt trees, then the round root recorded
+(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).
 
 The served value is the dithered product z = X (B + c)^T, exact for every int8 B, with X the int8 A + b the MMA reads (it
 wraps where A = 127 and b = 1), so y is not today's served y (`gate` measures how far) and the tokens are not the exact
@@ -82,6 +84,13 @@ class Window:
                                 for w, (n, k) in enumerate(self.nk)])
         self.c.build(self.bset, self.step0)
         self.pre = self._pre_sets()
+        a = self.pre["a"]
+        self.awords = self.c.lib.h1c_a_words(t)
+        self.apre = torch.zeros(L * self.awords, dtype=torch.int64, device=dev)
+        rc = self.c.lib.h1c_a_init(C.addressof(a.host), a.dev.data_ptr(), L, self.apre.data_ptr(), self.awords,
+                                   torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_a_init returned {rc}")
         self.r = H1R(h1o_path)
         self.plan = self.r.plan([Call(self.slot[w], self.wt[w], self.offs[w], self.pre["mid"].leaves_addr(0) + 64 * w,
                                       self.live, root_b=self.bset.roots.data_ptr() + 64 * w) for w in range(L)])
@@ -95,9 +104,9 @@ class Window:
                           lab=("r/", f"/{w}")))
         self.rset = self.c.set(rt)
         self.o = C.CDLL(h1o_path)
-        self.o.h1o_slot_launch.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_void_p]
         self.o.h1o_units_launch.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p,
-                                            C.c_int, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
+                                            C.c_int, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p,
+                                            C.c_void_p]
         if self.o.h1o_struct_bytes(0) != C.sizeof(_O) or self.o.h1o_struct_bytes(1) != 16:
             raise RuntimeError("h1o.cu's structs differ from dither_one's")
         self.call_bytes = self.r.lib.h1r_call_bytes()
@@ -117,7 +126,6 @@ class Window:
         self.fsize = C.sizeof(_O)
         self.S = torch.zeros(4, dtype=torch.int32, device=dev)
         self.units = [self.plan.offs[w][1] for w in range(L)]
-        self.ks1 = [(C.c_int * 1)(k) for _, k in self.nk]
         self.salt = torch.zeros(8, dtype=torch.int64, device=dev)
         self.step_base = torch.zeros(1, dtype=torch.int64, device=dev)
         self.stepv = torch.zeros(2, dtype=torch.int32, device=dev)
@@ -181,15 +189,13 @@ class Window:
         n, k = self.nk[w]
         st = torch.cuda.current_stream().cuda_stream
         fw = self.F.data_ptr() + self.fsize * w
-        a = self.pre["a"]
-        rc = self.o.h1o_slot_launch(fw, self.S.data_ptr(), self.t, xq.data_ptr(), s_a.data_ptr(), st)
-        rc = rc or self.c.lib.h1c_build(C.addressof(a.host) + self.tab_bytes * w, a.dev.data_ptr() + self.tab_bytes * w, 1,
-                                        self.stepv.data_ptr(), self.c.btab.data_ptr(), 1, st)
-        rc = rc or self.r.lib.h1r_launch(self.plan.table.data_ptr() + self.call_bytes * w, 1, self.units[w], self.ks1[w],
-                                         self.salt.data_ptr(), self.step_base.data_ptr(), self.plan.seeds.data_ptr(),
-                                         self.plan.out.data_ptr(), 0, 0, st)
+        a, tb = self.pre["a"], self.tab_bytes * w
+        rc = self.c.lib.h1c_a_call(C.addressof(a.host) + tb, a.dev.data_ptr() + tb, self.apre.data_ptr() + 8 * self.awords * w,
+                                   self.S.data_ptr(), xq.data_ptr(), s_a.data_ptr(), self.slot[w].data_ptr(),
+                                   self.scale[w].data_ptr(), k, st)
         rc = rc or self.o.h1o_units_launch(fw, self.S.data_ptr(), self.units[w], n, k, xq.data_ptr(), s_a.data_ptr(),
-                                           int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(), st)
+                                           int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(), self.salt.data_ptr(),
+                                           self.step_base.data_ptr(), st)
         if rc:
             raise RuntimeError(f"dither1 call {w} (M={xq.shape[0]}): a launch returned {rc}")
         self.calls += 1
@@ -209,7 +215,7 @@ class Window:
             self.flags = (F_DUMP | ((F_NW_TILES | F_NW_UNITS) if name == "control" else 0) | (F_FAULT if name == "fault" else 0)
                           | (F_FAULT_WB if name == "fault_wb" else 0))
             self._poison(self.slot + self.scale + self.z + list(self.ydump or [])
-                         + [self.plan.out, self.plan.seeds, self.pre["mid"].level])
+                         + [self.plan.out, self.plan.seeds, self.pre["mid"].level, self.pre["a"].level])
             self.caps[name] = {"s": self.s, "m": m}
         t, s = self.t, self.s
         bits = np.arange(t) < m
@@ -218,6 +224,11 @@ class Window:
         self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
         self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+        a = self.pre["a"]
+        rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
+                                   self.c.btab.data_ptr(), self.S.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_a_step returned {rc}")
         if self.cap:
             torch.cuda.synchronize()
         self.t_before = time.perf_counter()
