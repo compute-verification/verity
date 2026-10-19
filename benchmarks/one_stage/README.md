@@ -21,6 +21,10 @@ negatives.
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
   unproved can carry and its δ the draw's.
+- `plan_shards.py`: the sharded plan unit (`PlanShard_v1`) on a recorded remote session (vllm's `remote_session.json` and the
+  remote verifier's `verifier.json`): each pass's plan cut into the store's shards, every instance held to the unit's
+  reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in M0's block. A CPU job; it
+  builds nothing.
 - `zk_cost.sh`: C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job on vy-nebius-1, or a `--preemptible` one on vy-nebius-2). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
