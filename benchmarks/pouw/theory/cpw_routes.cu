@@ -23,10 +23,12 @@
 //     L1. The lane keeps the two IMADs and the rotate-add;
 //   9 foldmem at a block (`cpwb`): mode 8 with the block's slot (uniform addresses), thread 0 issuing both bulk XORs
 //     for every warp of the block and the block's barrier in place of the warp's, so the bulk ops' uniform glue is
-//     paid once a block.
+//     paid once a block;
+//   10 foldmem at a 16-warp block (`cpwx`): mode 9 at 4 NT threads, its slots in 80 KB of dynamic shared memory, so
+//     the glue is paid once for 16 warps.
 // `main` runs on the device it finds: bitexact (one warp, 64 sets, every final state and every checkpoint against the
-// host), then tp at 1, 2, 4 warps a SMSP and at full occupancy: SMSP-cycles a warp-set (clock64 a block, max over
-// blocks), 8 units a warp-set.
+// host; mode 10 one whole block, every thread's final state), then tp at 1, 2, 4 warps a SMSP and at full occupancy:
+// SMSP-cycles a warp-set (clock64 a block, max over blocks), 8 units a warp-set.
 #include <stdint.h>
 #include <stdio.h>
 
@@ -348,6 +350,53 @@ __global__ void __launch_bounds__(NT) cpwb(const uint32_t *st, const uint32_t *W
   if (tid == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
+// mode 10; `cp` holds each block's BT NCH-word y slot, and the launch brings 5 BT NCH words of shared memory
+template <int MODE>
+__global__ void __launch_bounds__(4 * NT) cpwx(const uint32_t *st, const uint32_t *W, uint32_t *out, uint32_t *cp,
+                                               long long *cyc, int sets, uint32_t one) {
+  static_assert(MODE == 10, "cpwx is mode 10");
+  constexpr int BT = 4 * NT;
+  extern __shared__ __align__(128) uint32_t smem[];
+  const int tid = threadIdx.x, idx = blockIdx.x * blockDim.x + tid;
+  const int src = idx & 1023;
+  uint32_t *sd = smem, *sk = smem + BT * NCH;
+  uint32_t y[NCH], z[NCH], d[8][4];
+#pragma unroll
+  for (int j = 0; j < NCH; ++j) {
+    y[j] = st[src * 16 + j];
+    z[j] = st[src * 16 + NCH + j];
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i)
+#pragma unroll
+    for (int e = 0; e < 4; ++e) d[i][e] = W[src * 32 + 4 * i + e];
+  for (int i = tid; i < 4 * BT * NCH; i += blockDim.x) sk[i] = KK(2 * (i / (BT * NCH)) + (i % NCH) / 4);
+  asm volatile("fence.proxy.async;" ::: "memory");
+  uint32_t *gb = cp + (size_t)blockIdx.x * BT * NCH;
+  const uint32_t bytes = blockDim.x * NCH * 4u;
+  const uint32_t sdb = (uint32_t)__cvta_generic_to_shared(sd);
+  const uint32_t skb = (uint32_t)__cvta_generic_to_shared(sk);
+  __syncthreads();
+  long long t0 = clock64();
+#pragma unroll 1
+  for (int s = 0; s < sets; ++s) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) imma(d[i], one, one);
+    tripb<0>(y, z, d, gb, sdb, skb, bytes, tid);
+    tripb<1>(y, z, d, gb, sdb, skb + 4u * BT * NCH, bytes, tid);
+    tripb<2>(y, z, d, gb, sdb, skb + 8u * BT * NCH, bytes, tid);
+    tripb<3>(y, z, d, gb, sdb, skb + 12u * BT * NCH, bytes, tid);
+  }
+  __syncthreads();
+  long long t1 = clock64();
+#pragma unroll
+  for (int j = 0; j < NCH; ++j) {
+    out[idx * 16 + j] = y[j];
+    out[idx * 16 + NCH + j] = z[j];
+  }
+  if (tid == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
 // the device pass sees no host code, so each mode is instantiated here
 #define CPW_INST(M) \
   template __global__ void cpw<M>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
@@ -361,6 +410,7 @@ CPW_INST(6)
 CPW_INST(7)
 template __global__ void cpwm<8>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
 template __global__ void cpwb<9>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
+template __global__ void cpwx<10>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -373,13 +423,14 @@ static uint32_t h_rotl(uint32_t x, int r) { return (x << r) | (x >> (32 - r)); }
 
 static uint32_t st[1024 * 16], W[1024 * 32];
 
-// one warp's lanes through `sets` sets: final states (lane-major, y then z) and each set's checkpoint (y, z)
-static void ref(int sets, uint32_t *fin, uint32_t *ck) {
-  uint32_t S[32][16];
-  memcpy(S, st, sizeof S);
+// n threads through `sets` sets: final states (thread-major, y then z), and each set's checkpoint (y, z) of the
+// first warp
+static void ref(int sets, int n, uint32_t *fin, uint32_t *ck) {
+  uint32_t(*S)[16] = (uint32_t(*)[16])fin;
+  memcpy(fin, st, (size_t)n * 16 * sizeof(uint32_t));
   for (int s = 0; s < sets; ++s) {
     uint32_t cy = 0, cz = 0;
-    for (int ln = 0; ln < 32; ++ln) {
+    for (int ln = 0; ln < n; ++ln) {
       uint32_t *y = S[ln], *z = S[ln] + NCH;
       for (int t = 0; t < 8; ++t)
         for (int e = 0; e < 4; ++e) {
@@ -389,15 +440,15 @@ static void ref(int sets, uint32_t *fin, uint32_t *ck) {
           y[c] = u * KA(t) + z[c];
           z[c] = h_rotl(u, ROT(t)) + y[c];
         }
-      for (int j = 0; j < NCH; ++j) {
-        cy ^= y[j];
-        cz ^= z[j];
-      }
+      if (ln < 32)
+        for (int j = 0; j < NCH; ++j) {
+          cy ^= y[j];
+          cz ^= z[j];
+        }
     }
     ck[2 * s] = cy;
     ck[2 * s + 1] = cz;
   }
-  memcpy(fin, S, sizeof S);
 }
 
 int main() {
@@ -413,13 +464,22 @@ int main() {
   for (int i = 0; i < 1024 * 16; ++i) st[i] = (uint32_t)rand() * 668265263u ^ (uint32_t)rand();
   for (int i = 0; i < 1024 * 32; ++i) W[i] = (uint32_t)rand() * 2654435761u ^ (uint32_t)rand();
   const int BSETS = CPS, TSETS = 2048;
-  static uint32_t fin[32 * 16], ck[2 * CPS];
-  ref(BSETS, fin, ck);
+  static uint32_t fin[4 * NT * 16], ck[2 * CPS];
+  ref(BSETS, 4 * NT, fin, ck);
 
-  struct { const char *name; Kern k; int mode; } ks[] = {
-      {"cpw_none", cpw<0>, 0},    {"cpw_st128", cpw<1>, 1},   {"cpw_redux16", cpw<2>, 2}, {"cpw_redg32", cpw<3>, 3},
-      {"cpw_atoms32", cpw<4>, 4}, {"cpw_redg16", cpw<5>, 5}, {"cpw_atoms16", cpw<6>, 6}, {"cpw_redux2", cpw<7>, 7},
-      {"cpw_foldmem", cpwm<8>, 8},  {"cpw_foldmem_blk", cpwb<9>, 9},
+  // each mode's block and dynamic shared memory; its bit-exact pass runs one warp, or with `whole` one whole block
+  struct { const char *name; Kern k; int mode, nt, smem; bool whole; } ks[] = {
+      {"cpw_none", cpw<0>, 0, NT, 0, false},
+      {"cpw_st128", cpw<1>, 1, NT, 0, false},
+      {"cpw_redux16", cpw<2>, 2, NT, 0, false},
+      {"cpw_redg32", cpw<3>, 3, NT, 0, false},
+      {"cpw_atoms32", cpw<4>, 4, NT, 0, false},
+      {"cpw_redg16", cpw<5>, 5, NT, 0, false},
+      {"cpw_atoms16", cpw<6>, 6, NT, 0, false},
+      {"cpw_redux2", cpw<7>, 7, NT, 0, false},
+      {"cpw_foldmem", cpwm<8>, 8, NT, 0, false},
+      {"cpw_foldmem_blk", cpwb<9>, 9, NT, 0, false},
+      {"cpw_foldmem_blk16", cpwx<10>, 10, 4 * NT, 5 * 4 * NT * NCH * 4, true},
   };
   const int maxblocks = sms * 32;
   // a warp's 2 CPS checkpoint words, or mode 8's 32 NCH-word y slot
@@ -437,37 +497,40 @@ int main() {
   const uint32_t one = 0x01010101u;
   int all = 1;
   for (auto &e : ks) {
-    static uint32_t out[32 * 16], cpo[2 * CPS];
+    static uint32_t out[4 * NT * 16], cpo[2 * CPS];
+    if (e.smem > 48 * 1024)
+      cudaFuncSetAttribute((const void *)e.k, cudaFuncAttributeMaxDynamicSharedMemorySize, e.smem);
+    const int bn = e.whole ? e.nt : 32;
     cudaMemset(d_cp, 0, 2 * CPS * sizeof(uint32_t));
-    e.k<<<1, 32>>>(d_st, d_W, d_out, d_cp, d_cyc, BSETS, one);
+    e.k<<<1, bn, e.smem>>>(d_st, d_W, d_out, d_cp, d_cyc, BSETS, one);
     cudaError_t err = cudaGetLastError();
     if (err == cudaSuccess) err = cudaDeviceSynchronize();
-    cudaMemcpy(out, d_out, sizeof out, cudaMemcpyDeviceToHost);
+    cudaMemcpy(out, d_out, (size_t)bn * 16 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
     cudaMemcpy(cpo, d_cp, sizeof cpo, cudaMemcpyDeviceToHost);
     int bad_st = err != cudaSuccess, bad_cp = 0;
-    for (int i = 0; i < 32 * 16; ++i) bad_st += out[i] != fin[i];
+    for (int i = 0; i < bn * 16; ++i) bad_st += out[i] != fin[i];
     const bool checked = e.mode >= 2 && e.mode <= 7;
     if (checked)
       for (int i = 0; i < 2 * CPS; ++i) bad_cp += cpo[i] != ck[i];
     int ok = bad_st == 0 && bad_cp == 0;
     all &= ok;
-    printf("%s bitexact=%d bad_states=%d bad_checkpoints=%d checkpoint=%s err=%s\n", e.name, ok, bad_st, bad_cp,
-           checked ? "checked" : "none", cudaGetErrorString(err));
+    printf("%s bitexact=%d threads=%d bad_states=%d bad_checkpoints=%d checkpoint=%s err=%s\n", e.name, ok, bn, bad_st,
+           bad_cp, checked ? "checked" : "none", cudaGetErrorString(err));
     int occ = 0;
-    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, e.k, NT, 0);
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, e.k, e.nt, e.smem);
     if (occ > 32) occ = 32;
     int bpsm[] = {1, 2, 4, occ};
     for (int b : bpsm) {
       if (b > occ) continue;
       int blocks = sms * b;
       cudaMemset(d_cp, 0, ncp * sizeof(uint32_t));
-      e.k<<<blocks, NT>>>(d_st, d_W, d_out, d_cp, d_cyc, TSETS, one);
+      e.k<<<blocks, e.nt, e.smem>>>(d_st, d_W, d_out, d_cp, d_cyc, TSETS, one);
       err = cudaGetLastError();
       if (err == cudaSuccess) err = cudaDeviceSynchronize();
       cudaMemcpy(cyc, d_cyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost);
       long long mx = 0;
       for (int i = 0; i < blocks; ++i) mx = cyc[i] > mx ? cyc[i] : mx;
-      double wps = b * (NT / 32) / 4.0;
+      double wps = b * (e.nt / 32) / 4.0;
       double tp = (double)mx / (wps * TSETS);
       printf("%s tp blocks_per_sm=%d occ=%d warps_per_smsp=%.1f smsp_cyc_per_warp_set=%.4f smsp_cyc_per_unit=%.5f "
              "err=%s\n", e.name, b, occ, wps, tp, tp / 8.0, cudaGetErrorString(err));
