@@ -180,16 +180,26 @@ theorem coinLayer_not_moved_le (n : ℕ) (δ : ℝ) (hδ : δ < 1 / 2) :
   rw [coinLayer_moved_half] at this
   linarith
 
-/-- #2699's budget `48,000·(δ_bind + n_π·δ_ZK) ≤ 2^-41` and its binding premise fail together for the coin layer. -/
-theorem coinLayer_moved_budget_unsat (δbind δzk : ℝ) (hzk : 0 ≤ δzk)
-    (hB : ∀ w, prob (fun x => (coinLayer 47999).Moved x w) ≤ δbind) :
-    ¬ (48000 : ℝ) * (δbind + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 := by
+/-- #2699's binding premise, `∀ w, prob (fun x => pf.Moved x w) ≤ δbind`, as a definition over any `S`. -/
+def MovedAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δbind : ℝ) : Prop :=
+  ∀ w, prob (fun x => pf.Moved x w) ≤ δbind
+
+/-- A budget `s·(δ_bind + n_π·δ_ZK) ≤ 2^-41` over `s ≥ 1` rounds and the binding premise fail together for the coin
+layer; #2699's is `s = 48,000`, `n = 47,999` (`coinLayer_moved_budget_unsat_dc`). -/
+theorem coinLayer_moved_budget_unsat (n : ℕ) (s δbind δzk : ℝ) (hs : 1 ≤ s) (hzk : 0 ≤ δzk)
+    (hB : MovedAt (coinLayer n) δbind) : ¬ s * (δbind + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 := by
   intro hb
   have hδ : 1 / 2 ≤ δbind := by
     by_contra h
-    exact coinLayer_not_moved_le 47999 δbind (not_le.mp h) hB
-  norm_num at hb
+    exact coinLayer_not_moved_le n δbind (not_le.mp h) hB
+  have h1 : (1 / 2 : ℝ) ≤ δbind + ((1 : ℕ) : ℝ) * δzk := by push_cast; linarith
+  have h2 := mul_le_mul_of_nonneg_right hs (show (0 : ℝ) ≤ δbind + ((1 : ℕ) : ℝ) * δzk by linarith)
+  have h3 : ((1 : ℝ) / 2) ^ 41 < 1 / 2 := by norm_num
   linarith
+
+theorem coinLayer_moved_budget_unsat_dc (δbind δzk : ℝ) (hzk : 0 ≤ δzk) (hB : MovedAt (coinLayer 47999) δbind) :
+    ¬ (48000 : ℝ) * (δbind + ((1 : ℕ) : ℝ) * δzk) ≤ (1 / 2) ^ 41 :=
+  coinLayer_moved_budget_unsat 47999 48000 δbind δzk (by norm_num) hzk hB
 
 /-! ## `Of` and the last round -/
 
