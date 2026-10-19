@@ -16,3 +16,5 @@ import SampledProofs.TwoStage
 import SampledProofs.Pieces
 import SampledProofs.Hello
 import SampledProofs.DomainAgrees
+import SampledProofs.Challenger
+import SampledProofs.ChallengerRecord

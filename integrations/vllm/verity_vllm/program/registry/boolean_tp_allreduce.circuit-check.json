@@ -5,6 +5,12 @@
   },
   "AllReduceMnnvl_v2{WORLD=8,N=8,SHOT=2}": {
    "and": 43912
+  },
+  "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(0,1,2,3)}": {
+   "and": 17208
+  },
+  "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(2,0,3,1)}": {
+   "and": 17208
   }
  }
 }

@@ -14,12 +14,15 @@ import pytest
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import commit as TPCM
 
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w"}
-RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}
+from tests.pipeline import served_ranks
+
+WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
+            "execution": "bi-eager"}
+RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "step_tokens_out": [1, 1, 1, 1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}
 
 
 class _LLM:
-    """`vllm.LLM` over two ranks: every `collective_rpc` goes on ``events`` and answers one dict per rank."""
+    """`vllm.LLM` over two ranks: every `collective_rpc` but the CPU readings around a run goes on ``events`` and answers one dict per rank."""
 
     def __init__(self, events: list[str]) -> None:
         self.events = events
@@ -28,8 +31,11 @@ class _LLM:
         return self
 
     def collective_rpc(self, method, timeout=None, args=(), kwargs=None):
-        self.events.append(f"rpc.{getattr(method, '__name__', method)}")
-        return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "verdict": "PASS"} for r in (0, 1)]
+        if getattr(method, "__name__", None) != "thread_cpu":
+            self.events.append(f"rpc.{getattr(method, '__name__', method)}")
+        if (served := served_ranks.answer(method, WORKLOAD)) is not None:
+            return served
+        return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "verdict": "PASS", "cpu_s": {}} for r in (0, 1)]
 
 
 def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], Path]:
@@ -42,6 +48,7 @@ def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], P
     from verity_vllm.pipeline.tp import lease as TPL
 
     events: list[str] = []
+    monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
     vllm = ModuleType("vllm")
     vllm.LLM = _LLM(events)
     monkeypatch.setitem(sys.modules, "vllm", vllm)

@@ -215,15 +215,12 @@ def InnerAdmitted (x : Msg) : Prop :=
     ∃ d, ins.read.draw = some d
 
 /-- **An honest inner run the deployed plain verifier accepts is of a statement it admits** (`acc_check`,
-`acc_draw`), at SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
+`acc_draw_of_setup`), at SHA-512: `InnerAccepts` there holds only where `InnerAdmitted` does. -/
 theorem innerAdmitted_of_accepts {x : Msg} {cs : List Coin} {v : List (Msg × Msg)}
     (h : InnerAccepts FlockDeploy.sha512 (FlockDeploy.V false) x cs v) : InnerAdmitted x := by
   have hacc : ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.V false) (xIOf x) := fun hn => hn _ _ _ _ h
   obtain ⟨ins, spec, sts, -, -, hs, -, hc⟩ := FlockDeploy.KS.acc_check hacc
-  obtain ⟨ins', spec', sts', d, hs', hd⟩ := FlockDeploy.KS.acc_draw hacc
-  rw [hs] at hs'
-  cases hs'
-  exact ⟨ins, spec, sts, hs, hc, d, hd⟩
+  exact ⟨ins, spec, sts, hs, hc, FlockDeploy.KS.acc_draw_of_setup hacc hs⟩
 
 /-! ## The code's side -/
 

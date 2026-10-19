@@ -24,10 +24,11 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--preset", required=True, help="a spec under benchmarks/specs, by name")
     parser.add_argument("--model-path", type=Path, default=None,
                         help="machine-local checkpoint override; every file is hashed into the result identity")
-    parser.add_argument("--arms", required=True, help="comma-separated arm ids; include every arm's control")
-    parser.add_argument("--arm-module", action="append", default=[],
-                        help="experimental pkg.mod:NAME exposing install(target); repeatable")
-    parser.add_argument("--sweep", choices=("quick", "full"), default=None)
+    parser.add_argument("--arms", default=None,
+                        help="comma-separated arm ids; include every arm's control (default: the spec's)")
+    parser.add_argument("--arm-module", action="append", default=None,
+                        help="experimental pkg.mod:NAME exposing install(target); repeatable (default: the spec's)")
+    parser.add_argument("--sweep", default=None, help="a sweep under benchmarks/specs, by name (default: the spec's)")
     parser.add_argument("--reps", type=int, default=None)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--eager", action="store_true",
@@ -44,7 +45,8 @@ def run(a: Any) -> int:
     if a.model_path is not None:
         preset = local_checkpoint(preset, a.model_path)
     preset, eager = served(preset, a.eager or spec.eager)
-    arms = resolve_arms(a.arms, tuple(a.arm_module))
+    modules = spec.arm_modules if a.arm_module is None else tuple(a.arm_module)
+    arms = resolve_arms(spec.arms if a.arms is None else a.arms, modules)
     points = expand_sweep(sweep)
     a.out.mkdir(parents=True, exist_ok=True)
     doc = run_benchmark(
@@ -61,7 +63,7 @@ def run(a: Any) -> int:
             reps=reps,
             eager=eager,
             preset=preset,
-            arm_modules=tuple(a.arm_module),
+            arm_modules=modules,
         ), identity=True)},
     )
     write(doc, a.out / "result.json")

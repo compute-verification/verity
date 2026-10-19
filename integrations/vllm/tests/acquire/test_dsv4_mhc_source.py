@@ -8,6 +8,8 @@ call (another layer's, the other side's, another return); a call attributed to n
 its mHC names."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import sys
 import types
 from collections import Counter
