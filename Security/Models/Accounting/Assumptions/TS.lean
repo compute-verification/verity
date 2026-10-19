@@ -31,8 +31,9 @@ Which form each takes:
   (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
   `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
   least the menu's routes of `a_k/m_k` a word. `FoldOptFolded` is FOLD-OPT per word folded (ASK-6 = A): the fold priced
-  at the words the run folds, `FoldOpt` its case at `N_w`. The headlines take it, so a run that skips folds is charged
-  through `WholeLuckAt`.
+  at the words the run folds, `FoldOpt` its case at `N_w`. `FoldOptFoldedAt` is it at one certificate, the one D-ideal
+  prices at; the headlines take it at their `π*` (RT2-LOGIC-1), so a run that skips folds is charged through
+  `WholeLuckAt`.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round. Split at the receipt
   (`Accounting.Guarantees.TS.LuckOfReceipt`), it is two luck premises:
   * the operand luck, which `OperandHMu` gives: (H-μ) at the deficient words (decision 110), through Lemma B at
@@ -123,6 +124,15 @@ certificate, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`, 
 is its case at `N_w`. -/
 def FoldOptFolded (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
+
+/-- `accounting-ts-fold-opt` (conjectured at the certificate a headline prices at; RT2-LOGIC-1). **FOLD-OPT_μ per
+word folded at `π`**: at the one certificate `π`, the run's fold is priced at least `(1 − μ_f)·folded·φ*(π)`.
+`FoldOptFolded` is it at every certificate, and a bit-exact fold of other instructions falsifies that while meeting it
+at `π` (RT2-LOGIC's IMAD rotate, `z = ⌊u·2^r/2^32⌋ + u·2^r + y'`: LOP3 and four IMAD-pipe instructions a word, 20 a
+unit against the menu's 16 at DS-120's issue facet, 14 against 16 halfway between issue and the LOP pipe). D-ideal's
+proof reads FOLD-OPT only at the certificate it prices, so a headline asks for it there. -/
+def FoldOptFoldedAt (Z : Model K R T L U F X) (A : Anatomy K T L U) (folded : ℝ) (lam : R → ℝ) : Prop :=
+  (1 - Z.muF) * folded * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
 /-- `accounting-ts-fill-opt` (assumed). **FILL-OPT_μ**: at every certificate, the run's filler is priced at least
 `(1 − μ_x)·χ*(π)`. -/

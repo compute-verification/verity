@@ -3,9 +3,10 @@ import Proofs.Accounting.TS
 /-!
 # Theorem D-ideal with fold skippers charged
 
-`DIdealFloor` with FOLD-OPT per word folded (`FoldOptFolded`, ASK-6 = A) and the whole-unit luck (`WholeLuckAt`,
-ASK-9 = A), the form the headlines take. A round's saving is `κ·d_w + f·e_w`, `d_w` its deficient share and `e_w` the
-share of its words whose fold the run skips, with `κ = N_w w*/B_♭` and `f = (1 − μ_f)N_w φ*/B_♭`. The tail bound is
+`DIdealFloor` with FOLD-OPT per word folded at the certificate it prices (`FoldOptFoldedAt`, ASK-6 = A, RT2-LOGIC-1)
+and the whole-unit luck (`WholeLuckAt`, ASK-9 = A), the form the headlines take. A round's saving is
+`κ·d_w + f·e_w`, `d_w` its deficient share and `e_w` the share of its words whose fold the run skips, with
+`κ = N_w w*/B_♭` and `f = (1 − μ_f)N_w φ*/B_♭`. The tail bound is
 PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game `wgame`, whose round weighs
 `ln(1/p₀)` when its unfolded share is positive, else `ln(1/p)` when it is deficient, else `0`:
 
@@ -113,8 +114,8 @@ theorem saving_le {p p0 κ f Λ : ℝ} [Fintype Ω] (hκ : 0 ≤ κ) (hf : 0 ≤
     simp only [ReceiptGame.game, RoundGame.deficiency, Unfolded.share, wgame]
     linarith
 
-/-- **Theorem D-ideal (2.7♭) with fold skippers charged**: `DIdealFloor` with FOLD-OPT per word folded, each run
-priced at the words it folds, `(1 − Σe/S)·N_w`, and the whole-unit luck at `p₀` beside (L) at `p`, for any `Λ ≥ 0`
+/-- **Theorem D-ideal (2.7♭) with fold skippers charged**: `DIdealFloor` with FOLD-OPT per word folded at `π`, each
+run priced at the words it folds, `(1 − Σe/S)·N_w`, and the whole-unit luck at `p₀` beside (L) at `p`, for any `Λ ≥ 0`
 with `κ ≤ Λ·ln(1/p)` and `κ + f ≤ Λ·ln(1/p₀)`: outside an event of probability at most `δ`, every accepted window has
 `T/T_cred ≥ 1 − ε_skip − ε_cert − ε_route − ε_mand − Λ·ln(1/δ′)/S`. -/
 theorem dIdealFloor_whole {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] [Fintype U]
@@ -127,7 +128,7 @@ theorem dIdealFloor_whole {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintyp
     (hδ : 0 < δ - S * (δbind + nπ * δzk)) (hSplit : ∀ x, (P.run x).Split)
     (hM : ∀ x, FacetCeilings Z.G (P.run x).run) (hW : ∀ x, WordsWritten Z (P.run x))
     (hSR : ∀ x, ScalarRoute Z (P.run x)) (hU : ∀ x, SideUnits Z (P.run x)) (hN : ∀ x, NoSum (P.run x))
-    (hF : ∀ x, FoldOptFolded Z (P.run x) ((1 - Uf.share x / S) * Z.Nw)) (hX : ∀ x, FillOpt Z (P.run x))
+    (hF : ∀ x, FoldOptFoldedAt Z (P.run x) ((1 - Uf.share x / S) * Z.Nw) lam) (hX : ∀ x, FillOpt Z (P.run x))
     (hG : P.game = G.game) (hPin : G.Pinned) (hL : LuckAt p P.game) (hWL : WholeLuckAt p0 G Uf)
     (hPS : ProofsSound P Z.Nw δbind δzk nπ) :
     prob (fun x => P.accepts x ∧ (P.run x).run.time / Z.credit Fl <
@@ -207,7 +208,7 @@ theorem sheetDIdealFloor_whole {K P T L U F X : Type} [Fintype K] [Fintype P] [D
     (h2 : ∀ x, SheetDispatch (Pl.run x).run) (h3 : ∀ x, SheetTensor Sh (Pl.run x).run)
     (h4 : ∀ x, SheetPipe Sh (Pl.run x).run) (h5 : ∀ x, SheetSmem Sh (Pl.run x).run)
     (h6 : ∀ x, SheetWords Z (Pl.run x)) (h7 : ∀ x, SheetSemantics Z (Pl.run x))
-    (hF : ∀ x, FoldOptFolded Z (Pl.run x) ((1 - Uf.share x / S) * Z.Nw)) (hX : ∀ x, FillOpt Z (Pl.run x))
+    (hF : ∀ x, FoldOptFoldedAt Z (Pl.run x) ((1 - Uf.share x / S) * Z.Nw) lam) (hX : ∀ x, FillOpt Z (Pl.run x))
     (hG : Pl.game = G.game) (hPin : G.Pinned) (hL : LuckAt p Pl.game) (hWL : WholeLuckAt p0 G Uf)
     (hPS : ProofsSound Pl Z.Nw δbind δzk nπ) :
     prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Z.credit Fl <

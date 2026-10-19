@@ -28,7 +28,13 @@ Case (a), which would make (I7) `¾`, restricts the cheater and is no premise. N
 hypothesis (degree-2 operand errors on cube bits), which only affine-operand runs meet (RT-HEADLINE): it is a proved
 route to the operand luck, not a premise here.
 
-Fold skippers are charged (RT-COMPOSE's B1, RT-HEADLINE §3). FOLD-OPT is per word folded (`FoldOptFolded`, ASK-6 = A):
+FOLD-OPT is asked at the statement's own `π*` (`FoldOptFoldedAt`), the one certificate the proof prices at
+(RT2-LOGIC-1, note:20261019T1140Z-draft-rt2-logic). At every certificate (`FoldOptFolded`) it is false for a
+bit-exact fold: the IMAD rotate costs 20 a unit against the menu's 16 at DS-120's `π*`, and 14 against 16 halfway
+between issue and the LOP pipe. At `π*` it is a conjecture (`shape.conjectures`), which
+`benchmarks/pouw/tests/test_lean_headline.py` tests on the bit-exact fold variants, the rotate among them.
+
+Fold skippers are charged (RT-COMPOSE's B1, RT-HEADLINE §3). FOLD-OPT is per word folded (ASK-6 = A):
 each run's fold is priced at the words it folds, `(1 − Σ_w e_w/S)·N_w`, where `Uf : Unfolded` gives each round's
 share `e_w` of words whose fold the run skips. A round with a positive unfolded share passes only by keeping the honest
 committed value without the fold, which the whole-unit luck bounds: B′ at a whole unit (`WholeLuckAt` at `p₀ = ½`,
@@ -79,8 +85,8 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 H1 + fx1's TS model (`Sm120.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm120.flat`), at the issue
 facet's certificate (`Sm120.piStar`), over a window of `Sm120.checks = 48,000` equal live rounds on any finite coins
 `Ω`: for any window's play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window,
-if the labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded prices every run's fold at the words it
-folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned
+if the labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded at `π*` prices every run's fold at the
+words it folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned
 (`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck
 premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at
 most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with
@@ -104,7 +110,8 @@ def Sm120SheetHeadline : Prop :=
     (∀ x, SheetTensor Sm120.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm120.sheet (Pl.run x).run) →
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) → (∀ x, SheetWords Sm120.model (Pl.run x)) →
     (∀ x, SheetSemantics Sm120.model (Pl.run x)) →
-    (∀ x, FoldOptFolded Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)) →
+    (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
+      (onFacet Sm120.piStar)) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm120.model.Nw →
@@ -141,8 +148,8 @@ def Sm120MeasuredHeadline : Prop :=
     (∀ x, FacetCeilings Sm120Measured.machine (Pl.run x).run) →
     (∀ x, WordsWritten Sm120Measured.model (Pl.run x)) → (∀ x, ScalarRoute Sm120Measured.model (Pl.run x)) →
     (∀ x, NoSum (Pl.run x)) →
-    (∀ x, FoldOptFolded Sm120Measured.model (Pl.run x)
-      ((1 - Uf.share x / Sm120.checks) * Sm120Measured.model.Nw)) →
+    (∀ x, FoldOptFoldedAt Sm120Measured.model (Pl.run x)
+      ((1 - Uf.share x / Sm120.checks) * Sm120Measured.model.Nw) (onFacet Sm120Measured.piStar)) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm120Measured.model.Nw →
