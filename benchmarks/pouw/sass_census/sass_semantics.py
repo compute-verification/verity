@@ -135,7 +135,10 @@ CONTROL = {"BRA", "BRX", "BRXU", "JMP", "JMX", "JMXU", "CALL", "RET", "EXIT", "B
            "PREEXIT", "RPCMOV", "BMOV", "LEPC", "ULEPC", "PMTRIG", "SETCTAID", "GETLMEMBASE", "SETLMEMBASE", "QSPC",
            "MATCH", "SYNCS", "SYNCSU", "USYNCS", "CCTL", "CCTLL", "CCTLT", "CCTLU", "UTMACCTL", "UTMACMDFLUSH",
            "UTCBAR", "UBLKL2CCTL", "UTMAL2CCTL", "UBLKPF", "UTMAPF", "PLOP3", "UPLOP3", "PSETP", "UPSETP", "P2R", "R2P",
-           "UP2UR", "UR2UP", "CS2UR", "VISET", "UVIRTCOUNT", "Option", "SETLMEMBASE", "TXQ", "DEPBAR"}
+           "UP2UR", "UR2UP", "CS2UR", "VISET", "UVIRTCOUNT", "Option", "SETLMEMBASE", "TXQ", "DEPBAR",
+           # cp.async.mbarrier.arrive: arrives on a shared-memory mbarrier as prior LDGSTS land (writes barrier state, no
+           # register). Absent from NVIDIA's Instruction Set Reference, yet emitted on sm_90/sm_100/sm_120.
+           "ARRIVES"}
 
 
 # Compare / set-predicate / range-check ops: they write a predicate (or a one-slot flag), not a committed s32 word.
