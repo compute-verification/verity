@@ -135,3 +135,154 @@ theorem repPZk_padsAt (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes PS) (
       RunPost.bind_pure (RunPost.mono (innerP_padsAt coin n hs _ pads ic _ _) fun _ _ _ h => h)
 
 end FlockComplete
+
+namespace Claims.ZKMal.Masked
+
+open Claims FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge CoinLayer
+
+/-- **Table `j`'s rep `r` pads column and salt at tree position `p`** at the executable's layout: the codes of
+`h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1` and the tape's pads salt `p` fitted to 192 bytes (`exeOf_pads`' leaf's
+parts), at every coin vector. -/
+theorem colPAt_exe (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
+    (t : Fin Claims.Flock.zkTableCap → ExeCell) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
+    (r : Fin 2) (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
+    (((tabC P x j).T (cz j)).colPAt (wtOf P x w j) (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j)
+        r p).1 =
+        fOf (_root_.Flock.Zk.codeAt ((FlockComplete.padsOf ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t)
+            j.val r.val (_root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0)).h ++
+          (FlockComplete.padsOf ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t) j.val r.val
+            (_root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0)).padH) p.val) ∧
+      (((tabC P x j).T (cz j)).colPAt (wtOf P x w j) (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j)
+        r p).2 =
+        fOf (_root_.Flock.Zk.codeAt ((FlockComplete.padsOf ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t)
+            j.val r.val (_root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0)).mu ++
+          (FlockComplete.padsOf ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t) j.val r.val
+            (_root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0)).padMu) p.val) ∧
+      ZkView.saltBytes (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).2.1 ⟨j, .inr (.inl (r, p))⟩) =
+        FlockComplete.fitBytes 192 (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t).innerSalt j.val r.val
+          p.val) := by
+  set T := (TapePlan.ofLayout (TapeLayout.exe P) exeTape).tapeZk t with hT
+  set L := _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0 with hLy
+  set B := ((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j with hB
+  have hz := fits_zkTab P (zkTab x j)
+  have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
+  have hE : (tabC P x j).z.nE = L.hab := by
+    show L.len - 4 = L.hab
+    simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw]
+    omega
+  have hlen : L.len = (tabC P x j).z.nE + 4 := by
+    rw [hE]
+    simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw]
+  have hE64 : (tabC P x j).z.nE ≤ 2 ^ 64 := hz.nE
+  have hfa : L.fa < L.fb := by simp only [_root_.Flock.Zk.PadLayout.fb]; omega
+  have hfb : L.fb < L.hab := Composed.ZerocheckMasked.fb_lt_hab L
+  have htx : L.tx = L.hab + 1 := rfl
+  have hty : L.ty = L.hab + 2 := rfl
+  have htw : L.tw = L.hab + 3 := rfl
+  have hhs := FlockComplete.padsOf_size T j.val r.val L
+  have hpH : (FlockComplete.padsOf T j.val r.val L).padH.size = _root_.Flock.Zk.K_PAD := by
+    simp [FlockComplete.padsOf]
+  have hms : (FlockComplete.padsOf T j.val r.val L).mu.size = L.len := by simp [FlockComplete.padsOf]
+  have hpM : (FlockComplete.padsOf T j.val r.val L).padMu.size = _root_.Flock.Zk.K_PAD := by
+    simp [FlockComplete.padsOf]
+  have tH : ∀ k : Fin (2 ^ 64 + 4), fOf (T.h j.val r.val k.val) = (t ⟨j.val, hc⟩).1.2.2.1 r k := fun k => by
+    show fOf (fAt 0 (fun r => fAt 0 ((cellAt t j.val).1.2.2.1 r) k.val) r.val) = _
+    rw [cellAt_lt t hc, fAt_lt _ _ r.isLt]; exact fAt_lt _ _ k.isLt
+  have tM : ∀ k : Fin (2 ^ 64 + 4), fOf (T.mu j.val r.val k.val) = (t ⟨j.val, hc⟩).1.2.2.2.2.2.1 r k := fun k => by
+    show fOf (fAt 0 (fun r => fAt 0 ((cellAt t j.val).1.2.2.2.2.2.1 r) k.val) r.val) = _
+    rw [cellAt_lt t hc, fAt_lt _ _ r.isLt]; exact fAt_lt _ _ k.isLt
+  have tPH : ∀ k : Fin _root_.Flock.Zk.K_PAD, fOf (T.padH j.val r.val k.val) = (t ⟨j.val, hc⟩).1.2.2.2.1 r k :=
+    fun k => by
+      show fOf (fAt 0 (fun r => fAt 0 ((cellAt t j.val).1.2.2.2.1 r) k.val) r.val) = _
+      rw [cellAt_lt t hc, fAt_lt _ _ r.isLt]; exact fAt_lt _ _ k.isLt
+  have tPM : ∀ k : Fin _root_.Flock.Zk.K_PAD, fOf (T.padMu j.val r.val k.val) = (t ⟨j.val, hc⟩).1.2.2.2.2.1 r k :=
+    fun k => by
+      show fOf (fAt 0 (fun r => fAt 0 ((cellAt t j.val).1.2.2.2.2.1 r) k.val) r.val) = _
+      rw [cellAt_lt t hc, fAt_lt _ _ r.isLt]; exact fAt_lt _ _ k.isLt
+  have hpl : Composed.padLenOf (zkTab x j).table (stAt x j) = (tabC P x j).z.nE + 4 := hlen
+  set pd := FlockComplete.padsOf T j.val r.val L with hpd
+  have hsz : (pd.h ++ pd.padH).size = (tabC P x j).z.nE + 4 + (tabC P x j).z.nPad := by
+    rw [Array.size_append, hhs, hpH, hlen]; rfl
+  have hszm : (pd.mu ++ pd.padMu).size = (tabC P x j).z.nE + 4 + (tabC P x j).z.nPad := by
+    rw [Array.size_append, hms, hpM, hlen]; rfl
+  have hget0 : ∀ k, k < L.len → k ≠ L.hab → k ≠ L.tw → pd.h[k]! = T.h j.val r.val k :=
+    fun k hk h1 h2 => FlockComplete.padsOf_get T _ _ L k hk h1 h2
+  have hget : ∀ k, k < L.len → k ≠ L.hab → k ≠ L.tw → (pd.h ++ pd.padH)[k]! = T.h j.val r.val k :=
+    fun k hk h1 h2 => by rw [FlockComplete.get_append_left _ _ (by rw [hhs]; exact hk), hget0 k hk h1 h2]
+  have hfaE : L.fa < (tabC P x j).z.nE := by omega
+  have hfbE : L.fb < (tabC P x j).z.nE := by omega
+  have hEv : ∀ b : Fin 2, (hEmb hz (.inr b)).val = L.hab + 1 + b.val := fun b => by
+    show (tabC P x j).z.nE + 1 + b.val = _
+    rw [hE]
+  have hf : ∀ i : ZK.PadIdx (tabC P x j).z.nE, fOf (pd.h ++ pd.padH)[Composed.padIdx i]! =
+      Composed.padH (nE := (tabC P x j).z.nE) ⟨L.fa, hfaE⟩ ⟨L.fb, hfbE⟩ (B.2.2.1 r) i := by
+    rintro (k | i)
+    · have hk := k.isLt
+      show fOf (pd.h ++ pd.padH)[k.val]! = (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl k))
+      rw [hget k.val (by omega) (by omega) (by omega)]
+      exact tH (hEmb hz (.inl k))
+    · fin_cases i
+      · show fOf (pd.h ++ pd.padH)[(tabC P x j).z.nE + 1]! = (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 0))
+        rw [hget ((tabC P x j).z.nE + 1) (by omega) (by omega) (by omega), ← tH, hEv, hE]
+        rfl
+      · show fOf (pd.h ++ pd.padH)[(tabC P x j).z.nE + 2]! = (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 1))
+        rw [hget ((tabC P x j).z.nE + 2) (by omega) (by omega) (by omega), ← tH, hEv, hE]
+        rfl
+      · show fOf (pd.h ++ pd.padH)[(tabC P x j).z.nE + 0]! =
+          (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨L.fa, hfaE⟩)) *
+            (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨L.fb, hfbE⟩))
+        rw [FlockComplete.get_append_left _ _ (by rw [hhs]; omega), show (tabC P x j).z.nE + 0 = L.hab by omega,
+          FlockComplete.padsOf_hab, hget0 L.fa (by omega) (by omega) (by omega),
+          hget0 L.fb (by omega) (by omega) (by omega), fOf_mul, tH ⟨L.fa, by omega⟩, tH ⟨L.fb, by omega⟩]
+        rfl
+      · show fOf (pd.h ++ pd.padH)[(tabC P x j).z.nE + 3]! =
+          (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 0)) * (t ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 1))
+        rw [FlockComplete.get_append_left _ _ (by rw [hhs]; omega), show (tabC P x j).z.nE + 3 = L.tw by omega,
+          FlockComplete.padsOf_tw, hget0 L.tx (by omega) (by omega) (by omega),
+          hget0 L.ty (by omega) (by omega) (by omega), fOf_mul, ← tH, ← tH, hEv, hEv]
+        rfl
+  have hfm : ∀ i : ZK.PadIdx (tabC P x j).z.nE, fOf (pd.mu ++ pd.padMu)[Composed.padIdx i]! = B.2.2.2.2.2.1 r i := by
+    intro i
+    have hi := Composed.padIdx_lt i
+    rw [FlockComplete.get_append_left _ _ (by rw [hms]; omega),
+      show pd.mu[Composed.padIdx i]! = T.mu j.val r.val (Composed.padIdx i) from Composed.Zerocheck.get_map_range _ (by omega)]
+    exact tM (padEmb' hz i)
+  have hg : ∀ k : Fin (tabC P x j).z.nPad, fOf (pd.h ++ pd.padH)[(tabC P x j).z.nE + 4 + k.val]! = B.2.2.2.1 r k := by
+    intro k
+    have hk := k.isLt
+    rw [show (tabC P x j).z.nE + 4 + k.val = pd.h.size + k.val by rw [hhs, hlen],
+      FlockComplete.get_append_right _ _ (by rw [hpH]; exact hk),
+      show pd.padH[k.val]! = T.padH j.val r.val k.val from Composed.Zerocheck.get_map_range _ hk]
+    exact tPH ⟨k.val, hk⟩
+  have hgm : ∀ k : Fin (tabC P x j).z.nPad,
+      fOf (pd.mu ++ pd.padMu)[(tabC P x j).z.nE + 4 + k.val]! = B.2.2.2.2.1 r k := by
+    intro k
+    have hk := k.isLt
+    rw [show (tabC P x j).z.nE + 4 + k.val = pd.mu.size + k.val by rw [hms, hlen],
+      FlockComplete.get_append_right _ _ (by rw [hpM]; exact hk),
+      show pd.padMu[k.val]! = T.padMu j.val r.val k.val from Composed.Zerocheck.get_map_range _ hk]
+    exact tPM ⟨k.val, hk⟩
+  have h1 : (((tabC P x j).T (cz j)).colPAt (wtOf P x w j) B r p).1 =
+      fOf (_root_.Flock.Zk.codeAt (pd.h ++ pd.padH) p.val) := by
+    rw [colPAt_tabC, ZkExec.fOf_codeAt _ p.val _ hsz]
+    exact Composed.sum_padCode hpl (pd.h ++ pd.padH) (ZkLink.innerPt p.val) _ _ hf hg
+  have h2 : (((tabC P x j).T (cz j)).colPAt (wtOf P x w j) B r p).2 =
+      fOf (_root_.Flock.Zk.codeAt (pd.mu ++ pd.padMu) p.val) := by
+    rw [colPAt_tabC, ZkExec.fOf_codeAt _ p.val _ hszm]
+    exact Composed.sum_padCode hpl (pd.mu ++ pd.padMu) (ZkLink.innerPt p.val) _ _ hfm hgm
+  have hp : p.val < _root_.Flock.Zk.Q + 2 ^ 64 := by
+    have h1 := p.isLt
+    have h2 : (tabC P x j).z.nQ ≤ _root_.Flock.Zk.Q := hz.nQ
+    have h3 : (tabC P x j).z.nPU ≤ 2 ^ 64 := hz.nPU
+    omega
+  have hs : ZkView.saltBytes (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).2.1 ⟨j, .inr (.inl (r, p))⟩) =
+      FlockComplete.fitBytes 192 (T.innerSalt j.val r.val p.val) := by
+    show ZkView.saltBytes ((t ⟨j.val, hc⟩).2.1.2.1 r (Fin.castLE (Nat.add_le_add hz.nQ hz.nPU) p)) =
+      FlockComplete.fitBytes 192 (fAt ByteArray.empty (fun r => fAt ByteArray.empty
+        (fun p => ZkView.saltBytes ((cellAt t j.val).2.1.2.1 r p)) p.val) r.val)
+    rw [cellAt_lt t hc, fAt_lt _ _ r.isLt, fitBytes_of_size (by rw [fAt_lt _ _ hp]; exact saltBytes_size _),
+      fAt_lt _ _ hp]
+    rfl
+  exact ⟨h1, h2, hs⟩
+
+end Claims.ZKMal.Masked
