@@ -49,7 +49,7 @@ from verity_vllm.program.registry.prims import BF16, BIT, F32, I32
 M32 = 0xFFFFFFFF
 
 _CONF = ("model-tested on synthetic rows: the tie rule read from vLLM d9105ea80 topk_histogram_4096.cuh:69-84, 380-548 "
-         "(cooperative_topk's rows of 2049..16384 keys) and held on an H200 by cooperative_topk's and persistent_topk's orders, run "
+         "(cooperative_topk's rows of 2049..16384 keys) and held by the served cooperative_topk's and persistent_topk's orders, run "
          "r20261018-233053-2502; a captured served decode past TOPK keys is its hardware check")
 _ORDERS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
