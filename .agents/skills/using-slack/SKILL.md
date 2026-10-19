@@ -38,10 +38,13 @@ The coordination API has one place, three interactions and one lifecycle.
 - **Only handle holders and the named humans are on Slack.** Workers never post, read or subscribe; a worker asks its own
   coordinator, and the coordinator asks on Slack and relays the answer. So a coordinator decides which of its workers hears
   what.
-- **Three channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
+- **Four channels.** `#agent-coordination` holds everything between handles. `#agent-alerts` holds machine alerts, and each
   top-level post there is addressed to `@infra`. `#ask-daniel` (`C0C5UCA0S0Z`, formerly `#approvals`) holds the cards for
   everything that needs Daniel, one question per card, each linking its page in the Asks for Daniel database, where only he
-  decides (`.agents/skills/asking-daniel/SKILL.md`); `@infra` subscribes to its top level.
+  decides (`.agents/skills/asking-daniel/SKILL.md`); `@infra` subscribes to its top level. `#ask-the-team` (`C0CA1JZSYNR`)
+  holds Daniel's questions to the team: `@top` subscribes, routes each one and answers in its thread, and a lane top asks
+  replies there with `research msg reply --channel-id C0CA1JZSYNR --thread <the question's ts>` (the bot can post there but
+  not read it, so give the question's own ts).
 - **Each request is one thread**: the root is the ask or the announcement, and everything about it is a reply.
 
 | Interaction | Command | Tags | Who closes it |
@@ -104,8 +107,10 @@ research msg subscriptions --as <your handle>    # prints the subscribe calls to
   added, or an inbox reopened or closed, since. A doorbell for a
   post that turns out not to be for you ends the turn silently. **Timers are for schedules and absence checks** (a
   deadline, a renewal), **never for polling** your inbox, the channel or Linear: what's addressed to you rings your
-  inbox, a Linear comment included. comms' daily review replays every post against the doorbells rung and chases what
-  missed (COMM-30).
+  inbox, a Linear comment included, and so does the end of a run you launched (`from runs, run R rc N (AGENT): ...`, which
+  the control pod rings with `research msg ring-run`). End your turn while a run goes on: the agent watch wakes you 10
+  minutes after any unread doorbell (an idle-time wake only for a lane that registers a recurring timer with infra).
+  comms' daily review replays every post against the doorbells rung and chases what missed (COMM-30).
 - **A holder also subscribes to its Linear team's issue events** (`subscribe_linear_issue`: creations and state
   changes), so an issue a human files straight into Linear reaches you; it rings no inbox. **Don't subscribe to its
   comments.** The sender never rings its own inbox, but every handle posts through one Slack bot and writes to Linear
@@ -198,6 +203,12 @@ the doorbell stays, as `traffic`'s audit trail and the wake that survives a laps
 conversation stays in the Slack thread. `close` moves the issue to done, and `--declined` to canceled, so the team's
 open issues are its open asks. If Linear fails, the whole ask goes out on Slack instead.
 
+An ask lives in one record, and answered is that record's state. `research msg traffic` (the unanswered list) and
+`traffic --latency` (time to first answer) read it first and say which record answered: a linked ask's Linear issue
+(out of Backlog, or a comment from anyone but the asker), a Daniel card's page (its Status no longer Waiting on Daniel,
+read with `$NOTION_API_KEY`). A reply or a 👀, ✅ or ❌ in the thread counts only for an ask with no record, so take a
+linked ask on its issue, not with a Slack reply.
+
 An alert in `#agent-alerts` takes the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
 
 **Work items are Linear-first** (Daniel, 14 Oct, top's announcement 1792006806.178789). The full brief — context, the
@@ -239,7 +250,9 @@ An addressed handle, woken by one, does four things:
 
 Everything that needs Daniel is a page in the Asks for Daniel Notion database plus a card in `#ask-daniel` that links it:
 `.agents/skills/asking-daniel/SKILL.md` has the template, `research msg ask-daniel --page`, iterating on his comments and
-recording his decision.
+recording his decision. `research msg ask --to @daniel` is the same command with `ask-daniel --page`'s flags (it names
+any it lacks), so one `ask` verb reaches every target; `ask-daniel` stays the explicit form, and `--link` for a page made
+with the Notion MCP.
 
 ## Chat channels
 
