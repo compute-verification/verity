@@ -1,6 +1,6 @@
 """`sampling_inputs`' closed form for the paced line's sampling term is `paced_line`'s arithmetic on uniform sessions,
-with the wrong receipts spilling past one group and not; that arithmetic is a stretch worked by hand; and a region's
-solution meets the constraints it was solved under."""
+with the wrong receipts spilling past one group and not, and with one openings coin over several groups; that arithmetic
+is a stretch worked by hand; and a region's solution meets the constraints it was solved under."""
 from __future__ import annotations
 
 import sys
@@ -17,7 +17,7 @@ import sampling_inputs as si  # noqa: E402
 
 def test_the_closed_form_is_the_line_arithmetic_on_uniform_sessions():
     rows = si.check_closed_form()
-    assert {row["beta"] > 1 for row in rows} == {True, False}
+    assert {row["beta"] > 1 for row in rows} == {True, False} and any(row["d"] < 1 for row in rows)
 
 
 def test_a_stretch_by_hand():
@@ -37,9 +37,15 @@ def test_a_region_solution_meets_its_constraints():
     prices = {"fit": 0.544, "floor": 0.08, "fit_deployed": 1.09, "floor_deployed": 0.16}
     for flight in (2, 1):
         line = si.solve(p, prices, 0.01, theta=600.0, line_rule=True, flight=flight)
+        shared = si.solve(p, prices, 0.01, theta=600.0, line_rule=True, flight=flight, shared=True)
         loose = si.solve(p, prices, 0.01, theta=600.0, line_rule=False, flight=flight)
-        for s in (line, loose):
+        for s in (line, shared, loose):
             assert s["eps_held"] <= 0.01 * (1 + 1e-12) and s["o"] == pytest.approx(s["d"] * s["r"] / s["k"])
-        assert 2 * flight * p["xi"] * line["k"] / (line["r"] * p["blocks"]) <= 0.01 * (1 + 1e-12)
-        cost = {id(s): s["passes_gpus"] + s["proving_gpus_fit"] for s in (line, loose)}
+        for s in (line, shared):
+            assert 2 * flight * p["xi"] * s["k"] / (s["r"] * p["blocks"]) <= 0.01 * (1 + 1e-12)
+        assert line["d"] >= 1
+        if flight == 2:
+            assert shared["d"] < 1 and shared["o"] < line["o"]
+        cost = {id(s): s["passes_gpus"] + s["proving_gpus_fit"] for s in (line, shared, loose)}
+        assert cost[id(shared)] <= cost[id(line)]
         assert cost[id(loose)] <= cost[id(line)] and loose["rebuild_held"] > line["rebuild_held"]

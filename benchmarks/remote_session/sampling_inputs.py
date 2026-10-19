@@ -167,14 +167,17 @@ def reproduce(v: dict, ingress_bytes_per_s: float) -> list[dict]:
 
 
 def check_closed_form() -> list[dict]:
-    """The closed form against `span_line` on uniform sessions, a group spilling into the rest (β > 1) and not."""
+    """The closed form against `span_line` on uniform sessions, a group spilling into the rest (β > 1) and not, and
+    one openings coin drawing over m groups (d = s/m). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
-    for d, G, W, k, r, c, N in ((1, 40, 3, 1, 8.0, 0.057, 10_000), (2, 40, 3, 2, 12.0, 0.03, 10_000),
-                                (64, 12, 4, 1, 11.89, 0.057, 10_000), (232, 12, 7, 1, 15.0, 0.06, 130_023)):
+    for s, m, G, W, k, r, c, N in ((1, 1, 40, 3, 1, 8.0, 0.057, 10_000), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000),
+                                   (64, 1, 12, 4, 1, 11.89, 0.057, 10_000), (232, 1, 12, 7, 1, 15.0, 0.06, 130_023),
+                                   (1, 4, 400, 3, 1, 8.0, 0.057, 10_000)):
+        d = s / m
         gap, L = k / r * 1e9, (2 * k / r + c) * 1e9
         seen = [{"released_ns": x * gap, "passes": k, "arrivals_ns": [x * gap + L]} for x in range((W + 1) * G)]
-        wrong = audit.pooled(record_of([(k * N, d)] * ((W + 1) * G)))[0]
-        B = budget(d * (W + 1) * G)
+        wrong = audit.pooled(record_of([(m * k * N, s)] * ((W + 1) * G // m)))[0]
+        B = budget(s * (W + 1) * G // m)
         g = groups_of(seen)
         for lo, hi in [(m * G, (m + 1) * G) for m in range(W)] + [(0, W * G)]:
             a = span_line(g, lo, hi, wrong=wrong, blocks=N, per_ns=0.0, chip=0.0)
@@ -253,15 +256,19 @@ def costs(p: dict, prices: dict, *, o: float, r: float) -> dict:
 
 
 def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, flight: int = 2,
-          price: str = "fit") -> dict | None:
+          price: str = "fit", shared: bool = False) -> dict | None:
     """The cheapest (r, k, d) whose held-over-time sampling term over Θ is at most ε, and, under `line_rule`, whose
     rebuild excess over L_max's floor c, 2·f·(X_r + I)·k / (r·N), is at most ε too. For each (k, d), r is the least that
-    meets them: k/r ≤ ε·N/(2·f·(X_r + I)), and k/r·(β + min(1, β)·(f − 1)) + min(1, β)·c ≤ ε·Θ."""
+    meets them: k/r ≤ ε·N/(2·f·(X_r + I)), and k/r·(β + min(1, β)·(f − 1)) + min(1, β)·c ≤ ε·Θ.
+
+    A group is a window of `audit.pooled`'s, and a window it draws nothing from may be wrong throughout, so d ≥ 1.
+    `shared` lets one openings coin draw over m groups' receipts after all their roots (d = 1/m, m ≤ 512): no session
+    has run it, so it is modeled, with the same closed form."""
     tau = eps * p["blocks"] / (2 * flight * p["xi"]) if line_rule else math.inf
     t_s = p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
     best = None
     for k in range(1, 9):
-        for d in range(1, 4097):
+        for d in ([1 / m for m in range(512, 1, -1)] if shared else []) + list(range(1, 4097)):
             beta = LN / d
             room = eps * theta - min(1.0, beta) * p["c_s"]
             if room <= 0:
@@ -276,8 +283,9 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
     if best is None:
         return None
     _, k, d, r, o = best
-    return {"eps": eps, "theta_s": theta, "line_rule": line_rule, "flight": flight, "price": price, "k": k, "d": d,
-            "r": r, "o": o, **line_at(p, o=o, d=d, k=k, r=r, theta=theta, flight=flight), **costs(p, prices, o=o, r=r)}
+    return {"eps": eps, "theta_s": theta, "line_rule": line_rule, "flight": flight, "price": price, "shared": shared,
+            "k": k, "d": d, "r": r, "o": o, **line_at(p, o=o, d=d, k=k, r=r, theta=theta, flight=flight),
+            **costs(p, prices, o=o, r=r)}
 
 
 def pct(x: float, digits: int = 3) -> str:
@@ -341,27 +349,28 @@ def main() -> None:
     for name, p in pts.items():
         for flight in (2, 1):
             for eps in (0.005, 0.01, 0.02) if name != "8B x1" else (0.01,):
-                for line_rule in (True, False):
-                    s = solve(p, prices, eps, theta=H, line_rule=line_rule, flight=flight)
+                for line_rule, shared in ((True, False), (True, True), (False, False)):
+                    s = solve(p, prices, eps, theta=H, line_rule=line_rule, flight=flight, shared=shared)
                     if s is not None:
                         s.update(point=name, window_s=T, per_window=closed(o=s["o"], d=s["d"], k=s["k"], r=s["r"],
                                                                            l_max=s["l_max_s"], theta=T)[1])
-                        if eps == 0.01 and flight == 2 and (line_rule or name not in chosen):
+                        if eps == 0.01 and flight == 2 and not shared and (line_rule or name not in chosen):
                             chosen[name] = s
                     region.append(s or {"point": name, "eps": eps, "line_rule": line_rule, "flight": flight,
-                                        "infeasible": True})
+                                        "shared": shared, "infeasible": True})
             s = solve(p, prices, 0.01, theta=T, line_rule=True, flight=flight)
             region.append(dict(s, point=name, window_s=T, per_window=s["eps_held"], reading="a window") if s else
                           {"point": name, "eps": 0.01, "line_rule": True, "flight": flight, "reading": "a window",
                            "infeasible": True})
     rows = []
     for s in region:
-        head = [s["point"], s["flight"], pct(s["eps"]), "line" if s["line_rule"] else "ε only",
-                s.get("reading", "pooled")]
+        rule = ("line" if s["line_rule"] else "ε only") + (", shared draws (modeled)" if s.get("shared") else "")
+        head = [s["point"], s["flight"], pct(s["eps"]), rule, s.get("reading", "pooled")]
         if s.get("infeasible"):
             rows.append(head + ["infeasible"] + [""] * 11)
             continue
-        rows.append(head + [f"{s['r']:.3g}", s["k"], s["d"], f"{s['o']:.3g}", f"{s['o'] * T:,.0f}",
+        d = s["d"] if s["d"] >= 1 else f"1/{round(1 / s['d'])}"
+        rows.append(head + [f"{s['r']:.3g}", s["k"], d, f"{s['o']:.3g}", f"{s['o'] * T:,.0f}",
                      f"{s['l_max_s'] * 1e3:.0f} ms",
                      pct(s["eps_held"]), pct(s["per_window"]), pct(s["rebuild_held"]),
                      f"{pct(s['serving_share'])} ({s['passes_gpus']:.2f})",
