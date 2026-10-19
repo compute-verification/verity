@@ -361,5 +361,6 @@ def test_the_config_names_the_registry_channel_and_every_loop_post_start_starts(
     assert REAL["mention"] == next(h["usergroup"] for h in reg["handles"] if h["handle"] == "infra")
     started = re.findall(r"setsid -f (/data/\S+)", (CONTROL / "post_start.sh").read_text())
     watched = " ".join(loop["started_by"] for loop in REAL["loop"])
-    unwatched = [s for s in started if s not in watched and s != "/data/infra/cloud_watch.sh"]   # it can't watch itself
+    # the cloud watch can't watch itself, and the control disk relay alerts on the router's heartbeat every 5 min
+    unwatched = [s for s in started if s not in watched and s not in ("/data/infra/cloud_watch.sh", "/data/infra/router.sh")]
     assert unwatched == [] and "research pods guard" in watched, f"add a [[loop]] to cloud_watch.toml for {unwatched}"

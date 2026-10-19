@@ -29,14 +29,16 @@ editing on the pod.
 | Store panels, every 10 min | `/data/console/console-loop.sh` (`tools/research/console/`) | `/data/console` | `/data/console/console.log` |
 | Agent watch (INF-69): follows every running cloud agent's run stream and cancels and continues a run held 15 min after a finished tool call, and records a coordinator ready to wake (a doorbell pending 10 min, or, for a handle in `agent_watch_timers.json`, no run for twice its timer's interval; with `--wake`, on while `/data/agent-watch/wake` exists, it starts a run), and records a cloud worker (a Task subagent) that went from ACTIVE to IDLE or has been ACTIVE 6 h (`worker_idle`, `worker_long`; record only: only its coordinator can resume it), a coordinator or worker ACTIVE 90 min with no note and no push to its branches (`silent`, twice at most per spell), and each `research run` that ended on a node of `nodes.json`, for its sender's handle (`run_ended`) (`verity_ops/agent_watch.py`) | `agent_watch.sh`, deployed as `/data/infra/agent_watch.sh`; waits for `/data/agent-watch/cursor.env` (root, 0600, `CURSOR_API_KEY=`) | `/data/infra/agent_watch.py` (a copy of `infra/ops/verity_ops/agent_watch.py`); coordinators from `/data/infra/fixtures-export-repo`'s registry and `/data/steward/research-notes/routes.d`, recurring timers from `/data/agent-watch/timers.json` (a copy of `agent_watch_timers.json`), doorbells from the relay's `/data/agent-watch/doorbells.json`; workers from the `origin:` of `/data/steward/research-notes/lanes/*/*.md` modified in the last 12 h (`--notes`) and `/data/agent-watch/workers.d/*.json` (`{agent_id, lane, launched_by, branch}`); pushes from `git ls-remote --heads` with `/data/state/secrets/verity-deploy`; nodes from `/data/agent-watch/nodes.json` (a copy of `agent_watch_nodes.json`, read each sweep: names and ssh options), their hosts from the notes clone's `machines.d` | `/data/agent-watch/watch.log`; findings in `/data/agent-watch/events.jsonl`; each sweep's snapshot in `/data/agent-watch/status.json` (schema `verity/agent-watch-status/v1`, read by console); what must outlive a restart in `/data/agent-watch/state.json`, the branch heads it saw in `heads.json` and the nodes' runs already seen in `run_ends.json`; with `/root/.config/verity/store-index.env` present, the same snapshot in Neon's `store_private.agent_watch_status` (newest 60) |
 | Cloud watch (INF-73), every 15 min: each loop above's success marker, R2's size and growth by top-level prefix and the Lean cache's last publish, Neon, spend against budgets.toml's lines, the GitHub rate limit, jobs nobody claims and the Vercel site's endpoints; posts only anomalies in #agent-alerts naming @infra (once when one opens, once when it clears) and a digest at 15:00Z, naming each check a missing key leaves unmonitored (`cloud_watch.py`'s docstring) | `cloud_watch.sh`, deployed as `/data/infra/cloud_watch.sh`; sources `r2.env`, `relay.env` and `store-index.env` | `/data/infra/cloud_watch.py` and `/data/infra/cloud_watch.toml` (copies of this directory's) | `/data/cloud-watch/watch.log`; state in `/data/cloud-watch/state.json` |
+| Router (INF-123): comms' `research msg router`, one process that reads every #chat-* channel and rings the lanes that own each post (the design is comms' "Per-person chats: the router" page in Notion), restarted 30 s after it exits; extra arguments from `/data/router/args` | `router.sh`, deployed as `/data/infra/router.sh`; waits for `/data/router/src/COMMIT` and `/data/state/secrets/router.env` (root, 0600: `SLACK_BOT_TOKEN`, and `ROUTER_ANTHROPIC_API_KEY` once Daniel adds it) | `/data/router/src` (a `tools/research` tree; its `COMMIT` file names it); the registry from `/data/infra/fixtures-export-repo`, inbox routes from the steward's notes clone | `/data/router/router.log`; state in `/data/router` (`$RESEARCH_ROUTER_STATE`); the router touches `/data/router/heartbeat` (`$RESEARCH_ROUTER_HEARTBEAT`) every pass, and the control disk relay alerts when it is 5 min old |
+| Control disk relay, every 5 min: the root disk, the steward's notes sync and the router's heartbeat | `control_disk.sh`, deployed as `/data/infra/control-disk/run.sh`; sources `relay.env` | `/data/infra/control-disk/control_disk_alert.py` (a copy of this directory's), `research-src` (a `tools/research` tree) and `registry.json` beside it | `/data/infra/control-disk/relay.log`; state in `seen.json` |
 
-The disk alert, `control_disk_alert.py`, ran on infra's VM (tmux `control-disk-alert`) while the pod held no Slack credential.
-Since 13 Oct the pod has `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), and a copy runs on the pod from
-`/data/infra/control-disk/run.sh`, started by hand: `post_start.sh` doesn't start it, so a reset stops it (the cloud watch
-alerts when its `seen.json` goes stale). It reads `df` every 5 minutes and posts in #agent-alerts at 90% and 95%, again under
-85%, and when the pod has been unreadable for 30 minutes. The same pass alerts when the steward's notes sync stalls (HEAD
-detached, an `index.lock` older than 10 minutes, or a change unpushed for an hour, on two reads in a row) and notes when it
-flows again. The agent watch's findings reach Slack from infra's VM: `agent_watch_relay.py`
+The control disk relay, `control_disk_alert.py`, ran on infra's VM until 13 Oct, when the pod got `relay.env` (`SLACK_BOT_TOKEN`,
+`GH_TOKEN`); since 19 Oct `post_start.sh` starts it, and the cloud watch alerts when its `seen.json` goes stale. It reads `df`
+every 5 minutes and posts in #agent-alerts at 90% and 95%, again under 85%, and when the pod has been unreadable for 30 minutes.
+The same pass alerts when the steward's notes sync stalls (HEAD detached, an `index.lock` older than 10 minutes, or a change
+unpushed for an hour, on two reads in a row) and notes when it flows again, and alerts when the router's heartbeat is more than 5
+minutes old (or missing 5 minutes after `/data/router/src/COMMIT` was written; before that the router isn't deployed and it says
+nothing), with a note when it is fresh again. The agent watch's findings reach Slack from infra's VM: `agent_watch_relay.py`
 (tmux `agent-watch-relay` on infra's VM) posts each new line of `events.jsonl` in #agent-alerts, leading with @top and ringing @top's inbox for what the watch leaves for a person (erroring, stuck, a refused cancel, held again, a run unreadable for an hour); a worker's alert, a silent agent and an ended run lead with the record's handle and ring that inbox; the watch frees runs without it.
 
 A coordinator whose duty timer recurs opts in to the watch's idle rule by adding its handle and the timer's interval in seconds
@@ -56,7 +58,8 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/state/root-research` | `/root/.research` | the guard's and the steward's state |
 | `/data/state/runpod` | `/root/.runpod` | the RunPod CLI config and its ssh key |
 | `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
-| `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts` |
+| `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts`, `router.env` (`SLACK_BOT_TOKEN`, a copy of `relay.env`'s; `ROUTER_ANTHROPIC_API_KEY` once Daniel adds it), `slack-app-token.json` (the Slack app's configuration token pair, which `research msg slack-app` rotates in place) and `slack-app.env` (`SLACK_APP_CONFIG_REFRESH_TOKEN`, which seeds the pair file once while it is absent); all root, 0600 |
+| `/data/router` | | the router's code (`src`), state, heartbeat and log |
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
 | `/data/guard-src` | `/workspace/guard-src` | the guard's code |
@@ -88,6 +91,30 @@ $CP "cat > /data/agent-watch/timers.json" < infra/control/agent_watch_timers.jso
 $CP "cat > /data/agent-watch/nodes.json" < infra/control/agent_watch_nodes.json
 $CP "python3.12 /data/infra/agent_watch.py runs --notes /data/steward/research-notes --hours 2"   # each node's ended runs, recording nothing
 git archive HEAD tools/research | $CP "rm -rf /data/infra/store-index-src.new && mkdir /data/infra/store-index-src.new && tar -x --strip-components=2 -C /data/infra/store-index-src.new && echo $(git rev-parse HEAD) > /data/infra/store-index-src.new/COMMIT && rm -rf /data/infra/store-index-src && mv /data/infra/store-index-src.new /data/infra/store-index-src"
+$CP "cat > /data/infra/control-disk/run.sh && chmod +x /data/infra/control-disk/run.sh" < infra/control/control_disk.sh
+$CP "cat > /data/infra/control-disk/control_disk_alert.py" < infra/control/control_disk_alert.py
+$CP "/data/infra/control-disk/run.sh --once --dry-run"      # one pass, posting nothing and writing no state
+$CP "cat > /data/infra/router.sh && chmod +x /data/infra/router.sh" < infra/control/router.sh
+$CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/msg.sh
+# the router's code: the store index's line with /data/router/src; router.sh starts it within a minute and restarts it on exit
+git archive HEAD tools/research | $CP "rm -rf /data/router/src.new && mkdir /data/router/src.new && tar -x --strip-components=2 -C /data/router/src.new && echo $(git rev-parse HEAD) > /data/router/src.new/COMMIT && rm -rf /data/router/src && mv /data/router/src.new /data/router/src"
+~~~
+
+A new router version reaches the running process only when it restarts: after deploying `src`, end the router's python process
+by its exact PID (`ps -eo pid,args | grep 'msg rout[e]r'`), and `router.sh` starts the new code 30 s later.
+
+## Running `research msg` as root
+
+`msg.sh` runs `research msg ARGS` on the pod for a handle holder who needs a credential that lives only here: the Slack app's
+configuration token pair (`slack-app export|diff|apply`), or the bot token for `chat open|close|list`. It fetches origin's
+`$REF` (default `main`; `REF=pull/N/head` runs a PR's head) into its own sparse checkout, `/data/infra/msg-repo`, on every call,
+and passes the credentials only through the environment. A command that writes the registry (`chat open`) prints the
+registry's diff for the caller to commit in a registry PR.
+
+~~~sh
+research pods ssh vy-control-verity -- env RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id> \
+  /data/infra/msg.sh chat open luke --email luke@example.com --host top --dry-run
+research pods ssh vy-control-verity -- /data/infra/msg.sh slack-app diff
 ~~~
 
 A change to `post_start.sh` takes effect at the next reset. To apply a new link or service now, run the new line by hand,
