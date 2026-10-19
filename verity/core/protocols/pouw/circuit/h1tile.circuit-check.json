@@ -1,5 +1,14 @@
 {
  "definitions": {
+  "PouwAnyByte_v2": {
+   "and": 255
+  },
+  "PouwMask32_v2": {
+   "and": 32
+  },
+  "PouwOrBit_v2": {
+   "and": 1
+  },
   "PouwU129_v2": {
    "and": 14
   }

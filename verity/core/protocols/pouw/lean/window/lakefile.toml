@@ -1,7 +1,8 @@
 # PoUW's audit window as executable Lean (`verity/core/protocols/pouw/window.py`): the grid, the draw size K′ and the
 # `sampling` item, the public items, and the window's advice: its entry rows, side trees, window statement and the tile
-# instances' public inputs, which read PoUW's frame-v3-sha512 domains and C-Flock's hm96 (`pouw_commit`). Its
-# properties are stated in `Security/Properties/Pouw.lean`. `PouwWindow.Difftest` and the difftest server, which hold it
+# instances' public inputs, which read PoUW's frame-v3-sha512 domains and C-Flock's hm96 (`pouw_commit`), and a live
+# window's round coins, which read the proof service's challenger (`core_sampled_proofs`'s `SampledProofs.Challenger`).
+# Its properties are stated in `Security/Properties/Pouw.lean`. `PouwWindow.Difftest` and the difftest server, which hold it
 # to the Python, run on the shared harness (`verity_difftest`), which nothing under the root `PouwWindow` imports.
 name = "pouw_window"
 defaultTargets = ["PouwWindow", "pouw-window-difftest"]
@@ -17,6 +18,10 @@ path = "../../../../difftest/lean"
 [[require]]
 name = "pouw_commit"
 path = "../commit"
+
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../../service/sampled_proofs"
 
 [[lean_lib]]
 name = "PouwWindow"
