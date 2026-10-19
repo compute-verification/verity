@@ -21,7 +21,8 @@ admit() holds an flock on <ramlock>/.admission.lock from the reading through wri
 run_id / run_dir), so two launches cannot both take the last N GB.  Short of N it raises MemoryNotAvailable (refused.json names
 it), or with wait_s polls until then.  The runner removes its file at exit, any status ($RESEARCH_MEM_RESERVATION, research.cli);
 a runner that dies leaves a file whose pid is gone.  `research mem [--ramlock DIR] [--json]` prints the reading on the machine,
-and the waiters in line.
+and the waiters in line.  A reservation caps nothing; on the shared nodes pods/nebius/oom_order.py sets each live run's
+oom_score_adj from its use against it, so the kernel's OOM killer takes a run over its reservation, or without one, first.
 
 Waiters form a line, first come first served: a run that waits writes a ticket, <ramlock>/.waiting/<ns>.<pid>.json ({"run_id",
 "gb", "pid", "start"}), under the admission lock, and removes it when admitted or on any exit.  A run, waiting or not, is admitted
