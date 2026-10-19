@@ -575,7 +575,8 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
     """`--on MACHINE`: plan ``commit`` on MACHINE, a check node, where the keys are that machine's (its interpreter, base image,
     the tools on its PATH and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
     `--cwd source`, in `REMOTE_POOL`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
-    environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  The
+    environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  Its
+    shell is no login shell: a profile's PATH would key flock-rust-tests, lean-agreement and preflight-lints unlike a check's.  The
     plan comes back from the run's `REMOTE_OUT` to ``out``.  Returns the run's exit, 2 when it launched none."""
     if machine == "auto" or "," in machine:
         print(f"check.py --plan --on {machine}: name one machine; its keys are that machine's", file=sys.stderr)
@@ -595,7 +596,7 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
         r = run([sys.executable, "-m", "research", "run", "--on", machine, "--project", REMOTE_PROJECT, "--source", str(tree),
                  "--cwd", "source", "--pool", REMOTE_POOL, "--as", os.environ.get("RESEARCH_LANE") or "ci",
                  "--timeout", str(REMOTE_TIMEOUT_S), "--wait", "--declared-output", REMOTE_OUT,
-                 *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-lc", cmd],
+                 *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-c", cmd],
                 cwd=ROOT, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(tree)], cwd=ROOT, capture_output=True)

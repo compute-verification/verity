@@ -276,7 +276,8 @@ def test_a_circuit_targets_pass_names_its_entry_and_the_task_list_that_keys_it(P
 def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_reads_back_what_it_wrote(P, tmp_path, monkeypatch):
     """`--on MACHINE` (`on_machine`): a `research run --wait` of a worktree of the commit, sent this plan.py, verdicts.py and
     each gathered pack under a name of its own, runs the inner plan in that tree's environment on those packs; the plan it
-    writes comes back, and the worktree is gone.  The run's command goes through a real shell here, a fake `uv` its end."""
+    writes comes back, and the worktree is gone.  The run's command goes through a real shell here, a fake `uv` its end; not a
+    login shell, whose profile would change the PATH the steps' keys read from the one a check's steps see."""
     import json
     import subprocess as sp
 
@@ -304,7 +305,7 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
             return sp.CompletedProcess(argv, 0, json.dumps({"runs": [{"dir": str(run_dir)}]}), "")
         src = Path(argv[argv.index("--source") + 1])
         seen.update(head=_git(src, "rev-parse", "HEAD"), on=argv[argv.index("--on") + 1], wait="--wait" in argv,
-                    pool=argv[argv.index("--pool") + 1])
+                    pool=argv[argv.index("--pool") + 1], shell=argv[-3:-1])
         (run_dir / "inputs").mkdir(parents=True)
         for i, x in enumerate(argv):
             if x == "--send":
@@ -317,7 +318,7 @@ def test_a_plan_on_a_machine_ships_the_commit_with_this_plan_and_the_packs_and_r
     out, notes = tmp_path / "plan.json", []
     assert P.on_machine("auto", first, tmp_path, packs, [], out, notes, run=run) == 2
     assert P.on_machine("m", first, tmp_path, packs, ["--packs-only", "--base", "B"], out, notes, run=run) == 1
-    assert seen == {"head": first, "on": "m", "wait": True, "pool": "research",
+    assert seen == {"head": first, "on": "m", "wait": True, "pool": "research", "shell": ["bash", "-c"],
                     "sent": ["pack-0.tar.gz", "pack-1.tar.xz", "plan.py", "verdicts.py"]}
     i = f"{run_dir}/inputs"
     assert json.loads(out.read_text()) == [f"{i}/plan.py", "--tree", ".", "--out", f"{run_dir}/out/plan.json", "--packs-only",
