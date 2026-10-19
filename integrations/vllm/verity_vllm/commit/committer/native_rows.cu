@@ -530,8 +530,14 @@ __global__ void __launch_bounds__(THREADS, 2)
 // One launch runs the row hash's compressions b0 .. b1 - 1: a launch that ends before the row's last keeps the chaining value in the
 // position's own 64 bytes of its output (hs, else out), which the launch that finishes the row overwrites; so each block lasts a
 // fraction of a row and frees its SM sooner for a kernel that needs every SM (the serving stream's cooperative GEMMs).
+// At most VERITY_ROWS_DATA_REGS registers a thread (88: no spills on sm_90 and sm_100, where it used 117): an SM still holds two of its
+// blocks, and the 20K registers they leave free fit gather blocks beside them (two on sm_90 at 38 registers, one on sm_100 at 48),
+// which at 117 waited for a leaf block to finish.
+#ifndef VERITY_ROWS_DATA_REGS
+#define VERITY_ROWS_DATA_REGS 88
+#endif
 template <bool H_ONLY>
-__global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
+__global__ void __maxnreg__(VERITY_ROWS_DATA_REGS)
     rows_leaf_data_kernel(const __grid_constant__ LeafK K, const uint8_t* __restrict__ rows, u64 stride, const uint8_t* __restrict__ sf, u64 first,
                      u64 nd, uint8_t* __restrict__ out, uint8_t* __restrict__ bc, uint8_t* __restrict__ hs, u32 b0, u32 b1) {
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
