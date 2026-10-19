@@ -34,12 +34,13 @@ theorem go_bind_congr_r {α β : Type} {x : TMW PS α} {f g : α → TMW PS β} 
   | (.ok (a, t'), l') => exact h a t' l' hx
   | (.error e, l') => rfl
 
-theorem ite_ok {α σ : Type} {c : Prop} [Decidable c] {e : String} {v a : α} {L L' : σ}
-    (h : ((if c then .error e else .ok v : Except String α), L) = (.ok a, L')) : ¬ c ∧ v = a ∧ L = L' := by
+theorem ite_ok {α τ σ : Type} {c : Prop} [Decidable c] {e : String} {v a : α} {T T' : τ} {L L' : σ}
+    (h : ((if c then .error e else .ok (v, T) : Except String (α × τ)), L) = (.ok (a, T'), L')) :
+    ¬ c ∧ v = a ∧ T = T' ∧ L = L' := by
   by_cases hc : c
   · simp [hc] at h
   · simp only [hc, ↓reduceIte, Prod.mk.injEq, Except.ok.injEq] at h
-    exact ⟨hc, h.1, h.2⟩
+    exact ⟨hc, h.1.1, h.1.2, h.2⟩
 
 theorem liftTM_ok_log {α : Type} {x : TM α} {t t' : Transcript} {a : α} {l l' : Array Claims.Msg}
     (h : ((liftTM x : TMW PS α).run t).go l = (.ok (a, t'), l')) : l = l' := by
@@ -65,7 +66,10 @@ theorem squeezeCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (kind : UInt8) {m 
         l.push (Claims.toMsg (framed t kind m))) := by
   simp only [squeezeP, StateT.run, hm, ite_false]
   rw [go_bind, cutRound_go]
-  by_cases hn : n ≤ l.size <;> simp only [hn, ↓reduceIte] <;> rfl
+  by_cases hn : n ≤ l.size
+  · simp only [hn, ↓reduceIte]
+  · simp only [hn, ↓reduceIte]
+    rfl
 
 theorem sampleVecCut_go (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : m ≠ 0) (t : Transcript)
     (l : Array Claims.Msg) :
@@ -126,14 +130,14 @@ theorem innerCut_alike {β : Type} {coin : ℕ → ℕ → F128} {n : ℕ} {h : 
   refine go_bind_congr_r fun _ t₂ l₂ h₂ => ?_
   obtain rfl := liftTM_ok_log h₂
   refine go_bind_congr_r fun eps t₃ l₃ h₃ => ?_
-  obtain ⟨hn₀, rfl, rfl⟩ := ite_ok ((sampleCut_go coin n t₂ l).symm.trans h₃)
+  obtain ⟨hn₀, rfl, rfl, rfl⟩ := ite_ok ((sampleCut_go coin n t₂ l).symm.trans h₃)
   obtain ⟨hρ, hσ⟩ := hrs (by omega)
   simp only [InZ.rho, InZ.sigma, cutCoins] at hρ hσ
   rw [hρ, hσ]
   refine go_bind_congr_r fun _ t₄ l₄ h₄ => ?_
   obtain rfl := liftTM_ok_log h₄
   refine go_bind_congr_r fun gs t₅ l₅ h₅ => ?_
-  obtain ⟨hn₁, rfl, rfl⟩ := ite_ok ((sampleVecCut_go coin n (by simp [Zk.triple]) t₄ _).symm.trans h₅)
+  obtain ⟨hn₁, rfl, rfl, rfl⟩ := ite_ok ((sampleVecCut_go coin n (by simp [Zk.triple]) t₄ _).symm.trans h₅)
   simp only [Array.size_push] at hn₁ ⊢
   have hz := hbat (by omega)
   have hτ := htc (by omega)
@@ -145,7 +149,7 @@ theorem innerCut_alike {β : Type} {coin : ℕ → ℕ → F128} {n : ℕ} {h : 
   refine go_bind_congr_r fun _ t₆ l₆ h₆ => ?_
   obtain rfl := liftTM_ok_log h₆
   refine go_bind_congr_r fun beta t₇ l₇ h₇ => ?_
-  obtain ⟨hn₂, rfl, rfl⟩ := ite_ok ((sampleCut_go coin n t₆ _).symm.trans h₇)
+  obtain ⟨hn₂, rfl, rfl, rfl⟩ := ite_ok ((sampleCut_go coin n t₆ _).symm.trans h₇)
   simp only [Array.size_push, Nat.add_assoc, Nat.reduceAdd] at hn₂ ⊢
   by_cases hb : (coin (l.size + 2) 0).isZero = true
   · simp only [hb, ↓reduceIte, bind_assoc]
@@ -200,13 +204,13 @@ theorem repMix_eq (k : ℕ) (hk : 2 ≤ k) (io : Asks PS) (hs : Hashes PS) (st :
   unfold repMix innerPre
   simp only [show k ≠ 0 by omega, show ¬ k ≤ 1 by omega, ↓reduceIte, bind_assoc]
   refine bind_congr fun ⟨zp, lp, ss, T, sws⟩ => ?_
-  simp only [bind_assoc, pure_bind]
+  simp only [pure_bind]
   refine bind_congr fun ⟨lg, zl, rec⟩ => ?_
-  simp only [bind_assoc, pure_bind]
+  dsimp only
   refine bind_congr fun tr' => ?_
-  simp only [bind_assoc, pure_bind]
   refine bind_congr fun ⟨rp, _⟩ => ?_
-  simp only [bind_assoc, pure_bind]
+  refine bind_congr fun lgc => ?_
+  by_cases hk2 : k ≤ 2 <;> simp only [hk2, ↓reduceIte]
 
 end FlockComplete.SimInner
 
@@ -219,12 +223,12 @@ open CoinLayer
 namespace Masked
 
 /-- Table `j`'s pads layout at the deployed instance. -/
-abbrev layE (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
+noncomputable abbrev layE (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog
     (zkTab x j).sch.k0
 
 /-- Table `j`'s rep `r` honest pads at the tape `τ`. -/
-abbrev padsE (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) : FlockComplete.PadsZk :=
+noncomputable abbrev padsE (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) : FlockComplete.PadsZk :=
   FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j)
 
 /-- **The phases hybrids 2 and 3 share** at the deployed instance (`mixE`'s arguments). -/
@@ -264,7 +268,7 @@ theorem simInner_of (h : InnerSrcE) : SimInner := by
   unfold mixE
   rw [FlockComplete.SimInner.repMix_eq 2 le_rfl, FlockComplete.SimInner.repMix_eq (2 + 1) (by omega)]
   refine FlockComplete.SimInner.go_bind_congr_r fun o t' l' ho => ?_
-  rw [if_pos le_rfl, if_neg (by omega)]
+  rw [ite_eq_left le_rfl, ite_eq_right (by omega)]
   exact FlockComplete.SimInner.innerCut_alike (fun i i' e => by simp only [FlockComplete.eraseZ, e])
     (h x hx w hw τ c n hn s spec hs j r dom cm0 ic extras he l hl o t' l' ho)
 
