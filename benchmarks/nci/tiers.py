@@ -74,8 +74,8 @@ BLOCK_NAME_BITS = 25
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading only as far as
-#: ThreadedOfLayered certifies it for any reference circuit C1 allows, and every gate of a block countable
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading no further than
+#: ThreadedOfLayered certifies any for a reference circuit C1 allows, and every gate of a block countable
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -132,7 +132,7 @@ SPEC = [
     {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e)", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "thread_bits", "label": "Model: reads up to which one inference block's (d, e)-threading is certified, only (1, 0) above (ThreadedOfLayered: 512 legs x 163,840 x 2.5 bits = 2.1e8 for any reference circuit C1 allows, 1.34e9 at bf16 embeddings; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem)", "unit": "bit", "min": 1e8, "max": 1e11, "log": True},
+    {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies 512 - E legs below E + 1 lookup columns, none at 512: 512 x 163,840 x 2.5 bits = 2.1e8 for any reference circuit C1 allows, 1.34e9 at bf16 embeddings; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e8, "max": 1e11, "log": True},
     {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695)", "unit": "", "min": 0.01, "max": 1, "log": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
@@ -235,7 +235,8 @@ def chord(p: dict, bits: float = math.inf) -> float:
     """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` novel bits
     each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
     ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
-    on few blocks is the adversary's best."""
+    on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
+    Gamma)``, on the (1, 0) piece, so d and e below ``thread_bits`` don't move it."""
     K, tb, reach = p["K"], p["thread_bits"], p["K"] + bits
     base = block_cap(p, K, K <= tb)
     s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * p["block_mults"] * p["Gamma"])
