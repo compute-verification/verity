@@ -186,7 +186,7 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
     under the same names, as the rank's Build registers them (`loader_parity.post_load_tensors_as_the_loader_does`): the weights the rank
     registers, pins and replays, and the Match capture's roots, are its `named_parameters`.  The forward reads the same tensor."""
     import torch
-    mods = dict(model.named_modules())
+    mods = dict(model.named_modules()) if names else {}
     for n in names:
         mname, _, attr = n.rpartition(".")
         parent = mods.get(mname)

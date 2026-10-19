@@ -30,14 +30,18 @@ from pathlib import Path
 from typing import Any
 
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
+LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm")
+MOE_SITES = ("FusedMoE", "SharedFusedMoE", "MoERunner")
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
-PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",),
-                          "RowParallelLinear": ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm"),
+PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",), "RowParallelLinear": LINEAR_PRODUCERS,
                           "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
-                          "FusedMoE": ("MoeSum", "MoeExpertSum"), "SharedFusedMoE": ("MoeSum", "MoeExpertSum"), "MoERunner": ("MoeSum", "MoeExpertSum")}
-#: a row adding two partials of its rank and step is a partial too (GLM-5.3's MoE block: the routed `MoeSum` plus the shared expert's
-#: down-proj), named `<spec><-<producer>|<producer>` (`_named`) and admitted only when every operand's producer is (`_admitted`)
+                          **{c: ("MoeSum", "MoeExpertSum") for c in MOE_SITES}}
+#: what a summed partial may add to a partial of its site's class: at a MoE site, the shared expert's down-proj, which the MoE runner
+#: reduces with the routed sum (GLM-5.3's and DeepSeek-V4's MoE blocks)
+ADDENDS_BY_SITE_CLASS = {c: LINEAR_PRODUCERS for c in MOE_SITES}
+#: a row adding two partials of its rank and step is a partial too (the MoE block's routed `MoeSum` plus the shared expert's down-proj),
+#: named `<spec><-<producer>|<producer>` (`_named`) and admitted only when every operand's producer is (`_admitted`)
 SUMMED_PARTIALS = ("ResidualAdd_v1",)
 
 
@@ -52,11 +56,15 @@ def _named(k: int, spec_of: Any, args_of: Any, step_of: Any) -> str:
     return f"{sp}<-" + "|".join(sorted(ops))
 
 
-def _admitted(sp: Any, classes: tuple[str, ...] = PARTIAL_PRODUCERS) -> bool:
-    """Every producer named in `sp` (`_own_rows`' ``+``-joined names) is of `classes`; a summed partial's, each of its operands'."""
+def _admitted(sp: Any, classes: tuple[str, ...] = PARTIAL_PRODUCERS, addends: tuple[str, ...] = ()) -> bool:
+    """Every producer named in `sp` (`_own_rows`' ``+``-joined names) is of `classes`; a summed partial's, each of its operands', of
+    which all but one may be of `addends` instead."""
     def one(x: str) -> bool:
         head, _, ops = x.partition("<-")
-        return all(o.startswith(classes) for o in ops.split("|")) if ops and head.startswith(SUMMED_PARTIALS) else x.startswith(classes)
+        if not (ops and head.startswith(SUMMED_PARTIALS)):
+            return x.startswith(classes)
+        operands = ops.split("|")
+        return any(o.startswith(classes) for o in operands) and all(o.startswith(classes + addends) for o in operands)
     return all(one(x) for x in str(sp).split("+"))
 
 
@@ -431,7 +439,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     if want and producers is not None:
                         key = (int(col["step"]), int(col["k"]))
                         specs = producers.get(r, {}).get(key) or []
-                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want)})
+                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want, ADDENDS_BY_SITE_CLASS.get(cls or "", ()))})
                         if bad:
                             c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {want} (wrong producer)")
         c.close()
