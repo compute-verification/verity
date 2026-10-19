@@ -27,13 +27,8 @@ theorem guess_false_of_same {C V : Type} [Fintype C] (mode : C → V → Mode) (
   intro h
   have h2 : prob (fun c : C => same c t ∧ (0 : ℝ) < if mode c t = Mode.whole then 1 else 0) ≤
       p0 * prob (fun c : C => (0 : ℝ) < if mode c t = Mode.whole then 1 else 0) := by
-    first
-      | (simp only [Accounting.Assumptions.Compose.GuessLuckAt, tileGame, ReceiptGame.game, RoundGame.LuckAt] at h
-         exact h.2.1)
-      | (simp only [Accounting.Assumptions.Compose.GuessLuckAt, tileGame, ReceiptGame.game, RoundGame.LuckAt] at h
-         exact h.2)
-      | (obtain ⟨-, h2, -⟩ := h
-         exact h2)
+    simp only [Accounting.Assumptions.Compose.GuessLuckAt, tileGame, ReceiptGame.game, RoundGame.LuckAt] at h
+    exact h.2.1
   have e : ∀ c : C, ((0 : ℝ) < if mode c t = Mode.whole then 1 else 0) ↔ mode c t = Mode.whole := by
     intro c
     split_ifs with hc <;> simp [hc]
@@ -59,9 +54,12 @@ theorem guess_false_dead {C V : Type} [Fintype C] [Nonempty C] (mode : C → V �
     ¬ Accounting.Assumptions.Compose.GuessLuckAt (1 / 2) (tileGame mode right same .whole t) := by
   have hpos : 0 < prob (fun c : C => mode c t = .whole) := by
     unfold prob
+    obtain ⟨c0⟩ := ‹Nonempty C›
     have hc : (0 : ℝ) < Fintype.card C := by exact_mod_cast Fintype.card_pos
-    rw [Finset.filter_true_of_mem (fun c _ => hw c), Finset.card_univ]
-    exact div_pos hc hc
+    refine div_pos ?_ hc
+    first
+      | exact_mod_cast Finset.card_pos.2 ⟨c0, by simp [hw c0]⟩
+      | exact Nat.cast_pos.2 (Finset.card_pos.2 ⟨c0, by simp [hw c0]⟩)
   exact guess_false_of_same mode right same t (fun c _ => hs c) hpos (by norm_num)
 
 end RtInt2Dead
