@@ -20,8 +20,10 @@ columns; the units read their rows from the leader's region), gated against CA's
           equal to the per-unit arm's (a leader's noise is its own) and every non-leader's different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and drawn blocks
           against seeds.noise_block of their unit's seed_j.
     time  CUDA graphs replayed between events, the arms interleaved (h1zbench.bench's loop).
+    tw    with --tw, at down_proj and --tw-ms: the tile-width price (`tw_arms`, `tw_price`; a price, not a served form).
 
     python j10hb.py --lib NAME=h1u_ka.so [--lib ...] --ref-lib h1zref.so --out OUT [--ms 1,32,256,2048,8192] [--gs 64,16]
+                    [--tw --noise-lib h1noise.so [--tw-ms 32,256,2048]]
 """
 from __future__ import annotations
 
@@ -170,6 +172,161 @@ def runner(oc: Z.OneCall):
     return lambda i: oc.run()
 
 
+def seeds_runner(lib: Z.OneLib, c: Call, S: int, seeds: torch.Tensor):
+    return lambda i: lib.seeds(c.data, c.base, S, seeds)
+
+
+def noise_runner(noise: NoiseLib, *a):
+    return lambda i: noise.run(*a)
+
+
+class NoiseLib:
+    """h1noise.cu's kn_band: an r x c tile layout's noise blocks (h1tile.Layout's order), per-unit (band 1) or J10 banded."""
+
+    def __init__(self, path: str):
+        h = self.h = ctypes.CDLL(path)
+        vp, u32 = ctypes.c_void_p, ctypes.c_uint
+        if not hasattr(h, "kn_band"):
+            raise RuntimeError(f"{path} has no kn_band: rebuild h1noise.cu at kernels-j10's branch")
+        h.kn_band.argtypes = [vp, u32, u32, u32, u32, u32, u32, u32, vp, vp]
+
+    def run(self, seeds: torch.Tensor, S: int, ncb: int, nb: int, rows_nb: int, band: int, J: int,
+            out: torch.Tensor) -> None:
+        rc = self.h.kn_band(seeds.data_ptr(), 16, S, ncb, nb, rows_nb, band, J, out.data_ptr(),
+                            torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"kn_band(S {S}, ncb {ncb}, nb {nb}, band {band}) rc {rc}")
+
+
+TW_C = 8
+TW_PEAK_TBS = {"H200": 4.8, "B200": 8.0, "RTX PRO 6000": 1.792}  # DRAM bandwidth, data sheets: the modeled delta only
+
+
+def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.Random, workers: int) -> tuple[dict, dict]:
+    """The tile-width price's arms at one down_proj shape (a price, not a served form). A 32 x 8 tile's seeds (kh_seeds at
+    its 4x units' positions, unit (ri, cj) at base + ri (N / 8) + cj) and its noise (kn_band at h1tile.Layout(32, 8, K)'s
+    counts), per-unit and banded at each g, beside today's 32 x 32 tile's through the same kernel. Gated before timing:
+    the kernel's counts are the Layout's; each arm's buffer 0xA5 first, then no 0xA5 block in any block a unit hashes, every
+    non-leader row block still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; CA's
+    banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to CA's
+    definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
+    nrb, sms = rows // 32, torch.cuda.get_device_properties(0).multi_processor_count
+    lays = {32: HT.Layout(32, 32, k), TW_C: HT.Layout(32, TW_C, k)}
+    doc: dict = {"label": f"a price, not a served form: down_proj tiles 32 x {TW_C} against 32 x 32", "c": {}}
+    arms: dict = {}
+    for cw, lay in lays.items():
+        ncb, S = n // cw, nrb * (n // cw)
+        nb, rnb = lay.blocks, lay.r * lay.rb
+        if cw == 32 and (nb != int(lib.h.kh_noise_blocks(k)) or rnb != 32 * (k // 512 + 1)):
+            raise RuntimeError(f"Layout(32, 32, {k}) has {nb} blocks, {rnb} of rows: not kh_noise_blocks'")
+        if lay.row(31) != 31 * lay.rb or lay.col(0) != rnb or lay.col(cw - 1) + lay.cb != nb:
+            raise RuntimeError(f"Layout(32, {cw}, {k}) is not rows then columns")
+        seeds = torch.empty((S, 16), dtype=torch.int64, device="cuda")
+        lib.seeds(c.data, c.base, S, seeds)
+        out = torch.empty((S * nb * 16,), dtype=torch.int32, device="cuda")
+        J = auto_j(S, nb, sms)
+        d = doc["c"][cw] = {"units": S, "column_tiles": ncb, "blocks": nb, "row_blocks": rnb, "J": J,
+                            "words": lay.r * cw * k, "lanes": lay.lanes, "receipt_words": 2 * lay.sets, "gates": {}}
+        arms[f"tw-seeds-c{cw}"] = seeds_runner(lib, c, S, seeds)
+        for g in [1, *gs]:
+            out.fill_(Z.A5)
+            noise.run(seeds, S, ncb, nb, rnb, g, J, out)
+            torch.cuda.synchronize()
+            v = out.view(S, nb, 16)
+            lead = torch.tensor([(u % ncb) % g == 0 for u in range(S)], device="cuda")
+            unwritten = rows_written = cols_poison = 0
+            for s0 in range(0, S, 2048):
+                p = (v[s0:s0 + 2048] == Z.A5).all(dim=-1)
+                ld = lead[s0:s0 + 2048]
+                rows_written += int((~p[:, :rnb][~ld]).sum())
+                unwritten += int(p[:, :rnb][ld].sum())
+                cols_poison += int(p[:, rnb:].sum())
+            sample = [(0, 0), (S - 1, nb - 1)]
+            for _ in range(24):
+                u = rng.randrange(S)
+                sample.append((u, rng.randrange(0 if (u % ncb) % g == 0 else rnb, nb)))
+            got = v[torch.tensor([u for u, _ in sample], device="cuda"), torch.tensor([t for _, t in sample], device="cuda")]
+            got = got.cpu().numpy().view(np.uint32)
+            bad = sum(got[i].tolist() != SD.halves(SD.noise_block(SD.seed(c.salt, c.base + u, *c.roots), t))
+                      for i, (u, t) in enumerate(sample))
+            d["gates"][g] = {"leader_row_poison_blocks": unwritten, "nonleader_row_blocks_written": rows_written,
+                             "col_poison_blocks": cols_poison, "blocks_checked": len(sample), "blocks_bad": bad,
+                             "ok": unwritten == 0 and cols_poison == 0 and bad == 0 and (g == 1 or rows_written == 0)}
+            if d["gates"][g]["ok"]:
+                arms[f"tw-noise-c{cw}-b{g}"] = noise_runner(noise, seeds, S, ncb, nb, rnb, g, J, out)
+    doc["ca_reference"] = tw_ca(c, gs[0] if gs else 64, workers)
+    doc["ok"] = all(x["ok"] for d in doc["c"].values() for x in d["gates"].values()) and doc["ca_reference"]["ok"]
+    return arms, doc
+
+
+def tw_ca(c, g0: int, workers: int) -> dict:
+    """CA's banded_reference on row block 0's 32 x 8 tiles J = g0 (a band leader) and g0 + 1 (a non-leader) at g0, unit
+    (0, J) at c.base + J: z = A B^T, 2 sets receipt words each, both read the leader's position, and the leader's receipt
+    is h1tile.reference's at its own position (its noise is its own) while the non-leader's is not."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    n, k = c.b.shape[0], c.a.shape[1]
+    a = c.a.cpu().numpy().astype(np.int64)
+    b = c.b.cpu().numpy().astype(np.int64)
+    js = (g0, g0 + 1)
+    cells = [{"a": (a[:32] & 0xFF).tolist(), "b": (b[TW_C * j:TW_C * j + TW_C] & 0xFF).tolist(), "salt": c.salt.hex(),
+              "position": c.base + j, "roots": [c.roots[0].hex(), c.roots[1].hex()], "I": 0, "J": j, "g": g0,
+              "row_positions": [c.base + j2 for j2 in range(n // TW_C)]} for j in js]
+    t0 = time.time()
+    ca = JB.ca_reference(cells, workers)
+    doc = {"tile": f"32 x {TW_C}", "cells": [(x["I"], x["J"], x["g"]) for x in cells], "cpu_s": round(time.time() - t0, 2),
+           **{x: v for x, v in ca.items() if x != "units"}, "ok": False}
+    if "units" not in ca:
+        return doc
+    us = ca["units"]
+    own = [HT.reference(cells[i]["a"], cells[i]["b"], c.salt, c.base + j, c.roots)[1] for i, j in enumerate(js)]
+    doc.update({
+        "receipt_words": [len(x["receipt"]) for x in us],
+        "z_eq_ab": [bool((np.array(x["z"]) == a[:32] @ b[TW_C * j:TW_C * j + TW_C].T).all()) for x, j in zip(us, js)],
+        "leader_positions": [x["leader_position"] for x in us],
+        "receipt_eq_h1tile_own": [[w & 0xFFFFFFFF for w in x["receipt"]] == list(o) for x, o in zip(us, own)]})
+    words = 2 * HT.Layout(32, TW_C, k).sets
+    doc["ok"] = (all(doc["z_eq_ab"]) and doc["receipt_words"] == [words] * 2
+                 and doc["leader_positions"] == [c.base + g0] * 2 and doc["receipt_eq_h1tile_own"] == [True, False])
+    return doc
+
+
+def tw_price(out: dict, gs: list[int], device: str) -> dict:
+    """The 32 x 8 call priced from the timed launches: today's unit launch (the same MMAs and fold lanes a 32 columns),
+    its seeds swapped for the 32 x 8 tile's, and its noise for kn_band's at Layout(32, 8, K); the swap form instead takes
+    today's whole call less kn_band's 32 x 32 seeds and noise. The extra row-noise reads and receipt words a 32 x 8 unit
+    adds over a 32 x 32 unit, modeled at the data sheet's DRAM bandwidth, are reported apart: no narrow unit kernel is
+    built, so neither form times them."""
+    med = {a: v["median_us"] for a, v in out["arms"].items()}
+    tw, osp = out["tile_width"], next((a for a in med if a.endswith("-osp")), None)
+    if osp is None or not tw.get("ok"):
+        return {"error": "no gated per-unit arm or tile-width gate"}
+    c32, c8 = tw["c"][32], tw["c"][TW_C]
+    peak = next((v for d, v in TW_PEAK_TBS.items() if d in device), None)
+    extra = (c8["units"] - c32["units"]) * (c32["row_blocks"] * 64 + 4 * c8["receipt_words"])
+    p: dict = {"bytes_extra": extra, "peak_tb_s": peak,
+               "delta_us_modeled": round(extra / (peak * 1e6), 3) if peak else None}
+    for g in [1, *gs]:
+        base = osp if g == 1 else f"{osp}-b{g}"
+        units = med.get(f"{osp}-units" if g == 1 else f"{osp}-b{g}-units")
+        need = [units, med.get("tw-seeds-c32"), med.get("tw-seeds-c8"), med.get(f"tw-noise-c8-b{g}"),
+                med.get(f"tw-noise-c32-b{g}"), med.get(base)]
+        if any(x is None for x in need):
+            p[f"b{g}"] = {"error": "an arm is missing"}
+            continue
+        u, s32, s8, n8, n32, call = need
+        price = u - s32 + s8 + n8
+        swap = call - s32 - n32 + s8 + n8
+        p[f"b{g}"] = {"call_32x32_us": call, "units_32x32_us": u, "noise_32x32_us": n32, "noise_32x8_us": n8,
+                      "seeds_32x32_us": s32, "seeds_32x8_us": s8, "call_32x8_us": round(price, 3),
+                      "over_32x32": round(price / call, 4),
+                      "over_32x32_per_unit": round(price / med[osp], 4),
+                      "call_32x8_swap_us": round(swap, 3), "swap_over_32x32": round(swap / call, 4),
+                      "with_delta_over_32x32": round((price + p["delta_us_modeled"]) / call, 4) if peak else None}
+    return p
+
+
 def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh: np.ndarray, clock: Clock, l2: int,
           rng: random.Random, shift: int, gs: list[int]) -> dict:
     X = torch.from_numpy(Xh[:m]).to("cuda")
@@ -227,6 +384,13 @@ def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh:
                 o2 = copy.copy(oc)
                 o2.lib = BandLib(path, gb, mode)
                 timed[barm + sfx] = o2
+    tws: dict = {}
+    if args.noise is not None and name == "down" and m in args.tw_ms:
+        tws, out["tile_width"] = tw_arms(call, first, args.noise, gs, rng, args.workers)
+        print(json.dumps({"linear": name, "m": m, "tile_width": out["tile_width"]}, default=str), flush=True)
+        out["gates"]["tile_width"] = {"ok": out["tile_width"]["ok"]}
+        if not out["tile_width"]["ok"]:
+            tws = {}
     failed = [arm for arm, g in out["gates"].items() if not g["ok"]]
     if failed:
         out["gate_failed"] = failed
@@ -234,6 +398,7 @@ def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh:
         out["error"] = "every gate failed: nothing timed"
         return out
     arms: dict = {arm: runner(oc) for arm, oc in timed.items()}
+    arms.update(tws)
     parms, info = plain_arms(name, n, k, m, Xh, l2)
     out.update(info)
     arms.update(parms)
@@ -270,7 +435,9 @@ def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh:
         base = arm.split("-b")[0] if "-b" in arm else arm.removesuffix("-noise").removesuffix("-units")
         if base in med and arm in med:
             out["over_per_unit"][arm] = round(med[arm] / med[base], 4)
-    del graphs, timed, call
+    if "tile_width" in out:
+        out["tile_width"]["price"] = tw_price(out, gs, clock.name)
+    del graphs, timed, call, arms, tws
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
     return out
@@ -288,7 +455,15 @@ def main() -> int:
     ap.add_argument("--ms", default=",".join(map(str, MS)))
     ap.add_argument("--linears", default=",".join(LINEARS))
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--tw", action="store_true", help="the tile-width price at down_proj (needs --noise-lib)")
+    ap.add_argument("--tw-ms", default="32,256,2048")
+    ap.add_argument("--noise-lib", help="h1noise.so with kn_band")
     args = ap.parse_args()
+    if args.tw and not args.noise_lib:
+        print("j10hb: --tw needs --noise-lib (h1noise.so built at this branch)", file=sys.stderr)
+        return 2
+    args.noise = NoiseLib(args.noise_lib) if args.tw else None
+    args.tw_ms = {int(v) for v in args.tw_ms.split(",")}
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     builds = {}
@@ -335,6 +510,8 @@ def main() -> int:
     layer: dict = {}
     for r in doc["shapes"]:
         for arm, v in r.get("arms", {}).items():
+            if arm.startswith("tw-"):
+                continue
             d = layer.setdefault(r["m"], {}).setdefault(arm, {"us": 0.0, "linears": []})
             d["us"] += v["median_us"]
             d["linears"].append(r["linear"])

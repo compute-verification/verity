@@ -16,7 +16,8 @@
 #            h1zref.cu's z = X·(B + c)ᵀ at the served shapes, receipts against receipts.py, y = dequant(z), the no-write
 #            control and both faults; then timed against its two-launch receipts-only form, the noise floor and plain)
 #   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (kernels-j10, measured only: each build's credited one-stream
-#            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone)
+#            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone;
+#            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
@@ -136,6 +137,7 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); jl+=" --lib ${v#h1u_}=$f"
       done
       [ -n "$jl" ] || { echo "job.sh: j10hb needs an h1u*.so in $LIBS" >&2; exit 2; }
+      [ -f "$LIBS/h1noise.so" ] && { NEED+=(h1noise); jl+=" --noise-lib $LIBS/h1noise.so"; }
       CMDS+=("$PY $HERE/j10hb.py$jl --ref-lib $LIBS/h1zref.so --out $OUT ${BENCH_ARGS:-}") ;;
     prof)
       plibs=""
