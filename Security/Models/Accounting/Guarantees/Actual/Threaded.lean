@@ -22,6 +22,10 @@ capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
   multiplications the declaration computes obey the cap, and every other one is a dark gate,
   `|M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
 
+The `Slots` forms (`ThreadedRuntimeSlots`, `ThreadedRateSlots`, `ThreadedRuntimeDarkSlots`) take the reference circuit's
+weights incompressible per parameter slot (`Nci.Assumptions.WeightsIncompressibleSlots`), so that a window spanning
+several optimizer steps on a parameter is charged for it once, with the same bounds.
+
 All count reads by width: `Placed.state` and `novelReads` are widths of the gates read. A wipe bounds information, what
 the state can determine, not the width of the gates a window reads from before its start, so composing these with a wipe
 needs the read bound in its determination form.
@@ -103,6 +107,72 @@ def ThreadedRuntimeDark : Prop :=
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
     T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressible c T Γ (R + r * ω) b_w b_a →
+      b_a * (T.M ∩ M.S).card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
+      (ω : ℝ) * (b_a * (T.M ∩ M.S).card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t ∧
+      (T.M.card : ℝ) ≤
+        M.dark.card + (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) / b_a
+
+/-- **The memory cap over threads, per parameter slot.** `ThreadedRuntime` with the reference circuit's weights
+incompressible per parameter slot of a slot map `σ` (`Nci.Assumptions.WeightsIncompressibleSlots`) at `(Γ, K)`, so that
+a window spanning several optimizer steps on a parameter is charged for it once: the same bound,
+`b_a |T.M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M| / (n K Λ(K)) − 1)`.
+
+Reads are counted by width, as in `ThreadedRuntime`. -/
+def ThreadedRuntimeSlots : Prop :=
+  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
+    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e : ℕ),
+    0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
+    A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
+    0 < b_w → 0 < b_a → 0 < d →
+    (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
+    (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
+    c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
+    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + r * ω) b_w b_a →
+      b_a * T.M.card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
+      (ω : ℝ) * (b_a * T.M.card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t
+
+/-- **The memory cap's rate at the optimal window, per parameter slot.** `ThreadedRate` under
+`Nci.Assumptions.WeightsIncompressibleSlots`: `b_a b_w d |T.M| ≤ reuse · n R r t`, and
+`κ b_a b_w d size(c) ≤ 2 reuse · n R r t`.
+
+Reads are counted by width, as in `ThreadedRuntime`. -/
+def ThreadedRateSlots : Prop :=
+  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω p Γ : ℕ) (R r b_w b_a : ℝ)
+    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e : ℕ),
+    0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
+    A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
+    0 < b_w → 0 < b_a → 0 < d →
+    (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
+    (∀ i (j : ℕ), j * p < t → (A.state (X i) (j * p) : ℝ) ≤ R) → p ∣ ω → ω ∣ t → r * ω = R →
+    (e : ℝ) ≤ T.reuse * (2 * R) / (4 * d * b_w) →
+    c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
+    T.Threaded Γ (2 * R) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (2 * R) b_w b_a →
+      b_a * b_w * d * T.M.card ≤ T.reuse * n * R * r * t ∧
+      ∀ κ : ℝ, κ * c.D.size c.D.computed ≤ 2 * T.M.card →
+        κ * b_a * b_w * d * c.D.size c.D.computed ≤ 2 * T.reuse * n * R * r * t
+
+/-- **The memory cap over threads, with dark gates, per parameter slot.** `ThreadedRuntimeDark` under
+`Nci.Assumptions.WeightsIncompressibleSlots`: the counted multiplications in `S` obey the memory cap,
+`b_a |T.M ∩ S| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M ∩ S| / (n K Λ(K)) − 1)`, and
+`|T.M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
+
+Reads are counted by width, as in `ThreadedRuntime`. -/
+def ThreadedRuntimeDarkSlots : Prop :=
+  ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
+    (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
+    (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
+    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e : ℕ)
+    (M : PartialContainment c (A.declaration (univ.biUnion X) t θ hθ)),
+    0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
+    A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
+    0 < b_w → 0 < b_a → 0 < d →
+    (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
+    (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
+    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + r * ω) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
       (ω : ℝ) * (b_a * (T.M ∩ M.S).card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t ∧
       (T.M.card : ℝ) ≤

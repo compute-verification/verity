@@ -10,6 +10,10 @@ gates, so it reads at most `αΓ` bits: the draft's `S*` is `αΓ` here.
 Theorem 2 also holds when the declaration contains the reference circuit only partly (`PartialContainment`): the
 counted multiplications it computes are throttled as before, and every other one is a dark gate, computed off the books
 (`ThreadedThrottledOn`, `ThreadedThrottledDark`, `ThreadedTrainingOn`).
+
+The `Slots` forms take `WeightsIncompressibleSlots`, weights charged per parameter slot, in place of
+`WeightsIncompressible`, with the same bound: a subcircuit that spans several optimizer steps on a parameter is charged
+for it once.
 -/
 
 namespace Nci.Guarantees
@@ -76,5 +80,37 @@ def ThreadedTrainingOn : Prop :=
     κ * c.D.size c.D.computed ≤ 2 * T.M.card →
       κ * b_a * c.D.size c.D.computed ≤
         2 * b_a * M.dark.card + 2 * α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
+
+/-- **Theorem 1 per parameter slot**: `ThreadedReads` with the weights charged per parameter slot of a slot map `σ`
+(`WeightsIncompressibleSlots`) rather than per weight gate. Its bound is the same, `Λ = max(e, c · S / (4 d b_w))`,
+since a thread's counted multiplications on the versions of one slot number at most `c` (`σ.reuse_le`). -/
+def ThreadedReadsSlots : Prop :=
+  ∀ (c : Declaration) (T : Threading c) (σ : T.Slots) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
+    0 < b_w → 0 < b_a → 0 < d → T.Threaded Γ S d e → Assumptions.WeightsIncompressibleSlots c T σ Γ S b_w b_a →
+    ∀ R, Small c Γ S R → b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e
+
+/-- **Theorem 2 per parameter slot**: `ThreadedThrottled` under `WeightsIncompressibleSlots`. -/
+def ThreadedThrottledSlots : Prop :=
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → c.Contains d → Complies Γ α d →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
+      b_a * T.M.card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
+
+/-- **Theorem 2 with dark gates, per parameter slot**: `ThreadedThrottledOn` under `WeightsIncompressibleSlots`. -/
+def ThreadedThrottledOnSlots : Prop :=
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
+    (M : PartialContainment c d),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
+      b_a * (T.M ∩ M.S).card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed
+
+/-- **Counted multiplications off the books are dark gates, per parameter slot**: `ThreadedThrottledDark` under
+`WeightsIncompressibleSlots`. -/
+def ThreadedThrottledDarkSlots : Prop :=
+  ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (T : Threading c) (σ : T.Slots) (dd e : ℕ)
+    (M : PartialContainment c d),
+    0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd → Complies Γ α d →
+    T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
+      (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a
 
 end Nci.Guarantees

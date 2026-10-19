@@ -23,7 +23,8 @@ guarantee or of the model's accounting:
   computation counts the residual and the declared computation together.
 
 `Dampener` takes all five as hypotheses; `DampenerWindows` derives the memory cap's from the windows; `DampenerThreaded`
-also discharges the declared computation's with `ThreadedThrottled`.
+also discharges the declared computation's with `ThreadedThrottled`, and `DampenerThreadedSlots` with
+`ThreadedThrottledSlots`, weights charged per parameter slot.
 -/
 
 namespace Nci.Guarantees
@@ -75,6 +76,23 @@ def DampenerThreaded : Prop :=
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
     c.Contains d → Complies Γ α d → T.Threaded Γ (α * Γ) dd e →
     Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
+    M ≤ Mu + Mr + T.M.card + Mx →
+    (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
+    n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e) →
+      efficiency κ M C U ≤
+        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
+          declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
+
+/-- **The compute dampener over NCI's thread bound, per parameter slot**: `DampenerThreaded` with the reference
+circuit's weights incompressible per parameter slot of a slot map `σ` (`Assumptions.WeightsIncompressibleSlots`), its
+declared computation's bound from `Nci.Guarantees.ThreadedThrottledSlots`. -/
+def DampenerThreadedSlots : Prop :=
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : Declaration) (T : Threading c)
+    (σ : T.Slots) (dd e : ℕ),
+    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
+    c.Contains d → Complies Γ α d → T.Threaded Γ (α * Γ) dd e →
+    Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
     n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →

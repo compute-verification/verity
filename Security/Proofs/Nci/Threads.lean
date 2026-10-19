@@ -1,6 +1,7 @@
 import Models.Nci.Guarantees.Threads
 import Proofs.Core.Circuit
 import Proofs.Nci.Pull
+import Proofs.Nci.Fit
 
 /-!
 # Proofs of NCI's guarantees over threads
@@ -9,12 +10,14 @@ Theorem 1 (`threaded_reads`) follows the draft's Appendix A: split a small subci
 than `d` values of (low) and the rest (high). Low threads give at most `e` multiplications per value read; each high
 thread gives at most `c · p` multiplications for the `p` weights used, and there are at most `A_H / (d b_a)` of them.
 With `p b_w + A_L + A_H ≤ R` (incompressibility) and AM–GM, `p · A_H ≤ (R − A_L)² / (4 b_w)`, and the total is linear in
-`A_L`.
+`A_L`. The counting (`threaded_count_by`) takes any `p` that caps each thread's multiplications at `c · p`, so it holds
+with `p` the parameter slots used (`card_threadMults_le_slots`, `threaded_reads_slots`).
 
-Theorem 2 follows Appendix B, through a partial containment (`ThreadedThrottledOn`): pull a compliant division of the
-containing declaration back to the gates `S` of `c` it computes (`piece`); each piece is small, reads no more than its IU,
-and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and a total containment is the case `S =
-computed` (`ThreadedThrottled`).
+Theorem 2 follows Appendix B, through a partial containment (`ThreadedThrottledOnSlots`): pull a compliant division of
+the containing declaration back to the gates `S` of `c` it computes (`piece`); each piece is small, reads no more than its
+IU, and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and a total containment is the case `S =
+computed` (`ThreadedThrottledSlots`). Each guarantee over weight gates is its `Slots` form at one slot per weight gate
+(`Fit.idSlots`), where `WeightsIncompressible` gives `WeightsIncompressibleSlots` (`weightsIncompressibleSlots_of`).
 -/
 
 namespace Nci.SecurityProofs
@@ -89,12 +92,13 @@ theorem threaded_ineq {bw d e cr S Rn X Y q Hb Mt : ℝ} (hbw : 0 < bw) (hd : 0 
           (mul_le_mul_of_nonneg_right (le_max_right _ _) hRX)
     _ = Rn * max e K := by ring
 
-/-- Theorem 1's counting, for any measure `Rn ≤ S` of what `R` reads that pays for the weights `R` uses and the thread
-values it reads. -/
-theorem threaded_count {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) {S b_w b_a Rn : ℝ} {d e : ℕ}
+/-- Theorem 1's counting, for any `Rn ≤ S` that pays `b_w` for each of `q` weights and `b_a` for each thread value `R`
+reads, when each thread's counted multiplications in `R` number at most `reuse · q`. -/
+theorem threaded_count_by {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) {S b_w b_a Rn : ℝ} {d e q : ℕ}
     (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
     (hT : ∀ t, (T.threadReads R t).card < d → (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
-    (hinc : b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
+    (hq : ∀ t, (T.threadMults R t).card ≤ T.reuse * q)
+    (hinc : b_w * q + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
     b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e := by
   classical
   set L := univ.filter fun t => (T.threadReads R t).card < d with hL_def
@@ -106,9 +110,9 @@ theorem threaded_count {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.
     rw [mul_sum]
     refine sum_le_sum fun t ht => ?_
     exact_mod_cast hT t (mem_filter.1 ht).2
-  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * (T.weightsUsed R).card * H.card := by
-    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * (T.weightsUsed R).card)
-      fun t _ => by exact_mod_cast card_threadMults_le T R t
+  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * q * H.card := by
+    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * q)
+      fun t _ => by exact_mod_cast hq t
     rwa [nsmul_eq_mul, mul_comm] at this
   have hHc : (d : ℝ) * H.card ≤ ∑ t ∈ H, ((T.threadReads R t).card : ℝ) := by
     have := card_nsmul_le_sum H (fun t => ((T.threadReads R t).card : ℝ)) (d : ℝ)
@@ -118,7 +122,7 @@ theorem threaded_count {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.
   rw [← sum_filter_add_sum_filter_not univ (fun t => (T.threadReads R t).card < d)] at hinc
   have hdr : (0 : ℝ) < d := by exact_mod_cast hd
   refine threaded_ineq (Hb := b_a * H.card) (Y := b_a * ∑ t ∈ H, ((T.threadReads R t).card : ℝ))
-    (X := b_a * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (q := (T.weightsUsed R).card) hbw hdr
+    (X := b_a * ∑ t ∈ L, ((T.threadReads R t).card : ℝ)) (q := q) hbw hdr
     (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _))
     (mul_nonneg hba.le (sum_nonneg fun _ _ => Nat.cast_nonneg _)) (Nat.cast_nonneg _) (by linarith)
     hRS ?_ ?_
@@ -128,6 +132,57 @@ theorem threaded_count {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.
     have h1 := mul_le_mul_of_nonneg_left hL hba.le
     have h2 := mul_le_mul_of_nonneg_left hH hba.le
     nlinarith
+
+/-- Theorem 1's counting, for any measure `Rn ≤ S` of what `R` reads that pays for the weights `R` uses and the thread
+values it reads. -/
+theorem threaded_count {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) {S b_w b_a Rn : ℝ} {d e : ℕ}
+    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
+    (hT : ∀ t, (T.threadReads R t).card < d → (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
+    (hinc : b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
+    b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e :=
+  threaded_count_by T R hbw hba hd hT (card_threadMults_le T R) hinc hRS
+
+section Slots
+
+/-- A thread's counted multiplications in `R` number at most `reuse` per parameter slot `R` uses. -/
+theorem card_threadMults_le_slots {c : Declaration} {T : Threading c} (σ : T.Slots) (R : Finset (Fin c.D.N))
+    (t : Fin T.m) : (T.threadMults R t).card ≤ T.reuse * (σ.slotsUsed R).card :=
+  (Fit.card_threadMults_le_reuse_slots σ R t).trans
+    (Nat.mul_le_mul_left _ (card_le_card (Fit.threadSlots_subset σ R t)))
+
+/-- A subcircuit uses at most as many parameter slots as weights. -/
+theorem card_slotsUsed_le {c : Declaration} {T : Threading c} (σ : T.Slots) (R : Finset (Fin c.D.N)) :
+    (σ.slotsUsed R).card ≤ (T.weightsUsed R).card := by
+  rw [Threading.Slots.slotsUsed]
+  exact card_image_le
+
+/-- **Weights incompressible per gate are incompressible per slot**, at any slot map and a nonnegative rate `b_w`:
+a subcircuit uses at most as many slots as weights. -/
+theorem weightsIncompressibleSlots_of {c : Declaration} {T : Threading c} (σ : T.Slots) {Γ : ℕ} {S b_w b_a : ℝ}
+    (hbw : 0 ≤ b_w) (h : Assumptions.WeightsIncompressible c T Γ S b_w b_a) :
+    Assumptions.WeightsIncompressibleSlots c T σ Γ S b_w b_a := by
+  intro R hR
+  have hle : ((σ.slotsUsed R).card : ℝ) ≤ (T.weightsUsed R).card := Nat.cast_le.2 (card_slotsUsed_le σ R)
+  have h1 := mul_le_mul_of_nonneg_left hle hbw
+  have h2 := h R hR
+  linarith
+
+/-- **With every slot one version, the two are the same**: for a slot map one-to-one on the weight gates, a subcircuit
+uses as many slots as weights. -/
+theorem weightsIncompressibleSlots_iff {c : Declaration} {T : Threading c} (σ : T.Slots)
+    (hσ : Set.InjOn σ.slot T.W) (Γ : ℕ) (S b_w b_a : ℝ) :
+    Assumptions.WeightsIncompressibleSlots c T σ Γ S b_w b_a ↔ Assumptions.WeightsIncompressible c T Γ S b_w b_a := by
+  simp only [Assumptions.WeightsIncompressibleSlots, Assumptions.WeightsIncompressible, Fit.card_slotsUsed σ hσ]
+
+/-- Theorem 1's counting with the weights charged per parameter slot. -/
+theorem threaded_count_slots {c : Declaration} {T : Threading c} (σ : T.Slots) (R : Finset (Fin c.D.N))
+    {S b_w b_a Rn : ℝ} {d e : ℕ} (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
+    (hT : ∀ t, (T.threadReads R t).card < d → (T.threadMults R t).card ≤ e * (T.threadReads R t).card)
+    (hinc : b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ Rn) (hRS : Rn ≤ S) :
+    b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e :=
+  threaded_count_by T R (q := (σ.slotsUsed R).card) hbw hba hd hT (card_threadMults_le_slots σ R) hinc hRS
+
+end Slots
 
 /-- **Theorem 1** (the thread draft, Appendix A). -/
 theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ) (hbw : 0 < b_w)
@@ -139,9 +194,19 @@ theorem threaded_reads (c : Declaration) (T : Threading c) (Γ : ℕ) (S b_w b_a
 /-- **Theorem 1** (the thread draft, Appendix A). -/
 theorem ThreadedReads : Guarantees.ThreadedReads := threaded_reads
 
-/-- **Theorem 2 with dark gates** (the thread draft, Appendix B, through a partial containment). -/
-theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
-  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd ⟨n, P, hP⟩ hT hW
+/-- **Theorem 1 per parameter slot** (the thread draft, Appendix A, with the weights charged per slot). -/
+theorem threaded_reads_slots (c : Declaration) (T : Threading c) (σ : T.Slots) (Γ : ℕ) (S b_w b_a : ℝ) (d e : ℕ)
+    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (hT : T.Threaded Γ S d e)
+    (hW : Assumptions.WeightsIncompressibleSlots c T σ Γ S b_w b_a) (R : Finset (Fin c.D.N)) (hR : Small c Γ S R) :
+    b_a * (T.mults R).card ≤ novelReads c R * T.bound S b_w d e :=
+  threaded_count_slots σ R hbw hba hd (hT R hR) (hW R hR) hR.2.2
+
+/-- **Theorem 1 per parameter slot**. -/
+theorem ThreadedReadsSlots : Guarantees.ThreadedReadsSlots := threaded_reads_slots
+
+/-- **Theorem 2 with dark gates, per parameter slot** (the thread draft, Appendix B, through a partial containment). -/
+theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := by
+  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd ⟨n, P, hP⟩ hT hW
   set Λ := T.bound (α * Γ) b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
   have hreads : ∀ u, (novelReads c (piece M P u) : ℝ) ≤ α * d.D.size (P.gates u) := fun u =>
@@ -156,29 +221,49 @@ theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
   calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (piece M P u)).card : ℝ) := by
         rw [hM, Nat.cast_sum, mul_sum]
     _ ≤ ∑ u, (novelReads c (piece M P u) : ℝ) * Λ :=
-        sum_le_sum fun u _ => threaded_reads c T Γ (α * Γ) b_w b_a dd e hbw hba hdd hT hW _ (hpiece u)
+        sum_le_sum fun u _ => threaded_reads_slots c T σ Γ (α * Γ) b_w b_a dd e hbw hba hdd hT hW _ (hpiece u)
     _ ≤ ∑ u, α * (d.D.size (P.gates u) : ℝ) * Λ := sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hreads u) hΛ
     _ = α * Λ * d.D.size d.D.computed := by
         rw [← sum_mul, ← mul_sum, show (d.D.size d.D.computed : ℝ) = ∑ u, (d.D.size (P.gates u) : ℝ) by
           exact_mod_cast (Partition.sum_card_gates P).symm]
         ring
 
-/-- **Theorem 2** (the thread draft, Appendix B): a total containment is a partial one with no dark gates. -/
-theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
-  intro Γ α b_w b_a c d T dd e hα hbw hba hdd ⟨M, hθ⟩ hd hT hW
-  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e (ofContainment M hθ) hα hbw hba hdd hd hT hW
+/-- **Theorem 2 with dark gates** (the thread draft, Appendix B, through a partial containment): its `Slots` form at one
+slot per weight gate. -/
+theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+  exact ThreadedThrottledOnSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hT
+    (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
+
+/-- **Theorem 2 per parameter slot** (the thread draft, Appendix B): a total containment is a partial one with no dark
+gates. -/
+theorem ThreadedThrottledSlots : Guarantees.ThreadedThrottledSlots := by
+  intro Γ α b_w b_a c d T σ dd e hα hbw hba hdd ⟨M, hθ⟩ hd hT hW
+  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e (ofContainment M hθ) hα hbw hba hdd hd hT hW
   rwa [ofContainment_S, Finset.inter_eq_left.2 T.M_computed] at h
 
-/-- **Counted multiplications off the books are dark gates.** -/
-theorem ThreadedThrottledDark : Guarantees.ThreadedThrottledDark := by
-  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
-  have h := ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+/-- **Theorem 2** (the thread draft, Appendix B): its `Slots` form at one slot per weight gate. -/
+theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
+  intro Γ α b_w b_a c d T dd e hα hbw hba hdd hc hd hT hW
+  exact ThreadedThrottledSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e hα hbw hba hdd hc hd hT
+    (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
+
+/-- **Counted multiplications off the books are dark gates, per parameter slot.** -/
+theorem ThreadedThrottledDarkSlots : Guarantees.ThreadedThrottledDarkSlots := by
+  intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hT hW
+  have h := ThreadedThrottledOnSlots Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hT hW
   have hS : ((T.M ∩ M.S).card : ℝ) ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a := by
     rw [le_div_iff₀ hba]
     linarith
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
     exact_mod_cast card_le_dark_add_inter M T.M_computed
   linarith
+
+/-- **Counted multiplications off the books are dark gates**: its `Slots` form at one slot per weight gate. -/
+theorem ThreadedThrottledDark : Guarantees.ThreadedThrottledDark := by
+  intro Γ α b_w b_a c d T dd e M hα hbw hba hdd hd hT hW
+  exact ThreadedThrottledDarkSlots Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hT
+    (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
 
 /-- Weights are incompressible when each weight is a novel input gate at least `b_w` bits wide and every thread value
 is at least `b_a` bits wide: a subcircuit reads every weight it uses, and those reads are disjoint from its thread reads. -/

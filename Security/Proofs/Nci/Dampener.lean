@@ -8,7 +8,8 @@ The arithmetic core is `sources_le`: the four sources' bounds, summed, with the 
 the declared computation together, give `η ≤ s + (1 − s) min(r, μ) + ν + χ`; the guarantee drops the factor `1 − s`.
 The window optimization is `window_quadratic` (and `window_quadratic_any` at every window length, with its rounding term
 exact) and `window_linear` (`Λ = e`, one window); `windows_cap` turns the servers' windows into the memory cap's
-hypothesis. `DampenerThreaded` discharges the declared computation's bound with `ThreadedThrottled`.
+hypothesis. `DampenerThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
+`DampenerThreaded` is its instance at one slot per weight gate.
 -/
 
 namespace Nci.SecurityProofs
@@ -187,15 +188,15 @@ theorem DampenerWindows : Guarantees.DampenerWindows := by
 theorem bound_eq_Lambda {c : Declaration} (T : Threading c) (S b_w : ℝ) (d e : ℕ) :
     T.bound S b_w d e = Lambda T.reuse e d b_w S := rfl
 
-/-- **The declared computation at NCI's thread bound**: `ThreadedThrottled`'s `b_a |M| ≤ α Λ size(d)`, with
-`size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
-theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Threading c} {dd e : ℕ} (hα : 0 ≤ α)
-    (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcd : c.Contains d) (hcomp : Complies Γ α d)
-    (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a)
+/-- **The declared computation at NCI's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
+`b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
+theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
+    (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcd : c.Contains d) (hcomp : Complies Γ α d)
+    (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a)
     (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :
     (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) := by
   have hΛ : 0 ≤ T.bound (α * Γ) b_w dd e := le_max_of_le_left (Nat.cast_nonneg _)
-  have hth := ThreadedThrottled Γ α b_w b_a c d T dd e hα hbw hba hdd hcd hcomp hT hW
+  have hth := ThreadedThrottledSlots Γ α b_w b_a c d T σ dd e hα hbw hba hdd hcd hcomp hT hW
   unfold rhoT
   rw [div_div_eq_mul_div, le_div_iff₀ hba]
   calc (T.M.card : ℝ) * b_a = b_a * T.M.card := mul_comm _ _
@@ -203,12 +204,28 @@ theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Thr
     _ ≤ α * T.bound (α * Γ) b_w dd e * C := mul_le_mul_of_nonneg_left hsize (mul_nonneg hα hΛ)
     _ = C * (α * T.bound (α * Γ) b_w dd e) := mul_comm _ _
 
+/-- **The declared computation at NCI's thread bound**: `declared_le_slots` at one slot per weight gate. -/
+theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Declaration} {T : Threading c} {dd e : ℕ} (hα : 0 ≤ α)
+    (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcd : c.Contains d) (hcomp : Complies Γ α d)
+    (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a)
+    (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :
+    (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
+  declared_le_slots hα hbw hba hdd hcd hcomp hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize
+
+theorem DampenerThreadedSlots : Guarantees.DampenerThreadedSlots := by
+  intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T σ dd e hκ hC hU hH hL hR hα hbw hba hdd hcd hcomp hT hW
+    hsize hM hu hr hx hnC hRL he hcap
+  exact DampenerWindows κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
+    b_w b_a hκ hC hU hH hL hR hα (Nat.cast_nonneg _) (Nat.cast_pos.2 hdd) hbw hba hM hu hr
+    (declared_le_slots hα hbw hba hdd hcd hcomp hT hW hsize) hx hnC hRL he hcap
+
+/-- `DampenerThreadedSlots` at one slot per weight gate. -/
 theorem DampenerThreaded : Guarantees.DampenerThreaded := by
   intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T dd e hκ hC hU hH hL hR hα hbw hba hdd hcd hcomp hT hW hsize
     hM hu hr hx hnC hRL he hcap
-  exact DampenerWindows κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
-    b_w b_a hκ hC hU hH hL hR hα (Nat.cast_nonneg _) (Nat.cast_pos.2 hdd) hbw hba hM hu hr
-    (declared_le hα hbw hba hdd hcd hcomp hT hW hsize) hx hnC hRL he hcap
+  exact DampenerThreadedSlots κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T (Fit.idSlots T) dd e hκ hC hU hH hL hR
+    hα hbw hba hdd hcd hcomp hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
+    hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
 and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and a faulty proof
