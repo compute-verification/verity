@@ -2,8 +2,8 @@
 
 - (c) The prefix barrier in the served layout. The served unit's receipt is 2 (KS + m) words over KS + m sets; the KS
   prefix sets are running partials, while T_(KS-1), O' and D_1 .. D_(m-1) are final-only (invariant under a reordering of
-  the segments). Credit counts K = 32 KS MACs a cell, the prefix sets' worth, so the m digit sets carry none. A tile of
-  all-zero A rows still does real noised work (X = b), which a dead-tile gate that reads A's bytes would zero.
+  the segments). The credit rule counts K = 32 KS MACs a cell, the prefix sets' worth, so the m digit sets carry none. A
+  tile of all-zero A rows still does real noised work (X = b), which a dead-tile gate that reads A's bytes would zero.
 - (a) Attention. The H1 scheme has no unit for attention's `DotBf16`. On a near-zero P row the residue identity collapses
   a full P̃·X contraction to 32 MACs, but a running-partial word adds one segment, one entry a residue, so it saves nothing.
 - (b) FP-native. A one-coin entry with an even coefficient is a single square (FP-ADIC's ½ cap). A two-coin entry is a
@@ -72,8 +72,9 @@ def check_final_words_are_order_invariant(rng):
 
 
 def check_credit_is_prefix_worth():
-    """Credit counts K = 32 KS MACs a cell (`credit.tally`: count N K), the prefix sets' worth, so the m digit sets are
-    uncredited: at Llama-3.1-8B's K their share of the sets is at or above the headline 0.656%."""
+    """The credit rule counts K = 32 KS MACs a cell (#2639's `credit.tally`, Cr = sum count N K), the prefix sets' worth,
+    so the m digit sets are uncredited: at Llama-3.1-8B's K their share of the sets is at or above the headline 0.656%.
+    This is the rule's formula; #2639 gives no useful-work credit until the same-GEMM gate."""
     rows = []
     for K, want_m in ((4096, 2), (14336, 3)):
         ks = K // 32
@@ -204,7 +205,7 @@ def collect(seed: int = 20261019):
     checks = [
         ("c1 receipt is 2 (KS + m)", lambda: check_receipt_is_2_sets(rng)),
         ("c2 final-only words order-invariant", lambda: check_final_words_are_order_invariant(rng)),
-        ("c3 credit is the prefix sets' worth", check_credit_is_prefix_worth),
+        ("c3 the credit rule counts the prefix sets' worth", check_credit_is_prefix_worth),
         ("c4 zero rows do noised work", lambda: check_zero_rows_do_noised_work(rng)),
         ("a1 no H1 unit for attention", check_no_h1_unit_for_attention),
         ("a2 near-zero P residue trick", lambda: check_near_zero_p_residue_trick(rng)),
