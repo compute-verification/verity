@@ -18,7 +18,8 @@ p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credit
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
 and down 256 at K = 14,336, a layer, 32 layers). 5 sequences fill 119 of its 1,152 row slots (u = 119/1152; 731,136 units
 live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound torch, on a node at load 500 to 615), 1.7 s of
-empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. The period counts 439.1 s a window.
+empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. The period counts 439.1 s a window,
+and 32 times that at 4×8 units unless the receipts are fused into the kernel.
 
 **A window's certification** is its K_d drawn units, proved by C-Flock (`--zk`, live coins) and checked by the Lean
 verifier (`flock-verify`). A drawn unit costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
@@ -164,8 +165,9 @@ RATES = {
 
 @dataclass(frozen=True)
 class Config:
-    """A period's shape, rates and fleet. `t_window_s` is an 18-round window's wall-clock; a window of M rounds takes
-    M/18 of it."""
+    """A period's shape, rates and fleet. `t_window_s` is an 18-round window's wall-clock at 32×32 units; a window of M
+    rounds takes M/18 of it, and with `receipts_per_unit` (torch receipts, 284 µs a unit) its receipts scale with the
+    units, 1,024/`unit_outputs` of them for each 32×32 unit."""
     name: str
     u: float = U_TODAY
     r: float = R_SERVED
@@ -178,6 +180,7 @@ class Config:
     lean_windows_per_process: int = 1
     prove_windows_per_process: int = 1
     lean_session_s: float | None = None
+    receipts_per_unit: bool = True
     nodes: int = NODES
     eps_flat: float = EPS_FLAT
     delta_s_log2: float = DELTA_S_LOG2
@@ -250,11 +253,17 @@ def window_cost(c: Config) -> dict:
                 lean_slots=lean_slots, node_s=prove / prove_slots + lean / lean_slots)
 
 
+def window_s(c: Config) -> float:
+    """One window's serving wall-clock."""
+    units = UNIT_ROWS * UNIT_COLS / c.unit_outputs if c.receipts_per_unit else 1.0
+    return c.t_window_s * c.rounds / ROUNDS * units
+
+
 def period(c: Config) -> dict:
     """What the first period at ε < 1% takes under `c`."""
     n = windows(c)
     w = window_cost(c)
-    serving_days = n * c.t_window_s * c.rounds / ROUNDS / DAY
+    serving_days = n * window_s(c) / DAY
     node_days = n * w["node_s"] / DAY
     cert_days = node_days / c.nodes
     statement_s = (w["prove_s"] + w["lean_s"]) / w["statements"]
@@ -294,8 +303,8 @@ LEVERS = [
           dict(u=U_FULL)),
     Lever("fused receipt kernel", "kernels", 3,
           "a window at #2790's credited Dither TPOT, 18 × 66.65 ms = 1.2 s (a different receipt form, not yet accepted by "
-          "a verifier on main), instead of 439.1 s of launch-bound torch receipts",
-          dict(t_window_s=T_WINDOW_DITHER)),
+          "a verifier on main), instead of 439.1 s of launch-bound torch receipts, at any unit size",
+          dict(t_window_s=T_WINDOW_DITHER, receipts_per_unit=False)),
     Lever("draws per window", "compute-accounting", 1,
           "the service challenger's K_d (H1_DRAW), the best of 4 to 256: more draws mean fewer windows and so fewer "
           "statements' fixed costs, but more draws a period once x = K_d/(r·M) is not small",
@@ -313,7 +322,8 @@ LEVERS = [
           dict(r=1.0, k=1.0)),
     Lever("served unit 32×32 → 4×8", "circuits + kernels", 3,
           "the receipt's unit is the measured tile, so a draw is one lane, not 32·K/4,096: the period's draws are set "
-          "by the lucks, not the unit's size; 32× the receipts and leaves a window",
+          "by the lucks, not the unit's size; 32× the receipts and leaves a window, so 32× the torch receipts' time "
+          "without the fused kernel (custody here stays the 32×32 window's)",
           dict(unit_outputs=LANE_OUTPUTS)),
     Lever("Lean session at O(description)", "proofs", 4,
           "the Lean session check at the Rust in-session verifier's cost (11.2 s in W2, not 1,175.7 s), the "
@@ -382,7 +392,7 @@ def near_term(base: Config = TODAY) -> list[Config]:
 def configurations(base: Config = TODAY) -> list[Config]:
     """INT-PERIOD's line, `base`, and `route`'s steps, each on the last."""
     line = Config("INT-PERIOD's line: per-draw rates, W2's tile a draw", rates="int-period", unit_outputs=LANE_OUTPUTS,
-                  k=1.0)
+                  k=1.0, receipts_per_unit=False)
     return [line, base, *route(base)]
 
 

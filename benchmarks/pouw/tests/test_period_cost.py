@@ -64,6 +64,14 @@ def test_the_period_shortens_with_load_draws_and_nodes():
     assert len({round(p["node_days"], 9) for p in ps}) == 1
 
 
+def test_torch_receipts_scale_with_the_units_and_fused_ones_do_not():
+    small = replace(PC.TODAY, unit_outputs=PC.LANE_OUTPUTS)
+    assert PC.window_s(small) == pytest.approx(32 * PC.window_s(PC.TODAY)) == pytest.approx(32 * PC.T_WINDOW)
+    fused = PC.apply(PC.lever("fused receipt kernel"), small)
+    assert PC.window_s(fused) == pytest.approx(PC.T_WINDOW_DITHER)
+    assert PC.window_s(replace(fused, rounds=72)) == pytest.approx(4 * PC.T_WINDOW_DITHER)
+
+
 def test_amortizing_a_process_cuts_only_its_fixed_part():
     w = PC.window_cost(PC.TODAY)
     lean = PC.window_cost(replace(PC.TODAY, lean_windows_per_process=64))
