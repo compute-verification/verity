@@ -11,8 +11,8 @@ model's linears in call order, each its `(K, N)`. Call `(s, w)` is step `s`'s ca
 The unit is the proof unit: SERVE-H1 receipts 32 × 32 units, which C-Flock can't prove at `K` = 4096 (about 5 G ANDs),
 while W2 (#2657) proves 4 × 8 ones; the layout takes the size as a parameter, and the receipts must be per proof unit.
 
-Every form has one live round a step (`window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), and they differ
-in the served output and in what a receipt unit reads of it (`Form`):
+Three forms have one live round a step (`window.live_challenger`, `sampled_proofs.challenger.LiveRecord`) and one has a
+live round a call; they differ in the served output and in what a receipt unit reads of it (`Form`):
 * `beside`, today's SERVE-H1: the tile proves receipts over the call's committed A rows and the registered B, beside
   the served linear's own GEMM (`int8_ops.scaled_mm`: `y = dequantize(torch._int_mm(A, B), s_a, s_w)`, cuBLASLt's s8
   GEMM, at the round-4 run's commit 14e4c23a), whose `y` no unit reads;
@@ -20,34 +20,43 @@ in the served output and in what a receipt unit reads of it (`Form`):
   serves `y = dequant(z)` from its exact product `z` and commits `z` as an AROW row table under the step's round root;
   each receipt unit opens its tile's `z`;
 * `yOpen`, the alternative kernels prices: no second tree; each receipt unit opens the Commit's own `y` rows of its tile
-  and its Program checks `dequant(z) = y`, `z` an inner wire.
+  and its Program checks `dequant(z) = y`, `z` an inner wire;
+* `perCall`, the schedule a path whose served GEMM is the noised one needs: round `c` is call `c`'s (`steps × calls`
+  rounds, 2,304 for Llama-3.1-8B); its root covers the call's A rows, its coin noises the call's one GEMM, and the
+  call's receipts and its served `y = dequant(z)` go under round `c + 1`'s root, `y` as each unit's own output words,
+  so the Commit's `y` tree is the units' (one tree, compared by root). The unit's Program computes `z` off its noised
+  sets, so that `z` and `y` read the coin (`Tie.noised`); `h1tile`'s `z`, its own dot, reads none, and Compose's cut
+  would then put `y` before the coin its GEMM needs.
 
 Integrity of the Commit's `y` is its served partition's sampled units' (proofs' framing, not read here), so it never
 reads the form. The link from that `y` to the proved product does (`Form.ServedLink`): `beside` has none (no unit reads the served `y`);
 `zTree` has it under a premise on the prover's fused kernel, that the `y` it serves is `dequant` of the `z` it commits,
 which nothing checks and the design rules exclude (nothing the prover runs is trusted); `yOpen` has it from the tie,
-whose `linked` field puts the Commit's `y` in every receipt unit, and the Program's check, with no premise. So `yOpen`
-needs the less trusted surface.
+whose `linked` field puts the Commit's `y` in every receipt unit, and the Program's check, with no premise; `perCall`
+has it from the tie and the unit's own `dequant(z)`, under the run-time check that the Commit's `y` root of the call is
+the root of those output words. So `yOpen` and `perCall` need the less trusted surface.
 
-The link is an equality of values, which useful-work credit needs and which doesn't give it. In every form the served
-value is committed before its step's coin and every receipt reads that coin (`Tie.noised`), and a receipt's H1 sets
-are over the noised operands `A + b` and `B + c + U`, which no function of `z` gives: the receipts' GEMM runs after the
-served one, in every form. A schedule whose served GEMM is the noised one draws a call's coin after its A rows are
-committed and before its GEMM, and a step's later calls read its earlier calls' outputs, so it has about a round a
-call, not a step; this module doesn't state one. Today's code computes `y` as `dequant` of the exact s32 product
-(`int8_ops.scaled_mm` at 14e4c23a: `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`), so `yOpen`'s check would hold of its `y`
-once those rows are committed, which round 4 doesn't do.
+The link is an equality of values, which useful-work credit needs and which doesn't give it. In the three forms of a
+round a step the served value is committed before its step's coin and every receipt reads that coin (`Tie.noised`),
+and a receipt's H1 sets are over the noised operands `A + b` and `B + c + U`, which no function of `z` gives: the
+receipts' GEMM runs after the served one. A schedule whose served GEMM is the noised one draws a call's coin after its
+A rows are committed and before its GEMM, and a step's later calls read its earlier calls' outputs, so it has a round
+a call: `perCall`, the one form whose schedule admits one GEMM. No form proves the prover ran one. Today's code
+computes `y` as `dequant` of the exact s32 product (`int8_ops.scaled_mm` at 14e4c23a:
+`RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))`), so `yOpen`'s check would hold of its `y` once those rows are committed,
+which round 4 doesn't do.
 
-Between the forms, `LayerCommitted` gains one committed class at its step's round (`z`, a computed
-word that reads no coin, or the Commit's `y`, a run input only its own call reads) and the round root one table root
-(`z`'s or the Commit's `y` rows'); the units keep their number, each gaining its tile's `z` or `y` words.
+Between the forms, `LayerCommitted` gains one committed class: at its step's round in `zTree` and `yOpen` (`z`, a
+computed word that reads no coin, or the Commit's `y`, a run input only its own call reads), and at the round after its
+call's in `perCall` (`y`, a computed word that reads the call's coin). The round root gains one table root (`z`'s or
+`y`'s), and the units keep their number, each gaining its tile's `z` or `y` words.
 
-`commitCoin` is the coin before which the served code commits a value of each class (`Cls`) of step `s`, as the served
-code is to do it: the registration (the weights' root over every linear's root(B), and the request queue's root) before
-the salt coin and so before round `0`'s; a call's A rows, admit words, and its `z` or `y` rows under its step's round
-root, before its coin; its receipts under the next round's root, the last round's in the manifest before the draw.
-Today's code commits the receipts at the draw (`serve.py`'s receipt trees, built after serving), which this schedule is
-the fix of, and its round root covers the A and admit roots only.
+`commitCoin` is the coin before which the served code commits a value of each class (`Cls`) of round `r`, as the
+served code is to do it: the registration (the weights' root over every linear's root(B), and the request queue's
+root) before the salt coin and so before round `0`'s; a call's A rows, admit words, and its `z` or `y` rows under its
+round's root, before its coin (`perCall`'s `y` under the next round's); its receipts under the next round's root, the
+last round's in the manifest before the draw. Today's code commits the receipts at the draw (`serve.py`'s receipt
+trees, built after serving), which this schedule is the fix of, and its round root covers the A and admit roots only.
 
 `Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
 rounds the layout's, each value's commit coin `commitCoin` of its class, and the IR facts that put each class's value
@@ -62,12 +71,13 @@ statement is over the declared circuit; these are the checks that make its `comm
 * `registered`: the salt coin opened against the registration root, recorded before every round's coin; the weights'
   root equal to the served model's published one; each drawn unit's B rows opened under its linear's root(B), and
   root(B) under the weights' root;
-* `act`, `admit`, `out`, `served`: round `s`'s root, recorded before round `s`'s coin, over the A table, admit, and `z`
-  or Commit `y` roots of exactly step `s`'s calls; each drawn unit's rows of them opened under it;
-* `receipt`: round `s + 1`'s root over step `s`'s receipt roots, the last step's in the manifest before the draw coin;
-  each drawn unit's receipt opened under it;
+* `act`, `admit`, `out`, `served`: round `r`'s root, recorded before round `r`'s coin, over the A table, admit, and
+  `z` or Commit `y` roots of exactly round `r`'s calls (`perCall`'s `y` roots in round `r + 1`'s); each drawn unit's
+  rows of them opened under it; in `perCall`, each call's Commit `y` root equal to its units' `y` root;
+* `receipt`: round `r + 1`'s root over round `r`'s receipt roots, the last round's in the manifest before the draw
+  coin; each drawn unit's receipt opened under it;
 * the unit's position `base s w + u`, computed by the verifier from the layout, never read; the unit's salt
-  `window.round_key(commitment, coin_s, s, root_s)`'s stream, derived by the verifier;
+  `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier;
 * the draw: `K_d` units of `population` from the draw coin opened after the manifest.
 -/
 
@@ -146,12 +156,30 @@ def llama31_8b : Layout where
 /-- **A served window's form**: `beside`, receipts over the committed operands beside cuBLASLt's served `y` (today's
 SERVE-H1); `zTree`, the fused kernel serves `dequant(z)` and commits `z`, which receipt units open (J11's first
 iteration, as kernels describes it); `yOpen`, receipt units open the Commit's `y` and check `dequant(z) = y` (the
-alternative). In all three the step's receipts are computed after its served values are committed. -/
+alternative); `perCall`, a round a call, whose one noised GEMM serves `y = dequant(z)` as its units' output. In the
+first three a step's receipts are computed after its served values are committed. -/
 inductive Form
   | beside
   | zTree
   | yOpen
+  | perCall
   deriving DecidableEq, Repr
+
+/-- Form `F`'s rounds on layout `L`: one a call in `perCall`, one a step in the others. -/
+def Form.rounds (L : Layout) : Form → ℕ
+  | .perCall => L.steps * L.calls
+  | _ => L.steps
+
+/-- Call site `c`'s round in form `F`: the call's own in `perCall`, its step's in the others. -/
+def Form.roundOf (L : Layout) : Form → ℕ → ℕ
+  | .perCall, c => c
+  | _, c => L.stepOf c
+
+/-- The rounds past its own after which form `F` commits an `out` word: one in `perCall`, whose `y` reads its round's
+coin, none in the others. -/
+def Form.outLag : Form → ℕ
+  | .perCall => 1
+  | _ => 0
 
 /-- **A served value's class**:
 * `registered`: a row of a linear's B table (under the weights' root) or an entry of the request queue (under the
@@ -159,9 +187,10 @@ inductive Form
 * `act`: a row of a call's A table, its slot's s8 row and scale (the empty row in a slot the queue leaves unassigned);
 * `admit`: an admit word of a call, written by its admit unit from the queue;
 * `receipt`: a receipt word of a call's unit;
-* `out`: a word of a call's exact product `z`, committed in its AROW row table (`zTree` only);
+* `out`: a word a call's unit computes and commits in a row table: the exact product `z` in `zTree`, the served
+  `y = dequant(z)` in `perCall`, its `z` off the noised sets;
 * `served`: a word of the Commit's served output `y` of a call, which its unit opens (`yOpen` only);
-* `inner`: a value no opening reads, a proof unit's own wire (`z` in `beside` and `yOpen`);
+* `inner`: a value no opening reads, a proof unit's own wire (`z` in `beside`, `yOpen` and `perCall`);
 * `coin`: a round's coin input, the unit's salt port. -/
 inductive Cls
   | registered
@@ -174,42 +203,49 @@ inductive Cls
   | coin
   deriving DecidableEq, Repr
 
-/-- **The coin before which the served code commits a value** of class `k` of step `s`, of the window's `steps` rounds
-(the draw is `steps`): the registration before round `0`'s; A rows, admit words, `z` and the Commit's `y` before their
-step's round's; receipts before the next round's. `inner` and `coin` values are committed nowhere (`Tie.inner` sets an
-inner value's commit coin to its cut; a coin is no value the prover writes). -/
-def commitCoin : Cls → ℕ → ℕ
+/-- **The coin before which the served code commits a value** of class `k` of round `r` in form `F`, of the window's
+`F.rounds L` rounds (the draw is the last): the registration before round `0`'s; A rows, admit words, `zTree`'s `z`
+and the Commit's `y` before their round's; receipts and `perCall`'s `y`, which read their round's coin, before the
+next round's. `inner` and `coin` values are committed nowhere (`Tie.inner` sets an inner value's commit coin to its
+cut; a coin is no value the prover writes). -/
+def commitCoin (F : Form) : Cls → ℕ → ℕ
   | .registered, _ => 0
-  | .act, s => s
-  | .admit, s => s
-  | .out, s => s
-  | .served, s => s
-  | .receipt, s => s + 1
+  | .act, r => r
+  | .admit, r => r
+  | .out, r => r + F.outLag
+  | .served, r => r
+  | .receipt, r => r + 1
   | .inner, _ => 0
   | .coin, _ => 0
 
-/-- **What ties receipt `i`'s unit to the served output**, by form: nothing in `beside`; in `zTree`, a `z` word of the
-unit; in `yOpen`, a gate of the unit that reads a word of the Commit's `y`. -/
+/-- **What ties receipt `i`'s unit to the served output**, by form: nothing in `beside`; in `zTree` and `perCall`, an
+`out` word of the unit (`z`, or the served `y`); in `yOpen`, a gate of the unit that reads a word of the Commit's
+`y`. -/
 def Form.Links {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Form → ℕ → Prop
   | .beside, _ => True
   | .zTree, i => ∃ j, j < Cd.dag.length ∧ cls j = .out ∧ Cd.unit j = Cd.unit i
   | .yOpen, i => ∃ g j, g < Cd.dag.length ∧ Cd.unit g = Cd.unit i ∧ Cd.Reads g j ∧ cls j = .served
+  | .perCall, i => ∃ j, j < Cd.dag.length ∧ cls j = .out ∧ Cd.unit j = Cd.unit i
 
 /-- **The served `y` is the proved product's**, by form, where `fused` is the fused kernel's premise (the `y` it serves
 is `dequant` of the `z` rows it commits): `beside` has no link (`False`); `zTree` has it exactly under `fused`, a
 premise on code the prover runs, which no run-time check reaches; `yOpen` has it from `Tie.linked` and the receipt
 Program's `dequant(z) = y` check over the opened `y` (a fact of that Program's Definition, which doesn't exist yet),
 with no premise, given the run-time check that the unit's `served` words open under the Commit's `y` root: `Tie`
-doesn't tell a `served` run input from an `act` one. It is an equality of values: useful-work credit needs it, and it doesn't give that credit, since in
-every form the receipts' GEMM follows the served one (the module docstring). Integrity reads none of it. -/
+doesn't tell a `served` run input from an `act` one. `perCall` has it from `Tie.linked` and the unit's own
+`dequant(z)` output, given the run-time check that the call's Commit `y` root is its units' `y` root. It is an
+equality of values: useful-work credit needs it, and it doesn't give that credit. In the three forms of a round a step
+the receipts' GEMM follows the served one; `perCall`'s schedule admits one GEMM, and no form proves the prover ran
+one (the module docstring). Integrity reads none of it. -/
 def Form.ServedLink (fused : Prop) : Form → Prop
   | .beside => False
   | .zTree => fused
   | .yOpen => True
+  | .perCall => True
 
 /-- **Declared circuit `Cd`, its gates classed by `cls`, is served window `L` in form `F`**:
 * `calls`, `rounds`, `round`: its call sites are the window's `steps × calls` calls, numbered step by step, its rounds
-  the window's steps, and each call site's round its step;
+  the form's (`Form.rounds`), and each call site's round its form's (`Form.roundOf`: its step's, or `perCall`'s own);
 * `inRange`: every gate's call site is one of them;
 * `live`: every round's coin is live (the live challenger's);
 * `coin`, `registered`, `act`, `computed`: a gate is a coin input exactly when it is of class `coin`; a `registered`
@@ -217,18 +253,18 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   `receipt`, `out` or `inner` gate is no input; so every input's class is its binding's;
 * `committed`: a gate that is no input is `inner` exactly when the IR doesn't mark it a committed output
   (`Gates.Gate.commit`), so no opened value is declared inner and committed at its cut by fiat;
-* `noised`: a `receipt` gate depends on its round's coin (`coinMark` past its round);
-* `forms`, `linked`: an `out` gate is `zTree`'s and a `served` gate `yOpen`'s, and every receipt's unit has its form's
-  link to the served output (`Form.Links`);
-* `commit`, `inner`: a value of an opened class is committed at `commitCoin` of its class and step, and an inner value
-  at its own cut.
+* `noised`: a `receipt` gate, and in `perCall` an `out` gate, depends on its round's coin (`coinMark` past its round);
+* `forms`, `linked`: an `out` gate is `zTree`'s or `perCall`'s and a `served` gate `yOpen`'s, and every receipt's unit
+  has its form's link to the served output (`Form.Links`);
+* `commit`, `inner`: a value of an opened class is committed at `commitCoin` of its form, class and round, and an
+  inner value at its own cut.
 The `commit` and `inner` fields are how the declared circuit is built from the layout; the others are facts of each
 call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the commit
 coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
 structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
   calls : Cd.calls = L.steps * L.calls
-  rounds : Cd.rounds = L.steps
-  round : ∀ c, c < Cd.calls → Cd.round c = L.stepOf c
+  rounds : Cd.rounds = F.rounds L
+  round : ∀ c, c < Cd.calls → Cd.round c = F.roundOf L c
   inRange : ∀ i, i < Cd.dag.length → Cd.call i < Cd.calls
   live : ∀ r, r < Cd.rounds → Cd.coinMode r = .live
   coin : ∀ i, i < Cd.dag.length → (cls i = .coin ↔ Cd.binding i = some .coin)
@@ -239,17 +275,18 @@ structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ 
     (cls i = .admit ∨ cls i = .receipt ∨ cls i = .out ∨ cls i = .inner) → Cd.binding i = none
   committed : ∀ i, i < Cd.dag.length → Cd.binding i = none →
     (cls i = .inner ↔ (Cd.dag[i]?).any (fun g => g.commit) = false)
-  noised : ∀ i, i < Cd.dag.length → cls i = .receipt → Cd.round (Cd.call i) + 1 ≤ (coinMark Cd).getD i 0
-  forms : ∀ i, i < Cd.dag.length → (cls i = .out → F = .zTree) ∧ (cls i = .served → F = .yOpen)
+  noised : ∀ i, i < Cd.dag.length → (cls i = .receipt ∨ (cls i = .out ∧ F = .perCall)) →
+    Cd.round (Cd.call i) + 1 ≤ (coinMark Cd).getD i 0
+  forms : ∀ i, i < Cd.dag.length → (cls i = .out → F = .zTree ∨ F = .perCall) ∧ (cls i = .served → F = .yOpen)
   linked : ∀ i, i < Cd.dag.length → cls i = .receipt → F.Links Cd cls i
   commit : ∀ i, i < Cd.dag.length → cls i ≠ .inner → cls i ≠ .coin →
-    Cd.commitRound i = commitCoin (cls i) (L.stepOf (Cd.call i))
+    Cd.commitRound i = commitCoin F (cls i) (F.roundOf L (Cd.call i))
   inner : ∀ i, i < Cd.dag.length → cls i = .inner → Cd.commitRound i = Cd.cutOf i
 
 /-- **The tie gives the service's commit order**: a declared circuit that is a served window, in any form, meets
 `LayerCommitted`. The commit coins are then no later than the IR's cuts: a weight's `0`; an A row's or a `y` row's,
-its step's round, its first reader's; an admit word's or a `z` word's, its step's round, the floor of its cut; a
-receipt's, the round after its own, which its coin read reaches. -/
+its round, its first reader's; an admit word's or `zTree`'s `z` word's, its round, the floor of its cut; a receipt's
+or `perCall`'s `y` word's, the round after its own, which its coin read reaches. -/
 def TieCommits : Prop :=
   ∀ (ι : Type) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls), Tie L F Cd cls → LayerCommitted Cd
 
@@ -260,9 +297,10 @@ def TieLive : Prop :=
   ∀ (ι K : Type) (Sc : Scheme K) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls),
     Tie L F Cd cls → Cd.Live Sc
 
-/-- **The served Llama-3.1-8B window's shape**: 128 linear calls a step, 86,016 units a step, 1,548,288 a window, and
-`llama31_8b` well formed. -/
+/-- **The served Llama-3.1-8B window's shape**: 128 linear calls a step, 86,016 units a step, 1,548,288 a window,
+2,304 rounds in `perCall`, and `llama31_8b` well formed. -/
 def Llama31Shape : Prop :=
-  llama31_8b.calls = 128 ∧ llama31_8b.perStep = 86016 ∧ llama31_8b.population = 1548288 ∧ llama31_8b.Wf
+  llama31_8b.calls = 128 ∧ llama31_8b.perStep = 86016 ∧ llama31_8b.population = 1548288 ∧
+    Form.rounds llama31_8b .perCall = 2304 ∧ llama31_8b.Wf
 
 end Accounting.Served

@@ -3,10 +3,10 @@ import Properties.Accounting.Served
 /-!
 # Proofs of the served tie's statements (`Accounting.Served`, `Properties.Served`)
 
-`TieCommits` goes class by class: a registered value's commit coin is `0`; an A row's or a `y` row's is its step's
-round, which is its first reader's, since only its own call reads it (`firstRead_cases`), or below the draw when nothing
-does (`round_lt`); an admit word's or a `z` word's is its step's round, the floor of its cut; a receipt's is the round
-after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut. `TieLive`: a unit with a word
+`TieCommits` goes class by class: a registered value's commit coin is `0`; an A row's or a `y` row's is its round,
+which is its first reader's, since only its own call reads it (`firstRead_cases`), or below the draw when nothing does
+(`round_lt`); an admit word's or `zTree`'s `z` word's is its round, the floor of its cut; a receipt's or `perCall`'s
+`y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut. `TieLive`: a unit with a word
 has a first gate, its round is a round of the window, and every one is live. `SeededScheduleNotLive`: `UnitsOfLayout`
 puts a read run input at the draw, `LayerCommitted` at its first reader's round, which `Wf` puts below it.
 `Llama31Shape` is a kernel computation.
@@ -18,7 +18,7 @@ open Accounting.Compose Accounting.Served
 
 theorem llama31Shape : Llama31Shape := by
   unfold Llama31Shape
-  refine ⟨by decide +kernel, by decide +kernel, by decide +kernel, ?_⟩
+  refine ⟨by decide +kernel, by decide +kernel, by decide +kernel, by decide +kernel, ?_⟩
   unfold Layout.Wf
   decide +kernel
 
@@ -26,13 +26,21 @@ theorem stepOf_lt {L : Layout} {c : ℕ} (hc : c < L.steps * L.calls) : L.stepOf
   unfold Layout.stepOf
   exact Nat.div_lt_of_lt_mul (by rwa [Nat.mul_comm] at hc)
 
+/-- A call site's round is a round of its form. -/
+theorem roundOf_lt {L : Layout} (F : Form) {c : ℕ} (hc : c < L.steps * L.calls) : F.roundOf L c < F.rounds L := by
+  cases F <;> first | exact stepOf_lt hc | exact hc
+
+/-- An `out` word's commit coin is its round's, except in `perCall`. -/
+theorem commitCoin_out {F : Form} (hF : F ≠ .perCall) (r : ℕ) : commitCoin F .out r = r := by
+  cases F <;> first | rfl | exact (hF rfl).elim
+
 /-- A tied circuit's gate is in a round of the window. -/
 theorem round_lt {ι : Type} {L : Layout} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls} (T : Tie L F Cd cls) (i : ℕ)
     (hi : i < Cd.dag.length) : Cd.round (Cd.call i) < Cd.rounds := by
   have hc := T.inRange i hi
   have hc' : Cd.call i < L.steps * L.calls := by rw [← T.calls]; exact hc
   rw [T.round _ hc, T.rounds]
-  exact stepOf_lt hc'
+  exact roundOf_lt F hc'
 
 /-- A value's first reader: none (the draw), or a gate that reads it. -/
 theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
@@ -81,34 +89,32 @@ theorem tieCommits : TieCommits := by
     simp [commitCoin]
   | act =>
     obtain ⟨hb, hr⟩ := T.act ℓ hlt (Or.inl hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
-    show L.stepOf (Cd.call ℓ) ≤ Cd.cutOf ℓ
-    rw [← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_run T hlt hb hr
   | served =>
     obtain ⟨hb, hr⟩ := T.act ℓ hlt (Or.inr hk)
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
-    show L.stepOf (Cd.call ℓ) ≤ Cd.cutOf ℓ
-    rw [← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_run T hlt hb hr
   | admit =>
     have hb := T.computed ℓ hlt (by simp [hk])
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
-    show L.stepOf (Cd.call ℓ) ≤ Cd.cutOf ℓ
-    rw [← hround]
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
     exact round_le_cut_of_none hb
   | out =>
     have hb := T.computed ℓ hlt (by simp [hk])
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
-    show L.stepOf (Cd.call ℓ) ≤ Cd.cutOf ℓ
-    rw [← hround]
-    exact round_le_cut_of_none hb
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    by_cases hF : F = .perCall
+    · subst hF
+      have hn := T.noised ℓ hlt (Or.inr ⟨hk, rfl⟩)
+      show Cd.round (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
+      simp only [Declared.cutOf, hb]
+      exact le_max_of_le_right hn
+    · rw [commitCoin_out hF]
+      exact round_le_cut_of_none hb
   | receipt =>
     have hb := T.computed ℓ hlt (by simp [hk])
-    have hn := T.noised ℓ hlt hk
-    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk]
-    show L.stepOf (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
-    rw [← hround]
+    have hn := T.noised ℓ hlt (Or.inl hk)
+    rw [T.commit ℓ hlt (by simp [hk]) (by simp [hk]), hk, ← hround]
+    show Cd.round (Cd.call ℓ) + 1 ≤ Cd.cutOf ℓ
     simp only [Declared.cutOf, hb]
     exact le_max_of_le_right hn
 
