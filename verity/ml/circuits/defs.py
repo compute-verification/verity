@@ -17,12 +17,13 @@
 from __future__ import annotations
 
 import bisect
+import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
-from .refs import Affine, Coll, Explicit, Refs, concat
-from .types import Array, Tuple as TupleT, Type, Value, remove_axis
+from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat
+from .types import Array, Record, Tuple as TupleT, Type, Value, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
@@ -441,8 +442,235 @@ def _build_body(sp: SpecializedDefinition) -> Body:
     return B.finish(out)
 
 
+def _first_other(T: Type, base: int, n: int, w: int) -> int | None:
+    """The first of leaves [base, base + n) of `T` whose width is not `w` (as an offset from `base`), None when there is none."""
+    if range_widths(T, base, base + n) == {w}:
+        return None
+    if n == 1:
+        return 0
+    h = n // 2
+    k = _first_other(T, base, h, w)
+    if k is not None:
+        return k
+    k = _first_other(T, base + h, n - h, w)
+    return None if k is None else h + k
+
+
+def _span(p: Affine | Strided) -> tuple[int, int]:
+    """The least and the greatest leaf a non-empty `Affine` or `Strided` part names."""
+    if isinstance(p, Affine):
+        return p.base, p.base + p.count - 1
+    q, last = divmod(p.count - 1, p.inner)
+    vals = [p.base + a * p.outer_stride + b * p.inner_stride
+            for a, b in [(0, 0), (0, min(p.inner, p.count) - 1), (q, 0), (q, last)] + ([(q - 1, p.inner - 1)] if q else [])]
+    return min(vals), max(vals)
+
+
+def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
+    """The smallest subtree of `t` holding leaves [lo, hi), and its first leaf's offset in `t`."""
+    off = 0
+    while True:
+        if isinstance(t, Array) and t.elem.leaves:
+            L = t.elem.leaves
+            i = (lo - off) // L
+            if (hi - 1 - off) // L != i:
+                return t, off
+            t, off = t.elem, off + i * L
+        elif isinstance(t, (Record, TupleT)):
+            pos = off
+            for ft in (f for _, f in t.fields) if isinstance(t, Record) else t.fields:
+                n = ft.leaves
+                if pos <= lo and hi <= pos + n:
+                    t, off = ft, pos
+                    break
+                pos += n
+            else:
+                return t, off
+        else:
+            return t, off
+
+
+def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | None:
+    """{k * stride mod L : k < count}, or None when it has more than `cap` members."""
+    g = math.gcd(stride, L)
+    if count >= L // g:
+        return set(range(0, L, g)) if L // g <= cap else None
+    return {k * stride % L for k in range(count)} if count <= cap else None
+
+
+class _Widths:
+    """The leaf widths a body's references name, for `Builder.finish`'s reinterpretation check (`E_REINTERPRET`). A reference
+    that names no leaf is not this check's: the decoder and the checkers refuse it. Nor is one to node `below` or later, which
+    node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
+    (PROTOCOL.md §4.4)."""
+
+    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
+        self.params, self.nodes = params, nodes
+        self.below = len(nodes)
+        self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
+        self.token = object()  # this check's entry in a `PartLog`'s memo
+        self._src: dict[tuple[str, int], tuple[Type | None, int | None, int]] = {}
+        self._same: dict[tuple[int, int], bool] = {}
+
+    def src(self, s: str, i: int) -> tuple[Type | None, int | None, int]:
+        """(type, homogeneous width, leaves) of parameter or node `i`; (None, None, 0) when there is none, or when `i` is node
+        `below` or later."""
+        if s == "n" and i >= self.below:
+            self.forward = True
+            return (None, None, 0)
+        hit = self._src.get((s, i))
+        if hit is None:
+            T = (self.params[i][1] if s == "p" and 0 <= i < len(self.params) else
+                 self.nodes[i].out if s == "n" and 0 <= i < len(self.nodes) else None)
+            hit = self._src[(s, i)] = (None, None, 0) if T is None else (T, T.homogeneous_width(), T.leaves)
+        return hit
+
+    def leaf(self, s: str, i: int, j: int) -> int | None:
+        T, h, n = self.src(s, i)
+        if T is None or not 0 <= j < n:
+            return None
+        if h is not None:
+            return h
+        (w,) = range_widths(T, j, j + 1)
+        return w
+
+    def other(self, p: Refs, w: int) -> int | None:
+        """The first leaf of part `p` (no `Concat`) whose width is not `w`, as an offset into `p`; None when there is none."""
+        if isinstance(p, Explicit):
+            return next((k for k, (s, i, j) in enumerate(p.items) if self.leaf(s, i, j) not in (None, w)), None)
+        if not p.count:
+            return None
+        T, h, n = self.src(p.space, p.idx)  # type: ignore[attr-defined]
+        if T is None or h == w:
+            return None
+        lo, hi = _span(p)  # type: ignore[arg-type]
+        if lo < 0 or hi >= n:
+            return None
+        if h is not None:
+            return 0
+        if isinstance(p, Affine):
+            return _first_other(T, p.base, p.count, w)
+        if range_widths(T, lo, hi + 1) == {w} or self._periodic(T, p, lo, hi, w):  # type: ignore[arg-type]
+            return None
+        return next((k for k, (s, i, j) in enumerate(p) if self.leaf(s, i, j) != w), None)
+
+    @staticmethod
+    def _periodic(T: Type, p: Strided, lo: int, hi: int, w: int) -> bool:
+        """Every leaf `p` names is of width `w`, by the offsets it reads within the elements of the array that holds them all."""
+        node, off = _cover(T, lo, hi + 1)
+        if not isinstance(node, Array):
+            return False
+        L = node.elem.leaves
+        A = _residues(p.outer_stride, -(-p.count // p.inner), L)
+        B = _residues(p.inner_stride, p.inner, L)
+        if A is None or B is None or len(A) * len(B) > 4096:
+            return False
+        r0 = (p.base - off) % L
+        return all(range_widths(node.elem, r, r + 1) == {w} for r in {(r0 + a + b) % L for a in A for b in B})
+
+    def misread(self, t: Type, pos: int, p: Refs) -> int | None:
+        """The first leaf of part `p` (no `Concat`), read at leaves pos.. of a `t`, whose width is not the one `t` gives that leaf,
+        as an offset into `p`; None when there is none."""
+        n = p.count
+        if not n:
+            return None
+        ws = range_widths(t, pos, pos + n)
+        if len(ws) == 1:
+            return self.other(p, next(iter(ws)))
+        if isinstance(p, Affine) and self._same_layout(t, pos, p):
+            return None
+        node, off = _cover(t, pos, pos + n)
+        if isinstance(node, Array):
+            L = node.elem.leaves
+            first = (pos - off) // L
+            bounds = [off + k * L for k in range(first, (pos + n - 1 - off) // L + 2)]
+        else:
+            bounds = [off]
+            for ft in (f for _, f in node.fields) if isinstance(node, Record) else node.fields:  # type: ignore[attr-defined]
+                bounds.append(bounds[-1] + ft.leaves)
+        for a, b in zip(bounds, bounds[1:]):
+            a, b = max(a, pos), min(b, pos + n)
+            if a < b:
+                k = self.misread(t, a, p.slice(a - pos, b - pos))
+                if k is not None:
+                    return a - pos + k
+        return None
+
+    def _same_layout(self, t: Type, pos: int, p: Affine) -> bool:
+        """Leaves pos.. of `t` have the widths of the leaves `p` names (True also when `p` names no leaf), by structure."""
+        T, _h, nT = self.src(p.space, p.idx)
+        n = p.count
+        if T is None or p.base < 0 or p.base + n > nT:
+            return True
+        if n <= 64:
+            return all(range_widths(t, pos + k, pos + k + 1) == range_widths(T, p.base + k, p.base + k + 1) for k in range(n))
+        a, ao = _cover(t, pos, pos + n)
+        b, bo = _cover(T, p.base, p.base + n)
+        if pos - ao == p.base - bo and (a is b or a == b):
+            return True
+        if isinstance(a, Array) and isinstance(b, Array) and a.elem.leaves == b.elem.leaves:
+            L = a.elem.leaves
+            return (pos - ao) % L == (p.base - bo) % L and self._same_widths(a.elem, b.elem)
+        return False
+
+    def _same_widths(self, E: Type, F: Type) -> bool:
+        key = (id(E), id(F))
+        if key not in self._same:
+            self._same[key] = E is F or E == F or (E.leaves <= 4096 and E.leaf_widths() == F.leaf_widths())
+        return self._same[key]
+
+    def first(self, c: Coll) -> tuple[int, tuple[str, int, int]] | None:
+        """(position, reference) of the first leaf of `c` that names a leaf of another width than `c.type` gives it, None when
+        there is none. A `Concat` cut from a `PartLog` costs only its parts past the longest cut checked at that width."""
+        t = c.type
+
+        def walk(r: Refs, pos: int) -> tuple[int, tuple[str, int, int]] | None:
+            if not isinstance(r, Concat):
+                k = self.misread(t, pos, r)
+                return None if k is None else (pos + k, r[k])
+            first = 0
+            if r.prefix is not None and not self.forward:
+                log, j = r.prefix
+                ws = range_widths(t, pos, pos + log.starts[j])
+                if len(ws) == 1:
+                    (w,) = ws
+                    owner, done = log.memo.get("defs.widths", (None, None))
+                    if owner is not self.token:
+                        done = {}
+                        log.memo["defs.widths"] = (self.token, done)
+                    for k in range(done.get(w, 0), j):
+                        hit = walk(log.parts[k], pos + log.starts[k])
+                        if hit is not None:
+                            return hit
+                    if not self.forward:
+                        done[w] = max(done.get(w, 0), j)
+                    first = j
+            for k in range(first, len(r.parts)):
+                hit = walk(r.parts[k], pos + r.starts[k])
+                if hit is not None:
+                    return hit
+            return None
+
+        return walk(c.refs, 0) if c.refs.count else None
+
+    def refuse(self, what: str, t: Type, hit: tuple[int, tuple[str, int, int]]) -> TypeError:
+        pos, (s, i, j) = hit
+        (want,) = range_widths(t, pos, pos + 1)
+        src = f"parameter {self.params[i][0]!r}" if s == "p" else f"node {i}"
+        return TypeError(f"E_REINTERPRET: {what}: leaf {pos} is typed Value<{want}> but names leaf {j} of {src}, a "
+                         f"Value<{self.leaf(s, i, j)}>: a silent reinterpretation. A word is read only at the width it was "
+                         f"committed with; a runtime word is split into limbs only by a registered LimbSplit Definition, which "
+                         f"computes the limbs and their carries")
+
+
 class Builder:
-    """Collects the explicit dataflow of one composite body, in function-body order."""
+    """Collects the explicit dataflow of one composite body, in function-body order.
+
+    `finish` refuses a body in which a node's argument or the return names a leaf at another width than its type gives that
+    position (`E_REINTERPRET`, PROTOCOL.md §4.4): an s32 word typed as s8 lanes is a silent reinterpretation, a limb split no
+    gate computes. A runtime word is split into limbs only by a Definition that computes them (a registered `LimbSplit`, with
+    its carries). The check runs at `finish`, when the parameters' types are final (a frontend may declare one before it knows
+    its fields) and every node a reference names exists."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
         self.params = params
@@ -551,6 +779,17 @@ class Builder:
             raise TypeError("composite body must return a Coll")
         if out.type != self.ret_type:
             raise TypeError(f"body returns {out.type!r}, declared {self.ret_type!r}")
+        W = _Widths(self.params, self.nodes)
+        for k, node in enumerate(self.nodes):
+            W.below = k
+            for i, a in enumerate(node.args):
+                hit = W.first(a)
+                if hit is not None:
+                    raise W.refuse(f"node {k} ({node.form} {node.fn.id}) argument {node.fn.signature()[0][i][0]!r}", a.type, hit)
+        W.below = len(self.nodes)
+        hit = W.first(out)
+        if hit is not None:
+            raise W.refuse("the body's return", out.type, hit)
         return Body(self.params, self.ret_type, self.nodes, out.refs, self.offsets)
 
 

@@ -16,8 +16,8 @@ from verity_vllm.query.module_body import Q_module_body_v1
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.required import (NAMED_RESIDUALS, Q_MODULE_BODY_ID, Q_WORD_ID, member_name, partition_of, request_manifest,
-                                        shared_instances, under)
+from verity_vllm.query.required import (Q_MODULE_BODY_ID, Q_WORD_ID, member_name, partition_of, request_manifest, shared_instances,
+                                        under)
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`
 EMBED_W, QKV_W = f"{W}.embed.weight", f"{W}.layers.0.self_attn.qkv_proj.weight"
@@ -93,16 +93,18 @@ def test_query_rejects_foreign_correspondence():
         Q_module_body_v1(P, Correspondence(P2))
 
 
-def test_member_name_structure_then_residual():
+def test_member_name_is_the_programs_own():
+    """The port of a multi-port Definition (hint-qualified when the Build recorded one), else the recorded hint, else `out`."""
     P = program()
     corr = Correspondence(P)
     gemm, rope, norm = P.call(4), P.call(5), P.call(3)
-    assert member_name(gemm, gemm.port("out"), corr.name(4), own_parameter=True) == ("0", "out", NAMED_RESIDUALS[0])
-    assert member_name(gemm, gemm.port("out"), corr.name(4), own_parameter=False)[:2] == ("out", "out")
-    assert member_name(rope, rope.port("out"), corr.name(5), own_parameter=False)[0] == "0"
-    assert member_name(norm, norm.port("out"), corr.name(3), own_parameter=False) == ("out", "out", None)
+    assert member_name(gemm, gemm.port("out"), corr.name(4)) == "out"
+    assert member_name(rope, rope.port("out"), corr.name(5)) == "query"
+    assert member_name(norm, norm.port("out"), corr.name(3)) == "out"
     two = _call(9, "Split_v1", "m/split[0]", [], ports=("0", "1"))
-    assert member_name(two, two.port("1"), parse_call_name(two.name), own_parameter=False) == ("1", "1", None)
+    assert member_name(two, two.port("1"), parse_call_name(two.name)) == "1"
+    hinted = _call(10, "Split_v1", "m/split/index_q[0]", [], ports=("0", "1"))
+    assert member_name(hinted, hinted.port("1"), parse_call_name(hinted.name)) == "index_q.1"
 
 
 def test_under():
@@ -136,30 +138,32 @@ def test_request_manifest_rows():
     assert rows == MODULE_BODY_ROWS == {
         ("weights", "model.embed.weight", "weight", (0, None)), ("weights", "model.layers.0.self_attn.qkv_proj.weight", "weight", (0, None)),
         ("instance_outputs", "model.embed", "out", (0, 4)),
-        ("instance_outputs", "model", "out", (0, 8)),                                  # h2 + h4: two crossing rows of `model`'s own body
+        ("instance_outputs", "model/add", "out", (0, 4)),                              # h2 and h4 cross `model`'s own body: two producers,
+        ("instance_outputs", "model/add_1", "out", (0, 4)),                            # each spelt at its fx node
         ("instance_outputs", "model.layers.0.input_layernorm", "out", (0, 4)),
-        ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "0", (0, 4)),        # Gemm_v1:out->0 (own parameter)
-        ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "0", (0, 4)),      # RoPE_v1:query->0
-        ("instance_outputs", "model.lm_head", "out", (0, 4)),                          # tied weight is not its own: structural `out`
+        ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "out", (0, 4)),
+        ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "query", (0, 4)),  # the Build's hint names the Call
+        ("instance_outputs", "model.lm_head", "out", (0, 4)),
         ("sampled_token_ids", "runner.sampler", "sampled_token_ids", (0, 1)),
         ("input_token_ids", "model.embed", "in", (0, 1)),
     }
     assert man["complete"] and man["unmodelled"] == {}
-    assert man["query"]["residuals_applied"] == {"Gemm_v1:out->0": 1, "RoPE_v1:query->0": 1, "encoding:in": 1, "encoding:sampled_token_ids": 1}
     assert man["populations"]["units"] == 7 and man["populations"]["steps"] == 1
     assert man["wrapper_prefix"] == "model."
     assert all(x["step"] == 0 for x in man["identities"] if x["family"] != "weights")
-    assert [x["output_member"] for x in man["identities"] if x["op_path"] == "model"] == ["out"]
-    body = next(x for x in man["identities"] if x["op_path"] == "model")
-    assert body["boundary"] == {"crossing_rows": 2, "returned_rows": 2, "structural_member": "out"}   # a crossing Value is a returned tensor too
+    assert not [x for x in man["identities"] if x["op_path"] == "model"]
+    body = next(x for x in man["identities"] if x["op_path"] == "model/add")
+    assert body["boundary"] == {"crossing_rows": 1, "returned_rows": 1}   # a crossing Value is a returned tensor too
+    assert (body["spec"], body["port"], body["position"]) == ("Add_v1", "out", [2, 0]), "the first Call of the group, its port and index"
     assert man["query"]["query_id"] == Q_MODULE_BODY_ID and "partition" not in man["query"]
 
 
 MODULE_BODY_ROWS = {
     ("weights", "model.embed.weight", "weight", (0, None)), ("weights", "model.layers.0.self_attn.qkv_proj.weight", "weight", (0, None)),
-    ("instance_outputs", "model.embed", "out", (0, 4)), ("instance_outputs", "model", "out", (0, 8)),
-    ("instance_outputs", "model.layers.0.input_layernorm", "out", (0, 4)), ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "0", (0, 4)),
-    ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "0", (0, 4)), ("instance_outputs", "model.lm_head", "out", (0, 4)),
+    ("instance_outputs", "model.embed", "out", (0, 4)),
+    ("instance_outputs", "model/add", "out", (0, 4)), ("instance_outputs", "model/add_1", "out", (0, 4)),
+    ("instance_outputs", "model.layers.0.input_layernorm", "out", (0, 4)), ("instance_outputs", "model.layers.0.self_attn.qkv_proj", "out", (0, 4)),
+    ("instance_outputs", "model.layers.0.self_attn.rotary_emb", "query", (0, 4)), ("instance_outputs", "model.lm_head", "out", (0, 4)),
     ("sampled_token_ids", "runner.sampler", "sampled_token_ids", (0, 1)), ("input_token_ids", "model.embed", "in", (0, 1)),
 }
 
@@ -230,11 +234,10 @@ def test_a_rank_program_requires_its_rank_local_partials_beside_every_collective
                             (f"{W}.logits_processor", f"shard_rank{rank}"): 2}
         assert rows[("tp_rank_partials", f"{W}.logits_processor", f"shard_rank{rank}")]["program_op_path"] == SITE
         assert rows[("instance_outputs", f"{W}.logits_processor", "out")]["invocation"] == 0
-        assert ("instance_outputs", f"{W}.layers.0.mlp.down_proj", "0") in rows                # the row-parallel linear's slot 0 = the all-reduce
+        assert rows[("instance_outputs", f"{W}.layers.0.mlp.down_proj", "out")]["spec"].startswith("AllReduce2_v1"), "the all-reduce's output"
         assert ("instance_outputs", f"{W}.embed", "out") in rows
         assert {x["op_path"] for x in m["identities"] if x["family"] == "input_token_ids"} == {f"{W}.embed"}
         assert m["op_path_aliases"][SITE] == [f"{W}.logits_processor", 0]
-        assert m["query"]["residuals_applied"]["encoding:rank operand"] == 3
     res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}, "tp": {"world": 2, "rank": 1}}
     with pytest.raises(ValueError, match="rank Program mismatch"):
         request_manifest(tp_program(), Correspondence(tp_program()), res, request_id="r0")
@@ -253,6 +256,9 @@ def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keep
     assert g["program_digest_per_rank"] == {"0": m0["program_digest"], "1": m1["program_digest"]}
     assert {x["program_digest"] for x in g["identities"] if x["rank"] == 1} == {m1["program_digest"]}
     assert len(g["identities"]) == len(m0["identities"]) + len(m1["identities"])
+    dead = dict(m1["identities"][-1], output_member="dead")
+    listed = merge_ranks([m0, dict(m1, unreturned=[dead])])
+    assert listed["unreturned"] == [dead] and listed["unreturned_digest"] == fmt.manifest_digest([dead]) != g["unreturned_digest"]
     lost = dict(m1, identities=[x for x in m1["identities"] if x["output_member"] != "shard_rank1"])
     bad = merge_ranks([m0, lost])
     assert not bad["complete"] and bad["tp_peer_binding"]["n_unbound"] == 1 and any(k[:16] == "tp peer binding:" for k in bad["unmodelled"])
@@ -295,4 +301,4 @@ def test_tensor_return_policy_requires_the_whole_node_output():
     assert norm(on) == {("0", 3), ("1", 3)}
     assert norm(off) == {("0", 1)}
     row0 = next(x for x in on["identities"] if x["op_path"] == f"{W}.norm" and x["output_member"] == "0")
-    assert row0["boundary"] == {"crossing_rows": 1, "returned_rows": 3, "structural_member": "0"}
+    assert row0["boundary"] == {"crossing_rows": 1, "returned_rows": 3}

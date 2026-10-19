@@ -707,7 +707,7 @@ def _unit(name: str) -> configparser.ConfigParser:
 def test_the_daily_service_runs_the_publisher_as_root_bounded_and_its_timer_fires_at_0615_utc():
     svc, timer = _unit("vy-lean-cache-daily.service"), _unit("vy-lean-cache-daily.timer")
     assert dict(svc["Service"]) == {"Type": "oneshot", "ExecStart": "/usr/local/lib/vy-lean-cache/run-daily",
-                                    "TimeoutStartSec": "3h", "Nice": "15", "IOSchedulingClass": "idle"}
+                                    "TimeoutStartSec": "20h", "Nice": "15", "IOSchedulingClass": "idle"}
     assert (svc["Unit"]["RequiresMountsFor"], svc["Unit"]["AssertPathIsMountPoint"]) == ("/build /workspace", "/build")
     assert dict(timer["Timer"]) == {"OnCalendar": "*-*-* 06:15:00 UTC", "AccuracySec": "1min", "Persistent": "false"}
     assert dict(timer["Install"]) == {"WantedBy": "timers.target"}

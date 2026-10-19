@@ -31,6 +31,16 @@ negatives.
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
   per-statement and per-unit costs with their standard errors, writing `costfit` observations.
+- `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
+  the request Program's root Calls by Definition kind and tries one unit of each through M0; `a11_slice.py` cuts the
+  capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
+  units from those values, one template each, under the stratified law, proved under `--zk` and held by the Lean verifier;
+  `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
+- `a9.sh`: run A9's entry point, on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
+  static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
+  its word and Boolean forms, cuts an up/gate coordinate whose rows overflow M0's block into its gather and
+  block-coordinate units, and saves the units for `a11.py --load-values`, whose audit proves them. `A9_SAVED` audits a
+  saved directory without the values stage.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

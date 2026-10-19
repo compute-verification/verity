@@ -1096,7 +1096,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                          f"`escapes` with the reason, or remove it")
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(f"escape: {n} is listed under `escapes` but is not one; remove the entry")
-    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"))
+    fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
     fails += claim_failures(policy, facts)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
@@ -1208,35 +1208,57 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out["guarantees"], out["reads"] = kept, now_reads
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
+    if update and policy.get("verifier") and facts.get("verifier") is not None:
+        out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
     return fails, out
 
 
-def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
+def compiled(found: dict) -> list[tuple[str, dict]]:
+    """(kind, constant) for each `@[implemented_by]` and `@[extern]` constant on the verifier's path (`Facts.lean`)."""
+    return [(kind, e) for kind in ("implemented_by", "extern") for e in found.get(kind, [])]
+
+
+def allowed_by(allow: list[str], e: dict) -> str | None:
+    """The `verifier.allow` entry that admits the constant ``e``: its name, a name prefix, or `module:M` for every constant
+    of a module under `M`."""
+    n = e["name"]
+    return next((a for a in allow if (under([a[len("module:"):]], e.get("module") or "") if a.startswith("module:")
+                                      else n == a or n.startswith(a + "."))), None)
+
+
+def verifier_allow(rule: dict, found: dict) -> list[str]:
+    """The `verifier.allow` that `--update` writes: the `module:` entries as they are, and by name each compiled constant on
+    the path that none of them admits, so the record lists it and the landing DM shows one added."""
+    modules = [a for a in rule.get("allow", []) if a.startswith("module:")]
+    return modules + sorted({e["name"] for _, e in compiled(found) if not allowed_by(modules, e)})
+
+
+def verifier_failures(rule: dict | None, found: dict | None, update: bool = False) -> list[str]:
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
-    no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
-    under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
-    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
+    no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
+    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
+    that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
+    constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
         return ["verifier: `Facts.lean` reported no verifier path; is the audit tool older than the policy?"]
     allow = rule.get("allow", [])
-    names = [a for a in allow if not a.startswith("module:")]
-    modules = [a[len("module:"):] for a in allow if a.startswith("module:")]
-
-    def allowed(e: dict) -> bool:
-        n = e["name"]
-        return any(n == a or n.startswith(a + ".") for a in names) or under(modules, e.get("module") or "")
-
     entries = ", ".join(rule.get("entries", []))
     fails = [f"verifier: entry {m} is not a constant of the build; fix `verifier.entries`" for m in found.get("missing", [])]
-    for kind in ("implemented_by", "extern"):
-        for e in found.get(kind, []):
-            if not allowed(e):
+    if not update:
+        used = set()
+        for kind, e in compiled(found):
+            if a := allowed_by(allow, e):
+                used.add(a)
+            else:
                 fails.append(f"verifier: {e['name']} (@[{kind}], in {e.get('module')}) is on the path from {entries}: compiled "
-                             f"code no proof sees; add it to `verifier.allow` only if it is a core primitive")
+                             f"code no proof sees; if it is a core primitive, run `check.py --update`, which lists it under "
+                             f"`verifier.allow` (the landing DM shows it), else take it off the path")
+        fails += [f"verifier: `verifier.allow` lists {a}, which admits nothing on the path from {entries}; run `check.py "
+                  f"--update`" for a in allow if not a.startswith("module:") and a not in used]
     for h in found.get("hash", []):
         fails.append(f"verifier: {entries} reach {h['name']} outside the hash parameter, by {' -> '.join(h['path'])}; route "
                      f"it through the parameter, or add the public constant it serves to `verifier.stop`")
@@ -1256,7 +1278,12 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
-    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM."""
+    meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
+    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
+    a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
+    of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
+    `HEq a a`) nor one of its hypotheses (split at `∧`), and no hypothesis is `False`. Read as written, nothing unfolded."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1304,7 +1331,31 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                 fails.append(f"claims: {n} states {'¬ ' if body.get('negated') else ''}{c} itself: a `meets` witness states the "
                              f"claim's checkable antecedents at a deployed record (a decoder meeting its bound, a non-empty "
                              f"scope), not the claim")
+            elif role == "meets" and (why := vacuous_meets(body, c)):
+                fails.append(f"claims: {n}, {c}'s `meets` witness, {why}: each conjunct of a `meets` witness's conclusion "
+                             f"applies a definition of the spec (the deployed record, a predicate or a field of it)")
     return fails
+
+
+def vacuous_meets(body: dict, claim: str) -> str | None:
+    """Why a `meets` witness's statement (``body``, `Facts.lean`'s `conclusionOf`) says nothing about the deployment, or None."""
+    if not isinstance(body.get("conclusion"), list) or not body["conclusion"]:
+        return "has no conclusion `Facts.lean` reported; is the audit tool older than the policy?"
+    if body.get("absurd"):
+        return "takes `False` as a hypothesis, so it proves anything"
+    for k in body["conclusion"]:
+        head = k.get("head")
+        if head is None:
+            return "has a conjunct that applies a bound variable, not a constant"
+        if head == claim:
+            return f"has a conjunct that states {claim} itself"
+        if k.get("refl"):
+            return f"has a conjunct that is a reflexivity ({head} of two equal sides)"
+        if k.get("assumed"):
+            return f"has a conjunct ({head} …) that is one of its own hypotheses"
+        if not k.get("defs"):
+            return f"has a conjunct ({head} …) that applies no definition under `meaning` (`True`, or a fact of Init or Mathlib alone)"
+    return None
 
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
@@ -1848,7 +1899,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     reading of its own.  After `--moved` (``renames``, `facts_of`), a guarantee and a definition are compared with the
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
-    records under its new name (a lock re-recorded after the move) is compared with that record."""
+    records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
+    or dropped from `verifier.allow` gets a line."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -1940,6 +1992,11 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         out.append(f"reads: {regrouped} {REGROUPED}")
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
+    before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
+    where = {e["name"]: f" (@[{kind}], in {e.get('module')})" for kind, e in compiled(facts.get("verifier") or {})}
+    out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
+            for a in after if a not in before]
+    out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
     return out
 
 

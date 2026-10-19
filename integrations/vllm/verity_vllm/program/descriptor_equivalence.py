@@ -148,10 +148,6 @@ class Mismatch(AssertionError):
     pass
 
 
-def _type_json(t) -> Any:
-    return t.to_json()
-
-
 def _compare_definition(fid: str, a, b, rep: dict) -> None:
     if isinstance(a, PrimitiveDefinition) or isinstance(b, PrimitiveDefinition):
         if not (isinstance(a, PrimitiveDefinition) and isinstance(b, PrimitiveDefinition)):

@@ -21,7 +21,7 @@ specified in `verity/ml/circuits/PROTOCOL.md` (pinned by `verity/ml/circuits/tes
 3. **CallGraph(fn)**, over the Call's gates `j = 0..n-1` in layout order:
    * operands: the gate's operand ids (one inside the Call must come before the gate, or the query is inapplicable: the Call is not
      topological); a gate with more than `WIDE_FAN_IN` (4096) operands is *wide*: its operands are
-     enumerated per argument (`_wide_operands`), skipping the Call's own parameters; an operand outside the
+     enumerated per argument (`wide_operands`), skipping the Call's own parameters; an operand outside the
      Call is an input, numbered by first read, and marks the gate *external*; a wide gate's outside operands are not listed;
    * structure: a gate is a constant when its primitive has no parameters, wiring when its id is in `WIRING`; then, j ascending, a
      non-structure, non-external gate with at least one operand, all of them constants, is a constant too;
@@ -159,7 +159,7 @@ def member_refs(a: Any, ax: int | None, m: int) -> Any:
     return a.take(ax, m).refs
 
 
-def _wide_operands(gate: Any, call: Any) -> Iterator[int]:
+def wide_operands(gate: Any, call: Any) -> Iterator[int]:
     """A wide fan-in gate's operands, skipping those that are the Call's own parameters (Input gates, outside the Call, which a
     wide gate never lists) without resolving them."""
     s = gate.scope
@@ -225,7 +225,7 @@ class CallGraph:
             it: Iterable[int] = g.operands
             ext = False
             if len(g.operands) > WIDE_FAN_IN:
-                it = _wide_operands(g, call)
+                it = wide_operands(g, call)
                 ext = True
                 wide.add(j)
             mine = []
@@ -775,6 +775,6 @@ def check_call_cut(G: CallGates, owner: Sequence[int], X: int, committed: Iterab
     return CutVerdict(False, tuple(cut.codes) + ("unit-too-wide",), detail)
 
 
-__all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "RECOMPUTE", "QueryInapplicable", "call_scope", "member_refs", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
+__all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "RECOMPUTE", "QueryInapplicable", "call_scope", "member_refs", "wide_operands", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
            "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition",
            "CALL_X", "CallGates", "call_gates", "call_units", "CallCut", "evaluate_call", "call_committed", "check_call_cut"]

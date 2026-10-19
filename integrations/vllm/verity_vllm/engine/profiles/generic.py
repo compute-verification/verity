@@ -14,6 +14,8 @@ One constructor per ARCHITECTURE class, selected by the family facts table (`fam
   * `dsa-moe`   -- GLM-5.3's sparse-attention MLA and sigmoid shared-expert MoE: the family's MLA parameter names
                    (`FAMILY_FACTS["glm_moe_dsa"]["params"]`), the DSA folds in `observe.fold.patterns.dsa`, and
                    `gen_shared_moe_patterns.MoEFusedSharedExpertsFp8`.
+  * `mhc-moe`   -- DeepSeek-V4's hyper-connected compressed-attention MoE: no constructor; `structural_refusal` states so (the family's
+                   facts serve `predict.dsv4`).
 `world > 1` is a generic branch of every class (the rank-local shard configuration: heads, kv heads, the MLP / expert width and the vocabulary
 divided by the world; `tp.embedding_shard.EmbeddingShardCuda` and `tp.collective_pattern.TpCollective(world)` registered first; the sampler over the
 all-gathered vocabulary; the header check re-shards the recorded FULL config) -- it replaced the two hand-written `*_tp2rank` modules and the
@@ -163,6 +165,8 @@ def structural_refusal(cfg: dict[str, Any]) -> str | None:
     if fam not in FF.FAMILY_FACTS:
         return f"model_type {fam!r} is not in the family facts table {FF.FAMILIES} (needs its own mechanism record)"
     arch = FF.FAMILY_FACTS[fam]["arch"]
+    if arch == "mhc-moe":
+        return f"{fam}: the mHC MoE architecture has no κ profile constructor (its Programs are the Build's, and predict.dsv4's ahead of time)"
     if arch == "dsa-moe":
         if int(cfg.get("n_group", 1) or 1) != 1 or int(cfg.get("topk_group", 1) or 1) != 1:
             return f"{fam}: n_group={cfg.get('n_group')!r} topk_group={cfg.get('topk_group')!r}: the sigmoid router is stated over one expert group"
