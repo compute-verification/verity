@@ -158,10 +158,19 @@ schedule. The weight gradients, the LM head's forward, attention's score and val
 and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
 0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
 shape with a fifth of its tokens at 32k; reported runs put at most about 5% of their tokens above their base context
-(Llama 3's 800B of 15.6T). A lower \(\kappa\) is
+(Llama 3's 800B of 15.6T). The other rows are counted the same way (`kappa.py`'s `ROWS`). The dense-100b example on
+Llama 3's schedule gives 0.61. RL's update needs the backward through every sampled token, so its circuit is
+pretraining's at the rollout's length: 0.39 on-policy at R1-Zero's 32k cap (0.56 at 8k, 0.28 at 64k; R1-Zero's
+reference-model and off-policy forwards give 0.47). Expert-specialized fine-tuning's frozen weights are committed in
+θ, so their products are in the denominator only and they take no weight gradients: 0.11. Evolution strategies run
+forwards alone: 0.58 at 32k. A lower \(\kappa\) is
 the defender's conservative side: it lowers the thread bound and raises \(\nu\) and \(\mu\) (`tiers.py`). A cheater's
 own lower-\(\kappa\) recipe (longer contexts, more heads) buys gates that aren't the reference recipe's work: what they
-are worth enters through `m`.
+are worth enters through `m`. A faulty proof block is worth at most the counted multiplications a block can hold, and a
+cheater can declare blocks of weight matmuls, so `tiers.py` takes such a block's own \(\kappa_{\text{block}} = 1\)
+(each multiply-add's multiplication counted) rather than the recipe's average. The cheating share \(\chi\) grows as
+\(\sqrt{\kappa_{\text{block}}}\): 1.27x what 0.60 gives, and 1.77x at 2, a block of multiplications alone whose
+additions are left to another block.
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
@@ -295,7 +304,7 @@ Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameter
 | Row | Lower (proven) | Upper (construction) |
 | --- | --- | --- |
 | `pretrain-full` | 9.6e4 | 1.4e7 (shard) |
-| `rl-full-weights` | 1.4e5 | 9.2e6 (shard) |
+| `rl-full-weights` | 6.2e4 | 3.7e6 (shard) |
 | `rl-rank1-lora-all-experts` | 4 | 6.3e4 (shard) |
 | `mezo-seed-finetune` | 1 | 2.4e3 (decode-shard) |
 | `zo-seed-pool` | 1 | about 3 (fit) |
@@ -318,7 +327,7 @@ multiply-add per parameter instead of a PRNG draw.
 
 - **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool`, `es-population-30` and `mezo-seed-finetune` cost
   about 1.2, 2 and 3.
-- **With a cap**, which every other calibration assumes (`theta_cap`), they cost about 3, 3,600 and 2,400. A fixed seed
+- **With a cap**, which every other calibration assumes (`theta_cap`), they cost about 3, 2,200 and 2,400. A fixed seed
   pool fits in one block even then: its decoding, 4.3×10¹⁶ flops, is under `Gamma`.
 
 **Design constraint.** The policy serves an agreement between rivals, so a rule on θ must neither reveal nor narrow the

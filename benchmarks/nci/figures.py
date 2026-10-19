@@ -447,7 +447,7 @@ def nci(out: Path) -> dict:
         f"K = 2 d b_w e = {kink:.3g} bit ({kink / 8e6:.0f} MB; d = 2048, b_w = 2.5, e = 4e4) nu is linear in K, "
         f"above it quadratic. At the default K = 2e7 bit, nu = {nu0:.3g} (tiers.evaluate's declared term at T4 with "
         f"host CPUs bounded: {model:.3g}); at the kink nu = {nu_kink:.3g}; nu reaches the design residual r = 0.01 at "
-        f"K = {K_r:.3g} bit. b_a = 4, kappa = 0.655.")
+        f"K = {K_r:.3g} bit. b_a = {P['b_a']:g}, kappa = {P['kappa']:g}.")
     return {"files": save(fig, out, "5_nci_term"), "title": "NCI's term", "caption": caption,
             "quote": {"nu_default": nu0, "kink_bits": kink, "nu_kink": nu_kink, "K_where_nu_equals_0.01": K_r}}
 
