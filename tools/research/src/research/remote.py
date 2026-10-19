@@ -59,15 +59,16 @@
                     the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
                     so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
                     refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
-                    `launched`.  `disk-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    `launched`.  `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
                     launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
                     wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
                     A dead holder (terminal status or vanished pid) is reclaimed.  The runner releases its own lock at exit.
     memory          --mem-gb N: the machine side admits the run only if its memory cgroup's limit - in use - live reservations
-                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N, and writes the run's reservation there;
-                    else MemoryNotAvailable (refused.json).  --mem-wait S polls up to S seconds instead.  The runner removes the
-                    reservation at exit; job.json run.remote.mem records the reading it was admitted on (research.mem).
+                    (the fleet's /workspace/ramlock/*.json, machines.toml `ramlock`) >= N and no older --mem-wait run is waiting in
+                    line, and writes the run's reservation there; else MemoryNotAvailable (refused.json).  --mem-wait S waits in line
+                    up to S seconds instead, first come first served.  The runner removes the reservation at exit; job.json
+                    run.remote.mem records the reading it was admitted on (research.mem).
     GPUs            on a machine whose GPUs gpu-lease hands out (GPU_LEASE_HOST_FILE), a run sees no GPU (CUDA_VISIBLE_DEVICES='')
                     unless it declares `--gpus N`: its workload then runs under `gpu-lease N --wait`, which queues it first come first
                     served for N of them (the wait counts against --timeout) and names them in CUDA_VISIBLE_DEVICES.  A workload that
@@ -149,10 +150,12 @@ TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
+STORE_READ_DIR = "store-read"                 # --store-read's read-only key, put in the workload's environment (store.custody.READ_DIR_NAME)
 LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch-ack: the FIFO the runner names its first record on
 LAUNCH_LOCK = ".launch.lock"                  # <root>/requests/<run-id>/.launch.lock: held by a delivery of the request until it answers
 FIRST_RECORD = "job.json"
 RUNNER_FAILED_LINES = 5                       # launcher.log lines in a RunnerFailed reason (refused.json keeps PREFLIGHT_TAIL)
+CANCEL_GRACE_S = 20                           # research cancel: SIGTERM, then the runner SIGKILLs what of the run is left this long after
 GUARD_IDLE_MIN_DEFAULT = 90
 GUARD_ENVIRON = "/proc/1/environ"             # RunPod injects RUNPOD_POD_ID and the pod-scoped RUNPOD_API_KEY into the container's first process
 DIRECT_GPUS_FILE = "/etc/vy/direct-gpus"      # the Nebius cluster's split (pods/nebius/sky/cluster_up.sh): `none` once Kueue owns every GPU
@@ -1344,6 +1347,13 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         env = _runner_env(req, runs_root, src_dir, remote)
         if req.get("custody") and not (request_path.parent / CUSTODY_DIR / "cred.json").is_file():
             raise Refused(f"--custody-r2: no staged key under {request_path.parent / CUSTODY_DIR}; the run could not publish its custody")
+        if req.get("store_read"):
+            from .store import custody as CU
+
+            try:
+                env.update(CU.reader_env(request_path.parent / STORE_READ_DIR))
+            except (OSError, ValueError, KeyError):
+                raise Refused(f"--store-read: no staged key under {request_path.parent / STORE_READ_DIR}") from None
         if req.get("job_user"):
             from . import jobuser
 
@@ -1393,6 +1403,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap (CI-99)
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -1402,11 +1413,17 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--exclusive-lock", str(runs_root / ".exclusive.lock")]
     if req.get("custody"):
         argv += ["--custody-dir", str(request_path.parent / CUSTODY_DIR)]
+    if req.get("store_read"):
+        argv += ["--store-read-dir", str(request_path.parent / STORE_READ_DIR)]
     if req.get("job_user"):
         argv += ["--job-user", req["job_user"]]
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
+        if cores := (req.get("queue") or {}).get("cores"):   # held here until whole cores of the share are its own (research.cores)
+            argv = [req.get("python") or sys.executable, "-m", "research", "cpu-hold", "--cpus", str(cores["n"]), "--from",
+                    cores["cpus"], "--wrap", str(len(req[QUEUE_WRAP])), "--who", run_id, "--ack",
+                    str(request_path.parent / LAUNCH_ACK), "--", *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
                 "--path", str(runs_root), "--ack", str(request_path.parent / LAUNCH_ACK), "--", *argv]
@@ -1440,7 +1457,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
 
 
 def ack_launch(path: Path | str, what: str) -> None:
-    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, or `disk-hold`) is in place.  Never
+    """Tell the launch-request waiting on the FIFO `path` that `what` (the run's first record, `disk-hold` or `cpu-hold`) is in place.  Never
     blocks: no FIFO there, or nobody reading it any more (ENXIO), means nobody waits on this launch."""
     try:
         fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
@@ -1698,7 +1715,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
@@ -1728,6 +1745,22 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                 raise Refused(f"--custody-r2: cannot mint the machine's key here: {e} (the parent key: the Cursor secrets, or source "
                               f"~/.config/verity/r2.env; --no-custody-r2 launches without run custody)") from None
             rec["custody"] = custody_pub
+        if store_read:
+            from .store import credentials as C
+            from .store import custody as CU
+
+            if not custody_ttl:
+                raise Refused("--store-read needs run custody (the default with --on): without it the runner's own publish would try "
+                              "the workload's read-only key")
+            if not hasattr(CU, "mint_reader") or "store_read" not in (Path(source_tool_package(source)) / "remote.py").read_text():
+                raise Refused(f"--store-read: the research package in {source} predates it; the machine would not pass the key on")
+            try:
+                read_pub, read_files = CU.mint_reader(custody_ttl or CU.DEFAULT_TTL)
+            except C.MintError as e:
+                raise Refused(f"--store-read: cannot mint a read-only key here: {e} (the parent key: the Cursor secrets, or source "
+                              f"~/.config/verity/r2.env)") from None
+            custody_files = [*custody_files, *read_files]
+            rec["store_read"] = read_pub
         tgt = pod_target(m)
         user = tgt.get("user", "root")
         ssh = ssh_argv(tgt["host"], tgt["port"], user=user)
@@ -1783,6 +1816,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
+                   **({"store_read": rec["store_read"]} if rec.get("store_read") else {}),
                    **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
@@ -2081,8 +2115,11 @@ def py_spy(local_dir: Path) -> str:
 
 def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     """`research cancel`: SIGTERM to the workload's process group on the machine (status.json `pgid`), its intent recorded first in the
-    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  Never the runner and never SIGKILL:
-    the runner records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.
+    run's events.jsonl (`tele cancel-intent --actor manual`), so the run classifies CANCELLED_MANUAL.  The SIGTERM reaches every process
+    of the run's own cgroup scopes and the run's processes outside its group too, and CANCEL_GRACE_S later the runner SIGKILLs what is
+    left of them, confirms they are gone and records it (status.json `scope_end`; telemetry.scope, INF-93).  Never the runner: it
+    records the workload's exit and then publishes custody, and one killed in its upload leaves the run without custody.  A run whose
+    shipped tool predates the scope end gets the SIGTERM to its group and run-dir processes alone, and the result says so (`scope`).
     A run another VM launched (`adopt`) has no shipped tool in its remote.json; the machine's job.json names it (`run.remote.tool`), and
     it must be a snapshot under the machine's <root>/tool/.  The group is signalled only if one of its members is this run's workload
     (`--expect-run-dir`: RESEARCH_RUN_DIR in its environment), since a runner that died leaves status.json `running` and pids wrap; a
@@ -2106,11 +2143,18 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     tele = ["env", f"PYTHONPATH={tool}", "python3", "-m", "research.telemetry", "cancel-intent", "--actor", "manual",
             "--reason", f"{reason} (research cancel by {by})", "--target-pgid", str(pgid), "--expect-run-dir", rd, "--attempt-dir", rd,
             "--deliver"]
-    # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
-    script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(tele)}; rc=$?; "
-              f"tail -n +$((n + 1)) \"$f\"; exit $rc")
-    r = ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+
+    def deliver(argv: list[str]) -> subprocess.CompletedProcess:
+        # every line appended since the cancel began: the runner records the workload's exit there as soon as the signal lands
+        script = (f"f={shlex.quote(rd)}/events.jsonl; n=$(wc -l < \"$f\" 2>/dev/null || echo 0); {shlex.join(argv)}; rc=$?; "
+                  f"tail -n +$((n + 1)) \"$f\"; exit $rc")
+        return ssh_run(ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root"), ["sh", "-c", script], timeout=120)
+
+    r, old_tool = deliver([*tele, "--grace-s", f"{CANCEL_GRACE_S:g}"]), False
     stderr = r.stderr.decode(errors="replace").strip()
+    if r.returncode == 2 and "--grace-s" in stderr:
+        r, old_tool = deliver(tele), True
+        stderr = r.stderr.decode(errors="replace").strip()
     if r.returncode == 2 and "--expect-run-dir" in stderr:
         raise Refused(f"{local_dir.name}'s research package ({tool}) predates the workload check, so nothing was signalled; on the machine, "
                       f"`kill -TERM -{pgid}` once /proc/<pid>/environ of a group member names RESEARCH_RUN_DIR={rd}")
@@ -2119,8 +2163,12 @@ def cancel(local_dir: Path, *, reason: str, by: str) -> dict[str, Any]:
     if res is None:
         raise Refused(f"the cancel recorded no result on the machine (rc {r.returncode}): {stderr[-300:]}")
     tgt = res.get("target") or {}
+    scope = res.get("scope")
+    if old_tool:
+        scope = {"fallback": f"the run's research package ({tool}) predates the scope end: SIGTERM to its group and to the processes "
+                             f"naming its run dir only, and nothing SIGKILLs what ignores it", "runner_kills_after_s": None}
     return {"pgid": pgid, "processes": tgt.get("members_total", len(tgt.get("members") or [])), "delivered": bool(res.get("delivered")),
-            "why": res.get("reason")}
+            "why": res.get("reason"), "scope": scope}
 
 
 def _file_sha256(p: Path) -> str:

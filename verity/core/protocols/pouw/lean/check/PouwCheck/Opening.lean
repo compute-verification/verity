@@ -9,8 +9,8 @@ import PouwWindow.Side
 (unless it is opened undrawn, the filler's). The registered entries root's domain is one-stage's served domain of the
 registered program and partition over the check's P entries (`windowDomain?`). The opening's entry, under its salt, is
 that root's leaf at its index (`verifyPath`). The unit is one of the entry's tiles (`tileIn?`). The proof's header names one
-instance whose first two rows, in key order (serde's, as C-Flock reads it), are an A row and a B row of the fp8-p schemas
-(`opened`). Each of those rows' b ‖ c, at the head of the body, is the entry's side tree's leaf at the unit's row.
+instance, over the circuit the verifier pins for the check's template (`tile?`), whose first two rows, in key order (serde's,
+as C-Flock reads it), are an A row and a B row of the fp8-p schemas (`opened`). Each of those rows' b ‖ c, at the head of the body, is the entry's side tree's leaf at the unit's row.
 Python's reading is kept where its outcome depends on it: hex as `bytes.fromhex` reads it, integers as `struct`
 packs them (a boolean is one), an entry as `Entry.from_json` reads it.
 -/
@@ -119,6 +119,8 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
   let some (h, body) := header? pub | return some "the proof's public file has no JSON header"
   let some n := (pyGet? h "instances").bind strictInt? | return some "the proof's header has no instance count"
   if n != 1 then return some s!"the proof has {n} instances, not one tile"
+  unless (tile? p.check.template).any (fun t => pyGet? h "circuit_sha512" == some (.str t.circuit)) do
+    return some "the proof's circuit is not the one the verifier pins for the check's template"
   let schemas := ((pyGet? h "frame_v3").bind (pyGet? · "schemas")).bind firstTwo
   if schemas != some (opened.map fun (_, s) => Json.str s) then
     return some "the proof's first rows are not an A row and a B row of the registered schemas"

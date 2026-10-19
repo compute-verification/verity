@@ -13,10 +13,17 @@ A spec-level reference for network accounting's timing channel:
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
+  With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
+  windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
+  salt frame with a salt-free placeholder, so every record is a function of the traffic alone; the salt sits in the
+  certifier's one sealed record cell, `_salts[p]`, until `Proxy.reveal(p, registration)` opens it on the PoUW window's
+  registration after its last ingress record is published, and `active.check_salts` reads the salt frames. A proxy back
+  from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the
+  Program's at position p, and carries nothing from before: a window it was down for has no record.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`, and in `service` the proof service, the hm96 leaves and the check's
-Definition. The certificate's signature scheme is a parameter: the certifier's
+`tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
+Definition, and in `active` the proof service's registration and receipt, which `reveal` reads. The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's

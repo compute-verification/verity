@@ -14,7 +14,6 @@ import subprocess
 import sys
 import threading
 import urllib.parse
-from email.utils import formatdate
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -27,7 +26,6 @@ C = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(C)
 
 READ, WRITE = ("reader", "read-secret"), ("writer", "write-secret")
-REV = "1" * 40
 PLAT = "x86_64-unknown-linux-gnu"
 
 
@@ -428,7 +426,7 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
     b, url = s3
     b.conflict = conflict
     r, rev = repo(tmp_path)
-    s = stage(tmp_path)
+    stage(tmp_path)
     same = C.BLOBS + hashlib.sha256(b"module archive").hexdigest()
     b.objects[same] = (b"module archive", b.now)
     assert C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None) == "published"

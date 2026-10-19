@@ -5,6 +5,9 @@
     ... PART...                                             only those parts (`tests`, `circuits`, `lean`: each job's `part` in
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
+    ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
+                                                            post-landing run drive launches on `main`'s tip (`train.sh
+                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod): an Attempt of the clean commit checked out, the
                                                             record `research merge` reads; with the pinned upstream build and
@@ -796,7 +799,9 @@ def record(argv: list[str]) -> int:
     (`gather_verdicts`) unless it is given a pack or --no-cache. A commit that can't land on REF as it is
     (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, or
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
-    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it)."""
+    one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
+    `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
+    gathered verdicts and no upstream build or Lean dependencies."""
     on = base = None
     agreement = priority = False
     rest = []
@@ -833,12 +838,15 @@ def record(argv: list[str]) -> int:
     spec.loader.exec_module(tool)
     combining = rest[:1] == ["--combine"]
     parts = None
-    if "--shard" in rest[:-1]:
-        try:
+    deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
+    try:
+        if "--shard" in rest[:-1]:
             parts = shard(rest[rest.index("--shard") + 1])["parts"]
-        except DECLARATION.DeclarationError as e:
-            print(f"check: {e}", file=sys.stderr)
-            return 2
+        elif deferred is not None:
+            parts = deferred_parts(deferred)
+    except DECLARATION.DeclarationError as e:
+        print(f"check: {e}", file=sys.stderr)
+        return 2
     if base is None:
         subprocess.run(["git", "fetch", "-q", "origin", "+refs/heads/main:refs/remotes/origin/main"], cwd=ROOT, capture_output=True)
         base = "origin/main"
@@ -852,7 +860,9 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    cmd = [sys.executable, "-m", "research", "run", "--tool", "check", "--project", "verity", "--cwd", "source"]
+    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it
+    cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
+           "--cwd", "source"]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -1052,6 +1062,15 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
+#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+DEFERRED_KIND = "check-deferred/v1"
+
+
+def deferred_parts(steps: str) -> list[str]:
+    """`--deferred STEP,...`: every part an unsharded check covers that is one of those ci.toml jobs or a job they need or run
+    after (`declaration.needed`).  DeclarationError for a name no job has."""
+    chosen = DECLARATION.needed(JOBS, [s for s in steps.split(",") if s])
+    return [p for p in shard_parts() if p.partition(":")[0] in chosen]
 
 
 def shard(spec: str) -> dict:
@@ -1608,13 +1627,16 @@ def reuse_lines(r: dict) -> list[str]:
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran).  A run
+    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for a
+    post-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  A run
     ``stopped_by`` a signal is `not_run`: no verdict, so a job queue runs it again."""
     if shard is not None:
         done = [{**s, "parts": got} if (got := [p for p in shard["parts"] if p.partition(":")[0] == s["step"]]) else s
                 for s in done]
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
-    doc = {"schema": "research/result/v0.1", "kind": SHARD_KIND if shard else "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+    deferred = bool(shard and shard.get("deferred"))
+    kind = DEFERRED_KIND if deferred else SHARD_KIND if shard else "check/v1"
+    doc = {"schema": "research/result/v0.1", "kind": kind, "run_id": os.environ["RESEARCH_RUN_ID"],
            "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "not_run" if stopped_by else "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
@@ -1625,7 +1647,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
-        doc["shard"] = shard
+        doc["deferred" if deferred else "shard"] = shard
     if verdicts:
         doc["verdicts"] = verdicts
     if contradicted:
@@ -1687,8 +1709,22 @@ def main(argv: list[str]) -> int:
             return 2
         rest = rest[:i] + rest[i + 2:]
         print(f"check: shard {sharded['k']}/{sharded['n']}: {', '.join(sharded['parts'])}", flush=True)
+    deferred = None
+    if "--deferred" in rest and rest.index("--deferred") + 1 < len(rest):
+        i = rest.index("--deferred")
+        deferred, rest = rest[i + 1], rest[:i] + rest[i + 2:]
     picked = [a for a in rest if a in DECLARATION.PARTS]
     rest = [a for a in rest if a not in DECLARATION.PARTS]
+    if deferred is not None:
+        if sharded or picked:
+            print("check: --deferred runs the post-landing steps alone, without --shard or a part", file=sys.stderr)
+            return 2
+        try:
+            sharded = {"parts": deferred_parts(deferred), "deferred": deferred.split(",")}
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
+        print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
     if picked:
         if sharded or os.environ.get("RESEARCH_RUN_ID"):
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",

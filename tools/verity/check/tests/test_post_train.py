@@ -139,6 +139,16 @@ def _launched(calls) -> str:
     return run[run.index("--id") + 1]
 
 
+def test_the_run_reserves_its_memory_and_sizes_its_workers_to_it(tmp_path, monkeypatch):
+    """19 Oct 05:31Z: the job ran about 20 workers at ~28 GB each with nothing reserved, filling vy-nebius-1's slice; two other
+    lanes' runs were killed."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
+    PT.main(["--workers", "40"])
+    run = next(c for c in calls if c[0] == "run")
+    assert run[run.index("--mem-gb") + 1] == str(PT.MEM_GB) and run[run.index("--mem-wait") + 1] == str(PT.MEM_WAIT_S)
+    assert f"-n {PT.MEM_GB // PT.WORKER_GB} " in run[-1] or f"-n{PT.MEM_GB // PT.WORKER_GB} " in run[-1], run[-1]
+
+
 def test_a_landing_gets_its_label_and_a_dry_run_writes_none(tmp_path, monkeypatch):
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806")
     assert PT.main(["--cores", "96-127"]) == 1

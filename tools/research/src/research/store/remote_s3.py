@@ -29,7 +29,7 @@ CONNECTIONS.  Every request runs on a pooled keep-alive TLS connection (`_Pool`:
 `max_pool_connections` = 64 of them; a request takes one, uses it exclusively, and gives it back when the response was consumed
 whole; a connection the service closed, or that failed mid-request, is dropped and the request retried on a fresh one).  Before
 this (r20) each request opened its own TLS connection: 259,030 blobs / 46 GB took 1.9 h at ~27 blobs/s.  `jobs` (default 32) is
-the bounded thread pool `put_many` / `head_many` / `get_many` / `delete_many` run on; `LocalStore.push` brings its own pool, of
+the bounded thread pool `put_many` runs on; `LocalStore.push` brings its own pool, of
 the same size, over `put`.
 
 MEASURED (2026-09-23, runpod pod vyv-v2cpu3 -> R2, 10k x 4 KiB blobs pushed through `LocalStore.push`, then re-pushed, then fetched,
@@ -108,7 +108,7 @@ HEAD_RETRIES = 1
 RETRIES = 3                     # transient 5xx / 429 / connection errors: 4 tries, 1 s, 2 s, 4 s backoff (or the service's Retry-After)
 RETRY_BACKOFF_S = 1.0
 RETRY_AFTER_MAX_S = 30.0        # a Retry-After above this is capped (the try budget stays bounded)
-JOBS = 32                       # the bounded thread pool behind put_many / head_many / get_many / delete_many
+JOBS = 32                       # the bounded thread pool behind put_many
 MAX_POOL_CONNECTIONS = 64       # idle keep-alive connections kept per instance
 PACK_THRESHOLD_BLOBS_PER_S = 300   # below this, the r20 plan called for a pack format for many-small-file trees (not met at jobs=32: docstring)
 ALGORITHM = "AWS4-HMAC-SHA256"
@@ -744,24 +744,6 @@ class S3Remote:
             except Exception as e:  # noqa: BLE001
                 return {"key": k, "error": f"{type(e).__name__}: {e}"}
         return self._map(one, items, jobs)
-
-    def head_many(self, keys: Iterable[str], *, jobs: int | None = None) -> list[dict | None]:
-        return self._map(self.head, keys, jobs)
-
-    def get_many(self, items: Iterable[tuple[str, Path]], *, jobs: int | None = None) -> list[str | None]:
-        """`get` over (key, path) pairs; per item None on success, else the error text (`KeyError` for an absent key)."""
-        def one(kp: tuple[str, Path]) -> str | None:
-            k, p = kp
-            try:
-                self.get(k, Path(p))
-                return None
-            except Exception as e:  # noqa: BLE001
-                return f"{type(e).__name__}: {e}"
-        return self._map(one, items, jobs)
-
-    def delete_many(self, keys: Iterable[str], *, jobs: int | None = None) -> int:
-        """Delete every key; returns how many existed."""
-        return sum(1 for x in self._map(self.delete, keys, jobs) if x)
 
     # ---- multipart --------------------------------------------------------------------------------------------------------------------
 
