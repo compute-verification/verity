@@ -513,12 +513,15 @@ def test_only_the_lease_pools_variables_match():
         assert not env_re.match(f"{name}=x")
 
 
-def _sh(cmd: str, root: Path, path: str = "") -> str:
-    """Run one of `COMMANDS` with its absolute paths under `root`."""
-    for top in ("/workspace/", "/etc/", "/var/", "/proc/"):
-        cmd = cmd.replace(top, f"{root}{top}")
+def _sh(cmd: str, root: Path, path: str = "", tops: tuple[str, ...] = ("workspace", "etc", "var", "proc")) -> str:
+    """Run one of `COMMANDS` with its absolute paths under `root`, rewritten in one pass: `root` may itself lie under one of
+    `tops` (a pod's tmp is under /workspace/), and a second pass would prefix it again."""
+    cmd = re.sub(rf"/(?:{'|'.join(tops)})/", lambda m: f"{root}{m[0]}", cmd)
     env = {**os.environ, "PATH": f"{path}:{os.environ['PATH']}" if path else os.environ["PATH"]}
     return subprocess.run(["sh", "-c", cmd], capture_output=True, text=True, check=True, env=env).stdout.replace(str(root), "")
+
+
+N2_TOPS = ("workspace", "etc", "var", "proc", "run")
 
 
 def _put(root: Path, files: dict[str, str]) -> None:
@@ -597,8 +600,7 @@ def _n2(tmp_path: Path, status: str, windows: str | None = None, cmd: str | None
         w.unlink(missing_ok=True)
     else:
         w.write_text(windows)
-    cmd = (cmd or policy.COMMANDS["n2"]).replace("/run/", f"{tmp_path}/run/")
-    return _sh(cmd, tmp_path, str(tmp_path / "bin"))
+    return _sh(cmd or policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"), N2_TOPS)
 
 
 @pytest.mark.parametrize("status, windows, why", [
@@ -712,5 +714,5 @@ def test_node_2_s_gate_fails_when_status_txt_cant_be_read(tmp_path):
     _n2(tmp_path, STATUS)
     (tmp_path / policy.FILL.lstrip("/") / "status.txt").unlink()
     with pytest.raises(subprocess.CalledProcessError) as e:
-        _sh(policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"))
+        _sh(policy.COMMANDS["n2"], tmp_path, str(tmp_path / "bin"), N2_TOPS)
     assert e.value.returncode == 1 and e.value.stdout == ""
