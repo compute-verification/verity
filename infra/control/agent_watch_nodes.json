@@ -1,5 +1,6 @@
 {
  "every_s": 300,
+ "quiet_handles": ["ci"],
  "nodes": ["vy-nebius-1", "vy-nebius-2"],
  "ssh": ["ssh", "-i", "/root/.runpod/ssh/runpodctl-ssh-key", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
          "-o", "ConnectTimeout=15", "-o", "StrictHostKeyChecking=accept-new",

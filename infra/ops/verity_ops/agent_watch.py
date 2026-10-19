@@ -82,7 +82,8 @@ node names, the ssh options with the key, optionally `machines_d`), the watch re
 read over one ssh (`RUNS_READER`, host, port, user and runs root from the node's machines.d entry in the notes clone), and
 records each once as **run_ended** for whoever sent it (the request's `submitted_by`, else the command's `--by`, else the job's
 lane): a coordinator's own handle, a worker's launcher's (its coordinator resumes it with Task: Cursor refuses a run on a worker),
-else the lane's when that is a handle; a run no handle owns is skipped. `run_ends.json` keeps each node's last read and the runs
+else the lane's when that is a handle; a run no handle owns, or one whose handle `quiet_handles` lists (ci: drive reads its own
+train checks' ends), is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
 
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
@@ -962,6 +963,7 @@ class Watch:
         st = {"since": self.ends.get("since", t), "nodes": dict(self.ends.get("nodes") or {}),
               "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
         handles = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
+        quiet = {str(h) for h in cfg.get("quiet_handles") or []}
         for node in nodes:
             since = max(st["since"], st["nodes"].get(node, st["since"])) - RUN_ENDS_SLACK_S
             rows, why = node_runs(cfg, self.notes, node, since, self.sh)
@@ -975,11 +977,12 @@ class Watch:
                 st["seen"][key] = t
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
                 if ended >= st["since"]:
-                    self.ring_run(node, row, coords, handles, ended)
+                    self.ring_run(node, row, coords, handles, ended, quiet)
         self.ends = st
         write_atomic(self.ends_path, (json.dumps(st, sort_keys=True) + "\n").encode())
 
-    def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float) -> None:
+    def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
+                 quiet: set[str] = frozenset()) -> None:
         by = AGENT_RE.search(str(row.get("submitted_by") or ""))
         agent = by[0] if by else ""
         lane = next((x for x in (row.get("by"), row.get("lane")) if x in handles), None)
@@ -993,6 +996,8 @@ class Watch:
         else:
             print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {row.get('submitted_by') or row.get('by') or '?'}"
                   ", which no handle owns: not rung", file=sys.stderr, flush=True)
+            return
+        if handle in quiet:
             return
         what = row.get("job") or row.get("stage") or " ".join(str(row.get("command") or "").split()[:4]) or "?"
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,

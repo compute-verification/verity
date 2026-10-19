@@ -1613,6 +1613,25 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
     assert len(ended(tmp_path)) == 3, "each run rings once, across restarts"
 
 
+def test_a_quiet_handles_runs_are_not_rung(tmp_path):
+    """Drive's train checks end every few minutes under `--by ci`, and drive reads them itself: ringing ci for each is noise."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    cfg = json.loads((tmp_path / "nodes.json").read_text())
+    (tmp_path / "nodes.json").write_text(json.dumps({**cfg, "quiet_handles": ["vllm"]}))
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-2"], "r20261018-195500-0004", clock.t, command=["slot", "--by", "vllm", "--", "check"])
+    node_run(roots["vy-nebius-1"], "r20261018-195000-0002", clock.t, by=f"https://cursor.com/agents/{CO}")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    assert [(r["run"], r["handle"]) for r in ended(tmp_path)] == [("r20261018-195000-0002", "circuits")]
+
+
+def test_the_shipped_nodes_file_keeps_ci_quiet():
+    cfg = json.loads((W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch_nodes.json").read_text())
+    assert cfg["quiet_handles"] == ["ci"] and cfg["nodes"] == ["vy-nebius-1", "vy-nebius-2"]
+
+
 def test_a_node_that_doesnt_answer_is_said_once_an_hour_and_caught_up_when_it_does(tmp_path, capsys):
     """The H200s stop after 2 h idle: a node read fails, and its runs are read from its last good read once it answers."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
