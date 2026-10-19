@@ -4,7 +4,8 @@
 // issue bound. These loops are ../dc/probes/sm90_wgmma.cu's, templated on the form: each form alone (wait_group 1), the
 // honest LI-CP-W loop (wgli_redux: 4 wgmma, LI's 256 LOP3 + 256 IMAD, 4 checkpoints of 4 LOP3 and one redux.sync.xor,
 // then wait), and the interleaved IMAD and LOP3 points. The RS form's A fragment is loop-invariant, the cheater's best
-// case (no delivery). Built and gated by ../opcode_probe/probe.py; rs.sh runs it, rs.py reads it.
+// case (no delivery). wgli_true (RT-HOPPER-8) is the honest loop folding the wgmma's own accumulators, after each
+// wait. Built and gated by ../opcode_probe/probe.py; rs.sh runs it, rs.py reads it.
 #include "../opcode_probe/probe.cuh"
 #include "../dc/dc.cuh"
 #include "../dc/probes/lanes.cuh"
@@ -114,6 +115,49 @@ DC_DEV void wg_mix(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
 }
 
+// wgli_true: the honest LI-CP-W loop with the receipt's data dependence (RT-HOPPER-8). A committed word at L = 32 is a
+// k32 prefix, which is the wgmma's accumulator and readable only after its wait, so each step issues one wgmma, waits,
+// LI-folds that step's 128 words into 8 chains (y = (y ^ d0 ^ k) * a + d1: one LOP3 and one IMAD a pair), XORs the 8
+// chains (4 LOP3) and reduces them by one redux.sync.xor. A warpgroup's fold can't overlap its own wgmma, only another
+// warpgroup's: _w2 has 2 warpgroups a CTA (wgli_redux's), _w3 has 3. Same instructions a MMA as wgli_redux.
+template <class F>
+DC_DEV void wg_li_true(const OpArgs& a) {
+  SETUP
+  const uint32_t k = dc_mix32(blockIdx.x * 977u + threadIdx.x);
+  uint32_t y[8], m[8];
+#pragma unroll
+  for (int c = 0; c < 8; c++) {
+    y[c] = dc_mix32(threadIdx.x * 8u + c);
+    m[c] = dc_mix32(0xA0000000u + c + (uint32_t)a.mode) | 1u;
+  }
+  uint32_t cp = 0;
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int s = 0; s < 4; s++) {
+      wgmma_fence();
+      F::mma(d, t, af, 1);
+      wgmma_commit();
+      wgmma_wait<0>();
+#pragma unroll
+      for (int p = 0; p < 64; p++) {
+        uint32_t x;
+        asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x) : "r"(y[p & 7]), "r"((uint32_t)d[2 * p]), "r"(k));
+        asm volatile("mad.lo.u32 %0,%1,%2,%3;" : "=r"(y[p & 7]) : "r"(x), "r"(m[p & 7]), "r"((uint32_t)d[2 * p + 1]));
+      }
+      uint32_t x0, x1, x2, x3;
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x0) : "r"(y[0]), "r"(y[1]), "r"(y[2]));
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x1) : "r"(x0), "r"(y[3]), "r"(y[4]));
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x2) : "r"(x1), "r"(y[5]), "r"(y[6]));
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x3) : "r"(x2), "r"(y[7]), "r"(cp));
+      asm volatile("redux.sync.xor.b32 %0,%1,0xffffffff;" : "=r"(cp) : "r"(x3));
+    }
+  }
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ cp ^ y[0] ^ y[7] ^ threadIdx.x)
+}
+
 OP_KERNEL(wg_s8_n256_a1, 256) { wg_alone<F_ss>(a); }
 OP_KERNEL(wg_s8_n256_rs_a1, 256) { wg_alone<F_rs>(a); }
 OP_KERNEL(wg_u8s8_n256_a1, 256) { wg_alone<F_u8>(a); }
@@ -124,6 +168,8 @@ OP_KERNEL(wgmix_imad_r256, 256) { wg_mix<F_ss, L_IMAD, 256>(a); }
 OP_KERNEL(wgmix_imad_r256_rs, 256) { wg_mix<F_rs, L_IMAD, 256>(a); }
 OP_KERNEL(wgmix_lop3_r256, 256) { wg_mix<F_ss, L_LOP3, 256>(a); }
 OP_KERNEL(wgmix_lop3_r256_rs, 256) { wg_mix<F_rs, L_LOP3, 256>(a); }
+OP_KERNEL(wgli_true_w2, 256) { wg_li_true<F_ss>(a); }
+OP_KERNEL(wgli_true_w3, 384) { wg_li_true<F_ss>(a); }
 
 #define S8 "IGMMA.64x256x32.S8.S8*=4"
 #define U8 "IGMMA.64x256x32.U8.S8*=4"
@@ -140,6 +186,8 @@ static const OpProbe PROBES[] = {
     P(wgmix_imad_r256_rs, S8 ",IMAD=256"),
     P(wgmix_lop3_r256, S8 ",LOP3.LUT=256"),
     P(wgmix_lop3_r256_rs, S8 ",LOP3.LUT=256"),
+    P(wgli_true_w2, S8 LI),
+    {.name = "wgli_true_w3", .kernel = (const void*)wgli_true_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
