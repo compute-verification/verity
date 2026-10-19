@@ -94,8 +94,9 @@ def main() -> int:
             cp = int(tag[len("li_exact<"):-1])
             ncp = 16 if cp == 2 else 4
             redux, red = (0, ncp) if cp == 3 else (ncp, 0)
-            if base["REDUX"] != redux or base["RED"] != red:
-                fails.append(f"{tag}: {base['REDUX']} REDUX and {base['RED']} RED a trip, want {redux} and {red}")
+            got_red = base["RED"] + base["REDG"]
+            if base["REDUX"] != redux or got_red != red:
+                fails.append(f"{tag}: {base['REDUX']} REDUX and {got_red} RED a trip, want {redux} and {red}")
             if base["LOP3"] < 256 + 4 * ncp:
                 fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + 4 * ncp}")
             imad = sum(n for op, n in ops.items() if op == "IMAD")

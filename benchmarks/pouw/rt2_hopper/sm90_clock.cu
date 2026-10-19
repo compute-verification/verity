@@ -91,7 +91,9 @@ __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ word
         if (lane == 0) out[u] = r;
       }
       if constexpr (CP == CP_SEG4) keep[j] = __reduce_xor_sync(0xffffffffu, xor8(y));
-      if constexpr (CP == CP_RED) atomicXor(&out[u], xor8(y));
+      // inline PTX, since nvcc's atomic optimizer turns a same-address atomicXor into REDUX and one lane's REDG
+      if constexpr (CP == CP_RED)
+        asm volatile("red.relaxed.gpu.global.xor.b32 [%0], %1;" ::"l"(out + u), "r"(xor8(y)) : "memory");
     }
     if constexpr (CP == CP_SEG4)
       if (lane == 0) reinterpret_cast<uint4*>(out)[u4] = make_uint4(keep[0], keep[1], keep[2], keep[3]);
