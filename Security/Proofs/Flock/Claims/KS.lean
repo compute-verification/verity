@@ -139,6 +139,7 @@ import Proofs.Flock.Claims.KS.ZkKSAlign
 import Proofs.Flock.Claims.KS.SlotDistOn
 import Proofs.Flock.Claims.KS.ZkTauSlot
 import Proofs.Flock.Claims.KS.ZkUntrim
+import Proofs.Flock.Claims.KS.ZkExtend
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -621,4 +622,9 @@ coins into a rep (`ZkTauSlot`: `FlockDeploy.KS.zkTau_dist`, `FlockDeploy.KS.slot
 column and equal to no full-width one (`Flock.TrimBridge.hole_agree`). Both follow from the one full-width table bound,
 the untrimmed with `ExtendJ` (`Flock.TrimBridge.KS_both_of_tableBoundJR`), so from `zk_KS_of_kinds`'s premises
 (`FlockDeploy.KS.TrimBridge.zk_KS_both_of_kinds`). Those hold at every message, so the untrimmed instance's KS rests
-on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy.KS.zk_KS_untrim_of_extendJ`). -/
+on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy.KS.zk_KS_untrim_of_extendJ`). And
+`ExtendJ` holds at the untrimmed instance at every relation: an unopened position takes a full-width column whose first
+lane no trace one agreement short of its radius has there, which Johnson's bound leaves room for in GF(2^128), so the
+table still does not extract (`ZkExtend`: `Claims.GS.exists_avoid`, `FlockDeploy.KS.zk_fill_step`,
+`FlockDeploy.KS.zk_extendJ`). So masked KS at the untrimmed instance holds with no premise too
+(`FlockDeploy.KS.zk_KS_untrim`). -/
