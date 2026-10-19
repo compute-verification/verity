@@ -202,13 +202,35 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
     (14336, 512, 512): (131.07, 119.78, 41.6)}
 
 
+#: the remote bandwidth audit's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
+#: circuit, its 4 KiB block decoded to its payload, its sketch receipt recomputed, and the receipt leaf and the payload
+#: opened to their roots (its ANDs are the whole unit's, every opening included)
+OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
+OPENING_ANDS = 29_617_630
+
+#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the firewall's send check, per run
+#: and (staged units, drawn units): the GPU-seconds its cold prover process held the lease (its wall less the lease's
+#: wait; the mean of two where it ran two). Their device phase is 79 ms an opening at a full statement, 16 ms without the
+#: send check, the GPU's own algebra about 1 ms of it (note:memory-accounting/20261018T1937Z-report-zk-openings). They
+#: give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify lean-4e521bba8e1bc519), not CPU. Nor `stage`:
+#: A8's staging is about 130 s at 64 staged units and at 512, a fixed cost a statement of this template pays that the stage
+#: fit's terms, shared with the s8 coordinates, don't carry (PRF-77).
+OPENING_SESSIONS: dict[str, dict[tuple[int, int], float]] = {
+    "r20261018-195718-d00b": {(64, 1): 139.5, (64, 8): 138.0, (64, 32): 161.0, (64, 64): 163.5},
+    "r20261018-211523-93ec": {(512, 64): 156.0, (512, 128): 161.0, (512, 256): 197.0, (512, 512): 234.0}}
+
+
 def observations() -> list[Observation]:
     return [Observation(ZK_RUN, f"ScaledMmS8Coordinate_v1{{K={k}}}", s8_coord_ands(k), c, d, prove=p, verify=v, stage=s)
-            for (k, c, d), (p, v, s) in ZK.items()]
+            for (k, c, d), (p, v, s) in ZK.items()] + \
+        [Observation(run, OPENING, OPENING_ANDS, c, d, prove=p)
+         for run, points in OPENING_SESSIONS.items() for (c, d), p in points.items()]
 
 
 KEY = {"prover": "flock-circuit bin-dec484d021e461a0-g1-sm120 (binary 21944fa201b5, CUDA 13.3.1), --zk --gpu, "
-                  "FC_HOST_WITNESS=1, the firewall's send check on",
+                  "FC_HOST_WITNESS=1, the firewall's send check on; the opening unit's sessions "
+                  "bin-b4e798e6b2590a24-g1-sm120, the same flags",
        "verifier": "flock-verify lean-3a9d4dc43048fdae (binary b3b257d5ac0e), verify --zk, one CPU",
-       "hardware": "RTX PRO 6000 Blackwell Server Edition (driver 580.173.02), Xeon 6776P, vy-nebius-2",
-       "templates": "ScaledMmS8Coordinate_v1{K=4096|14336}"}
+       "hardware": "RTX PRO 6000 Blackwell Server Edition (driver 580.173.02), Xeon 6776P, vy-nebius-2; the opening "
+                   "unit's, the same card on vy-nebius-1",
+       "templates": f"ScaledMmS8Coordinate_v1{{K=4096|14336}}, {OPENING}"}
