@@ -101,7 +101,7 @@ theorem hiSalt_exe (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTa
     rw [cellAt_lt t hc]
     simp only [saltAt, fAt, hl0, r.isLt, hl', hp', ↓reduceIte, ↓reduceDIte] <;> rfl
   unfold hiSalt
-  rw [if_pos h, fAt_lt _ _ hk]
+  rw [ite_eq_left h, fAt_lt _ _ hk]
   change ZkView.saltBytes (Sum.elim ((t ⟨j.val, hc⟩).1.2.2.2.2.2.2.2.2.2 r).1 ((t ⟨j.val, hc⟩).1.2.2.2.2.2.2.2.2.2 r).2
       (hiEmbOf (zkTab x j).table.sch.levels hn ⟨hiIdx (zkTab x j).table.sch.levels (⟨l, hl'⟩, ⟨p, hp'⟩), hk⟩)) =
     saltAt (cellAt t j.val) r.val l p
@@ -116,7 +116,7 @@ theorem hiSalt_exe_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.z
   split_ifs with h
   · exact hiSalt_exe P x t j r h
   · unfold hiSalt
-    rw [if_neg h]
+    rw [ite_eq_right h]
 
 /-- **A prover of Ligerito's levels ≥ 1 reading salts by level and position**: rep `r`'s bytes after `T'` from the
 table, the statement, the coins, the restart `y₁'` and the salts, level `l`'s at position `p` (`ligeritoPZk`'s
@@ -155,7 +155,7 @@ theorem ofSalts_exe (Pc : SaltProver) (hPc : SaltsOn Pc) (x : Msg) (t : Fin Clai
     ofSalts Pc (zkTab x j).table (stAt x j) c r L y (hiTape (ofSalts Pc) x t j r) =
       Pc (zkTab x j).table (stAt x j) c r L y ((exeTape t).salt j.val r.val) := by
   rw [ofSalts_exe_on]
-  exact hPc _ _ c r L y _ _ fun l p h => if_pos h
+  exact hPc _ _ c r L y _ _ fun l p h => ite_eq_left h
 
 end Masked
 
