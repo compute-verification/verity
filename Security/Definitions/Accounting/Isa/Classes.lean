@@ -76,7 +76,7 @@ inductive Sync
   deriving DecidableEq, Repr
 
 -- Mathlib's `deriving Fintype` fails on an enumeration at this revision (its `Finset.mem_mk` rewrite misses).
-instance : Fintype Sync :=
+instance instFintypeSync : Fintype Sync :=
   Fintype.ofList (α := Sync) [.IMMA16832, .IMMA16816, .IMMA8816, .IMMASP16864, .IMMASP16832, .MMA, .HMMA16816,
     .HMMASP16832, .HMMA16816F16, .HMMA1688T, .HMMA1684T, .QMMA16832, .QMMASF16832, .QMMASP16864, .OMMASF16864,
     .BMMA168256, .IMMAS4, .DMMA] fun x => by
@@ -133,7 +133,7 @@ inductive Base
   | SULD1 | SULD4 | SUST | SURED | SUATOM
   deriving DecidableEq, Repr
 
-instance : Fintype Base :=
+instance instFintypeBase : Fintype Base :=
   Fintype.ofList (α := Base) [.UNI, .UNI64, .LDCU128, .ALU, .IMAD, .FFMA, .HFMA2, .VIMNMX, .F2FS, .XU, .SEL, .NOROW,
     .VSIMD, .IMADW, .ALU64, .W2, .DMUL, .CVT64, .MOV64, .SHFL, .REDUX, .VOTE, .LDS32, .LDS64, .LDS128, .LDG32, .LDG64,
     .LDG128, .LDG128CG, .LDG128NA, .LDG256, .LDG256CG, .LDC64, .LDCDIV, .LDCUNI, .LDGSTS16, .LDSM_X1, .LDSM_X2,

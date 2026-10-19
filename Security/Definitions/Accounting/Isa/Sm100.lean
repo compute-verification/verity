@@ -29,7 +29,7 @@ inductive Tc05
   deriving DecidableEq, Repr
 
 -- Mathlib's `deriving Fintype` fails on an enumeration at this revision (its `Finset.mem_mk` rewrite misses).
-instance : Fintype Tc05 :=
+instance instFintypeTc05 : Fintype Tc05 :=
   Fintype.ofList (α := Tc05) [.UTCIMMA_M64_N64, .UTCIMMA_M64_N128, .UTCIMMA_M64_N256, .UTCIMMA_M128_N32,
     .UTCIMMA_M128_N64, .UTCIMMA_M128_N128, .UTCIMMA_M128_N256, .UTCHMMA_F16_M128_N256, .UTCQMMA_E4M3_M128_N128,
     .UTCQMMA_E4M3_M128_N256, .UTCHMMA_BF16, .UTCHMMA_TF32, .UTCQMMA_E5M2, .UTCQMMA_E3M2, .UTCQMMA_E2M3, .UTCQMMA_E2M1,
@@ -90,7 +90,7 @@ inductive Tmem
   | LDTM | STTM | UTCCP | UTCSHIFT
   deriving DecidableEq, Repr
 
-instance : Fintype Tmem :=
+instance instFintypeTmem : Fintype Tmem :=
   Fintype.ofList (α := Tmem) [.LDTM_32X32B_X1, .LDTM_32X32B_X4, .LDTM_32X32B_X16, .LDTM_32X32B_X32, .LDTM_32X32B_X64,
     .LDTM_32X32B_X128, .LDTM_16X64B_X16, .LDTM_16X128B_X8, .LDTM_16X256B_X4, .LDTM, .STTM, .UTCCP, .UTCSHIFT]
     fun x => by

@@ -26,7 +26,7 @@ inductive Gmma
   deriving DecidableEq, Repr
 
 -- Mathlib's `deriving Fintype` fails on an enumeration at this revision (its `Finset.mem_mk` rewrite misses).
-instance : Fintype Gmma :=
+instance instFintypeGmma : Fintype Gmma :=
   Fintype.ofList (α := Gmma) [.IGMMA_S8_N8, .IGMMA_S8_N16, .IGMMA_S8_N32, .IGMMA_S8_N64, .IGMMA_S8_N128, .IGMMA_S8_N192,
     .IGMMA_S8_N256, .IGMMA_S8_N256_RS, .IGMMA_U8S8_N256, .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_F16_N256,
     .HGMMA_TF32_N256, .QGMMA_E4M3_N128, .QGMMA_E4M3_N256, .QGMMA_E5M2_N256, .BGMMA_B1_N256, .HGMMA_F16ACC, .IGMMA_SP_S8,
