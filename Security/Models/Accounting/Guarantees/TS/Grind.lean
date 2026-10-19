@@ -47,7 +47,8 @@ zero-luck sampled rate; at `κ = p/(1 - p)` that is exactly the live analysis' c
 What these don't give, and stays a premise: the skip decision is fixed by the query (E3, `HMu`'s no-leak premise:
 a cheater that sees its luck after the seed and picks which units to skip pays `C(n, w)` and needs more than
 `log₂(e·n/w)` bits a unit, which no one-bit coin gives, under live coins as much as here), the joint view of words that
-share a coin (`HMu`), and the binding term `δb` itself (SHA-512 frame-v3 roots: about `T²/2^513`).
+share a coin (`HMu`), and the binding term `δb` itself, which is per prover (SHA-512 frame-v3 roots: about `T²/2^513`
+for a prover that holds no SHA-512 collision, and `1` for one that does).
 -/
 
 namespace Accounting.Guarantees.TS
