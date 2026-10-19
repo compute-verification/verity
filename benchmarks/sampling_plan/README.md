@@ -21,6 +21,13 @@ the served Program's own commitment floor, which every plan pays.
   budget, the break-even table (the linears forced to each grain, per window, ε and commitment regime), the sensitivity
   (each cost group scaled, each input at its low and high) and the hints (`plan.json`), and prints the tables.
 
+- `joint_pouw.py`: PoUW's draw (H1 + fx1 tiles, `eps1-sm120-h1fx1`) and the exfiltration draw on one served window of the
+  same row, alone and as one stratified law `k_s = max(k_s^work, k_s^exfil)`: each unit's proving cost against its plain
+  cost, PoUW's K′ (uniform and work-weighted) and the window it needs, the exfiltration arms in one window and as detection
+  over a deployment, the joint law's cost and Z, and the serve-time price of each tile shape (receipts, noise). It writes
+  `joint.json` and prints the tables (note:compute-accounting/20261019T0430Z-draft-joint-pouw-exfil).
+
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR      # about a minute on one core
+uv run python benchmarks/sampling_plan/joint_pouw.py --out DIR      # a second
 ```
