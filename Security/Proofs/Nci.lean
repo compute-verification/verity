@@ -9,6 +9,7 @@ import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Threads
 import Proofs.Nci.Contained
+import Proofs.Nci.Info
 import Proofs.Nci.Training
 
 /-!

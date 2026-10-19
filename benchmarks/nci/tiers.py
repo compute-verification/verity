@@ -11,7 +11,8 @@ proved.
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
   peak. It trains at full efficiency unless the memory cap binds. A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
-  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedReads`` per window), declared or not. The state is all memory,
+  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; ``ThreadedOfState`` per
+  window counts them by information, which a wipe bounds), declared or not. The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
@@ -164,8 +165,11 @@ STATUS = [
      "under the floor credit with verified filler (Decisions 89/90, Corollary D3; modelled, not served): today's served "
      "windows credit 10.3% of padded MACs. Host CPUs are neither credited nor bounded and count at their datasheet peak "
      "until a CPU filler or a physical cap exists (CMP-49)."),
-    ("Memory cap", "Actual.Windows and ThreadedReads are proved; the composition and reads counted by information are "
-     "being proved. Needs the declared computation's novel intake held to alpha F, which holds only once the per-window "
+    ("Memory cap", "Actual.Windows and its composition with the thread bound (Actual.ThreadedRuntime, ThreadedRate) are "
+     "proved with reads counted by width, and the thread bound with reads counted by information (ThreadedOfState: a "
+     "window read by a state that is a function of k bits plus an intake, under WeightsSupport). Joining the information "
+     "form to the windows needs a wipe premise in support form at each window's start. "
+     "Needs the declared computation's novel intake held to alpha F, which holds only once the per-window "
      "count check is a gated unit in the ZK flow (NET-35); until then intake is line rate (intake_x about 1.3e6) and memory "
      "caps nothing."),
     ("Wipe residual", "The slack is proved only in the ideal-permutation model, and the reference permutation is refuted "
