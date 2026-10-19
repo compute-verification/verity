@@ -809,10 +809,14 @@ def unpreserved(ctx: Ctx) -> list[Finding]:
 
 def asks(ctx: Ctx) -> list[Finding]:
     """An ask in #agent-coordination its record doesn't show answered after 2 hours (`research msg traffic --json`), to its owner,
-    naming the record; the asks whose record can't be read (no Linear or Notion credentials), as one finding to infra."""
+    naming the record; the asks whose record can't be read (no Linear or Notion credentials), as one finding to infra.  A
+    machine's notice (`vy-*`, the router) isn't an ask anyone answers: vy-monitors' OOM notices naming @ci and @lean would ring
+    them for ever (as top_watch.py's sweep skips them)."""
     rep = json.loads(ctx.sh([*ctx.research, "slack", "traffic", "--json", "--hours", "24", "--stale-h", "2"], timeout=300))
     out = []
     for a in rep.get("unanswered") or []:
+        if str(a.get("by") or "").startswith("vy-") or a.get("by") == "router":
+            continue
         to = tuple(a.get("to") or ())
         record = {"linear": f"its Linear issue {a.get('ref')}: {a.get('state')}", "notion": f"its page: {a.get('state')}"}.get(
             a.get("record"), "no 👀, reply, ✅ or ❌")
