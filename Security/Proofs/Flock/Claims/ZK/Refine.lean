@@ -10,7 +10,8 @@ coins they open (`RefSession.swMsgAt`: `enc` before the last coin, then `fin` or
 opening that fails (`strat_cons_eval`).
 
 * **The coin stops** (`stopRefine_of_sessionStops`): `StopRefine` holds once the session's `abort` is the frame's stop and
-  its message is the stop after every history whose last coins the frame refuses (`SessionStops`). A session whose
+  its message is the stop after every history whose openings pass and whose last coins the frame refuses
+  (`SessionStops`). A session whose
   messages are the frame's releases (`SessionFrames`) has the second, by `LeanRelease.release_of_refusesCoins`
   (`sessionStops_of_frames`). At the empty history the frame refuses no coins (`refusesCoins_nil`), and the prover's
   message there is its `Hello`.
@@ -27,8 +28,9 @@ opening that fails (`strat_cons_eval`).
 * **The session with the frame's stops** (`RefSession.withStops`): `S` with every message `stop` at the coins and round
   where `Rf` says, and its `abort` the stop. It keeps `S`'s tables, witnesses, dummy and tape, so `Tables`, `Complete`,
   `DummyReg` and `TapeOK` carry over as they are, and `Causal` and `SwCausal` where `Rf` reads the coins before its round
-  only (`StopsCausal`). Where its stops are the frame's refusals (`StopsAt`: `Rf` at the coins the openings open is
-  `refusesCoins`), `StopRefine` holds at its switched prover (`LeanRelease.stopRefine_withStops`), and
+  only (`StopsCausal`). Where its stops are the frame's refusals (`StopsAt`: on every history whose openings pass, `Rf`
+  at the coins they open is `refusesCoins`), `StopRefine` holds at its switched prover
+  (`LeanRelease.stopRefine_withStops`), and
   `Flock.zk_server_lean` holds there from `LiveRefine` and `FillRefine` alone (`Flock.zk_server_lean_stops`).
 -/
 
@@ -126,11 +128,13 @@ namespace LeanRelease
 theorem refusesCoins_nil {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) : L.refusesCoins x ρ [] = false :=
   rfl
 
-/-- **The session's coin stops are the frame's**: after every history whose last coins the frame refuses, the switched
-reference prover's message at the coins the openings open is the stop. -/
+/-- **The session's coin stops are the frame's**: after every history whose openings all pass the coin-tree check and
+whose last coins the frame refuses, the switched reference prover's message at the coins the openings open is the stop.
+-/
 def SessionStops (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
-    (x : Msg) (w : Flock.Wit) : Prop :=
+    (H : Msg → Msg) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = true →
       S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2) = L.stop
 
@@ -145,9 +149,9 @@ def SessionFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S
 /-- **A session whose messages are the frame's releases stops where the frame refuses the coins**
 (`release_of_refusesCoins`). -/
 theorem sessionStops_of_frames (S : RefSession) (vs : S.SwVals)
-    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (x : Msg) (w : Flock.Wit)
-    (hF : SessionFrames S vs L x w) : SessionStops S vs L x w := by
-  intro ν t m₀ ρ₀ ops hr
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (x : Msg) (w : Flock.Wit)
+    (hF : SessionFrames S vs L x w) : SessionStops S vs L H x w := by
+  intro ν t m₀ ρ₀ ops _ hr
   obtain ⟨st, v, he⟩ := hF ν t m₀ ρ₀ ops
   rw [he]
   exact L.release_of_refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) st v hr
@@ -156,7 +160,7 @@ theorem sessionStops_of_frames (S : RefSession) (vs : S.SwVals)
 the stop and its coin stops being the frame's. -/
 theorem stopRefine_of_sessionStops (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)
-    (x : Msg) (w : Flock.Wit) (hA : S.abort = L.stop) (hS : SessionStops S vs L x w) :
+    (x : Msg) (w : Flock.Wit) (hA : S.abort = L.stop) (hS : SessionStops S vs L H x w) :
     L.StopRefine H (S.swP vs).prover n wk x w := by
   intro ρ κ h _ hr
   obtain ⟨ν, t⟩ := ρ
@@ -170,15 +174,15 @@ theorem stopRefine_of_sessionStops (S : RefSession) (vs : S.SwVals)
       ((S.swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = L.stop
     rw [strat_cons_eval]
     split
-    · exact hS ν t m₀ ρ₀ ops hr
-    · exact hA
+    next hok => exact hS ν t m₀ ρ₀ ops hok hr
+    next => exact hA
 
 /-- **`StopRefine` at a session whose messages are the frame's releases.** -/
 theorem stopRefine_of_sessionFrames (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)
     (x : Msg) (w : Flock.Wit) (hA : S.abort = L.stop) (hF : SessionFrames S vs L x w) :
     L.StopRefine H (S.swP vs).prover n wk x w :=
-  stopRefine_of_sessionStops S vs L H n wk x w hA (sessionStops_of_frames S vs L x w hF)
+  stopRefine_of_sessionStops S vs L H n wk x w hA (sessionStops_of_frames S vs L H x w hF)
 
 /-- **After an opening the prover's check refuses, `LiveRefine` makes the frame's release the `abort` message**: at a
 live round past `Hello` whose last coins the frame takes, where some opening so far fails the coin-tree check, the
@@ -214,11 +218,13 @@ theorem refusesCoins_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' :
   unfold refusesCoins
   rw [L.answered_tape x ρ ρ' h]
 
-/-- **The rule's stops are the frame's refusals** at `x`: after every history past `Hello`, `Rf` at the coins the
-openings open, padded, at their round, is whether the frame refuses the last coins. -/
+/-- **The rule's stops are the frame's refusals** at `x`: after every history past `Hello` whose openings all pass the
+coin-tree check, `Rf` at the coins they open, padded, at their round, is whether the frame refuses the last coins. After
+an opening that fails, the prover sends its `abort`, so the rule need not say there. -/
 def StopsAt (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool)
-    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (x : Msg) : Prop :=
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (x : Msg) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) =
       Rf x (S.pad (ops.map fun p => S.decOf p.2)) (min (ops.map fun p => S.decOf p.2).length (refK x))
 
@@ -226,10 +232,10 @@ def StopsAt (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → �
 prover's message is the stop wherever the frame refuses the coins. -/
 theorem stopRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)
-    (x : Msg) (w : Flock.Wit) (hR : StopsAt S Rf L x) :
+    (x : Msg) (w : Flock.Wit) (hR : StopsAt S Rf L H x) :
     L.StopRefine H ((S.withStops Rf L.stop).swP vs).prover n wk x w :=
-  stopRefine_of_sessionStops (S.withStops Rf L.stop) vs L H n wk x w rfl fun ν t m₀ ρ₀ ops hr =>
-    S.swMsgAt_withStops_stop Rf L.stop x _ _ t _ ((hR ν t m₀ ρ₀ ops).symm.trans hr)
+  stopRefine_of_sessionStops (S.withStops Rf L.stop) vs L H n wk x w rfl fun ν t m₀ ρ₀ ops hok hr =>
+    S.swMsgAt_withStops_stop Rf L.stop x _ _ t _ ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)
 
 end LeanRelease
 
@@ -249,7 +255,7 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hsc : S.SwCausal vs) (hT : S.TapeOK) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
-    (hst : LeanRelease.StopsAt S Rf L x)
+    (hst : LeanRelease.StopsAt S Rf L H x)
     (hL : L.LiveRefine H ((S.withStops Rf L.stop).swP vs).prover wk x w)
     (hF : L.FillRefine H ((S.withStops Rf L.stop).swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1)
       wk x w)
