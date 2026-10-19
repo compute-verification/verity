@@ -288,7 +288,7 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 
-def test_a_push_that_would_update_main_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
+def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
     """INF-110: at 07:49Z 19 Oct a worker whose VM came back from a snapshot with /workspace on main pushed straight onto it,
     and drive rebuilt every queued PR. INF-105: printing git config values showed part of a GitHub installation token."""
     env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
@@ -306,7 +306,8 @@ def test_a_push_that_would_update_main_and_a_config_that_prints_tokens_are_refus
 
     for command in ("git push", "git push origin", "git push origin main", "git push -u origin HEAD:main", "git push origin +main",
                     "git push origin HEAD:refs/heads/main", "git push --all origin", "git push --mirror origin",
-                    "git push origin --delete main", "git push origin :main", f"git -C {ws} push origin main"):
+                    "git push origin --delete main", "git push origin :main", f"git -C {ws} push origin main",
+                    "git push origin next", "git push origin HEAD:refs/heads/next", "git push --force origin +HEAD:next"):
         out = ask(command)
         assert out["permission"] == "deny" and "HEAD:refs/heads/<your-branch>" in out["agent_message"], command
     assert ask("git push origin main", "")["permission"] == "deny", "whoever runs it"
