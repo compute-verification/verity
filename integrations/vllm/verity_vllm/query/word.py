@@ -582,6 +582,12 @@ def _depth(fn: Any, limits: dict[str, int], depth: dict[str, int], fns: dict[str
 #: the prefetch's work, set before its workers fork (a Definition need not pickle)
 _PENDING: list[tuple[Any, int, int, int, dict[str, int]]] = []
 
+#: what `prefetch` budgets a rule's cut at: a body cut as a whole up to 4 KiB a gate (GLM-5.3's MoE expert FP8 GEMMs, whose gathers
+#: read every expert's word, peak at 3.8-4.5 KB a gate, 12.8 GB for w13's 3.3M gates; most bodies at about 0.5 KB), over the
+#: process's 256 MiB; a separable body's rule combines its members' memoed rules, so the 256 MiB alone
+RULE_PEAK_PER_GATE = 4 << 10
+RULE_PEAK_BASE = 256 << 20
+
 
 def _rule_of_pending(i: int) -> dict[str, Any] | str:
     """The unit rule of pending Definition `i`, or what it raised (`repr`): left to `check_calls`, which reports or raises it."""
@@ -593,14 +599,17 @@ def _rule_of_pending(i: int) -> dict[str, Any] | str:
 
 
 def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *, max_gates: Limits = None, jobs: int = 1,
-             specialize: Callable[[str, dict], Any] = specialization) -> int:
+             budget: int | None = None, specialize: Callable[[str, dict], Any] = specialization) -> int:
     """Memo, `jobs` forked processes at a time, the unit rules `check_calls` would compute one after another for Calls of the
     Definition ids `specs` (`spec_histogram` keys; a `batch:` / `scan:` prefix is dropped): every Definition under them that the
     process has not ruled on yet, the bodies cut as a whole first, then each separable body once its members are memoed.  A rule
     is a function of its Definition, so a check reads what it would have computed; a spec that does not resolve, or a rule that
-    raises, is left to `check_calls`.  Nothing is done for `jobs` <= 1 or without `fork`.  Returns how many rules were memoed."""
+    raises, is left to `check_calls`.  Nothing is done for `jobs` <= 1 or without `fork`.  Returns how many rules were memoed.
+
+    `budget` (bytes): the cuts in flight together are those whose estimated peaks (`RULE_PEAK_PER_GATE`, `RULE_PEAK_BASE`) fit it,
+    the largest that fits first; a cut over it runs alone.  None: `jobs` at a time, whatever they take."""
     import multiprocessing
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
     from verity_vllm.query.program_view import spec_base, spec_statics
     if jobs <= 1 or "fork" not in multiprocessing.get_all_start_methods():
         return 0
@@ -623,14 +632,30 @@ def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *,
         if not todo:
             continue
         _PENDING[:] = [(fn, X, W, extras, limits) for fn in todo]
+        need = [RULE_PEAK_BASE + (RULE_PEAK_PER_GATE * fn.gates if d == 0 else 0) for fn in todo]
+        workers, rules = min(jobs, len(todo)), {}
         try:
-            with ProcessPoolExecutor(min(jobs, len(todo)), mp_context=multiprocessing.get_context("fork")) as ex:
-                for fn, rule in zip(todo, ex.map(_rule_of_pending, range(len(todo)))):
-                    if isinstance(rule, dict):
-                        memo[(fn.id, X, W, extras)] = rule
-                        done += 1
+            with ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("fork")) as ex:
+                pending, running, used = list(range(len(todo))), {}, 0
+                while pending or running:
+                    while pending and len(running) < workers:
+                        i = next((i for i in pending if budget is None or used + need[i] <= budget), None if running else pending[0])
+                        if i is None:
+                            break
+                        pending.remove(i)
+                        running[ex.submit(_rule_of_pending, i)] = i
+                        used += need[i]
+                    finished, _ = wait(running, return_when=FIRST_COMPLETED)
+                    for f in finished:
+                        i = running.pop(f)
+                        used -= need[i]
+                        rules[i] = f.result()
         finally:
             _PENDING.clear()
+        for i, fn in enumerate(todo):
+            if isinstance(rules[i], dict):
+                memo[(fn.id, X, W, extras)] = rules[i]
+                done += 1
     return done
 
 
@@ -765,4 +790,4 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
            "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
-           "prefetch", "check_calls", "call_groups", "check_query"]
+           "RULE_PEAK_PER_GATE", "RULE_PEAK_BASE", "prefetch", "check_calls", "call_groups", "check_query"]
