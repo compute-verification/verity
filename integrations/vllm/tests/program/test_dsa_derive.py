@@ -20,7 +20,6 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
-import json
 import sys
 import types
 
@@ -34,7 +33,6 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Affine, runs
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.instances_file import RowTexts, instance_rows
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -705,8 +703,6 @@ def test_a_prefill_of_at_most_topk_keys_derives_by_dense_mha_and_the_decode_afte
     for n in att:
         rows = n.args[1].type.n
         assert (len(codec._flat_parts(n.args[1].refs)), len(codec._flat_parts(n.args[2].refs))) == (2 * rows, rows), n.fn.id
-    texts = RowTexts()   # ... and the instances file writes them from the heads' logs, as the row dicts' text
-    assert ", ".join(texts.rows(rep.program)) == json.dumps(list(instance_rows(rep.program)))[1:-1] and texts.logs
     apps = [a["preconditions_checked"] for a in rep.provenance["applications"] if a["rule"] == "DsaDenseMha[vllm-dsa]_v1"]
     assert [(a["layer_name"], a["indexer"], a["BN"], a["BM"], a["splits"], a["history_rows_after"]) for a in apps] == [
         (NAMES[0], True, 128, 192, 1, 2), (NAMES[1], False, 128, 192, 1, 2)]

@@ -71,11 +71,12 @@ def write_instances_file(path: str, head: dict, rows, **gz) -> None:
         write_instances(f, head, rows)
 
 
-def write_program_instances(path: str, head: dict, program, **gz) -> None:
-    """`write_instances_file(path, head, instance_rows(program))`'s text, from `RowTexts`."""
+def write_program_instances(path: str, head: dict, program, *, names: dict[int, str | None] | None = None, **gz) -> None:
+    """`write_instances_file(path, head, instance_rows(program))`'s text, from `RowTexts`; with `names`, each row's name is
+    `names.get(i)` in place of its Call's own."""
     with ParallelGzip(path, **gz) as f:
         f.write(_head_text(head))
-        for k, text in enumerate(RowTexts().rows(program)):
+        for k, text in enumerate(RowTexts().rows(program, names)):
             f.write(text if k == 0 else ", " + text)
         f.write("]}")
 
@@ -191,7 +192,7 @@ class RowTexts:
                 self.scattered_bytes += len(text)
         return text
 
-    def rows(self, program) -> Iterator[str]:
+    def rows(self, program, names: dict[int, str | None] | None = None) -> Iterator[str]:
         from verity.ml.circuits.codec import descriptor_id
         dumps, specs = json.dumps, self.specs
         for k, n in enumerate(program.fn.body.nodes):
@@ -199,7 +200,8 @@ class RowTexts:
             if spec is None:
                 spec = specs[id(n.fn)] = dumps(descriptor_id(n.fn))
             args = ", ".join([self.operand(a.refs) for a in n.args])
-            yield f'{{"i": {k}, "spec": {spec}, "form": {dumps(n.form)}, "name": {dumps(n.name)}, "args": [{args}]}}'
+            name = n.name if names is None else names.get(k)
+            yield f'{{"i": {k}, "spec": {spec}, "form": {dumps(n.form)}, "name": {dumps(name)}, "args": [{args}]}}'
 
 
 def _deflate(data: bytes, zdict: bytes, level: int) -> bytes:

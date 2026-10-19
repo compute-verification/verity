@@ -12,6 +12,8 @@ import zlib
 
 import pytest
 
+from tests.program import test_dsa_derive as DSA
+from tests.program.test_dsa_derive import dense, served  # noqa: F401  (the dense DSA layers' fixture)
 from verity_vllm.pipeline.build import _instance_rows, _write_instances, _write_instances_file
 from verity_vllm.program.instances_file import write_instances_file
 
@@ -128,6 +130,32 @@ def test_a_programs_rows_written_from_its_logs_are_the_json_dumps_text(tmp_path,
     write_program_instances(str(p), head, program, block=4096, threads=2)
     assert gzip.decompress(p.read_bytes()).decode() == json.dumps({**head, "rows": rows})
     _read_as_json_load(p)
+
+
+@pytest.mark.parametrize("seed", [0, 7])
+def test_the_builds_writer_is_the_row_dicts_text_under_its_name_and_params_overrides(tmp_path, seed):
+    """`build_instances.write_instances`, the Build's, writes from the Program's logs the text of its row dicts under its head, and
+    with `names` and `params` (`predict.aot.emit`'s) the text of each row renamed `names.get(i)` under those parameters."""
+    from verity_vllm.pipeline.build_instances import write_instances
+    program = _attention_program(seed)
+    rows, supplied = list(_instance_rows(program)), {"supplied": {"x": "registered"}}
+    own = [[n, str(t)] for n, t in program.fn.body.params]
+    for names, params in ((None, None), ({0: "a", 2: "c\u00e9", 5: None}, [["y", "Array<2,Value<16>>"]])):
+        write_instances(str(tmp_path), program, "d" * 128, "c" * 64, supplied, names=names, params=params)
+        head = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 128, "correspondence_digest": "c" * 64, "params": params or own, **supplied}
+        want = rows if names is None else [{**r, "name": names.get(r["i"])} for r in rows]
+        assert gzip.decompress((tmp_path / "instances.json.gz").read_bytes()).decode() == json.dumps({**head, "rows": want})
+
+
+def test_a_dense_dsa_prefills_rows_are_written_from_its_heads_logs(dense):
+    """GLM-5.3's dense-MHA prefill (`tests/program/test_dsa_derive.py`'s dense layers): each head's key and value sequences are cuts
+    of its logs, which `RowTexts` writes from the logs as the row dicts' own text."""
+    from verity_vllm.program.instances_file import RowTexts, instance_rows
+    model = DSA._model(dense=True)
+    rep = DSA._derive(model, DSA._inputs(model))
+    assert rep.program is not None, rep.unsupported
+    texts = RowTexts()
+    assert ", ".join(texts.rows(rep.program)) == json.dumps(list(instance_rows(rep.program)))[1:-1] and texts.logs
 
 
 def _glm_attention_layer(rows: int, heads: int):
