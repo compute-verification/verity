@@ -144,7 +144,7 @@
   },
   "Nci.Assumptions.ReferenceLayered": {
    "owner": "@lean",
-   "digest": "0c38b95de729b4d6ed79bef612e60880b1bf7d50edf243c1614cb8921a81d846"
+   "digest": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
   },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
@@ -5544,7 +5544,7 @@
    "Nci.Assumptions.ReferenceLayered": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_tiers.py::test_reference_layered_at_kimi_k2",
-    "why": "The reference training circuit's threading has a keyed form (Layered) at Kimi K2's shapes: roots of at least 512 legs, at most 37,248 counted multiplications reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (note:training-20261019T0446Z-threading-layered), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) and that tiers.py's (d, e) = (505, 37248) is what ReferenceThreaded derives from them at S = K; it cannot find a reference circuit that is not keyed."
+    "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\", https://app.notion.com/p/3fe399515d9e81108139f66cfd33db94), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters in 16-wide steps (kappa.py) and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
@@ -17406,9 +17406,9 @@
    ]
   },
   "Models.Nci.Assumptions.Layered": {
-   "digest": "4d8cb346e589e79224b1399f775c1b18b7b3bd60731806bf496e442ea08e591e",
+   "digest": "f63ffe4be279caed5c9f562cd2eb9ed415a1c7ef4b2302f979ddbdfa1e32cd04",
    "definitions": {
-    "Nci.Assumptions.ReferenceLayered": "0c38b95de729b4d6ed79bef612e60880b1bf7d50edf243c1614cb8921a81d846"
+    "Nci.Assumptions.ReferenceLayered": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
    },
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
   },
@@ -17459,11 +17459,11 @@
    "guarantees": ["Nci.SecurityProofs.ContainedMatMul", "Nci.SecurityProofs.ContainedTraining"]
   },
   "Models.Nci.Guarantees.Layered": {
-   "digest": "5ce4541d722af7c84d782eabdf44725aa0d0a79dfd0fcd601833df71e462adf3",
+   "digest": "65eeeab3b1d4baac628409fdfbf31a39a7d1dd4f8a7fe989651bad6b94349ed4",
    "definitions": {
     "Nci.Guarantees.LayeredTraining": "a32f0924232512df262b89dafb1c654ebc7dc5d3d59605f26cf1cfbefc2b164e",
-    "Nci.Guarantees.ReferenceThreaded": "3a069c6b9f9101f216a8cf16119a91f42206f67ba27e773acf88eadb42e71f9f",
-    "Nci.Guarantees.ReferenceTraining": "7cc10cc8907636496d0cae023ca82d7485fe5f13541e5b70ef16391edc42ab05",
+    "Nci.Guarantees.ReferenceThreaded": "9384d85cfae9a2f425d2e9620bd2455c8d5d9c30601124d4fe283c74c0124124",
+    "Nci.Guarantees.ReferenceTraining": "4c21e0183dff1600f1687f436829fe99ebc9586efc43a959768a15459b781b49",
     "Nci.Guarantees.ThreadedOfLayered": "d8b16a2a29b38b05cc9448e33f0b5231a66261706be4dbc1e0011d915566f05e"
    },
    "guarantees": [
