@@ -5,6 +5,7 @@ import Definitions.Population.Oblivious
 import Definitions.Population.AddressMap
 import Definitions.Population.Necessity
 import Definitions.Population.Exfiltration
+import Definitions.Population.DrawPressure
 
 /-! Populations' vocabulary: units over committed value slots with public read and write sets (`Dataflow`), unit
 functions and correctness, what a checker confirms of the dataflow (single assignment, acyclicity), cones and egress,
@@ -19,4 +20,5 @@ transcript before the coins, `k` draws from a distribution fixed before it, an a
 what each policy's damage is (integrity's damaged egress, control at the public widths, a range-restricted dataflow).
 `Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first
 detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent draw, and deviations from
-the honest egress. -/
+the honest egress. `DrawPressure`: the deployed draw, `k` of the `n` units uniformly without replacement, and the draws
+that miss a wrong set. -/
