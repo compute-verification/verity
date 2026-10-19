@@ -7,6 +7,7 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
                                    at most 2^t values of an s8 operand) and 64 (bit planes); DS-90 prices it on issue alone
     python forms_gap.py --rs-fit   RT-HOPPER-1: RS offered at SS's joint coefficients times the H200's matched-pair ratio
     python forms_gap.py --honest-true  RT-HOPPER-8: γ with honest timed by the loop that folds the wgmma's accumulators
+    python forms_gap.py --fan-in   RT-HOPPER-2: ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -168,15 +169,30 @@ def b1_gap() -> None:
             print(line(f"DS-90 q*=0.5 honest form only fold {r}", eps(d, "DS-90", 0.5, "--fold-cost", str(r))))
 
 
+# The fold's cost a word that FoldFanIn proves at fan-in f, 1/(f − 1): f = 3 (three registers), 5 (guarded), 10 (sm_90's
+# cx[UR][imm] operand) and 11 (a guarded P2R with it), beside LI's own (FOLD-OPT's) and DS-90's cliff.
+FAN_IN = {"LI, FOLD-OPT": 1.0546875, "DS-90's cliff": 0.922, "f=3": 1 / 2, "f=5": 1 / 4, "f=10": 1 / 9, "f=11": 1 / 10}
+
+
+def fan_in() -> None:
+    """RT-HOPPER-2: the headline at the fold costs FoldFanIn proves, which is all the TS guarantee has without FoldOpt."""
+    with tempfile.TemporaryDirectory() as t:
+        d = scratch(Path(t), rs=False)
+        for label, r in FAN_IN.items():
+            for vector, q in (("DS-90", 0.5), ("DC-90-ri", 1.22)):
+                print(line(f"{vector} q*={q} fold {r:.4g} ({label})", eps(d, vector, q, "--fold-cost", str(r))))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--sheet", action="store_true", help="DS-90's cliffs in the fold's cost and in A2u")
     ap.add_argument("--b1", action="store_true", help="ε with BGMMA_B1_N256, which DS-90 prices on issue alone, offered")
     ap.add_argument("--rs-fit", action="store_true", help="ε with RS offered at SS's joint coefficients times the H200's ratio")
     ap.add_argument("--honest-true", action="store_true", help="γ with honest timed by the loop that folds the accumulators")
+    ap.add_argument("--fan-in", action="store_true", help="ε at the fold costs FoldFanIn proves, without FoldOpt")
     a = ap.parse_args()
     (sheet() if a.sheet else b1_gap() if a.b1 else rs_fit() if a.rs_fit else honest_true() if a.honest_true
-     else forms_gap())
+     else fan_in() if a.fan_in else forms_gap())
     return 0
 
 
