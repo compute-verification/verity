@@ -78,7 +78,8 @@ def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_p
     assert check.validation_status == "passed"
     got = json.loads((tmp_path / "step_root_cost.json").read_text())
     assert got["tables"] == 8 and got["rows"] == 24 and got["reference_root_equal"]
-    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == {"1"}
+    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == set(got["sha512_floor_cpu_s"]) == {"1"}
+    assert {"step_roots.w1.cpu_seconds", "salts.cpu_seconds"} <= {m["name"] for m in check.doc["measurements"]}
 
 
 def test_commit_cost_tool_is_registered() -> None:
