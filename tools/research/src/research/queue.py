@@ -1692,7 +1692,9 @@ def main(argv: list[str]) -> int:
                     help="drive: land a train whose Lean check passed by regenerating lock records with those locks committed on "
                          "top (`Regenerated:`), which `research merge`'s gate accepts on the train's check (CI-64)")
     ap.add_argument("--defer", metavar="STEP[,STEP...]",
-                    help="drive: land a train once every other step passed, these still running; one that then fails reverts it")
+                    help="drive: land a train once every other step passed; one post-landing run at a time checks these on "
+                         "`main`'s tip, and a failure reverts the PR it implicates, else every landing since the last verified tip, "
+                         "or nothing when no landing since touches what failed")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync/land/drive: admit only ready marks written at "
                                                                            "or after this time (default: `marked_after` in the rules file)")
     ap.add_argument("--first", metavar="N[,N...]", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
