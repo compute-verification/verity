@@ -1,7 +1,7 @@
 """The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir, pinned and loaded back by row id, its
 conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
-supersedes, a row file not done only at its public cap refused before anything is written, a job's bundle read with no store, and a
-checkpoint's staging event."""
+supersedes, a row file not done only at its public cap refused by publish, pull and switch before anything is written, a job's
+bundle read with no store, and a checkpoint's staging event."""
 from __future__ import annotations
 
 import gzip
@@ -324,6 +324,19 @@ def test_a_record_published_from_another_tree_is_pulled_into_this_index(tmp_path
         records.pull(build)
 
 
+def test_pull_refuses_a_row_not_done_only_at_its_public_cap_before_it_touches_the_index(tmp_path, store, monkeypatch):
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    art = records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="heavy",
+                          summary=_served(d))
+    monkeypatch.setattr(records, "INDEX", tmp_path / "checkout.json")
+    _w(CR.WORKLOADS / f"{ROW}.json", json.loads((WORKLOADS / f"{ROW}.json").read_text()))
+    with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
+                                         r"is 'eos-token'.*pull would index it as one, so it indexes nothing"):
+        records.pull(art)
+    assert not records.INDEX.exists(), "a checkout whose file is not at its cap does not index the pod's record"
+
+
 def test_a_checkpoints_staging_is_labelled_and_glue_counts_its_hours_from_it(tmp_path, store):
     rev = "aca966e4e02791568aa6a4ced368624b3d897f42"
     records.staged(REPO, rev, at="2026-10-12T21:42:55Z", ref="vy-glm53-eu:/fs/x.verify", by="circuits")
@@ -380,6 +393,24 @@ def test_a_row_is_switched_by_a_comparison_equal_on_every_rank_and_publishes_onl
     art = records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
     assert records.index()[ROW] == {"record": art, "tier": "fast", "pinned_from": {"record": art, "build": build, "tree": "cursor/x@1b53f685a"},
                                     "manifest_digest": "mm", "programs": e["programs"], "aot": e["aot"]}
+
+
+def test_switch_refuses_a_row_not_done_only_at_its_public_cap_before_it_touches_the_index(tmp_path, store):
+    d = _row_dir(tmp_path)
+    run, trace, cmp = "r20261018-001500-aaaa", "art:" + "5" * 64, _comparison(d)
+    wl, eos = CR.WORKLOADS / f"{ROW}.json", json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    _w(wl, eos)
+    with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
+                                         r"is 'eos-token'.*switch would index it as one, so it switches nothing"):
+        records.switch(ROW, cmp, run=run, trace=trace, tier="fast")
+    assert not records.INDEX.exists()
+    _w(wl, _capped(eos))
+    records.switch(ROW, cmp, run=run, trace=trace, tier="fast")
+    indexed = records.index()
+    _w(wl, {**_capped(eos), "sampling": {**_capped(eos)["sampling"], "stop": ["</s>"]}})
+    with pytest.raises(UsageError, match=r"sampling\.stop \['</s>'\] stops a request before its cap"):
+        records.switch(ROW, cmp, run=run, trace=trace)
+    assert records.index() == indexed, "a switched row whose file has lost its cap is not switched again"
 
 
 def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, monkeypatch):

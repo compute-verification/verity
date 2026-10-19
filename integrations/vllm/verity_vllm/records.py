@@ -62,7 +62,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import RowId, UsageError, done_source_refusal, option
+from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline.store_data import data, fetch, listing
 
@@ -307,11 +307,10 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     with its label and index it with its Programs as the row's pins (`tier`: its neutrality rebuild's, by default the index's).
     A switched row's (`config_record.aot_of`) are its AOT Build's predicted Programs: a Build that traced one is refused, and the
     row keeps its `aot`.  The row it indexes is a row of record, so a row file not done only at its public cap
-    (`config.done_source_refusal`) is refused before anything is written.  Returns its art: id."""
+    (`config_record.index_refusal`) is refused before anything is written.  Returns its art: id."""
     if not TREE.fullmatch(tree):
         raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
-    wl = CR.WORKLOADS / f"{row}.json"
-    if why := done_source_refusal(json.loads(wl.read_text()) if wl.is_file() else {"sweep": {"row_id": row}}, of_record=True):
+    if why := CR.index_refusal(row):
         raise UsageError(f"{why}; publish would index it as one, so it publishes nothing")
     tier = _tier(row, tier)
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
@@ -358,13 +357,16 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
 
 def pull(art: str, tier: str | None = None) -> str:
     """Index `art`, a record `publish` preserved from another tree (a pod's `row chain`), in this tree's records.json, with the tier
-    it was published with (`tier` overrides it), a switched row keeping its `aot`; returns its row."""
+    it was published with (`tier` overrides it), a switched row keeping its `aot`; returns its row.  A row whose file in this tree is
+    not done only at its public cap (`config_record.index_refusal`) is refused before the index is touched."""
     m = json.loads(data("show", art, "--json"))["manifest"]
     meta = m.get("meta") or {}
     if m.get("kind") != CR.KIND or meta.get("outcome") != "PASS":
         raise UsageError(f"{art}: a {m.get('kind')} ({meta.get('outcome')}), not a PASS {CR.KIND}")
     rec = json.loads(fetch(art).read_text())
     row = rec["config"]["row"]
+    if why := CR.index_refusal(row):
+        raise UsageError(f"{why}; pull would index it as one, so it indexes nothing")
     doc = CR.load_index(INDEX)
     aot = (doc["rows"].get(row) or {}).get("aot")
     doc["rows"][row] = {**entry(rec, art, _tier(row, tier or meta.get("tier"))), **({"aot": aot} if aot else {})}
@@ -401,7 +403,8 @@ def switch(row: str, comparison: dict[str, Any], *, run: str, trace: str, tier: 
     """Switch `row` to the AOT Build: its index entry's `aot` names the comparison `run` (`verity-vllm predict compare`, its
     `comparison.json`) and the traced Build `trace` it compared, and its pins are the comparison's Programs.  Refused unless the
     comparison is of `row` and equal on every rank, or where a row already pinned would move: re-pinning is `verity-vllm neutrality
-    --update`'s.  A row new to the index is pinned with no record, at `tier`."""
+    --update`'s, or where the row's file is not done only at its public cap (`config_record.index_refusal`).  A row new to the index
+    is pinned with no record, at `tier`."""
     if not RUN.fullmatch(run) or not ART.fullmatch(trace):
         raise UsageError(f"--run {run!r} --trace {trace!r}: the comparison's run id and the traced Build's art: id")
     if RowId.parse(row).world < 2:
@@ -409,6 +412,8 @@ def switch(row: str, comparison: dict[str, Any], *, run: str, trace: str, tier: 
     if comparison.get("row") != row or comparison.get("equal") is not True:
         raise UsageError(f"{row}: the comparison is of {comparison.get('row')} and {'equal' if comparison.get('equal') else 'NOT equal'}: "
                          f"a row is switched only where its predicted Programs equal its traced Build's on every rank")
+    if why := CR.index_refusal(row):
+        raise UsageError(f"{why}; switch would index it as one, so it switches nothing")
     parts = lambda p: {n: v["predicted"] for n, v in p.items() if isinstance(v, dict) and "predicted" in v}   # noqa: E731
     programs = {r: {"step": ps.pop("step"), "workload": ps.pop("workload"), "requests": ps}
                 for r, ps in ((r, parts(p)) for r, p in sorted(comparison["ranks"].items(), key=lambda kv: int(kv[0])))}
