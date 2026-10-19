@@ -348,12 +348,11 @@ import Proofs.Flock.Claims.ZK.Stop
 * `FinInner`: `Masked.repOpenRest` (both halves of `FinalRest`) and `Masked.finExe_of_inner`, `FinExe` from `LiveEnd`,
   `SimCommit`, the three hybrids and `InnerTauVal`.
 * `CausalExe`: `Masked.causalExe`, `CausalExe`: every executable send reads only coins drawn before it.
-* `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from
-  `RepOpenRest`'s level-0 half `Masked.RepOpen0`: `hstep` from `Masked.prefixLive` and `SimSession`
-  (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and `SimInner`
-  (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value `Masked.innerTauVal`),
-  `Causal` by `Masked.causalExe`, the last message from `Masked.liveEnd`, `Masked.repTau_of` and
-  `Masked.repOpenRest_pads` (`Masked.finExe_of_rest`, `Masked.repOpenRest_of`).
+* `Assemble`: **`Flock.zk_deployZk_masked_exe_split`**, Flock's zero knowledge at the deployed masked session given
+  only that `H` is SHA-512 and `0 < t`: `hstep` from `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`),
+  `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and `SimInner` (`Masked.simSession_of`),
+  `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value `Masked.innerTauVal`), `Causal` by
+  `Masked.causalExe`, and the last message from `Masked.liveEnd` and `Masked.innerTauVal` (`Masked.finExe_of_inner`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
