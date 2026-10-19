@@ -64,7 +64,8 @@ at the cut `commitCoin` names (a weight registered, an A row or a `y` row a run 
 receipt reading its round's coin). `TieCommits` states that the tie gives `Accounting.Compose.LayerCommitted`, and
 `TieLive` that it gives `Declared.Live` under any scheme: the two `Scope` conjuncts that are protocol structure. The
 units, the population and the draw, which read the verifier's partition of each call's Program, are
-`Properties.Served`'s.
+`Properties.Served`'s. `EpochTie` ties an epoch's windows, each one's `Tie` and every round's coin its own
+(`CoinsFresh`), which no Compose theorem reads: it is the run-time condition under which `Tie.live` is the run's.
 
 What the verifier must check at run time for each class, so that a `Declared` meeting `Tie` is the run's (the
 statement is over the declared circuit; these are the checks that make its `commitRound` the code's):
@@ -77,7 +78,14 @@ statement is over the declared circuit; these are the checks that make its `comm
 * `receipt`: round `r + 1`'s root over round `r`'s receipt roots, the last round's in the manifest before the draw
   coin; each drawn unit's receipt opened under it;
 * the unit's position `base s w + u`, computed by the verifier from the layout, never read; the unit's salt
-  `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier;
+  `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier from the challenger's opening of
+  round `r`'s coin and the recorded root, never read from the record (`serve.py`'s reference recomputation reads the
+  record's `salt` today);
+* each round's coin one that no other round of the epoch's windows reads (`CoinsFresh`, `EpochTie`): a live epoch a
+  window, or a seeded salt a window from the certifier's `reveal(w)`; main's one salt an epoch (`SaltWindows`) fails it
+  (RT-SCOPE-6);
+* the window's `F.rounds L` live rounds, the count Compose's bound reads: RT-INT-1 puts `ε < 1%` at 10,552 equal live
+  rounds, which no form of the 18-step window reaches (`Llama31Rounds`);
 * the draw: `K_d` units of `population` from the draw coin opened after the manifest.
 -/
 
@@ -302,5 +310,34 @@ def TieLive : Prop :=
 def Llama31Shape : Prop :=
   llama31_8b.calls = 128 ∧ llama31_8b.perStep = 86016 ∧ llama31_8b.population = 1548288 ∧
     Form.rounds llama31_8b .perCall = 2304 ∧ llama31_8b.Wf
+
+/-- **Every round of an epoch's windows reads its own coin** (RT-SCOPE-6, W5's W-c): `coin w r` is the challenger coin
+the verifier derives window `w`'s round-`r` noise keys from, for `W` windows of `R` rounds, and no two (window, round)
+pairs share one. `Tie.live` is the run's only under it: a coin another round has read was opened before this round's
+commit, so the noise it keys can be computed ahead and streamed. On main one salt spans an epoch's windows
+(`SaltWindows`, `EPOCH_SALT_DOMAIN`) and a call's key reads that salt and its call index only, so two windows' round
+`r` share a coin, which this excludes (`Properties.Served.oneSalt_not_fresh`). SERVE-H1's live window meets it with a
+live epoch a window, whose round `r` coin is opened once, after round `r`'s root (`window.live_families`,
+`rounds_reason`; `coin w r = (w, r)`), as does a seeded salt a window from the certifier's `reveal(w)` or a hash
+binding it to the epoch coin. The verifier derives every key itself, `window.round_key(commitment, coin_r, r, root_r)`
+from the challenger's opening and the recorded root, and reads no salt from the prover's record. -/
+def CoinsFresh {C : Type} (W R : ℕ) (coin : ℕ → ℕ → C) : Prop :=
+  ∀ w r w' r', w < W → w' < W → r < R → r' < R → coin w r = coin w' r' → w = w' ∧ r = r'
+
+/-- **An epoch of `W` served windows is tied**: each window's declared circuit is layout `L`'s in form `F` (`Tie`, which
+fixes its live rounds at `F.rounds L`, the count Compose's bound reads), and each of its rounds reads a coin no other
+round of the epoch reads (`CoinsFresh`). -/
+structure EpochTie {ι C : Type} (L : Layout) (F : Form) (W : ℕ) (Cd : ℕ → Declared ι) (cls : ℕ → ℕ → Cls)
+    (coin : ℕ → ℕ → C) : Prop where
+  tie : ∀ w, w < W → Tie L F (Cd w) (cls w)
+  fresh : CoinsFresh W (F.rounds L) coin
+
+/-- **The served Llama-3.1-8B window's live rounds** (RT-INT-1): 18 in each form of a round a step and 2,304 in
+`perCall`, and `perCall` first reaches 10,552 rounds, RT-INT-1's count for `ε < 1%` (`eps.py`, and
+r20261019-055920-6d6f's `rounds_floor_live_scope`, a statement not on main), at 83 steps. -/
+def Llama31Rounds : Prop :=
+  (∀ F, F ≠ .perCall → Form.rounds llama31_8b F = 18) ∧ Form.rounds llama31_8b .perCall = 2304 ∧
+    Form.rounds { llama31_8b with steps := 82 } .perCall < 10552 ∧
+    10552 ≤ Form.rounds { llama31_8b with steps := 83 } .perCall
 
 end Accounting.Served

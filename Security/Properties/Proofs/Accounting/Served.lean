@@ -9,8 +9,10 @@ which is its first reader's, since only its own call reads it (`firstRead_cases`
 `y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut.
 `TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
 `SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
-round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses.
-`Llama31Shape` is a kernel computation.
+round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
+`epochScope` each window's of an `EpochTie`. `CoinsFresh` is not vacuous: one salt an epoch fails it over two windows
+(`oneSalt_not_fresh`) and a live epoch a window meets it (`perWindow_fresh`). `Llama31Shape` and `Llama31Rounds` are
+kernel computations.
 -/
 
 namespace Properties.Served
@@ -144,6 +146,29 @@ theorem tieScope : TieScope := by
   intro ι K Sc L F Cd cls δs T hWf hδ hL
   unfold Scope
   exact ⟨hWf, tieLive ι K Sc L F Cd cls T, hδ, hL, tieCommits ι L F Cd cls T⟩
+
+/-- Each window of a tied epoch is in Compose's scope. -/
+theorem epochScope {ι C K : Type} {L : Layout} {F : Form} {W : ℕ} {Cd : ℕ → Declared ι} {cls : ℕ → ℕ → Cls}
+    {coin : ℕ → ℕ → C} (E : EpochTie L F W Cd cls coin) (Sc : Scheme K) (δs : ℝ) {w : ℕ} (hw : w < W)
+    (hWf : (Cd w).Wf) (hδ : 0 < δs) (hL : Sc.LuckProved) : Scope Sc (Cd w) δs :=
+  tieScope ι K Sc L F (Cd w) (cls w) δs (E.tie w hw) hWf hδ hL
+
+/-- One salt an epoch, window `w`'s round-`r` coin `(e, r)` whatever `w`, isn't fresh over two windows of a round. -/
+theorem oneSalt_not_fresh {W R : ℕ} (e : ℕ) (hW : 2 ≤ W) (hR : 0 < R) :
+    ¬ CoinsFresh W R (fun _ r => (e, r)) := by
+  intro h
+  have h01 := (h 0 0 1 0 (by omega) (by omega) hR hR rfl).1
+  omega
+
+/-- A live epoch a window, window `w`'s round-`r` coin `(w, r)`, is fresh. -/
+theorem perWindow_fresh (W R : ℕ) : CoinsFresh W R (fun w r => (w, r)) := by
+  intro w r w' r' _ _ _ _ h
+  exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+
+theorem llama31Rounds : Llama31Rounds := by
+  unfold Llama31Rounds
+  refine ⟨fun F hF => ?_, by decide +kernel, by decide +kernel, by decide +kernel⟩
+  cases F <;> first | exact (hF rfl).elim | decide +kernel
 
 theorem seededScheduleNotLive : SeededScheduleNotLive := by
   intro ι Cd Np Kd p query l hl hU hWf ⟨ℓ, j, hb, hj, hR⟩ hLC
