@@ -118,7 +118,7 @@ theorem header_at (L : List UInt8) (p : ℕ) (f : Frame) (rest : List UInt8) (hd
   rw [hd, Frame.enc, header_data] at h0 h1
   refine ⟨by simpa using h0, by simpa using h1, ?_⟩
   rw [u64OfLE_of_get _ _ f.len.toUInt64 fun i hi => ?_]
-  · simp [Nat.mod_eq_of_lt hw]
+  · simpa [Nat.mod_eq_of_lt hw] using hw
   · rw [show p + 8 + i = p + (8 + i) by omega, get!_drop, hd, Frame.enc, header_data, le64_data]
     simp only [getElem!_def, List.append_assoc]
     rw [List.getElem?_append_right (by simp), List.getElem?_append_left (by simp; omega)]
