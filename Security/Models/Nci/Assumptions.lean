@@ -54,13 +54,19 @@ values determine rather than over wiring. For every IU `R` and every set `T` of 
 its committed values `θv`.
 
 Wiring cannot falsify it: a weight held in a constant gate, or rebuilt from a narrower wire, has the support it has.
-It fails when the chain's values are determined by less than they are charged for, that is, when the chain is not
-updated. `b_w` and `b_a` are rates, in bits of support per entry, and are below an entry's width when products repeat
-values (at FP4, a product's sign and scale symmetries), so they are measured, not read from the format.
+It fails when the chain's values are determined by less than they are charged for, as when the chain is not updated.
+`b_w` and `b_a` are rates, in bits of support per entry, and are below an entry's width when products repeat values (at
+FP4, a product's sign and scale symmetries), so they are measured, not read from the format.
 
 Every value of `R` is a function of the values on `in(R)`, so `support(T) ≤ 2^novelReads(R)`; at cap `K + b_w + b_a`
 this assumption gives `ActivationsIncompressible` at cap `K` (`activationsIncompressible_of_support`). It needs no
-bound on `R`'s size: the support form says what the values are, not what an IU can compute. -/
+bound on `R`'s size: the support form says what the values are, not what an IU can compute.
+
+**Falsified** (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
+art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32) at FP4, for every updated chain too: when a product
+gate of the first multiplication holds an E2M1 × E2M1 product, `T` that one gate is charged `b_w + b_a` and takes at
+most 37 values, so the assumption fails at every cap of at least `b_w + b_a` once `b_w + b_a > log₂ 37 ≈ 5.21` (the
+calculator's 2.5 + 4 = 6.5). At FP8 (E4M3, 2011 products) this counterexample does not apply. -/
 def ActivationsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (K b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, ∀ T ⊆ R, c.charge R b_w b_a T ≤ K → (2 : ℝ) ^ c.charge R b_w b_a T ≤ support D θv T
 

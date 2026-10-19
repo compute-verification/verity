@@ -7386,7 +7386,7 @@
    "FlockVBridge.unit_recOpen": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.FullPositions": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.Inference": "completeness: Move to Proofs as Training's completeness pair (an inference partition complies); no concrete instance exists yet.",
-   "Nci.SecurityProofs.IuReads": "falsified (conjecture,no-function): It rests on ActivationsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
+   "Nci.SecurityProofs.IuReads": "falsified (conjecture,no-function): It rests on ActivationsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); lean restates it.",
    "Nci.SecurityProofs.LoomisWhitney": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.OtherPositions": "lemma: leaves the list under the 5:11 PM ruling",
    "Nci.SecurityProofs.ReadBound": "lemma: leaves the list under the 5:11 PM ruling",
@@ -7759,6 +7759,10 @@
    "Nci.Assumptions.ActivationsIncompressible": {
     "status": "falsified",
     "why": "analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z))"
+   },
+   "Nci.Assumptions.ActivationsSupport": {
+    "status": "falsified",
+    "why": "ActivationsIncompressible in support form; false at FP4 for every chain, updated or not (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32): T one first-multiplication product gate holding an E2M1 x E2M1 product is charged b_w + b_a and takes at most 37 values, so it fails at every cap >= b_w + b_a once b_w + b_a > log2 37 = 5.21 (the calculator's 2.5 + 4 = 6.5). Nci.SecurityProofs.IuReads rests on it."
    },
    "Nci.Assumptions.PartialSumsIncompressible": {
     "status": "falsified",
