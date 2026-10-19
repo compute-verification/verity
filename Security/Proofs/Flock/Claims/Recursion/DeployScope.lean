@@ -222,7 +222,7 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
   · have hio : innerOfO xO = some r.shape := by
       rw [innerOfO, hxO, hins]
       exact hinner
-    unfold fullDrawO at hf
+    replace hf := fullDrawO_fullDraw hf
     rw [hio, RecScope.fullDraw_some_rec] at hf
     unfold RecScope.fullDrawOk
     have hd := checks_recordDraw hc

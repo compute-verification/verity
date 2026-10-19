@@ -22,6 +22,9 @@ read:
   decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
   inner protocol `Inner.ofFlock` reads there;
+* `KSFlock_meets_trim`, `Inner.KS_meets_trim`, `Inner.KSAbort_meets_trim`: the same at the trimmed records
+  (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`, `FlockDeploy.listWithin_plainTrim`,
+  `FlockDeploy.listWithin_zkTrim`), where the recursion's KS theorems sit;
 * `ZK_meets`, `ZKPriv_meets`: the deployed outer record is masked;
 * `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
   which `Flock.RecScope.scopeMatches_deployed` reads;
@@ -106,6 +109,13 @@ theorem KSFlock_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
   ⟨FlockDeploy.listWithin_plain rel, FlockDeploy.listWithin_zk rel⟩
 
+/-- `KSFlock`'s antecedents at the trimmed records: the inner radius decoder meets the spec at the trimmed plain record,
+and the outer one at the trimmed `--zk` record. -/
+theorem KSFlock_meets_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    decOK (FlockDeploy.deployPlainTrim rel) Claims.GS.plainDecodeRD ∧
+      decOK (FlockDeploy.deployZkTrim rel) Claims.GS.zkDecodeRD :=
+  ⟨FlockDeploy.listWithin_plainTrim rel, FlockDeploy.listWithin_zkTrim rel⟩
+
 /-- `BitsFlock`'s checkable antecedents at the deployment: the inner and outer radius decoders meet the spec at the
 deployed plain and `--zk` records. -/
 theorem BitsFlock_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
@@ -140,11 +150,23 @@ theorem Inner.KS_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
     decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD :=
   FlockDeploy.listWithin_plain rel
 
+/-- `Inner.KS`'s antecedent at the trimmed record: the inner radius decoder meets the spec at the trimmed plain
+record. -/
+theorem Inner.KS_meets_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    decOK (FlockDeploy.deployPlainTrim rel) Claims.GS.plainDecodeRD :=
+  FlockDeploy.listWithin_plainTrim rel
+
 /-- `Inner.KSAbort`'s antecedent at the deployment: the inner radius decoder meets the spec at the deployed plain
 record. -/
 theorem Inner.KSAbort_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     decOK (FlockDeploy.deployPlain rel) Claims.GS.plainDecodeRD :=
   FlockDeploy.listWithin_plain rel
+
+/-- `Inner.KSAbort`'s antecedent at the trimmed record: the inner radius decoder meets the spec at the trimmed plain
+record. -/
+theorem Inner.KSAbort_meets_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
+    decOK (FlockDeploy.deployPlainTrim rel) Claims.GS.plainDecodeRD :=
+  FlockDeploy.listWithin_plainTrim rel
 
 /-- `ZK`'s checkable antecedent at the deployment: the deployed outer record is masked. -/
 theorem ZK_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :

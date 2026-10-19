@@ -7,8 +7,8 @@ import Proofs.Flock.Claims.Complete.Zk.Verdict
 # The masked completeness proof's skeleton
 
 `complete_zk_of_goals`: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`
-(`Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
-pass.
+(`CompleteWith H (deployZk rel) honestPZk (δcZk H)`), given one goal per check the honest masked run must
+pass and the rank bound (`MaskRank.MaskRankBound`, which `pr_badZk_le` reads).
 
 * **The setting.** A good case (`CaseZk`): a statement in scope that the masked verifier can accept at one table
   (`readyZk H`), at its setup, a witness in the relation, a masked tape, and coins outside `BadZk`. The honest run at it
@@ -339,11 +339,11 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, the
+/-- `readyZk` at the case's setup: one table, the session draws a unit, the statement is under `2^64` bytes, every
 table's regions fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest
 masked record fits. -/
 theorem CaseZk.ready_all (c : CaseZk H rel) :
-    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧
+    c.sts.size = 1 ∧ c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
       setupWith (Claims.hOf H) c.s.read = .ok (c.spec, c.sts) ∧ c.spec.coinTree.isSome = true ∧
       RecordFitsZkAt H c.x c.spec c.sts := by
   have h := c.ready
@@ -361,7 +361,7 @@ theorem CaseZk.ready_parts (c : CaseZk H rel) :
 
 /-- `readyZk` at the case's setup: the table's regions fit, and the honest masked record fits its length word. -/
 theorem CaseZk.ready_fits (c : CaseZk H rel) :
-    (∀ st ∈ c.sts, JsonRT.RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
+    (∀ st ∈ c.sts, RegionsFit st) ∧ RecordFitsZkAt H c.x c.spec c.sts :=
   ⟨c.ready_all.2.2.2.1, c.ready_all.2.2.2.2.2.2⟩
 
 /-- **The printed honest masked record is under `2^64` bytes**: `readyZk` asks it of every honest masked session, which
@@ -369,7 +369,7 @@ the pure session's run is (`sessionPZk_sim`). -/
 theorem RunZk.recordFits (o : RunZk H rel) : o.record.toUTF8.size < 2 ^ 64 := by
   refine o.ready_fits.2 o.w o.ω o.r o.record o.proofs ?_
   obtain ⟨bs, h1, -⟩ := sessionPZk_sim H (fun j => (Claims.coinSeq o.r j).bytes) o.spec (tabsOf o.sts)
-    (tracesOf o.sts o.w) o.ω #[]
+    (MaskRank.masksOf o.sts) (tracesOf o.sts o.w) o.ω #[]
   have hran := o.ran
   unfold sessionSZk at hran
   rw [hran] at h1
@@ -493,10 +493,10 @@ theorem RunZk.acc (g : GoalsZk H rel) (o : RunZk H rel) :
 end Proved
 
 /-- **Masked completeness from the goals**: Flock's masked verifier is complete for `honestPZk` with error `δcZk H`,
-given each goal. -/
+given each goal and the rank bound. -/
 theorem complete_zk_of_goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (g : GoalsZk H rel) : Claims.Flock.Complete H (deployZk rel) honestPZk (δcZk H) := by
-  refine complete_zk_of H rel fun x w hsc hr hready ω r hgood => ?_
+    (hMR : MaskRank.MaskRankBound) (g : GoalsZk H rel) : CompleteWith H (deployZk rel) honestPZk (δcZk H) := by
+  refine complete_zk_of H rel hMR fun x w hsc hr hready ω r hgood => ?_
   have hset : ∃ s spec sts, setupOf true x = some (s, spec, sts) := by
     unfold readyZk at hready
     split at hready

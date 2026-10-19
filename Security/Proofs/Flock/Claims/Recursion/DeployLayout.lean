@@ -216,28 +216,26 @@ message. -/
 theorem ksA_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))
-    (hext : Claims.Flock.Extendθ (FlockDeploy.deployPlain rel) (FlockDeploy.KS.wordLen false)
-      (FlockDeploy.KS.wide false))
     (htab : Claims.Recursion.TableBoundθOnAcc FlockDeploy.sha512 (FlockDeploy.deployPlain rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
-    (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI)
+    (hdec : Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI)
     (hPub : Claims.Recursion.VStar.ReadsPub FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf)
     (hFin : Claims.Recursion.VStar.FinalOpens FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) opening)
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) opening)
     (hD : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf opening
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf opening
       Claims.Recursion.Form.Dense)
     (hH : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf opening
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf opening
       Claims.Recursion.Form.Holo)
     (hS : Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf opening
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf opening
       Claims.Recursion.Form.Sparse) :
     Claims.Recursion.KSA FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) :=
-  ksA_deployed_parts rel relO ivScope b.atPorts layoutOf rfl opening hF hext htab decI hdec
+      (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) :=
+  ksA_deployed_parts rel relO ivScope b.atPorts layoutOf rfl opening hF htab decI hdec
     (partCallsTrue_layoutOf _ _ _) hPub hFin hD hH hS
 
 /-- **`KSFlock` at `deployRec` from V\*'s parts at the registered ports**: `ksA_deployed_concrete` at every inner
@@ -245,32 +243,30 @@ decoder that meets the spec, as `KSA` is `KS`. -/
 theorem ksFlock_deployed_concrete (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation)
     (ivScope : Msg → Bool) (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))
-    (hext : Claims.Flock.Extendθ (FlockDeploy.deployPlain rel) (FlockDeploy.KS.wordLen false)
-      (FlockDeploy.KS.wide false))
     (htab : Claims.Recursion.TableBoundθOnAcc FlockDeploy.sha512 (FlockDeploy.deployPlain rel)
       (FlockDeploy.KS.wordLen false) (FlockDeploy.KS.wide false))
-    (hPub : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI →
+    (hPub : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI →
       Claims.Recursion.VStar.ReadsPub FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf)
-    (hFin : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI →
+        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf)
+    (hFin : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI →
       Claims.Recursion.VStar.FinalOpens FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) opening)
-    (hD : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI →
+        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) opening)
+    (hD : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI →
       Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf opening
+        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf opening
         Claims.Recursion.Form.Dense)
-    (hH : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI →
+    (hH : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI →
       Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf opening
+        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf opening
         Claims.Recursion.Form.Holo)
-    (hS : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlain rel) decI →
+    (hS : ∀ decI, Claims.Recursion.decOK (FlockDeploy.deployPlainTrim rel) decI →
       Claims.Recursion.VStar.VStarParts FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlain rel) decI) (deployZkRec relO) layoutOf opening
+        (Claims.Recursion.Inner.ofFlock (FlockDeploy.deployPlainTrim rel) decI) (deployZkRec relO) layoutOf opening
         Claims.Recursion.Form.Sparse) :
     Claims.Recursion.KSFlock FlockDeploy.sha512 (deployRec (FlockDeploy.V false) ivScope b.atPorts)
-      (FlockDeploy.deployPlain rel) (deployZkRec relO) :=
+      (FlockDeploy.deployPlainTrim rel) (deployZkRec relO) :=
   (Claims.Recursion.KSFlockA_iff_KSFlock _ _ _ _).1 fun decI hdec =>
-    ksA_deployed_concrete rel relO ivScope b opening hF hext htab decI hdec (hPub decI hdec) (hFin decI hdec)
+    ksA_deployed_concrete rel relO ivScope b opening hF htab decI hdec (hPub decI hdec) (hFin decI hdec)
       (hD decI hdec) (hH decI hdec) (hS decI hdec)
 
 end RecDeploy

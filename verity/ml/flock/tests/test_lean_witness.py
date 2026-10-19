@@ -51,6 +51,7 @@ from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity_flock import circuit as C
 from verity_flock import rec_bindings as RB
+from verity_flock import rec_live as RL
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
@@ -384,15 +385,17 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
         assert w[check]["ok"], (check, w[check].get("why"))
 
 
-def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa: F811
-    """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units) with the
+def test_f1_verify_refuses_the_smallest_level_only_for_its_undrawn_inner_session(built, f1_gate, f1, once):  # noqa: F811
+    """`flock-verify verify --zk`, the verifier of record, passes level 3 (`rec-open/l16-h4`, 106 units) with the
     verifier's own V* inputs, the inner statement and session its coefficients are checked against, and the coin
     server's inner transcript (`inner/s1/public.json`), whose link points and level-3 tops the level is held to
     (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
-    `85-rec-reprice.sh`'s STEP=lean runs it: past every refusal the verdict runs last (the form's, a draw-less session's,
-    and a V* session's short of every unit, `RecSetup.fullDraw`), and not as a private circuit's. The checks above are
-    the model's predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails
-    here and nowhere else. About two minutes, beside the gate's witness runs."""
+    `85-rec-reprice.sh`'s STEP=lean runs it, through every check and every refusal the verdict runs last (the form's, a
+    draw-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
+    inner session ran before the coin server drew it (#2468), so its record holds no draw, and a session over it is refused
+    (`RecSetup.innerDrawn`), with that reason alone, and not as a private circuit's. The checks above are the model's
+    predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails here and nowhere
+    else. About two minutes, beside the gate's witness runs."""
     g, d, part = f1_gate, f1["inputs"], "L3"
     v, st = g / "v" / part, g / "stage"
     names = [nm for nm, _ in F1_STATEMENTS]
@@ -410,7 +413,8 @@ def test_f1_verify_accepts_the_smallest_level(built, f1_gate, f1, once):  # noqa
         return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
 
     r = _kept(once, "verify-f1-L3", run)
-    assert r["rc"] == 0 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [(True, "", False)], r
+    assert r["rc"] == 1 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [
+        (False, RL.NO_INNER_DRAW, False)], r
 
 
 def test_f1_the_sessions_fail_the_public_output_checks(f1):
