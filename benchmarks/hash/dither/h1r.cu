@@ -611,6 +611,40 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
 
 __device__ __forceinline__ void nbar_sync(int id, int n) { asm volatile("bar.sync %0, %1;\n" ::"r"(id), "r"(n) : "memory"); }
 __device__ __forceinline__ void nbar_arrive(int id, int n) { asm volatile("bar.arrive %0, %1;\n" ::"r"(id), "r"(n) : "memory"); }
+// the same with the id an immediate: a register id makes ptxas reserve all 16 of a block's barriers, which caps an SM at
+// one such block (ncu's Block Limit Barriers)
+template <int ID, bool ARRIVE>
+__device__ __forceinline__ void nbar_c(int n) {
+  if constexpr (ARRIVE)
+    asm volatile("bar.arrive %0, %1;\n" ::"n"(ID), "r"(n) : "memory");
+  else
+    asm volatile("bar.sync %0, %1;\n" ::"n"(ID), "r"(n) : "memory");
+}
+// barrier BASE + i, i < 4 and warp-uniform; IMM: through immediates (a switch on i), else through a register id
+template <bool IMM, int BASE, bool ARRIVE = false>
+__device__ __forceinline__ void nbar4(int i, int n) {
+  if constexpr (IMM) {
+    switch (i) {
+      case 0: nbar_c<BASE, ARRIVE>(n); break;
+      case 1: nbar_c<BASE + 1, ARRIVE>(n); break;
+      case 2: nbar_c<BASE + 2, ARRIVE>(n); break;
+      default: nbar_c<BASE + 3, ARRIVE>(n); break;
+    }
+  } else if constexpr (ARRIVE) {
+    nbar_arrive(BASE + i, n);
+  } else {
+    nbar_sync(BASE + i, n);
+  }
+}
+template <bool IMM, int ID, bool ARRIVE = false>
+__device__ __forceinline__ void nbar1(int n) {
+  if constexpr (IMM)
+    nbar_c<ID, ARRIVE>(n);
+  else if constexpr (ARRIVE)
+    nbar_arrive(ID, n);
+  else
+    nbar_sync(ID, n);
+}
 
 // The block form, for calls whose units leave most of the GPU idle (decode): one unit a block of BOW + 1 warps, the same
 // values as `h1r_unit<2, E>` (so the same receipt, z and y).  The operand warps 0 .. BOW - 1 hash the noise a group of
@@ -620,7 +654,9 @@ __device__ __forceinline__ void nbar_arrive(int id, int n) { asm volatile("bar.a
 // the operand warps through shared memory at the end.  The fold warp (BOW) runs T_s's MMAs, E's fault and the absorb in
 // segment order, then the tail and E's output.
 // A slot is handed over by named barriers: FULL after the operand warp's stores, EMPTY after the fold warp's loads.
+// IMM: every barrier id an immediate (`nbar4`), 11 barriers, not 16, the same values.
 constexpr int BOW = 4;
+static_assert(BOW == 4, "nbar4 dispatches four slots");
 constexpr int BTH = 32 * (BOW + 1);
 enum : int { NB_FULL = 1, NB_EMPTY = NB_FULL + BOW, NB_OPS = NB_EMPTY + BOW, NB_RED = NB_OPS + 1 };
 constexpr int RS = 33;  // the reduction's lane stride in words
@@ -637,7 +673,7 @@ struct __align__(16) H1BShared {
   u64 sd[16];           // seed_j, σ_R
 };
 
-template <class E = NoEpi>
+template <class E = NoEpi, bool IMM = false>
 __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, const u64* __restrict__ seeds, u64 nt0,
                                          u64 nt1, u64 nt2, u32* __restrict__ out, int nowrite, const E& ep = E()) {
   const int tid = threadIdx.x, lane = tid & 31, wid = tid >> 5;
@@ -743,7 +779,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
 #pragma unroll
           for (int j = 0; j < 16; ++j) d[j] = h[j];
         }
-        nbar_sync(NB_OPS, 32 * BOW);
+        nbar1<IMM, NB_OPS>(32 * BOW);
       }
       if (gi + 1 < ng) {
         const int cn = 2 * gi + 1 + (w >> 1);
@@ -793,7 +829,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
             nc4[j] = sh.nz[buf][ci][1][(8 * j + g) * NZ + s16];
           }
         }
-        if (s >= BOW) nbar_sync(NB_EMPTY + w, 64);
+        if (s >= BOW) nbar4<IMM, NB_EMPTY>(w, 64);
         *reinterpret_cast<uint4*>(Xs + lane * XS) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
         *reinterpret_cast<uint4*>(Xs + lane * XS + 16) = make_uint4(xw[4], xw[5], xw[6], xw[7]);
         *reinterpret_cast<uint4*>(Ws + lane * XS) = make_uint4(ww[0], ww[1], ww[2], ww[3]);
@@ -806,7 +842,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
           *reinterpret_cast<uint4*>(Rs + lane * XS) = b0;
           *reinterpret_cast<uint4*>(Rs + lane * XS + 16) = b1;
         }
-        nbar_arrive(NB_FULL + w, 64);
+        nbar4<IMM, NB_FULL, true>(w, 64);
         __syncwarp();
         u32 af[2][4], wf[4][2];
 #pragma unroll
@@ -843,9 +879,9 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
       }
     }
     // the noise buffers are free once every operand warp is past its last segment
-    nbar_sync(NB_OPS, 32 * BOW);
+    nbar1<IMM, NB_OPS>(32 * BOW);
     for (int i = tid; i < 2 * 32 * RS; i += 32 * BOW) (&sh.red[0][0])[i] = 0;
-    nbar_sync(NB_OPS, 32 * BOW);
+    nbar1<IMM, NB_OPS>(32 * BOW);
 #pragma unroll
     for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
@@ -855,7 +891,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
           atomicAdd(&sh.red[0][lane * RS + 16 * mi + 4 * ni + e], Y[mi][ni][e]);
           if constexpr (E::ON) atomicAdd(&sh.red[1][lane * RS + 16 * mi + 4 * ni + e], cr[mi][ni][e]);
         }
-    nbar_arrive(NB_RED, BTH);
+    nbar1<IMM, NB_RED, true>(BTH);
     return;
   }
 
@@ -881,7 +917,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
       const int s = s0 + w;
       const uint8_t* Xs = sh.op[w][0];
       const uint8_t* Ws = sh.op[w][1];
-      nbar_sync(NB_FULL + w, 64);
+      nbar4<IMM, NB_FULL>(w, 64);
       u32 af[2][4], bf[4][2];
 #pragma unroll
       for (int mi = 0; mi < 2; ++mi) {
@@ -895,7 +931,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
         bf[ni][0] = *reinterpret_cast<const u32*>(Ws + (8 * ni + g) * XS + 4 * q);
         bf[ni][1] = *reinterpret_cast<const u32*>(Ws + (8 * ni + g) * XS + 16 + 4 * q);
       }
-      if (s + BOW < KS) nbar_arrive(NB_EMPTY + w, 64);
+      if (s + BOW < KS) nbar4<IMM, NB_EMPTY, true>(w, 64);
 #pragma unroll
       for (int mi = 0; mi < 2; ++mi)
 #pragma unroll
@@ -905,7 +941,7 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
     }
   }
   int Y[2][4][4], cr[2][4][4];
-  nbar_sync(NB_RED, BTH);
+  nbar1<IMM, NB_RED>(BTH);
 #pragma unroll
   for (int mi = 0; mi < 2; ++mi)
 #pragma unroll

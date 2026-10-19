@@ -18,9 +18,10 @@
 //                and 12:16Z; H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
 //                product from the same O, so y = dequant(A Bᵀ) serves the registered model; the receipts are the same
 //                words, and the peel adds binary-by-int8 MMAs beside the wrap MMA (no product of A itself)
-//   h1o_units{s,b}2[p]  the same kernels' code as separate functions whose shared-memory carveout `h1o_init` sets to
-//                the maximum (102.4 KB on sm_120), so two units' blocks fit an SM: the driver's default for the others
-//                is 64 KB, one block an SM, though their registers allow two
+//   h1o_units{s,b}2[p]  those kernels as separate functions whose shared-memory carveout `h1o_init` sets to the maximum
+//                (102.4 KB on sm_120; the driver's default for the others is 64 KB, one block an SM), and in the block
+//                form with every barrier id an immediate (`h1b_unit<E, true>`: 11 barriers, not the 16 a register id
+//                reserves, which also caps an SM at one block): the same values; the split form needs its 16
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
 // and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
@@ -185,7 +186,8 @@ __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F
   C.lda = F->k;
   const OutEpiT<PL> ep{F->z[p], zo, y, F->ydump, sa, sw, F->n, M, st.m, st.flags, nullptr, salt, step_base,
                        st0, st1, st2, rt0, rt1, rt2};
-  h1b_unit<OutEpiT<PL>>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
+  h1b_unit<OutEpiT<PL>, OCC == 2>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0,
+                                  ep);
 }
 
 // the split form: a unit a block of six warps (`h1s_unit<OutEpi>`), the same values again
