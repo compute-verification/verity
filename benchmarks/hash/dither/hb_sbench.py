@@ -21,6 +21,9 @@
     dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
                    h1k for the calls a warp-a-unit form underfills, h1u for the rest; gated as dither-1s-hbp is.
 
+sbench's dither-a arms (ASK-71's option A, `dither_a`) run here as they are, their side unit kh_unit_ws from HB_H1U, and
+their tokens must equal exact's at every decode rep too.
+
 Each arm takes sbench's -xl, -a2 and -a3 suffixes (exactlin's quantizer, the paired A table, its messages in registers;
 gated as the arm is).
 
@@ -93,14 +96,14 @@ def clean_gate_tokens(llm) -> None:
 def main() -> int:
     rc = sbench.main()
     summary = Path(sys.argv[sys.argv.index("--out") + 1]) / "summary.json"
-    if rc or not summary.exists():
+    if (rc and rc != 4) or not summary.exists():
         return rc
     eq = json.loads(summary.read_text())["gate_tokens_equal_ref_arm"]
     failed = {arm: eq[arm] for arm in eq if sbench.base_arm(arm) in TOKENS_EVERY_REP and not all(eq[arm])}
     if failed:
         print(json.dumps({"reps_tokens_failed": failed}), flush=True)
         return 4
-    return 0
+    return rc
 
 
 sbench.build = build
@@ -109,7 +112,7 @@ sbench.REF_OF["dither-1s-hb"] = "exact"
 sbench.TOKENS_GATED["dither-1s-hb"] = False
 sbench.REF_OF["dither-1s-hbp"] = "exact"
 sbench.REF_OF["dither-1s-hbk"] = "exact"
-TOKENS_EVERY_REP = ("dither-1s-hbp", "dither-1s-hbk")
+TOKENS_EVERY_REP = ("dither-1s-hbp", "dither-1s-hbk", *sbench.DITHER_A)
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -57,6 +57,17 @@ Arms:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
                  (DITHER_PERCALL_WAITS: `percall_rtt.py`'s paced samples from the serving node, replayed in order)
+    dither-a     ASK-71's option A, the provisional credit form (`dither_a`; every run labelled form=ASK-71 A
+                 (provisional)): exact-fused's quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
+                 call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
+                 dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
+                 dither-a the second where HB_H1U is set, dither-a-hbk the K split's kh_one (HB_H1U_KSPLIT) for its
+                 receipts only.  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
+                 builds every call's table between steps; -zyc the side stream each call's after its receipts),
+                 and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
+                 tokens).  With -ao last, the A tables run on a stream of
+                 their own, each beside the previous call's units (the units of a call still wait on its A table)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -298,16 +309,41 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         win = DO.hook(llm)
         llm.dither_stats, llm.dither_win, llm.dither_mod = win.stats, win, DO
         return llm
+    if arm in DITHER_A:
+        sys.path.insert(0, str(HERE))
+        import dither_a as DA
+        import dither_fused as DF
+        import dither_one as DO
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        h1u = os.environ.get("HB_H1U")
+        unit, z, ao = DITHER_A[arm]
+        unit = unit or ("kh" if h1u else "h1r")
+        if unit == "hbk":
+            h1u = os.environ["HB_H1U_KSPLIT"]
+        a = engine_args(gpu_mem)
+        DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
+                 h1u=h1u, z=z, ao=ao)
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        win = DO.hook(llm)
+        win.captures = DA.CAPTURES
+        # the y-only floor commits no z, so it has no window gate: its gate is its tokens (TOKENS_ONLY)
+        llm.dither_stats, llm.dither_win, llm.dither_mod = DA.stats(win), (win if z != "none" else None), DA
+        return llm
     raise ValueError(arm)
+
+
+DITHER_A = {f"dither-a{u}{z}{o}": (unit, zm, ao) for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"))
+            for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none")) for o, ao in (("", False), ("-ao", True))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
           "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
           "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
-          "exact-fused": "exact", "stock-percall": "stock"}
+          "exact-fused": "exact", "stock-percall": "stock", **{x: "exact" for x in DITHER_A}}
 # an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
-TOKENS_ONLY = {"exact-fused", "stock-percall"}
+TOKENS_ONLY = {"exact-fused", "stock-percall", *(x for x, (_, z, _) in DITHER_A.items() if z == "none")}
 def token_diff(a: list, b: list) -> dict:
     """Two arms' greedy outputs for the same requests: how many are equal, and each other one's first differing position."""
     first = sorted(next((i for i, (x, y) in enumerate(zip(p, q)) if x != y), min(len(p), len(q)))
@@ -320,6 +356,16 @@ PROF_RANGE = "verity/exactlin/prof"
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
+# SBENCH_PICK=first|last: every engine's Inductor autotune choices made untimed (`picks.py`); each arm's picks are
+# logged either way (gate.json's full log, each rep's digest).  SBENCH_PICK_ARMS=PREFIX[,PREFIX]: only the arms whose
+# names start with one are pinned (exact,dither: the arms held to exact's tokens), the rest keep their timed picks
+PICK_ENV = "SBENCH_PICK"
+PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
+
+
+def pick_of(arm: str) -> str | None:
+    only = [p for p in (os.environ.get(PICK_ARMS_ENV) or "").split(",") if p]
+    return (os.environ.get(PICK_ENV) or None) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
@@ -331,6 +377,9 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     if arm.startswith("dither"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
+    sys.path.insert(0, str(HERE))
+    import picks as PK
+    plog = PK.install(pick_of(arm))
     t0 = time.perf_counter()
     try:
         llm = build(arm, Path(scratch), gpu_mem)
@@ -376,7 +425,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.synchronize()
                 torch.cuda.nvtx.range_pop()
                 torch.cuda.profiler.stop()
-            res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs]}
+            res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs], "picks": plog}
             if win is not None:
                 t0 = time.perf_counter()
                 if mod is DF:
@@ -425,10 +474,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
             conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n})
-        if hasattr(llm, "dither_stats"):
-            conn.send({"stats": llm.dither_stats()})
-        else:
-            conn.send({"stats": None})
+        conn.send({"stats": llm.dither_stats() if hasattr(llm, "dither_stats") else None, "picks": PK.summary(plog)})
 
     while True:
         cmd = conn.recv()
@@ -469,6 +515,8 @@ def main() -> int:
                     help="stock arms at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's")
     ap.add_argument("--arm-mem", type=arm_mem, default={},
                     help="ARM=F,...: those arms' gpu_memory_utilization (a stock arm's own batch needs KV room for it)")
+    ap.add_argument("--time-passed", action="store_true",
+                    help="on a failed gate, stop the failed arms and time the rest (the exit is 4 still)")
     a = ap.parse_args()
     os.environ["SBENCH_T"] = str(a.t)
     if a.stock_own_batch:
@@ -485,6 +533,9 @@ def main() -> int:
                 REF_OF[arm] = REF_OF[base]
             if base in TOKENS_GATED:
                 TOKENS_GATED[arm] = TOKENS_GATED[base]
+    missing = sorted({REF_OF[x] for x in arms if x in TOKENS_ONLY and REF_OF[x] not in arms})
+    if a.gate and missing:
+        ap.error(f"a tokens-only arm's gate is its reference's tokens: add {','.join(missing)} to --arms")
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     for arm in arms:      # one engine at a time comes up, so their memory profiling doesn't race
@@ -499,6 +550,7 @@ def main() -> int:
         conns[arm].send({"op": "warm"})
         recv(arm, conns[arm], "warm"), recv(arm, conns[arm], "warm")
     reps: list[dict] = []
+    rc = 0
     ref_tokens: dict = {}
     gate = {}
     vs_ref: dict = {}
@@ -508,7 +560,8 @@ def main() -> int:
         for arm in arms:
             conns[arm].send({"op": "gate"})
             res = recv(arm, conns[arm], "gate")
-            res["stats"] = recv(arm, conns[arm], "gate")["stats"]
+            msg = recv(arm, conns[arm], "gate")
+            res["stats"], res["picks_summary"] = msg["stats"], msg.get("picks")
             gate_doc[arm] = res
             (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         for arm in arms:
@@ -524,28 +577,31 @@ def main() -> int:
                     x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
         for arm in arms:
             print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
-                                               if k not in ("tokens", "tokens_capture")}}), flush=True)
+                                               if k not in ("tokens", "tokens_capture", "picks")}}), flush=True)
         (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
             gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
                                                 or not TOKENS_GATED.get(arm, True)))]
         failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
         if failed:
-            print(json.dumps({"gate_failed": failed, "timed": False}), flush=True)
-            for arm in arms:
+            print(json.dumps({"gate_failed": failed, "timed": a.time_passed}), flush=True)
+            for arm in failed if a.time_passed else arms:
                 conns[arm].send({"op": "stop"})
-            return 4
+            if not a.time_passed:
+                return 4
+            arms = [x for x in arms if x not in failed]
+            rc = 4
     for r in range(a.reps):
         for op in a.ops.split(","):
             for j in range(len(arms)):
                 arm = arms[(j + r) % len(arms)]
                 conns[arm].send({"op": op})
                 res = recv(arm, conns[arm], op)
-                stats = recv(arm, conns[arm], op)["stats"]
+                msg = recv(arm, conns[arm], op)
                 toks = res.pop("tokens", None)
                 if toks is not None:
                     ref_tokens.setdefault((r, arm), toks)
-                row = {"rep": r, "op": op, "arm": arm, **res, "stats": stats}
+                row = {"rep": r, "op": op, "arm": arm, **res, "stats": msg["stats"], "picks": msg.get("picks")}
                 reps.append(row)
                 print(json.dumps(row), flush=True)
                 with open(out / "reps.jsonl", "a") as f:
@@ -562,7 +618,8 @@ def main() -> int:
         conns[arm].send({"op": "stop"})
     summary = {"arms": arms, "info": info, "gate_tokens_equal_ref_arm": gate, "decode_tokens_vs_ref": vs_ref,
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
-               "gate": {arm: {k: v for k, v in d.items() if k != "tokens"} for arm, d in gate_doc.items()},
+               "gate": {arm: {k: v for k, v in d.items() if k not in ("tokens", "picks")} for arm, d in gate_doc.items()},
+               "pick": os.environ.get(PICK_ENV) or "timed", "pick_by_arm": {arm: pick_of(arm) or "timed" for arm in info},
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
                               "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
                               "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
@@ -578,9 +635,10 @@ def main() -> int:
             p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
+    summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     print(json.dumps(summary["per_arm"], indent=1), flush=True)
-    return 0
+    return rc
 
 
 if __name__ == "__main__":

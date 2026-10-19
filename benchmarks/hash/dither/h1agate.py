@@ -6,10 +6,12 @@
              the slot rows (< m xq's, >= m zero), the scales (< m sa's, >= m 0) and the A root = `commit.s8_table`'s over
              the slots and = `h1c_build`'s; no poison left in any A level; at (s, m) = (7, 37), then captured as one CUDA
              graph (the step's part and the 128 calls) and replayed at (8, T), (9, 1), (10, 32) and (12, T - 3) with step
-             and m written in place; a control: one xq byte of one live row flipped moves that call's root and no other
+             and m written in place; a control: one xq byte of one live row flipped moves that call's root and no other;
+             every root also = one h1c_build of all 128 tables' (`batch`)
     time     the graph's 128 calls (and the step's part alone) replayed between CUDA events at m = 32, 64 and T, against
              the 128 per-call h1c_build launches of the earlier path (domains, segments, leaves, levels), captured the same
-             way
+             way, and against `batch`: the 128 tables in one h1c_build, a per-step A commitment's build (a scheme change,
+             measured only: its tables off the forward's critical path, built together once the step's A are known)
 
 Each h1c_a_form value --forms names (0 h1c_a_call_k, 2 h1c_a_call2_k, its compressions paired, 3 h1c_a_call3_k, paired
 with its messages in registers) is gated in turn, and only if every one passes is each timed, in the same process on the
@@ -96,6 +98,14 @@ class Calls:
             if rc:
                 raise RuntimeError(f"h1c_build({w}) returned {rc}")
 
+    def run_batch(self) -> None:
+        """A per-step A commitment's build (a scheme change, measured only): the step's 128 tables in one h1c_build."""
+        st = self.st
+        rc = self.lib.lib.h1c_build(C.addressof(st.calls.host), st.calls.dev.data_ptr(), self.L, self.step.data_ptr(),
+                                    self.lib.btab.data_ptr(), 1, torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_build(all {self.L}) returned {rc}")
+
     def poison(self) -> None:
         for x in self.st.slots:
             x.view(torch.uint8).fill_(0xA5)
@@ -134,9 +144,14 @@ def check(c: Calls, window: str, key: bytes, s: int, m: int) -> dict:
     torch.cuda.synchronize()
     old = c.roots()
     old_bad = [w for w in range(c.L) if got[w] != old[w]]
-    ok = not (slots_bad or scales_bad or poisoned or cpu_bad or old_bad)
+    st.mid.level.fill_(POISON)
+    c.run_batch()
+    torch.cuda.synchronize()
+    batch = c.roots()
+    batch_bad = [w for w in range(c.L) if got[w] != batch[w]]
+    ok = not (slots_bad or scales_bad or poisoned or cpu_bad or old_bad or batch_bad)
     return {"s": s, "m": m, "calls": c.L, "slots_bad": slots_bad, "scales_bad": scales_bad, "a_levels_poisoned": poisoned,
-            "roots_vs_commit_bad": cpu_bad, "roots_vs_h1c_build_bad": old_bad, "ok": ok}
+            "roots_vs_commit_bad": cpu_bad, "roots_vs_h1c_build_bad": old_bad, "roots_vs_batch_bad": batch_bad, "ok": ok}
 
 
 def timed(g: torch.cuda.CUDAGraph, reps: int) -> list[float]:
@@ -191,20 +206,24 @@ def gate(c: Calls, window: str, key: bytes) -> dict:
 
 
 def timing(c: Calls, reps: int) -> list[dict]:
-    gs, gc, go = torch.cuda.CUDAGraph(), torch.cuda.CUDAGraph(), torch.cuda.CUDAGraph()
+    gs, gc, go, gb = (torch.cuda.CUDAGraph() for _ in range(4))
     with torch.cuda.graph(gs):
         c.run_step()
     with torch.cuda.graph(gc):
         c.run_calls()
     with torch.cuda.graph(go):
         c.run_old()
+    with torch.cuda.graph(gb):
+        c.run_batch()
     rows = []
     for m in sorted({32, 64, c.st.t}):
         c.set(11, m)
-        ms = {"step_part": timed(gs, reps), "calls": timed(gc, reps), "old_calls": timed(go, reps)}
+        ms = {"step_part": timed(gs, reps), "calls": timed(gc, reps), "old_calls": timed(go, reps),
+              "batch": timed(gb, reps)}
         row = {"m": m, **{f"{k}_ms": round(statistics.median(v), 4) for k, v in ms.items()},
                "call_us": round(1e3 * statistics.median(ms["calls"]) / c.L, 2),
                "old_call_us": round(1e3 * statistics.median(ms["old_calls"]) / c.L, 2),
+               "batch_call_us": round(1e3 * statistics.median(ms["batch"]) / c.L, 2),
                **{f"{k}_ms_all": [round(x, 4) for x in v] for k, v in ms.items()}}
         rows.append(row)
         print(json.dumps({"time": {k: v for k, v in row.items() if not k.endswith("_all")}}), flush=True)

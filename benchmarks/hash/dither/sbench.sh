@@ -26,8 +26,19 @@ done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
 grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -8
 grep -B1 -A2 "h1c_a_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head -6
+# dither-a-kh's side unit: h1u.cu's kh_unit_ws, built here for sm_120a (HB_H1U)
+case " $* " in *dither-a-kh*)
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    -o "$S/h1u.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u.log" 2>&1 \
+    || { echo "sbench: NVCC_FAIL h1u"; grep -v "^ptxas info" "$OUT/build-h1u.log" | tail -30; exit 11; }
+  grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
+  export HB_H1U=$S/h1u.so ;;
+esac
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
+# SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
+# timed .best_config, so a pinned run compiles into its own
+[ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 # CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
@@ -70,7 +81,9 @@ echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
-gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
+# SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
+PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
