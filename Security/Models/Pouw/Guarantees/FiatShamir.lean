@@ -5,7 +5,7 @@ import Models.Pouw.Assumptions.FiatShamir
 # Relative security under Fiat–Shamir draws: the grinding premium (trusted)
 
 Decision 102 derives each matmul's seed from SHA-512 of commitments the prover has already made (its operand roots, at
-the epoch's live salt), in place of `ServiceSoundStaged`'s live per-stage coins, so
+the window's live salt, `pouw.salt`), in place of `ServiceSoundStaged`'s live per-stage coins, so
 `Accounting.Assumptions.TS.StageLuck`, which `Accounting.Guarantees.TS.StageBudget` and `StageIdeal` rest on, no longer
 holds: the prover can re-roll a root
 and try again. The statement here is its replacement. The grind is priced into the floor, as a premium `π` a seed group
@@ -64,6 +64,10 @@ case, which `M` can't set low. A finder that declares a large cost to meet `ecr/
 and reads `⊤`. With a free state term `g` in the finders' place the statement said nothing, since `g = 1` satisfies the
 premise; through the finders at computed budgets, a machine that hard-codes a collision gets about 1 and every other
 adversary `K (βb qb + βz qz) / 2^256` on top of `κ`.
+
+The live salt the seeds hash is the window's `pouw.salt`, `SHA-512(tag ‖ reveal(p) ‖ u64be(p) ‖ stream ‖ prover)` for
+PoUW window `p` (`reveal(p)` the certifier's salt for it, #2637), and `T` counts every oracle query from that salt's
+release at the window's start, when the certifier draws it (`FSWithin`).
 
 At GRIND's instance (`SteerBoundOfMoment`: `τ = M·e^{−θπ}`) and the premium `π* = ln(T·M/δ)/θ`, the tries cost
 `T·τ = δ`, and the grind sits in `F`, at `π*` a seed group. The live floor's accumulation over stages is kept in the

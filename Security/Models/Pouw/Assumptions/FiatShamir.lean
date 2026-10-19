@@ -40,7 +40,7 @@ and position its seed is derived from, and the extractor reads them off the adve
 oracle program's output (`FSWithin`, the antecedent, as `ProverModel.RegQueries` is gap (4)'s). `H` stands for SHA-512
 domain-separated for the commitments' trees as well as the seeds, gap (4)'s one oracle. So the witnessed inputs differ
 from the committed ones only if the run's queries hold a collision or open a node that no query answered, and
-`ε_id(T, |J|) ≈ (T² + T·|J|)/2^512` is the expected instance, with `T` every evaluation under the epoch's salt.
+`ε_id(T, |J|) ≈ (T² + T·|J|)/2^512` is the expected instance, with `T` every evaluation under the window's salt.
 
 It is false for a service whose proofs don't bind the seed to the committed roots and position: a position the prover
 picks inside the unit picks the seed (decision 106's condition). -/

@@ -6,10 +6,11 @@ import Definitions.Pouw.Basic.QTree
 # Relative security under Fiat–Shamir draws: the vocabulary its statements read (trusted)
 
 Decision 102's seeds, as Daniel's ruling of 17 Oct (8:20 PM PDT, `.agents/skills/friction/SKILL.md`) allows them: PoUW's
-per-matmul noise seeds may be derived by Fiat–Shamir from the epoch's live salt, every other coin stays live, and the
+per-matmul noise seeds may be derived by Fiat–Shamir from a live salt, every other coin stays live, and the
 guarantee carries a grinding term `T·μ^m`. Matmul `j`'s draw comes from
 `SHA-512(tag ‖ s ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`, a hash of commitments the prover has already made, at
-the epoch's live salt `s` (`Epoch.start`: every window of an epoch reads one salt). The compiled Program's seeds
+the window's live salt `s`, `pouw.salt` (one salt per PoUW window, from the certifier's draw at the window's start,
+#2637). The compiled Program's seeds
 (`verity/core/protocols/pouw/circuit/seeds.py`) hash `tag ‖ s ‖ position ‖ root(A_j) ‖ root(B_j)`, with each run under
 one salt on its own range of positions; the statements read only the input a commitment names for each stage (`pre`),
 so either form is an instance where distinct stages name distinct inputs. The served circuit also derives a receipt
@@ -85,8 +86,8 @@ abbrev FSAdv (Mc : Machine) (S : FSService J N Live) (Ω : Type) : Type :=
 the result of one adaptive oracle program (`QTree`), whatever the live coins, so it commits before they are drawn.
 The program makes at most `T` calls against every oracle, counting the `|J|` inputs its commitment names, at which its
 proofs are to derive their seeds. Every query counts, whenever it is made and by whichever of the prover's devices,
-from the salt's release to the deadline: a try at a root it then drops is a query, and so is a query made for an
-earlier window of the epoch, which reads the same oracle. Its answers may read the oracle anywhere, since the draws
+from the salt's release at the window's start, when the certifier draws it, to the deadline: a try at a root it then
+drops is a query. Its answers may read the oracle anywhere, since the draws
 are fixed by the commitment. -/
 def FSWithin [Fintype J] (Mc : Machine) (S : FSService J N Live) {Ω : Type} (M : FSAdv Mc S Ω) (T : ℕ) : Prop :=
   ∀ r : Ω, ∃ t : QTree S.Q N S.Com, ∀ (H : S.Q → N) (l : Live),

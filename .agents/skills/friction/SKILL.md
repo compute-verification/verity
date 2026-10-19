@@ -118,9 +118,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
   for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
   commands: `.agents/skills/asking-daniel/SKILL.md`.
 - 2026-10-17 (8:20 PM PDT, in proofs' chat; compute accounting's card ba874f45): PoUW's per-matmul noise seeds may be
-  derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
-  live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
-  grinding etc. is not a huge problem." This narrows "live coins only" for PoUW's per-call randomness, for now. The
+  derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from a live salt,
+  now the window's (`pouw.salt`, one per PoUW window from the certifier's draw, #2637; the ruling said the epoch's,
+  and proofs' review of #2822 moved it): "I'm happy to do Fiat-Shamir for this for now because it's going to happen
+  at such a high-frequency that grinding etc. is not a huge problem." This narrows "live coins only" for PoUW's per-call randomness, for now. The
   roots, positions and shapes are private, so a drawn unit derives the seed and its own noise inside its proof, and
   the guarantee carries a grinding term (T·μ^m). With it went:
   noise is generated after each A·B pair is committed, and a sampled unit proves itself and its own noise's
