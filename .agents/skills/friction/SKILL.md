@@ -109,6 +109,8 @@ Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (9:37 AM PDT): writing for a person goes in Notion or cites what they can open, never a `note:` id
+  (AGENTS.md "Where writing goes", lane contract §5c).
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
   he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
   cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.

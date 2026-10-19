@@ -351,6 +351,9 @@ Never print a secret's value.
   - `research notes sync --path lanes/<lane>` publishes notes from any VM with `RESEARCH_NOTES_TOKEN` set.
   - A Cursor agent store is its agent's scratch: nothing another agent or a person needs lives only there, and nothing
     cites a `store:` path.
+- **Writing for a person** (an explanation, a one-pager, an answer in someone's chat) is a Notion page, or cites only
+  what they can open: PRs, repository files, run ids and Notion pages. The notes repo is private, so a `note:` id is for
+  agents (Daniel, 19 Oct).
 - **Evidence and generated output** (explore JSON, plots, gate outputs, logs, run results, rendered tables and reports)
   go in the evidence store only, never Git: neither this repo nor the notes.
   - `research run` publishes every run, completed or failed, as an Attempt with its outputs. The contract is
