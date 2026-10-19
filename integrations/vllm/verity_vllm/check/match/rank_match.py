@@ -80,10 +80,6 @@ def _same_site(a: str | None, b: str | None) -> bool:
     return same_module_path(a, b)
 
 
-def collectives_from_summary(summary: dict) -> list[dict]:
-    return list(summary.get("collectives") or [])
-
-
 def _own_rows(rs: list, c: dict, spec_of: Any) -> list[str]:
     """The producer of each row of this rank's own part of a collective row's operand (`parts` in rank order, `world` equal parts: one
     row of N for a per-row collective, all M rows for a flat one): the spec of the node whose output holds it (`spec_of(node)`), several

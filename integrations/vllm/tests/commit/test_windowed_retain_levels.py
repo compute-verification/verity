@@ -160,6 +160,20 @@ def test_learning_and_hit_runs_commit_the_one_block_roots(monkeypatch, reference
         com.close()
 
 
+@pytest.mark.parametrize("fast", [True, False], ids=["native-end", "python-end"])
+def test_the_step_end_paths_commit_the_same_roots_and_row_order(monkeypatch, reference, fast):
+    """The serving thread's step end in one native call with the row order expanded by the worker, or as before: the same roots and
+    the same `step_rows`."""
+    com = committer(monkeypatch)
+    com.native_end = com.rows_off_thread = fast
+    try:
+        rc = run(com, SCHED)
+        assert [s.root for s in rc.steps] == reference
+        assert list(com.step_rows.values()) == [[("r0", 0, 1), ("r1", 1, 2)]] * len(SCHED)
+    finally:
+        com.close()
+
+
 def test_bounded_record_run_without_levels_commits_the_one_block_roots(monkeypatch, reference):
     """Bounded staging: the learn-only warm-up records the plans, then the record run hashes every window in place with no host copy
     and no host sync per window."""

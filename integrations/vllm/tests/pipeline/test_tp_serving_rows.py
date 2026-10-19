@@ -180,7 +180,7 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     rank_root = bytes(r.run.run_root)
     root = tp_run_root(1, {0: rank_root})
     reqs = [{"request_id": k, "arrive_step": v} for k, v in r.arrivals.items()]
-    st = {"rank": 0, "rc": r.run, "com": r.store, "bmap": bmap, "eng": SimpleNamespace(model=None), "manifest_doc": None,
+    st = {"rank": 0, "rc": r.run, "com": r.store, "bmap": bmap, "eng": SimpleNamespace(model=None), "weights": None, "manifest_doc": None,
           "replay": {"programs": {"0": str(c["row_dir"] / "build_request")}, "of_record": {"0": [c["inst"]["digest"]]}, "requests": reqs}}
     tp = {"world": 1, "tp_run_root": root.hex(), "roots": {"0": rank_root.hex()}, "root_tag": TP_ROOT_TAG.decode()}
     req = {"dir": str(tmp_path / "tp"), "partition": str(pf), "run": "r-tp", "committer": {"source": "t"}, "row": "row-t"}

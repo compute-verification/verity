@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -288,6 +289,8 @@ def test_unknown_set_and_bad_range_are_refused():
 
 def _gpu_compute_capability() -> str | None:
     if shutil.which("nvcc") is None and not Path("/usr/local/cuda/bin/nvcc").exists():
+        return None
+    if os.environ.get("CUDA_VISIBLE_DEVICES") == "":     # nvidia-smi lists the host's GPUs; this process may use none of them
         return None
     try:
         smi = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True, check=False)

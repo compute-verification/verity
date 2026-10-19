@@ -47,6 +47,7 @@ members = [
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
+    "verity-network-sim",
     "verity-network-traces",
     "verity-numerical",
     "verity-ops",
@@ -2008,6 +2009,17 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
 ]
 provides-extras = ["torch"]
+
+[[package]]
+name = "verity-network-sim"
+version = "0.0.0"
+source = { virtual = "benchmarks/network_sim" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
 name = "verity-network-traces"

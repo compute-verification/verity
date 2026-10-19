@@ -73,6 +73,29 @@ receipt; the checkpoint a segment of the chains' full states (`Accounting.Guaran
 
 Three words' receipts can have one: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and `a₃ ≡ ±1 (mod 2^(n−r₁))`,
 flipping the top bit of all three words moves the receipt by one constant (`benchmarks/pouw/theory/duo_proj.c`).
+
+The whole state binds one word at a state (`DuoRunWordInjective`), and no more than that for every choice of words:
+
+* `DuoPairAtStateNotInjective`: at width 32 with the keys of the served chain 0's first two words, one start state and
+  two word pairs give one state.
+* `DuoRunAtStateNotInjective`: at every width `n > 0`, every run of three or more words, with any keys, from any start
+  state, has two different word sequences with one final state: `2^(nL)` runs reach `2^(2n)` states.
+
+So a full-state checkpoint binds a segment's words for every choice of them only while each segment holds at most one
+deficient word a chain (`Accounting.Guarantees.TS.DuoSegmentsBind`); two or more are bound only with a probability over
+the wrong words, which no all-state statement (`DuoQuadNoKernel` and the like) supplies.
+
+A warp's checkpoint XORs its chains' full states, so wrong runs in two chains cancel on every start state when each
+one's final states differ from the honest run's by one XOR constant: equal `stateSpread`s, an all-state XOR kernel.
+
+* `DuoPairXorNoKernel`: two words have none, for odd multipliers and rotations `0 < r < n`, so wrong words in only the
+  last two places of a set can't cancel across chains.
+
+Three words can have one, the receipt's kernel above: with `r₁ + r₃ ≡ 0 (mod n)`, `a₂ ≡ −1 (mod 2^r₁)` and
+`a₃ ≡ ±1 (mod 2^(n−r₁))`, flipping the top bit of all three words moves the final state by one constant. A served
+chain's segment has the rotations `(6, 20, 3, 17)` or `(13, 27, 10, 24)` (`fgemm.cu`'s `rot_of` at its positions of
+one parity), so `r₁ + r₃ mod 32 ∈ {5, 9, 19, 23}`, off that family; three and four words have no statement here. fx1
+has the same (`Fx1PairXorNoKernel`).
 -/
 
 namespace Pouw.Guarantees.Receipt
@@ -226,5 +249,32 @@ receipt rotation 16, from the state `(0x247a23f6, 0xc48c9971)` the words `0x1632
 def DuoReceiptNotInjective : Prop :=
   ¬ Function.Injective (fun d : BitVec 32 =>
     duoReceipt 16 (duoWord (0x6d403793#32) (0x9e43d96b#32) 6 (0x247a23f6#32, 0xc48c9971#32) d))
+
+/-- **Two duo words are not bound at a state.** At width 32, with the keys of the served chain 0's first two words
+(`fgemm.cu`'s `key_xor(0, t)`, `key_mul(0, t)`, `rot_of(DUO, 0, t)` at `t = 0` and `t = 2`: `(0x6d403793, 0x9e43d96b, 6)`
+and `(0x5cc85cac, 0x5e95a543, 20)`), from the state `(0x247a23f6, 0xc48c9971)` the word pairs `(0x40156b95, 0x0)` and
+`(0xb4d85e5c, 0x375f7285)` reach one state. -/
+def DuoPairAtStateNotInjective : Prop :=
+  ¬ Function.Injective (fun d : BitVec 32 × BitVec 32 =>
+    duoPair (0x6d403793#32) (0x9e43d96b#32) 6 (0x5cc85cac#32) (0x5e95a543#32) 20 d (0x247a23f6#32, 0xc48c9971#32))
+
+/-- **No whole state binds three duo words at a state.** For every width `n + 1`, every run of `L + 3` words with any
+keys and every start state, two different runs reach one final state: `2^((n+1)(L+3))` runs, `2^(2(n+1))` states. -/
+def DuoRunAtStateNotInjective : Prop :=
+  ∀ (n L : ℕ) (k a : Fin (L + 3) → BitVec (n + 1)) (r : Fin (L + 3) → ℕ) (s : BitVec (n + 1) × BitVec (n + 1)),
+    ¬ Function.Injective (fun w : Fin (L + 3) → BitVec (n + 1) => duoRun k a r w s)
+
+/-- **Two duo words have no all-state XOR kernel.** For every width, odd multipliers and rotations that move every
+bit, two word pairs whose final states differ by one XOR constant on every start state (equal `stateSpread`s) are
+equal. -/
+def DuoPairXorNoKernel : Prop :=
+  ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (k₂ : BitVec n) (a₂ : OddKey n) (r₂ : Rotation n),
+    Function.Injective (fun d => stateSpread (duoPair k₁ a₁.1 r₁.1 k₂ a₂.1 r₂.1 d))
+
+/-- **Two fx1 words have no all-state XOR kernel.** `DuoPairXorNoKernel`'s keys, with odd IMAD multipliers. -/
+def Fx1PairXorNoKernel : Prop :=
+  ∀ (n : ℕ) (k₁ : BitVec n) (a₁ : OddKey n) (r₁ : Rotation n) (m₁ : OddKey n) (k₂ : BitVec n) (a₂ : OddKey n)
+    (r₂ : Rotation n) (m₂ : OddKey n),
+    Function.Injective (fun d => stateSpread (fx1Pair k₁ a₁.1 r₁.1 m₁.1 k₂ a₂.1 r₂.1 m₂.1 d))
 
 end Pouw.Guarantees.Receipt

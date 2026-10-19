@@ -25,8 +25,8 @@ Here each is the `Claims.Pr` that a model draw misses `B`:
   product over its classes of each rule's `P̄_a` on the class's window (`classPa`), the probability that independent
   draws of the classes all miss; `classesPa_strata`, `Design.Pa_strata`: classes drawn as strata are one strata draw.
 
-That the deployed verifier's draw has these distributions is not stated by the block: `Live.lean` proves it of the
-executable draw on uniform bytes, and binding the sampled verifier's draw to it is the code side's.
+`Live.lean` proves these distributions of the executable draw on uniform bytes, and `Select` of the deployed sampled
+verifier's (`drawMisses`, and `DrawLaw` from it, `drawLaw_of_slots`).
 -/
 
 namespace Claims.Sampling

@@ -36,7 +36,10 @@ VF3Q_LOADS = ["LDS64", "LDG64", "LDG256", "LDG128NA", "LDG128CG", "LDG256CG"]
 def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
-    assert d["vector"] == "VF3r-16" and round(d["tau"], 4) == 0.0556 and d["failures"] == [] and d["unreproduced"] == []
+    assert d["vector"] == model().current and d["failures"] == [] and d["unreproduced"] == []
+    assert main(["solve", "VF3r-16", "--json"]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert round(d["tau"], 4) == 0.0556 and d["failures"] == [] and d["unreproduced"] == []
     assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0435, 1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 15, "below": [], "absent": []},
@@ -91,8 +94,8 @@ def test_a_measurement_is_data(tmp_path, capsys):
     assert "JI3o_0" in resolve("VF3p-16", data).census["LDSM_X1"]
     assert "JI3q_0" in resolve("VF3q-16", data).census["LDSM_X1"]
     assert "JI3s_0" in resolve("VF3r-16", data).census["LDSM_X1"]
-    assert "JI3t_0" in new.census["LDSM_X1"]
-    assert not {"JI3e_0", "JI3n_0", "JI3o_0", "JI3q_0", "JI3s_0"} & set(new.census["LDSM_X1"])
+    assert "JI3t_0" in resolve("VF3s-16", data).census["LDSM_X1"]
+    assert not {"JI3e_0", "JI3n_0", "JI3o_0", "JI3q_0", "JI3s_0"} & set(resolve("VF3s-16", data).census["LDSM_X1"])
     assert vector("TEST", data).published == {}
     assert main(["--data", str(data), "solve", "TEST"]) == 0
     assert "published: nothing yet" in capsys.readouterr().out

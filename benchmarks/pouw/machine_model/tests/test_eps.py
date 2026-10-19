@@ -257,11 +257,13 @@ def test_two_bit_entries_on_the_indexed_operand(tmp_path):
 
 
 def test_core_and_sample_are_two_layers():
-    """Daniel (06:29Z): the core ε is the protocol with 100% checking, ε_luck = ε_adapt = 0; ε_sample = ε_luck + ε_adapt
-    is the sampling compiler's and never enters it."""
+    """The core ε is the protocol with 100% checking (Daniel, 06:29Z), Corollary D3's: every check is one draw, so ε_luck
+    is in it (LEDGER; JL is not assumed) and ε_adapt = 0; ε_sample = ε_adapt is the sampling compiler's and never
+    enters it."""
     e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))
-    assert e.core() == pytest.approx(1 - (1 - e.skip - e.mand - e.machine_eps) * (1 - (e.sched or 0)) * (1 - e.clock))
-    assert e.sample() == pytest.approx(e.luck + 0.0035) and e.luck > 0
+    assert e.core() == pytest.approx(
+        1 - (1 - e.skip - e.mand - e.machine_eps - e.luck) * (1 - (e.sched or 0)) * (1 - e.clock))
+    assert e.sample() == pytest.approx(0.0035) and e.luck > 0
     assert e.core() == pytest.approx(E.eps(DUO, PI, 8).core()) and e.core() < e.total()
     assert e.core(sched=False) <= e.core()
 
@@ -386,12 +388,12 @@ def test_cli(capsys):
     assert out.startswith("dither-1s: ") and "binding JI3e_0" in out and "ε_machine  11.171%" in out
     assert "Dither-1S (also dither-duo, record, adopted): noise linears one-sided" in out
     assert "q* threshold (ε_machine = its floor): none ≤ 64; lanes alone 2.029" in out and "ε_sched    14.121%" in out
-    assert "ε core     " in out and "ε_sample" not in out and "ε_luck" not in out
+    assert "ε core     " in out and "ε_sample" not in out and "ε_luck     0.153%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled"]) == 0
     out = capsys.readouterr().out
-    assert "ε_adapt 0.350%: proof unit whole" in out and "ε_sample   0.503%" in out
+    assert "ε_adapt 0.350%: proof unit whole" in out and "ε_sample   0.350%" in out
     assert main(["eps", "--vector", PIN, "--checking", "sampled", "--adapt", "segment"]) == 0
-    assert "ε_sample   21.153%" in capsys.readouterr().out
+    assert "ε_sample   21.000%" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="--checking sampled"):
         main(["eps", "--adapt", "whole"])
     assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--operands", "floor", "--credit",
@@ -399,9 +401,9 @@ def test_cli(capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["registry"]["aliases"] == ["dither-two-sided", "A", "adopted-bd-lm"]
     assert d["credit"] == "floor" and d["terms"]["machine"] == 0 and d["terms"]["sched"] is None
-    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.004
+    assert d["threshold"] == pytest.approx((JI + 0.2) / 4, abs=1e-5) and d["core"] < 0.0045
     assert d["adapt"]["unit"] == "per-stage" and d["terms"]["adapt"] == 0
-    assert d["sample"]["eps"] == pytest.approx(d["terms"]["luck"]) and d["sample"]["budget"]["checks"] == 48000
+    assert d["sample"]["eps"] == d["terms"]["adapt"] == 0 and d["luck_budget"]["checks"] == 48000
     assert main(["eps", "--vector", PIN, "dither-2s", "--uni-issue", "1", "--q", "4", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["design"] == "dither-2s" and d["operands"] == "free"
@@ -436,9 +438,11 @@ def test_cli(capsys):
                  "floor", "--checking", "sampled"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert "checking sampled" in lines[0] and "the proof unit (each design its own)" in lines[0]
-    assert lines[1].split()[-5:] == ["|", "unit", "luck", "adapt", "sample"] and lines[2].split()[-5:-3] == ["|", "whole"]
-    luck, adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-3:])
-    assert adapt == 0.35 and sample == pytest.approx(luck + adapt, abs=1e-3)
+    head = lines[1].split()
+    assert head[-4:] == ["|", "unit", "adapt", "sample"] and lines[2].split()[-4:-2] == ["|", "whole"]
+    assert head[head.index("floor") + 1:head.index("floor") + 3] == ["luck", "core@2"]
+    adapt, sample = (float(x.rstrip("%")) for x in lines[2].split()[-2:])
+    assert adapt == sample == 0.35
     assert main(["designs"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert [x.split()[0] for x in lines[1:1 + len(E.designs())]] == E.designs()
@@ -549,12 +553,29 @@ def test_dc_li_binds_honest_on_the_lane_facet():
             assert s.as_built.binding == binds and E.threshold(s) == pytest.approx(thr, abs=1e-4), dev
             assert s.machine_eps(0.5) == pytest.approx(0, abs=1e-9), dev
             e = E.eps(ds, pi, 0.5, d, operands="floor", credit="floor")
-            assert e.T_honest * h.words == pytest.approx(t, rel=1e-4) and e.core() == pytest.approx(e.skip), dev
+            assert e.T_honest * h.words == pytest.approx(t, rel=1e-4), dev
+            assert e.core() == pytest.approx(e.skip + e.luck), dev
     assert [(f.mix, f.p) for f in E.design("dither-2s-li-l32", DEVICES / "sm_90").filler] == [({"FFMA": 1}, 0.0)]
     assert E.honest("dc100-li-l32", DEVICES / "sm_100").base() == {"UTCIMMA_M128_N256": 1, "LDTM_32X32B_X128": 8}
 
 
-HEADLINE_Q = 1.22   # decision 89's reading: output counting's q* over the served workload (CALC r10, #2325)
+def test_sm90_ffma_filler_has_no_uniform_form():
+    """sm_90's uniform datapath is integer only (model.toml's `uniform_forms`), so a filler with FFMA in its mix stays on
+    lanes even on DC-90-ri, where a uniform instruction is nearly free on JI90_0; an IMAD filler may move there, and a
+    device that names no forms lets every filler."""
+    d = DEVICES / "sm_90"
+    pi = E.machine("DC-90-ri", d)
+    assert pi.uniform_forms == ("IMAD", "ALU") and E.machine("", DEVICES / "sm_100").uniform_forms is None
+    assert not pi.uniform_form(E.Filler(per_word=0.07, mix={"FFMA": 2, "IMAD": 1}))
+    assert pi.uniform_form(E.Filler(per_word=0.07, mix={"IMAD": 1}))
+    ds = E.design("dither-2s-licpw-redux-l32", d)
+    for q in (1.22, 0.5):
+        assert E.eps(ds, pi, q, d, operands="free", credit="floor").cheat.filler_uniform == (0.0,)
+    imad = replace(ds, filler=(replace(ds.filler[0], mix={"IMAD": 1.0}),))
+    assert E.eps(imad, pi, 0.5, d, operands="free", credit="floor").cheat.filler_uniform[0] > 0.0
+
+
+HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)
 HEADLINE = [("sm_80", "dither-2s-l16"), ("sm_89", "dither-2s-l16"),   # A100, L40S
             ("sm_90", "dither-2s-li-l32"), ("sm_100", "dither-2s-li-fill-l32")]   # H200, B200
 
@@ -584,12 +605,13 @@ def _worst_core_under_margin(data, pi, d, m):
 def test_dc_the_headline_holds_decision_76s_margin():
     """EPS1 DC's margin audit (note:20261017T0452Z-draft-eps1-dc Round 8): every device family's headline core ε stays
     under 1% when each measured facet the headline reads moves 2% in the cheater's favour (decision 76), at the
-    decision-89 reading (operands free, q* = 1.22). The A100 and L40S are far from binding; the B200 is bound by its
-    exact operand floor and the issue axiom, not a measured row, so the margin leaves it at 0.927%. The H200 is the one
-    thin family: its 0.02 FFMA filler puts honest on JI90_0 by only the ALU pipe's 1.5% issue slack, so a 2% rise in
-    JPA90_0 (ALU lanes beside the tensor) moves honest's binding off JI90_0 and opens the lane route, taking core to
-    0.91% (it crosses 1% only past a 2.3% margin). A 0.05 FFMA filler a word restores the full margin (core back to its
-    0.498% floor) at γ 1.589, the cheapest add-on; its ε_skip at the larger ♭ is CALC's to re-price."""
+    decision-89 reading (operands free, q* = 1.22), ε_luck in the core (Corollary D3). The A100 and L40S are far from
+    binding; the B200 is bound by its exact operand floor and the issue axiom, not a measured row, so the margin leaves
+    it at 0.952%. The H200 is the one thin family: its 0.02 FFMA filler puts honest on JI90_0 by only the ALU pipe's
+    1.5% issue slack, so a 2% rise in JPA90_0 (ALU lanes beside the tensor) moves honest's binding off JI90_0 and opens
+    the lane route, taking core to 0.98% (it crosses 1% past a 2.1% margin). A 0.05 FFMA filler a word restores the
+    full margin (core back to its 0.574% floor) at γ 1.589, the cheapest add-on; its ε_skip at the larger ♭ is CALC's
+    to re-price."""
     worst = {}
     for dev, name in HEADLINE:
         data = device(dev)
@@ -599,15 +621,15 @@ def test_dc_the_headline_holds_decision_76s_margin():
         worst[dev] = (base, _worst_core_under_margin(data, pi, d, 0.02))
         assert worst[dev][1] < 0.01, f"{dev} {name}: {worst[dev][1]*100:.3f}% over 1% under decision 76's margin"
     assert worst["sm_80"] == pytest.approx((0.00147, 0.00147), abs=5e-5)
-    assert worst["sm_89"][0] == pytest.approx(0.00260, abs=5e-5) and worst["sm_89"][1] < 0.0030
-    assert worst["sm_100"][0] == pytest.approx(0.00927, abs=5e-5) and worst["sm_100"][1] == pytest.approx(0.00927, abs=5e-5)
+    assert worst["sm_89"][0] == pytest.approx(0.00306, abs=5e-5) and worst["sm_89"][1] < 0.0035
+    assert worst["sm_100"][0] == pytest.approx(0.00952, abs=5e-5) and worst["sm_100"][1] == pytest.approx(0.00952, abs=5e-5)
     # the H200 is thin at its 0.02 filler; 0.05 FFMA a word restores the margin to the floor
     sm90 = device("sm_90")
     p90 = E.machine("", sm90)
     thin = E.design("dither-2s-li-l32", sm90)
-    assert worst["sm_90"][0] == pytest.approx(0.00498, abs=5e-5) and 0.0085 < worst["sm_90"][1] < 0.0095
+    assert worst["sm_90"][0] == pytest.approx(0.00576, abs=5e-5) and 0.0095 < worst["sm_90"][1] < 0.0099
     wide = replace(thin, filler=(E.lane_fill(0.05, {"FFMA": 1.0}),))
-    assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00498, abs=5e-5)
+    assert _worst_core_under_margin(sm90, p90, wide, 0.02) == pytest.approx(0.00574, abs=5e-5)
 
 
 def test_cli_device(capsys):

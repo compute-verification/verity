@@ -50,9 +50,13 @@ from verity_vllm.pipeline import row_group as RG
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
+from verity_vllm.program import prefix_plan as PP
 
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
+#: a derive on ir="boolean" lifts every word Definition to bits after the word derive: 2.6x the word derive's wall on Qwen3-0.6B,
+#: and over 900 s against 357 s on the int8 Llama-3.1-8B row (VLLM-27)
+BOOLEAN_DERIVE_SCALE = 4
 
 
 def _tail(path: str, n: int = 300) -> str:
@@ -76,6 +80,7 @@ class SingleRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
+        self.tgt, self.tgt_args = "", []      # the declared target (`shape`)
 
     def run(self) -> int:
         try:
@@ -130,7 +135,6 @@ class SingleRow(Row):
         if not os.path.isfile(self.path(self.wl)):
             print(f"no manifest {self.wl}")
             raise Stop(2)
-        self.refuse_unserved_engine()
         self.trap = True
         rel_line, rel_src = self.release_line(" (release_json.py failed; not installed here by pod_release.sh)")
         self.rel_tag = rel_line.split("|", 1)[0]
@@ -234,9 +238,10 @@ class SingleRow(Row):
         return RB.required_manifest(self, stage, digest)
 
     # ------------------------------------------------------------------------------------------------ Build
-    def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None) -> list[str]:
+    def request_cmd(self, lp: int, t: int, out: str, lctx: list[str] | None = None, C: int = 0) -> list[str]:
         return self.cli("build", "--model", self.repo, "--revision", self.rev, "--wrapper", "request", "--LP", str(lp), "--T", str(t),
-                        "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out, *self.tgt_args, *(lctx or []))
+                        *(["--cached", str(C)] if C else []), "--max-model-len", str(self.MML), "--workload", self.wl, "--out", out,
+                        *self.tgt_args, *(lctx or []))
 
     def derive_all(self, to: int) -> tuple[int, int]:
         """The step, request and extra-shape derives, ``--build-jobs`` wide (auto: `row_records.build_jobs_auto`) -> (step rc, request rc)."""
@@ -251,15 +256,15 @@ class SingleRow(Row):
         self.tl("build.jobs", "mark", ("jobs", jobs_n), ("requested", req))
         extra = []
         rc_x = 0
-        for lp, t in R.extra_shapes(self.path(self.wl), self.LP, self.T):
-            out = f"{self.d}/build_request_LP{lp}_T{t}"
+        for s in R.extra_shapes(self.path(self.wl), self.LP, self.T):
+            out = f"{self.d}/build_request_{PP.shape_name(s)}"
             if R.derived_ok(out):
                 continue
-            lx = self.launch_args(lp, t)
+            lx = self.launch_args(*s)
             if lx is None:
                 rc_x = 1
                 continue
-            extra.append((f"build.derive_request_LP{lp}_T{t}", f"{out}.log", self.request_cmd(lp, t, out, lx), out))
+            extra.append((f"build.derive_request_{PP.shape_name(s)}", f"{out}.log", self.request_cmd(s[0], s[1], out, lx, PP.cached_rows(s)), out))
         if jobs_n <= 1:
             rc1 = RC.derive_cached(self, "build.derive_step", to, f"{self.d}/build_step.log", cmd_s, f"{self.d}/build_step")
             rc2 = (RC.derive_cached(self, "build.derive_request", to, f"{self.d}/build_request.log", cmd_r, f"{self.d}/build_request")
@@ -310,9 +315,14 @@ class SingleRow(Row):
         """B >= 2: the workload Program's compose and the manifest beside the derives (`row_build.follow_compose`)."""
         return RB.follow_compose(self, to)
 
+    def derive_timeout(self, lp: int, t: int) -> int:
+        """One derive's limit: `--build-timeout`, else 900 s per (256 positions x 31 tokens), times `BOOLEAN_DERIVE_SCALE` on ir="boolean"."""
+        ir = json.loads(self.tgt or "{}").get("ir")
+        scale = max(1, (max(lp, 256) // 256) * (max(t, 31) // 31)) * (BOOLEAN_DERIVE_SCALE if ir == "boolean" else 1)
+        return self.cb.build_timeout or min(CAP, 900 * scale)
+
     def build(self) -> None:
-        scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
-        to = self.cb.build_timeout or min(CAP, 900 * scale)
+        to = self.derive_timeout(self.LP, self.T)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
@@ -372,11 +382,11 @@ class SingleRow(Row):
 
     # ------------------------------------------------------------------------------------------------ Match
     def derive_missing(self, derived: list[str], label: str) -> None:
-        """Derive the request shapes X-09 named as missing (one request-wrapper derivation per (LP, T))."""
-        for lp, t in R.missing_derived(self.d):
-            self.log(f"{label}: deriving request Program LP={lp} T={t}")
-            out = f"{self.d}/build_request_LP{lp}_T{t}"
-            self.run_to(self.cb.build_timeout or 900, f"{out}.log", self.request_cmd(lp, t, out))
+        """Derive the request shapes X-09 named as missing (one request-wrapper derivation per (LP, T[, C]))."""
+        for s in R.missing_derived(self.d):
+            self.log(f"{label}: deriving request Program {PP.shape_name(s)}")
+            out = f"{self.d}/build_request_{PP.shape_name(s)}"
+            self.run_to(self.derive_timeout(256, 31), f"{out}.log", self.request_cmd(s[0], s[1], out, C=PP.cached_rows(s)))
             derived += ["--derived", out]
 
     def compare(self, to_c: int) -> tuple[int, int | None, bool]:
@@ -415,8 +425,7 @@ class SingleRow(Row):
                          quiet=True)
             if not os.path.isfile(f"{req_dir}/result.json"):
                 self.log(f"early EOS: served T_r={t_r} != cap-1={self.T} -> deriving request Program LP={self.LP} T={t_r}")
-                scale = max(1, (max(self.LP, 256) // 256) * (max(t_r, 31) // 31))
-                self.run_to(self.cb.build_timeout or min(CAP, 900 * scale), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
+                self.run_to(self.derive_timeout(self.LP, t_r), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
         open(f"{d}/match_shape.json", "w").write(f'{{"LP": {self.LP}, "T": {t_r}, "cap_T": {self.T}, "derived": "{req_dir}"}}\n')
         return self.run_to(to_c, f"{d}/match_compare.log",
                            self.cli("program-compare", "--a", req_dir, "--b", f"{d}/match", "--out", f"{d}/match_compare.json", py=self.py312)), None, False

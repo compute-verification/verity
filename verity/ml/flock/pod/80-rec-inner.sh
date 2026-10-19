@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # The first recursive session's inner side (rec_inner.py, verity_flock.rec_live): RoPE d64 staged as M0's statement, proved
 # on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose coin server (the challenger) sees only salted
-# tops, message commitments and the schedule (the statement's public shape's); then the recorded session replayed by upstream's verifier
-# (flock-circuit replay) and by Lean's flock-verify (--coins os), V*'s hashing over it (verity_flock.rec_vstar), and two
+# tops, message commitments and the schedule (the statement's public shape's) and answers Register with the verifier's full draw
+# (stage/draw.json, rec_live.full_draw: every unit); then the recorded session replayed by upstream's verifier (flock-circuit
+# replay) and by Lean's flock-verify (--coins os, the draw held to its own law: --stratified N --program --partition), V*'s
+# hashing over it (verity_flock.rec_vstar), and two
 # forgeries (a changed challenge, a changed query coin) that every verifier must reject. Run from the verity tree (research run
 # --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, time-prove.txt, prove.txt/.err,
 # proxy.log, inner/ (session/, public.json, private.json, stage/:
@@ -39,11 +41,12 @@ python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D > 
 cat $O/stage.json
 TB=(); [ -d $D/tables ] && TB=(--tables $D/tables)
 PART=(--partition $D/partition.json)
+DRAWN=(--program $D/program.json --stratified $N)
 
 # the schedule the proxy holds the session to, from the statement's public shape before the session (rec_live --schedule-for)
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt > $O/schedule.json || exit 1
-python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json > $O/proxy.log 2>&1 &
+python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json --draw $D/draw.json > $O/proxy.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/proxy.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done
@@ -58,9 +61,9 @@ SESS=$O/inner/session
 $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $SESS > $O/replay.txt 2>&1
 python3 -m verity_flock.rec_vstar $O/inner > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
 wait $LP
-$LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" --coins os --session $SESS > $O/lean.log 2>&1
+$LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" "${DRAWN[@]}" --coins os --session $SESS > $O/lean.log 2>&1
 echo "lean exit $?"
-mkdir -p $O/inner/stage && cp $D/circuit.txt $D/pub-$N.bin $D/partition.json $D/program.json $O/inner/stage/
+mkdir -p $O/inner/stage && cp $D/circuit.txt $D/pub-$N.bin $D/partition.json $D/program.json $D/draw.json $O/inner/stage/
 wait $CLP
 /usr/bin/time -v -o $O/time-claims.txt $CLAIMS_BIN "${PART[@]}" verity/flock-circuit $D/circuit.txt $D/pub-$N.bin $SESS os > $O/inner/claims.json 2> $O/claims.err
 echo "claims exit $?"
@@ -70,7 +73,7 @@ for F in challenge query; do
   FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
   python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS
   $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $FS/session > $O/forged-$F-replay.txt 2>&1
-  $LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" --coins os --session $FS/session > $O/forged-$F-lean.txt 2>&1
+  $LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" "${DRAWN[@]}" --coins os --session $FS/session > $O/forged-$F-lean.txt 2>&1
   echo "forged $F lean exit $?"
   python3 -m verity_flock.rec_vstar $FS > $O/forged-$F-vstar.json 2>&1; echo "forged $F vstar exit $?"
 done

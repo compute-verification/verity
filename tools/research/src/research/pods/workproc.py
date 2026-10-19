@@ -26,10 +26,6 @@ def is_work(args: str) -> bool:
     return bool(re.search(WORK_RE, args)) and not re.search(NOT_WORK_RE, args)
 
 
-def is_serve(args: str) -> bool:
-    return SERVE_RE in args and not re.search(MARKS_RE, args)
-
-
 def guard_env() -> dict[str, str]:
     """The definition as the guard reads it (grep -E patterns; PRUNE space-separated)."""
     return {"GUARD_WORK_RE": WORK_RE, "GUARD_NOT_WORK_RE": NOT_WORK_RE, "GUARD_SERVE_RE": SERVE_RE, "GUARD_MARKS_RE": MARKS_RE,

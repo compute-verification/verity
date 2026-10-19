@@ -21,14 +21,13 @@ def solved(name):
 
 
 def test_every_named_vector_is_here():
-    assert NAMES[0] == "VF" and NAMES[-10:] == ["VF3l-16-copy16-fan32", "VF3l-16-copy32", "VF3l-16-copy32-fan16",
-                                               "VF3m-16", "VF3n-16", "VF3o-16", "VF3p-16", "VF3q-16", "VF3r-16",
-                                               "VF3s-16"]
+    assert NAMES[0] == "VF" and model().current in NAMES and set(PUBLISHED) < set(NAMES)
     assert {"VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict", "VF3j", "VF3j-8",
             "VF3j-16", "VF3k-16"} < set(NAMES)
 
 
-# τ, τ at 600 W, U/F_low and margin as the round notes published them
+# τ, τ at 600 W, U/F_low and margin as the round notes published them, through VF3s-16. A later vector is held to its
+# own file's [published] (test_reproduces_its_published_numbers), so a new vector touches no test.
 PUBLISHED = {
     "VF3h": (0.1246, 0.0975, 1.0938, 1.935),          # note:20261016T1538Z-draft-rs-vf3i-textures-uniform
     "VF3i-strict": (0.0698, 0.0546, 1.0938, 1.935),   # note:20261016T1640Z-draft-rs-vf3j-strict-closure, on valid rows

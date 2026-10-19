@@ -46,6 +46,9 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 UNIT = "rec-open/l16-h4"
+#: the population programs' version the recorded levels were staged at (`TemplateInstances_v0`, before v1), which every
+#: staging here restages them at, so that they read the recorded `pub.bin` and `registered.json`
+VERSION = 0
 #: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves
 CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
                   "459a42e2dda3e07463")
@@ -83,7 +86,8 @@ def forged(built, once) -> Path:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(S, "coefficients", coefficients)
             res = S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
-                          algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+                          algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin",
+                          version=VERSION)
         assert res["levels"][f"L{LEVEL}"]["opened"] == res["levels"][f"L{LEVEL}"]["instances"] == 106
 
     out = once("rec-coins-forged", make, _KEY) / f"L{LEVEL}"
@@ -233,17 +237,32 @@ def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, 
                                                    "claims at points the prover chose")
 
 
-def test_an_inner_record_that_keeps_a_unit_draw_is_refused(forged, shape, tmp_path):
-    """`Record.decode`'s U1 (`Draw.check`): the inner statement never carries a draw (`Inner.load` refuses one in its
-    header), so an honest inner record given a `unit_draw` is refused by U1 alone; nothing else reads the record's draw."""
+def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
+    """The honest inner session, its record given `draw` as its `unit_draw`."""
     inner = shutil.copytree(SET / "inner-honest", tmp_path / "inner-drawn")
     s = json.loads((inner / "session" / "session.json").read_text())
-    s["unit_draw"] = {"law": "subset", "units": [0]}
+    s["unit_draw"] = draw
     (inner / "session" / "session.json").write_text(json.dumps(s))
+    return inner
+
+
+def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path):
+    """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose draw is a well
+    formed sample of the 64 units is refused before its record is read."""
+    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
-    assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's record: U1: the record keeps a unit draw the "
-                        "statement does not carry"), v["why"]
+    assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's draw: the session's draw proves 1 units, not "
+                        "every one of the statement's 64 in order"), v["why"]
+
+
+def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path):
+    """`RecCoins.drawnSpec`: a record whose draw is every unit is decoded against the drawn statement's spec, whose
+    header carries the draw. The honest session ran without one, so its record is refused there, at its parameters."""
+    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
+    v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
+                rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
+    assert v["why"] == f"setup: rec-coins: {UNIT}: the inner session's record: {S2_R7}", v["why"]
 
 
 def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, tmp_path):
@@ -255,7 +274,7 @@ def test_a_coef_registered_one_bit_off_is_refused_at_its_opening(forged, shape, 
 
 def _stage(d: Path, **kw) -> dict:
     return S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d,
-                   pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", **kw)
+                   pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin", version=VERSION, **kw)
 
 
 @pytest.fixture(scope="module")
@@ -669,7 +688,8 @@ def bit_rows(built, once) -> Path:
                 low, sub, port_bits=[16 * w for w, _ in low.leaves["in_ports"]], **kw))
             mp.setattr(FC, "write", lambda *a, registered=None, **kw: write(*a, **kw))
             S.stage(SET / "inner-honest", json.loads((SET / "fold-honest.json").read_text()), d, levels=[LEVEL],
-                    algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin")
+                    algebra=False, pts=json.loads((SET / "points-honest.json").read_text()), salts=SET / "acc-salts.bin",
+                    version=VERSION)
 
     out = once("rec-coins-bit-rows", make, _KEY) / f"L{LEVEL}"
     assert '"row_schemas":[["hm96-sha512/row/v2",' in (out / "circuit.txt").open().readlines()[1]

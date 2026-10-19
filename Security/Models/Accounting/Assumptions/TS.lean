@@ -26,18 +26,29 @@ Which form each takes:
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
   `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
-  below the menu's price across rounds, is what stays assumed. `FanIn`, the ISA's operand counts, gives both at the
-  fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`, `FillOptOfFanIn`): for a fold or filler presented as
-  a straight-line dataflow over the words it absorbs, priced at least the menu's routes of `a_k/m_k` a word.
+  below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
+  (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
+  `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
+  least the menu's routes of `a_k/m_k` a word.
 * (I7) `LuckAt`: (L) at `p` with freshness (F1)–(F2), one bet a round.
 * (I8) `ProofsSound`: deterministic computation, the circuit and inputs committed before σ, Theorem S's order, binding
   `δ_bind` and proof soundness `δ_ZK`, with Lemma E1(c) (every adaptive word lies below a committed value wrong for its
   own derivation). E1(c) is proved on paper; it sits inside this premise until the adaptive model is in Lean.
   `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
   binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
-  `δ_ZK`, the Definitions' pinning, and `RightFixed`.
+  `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `Accounting.Guarantees.TS.ProofsSoundOfDrawn`
+  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the drawn units' proofs (`Accounting.TS.DrawnLayer`): binding of every
+  committed position before the coin that follows its commitment (at `|L|·√δ_fork`,
+  `Accounting.Guarantees.TS.DrawnBindingOfFork`), the proofs' soundness jointly over a round's draws at `δ_ks`, each
+  unit's pinning, the share covering every unit that isn't good (`DrawnLayer.Covers`, proved for each game), and
+  `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
+* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
+  the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
+  every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
+  so `RightFixed`, which asks for every committed value right, says nothing there; and a unit's check can pass by luck,
+  so goodness reads the run's modes, not rightness.
 * `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
@@ -102,15 +113,31 @@ def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 def FillOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muX) * Z.chiStar lam ≤ Z.G.price lam A.nfill
 
-/-- `accounting-ts-fan-in` (ISA; register operands read from SASS on sm_80, sm_89, sm_90, sm_100 and sm_120). **An
-instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction `j` (its lanes,
-or the one node of a warp-wide instruction) merge at most `m_{cls j}` components into one, `Σ (sources − 1)`. A lane
-of LOP3, IADD3, IMAD, IDP.4A or FFMA reads three 32-bit registers (2 a lane, 64 a warp instruction); counted by
-dependence its predicate and 64-bit operands count too (IADD3.X: three registers and two carry-ins, 4 a lane;
-IMAD.WIDE: 3); a warp-wide instruction counts its whole operand set (SHFL 63; IMMA.16832: ten registers a thread, 319).
-Memory is a node each access reads: a load merges its address and that node (1 a lane), a store or atomic its address,
-its value registers and that node (STS.32 and ATOMS 2 a lane; STS.128 and STSM.x4 5 a lane, 160 a warp instruction),
-so the classes that merge most per instruction are the wide stores. -/
+/-- `accounting-ts-fan-in` (ISA; every form nvdisasm decodes on sm_80, sm_89, sm_90, sm_100 and sm_120, counted by
+dependence). **An instruction merges at most `m` components**: the nodes a straight-line dataflow issues as instruction
+`j` (its lanes, or the one node of a warp-wide or uniform instruction) merge at most `m_{cls j}` components into one,
+`Σ (sources − 1)`. A node's sources are every value it depends on: each register or uniform-register word it reads (a
+pair is two), each predicate it reads (an operand, a carry-in, its guard), a constant bank (`c[..][..]`, and
+`cx[UR][..]`'s uniform register besides), the memory node of each access, and, since any instruction can carry a guard
+and keeps what it writes when the guard is false, every word and predicate it writes (its destination, carry-outs and
+predicate destinations). `cls` is the census's class: an MMA form's family and shape; a texture, surface, TMA, bulk or
+tensor-memory access's unit and width; else the opcode's (`loads.class_of`), a memory access the census doesn't name in
+its space's class, and every other form in NOROW. Each class at its widest form, a lane, on sm_100 and sm_120: ALU 8
+(IADD3.X: three registers, two carry-ins, the guard, the kept destination and two kept carry-outs), IMAD 6, IMAD.WIDE 8,
+IADD.64 8, LEA 6, FFMA 4 (sm_100's FFMA2 8), HFMA2, IDP.4A and F2FS 4, VIMNMX 6 (sm_120's IMNMX.U64 10: three pairs,
+two predicate operands, two kept predicate destinations and the guard), SEL 4 (sm_120's SEL.64 7), XU 4 (BAR.RED.POPC,
+the barrier a node), DFMA and DADD 8, DMUL 6, a constant load 5 (LDC.64 from `cx[UR][R]`), NOROW 9 (P2R: two
+registers, P0–P6 and the kept destination). sm_80, sm_89 and sm_90 read a `cx[UR][imm]` operand where the others read a
+register, one source more: ALU 9, IMAD 7, IMAD.WIDE 9, LEA 7, FFMA, HFMA2, IDP.4A, F2FS, SEL and VIMNMX 5 (sm_90's
+VIMNMX.U32 7), NOROW 10 (P2R). Memory, a lane: a shared load or store 7 (LDS.128, STS.128), a global load 15
+(LDG.E.ENL2.256 with its descriptor, address pair, predicate operand and predicate destination), a global or generic
+store 13 (STG.E.ENL2.256), a shared atomic 15 (ATOMS.CAS.128), a global or generic atomic 18 (ATOMG.E.CAS.128), a
+reduction 9 (REDG.E.ADD.F32x4), LDGSTS 9, LDSM and STSM 7, a texture or surface access 20. A warp-wide instruction
+counts its lanes together: SHFL 191; UNI's R2UR 96 and VOTEU 65; an MMA form its A, B and C words, the kept
+D, a guard a lane and its UP operand, with a block-scaled form's two scale registers a lane and uniform register and a
+sparse form's metadata register a lane (IMMA.16832 480, QMMA.SF.16832 545); sm_100's tensor-memory load or store its
+registers on 32 lanes, which it keeps under one uniform guard, with the guard, address and node (LDTM.32x32b.x128
+4098). A uniform one counts once: UNI64's UIADD3.64.X 12, a TMA or bulk copy 15. -/
 def FanIn {ι W J : Type} [DecidableEq J] (D : Dataflow ι W) (ins : Fin D.n → J) (cls : J → K) (m : K → ℝ) :
     Prop :=
   ∀ j, (D.issued ins j : ℝ) ≤ m (cls j)
@@ -144,5 +171,36 @@ wrong every word that isn't fixed is in its round's share, and the rounds carry 
 def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
     (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+
+open Classical in
+/-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit with its fold clause, proved on paper; the rounds' equal shares).
+**The good units' words are fixed, and a unit not skipped whole has its words folded**: for a layer whose positions'
+writers read them (`DrawnLayer.WriterReads`) and whose cuts are no later than the protocol's commitments, under the
+run's modes `mode` (a unit is paid only if the run computed it, from the operands it committed, under its noise), on
+every accepted path:
+* the run's owned right fixed words per unit are at least the words `wt w j` of the good units over `S`. Unit `j` of
+  round `w` is good (`DrawnLayer.Good`, decision 119) when the run computed it and every unit that writes it a value
+  after the coin its noise reads (`DrawnLayer.Late`, transitively; under decision 107, the K-chunks before it in its
+  running sum), none of them skipped and guessed. Values committed before a unit's coin are fixed when its noise is
+  drawn, and a late value from a computed unit is the honest function of values fixed before it, so a good unit's
+  words are its own and none is adaptive (E1(c): an adaptive word lies below a committed value wrong for its own
+  derivation). A skipped unit whose check passes by luck (`PouwWarpCheck_v2` compares its receipt's checkpoints, not
+  its words) isn't credited: its words are guesses, and the luck term pays for it;
+* the fold clause: the run's folded words `folded x` per unit are at least the words of the units not skipped whole
+  over `S`: a paid unit folds its words, a folded unit its committed ones, and only a whole unit skips its fold.
+
+It reads neither the draw nor the proofs: the modes are the run's, and the proofs only vouch for the drawn units
+(`Accounting.Guarantees.TS.DrawnRightOff`). Under live coins a unit's coin is the live coin its noise reads; under
+seeded (Fiat–Shamir) coins it is read per query, on the circuit's cut layer: the layer's coins are the seed answers the
+prover queried, and a unit's coin the query its noise's seed answers (decision 128; it may stay on that layer because
+it reads no committed value). With `Σ wt = S·N_w` and the share covering every unit that isn't good
+(`DrawnLayer.Covers`), it gives `(1 − Σ_w d_w / S)·N_w` fixed words. It stays an assumption until the play's fixed and
+folded words are defined from the committed values (the adaptive model). -/
+def UnitFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype J] (P : Play (Paths C m × B) S K T L U)
+    (pf : DrawnLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
+    (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) : Prop :=
+  pf.WriterReads → ∀ x, P.accepts x →
+    (∑ w, ∑ j, if pf.Good mode x w j then wt w j else 0) / S ≤ (P.run x).fixed ∧
+      (∑ w, ∑ j, if mode x (w, j) = .whole then 0 else wt w j) / S ≤ folded x
 
 end Accounting.Assumptions.TS

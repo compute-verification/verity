@@ -2,7 +2,8 @@
 //! carries now, as no-ops, and the prover's own randomness.
 //!
 //! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it
-//! is used again, so no premise on a stream generator is left on any of them (Daniel, 9 Oct, decision 4). A test harness (feature
+//! is used again, so no premise on a stream generator is left on any of them (Daniel, 9 Oct, decision 4). Under the outer
+//! firewall the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
 //! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
 //! seed, verifier coins): no message byte depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on
 //! unseeded device state; the selftest `prover_is_deterministic` checks proofs and transcript byte for byte.
@@ -60,7 +61,7 @@ pub struct ProverSeed {
 impl ProverSeed {
     pub fn from_os() -> Self {
         let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed).expect("the OS random generator failed: refusing to prove without prover randomness");
+        os_fill(&mut seed);
         ProverSeed { seed, injected: false }
     }
 
@@ -110,7 +111,7 @@ pub fn coin_nonce(seed: &ProverSeed) -> [u8; 32] {
         r.set_stream(STREAM_COIN_NONCE);
         r.fill_bytes(&mut n);
     } else {
-        getrandom::fill(&mut n).expect("the OS random generator failed: refusing to send Hello without a fresh nonce");
+        os_fill(&mut n);
     }
     n
 }
@@ -200,9 +201,22 @@ impl LeafSalts {
     }
 }
 
-/// `out` read from the OS (`getrandom`), in [`OS_PIECE`]-byte pieces on rayon's threads.
+/// Where a proving build's draws read the OS's bytes when not from `getrandom` itself: under the outer firewall, the Lean
+/// server's `flock-firewall tap` (`firewall::lean_tap`, PROTOCOL.md §10.4), set once before the process's first draw.
+static OS_SOURCE: std::sync::OnceLock<std::sync::Mutex<Box<dyn FnMut(&mut [u8]) + Send>>> = std::sync::OnceLock::new();
+
+/// Makes `source` the OS bytes of every later draw of this process; `Err` when a source is already set.
+pub fn set_os_source(source: Box<dyn FnMut(&mut [u8]) + Send>) -> Result<(), String> {
+    OS_SOURCE.set(std::sync::Mutex::new(source)).map_err(|_| "the prover's OS source is already set".to_string())
+}
+
+/// `out` read from the OS: from [`set_os_source`]'s source if one is set, else `getrandom` in [`OS_PIECE`]-byte pieces on
+/// rayon's threads.
 fn os_fill(out: &mut [u8]) {
     use rayon::prelude::{ParallelIterator, ParallelSliceMut};
+    if let Some(s) = OS_SOURCE.get() {
+        return (s.lock().unwrap_or_else(std::sync::PoisonError::into_inner))(out);
+    }
     out.par_chunks_mut(OS_PIECE)
         .for_each(|p| getrandom::fill(p).expect("the OS random generator failed: refusing to prove without prover randomness"));
 }

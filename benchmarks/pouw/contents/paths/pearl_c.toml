@@ -1,0 +1,4 @@
+order = 120
+path = "`pearl_c/`"
+runs_on = "CPU"
+what = "Pearl-C's hashing format -h3 on the device (`hash_h3.cuh`, which `pearl_c_sm120.cu` includes), its host build (`hash_host.cpp`, which also builds `pearl_c_sm120/hash_fast.cuh`, and `simt_twin.py`, for byte tests without a GPU) and `fake_cuda.c`, the stand-in for libcuda that `run.py`'s dry run uses. BLAKE3 and the H100 -h1 bench are in `archive/pouw-blake3/`"

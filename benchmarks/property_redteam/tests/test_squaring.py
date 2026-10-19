@@ -7,6 +7,8 @@ import random
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
@@ -121,30 +123,56 @@ def test_the_seam_is_wrong_exactly_where_its_predicate_says():
     assert vals[c_top] == sum(v << (8 * m) for m, v in enumerate(f)) >> 1024
 
 
-def test_hole_b_squares_at_one_unit_a_limb_and_chains():
+def test_hole_b_is_refused_by_the_gather_hull():
     b = S.Builder()
     a = [b.inp(i, 0, 255) for i in range(S.N_LIMBS)]
     once, _ = S.holeb_square(b, a)
-    assert b.lean_units == b.fixed_units == 128
-    twice, _ = S.holeb_square(b, once)
-    assert b.lean_units == b.fixed_units == 256
-    assert S.proven(b.gates) == [] and S.operand_bits(128, b.gates)
-    assert all(b.gates[g].op.kind == "gather" and b.ivs[g] == (0, 255) for g in once)
+    assert b.fixed_units == 128
+    with pytest.raises(AssertionError, match="outside s32"):
+        S.holeb_square(b, once)  # the next squaring's columns, over the bytes' derived hulls, leave s32
+    b._append(S.Op("mma", fa=S.U8, fb=S.U8, k=1), (b.const(0), once[0], once[0]), S.S32_MIN, S.S32_MAX)
+    errs = S.proven(b.gates)
+    for g in once:
+        assert b.gates[g].op.kind == "gather" and (b.gates[g].lo, b.gates[g].hi) == (0, 255)
+        lo, hi = b.ivs[g]
+        assert lo < 0 or hi > 255
+        assert any(e.startswith(f"gate {g} (gather): derived") for e in errs)
+    assert any(f"(mma): operand {once[0]}" in e and "outside format (0, 255)" in e for e in errs)
+    assert not S.restricted(128, b.gates)
     rng = random.Random(20261018)
-    tried = 0
-    while tried < 3:
-        x = rng.randrange(1 << 1024)
-        vals, window, hold = b.evaluate(dict(enumerate(S.limbs(x))))
-        y = S.output_value([vals[o] for o in once])
-        if S.seam_fails(x) or S.seam_fails(y):
-            continue
-        tried += 1
-        assert window and hold and y % S.P == x * x % S.P
-        z = [vals[o] for o in twice]
-        assert all(0 <= v <= 255 for v in z) and S.output_value(z) % S.P == pow(x, 4, S.P)
-    bad = next(x for x in (rng.randrange(1 << 1024) for _ in range(1 << 15)) if S.seam_fails(x))
-    vals, window, hold = b.evaluate(dict(enumerate(S.limbs(bad))))
-    assert not hold and not 0 <= vals[once[S.SEAM_W - 1]] <= 255
+    x = next(x for x in (rng.randrange(1 << 1024) for _ in range(16)) if not S.seam_fails(x))
+    vals, window, hold = b.evaluate(dict(enumerate(S.limbs(x))))
+    assert window and hold and S.output_value([vals[o] for o in once]) % S.P == x * x % S.P
+
+
+def test_a_gather_derives_its_columns_hull_and_a_table_read_its_low_bits():
+    b = S.Builder()
+    i = b.inp(0, -1000, 1000)
+    col = [b.const(c) for c in (5, -3, 9)]
+    rng = b.gather(i, col)
+    low = b.gather(i, col, low=2)
+    assert (b.gates[rng].lo, b.gates[rng].hi) == b.ivs[rng] == (-3, 9)
+    assert b.ivs[low] == (-3, 9) and S.proven(b.gates) == []
+    for v in (-7, -1, 0, 1, 2, 3, 4, 6, 1000):
+        vals = b.evaluate({0: v})[0]
+        assert vals[rng] == ([5, -3, 9][max(v, 0)] if v < 3 else 0)  # `toNat` reads a negative index as 0
+        assert vals[low] == ([5, -3, 9, 0][v % 4])
+    assert b.fixed_units == S.budgeted(b.gates, fixed=True) == 2 + 2  # ⌈log₂ 4⌉ at range, n = 2 at low: two kinds
+    again = b.gather(i, [b.const(7)] * 3, low=2)
+    wider = b.gather(i, [b.const(1)] * 3, low=3)
+    assert S.units(b.gates, again, fixed=True) == 0 and S.units(b.gates, wider, fixed=True) == 1
+    assert b.fixed_units == S.budgeted(b.gates, fixed=True) == 5
+
+
+def test_no_one_pass_plan_beats_32_groups():
+    u8, s8 = S.column_intervals(S.U8), S.column_intervals(S.S8)
+    assert (S._iv_bits(u8[0]), S._iv_bits(u8[-1]), S._iv_bits(s8[0]), S._iv_bits(s8[-1])) == (30, 23, 29, 22)
+    n, plan = S.group_plan(u8)
+    assert n == 32 and sorted(p + d for g in plan for p, span in g for d in range(span)) == list(range(S.N_LIMBS))
+    assert S.group_plan(s8, True)[0] == 32
+    for cols, signed in ((u8, False), (s8, True)):
+        for start in range(0, S.N_LIMBS, 4 if signed else 1):
+            assert S.group_plan(cols, signed, start=start)[0] >= 32
 
 
 def test_the_seam_fails_on_about_2_to_the_minus_12_of_inputs():

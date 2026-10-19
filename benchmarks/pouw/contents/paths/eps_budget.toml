@@ -1,0 +1,4 @@
+order = 290
+path = "`eps_budget.py`"
+runs_on = "CPU"
+what = "Dither's skippable share of honest work as served, for each design of the registry (`machine_model/data/designs/`): Llama-3.1-8B and 70B, 2K–32K, prefill and decode, by int8 products and by time, per component, with γ and decode's zero-weight gap; P·V's block size for the designs whose P·V is `pv`; and each design's ε_skip, the number its `[skip]` records (SKIP, note:20261017T0340Z-draft-skip)"

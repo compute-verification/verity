@@ -35,8 +35,9 @@ class TpCollective:
     `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`.
     [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
     `AllGather_v1{WORLD,N}` (`b1_tp2.all_reduce` / `all_gather`); the `parts` operand is `Array<world, Array<N, bf16>>` in rank order and
-    the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank)).  A world-8 all-reduce
-    on a captured route is the Build's one flat call per request (`_per_request`), the parts of one call (step, k)."""
+    the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank)).  An all-reduce on a
+    route `tp_allreduce.CAPTURED` covers at the capture's settings, world, GPU and transport (`covered_route`) binds the Build's routed
+    Definition instead: one flat call per request (`_per_request`), the parts of one call (step, k)."""
 
     name: str = "tp.collective"
 
@@ -125,26 +126,36 @@ def request_spans(attribution) -> list[tuple[int, int]]:
 
 def allreduce_settings(header) -> dict | None:
     """The all-reduce switches the capture ran under: its header's ``allreduce_settings`` when recorded, else the rank's recorded
-    ``parallel_config.disable_custom_all_reduce`` (``notes.tp2.facts``) with the manifest's engine flags (`tp_allreduce.settings_of`);
-    None when the capture recorded neither."""
+    ``parallel_config.disable_custom_all_reduce`` (``notes.tp2.facts``) with the rank's NCCL environment (``nccl_env``) and the
+    manifest's engine flags (`tp_allreduce.settings_of`); None when the capture recorded neither."""
     notes = getattr(header, "notes", None) or {}
     if notes.get("allreduce_settings"):
         return dict(notes["allreduce_settings"])
-    pc = (((notes.get("tp2") or {}).get("facts") or {}).get("parallel_config") or {})
+    facts = (notes.get("tp2") or {}).get("facts") or {}
+    pc = facts.get("parallel_config") or {}
     if not isinstance(pc.get("disable_custom_all_reduce"), bool):
         return None
-    return T.settings_of(pc["disable_custom_all_reduce"], (getattr(header, "profile", None) or {}).get("engine_flags") or {})
+    env = {**(facts.get("nccl_env") or {}), **((getattr(header, "profile", None) or {}).get("engine_flags") or {})}
+    return T.settings_of(pc["disable_custom_all_reduce"], env)
+
+
+def capture_device(header) -> tuple[str, int] | None:
+    """The capture's GPU as `tp_allreduce.device_of` names it (``RunHeader.profile["gpu"]``), or None when it recorded none."""
+    gpu = (getattr(header, "profile", None) or {}).get("gpu") or {}
+    cc, sms = gpu.get("compute_capability", gpu.get("cc")), gpu.get("multi_processor_count", gpu.get("sms"))
+    return None if cc is None or sms is None else T.device_of(cc, sms)
 
 
 def covered_route(header, world: int, M: int, N: int) -> T.Captured | None:
-    """The captured route vLLM takes for one communicator all-reduce of [M,N] at the capture's settings, which the Build binds as one
-    call per request (`vllm_bindings.AllReduceRule`, `tp_allreduce.route_binding`), or None when the capture's settings or
-    `tp_allreduce.covered` name no route."""
+    """The captured route vLLM takes for one communicator all-reduce of [M,N] at the capture's settings, world, GPU and NCCL transport,
+    which the Build binds as one call per request (`vllm_bindings.AllReduceRule`, `tp_allreduce.route_binding`), or None when the
+    capture's settings or `tp_allreduce.covered` name no route."""
     settings = allreduce_settings(header)
-    if settings is None or world != 8:
+    if settings is None:
         return None
     setting, route = T.served_route(settings, M, N)
-    return T.covered(setting, N, route, M) if setting is not None else None
+    return (T.covered(setting, N, route, M, world=world, device=capture_device(header), transport=settings.get("nccl_transport"))
+            if setting is not None else None)
 
 
 FUSED_AR_NORM_OP = "vllm.flashinfer_trtllm_fused_allreduce_norm"

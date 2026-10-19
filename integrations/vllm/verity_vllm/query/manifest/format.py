@@ -49,6 +49,12 @@ TP_PARTIAL_MEMBER = "part_rank{rank}"
 
 TP_SHARD_MEMBER = "shard_rank{rank}"
 
+#: A served Build's step boundary (`acquire.served`, `served_compiled_source`, `served_check`): piece 0's token inputs, the logits and the
+#: sampled ids; and the one family of its identities (every value of every engine step).
+SERVED_IDS, SERVED_POSITIONS = "c00.input/ids", "c00.input/positions"
+SERVED_LOGITS, SERVED_SAMPLED = "logits_processor", "runner.sampler/sampled_token_ids"
+SERVED_FAMILY = "served_kernel_values"
+
 _ROW_RE = re.compile(r"\[(\d+)\]$")
 
 
@@ -398,6 +404,13 @@ STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 #: parameter (R15 static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
 
+#: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
+#: by `MoeAlignRanks_v1` only.  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
+#: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
+#: committed ranks rank each expert's pairs), and the manifest names no identity for it.
+SCHEDULE_PARAM = "schedule"
+SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
+
 
 def has_splits_param(params) -> bool:
     return any(str(n) == SPLITS_PARAM for n, _t in (params or []))
@@ -563,20 +576,29 @@ def manifest_digest(identities: list[dict[str, Any]]) -> str:
     return h.hexdigest()
 
 
+def unreturned_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """A manifest's UNRETURNED outputs (`required.Population.unreturned`: no Call reads them, the Program does not return them, no policy
+    requires them): identity rows outside `identities`, with their own digest, so what the word check skipped is auditable."""
+    rows = sorted(rows, key=row_key)
+    return {"unreturned": rows, "unreturned_digest": manifest_digest(rows)}
+
+
 def programs_for(fx: dict[str, Any], programs_root: str) -> dict[str, Any]:
     """The request Program per declared request (build-global / verify), loaded: see `program_dirs_for` for the lookup."""
     return {rid: load_program(d) for rid, d in program_dirs_for(fx, programs_root).items()}
 
 
 def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
-    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>` under programs_root, else any
-    build_request*/result.json declaring exactly (LP, T) (the row's default request Program); never a near shape.  [R16 reqval] the
-    traversal engine streams these (rows never all in memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
+    """The request Program DIR per declared request: `*LP<prompt_len>_T<max_tokens-1>[_C<cached>]` under programs_root, else any
+    build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
+    request's Program for a warm one (`prefix_plan.request_shape`).  [R16 reqval] the traversal engine streams these (rows never all in
+    memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
+    from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
-        lp, t = int(r["prompt_len"]), int(r["max_tokens"]) - 1
-        pat = os.path.join(programs_root, f"*LP{lp}_T{t}")
+        sh = PP.request_shape(r)
+        pat = os.path.join(programs_root, f"*{PP.shape_name(sh)}")
         hits = sorted(glob.glob(pat))
         if not hits:
             for cand in sorted(glob.glob(os.path.join(programs_root, "build_request*"))):
@@ -586,10 +608,10 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                         res = json.load(open(rj))
                     except Exception:  # noqa: BLE001
                         continue
-                    if res.get("ok") and int(res.get("LP", -1)) == lp and int(res.get("T", -1)) == t:
+                    if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
                         break
         if not hits:
-            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring LP={lp} T={t})")
+            raise SystemExit(f"no request Program for {r['request_id']} at {pat} (nor a build_request*/result.json declaring {PP.shape_key(sh)})")
         progs[r["request_id"]] = hits[0]
     return progs

@@ -8,15 +8,15 @@ circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean defi
 
 A gate's operands are `layout.Circuit.gate(i).operands`. It uses all of them, except that a primitive with an
 `evaluate_lazy` (a gather: its index and the word it selects) uses the operands its evaluator fetches, which takes the
-run's values (`inputs`, as `evaluate.py`'s transcript holds them). Without them, its array operands are candidates
-(`upper`): `reads(t)` refuses a step whose candidates from before `t` aren't otherwise read, since an upper bound would
-over-credit the audit, and `reads_upper(t)` counts them. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t`
-the gates of the steps before `t`, and `reads_upper(t)` is `in(S_t)` less the run inputs that arrive at `t`;
+run's values (`inputs`, as `evaluate.py`'s transcript holds them). Without them `requirement` refuses a gather, and
+`upper_bound` counts its whole column: an upper bound on what a step reads, which over-counts reads, so it is never
+credited as the requirement. `live(t)` is `boundary.py`'s `out(S_<t) ∩ in(S_≥t)` for `S_<t` the gates of the steps
+before `t`, and `upper_bound`'s `reads(t)` is `in(S_t)` less the run inputs that arrive at `t`;
 `tests/test_requirement.py` holds both to `boundary.out_gates` and `boundary.in_gates`.
 
 `execution` is the gate pass: `Accounting.Requirement`'s `Wiring` and `Execution` gate by gate (an `Execution`: widths,
-the registered values, each produced value's engine step, each gate's operands, those it uses and its candidates, the
-run's values), and `Requirement.of` derives each value's birth and last read from it. Placed on devices (`leaf`, and
+the registered values, each produced value's engine step, each gate's operands and those it uses, the run's values and
+inputs), and `Requirement.of` derives each value's birth and last read from it. Placed on devices (`leaf`, and
 `ticks`: the tick at which each device begins each engine step), an `Execution` also has `Placement`'s regions, ingress
 and credits (`region`, `ingress`, `credits`). `verity/core/primitives/requirement/` holds `Requirement.of`, `pack`,
 `credited`, `credited_reads`, `store_matches`, `plan_matches` and the placed functions to the Lean definitions on
@@ -24,7 +24,9 @@ and credits (`region`, `ingress`, `credits`). `verity/core/primitives/requiremen
 
 `from_census` is the same requirement at any scale, from a census (`census.census`) in place of the gates: a value is a
 census value (a run of a root node's output leaves read alike), and a schedule's steps are whole root Calls. A census
-holds no run values, so its candidates stay unresolved. `tests/test_requirement.py` holds it to `requirement` gate by gate.
+holds no run values, so a gather's candidates (the census's `selects`) stay unresolved (`upper`): `reads(t)` refuses a
+step whose candidates from before `t` aren't otherwise read, since an upper bound would over-credit the audit, and
+`reads_upper(t)` counts them. `tests/test_requirement.py` holds it to `upper_bound` gate by gate.
 
 A step is always an engine step, never a device tick: the ticks a step spans on each device are the placement's.
 
@@ -56,7 +58,6 @@ from typing import Mapping, Sequence
 from .census import SCHEMA as CENSUS, step_of as census_step
 from .layout import resolve
 from .program import REGISTRATION, Program, is_input
-from .types import Value
 
 #: the deployed store's block: 4,096 bytes
 BLOCK_BITS = 4096 * 8
@@ -106,8 +107,7 @@ class Schedule:
 class Execution:
     """A circuit's wiring and one execution of it, value by value, as `Accounting.Requirement`'s `Wiring` and `Execution`
     hold them: each value's width, the registered values, the engine step of each other value the execution produces (a
-    run input's is its arrival), the operands of each gate it runs (`ops`), those the gate uses (`uses`) and, a gather
-    whose selection the run's values didn't resolve, the operands it may select (`upper`, its candidates), the run's
+    run input's is its arrival), the operands of each gate it runs (`ops`) and those the gate uses (`uses`), the run's
     values where known, and the run's inputs (`inputs`: an `Input` not bound by registration, a request's tokens). It
     produces the registered values and those with a step (`ran`), and computes those but the registered values and the
     run's inputs (`computed`)."""
@@ -118,7 +118,6 @@ class Execution:
     ops: Mapping[int, tuple[int, ...]]
     uses: Mapping[int, frozenset[int]]
     values: Mapping[int, int]
-    upper: Mapping[int, frozenset[int]] = field(default_factory=dict)
     inputs: frozenset[int] = frozenset()
 
     @property
@@ -138,10 +137,10 @@ class Execution:
         return all(v < g for g, vs in self.ops.items() for v in vs)
 
     def follows(self) -> bool:
-        """`Execution.Follows`: each gate the execution runs uses (or may select) only its operands, which it produced too,
-        at no later step unless registered."""
+        """`Execution.Follows`: each gate the execution runs uses only its operands, which it produced too, at no later step
+        unless registered."""
         ran = self.ran
-        return all(self.uses.get(g, frozenset()) | self.upper.get(g, frozenset()) <= frozenset(self.ops.get(g, ()))
+        return all(self.uses.get(g, frozenset()) <= frozenset(self.ops.get(g, ()))
                    and all(v in ran and (v in self.registered or self.step_of(v) <= self.step_of(g)) for v in self.ops.get(g, ()))
                    for g in ran)
 
@@ -206,7 +205,7 @@ class Requirement:
     uses: Mapping[int, frozenset[int]]
     steps: int
     values: Mapping[int, int]
-    #: per step, the candidates of its lazy primitives whose selection the run's values didn't resolve
+    #: per step, the candidates of its gathers whose selection no run values resolve (`from_census`'s)
     upper: Mapping[int, frozenset[int]] = field(default_factory=dict)
 
     @classmethod
@@ -218,17 +217,14 @@ class Requirement:
         born = {v: -1 if v in ex.registered else ex.step[v] for v in ex.ran}
         last: dict[int, int] = {}
         uses: dict[int, set[int]] = {}
-        upper: dict[int, set[int]] = {}
         for g in ex.ran:
             s = ex.step_of(g)
             for v in ex.ops.get(g, ()):
                 last[v] = max(last.get(v, s), s)
             if ex.uses.get(g):
                 uses.setdefault(s, set()).update(ex.uses[g])
-            if ex.upper.get(g):
-                upper.setdefault(s, set()).update(ex.upper[g])
         return cls(ex.width, ex.registered, born, last, {s: frozenset(u) for s, u in uses.items()},
-                   1 + max(ex.step.values(), default=-1), ex.values, {s: frozenset(u) for s, u in upper.items()})
+                   1 + max(ex.step.values(), default=-1), ex.values)
 
     def live(self, t: int) -> frozenset[int]:
         return frozenset(v for v, b in self.born.items() if b < t <= self.last.get(v, -1))
@@ -276,10 +272,11 @@ class Requirement:
                 "registered_bits": self.bits(v for v in self.registered if v in self.last)}
 
 
-def execution(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None) -> Execution:
+def execution(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None, *,
+              whole_columns: bool = False) -> Execution:
     """`program` run on `schedule`, gate by gate. `inputs`: each input gate's value, for the operands a gather uses (and
-    the values a store's payload carries). Without them a gather uses its scalar operands and its array operands are its
-    candidates."""
+    the values a store's payload carries). Without them a gather is refused, unless `whole_columns` counts its every
+    operand as used (`upper_bound`)."""
     circuit = program.circuit
     width: dict[int, int] = {}
     registered: set[int] = set()
@@ -287,7 +284,6 @@ def execution(program: Program, schedule: Schedule, inputs: Mapping[int, int] | 
     arrival: dict[int, int] = {}
     ops: dict[int, tuple[int, ...]] = {}
     uses: dict[int, frozenset[int]] = {}
-    upper: dict[int, frozenset[int]] = {}
     values: dict[int, int] = dict(inputs or {})
     for i in range(circuit.size):
         g = circuit.gate(i)
@@ -304,28 +300,31 @@ def execution(program: Program, schedule: Schedule, inputs: Mapping[int, int] | 
             if v < program.input_gates and v not in registered:
                 arrival[v] = min(arrival.get(v, s), s)
         lazy = getattr(g.prim, "evaluate_lazy", None)
-        if lazy is not None and inputs is None:
-            used, candidates, at = set(), set(), 0
-            for _, t in g.prim.params:
-                (used if isinstance(t, Value) else candidates).update(g.operands[at:at + t.leaves])
-                at += t.leaves
-            uses[i], upper[i] = frozenset(used), frozenset(candidates)
-        elif lazy is not None:
-            fetched: set[int] = set()
-            values[i] = lazy(lambda j, _o=g.operands: (fetched.add(_o[j]), values[_o[j]])[1])
-            uses[i] = frozenset(fetched)
-        else:
+        if lazy is not None and inputs is None and not whole_columns:
+            raise ValueError(f"gate {i} is a gather: it uses only the operands its evaluator fetches, which takes the run's "
+                             f"inputs; pass them, or take `upper_bound`, which counts its whole column")
+        if inputs is None or lazy is None:
             uses[i] = frozenset(g.operands)
             if inputs is not None:
                 values[i] = g.prim.evaluate(*(values[o] for o in g.operands))
+        else:
+            used: set[int] = set()
+            values[i] = lazy(lambda j, _o=g.operands: (used.add(_o[j]), values[_o[j]])[1])
+            uses[i] = frozenset(used)
     return Execution(width, frozenset(registered), {**step, **arrival}, ops, uses, values if inputs is not None else {},
-                     upper, frozenset(arrival))
+                     inputs=frozenset(arrival))
 
 
 def requirement(program: Program, schedule: Schedule, inputs: Mapping[int, int] | None = None) -> Requirement:
-    """The requirement of `program` run on `schedule`. `inputs`: each input gate's value, for the operands a gather uses;
-    without them a gather's array operands are candidates, and `reads` refuses the steps they leave open."""
+    """The requirement of `program` run on `schedule`. `inputs`: each input gate's value; a Program with a gather needs
+    them."""
     return Requirement.of(execution(program, schedule, inputs))
+
+
+def upper_bound(program: Program, schedule: Schedule) -> Requirement:
+    """An upper bound on `program`'s requirement on `schedule` without the run's inputs: a gather uses its whole column.
+    Its reads over-count a step's, so it is never credited as the requirement."""
+    return Requirement.of(execution(program, schedule, whole_columns=True))
 
 
 def census_offsets(c: Mapping) -> list[int]:

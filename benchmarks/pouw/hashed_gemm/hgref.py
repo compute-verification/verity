@@ -1,7 +1,7 @@
 """hgemm.cu's gate judged by the repository's own functions: every level of both trees of every call, by
 ``verity.ml.commitments`` (commit_gpu's reference.py: ``permute``, ``prf_salt``, ``params``), and sampled tiles' windowed
 receipts by ``segment.PouwSegCheck_v2{16, FOLD}``'s own fold (``fold_keys``, ``fold_absorb``, ``fold_final`` of
-segment_e2e.py, cursor/e2e-slice-ea24@3341b0f46's verity/core/protocols/pouw/circuit/segment.py, pinned by its sha256).
+`verity.core.protocols.pouw.circuit.segment`, which `PouwSegCheck_v3` checks the same receipts with).
 
 Call c's trees, each a ``CommitmentDomain(identity_digest_sha512(TAG, {"tree": T, "m", "n", "k", "leaves"}), -1,
 RangeIndexedDomain(0, leaves), hash="sha512")`` of hm96-sha512/row/v2 rows of 16,384 bits:
@@ -19,8 +19,6 @@ Run from the source tree's root with ``PYTHONPATH=.``.
 """
 from __future__ import annotations
 
-import hashlib
-import importlib.util
 import json
 import multiprocessing as mp
 import os
@@ -35,21 +33,13 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "commit_gpu"))
 import reference as cref  # noqa: E402
 
+from verity.core.protocols.pouw.circuit import segment as SG  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
 from verity.ml.commitments.merkle import Commitment, CommitmentDomain, Opening, tree_levels, verify_opening  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
-
-SEG_SHA256 = "4aff8b61dcacf1cf32f11c8ec4e4bd19573fc84e68267a34ac69e8f6f10f28f7"
-_seg_path = HERE / "segment_e2e.py"
-if hashlib.sha256(_seg_path.read_bytes()).hexdigest() != SEG_SHA256:
-    sys.exit(f"{_seg_path} is not segment.py of cursor/e2e-slice-ea24@3341b0f46 (sha256 {SEG_SHA256}): restore it, don't edit it")
-_spec = importlib.util.spec_from_file_location("verity.core.protocols.pouw.circuit.segment_e2e", _seg_path)
-SG = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = SG
-_spec.loader.exec_module(SG)
 
 TAG = "verity/hashed-gemm/v1"
 ROW, ROW_BITS, XR, S, NCT = 2048, 16384, 64, 16, 512

@@ -83,10 +83,7 @@ def test_the_decoders_requirement(run):
     assert req.to_json() == {"steps": 3, "live_bits": [320, 384, 416], "read_bits": [128, 192, 224], "registered_bits": 320}
     assert sorted(req.live(2) - req.registered) == [14, 19, 21]  # k_0, k_1 and tok_2
     assert sorted(req.reads(1)) == [3, 7, 9, 10, 14, 15]  # emb[0][2], emb[1][2], wk, k_0, tok_1
-    structural = R.requirement(program, schedule)
-    assert structural.to_json()["read_bits_upper"] == [320, 384, 416]
-    with pytest.raises(ValueError, match="reads_upper"):
-        structural.reads(0)
+    assert R.upper_bound(program, schedule).to_json()["read_bits"] == [320, 384, 416]
     assert (req.held(0, 3), req.read(0, 3)) == (1120, 544)
 
 
@@ -96,10 +93,10 @@ def _part(program: Program, nodes) -> Part:
 
 
 def test_live_and_reads_are_the_boundary(run):
-    """live(t) = out(S_<t) ∩ in(S_≥t) with the inputs there before t, and the structural reads_upper(t) = in(S_t) less the
-    run inputs that arrive at t, by `boundary.out_gates` and `boundary.in_gates` over the steps' root Calls."""
+    """live(t) = out(S_<t) ∩ in(S_≥t) with the inputs there before t, and the upper bound's reads(t) = in(S_t) less the run
+    inputs that arrive at t, by `boundary.out_gates` and `boundary.in_gates` over the steps' root Calls."""
     program, starts, schedule, _ = run
-    req = R.requirement(program, schedule)
+    req = R.upper_bound(program, schedule)
     calls = [k for k, nd in enumerate(program.root.body.nodes) if not is_input(nd.fn)]
     by_step = [calls[a:b] for a, b in zip(starts, starts[1:] + [len(calls)])]
     inputs = range(program.input_gates)
@@ -107,7 +104,7 @@ def test_live_and_reads_are_the_boundary(run):
         later = boundary.in_gates(_part(program, chain(*by_step[t:])))
         out = boundary.out_gates(_part(program, chain(*by_step[:t]))) if t else frozenset()
         assert req.live(t) == (out & later) | {v for v in later if v in inputs and req.born[v] < t}
-        assert req.reads_upper(t) == {v for v in boundary.in_gates(_part(program, by_step[t])) if req.born[v] < t}
+        assert req.reads(t) == {v for v in boundary.in_gates(_part(program, by_step[t])) if req.born[v] < t}
 
 
 def _subsets(xs):
@@ -196,31 +193,6 @@ def test_past_the_executed_prefix_nothing_runs(run):
     assert not {19, 21} & (req.live(1) | req.live(2))
 
 
-def test_a_gather_without_the_runs_inputs_leaves_candidates(run):
-    """Without the run's inputs the gathers' selected words are unknown: their columns are candidates, `reads` refuses the
-    steps they leave open, and `reads_upper` counts them, more reads than any run makes."""
-    program, _, schedule, req = run
-    structural = R.requirement(program, schedule)
-    with pytest.raises(ValueError, match="reads_upper"):
-        structural.reads(1)
-    assert structural.live(1) == req.live(1) and req.reads(1) < structural.reads_upper(1)
-
-
-def test_an_execution_that_does_not_follow_its_wiring_is_refused(run):
-    """`Requirement.of` takes only an execution that follows its wiring (`Execution.Follows`): a gate whose operand is
-    produced at a later step, or that uses or may select a value that isn't its operand, is refused."""
-    program, _, schedule, _ = run
-    ex = R.execution(program, schedule, _inputs())
-    assert ex.follows() and R.Requirement.of(ex) == R.requirement(program, schedule, _inputs())
-    late = R.Execution(ex.width, ex.registered, {**ex.step, 14: 2}, ex.ops, ex.uses, ex.values)
-    foreign = R.Execution(ex.width, ex.registered, ex.step, ex.ops, {**ex.uses, 14: ex.uses[14] | {21}}, ex.values)
-    stray = R.Execution(ex.width, ex.registered, ex.step, ex.ops, ex.uses, ex.values, {14: frozenset({21})})
-    for bad in (late, foreign, stray):
-        assert not bad.follows()
-        with pytest.raises(ValueError, match="Follows"):
-            R.Requirement.of(bad)
-
-
 def test_a_placement_credits_the_gates_the_execution_computes(run):
     """The run's input, the token, is an input gate wherever it is placed: all on one device over the whole run, the
     credits at each value's width are the computed gates', 576 bits, not 608 with the token's. The wiring is topological,
@@ -250,20 +222,22 @@ def _span(req: R.Requirement, v: int) -> tuple:
 
 
 def _census_path(program: Program, ends: list[int]) -> R.Requirement:
-    """`from_census` is `requirement` without run values: each census value's gates have its birth and last read, and every
-    step's live gates, bounded reads and resolution are its values'."""
+    """`from_census` is `upper_bound` at the census's grain: each census value's gates have its birth and last read, and
+    every step's live gates and bounded reads are its values'."""
     c = census(program, ends)
     schedule = R.Schedule.by_calls(program, _starts(program, ends))
-    by_census, by_gates = R.from_census(c, schedule), R.requirement(program, schedule)
+    by_census, by_gates = R.from_census(c, schedule), R.upper_bound(program, schedule)
     gates = lambda vs: R.census_gates(program, c, vs)  # noqa: E731
     assert R.census_offsets(c) == list(program.root.body.offsets) and R.from_census(c) == by_census
     assert gates(by_census.registered) == by_gates.registered
     for x in range(len(c["values"]["producer"])):
         assert {_span(by_gates, g) for g in gates([x])} <= {_span(by_census, x)}
     for t in range(by_gates.steps):
-        assert gates(by_census.live(t)) == by_gates.live(t) and gates(by_census.reads_upper(t)) == by_gates.reads_upper(t)
-        assert by_census.resolved(t) == by_gates.resolved(t)
-    assert by_census.to_json() == by_gates.to_json()
+        assert gates(by_census.live(t)) == by_gates.live(t) and gates(by_census.reads_upper(t)) == by_gates.reads(t)
+    want = by_gates.to_json()
+    if not all(by_census.resolved(t) for t in range(by_census.steps)):
+        want["read_bits_upper"] = want.pop("read_bits")
+    assert by_census.to_json() == want
     return by_census
 
 
@@ -311,3 +285,27 @@ def test_a_split_call_another_schema_and_an_approximate_census_are_refused():
         R.from_census(c | {"schema": "verity/census/v0"})
     with pytest.raises(ValueError, match="approximate"):
         R.from_census(c | {"approximate": True})
+
+
+def test_a_gather_needs_the_runs_inputs(run):
+    """Without the run's inputs the gathers' selected words are unknown: `requirement` refuses them, and `upper_bound`
+    counts each gather's whole column, more reads than any run makes."""
+    program, _, schedule, req = run
+    with pytest.raises(ValueError, match="gather"):
+        R.requirement(program, schedule)
+    bound = R.upper_bound(program, schedule)
+    assert bound.live(1) == req.live(1) and req.reads(1) < bound.reads(1)
+
+
+def test_an_execution_that_does_not_follow_its_wiring_is_refused(run):
+    """`Requirement.of` takes only an execution that follows its wiring (`Execution.Follows`): a gate whose operand is
+    produced at a later step, or that uses a value that isn't its operand, is refused."""
+    program, _, schedule, _ = run
+    ex = R.execution(program, schedule, _inputs())
+    assert ex.follows() and R.Requirement.of(ex) == R.requirement(program, schedule, _inputs())
+    late = R.Execution(ex.width, ex.registered, {**ex.step, 14: 2}, ex.ops, ex.uses, ex.values)
+    foreign = R.Execution(ex.width, ex.registered, ex.step, ex.ops, {**ex.uses, 14: ex.uses[14] | {21}}, ex.values)
+    for bad in (late, foreign):
+        assert not bad.follows()
+        with pytest.raises(ValueError, match="Follows"):
+            R.Requirement.of(bad)

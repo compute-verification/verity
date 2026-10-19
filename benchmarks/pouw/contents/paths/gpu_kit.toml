@@ -1,0 +1,4 @@
+order = 20
+path = "`gpu_kit/`"
+runs_on = "RTX PRO 6000"
+what = "The timing protocol for a standalone `.cu` bench, as code: `bench.cuh` (0xA5 poisoning and its no-write control, interleaved items with NVML clocks, the dump format), `sass_gate.py` (the timed loop's opcode counts, no spills, a live sink, bank conflicts) and `compare.py` (the twin compare)"

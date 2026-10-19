@@ -1,0 +1,18 @@
+# Drive's flags of record: `research queue drive --config tools/verity/check/drive.toml` reads this file at `main` in the queue's
+# clone on every tick (`DriveFlags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
+# restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
+
+# the machines train.sh launches each train's check on (a machine, or `auto`)
+on = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2"]
+# the most checks of `next` running at once
+max_running = 4
+# PRs per checked train on `next`
+train_size = 15
+# ready marks written before this don't count: drive's cutoff, 12 Oct
+marked_after = "2026-10-12T06:00:00Z"
+# steps a train lands without, still running; one that then fails reverts the landing (the Lean check's are never deferred)
+defer = ["circuit-check", "pytest"]
+# land a train whose Lean check passed by committing the lock records it regenerated on top (CI-64)
+regenerate_locks = true
+# ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix the next train needs)
+first = []

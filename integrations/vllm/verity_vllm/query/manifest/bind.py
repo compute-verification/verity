@@ -3,9 +3,10 @@ value are bound to that row by structure.  Nothing reconciles a tap's spelling w
 
 IDENTITY.  The manifest of record (`verity_vllm.query.required`) spells each required Value as (op_path, output_member, invocation) at
 an engine step on a rank, from the Program and its correspondence alone: op_path is the producing Call's owning module (a collective
-site's enclosing module at invocation k, `<module>/<fx node>` for a Value two Calls of one module body exchange); output_member is the
-Definition's port name when it returns several (`<hint>.<port>` when the Build recorded a hint, which names the Call), else the recorded
-hint, else `out`.  The protocol's encodings are identity format, each one constant the manifest and the committing tap share:
+site's enclosing module at invocation k, `<module>/<fx node>` for a Value two Calls of one module body exchange, and for each fx node's
+Value when two fx nodes of the module produce a member of one name at the step); output_member is the Definition's port name when it
+returns several (`<hint>.<port>` when the Build recorded a hint, which names the Call), else the recorded hint, else `out`.  The
+protocol's encodings are identity format, each one constant the manifest and the committing tap share:
 `part_rank<r>` / `shard_rank<r>` (`format.TP_PARTIAL_MEMBER`), a norm site's `all_reduce` (`collective_names.NORM_SITE_MEMBER`), the
 token ids `<consumer>/in`, `runner.sampler/sampled_token_ids`, the kernel streams `fa2.m1/L<k>/<geometry>` and `moe/L<k>/<plane>`.  A
 row also carries its Call's `spec`, `port` and `position` (Program order), outside the manifest digest.
@@ -255,7 +256,9 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}, each
     name bound by the manifest's binder (`Binder`, with the committing sources' declared `ports`).  Reports missing
     identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence is bind's separate
-    check."""
+    check.  A kernel-stream tensor (`HIDDEN_FAMILIES`) the binder leaves unbound is still committed under its own name, as the binding
+    map keeps it: a B>1 batch-level hidden row (request `*`) names the padded whole-step geometry, and is covered op-level by the
+    per-sequence planes (`s<i>/...`) or the whole launch the tap committed under another spelling."""
     if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
         um = manifest.get("unmodelled") or {}
         n = len(manifest.get("identities") or [])
@@ -268,7 +271,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     extras = 0
     for step, metas in layouts.items():
         for m, (op, member, inv, how) in zip(metas, binder.bind(int(step), [m["name"] for m in metas])):
-            if how == "unbound":
+            if how == "unbound" and not op.startswith(HIDDEN_FAMILIES):
                 extras += 1
                 continue
             numel = m.get("numel")

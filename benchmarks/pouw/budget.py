@@ -165,8 +165,8 @@ FAMILIES = (
 def sweep(out: Path = FILL_DATA) -> dict:
     """Regenerate `budget_fill.json` from the machine model (on a tree whose machine model has every family's design and
     vector; VF3r-16 is on next since 9c9567c396). Each point is one `eps` LP, ≈ 0.3 s."""
-    from verity_machine_model import cli
     from verity_machine_model import eps as E
+    from verity_machine_model.commands import eps as cmd
     from verity_machine_model.model import DATA, device
 
     fams = {}
@@ -174,7 +174,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
         data = DATA if f.device == "sm_120" else device(f.device)
         pi = E.machine(f.vector, data)
         base = E.design(f.design_name, data)
-        flat0 = cli._eps_record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]
+        flat0 = cmd._eps_record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]
         d0 = base
         for x, mix in f.pre_fill:
             d0 = d0.with_fill(x, dict(mix))
@@ -182,7 +182,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
         for name, mix in FILL_MIXES.items():
             pts = []
             for y in FILL_GRID:
-                r = cli._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
+                r = cmd._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
                                     "full")
                 flat = r["baseline"]["cycles_per_mma"]
                 pts.append([y, round(r["gamma"], 5), round(r["terms"]["skip"] * flat0 / flat, 7),
@@ -208,10 +208,11 @@ def _cut_label(cut: dict) -> str:
 
 def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     """Regenerate `budget_sampling.json` from OPT2's planner on `tree`, a checkout with
-    `benchmarks/sampling_plan/int8_llama.py` (cursor/sampling-optimizer-c7a9 at 470cea0c79 or later, whose `for_budget`
-    bisects). Per regime its frontier at δ_s, and at each spend of SPEND_GRID the least-ε plan within it (`at_budget`,
-    the zero-work templates included): ε_sample, the draws a week, the share of the plan's cost that grows with a unit's
-    ANDs (all but the sessions' fixed cost) and the linears' cut. ≈ 2 s a regime."""
+    `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total (ASK-25), run with `scheme=None` so a spend
+    is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
+    each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
+    draws a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
+    linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
     sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
     import int8_llama as P
@@ -221,14 +222,14 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     v = {k: i.value for k, i in I.items()}
     regimes = {}
     for name, (commit, statement) in REGIMES.items():
-        _, w, costs, objective, cands, alts, _, plans = P.run(v, commit=commit, statement=statement)
+        _, w, costs, objective, cands, alts, _, plans = P.run(v, commit=commit, statement=statement, scheme=None)
         extra = P.zero_work_cost(costs, v)
         pts = []
         for bs in SPEND_GRID:
-            p = P.at_budget(v["commit_floor"] + bs, plans, cands, costs, objective, w, v, extra)
+            p = P.at_budget(bs, plans, cands, costs, objective, w, extra)
             if p is None:
                 continue
-            s = P.summarize(p, w, v, extra, alts)
+            s = P.summarize(p, w, extra, alts)
             sessions = sum(math.ceil(n / s["statement"][t]) for t, n in s["draws"].items())
             total = p.cost["total"] + extra
             pts.append([bs, float(f"{s['eps']:.7g}"), sum(s["draws"].values()),

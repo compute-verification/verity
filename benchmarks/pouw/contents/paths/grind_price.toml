@@ -1,0 +1,4 @@
+order = 317
+path = "`grind_price.py`"
+runs_on = "CPU"
+what = "ε_grind, hashed seeds' grinding premium (`Accounting.Guarantees.TS.GrindPremiumAt`), per family, model, regime and kind at T = 2^80 and 2^128: at the h1tile template's θ (`TileLuck`, `TemplateMoment`: κ = 4, r·θ = 1/256), at its numeric optimum, at fixed h, and for deployed H1 attention's floor; the κ each family's ε_luck makes best, decode's seed groups, the cover that brings each kind under 0.1%, and the non-levers (GRIND, note:20261018T0700Z-draft-grind)"

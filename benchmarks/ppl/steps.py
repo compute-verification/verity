@@ -180,7 +180,7 @@ def _check_smooth(p):
         raise ValueError("smooth.alpha is in [0, 1]")
 
 
-@linear_step("smooth", phase="real", calib=True, check=_check_smooth)
+@linear_step("smooth", phase="real", calib=True, check=_check_smooth, source="D4-70B")
 def smooth(mm, nxt, *, alpha: float, kv_shared: bool = False):
     """SmoothQuant before the rotation: x / m and W m per input channel, m from the calibration windows' channel maxima
     (1 / m folds into the RMSNorm weights before q/k/v and gate/up, and into up_proj's rows before down_proj).
@@ -190,7 +190,7 @@ def smooth(mm, nxt, *, alpha: float, kv_shared: bool = False):
     return nxt(mm.replace(x=mm.x / m[None, :], w=lambda w: w * m[None, :]))
 
 
-@linear_step("rotate", phase="real")
+@linear_step("rotate", phase="real", source="D4-PPL")
 def rotate_linear(mm, nxt, *, kind: str = "q"):
     """x Q and W Q for one orthogonal Q per k: `q` signs (H_{k/odd} x R_odd), R a random odd x odd orthogonal, seeded
     by k (exact_grid's); `h` the flat Q = signs (H_{k/28} x H_28) / sqrt(k) (Paley's H_28)."""
@@ -231,7 +231,7 @@ def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
 
 
 @linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
-             check=_check_int8_linear)
+             check=_check_int8_linear, source="D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE")
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
                 group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1):
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
@@ -342,7 +342,7 @@ def p_edges(s: int, block: int, sink: bool) -> list[int]:
     return sorted(edges) + [s]
 
 
-@attention_step("rotate", phase="real", seeded=True)
+@attention_step("rotate", phase="real", seeded=True, source="D4-ATTN")
 def rotate_attention(mm, nxt):
     """Q R, K R and V R for one random Hadamard R of the head dimension (signs times Sylvester's H, seeded by the arm's
     seed and the layer), and the output times R^T: S and O unchanged before any edit."""
@@ -354,7 +354,7 @@ def rotate_attention(mm, nxt):
     return nxt(mm.replace(w=lambda v: v @ R)) @ R.T
 
 
-@attention_step("center_keys", phase="real", on=("qk",))
+@attention_step("center_keys", phase="real", on=("qk",), source="D4-ATTN")
 def center_keys(mm, nxt):
     """K - mu, mu its per-channel mean over the window: q mu is the same for every key of q's row, so softmax(S) is
     unchanged, and a part of K constant over tokens (Qwen2.5's k bias) no longer sets K's scale."""
@@ -519,7 +519,8 @@ def _check_int8_attention(p):
 
 
 @attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
-                calib=lambda p: p["k_scale"] == "calib", check=_check_int8_attention)
+                calib=lambda p: p["k_scale"] == "calib", check=_check_int8_attention,
+                source="D4-ATTN, EPS-BUDGET, PPL-DITHER-SIZE, PPL-LUT")
 def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
                    k_scale: str = "token", k_sink: bool = False, p: str = "round", p_top: int = 127, p_block: int = 0,
                    p_sink: bool = False, v: str = "round", v_top: int = 127, v_scale: str = "channel", qk_bits: int = 1,
@@ -617,7 +618,7 @@ def _check_peel(p):
         raise ValueError("peel.offset serves P - offset")
 
 
-@attention_step("peel", phase="integer", check=_check_peel)
+@attention_step("peel", phase="integer", check=_check_peel, source="D4-ATTN")
 def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
     """Low-rank noise the server adds and peels exactly: E_ik = U_{i, k mod 32}, U (tokens x 32) uniform on
     {+-1..+-width}, one draw per layer shared by its heads; on P only where key <= query, P served as P - offset + E
@@ -794,7 +795,8 @@ def _check_grid_linear(p):
         raise ValueError(f"grid.density is in (0, 1], a multiple of 1/{WORD_K}")
 
 
-@linear_step("grid", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_grid_linear)
+@linear_step("grid", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_grid_linear,
+             source="D4-LOWBIT, LOWBIT-DESIGN")
 def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dither", block: int = 0,
                 scales: str = "odd", density: float = 1.0):
     """Both operands on a low-bit grid (`GRIDS`: fp4c, fp4, int5): activations one scale per token, weights one per
@@ -830,7 +832,7 @@ def _check_linear_peel(p):
         raise ValueError("peel: width in 1..64, top in 1..127")
 
 
-@linear_step("peel", phase="integer", check=_check_linear_peel)
+@linear_step("peel", phase="integer", check=_check_linear_peel, source="LOWBIT-DESIGN")
 def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 127):
     """The weight-side coin of the int8 design: a low-rank U (output rows x PEEL_L, period PEEL_L in k) served as
     W + U and peeled exactly, X (W + U)^T - fold(X) U^T with fold(X)_l = sum over k = l mod PEEL_L of X_k (L / k of the
@@ -858,7 +860,7 @@ def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 12
 
 
 @attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
-                check=lambda p: _check_grid(p, ("q", "k", "p", "v")))
+                check=lambda p: _check_grid(p, ("q", "k", "p", "v")), source="D4-LOWBIT")
 def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", p: str = "dither", v: str = "dither",
                    p_sink: bool = False):
     """Both attention matmuls on a low-bit grid (`GRIDS`), each operand `round`ed or `dither`ed (`on_grid`): Q and K one
@@ -950,7 +952,7 @@ def _check_fp(p):
         raise ValueError("fp: nv blocks hold E2M1")
 
 
-@linear_step("fp", phase="quantize", check=_check_fp)
+@linear_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
 def fp_linear(mm, nxt, *, fmt: str, scale: str):
     """A format's own plain quantization, no PoUW: activations and weights rounded to the nearest value of `fmt`
     (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv), the
@@ -963,7 +965,7 @@ def fp_linear(mm, nxt, *, fmt: str, scale: str):
     return nxt(mm.replace(x=fake_quant(mm.x, fmt, scale), w=mm.cached("fp", weights)))
 
 
-@attention_step("fp", phase="quantize", check=_check_fp)
+@attention_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
 def fp_attention(mm, nxt, *, fmt: str, scale: str):
     """Both attention matmuls in a format, plain: Q and K scaled along the head dimension (`channel`: per head and
     token), P and V along the keys (`channel`: per query row, per KV head and channel), rounded; products in FP32."""
@@ -1026,7 +1028,8 @@ def _check_native(p):
         raise ValueError("native: int8 activations are Dither's, dithered, beside integer weights (not mx)")
 
 
-@linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native)
+@linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native,
+             source="PPL-COMPILE")
 def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
                   act_grid: str = ""):
     """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, int5 on E4M3; e2m1i, e2m1x2 on E2M1), both
@@ -1143,14 +1146,14 @@ def _check_emulate(p):
         raise ValueError(f"emulate.route is one of {ROUTES}")
 
 
-@linear_step("emulate", phase="integer", check=_check_emulate)
+@linear_step("emulate", phase="integer", check=_check_emulate, source="PPL-COMPILE, EMU8")
 def emulate_linear(mm, nxt, *, route: str):
     """int8 run on FP8 or FP4 hardware by limb splitting (`route_planes`): the quantizer's int8 product recomputed
     exactly from limb planes the format holds, gated equal on every call (`emulate`), and returned."""
     return emulate(mm, nxt, route)
 
 
-@attention_step("emulate", phase="integer", check=_check_emulate)
+@attention_step("emulate", phase="integer", check=_check_emulate, source="PPL-COMPILE, EMU8")
 def emulate_attention(mm, nxt, *, route: str):
     """Both attention matmuls' int8 products by limb splitting, as `linear.emulate`."""
     return emulate(mm, nxt, route)

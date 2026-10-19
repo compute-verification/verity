@@ -227,6 +227,18 @@ def test_a_message_is_only_its_agents_and_a_secret_refusal_keeps_it_queued(tmp_p
     assert "hello" in hook("ls", "bc-worker", tmp_path)["user_message"]
 
 
+def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
+    queue("bc-worker", "first", tmp_path)
+    queue("bc-worker", "second", tmp_path)
+    queue("bc-done", "delivered", tmp_path)
+    hook("ls", "bc-done", tmp_path)
+    listed = subprocess.run([sys.executable, INBOX_TOOL, "list"], env={**os.environ, "AGENT_INBOX": str(tmp_path)},
+                            check=True, capture_output=True, text=True).stdout.splitlines()
+    stamp = (tmp_path / "bc-worker.md").read_text().splitlines()[0].strip("[]")
+    assert any(x.startswith("pending   bc-worker ") and x.endswith(f"bytes  since {stamp}") for x in listed)
+    assert any(x.startswith("delivered bc-done ") and "since" not in x for x in listed)
+
+
 def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):
     inbox = tmp_path / "not-a-dir"
     inbox.write_text("")

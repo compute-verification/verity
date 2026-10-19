@@ -2,10 +2,11 @@
 
 Every member is opened and verified against this rank's run root (the reader of the value check and the sampled replay); a member
 that does not verify is a pick without bytes, named, which the driver's check fails.  Per pick: the rank's partial rows and the rows
-of the received collective output as this rank committed it.  A world-8 all-reduce pick also names the routed Definition the rank
-Program binds at the call (`route_of`: `registry.tp_allreduce`'s route for the call's M and N under the engine's all-reduce switches,
-the fused norm's when `fused_allreduce_rms_norm` takes FlashInfer's path; over several requests, the one call per request the Build binds
-on that route, from the collector's row record `step_rows`), held to the specs the rank's Programs bind (`program_binds`); its received member is the norm's `<norm>/all_reduce` on the other path, and the fused norm's are `<norm>/0` and
+of the received collective output as this rank committed it.  An all-reduce pick on a captured route also names the routed Definition
+the rank Program binds at the call (`route_of`: `registry.tp_allreduce`'s route for the call's M and N under the engine's all-reduce
+switches at the rank's world and GPU, the fused norm's when `fused_allreduce_rms_norm` takes FlashInfer's path; over several requests,
+the one call per request the Build binds on that route, from the collector's row record `step_rows`), held to the specs the rank's
+Programs bind (`program_binds`); its received member is the norm's `<norm>/all_reduce` on the other path, and the fused norm's are `<norm>/0` and
 `<norm>/1` with its residual (the previous call's `<norm>/1`, the embedding for the first) and the norm's weight.  Picks are drawn
 identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt.
 """
@@ -21,31 +22,38 @@ from verity_vllm.check.match import xrank_collectives as XC
 ROUTED_WORLD = 8
 
 
-def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = None,
+def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = None, device: Any = None,
              spans: list[tuple[int, int]] | None = None) -> dict[str, Any] | None:
     """The routed Definition of one bf16 [M, N] all-reduce: {"spec", "family", "statics", "fused"}, {"why"} when no captured route
-    covers it, or None off the routed world (the AllReduce_v2 chain).  `norm`: the RMSNorm a `fused_allreduce_rms_norm` call passes,
-    which takes the fused route exactly where the export shim authors it (FlashInfer on, M <= `fused_max_tokens`, a captured entry).
-    `spans`: (first row, rows) of each request's run of the launch (`call_spans`); over several requests the Build binds one call per
-    request on the launch's route (`route_binding(.., rows)`, `vllm_bindings.AllReduceRule`), listed as "calls" [{lo, rows, spec, statics}]."""
+    covers it at the routed world, or None at world 2 and, off the routed world, where no captured route covers it (the AllReduce_v2
+    chain).  `norm`: the RMSNorm a `fused_allreduce_rms_norm` call passes, which takes the fused route exactly where the export shim
+    authors it (FlashInfer on, M <= `fused_max_tokens`, a captured entry).  `device`: the rank's GPU (`tp_allreduce.device_of`), which
+    the routes keyed on a device read with the switches' NCCL transport.  `spans`: (first row, rows) of each request's run of the
+    launch (`call_spans`); over several requests the Build binds one call per request on the launch's route (`route_binding(.., rows)`,
+    `vllm_bindings.AllReduceRule`), listed as "calls" [{lo, rows, spec, statics}]."""
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import tp_allreduce as T
 
-    if int(world) != ROUTED_WORLD:
+    world = int(world)
+    if world <= 2:
         return None
     setting, route = T.served_route(settings, M, N)
     if setting is None:
-        return {"why": f"all-reduce switches {settings!r} name no captured setting"}
+        return {"why": f"all-reduce switches {settings!r} name no captured setting"} if world == ROUTED_WORLD else None
+    facts = {"world": world, "device": device, "transport": settings.get("nccl_transport")}
     fused = None
     if norm is not None and settings.get("flashinfer") and M <= T.fused_max_tokens(N, world):
-        fused = T.covered(setting, N, "fused", M)
+        fused = T.covered(setting, N, "fused", M, **facts)
     if fused is not None:
         defn, statics = T.AllReduceRmsNormMnnvl, {"WORLD": world, "N": N, "SHOT": T.mnnvl_shot(M, N, world), "CLUSTER": T.mnnvl_grid(M, N)[1],
                                                   "EPS": float(norm.variance_epsilon), "FMA": bool(fused.statics["FMA"])}
     else:
-        c = T.covered(setting, N, route, M)
+        c = T.covered(setting, N, route, M, **facts)
         if c is None:
-            return {"why": f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}"}
+            if world != ROUTED_WORLD:
+                return None
+            return {"why": f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}, world={world}, "
+                           f"device={facts['device']!r}, transport={facts['transport']!r}"}
         defn, statics = T.route_binding(c, world, M, N)
         if spans and len(spans) > 1:
             try:
@@ -73,9 +81,10 @@ def call_spans(step_rows: dict[int, list], step: int, M: int, n_requests: int) -
     return spans, None
 
 
-def call_family(settings: dict[str, Any], world: int, norm_of: Any) -> Any:
+def call_family(settings: dict[str, Any], world: int, norm_of: Any, device: Any = None) -> Any:
     """(site, kind, sizes) -> the routed family a committed [M, N] all-reduce partial's call takes (`route_of`), None for any other;
-    `norm_of(site)`: the RMSNorm a fused call at the site passes, else None.  Rank-agnostic: the route reads only M, N and the switches."""
+    `norm_of(site)`: the RMSNorm a fused call at the site passes, else None.  Rank-agnostic: the route reads only M, N, the switches
+    and the GPU (`device`)."""
     memo: dict[tuple, str | None] = {}
 
     def family(site: str, kind: str, sizes: tuple[int, ...]) -> str | None:
@@ -84,7 +93,7 @@ def call_family(settings: dict[str, Any], world: int, norm_of: Any) -> Any:
         norm = norm_of(site)
         key = (int(sizes[0]), int(sizes[1]), None if norm is None else float(norm.variance_epsilon))
         if key not in memo:
-            r = route_of(settings, key[0], key[1], world, norm=norm)
+            r = route_of(settings, key[0], key[1], world, norm=norm, device=device)
             memo[key] = r.get("family") if r else None
         return memo[key]
 
@@ -136,8 +145,8 @@ def _routed(pk: dict[str, Any], route: dict[str, Any], site_mod: Any, order: lis
 
 
 def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2,
-         max_rows: int = 16) -> dict[str, Any]:
-    """THIS rank's picks -> `out_dir/xrank_pair<pair>_rank<r>.pt`; the record the driver reads beside it."""
+         max_rows: int = 16, device: Any = None) -> dict[str, Any]:
+    """THIS rank's picks -> `out_dir/xrank_pair<pair>_rank<r>.pt`; the record the driver reads beside it.  `device`: `route_of`'s."""
     import torch
 
     from verity_vllm.acquire.sources.partial_source import _committed
@@ -154,7 +163,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
     def norm_of(site: str) -> Any:
         return mods.get(site) if order and site in order else None
 
-    fam_of = call_family(settings, world, norm_of) if world == ROUTED_WORLD else None
+    fam_of = call_family(settings, world, norm_of, device) if world == ROUTED_WORLD else None
     plan = XC.pick_strata(layouts, rank, bytes.fromhex(seed_hex), per_stratum=int(per_stratum), max_rows=int(max_rows), world=world,
                           call_family=fam_of)
     picks, missing, nbytes = [], 0, 0
@@ -188,7 +197,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
             extra = {"route_why": f"partial {pm.name} of shape {tuple(pm.shape)}, not [M, N]"}
         elif pk["kind"] == "all_reduce" and pm is not None and len(pm.shape) == 2:
             spans, spans_why = call_spans(step_rows, step, int(pm.shape[0]), n_req) if world == ROUTED_WORLD else (None, None)
-            route = route_of(settings, int(pm.shape[0]), int(pm.shape[1]), world, norm=norm_of(pk["site"]), spans=spans)
+            route = route_of(settings, int(pm.shape[0]), int(pm.shape[1]), world, norm=norm_of(pk["site"]), device=device, spans=spans)
             if spans_why and route is not None and "why" not in route and not route["fused"]:
                 route = {"why": spans_why}
             if route is not None and "why" not in route:

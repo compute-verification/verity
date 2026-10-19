@@ -28,9 +28,13 @@ rows into, for each tile, checked values, a transcript leaf and the useful outpu
 - `checked(ctx, ops)`, `digest(ctx, noise, checked)`, `useful(ctx, noise, ops, checked)`.
 
 Operands are committed as rows along k: A is m × k and the weight B is committed as its n rows, so the product is A·Bᵀ.
-Everything else is the protocol's (`audit`), the same for every scheme.
+Everything else is the protocol's, the same for every scheme.
 
 ## Lifecycle (`audit`)
+
+Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Step 5 is the served window's
+draw. Steps 6 and 7, run in the clear, are a reference tool and not a verifier (`benchmarks/pouw/clear/clear_audit.py`):
+the served window proves its drawn tiles in zero knowledge, and its verifier of record is the Lean (`lean/check`).
 
 1. **Weights.** Each weight's rows are committed in a `verity.ml.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
@@ -44,17 +48,35 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
    Its root must reach the challenger within the deadline of the salt coin's release: the verifier's rule at the
    deadline in `Security/Definitions/Pouw/Game/Deadline.lean`, which `WorkBetweenSaltAndDeadline` reads. The served
-   window states it as `Check.registration_deadline`, seconds on the
+   window states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
+   parameters without it, and refuses as `late-registration` a window received after the epoch's draw coin was released
+   (each root's receipt comes before the coin's release). The deadline is in seconds on the
    challenger's clock, and the proof service refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
-5. **Selection.** Served accounting uses only the sampled audit.
-   - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
-     being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
-     `key.uniform(W, j)` mapped to a tile by cumulative work, so t tiles are drawn independently, each with probability
-     W_ref(tile)/W, a tile's work being its cells' share of its matmul's W_ref (Lean `WorkWeightedSampling`).
-   - `Lottery(target)` is Pearl's mining rule, not one of the audit's sampling designs: the tiles whose digest, read
-     little-endian, is at most target·|rows|·|cols|·k. It stays in `audit`, unwired: no served path selects with it.
+5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
+   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`).
+   - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
+     the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
+     least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
+     any other but credited nothing. `window.sampling` registers the law `{"law": "subset", "k": K′}`, the registration's
+     `population` being N, with K′ = `window.k_prime(ε, δ, W, N, w_max)` and W = g_ℓ·w_max the credited work: the
+     smallest K >= 1 with (1 − ε·W/(N·w_max))^K <= δ, compared exactly in rationals (`window.miss_at_most`), N if no
+     K <= N has it, and 1 when ε·W/(N·w_max) = 1. A wrong set holding a share ε of W has at least ε·W/w_max tiles, so
+     the draw misses it with probability at most δ.
+   - **The draw.** The challenger opens the epoch's draw coin once, after the registration (its digest), and keys the
+     draw `derive(coin, "verity/pouw/served-zk-draw/v1", {"stream", "registration", "receipt"})` (`draw_key`,
+     `core_check.draw_key_context`). The units are `core_check.stream_subset(K′, N, ·)`, Lean's `Draw.subset`
+     (`flock-verify draw --population N --k K′ --stream`), over the 2·K′·width(N) + 64 bytes of the key's stream
+     `"draw"` (`draw_bytes`, width(N) = ⌈(bitlen(N) + 64)/8⌉ bytes): a sparse partial Fisher–Yates whose step i swaps
+     position i with i + r, r uniform below N − i by rejection over big-endian width(N)-byte words, and the units are
+     the first K′ positions, ascending. So every K′-subset of [0, N) is equally likely. A stream that runs out refuses
+     (`sampler`), and nothing redraws. `core_check.draw` holds the units to the coin's opening.
+   - **Sessions.** The units are proved in ⌈K′/cap⌉ sessions (`window.sessions`) by ascending rank: session σ's instance
+     s is drawn[σ·cap + s], and the filler tile N − 1 after the last (`window.instance_ts`, "The served audit window").
+   - `Sampled(t)` (t independent work-weighted draws, Lean `WorkWeightedSampling`) and `Lottery(target)` (Pearl's mining
+     rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k) are the reference tool's
+     (`clear_audit`), unwired: no served path selects with either.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
    recomputes the tile through the scheme (`encode`, `admissible`, `checked`, `digest`) and compares the leaf. It refuses
    a tile any of whose opened rows fails the scheme's rules (`encode`'s parse, then `admissible`); Lean's
@@ -75,8 +97,12 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
-a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
-prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term.
+a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
+`coins`, `live` or `seeded` (`window.mode`, Compose's `CoinMode`; an item that names none is seeded). In a seeded window
+(`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation from the salt and the prover's roots,
+Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term. In a live window
+(`window.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only after the verifier
+recorded round r's root (decision 36).
 
 ## Epoch coins (`coins`)
 
@@ -96,12 +122,50 @@ root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding ta
 
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
 opened live and once: the salt coin after the verifier recorded `weights_root`, the draw coin after it recorded what the
-draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `pearl_c_work.draw_after`). An
+draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `clear_work.draw_after`). An
 opening is (epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it
 asked for, that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded
 (`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
+
+**Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
+record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
+uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
+family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole
+width (the seeded coins above stay 32 bytes, so a recorded seeded registration reads as it did), and publishes
+
+~~~text
+x_p     = SHA-512(scheme || 0x00 || coin_p)                               coin_p: 64 fresh bytes (`COIN_BYTES`)
+value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
+root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain binding
+          identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
+~~~
+
+and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its epoch,
+label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
+roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
+root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
+then asks the challenger for that root's coin. The commitment those checks read is the challenger's own: before any coin
+opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sign_record`, `write_record`; Lean
+`SampledProofs.ChallengerRecord`), and the verifier reads that record from the challenger's file under its own key
+(`trusted_commitment`), never from the prover's bundle, and fails closed on a missing, malformed or unsigned record.
+
+Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
+coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
+challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+(`received_at`) and then coin i's release after it (`released_at`).
+
+**Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
+coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
+(`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
+`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. Round
+r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
+key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
+noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
+`PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+and draw only).
 
 ## Registered weights (`registration`)
 
@@ -691,7 +755,7 @@ useful    U/(α_A·α_B), glue
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
     transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
-    after the tile's cap (`pearl_c_work.row_cap`), and `volunteer` gives up a row over it first.
+    after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first.
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`); `PearlC(hashing="h3")` on the H100
     record names `pearl-c-h100-v1-h3`. The `test-16-v1-h3` and `decode-32-v1-h3` vectors pin a call end to end, with A's
     row root and row 0's leaf, digest, seed and E_A line, and a hash of every row digest and seed. h0's verifier refuses
@@ -710,7 +774,9 @@ useful    U/(α_A·α_B), glue
     `forming_elements` is a stub that returns 0.
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
     cap.
-- **The work sampling design** (`schemes/pearl_c_work.py`) is what the verifier credits, draws and checks.
+- **The work sampling design** is what the verifier credits, draws and checks. Its records (`Split`, `UnitRecord`,
+  `records_root`) are `schemes/pearl_c_work.py`'s, which vLLM's prover writes; its law and clear audit are a reference
+  tool, ``benchmarks/pouw/clear/clear_work.py``.
   - A weight's `Split` holds at most ⌊k/100⌋ side channels. The unit reads the kept channels zero-padded to `k_unit`,
     and credit is on the kept width, so padding earns nothing. The audit recomputes S by the pinned rule through
     `split_check`, which the model integration supplies.
@@ -769,7 +835,7 @@ useful    U/(α_A·α_B), glue
 
 The same scheme as `pearl-c-h100-v1` on another device record. The record (`Device`) is a scheme parameter: the FP8 atom
 (E4M3, k = 32), the BF16 peel step (k = 16), G (atoms per promotion), the W1 prices (`Prices`) and the domain's k bound.
-`pearl_c`, `pearl_c_debit`, `pearl_c_u` and `pearl_c_work` read them from it, and the H100's record (`H100`) is every
+`pearl_c`, `pearl_c_debit`, `pearl_c_u` and the work law (`clear_work`) read them from it, and the H100's record (`H100`) is every
 function's default, so every `pearl-c-h100-*` output and vector above is unchanged.
 
 - **The atom is the card's captured step**, `BLACKWELL_SM120_E4M3_M16N8K32`: `mma.sync` `kind::f8f6f4` m16n8k32 E4M3 as one
@@ -1001,7 +1067,7 @@ useful    U/(α_A·α_B), glue
           0.13–0.30.
 
   R1. **A row whose own F1′ per word passes ρ·(its cell credit) is uncredited.**
-      - The prover declares it (`pearl_c_work.declare` with the transcript).
+      - The prover declares it (`clear_work.declare` with the transcript).
       - The verifier checks the declaration on every drawn tile (`check_opened`): a credited row over the bound, or an
         excluded row under it that passes the per-row rules, fails the tile.
       - The row is still formed, checked and hashed.
@@ -1042,7 +1108,7 @@ useful    U/(α_A·α_B), glue
   - the weight side is `job_cost`.
 - **Registered weights** are the shared rule ("Registered weights (`registration`)"), through
   `PearlC4.check_registration`.
-- **The work sampling design** is `pearl_c_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
+- **The work sampling design** is `clear_work`'s. The scheme brings its own row parser, per-row rules and tile debit.
 - **The reference replay (`pearl_c4_replay`)** checks a device run's own transcript under that sampling design's rules,
   which every measured row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
@@ -1258,6 +1324,136 @@ written `+0`. The `pc4` table registers the high half itself (`rows4`), and a ro
 `1 ≤ floor` is `ρ` finite and `φ ≥ 0`, the circuit's flag. `pc4Sem`'s `β` is `0` where `β`'s word is not finite, so
 `RowAdmit4` refuses the row, as the circuit's flag (`β ≤ F32_MAX`) does. `pc8Sem`'s forming value is `D_t`'s,
 and its `e4m3` is the code wherever `F32ToE4m3Sat_v1` agrees with `e4m3Word` and `D_t` is not NaN.
+
+## `compile`: PoUW as one pass over the served Program (`circuit/compile.py`)
+
+Decision 102's shape: the served Program is the model's own, and PoUW is one compile pass over it. `compile(program, scheme,
+groups)` returns a `Compiled` (the compiled `Program`, the served one, the scheme, its `Site`s and `Unit`s, and each site's
+seed group); `rebuild(served, scheme, descriptor, groups)` is the verifier's side, which compiles itself and refuses any other
+descriptor (`traced_as` at Program level).
+
+**Find.** `MATMULS` registers each family's A and B ports, (m, k, n) per Call and the arm it is registered at:
+
+~~~text
+family                  A     B      per Call     arm
+S8Dot_v1, S8Dot_v2      a     b      1 × K × 1    the plain arm: NOISE "none", T0 "zero", COMMIT "final", no tail, LIMBS "none"
+S8Matmul_v1             a     b      1 × K × N    the same; each of b's N rows is a dot
+GemmAccumulatorS8_v1    x     wrow   1 × K × 1    any (#2365's W8A8 accumulator, ScaledMmS8Coordinate_v1's node 0)
+GemmAccumulatorS8_v2    x     wrow   1 × K × 1    any (on bits)
+DotBf16_v1 .. v3        x     w      1 × K × 1    any (bf16 linears, and attention's QKᵀ: decision 109)
+~~~
+
+A Call nested in a Definition is found through it when its operands are that Definition's parameters, at any depth; a
+Program whose root is the matmul is served as one Call of it (`PouwCall_v1{FN}`). Attention is to be credited like every A·B
+(decision 109): its QKᵀ is a `DotBf16` kind like any other, but the one registered scheme, `eps1-sm120-h1fx1`, has no unit
+for it, so its dots are refused (`scheme`) until one is plugged. P·V as `AttnBlock_v3` serves it, tensor-core steps on a P
+the block computes, is no Call of a registered family, so it is refused (`uncovered`) until it is one.
+
+**Tile and replace.** A site is a root node's dots of one kind, and its distinct A rows and B rows, first use first, are its
+operands. Its A rows go in blocks of the scheme's r, each block's B rows in chunks of c (r × c is a scheme parameter, decision
+106), and a tile is the site's dots in one block and chunk. Each tile is one self-contained unit of its kind
+(`Scheme.units`: per kind a factory, which carries that kind's noise form; `Scheme.plug` sets one, as ATTN-NOISE will for
+P·V): `(a: its A rows, b: its B rows, salt, position, roots) -> {z, receipt}`. z, its cells' exact products, feeds the Call's
+consumers in the Call's place, so served values don't change; the receipt is a sink only the Program's outputs read. The units
+sit at the root, one batch per site and tile shape, ahead of the node that read them; that node's Definition F becomes
+`PouwRest_v1{FN=F}`, F without its dots, reading their z. The compiled Program is `PouwCompiled_v1{SERVED, SCHEME, GROUPS}`:
+the served parameters, `pouw.salt`, `pouw.positions` and `pouw.roots` to `{served: the served return, receipts}`.
+
+**Seeds and noise** (decision 105, `circuit/seeds.py`). The salt is the Program's one coin (`In(kind="coin")`). A unit
+derives its seed in its own proof, and its noise from the seed:
+
+~~~text
+seed_j  = SHA-512(u64(j) ‖ (SEED_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)        PouwSeed
+σ_R     = SHA-512(u64(j) ‖ (RECEIPT_TAG ‖ salt ‖ root(A_j) ‖ root(B_j)) ⊕ u64(j)*)     PouwUnitSeeds, with seed_j
+block_t = SHA-512(NOISE_TAG ‖ seed_j ‖ u64(t))                                          PouwNoiseBlock
+~~~
+
+j is the unit's position and (root(A_j), root(B_j)) its seed group's roots. ``⊕ u64(j)*`` XORs every message word after the
+first with the position, an injective encoding that makes every gate of a seed read its own position, so no two units compute
+a common value. Positions (`pouw.positions`, unit u at slot u, `Compiled.positions(base)`) and roots (`pouw.roots`) are inputs
+bound before the draw; a verifier that runs the Program more than once under one salt gives each run its own range of
+positions, so each (salt, position) seeds one unit.
+
+A unit's receipt keys and chain starts come from σ_R, a hash of its own tag, never from the noise seed (decision 121). A unit
+whose folds take keys calls `PouwUnitSeeds` once for both, [seed_j, σ_R] with the masked salt and roots shared, since two
+seeds at one position are one seed (COIN-RULES' `E_COIN_REUSE`).
+
+**Seed groups** (decisions 112 and 122). `groups` names the calls committed together: sites of one key share a slot of
+`pouw.roots`, each unit still at its own position. One commitment fixes the noise of every unit it covers, so the grinding
+premium is a constant number of units per group (`Compiled.cover`), and the scheme's `cover` is the fewest a group may
+cover. By default each site is a group, and a site is one call: a layer's QKᵀ batched over its heads and the step's batch
+is one site, so one seed covers the call, not one head.
+
+The attention kinds' seed groups are checked by GRIND's bound itself (decision 122; `Scheme.rows`, `Compiled.grind`). A
+kind's `RowNoise` gives the noise bits of one A row and one B row at contraction k: QKᵀ's Q row k + 320 and K row k
+(`QK_ROWS`, on `DotBf16_v1 .. v3`), P·V's P row 224 and V column k (`PV_ROWS`, for the kind ATTN-NOISE plugs). Over the
+group's distinct rows of the kind, each with its bits and its readers among the group's dots, the grind term is
+`grind.visible_premium` (the formula `benchmarks/pouw/grind_price.py`'s table reads) over the group's dots, at
+T = 2^128 and δ = 2^-40. Over 0.1% (`grind.FLAG`) the pass refuses the group (`cover`): its noise is the live per-round coin
+of decision 36, not a seed's. One rule covers both regimes:
+
+- at decode the Q rows bind, so it counts every (query head, request) pair, whatever KV heads they share: one call is 8B's
+  decode at batch ≥ 13 for QKᵀ and ≥ 25 for P·V (70B: 7 and 13), from a context of 64 keys. Over fewer keys a KV head's K
+  rows (k bits) or V columns (L bits), each read by its query heads, bind instead, and the check asks for a larger batch
+  (70B's QKᵀ over 16 keys: 12);
+- at prefill a KV head's K rows and V columns, read by all its query heads, bind, so it counts (KV head, request)
+  components, far fewer the longer the prompt: a 16-token causal prompt needs 166 for QKᵀ (GRIND's table says 171, counting
+  every Q row's readers as the prompt's L keys).
+
+A bf16 linear on `DotBf16` carries QKᵀ's form under a scheme that keeps it for its family. A seed group never spans calls run
+one after another (`span`): a seed binds its calls' operand roots, and layer ℓ + 1's operands exist only after layer ℓ has
+run.
+
+**The floor** (`Compiled.floor`). Per unit, by slot, the work its noise forces: its cells' dots where its kind's form
+(`Scheme.form`: `Scheme.rows`, or `Scheme.noise` for a kind the grind term doesn't read) puts noise on both its rows at
+its k, and k multiply-adds each; a kind with a clean side, or with no form, none. H1's s8 kinds carry `h1tile.H1_ROWS`:
+an X row its k dither bits, a W column its k coin bits and U's 256. It is read off the plan, with no gate walked, with
+each unit's batch node in the compiled Program's root for placement. It is the floor
+`Accounting.Guarantees.PouwBlockCredit` (cursor/attrib-ea24) attributes to the block a unit is placed at, `Wb · Nmin`
+with `Wb` the least of the block's units' and `Nmin` the right units the draw established, and not every gate the salt
+reaches: the seed's and the noise's SHA-512 and the receipt fold read it too, and are outside the floor.
+
+**Check** (`CompileError.code`):
+
+- `coin-read`: the served Program reads a coin (a coin parameter, a seed of its own, or it is already compiled);
+- `edited-arm`, `arm`: a Call isn't the registered arm; `scan`, `operand-inside`: a matmul inside a scan, or on an operand
+  computed inside its Definition;
+- `uncovered`: a registered Call or a matmul step left outside every unit;
+- `cover`: a seed group covers fewer units than the scheme's `cover`, or its dots of a kind with a `RowNoise` carry a grind
+  term over 0.1%;
+- `span`: a seed group holds a call and a call that reads its output;
+- `salt-flow`: the salt reaches anything but a unit's seed;
+- `position`: a unit's seed reads a position or roots other than its own parameters, or at the root a unit batch reads slots
+  other than its own: no unit chooses its position, and no two share one;
+- `seed`: a unit derives no seed, or more than one; `noise-in-z`: its z reads a node the seed reaches;
+- `separator`: a unit read past its z; `width`: a node outside the units that commits more than the width rule allows;
+- `name`, `scheme`: a parameter already named `pouw.*`, or a scheme or kind that isn't registered.
+
+`Compiled.check_gates` adds the gate-level cut (no value computed in two units), the separator and the width rule by
+reachability, for a Program small enough to flatten. Where COIN-RULES has its seed role (`ports.py`), the seed, each unit and
+the compiled Program declare their position `In(kind="position")` beside the salt's coin port, and its Build check refuses
+some units before compile's own checks do: two seeds at one position (`E_COIN_REUSE`), a position the unit computes
+(`E_PORT_KIND`), a seed's noise reaching z or past the unit's sinks (`E_COIN_FLOW`).
+
+**Schemes.** The pass's own `compile.SCHEMES`, separate from `circuit.SCHEMES`; `BUILTIN` loads this package's at the first
+name not registered.
+
+- `eps1-sm120-h1fx1` (`circuit/h1tile.py`, where `circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32
+  tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
+  X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
+  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
+  column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
+  The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
+  ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
+  legal proof unit under the 16-bit output rule, or the warp check must be a unit kind of its own aggregating coordinates, is
+  decision 107's, still open.
+
+The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
+registered Definitions, each checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`,
+`h1tile.circuit-check.py`); `PouwH1Tile` only where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
+
+Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
+site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
 
 ## Not here yet
 

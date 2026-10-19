@@ -1,0 +1,4 @@
+order = 340
+path = "`exact_kit/`"
+runs_on = "CPU"
+what = "`verity-exact-kit`, the theory and referee scripts' primitives (F_2 and F_p linear algebra, Möbius coefficients, kernel searches, SAT) and their one check registry with a JSON verdict; no theory, no folds (its own README)"

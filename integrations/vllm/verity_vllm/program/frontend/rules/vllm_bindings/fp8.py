@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from verity.ml.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll, array_of
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
@@ -31,13 +31,6 @@ def _f32_equal(a, b: float) -> bool:
     return isinstance(a, (int, float)) and not isinstance(a, bool) and _np.float32(a) == _np.float32(b)
 
 
-def _vllm_op(name: str) -> set:
-    try:
-        return {getattr(torch.ops.vllm, name).default}
-    except (AttributeError, RuntimeError):
-        return set()
-
-
 class DynamicDeepGemmFp8LinearRule(OpRule):
     """vLLM's default Hopper block-FP8 linear, one registered row call per token.
 
@@ -62,9 +55,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
     )
 
     def targets(self):
-        return _vllm_op("dynamic_flashinfer_deepgemm_blockscale_gemm") | {
-            iface.dynamic_flashinfer_deepgemm_blockscale_gemm.default
-        }
+        return targets_for("dynamic_flashinfer_deepgemm_blockscale_gemm")
 
     def applies(self, node, ctx):
         target = active_target_profile()
@@ -120,6 +111,66 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
             {"M": M, "K": K, "N": N, "G": 128, "branch": branch, "use_deep_gemm_e8m0": True},
             emitted=f"{fn.id} x{len(rows)}",
         )
+
+
+class DeepGemmFp8EinsumRule(InPlaceRule):
+    """DeepGEMM's `fp8_einsum("bhr,hdr->bhd", (a, a_scale), (b, b_scale), d, recipe=(1, 128, 128))` (`vllm.utils.deep_gemm`, exported
+    as `vllm_iface.deep_gemm_fp8_einsum` by `export_compat.deep_gemm_fp8_einsum_leaf`) -> `deepgemm_fp8_einsum_grouped{H,K,N,G}`
+    (ScaledMmFp8BlockGrouped_v1) per token b; `d` is rebound.  DeepSeek-V4's `wo_a` is the caller: a and a_scale the inverse-RoPE
+    quant's e4m3 words and group scales, b and b_scale the grouped weight and its block scales as the loader leaves them."""
+    modes = frozenset({"profile"})
+    info = RuleInfo("DeepGemmFp8Einsum[vllm]", 1, "in-place-binding",
+                    applies_to="vllm_iface.deep_gemm_fp8_einsum(expr, a, a_scale, b, b_scale, Tensor! d, recipe)",
+                    preconditions=("cc 9.0 (recipe (1, 128, 128) with f32 block scales: DeepGEMM's cc 9.0 bmm)", "expr 'bhr,hdr->bhd', recipe [1, 128, 128]",
+                                   "a an e4m3 value [T, H, K], a_scale an f32 value [T, H, K/128], K % 128 == 0",
+                                   "b an e4m3 parameter [H, N, K], b_scale an f32 parameter [H, cdiv(N, 128), K/128]",
+                                   "d an unwritten bf16 allocation [T, H, N]"),
+                    evidence_domain="structural; numerics: ScaledMmFp8BlockGrouped_v1 (registry.deepgemm; the DeepGEMM capture its conformance "
+                                    "names compares every output word on cc 9.0)")
+    EXPR = "bhr,hdr->bhd"
+
+    def targets(self):
+        return {iface.deep_gemm_fp8_einsum.default}
+
+    def applies(self, node, ctx):
+        cc = active_target_profile().compute_capability
+        if cc != (9, 0):
+            return f"compute capability {cc}, not cc 9.0"
+        if len(node.args) != 7 or node.kwargs:
+            return "unexpected operator arity"
+        expr, a, a_s, b, b_s, d, recipe = node.args
+        G = FP8_QUANT_PINS["group_size"]
+        if expr != self.EXPR or list(recipe) != [1, G, G]:
+            return f"numerics_unregistered: fp8_einsum({expr!r}, recipe={list(recipe)}); the Definition is {self.EXPR!r} at recipe [1, {G}, {G}]"
+        for name, x, dt in (("a", a, FP8_E4M3), ("a_scale", a_s, torch.float32), ("b", b, FP8_E4M3), ("b_scale", b_s, torch.float32)):
+            if not isinstance(ctx.val(x), Coll) or not dtype_is(ctx, x, dt):
+                return f"{name} is not a {dt} value ({type(ctx.val(x)).__name__}, {ctx.dtype_of(x)})"
+        if not isinstance(ctx.val(d), Alloc) or not dtype_is(ctx, d, BF16):
+            return f"d is not an unwritten bf16 allocation ({type(ctx.val(d)).__name__}, {ctx.dtype_of(d)})"
+        ash, bsh = shape(ctx, a), shape(ctx, b)
+        if len(ash) != 3 or len(bsh) != 3 or ash[1] != bsh[0] or ash[2] != bsh[2] or ash[2] % G:
+            return f"a {ash} and b {bsh} are not [T, H, K] and [H, N, K] with K % {G} == 0"
+        (T, H, K), N = ash, bsh[1]
+        want = {"a_scale": (T, H, K // G), "b_scale": (H, weight_blocks(N, G), K // G), "d": (T, H, N)}
+        for name, x in (("a_scale", a_s), ("b_scale", b_s), ("d", d)):
+            if shape(ctx, x) != want[name]:
+                return f"{name} {shape(ctx, x)}, expected {want[name]}"
+        if ctx.weight_of(b) is None or ctx.weight_of(b_s) is None:
+            return "b / b_scale are not declared weight operands"
+        if not ctx.vocab.has("deepgemm_fp8_einsum_grouped"):
+            return "the vocabulary has no deepgemm_fp8_einsum_grouped"
+        return True
+
+    def emit(self, node, ctx):
+        _expr, a, a_s, b, b_s, d, _recipe = node.args
+        (T, H, K), N, G = shape(ctx, a), shape(ctx, b)[1], FP8_QUANT_PINS["group_size"]
+        fn = ctx.kind("deepgemm_fp8_einsum_grouped", node, H=H, K=K, N=N, G=G)
+        x, s, w, ws = (ctx.coll(v) for v in (a, a_s, b, b_s))
+        outs = [ctx.call(fn, x[t], s[t], w, ws, node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t in range(T)]
+        ctx.rebind(d, array_of(outs), self, what="d")
+        ctx.bind_weight_role(b, self, "fp8_einsum_w", H=H, K=K, N=N)
+        ctx.bind_weight_role(b_s, self, "fp8_einsum_ws", H=H, K=K, N=N, G=G)
+        ctx.record(self, node, {"T": T, "H": H, "K": K, "N": N, "G": G, "expr": self.EXPR}, emitted=f"{fn.id} x{T}")
 
 
 class PerTokenGroupFp8QuantRule(InPlaceRule):

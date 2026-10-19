@@ -14,7 +14,9 @@ edge, a block's edge and random), and for each k of `--ks`:
 - `gather`: whole blocks decoded (encoded) or copied (plain) equal the plain cache's blocks.
 
 Then `bound`, the bound key (`bound_gate`): token-layers written after the codec seed, each under its slot's offset,
-the pinned ones in both forms (without the append coin and with it).
+the pinned ones in both forms (without the append coin and with it), and deferred residency's plaintext flag
+(`deferred_gate`): the pinned coin blocks appended plaintext and encoded in place once the coin is known, and decode
+attention and the gather over a cache whose slots mix plaintext and encoded ones.
 
 Writes `paged-gate.json` and `paged-gate.log` under `--out`; exits nonzero if any gate fails."""
 from __future__ import annotations
@@ -50,19 +52,23 @@ BOUND_LENS = (1, 17, 64, 300, 511)
 BOUND_SPLITS = (1, 4)
 
 
-def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
-    """The bound key on every path, in two parts.
+def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
+    """The bound key on every path, in three parts.
 
     - `pinned` (a library at the remote audit's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
       (the remote audit's payloads j = 0 and 20 under their bound keys) and its `codec.coin` blocks (the same payloads
       appended under the append coin's form b_j(c_a), PROTOCOL.md §3), each appended as one token's K and V at the
       slot and layer whose store-order block is j (store base 0) under b_j, and at another slot with the index
       difference folded into its offset (b_j + tau W (j − there)): the token-layer's words equal the pinned block (its
-      SHA-512 and first word) both times, so a page encodes at its store index whatever slot holds it.
+      SHA-512 and first word) both times, so a page encodes at its store index whatever slot holds it. The `codec.coin`
+      blocks again in the deferred form (`deferred`): appended plaintext with the slot's flag set, then encoded in
+      place by `pg_encode`, which clears the flag, and a second `pg_encode` leaves the words as they are.
     - `random` (any library): every slot of both layers under a random offset of its own. The appended cache equals
       `kv.py` on a few words. `pg_append_multi` with the offsets in its table equals it. Decode attention over it
       (BOUND_LENS, at each of BOUND_SPLITS) equals the plain cache's output bit for bit, and decoded under the seed's
-      key it does not. The gather, with receipts and without, equals the plain blocks."""
+      key it does not. The gather, with receipts and without, equals the plain blocks.
+    - `deferred`: plaintext and encoded slots mixed in one cache (`deferred_gate`), main_rc being main's receipt
+      buffers and its `receipt_gate`."""
     G, D, WB, f = lib.shape["kv_heads"], lib.shape["head_dim"], lib.shape["wb"], lib.field
     W, nslots = K.token_layer_words(f), BLOCKS * BS
     out = {"ok": True}
@@ -77,9 +83,16 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
         KB.set_key(lib, dev)
         cache = torch.zeros(BLOCKS, G, BS, 2 * D, dtype=torch.bfloat16, device="cuda")
         lay = P.layout(cache, G, WB)
+
+        def token_layer(slot):
+            bo, so = divmod(slot, BS)
+            return torch.cat((cache[bo, :, so, :D].reshape(-1), cache[bo, :, so, D:].reshape(-1))).view(
+                torch.uint8).cpu().numpy().tobytes()
+
         pins = []
-        for form, vectors, coin in (("bound", pinned["bound"], None),
-                                    ("coin", pinned["coin"]["bound"], bytes.fromhex(pinned["coin"]["c_a"]))):
+        c_a = bytes.fromhex(pinned["coin"]["c_a"])
+        for form, vectors, coin in (("bound", pinned["bound"], None), ("coin", pinned["coin"]["bound"], c_a),
+                                    ("deferred", pinned["coin"]["bound"], c_a)):
             for v in vectors:
                 j = v["j"]
                 pay = RV.payload(j)
@@ -91,23 +104,39 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
                 for slot, layer, off in ((j // LAYERS, j % LAYERS, b),
                                          (there // LAYERS, there % LAYERS, (b + key.tau * W * (j - there)) % f.p)):
                     bj = P.offsets(torch, [off if s == slot else 0 for s in range(nslots)], f)
-                    P.append(lib, torch, cache, lay, 0, LAYERS, layer, 1, rc.rounds, kr, vr,
-                             torch.tensor([slot], dtype=torch.int64, device="cuda"), bj=bj)
-                    torch.cuda.synchronize()
-                    bo, so = divmod(slot, BS)
-                    got = torch.cat((cache[bo, :, so, :D].reshape(-1), cache[bo, :, so, D:].reshape(-1))).view(
-                        torch.uint8).cpu().numpy().tobytes()
+                    at = torch.tensor([slot], dtype=torch.int64, device="cuda")
+                    extra = {}
+                    if form == "deferred":
+                        # appended plaintext, flagged, until the coin; then encoded in place, twice (the second a no-op)
+                        flags = torch.zeros(nslots, dtype=torch.uint8, device="cuda")
+                        P.append(lib, torch, cache, lay, 0, LAYERS, layer, 0, rc.rounds, kr, vr, at, plain=flags)
+                        torch.cuda.synchronize()
+                        extra["plaintext"] = token_layer(slot) == pay and flags.nonzero().flatten().tolist() == [slot]
+                        tab = P.encode_table(torch, [(at, 1, cache, 0, LAYERS, layer, bj, flags)]).cuda()
+                        P.encode(lib, torch, tab, 1, 1, lay, rc.rounds)
+                        torch.cuda.synchronize()
+                        once = token_layer(slot)
+                        extra["settled"] = not bool(flags.any())
+                        P.encode(lib, torch, tab, 1, 1, lay, rc.rounds)
+                        torch.cuda.synchronize()
+                        extra["idempotent"] = token_layer(slot) == once
+                    else:
+                        P.append(lib, torch, cache, lay, 0, LAYERS, layer, 1, rc.rounds, kr, vr, at, bj=bj)
+                        torch.cuda.synchronize()
+                    got = token_layer(slot)
                     pins.append({"form": form, "j": j, "slot": slot, "layer": layer,
                                  "folded": slot * LAYERS + layer != j, "digest": d.hex() == v["digest"],
                                  "b": format(b, "x") == v["b"], "word_0": got[:WB].hex() == v["word_0"],
-                                 "block_sha512": hashlib.sha512(got).hexdigest() == v["block_sha512"]})
+                                 "block_sha512": hashlib.sha512(got).hexdigest() == v["block_sha512"], **extra})
         forms = {form: all(p["digest"] and p["b"] and p["word_0"] and p["block_sha512"]
-                           for p in pins if p["form"] == form) for form in ("bound", "coin")}
+                           and all(p.get(x, True) for x in ("plaintext", "settled", "idempotent"))
+                           for p in pins if p["form"] == form) for form in ("bound", "coin", "deferred")}
         pins_ok = all(forms.values())
         out["pinned"] = {"codec": rc.name, "forms": forms, "blocks": pins, "ok": pins_ok}
         out["ok"] &= pins_ok
         log(f"bound pinned {rc.name}: {'ok' if pins_ok else 'FAIL ' + str(pins)} ({len(pins)} appends against "
-            "vectors.json's codec.bound and codec.coin, at the block's own slot and folded at another)")
+            "vectors.json's codec.bound and codec.coin, at the block's own slot and folded at another; codec.coin "
+            "also appended plaintext and encoded in place)")
         k, dev_key = rc.rounds, dev
     else:
         out["pinned"] = {"skipped": f"the library is {f.name}{'/masked' if lib.mask else ''}, not {rc.name}"}
@@ -180,7 +209,132 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log) -> dict:
     out["ok"] &= rand_ok
     log(f"bound random k={k}: {'ok' if rand_ok else 'FAIL'} (append_multi {multi_ok}, kv.py {py_ok}, attention "
         f"{sum(c['equal'] and c['seed_key_differs'] for c in att)}/{len(att)}, gather {gather_ok})")
+    out["deferred"] = deferred_gate(lib, torch, k, plain, enc, bjs, rows, lay, bt, btd, lens, q, rng, main_rc, log)
+    out["ok"] &= out["deferred"]["ok"]
     return out
+
+
+def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.Layout, bt, btd, lens, q, rng,
+                  main_rc, log) -> dict:
+    """The plaintext flag (deferred residency, remote_bandwidth's PROTOCOL.md §4) on `bound_gate`'s random caches: each
+    slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every
+    decode's tiles mix both.
+
+    - `cache`: the mixed cache holds the plain cache's words at the flagged slots and the all-encoded cache's at the
+      rest, and the flags are what the appends wrote; `pg_append_multi` (both forms, the flags in its table) writes the
+      same cache and flags.
+    - `attention` (BOUND_LENS, at each of BOUND_SPLITS): with the flags, the output equals the plain cache's bit for
+      bit, and with receipts too, which mark exactly the encoded slots it reads and equal the reference's
+      (`receipt_gate`); without the flags (every slot decoded) it does not.
+    - `gather`: with receipts and without, equals the plain blocks; its receipts are the encoded slots'.
+    - `encode`: `pg_encode` of the flagged slots, both layers in one launch, leaves each cache equal to the all-encoded
+      one and every flag clear; attention after it equals the plain output; a second encode, over every slot, changes
+      nothing (each flag is clear).
+    - flags on a plain cache are refused."""
+    D, H = lib.shape["head_dim"], lib.shape["heads"]
+    nslots, batch = BLOCKS * BS, len(BOUND_LENS)
+    rc_sk, used, epoch, receipt_gate = main_rc
+
+    def eq(a, b) -> bool:
+        return bool(torch.equal(a.view(torch.int16), b.view(torch.int16)))
+
+    is_plain = [[rng.random() < 0.5 for _ in range(nslots)] for _ in range(LAYERS)]
+    want = [torch.tensor(p, dtype=torch.uint8, device="cuda") for p in is_plain]
+    split = [tuple(torch.tensor([s for s in range(nslots) if p[s] == side], dtype=torch.int64, device="cuda")
+                   for side in (True, False)) for p in is_plain]
+    mix = [torch.empty_like(p) for p in plain]
+    multi = [torch.empty_like(p) for p in plain]
+    flags = [torch.full((nslots,), 7, dtype=torch.uint8, device="cuda") for _ in range(LAYERS)]
+    mflags = [f.clone() for f in flags]
+    kept = []
+    for encd in (0, 1):
+        ents = []
+        for l in range(LAYERS):
+            sl = split[l][encd]
+            kr, vr = rows[l][0][sl], rows[l][1][sl]
+            kept += [kr, vr]
+            P.append(lib, torch, mix[l], lay, 0, LAYERS, l, encd, k, kr, vr, sl, bj=bjs[l] if encd else None,
+                     plain=flags[l])
+            ents.append((kr, vr, sl, sl.shape[0], multi[l], 0, LAYERS, l, bjs[l] if encd else None, mflags[l]))
+        tab = P.table(torch, ents).cuda()
+        kept.append(tab)
+        P.append_multi(lib, torch, tab, LAYERS, max(e[3] for e in ents), lay, encd, k)
+    torch.cuda.synchronize()
+    cache_ok = all(eq(mix[l], torch.where(want[l].bool().view(BLOCKS, 1, BS, 1), plain[l].view(torch.int16),
+                                          enc[l].view(torch.int16)))
+                   and torch.equal(flags[l], want[l]) for l in range(LAYERS))
+    multi_ok = all(eq(multi[l], mix[l]) and torch.equal(mflags[l], want[l]) for l in range(LAYERS))
+    read = sorted({int(bt[i, p // BS]) * BS + p % BS for i, n in enumerate(BOUND_LENS) for p in range(n)})
+
+    def attention(label: str) -> list[dict]:
+        cells = []
+        for layer in range(LAYERS):
+            enc_read = [s for s in read if not is_plain[layer][s]] if label == "mixed" else read
+            for sp in BOUND_SPLITS:
+                part = torch.empty(P.part_floats(lib, batch, sp), dtype=torch.float32, device="cuda")
+                o_p, o_f, o_r, o_n = (torch.full((batch, H * D), c, dtype=torch.bfloat16, device="cuda")
+                                      for c in (7.0, -3.0, 2.0, 5.0))
+                P.attn(lib, torch, plain[layer], lay, 0, LAYERS, layer, 0, k, q, o_p, part, lens, btd, batch, sp)
+                P.attn(lib, torch, mix[layer], lay, 0, LAYERS, layer, 1, k, q, o_f, part, lens, btd, batch, sp,
+                       bj=bjs[layer], plain=flags[layer])
+                P.attn(lib, torch, mix[layer], lay, 0, LAYERS, layer, 1, k, q, o_n, part, lens, btd, batch, sp,
+                       bj=bjs[layer])
+                epoch.add_(1)
+                rc_sk.fill_(-1)
+                P.attn(lib, torch, mix[layer], lay, 0, LAYERS, layer, 1, k, q, o_r, part, lens, btd, batch, sp,
+                       receipts=(rc_sk, used, epoch), bj=bjs[layer], plain=flags[layer])
+                rc_ok = receipt_gate(mix[layer], layer, enc_read, f"deferred {label} attention layer={layer} sp={sp}")
+                cells.append({"layer": layer, "splits": sp, "plain_slots": len(read) - len(enc_read),
+                              "encoded_slots": len(enc_read), "equal": eq(o_p, o_f), "receipts_equal": eq(o_p, o_r),
+                              "receipts": rc_ok, "unflagged_equal": eq(o_p, o_n)})
+        return cells
+
+    mixed = attention("mixed")
+    mixed_ok = all(c["equal"] and c["receipts_equal"] and c["receipts"] and not c["unflagged_equal"] for c in mixed)
+    blocks = torch.tensor(rng.sample(range(BLOCKS), 20), dtype=torch.int32, device="cuda")
+    gather_ok = True
+    for l in range(LAYERS):
+        for with_rc in (False, True):
+            o = torch.empty(20, *plain[l].shape[1:], dtype=torch.bfloat16, device="cuda")
+            if with_rc:
+                epoch.add_(1)
+                rc_sk.fill_(-1)
+            P.gather(lib, torch, mix[l], lay, 0, LAYERS, l, 1, k, blocks, o,
+                     receipts=(rc_sk, used, epoch) if with_rc else None, bj=bjs[l], plain=flags[l])
+            torch.cuda.synchronize()
+            gather_ok &= eq(o, plain[l][blocks.long()])
+            if with_rc:
+                enc_slots = [b * BS + s for b in blocks.cpu().tolist() for s in range(BS) if not is_plain[l][b * BS + s]]
+                gather_ok &= receipt_gate(mix[l], l, enc_slots, f"deferred gather layer={l}")
+    tab = P.encode_table(torch, [(split[l][0], split[l][0].shape[0], mix[l], 0, LAYERS, l, bjs[l], flags[l])
+                                 for l in range(LAYERS)]).cuda()
+    P.encode(lib, torch, tab, LAYERS, max(split[l][0].shape[0] for l in range(LAYERS)), lay, k)
+    torch.cuda.synchronize()
+    encode_ok = all(eq(mix[l], enc[l]) and not bool(flags[l].any()) for l in range(LAYERS))
+    after = attention("encoded")
+    after_ok = all(c["equal"] and c["receipts_equal"] and c["receipts"] and c["unflagged_equal"] for c in after)
+    all_slots = torch.arange(nslots, dtype=torch.int64, device="cuda")
+    tab = P.encode_table(torch, [(all_slots, nslots, mix[l], 0, LAYERS, l, bjs[l], flags[l])
+                                 for l in range(LAYERS)]).cuda()
+    P.encode(lib, torch, tab, LAYERS, nslots, lay, k)
+    torch.cuda.synchronize()
+    again_ok = all(eq(mix[l], enc[l]) for l in range(LAYERS))
+    try:
+        P.attn(lib, torch, plain[0], lay, 0, LAYERS, 0, 0, k, q, torch.empty_like(q), torch.empty(
+            P.part_floats(lib, batch, 1), dtype=torch.float32, device="cuda"), lens, btd, batch, 1, plain=flags[0])
+        refused = False
+    except RuntimeError:
+        refused = True
+    ok = cache_ok and multi_ok and mixed_ok and gather_ok and encode_ok and after_ok and again_ok and refused
+    res = {"k": k, "plain_slots": [sum(p) for p in is_plain], "cache": cache_ok, "append_multi": multi_ok,
+           "attention": mixed, "gather": gather_ok, "encode": encode_ok, "attention_encoded": after,
+           "encode_again": again_ok, "plain_cache_refused": refused, "ok": ok}
+    log(f"deferred k={k}: {'ok' if ok else 'FAIL'} (cache {cache_ok}, append_multi {multi_ok}, mixed attention "
+        f"{sum(c['equal'] and c['receipts_equal'] and c['receipts'] and not c['unflagged_equal'] for c in mixed)}"
+        f"/{len(mixed)}, gather {gather_ok}, encode {encode_ok}, attention after "
+        f"{sum(c['equal'] and c['receipts_equal'] and c['receipts'] for c in after)}/{len(after)}, "
+        f"encode again {again_ok}, plain cache refused {refused})")
+    return res
 
 
 def main() -> int:
@@ -463,7 +617,7 @@ def main() -> int:
             f"({len(att['cells'])} cells, max rel err {max(errs):.1e}), gather {'ok' if ok_g else 'FAIL'}")
     res["receipt_sets"] = receipt_sets
     res["plan_of"] = plan_checked
-    res["bound"] = bound_gate(lib, torch, [int(v) for v in a.ks.split(",")], log)
+    res["bound"] = bound_gate(lib, torch, [int(v) for v in a.ks.split(",")], log, (rc_sk, used, epoch, receipt_gate))
     res["ok"] &= res["bound"]["ok"]
     (out_dir / "paged-gate.json").write_text(json.dumps(res, indent=1))
     log("paged gate " + ("passed" if res["ok"] else "FAILED"))

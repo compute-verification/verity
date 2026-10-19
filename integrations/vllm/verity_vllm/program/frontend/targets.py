@@ -73,7 +73,19 @@ TARGETS: dict[str, dict[str, Any]] = {
                # a biased linear binds GemmBias_v2{K,N,DOT} with this family's step (`gemm_bias_dot`): serving has no source for the
                # pre-bias word of Gemm_v2 + BiasAdd_v1
                "gemm_bias_dot": True,
+               # the bf16 fused-MoE expert GEMMs bind MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT} with this family's step (`moe_expert_dot`),
+               # at any tuned tile at served defaults (`moe_tuned_tile_refusal`); the runs are Qwen3-30B-A3B's on one H200
+               "moe_expert_dot": True,
                "evidence": {"attention_fa2": "R13 hopper: forced-FA2 row `…__h100__…__bi-eager-fa2` Match replay (D=64, BN=128, DOT=Hopper, INV=Fa2InvSum)",
+                            "moe_expert": "Triton lowers the bf16 fused_moe_kernel's tl.dot to wgmma k16 or to MMA v2's mma.sync m16n8k16, whose "
+                                          "HMMA.16816 on cc 9.0 is silicon.HOPPER_BF16_M16N8K16, the wgmma step's parameters and not the Ampere "
+                                          "step (silicon.instructions, r20260922-185339-e337); cc 9.0, 132 SMs, vLLM d9105ea80, served defaults: "
+                                          "the compiled Match r20261018-084657-c7f6 equals MoeExpertGemm_v2 / MoeExpertGemmW_v2{DOT=HopperBF16WgmmaDot16_v1} "
+                                          "on 672 of 672 rows each at the tuned tiles of 1 to 303 rows, where the _v1 binding matched 27 of 1,344 "
+                                          "(r20261018-062333-f1a7); eager under batch invariance, whose launches take the same tuned tiles: the "
+                                          "Match r20261018-101214-aa8f folds every expert row of 32 steps to these Definitions, and tier A on its "
+                                          "rerun's capture (r20261018-103507-288c, replayed by r20261018-122240-8e2d) evaluates 1,536 of 1,536 rows "
+                                          "exactly at the gates, each launch's 384 rows of decode step 1 and 384 of the prefill",
                             "attention_fa3": "lane HP CONF-b1-hopper (D=128, BN=128, 39 leaves exact, positions 0..526); R13 hopper: D=64 (BN 128 prefill / "
                                              "192 decode) — the native FA3 row's Match replay"}},
     "blackwell_consumer": {"dot_id": "HopperBF16WgmmaDot16_v1",
@@ -130,8 +142,8 @@ def tensor_core_dot(profile):
 def moe_expert_dot(profile):
     """The k16 step of the fused-MoE expert GEMMs' Definition on the declared target: None for the `_v1` Definitions, else the
     target's registered step for the `_v2{E,K,N,DOT}` ones.  A family binds them when its record says `moe_expert_dot` (its
-    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one); every other family keeps the `_v1` records' binding
-    (cc 9.0 too: its fused_moe_kernel lowering has no correspondence run yet).  An unregistered target raises `UnregisteredTarget`."""
+    fused_moe_kernel correspondence ran on a step other than the Ampere/Ada one: cc 9.0 and 12.0); the Ampere/Ada family keeps the
+    `_v1` records' binding.  An unregistered target raises `UnregisteredTarget`."""
     return tensor_core_dot(profile) if TARGETS[target_family(profile)].get("moe_expert_dot") else None
 
 
@@ -161,6 +173,18 @@ def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     if dot is None:
         return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
     return bind(M.MoeExpertGemmWV2 if routed else M.MoeExpertGemmV2, E=int(E), K=int(K), N=int(N), DOT=dot)
+
+
+def moe_tuned_tile_refusal(profile, kb: Any) -> str | None:
+    """None when a tuned bf16 `fused_moe_kernel` tile (vLLM's per-device table, which batch invariance does not override) is one the
+    Definitions model on the declared target: cc 9.0, where every tile's `tl.dot` is the k16 step `moe_expert_dot` names (wgmma or MMA
+    v2, both Hopper's) and a row's chain does not depend on the tile, and BLOCK_SIZE_K a multiple of that step; else why not.  The
+    Build's rule and the fold's are this one."""
+    if tuple(profile.compute_capability) != (9, 0):
+        return (f"numerics_unregistered: a tuned bf16 expert launch is modelled on cc 9.0 only, not on cc {profile.capability_str}")
+    if not isinstance(kb, int) or isinstance(kb, bool) or kb <= 0 or kb % 16:
+        return f"numerics_unregistered: BLOCK_SIZE_K={kb!r} is not a multiple of the k16 step"
+    return None
 
 
 def moe_expert_fp8_dot(profile):
@@ -626,7 +650,7 @@ def describe(profile) -> dict[str, Any]:
 
 
 __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "target_family", "gemm_target", "tensor_core_dot",
-           "moe_expert_dot", "moe_expert_gemm_spec", "moe_expert_fp8_dot", "moe_expert_fp8_launch_dot",
+           "moe_expert_dot", "moe_expert_gemm_spec", "moe_tuned_tile_refusal", "moe_expert_fp8_dot", "moe_expert_fp8_launch_dot",
            "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
