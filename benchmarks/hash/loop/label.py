@@ -1,9 +1,10 @@
 """Label hash-loop runs and their result artifacts in the evidence store, with the existing vocabulary only (`research data vocab`):
-campaign=hash-loop, sweep=iteration, row=N, label=<hypothesis>, source=<branch>@<commit>, hardware=<GPU>; the arms are in the
+campaign=hash-loop, sweep=iteration (or --sweep what-if: an arm that doesn't serve), row=N, arm=<workload> (qwen3-8b; plot.py
+draws workload:arm, the arm being each measurement's), label=<hypothesis>, source=<branch>@<commit>, hardware=<GPU>; the arms are in the
 result's measurements. `--outcome kept|dropped --reason TEXT` adds the iteration's verdict (kernel_outcome, kernel_reason) to each
 result. Re-running it is harmless: a label already asserted with the same value is skipped.
 
-    python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis TEXT [--branch B] [--outcome kept|dropped --reason TEXT] [--by hash]
+    python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis TEXT [--sweep what-if] [--branch B] [--outcome kept|dropped --reason TEXT] [--by hash]
 """
 from __future__ import annotations
 
@@ -38,6 +39,8 @@ def main() -> int:
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--row", required=True)
     ap.add_argument("--hypothesis", required=True)
+    ap.add_argument("--sweep", default="iteration")
+    ap.add_argument("--workload", default="qwen3-8b", help="the `arm` label: the workload, e.g. llama8b-int8")
     ap.add_argument("--branch", default=BRANCH)
     ap.add_argument("--outcome", choices=("kept", "dropped"))
     ap.add_argument("--reason")
@@ -59,7 +62,7 @@ def main() -> int:
             print(f"{run}: machine {machine!r} / commit {commit!r}: not a hash-loop run", file=sys.stderr)
             rc = 1
             continue
-        labels = [("campaign", "hash-loop"), ("sweep", "iteration"), ("row", str(a.row)), ("label", a.hypothesis),
+        labels = [("campaign", "hash-loop"), ("sweep", a.sweep), ("row", str(a.row)), ("arm", a.workload), ("label", a.hypothesis),
                   ("source", f"{a.branch}@{commit}"), ("hardware", HARDWARE[machine])]
         targets = [run] + ([result] if result else [])
         if not result:

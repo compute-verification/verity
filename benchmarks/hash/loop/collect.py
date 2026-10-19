@@ -15,8 +15,21 @@ bench arm's own id. Measures (stock's step times are stock-prof's, the same engi
   {prefill,decode}_step_ms     mean engine-step span (nsys exec range to the next), over the timed runs
   {prefill,decode}_serve_ms    GPU time of the model's own kernels per step
   {prefill,decode}_hash_gpu_ms GPU time of the hash kernels (leaves + tree) launched per step
+  {prefill,decode}_gather_ms   GPU time of the gather into the staging windows per step (the gather kernel, or the copy engines'
+                               device-to-device copies; stock's are its own few)
   {prefill,decode}_serve_rise_pct  100 (serve_arm / serve_stock - 1): the model's kernels slowed by sharing the GPU
   noise_tpot_cv_pct        (stock only) the coefficient of variation of stock's TPOT over its interleaved reps
+  first_run_ms             wall time of the arm's first profiled run (the gate run, the same steps): no plan is learned yet, so every
+                           step is a learning step, as every step is under live serving, where a batch's shape never repeats; the
+                           timed runs replay its requests and hit its plans
+  first_run_rise_pct       100 (first_run_arm / first_run_stock - 1)
+  first_run_copy_gb        GB copied D2H plus H2D in that run (memcpy.DtoH.GB + memcpy.HtoD.GB)
+  serve_run_ms, hash_run_ms, hash_corun_ms  per timed run: GPU time of the model's kernels, of the hash kernels, and the time both ran
+  serve_lost_per_corun_ms  (serve_run_arm - serve_run_stock) / hash_corun_arm: model-kernel GPU time lost per ms of co-running hash
+                           (circuits' interference measure, note:circuits-commit-serve-interference)
+The result's workload_fingerprint.pin is PIN_BUILD's served-pin check (pinned: the arms ran under the Build of record's compile
+artifact and its check found the same winners; unpinned: no PIN_BUILD, as on the B200). workload_fingerprint.retain is each arm's
+retention mode, the `retain=` of its definition (the arm sets VERITY_RETAIN in its own process, so the node's default never applies).
 The step measures need a one-point sweep: nsys_summary's runs carry no sweep point, so a wider sweep reports the ratios only.
 """
 from __future__ import annotations
@@ -24,11 +37,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import statistics
 import sys
 from pathlib import Path
 
-ARM = {"stock": "stock", "stock-prof": "stock", "served-commit-rows": "sha512", "served-commit-rows-blake3": "blake3"}
+ARM = {"stock": "stock", "stock-prof": "stock", "served-commit-rows": "sha512", "served-commit-rows-blake3": "blake3",
+       "served-commit-rows-layer": "sha512-layer"}
 for _kv in filter(None, os.environ.get("ARM_NAMES", "").split(",")):
     ARM[_kv.split("=", 1)[0]] = _kv.split("=", 1)[1]
 RATIOS = (("tpot_overhead_pct", "time_per_output_token_s", 1), ("throughput_overhead_pct", "tokens_per_s", -1),
@@ -74,6 +89,29 @@ def step_means(summary: list[dict], reps: int) -> dict[str, float]:
         out[f"{phase}_step_ms"] = mean(lambda r: r.get("step_ms", 0.0))
         out[f"{phase}_serve_ms"] = mean(lambda r: r.get("serve", 0.0))
         out[f"{phase}_hash_gpu_ms"] = mean(lambda r: r.get("hash.leaves", 0.0) + r.get("hash.tree", 0.0))
+        out[f"{phase}_gather_ms"] = mean(lambda r: r.get("collect.gather", 0.0) + r.get("memcpy.DtoD", 0.0))
+    for key, name in (("gpu_busy_serve_ms", "serve_run_ms"), ("gpu_busy_hash_ms", "hash_run_ms"), ("hash_overlap_serve_ms", "hash_corun_ms")):
+        if all(key in r for r in runs):
+            out[name] = round(statistics.fmean(r[key] for r in runs), 3)
+    first = summary[0] if len(summary) > reps else {}
+    if "run_wall_ms" in first:
+        out["first_run_ms"] = round(first["run_wall_ms"], 3)
+        cat = first.get("gpu_ms_by_category", {})
+        out["first_run_copy_gb"] = round(sum(cat.get(k, (0.0,))[0] for k in ("memcpy.DtoH.GB", "memcpy.HtoD.GB")), 3)
+    return out
+
+
+def retain_modes(arms: list[dict]) -> dict[str, str | None]:
+    """Each arm's `retain=` in its definition (module_spec `pkg.mod:NAME` under benchmarks/); None for an arm without one (stock)."""
+    out: dict[str, str | None] = {}
+    for arm in arms:
+        spec, mode = arm.get("module_spec") or "", None
+        if ":" in spec:
+            mod, name = spec.split(":", 1)
+            src = Path(__file__).resolve().parents[2].joinpath(*mod.split(".")).with_suffix(".py")
+            hit = re.search(rf'^{re.escape(name)} = \w+\([^)]*retain="(\w+)"', src.read_text(), re.M) if src.is_file() else None
+            mode = hit.group(1) if hit else None
+        out[arm.get("id", "?")] = mode
     return out
 
 
@@ -86,6 +124,7 @@ def main() -> int:
     ap.add_argument("--bench-rc", type=int, default=0)
     ap.add_argument("--result", type=Path, default=None)
     ap.add_argument("--arm-names", default="")
+    ap.add_argument("--pin-rc", type=int, default=None, help="prof.sh's `pin check rc` (with PIN_BUILD)")
     a = ap.parse_args()
     ARM.update(kv.split("=", 1) for kv in filter(None, a.arm_names.split(",")))
     run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", a.out.parent))
@@ -108,7 +147,13 @@ def main() -> int:
     base = steps.get("stock", {})
     for arm, s in steps.items():
         for k, v in s.items():
-            meas.append({"name": k, "arm": arm, "value": v, "unit": "ms"})
+            meas.append({"name": k, "arm": arm, "value": v, "unit": "GB" if k.endswith("_gb") else "ms"})
+        if arm != "stock" and base.get("first_run_ms") and "first_run_ms" in s:
+            rise = round(100 * (s["first_run_ms"] / base["first_run_ms"] - 1), 3)
+            meas.append({"name": "first_run_rise_pct", "arm": arm, "value": rise, "unit": "%"})
+        if arm != "stock" and base.get("serve_run_ms") and s.get("hash_corun_ms"):
+            lost = (s["serve_run_ms"] - base["serve_run_ms"]) / s["hash_corun_ms"]
+            meas.append({"name": "serve_lost_per_corun_ms", "arm": arm, "value": round(lost, 4), "unit": "ms/ms"})
         if arm != "stock":
             for phase in ("prefill", "decode"):
                 b, x = base.get(f"{phase}_serve_ms"), s.get(f"{phase}_serve_ms")
@@ -119,6 +164,14 @@ def main() -> int:
         p = a.out / f"clocks.{when}.csv"
         if p.is_file():
             clocks[when] = p.read_text().strip().splitlines()[-1]
+    pin_txt = a.out / "pin_check.txt"
+    pin = {"state": "unpinned"}
+    if os.environ.get("PIN_BUILD"):
+        rc = a.pin_rc if pin_txt.is_file() else None
+        pin = {"state": "pinned" if rc == 0 else "pin-failed", "build": os.environ.get("PIN_BUILD_ART", os.environ["PIN_BUILD"]),
+               "check_rc": rc}
+        if rc != 0:
+            errors.append(f"served-pin check rc {rc}: the kernels are not the Build's")
     ident = res.get("identity", {})
     status = "passed" if gates_ok and a.bench_rc == 0 and not errors else "failed"
     doc = {
@@ -127,7 +180,8 @@ def main() -> int:
         "workload_fingerprint": {"bench": "served_commit/prof.sh", "spec": ident.get("preset", {}).get("id"), "sweep": ident.get("sweep"),
                                  "git_commit": ident.get("git_commit"), "vllm_version": ident.get("vllm_version"),
                                  "arms": [x["id"] for x in ident.get("arms", [])], "reps": a.reps, "row": a.row,
-                                 "hypothesis": a.hypothesis, "clocks": clocks},
+                                 "hypothesis": a.hypothesis, "clocks": clocks, "pin": pin,
+                                 "retain": retain_modes(ident.get("arms", []))},
         "validation": {"status": status, "checker": "verity-bench gates (token-for-token vs stock, commit-arm gate)",
                        "detail": "; ".join(errors) or f"bench rc {a.bench_rc}, gates {'passed' if gates_ok else 'failed'}", "evidence": []},
         "measurements": meas,
