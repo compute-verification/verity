@@ -64,8 +64,8 @@ RANGES = {
     "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
-    "kappa_block": (0.6, 2.0, "Kimi K2's average 0.60 if a block must hold whole training steps; weight matmuls alone "
-                              "1; every gate a counted multiplication 2"),
+    "kappa_block": (0.6, 2.0, "Kimi K2's average 0.60 if a block must hold whole training steps; weight matmuls with "
+                              "their accumulations 1; multiplications alone, their additions in another block, 2"),
     "kappa_chain": (0.03, 0.3, "guess, around Kimi K2's dense path 7%"),
     "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
     "e_chain": (4096.0, 49152.0, "guess"),
