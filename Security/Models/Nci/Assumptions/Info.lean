@@ -31,8 +31,10 @@ If each FP4 thread value is a gate holding its E2M1 value (15 values), one weigh
 reads two thread values and no weight, is charged 8 bits, and its reads take at most 225 < 2⁸ values. If the gates hold
 E2M1 codes (16 with `-0`) and each block's scale sits in its own gate, an NVFP4 or MXFP4 block's codes always include
 one of magnitude at least 3, so 16 weight-gradient products over one 16-token block are charged 128 bits against fewer
-than 2^127.998 values. It holds against these at FP8 (E4M3, 7.98 bits per entry), and when each FP4 gate holds its
-scaled value. -/
+than 2^127.998 values. These leave FP8 (E4M3, 7.98 bits per entry) standing, and FP4 gates that hold scaled values,
+but redundant reads falsify it at every format and every margin (`WeightsSupportFmt`): under the standard threading the
+gates reading a 128 × 128 × 2 tile of fprop products `W[i,j] · x[t,j]` are charged `b_a · 32768` bits against at most
+4096 bits of values at E4M3, false at every `b_a > 1/8`. -/
 def WeightsSupport (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) : Prop :=
   ∀ R, SmallInfo c θv Γ S R →
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤

@@ -10,6 +10,7 @@ import Models.Nci.Guarantees.Fit
 import Models.Nci.Guarantees.FitRate
 import Models.Nci.Guarantees.Dampener
 import Models.Nci.Guarantees.Info
+import Models.Nci.Guarantees.Fmt
 import Models.Nci.Guarantees.Training
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
