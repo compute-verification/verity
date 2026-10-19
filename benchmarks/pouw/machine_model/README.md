@@ -73,7 +73,7 @@ The data, each kind of thing a file or a line of its own:
 - `data/table.toml`: the cheater's table route (`eps --lookups`): lane instructions and L2 bytes a word, and the L2
   bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
 - `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
-  prices it on, and the conditions no computation shows.
+  prices it on, the conditions no computation shows, and its scope, per node ("The headline is per node").
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:
@@ -326,6 +326,29 @@ The other options:
 - `--checking sampled`: charges ε_adapt for the design's own proof unit (`unit`, whole dot products: +0.35%).
   `--adapt UNIT` charges another (`data/adapt.toml`): `segment`, the spot check decision 72 replaced (≈ 21%), or
   `whole-recompute` and `per-stage` (0). The Python `eps()` charges none unless given one.
+
+## The headline is per node
+
+`machine-model headline`'s ε, and the Lean headline guarantees exported from this data
+(`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node (ASK-65 = A,
+19 Oct): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the
+credited work. The device that did it is left to the attribution layer. The floor argument places no work: every
+credited word is a fresh function of the post-coin noise, so it was computed after the coin, but nothing ties a
+committed tile to the GPU that computed it. The transcript is a Merkle root over tile digests, so a helper holding the
+salt ships one 64-byte digest a tile. The model prices the work on one device's rows, which makes ε a share of the
+credited time `T_cred` on that device, not of that device's own time.
+
+A per-GPU reading of ε comes only through the attribution layer, under two conditions:
+
+- **LOC's host deduction** (decision 37, LOC: the node computes its own certified work): what the host CPU can compute
+  of the credited work exactly is deducted from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
+  for the fold and credited fillers, each bit-exact.
+- **The peer-GPU premise**: every billable GPU on the node is credited each window, so no uncredited peer computes a
+  credited GPU's tiles over NVLink. Otherwise the node is the unit.
+
+Counted per GPU without them, as the headline's ε plus the host's or a peer's share of the credited time, the host's
+AMX and AVX-512 (and NVLink peers) take every device over 1% on some real host. #2681 (RT-SCOPE) measures the host's
+rate on each host family and prints the counted ε at both readings.
 
 ## Adopt a probe's census
 
