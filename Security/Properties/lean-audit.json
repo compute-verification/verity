@@ -54,6 +54,7 @@
   "PouwWindow.Grid",
   "PouwWindow.Draw",
   "PouwWindow.Public",
+  "PouwWindow.Length",
   "Properties.Pouw.Check",
   "PouwWindow.Json",
   "PouwCheck.Json",
