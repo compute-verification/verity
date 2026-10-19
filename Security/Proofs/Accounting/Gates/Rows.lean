@@ -6,7 +6,8 @@ import Std.Data.String.ToNat
 # The circuit model against the running Python, row by row
 
 Rows the kernel evaluates the model on, each set recomputed from the Python by
-`verity/ml/circuits/tests/test_lean_gates.py`:
+`verity/ml/circuits/tests/test_lean_gates.py`, and the H1 rows by PoUW's `verity/core/protocols/pouw/tests/test_h1_gates.py`
+(the tile is PoUW's, which `verity.ml` doesn't import):
 
 * `s8Rows`: `intervals` over an `S8Dot_v1` coordinate (`s8Dot`, `ops/s8.py`'s `_dot_body`) whose operands and incoming
   accumulator come from producers declaring the binding's `A`, `B`, `A_g`, `B_g` and `C`: the derived intervals of its
@@ -15,6 +16,9 @@ Rows the kernel evaluates the model on, each set recomputed from the Python by
 * `censusRows`: `census` of `S8Dot_v1` coordinates (or one `S8Matmul_v1`) and `LimbSplit_v1` splits over their inputs
   (`censusDag`), against census/v1 of the same Program: the s8 family's steps and MACs, served and tail apart in all and
   per engine step, the constants, the limb splits' carries, the inputs' bits, and property/v1's units of the limb steps.
+* `h1Rows`: `census` of an H1 + fx1 tile (`h1Dag`, `h1tile.PouwH1Tile`): its dot steps and `dotMacs` against its
+  Program's classes in census/v1, none of its MACs served or tail, and its committed and served words against the
+  receipt's layout.
 * `classRows`, `familyRows`, `tableReadRows`: `classOf` on primitive ids (`classTag`), against property/v1's `class_of`
   with its gathers' kinds and its s8 family's formats, and circuits' input ids.
 * `unitsRows`, `tableUnitsRows`: `units` by class on small circuits of primitive ids (`dagOf`: each gate an operation of
@@ -202,7 +206,7 @@ def censusOf (matmul : Bool) (N K L : ℕ) (acc u8 tu8 : Bool) (tail : List (ℕ
   let C := censusDag matmul N K L acc u8 tu8 tail regB limbs
   let c := census C fun _ => True
   let steps := (if matmul then 1 else N) + if limbs.isEmpty then 0 else 1
-  (c.family, c.macs, c.servedMacs, c.tailMacs, c.affine, c.carries, c.rounding, c.compareSelect, c.runBits,
+  (c.family, c.dotMacs, c.servedMacs, c.tailMacs, c.affine, c.carries, c.rounding, c.compareSelect, c.runBits,
     c.registeredBits, (List.range steps).map fun s => let d := census C (· = s); (d.servedMacs, d.tailMacs))
 
 /-- Rows `(matmul, N, K, L, acc, u8, tu8, tail, regB, limbs, counts)`: `censusOf` is census/v1's count of the same
@@ -219,6 +223,122 @@ def censusRows : List (Bool × ℕ × ℕ × ℕ × Bool × Bool × Bool × List
 theorem censusOf_censusRows :
     censusRows.all (fun (matmul, N, K, L, acc, u8, tu8, tail, regB, limbs, out) =>
       censusOf matmul N K L acc u8 tu8 tail regB limbs == out) := by
+  decide +kernel
+
+/-! ## `census` of an H1 + fx1 tile -/
+
+/-- H1's digit count `m` at `KS` segments (`segment.n_digits`): the least `m` with `128·KS ≤ 128^m` and
+`⌊127·KS / 128^(m−1)⌋ ≤ 127`. -/
+def nDigits (ks : ℕ) : ℕ :=
+  ((List.range (ks + 1)).find? fun m =>
+    decide (128 * ks ≤ 128 ^ (m + 1)) && decide (127 * ks / 128 ^ m ≤ 127)).getD 0 + 1
+
+/-- Entry `q`'s row slot in its lane (`segment.row_slot`). -/
+def rowSlot (q : ℕ) : ℕ := 2 * (q / 4 / 4) + q % 4 / 2
+
+/-- Entry `q`'s column slot in its lane (`segment.col_slot`). -/
+def colSlot (q : ℕ) : ℕ := 2 * (q / 4 % 4) + q % 4 % 2
+
+/-- Lane `ln`'s row at row slot `s` of an `r × c` tile (`h1tile.Layout.rows`). -/
+def laneRow (r c ln s : ℕ) : ℕ := ln / (c / 8) + r / 4 * s
+
+/-- Lane `ln`'s column at column slot `s` of a tile of `c` columns (`h1tile.Layout.cols`). -/
+def laneCol (c ln s : ℕ) : ℕ := 2 * (ln % (c / 8)) + 2 * (c / 8) * (s / 2) + s % 2
+
+/-- A budgeted gate of class `cls` and primitive `prim` reading `args`, at engine step 0. -/
+def h1Gate (prim : String) (cls : Budget) (args : List ℕ) (site : Site := .other) (commit : Bool := false) : Gate ℕ :=
+  ⟨.budgeted cls fun v => v.headD 0, args, s32Min, s32Max, 0, prim, site, commit⟩
+
+/-- A lane's segment dot of primitive `prim` (`PouwSegDot_v2` from the accumulator at gate `acc`, or `PouwSegDot0_v2`
+from the zero there): `acc + Σ a_k·b_k` over 32 s8 pairs, wrapping. -/
+def segDot (prim : String) (acc : ℕ) (a b : List ℕ) : Gate ℕ :=
+  ⟨.mma .s8 .s8 32 false, acc :: (a ++ b), s32Min, s32Max, 0, prim, .other, false⟩
+
+/-- A step of a cell's `z`: `BlackwellS8ImmaDot32_v2` (s8·s8, clamped) on the accumulator at gate `acc`. -/
+def immaStep (acc : ℕ) (a b : List ℕ) : Gate ℕ :=
+  ⟨.mma .s8 .s8 32 true, acc :: (a ++ b), s32Min, s32Max, 0, "BlackwellS8ImmaDot32_v2", .other, false⟩
+
+/-- **An H1 + fx1 tile's circuit** (`h1tile.PouwH1Tile` with `EXACT` the s8 accumulator `GemmAccumulatorS8_v2{K}` over
+`BlackwellS8ImmaDot32_v2`, on the full `r × c` grid), at engine step 0: `A`'s `r` rows of `K` codes (run inputs), `B`'s
+`c` rows (registered), the salt (a coin) and a zero; `X = A + b` (`r·K`), `U` (32 a column), `−U`, `W′ = B + c + U`
+(`c·K`) and each row's `m` digit words `A_d` (32 a word); then each lane's dots set by set (`T_0 … T_{KS−1}`,
+`O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, one a lane entry, 32 a set), and per set its fx1 fold and its two halves'
+`PouwXinFinal`; the receipt's `2·(KS + m)` words, each the XOR over lanes of one half after one set, at its receipt site
+and committed; and `z`, each cell's `K/32` steps from the zero. Its noise and fold keys read the salt, and its digits read
+`X` directly: the counts it is held to read neither. -/
+def h1Dag (r c K : ℕ) : Dag ℕ :=
+  let ks := K / 32
+  let m := nDigits ks
+  let sets := ks + m
+  let lanes := r / 4 * (c / 8)
+  let bB := r * K
+  let sB := bB + c * K
+  let zB := sB + 1
+  let xB := zB + 1
+  let uB := xB + r * K
+  let nB := uB + 32 * c
+  let wB := nB + 32 * c
+  let dB := wB + c * K
+  let lB := dB + r * m * 32
+  let per := 32 * sets + 3 * sets
+  let zzB := lB + lanes * per + 2 * sets
+  let row := fun (ln e : ℕ) => laneRow r c ln (rowSlot e)
+  let col := fun (ln e : ℕ) => laneCol c ln (colSlot e)
+  let span := fun (base n : ℕ) => (List.range n).map (base + ·)
+  let dotOf := fun (ln s e : ℕ) =>
+    if s = 0 then segDot "PouwSegDot0_v2" zB (span (xB + row ln e * K) 32) (span (wB + col ln e * K) 32)
+    else if s < ks then
+      segDot "PouwSegDot_v2" (lB + ln * per + 32 * (s - 1) + e) (span (xB + row ln e * K + 32 * s) 32)
+        (span (wB + col ln e * K + 32 * s) 32)
+    else if s = ks then
+      segDot "PouwSegDot_v2" (lB + ln * per + 32 * (s - 1) + e) (span (nB + 32 * col ln e) 32)
+        (span (dB + 32 * (row ln e * m)) 32)
+    else segDot "PouwSegDot0_v2" zB (span (uB + 32 * col ln e) 32) (span (dB + 32 * (row ln e * m + (s - ks))) 32)
+  let lane := fun (ln : ℕ) =>
+    (List.range (32 * sets)).map (fun t => dotOf ln (t / 32) (t % 32)) ++
+      (List.range sets).flatMap fun s =>
+        let f := lB + ln * per + 32 * sets + 3 * s
+        [h1Gate "PouwFx1Absorb_v2" .fold ((if s = 0 then sB else f - 3) :: span (lB + ln * per + 32 * s) 32),
+          h1Gate "PouwXinFinal_v2" .rounding [f], h1Gate "PouwXinFinal_v2" .rounding [f]]
+  (List.range (r * K)).map (fun i => inputGate .run 8 i) ++
+    (List.range (c * K)).map (fun i => inputGate .registered 8 (bB + i)) ++
+    [inputGate .coin 32 sB, zero32 0] ++
+    (List.range (r * K)).map (fun i => h1Gate "PouwI8AddBit_v2" .rounding [i, sB]) ++
+    (List.range (32 * c)).map (fun _ => h1Gate "PouwU129_v2" .rounding [sB]) ++
+    (List.range (32 * c)).map (fun i => h1Gate "PouwI8Neg_v2" .rounding [uB + i]) ++
+    (List.range (c * K)).map (fun i => h1Gate "PouwI8Add_v2" .rounding [bB + i, sB, uB + 32 * (i / K) + i % K % 32]) ++
+    (List.range (r * m * 32)).map (fun i => h1Gate "PouwDigitLo_v2" .rounding [xB + K * (i / (32 * m)) + i % 32]) ++
+    (List.range lanes).flatMap lane ++
+    (List.range (2 * sets)).map (fun w =>
+      h1Gate "PouwXor32_v2" .rounding
+        ((List.range lanes).map fun ln => lB + ln * per + 32 * sets + 3 * (w / 2) + 1 + w % 2)
+        (.receipt "GemmAccumulatorS8_v2" K w (span 0 (r * K)) (span bB (c * K))) true) ++
+    (List.range (r * c * ks)).map fun t =>
+      immaStep (if t % ks = 0 then zB else zzB + t - 1) (span (t / ks / c * K + 32 * (t % ks)) 32)
+        (span (bB + t / ks % c * K + 32 * (t % ks)) 32)
+
+/-- An H1 row's counts: the s8 family's steps, their MACs (`dotMacs`), the served and the tail MACs, the committed
+words, and those of them whose role is served. -/
+abbrev H1Out := ℕ × ℕ × ℕ × ℕ × ℕ × ℕ
+
+/-- `census` of `h1Dag`, with its committed words of the served role. -/
+def h1Of (r c K : ℕ) : H1Out :=
+  let C := h1Dag r c K
+  let d := census C fun _ => True
+  (d.family, d.dotMacs, d.servedMacs, d.tailMacs, d.committed,
+    countAt C (fun _ => True) fun g => if g.commit && g.role.isServed then 1 else 0)
+
+/-- Rows `(r, c, K, counts)`: `h1Of` is the H1 tile's Program as PoUW's `test_h1_gates.py` counts it. Its dot steps and
+`dotMacs` are its classes' instances in census/v1 (the lanes' `PouwSegDot_v2` and `PouwSegDot0_v2` and `z`'s
+`BlackwellS8ImmaDot32_v2`, 32 MACs each); it has no served and no tail MACs, and its committed and served words are the
+receipt's `2·(KS + m)` and `2·KS`. They take one lane, two lanes (a receipt word an XOR of two) and `KS = 3`. -/
+def h1Rows : List (ℕ × ℕ × ℕ × H1Out) := [
+  (4, 8, 64, (192, 6144, 0, 0, 8, 4)),
+  (4, 16, 64, (384, 12288, 0, 0, 8, 4)),
+  (4, 8, 96, (256, 8192, 0, 0, 10, 6))]
+
+/-- `census` of an H1 + fx1 tile is its Program's count on every row. -/
+theorem h1Of_h1Rows : h1Rows.all (fun (r, c, K, out) => h1Of r c K == out) := by
   decide +kernel
 
 /-! ## `tableReadBits` on the id's characters -/
