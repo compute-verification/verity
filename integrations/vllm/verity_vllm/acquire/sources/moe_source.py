@@ -86,6 +86,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import re
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -124,9 +125,18 @@ PORTS = {"router_w": _call("MoeRouterSqrtSoftplus_v1", "0"), "router_ids": _call
 LABELS = frozenset({*MOE_FP8_PLANES, *PORTS, "ids", "in"})
 
 
+PLANE_NAME = re.compile(r"moe/L(\d+)/")
+
+
 def binds_planes(manifest: Mapping[str, Any] | None) -> bool:
     """Whether the source binds the `moe_block_stream` planes (`moe/L<k>/<plane>`): with no manifest, or one that names them."""
     return manifest is None or any(r.get("family") == "moe_block_stream" for r in manifest.get("identities") or ())
+
+
+def plane_layer(name: str) -> int | None:
+    """The layer `k` of a plane's name (`moe/L<k>/<plane>`, the router-softmax tap's too); None for any other name."""
+    m = PLANE_NAME.match(name)
+    return int(m.group(1)) if m else None
 
 
 def hash_router_input(input_tokens: Any, table: Any, topk: int) -> Any:
@@ -166,9 +176,8 @@ class MoeBlockSource:
         self.layers = moe_layers_of(model)
         self.modules = [(n, m) for n, m in model.named_modules() if n in self.layers]
         self.at_calls = not binds_planes(manifest)
-        #: layer -> the prefix of its names: the MoE module at calls, else its planes' `moe/L<k>`
-        self.prefix = {k: n if self.at_calls else f"moe/L{k}" for n, k in self.layers.items()}
-        self._layer_at = {p: k for k, p in self.prefix.items()}
+        #: layer -> its MoE module, the prefix of the layer's names at calls (a plane's is `moe/L<k>`)
+        self.module_of = {k: n for n, k in self.layers.items()}
         #: the layers whose router read a hash table, at calls (each commits ids and in beside its weights)
         self.hash_layers: set[int] = set()
         # the MoE modules whose returned value this source binds as `<module>/out`: on a TP rank, those that do not all-reduce it
@@ -250,9 +259,11 @@ class MoeBlockSource:
 
     def layer_of(self, name: str) -> int | None:
         """The MoE layer of a name this source commits (not `<module>/out`); None for any other name."""
+        if not self.at_calls:
+            return plane_layer(name)
         prefix, _, label = name.rpartition("/")
-        k = self._layer_at.get(prefix)
-        return k if k is not None and (label in LABELS or not self.at_calls) else None
+        k = self.layers.get(prefix)
+        return k if k is not None and label in LABELS else None
 
     def uninstall(self) -> None:
         for h in self._handles:
@@ -275,7 +286,7 @@ class MoeBlockSource:
             self.c.errors.append(f"moe source: {what} launched outside a MoE module forward (no layer attribution)"[:200])
             return
         t0 = time.perf_counter()
-        name = f"{self.prefix[self.cur_layer]}/{what}"
+        name = f"{self.module_of[self.cur_layer] if self.at_calls else f'moe/L{self.cur_layer}'}/{what}"
         self.c._acquire(name, t, job)
         if what == "up" and self._flush_after_plane is not None and self._flush_after_plane("up"):
             self.stats["plane_flushes"] += 1             # [FLUSH-03] `up` leaves the device before the block's w2 launch overwrites its workspace

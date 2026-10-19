@@ -1968,9 +1968,10 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
 
     def _moe_layer_of(self) -> Any:
         """The MoE source's `layer_of`: the layer of each name it commits (its planes, or its values at calls under a MoE module),
-        which it holds to its own rule; None for every name without one."""
+        which it holds to its own rule; None for every name without one.  Without the source (an offline committer), a plane's layer."""
+        from verity_vllm.acquire.sources.moe_source import plane_layer
         src = next((s for s in self.sources if getattr(s, "short_name", "") == "moe"), None)
-        return getattr(src, "layer_of", None) or (lambda n: None)
+        return getattr(src, "layer_of", None) or plane_layer
 
     def identity_check(self, manifest: dict[str, Any] | None = None) -> dict[str, Any]:
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
