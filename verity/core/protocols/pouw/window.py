@@ -13,8 +13,8 @@ noise floor ρ·α >= 1 holds), and ``admit``, whether it holds admitted work (a
 rounded down to the grid.  A row that is not admitted is the canonical empty row, zero words and ok 0 (the emptiness
 check), so an empty slot's ok can't be set, and an admitted zero row has ok 0.
 
-**Public items** (`PUBLIC`), exactly the draft's list and the shape.  The service refuses a registration that makes
-anything else public; the window's own root and W's root are salted roots, which the rule allows.
+**Public items** (`PUBLIC`), exactly the draft's list, the shape and the length.  The service refuses a registration that
+makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
     verdict    output       outcome    every drawn tile proved and opened, or not
@@ -22,8 +22,15 @@ anything else public; the window's own root and W's root are salted roots, which
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the law subset:K′ they fix with the work level (`k_prime`)
     shape      structure    parameter  the window's calls (slots, weight rows, first pass tile): N and every tile's place
+    length     structure    parameter  each call's fixed length: its requests ran at max_tokens L with ignore_eos
     drawn      coins        outcome    the verifier's own draw, after the receipt
     root_W     commitment   parameter  the weights' salted root
+
+**The fixed length** (Daniel, 19 Oct, CMP-43): a window of record's rows serve at a public fixed length, vLLM's
+``ignore_eos`` with a public ``max_tokens`` L per call (`Length`), so every admitted request runs L steps whatever it
+samples and the window's useful work is public.  A request's end-of-sequence (its ``done``) is a computed value only: it
+masks neither egress nor credit.  A window whose length item is missing or not ``ignore_eos`` is EOS-keyed, and PoUW's
+check refuses it as ``window-form: eos-keyed`` (`fixed_length`, `length_problem`).
 
 **The grid** (`GRID_BITS` = s): the positive integers with at most s + 1 significant bits, so consecutive points above
 2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window whose masked sum is N_real credited tiles
@@ -103,11 +110,13 @@ PUBLIC = (
                                            "is stated in them"),
     ("shape", "structure", "parameter", "the window's calls, each its batch slots, weight rows and first tile in the pass: "
                                         "they fix N, every entry's range and rows, and the tile each index is"),
+    ("length", "structure", "parameter", "each call's fixed length: its requests ran at max_tokens L ignoring "
+                                         "end-of-sequence, so the window's useful work is public and done masks nothing"),
     ("drawn", "coins", "outcome", "the verifier's own draw, after the receipt"),
     ("root_W", "commitment", "parameter", "the weights' salted root: what the tiles' weight rows are committed to, hiding"),
 )
 #: the items a registration carries; the verdict and the draw come after it
-REGISTERED = ("work", "check", "sampling", "shape", "root_W")
+REGISTERED = ("work", "check", "sampling", "shape", "length", "root_W")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`
 COINS = "coins"
@@ -581,6 +590,46 @@ def shape_problem(shape: Sequence[Call], bound: int) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class Length:
+    """A window's fixed length: whether its rows ran ignoring end-of-sequence (vLLM's ``ignore_eos``), and each call's
+    ``max_tokens`` L, in the shape's order."""
+    ignore_eos: bool
+    max_tokens: tuple[int, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {"ignore_eos": self.ignore_eos, "max_tokens": list(self.max_tokens)}
+
+
+def length_of(x: Any) -> Length:
+    """The length a JSON value holds, ``{ignore_eos, max_tokens}``: a boolean and a non-empty list of natural numbers;
+    raises ValueError for any other value."""
+    if not isinstance(x, Mapping) or set(x) != {"ignore_eos", "max_tokens"} or not isinstance(x["ignore_eos"], bool) \
+            or not isinstance(x["max_tokens"], (list, tuple)) or not x["max_tokens"] \
+            or not all(_int(n) and n >= 0 for n in x["max_tokens"]):
+        raise ValueError("a window's length is {ignore_eos, max_tokens}: a boolean and a non-empty list of natural numbers")
+    return Length(x["ignore_eos"], tuple(x["max_tokens"]))
+
+
+def fixed_length(x: Any) -> bool:
+    """Whether a JSON value says its rows ran at a fixed length: an object whose ``ignore_eos`` is true.  Anything else is
+    an EOS-keyed window's, which PoUW's check refuses as ``window-form: eos-keyed``."""
+    return isinstance(x, Mapping) and x.get("ignore_eos") is True
+
+
+def length_problem(length: Length, shape: Sequence[Call]) -> str | None:
+    """Why `length` is not a fixed length of `shape`'s calls, or None: its rows ignored end-of-sequence, and it holds one
+    max_tokens per call, each at least 1."""
+    if not length.ignore_eos:
+        return "its rows stop at end-of-sequence (ignore_eos false), not at a fixed length"
+    if len(length.max_tokens) != len(shape):
+        return f"{len(length.max_tokens)} lengths, not one per call of the shape's {len(shape)}"
+    for c, n in enumerate(length.max_tokens):
+        if n < 1:
+            return f"call {c}: its max_tokens {n} is not a positive length"
+    return None
+
+
 def shape_entries(shape: Sequence[Call], bound: int) -> list[Entry]:
     """The entries' public fields, each a function of the shape (their roots and records zero): call c's range is the
     m_c·n_c tiles after the calls before it, its sides m_c and n_c rows, its pass place (tile0, ⌈n/64⌉, m); the filler's
@@ -829,10 +878,11 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
     return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
 
 
-__all__ = ["COINS", "Call", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LIVE_SCHEME", "MODES", "M_MAX",
-           "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT",
-           "T_BITS", "Work", "credit", "entry_bc", "entry_digest", "entry_leaf", "floor_point", "instance_ts", "k_prime",
-           "layout_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode", "on_grid",
+__all__ = ["COINS", "Call", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LIVE_SCHEME", "Length", "MODES",
+           "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN",
+           "SALT", "T_BITS", "Work", "credit", "entry_bc", "entry_digest", "entry_leaf", "fixed_length", "floor_point",
+           "instance_ts", "k_prime", "layout_problem", "length_of", "length_problem", "level", "levels", "live_challenger",
+           "live_epoch_reason", "live_families", "mode", "on_grid",
            "pad_node", "pass_tiles", "point", "public_fields", "public_inputs", "record_digest", "record_problem",
            "round_key", "rounds_reason", "sampling", "selected", "session_cap", "sessions", "shape_entries", "shape_json",
            "shape_of", "shape_problem", "shape_tiles", "side_domain", "side_field", "side_levels", "side_path", "side_row",

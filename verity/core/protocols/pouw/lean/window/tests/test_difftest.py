@@ -9,7 +9,9 @@ exactly, and every way out of its domain.
 
 The advice's functions run on entries of the layout and every way off it (`_layout_entry`), rows and words mutated off
 the row format, records that are their entries' and each way they are not, shapes of the window's form and each way off
-it (`_shape_in`), side rows and their fields with every bit and pad off, small side domains of up to 2^8 positions
+it (`_shape_in`), fixed lengths of a shape's calls and each way off them and off the length's form (`_length_json`: an
+EOS-keyed flag, a count off the calls, a zero max_tokens), side rows and their fields with every bit and pad off, small
+side domains of up to 2^8 positions
 (the side trees' code is the same at 2^13 and 2^17, which the pinned window exercises), and windows built honestly on a
 shape (`_window`: one to four calls whose slots and weight rows are admitted, refused and empty at random, the filler,
 empty entries, records and side rows' fields) and then broken in one of the ways `window_problem` names, among them a
@@ -369,6 +371,48 @@ def shape_entries_in(rng: random.Random) -> dict:
     return {"shape": x, "bound": max(0, bound)}
 
 
+def _length_json(rng: random.Random, calls: int) -> Any:
+    """A fixed length's JSON for `calls` calls: of the form, or off it in one of the ways `length_problem`, `length_of` and
+    `fixed_length` name."""
+    x: Any = {"ignore_eos": True,
+              "max_tokens": [rng.choice((1, 4, 16, 4096, rng.randint(1, 1 << 40))) for _ in range(calls)]}
+    bad = rng.choice(("none",) * 4 + ("eos", "count", "zero", "json"))
+    if bad == "eos":
+        x["ignore_eos"] = False
+    elif bad == "count":
+        x["max_tokens"] = x["max_tokens"] + [4] if calls == 1 or rng.random() < 0.5 else x["max_tokens"][1:]
+    elif bad == "zero":
+        x["max_tokens"][rng.randrange(calls)] = 0
+    elif bad == "json":
+        how = rng.choice(("empty", "missing", "extra", "neg", "bool", "flag", "str", "notobj"))
+        if how == "empty":
+            x["max_tokens"] = []
+        elif how == "missing":
+            del x[rng.choice(("ignore_eos", "max_tokens"))]
+        elif how == "extra":
+            x["eos"] = 2
+        elif how == "neg":
+            x["max_tokens"][0] = -1
+        elif how == "bool":
+            x["max_tokens"][0] = True
+        elif how == "flag":
+            x["ignore_eos"] = rng.choice((1, "true", None))
+        elif how == "str":
+            x["max_tokens"] = "4"
+        else:
+            x = rng.choice(([True, 4], None, 3, "ignore_eos"))
+    return x
+
+
+def length_in(rng: random.Random) -> dict:
+    shape = _shape(rng)
+    return {"length": _length_json(rng, len(shape)), "shape": Wd.shape_json(shape)}
+
+
+def fixed_length_in(rng: random.Random) -> dict:
+    return {"length": _length_json(rng, rng.randint(1, 4))}
+
+
 def tile_at_in(rng: random.Random) -> dict:
     shape = _shape(rng)
     n = Wd.shape_tiles(shape)
@@ -691,6 +735,7 @@ LAYOUT = {"range": "its range [", "zero": "zero row", "side": "rows, not 1 to", 
 RECORD = {"digest": "not the one the entry binds", "place": "its tile0, cols and m", "shape": "has no shape"}
 SHAPE = {"calls": "calls, not 1 to the bound", "m": "its m ", "n": "its n ", "start": "pass tiles start at",
          "end": "pass tiles end at", "tiles": "tiles are not of"}
+LENGTH = {"eos": "ignore_eos false", "count": "lengths, not one per call", "zero": "is not a positive length"}
 WINDOW = {"bound": "entries, not the bound", "row": "not an entry row", "layout": "not the layout",
           "public": "are not the shape's", "h3": "-h3 root is not the pass's", "indices": "rows' indices are not",
           "bits": "ok, admit or blank is not 0 or 1", "filler": "the filler's side-", "empty": "not the canonical empty row",
@@ -713,6 +758,12 @@ def record_problem(v: dict) -> str | None:
 def shape_problem(v: dict) -> str | None:
     why = Wd.shape_problem(Wd.shape_of(v["shape"]), v["bound"])
     _reason("shape_problem", why, SHAPE)
+    return why
+
+
+def length_problem(v: dict) -> str | None:
+    why = Wd.length_problem(Wd.length_of(v["length"]), Wd.shape_of(v["shape"]))
+    _reason("length_problem", why, LENGTH)
     return why
 
 
@@ -784,7 +835,8 @@ def layout_constants(_: dict) -> dict:
 #: of each function that returns one, and its accept.
 REACHES = {"k_prime": {"refused", "capped", "k > 10,000", "n > 2^50", "exact"},
            "layout_problem": {"accept", *LAYOUT}, "record_problem": {"accept", *RECORD},
-           "shape_problem": {"accept", *SHAPE}, "window_problem": {"accept", "refused", *WINDOW},
+           "shape_problem": {"accept", *SHAPE}, "length_problem": {"accept", *LENGTH},
+           "window_problem": {"accept", "refused", *WINDOW},
            "live_epoch_reason": {"accept", "scheme", "coins"}}
 SEEN: dict[str, set[str]] = {fn: set() for fn in REACHES}
 
@@ -842,6 +894,10 @@ PORTS = {
                                                                                               v["bound"])],
                             shape_entries_in, need_rejects=False), 200),
     "tile_at": (_port("tile_at", lambda v: list(Wd.tile_at(Wd.shape_of(v["shape"]), v["t"])), tile_at_in), 500),
+    "length_of": (_port("length_of", lambda v: Wd.length_of(v["length"]).to_json(), fixed_length_in), 300),
+    "fixed_length": (_port("fixed_length", lambda v: Wd.fixed_length(v["length"]), fixed_length_in,
+                           need_rejects=False), 300),
+    "length_problem": (_port("length_problem", length_problem, length_in), 500),
     "tile_read": (_port("tile_read", lambda v: Wd.tile_read(_entry_row(v), v["i"], v["j"]), tile_read_in), 500),
     "record_digest": (_port("record_digest", lambda v: Wd.record_digest(v["record"]).hex(), record_digest_in,
                             need_rejects=False), 500),
