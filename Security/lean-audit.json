@@ -258,6 +258,14 @@
    "owner": "@lean",
    "digest": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941"
   },
+  "Nci.Assumptions.PackedActivationsIncompressible": {
+   "owner": "@lean",
+   "digest": "a6fb3d21348c2e1cdd66f40d0f2d781f25700f21f5cd6f8a4c337877350605cb"
+  },
+  "Nci.Assumptions.PackedTrainingIncompressible": {
+   "owner": "@lean",
+   "digest": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -5664,6 +5672,28 @@
    "assumptions": [],
    "type_hash": "0339e5b11195f6a2be6a2b2b33069b168fcccd1d874e338d0247bc7742752583"
   },
+  "Nci.SecurityProofs.PackedContainedFanOutOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.PackedContainedFanOutOn : Nci.Guarantees.PackedContainedFanOutOn"],
+   "assumptions": [],
+   "type_hash": "4d2565dacf91227c14474ec7bf24354cc36527de5075976aab9be094e60a3be7"
+  },
+  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn : Nci.Guarantees.PackedIncompressibleContainedMatMulOn"
+   ],
+   "assumptions": [],
+   "type_hash": "489269136c34fdbbb4abbd2ee45cd3e3c5a72e8ec2322facf15516da3220425c"
+  },
+  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": {
+   "owner": "@lean",
+   "signature": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn : Nci.Guarantees.PackedIncompressibleContainedTrainingOn"
+   ],
+   "assumptions": [],
+   "type_hash": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e"
+  },
   "Nci.SecurityProofs.ReadBound": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
@@ -8271,7 +8301,10 @@
    "Pous.SecurityProofs.StreamedWipe": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (no-function,world-unlisted): sm_120's headline at 0.656%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* the issue facet, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,496, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.656%; the folded one gives 0.599%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4), FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
-   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,652, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list."
+   "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline": "frozen (no-function,world-unlisted): sm_120's headline on its measured vector at 0.591%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of VF3r-16 and H1 + fx1 (Definitions.Accounting.Headline.Sm120Measured) with pi* JI3s_0, q = q_T = 9/8, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches give epsilon < 1% only from 9,652, Compose's live line only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the folded branch binding (0.591%; the unfolded one gives 0.573%); FacetCeilings on VF3r-16's rows, WordsWritten at the forms' omega, ScalarRoute at 9/8, NoSum, FOLD-OPT per word folded (FoldOptFolded at the run's unfolded share, ASK-6 = A), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding at delta_bind, proof soundness at delta_ZK, the Definitions' pinning (ProofLayer.Pins, met by main's circuit Definitions since PIN, #2417), the play being its proofs' (ProofLayer.Of) and RightFixed are not on the premises list.",
+   "Nci.SecurityProofs.PackedContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain it runs (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions/Packed.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, Security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (Security/Models/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsSupport": {
@@ -11663,6 +11696,9 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -11739,6 +11775,9 @@
     "Nci.SecurityProofs.InfoOfState",
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -11866,6 +11905,9 @@
     "Nci.SecurityProofs.Inference",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -12091,6 +12133,9 @@
     "Nci.SecurityProofs.IuReads",
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.OtherPositions",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
@@ -12149,6 +12194,9 @@
     "Nci.SecurityProofs.IncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.IncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
     "Nci.SecurityProofs.ThreadedThrottledOn",
@@ -12233,6 +12281,29 @@
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn"
+   ]
+  },
+  "Definitions.Nci.Packed": {
+   "digest": "5c0cf917dac1433d52ec7ff1f154562dc069d90522f8a1f2760a9ac851812d9f",
+   "definitions": {
+    "Nci.PackedChain": "80e0cb21810c4c9dd07873950c6b1e8ba7de8993a4b8de51a9bda3b76022c7ab",
+    "Nci.PackedChain.G": "cbbba0620815a9007dc99788c260a50e5e811a5d09014ad8233059dc7efdc094",
+    "Nci.PackedChain.L": "13a5d3fac16fdce6db840443439418ff0682f45815924cda7e9754670dbea249",
+    "Nci.PackedChain.LinkedWhole": "287c2c7ad98496117339c9d73931236ed165e2a705d887b810d0510667983ac4",
+    "Nci.PackedChain.N": "f3c15d29aee18d14b20895715c90ff8b5a82690cc2e6c6c02567f9613b804cd5",
+    "Nci.PackedChain.Whole": "830dd75b6609ba842aee7af0401c611dbbe8cc49f354ccbc43ca49a57e6622f9",
+    "Nci.PackedChain.d": "888cb57e73a44ddc658c268767c0a5ff922972509d204910881b0d2a7247a77d",
+    "Nci.PackedChain.e": "589f165fcf934756d2bd775bd146ed8571bafc4016fc92a25afa0921c55ac261",
+    "Nci.PackedChain.inputsUsed": "1e431bdd77a00fc13a1fe30505dbe69243ad22cc55ba4943d6411e01af78dcba",
+    "Nci.PackedChain.prod": "f572d9819efccb95791fe5af19978337aa7b76845dcb9eb381ac4f855cb429d7",
+    "Nci.PackedChain.spread": "75e36f64ebc696c267cd7f8a6de2070a1dc9f398c55fe2ce5ef60f312bdf4040",
+    "Nci.PackedChain.weightsUsed": "e1c59424a337dc4469481717ff5ce15b4faa7f057a081328ba41aedd48be2b40",
+    "Nci.PackedChain.π": "77392111ad5311e624eaaff36e4d1cd2d202d12478de4439af97dd2ed921b38f"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedContainedFanOutOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
   },
   "Definitions.Nci.Reads": {
@@ -12348,6 +12419,8 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn",
     "Nci.SecurityProofs.LayeredTraining",
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
@@ -22981,6 +23054,23 @@
    },
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
   },
+  "Models.Nci.Assumptions.Packed": {
+   "digest": "0e92201f09ca7dc081175cbcac6116af2c84cc5a0c82c296d9f52a67809c076d",
+   "definitions": {
+    "Nci.Assumptions.PackedActivationsIncompressible": "a6fb3d21348c2e1cdd66f40d0f2d781f25700f21f5cd6f8a4c337877350605cb"
+   },
+   "guarantees": ["Nci.SecurityProofs.PackedContainedFanOutOn"]
+  },
+  "Models.Nci.Assumptions.PackedTraining": {
+   "digest": "ac2824020eff72bf20c610391f3324978df824cbce953f96d51e5dbeda438b28",
+   "definitions": {
+    "Nci.Assumptions.PackedTrainingIncompressible": "c28bc0a9de11da069d9d22c5a84ef29c4bf53c0134d4d860ce6327a9fdd3fcfb"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
+   ]
+  },
   "Models.Nci.Assumptions.Remote": {
    "digest": "e068989a21dfc9b9c7385b0f5b08844742fc36fa37ec15c4ec5768697236a04a",
    "definitions": {
@@ -23175,6 +23265,24 @@
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
+   ]
+  },
+  "Models.Nci.Guarantees.Packed": {
+   "digest": "70d8fdd106d4bce865f472cbb485e133e4b60f93893f4cd10e2d8049f8c698f0",
+   "definitions": {
+    "Nci.Guarantees.PackedContainedFanOutOn": "e2b133a9e0a10ecb4fdc06be871b51a5e74a57eb0f86c3363ffbf56aacb4eae4"
+   },
+   "guarantees": ["Nci.SecurityProofs.PackedContainedFanOutOn"]
+  },
+  "Models.Nci.Guarantees.PackedTraining": {
+   "digest": "9677c66e093e0bec91b6b9509f434e7293a10e64795d0d489c85451974fed90f",
+   "definitions": {
+    "Nci.Guarantees.PackedIncompressibleContainedMatMulOn": "f0eb0d263cd6c17bf3c661bb0da2178b60c1c385820a64769235694624cdab24",
+    "Nci.Guarantees.PackedIncompressibleContainedTrainingOn": "69c441c51a747989a0fc42735fefd63968662ea6a56efdf0e9d911fdc1e2b33d"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
+    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
    ]
   },
   "Models.Nci.Guarantees.Reads": {
