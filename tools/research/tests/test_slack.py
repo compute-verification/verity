@@ -262,6 +262,17 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
         slack.load_registry(registry)
 
 
+def test_a_handles_examples_are_a_few_one_line_questions(registry):
+    reg = json.loads(registry.read_text())
+    reg["handles"][0]["examples"] = ["How does the verifier check a sampled proof?", "What does PoUW prove?"]
+    registry.write_text(json.dumps(reg))
+    assert slack.load_registry(registry)["handles"][0]["examples"][1] == "What does PoUW prove?"
+    for bad in (["q"] * 6, ["x" * 161], [""], "one string"):
+        reg["handles"][0]["examples"] = bad
+        registry.write_text(json.dumps(reg))
+        with pytest.raises(slack.SlackError, match="examples"):
+            slack.load_registry(registry)
+
 def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
     reg = json.loads(registry.read_text())
     reg["handles"][0]["remit"] = "x" * (slack.DESCRIPTION_MAX + 1)

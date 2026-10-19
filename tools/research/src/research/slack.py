@@ -287,6 +287,9 @@ def load_registry(path: Path, people: bool = True) -> dict:
     return with_people(reg, ChatPeople().open()) if people else reg
 
 
+EXAMPLES_MAX, EXAMPLE_CHARS = 5, 160                   # a handle's `examples`: the questions a collaborator might ask it
+
+
 def check_registry(reg: dict, path: str) -> dict:
     if reg.get("schema") != SCHEMA:
         raise SlackError(f"registry {path}: schema {reg.get('schema')!r}, expected {SCHEMA!r}")
@@ -307,6 +310,10 @@ def check_registry(reg: dict, path: str) -> dict:
             owned[p] = name
         if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or any(o.get("linear") == h["linear"] for o in reg["handles"] if o is not h)):
             raise SlackError(f"registry {path}: @{name}'s linear {h['linear']!r}: a Linear team key no other handle has")
+        ex = h.get("examples", [])
+        if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
+            raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
+                             f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
     chans = reg.get("channels") or {}
     if FRONT_DOOR not in chans:
         raise SlackError(f"registry {path}: no #{FRONT_DOOR}")
