@@ -198,10 +198,12 @@ research run --tool flock-agreement --campaign flock-verifier -- python ci.py --
   refusals word for word, the malformed parameters).
 - The outer firewall's release (`Flock.Firewall.Frame`, `flock-firewall frame`, live PROTOCOL.md §10.4): every round a
   firewalled rep sends is the Lean frame's, with the masking challenger held to it byte for byte, the rep's pads and the
-  pads tree's salts are the frame's own OS draws, with the root it computes, and the coins' two refusals (an outer coin 1,
-  the mask slot's rank) are the frame's. `flock-firewall tap` serves the prover's every other OS read
+  pads tree's salts are the frame's own OS draws, with the root it computes, and the coins' four refusals (an outer coin 1,
+  the mask slot's rank, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`) are the frame's; the inner
+  proof's rounds leave through it too. `flock-firewall tap` serves the prover's every other OS read
   (`test_firewall_frame.py` on hand-made reps: the draws, the release, the refusals, the coin and prior protocol, the
-  tap). On RoPE d64 at m = 25 (`art:edc7c50b`), 3 honest firewalled CPU sessions were accepted and each of the
+  tap; the ρ and β stops on `live/src/coin_stop_vectors.json`, which `zk_veil`'s
+  `rust_coin_stops_agree_with_the_lean_frames_vectors` holds Rust's `rho_independent` and `prove_inner` to). On RoPE d64 at m = 25 (`art:edc7c50b`), 3 honest firewalled CPU sessions were accepted and each of the
   7 `FC_FIREWALL_TAMPER` controls was refused or stopped as before; `firewall_outer_agree.py` found 10 of 10 transcripts as
   expected, with the same public input and the same 1,454-item sequence as `r20261006-134729-fddc` before the Lean release.
 - The firewall's contract (`Flock.Firewall.Contract`, `flock-firewall contract`), the property every firewall's sessions

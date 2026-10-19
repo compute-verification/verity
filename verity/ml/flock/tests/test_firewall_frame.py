@@ -9,11 +9,13 @@ marked `fail` or refused, every value of the algebraic phase leaves as its pad a
 rep's `finish` is `stop`. So what a stopped rep releases under pads `h` is byte for byte what the honest rep releases under
 pads `h + v`, and the rounds, their lengths and their order are the same: before `Finish`, nothing depends on whether a check
 failed. The frame decides the rep's refusals from the coins the stream answered each round it released (`coins`): a
-zerocheck outer coin `r_j = 1`, and, at the opening's label, a mask slot short of full rank on the claim points of the
-table's reps (`prior`'s and the rep's own); either answers `stop` at once, nothing of the round leaving. `flock-circuit`
-holds its own masking challenger to this release byte for byte on every round it sends (`firewall::Gate`), its pads tree
-over the frame's draws to the frame's root, and its own refusals to the frame's. The prover's every other OS read is
-`flock-firewall tap`'s: a line `N` answered with `N` fresh bytes."""
+zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot short of full rank on the claim points of the table's
+reps (`prior`'s and the rep's own); level 0's `ρ_0, ρ_1` dependent over F128; and `β = 0` in the inner proof, whose four
+rounds leave through the frame too. Each answers `stop` at once, nothing of the round leaving. `flock-circuit` holds its
+own masking challenger to this release byte for byte on every round it sends (`firewall::Gate`), its pads tree over the
+frame's draws to the frame's root, and its own refusals to the frame's (`live/src/coin_stop_vectors.json` holds Rust's
+`ρ` and `β` checks to the frame's). The prover's every other OS read is `flock-firewall tap`'s: a line `N` answered with
+`N` fresh bytes."""
 from __future__ import annotations
 
 import json
@@ -28,6 +30,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
+VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_stop_vectors.json"
 SKIP = 64
 K_PAD = 192
 LAY = {"n_mlv": 2, "n_lc": 1, "n_ood0": 1, "k0": 1}
@@ -98,6 +101,7 @@ class Frame:
         self.p = subprocess.Popen([str(BIN), "frame"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if start is None:
             start = json.dumps({"layout": lay} | ({"mask": mask} if mask else {}))
+        self.rng = random.Random(1)
         self.start = self.ask(start)
         if isinstance(self.start, tuple):
             b = self.start[1]
@@ -117,10 +121,11 @@ class Frame:
         return self.ask(f"coins {len(coins)}", wire(coins))
 
     def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None):
-        """The round's answer; a released round's coins (zeros, unless `coins`) are answered back, as the firewall does."""
+        """The round's answer; a released round's coins (seeded, never 0 or 1, unless `coins`) are answered back, as the
+        firewall does."""
         r = self.ask(f"round {n} {len(content)}" + (" fail" if fail else ""), content)
         if isinstance(r, tuple):
-            assert self.coins([0] * n if coins is None else coins) == "ok"
+            assert self.coins([self.rng.getrandbits(128) | 2 for _ in range(n)] if coins is None else coins) == "ok"
         return r
 
     def close(self) -> int:
@@ -146,10 +151,17 @@ ALG = list(range(1, 2 * SKIP + 1)) + [11, 12, 13, 14, 21, 22, 31, 32] + list(ran
 LG = [41, 42, 43, 44, 45, 46, 47, 48, 49]
 
 
+#: the inner proof's four rounds (`zk_veil::prove_inner`), which leave as they are: `final_c'` then `ε`, `(ρ, σ)` then the
+#: batching coins, `τ`'s commitment then `β`, `Y` then the queries
+INNER = [(label("verity-flock-zk-inner-v0") + obs([8], 1) + squeeze(1, 1), 1), (obs([9, 10]) + squeeze(2, 5), 5),
+         (msg(b"\2" * 64) + squeeze(1, 1), 1), (obs([11, 12, 13]) + squeeze(2, 4), 4)]
+
+
 def rep_rounds(alg: list[int]) -> list[tuple[bytes, int]]:
     """The hand-made rep's rounds (each with its coin count) with algebraic values `alg`: the binding and the zerocheck's
     label, the skip's sent vectors, the multilinear rounds (a zero squeeze inside), `final_a` and `final_b` as scalars, the
-    lincheck round and `z_partial`, the opening with level 0's masked values, and a zerocheck label after the opening."""
+    lincheck round and `z_partial`, the opening with level 0's masked values then `ρ_0`, `ρ_1` alone, level 0's close, a
+    zerocheck label after the opening, and the inner proof."""
     a = alg
     r0 = hdr(1, 0, 3) + pad16(b"dom") + label("flock-r1cs-v0") + msg(b"\1" * 64) + label("flock-zerocheck-v0") + squeeze(2, 6)
     r1 = obs(a[:SKIP]) + obs(a[SKIP:2 * SKIP]) + squeeze(1, 1)
@@ -157,9 +169,10 @@ def rep_rounds(alg: list[int]) -> list[tuple[bytes, int]]:
     r2 = obs(a[at:at + 2]) + squeeze(2, 0) + obs(a[at + 2:at + 4]) + obs([a[at + 4]], 1) + obs([a[at + 5]], 1) \
         + obs(a[at + 6:at + 8]) + obs(a[at + 8:at + 8 + SKIP]) + squeeze(2, 2)
     r3 = label("flock-pcs-open-batch-v0") + obs([5]) + label("verity-flock-zk-l0-open-v0") + obs(LG[:1]) + obs(LG[1:5]) \
-        + obs(LG[5:]) + label("verity-flock-zk-l0-close-v0") + obs([6]) + squeeze(2, 3)
-    r4 = label("flock-zerocheck-v0") + obs([7]) + squeeze(1, 1)
-    return [(r0, 6), (r1, 1), (r2, 2), (r3, 3), (r4, 1)]
+        + obs(LG[5:]) + squeeze(2, 2)
+    r4 = label("verity-flock-zk-l0-close-v0") + obs([6]) + squeeze(2, 3)
+    r5 = label("flock-zerocheck-v0") + obs([7]) + squeeze(1, 1)
+    return [(r0, 6), (r1, 1), (r2, 2), (r3, 2), (squeeze(2, 2), 2), (r4, 3), (r5, 1), *INNER]
 
 
 def release(h: list[int], root: bytes, alg: list[int]) -> list[bytes]:
@@ -179,8 +192,11 @@ def release(h: list[int], root: bytes, alg: list[int]) -> list[bytes]:
             + obs(m([a[at + 5]], at + 5), 1) + obs(m(a[at + 6:at + 8], at + 6)) + obs(m(a[at + 8:at + 8 + SKIP], at + 8))
             + squeeze(2, 2),
             label("flock-pcs-open-batch-v0") + obs([5]) + label("verity-flock-zk-l0-open-v0") + obs(m(LG[:1], n))
-            + obs(m(LG[1:5], n + 1)) + obs(m(LG[5:], n + 5)) + label("verity-flock-zk-l0-close-v0") + obs([6]) + squeeze(2, 3),
-            label("flock-zerocheck-v0") + obs([7]) + squeeze(1, 1)]
+            + obs(m(LG[1:5], n + 1)) + obs(m(LG[5:], n + 5)) + squeeze(2, 2),
+            squeeze(2, 2),
+            label("verity-flock-zk-l0-close-v0") + obs([6]) + squeeze(2, 3),
+            label("flock-zerocheck-v0") + obs([7]) + squeeze(1, 1),
+            *(r for r, _ in INNER)]
 
 
 def released(f: Frame, rounds, fail_at: int | None = None) -> list:
@@ -228,7 +244,7 @@ def test_a_stopped_rep_releases_under_pads_h_what_the_honest_rep_releases_under_
     o = order(**LAY)
     garbage = [(5 * i + 1) << 70 for i in range(len(ALG))]
     #: each round's first absorbed position: the device's honest values before the failed round, anything from it on
-    first = [0, 0, 2 * SKIP, len(ALG), len(ALG)]
+    first = [0, 0, 2 * SKIP] + [len(ALG)] * (len(rep_rounds(ALG)) - 3)
     for fail_at, s in enumerate(first):
         f = Frame()
         stopped = released(f, rep_rounds(ALG[:s] + garbage[s:]), fail_at=fail_at)
@@ -320,6 +336,77 @@ def test_a_zerocheck_outer_coin_of_one_stops_the_rep_at_once_and_no_other_coin_o
     assert f.round(R0, 6)[0].startswith("ok ")
     assert f.round(squeeze(1, 1), 1, coins=[1])[0] == "ok 16", "with seven multilinear rounds or fewer there is no outer coin"
     assert f.close() == 0
+
+
+def test_level_0s_rho_dependent_over_f128_stops_the_rep_at_once_and_no_other_level_0_coin_does():
+    """`coin_stop_vectors.json`'s `ρ` cases, which Rust's `rho_independent` agrees with (`zk_veil`'s test of them): `ρ_0`
+    and `ρ_1` are the two rounds after level 0's last masked value, and a coin of level 0 before it is no `ρ`."""
+    rounds = rep_rounds(ALG)
+    for v in json.loads(VECTORS.read_text())["rho"]:
+        rho = [int(w, 16) for w in v["coins"]]
+        f = Frame()
+        for r, n in rounds[:3]:
+            assert f.round(r, n)[0].startswith("ok ")
+        assert f.round(*rounds[3], coins=rho[:2])[0].startswith("ok "), v["case"]
+        assert f.ask("round 2 16", squeeze(2, 2))[0] == "ok 16"
+        if v["independent"]:
+            assert f.coins(rho[2:]) == "ok", v["case"]
+            assert all(isinstance(f.round(r, n), tuple) for r, n in rounds[5:]) and f.ask("finish") == "ok" and f.close() == 0
+        else:
+            assert f.coins(rho[2:]) == "stop PROVER-STOPPED: degenerate coins: rho_0, rho_1 dependent over F128", v["case"]
+            assert f.close() == 0
+    f = Frame()
+    for r, n in rounds[:3]:
+        assert f.round(r, n)[0].startswith("ok ")
+    early = label("flock-pcs-open-batch-v0") + obs([5]) + label("verity-flock-zk-l0-open-v0") + obs(LG[:1]) + squeeze(2, 4)
+    assert f.round(early, 4, coins=[0] * 4)[0].startswith("ok "), "a lane round's coins, before level 0's last masked value"
+    assert f.round(obs(LG[1:5]) + obs(LG[5:]) + squeeze(2, 2), 2)[0].startswith("ok ")
+    assert all(isinstance(f.round(r, n), tuple) for r, n in rounds[4:]) and f.ask("finish") == "ok" and f.close() == 0
+
+
+def test_level_0_closes_only_after_its_four_rho_coins():
+    rounds = rep_rounds(ALG)
+    f = Frame()
+    for r, n in rounds[:4]:
+        assert f.round(r, n)[0].startswith("ok ")
+    assert f.round(*rounds[5]) == "err level 0 closed after 2 of its 4 ρ coins" and f.close() == 0
+
+
+def test_beta_zero_in_the_inner_proof_stops_the_rep_at_once_and_no_other_inner_coin_does():
+    """`coin_stop_vectors.json`'s `β` cases, which Rust's `prove_inner` agrees with (`zk_veil`'s test of them): `β` is the
+    coin of the inner proof's third round, counted from its label."""
+    rounds = rep_rounds(ALG)
+    k = len(rounds) - 2
+    for v in json.loads(VECTORS.read_text())["beta"]:
+        f = Frame()
+        for r, n in rounds[:k]:
+            assert f.round(r, n, coins=[0] * n if r in (x for x, _ in INNER) else None)[0].startswith("ok ")
+        assert f.ask(f"round 1 {len(rounds[k][0])}", rounds[k][0])[0].startswith("ok ")
+        if v["stop"]:
+            assert f.coins([int(v["coin"], 16)]) == "stop PROVER-STOPPED: degenerate coin β = 0" and f.close() == 0
+        else:
+            assert f.coins([int(v["coin"], 16)]) == "ok"
+            assert f.round(*rounds[k + 1], coins=[0] * 4)[0].startswith("ok ") and f.ask("finish") == "ok" and f.close() == 0
+
+
+def test_the_inner_proof_comes_once_after_the_opening_and_the_rep_ends_only_after_its_four_rounds():
+    rounds = rep_rounds(ALG)
+    f = Frame()
+    for r, n in rounds[:3]:
+        assert f.round(r, n)[0].startswith("ok ")
+    assert f.round(*INNER[0]) == "err the inner proof began before the opening ended" and f.close() == 0
+    f = Frame()
+    for r, n in rounds[:-1]:
+        assert f.round(r, n)[0].startswith("ok ")
+    assert f.ask("finish") == "err the rep ended after 3 of the inner proof's 4 rounds" and f.close() == 1
+    f = Frame()
+    for r, n in rounds[:-1]:
+        assert f.round(r, n)[0].startswith("ok ")
+    assert f.round(*INNER[0]) == "err a second inner proof" and f.close() == 0
+    f = Frame()
+    for r, n in rounds:
+        assert f.round(r, n)[0].startswith("ok ")
+    assert f.round(squeeze(1, 1), 1) == "err a round after the inner proof's 4" and f.close() == 0
 
 
 #: a layout with three outer coins and no masked level 0, whose claim points have nine word coordinates (512 words)
