@@ -57,6 +57,8 @@ _T_RE = re.compile(r"\{T=\d+,")
 # Definition.
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
 SPLITS_OPERAND = 5
+# the unit of a launch several requests share whose (blk[P], par) its members' Marlin GEMMs read (`launch_units.unit_blocks`)
+LAUNCH_BLOCKS = "MoeAlignBlocks_v1"
 
 
 def const_value(spec: str) -> tuple[int, int] | None:
@@ -143,6 +145,12 @@ class Prog(PeerReads, PX.PrefixInput):
         # a rank Program's WITNESS inputs (a user input the link table names neither a prompt nor a peer input: the MoE align `schedule`):
         # Input node -> its name; a read canonicalises as ("WIT", name, lo, hi), never as an unnamed weight.  Set by `load_derived`.
         self.witness_fields: dict[int, str] = {}
+        self.witness_index: dict[int, int] = {}    # fold side: witness Input node -> request index (batch_decomp ownership)
+        # fold side, under a batch: a shared launch's keys parameter (Input node -> witness name), and per launch (`e<step>.<j>`) and
+        # member request index the linked words its witness reserves there: (witness name, word offset, slot, pairs)
+        self.launch_witness: dict[int, str] = {}
+        self.linked: dict[str, dict[int, tuple[str, int, int, int]]] = {}
+        self.launch_blocks: dict[int, str] = {}    # fold side: each shared launch's blocks unit (`LAUNCH_BLOCKS`) node -> its launch
         self.supplied_fields: dict[int, list[tuple[int, str, int]]] = {}   # `supplied_inputs`, set by the loaders
         self.supplied_owner: dict[int, int | None] = {}
         self.split_statics = split_selects.as_fold_selects(self.inst)       # a select specialised on S compares as the fold's
@@ -495,7 +503,8 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # [X-09] the fold's own attribution when recorded
                              "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
-                             "operand_roots": o.get("operand_roots")})  # [R15 fp8] per-operand weight names (multi-weight Computes)
+                             "operand_roots": o.get("operand_roots"),  # [R15 fp8] per-operand weight names (multi-weight Computes)
+                             **({"launch": o["launch"]} if "launch" in o else {})})   # the shared launch this instance is the unit of
     if d not in LOAD_NOTES:     # a pre-header instances.jsonl (no schema line): the form is the default, the digests are still stated
         LOAD_NOTES[d] = {"source": "record files", "instances_schema": None, "operand_refs_form": "runs", "program_sha256": program_sha}
     LOAD_NOTES[d]["instances_sha256"] = ih.hexdigest()
@@ -540,6 +549,21 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
             raise ValueError(f"{d}: peers parameter {ent.get('name')!r} has duplicate field ordinals")
         p.peer_fields[node] = flds
         p.peer_index[node] = int(ent["request_index"])
+    # a witness parameter (`witness_layout`: the Marlin align's `schedule`) is one homogeneous Input node, bound by its name as the rank
+    # Program's witness input of that name is (`load_derived`)
+    for ent in pj.get("witness_layout") or []:
+        node = int(ent["param"])
+        if node not in p.inputs:
+            raise ValueError(f"{d}: witness parameter {ent.get('name')!r} (index {node}) is not an Input node of the Program")
+        if ent.get("request_index") is None:
+            p.launch_witness[node] = ent["witness"]
+            continue
+        p.witness_fields[node] = ent["witness"]
+        p.witness_index[node] = ri = int(ent["request_index"])
+        for f in ent.get("fields") or []:
+            if f.get("form") == "linked":
+                p.linked.setdefault(f["launch"], {})[ri] = (ent["witness"], int(f["offset"]), int(f["slot"]), int(f["pairs"]))
+    p.launch_blocks = {o["node"] + n_in: o["launch"] for o in rows if o.get("launch") and o["spec"].split("{")[0] == LAUNCH_BLOCKS}
     p.tp = pj.get("tp")
     w_nodes = SI.load_oracle_supplied(p, pj, d)   # a `registered_values` fold's supplied parameters
     del pj, desc   # [R16 global] the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode

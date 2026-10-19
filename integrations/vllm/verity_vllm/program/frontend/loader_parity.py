@@ -1,7 +1,8 @@
-"""Loader parity on a meta model: what vLLM's weight loader does to the model after loading (re-tie a checkpoint-untied head, register
-MLA's absorbed projections, reshape block-FP8 weights and scales, run the model-level post-load hook), reproduced without loading,
-so the derived Program reads the served model's weights under their served names.  Each returns the fact it consulted for the
-report.  vLLM is imported inside each function: callers reach them through `vllm_meta`, which pins the export environment first."""
+"""Loader parity: what vLLM's loader does to a model after it loads the weights, done on the meta instantiation
+(`vllm_meta.instantiate_meta`), which never loads.  Each step leaves the model with the Parameters the served model has, in the served
+shapes and dtypes and under the served names, so the derived Program reads the roots the collector commits, and returns the fact it
+consulted for the Build's report; `as_the_loader_does` runs them in the loader's order."""
+
 from __future__ import annotations
 
 import os
@@ -156,3 +157,11 @@ def post_load_tensors_as_the_loader_does(model: nn.Module) -> dict:
                 parameters={f"{mname}.{n}" if mname else n: {"shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")}
                             for (mname, n), v in sorted(made.items())})
     return fact
+
+
+def as_the_loader_does(model: nn.Module, vllm_config) -> dict:
+    """Every loader-parity step on `model`, by the Build report's key."""
+    return {"lm_head_tying": retie_lm_head_as_the_loader_does(model, vllm_config),
+            "mla_absorbed_weights": mla_absorbed_weights_as_the_loader_does(model, vllm_config),
+            "fp8_block_weights": fp8_block_weights_as_the_loader_does(model),
+            "post_load_tensors": post_load_tensors_as_the_loader_does(model)}

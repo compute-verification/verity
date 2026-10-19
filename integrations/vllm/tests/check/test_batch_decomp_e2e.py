@@ -12,6 +12,7 @@ MISSING_DERIVED, never assumed.  Written by lane p0b/mbatch as an independent ch
 
 from __future__ import annotations
 
+import functools
 import gzip
 import itertools
 import json
@@ -25,13 +26,16 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match.program_compare import compare_steps, load_oracle
 from verity_vllm.observe.log import dumps as log_dumps
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, Profile
+from verity_vllm.observe.fold.resolver import Compute, Const, Gather, GatherMany, Group, PerRow, Pieces, Profile, Shared, Witness, scratch_view
+from verity_vllm.engine.profiles.gen_marlin_moe_patterns import launch_members
 from tests.observe import test_fold_synthetic as toy
 from tests.observe.test_fold_synthetic import (A_COS, A_DOWN_W, A_EMBED, A_GU_W, A_LN1, A_LN2, A_NORM, A_O_W, A_QKV_W, BF, BN, C, I32D, I64D,
                                                       W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM, W_O, W_QKV, Ids, V, _as3, _kv_flat,
                                                       _slot, memory)  # noqa: F401 - `memory` is the fixture
 from verity.ml.circuits.defs import bind
 from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import marlin_moe as MM
+from verity_vllm.program.registry import value_inputs as VI
 
 BS = 4
 A_IDS, A_POS, A_KC, A_VC = 10, 11, 12, 13
@@ -188,11 +192,63 @@ def p_attention_leak(node, ctx):
     return Group(tuple(parts), (node.id, ch.id), node.enter.module or "")
 
 
-def profile(leak=False):
+def p_rms_witness(node, ctx, borrow=False):
+    """The residual-free norm reading its epsilon word as each row's next `schedule` witness word: a request-owned witness read, as the
+    Marlin align reads its keys.  `borrow`: the step's last row reads the first row's request's witness instead of its own."""
+    if not node.is_triton or not node.op.endswith("_rms_norm_kernel"):
+        return None
+    a = node.enter.args
+    keys = [req for req, _ in ctx.start.rows]
+    if borrow:
+        keys[-1] = keys[0]
+    return Compute(bind(VI.RMSNormTritonV3, N=C["H"]), a["input_ptr"].shape[0],
+                   (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]), Witness("schedule", tuple(keys))), (PerRow(a["output_ptr"]),), (node.id,),
+                   node.enter.module or "")
+
+
+def p_rms_launch(node, ctx, borrow=False):
+    """The norm's epsilon in the launch form of the Marlin align's schedule, the step's token ids its router ids (top-k 1): at a step
+    several requests share, the launch's unit (`MoeAlignRanks` keyed by the launch's witness, then `MoeAlignBlocks`) runs once, row p
+    reads the blocks' word p and one more norm row per member, over its first token, reads the block count; at a step of one request
+    both are its next `schedule` words, as its request Program reads its linked words.  `borrow`: the step's last row reads word 0."""
+    if not node.is_triton or not node.op.endswith("_rms_norm_kernel"):
+        return None
+    a, mod, rows = node.enter.args, node.enter.module or "", ctx.start.rows
+    x, w, y, M = a["input_ptr"], a["weight_ptr"], a["output_ptr"], a["input_ptr"].shape[0]
+    members, norm = launch_members(rows, 1), bind(VI.RMSNormTritonV3, N=C["H"])
+    first = {r: i for i, (r, _p) in reversed(list(enumerate(rows)))}
+
+    def count_row(k, req, eps):
+        out = ViewDesc(-(8 * node.id + 4 + k) - 1, 0, (1, C["H"]), (C["H"], 1), BF, "cuda:0")
+        return Compute(norm, 1, (Gather(x, (first[req],)), Shared(w), eps), (PerRow(out),), (), mod, attribution=(rows[first[req]],))
+    if len(members) == 1:
+        req = members[0][0]
+        return Group((Compute(norm, M, (PerRow(x), Shared(w), Witness("schedule", (req,) * M)), (PerRow(y),), (node.id,), mod),
+                      count_row(0, req, Witness("schedule", (req,)))), (node.id,), mod)
+    unit, ids = f"e{ctx.start.step}.0", ViewDesc(A_IDS, 0, (M,), (1,), I32D, "cuda:0")
+    rank, start, blk, par = (scratch_view(ids, node.id, k, n) for k, n in enumerate((M, M, M, 1)))
+    ix = Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(M)),))
+    return Group((Compute(bind(MM.MoeAlignRanks, E=C["V"], P=M, BM=4), 1, (Shared(ids), Witness("schedule", (unit,), members), ix),
+                          (Shared(rank), Shared(start)), (), f"{mod}/rank", launch=unit),
+                  Compute(bind(MM.MoeAlignBlocks, P=M, BM=4), 1, (Shared(ids), Shared(rank), Shared(start)), (Shared(blk), Shared(par)), (), mod,
+                          launch=unit),
+                  Compute(norm, M, (PerRow(x), Shared(w), Gather(blk, tuple(range(M - 1)) + ((0,) if borrow else (M - 1,)))), (PerRow(y),),
+                          (node.id,), mod),
+                  *(count_row(k, req, Shared(par)) for k, (req, _slot, _pairs) in enumerate(members))), (node.id,), mod)
+
+
+def profile(leak=False, witness=None):
+    """The toy profile; `witness` "own" or "borrow" puts the norm's epsilon in the `schedule` witness (`p_rms_witness`), "launch" or
+    "launch-borrow" in its launch form (`p_rms_launch`)."""
     pats = [p for p in toy.PATTERNS if not (leak and p.name == "attention")]
     if leak:
         pats.append(toy.Pat("attention_leak", p_attention_leak))
-    return Profile("toy", pats, dict(C), toy.weight_field, False)
+    launch = (witness or "").startswith("launch")
+    if witness:
+        rms = functools.partial(p_rms_launch if launch else p_rms_witness, borrow=witness.endswith("borrow"))
+        pats = [toy.Pat(p.name, rms) if p.name == "rms_triton" else p for p in pats]
+    return Profile("toy", pats, dict(C), toy.weight_field, False, witnesses=("schedule",) if witness else (),
+                   launch_witnesses=("schedule",) if launch else ())
 
 
 # ------------------------------------------------------------------------------------------------------------------- helpers
@@ -212,18 +268,18 @@ def persist(result, events, d):
     return str(d)
 
 
-def fold_alone(req, d, leak=False):
+def fold_alone(req, d, leak=False, witness=None):
     """The request served alone = what the derived request-wrapper Program for (LP_r, T_r) describes."""
     evs = batched_log([req])
-    r = fold(evs, profile(leak), strict=True)
+    r = fold(evs, profile(leak, witness), strict=True)
     p = persist(r, evs, d)
     json.dump({"structural_inputs": {"LP": len(req["prompt"]), "T": len(req["sampled"]) - 1}}, open(f"{p}/construction_manifest.json", "w"))
     return p
 
 
-def fold_batched(reqs, d, leak=False):
+def fold_batched(reqs, d, leak=False, witness=None):
     evs = batched_log(reqs)
-    r = fold(evs, profile(leak), strict=True)
+    r = fold(evs, profile(leak, witness), strict=True)
     assert r.report.unsupported == 0 and not r.errors
     return persist(r, evs, d), r
 
@@ -379,6 +435,51 @@ def test_prog_retains_one_copy_of_the_operand_references_and_the_verdicts_are_un
     neg = bd.decompose(dl, [a0, a1])
     assert neg["verdict"] == "FAIL" and neg["xreq_total"] >= 1 and _req(neg, "r1")["canonical_equal"] is False
     assert _req(neg, "r0")["canonical_equal"] is True
+
+
+def test_a_witness_parameter_is_its_requests_input(memory, tmp_path, derived_is_a_fold):
+    """A profile witness (the Marlin align's `schedule`) is one parameter per request after the peers: the weights still follow the
+    request-owned parameters, every instance is attributed, and each request's projection reads its own witness as the single-request
+    fold's witness input of that name."""
+    d, r = fold_batched([R0, R1], tmp_path / "b2", witness="own")
+    assert [(e["name"], e["request"]) for e in r.witness_layout] == [("schedule_0", "r0"), ("schedule_1", "r1")]
+    B = load_oracle(d, "oracle")
+    assert B.witness_index == {2: 0, 3: 1} and bd.request_inputs(B, [{"request_id": "r0"}, {"request_id": "r1"}])[2:] == \
+        ([("r0", 2), ("r1", 3)], {4})
+    res = bd.decompose(d, [fold_alone(R0, tmp_path / "LP3_T2", witness="own"), fold_alone(R1, tmp_path / "LP2_T1", witness="own")])
+    assert res["verdict"] == "PASS", res["reasons"]
+    assert res["attribution"]["unattributed"] == 0 and res["xreq_total"] == 0
+    assert [(e["request_id"], e["canonical_equal"]) for e in res["requests"]] == [("r0", True), ("r1", True)]
+
+
+def test_a_read_of_another_requests_witness_is_cross_request(memory, tmp_path, derived_is_a_fold):
+    """r1's last row of each step reads r0's witness: a cross-request read in r1's projection (and r0's own words land elsewhere)."""
+    d, _ = fold_batched([R0, R1], tmp_path / "b2", witness="borrow")
+    res = bd.decompose(d, [fold_alone(R0, tmp_path / "LP3_T2", witness="own"), fold_alone(R1, tmp_path / "LP2_T1", witness="own")])
+    assert res["verdict"] == "FAIL" and _req(res, "r1")["xreq"]["counts"].get("witness-param", 0) >= 1
+    assert _req(res, "r1")["canonical_equal"] is False and _req(res, "r0")["canonical_equal"] is False
+
+
+def test_a_shared_launch_runs_once_and_each_member_reads_its_linked_words(memory, tmp_path, derived_is_a_fold):
+    """The launches r0 and r1 share run once, in no request's leg, keyed by the run's `launch_schedule`; each member's reads of the
+    blocks (its pairs' at its slot, then the count) are its own linked `schedule` words, as its request Program reads them."""
+    d, r = fold_batched([R0, R1], tmp_path / "b2", witness="launch")
+    assert [(e["name"], e["request"]) for e in r.witness_layout] == [("schedule_0", "r0"), ("schedule_1", "r1"), ("launch_schedule", None)]
+    B = load_oracle(d, "oracle")
+    assert B.linked == {"e0.0": {0: ("schedule", 0, 0, 3), 1: ("schedule", 0, 3, 2)}, "e1.0": {0: ("schedule", 4, 0, 1), 1: ("schedule", 3, 1, 1)}}
+    assert sorted(B.launch_blocks.values()) == ["e0.0", "e1.0"]
+    res = bd.decompose(d, [fold_alone(R0, tmp_path / "LP3_T2", witness="launch"), fold_alone(R1, tmp_path / "LP2_T1", witness="launch")])
+    assert res["verdict"] == "PASS", res["reasons"]
+    assert res["attribution"]["how"]["launch"] > 0 and res["attribution"]["unattributed"] == 0 and res["xreq_total"] == 0
+    assert [(e["request_id"], e["canonical_equal"]) for e in res["requests"]] == [("r0", True), ("r1", True)]
+
+
+def test_a_read_of_another_members_blocks_is_cross_request(memory, tmp_path, derived_is_a_fold):
+    """r1's last row of each shared step reads r0's first block: a cross-request read of the launch in r1's projection."""
+    d, _ = fold_batched([R0, R1], tmp_path / "b2", witness="launch-borrow")
+    res = bd.decompose(d, [fold_alone(R0, tmp_path / "LP3_T2", witness="launch"), fold_alone(R1, tmp_path / "LP2_T1", witness="launch")])
+    assert res["verdict"] == "FAIL" and _req(res, "r1")["xreq"]["counts"].get("launch", 0) >= 1
+    assert _req(res, "r0")["canonical_equal"] is True
 
 
 def test_missing_derived_shape_is_reported_not_assumed(memory, tmp_path, derived_is_a_fold):

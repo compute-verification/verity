@@ -46,6 +46,7 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
 
 from __future__ import annotations
 
+import bisect
 import collections
 import gzip
 import json
@@ -58,7 +59,7 @@ from dataclasses import dataclass
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.input_layout import weights_input_nodes  # noqa: F401  (re-exported: attribution, resolve_decomp, tests)
+from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (re-exported: attribution, resolve_decomp, tests)
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
 from verity_vllm.program import prefix_plan as PP
@@ -116,6 +117,7 @@ def request_params(header: dict) -> tuple[list[dict], dict[str, int], dict[str, 
 
 
 SHARED = "*weight-only*"   # owner sentinel of a weight-only instance (F-r19-int-15); never a request id
+LAUNCH = "*launch*"        # owner sentinel of a launch unit's instance (fold meta `launch`): in no leg, GM-01 checks it against the workload's
 
 
 def is_weight_only(r: dict, weights_nodes: frozenset, shared_nodes: set, compact: bool) -> bool:
@@ -192,6 +194,17 @@ class Projection(PX.CachedKv, C.Prog):
         self.peer_fields = {peer_node: oracle.peer_fields[peer_node]} if peer_node is not None and peer_node in getattr(oracle, "peer_fields", {}) else {}
         self._all_peer_nodes = set(getattr(oracle, "peer_fields", {}))
         self.peer_index = getattr(oracle, "peer_index", {})
+        # the request's OWN witness parameters canonicalise as ("WIT", name, ..) (the rank Program's witness input of that name); another
+        # request's is xreq.  Each is request i's for its header index i = this prompt's node, as a `run_<i>` below.
+        w_index = getattr(oracle, "witness_index", {})
+        self.witness_fields = {k: nm for k, nm in getattr(oracle, "witness_fields", {}).items() if w_index.get(k) == tok_node}
+        self._all_witness_nodes = set(getattr(oracle, "witness_fields", {}))
+        # a shared launch's blocks (`Prog.launch_blocks`) read as this request's linked `schedule` words there (`Prog.linked`): its
+        # pairs' blocks at its slot, then the launch's block count (leaf P, the members' pairs); any other leaf is another member's
+        linked = getattr(oracle, "linked", {})
+        self.launch_reads = {k: (linked.get(u, {}).get(tok_node), sum(m[3] for m in linked.get(u, {}).values()))
+                             for k, u in getattr(oracle, "launch_blocks", {}).items()}
+        self._launch_sorted = sorted(self.launch_reads)
         # the registered `values` are shared like the weights; a `run_<i>` is request i's (the header index = this prompt's node)
         owner = getattr(oracle, "supplied_owner", {})
         self.supplied_fields = {k: f for k, f in getattr(oracle, "supplied_fields", {}).items() if owner.get(k) in (None, tok_node)}
@@ -239,10 +252,14 @@ class Projection(PX.CachedKv, C.Prog):
                     return ("SPLITS", lo, hi)
                 if idx == self.peer_node:
                     return self._peer_src(idx, lo, hi)     # [R17 D90] the request's own received-collective peer input
+                if idx in self.witness_fields:
+                    return ("WIT", self.witness_fields[idx], lo, hi)
                 if idx not in self.weights_nodes:
-                    kind = "seed" if idx in getattr(self, "_all_seed_nodes", ()) else ("peers" if idx in self._all_peer_nodes else "prompt")
+                    kind = self._foreign_kind(idx)
                     self._xreq(f"{kind}-param", idx, lo, hi)
                     return (XREQ, kind, idx, lo, hi)
+            elif idx in self.launch_reads:
+                return self._launch_src(idx, lo, hi)
             elif idx not in self.k2i:
                 self._xreq("node", idx, lo, hi)
                 return (XREQ, "node", idx, lo, hi)
@@ -272,16 +289,22 @@ class Projection(PX.CachedKv, C.Prog):
                         return [("SPLITS", (lo0, hi0), (dL, dH), c)]
                     if idx0 == self.peer_node:
                         return self._peer_srcP(p, unfold)     # [R17 D90] the request's own received-collective peer input
+                    if idx0 in self.witness_fields:
+                        return [("WIT", self.witness_fields[idx0], (lo0, hi0), (dL, dH), c)]
                     if idx0 not in self.weights_nodes:
-                        kind = "seed" if idx0 in getattr(self, "_all_seed_nodes", ()) else ("peers" if idx0 in self._all_peer_nodes else "prompt")
+                        kind = self._foreign_kind(idx0)
                         self._xreq(f"{kind}-param", (idx0, lo0, hi0), (0, dL, dH), c)
                         return [(XREQ, kind, (idx0, lo0, hi0), (0, dL, dH), c)]
+                elif idx0 in self.launch_reads:
+                    return self._per_run(p, unfold)
                 elif idx0 not in self.k2i:
                     self._xreq("node", (idx0, lo0, hi0), (0, dL, dH), c)
                     return [(XREQ, "node", (idx0, lo0, hi0), (0, dL, dH), c)]
                 return super()._srcP(p, unfold)
             # a window over several producer nodes: all of them another request's (none ours, none an input) -> one XREQ progression
             lo_i, hi_i = min(idx0, idx0 + (c - 1) * dI), max(idx0, idx0 + (c - 1) * dI)
+            if self._launch_sorted and bisect.bisect_right(self._launch_sorted, hi_i) > bisect.bisect_left(self._launch_sorted, lo_i):
+                return self._per_run(p, unfold)
             if lo_i > self._max_input and self._own_count(lo_i, hi_i) == 0:
                 self._xreq("node", (idx0, lo0, hi0), (dI, dL, dH), c)
                 return [(XREQ, "node", (idx0, lo0, hi0), (dI, dL, dH), c)]
@@ -289,6 +312,26 @@ class Projection(PX.CachedKv, C.Prog):
                 return super()._srcP(p, unfold)
             return self._per_run(p, unfold)
         return super()._srcP(p, unfold)
+
+    def _launch_src(self, idx: int, lo: int, hi: int):
+        """A read of a shared launch's blocks: this request's own linked `schedule` words, else a cross-request read."""
+        own, P = self.launch_reads[idx]
+        if own is not None:
+            name, off, slot, pairs = own
+            if slot <= lo and hi <= slot + pairs:
+                return ("WIT", name, off + lo - slot, off + hi - slot)
+            if (lo, hi) == (P, P + 1):
+                return ("WIT", name, off + pairs, off + pairs + 1)
+        self._xreq("launch", idx, lo, hi)
+        return (XREQ, "launch", idx, lo, hi)
+
+    def _foreign_kind(self, idx: int) -> str:
+        """Which parameter of another request Input node `idx` is: its seed, peers or witness, else its prompt."""
+        if idx in getattr(self, "_all_seed_nodes", ()):
+            return "seed"
+        if idx in self._all_peer_nodes:
+            return "peers"
+        return "witness" if idx in self._all_witness_nodes else "prompt"
 
     @property
     def _max_input(self) -> int:
@@ -299,7 +342,6 @@ class Projection(PX.CachedKv, C.Prog):
 
     def _own_count(self, lo_i: int, hi_i: int) -> int:
         """How many of this request's instance node indices lie in [lo_i, hi_i]."""
-        import bisect
         own = getattr(self, "_own_sorted", None)
         if own is None:
             own = self._own_sorted = sorted(self.k2i)
@@ -551,30 +593,17 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     n_in = B.n_input_nodes
     _attr_phase = _Phase(run_prof, "attribution") if profiling else _NoPhase()
     _attr_phase.__enter__()
-    # [R15 stoch] a stochastic fold declares one `seed_<i>` parameter per seeded request between the prompts and the weights (fold._header)
-    # (`Input64_v1` nodes in request order: the i-th seed node is the i-th request's -- every request of a stochastic row is seeded,
-    # derive_step.sampler_geometry refuses otherwise)
-    seed_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "seed_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has {len(B.seed_index)} seed input nodes but the header has {len(reqs)} requests")
-        seed_node_of[reqs[i]["request_id"]] = k
-    # [R17 D90] a tensor-parallel rank fold declares one `peers_<i>` parameter per request (program.json peers_layout -> load_oracle
-    # `peer_index`: node -> request index), request-owned like the prompt; a header/Program disagreement on the count is refused by name
-    peer_node_of: dict[str, int] = {}
-    for k, i in sorted(getattr(B, "peer_index", {}).items()):
-        if i >= len(reqs):
-            raise ValueError(f"program has a peers input node for request index {i} but the header has {len(reqs)} requests")
-        peer_node_of[reqs[i]["request_id"]] = k
-    if peer_node_of and len(peer_node_of) != len(reqs):
-        raise ValueError(f"program has {len(peer_node_of)} peers input nodes for {len(reqs)} requests (a TP rank fold declares one per request)")
-    # [R16 global, F-fp8-GM1 / M-0823] the shared weights are the Input nodes no request owns -- ONE node for a homogeneous bf16 Record,
-    # one per leaf field for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when the layout does not hold
-    weights_nodes = weights_input_nodes(B, len(reqs), len(seed_node_of), len(peer_node_of))
+    # the request-owned parameters after the prompts: [R15 stoch] a stochastic fold's `seed_<i>` per seeded request (every request of a
+    # stochastic row is seeded, derive_step.sampler_geometry refuses otherwise), [R17 D90] a TP rank fold's `peers_<i>` per request and a
+    # profile's witness parameters; [R16 global, F-fp8-GM1 / M-0823] the shared weights are the Input nodes no request owns -- ONE node for
+    # a homogeneous bf16 Record, one per leaf field for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when
+    # the layout does not hold
+    seed_node_of, peer_node_of, witness_owners, weights_nodes = request_inputs(B, reqs)
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
     # attribution of every instance, in node order (producers precede consumers). Channels, in order:
-    #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+);
+    #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+), or `launch`: a unit of a launch several
+    #               requests share (the Marlin align), owner LAUNCH, in no leg; reading it names no request;
     #   dataflow -- every request-owned operand the instance reads (its own prompt parameter / a node attributed earlier) names ONE request
     #               (row independence: an instance over one request's data is that request's; several requests -> non-separable, refused);
     #   weight-only -- [R19, F-r19-int-15] every node operand is a shared weight or an earlier weight-only instance (and there is at least
@@ -587,8 +616,9 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # A per-position Attention group (rows=|positions sharing T|) is the case only dataflow gets right on pre-X-09 folds.
     shared_idx: list[tuple[int, int]] = []   # (instance index, engine step) of every weight-only instance (owner SHARED, module level)
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
-    # request-owned inputs: its prompt, seed, [R17 D90] peers (a collective instance reading request r's peers node is r's) and run values
-    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *SI.run_owners(B, reqs)]:
+    # request-owned inputs: its prompt, seed, [R17 D90] peers (a collective instance reading request r's peers node is r's), witnesses
+    # and run values
+    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
         owners_of_param[k].add(rid)
     shared_inputs = weights_nodes | SI.values_nodes(B)
     owner_of_node: dict[int, str] = {}
@@ -605,6 +635,10 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             unattributed.append({"i": i, "k": r["k"], "spec": r["spec"], "why": "no instances.jsonl row"})
             continue
         rid, h = o.get("request"), "meta"
+        if o.get("launch"):
+            owner_of_node[r["k"]] = LAUNCH
+            how["launch"] += 1
+            continue
         if rid is None:
             deps: set = set()
             reads_weight = False        # a shared weight node or an earlier weight-only instance among the operands
@@ -622,7 +656,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                             own = owner_of_node.get(idx, ("?", "node", idx))
                             if own == SHARED:
                                 reads_weight = True
-                            else:
+                            elif own != LAUNCH:
                                 deps.add(own)
             unknown = {d for d in deps if isinstance(d, tuple)}
             owners = deps - unknown

@@ -20,7 +20,7 @@ from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_maj
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name, triton_name
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
-from verity_vllm.observe.fold.patterns.rotary import _positions_ok
+from verity_vllm.observe.fold.patterns.rotary import step_positions
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import (
     Compute,
@@ -106,18 +106,6 @@ def _index_scale_rows(v: ViewDesc) -> ViewDesc:
     return ViewDesc(v.alloc, v.offset + 32, (v.shape[0] * v.shape[1],), (33,), v.dtype, v.device)
 
 
-def _positions(node: TreeNode, ctx: StepContext, pos: Any, rows: int) -> tuple[int, ...] | Unsupported:
-    if not isinstance(pos, ViewDesc):
-        return unsupported(node, "positions argument is not a tensor view", positions=repr(pos))
-    why = _positions_ok(pos, rows, ctx)
-    if why:
-        return unsupported(node, why)
-    out = tuple(int(p) for p in ctx.start.positions[:rows])
-    if len(out) != rows:
-        return unsupported(node, "StepStart positions do not cover the kernel rows", rows=rows, positions=len(out))
-    return out
-
-
 def _slots(node: TreeNode, ctx: StepContext, rows: int, limit: int) -> tuple[int, ...] | Unsupported:
     if len(ctx.start.slot_mapping) < rows:
         return unsupported(node, "StepStart slot_mapping does not cover the kernel rows", rows=rows, slots=len(ctx.start.slot_mapping))
@@ -168,7 +156,7 @@ class DsaNormRope:
         if not all(isinstance(v, ViewDesc) for v in (q, qo, qw, kv, kvw, kpe, cs, latent)):
             return unsupported(node, "fused norm/RoPE pointer arguments are not bound", args={k: repr(v) for k, v in a.items() if k.endswith("_ptr")})
         M = q.shape[0]
-        pos = _positions(node, ctx, a.get("pos_ptr"), M)
+        pos = step_positions(node, ctx, a.get("pos_ptr"), M)
         if isinstance(pos, Unsupported):
             return pos
         if M != len(ctx.start.rows) or q.shape != (M, 2048) or qo.shape != (M, 2048) or kv.shape != (M, 512) or kpe.shape != (M, 64):
@@ -259,7 +247,7 @@ class DsaQ:
         if not all(isinstance(v, ViewDesc) for v in (q, qo, cs)):
             return unsupported(node, "fused-q RoPE pointers are not bound")
         M = q.shape[0]
-        pos = _positions(node, ctx, a.get("pos_ptr"), M)
+        pos = step_positions(node, ctx, a.get("pos_ptr"), M)
         if isinstance(pos, Unsupported):
             return pos
         if q.shape != (M, 8, 64) or qo.shape != (M, 8, 64) or q.dtype != "bfloat16" or qo.dtype != "bfloat16" \

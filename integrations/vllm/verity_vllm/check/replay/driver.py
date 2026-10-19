@@ -223,6 +223,11 @@ def _malloc_trim() -> bool:
         return False
 
 
+def default_workers(processes: int = 1) -> int:
+    """The forked pool's size when the caller names none: half the cores, shared by ``processes`` replays running at once, at most 32."""
+    return max(1, min(32, (os.cpu_count() or 2) // 2 // processes))
+
+
 def fit_pool(want: int, picked: list[dict], worker_peak: int) -> tuple[int, dict[str, Any] | None]:
     """How many forked workers fit, measured after the prewarm, and the fit's record (None without a cgroup limit).  The room is the
     cgroup's memory.max less its use once the parent's free heap is returned (`malloc_trim`); a pick's peak is ``worker_peak`` plus what
@@ -536,7 +541,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # process pool shares the committed store + the weights cache copy-on-write and returns small records.  The children never touch CUDA
     # (weights are pre-read into the cache in the parent, the committed reader slices host tensors); a pool failure / timeout falls back
     # to the serial path.  Results are folded in the picked order below, so the record is independent of the schedule.
-    workers = max(1, min(32, (os.cpu_count() or 2) // 2)) if workers is None else workers
+    workers = default_workers() if workers is None else workers
     workers_requested = int(workers)
     pool_note = None
     # [rev-cb F-cb-44] a DEVICE-retained committed store (`--retain device`) cannot be read by forked children (CUDA after fork ->

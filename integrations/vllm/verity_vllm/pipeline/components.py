@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import time
+from dataclasses import replace
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import REGISTRY
@@ -83,6 +84,16 @@ def recorded_registration(d: str) -> dict | None:
     return out or None
 
 
+def recorded_schedule(d: str) -> tuple[dict, ...]:
+    """A TP rank component's Marlin align calls (result.json `tp.schedule.record`, `CollectiveBus`): where its `schedule` input holds
+    each call's keys or, at a launch shared with other requests, its linked words (`program.launch_units`); () without align calls."""
+    try:
+        tp = json.load(open(os.path.join(d, "result.json"))).get("tp") or {}
+    except (OSError, ValueError):
+        return ()
+    return tuple((tp.get("schedule") or {}).get("record") or ())
+
+
 def registration_refusal(dirs: list[str]) -> str | None:
     """Why the components cannot share one registration (`Workload_v1`'s `shared.values` and tables), or None: each registers the same
     fields with the same bits and the same tables, or none does."""
@@ -116,7 +127,8 @@ def load_component(d: str, canon: dict) -> dict:
     pre: dict = {"prov": component_provenance(d, desc)}
     if not pre["prov"]["refusal"]:
         try:
-            pre["comp"] = W.request_component(desc, REGISTRY, wrapper_params(d), canon=canon, digest=pre["prov"]["descriptor_digest"])
+            pre["comp"] = replace(W.request_component(desc, REGISTRY, wrapper_params(d), canon=canon, digest=pre["prov"]["descriptor_digest"]),
+                                  schedule=recorded_schedule(d))
         except Exception as e:  # noqa: BLE001 -- raised by component_of, where GP-01 has always raised it
             pre["error"] = e
     pre["secs"] = round(time.time() - t1, 2)

@@ -454,7 +454,8 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
     digest its `peers_r[s,k]` leaf is bound to (`peer_binding` of tp2_rank_match.json = the recorder's digest of rank 1-r's partial at (s,k));
     the Commit compared every committed rank-local partial against the SAME recorder's stored tensors bit-exact (`match_oracle`, per rank,
     exhaustive over (step, k)).  This closes the chain BY VALUE: fold peer leaf (r, s, k) == recorder part digest (1-r, s, k) == the bytes
-    rank 1-r COMMITTED at (s, k).  Checks, each named: the fold Match record exists and PASSed; every binding's peer digest equals the
+    rank 1-r COMMITTED at (s, k), at every (s, k) the oracle compared; one it exempts (a differing MoE align witness in its cone,
+    `oracle_witness.WITNESS_RULE`) is bound in the Commit by its cross-rank collectives check and boundary linkage.  Checks, each named: the fold Match record exists and PASSed; every binding's peer digest equals the
     recorder row of the OTHER rank at the same (s, k) and its own digest the recorder row of its own rank; the binding covers every recorder
     (s, k) of every rank (2 x n); the Commit's match oracle PASSed on every rank.  Absent fold Match: result None (the row's Match is
     collective-level only, ◐) unless `require`, then a named FAIL.  CPU only, digests only (no tensors re-read)."""
@@ -536,6 +537,7 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
         fails.append("Commit match oracle not run (--no-match-oracle): the binding digests have no committed value to bind to")
     res["result"] = not fails
     res["why"] = None if not fails else "; ".join(fails[:3])
-    res["rule"] = ("fold peers_r[s,k,p] leaf digest == recorder partial digest of rank p at (s,k) == bytes rank p committed at (s,k) (match oracle bit-exact), "
-                   "every (s,k) of every rank, every other rank p; fold Match + rank Match PASS")
+    res["rule"] = ("fold peers_r[s,k,p] leaf digest == recorder partial digest of rank p at (s,k) == bytes rank p committed at (s,k) (match oracle bit-exact "
+                   "where it compares; an exempt (s,k) is bound by the Commit's cross-rank collectives), every (s,k) of every rank, every other rank p; "
+                   "fold Match + rank Match PASS")
     return res

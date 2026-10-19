@@ -84,9 +84,10 @@ required, name a model.
 
 **`acquire/`** implements *value acquisition*: `plan.py` (required values + correspondence -> acquisition plan), `install.py`,
 `stage.py`, `compiled.py` (the manifest of `Execution=compiled` rows), `sources/` (`hidden_source.py` / `moe_source.py` /
-`compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `norm_scale_source.py` / `router_softmax_source.py` /
-`vocab_range_source.py`, attached by `taps.py`; `kv_slots_source.py`, each KV layer's slots for the memory map, attached by
-`commit --memory-map`), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
+`compiled_source.py` / `compiled_kernel_source.py` / `partial_source.py` / `moe_align_source.py` / `norm_scale_source.py` /
+`router_softmax_source.py` / `vocab_range_source.py`, attached by `taps.py`; `kv_slots_source.py`, each KV layer's slots for the
+memory map, attached by `commit --memory-map`; `oracle_witness.py` conditions the TP match oracle on the MoE align schedules both
+runs committed), `fa2_plane_classes.py`, `committer_api.py`, and the shipped tap sources (`fa2_tap_src/`,
 `fa3_tap_src/`, `norm_tap_src/`, `router_tap_src/`).  `gate.py` is the CPU gate (one row's acquisition plan, off-pod).  Four taps are
 on by default; `NORM_TAP=0`, `GUARDED_MAX_TAP=0`, `ROUTER_TAP=0` or `VOCAB_TAP=0` turns one off, for A/B only.  The guarded-max tap
 (`query/guarded_max.py`) runs on every row, whose attention is FA2 or FA3: the tap builds of `pod_fa2_tap.sh FA2_TAP_ROW_GUARD=1` /
