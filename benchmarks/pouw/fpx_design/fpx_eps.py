@@ -94,6 +94,24 @@ VARIANTS = [
     dict(device="sm_100", name="fpx-2sp-e4m3i-alu", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
          fold_add={"ALU": 1.0},
          title="FP8 peel (2SP), LI-CP-W redux fold, the extraction on ALU", summary="as fpx-2sp-e4m3i"),
+    # gap-one twin (g1): the twin's coins move each operand by 1, not by the grid's gap, so every coin product has an
+    # odd coefficient as in int8 Dither; R + b (|R| <= 352) is exact in FP16, so the twin is one FP16 GEMM (2 FP8
+    # slots), served beside it in FP8 (H200: in FP16 too, outside the 14-bit window)
+    dict(device="sm_120", name="fpx-g1-e4m3i-f16", base="dither-c-peel-fx1", plain=2.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5},
+         title="FP8 g1: served e4m3i ±352 round-to-nearest, the gap-one twin in FP16, fx1 fold",
+         summary="int8 Dither's coin structure on R + b, R the served e4m3i operand, one FP16 twin and one FP8 served "
+                 "GEMM a word"),
+    dict(device="sm_100", name="fpx-g1-e4m3i-f16", base="dither-2s-licpw-redux-heavy-l32", plain=2.0,
+         fold_add={"ALU": 0.5, "IMAD": 0.5},
+         title="FP8 g1 on the B200 record's fold: the gap-one twin in FP16, served in FP8",
+         summary="as sm_120's fpx-g1-e4m3i-f16"),
+    dict(device="sm_100", name="fpx-g1-e4m3i-f16-duo", base="dither-2s-l32", plain=2.0, fold_add={"IMAD": 1.0},
+         title="FP8 g1 on the duo fold", summary="as fpx-g1-e4m3i-f16 on the duo fold"),
+    dict(device="sm_90", name="fpx-g1-e4m3i-f16", base="dither-2s-licpw-redux-imad-l32", plain=3.0,
+         fold_add={"IMAD": 0.5, "ALU": 0.5},
+         title="FP8 g1 on H200: served and twin both FP16 (exact), the H200 record's fold",
+         summary="the e4m3i products leave the FP8 14-bit window, so both GEMMs run in FP16 at half the FP8 rate"),
 ]
 
 
