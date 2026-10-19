@@ -181,6 +181,12 @@ def _descendants(e: Any) -> Iterator[Any]:
         yield from _descendants(c)
 
 
+def _on_host(e: Any) -> bool:
+    """A host event (an op, a range, a runtime call): CUPTI also reports each range as a device-side annotation of the same
+    name, with no children, which is not the range."""
+    return str(getattr(e, "device_type", "DeviceType.CPU")).endswith("CPU")
+
+
 def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], device: str) -> dict[str, Any]:
     """The ledger from profiler events (torch's FunctionEvents, their `cpu_children` trees and attached `kernels`).
 
@@ -188,7 +194,7 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
     numbered #0, #1, .. in the pass's order.  Each call's events are those in its range, in order, each flagged ``fused``
     (inside its fused launch's range) or ``after_fused`` (after that range closed); of the recorder's reads (`READ_RANGE`)
     only GEMM launches."""
-    evs = sorted(events, key=lambda e: (e.time_range.start, -e.time_range.end))
+    evs = sorted(filter(_on_host, events), key=lambda e: (e.time_range.start, -e.time_range.end))
 
     def gemm_op(e) -> bool:
         return bool(GEMM_OPS.match(e.name)) and not any(GEMM_OPS.match(d.name) for d in _descendants(e))

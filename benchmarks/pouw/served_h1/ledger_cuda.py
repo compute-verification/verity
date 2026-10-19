@@ -25,9 +25,10 @@ M, K, N, BLOCKS = 32, 64, 64, 4
 
 def _raw(prof, i: int) -> list[dict]:
     """Every event in call i's range with the kernels CUPTI attached to it, reads included: what the ledger reduces."""
-    r = next(e for e in prof.events() if e.name == f"{SG.CALL_RANGE}{i}")
-    return [{"name": e.name, "depth": d, "kernels": [k.name for k in (getattr(e, "kernels", ()) or ())]}
-            for e, d in _walk(r, 0)]
+    named = [e for e in prof.events() if e.name == f"{SG.CALL_RANGE}{i}"]
+    r = next(e for e in named if SG._on_host(e))
+    return [{"name": e.name, "depth": d, "device": str(e.device_type), "kernels": [k.name for k in (getattr(e, "kernels", ()) or ())]}
+            for e, d in _walk(r, 0)] + [{"same_name": str(e.device_type), "children": len(e.cpu_children)} for e in named]
 
 
 def _walk(e, d):

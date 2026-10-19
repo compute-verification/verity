@@ -21,6 +21,7 @@ import json
 import random
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -261,6 +262,14 @@ def test_beside_path_that_keeps_the_order_is_refused_by_the_trace():
     v = _Window("beside", "call").verdict()
     assert not v["ok"] and v["by_check"] == {"order": 0, "trace": STEPS * LINEARS}
     assert all("receipts from a separate pass" in r["reasons"][0] for r in v["refused"])
+
+
+def test_a_device_copy_of_a_range_is_not_the_range(fused):
+    """CUPTI reports every range again as a childless device-side annotation of the same name (r20261019-061606-f917)."""
+    evs = list(fused.rec.prof.events())
+    ghosts = [SimpleNamespace(name=e.name, device_type=torch.autograd.DeviceType.CUDA, cpu_children=[], kernels=[],
+                              time_range=e.time_range, input_shapes=[]) for e in evs if e.name.startswith("verity/")]
+    assert ghosts and SG.ledger_of(evs + ghosts, fused.rec.meta, "cpu") == fused.ledger
 
 
 def test_record_without_a_ledger_is_refused(fused):
