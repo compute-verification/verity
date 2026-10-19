@@ -121,7 +121,7 @@
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "gb200"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h100"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h20"},
-    {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h200"},
+    {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "h200", "count": 2},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l4"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l40"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l40s"},
@@ -296,7 +296,6 @@
     {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "new_patterns", "detail": "qwen"},
     {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/query/required.py", "kind": "layer-class", "symbol": "<module>", "detail": "RotaryEmbedding"}
+    {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2}
   ]
 }

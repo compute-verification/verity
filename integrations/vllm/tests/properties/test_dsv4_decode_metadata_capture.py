@@ -3,6 +3,8 @@ operands, its launch checks and comparison jobs on what the twin says the kernel
 loop with the GPU stood in for."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import contextlib
 import copy
 import hashlib

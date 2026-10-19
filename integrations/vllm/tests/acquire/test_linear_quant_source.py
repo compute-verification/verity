@@ -1,8 +1,10 @@
 """The block-FP8 linears' input quantization source: inside a linear's call during a committed step, the `_C` group-quant launch's
 outputs are bound as `<linear>/x_q` (as written) and `<linear>/x_s` (the column-major scales' row-major copy) and copied at once;
-nothing outside a linear or a step; a second launch in one call, or scales of another shape, is a named collector error."""
+nothing outside a linear or a step; a second launch in one call, or scales of another shape, is a named collector error; on a TP
+Commit, once one rank attaches it every rank must."""
 from __future__ import annotations
 
+import json
 import types
 
 import pytest
@@ -10,6 +12,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.acquire.sources import linear_quant_source as LQ  # noqa: E402
+from verity_vllm.acquire.sources import taps as TAPS  # noqa: E402
 
 K, GROUP = 256, 128
 OPS = types.SimpleNamespace()
@@ -100,6 +103,27 @@ def test_a_second_launch_or_other_scales_is_a_named_error(monkeypatch) -> None:
             src.uninstall()
         assert len(c.errors) == 1 and msg in c.errors[0] and src.stats["errors"] == 1
     assert OPS.per_token_group_fp8_quant is _quant
+
+
+def test_every_tp_rank_whose_rows_name_the_definition_must_attach_it(tmp_path) -> None:
+    class Com:
+        def __init__(self) -> None:
+            self.sources: list = []
+
+        def attach_source(self, s) -> None:
+            self.sources.append(s)
+
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"identities": [{"rank": r, "spec": "DeepGemmFp8Linear_v1"} for r in (0, 1)]}))
+    attach = TAPS.for_ranks(TAPS.TapSources())
+    made = [{"rank": r, "tap_sources": attach(Com(), Model(), str(path), r)} for r in (0, 1)]
+    versions: dict = {}
+    assert TAPS.require_on_every_rank(made, (), versions, TAPS.TapSources(), explicit_classes=True) == ()
+    assert versions["linear_quant_source"] == {0: {"sites": 1}, 1: {"sites": 1}}
+    other = attach(Com(), torch.nn.Linear(2, 2), str(path), 1)
+    assert "no block-FP8 linear" in other["linear_quant_source"]["error"]
+    with pytest.raises(SystemExit, match=r"linear quant source did not attach on ranks \[1\]"):
+        TAPS.require_on_every_rank([made[0], {"rank": 1, "tap_sources": other}], (), {}, TAPS.TapSources(), explicit_classes=True)
 
 
 def test_it_attaches_only_where_the_manifest_binds_the_definition() -> None:

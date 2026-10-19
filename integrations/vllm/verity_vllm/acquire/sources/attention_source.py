@@ -23,11 +23,14 @@ both, each over its own rows.  A cache row is read at the step's slot mapping as
 other entry, which the copy-equality Program then refuses.  Taps the map marks `target_only` are bound on the target only
 (`route_source.on_target`).  `capture-map ids --binder attention --names` prints what a step binds.
 
-The Program's sparse MLA of a layer (`dsa_indexer_attn`: SparseMlaSplit_v1 / SparseMla_v1 per query row, [rows, NHL * KVL]) is the
-value `forward_mqa` returns and the W_UV bmm reads: the `attn` tap.  So the source claims those `call_boundaries` identities
-(`claims`, one of `call_boundary_source.CLAIMS`): given the rank's manifest rows, each step's `attn` tensor of a layer whose step
-names one is held to its rows and width (a collector error otherwise), and `name_bindings` binds the identity, op path as the
-manifest spells it, to that committed tensor at that engine step.  Nothing more is committed.
+Each tap that is a Program Call's port is declared to the binding (`ports`, `TAP_PORTS`), which binds it to the row that port
+produces whatever label the map commits it under (`verity_vllm.query.manifest.bind`): the DSA indexer's query and weights (`DsaIndexerQ_v1`
+ports 0 / 1) and its cache row's key and scale (`DsaIndexerKRow_v1` ports 0 / 1).  Two of them are Values two Calls of the attention
+body exchange, `call_boundaries` identities `<layer>.self_attn/<fx node>` (`CALL_TAPS`): the sparse MLA of a layer (SparseMlaSplit_v1 /
+SparseMla_v1 per query row), which `forward_mqa` returns and the W_UV bmm reads (the `attn` tap), and the W_UK_T absorb's product the
+sparse MLA reads (`q_nope_absorb`).  The source claims those identities (`claims`, one of `call_boundary_source.CLAIMS`), and each
+step's tensor of such a tap is held to the rows and width of the identity it binds (a collector error otherwise).  Nothing more is
+committed.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ import torch
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine.hooks import Hooks
 
 BINDER = "attention"
@@ -54,27 +58,33 @@ SCALE_BYTES = 4
 _BYTES = {"bfloat16": 2, "float32": 4, "int32": 4, "float8_e4m3fn": 1, "uint8": 1}
 #: the Definitions of `dsa_indexer_attn`'s per-row sparse MLA, whose output the `attn` tap is
 SPARSE_MLA_SPECS = ("SparseMlaSplit_v1", "SparseMla_v1")
-_SPARSE_MLA_SITE = re.compile(r"(?:^|\.)layers\.(\d+)\.self_attn/dsa_indexer_attn(?:_\d+)?$")
+#: the taps that are a Call boundary of the attention body -> the Definitions of the Call whose output they are
+CALL_TAPS = {ATTN_MQA: frozenset(SPARSE_MLA_SPECS), ARGUMENTS["ql_nope"]: frozenset({"BatchedGemm_v1"})}
+#: the taps that are a Program Call's port (`bind.Port`)
+TAP_PORTS = {**{t: Port(fams, "out", call_boundary=True) for t, fams in CALL_TAPS.items()},
+             ARGUMENTS["index_q_fp8"]: Port(frozenset({"DsaIndexerQ_v1"}), "0"), ARGUMENTS["index_weights_out"]: Port(frozenset({"DsaIndexerQ_v1"}), "1"),
+             INDEX_ROWS: Port(frozenset({"DsaIndexerKRow_v1"}), "0"), INDEX_SCALE: Port(frozenset({"DsaIndexerKRow_v1"}), "1")}
+_CALL_SITE = re.compile(r"(?:^|\.)layers\.(\d+)\.self_attn/[^/]+$")
 
 
 def binds(cmap: Mapping[str, Any]) -> bool:
     return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
 
 
-def sparse_mla_layer(r: Mapping[str, Any]) -> int | None:
-    """The layer of a `call_boundaries` identity that is a layer's sparse MLA output (`<...>layers.<i>.self_attn/dsa_indexer_attn[_k]`,
-    member `out`, bf16, a `SPARSE_MLA_SPECS` Definition), else None."""
+def call_tap(r: Mapping[str, Any]) -> tuple[str, int] | None:
+    """(tap, layer) of a `call_boundaries` identity a `CALL_TAPS` tap binds (`<...>layers.<i>.self_attn/<fx node>`, member `out`, bf16,
+    one of the tap's Definitions), else None."""
     if r.get("family") != CB.FAMILY or r.get("output_member") != "out" or r.get("dtype") != "bf16":
         return None
-    if str(r.get("spec") or "").split("{", 1)[0] not in SPARSE_MLA_SPECS:
-        return None
-    m = _SPARSE_MLA_SITE.search(str(r.get("op_path") or ""))
-    return int(m.group(1)) if m else None
+    fam = str(r.get("spec") or "").split("{", 1)[0]
+    tap = next((t for t, fams in CALL_TAPS.items() if fam in fams), None)
+    m = _CALL_SITE.search(str(r.get("op_path") or ""))
+    return (tap, int(m.group(1))) if tap and m else None
 
 
 def claims(r: Mapping[str, Any]) -> str | None:
-    """`call_boundary_source.CLAIMS`: a layer's sparse MLA output is this source's."""
-    return BINDER if sparse_mla_layer(r) is not None else None
+    """`call_boundary_source.CLAIMS`: a Call boundary of the attention body a tap binds is this source's."""
+    return BINDER if call_tap(r) is not None else None
 
 
 if claims not in CB.CLAIMS:
@@ -124,7 +134,7 @@ class AttentionSource:
     short_name = "attention"
 
     def __init__(self, com: Any, routes: Any, identities: Sequence[Mapping[str, Any]] = ()) -> None:
-        """`identities`: the rank's required-manifest rows; the sparse MLA call boundaries among them are bound from the `attn` tap."""
+        """`identities`: the rank's required-manifest rows; the call boundaries among them a `CALL_TAPS` tap binds hold its tensors."""
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
         self.layers: dict[int, Any] = dict(routes.layers)
         free = self.cmap.get("free_symbols", {})
@@ -146,12 +156,11 @@ class AttentionSource:
                 raise ValueError(f"capture map {self.cmap.get('id')}: the module of layer {i}'s forward has no {NORM_ROPE}")
             if home not in self.homes:
                 self.homes.append(home)
-        #: (engine step, layer) -> the sparse MLA call boundaries of that layer and step, bound from the `attn` tap
-        self.boundaries: dict[tuple[int, int], list[Mapping[str, Any]]] = {}
+        #: (engine step, tap, layer) -> the call boundaries of that layer and step the tap binds
+        self.boundaries: dict[tuple[int, str, int], list[Mapping[str, Any]]] = {}
         for r in identities:
-            if (layer := sparse_mla_layer(r)) is not None:
-                self.boundaries.setdefault((int(r.get("engine_step", r.get("step"))), layer), []).append(r)
-        self._held: set[tuple[int, int]] = set()
+            if (tl := call_tap(r)) is not None:
+                self.boundaries.setdefault((int(r.get("engine_step", r.get("step"))), *tl), []).append(r)
         self._copies: list[Any] = []
         self._hooks = Hooks()
         self._pending: tuple[Any, Mapping[str, Any]] | None = None
@@ -180,17 +189,15 @@ class AttentionSource:
         self._copies = []
 
     def begin_run(self) -> None:
-        self._held = set()
         self.stats = {"layers": len(self.layers), "on_target": self.on_target, "calls": 0, "bound": 0, "unpaired": 0, "layout_refused": 0,
                       "mha_unbound": 0, "by_tap": {}, "copied_by_tap": {},
                       "call_boundaries": sum(len(v) for v in self.boundaries.values()), "call_boundaries_held": 0}
 
-    def _hold_boundary(self, layer: int, t: Any, job: Any) -> None:
-        """The `attn` tensor of `layer` at the job's step, held to the step's sparse MLA call boundaries of that layer: every request's
-        rows packed, NHL * KVL bf16 words each, the identities' element ranges whole.  Held, the identities bind it (`name_bindings`);
-        otherwise a collector error, and they stay unbound."""
+    def _hold_boundary(self, tid: str, layer: int, t: Any, job: Any) -> None:
+        """The tensor of `CALL_TAPS` tap `tid` of `layer` at the job's step, held to the step's call boundaries of that layer the tap
+        binds: every request's rows packed, `width` bf16 words each, the identities' element ranges whole; otherwise a collector error."""
         step = int(job.step)
-        ids = self.boundaries.get((step, layer))
+        ids = self.boundaries.get((step, tid, layer))
         if not ids:
             return
         rows = sum(int(r["rows"]) for r in ids)
@@ -198,20 +205,14 @@ class AttentionSource:
         bad = [r for r in ids if list(r.get("element_range") or ()) != [0, int(r["rows"]) * int(r["width"])] or int(r["width"]) != int(ids[0]["width"])]
         if bad or len({r["op_path"] for r in ids}) != 1 or t.dtype != torch.bfloat16 or not shape or shape[0] != rows \
                 or t.numel() != rows * int(ids[0]["width"]):
-            self.c.errors.append(f"attention: layer {layer} at engine step {step}: forward_mqa returned {shape} {t.dtype}; the manifest's sparse MLA "
+            self.c.errors.append(f"attention: layer {layer} at engine step {step}: tap {tid} is {shape} {t.dtype}; the manifest's "
                                  f"call boundaries there are {[(r['request_id'], r['op_path'], r['rows'], r['width'], r.get('element_range')) for r in ids][:3]}"[:300])
             return
-        self._held.add((step, layer))
         self.stats["call_boundaries_held"] += len(ids)
 
-    def name_bindings(self) -> dict[str, dict[int, tuple[str, str]]]:
-        """`binding.build_binding_map`'s per-step rebinding: the `attn` name of each layer -> {engine step: (op_path, member)} of the
-        sparse MLA call boundary its tensor was held to at that step (`_hold_boundary`)."""
-        out: dict[str, dict[int, tuple[str, str]]] = {}
-        for step, layer in sorted(self._held):
-            r = self.boundaries[(step, layer)][0]
-            out.setdefault(self.names[ATTN_MQA][layer], {})[step] = (str(r["op_path"]), str(r["output_member"]))
-        return out
+    def ports(self) -> dict[str, Port]:
+        """`bind.Binder`'s declared labels: each `TAP_PORTS` tap bound here, under the label the map commits it with."""
+        return {n.rsplit("/", 1)[1]: TAP_PORTS[tid] for tid, layers in self.names.items() if tid in TAP_PORTS for n in layers.values()}
 
     def declaration_classes(self) -> list[dict]:
         return []
@@ -239,6 +240,8 @@ class AttentionSource:
             self._copies.append(t)  # alive until the step ends: the committer may stage it asynchronously
             self.stats["copied_by_tap"][tid] = self.stats["copied_by_tap"].get(tid, 0) + 1
         self.c._acquire(name, t, job)
+        if tid in CALL_TAPS:
+            self._hold_boundary(tid, layer, t, job)
         self.stats["bound"] += 1
         self.stats["by_tap"][tid] = self.stats["by_tap"].get(tid, 0) + 1
 
@@ -307,8 +310,6 @@ class AttentionSource:
             if job is not None and me._active is not None:
                 me._mqa_rows = int(out[0].shape[0])
                 me._bind(ATTN_MQA, me._active, out[0], job)
-                if me._active in me.names.get(ATTN_MQA, {}):
-                    me._hold_boundary(me._active, out[0], job)
             return out
         return forward_mqa
 
@@ -341,4 +342,4 @@ class AttentionSource:
         return fused_norm_rope
 
 
-__all__ = ["AttentionSource", "BINDER", "ARGUMENTS", "TAPS", "binds", "mla_rows", "indexer_rows"]
+__all__ = ["AttentionSource", "BINDER", "ARGUMENTS", "TAPS", "CALL_TAPS", "TAP_PORTS", "binds", "call_tap", "mla_rows", "indexer_rows"]

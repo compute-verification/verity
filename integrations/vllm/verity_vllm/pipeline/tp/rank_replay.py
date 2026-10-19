@@ -4,12 +4,12 @@
 `load` reads the rank's request Programs and refuses, by name, any whose digest is not of record for the rank or whose TP context is
 not the rank's; `evaluate` runs manbind's sampled replay and the exhaustive boundary linkage on the rank's binding map, its committed
 members (`committed`: an `oracle_compare.OpenedReader` over the live committer, or over the bundle's dumped store) and its weight
-shards (`weights_of(prefix)`: the engine's parameters, or the checkpoint's shards opened against the committed weights root).  The
-seed is `seed_of`'s: the driver's targeted seed, else the verifier's challenge with the rank's run root, else the run root.
+shards (`weights_of(prefix)`: the weights the rank registered, or the checkpoint's shards opened against the committed weights root).
+The seed is `seed_of`'s: the driver's targeted seed, else the verifier's challenge with the rank's run root, else the run root.
 
 `in_process` and `defer` take the worker's commit state (`TP2CaptureWorkerExtension._tp2_commit`: rank, world, committer, engine,
-binding map, replay config).  Under ``tp-commit --memory-map`` each first writes the rank's memory map from the live committer
-(`memory_map`), which changes no verdict."""
+the weights it registered, binding map, replay config).  Under ``tp-commit --memory-map`` each first writes the rank's memory map
+from the live committer (`memory_map`), which changes no verdict."""
 from __future__ import annotations
 
 import json
@@ -20,6 +20,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from verity_vllm.engine import hooks
 
 SCHEMA = "verity-sweep/tp-sampled-replay/v1"
 METHOD = "sampled-exact-replay per rank (manbind sampled_replay on the rank's map, Programs and shards)"
@@ -246,7 +248,8 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
         # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
         try:
             w_saved = getattr(com, "weights", None)
-            w_now = com.register_weights()
+            with hooks.patched(com, "model", st["weights"]):
+                w_now = com.register_weights()
             if w_saved is not None:
                 com.weights = w_saved
             w_ref = (rc.weight_registration or {}).get("root") if isinstance(rc.weight_registration, dict) else (w_saved or {}).get("root")
@@ -260,7 +263,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
                   "why": None if eq else ("no committed weights root on the run" if not w_ref else "root differs")}
         except Exception as we:  # noqa: BLE001
             wc = {"equal": None, "self_consistent": None, "pin_of_record": None, "pinned": None, "note": f"by reference, unverified at replay: {we!r}"[:200]}
-        sr, lk = evaluate(p, cfg, bmap=bmap, committed=rd, weights_of=lambda prefix: SR.model_weights_provider(st["eng"].model, prefix),
+        sr, lk = evaluate(p, cfg, bmap=bmap, committed=rd, weights_of=lambda prefix: SR.model_weights_provider(st["weights"], prefix),
                           weights_check=wc, run_root=rc.run_root, manifest_doc=st.get("manifest_doc"))
     except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
         sr, lk = not_run(rank, e, traceback.format_exc())

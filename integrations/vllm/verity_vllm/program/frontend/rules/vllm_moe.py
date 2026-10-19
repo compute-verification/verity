@@ -134,9 +134,19 @@ def _not_owned(family: str) -> str | None:
     return None
 
 
+def _pinned_tile_refusal(sc, geom) -> str | None:
+    for k, v in MOE_GEMM_PINS["tiles"].items():
+        if sc.get(k) != v:
+            return f"numerics_unregistered: tiling {k}={sc.get(k)!r} is not the difftested launch geometry ({MOE_GEMM_PINS['tiles']})"
+    if geom.get("num_warps", sc.get("num_warps")) != MOE_GEMM_PINS["num_warps"] or geom.get("num_stages", sc.get("num_stages")) != MOE_GEMM_PINS["num_stages"]:
+        return f"numerics_unregistered: num_warps/num_stages {geom.get('num_warps')}/{geom.get('num_stages')} are not the difftested {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
+    return None
+
+
 def _launch_pins(node, meta, sc) -> str | None:
     """`fused_moe_kernel` launch pins shared by both families (`MOE_GEMM_PINS`: kernel, source body, numeric constexprs, no bias / scale
-    pointers, the difftested tiling and warps / stages): a refusal string or None.  Operand shapes / schedule are the family's own."""
+    pointers, the difftested tiling and warps / stages, or a tuned tile `frontend.targets.moe_tuned_tile_refusal` accepts): a refusal
+    string or None.  Operand shapes / schedule are the family's own."""
     if meta.get("kernel") != MOE_GEMM_PINS["kernel"]:
         return f"kernel {meta.get('kernel')} is not {MOE_GEMM_PINS['kernel']}"
     pin_sha = MOE_GEMM_PINS["src_sha256"]
@@ -148,12 +158,10 @@ def _launch_pins(node, meta, sc) -> str | None:
     for nm in MOE_GEMM_PINS["none_ptrs"]:
         if sc.get(nm) is not None or launch_tensor(node, meta, nm) is not None:
             return f"numerics_unregistered: {nm} is set (bias / scale epilogue is a different numeric)"
-    for k, v in MOE_GEMM_PINS["tiles"].items():
-        if sc.get(k) != v:
-            return f"numerics_unregistered: tiling {k}={sc.get(k)!r} is not the difftested launch geometry ({MOE_GEMM_PINS['tiles']})"
-    geom = meta.get("geometry") or {}
-    if geom.get("num_warps", sc.get("num_warps")) != MOE_GEMM_PINS["num_warps"] or geom.get("num_stages", sc.get("num_stages")) != MOE_GEMM_PINS["num_stages"]:
-        return f"numerics_unregistered: num_warps/num_stages {geom.get('num_warps')}/{geom.get('num_stages')} are not the difftested {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
+    if (r := _pinned_tile_refusal(sc, meta.get("geometry") or {})) is not None:
+        from verity_vllm.program.frontend import targets as T
+        if T.moe_tuned_tile_refusal(active_target_profile(), sc.get("BLOCK_SIZE_K")) is not None:
+            return r
     bk = sc.get("BLOCK_SIZE_K")
     if not isinstance(bk, int) or bk % 16:
         return f"BLOCK_SIZE_K={bk!r} (need a multiple of 16)"

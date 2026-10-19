@@ -42,7 +42,8 @@ def oracle_producers_of_record(args: Any, required_manifest: dict[str, Any] | No
     labels = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
     if getattr(args, "programs_root", None):
         fx = {"requests": [{"request_id": labels[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                            "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
+                            "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "cached": int(r.get("cached") or 0)}
+                           for r in reqs]}
         loaded = MF.programs_for(fx, args.programs_root)
     elif getattr(args, "program_dir", None):
         one = MF.load_program(args.program_dir)

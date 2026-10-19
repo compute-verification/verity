@@ -548,10 +548,6 @@ class DatasetIdentity:
     def honest_tiers(self) -> list[str]:
         return [t for t in self.tiers if not t.endswith("-neg")]
 
-    @property
-    def negative_tiers(self) -> list[str]:
-        return [t for t in self.tiers if t.endswith("-neg")]
-
     def corner_families(self, tier: str) -> dict[str, int]:
         comp = (self.tiers.get(tier) or {}).get("composition") or {}
         return dict(comp.get("corner_families") or {})
