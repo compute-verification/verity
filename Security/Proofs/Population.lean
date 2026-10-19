@@ -9,6 +9,7 @@ import Proofs.Population.Oblivious
 import Proofs.Population.Transfer
 import Proofs.Population.Converse
 import Proofs.Population.HonestCone
+import Proofs.Population.LongValue
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -42,4 +43,8 @@ are public when the padded assignments are those holding the public values; that
 machine's honest wiring, which never has a secret upstream of the egress, does not bound its egress.
 `HonestCone`: Daniel's leakage form and the skipped work hold for every time-ordered, address-closed program at the
 cones over its honest runs, with no obliviousness; what needs the padding is isolation, a secret's place upstream.
+`LongValue`: a committed value of another length than its slot's width buys nothing. The verifier refuses such an
+opening before it reads it, so the slot is ⊥ in its view (or the run holds a collision), and its writer and readers are
+wrong; ⊥ is weakly dominated by a short wrong value, and the determinacy, egress, leakage and skipped-work
+theorems hold over `Option V` with `|V| + 1` for `|V|`.
 -/
