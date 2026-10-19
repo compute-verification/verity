@@ -938,19 +938,22 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
 
 
-def test_every_binding_and_pin_is_in_the_module_it_binds():
-    """The tree is migrated (`migrate_bindings.py`): it would move no binding out of `targets.py` and no pin out of the file
-    that holds it, so a binding or pin added in the wrong place fails here."""
-    import importlib.util
+#: `targets.py`'s own binding units: what no one module owns (every kernel's and vocabulary kind's self-check bindings), its
+#: module body, and `_root_bindings`, a helper whose name reads as a binding's
+TARGETS_UNITS = {"_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots", "_root_bindings", "common"}
 
+
+def test_every_binding_and_pin_is_in_the_module_it_binds():
+    """`targets.py` binds only what no one module owns, and every pin is in the file of the module that owns it, so a binding
+    or pin added in the wrong place fails here: a Definition's goes in its module's sidecar (`circuit_check.sidecars`)."""
+    from circuit_check import cache as CC
     from circuit_check import checks as CK
     from circuit_check import sidecars as SC
+    from circuit_check import targets as TG
 
-    spec = importlib.util.spec_from_file_location("migrate_bindings", REPO / "tools/verity/circuit_check/migrate_bindings.py")
-    MB = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(MB)
-    moved, _text, summary = MB.plan(strict=True)
-    assert not moved and not summary["stays"], (sorted(moved), summary["stays"])
+    stray = sorted(set(CC._units_of(CC.TARGETS.read_text())[0]) - TARGETS_UNITS)
+    assert not stray, f"targets.py binds {stray}: move each to the sidecar of the module that defines what it binds"
+    TG.load_registries()
     misplaced = []
     for kind, pins in CK.load_pins().items():
         for key in pins:
