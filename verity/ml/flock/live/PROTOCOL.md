@@ -654,12 +654,17 @@ The stops the coins decide are the firewall's own, taken from the public coins a
 - a zerocheck outer coin 1: the rep's Lean frame, from the coins the stream answered (`Flock.Firewall.Frame.Masker.answer`);
 - the mask slot's rank at the opening: the Lean frame, over the claim points it computes from the table's coins
   (`claimPoints`, `maskRank`);
-- the shadow opening's ρ-independence, which the device reports as return code 240;
-- β = 0 in the inner proof.
+- level 0's `ρ_0, ρ_1` dependent over F128: the Lean frame, from the four words the stream answered after level 0's last
+  masked value (`rhoCoins`, `Flock.Zk.rhoIndependent`), and level 0 closes only after all four;
+- β = 0 in the inner proof: the Lean frame, at the inner proof's third round (`innerCoins`). The inner proof's four rounds
+  leave through the rep's Lean frame as every other round does, unmasked, and the frame's `finish` comes after them.
 
-Rust's own versions of the first two (`Masking::refuse_outer`, `mask_rank_ok`) still run under the firewall, as speed
-references that record instead of stopping (`Masking::defer`): a rep they refuse where the Lean frame went on is refused
-(`FIREWALL-REFUSED: Rust's masking refused the rep …`), and the stop that leaves is always the Lean frame's.
+Rust's own versions of all four (`Masking::refuse_outer`, `mask_rank_ok`, the shadow opening's `rho_independent`,
+`prove_inner`'s β check) still run under the firewall, as cross-checks: the first two record instead of stopping
+(`Masking::defer`), and the last two cannot fire first, since the Lean frame stops the rep when the coins come, before
+Rust's code reads them. A rep any of them refuses where the Lean frame went on is refused (`FIREWALL-REFUSED: Rust's …
+refused the rep …`), and the stop that leaves is always the Lean frame's. A device that claims degenerate coins (return
+code 240) is a worker that failed, as above.
 
 Each stops the session where those coins stand, which is where an honest device stops too. A table's proofs leave only
 after both reps' Lean frames answer `ok` at their `finish`, and the proofs a prover without the barrier would send early
@@ -752,13 +757,19 @@ it), and the prover one `flock-firewall tap` for its other draws (§2), started 
   every later algebraic value leaves as its pad alone and whose `finish` is `stop`. At the opening's label the frame runs
   the rank check, and a mask slot of less than full rank is answered `stop WHY`.
 - **coins**: after each released round, `coins N` and the coins the stream answered it. No round and no `finish` is taken
-  while they are owed. A zerocheck outer coin 1 is answered `stop WHY`.
-- **finish**: `ok`, or `stop` for a stopped rep, once every masked phase closed with every pad of the layout used.
+  while they are owed. A zerocheck outer coin 1, level 0's `ρ_0, ρ_1` dependent over F128 (the four words after its last
+  masked value) and the inner proof's `β = 0` are answered `stop WHY`.
+- **the inner proof**: its four rounds (`ε`, the batching coins, `β`, the queries), after the opening's, are rounds like
+  any other: `zk_finish` proves it on a challenger that sends each round through the rep's frame first, and the frame
+  takes one inner proof, after the opening ended, and no round after its fourth.
+- **finish**: `ok`, or `stop` for a stopped rep, once every masked phase closed with every pad of the layout used and
+  the inner proof's four rounds left. A Lean frame that stopped the rep at its `finish` where the firewall's checks all
+  passed is refused (`FIREWALL-REFUSED: the Lean frame stopped the rep`).
 
 A `stop` ends the rep where the coins stand, as an honest prover's refusal does. The masking challenger still runs as the
 speed reference. Its inner challenger (`firewall::Gate`) frames what it would send, holds that to the Lean round byte for
-byte, refuses on any difference, and hands the stream only the Lean round. The `final_c'`, inner proof, recheck and shadow
-opening are still Rust's (`FirewallComputes`). Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
+byte, refuses on any difference, and hands the stream only the Lean round; the inner proof's rounds go through it the same
+way. The values of `final_c'`, the inner proof, the recheck and the shadow opening are still Rust's (`FirewallComputes`). Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
 reference, over Rust's claim points).
 
 In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
