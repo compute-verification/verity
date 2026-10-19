@@ -117,9 +117,11 @@ def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
     next flush, window mark and step end, and the next step rewriting the slots on the serving stream: the same roots as one
     acquisition per tensor in the same order, also with the side stream held back behind a sleep before each step's gather (from the
     second step, once it exists), so that a missing join would bind stale or rewritten slots; with VERITY_DRAIN_SIDE=0, the same roots
-    with every flush on the serving stream."""
-    for side, lag in ((True, False), (False, False), (True, True)):
+    with every flush on the serving stream; and with VERITY_GATHER_DESC_DEV=0 (descriptors read from the host-mapped ring, not copied to
+    the device ring ahead of each gather), the same roots."""
+    for side, lag, desc_dev in ((True, False, True), (False, False, True), (True, True, True), (True, False, False)):
         monkeypatch.setenv("VERITY_DRAIN_SIDE", "1" if side else "0")
+        monkeypatch.setenv("VERITY_GATHER_DESC_DEV", "1" if desc_dev else "0")
         com = committer(monkeypatch, retain_levels=False)
         runner = _SlotRunner(lag)
         runner.committer, com.runner = com, runner
@@ -134,9 +136,10 @@ def test_side_stream_drain_commits_step_rows_roots(monkeypatch):
                     want.append(rows_root(i, first + [(nm, t) for nm, t in ts if all(nm != p for p, _t in first)], keys[i]))
                     plain.append(rows_root(i, ts, keys[i]))
                 st = rc.extra["native_collect"]
-                assert roots == want, (side, lag, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
+                assert roots == want, (side, lag, desc_dev, run, [i for i in range(len(SCHED)) if roots[i] != want[i]],
                                        [i for i in range(len(SCHED)) if roots[i] == plain[i]], st)
                 assert st["gather_side_flushes"] == (len(SCHED) if side else 0), st
+                assert (st["gather_desc_copies"] > 0) is desc_dev, st
         finally:
             com.close()
 
