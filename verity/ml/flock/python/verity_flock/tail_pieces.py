@@ -493,6 +493,11 @@ def gather_f32(C, tok, *col):
     return _gather(C, tok, col, 0x7FC00000)
 
 
+def gather_e4m3(C, tok, *col):
+    """``GatherE4m3x{V}_v1`` (a routed expert's FP8 weight word): out of range, 0x7F (the E4M3 NaN)."""
+    return _gather(C, tok, col, 0x7F)
+
+
 # --- gemma-2's tanh family: table reads over |x| between an identity and a saturation region ---------------------------------
 
 def _tanh(C, x, table: str, nan_word: int):
@@ -608,5 +613,8 @@ PIECES = {
     "TanhF32Rn_v1": tanh_rn,
     "GeluTanhMulBf16_v1": gelu_tanh_mul_bf16,
 }
-#: primitive families whose id carries a width: pattern -> piece
-FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32}
+#: primitive families whose id carries a width: pattern -> piece. ``MoeSelectBf16x{E}_v1`` (`verity.ml.circuits.ops.moe`, a static
+#: MoE pair unit's select of its expert's word) is the bf16 gather over E experts; its Boolean form is made per E, on demand, so
+#: `ir_lower._boolean_build` cannot find it in a process that never made it.
+FAMILIES = {r"BitAtx\d+_v1": bit_at, r"GatherBf16x\d+_v1": gather_bf16, r"GatherF32x\d+_v1": gather_f32,
+            r"GatherE4m3x\d+_v1": gather_e4m3, r"MoeSelectBf16x\d+_v1": gather_bf16}
