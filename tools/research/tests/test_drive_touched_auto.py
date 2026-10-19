@@ -65,7 +65,8 @@ def test_the_run_is_research_run_on_auto_from_a_worktree_of_exactly_the_commit_w
     argv, wt = call["argv"], call["cwd"]
     assert argv[:4] == [sys.executable, "-m", "research", "run"]
     head = argv[: argv.index("--")]
-    assert head[4:] == ["--on", "auto", "--source", str(wt), "--cwd", "source", "--cpus", "16", "--mem-gb", "160",
+    assert head[4:] == ["--on", "auto", "--source", str(wt), "--cwd", "source", "--class", "capture", "--cpus", "16",
+                        "--mem-gb", "160",
                         "--max-min", "120", "--send", str(Path(Q.quick_tier.__file__)), "--require-result",
                         "--declared-output", "out/*"]
     assert call["head"] == commit and call["dirty"] == ""                     # research run refuses a dirty tree
