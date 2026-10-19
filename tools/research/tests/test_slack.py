@@ -1149,8 +1149,8 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     (welcome,) = fake.messages[c["id"]]
     assert fake.pins == [(c["id"], welcome["ts"])] and welcome["username"] == "top"
     assert welcome["text"] == slack.chat_welcome("Luke Example") and welcome["text"].splitlines() == [
-        "*This channel is Luke's*, for questions and requests to Verity's agents: post a new message, and start it with a "
-        "lane's name (`@circuits ...`) to ask that lane.",
+        ("*This channel is Luke's*, for questions and requests to Verity's agents: post a new message, and start it with a "
+         "lane's name (`@circuits ...`) to ask that lane."),
         "*Agents answer in your post's thread*: reply there to follow up, one thread per question."]
     assert fake.bookmarks == [{"channel_id": c["id"], "title": "Start here", "type": "link", "link": START}]
     luke = {"schema": slack.PERSON_SCHEMA, "name": "Luke Example", "slack_user": LUKE, "email": "luke@example.org",
