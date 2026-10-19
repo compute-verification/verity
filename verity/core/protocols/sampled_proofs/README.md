@@ -301,6 +301,8 @@ Code and records call a sampling design a `law`; the name stays until a format v
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (M0's `serve --draw`
   syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a draw's `p` too).
+- A new Spec states `rate:NUM/DEN[:T]` (`draw.parse_rate`): over N units, `subset:K` at `K = T·⌈NUM·N/(DEN·T)⌉`
+  (`draw.rate_count`), refused (`rate`) unless `1 ≤ K ≤ N`.
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
