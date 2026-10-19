@@ -1,5 +1,5 @@
-"""The device a served Build vouches for (`acquire.served_device`): cc 9.0 binds FA3 and cc 12.0 FA2, each with its GEMMs' k16 step and
-its Triton compile target; a device without one of them is refused with every missing binding by name; and FA2's launch at vLLM's
+"""The device a served Build vouches for (`acquire.served_device`): cc 9.0 binds FA3 and cc 10.0 and 12.0 FA2, each with its GEMMs' k16
+step and its Triton compile target; a device without one of them is refused with every missing binding by name; and FA2's launch at vLLM's
 defaults: a GQA decode launch swapped and split `fa2_num_splits` ways (at a FULL graph's padded batch and max_model_len), the align
 kernel's kBlockN at one split, and any other launch the split kernel's tile unsplit, causal when a sequence has more than one query
 row.  The split counts here are worked by hand from `set_params_splitkv` (vllm-flash-attn 506341a1)."""
@@ -29,18 +29,30 @@ def test_each_cc_binds_its_own_attention_and_k16_step() -> None:
                                            "max_model_len": 4096}
 
 
-def test_a_device_without_a_binding_is_refused_naming_every_one() -> None:
+def test_cc100_binds_fa2_which_its_row_declares_and_refuses_vllms_default_flashinfer() -> None:
+    """The B200: cuBLAS's tcgen05 k16 step and FA2's mma.sync are Hopper's pipeline; vLLM's default there, FLASHINFER, has no
+    Definitions, so a served row declares FLASH_ATTN FA2 and a process that ran FLASHINFER is refused by name."""
+    b200 = SD.device_of((10, 0), 148, attention=FA2, max_model_len=4096)
+    assert (b200.attention, b200.dot.id, b200.sms) == ("FA2", "HopperBF16WgmmaDot16_v1", 148)
+    assert SD.device_of((10, 0), 148, max_model_len=4096) == b200
     with pytest.raises(Unmodelled) as e:
         SD.device_of((10, 0), 148, attention=[{"backend": "FLASHINFER", "fa_version": None}], max_model_len=4096)
     msg = str(e.value)
-    assert msg.startswith("cc 10.0: no binding for ")
-    assert "k16 step (no registered GEMM target at cc 10.0)" in msg and "attention FLASHINFER:" in msg and "cc=100" in msg
+    assert msg.startswith("cc 10.0: no binding for attention FLASHINFER:") and "k16 step" not in msg and "cc=100" not in msg
+
+
+def test_a_device_without_a_binding_is_refused_naming_every_one() -> None:
+    with pytest.raises(Unmodelled) as e:
+        SD.device_of((8, 6), 84, attention=[{"backend": "FLASHINFER", "fa_version": None}], max_model_len=4096)
+    msg = str(e.value)
+    assert msg.startswith("cc 8.6: no binding for ")
+    assert "k16 step (no registered GEMM target at cc 8.6)" in msg and "attention FLASHINFER:" in msg and "cc=86" in msg
     with pytest.raises(Unmodelled, match="max_model_len"):
         SD.device_of((12, 0), SMS, attention=FA2)
     with pytest.raises(Unmodelled, match=r"attention FLASH_ATTN \(FA2\)"):
         SD.device_of((9, 0), 132, attention=FA2)
-    with pytest.raises(Unmodelled, match="cc=100"):
-        T.recognize("k", "@triton.jit\ndef k(x):\n    pass\n", cc=(10, 0))
+    with pytest.raises(Unmodelled, match="cc=86"):
+        T.recognize("k", "@triton.jit\ndef k(x):\n    pass\n", cc=(8, 6))
 
 
 def test_fa2_full_decode_splits_at_the_capture_batch_and_max_model_len() -> None:
