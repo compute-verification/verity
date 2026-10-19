@@ -6,6 +6,7 @@ establish a drawn tile's checked words (C̃ and U) and its rows' admission witho
     Pc8RowB{K,DEV}        row j of B              B_j, E_B,j, F_B, F_A, G                  B̃_j's codes, P_B,j, ok
       (in Pc8Weight, once per job and weight)
     Pc8RowA{K,DEV}        row i of A              A_i, E_A,i, F_A, F_B                     A′_i's codes, P_A,i, ok
+    Pc8RowATap{K,DEV}     row i of A under -h4    A_i's BF16 words, E_A,i, F_A, F_B        Pc8RowA's, on A_i widened
     Pc8Tile{K,TM,TN,DEV}  tile of TM × TN words   its TM rows A′, P_A and TN rows B̃, P_B   C̃ and U of its words
 
 The roots are `pc4`'s: `Pc8Weight{K,N,DEV}` holds the B rows; `Pc8Call{M,K,N,TM,TN,DEV}` holds the A rows and the tiles,
@@ -18,7 +19,8 @@ place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, th
 hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet; and an audit window's tile,
 `Pc8TileSide`, is `Pc8TileHidden` on the window's side rows, each carrying its index field: `SIDE_PORTS`), and the rows are
 C-Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
-row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile cap to the hiding call,
+row's ``ok`` row, and the anchored inputs public input regions; under -h4 A's input row is the Commit tap's bf16 row
+(`Pc8RowATap`, `PORTS_H4`), so the unit reads the row the tap's tree commits and widens it as wiring.  ``Shape.cap`` adds the per-tile cap to the hiding call,
 cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into a head, a form
 per segment of row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's block at every served k.  A shape
 takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a short last tile row there); off,
@@ -60,7 +62,7 @@ from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, 
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
+from verity.ml.circuits.ops.prims import (Bf16ToF32, BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperBF16WgmmaDot16,
                              HopperE4m3QgmmaDot32)
 from verity.ml.circuits.ops.scalar import BitAnd, F32Fabs, F32Fmaxf, F32Neg, I32Add, I32Le, SelectI32
 
@@ -209,6 +211,25 @@ Pc8RowADef = CompositeDefinition(
     conformance="protocol-defined")
 
 
+def _row_a_tap_sig(S_):
+    params, out = _row_sig(S_, "fb")
+    return (("x", Array(S_.K, BF16)),) + params[1:], out
+
+
+def _row_a_tap_body(B, S_, x, line, fa, fb):
+    e = pc4._Emit(B)
+    w = array_of([e.call(Bf16ToF32, x[t]) for t in range(S_.K)])
+    outs, _accs, _beta = _row_a(e, S_.K, S_.DEV, w, line, fa, fb)
+    return tuple_of(*outs)
+
+
+Pc8RowATapDef = CompositeDefinition(
+    "Pc8RowATap", 1, ("K", "DEV"), _row_a_tap_sig, _row_a_tap_body,
+    doc="`Pc8RowA` under hashing -h4: row i of A read as the Commit tap's k BF16 words, each widened to its FP32 word "
+        "(w << 16, `Bf16ToF32`, wiring: no gate), then `Pc8RowA`'s body on those words (`pearl_c.parse_tap_row`).",
+    conformance="protocol-defined")
+
+
 def _row_b_body(B, S_, x, line, fb, fa, g):
     e, k, dev = pc4._Emit(B), S_.K, S_.DEV
     alpha, beta, ok = _stats(e, x, k)
@@ -329,6 +350,8 @@ PORTS = {
     "tile": {"rows": (("fp8-p", ROLE_X, ("ac", "pa")), ("fp8-p", ROLE_W, ("bc", "pb")), ("tile", ROLE_X, (0,))),
              "regions": {}, "advice": ()},
 }
+#: `PORTS` under hashing -h4: A's input row is the Commit tap's BF16 row (`Pc8RowATap`), the row its tree commits
+PORTS_H4 = PORTS | {"row_a": {**PORTS["row_a"], "rows": (("bf16", ROLE_X, ("x",)),) + PORTS["row_a"]["rows"][1:]}}
 
 
 # ---- the anchors: public input regions, each with its recomputation ------------------------------------------------------
@@ -385,11 +408,13 @@ SEEDS = {"seed_a": C.LABELS["seed-A"].decode(), "seed_b": C.LABELS["seed-B"].dec
 def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
               hidden: bool = False, hashing: str = "h0") -> dict[str, SpecializedDefinition]:
     """The unit templates at depth ``k``, tile ``tile`` (rows, columns) and device ``dev``, by role; ``hidden``, the
-    hiding tile, under ``hashing`` h0 (`Pc8TileHidden`) or h3 (`Pc8TileHiddenH3`)."""
+    hiding tile, under ``hashing`` h0 (`Pc8TileHidden`) or h3 (`Pc8TileHiddenH3`); h4 is h3 with A's rows the Commit
+    tap's BF16 rows (`Pc8RowATap`, ports `PORTS_H4`)."""
     if hashing not in C.HASHINGS or (hashing != "h0" and not hidden):
-        raise ValueError(f"Pearl-C's tile takes hashing {' or '.join(C.HASHINGS)}, and h3 only hiding: {hashing!r}")
+        raise ValueError(f"Pearl-C's tile takes hashing {' or '.join(C.HASHINGS)}, and h3 and h4 only hiding: {hashing!r}")
     td = Pc8TileDef if not hidden else Pc8TileHiddenDef if hashing == "h0" else Pc8TileHiddenH3Def
-    return {"row_b": bind(Pc8RowBDef, K=k, DEV=dev), "row_a": bind(Pc8RowADef, K=k, DEV=dev),
+    ra = Pc8RowATapDef if hashing == "h4" else Pc8RowADef
+    return {"row_b": bind(Pc8RowBDef, K=k, DEV=dev), "row_a": bind(ra, K=k, DEV=dev),
             "tile": bind(td, K=k, TM=tile[0], TN=tile[1], DEV=dev)}
 
 
@@ -598,8 +623,8 @@ def check(shape: Shape) -> SpecializedDefinition:
 # ---- the partition -------------------------------------------------------------------------------------------------------
 
 ROLES = pc4.ROLES
-_ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8TileDef): "tile", id(Pc8TileHiddenDef): "tile",
-            id(Pc8TileHiddenH3Def): "tile"}
+_ROLE_OF = {id(Pc8RowBDef): "row_b", id(Pc8RowADef): "row_a", id(Pc8RowATapDef): "row_a", id(Pc8TileDef): "tile",
+            id(Pc8TileHiddenDef): "tile", id(Pc8TileHiddenH3Def): "tile"}
 
 
 def _role_of() -> dict[int, str]:
@@ -636,6 +661,6 @@ def unit_cut(fn: SpecializedDefinition):
     return pc4.unit_cut(fn, _role_of())
 
 
-__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS",
+__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "PORTS_H4", "P_ROW", "ROLES", "SEEDS",
            "SIDE_PORTS", "TILE", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query",
            "side_tile", "templates", "tile_templates", "unit_cut", "units", "weight"]
