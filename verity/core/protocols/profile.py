@@ -54,6 +54,25 @@ class Bernoulli:
     def to_json(self) -> dict:
         return {"bernoulli": str(self.p)}
 
+    def count_bound(self, population: int, delta: float) -> int:
+        """The largest M <= population with (1 - p)^M >= delta (Lean `Bound.bernoulliBound`): each member is drawn
+        independently, so a set of M wrong members escapes with probability exactly (1 - p)^M, and except with
+        probability delta an accepted transcript has at most this many.  All of them when 1 - population * p >= delta
+        (Bernoulli's inequality), else the search doubles M while it escapes, then halves, in exact arithmetic."""
+        if not 0 < delta < 1:
+            raise ValueError("0 < delta < 1")
+        d, q = Fraction(delta), 1 - self.p
+        if 1 - population * self.p >= d:
+            return population
+        lo, hi = 0, 1
+        while hi <= population and q ** hi >= d:
+            lo, hi = hi, 2 * hi
+        hi = min(hi, population + 1)
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            lo, hi = (mid, hi) if q ** mid >= d else (lo, mid)
+        return lo
+
 
 @dataclass(frozen=True, slots=True)
 class Subset:
@@ -256,10 +275,14 @@ class IntegrityProfile:
 
     def bound(self) -> int | float:
         """Except with probability delta, an accepted transcript has at most this many wrong checked members: exact
-        (`Stratified.count_bound`) when the law has strata, else `worst_case` with utility m (the linear relaxation, from
-        above)."""
-        law = self.strata()
-        return law.count_bound(self.delta) if law is not None else self.worst_case(lambda m: float(m))
+        when the law has strata (`Stratified.count_bound`) or is one `Bernoulli` draw of the checked level
+        (`Bernoulli.count_bound`), else `worst_case` with utility m (the linear relaxation, from above)."""
+        law, checked = self.strata(), self.levels[-1].name
+        if law is not None:
+            return law.count_bound(self.delta)
+        if isinstance(self.draws[checked], Bernoulli) and len(self.draws) == 1:
+            return self.draws[checked].count_bound(self.count(checked), self.delta)
+        return self.worst_case(lambda m: float(m))
 
     def stratum_bounds(self) -> dict[str, int]:
         """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is drawn `Bernoulli`.  They

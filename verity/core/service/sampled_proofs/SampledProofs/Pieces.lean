@@ -172,6 +172,19 @@ def bound (j : Json) : V Json := do
   return Json.mkObj [("bound", Lean.toJson (Bound.countBound strata δ)),
     ("per_stratum", Json.mkObj (strata.toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s δ))))]
 
+/-- `{"population", "p", "delta"}` to `{"bound"}` (`Bernoulli.count_bound`); refused where `Bernoulli` is: `p` not a
+ratio in [0, 1], δ not in (0, 1). -/
+def bernoulliBound (j : Json) : V Json := do
+  if keys? j != some #["delta", "p", "population"] then throw "exactly {population, p, delta}"
+  let some population := nat? (getD j "population") | throw "population is not a natural number"
+  let .str p := getD j "p" | throw "p is not a ratio"
+  let p ← Core.Ratio.ofString p "p"
+  if p.den < p.num then throw "p is not in [0, 1]"
+  let .str d := getD j "delta" | throw "delta is not a ratio"
+  let δ ← Core.Ratio.ofString d "delta"
+  if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
+  return Json.mkObj [("bound", Lean.toJson (Bound.bernoulliBound population p δ))]
+
 /-- `{"verdicts": {name: {...}}}` to `{"verdict"}`. -/
 def verdict (j : Json) : V Json := do
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
@@ -338,7 +351,7 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
-   ("bound", bound),
+   ("bound", bound), ("bernoulli_bound", bernoulliBound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
    ("proof_units", proofUnits), ("hello", Hello.check)]

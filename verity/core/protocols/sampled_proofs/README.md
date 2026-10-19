@@ -95,7 +95,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`check_verdicts`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
-  `benchmarks/one_stage` call it. The two are held to each other by
+  `benchmarks/one_stage` call it. Python is held to the Lean by
   `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
@@ -335,7 +335,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
 - `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
   `delta` and the count drawn per template.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
-  `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and the linear relaxation for
+  `Stratified.count_bound` at delta for `subset` (one stratum), `stratified` and `work`, and `Bernoulli.count_bound` for
   `bernoulli`; a stratified or work sampling design adds each template's own bound.
 - `integrity_profile` is `verity/integrity-profile/v1`: `{"format", "protocol", "program", "query", "partition",
   "population", "registration": <digest>, "scheme", "roots": [{"port", "root", "leaves"}], "law", "drawn",
