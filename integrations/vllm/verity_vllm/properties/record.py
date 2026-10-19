@@ -196,9 +196,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
     Property("noninterference", "verity-vllm/noninterference/v2",
              "At the record's tensor-parallel world, the observed engine generated the bare engine's tokens for every request (and, "
              "where boundary hashes were taken, every compared boundary value is bit-identical)."),
-    Property("census", "verity-capture/census-reconciliation/v1",
+    Property("census", "verity-capture/census-reconciliation/v2",
              "Every device kernel the bare engine launched is claimed by a kernel the Match resolution declares or by the frozen "
-             "kernel allowlist, at every step."),
+             "kernel allowlist, at every step, and every declared kernel launched exactly as many times as the step has events "
+             "declaring it, unless the frozen launch-count allowlist exempts it with its reason."),
     Property("golden", "verity-gen/golden-check/v1",
              "Every golden log still resolves to its recorded attribution under the current patterns."),
     Property("holdout", "verity-gen/holdouts/v1",

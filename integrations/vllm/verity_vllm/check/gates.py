@@ -29,7 +29,8 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
 
 Gates:
     G1 observation fidelity    non-interference PASS, tokens equal across a/b/c AND to the control run, every boundary
-                               hash equal, steps == max_tokens, layers == expected_layers; census residue 0, ambiguous 0
+                               hash equal, steps == max_tokens, layers == expected_layers; census residue 0, ambiguous 0,
+                               every declared kernel's launch count equal to its declaring events
     G2 semantic closure        0 Unsupported, 0 Unresolved, 0 ambiguous pattern matches
     G3 root closure            0 unknown roots, 0 opaque/prescribed fallbacks, root_policy pass with no new root class
     G4 primitive exactness     tier-a replay pass, k >= TIER_A_K per (specialization, regime) stratum, every captured
@@ -497,7 +498,8 @@ def gate_G1(run: RunArtifacts) -> GateResult:
     """Observation fidelity: `noninterference.json` PASS; tokens equal across the (a) observer, (b) hooks and (c) bare
     variants AND equal to the clean control run's tokens (computed here from `generated_token_ids`, never from a
     workload-authored accepted list); every boundary hash equal; `steps == max_tokens`; `layers == expected_layers`
-    (from the file; null fails); AND the census reconciliation has residue 0 and 0 ambiguous claims."""
+    (from the file; null fails); AND the census reconciliation has residue 0, 0 ambiguous claims and 0 launch-count
+    mismatches."""
     ni = run.need("noninterference")
     cr = run.need("census_reconcile")
     ev = [run.rel("noninterference"), run.rel("census_reconcile")]
@@ -578,9 +580,14 @@ def gate_G1(run: RunArtifacts) -> GateResult:
     step_errors = [s for s in (cr.get("steps") or []) if isinstance(s, dict) and "error" in s]
     if step_errors:
         problems.append(f"{len(step_errors)} census steps without a resolved log step")
+    counts = _int(_get(t, "count_mismatches", "census_reconcile.totals (a reconciliation without the launch-count gate: "
+                                              "rerun `verity-vllm census --reconcile`)"), "count_mismatches")
+    if counts:
+        problems.append(f"census: {counts} launch counts differ from their declaring events {t.get('count_mismatch_kernels')}")
     detail["census"] = {"census_kernels": t.get("census_kernels"), "distinct_kernel_names": t.get("distinct_kernel_names"),
                         "residue_kernels": residue, "residue_names": t.get("residue_names"), "ambiguous": ambiguous,
-                        "steps_aligned": cr.get("steps_aligned"), "residue_zero": cr.get("residue_zero")}
+                        "steps_aligned": cr.get("steps_aligned"), "residue_zero": cr.get("residue_zero"),
+                        "count_mismatches": counts, "count_exempt": t.get("count_exempt")}
     return _result(problems, ev, detail)
 
 
