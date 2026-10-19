@@ -75,7 +75,8 @@ def _raw(man: dict) -> bytes:
 
 def _params(run: str, raw: bytes) -> dict:
     return {"context": f"served-zk/{run}/{hashlib.sha512(raw).hexdigest()}", "deployment": f"served-zk/{run}",
-            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N}
+            "k": K, "eps": "1/2", "delta": "1/10", "grid_bits": Wd.GRID_BITS, "range": [1, 1 << 40], "entries": 4, "w_rows": N,
+            "registration_deadline": SC.REGISTRATION_DEADLINE}
 
 
 #: each window's pass by its parameters' context: (the epoch's coins, the manifest's bytes, the manifest)
@@ -220,10 +221,19 @@ def test_register_makes_exactly_the_public_items_public(served):
         SC.work_at({**params, "range": [100, 1 << 40]}, public["level"])
 
 
-def _challenger(params, units=None, coins=None) -> SC.Challenger:
-    """The challenger holding the epoch's coins that salted the window's pass; `units` a stand-in for Lean's draw."""
-    sampler = SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]])
-    return SC.Challenger(params, coins or PASSES[params["context"]][0], sampler, clock=lambda: 0.0)
+def _salt_after(params) -> bytes:
+    """What the epoch's salt coin is opened after: the weights' root of the window's pass."""
+    man = PASSES[params["context"]][2]
+    return weights_root({int(w): bytes.fromhex(v["root"]) for w, v in man["weights"].items()})
+
+
+def _challenger(params, units=None, coins=None, sampler=None, record=None) -> SC.Challenger:
+    """The challenger holding the epoch's coins (the ones that salted the window's pass, by default), its salt coin opened
+    after the pass's weights' root as the job opens it; `units` a stand-in for Lean's draw."""
+    sampler = sampler or (SC.python_sampler if units is None else (lambda law, n, src: list(units)[:law["k"]]))
+    ch = SC.Challenger(params, coins or _coins(), sampler, clock=lambda: 0.0, record=record)
+    ch.open("salt", _salt_after(params))
+    return ch
 
 
 def _held(ch, name, rec, **kw):
@@ -314,11 +324,12 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
         ch.select("honest")
     assert _codes(e) == {"drawn"}
 
-    again = SC.Challenger(params, SC.Recorded(ch.coins.commitment, [o]), clock=lambda: 0.0)
+    salt = ch.openings["salt"]
+    again = _challenger(params, coins=SC.Recorded(ch.coins.commitment, [salt, o]))
     _held(again, "honest", rec)
     assert again.select("honest").draw == d.draw
     forged = CoinOpening(o.epoch, o.label, o.after, bytes([o.coin[0] ^ 1]) + o.coin[1:], o.salt, o.path)
-    tampered = SC.Challenger(params, SC.Recorded(ch.coins.commitment, [forged]), clock=lambda: 0.0)
+    tampered = _challenger(params, coins=SC.Recorded(ch.coins.commitment, [salt, forged]))
     _held(tampered, "honest", rec)
     with pytest.raises(S.Refused) as e:
         tampered.select("honest")
@@ -326,7 +337,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
 
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    bad = SC.Challenger(params, PASSES[params["context"]][0], lambda law, n, src: list(range(law["k"] + 1)), clock=lambda: 0.0)
+    bad = _challenger(params, sampler=lambda law, n, src: list(range(law["k"] + 1)))
     _held(bad, "honest", rec)
     with pytest.raises(S.Refused):
         bad.select("honest")
@@ -340,8 +351,7 @@ def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_n
     """Under ``registration_deadline`` (`Pouw.AcceptsBy`'s td, seconds on the challenger's clock), the salt coin's opening
     reads its release, and each stream records the epoch's salt at that release before its first registration.  A window
     received within the deadline registers with both readings.  One received later, or before the salt is open, is
-    refused (`late-registration`) and ends the epoch: the stream takes nothing after it.  Without the parameter nothing is
-    timed."""
+    refused (`late-registration`) and ends the epoch: the stream takes nothing after it."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -376,8 +386,71 @@ def test_a_window_received_past_the_deadline_from_the_salt_coins_release_earns_n
         _held(unsalted, "early", rec)
     assert _codes(e) == {"late-registration"}
 
-    untimed = SC.Challenger(params, SC.Recorded(coins.commitment, [salt]), clock=lambda: 1e9)
-    assert _held(untimed, "honest", rec).received_at is None and untimed.salt_released_at is None
+
+def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
+    """Parameters without ``registration_deadline`` are refused, so the service accepts no window `EndToEndWindow`
+    doesn't cover: the challenger won't hold them, `spec_of` won't state a check under them, and the committer won't
+    register under them.  `params` writes the deadline.  Only a replay of a record whose parameters predate it runs
+    without one (`predates_deadline`), and never with parameters that carry one."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    bare = {k: v for k, v in params.items() if k != "registration_deadline"}
+    for refuse in (lambda: SC.Challenger(bare, _coins()), lambda: SC.spec_of(bare, public["level"]),
+                   lambda: _register(bare, public)):
+        with pytest.raises(ValueError, match="no registration_deadline"):
+            refuse()
+    with pytest.raises(ValueError, match="carry a registration_deadline"):
+        SC.Challenger(params, _coins(), predates_deadline=True)
+    assert SC.Challenger(bare, _coins(), predates_deadline=True).predates_deadline
+    assert SC.spec_of(bare, public["level"], predates_deadline=True).check.registration_deadline is None
+    assert SC.spec_of(params, public["level"]).check.registration_deadline == SC.REGISTRATION_DEADLINE
+
+    man = {"schema": PD.MANIFEST_SCHEMA, "run": "r", "matmuls": [{"index": 0, "m": 1, "k": SC.K, "n": SC.K, "weight": 2}]}
+    (tmp_path / "pass").mkdir()
+    (tmp_path / "pass" / "manifest.json").write_text(json.dumps(man))
+    assert SC.main(["params", str(tmp_path / "pass"), str(tmp_path / "p.json")]) == 0
+    assert json.loads((tmp_path / "p.json").read_text())["registration_deadline"] == SC.REGISTRATION_DEADLINE
+    assert SC.main(["params", str(tmp_path / "pass"), str(tmp_path / "q.json"), "--registration-deadline", "60"]) == 0
+    assert json.loads((tmp_path / "q.json").read_text())["registration_deadline"] == 60.0
+
+
+def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_path):
+    """The record's order is each window's receipt before the epoch's draw coin's release: once the draw coin is open, a
+    window is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
+    stream is left as it was.  A control replaying the honest draw opens no coin and still registers.  A record whose
+    parameters predate the deadline replays as it ran (`replay`), its post-draw registration refused for what refused
+    it then, byte for byte."""
+    *_, words = served
+    params, public, _, _ = _window(words)
+    rec = _register(params, public)
+    ch = _challenger(params, record=OR.Record(lean=False))
+    _held(ch, "honest", rec)
+    ch.select("honest")
+    with pytest.raises(S.Refused) as e:
+        _held(ch, "after", rec, stream="later")
+    assert _codes(e) == {"late-registration"} and "after the epoch's draw coin" in e.value.verdict.detail["late-registration"]
+    assert "after" not in ch.regs and ("later", SC.level_of(rec)) not in ch.streams and not ch.witness["after"]
+    ch.register("ctl", rec, stream="ctl", replay="honest")
+    assert ch.select("ctl").units == ch.draws["honest"].units
+
+    bare = {k: v for k, v in params.items() if k != "registration_deadline"}
+    old = SC.Challenger(bare, _coins(), record=OR.Record(lean=False), predates_deadline=True)
+    log = tmp_path / "log"
+    log.mkdir()
+    (log / "coins.json").write_text(json.dumps(old.coins.commitment.to_json()))
+    (tmp_path / "rec.json").write_text(json.dumps(rec))
+    (tmp_path / "man.json").write_bytes(PASSES[params["context"]][1])
+    reg = {"registration": f"{tmp_path}/rec.json", "manifest": f"{tmp_path}/man.json"}
+    reqs = [{"op": "salt", "after": _salt_after(params).hex()}, {"op": "register", "name": "honest", **reg},
+            {"op": "select", "name": "honest"}, {"op": "register", "name": "after", "stream": "later", **reg}]
+    replies = [SC.answer(old, json.dumps(r)) for r in reqs]
+    assert [x.split(" ", 1)[0] for x in replies] == ["OPENED", "REGISTERED", "DRAWN", "REGISTERED"]
+    (log / "requests.jsonl").write_text("".join(json.dumps({"request": json.dumps(r), "reply": x}) + "\n"
+                                                for r, x in zip(reqs, replies)))
+    (log / "openings.jsonl").write_text("".join(json.dumps(o.to_json()) + "\n" for o in old.openings.values()))
+    assert SC.replay(bare, log, tmp_path / "replay", record=OR.Record(lean=False)) == []
+    (tmp_path / "bare.json").write_text(json.dumps(bare))
+    assert SC.main(["replay", str(tmp_path / "bare.json"), str(log), str(tmp_path / "replay2"), "--python-record"]) == 0
 
 
 @LEAN
@@ -398,7 +471,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         ch = _challenger(params)
         with pytest.raises(S.Refused) as e:
             ch.register("x", rec, manifest=None if m is None else _raw(m), recorded=recorded)
-        assert _codes(e) == {code} and not ch.openings and "x" not in ch.regs
+        assert _codes(e) == {code} and set(ch.openings) == {"salt"} and "x" not in ch.regs
         return e.value.verdict.detail[code]
 
     for case, why in (("foreign", "coin does not open against the epoch's coin commitment"),
@@ -556,7 +629,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
     answer = w[-1]["lean"]
     assert o.accepted and answer["verdict"] == "accept" and pub == answer["public"]
     record = OR.Record(lean=False)
-    py = SC.Challenger(params, _coins(), SC.python_sampler, clock=lambda: 0.0, record=record)
+    py = _challenger(params, record=record)
     o2, pub2, _ = _through(py, rec)
     assert o2.accepted and pub2 == pub and all(e["lean"] is None and e["of_record"] == "python" for e in py.witness["honest"])
     t = ch.draws["honest"].units[0]
