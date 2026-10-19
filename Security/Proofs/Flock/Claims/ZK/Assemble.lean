@@ -41,10 +41,7 @@ theorem encExe_of_sim (hss : SimSession) (nr : Msg → ℕ → ℕ) {x : Msg} (h
   rw [← hS]
   unfold encExe
   rw [ite_eq_right h0]
-  first
-  | (simp only [hsx]; done)
-  | (rw [hsx]; rfl)
-  | rw [hsx]
+  simp only [hsx]
 
 /-- **The sent gap's `hstep` at the deployed plan**: at a round after the first where the openings show no refusal,
 either the masked session answered by the openings sends past them and the deployed encoding is its next body, or it
