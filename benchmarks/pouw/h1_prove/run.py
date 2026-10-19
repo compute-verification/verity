@@ -36,6 +36,8 @@ carry a wrong witness instead:
   pub.bin is the verifier's, every committed row is the window's, and the receipt row is not what the circuit computes on
   the unit's inputs, salt, position and roots.
 * ``in-z``: the same with its z cell 0 plus one (``--z-cell``).
+* ``in-d``: the same with a kernel's D_1 word (lane 0, entry 0) one too large (``--d-word``): z and the receipt both
+  computed from it, so both output rows are replaced; under ``H1_TILE=v3`` z is that word's recombination.
 
 Each is proved like the honest statement, whose prover stops on the failing witness before it sends a proof, and again as
 ``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (C-Flock's negative-control prover, which sends its proofs anyway), so the
@@ -69,7 +71,7 @@ from verity.core.protocols.pouw.coins import Challenger, coin_reason  # noqa: E4
 DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = 4, 8
 #: the in-proof negatives: the tampered window's flag, and the output row whose committed words its statement carries
-IN_PROOF = {"in-receipt": ("--receipt-word", "o1"), "in-z": ("--z-cell", "o0")}
+IN_PROOF = {"in-receipt": ("--receipt-word", ("o1",)), "in-z": ("--z-cell", ("o0",)), "in-d": ("--d-word", ("o0", "o1"))}
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
 
@@ -270,11 +272,14 @@ def cmd_prepare(a) -> int:
         raise SystemExit("the honest statement's pub.bin is not the verifier's own file")
     # the in-proof negatives: the honest statement with the first drawn unit's (instance 0's) output row the tampered
     # window's, under the verifier's own file of that window, so binding holds and the witness is wrong
-    for t, (_f, port) in IN_PROOF.items():
-        words = np.load(work / f"open-{t}" / "rows.npz")[f"w_{port}"][0]
+    for t, (_f, ports) in IN_PROOF.items():
         for d in (t, f"{t}{SKIP}"):
-            record.setdefault("forged", {})[d] = U.forge_statement(sw / "st-honest", sw / f"st-{d}", (vp / f"{t}.pub.bin").read_bytes(),
-                                                                   0, port, words, sw / "circuit.txt")
+            src = sw / "st-honest"
+            for port in ports:
+                words = np.load(work / f"open-{t}" / "rows.npz")[f"w_{port}"][0]
+                record.setdefault("forged", {}).setdefault(d, {})[port] = U.forge_statement(
+                    src, sw / f"st-{d}", (vp / f"{t}.pub.bin").read_bytes(), 0, port, words, sw / "circuit.txt")
+                src = sw / f"st-{d}"
         log(f"forged {t}: {record['forged'][t]}")
     st = record["staged"]
     plan = {"statements": [{"tag": "honest", "dir": stmts["honest"]["out"], "n": len(units)},
@@ -400,6 +405,8 @@ def cmd_summarize(a) -> int:
                "openings": record["openings"], "prover_pub_is_verifiers": record["prover_pub_is_verifiers"],
                "windows": {w: {k: v[k] for k in ("tiles", "calls", "commit_seconds", "serve_seconds") if k in v}
                            for w, v in record["windows"].items()},
+               "tile": U.tile(), "z_is_served_product": {w: v["served"].get("z_is_served_product")
+                                                          for w, v in record["windows"].items()},
                "staged": record["staged"]}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({k: summary[k] for k in ("pass", "unit", "k", "ands", "window_tiles", "drawn_units", "statements",

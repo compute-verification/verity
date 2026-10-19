@@ -116,11 +116,47 @@ def _init(priv_dir: str, salt: bytes) -> None:
     _W["salt"] = salt
 
 
-def _serve_one(u: int) -> tuple[int, list[int], list[int]]:
+def _serve_one(u: int, d_word: bool = False) -> tuple[int, list[int], list[int], int]:
+    """Unit u's z and receipt (`h1tile.reference`, v3's under ``H1_TILE=v3``), and how many of its cells' z are the served
+    product A Bᵀ, what vLLM's `_int_mm` returns on the call's int8 rows, computed here in Python (every cell's, v1's and v3's: v3's wrap correction and dither
+    peel included). ``d_word``: as a kernel whose lane 0 made its D_1 entry 0 one too large, folded and recombined like the
+    honest words, so z and the receipt agree with each other."""
     from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.core.protocols.pouw.circuit import seeds as SD
     a, b, roots, _call = _rows(_W["priv"], _W["com"], u)
-    z, rc = H.reference([[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b], _W["salt"], u, roots)
-    return u, z, rc
+    a, b = [[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b]
+    v3 = U.tile() == "v3"
+    if not d_word:
+        z, rc = H.reference(a, b, _W["salt"], u, roots, stream=v3)
+    else:
+        lay = H.Layout(len(a), len(b), len(a[0]))
+        rows, cols = H.noise(SD.seed(_W["salt"], u, *roots), lay)
+        keys = H.fold_keys(SD.receipt_seed(_W["salt"], u, *roots), lay)
+        cp, cells = [[0, 0] for _ in range(lay.sets)], {}
+        xs = [[(a[i][t] + rows[i][0][t]) & 0xFF for t in range(lay.k)] for i in range(lay.r)]
+        wbs = [H.col_wrap(b[j], cols[j]) for j in range(lay.c)]
+        pis = [(rows[i][0][:lay.k], H.row_wrap(a[i], rows[i])) for i in range(lay.r)]
+        pjs = [(b[j], cols[j][0][:lay.k]) for j in range(lay.c)]
+        for ln in range(lay.lanes):
+            sets = H.lane_sets(a, b, rows, cols, lay, ln)
+            if ln == 0:
+                sets[lay.ks + 1][0] = (sets[lay.ks + 1][0] + 1) & H.M32
+            st = list(keys[ln])
+            for s, p in enumerate(sets):
+                st = H.SG.absorb(H.FOLD, st, p)
+                for h in range(2):
+                    for v in st[8 * h:8 * h + 8]:
+                        cp[s][h] ^= v
+            for e in range(32):
+                i, j = lay.rows(ln)[H.SG.row_slot(e)], lay.cols(ln)[H.SG.col_slot(e)]
+                cells[(i, j)] = H.stream_cell(sets[lay.ks][e], [d[e] for d in sets[lay.ks + 1:]], xs[i], wbs[j], pis[i],
+                                              pjs[j])
+        pairs = [(i, j) for i in range(lay.r) for j in range(lay.c)]
+        z = [cells[p] for p in pairs] if v3 else [H.SG.seg_dot(0, a[i], b[j]) for i, j in pairs]
+        rc = [w & H.M32 for s in cp for w in s]
+    sx = lambda v: v - 256 if v & 0x80 else v  # noqa: E731
+    served = [sum(sx(x) * sx(w) for x, w in zip(ai, bj)) & H.M32 for ai in a for bj in b]
+    return u, z, rc, sum(int(x == y) for x, y in zip(z, served))
 
 
 def cmd_serve(a) -> int:
@@ -129,10 +165,10 @@ def cmd_serve(a) -> int:
     salt = bytes.fromhex(a.salt)
     T = com["tiles"]
     shape = U.Shape(com["unit"]["k"], R, C)
-    zs, rcs = [None] * T, [None] * T
+    zs, rcs, eq = [None] * T, [None] * T, 0
     with ProcessPoolExecutor(a.workers, initializer=_init, initargs=(str(priv_dir), salt)) as ex:
-        for u, z, rc in ex.map(_serve_one, range(T), chunksize=64):
-            zs[u], rcs[u] = z, rc
+        for u, z, rc, n in ex.map(_serve_one, range(T), chunksize=64):
+            zs[u], rcs[u], eq = z, rc, eq + n
     priv = dict(np.load(priv_dir / "rows.npz"))
     zw = np.stack([U.z_words(z) for z in zs])
     rw = np.stack([U.receipt_words(rc) for rc in rcs])
@@ -145,7 +181,8 @@ def cmd_serve(a) -> int:
     priv.update(zw=zw, rw=rw, sz=sz, sr=sr, bcz=np.frombuffer(b"".join(bcz), np.uint8).reshape(T, 128),
                 bcr=np.frombuffer(b"".join(bcr), np.uint8).reshape(T, 128))
     np.savez(priv_dir / "rows.npz", **priv)
-    served = {"z_root": rz.hex(), "receipt_root": rr.hex(), "tiles": T, "salt": salt.hex()}
+    served = {"z_root": rz.hex(), "receipt_root": rr.hex(), "tiles": T, "salt": salt.hex(), "tile": U.tile(),
+              "z_is_served_product": {"cells": T * R * C, "equal": eq}}
     (priv_dir / "served.json").write_text(json.dumps(served))
     Path(a.out).write_text(json.dumps(served, indent=1))
     print(json.dumps(served))
@@ -168,7 +205,17 @@ def cmd_tamper(a) -> int:
     priv = dict(np.load(src / "rows.npz"))
     shape = U.Shape(com["unit"]["k"], R, C)
     ports = shape.ports()
-    if a.z is not None or a.z_cell is not None or a.receipt_word is not None:
+    if a.d_word is not None:
+        u = a.d_word
+        _init(str(src), salt)
+        _u, z, rc, _n = _serve_one(u, d_word=True)
+        for out, words, port in (("z", U.z_words(z), ports[-2]), ("r", U.receipt_words(rc), ports[-1])):
+            priv[f"{out}w"] = priv[f"{out}w"].copy()
+            priv[f"{out}w"][u] = words
+            priv[f"bc{out}"] = priv[f"bc{out}"].copy()
+            priv[f"bc{out}"][u] = np.frombuffer(U.commit_strings(port, priv[f"{out}w"][u:u + 1], [bytes(priv[f"s{out}"][u])])[0],
+                                                 np.uint8)
+    elif a.z is not None or a.z_cell is not None or a.receipt_word is not None:
         u, out, w = (a.z, "z", None) if a.z is not None else (a.z_cell, "z", 0) if a.z_cell is not None else (a.receipt_word, "r", 0)
         rows, bcs, salts, port = f"{out}w", f"bc{out}", f"s{out}", ports[-2] if out == "z" else ports[-1]
         priv[rows] = priv[rows].copy()
@@ -188,7 +235,7 @@ def cmd_tamper(a) -> int:
     T, w = com["tiles"], com["window"]
     served = {"z_root": U.levels(U.domain(w, "z", T), _bl(priv["bcz"]))[-1][0].hex(),
               "receipt_root": U.levels(U.domain(w, "receipt", T), _bl(priv["bcr"]))[-1][0].hex(), "tiles": T, "salt": salt.hex(),
-              "tampered": {"unit": u, "what": next(k for k in ("z", "z_cell", "receipt_word", "receipt")
+              "tampered": {"unit": u, "what": next(k for k in ("z", "z_cell", "receipt_word", "receipt", "d_word")
                                                   if getattr(a, k) is not None)}}
     np.savez(dst / "rows.npz", **priv)
     (dst / "served.json").write_text(json.dumps(served))
@@ -278,6 +325,7 @@ def main(argv=None) -> int:
     g.add_argument("--receipt", type=int)
     g.add_argument("--z-cell", type=int)
     g.add_argument("--receipt-word", type=int)
+    g.add_argument("--d-word", type=int)
     p = sub.add_parser("open")
     p.add_argument("priv")
     p.add_argument("salt")
