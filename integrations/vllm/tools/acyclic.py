@@ -1,8 +1,9 @@
 """ACYCLIC: whether each Call's Q_word units (`verity/partition/v1`, X = 16, W = 32) read each other in a cycle.
 
 A unit reads another when one of its computing gates reads a gate the other owns (through structure, as `cut.CallGraph` lists
-the reads).  `check_cut` holds a cut to the invariant and the width rule but not to an acyclic unit graph, and a cycle lets every
-unit's check pass with outputs the Call doesn't compute (proofs' POP1, `qword_not_acyclic`).  Per distinct Definition this tool
+the reads).  `check_cut` holds a cut to the invariant and the width rule but not to an acyclic unit graph.  Core's partition
+theorems need none (a unit is checked gate by gate in gate order, `compose_cone`), but POP1's population theorems take an
+acyclic unit graph as a hypothesis, which a Q_word cut need not meet (`qword_not_acyclic`).  Per distinct Definition this tool
 cuts once, as POPREAD does (core's `cut_word` on POPREAD's `LeanGraph`; a separable body is its members' cuts, which read no
 other member), builds the units' read graph, finds its strongly connected components with more than one unit (Tarjan), and
 names one shortest cycle with a gate read per step.  Per row it counts the Calls whose Definition's cut has such a component
@@ -15,6 +16,7 @@ one Call, and the Program's components are its Calls' components, one set per ac
     python tools/acyclic.py descriptor DESCRIPTOR.json.gz [--jobs N] [--log L.jsonl] [--rules L.jsonl] --name NAME --out OUT.json
     python tools/acyclic.py served BUILD.json [...] --out OUT.json      (a served-compiled Build's P_served, Calls as POPREAD counts them)
     python tools/acyclic.py table OUT.json [...] [--md OUT.md]
+    python tools/acyclic.py instances DESCRIPTOR.json.gz --id ID [...] --out OUT.json   (each key of ID and the root Calls naming it)
 """
 from __future__ import annotations
 
@@ -419,6 +421,24 @@ def merge(report: dict[str, Any], logs: Iterable[str | Path]) -> dict[str, Any]:
                      per, extra)
 
 
+def instances(path: str | Path, ids: Iterable[str]) -> list[dict[str, Any]]:
+    """Per descriptor key whose Definition id is in `ids`: the root Calls naming it, its binding record, its body's node count
+    and the SHA-256 of its entry, read off the descriptor without decoding it.  `codec.decode_program` keys a composite by its
+    id and binding record and builds one Definition per key from that entry and its callees', so the Calls naming one key are
+    activations of one Definition, which Q_word cuts once (step 1) and `Cycles` measures once."""
+    import gzip
+    import hashlib
+    from verity.ml.circuits.codec import canonical_json
+    with (gzip.open(path, "rt") if str(path).endswith(".gz") else open(path)) as f:
+        desc = json.load(f)
+    defs, ids = desc["definitions"], set(ids)
+    callee = (lambda i: desc["callees"][i]) if "callees" in desc else (lambda fid: fid)
+    calls = Counter(callee(nd["fn"]) for nd in defs[desc["root"]]["body"]["nodes"])
+    return [{"key": k, "id": d["id"], "bindings": d.get("bindings") or {}, "nodes": len(d["body"]["nodes"]) if "body" in d else 0,
+             "root_calls": calls[k], "sha256": hashlib.sha256(canonical_json(d)).hexdigest()}
+            for k, d in defs.items() if d["id"] in ids]
+
+
 def _pct(x: float) -> str:
     return f"{100 * x:.2f}%"
 
@@ -470,7 +490,17 @@ def main(argv: list[str] | None = None) -> int:
     t = sub.add_parser("table")
     t.add_argument("reports", nargs="+")
     t.add_argument("--md", default=None)
+    i = sub.add_parser("instances", help="each descriptor key of the given Definition ids and the root Calls naming it")
+    i.add_argument("path")
+    i.add_argument("--id", action="append", required=True, dest="ids")
+    i.add_argument("--out", required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "instances":
+        got = instances(a.path, a.ids)
+        Path(a.out).write_text(json.dumps(got, indent=1))
+        for e in got:
+            print(f"acyclic: {e['root_calls']:>10,} root Calls {e['nodes']:>6,} nodes {e['key'][:160]}", file=sys.stderr)
+        return 0
     if a.cmd == "table":
         md = render(json.loads(Path(x).read_text()) for x in a.reports)
         if a.md:

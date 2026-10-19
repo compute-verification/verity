@@ -1,6 +1,6 @@
 """`tools/acyclic.py`: Tarjan's components against a brute-force reachability, and a toy Definition whose Q_word cut has two units
 reading each other (it returns x, then z, then y with y = f(x) and z = g(y), so x and z share an output unit), which `check_cut`
-accepts; the same Definition returning x, y, z is cut without a cycle."""
+accepts; the same Definition returning x, y, z is cut without a cycle.  Calls naming one descriptor key share one cut."""
 from __future__ import annotations
 
 import gzip
@@ -118,3 +118,26 @@ def test_a_row_counts_its_cyclic_calls_and_their_share(tmp_path):
     assert {k: merged["totals"][k] for k in t} == t and merged["cyclic_families"] == r["cyclic_families"]
     upper = AC.analyze_descriptor(path, AC.Cycles(gates_from=2), "toy")["totals"]
     assert (upper["units"], upper["cyclic_calls"], upper["pending_calls"]) == (5, 1, 1)
+
+
+def test_calls_naming_one_descriptor_key_are_one_definition_cut_once(tmp_path):
+    from verity.ml.circuits.codec import encode_program
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.ops.scalar import I32
+    from verity.ml.circuits.program import Program
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Tuple, Value
+
+    cyc, ok = _packed("xzy"), _packed("xyz")
+    xzy, xyz = Tuple(Value(1), Value(1), I32), Tuple(Value(1), I32, Value(1))
+    sig = lambda S: ((("a", I32), ("b", I32)), Tuple(xzy, xzy, xyz))
+    root = bind(CompositeDefinition("AcyclicTwice", 0, (), sig,
+                                    lambda B, S, a, b: tuple_of(B.call(cyc, a, b), B.call(cyc, b, a), B.call(ok, a, b)),
+                                    register=False))
+    path = tmp_path / "descriptor.json.gz"
+    with gzip.open(path, "wt") as f:
+        json.dump(encode_program(Program(root)), f)
+    got = {e["key"]: (e["root_calls"], e["nodes"]) for e in AC.instances(path, ["AcyclicToyXZY_v0", "AcyclicToyXYZ_v0"])}
+    assert got == {"AcyclicToyXZY_v0": (2, 3), "AcyclicToyXYZ_v0": (1, 3)}
+    r = AC.analyze_descriptor(path, AC.Cycles(), "toy")
+    assert r["source"]["computed"] == 2 and (r["totals"]["calls"], r["totals"]["cyclic_calls"]) == (3, 2)
