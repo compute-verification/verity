@@ -5,7 +5,8 @@
 # after (`inplace_gate.py --no-timing`: every receipt, root,
 # kept level and opening against the driver's reference), the in-place pass of both interleaved at 8B (`ab_pass.py`), and
 # the served pass (`pass_bench.py`: rs_pass and the chained passes, each root against reader.cu's unfused tree) after,
-# before, after. A gate that fails ends the lease before anything is timed. Results go to $OUT.
+# before, after. A gate that fails ends the lease before anything is timed. STEPS=prof: `profile_pass.py`'s timings of
+# both builds, then one launch of each kernel under ncu (application replay, clocks as they run). Results go to $OUT.
 #
 #   git show origin/main:benchmarks/remote_session/session.cu > /tmp/session_base.cu
 #   research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --timeout 60m \
@@ -66,6 +67,21 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-40}" ${LEASE_ARGS:-} -- bash -c '
       ab) "$PY" benchmarks/hash/bwkernels/ab_pass.py --before "$B/before.so" --after "$B/after.so" --out "$O" \
             --rounds "$ROUNDS" --reps "$REPS" > "$O/ab.log" 2>&1
           echo "ab rc $?" >> "$O/rc.txt" ;;
+      prof) for k in after before; do
+              "$PY" benchmarks/hash/bwkernels/profile_pass.py --lib "$B/$k.so" --out "$O/prof_$k" > "$O/prof_$k.log" 2>&1
+              echo "prof $k rc $?" >> "$O/rc.txt"
+            done
+            NCU=$(command -v ncu || echo "$CUDA_HOME/bin/ncu")
+            for k in after before; do
+              "$NCU" --profile-from-start off --replay-mode application --clock-control none \
+                -k "regex:^(read_kernel|mapped_read_kernel|sketch16_receipts_kernel|mapped16_receipts_kernel|mapped16_pass_kernel|mapped_consumer_kernel|leaves_kernel)" \
+                --section SpeedOfLight --section MemoryWorkloadAnalysis --section Occupancy --section WarpStateStats \
+                --section LaunchStats --section ComputeWorkloadAnalysis -o "$O/ncu_$k" \
+                "$PY" benchmarks/hash/bwkernels/profile_pass.py --lib "$B/$k.so" --out "$O/ncu_$k.d" --no-timing \
+                > "$O/ncu_$k.log" 2>&1
+              echo "ncu $k rc $?" >> "$O/rc.txt"
+              "$NCU" --import "$O/ncu_$k.ncu-rep" --page details --csv > "$O/ncu_$k.csv" 2>> "$O/ncu_$k.log"
+            done ;;
       pb) i=0
           for k in after before after; do
             i=$((i + 1))
