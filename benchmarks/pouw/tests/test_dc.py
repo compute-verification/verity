@@ -431,4 +431,43 @@ def test_uniform_write_census_is_idempotent(tmp_path):
     assert sum(ln.startswith("UP,") for ln in (dev / "rows.csv").read_text().splitlines()) == 1
     import tomllib
     assert tomllib.loads((dev / "vectors" / "DC-90.toml").read_text())["rows"].count("UP") == 1
-    assert len(census.uniform_kept(dev, "census.csv", "kind")) == 2 and len(census.uniform_kept(dev, "rows.csv", "row")) == 1
+    assert sum(ln["kind"] == "UNI" for ln in census.kept(dev, "census.csv")) == 2
+    assert sum(r["row"] == "UP" for r in census.kept(dev, "rows.csv")) == 1
+
+
+def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
+    """census.py --write replaces its own rows and drops a joint row its hull no longer has (JPA90_7 here), and keeps
+    every other line and row in the directory: the data sheet's DS_* and TMAB as well as uniform.py's UNI and UP. A row
+    whose old description extends the generated one keeps its note."""
+    import shutil
+    census = _load("census")
+    dev = tmp_path / "sm_90"
+    shutil.copytree(DC.parent / "machine_model" / "data" / "devices" / "sm_90", dev)
+    run = _sm90_run(tmp_path / "r20261017-000000-abcd" / "out", 0.05)
+    with open(dev / "census.csv", newline="") as f:
+        before = list(csv.DictReader(f))
+    with open(dev / "rows.csv", newline="") as f:
+        rows_before = list(csv.DictReader(f))
+    foreign = [ln for ln in before if ln["kind"] == "UNI" or not census.OWN_ROW.fullmatch(ln["row"])]
+    assert {ln["row"] for ln in foreign} >= {"DS_issue", "DS_tensor"}
+    gen_rows = census.census(census.Device("sm90", [run]))[1]
+    gen_m = next(r for r in gen_rows if r["row"] == "M")["description"]
+    stale = {**before[0], "row": "JPA90_7", "cycles": "1", "rate": "", "noise": "", "u": ""}
+    with open(dev / "census.csv", "a", newline="") as f:
+        csv.DictWriter(f, fieldnames=list(before[0]), lineterminator="\n").writerow(stale)
+    for r in rows_before:
+        if r["row"] == "M":
+            r["description"] = gen_m + ". A note added by hand"
+    (dev / "rows.csv").write_text(census.rows_csv(rows_before + [{"row": "JPA90_7", "status": "joint", "runs":
+                                                                   "r20261017-000000-abcd", "description": "stale"}]))
+    assert census.main(["sm90", str(run), "--write", str(dev)]) == 0
+    with open(dev / "census.csv", newline="") as f:
+        after = list(csv.DictReader(f))
+    with open(dev / "rows.csv", newline="") as f:
+        rows_after = {r["row"]: r for r in csv.DictReader(f)}
+    assert all(ln in after for ln in foreign)
+    assert "JPA90_7" not in {ln["row"] for ln in after} and "JPA90_7" not in rows_after
+    assert {r["row"] for r in rows_before if not census.OWN_ROW.fullmatch(r["row"])} <= set(rows_after)
+    assert {"DS_issue", "TMAB", "UP"} <= set(rows_after)
+    assert rows_after["M"]["description"] == gen_m + ". A note added by hand"
+    assert "M's old description" not in capsys.readouterr().err

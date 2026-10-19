@@ -5,8 +5,10 @@
 RUN_OUT is a DC run's `out/` (`research fetch RUN --all` puts it at ~/.research/runs/RUN/out; the run id is the name of
 a directory on its path). analyze.py reads each run; a kind's line takes its fastest run (as machine_model's adopt.py
 merges two lines) and names every run that measured it, and the joint rows are the upper hull of every run's points.
---write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping the
-uniform datapath's lines (UNI, and the row UP) that uniform.py wrote there; else they print.
+--write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping every
+line and row this doesn't write: the uniform datapath's (UNI, and the row UP) that uniform.py wrote, and the rows of
+other sources (the data sheet's DS_*, TMAB). A row it writes whose old description extends the new one keeps the old,
+the added note with it; one whose note it can't keep is named on stderr. Else they print.
 
 The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycles at 1 - 2%, eps1.py's convention):
 - issue: every kind holds 1 SMSP-cycle.
@@ -436,12 +438,35 @@ def tables(dev: Device) -> str:
     return "\n".join(out) + "\n"
 
 
-def uniform_kept(d: Path, name: str, key: str) -> list[dict[str, str]]:
-    """The lines uniform.py owns in DIR/NAME (UNI's census lines, the UP row), which --write keeps."""
+#: the rows census() writes; a stale one (a joint row the new hull drops) goes, every other row is kept
+OWN_ROW = re.compile(r"issue|MS?|A|I|SHFL|TL|TM\d+_\d+|JI\d+_\d+|JP[A-Z]+\d+_\d+")
+
+
+def kept(d: Path, name: str) -> list[dict[str, str]]:
+    """The lines and rows of DIR/NAME that census() doesn't write, which --write keeps: uniform.py's (UNI's census
+    lines, the UP row) and every row of another source (the data sheet's DS_*, TMAB)."""
     if not (d / name).is_file():
         return []
     with open(d / name, newline="") as f:
-        return [r for r in csv.DictReader(f) if r[key] in ("UNI", "UP")]
+        return [r for r in csv.DictReader(f) if r.get("kind") == "UNI" or not OWN_ROW.fullmatch(r["row"])]
+
+
+def with_notes(d: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """`rows` with each one's old description where it extends the new one (a note added after the generated text)."""
+    if not (d / "rows.csv").is_file():
+        return rows
+    with open(d / "rows.csv", newline="") as f:
+        old = {r["row"]: r["description"] for r in csv.DictReader(f)}
+    out = []
+    for r in rows:
+        o = old.get(r["row"], "")
+        if o.startswith(r["description"]):
+            r = {**r, "description": o}
+        elif o and not r["description"].startswith(o):
+            print(f"census.py: {r['row']}'s old description isn't the generated one; its note, if any, is dropped",
+                  file=sys.stderr)
+        out.append(r)
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -455,7 +480,7 @@ def main(argv: list[str] | None = None) -> int:
     print(tables(dev))
     if a.write:
         a.write.mkdir(parents=True, exist_ok=True)
-        lines, rows = lines + uniform_kept(a.write, "census.csv", "kind"), rows + uniform_kept(a.write, "rows.csv", "row")
+        lines, rows = lines + kept(a.write, "census.csv"), with_notes(a.write, rows) + kept(a.write, "rows.csv")
         (a.write / "census.csv").write_text(rowsmod.census_csv(lines))
         (a.write / "rows.csv").write_text(rows_csv(rows))
         print(f"wrote {a.write / 'census.csv'} ({len(lines)} lines) and {a.write / 'rows.csv'} ({len(rows)} rows)")
