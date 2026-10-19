@@ -1403,6 +1403,9 @@ def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segmen
                                      "kernel")] == [
         "pearlc:row_digests", "pearlc:tile_hash", "pearlc:setup", "pearlc:folds", "pearlc:lines_a", "pearlc:seeds", "pearlc:screen",
         "other"]
+    assert [SP.category(k) for k in ("pd_commit_851", "pd_tree_979", "pd_tiles_851")] == [
+        "pearlc:pd_commit", "pearlc:pd_tree", "pearlc:tile_hash"]
+    assert {"pearlc:pd_commit", "pearlc:pd_tree"} <= set(SP.HASH_GROUPS["a_rows"])
     rows = [(0, 1, "s512_row_segs", 7), (1, 2, "s512_tile_segs", 9), (2, 3, "s512_folds", 7), (3, 4, "s512_folds", 9),
             (4, 5, "s512_folds", 11), (5, 6, "s512_tile_segs", 7), (6, 7, "s512_folds", 7)]
     assert [r[4] for r in SP._folds(rows)] == ["pearlc:row_digests", "pearlc:tile_hash", "pearlc:row_digests", "pearlc:tile_hash",
