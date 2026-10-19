@@ -497,6 +497,7 @@ structure LigHyp (coin : ℕ → ℕ → F128) (n p0 : ℕ) (ms : MerkleScheme) 
     (salt : ℕ → ℕ → ByteArray) (src : RepSrc) : Prop where
   k0 : 1 ≤ sch.k0
   n0 : sch.n ≠ 0
+  levels : 2 ≤ sch.levels.size
   ood : src.masked (lay.lgOod 0) = mleF t (zS coin p0 sch.n) + h[lay.lgOod 0]!
   msg : ∀ j < sch.k0, mmOf src lay j = maskMsg lay h j (roundPoly (tabS coin p0 t j) (wS coin p0 b sch.n j))
   e0 : (⟨src.masked (lay.lgE 0 0), src.masked (lay.lgE 0 1)⟩ : F256) =
@@ -656,7 +657,37 @@ theorem ligeritoCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (hs : Hashes P
           fun h => absurd h (by omega)⟩
         rw [hch]
         simp [Array.range_succ, chS]
-    case rest => sorry
+    case rest =>
+      obtain ⟨hu, -, hge⟩ := hI
+      obtain ⟨rfl, hnl, hρk⟩ := hge le_rfl
+      subst hu
+      rcases r with ⟨initCh, rho, zl⟩
+      dsimp only
+      rw [get_bind_run, get_bind_run,
+        commitP_congr hs ms _ _ (H.salt hnl hρk 1 le_rfl (by have := H.levels; omega))]
+      refine lliftT fun cm1 t₂ l₂ _ => ?_
+      refine lliftT fun _ t₃ l₃ _ => ?_
+      refine lbind_eq fun _ s₄ t₄ l₄ _ => ?_
+      refine lbind_eq fun _ s₅ t₅ l₅ _ => ?_
+      rw [queryP_eraseC, bind_map_left]
+      refine lbind_eq fun a s₆ t₆ l₆ _ => ?_
+      rcases a with ⟨op0, v0⟩
+      dsimp only
+      refine lbind_eq fun _ s₇ t₇ l₇ _ => ?_
+      refine lbind_eq fun _ s₈ t₈ l₈ _ => ?_
+      refine lliftT fun bq t₉ l₉ _ => ?_
+      rw [modify_bind_run, modify_bind_run]
+      refine lbind (lforIn_eq _ _ _ (fun i hi u s t l => ?_) _ _ _ _) fun r s₁₀ r' s₁₀' t₁₀ l₁₀ _ _ hr => ?_
+      · refine Alike.of_eq ?_ s t l
+        by_cases hlast : i + 1 = sch.levels.size - 1
+        · have hl : (!(i + 1 == sch.levels.size - 1)) = false := by simp [hlast]
+          simp only [hl, Bool.false_eq_true, ↓reduceIte]
+        · have hc : ∀ g, commitP hs ms (sch.levels.getD (i + 2) default) g (src.hiSalt (i + 2)) =
+              commitP hs ms (sch.levels.getD (i + 2) default) g (salt (i + 2)) := fun g =>
+            commitP_congr hs ms _ g (H.salt hnl hρk (i + 2) (by omega) (by omega))
+          simp only [hc]
+      · obtain ⟨rfl, rfl⟩ := Prod.mk.inj hr
+        exact lpure ⟨rfl, rfl⟩
 
 end LigLock
 
