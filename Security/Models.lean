@@ -6,6 +6,7 @@ import Models.Nci.Guarantees.Reads
 import Models.Nci.Guarantees.Threads
 import Models.Nci.Guarantees.Contained
 import Models.Nci.Guarantees.Fit
+import Models.Nci.Guarantees.FitRate
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
 import Models.Pouw.Assumptions

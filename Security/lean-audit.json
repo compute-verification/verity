@@ -480,8 +480,20 @@
     "Models.Nci.Assumptions",
     "Models.Nci.Guarantees"
    ],
-   "except": [],
+   "except": ["Models.Nci.Guarantees.FitRate"],
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
+  },
+  "Models.Nci.Guarantees.FitRate": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Nci",
+    "Models.Nci.Assumptions",
+    "Definitions.Accounting",
+    "Models.Nci.Guarantees.FitRate"
+   ],
+   "except": [],
+   "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
   },
   "Models.Pouw.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions"],
@@ -3502,6 +3514,9 @@
    "assumptions": [],
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
+  "Nci.SecurityProofs.FitRate": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -5261,6 +5276,7 @@
    "Nci.SecurityProofs.ContainedMatMul": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.FitBound": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance.",
+   "Nci.SecurityProofs.FitRate": "frozen (no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (Security/Models/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.Training": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMul": "falsified (conjecture,no-function): It rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
    "Nci.SecurityProofs.UpdatedMatMulReads": "falsified (conjecture,no-function): It is UpdatedMatMul before its division by alpha, so it rests on ActivationsIncompressible and PartialSumsIncompressible, an analysis simplification, known false (Daniel 7:46 PM PDT (02:46Z)); lean restates it.",
