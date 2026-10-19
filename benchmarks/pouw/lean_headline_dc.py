@@ -517,7 +517,8 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
     menu = ("honest's form and the uniform `UNI` (1): the census prices every other tensor form on the joint rows at "
             "the scalar coefficient, a lower bound on its issue cost, so they are off the menu and `NoSum` carries "
             "them" if r.menu == "honest" else "every census MMA class (ω = m·n)")
-    lam = ", ".join(f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items())
+    lam = LH._wrap([f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items()],
+                   " " * (len(f"  cert {m} ["))).lstrip()
     bullets = [
         f"`rowNames`, `{sv}`, `machine`: the measured vector {fam.measured}, {m} rows of SMSP-cycles a warp instruction "
         f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz.",
@@ -550,7 +551,8 @@ def {sv} : List Sparse := [
 noncomputable def machine : Machine (Fin {nk}) (Fin {m}) :=
   rowsMachine {nk} {m} {sv} {fam.fmax}
 
-/-- `{fam.design}`'s design data on {fam.measured}: writer kinds as (class, ω), and `{fam.ns}.d2s`'s routes. -/
+{LH._words(f"`{fam.design}`'s design data on {fam.measured}: writer kinds as (class, ω), and `{fam.ns}.d2s`'s "
+           f"routes. -/", "/-- ", "")}
 def d2s : DesignData where
   writers := [
 {_writer_lines(x)}
@@ -574,7 +576,8 @@ noncomputable def flat : Labelled (Fin {nk}) :=
   labelled {nk} {fam.ns}.flatWords {fam.ns}.flatFold {fam.ns}.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
-noncomputable def lamStar : Fin {m} → ℝ := cert {m} [{lam}]
+noncomputable def lamStar : Fin {m} → ℝ :=
+  cert {m} [{lam}]
 
 end Accounting.TS.Headline.{fam.ns}Measured
 '''
