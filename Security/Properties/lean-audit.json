@@ -287,25 +287,25 @@
    "type_hash": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8"
   },
   "NciCheck.Properties.SecurityProofs.Throttles": {
-   "owner": "@training",
+   "owner": "@lean",
    "signature": ["NciCheck.Properties.SecurityProofs.Throttles : NciCheck.Properties.Throttles"],
    "assumptions": [],
    "type_hash": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13"
   },
   "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
-   "owner": "@training",
+   "owner": "@lean",
    "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesDark : NciCheck.Properties.ThrottlesDark"],
    "assumptions": [],
    "type_hash": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d"
   },
   "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-   "owner": "@training",
+   "owner": "@lean",
    "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots : NciCheck.Properties.ThrottlesDarkSlots"],
    "assumptions": [],
    "type_hash": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7"
   },
   "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
-   "owner": "@training",
+   "owner": "@lean",
    "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesSlots : NciCheck.Properties.ThrottlesSlots"],
    "assumptions": [],
    "type_hash": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263"
