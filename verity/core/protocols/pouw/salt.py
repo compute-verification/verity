@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
 SALT_BYTES = 64
+#: `pouw_salt`'s domain tag, which keeps its input apart from `window_salt`'s
+SALT_TAG = b"verity/pouw-salt/v1"
 #: `audit.weights_root`, a SHA-512 `tagged`
 WEIGHTS_ROOT_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
@@ -50,11 +52,12 @@ def _window(window: Any) -> int:
 
 
 def pouw_salt(reveal: bytes, window: int) -> bytes:
-    """The salt PoUW applies in window `window`, from the certifier's salt `reveal`: SHA-512(reveal ‖ u64be(window)).
-    The form isn't settled; this is the only place that states it, and `test_pouw_salt_form` pins it."""
+    """The salt PoUW applies in window `window`, from the certifier's salt `reveal`: SHA-512(`SALT_TAG` ‖ reveal ‖
+    u64be(window)). This is the only place that states it (Lean's `PouwCheck.pouwSalt` mirrors it), and
+    `test_pouw_salt_form` pins it."""
     if type(reveal) is not bytes or len(reveal) != SALT_BYTES:
         raise DomainError(f"the certifier's salt is {SALT_BYTES} bytes")
-    return hashlib.sha512(reveal + _window(window).to_bytes(8, "big")).digest()
+    return hashlib.sha512(SALT_TAG + reveal + _window(window).to_bytes(8, "big")).digest()
 
 
 def context(prefix: str, window: int, manifest: str) -> str:
@@ -134,5 +137,5 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["SALT_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_salt",
+__all__ = ["SALT_BYTES", "SALT_TAG", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_salt",
            "pouw_window", "registered", "revealed", "window_of"]

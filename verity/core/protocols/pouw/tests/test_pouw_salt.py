@@ -90,13 +90,13 @@ def certifier(windows: int, cls: type[Proxy] = Proxy, weights: dict[int, bytes] 
 
 
 def test_pouw_salt_form():
-    """The salt PoUW applies in window p is SHA-512(reveal ‖ u64be(p)), pinned on one vector; a reveal that isn't 64
-    bytes and a window that isn't a u64 are refused."""
+    """The salt PoUW applies in window p is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p)), pinned on one vector; a
+    reveal that isn't 64 bytes and a window that isn't a u64 are refused."""
     reveal = bytes(range(64))
     assert PS.pouw_salt(reveal, 3).hex() == (
-        "b761cc000dcb04d328fb60eca2836461f12782a72d1406d8073c9a4c6d06c629"
-        "8fba66fb6e8c0b6dc8f06fe991409e9d79db525b094ee402a2d8d236c1faf43e")
-    assert PS.pouw_salt(reveal, 3) == hashlib.sha512(reveal + (3).to_bytes(8, "big")).digest()
+        "284640f46fa004edc083e70781de725866d541643a6e4d3d6c5e970c6792872c"
+        "01bf359e56beb32a9d954d00692468716b819c3d9348e673924f91d2f0cffd50")
+    assert PS.pouw_salt(reveal, 3) == hashlib.sha512(b"verity/pouw-salt/v1" + reveal + (3).to_bytes(8, "big")).digest()
     assert PS.pouw_salt(reveal, 4) != PS.pouw_salt(reveal, 3)
     for bad in (reveal[:32], reveal + b"\0", bytearray(reveal), reveal.hex()):
         with pytest.raises(DomainError, match="64 bytes"):

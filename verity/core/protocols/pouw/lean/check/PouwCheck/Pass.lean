@@ -34,6 +34,7 @@ def MANIFEST_RECORDED : String := "verity-vllm/pouw-pearl-c-run/v1"
 def MANIFEST_CERTIFIED : String := "verity-vllm/pouw-pearl-c-run/v3"
 def WINDOW_SEGMENT : String := "pouw-window"
 def SALT_BYTES : Nat := 64
+def SALT_TAG : ByteArray := "verity/pouw-salt/v1".toUTF8
 def WEIGHTS_ROOT_BYTES : Nat := 64
 def COINS_RECORDED : String := "verity/pouw/epoch-coins/v2"
 def DRAW_DOMAIN : String := "verity/pouw/served-zk-draw/v1"
@@ -188,8 +189,8 @@ def windowOf (context : String) : Option Nat :=
   let d := parts.getD (n - 2) ""
   if 3 ≤ n && parts.getD (n - 3) "" == WINDOW_SEGMENT && isDecimal d && d.toNat! < 2 ^ 64 then some d.toNat! else none
 
-/-- `salt.pouw_salt`: the salt PoUW applies in window `p`, SHA-512(reveal ‖ u64be(p)). -/
-def pouwSalt (reveal : ByteArray) (p : Nat) : ByteArray := Flock.Sha512.hash (reveal ++ PouwCommit.be8 p)
+/-- `salt.pouw_salt`: the salt PoUW applies in window `p`, SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(p)). -/
+def pouwSalt (reveal : ByteArray) (p : Nat) : ByteArray := Flock.Sha512.hash (SALT_TAG ++ reveal ++ PouwCommit.be8 p)
 
 /-- `_certified_salt`: a certified window's pass, whose weights' root is `weights`, the one the certifier recorded before
 it drew the window's salt, and whose salt is `pouwSalt` of the certifier's reveal for the PoUW window the window's
