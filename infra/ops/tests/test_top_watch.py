@@ -165,12 +165,10 @@ def test_an_active_agent_with_no_handle_rings_top_once():
 
 def test_main_stalled_rings_ci_only_while_next_is_ahead_and_once_per_main_head():
     state, ring = {}, Ring()
-    ahead, head = {"n": 0}, {"sha": "abc1234567"}
+    ahead = {"n": 0}
 
-    def read(path):
-        if path.endswith("/commits/main"):
-            return {"sha": head["sha"], "commit": {"committer": {"date": "2026-10-19T18:30:00Z"}}}
-        return {"ahead_by": ahead["n"]}
+    def read():
+        return {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": ahead["n"]}
 
     T.main_stalled(state, ring, NOW - 3600, read)
     T.main_stalled(state, ring, NOW, read)
@@ -185,10 +183,8 @@ def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_l
     state, ring = {}, Ring()
     heads = iter(["old", "landed", "landed", "landed"])
 
-    def read(path):
-        if path.endswith("/commits/main"):
-            return {"sha": next(heads), "commit": {"committer": {"date": "2026-10-19T16:00:00Z"}}}
-        return {"ahead_by": 700}
+    def read():
+        return {"sha": next(heads), "committed": "2026-10-19T16:00:00Z", "ahead": 700}
 
     for t in (NOW - 3600, NOW, NOW + 1800):
         T.main_stalled(state, ring, t, read)

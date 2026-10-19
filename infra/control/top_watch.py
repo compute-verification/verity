@@ -296,27 +296,38 @@ def rules_thread(state, ring, api, reg, now) -> None:
         state["rules_seen"] = new[-1]["ts"]
 
 
-def gh(path: str) -> dict:
-    req = urllib.request.Request(f"https://api.github.com{path}", headers={
-        "Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"})
+MAIN_QUERY = """query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
+  ref(qualifiedName: "refs/heads/main") { target { oid ... on Commit { committedDate } } compare(headRef: "next") { aheadBy } } } }"""
+
+
+def gh_main() -> dict:
+    """main's head, its commit time and how far `next` is ahead, in one small GraphQL read (REST's compare of main...next
+    carries every commit and patch: megabytes while a few hundred commits are queued)."""
+    owner, name = REPO.split("/")
+    req = urllib.request.Request("https://api.github.com/graphql", method="POST",
+                                 data=json.dumps({"query": MAIN_QUERY, "variables": {"owner": owner, "name": name}}).encode(),
+                                 headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as r:
-        return json.load(r)
+        out = json.load(r)
+    if out.get("errors"):
+        raise ValueError(f"GitHub GraphQL: {out['errors'][0].get('message')}")
+    ref = out["data"]["repository"]["ref"]
+    return {"sha": ref["target"]["oid"], "committed": ref["target"]["committedDate"], "ahead": ref["compare"]["aheadBy"]}
 
 
-def main_stalled(state, ring, now, read: Callable[[str], dict] = gh) -> None:
+def main_stalled(state, ring, now, read: Callable[[], dict] = gh_main) -> None:
     """main's head unchanged for STALL_S. A landed train's commit carries the time drive built it on `next`, not when main moved
     to it, so the clock starts at the later of that and the first pass that saw the head."""
-    head = read(f"/repos/{REPO}/commits/main")
-    committed = datetime.fromisoformat(head["commit"]["committer"]["date"].replace("Z", "+00:00")).timestamp()
+    head = read()
+    committed = datetime.fromisoformat(head["committed"].replace("Z", "+00:00")).timestamp()
     seen = state.get("main_head") or {}
     if seen.get("sha") != head["sha"]:
         seen = state["main_head"] = {"sha": head["sha"], "seen": now}
     at = max(committed, seen["seen"])
-    ahead = read(f"/repos/{REPO}/compare/main...next").get("ahead_by", 0)
-    if now - at >= STALL_S and ahead > 0:
+    if now - at >= STALL_S and head["ahead"] > 0:
         once_each(state, f"main:{head['sha']}", ring, "ci",
                   f"ci: main hasn't moved for {(now - at) // 60:.0f} min (at {head['sha'][:10]} since {iso(at)}) while "
-                  f"next is {ahead} commits ahead of it: check drive (`research queue status`).", None, now)
+                  f"next is {head['ahead']} commits ahead of it: check drive (`research queue status`).", None, now)
 
 
 def h200s(state, ring, now, samples: Callable[[float, float], list[dict]]) -> None:
