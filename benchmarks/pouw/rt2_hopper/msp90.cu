@@ -3,7 +3,9 @@
 // IADD3+FFMA lane? tensor_kinds/sm80.cu's own forms, kernels and timing, built for sm_90a: the dense m16n8k32 and the
 // deep sparse m16n8k64 beside it, each alone at 2, 4 and 8 warps a SMSP (and with the loop thinned, U = 4) and
 // interleaved with LANE_MIX (IADD3 then FFMA) at 8 to 64 lane ops a MMA (k_mixu, which has no block-time artifact:
-// every warp issues both). A full slot step holds when the shallow form's cycles a MMA equal the deep form's.
+// every warp issues both). (M′) holds when the shallow form's SMSP-cycles a MMA are at least its 128 slots at the
+// credited step, 4·K_c/R_c = 4·32/4096 a slot (wgmma s8's), so 4 SMSP-cycles; the deep legacy forms are slower than that
+// themselves, so equalling them is not the test.
 #define GROUP 99
 #define main sm80_main
 #include "../tensor_kinds/sm80.cu"
