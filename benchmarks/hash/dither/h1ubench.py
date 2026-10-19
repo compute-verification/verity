@@ -2,11 +2,12 @@
 (receipts_ca.py, its `call_receipts`) and `h1tile.reference`, then timed interleaved with the plain int8 GEMM of the same
 call and H1's noise floor (h1noise.cu's midstate kernel), at Llama-3.1-8B's linears and M = 1, 32, 256, 2048, 8192.
 
-    python h1ubench.py --lib h1u.so [--variant NAME=h1u_x.so ...] [--noise-lib h1noise.so] --out OUT [--reps 5]
-                       [--ms ...] [--linears ...]
+    python h1ubench.py --lib h1u.so [--variant NAME=h1u_x.so ...] [--noise-lib h1noise.so]
+                       [--noise-variant NAME=h1noise_x.so ...] --out OUT [--reps 5] [--ms ...] [--linears ...]
 
-A variant (another build of h1u.cu, e.g. h1u_b3.so with H1U_MINB=3) passes every gate below on the same inputs, then is
-timed as arm h1u-NAME in the same interleaved reps; a variant whose gate fails is not timed.
+A variant (another build of h1u.cu, e.g. h1u_b3.so with H1U_MINB=3 or h1u_p35.so with H1_PIPE=35) passes every gate
+below on the same inputs, then is timed as arm h1u-NAME in the same interleaved reps; a noise variant is arm floor-NAME.
+A build whose gate fails is not timed.
 
 The receipts are a side computation beside the served product (z, the plain A B^T, is the served call's own GEMM), so a
 call served with them costs plain + h1u and gamma = 1 + h1u / plain, plain the faster of torch._int_mm and vLLM's
@@ -19,7 +20,8 @@ Gates before any timing, every one in this run (a failed gate exits 4 and times 
     the device seeds against seeds.seed / receipt_seed;
   * every timed shape: 0xA5 poison, then kh_unit's receipts against call_receipts on sampled units (first, last and
     random ones) and no poison left anywhere; then a no-write control (a launch over zero rows) under the same poison,
-    which the comparison must reject.
+    which the comparison must reject;
+  * every noise floor (h1noise.so, --noise-variant builds) at the shape's J: h1bench.py's gate.
 """
 from __future__ import annotations
 
@@ -42,6 +44,7 @@ sys.path.insert(0, str(HERE.parents[2]))
 import receipts_ca as RC
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
 from h1bench import Lib as NoiseLib
+from h1bench import gate as noise_gate
 from kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
@@ -183,9 +186,24 @@ def anchors(libs: dict[str, Lib], rng: random.Random) -> list[dict]:
     return res
 
 
-def bench(libs: dict[str, Lib], nlib: NoiseLib | None, args, name: str, n: int, k: int, m: int, Xh: np.ndarray,
+_NOISE_GATES: dict = {}
+
+
+def floor_gate(arm: str, nlib: NoiseLib, nb: int, j: int) -> dict:
+    """h1bench.py's gate (kn_ca against hashlib, kn_mid's writes and its sink fold at J against kn_ca, a no-write control)
+    for one noise build at nb blocks a unit and J, once a run."""
+    key = (arm, nb, j)
+    if key not in _NOISE_GATES:
+        gen = torch.Generator(device="cuda")
+        gen.manual_seed(0x4831 + nb + 64 * j)
+        _NOISE_GATES[key] = noise_gate(nlib, nb, [j], gen)
+    return _NOISE_GATES[key]
+
+
+def bench(libs: dict[str, Lib], nlibs: dict[str, NoiseLib], args, name: str, n: int, k: int, m: int, Xh: np.ndarray,
           clock: Clock, l2: int, sms: int, rng: random.Random) -> dict:
-    """libs: arm name -> build, "h1u" (the main build) first; a build is timed only if its gate passed."""
+    """libs: arm name -> build, "h1u" (the main build) first; nlibs: arm name -> noise build ("floor" the main one). A
+    build is timed only if its gate passed."""
     lay = HT.Layout(32, 32, k)
     mp = max(32, m)
     X = torch.from_numpy(Xh[:m]).to("cuda")
@@ -212,13 +230,20 @@ def bench(libs: dict[str, Lib], nlib: NoiseLib | None, args, name: str, n: int, 
         out["error"] = "gate failed: nothing timed"
         return out
     arms: dict = {arm: (lambda c: lambda i: c.run())(c) for arm, c in builds.items() if arm not in failed}
-    if nlib is not None:
+    if nlibs:
         sj = torch.randint(0, 256, (S, 64), dtype=torch.uint8, device="cuda").view(torch.int64)
         J = auto_j(S, lay.blocks, sms)
-        snk = torch.empty((nlib.items(S, lay.blocks, J) * 32,), dtype=torch.int32, device="cuda")
-        ksnk = torch.empty((nlib.items(S, KEY_BLOCKS, 1) * 32,), dtype=torch.int32, device="cuda")
-        arms["floor"] = lambda i: (nlib.mid(sj, S, lay.blocks, J, snk, True), nlib.mid(sj, S, KEY_BLOCKS, 1, ksnk, True))
         out["floor_j"] = J
+        for arm, nl in nlibs.items():
+            gs = [floor_gate(arm, nl, lay.blocks, J), floor_gate(arm, nl, KEY_BLOCKS, 1)]
+            out["gates"][arm] = {"ok": all(g["ok"] for g in gs), "noise": gs}
+            if not out["gates"][arm]["ok"]:
+                out.setdefault("gate_failed", []).append(arm)
+                continue
+            snk = torch.empty((nl.items(S, lay.blocks, J) * 32,), dtype=torch.int32, device="cuda")
+            ksnk = torch.empty((nl.items(S, KEY_BLOCKS, 1) * 32,), dtype=torch.int32, device="cuda")
+            arms[arm] = (lambda nl, snk, ksnk: lambda i: (nl.mid(sj, S, lay.blocks, J, snk, True),
+                                                          nl.mid(sj, S, KEY_BLOCKS, 1, ksnk, True)))(nl, snk, ksnk)
     parms, info = plain_arms(name, n, k, m, Xh, l2)
     out.update(info)
     arms.update(parms)
@@ -253,9 +278,14 @@ def bench(libs: dict[str, Lib], nlib: NoiseLib | None, args, name: str, n: int, 
                 "gamma": round(1 + med["h1u"] / plain[fp], 4),
                 "h1u_gcomp_per_s": round(comp / (med["h1u"] * 1e3), 3),
                 "ratios": {f"{x}/{p}": round(med[x] / v, 4) for x in med if x not in plain for p, v in plain.items()}})
-    out["variants"] = {arm: {"us": med[arm], "gamma": round(1 + med[arm] / plain[fp], 4),
-                             "gcomp_per_s": round(comp / (med[arm] * 1e3), 3), "over_h1u": round(med[arm] / med["h1u"], 4)}
-                       for arm in builds if arm != "h1u" and arm in med}
+    out["variants"] = {}
+    for arm in [*builds, *nlibs]:
+        base = "h1u" if arm in builds else "floor"
+        if arm == base or arm not in med or base not in med:
+            continue
+        out["variants"][arm] = {"us": med[arm], "gamma": round(1 + med[arm] / plain[fp], 4),
+                                "gcomp_per_s": round(comp / (med[arm] * 1e3), 3),
+                                f"over_{base}": round(med[arm] / med[base], 4)}
     if "floor" in med:
         out["floor_us"] = med["floor"]
         out["h1u_over_floor"] = round(med["h1u"] / med["floor"], 4)
@@ -272,6 +302,7 @@ def main() -> int:
     ap.add_argument("--lib", required=True)
     ap.add_argument("--variant", action="append", default=[], metavar="NAME=PATH")
     ap.add_argument("--noise-lib")
+    ap.add_argument("--noise-variant", action="append", default=[], metavar="NAME=PATH")
     ap.add_argument("--out", required=True)
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--item-ms", type=float, default=3.0)
@@ -286,7 +317,11 @@ def main() -> int:
         vname, _, path = v.partition("=")
         paths[f"h1u-{vname}"] = path
     libs = {arm: Lib(p) for arm, p in paths.items()}
-    nlib = NoiseLib(args.noise_lib) if args.noise_lib else None
+    npaths = {"floor": args.noise_lib} if args.noise_lib else {}
+    for v in args.noise_variant:
+        vname, _, path = v.partition("=")
+        npaths[f"floor-{vname}"] = path
+    nlibs = {arm: NoiseLib(p) for arm, p in npaths.items()}
     clock = Clock()
     props = torch.cuda.get_device_properties(0)
     l2 = int(getattr(props, "L2_cache_size", 50 << 20))
@@ -294,7 +329,7 @@ def main() -> int:
     doc = {"schema": "dither-hb/h1u/v1", "device": clock.name, "sms": props.multi_processor_count, "l2_bytes": l2,
            "torch": torch.__version__, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "reference": "receipts_ca.py (served_h1/receipts.py at origin/cursor/serve-h1-ea24 8d04cd79db), h1tile.reference",
-           "libs": paths,
+           "libs": paths, "noise_libs": npaths,
            "shapes": []}
     doc["anchors"] = anchors(libs, rng)
     print(json.dumps({"anchors": doc["anchors"]}), flush=True)
@@ -315,7 +350,7 @@ def main() -> int:
         for m in ms:
             t0 = time.time()
             try:
-                r = bench(libs, nlib, args, name, n, k, m, xs[k], clock, l2, props.multi_processor_count, rng)
+                r = bench(libs, nlibs, args, name, n, k, m, xs[k], clock, l2, props.multi_processor_count, rng)
             except Exception as e:  # noqa: BLE001
                 r = {"linear": name, "m": m, "error": "".join(traceback.format_exception(e))[-3000:]}
             r["wall_s"] = round(time.time() - t0, 2)

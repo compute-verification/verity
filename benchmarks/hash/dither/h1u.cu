@@ -93,7 +93,13 @@ __device__ __forceinline__ void fold(const int (&acc)[8][4], u32 (&y)[8], u32 (&
       const u32 p = (u32)acc[t][e] * KEYS.fx1[8 * i + c];
       const u32 uu = y[c] ^ p ^ KEYS.kk[t];
       y[c] = uu * KEYS.ka[t] + z[c];
+#if H1_PIPE & 64
+      // rotl(uu, r) + y as two IMADs: hi(uu 2^r) + (uu 2^r + y), the rotation's halves having disjoint bits
+      const u32 m = PW2[KEYS.rot[t]];
+      asm("mad.hi.u32 %0, %1, %2, %3;" : "=r"(z[c]) : "r"(uu), "r"(m), "r"(uu * m + y[c]));
+#else
       z[c] = __funnelshift_l(uu, uu, KEYS.rot[t]) + y[c];
+#endif
     }
   }
 }

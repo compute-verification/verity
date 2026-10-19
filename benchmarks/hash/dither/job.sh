@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # The dither-hb benches. Libraries are built on a CPU node and shipped to the dc node, so nothing but the bench runs on
 # vy-dc-h200 / vy-dc-b200 (no CPU phase there):
-#   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1u_b3}.so, their
+#   build    (vy-nebius-2) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u}.so and the
+#            variants h1u_b3 (H1U_MINB=3), h1u_pN and h1noise_pN (H1_PIPE=N, N in $PIPES and $NOISE_PIPES), their
 #            SASS and resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository
 #            files nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
 #            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
-#   h1u      h1u.so, h1u_b3.so (H1U_MINB=3) and h1noise.so: h1ubench.py (H1 + fx1's fused unit gated against receipts.py and h1tile.reference,
-#            then timed against the plain int8 GEMMs and the noise floor)
+#   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit gated
+#            against receipts.py and h1tile.reference, the noise floor gated as h1bench.py does, then all timed against
+#            the plain int8 GEMMs)
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
@@ -40,12 +42,17 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    for src in kb kb_pg h1noise h1u h1u_b3; do
+    # NAME[:FILE:FLAG]: a variant is FILE.cu built with FLAG
+    builds=(kb kb_pg h1noise h1u h1u_b3:h1u:-DH1U_MINB=3)
+    for p in ${PIPES:-3 5 35 69 99}; do builds+=("h1u_p$p:h1u:-DH1_PIPE=$p"); done
+    for p in ${NOISE_PIPES:-3 5 35}; do builds+=("h1noise_p$p:h1noise:-DH1_PIPE=$p"); done
+    for b in "${builds[@]}"; do
+      IFS=: read -r src file def <<< "$b"
       [ "$src" = kb_pg ] && [ "$arch" != sm_100a ] && continue
       flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode "arch=compute_${arch#sm_},code=$arch")
       [ "$src" = kb ] && flags+=(-lcublasLt -Xlinker "-rpath=$LIB64")
-      file=$src
-      [ "$src" = h1u_b3 ] && { file=h1u; flags+=(-DH1U_MINB=3); }
+      file=${file:-$src}
+      [ -n "$def" ] && flags+=("$def")
       "$NVCC" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { cat "$dir/build-$src.log"; exit 2; }
       "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
       "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
@@ -71,8 +78,17 @@ for b in ${BENCH//,/ }; do
       CMDS+=("$PY $HERE/kbench.py --lib $LIBS/kb.so $PG --out $OUT ${BENCH_ARGS:-}") ;;
     h1) NEED+=(h1noise); CMDS+=("$PY $HERE/h1bench.py --lib $LIBS/h1noise.so --out $OUT ${BENCH_ARGS:-}") ;;
     h1u)
-      NEED+=(h1u h1u_b3 h1noise)
-      CMDS+=("$PY $HERE/h1ubench.py --lib $LIBS/h1u.so --variant b3=$LIBS/h1u_b3.so --noise-lib $LIBS/h1noise.so --out $OUT ${BENCH_ARGS:-}") ;;
+      NEED+=(h1u h1noise)
+      vars=""
+      for f in "$LIBS"/h1u_*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v"); vars+=" --variant ${v#h1u_}=$f"
+      done
+      for f in "$LIBS"/h1noise_*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v"); vars+=" --noise-variant ${v#h1noise_}=$f"
+      done
+      CMDS+=("$PY $HERE/h1ubench.py --lib $LIBS/h1u.so --noise-lib $LIBS/h1noise.so$vars --out $OUT ${BENCH_ARGS:-}") ;;
     *) echo "job.sh: no bench $b" >&2; exit 2 ;;
   esac
 done
