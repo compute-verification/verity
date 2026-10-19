@@ -170,6 +170,110 @@ __global__ void __launch_bounds__(BT) fbk(const uint32_t *st, const uint32_t *W,
   if (tid == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
+__device__ __forceinline__ void imma6(uint32_t (&d)[4], uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3,
+                                      uint32_t b0, uint32_t b1) {
+  asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+               : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+               : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+}
+
+// fbk's trip without the glue ptxas rematerializes there: the lane's global and shared slot addresses come in opaque
+// (gt, st), each logical warp's an immediate offset from them, and the bulk body sits under a warp-uniform branch with
+// elect.sync's predicate inside the asm, so no warp takes a divergent branch
+template <int K, int BT, int H>
+__device__ __forceinline__ void tripu(uint32_t (&y)[K][NCH], uint32_t (&z)[K][NCH], const uint32_t (&d)[K][8][4],
+                                      uint32_t *gt, uint32_t st, uint32_t *gb, uint32_t sd, uint32_t sk, uint32_t bytes,
+                                      int wid) {
+#pragma unroll
+  for (int k = 0; k < K; ++k) {
+    uint32_t m[NCH];
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) m[j] = d[k][2 * H + j / 4][j % 4] * FK(4 * (2 * H + j / 4) + j % 4);
+    st256(gt + NCH * BT * k, y[k]);
+    sts128(st + 4u * NCH * BT * k, m[0], m[1], m[2], m[3]);
+    sts128(st + 4u * NCH * BT * k + 16, m[4], m[5], m[6], m[7]);
+  }
+  asm volatile("fence.proxy.async;" ::: "memory");
+  __syncthreads();
+  if (wid == 0)
+    asm volatile("{\n\t.reg .pred p;\n\telect.sync _|p, 0xffffffff;\n\t"
+                 "@p cp.reduce.async.bulk.global.shared::cta.bulk_group.xor.b32 [%0], [%1], %3;\n\t"
+                 "@p cp.async.bulk.commit_group;\n\t@p cp.async.bulk.wait_group 0;\n\t"
+                 "@p cp.reduce.async.bulk.global.shared::cta.bulk_group.xor.b32 [%0], [%2], %3;\n\t"
+                 "@p cp.async.bulk.commit_group;\n\t@p cp.async.bulk.wait_group 0;\n\t"
+                 "@p fence.proxy.async;\n\t}" ::"l"(gb), "r"(sd), "r"(sk), "r"(bytes)
+                 : "memory");
+  __syncthreads();
+#pragma unroll
+  for (int k = 0; k < K; ++k) {
+    uint32_t u[NCH];
+    ldcg256(gt + NCH * BT * k, u);
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) {
+      y[k][j] = u[j] * KA(2 * H + j / 4) + z[k][j];
+      z[k][j] = __funnelshift_l(u[j], u[j], ROT(2 * H + j / 4)) + y[k][j];
+    }
+  }
+}
+
+// fbk at 256 bits with tripu: the IMMA's A and B fragments are six registers ptxas can't merge, so it holds them
+// across the loop instead of reloading `one` and copying it each set
+template <int K, int BT>
+__global__ void __launch_bounds__(BT) fbu(const uint32_t *st, const uint32_t *W, uint32_t *out, uint32_t *cp,
+                                          long long *cyc, int sets, uint32_t one) {
+  constexpr int SLOT = K * BT * NCH;
+  extern __shared__ __align__(128) uint32_t smem[];
+  const int tid = threadIdx.x, base = (blockIdx.x * BT + tid) * K;
+  const int wid = __shfl_sync(0xffffffffu, tid >> 5, 0);
+  uint32_t *sd = smem, *sk = smem + SLOT;
+  uint32_t y[K][NCH], z[K][NCH], d[K][8][4];
+#pragma unroll
+  for (int k = 0; k < K; ++k) {
+    const int src = (base + k) & 1023;
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) {
+      y[k][j] = st[src * 16 + j];
+      z[k][j] = st[src * 16 + NCH + j];
+    }
+#pragma unroll
+    for (int i = 0; i < 8; ++i)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) d[k][i][e] = W[src * 32 + 4 * i + e];
+  }
+  for (int i = tid; i < 4 * SLOT; i += BT) sk[i] = KK(2 * (i / SLOT) + (i % NCH) / 4);
+  asm volatile("fence.proxy.async;" ::: "memory");
+  uint32_t *gb = cp + (size_t)blockIdx.x * SLOT, *gt = gb + NCH * tid;
+  const uint32_t bytes = SLOT * 4u;
+  const uint32_t sdb = (uint32_t)__cvta_generic_to_shared(sd);
+  const uint32_t skb = (uint32_t)__cvta_generic_to_shared(sk);
+  uint32_t stt = sdb + 4u * NCH * tid;
+  uint32_t a0 = one, a1 = one, a2 = one, a3 = one, b0 = one, b1 = one;
+  asm volatile("" : "+l"(gt), "+r"(stt), "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(b0), "+r"(b1));
+  __syncthreads();
+  long long t0 = clock64();
+#pragma unroll 1
+  for (int s = 0; s < sets; ++s) {
+#pragma unroll
+    for (int k = 0; k < K; ++k)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) imma6(d[k][i], a0, a1, a2, a3, b0, b1);
+    tripu<K, BT, 0>(y, z, d, gt, stt, gb, sdb, skb, bytes, wid);
+    tripu<K, BT, 1>(y, z, d, gt, stt, gb, sdb, skb + 4u * SLOT, bytes, wid);
+    tripu<K, BT, 2>(y, z, d, gt, stt, gb, sdb, skb + 8u * SLOT, bytes, wid);
+    tripu<K, BT, 3>(y, z, d, gt, stt, gb, sdb, skb + 12u * SLOT, bytes, wid);
+  }
+  __syncthreads();
+  long long t1 = clock64();
+#pragma unroll
+  for (int k = 0; k < K; ++k)
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) {
+      out[(size_t)(base + k) * 16 + j] = y[k][j];
+      out[(size_t)(base + k) * 16 + NCH + j] = z[k][j];
+    }
+  if (tid == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
 // the device pass sees no host code, so each variant is instantiated here
 #define FBK_INST(K, BT, WIDE)                                                                                         \
   template __global__ void fbk<K, BT, WIDE>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *,  \
@@ -179,6 +283,10 @@ FBK_INST(1, 512, 1)
 FBK_INST(2, 256, 0)
 FBK_INST(2, 256, 1)
 FBK_INST(4, 128, 1)
+template __global__ void fbu<2, 256>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int,
+                                     uint32_t);
+template __global__ void fbu<4, 128>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int,
+                                     uint32_t);
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -228,7 +336,8 @@ int main() {
   struct { const char *name; Kern k; int K, bt, wide; } ks[] = {
       {"fbk_k1_128", fbk<1, 512, 0>, 1, 512, 0}, {"fbk_k1_256", fbk<1, 512, 1>, 1, 512, 1},
       {"fbk_k2_128", fbk<2, 256, 0>, 2, 256, 0}, {"fbk_k2_256", fbk<2, 256, 1>, 2, 256, 1},
-      {"fbk_k4_256", fbk<4, 128, 1>, 4, 128, 1},
+      {"fbk_k4_256", fbk<4, 128, 1>, 4, 128, 1}, {"fbu_k2_256", fbu<2, 256>, 2, 256, 1},
+      {"fbu_k4_256", fbu<4, 128>, 4, 128, 1},
   };
   const int smem = 5 * LANES * NCH * 4, maxblocks = sms * 32;
   uint32_t *d_st, *d_W, *d_out, *d_cp;

@@ -32,21 +32,21 @@ def targets(rest):
 parts = re.split(r"\n\s*Function : (\S+)\n", "\n" + open(sys.argv[1]).read())
 out = {}
 for name, body in zip(parts[1::2], parts[2::2]):
-    m = re.search(r"fbkILi(\d+)ELi(\d+)ELi(\d+)E", name)
+    m = re.search(r"(fb[ku])ILi(\d+)ELi(\d+)E(?:Li(\d+)E)?", name)
     if not m:
         continue
-    K, BT, WIDE = map(int, m.groups())
+    kern, K, BT, WIDE = m[1], int(m[2]), int(m[3]), int(m[4] or 1)
     ins = [(int(a, 16), p.strip(), op, rest) for a, p, op, rest in INS.findall(body)]
     loops = [(t, a) for a, p, op, rest in ins if op.startswith("BRA") for t in targets(rest) if t < a]
     head, tail = max(loops, key=lambda lp: lp[1] - lp[0])
     loop = [x for x in ins if head <= x[0] <= tail and not x[2].startswith("IMMA") and x[2] != "NOP"]
     bodies = [(a, targets(rest)[0]) for a, p, op, rest in loop
-              if op == "BRA" and p and targets(rest) and targets(rest)[0] > a]
+              if op in ("BRA", "BRA.U") and p and targets(rest) and targets(rest)[0] > a]
     inside = [op for a, p, op, r in loop if any(b < a < t for b, t in bodies)]
     outside = [op for a, p, op, r in loop if not any(b < a < t for b, t in bodies)]
     W, units = BT // 32, 8 * K
     unit = (len(outside) + len(inside) / W) / units
-    out[f"K{K}_BT{BT}_W{'256' if WIDE else '128'}"] = {
+    out[f"{kern}_K{K}_BT{BT}_W{'256' if WIDE else '128'}"] = {
         "K": K, "BT": BT, "wide": WIDE, "warps": W, "units_a_set": units, "loop": [hex(head), hex(tail)],
         "every_warp_a_set": len(outside), "thread0_a_set": len(inside), "branch_bodies": len(bodies),
         "every_warp_a_unit": len(outside) / units, "ds_issue_a_unit": unit, "floor": FLOOR,
