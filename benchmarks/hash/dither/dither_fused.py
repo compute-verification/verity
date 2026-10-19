@@ -17,6 +17,10 @@ Per engine step s (parity p = s mod 2), around the runner's `execute_model`:
              (`pouw.window.live_challenger`), the salt `h1tile.live_salt`, step s's seeds (`h1r_launch` version 0) into the
              buffer step s + 1's launches read
 
+With ``rc="side"`` (`patch`) no `h1f` launch computes receipts: after step s's coin, its seeds, units (`h1r_launch` version
+2) and receipt trees go on a second stream and run beside the engine's step s + 1, whose main stream first waits for step
+s - 1's (they read the slots step s + 1 overwrites).  What is committed, before which coin, and every receipt are the same.
+
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
 from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
 the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this lane's rendering of CA's form (a z
@@ -50,6 +54,7 @@ MODEL = {"repo": "verity-int8/Llama-3.1-8B-INT8"}
 ROUNDS = 1 << 14
 F_DUMP, F_NW_TILES, F_NW_UNITS = 1, 2, 4    # h1f.cu's H1FStep.flags
 POISON = 0xA5
+RC_MODES = ("fused", "side")
 LIB = "dither"
 REG: dict[int, tuple[str, torch.nn.Module]] = {}
 CFG: dict = {}
@@ -72,8 +77,10 @@ class Window:
     the A, admit and z tables, the step trees and the round); the receipts' call tables (one per parity, sharing one seeds
     and one receipts buffer) and the receipt trees; the `h1f` table and step struct; the live coins."""
 
-    def __init__(self, t: int, key: bytes, h1c_path: str, h1f_path: str, gate: bool, dev):
-        self.t, self.key, self.dev = t, key, dev
+    def __init__(self, t: int, key: bytes, h1c_path: str, h1f_path: str, gate: bool, dev, rc: str = "fused"):
+        if rc not in RC_MODES:
+            raise ValueError(f"receipts mode {rc!r}, not one of {RC_MODES}")
+        self.t, self.key, self.dev, self.rc_mode = t, key, dev, rc
         self.L = L = len(REG)
         if sorted(REG) != list(range(L)):
             raise RuntimeError(f"linears registered: {sorted(REG)}")
@@ -153,6 +160,15 @@ class Window:
         self.phases: list[dict] = []
         self.t_before = 0.0
         self.ev = [torch.cuda.Event(enable_timing=True) for _ in range(9)]
+        if rc == "side":
+            self.side = torch.cuda.Stream(device=dev)
+            self.ready, self.rc_done = torch.cuda.Event(), torch.cuda.Event()
+            self.rc_pending = False
+            self.salt_p = [torch.zeros(8, dtype=torch.int64, device=dev) for _ in range(2)]
+            self.base_p = [torch.zeros(1, dtype=torch.int64, device=dev) for _ in range(2)]
+            self.rstep = [torch.zeros(1, dtype=torch.int32, device=dev) for _ in range(2)]
+            self.sev = [[torch.cuda.Event(enable_timing=True) for _ in range(3)] for _ in range(2)]
+            self.sev_set = [False, False]
         self._coins()
 
     def arm(self, m: int, names: tuple = ("gate", "control")) -> None:
@@ -202,7 +218,8 @@ class Window:
 
     def launch(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> None:
         n, k = self.nk[w]
-        rc = self.f.h1f_launch(self.F.data_ptr() + self.fsize * w, self.S.data_ptr(), self.t, n, k, self.units[w],
+        units = self.units[w] if self.rc_mode == "fused" else 0
+        rc = self.f.h1f_launch(self.F.data_ptr() + self.fsize * w, self.S.data_ptr(), self.t, n, k, units,
                                xq.data_ptr(), s_a.data_ptr(), int(xq.shape[0]), wt.data_ptr(), s_w.data_ptr(), y.data_ptr(),
                                self.plans[0].seeds.data_ptr(), self.plans[0].out.data_ptr(),
                                torch.cuda.current_stream().cuda_stream)
@@ -220,25 +237,36 @@ class Window:
         self.cap_step = self.cap_rc = None
         if self._next_rc is not None:
             self.cap_rc, self._next_rc = self._next_rc, None
-            self._poison([self.plans[0].out])
-            if self.cap_rc == "control":
-                self.flags |= F_NW_UNITS
+            if self.rc_mode == "fused":
+                self._poison([self.plans[0].out])
+                if self.cap_rc == "control":
+                    self.flags |= F_NW_UNITS
         elif self.arms and m == self.arm_m:
             self.cap_step = name = self.arms.pop(0)
             p = self.parity
             self._poison([x[p] for x in self.slot] + [x[p] for x in self.scale] + [x[p] for x in self.z] + list(self.ydump or []))
             self.flags |= F_DUMP | (F_NW_TILES if name == "control" else 0)
             self.caps[name] = {"s": self.s, "m": m}
-        self.S.copy_(torch.tensor([self.parity, m, self.rc_on, self.flags], dtype=torch.int32))
+        rc_on = self.rc_on if self.rc_mode == "fused" else 0
+        self.S.copy_(torch.tensor([self.parity, m, rc_on, self.flags], dtype=torch.int32))
         if self.cap_step or self.cap_rc:
             torch.cuda.synchronize()
         self.t_before = time.perf_counter()
 
     def after(self) -> None:
-        torch.cuda.synchronize()
+        side = self.rc_mode == "side"
+        main = torch.cuda.current_stream()
+        if side:
+            main.synchronize()
+        else:
+            torch.cuda.synchronize()
         t_fwd = time.perf_counter()
         s, p, m, t = self.s, self.parity, self.m, self.t
         ev = self.ev
+        side_ms = {}
+        if side and self.sev_set[p]:   # step s - 2's receipts: forward s ran after the main stream waited on them
+            sv = self.sev[p]
+            side_ms = {"side_h1r_ms": sv[0].elapsed_time(sv[1]), "receipt_trees_ms": sv[1].elapsed_time(sv[2])}
         bits = np.arange(t) < m
         self.live[p].copy_(torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)))
         self.admit[p].copy_(torch.frombuffer(bytearray(b"".join(CR.word_rows(CR.words(bits)))), dtype=torch.uint8))
@@ -252,10 +280,10 @@ class Window:
         self.c.build(pre["mid"], self.stepv[0:1])
         self.c.build(pre["round"], self.stepv[0:1])
         ev[3].record()
-        if self.rc_on:
+        if self.rc_on and not side:
             self.c.build(self.rset, self.stepv[1:2])
         ev[4].record()
-        if self.cap_rc is not None:
+        if self.cap_rc is not None and not side:
             self.caps[self.cap_rc]["receipts"] = self.plans[0].out.clone()
             self.caps[self.cap_rc]["r_roots"] = self.rset.roots.clone()
         root = unwords(pre["round"].root(0))
@@ -263,19 +291,23 @@ class Window:
         opening = self.rounds.record(root)
         salt = self.HT.live_salt(self.lch.commitment, opening.coin, s, root)
         t_coin = time.perf_counter()
-        self.salt.copy_(torch.from_numpy(words(salt)))
-        self.step_base.fill_(s * self.u_step)
-        if self.cap_step is not None:
-            self._poison([self.plans[0].seeds])
-        ev[5].record()
-        self.r.launch(self.plans[p], self.salt, version=0, step_base=self.step_base)
-        ev[6].record()
-        ev[6].synchronize()
+        if side:
+            self._side_receipts(main, s, p, salt)
+        else:
+            self.salt.copy_(torch.from_numpy(words(salt)))
+            self.step_base.fill_(s * self.u_step)
+            if self.cap_step is not None:
+                self._poison([self.plans[0].seeds])
+            ev[5].record()
+            self.r.launch(self.plans[p], self.salt, version=0, step_base=self.step_base)
+            ev[6].record()
+            ev[6].synchronize()
         t_end = time.perf_counter()
         ph = {"m": m, "forward_ms": 1e3 * (t_fwd - self.t_before), "a_admit_tables_ms": ev[0].elapsed_time(ev[1]),
               "z_tables_ms": ev[1].elapsed_time(ev[2]), "step_trees_ms": ev[2].elapsed_time(ev[3]),
-              "receipt_trees_ms": ev[3].elapsed_time(ev[4]), "coin_host_ms": 1e3 * (t_coin - t_root),
-              "seeds_ms": ev[5].elapsed_time(ev[6]), "between_ms": 1e3 * (t_end - t_fwd)}
+              "coin_host_ms": 1e3 * (t_coin - t_root), "between_ms": 1e3 * (t_end - t_fwd), **side_ms}
+        if not side:
+            ph.update(receipt_trees_ms=ev[3].elapsed_time(ev[4]), seeds_ms=ev[5].elapsed_time(ev[6]))
         if self.price_y and self.yset is not None:
             ev[7].record()
             self.c.build(self.yset, self.stepv[0:1])
@@ -301,6 +333,34 @@ class Window:
         if self.s == ROUNDS:
             raise RuntimeError(f"the window's {ROUNDS} rounds are spent")
 
+    def _side_receipts(self, main, s: int, p: int, salt: bytes) -> None:
+        """Step s's seeds, units (`h1r_launch` version 2) and receipt trees on the side stream, after its coin, while the
+        engine runs step s + 1.  The main stream first waits for step s - 1's: forward s + 1 overwrites the slots they
+        read, and they share the seeds and receipts buffers; salt, base and step are per parity for the same reason."""
+        self.salt_p[p].copy_(torch.from_numpy(words(salt)))
+        self.base_p[p].fill_(s * self.u_step)
+        self.rstep[p].fill_(s)
+        if self.rc_pending:
+            main.wait_event(self.rc_done)
+        if self.cap_rc is not None:
+            self.caps[self.cap_rc]["receipts"] = self.plans[0].out.clone()
+            self.caps[self.cap_rc]["r_roots"] = self.rset.roots.clone()
+        if self.cap_step is not None:
+            self._poison([self.plans[0].seeds, self.plans[0].out])
+        self.ready.record(main)
+        sv = self.sev[p]
+        with torch.cuda.stream(self.side):
+            self.side.wait_event(self.ready)
+            sv[0].record()
+            self.r.launch(self.plans[p], self.salt_p[p], nowrite=self.cap_step == "control", version=2,
+                          step_base=self.base_p[p])
+            sv[1].record()
+            self.c.build(self.rset, self.rstep[p])
+            sv[2].record()
+            self.rc_done.record()
+        self.rc_pending = True
+        self.sev_set[p] = True
+
     def stats(self) -> dict:
         """Steps so far and the per-step phase medians since the last call, by step size m (decode B32: m = 32)."""
         ph, self.phases = self.phases, []
@@ -318,7 +378,7 @@ class Window:
 def _window(dev) -> Window:
     global WIN
     if WIN is None:
-        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev)
+        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
     return WIN
 
 
@@ -335,11 +395,12 @@ def _fused_mm_fake(xq, s_a, w, s_w, idx):
     return xq.new_empty((xq.shape[0], w.shape[0]), dtype=torch.bfloat16)
 
 
-def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = False) -> None:
-    """Every int8-exact linear through ``dither::fused_mm`` (call before the engine is built, in its process)."""
+def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = False, rc: str = "fused") -> None:
+    """Every int8-exact linear through ``dither::fused_mm`` (call before the engine is built, in its process); `rc` where
+    the receipts run: "fused" in the next step's `h1f` launches, "side" in one `h1r` launch on another stream."""
     from verity_vllm.engine import int8_ops
     from verity_vllm.engine import int8_vllm as IV
-    CFG.update(t=t, h1c=h1c, h1f=h1f, key=key or os.urandom(64), gate=gate)
+    CFG.update(t=t, h1c=h1c, h1f=h1f, key=key or os.urandom(64), gate=gate, rc=rc)
     IV.register()
     orig_pw = IV.Int8PlainLinearMethod.process_weights_after_loading
 
@@ -405,7 +466,8 @@ def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     """Capture `which`'s checks (`Window.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
     (cuBLASLt) on the slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm on the same rows (today's served y),
-    every receipt = h1r (gated against receipts.py) on the saved slots, a few units = h1tile.reference (z and receipt),
+    every receipt = h1r v1 (another unit implementation than the served v2's, gated against receipts.py) on the saved
+    slots, a few units = h1tile.reference (z and receipt),
     every call's A, admit and z roots, the receipt roots of CPU_CALLS and the step's round = commit.py's.  Every buffer
     read was 0xA5 before the kernels wrote it; the control capture's kernels wrote none of them, so it must fail."""
     from verity_vllm.engine import int8_exact as E
@@ -435,7 +497,7 @@ def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
     plan = r.plan([Call(g["a"][w], win.wt[w], s * win.u_step + win.offs[w], roots[w], live) for w in range(L)])
     salt = torch.from_numpy(words(g["salt"])).to(win.dev)
-    r.launch(plan, salt, version=2)
+    r.launch(plan, salt, version=1)
     torch.cuda.synchronize()
     got = g["receipts"]
 

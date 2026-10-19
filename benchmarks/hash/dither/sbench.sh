@@ -2,7 +2,7 @@
 # Dither's served standard number on node 2 (sbench.py), on one leased GPU for at most 40 minutes: libh1c.so and libh1f.so
 # built for sm_120a first (the dither arm's).  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
 # --t 64).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
-# kernels as nodes), then their summary.
+# kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
@@ -27,7 +27,7 @@ export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then
-  NSYS=("$CUDA/bin/nsys" profile -t cuda --cuda-graph-trace=node --sample=none --cpuctxsw=none
+  NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
@@ -40,6 +40,6 @@ echo "sbench: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" stats --report cuda_gpu_kern_sum --format csv -o "$OUT/gate" "$S/gate.nsys-rep" > "$OUT/nsys-stats.log" 2>&1 \
     || echo "sbench: nsys stats rc $?"
-  "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$OUT"/gate_cuda_gpu_kern_sum.csv | tee "$OUT/kernels.json"
+  "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
 fi
 exit "$rc"

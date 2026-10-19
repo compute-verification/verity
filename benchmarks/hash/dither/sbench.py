@@ -24,11 +24,14 @@ Arms:
     dither       exact with every linear's y from Dither's fused GEMM (`dither_fused`: z = xq W^T and its dequantization in
                  one kernel that also computes the previous step's receipts; A, admit and z tables, the round, the live
                  coin and the seeds between steps)
+    dither-side  dither with the receipts in one `h1r` launch a step on a second stream, after the step's coin, beside the
+                 next step (`dither_fused.patch(rc="side")`); the `h1f` launches compute z and y only
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
 its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's, under a CUDA
-profiler range (nsys --capture-range=cudaProfilerApi reads the kernels that ran).  The decode gate compares each arm's
+profiler range and the NVTX range GATE_RANGE (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
+kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4).
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
@@ -128,16 +131,17 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         a = engine_args(gpu_mem)
         eng = build_engine(ckpts, case=ns.role, target=target, max_num_seqs=a.pop("max_num_seqs"), engine_args=a)
         return eng.llm
-    if arm in ("exact", "dither"):
+    if arm in ("exact", "dither", "dither-side"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         a = engine_args(gpu_mem)
-        if arm == "dither":
-            DF.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1f=os.environ["DITHER_H1F"], gate=True)
+        if arm != "exact":
+            DF.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1f=os.environ["DITHER_H1F"], gate=True,
+                     rc="side" if arm == "dither-side" else "fused")
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
-        if arm == "dither":
+        if arm != "exact":
             win = DF.hook(llm)
             llm.dither_stats = win.stats
             llm.dither_win = win
@@ -145,15 +149,16 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     raise ValueError(arm)
 
 
-REF_OF = {"dither": "exact"}
+REF_OF = {"dither": "exact", "dither-side": "exact"}
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
+GATE_RANGE = "verity/dither/gate"   # kernels.py reads the dither worker's kernels inside it
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     import torch
     from vllm import SamplingParams
-    if arm == "dither":
+    if arm.startswith("dither"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
     t0 = time.perf_counter()
@@ -195,9 +200,11 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.synchronize()
                 torch.cuda.profiler.start()
+                torch.cuda.nvtx.range_push(GATE_RANGE)
             t, outs = gen(ps, GATE_TOKENS)
             if prof:
                 torch.cuda.synchronize()
+                torch.cuda.nvtx.range_pop()
                 torch.cuda.profiler.stop()
             res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs]}
             if win is not None:
