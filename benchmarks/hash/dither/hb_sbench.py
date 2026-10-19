@@ -18,6 +18,8 @@
                    The gate's tokens come from the same generation run first with the window disarmed: in one stream
                    the control serves y from the poisoned slot and both faults move y by design, so the armed
                    generation's tokens can't be exact's; the checks read the armed generation's captures.
+    dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
+                   h1k for the calls a warp-a-unit form underfills, h1u for the rest; gated as dither-1s-hbp is.
 
 sbench's arms run in spawned worker processes, which import this file as their main module before unpickling
 `sbench.worker`, so the change below applies in every worker too. Run by hb_served.sh with HB_DITHER_DIR, the source tree's
@@ -48,10 +50,11 @@ def build(arm: str, scratch, gpu_mem: float):
         import hb_one
         hb_one.patch(os.environ["HB_H1U"])
         return _build("dither-1s", scratch, gpu_mem)
-    if arm == "dither-1s-hbp":
+    if arm in ("dither-1s-hbp", "dither-1s-hbk"):
         import hb_one
         import hb_peel
-        hb_one.patch(os.environ.get("HB_H1U_PEEL") or os.environ["HB_H1U"], peel=True)
+        so = os.environ["HB_H1U_KSPLIT"] if arm == "dither-1s-hbk" else os.environ.get("HB_H1U_PEEL") or os.environ["HB_H1U"]
+        hb_one.patch(so, peel=True)
         hb_peel.install()
         llm = _build("dither-1s", scratch, gpu_mem)
         llm.dither_mod = hb_peel
@@ -101,7 +104,8 @@ sbench.REF_OF["dither-hb"] = "exact"
 sbench.REF_OF["dither-1s-hb"] = "exact"
 sbench.TOKENS_GATED["dither-1s-hb"] = False
 sbench.REF_OF["dither-1s-hbp"] = "exact"
-TOKENS_EVERY_REP = ("dither-1s-hbp",)
+sbench.REF_OF["dither-1s-hbk"] = "exact"
+TOKENS_EVERY_REP = ("dither-1s-hbp", "dither-1s-hbk")
 
 if __name__ == "__main__":
     sys.exit(main())

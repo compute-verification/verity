@@ -21,11 +21,12 @@
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
 # on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
 # default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
-# hb_sbench.py adds four arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
+# hb_sbench.py adds five arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
 # (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); dither-1s-hb,
-# dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so); and
+# dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so);
 # dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
-# HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one). The
+# HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one); and dither-1s-hbk,
+# dither-1s-hbp on the unit's K split (an H1U_KSPLIT build, the .so HB_H1U_KSPLIT names). The
 # dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), and dither-1s-hbp's at
 # H1V3_PEEL_SHA too (default 4733b9ab0c, v3 with the peel), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
 # gzip`; a --cwd source tree has no history), else the source's git.
@@ -51,8 +52,9 @@ mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
 [ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
 [ -n "${HB_H1U_PEEL:-}" ] && HB_H1U_PEEL=$INPUTS/$(basename "$HB_H1U_PEEL")
+[ -n "${HB_H1U_KSPLIT:-}" ] && HB_H1U_KSPLIT=$INPUTS/$(basename "$HB_H1U_KSPLIT")
 sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py "$INPUTS"/hb_one.py "$INPUTS"/hb_peel.py ${HB_H1U:+"$HB_H1U"} \
-  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+  ${HB_H1U_PEEL:+"$HB_H1U_PEEL"} ${HB_H1U_KSPLIT:+"$HB_H1U_KSPLIT"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -106,6 +108,12 @@ case " $* " in *dither-1s-hbp*)
     exit 2; }
   [ -n "${HB_H1U_PEEL:-}" ] && export HB_H1U_PEEL ;;
 esac
+case " $* " in *dither-1s-hbk*)
+  [ -f "$INPUTS/hb_peel.py" ] && [ -f "${HB_H1U_KSPLIT:-/nonexistent}" ] || {
+    echo "hb_served.sh: dither-1s-hbk needs --send benchmarks/hash/dither/hb_peel.py and an H1U_KSPLIT build's .so, --env HB_H1U_KSPLIT=ITS_NAME" >&2
+    exit 2; }
+  export HB_H1U_KSPLIT ;;
+esac
 cp "$INPUTS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$INPUTS/BUILD.txt"
 [ "$barch" = "$ARCH" ] || { echo "hb_served.sh: the libraries are $barch's, not $ARCH's" >&2; exit 2; }
@@ -148,7 +156,7 @@ fi
 grep -qs "^def peel_seg" "$S/h1v3p/verity/core/protocols/pouw/circuit/h1tile.py" \
   && export HB_H1V3_PEEL_TREE=$S/h1v3p HB_H1V3_PEEL_SHA=$H1V3_PEEL_SHA
 echo "h1v3_peel ${HB_H1V3_PEEL_SHA:-none}" >> "$OUT/env/wrapper.txt"
-case " $* " in *dither-1s-hbp*)
+case " $* " in *dither-1s-hbp*|*dither-1s-hbk*)
   [ -n "${HB_H1V3_PEEL_TREE:-}" ] || {
     echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel: --send h1v3-$H1V3_PEEL_SHA.tar.gz (git archive $H1V3_PEEL_SHA verity | gzip)" >&2
     exit 2; } ;;
