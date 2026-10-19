@@ -14,12 +14,14 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
   Programming Guide widths; no shared-memory row (DS-100 prices none). Its machine reproduces every DS-100 coefficient.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` as a TS model on the sheet's machine: writer kinds every census MMA
   class (ω = m·n, its destination's 32-bit words a warp) and the uniform `UNI` (2, a UR pair: RT-HOPPER-7); the vector
-  classes CUDA's lane classes; the design's fold on lanes and alone on the uniform datapath; the table level's bytes
-  counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T = ½`, `b_T =
-  0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
-* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
-  ε_skip's skippable work at ALU's price, 0.684891% of ♭'s bound (`eps_budget.design_skip` on DS-100).
-* `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.031474 + DS_alu 0.968526).
+  classes CUDA's lane classes; the fold routes the design's fold and its 2 other bit-exact programs (cp-seg4, cp-seg4u:
+  RT2-HOPPER-1's REDG checkpoints) on lanes, and alone on the uniform datapath at the least of their counts; the table
+  level's bytes counted in ALU, which `b_T = 0` prices at nothing (the census has no load class); A6's floors `q = q_T =
+  ½`, `b_T = 0`; 32768 committed words a unit of honest work (an UTCIMMA_M128_N256 at L = 32).
+* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold (the fold
+  routes' cheapest mix, by share of the words: cp-seg4 19/32, cp-seg4u 13/32), no filler, and ε_skip's skippable work at
+  FFMA's price, 0.688979% of ♭'s bound (`eps_budget.design_skip` on DS-100).
+* `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.500000 + DS_alu 0.500000).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
 
@@ -90,7 +92,9 @@ def d2s : DesignData where
   vec := [1, 2, 0, 14]  -- FFMA, IMAD, ALU, SHFL
   folds := [
     [(0, 17, 1024), (2, 1, 64), (14, 3, 4096)],
-    [(15, 135, 128)]]
+    [(0, 17, 1024), (2, 1, 64), (14, 9, 16384)],
+    [(0, 67, 4096), (2, 1, 64), (14, 17, 16384), (15, 1, 4096)],
+    [(15, 537, 512)]]
   bytes := 0  -- ALU
   q := 1 / 2
   qT := 1 / 2
@@ -100,25 +104,26 @@ def d2s : DesignData where
 def flatFill : Sparse := []
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the data sheet's machine. -/
-noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 2) Unit :=
-  d2s.model 26 13 2 sheet.machine
+noncomputable def model : Model (Fin 26) (SheetRow Pipe) (Fin 13) Unit Empty (Fin 4) Unit :=
+  d2s.model 26 13 4 sheet.machine
 
 /-- ♭'s word production a unit: the MMA and the operand floor. -/
-def flatWords : Sparse := [(9, 0, 1), (18, 1, 1)]
+def flatWords : Sparse := [(18, 1, 1)]
 
-/-- ♭'s fold a unit: the lane fold for 32768 words. -/
-def flatFold : Sparse := [(0, 544, 1), (2, 512, 1), (14, 24, 1)]
+/-- ♭'s fold a unit: the lane fold for 32768 words, the fold routes' cheapest mix, by share of the words: cp-seg4 19/32,
+cp-seg4u 13/32. -/
+def flatFold : Sparse := [(0, 2163, 4), (2, 512, 1), (14, 49, 2), (15, 13, 4)]
 
-/-- ♭'s skippable work a unit, at ALU's price. -/
-def flatSkip : Sparse := [(0, 116431542624, 31035971429)]
+/-- ♭'s skippable work a unit, at FFMA's price. -/
+def flatSkip : Sparse := [(1, 14902624017519, 1986220412374)]
 
 /-- The floor program ♭, labelled. -/
 noncomputable def flat : Labelled (Fin 26) := labelled 26 flatWords flatFold flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : SheetRow Pipe → ℝ
-  | .issue => 7868549 / 250000000
-  | .pipe .alu => 242131451 / 250000000
+  | .issue => 1 / 2
+  | .pipe .alu => 1 / 2
   | _ => 0
 
 /-- The checks a window. -/
