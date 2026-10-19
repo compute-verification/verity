@@ -73,6 +73,7 @@
         "verity/core/protocols/sampled_proofs/",
         "archive/",
         "benchmarks/one_stage/",
+        "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "archive/sp1/benchmarks/dot_product/",

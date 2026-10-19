@@ -1,0 +1,11 @@
+# The proof service's challenger on its auditor host: `serve.py` over `verity.core.protocols.sampled_proofs.remote`, which
+# `run.sh` runs as a research run on a machine beside the prover's. Not a package: the suite runs serve.py as a process
+# over loopback with a test key.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
+          "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/__init__.py", "verity/ml/commitments",
+          "verity/ml/crypto"]
