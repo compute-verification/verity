@@ -153,9 +153,10 @@ theorem epochScope {ι C K : Type} {L : Layout} {F : Form} {W : ℕ} {Cd : ℕ �
     (hWf : (Cd w).Wf) (hδ : 0 < δs) (hL : Sc.LuckProved) : Scope Sc (Cd w) δs :=
   tieScope ι K Sc L F (Cd w) (cls w) δs (E.tie w hw) hWf hδ hL
 
-/-- One salt an epoch, window `w`'s round-`r` coin `(e, r)` whatever `w`, isn't fresh over two windows of a round. -/
-theorem oneSalt_not_fresh {W R : ℕ} (e : ℕ) (hW : 2 ≤ W) (hR : 0 < R) :
-    ¬ CoinsFresh W R (fun _ r => (e, r)) := by
+/-- A coin that doesn't read the window, as main's one salt an epoch (`c` constant), isn't fresh over two windows of a
+round. -/
+theorem oneSalt_not_fresh {C : Type} {W R : ℕ} (c : ℕ → C) (hW : 2 ≤ W) (hR : 0 < R) :
+    ¬ CoinsFresh W R (fun _ r => c r) := by
   intro h
   have h01 := (h 0 0 1 0 (by omega) (by omega) hR hR rfl).1
   omega

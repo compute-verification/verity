@@ -313,14 +313,17 @@ def Llama31Shape : Prop :=
 
 /-- **Every round of an epoch's windows reads its own coin** (RT-SCOPE-6, W5's W-c): `coin w r` is the challenger coin
 the verifier derives window `w`'s round-`r` noise keys from, for `W` windows of `R` rounds, and no two (window, round)
-pairs share one. `Tie.live` is the run's only under it: a coin another round has read was opened before this round's
-commit, so the noise it keys can be computed ahead and streamed. On main one salt spans an epoch's windows
-(`SaltWindows`, `EPOCH_SALT_DOMAIN`) and a call's key reads that salt and its call index only, so two windows' round
-`r` share a coin, which this excludes (`Properties.Served.oneSalt_not_fresh`). SERVE-H1's live window meets it with a
-live epoch a window, whose round `r` coin is opened once, after round `r`'s root (`window.live_families`,
-`rounds_reason`; `coin w r = (w, r)`), as does a seeded salt a window from the certifier's `reveal(w)` or a hash
-binding it to the epoch coin. The verifier derives every key itself, `window.round_key(commitment, coin_r, r, root_r)`
-from the challenger's opening and the recorded root, and reads no salt from the prover's record. -/
+pairs read one coin. With `Tie.live` and the round log's order (each round's coin opened after that round's root) it
+makes every round's coin fresh: a coin another round reads is opened after that round's root, not this one's, so the
+noise it keys could be computed ahead and streamed. On main one salt spans an epoch's windows (`SaltWindows`, the salt
+`audit.Epoch.start` derives from the challenger's salt coin, `EPOCH_SALT_DOMAIN`) and a call's key reads that salt and
+its call index only. `SaltWindows` keeps call indices distinct across the salt's windows, but an index is public, so
+every round of every window reads the one salt coin, opened before the later windows' commits, which this excludes
+(`Properties.Served.oneSalt_not_fresh`). SERVE-H1's live window meets it with a live commitment a window, whose round
+`r` coin is opened once, after round `r`'s root (`window.live_families`, `rounds_reason`; `coin w r = (w, r)`), as does
+a seeded salt a window from the certifier's `reveal(w)` or a hash binding it to the epoch coin. The verifier derives
+every key itself, `window.round_key(commitment, coin_r, r, root_r)` from the challenger's opening and the recorded
+root, and reads no salt from the prover's record. -/
 def CoinsFresh {C : Type} (W R : ℕ) (coin : ℕ → ℕ → C) : Prop :=
   ∀ w r w' r', w < W → w' < W → r < R → r' < R → coin w r = coin w' r' → w = w' ∧ r = r'
 
