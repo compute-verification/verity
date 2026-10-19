@@ -559,8 +559,8 @@ WORD_CHECK_HELP = ("the partition of record's check: Q_word_v1{X,W} (\"16/32[+ex
 QUERY_HELP = f"the query the manifest is built under: {QUERY_OF_RECORD} (the record) or Q_module_body_v1 (A/B only; pair it with --word-check off)"
 CROSS_CALL_HELP = "check that no value is computed in two Calls (verity_vllm.query.cross_call); fail the Build naming every recompute"
 WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity_vllm.query.word.gate_limits): a Definition over its limit is a too-large violation, "
-                       "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.6 KB of host memory "
-                       "per gate cut); the query id is the same under any")
+                       "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
+                       "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
 GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
                     "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
                     "scale; the Commit then needs the guarded-max tap build")
