@@ -1,7 +1,8 @@
 {
- "roots": ["RemoteAudit", "RemoteAudit.Difftest"],
+ "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier"],
  "exempt": {
-  "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof"
+  "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof",
+  "RemoteAudit.VerifierMain": "the remote-audit-verifier executable's entry point, one line; it runs RemoteAudit.Verifier.serve, audited under RemoteAudit.Verifier"
  },
  "layers": {
   "RemoteAudit": {
@@ -11,6 +12,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
+  "toolchain": "67182288f4701e1c98266195f69c10a9fd4d7d7c92bf3b3f6ba382bd0dd31687"
  }
 }

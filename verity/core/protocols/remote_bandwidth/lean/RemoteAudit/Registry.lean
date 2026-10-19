@@ -109,6 +109,21 @@ def step (r : Registry) (node : ByteArray) (k : Nat) (e : Session.Event) :
   let (out, s) ← Session.step s e
   pure (some out, r.withLive node ({ · with sessions := x.sessions.set! k (.running s) }))
 
+/-- Session `k` of the node's live registration, if this registry runs it. -/
+def running (r : Registry) (node : ByteArray) (k : Nat) : Option Session.State :=
+  match (r.live.find? (·.node == node)).bind (·.sessions[k]?) with
+  | some (.running s) => some s
+  | _ => none
+
+/-- Session `k` of the node's live registration set to `s`, if this registry runs it. -/
+def update (r : Registry) (node : ByteArray) (k : Nat) (s : Session.State) : Registry :=
+  r.withLive node fun x => { x with sessions := x.sessions.modify k fun | .running _ => .running s | o => o }
+
+/-- Session `k` of the node's live registration ended with `outcome` where `Session` gives it none: the driver's
+(a message it can't read, `malformed`, or the verifiers' `disagreement`). It counts so at the close. -/
+def abort (r : Registry) (node : ByteArray) (k : Nat) (outcome : String) : Registry :=
+  r.withLive node fun x => { x with sessions := x.sessions.modify k fun _ => .read outcome }
+
 /-- End the node's live registration, its sessions counted as they stand; refused for a node with none live. -/
 def close (r : Registry) (node : ByteArray) : Except String (Option Closed × Registry) := do
   let node ← node? node

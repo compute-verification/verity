@@ -14,11 +14,15 @@ receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
 `Security/Properties/RemoteAudit.lean`.
 
-The verifier of record is still `audit.py`: `benchmarks/remote_session/verifier.py` runs `audit.Session`. It switches
-to the Lean under the 8 Oct ruling (the friction skill): the gap list is empty for the record versions in use, every
-recorded run in the store replayed through the Lean gets the verdict the Python gave, the Python keeps running beside it
-as the reference, the switch is one reversible line, and the protocol's properties move from `Models/` to
-`Properties/`. What the Lean doesn't check yet that `audit.py` does:
+`benchmarks/remote_session/verifier.py` runs both, by its one switch line `VERDICT` (`--verdict`): under `both`, the
+default, the Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`) decides and `audit.Session` runs beside
+it, checking every window too, and a registration, event, window verdict or record on which they differ refuses the
+session at that window as `disagreement`, so a session is accepted only where both accept it; under `lean`
+`audit.Session` keeps the books and compares every event and record but checks no openings; under `python` there is no
+Lean. The default flips to `lean`, the Lean the verifier of record, under the 8 Oct ruling (the friction skill): the
+gap list is empty for the record versions in use, every recorded run in the store replayed through the Lean gets the
+verdict the Python gave, the Python keeps running beside it as the reference, and the protocol's properties move from
+`Models/` to `Properties/`. What the Lean doesn't check yet that `audit.py` does:
 
 - a registration that binds PoUW's tiles, which the Lean refuses;
 - the record past the summary `RemoteAudit.Session` returns: the coins' commitment, the integrity profile and the
