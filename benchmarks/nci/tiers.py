@@ -7,9 +7,10 @@ Efficiency is a sum of four terms, each an upper bound under the model; ``STATUS
 * Unmonitored compute trains at full efficiency.
 * The monitored compute residual (monitored compute that PoUW doesn't attest) trains at full efficiency unless memory
   caps it. A server-window reads its starting state plus what enters during it, ``K_r = state + ingress L``, and
-  contains at most ``K_r Lambda(K_r) / b_a`` counted multiplications (``ThreadedReads`` per region), counting every gate
-  on the server, declared or not. The state is all memory; after a wipe, what the wipe leaves plus what helpers refill
-  within the read deadline; under exhaustion, the HBM the declared workload doesn't hold plus the proof-of-space slack.
+  contains at most ``K_r Lambda(K_r) / b_a`` counted multiplications (``ThreadedOfState`` per region, reads counted by
+  information), counting every gate on the server, declared or not. The state is all memory; after a wipe, what the wipe
+  leaves plus what helpers refill within the read deadline; under exhaustion, the HBM the declared workload doesn't hold
+  plus the proof-of-space slack.
   Ingress is line rate or, under network accounting, side channels plus certified timing plus the NCI-bounded declared
   ingress ``alpha Phi``.
 * Declared compute trains at the thread bound, ``rho_T = b_a / (alpha Lambda(K))`` gates per counted multiplication with
@@ -110,8 +111,10 @@ STATUS = [
      "(d, e) premise, which nothing proves at Kimi's (2048, 4e4)."),
     ("Declared compute, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption budget "
      "is on paper. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
-    ("Memory cap on the residual", "Actual.Windows and ThreadedReads are proved; the composition is on paper and needs "
-     "reads counted by information rather than width (open)."),
+    ("Memory cap on the residual", "Actual.Windows is proved, and so is the thread bound with reads counted by "
+     "information (ThreadedOfState: a region read by a state that is a function of k bits plus an ingress, under "
+     "WeightsSupport). Joining them is on paper: it needs each window's cut as gates, a wipe premise in support form, "
+     "and the reference circuit contained in each window."),
     ("Memory a wipe leaves", "The slack of 1/19 is proved (SecureErasureMeetsFamily, ideal primitive, isolation; in no "
      "lock). Unwipeable memory is declared, not measured. No theorem bounds help during a wipe; the helper term is an "
      "attack."),
