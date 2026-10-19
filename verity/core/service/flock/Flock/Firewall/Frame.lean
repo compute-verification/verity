@@ -20,8 +20,9 @@ round it released): a zerocheck outer coin `r_j = 1`; at the opening's label, a 
 points of the table's reps so far (`prior`'s, then this rep's, each from its coins: `claimPoints`) have less than full rank
 (`maskRank`); level 0's `ρ_0, ρ_1` dependent over F128 (`Zk.rhoIndependent`, the coins after its last masked value); and
 `β = 0` in the inner proof (its third round's coin, counted from `Zk.LABEL_INNER`). Each is a stop the public coins decide
-(`STOP`): nothing of the round leaves. The inner proof is the firewall's own, and its rounds leave through the frame as
-every other round does, unmasked.
+(`STOP`): nothing of the round leaves. The inner proof is the firewall's own, and its rounds leave through the frame
+unmasked, in the form the frame fixes (`innerOwn`): `(ρ, σ)` and `Y` are the frame's, from its draws and the coins, and of
+its other two rounds only `final_c'` and `τ`'s commitment are the firewall's.
 
 The frame makes the pass decision on each device round (`check`, `passes`): the firewall hands it the device round with
 the statement's scheduled round in its place, the skeleton's round with every value zero in the algebraic phase and the
@@ -218,13 +219,16 @@ structure Cfg where
   root : ByteArray
   /-- the mask slot the rank check at the opening's label reads (none: no check) -/
   mask : Option MaskSlot := none
+  /-- the pads tree's two rows, `(h ‖ pad_h)` and `(μ ‖ pad_μ)`, which the inner proof's `Y` combines -/
+  rowH : Array F128 := #[]
+  rowMu : Array F128 := #[]
   deriving Inhabited
 
-/-- The configuration of a rep of layout `l` with the draws `d` and the statement's mask slot: `d`'s pads, and the root the
-frame computes over `d` (`padsRoot`). -/
+/-- The configuration of a rep of layout `l` with the draws `d` and the statement's mask slot: `d`'s pads and rows, and the
+root the frame computes over `d` (`padsRoot`). -/
 def Cfg.ofDraws (l : Zk.PadLayout) (d : Draws) (mask : Option MaskSlot) : Cfg :=
   { lay := l, h := d.h, order := absorbed l, nPiop := (absorbed l).size - nLig l, lig := l.k0 > 0,
-    root := padsRoot l d, mask }
+    root := padsRoot l d, mask, rowH := d.h ++ d.padH, rowMu := d.mu ++ d.padMu }
 
 /-- Whether a rep can start from `c`: a 64-byte root, and every pad of the order among the rep's pads. -/
 def Cfg.check (c : Cfg) : V Unit := do
@@ -251,6 +255,9 @@ structure Masker where
   rho : Array F128 := #[]
   /-- the inner proof's rounds answered so far, once its label came -/
   inner : Option Nat := none
+  /-- the inner proof's `ε` and `β`, once the stream answered them -/
+  eps : F128 := 0
+  beta : F128 := 0
   /-- a round failed the firewall's check or was refused: the algebraic phase's values leave as their pads alone, and the
   rep ends in `stop` -/
   stopped : Bool := false
@@ -322,13 +329,14 @@ def rhoCoins (r c : Array F128) : V (Array F128) := do
 /-- The coins `c` the stream answered the round last released. The algebraic phase's are kept (the claim points), and a
 zerocheck outer coin `r_j = 1` among them is a stop (`zk_veil::Masking::refuse_outer`): at `r_j = 1` the replay's round `j`
 divides by zero. Level 0's after its last masked value are `ρ`'s (`rhoCoins`), and the inner proof's are counted, its
-third being `β` (`innerCoins`). -/
+first being `ε` and its third `β` (`innerCoins`), which its next round reads (`innerOwn`). -/
 def Masker.answer (cfg : Cfg) (s : Masker) (c : Array F128) : V Masker := do
   let some n := s.owed | throw "coins for no round"
   if c.size != n then throw s!"{c.size} coins for a round that squeezed {n}"
   let s := { s with owed := none }
   if let some k := s.inner then
     innerCoins k c
+    let s := if k == 0 then { s with eps := c[0]! } else if k == INNER_BETA then { s with beta := c[0]! } else s
     return { s with inner := some (k + 1) }
   if s.l0 then
     if s.pos != cfg.order.size then return s
@@ -352,8 +360,36 @@ def Masker.unfinished (c : Cfg) (s : Masker) : Option String :=
     some s!"the rep ended after {s.inner.getD 0} of the inner proof's {INNER_ROUNDS} rounds"
   else none
 
+/-- The inner proof's round `k` (`zk_veil::prove_inner`, `Zk.verifyInner`), `content` squeezing `n` coins, as the frame
+fixes it: every frame, kind and length, and every value the frame can compute from its draws and the coins. Round 0 is the
+inner label, `final_c'` and `ε`'s squeeze; round 1 is `(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` and the batching coins;
+round 2 is `τ`'s 64-byte commitment and `β`'s squeeze; round 3 is `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries. Only
+`final_c'` and `τ`'s commitment are the firewall's: `final_c'` masks the device's `final_c` under `h_fc`, and
+`τ = ⟨c, μ ‖ pad_μ⟩` reads the batched constraints the frame does not derive. -/
+def innerOwn (c : Cfg) (s : Masker) (k : Nat) (content : ByteArray) (n : Nat) : V Unit := do
+  let fixedBut := fun (pre : ByteArray) (free : Nat) (post : ByteArray) =>
+    content.size == pre.size + free + post.size && content.extract 0 pre.size == pre
+      && content.extract (pre.size + free) content.size == post
+  match k with
+  | 0 =>
+    if !fixedBut (labelFrame Zk.LABEL_INNER.toUTF8 ++ header 3 1 1) 16 (header 4 1 1) then
+      throw "the inner proof's round 0 is not its label, final_c' and ε's squeeze"
+  | 1 =>
+    let l := c.lay
+    let rs := #[s.eps * c.h[l.fa]! + c.h[l.tx]!, c.h[l.fb]! + c.h[l.ty]!]
+    if content != header 3 2 2 ++ wordBytes rs ++ header 4 2 n then
+      throw "the inner proof's round 1 is not the rep's (ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty) and the batching coins"
+  | 2 =>
+    if !fixedBut (header 5 0 64) 64 (header 4 1 1) then
+      throw "the inner proof's round 2 is not τ's 64-byte commitment and β's squeeze"
+  | 3 =>
+    let y := (c.rowH.zip c.rowMu).map fun (a, b) => a + s.beta * b
+    if content != header 3 2 y.size ++ wordBytes y ++ header 4 2 n then
+      throw "the inner proof's round 3 is not the rep's Y = (h ‖ pad_h) + β (μ ‖ pad_μ) and the queries"
+  | _ => throw s!"a round after the inner proof's {INNER_ROUNDS}"
+
 /-- `round`, with the offsets in `content` of the values it absorbs in the algebraic phase (16 bytes each, ascending): the
-values a device round carries freely, since each leaves masked. -/
+values a device round carries freely, since each leaves masked. A round of the inner proof is the one `innerOwn` fixes. -/
 def roundFree (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteArray × Masker × Array Nat) := do
   if s.inner == some INNER_ROUNDS then throw s!"a round after the inner proof's {INNER_ROUNDS}"
   let mut s := s
@@ -400,6 +436,7 @@ def roundFree (c : Cfg) (s : Masker) (content : ByteArray) (n : Nat) : V (ByteAr
         if pos != content.size then throw "a squeeze before the round's end"
         if len != n then throw s!"the round squeezes {len} coins, the caller asked for {n}"
         if !(kind == 2 || (kind == 1 && n == 1)) then throw s!"a squeeze of kind {kind} and length {n}"
+        if let some k := s.inner then innerOwn c s k content n
         return (out ++ header 4 kind n, { s with owed := some n }, free)
     | x => throw s!"unknown frame op {x}"
   throw "a round without its squeeze"
@@ -493,8 +530,8 @@ release, or `ok LEN' fail WHY` followed by the scheduled round's release as a st
 `coins N` followed by the `16 N` bytes of the coins the stream answered it is answered `ok`; no round is taken before the
 last one's coins. `round N LEN fail` is the scheduled round where no device round passed the firewall's own check (a
 worker that failed, or one Rust's checks fail): it stops the rep first, and is answered `ok LEN'`. `round N LEN` alone is
-one of the inner proof's `INNER_ROUNDS` rounds, the firewall's own, after the opening's: answered `ok LEN'`, and refused
-anywhere else. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep. A round or coins the
+one of the inner proof's `INNER_ROUNDS` rounds, the firewall's own, after the opening's: answered `ok LEN'` when it is the
+round `innerOwn` fixes, and refused anywhere else. A round `round` refuses is answered `err WHY`, releases nothing and stops the rep. A round or coins the
 refusals stop are answered `stop WHY` (`STOP`), nothing of the round leaving, and end the rep. `finish` is answered `ok`,
 or `stop` for a stopped rep, when every masked phase closed with every pad used and the inner proof's rounds all left.
 Anything else is answered `err WHY` and ends the rep: nothing after it leaves. -/
