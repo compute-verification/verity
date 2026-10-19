@@ -1101,6 +1101,20 @@ theorem repCut_eraseC (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes Flo
   rintro ⟨lg, zl, rec⟩
   simp only [replay_eraseL, ligeritoConstraints_eraseL, eraseZ, eraseL_eraseL]
 
+/-- The pads commitment's columns: the code of the pads at every one of its `n` leaves. -/
+theorem innerCommitP_ch {p : PadsZk} {salt : ℕ → ByteArray} {ic : InnerCommit}
+    (h : (innerCommitP hsV p salt : _root_.Flock.V _) = .ok ic) :
+    ic.ch = (Array.range ((p.h ++ p.padH).size.nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)).map
+      (_root_.Flock.Zk.codeAt (p.h ++ p.padH)) := by
+  unfold innerCommitP at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · cases h
+      rfl
+
 end FinRep
 
 /-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`): at opened coins
