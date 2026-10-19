@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 from verity.ml.commitments import RangeIndexedDomain
@@ -64,10 +65,11 @@ def _bytes(t: Any) -> bytes:
     return t.cpu().numpy().tobytes()
 
 
-def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96) -> bytes:
+def call_keys(fixture: Any, salt: bytes, root_b: bytes, index: int, m16: int, hash: str = HM96,
+              binding: Callable[[bytes, int], bytes] = activation_binding) -> bytes:
     """A call's dom_a ‖ unit, as `fixture.keys_of` derives them for matmul `index` of m₁₆ rows, under tree hash `hash` (-h3's
-    is `HM96`)."""
-    return rows_domain(activation_binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
+    is `HM96`) and A's `binding` (`audit.a_binding`'s choice: A's own tree's, or under h4 the Commit tap's)."""
+    return rows_domain(binding(salt, index), index, m16, hash).domain_id + fixture.unit_block(salt, root_b, index)
 
 
 class _Keys:
@@ -75,20 +77,20 @@ class _Keys:
     `call_keys` once at construction, so a tree hash whose domain id isn't that digest of that message fails there.
     ``native`` set to None takes `call_keys` itself (the reference path)."""
 
-    def __init__(self, fixture: Any, salt: bytes, hash: str = HM96):
-        self.native, self.fixture, self.salt, self.hash = hashlib.sha512, fixture, salt, hash
+    def __init__(self, fixture: Any, salt: bytes, hash: str = HM96, binding: Callable[[bytes, int], bytes] = activation_binding):
+        self.native, self.fixture, self.salt, self.hash, self.binding = hashlib.sha512, fixture, salt, hash, binding
         self.positions: dict[int, bytes] = {}
         root = bytes(64)
-        if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash):
+        if self(root, 0, CHECK_ROWS) != call_keys(fixture, salt, root, 0, CHECK_ROWS, hash, binding):
             raise ValueError(f"native keys don't frame tree hash {hash!r} as CommitmentDomain does")
 
     def __call__(self, root_b: bytes, index: int, m16: int) -> bytes:
         if self.native is None:
-            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash)
+            return call_keys(self.fixture, self.salt, root_b, index, m16, self.hash, self.binding)
         pos = self.positions.get(m16)
         if pos is None:
             pos = self.positions[m16] = RangeIndexedDomain(m16).identity_sha512()
-        msg = domain_message(activation_binding(self.salt, index), index, pos, m16, "sha512")
+        msg = domain_message(self.binding(self.salt, index), index, pos, m16, "sha512")
         return self.native(msg).digest() + self.salt + root_b + index.to_bytes(8, "little")
 
 

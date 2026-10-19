@@ -151,7 +151,9 @@ CATEGORIES = (
     ("pearlc:seeds", r"^s512_seeds$"),
     ("pearlc:a_tree", r"^s512_pads$|^hm_leaves$|^s512_frame_leaves$|^s512_nodes$|^s512_tree_small$"),
     ("pearlc:setup", r"^s512_heads$"),
-    ("pearlc:tile_hash", r"^s512_tile_leaves$|^s512_tile_segs$"),
+    ("pearlc:tile_hash", r"^s512_tile_leaves$|^s512_tile_segs$|^pd_tiles_"),
+    ("pearlc:pd_commit", r"^pd_commit_"),
+    ("pearlc:pd_tree", r"^pd_tree_"),
     ("pearlc:folds", r"^s512_folds$"),
     ("pearlc:screen", r"screen|^scatter$"),
     ("fp8:quant", r"fp8_quant|scaled_fp8|segmented_max|dynamic_scaled|per_token_group_quant|quant"),
@@ -170,7 +172,8 @@ FOLDS = {"s512_row_segs": "pearlc:row_digests", "s512_tile_segs": "pearlc:tile_h
 PASS_END = {"pearlc:a_tree": "pearlc:transcript_tree"}
 #: `hash_split_ms`'s groups of Pearl-C categories
 HASH_GROUPS = {"tile_leaves": ("pearlc:tile_hash",),
-               "a_rows": ("pearlc:row_digests", "pearlc:a_tree", "pearlc:seeds", "pearlc:lines_a"),
+               "a_rows": ("pearlc:row_digests", "pearlc:a_tree", "pearlc:seeds", "pearlc:lines_a", "pearlc:pd_commit",
+                          "pearlc:pd_tree"),
                "transcript_tree": ("pearlc:transcript_tree",),
                "screen": ("pearlc:screen",),
                "forming_gemm": ("pearlc:forming", "pearlc:gemm")}

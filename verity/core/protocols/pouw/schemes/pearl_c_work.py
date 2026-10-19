@@ -288,16 +288,18 @@ def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[in
     return debit, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
-def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequence[int]], bool]]:
-    """(parse_row, row_passes): the scheme's own when it brings them, else Pearl-C v1's."""
-    return getattr(scheme, "parse_row", C.parse_f32_row), getattr(scheme, "row_passes", row_passes)
+def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[bytes, int], list[int]], Callable[[Sequence[int]], bool]]:
+    """(parse A's row, parse B's row, row_passes): the scheme's own when it brings them, else Pearl-C v1's, whose A rows
+    under h4 (`PearlC.a_tap`) are the Commit tap's BF16 words."""
+    parse = getattr(scheme, "parse_row", C.parse_f32_row)
+    return (C.parse_tap_row if getattr(scheme, "a_tap", False) else parse), parse, getattr(scheme, "row_passes", row_passes)
 
 
 def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
                  ops) -> str | None:
     """The tile rule on an opened tile whose openings and digest have passed: None, or the reason it fails."""
     k = record.matmul.shape.k
-    parse, passes = _rules(scheme)
+    parse_a, parse_b, passes = _rules(scheme)
     ea, eb = set(record.excluded_a), set(record.excluded_b)
     va, vb = set(record.voluntary_a), set(record.voluntary_b)
     kinds = [("A", i, row, "filler" if i >= record.real_rows else "excluded" if i in ea else "voluntary" if i in va
@@ -319,7 +321,7 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
 
     for side, index, row, kind in kinds:
         try:
-            words = parse(row, k)
+            words = (parse_a if side == "A" else parse_b)(row, k)
         except P.Reject as e:
             return f"{side} row {index} is malformed: {e}"
         if kind == "filler":
@@ -539,9 +541,9 @@ def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[b
     transcript's forming.  Pearl-C's schemes bring none, so `transcript` changes nothing for them.  `voluntary_a` (by
     matmul index) and `voluntary_b` (by weight) are the rows the prover gives up (V-EX, `volunteer`); a row the rules
     exclude stays excluded."""
-    parse, passes = _rules(scheme)
+    parse_a, parse_b, passes = _rules(scheme)
     k_of = {u.weight: u.shape.k for u in epoch.workload.matmuls}
-    excluded_b = {w: {j for j, r in enumerate(rows) if not passes(parse(r, k_of[w]))} for w, rows in weights.items()}
+    excluded_b = {w: {j for j, r in enumerate(rows) if not passes(parse_b(r, k_of[w]))} for w, rows in weights.items()}
     r1 = getattr(scheme, "r1_rows", None) if transcript is not None else None
     extra_a: dict[int, set[int]] = {}
     if r1 is not None:
@@ -558,7 +560,7 @@ def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[b
     for u in epoch.workload.matmuls:
         real = (real_rows or {}).get(u.index, u.shape.m)
         rows = activations[u.index]
-        excluded_a = tuple(i for i in range(real) if not passes(parse(rows[i], u.shape.k)) or i in extra_a.get(u.index, ()))
+        excluded_a = tuple(i for i in range(real) if not passes(parse_a(rows[i], u.shape.k)) or i in extra_a.get(u.index, ()))
         va = tuple(sorted(set((voluntary_a or {}).get(u.index, ())) - set(excluded_a)))
         vb = tuple(sorted(set((voluntary_b or {}).get(u.weight, ())) - excluded_b[u.weight]))
         out.append(UnitRecord(u, real, splits[u.weight].k_kept, excluded_a, tuple(sorted(excluded_b[u.weight])), va, vb))

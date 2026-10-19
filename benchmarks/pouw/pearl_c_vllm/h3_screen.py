@@ -11,7 +11,8 @@ the reference.
 poisoned digests).  ``check`` holds them to the reference (`pearl_c.PearlC`):
 
 - each eager call's row digests are `row_digest`'s and its row seeds `row_seeds` over its m₁₆ committed rows, E_A's line of
-  row i is ``sample_line(seed_i, 0, 0, 0)``, and each padding row r's is ``sample_line(seed_A, 0, 0, r)``;
+  row i is ``sample_line(seed_i, 0, 0, 0)``, and each padding row r's is ``sample_line(seed_A, 0, 0, r)`` (under h4
+  ``sample_line(PAD_SEED, 0, 0, r)``, `pearl_c.PAD_SEED`);
 - every tile of each pass is `Verifier.check_tile`'s: openings, then the leaf recomputed by the reference (E_A per row from
   the row's own seed), so the honest passes' leaves are the reference's bit for bit and the control's are not;
 - and `verify_run`'s audit of each pass, recorded (its tile rule includes -h3's row cap, which an honest row can exceed).
@@ -103,14 +104,15 @@ def _calls(d: Path) -> dict:
         ctx = Context(bytes.fromhex(man["salt"]), Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]),
                       bytes.fromhex(u["root_a"]), bytes.fromhex(wt["root"]))
         data = files(u["rows"])
-        rows = [VR.f32_row(data, u["k"], i) for i in range(u["m"])]
+        rows = [(VR.tap_row if s.a_tap else VR.f32_row)(data, u["k"], i) for i in range(u["m"])]
         seeds = s.row_seeds(ctx, rows, range(u["m"]))
         got = (d / f"call{u['index']}.seeds_a").read_bytes()
         seed_a, ea = (d / f"call{u['index']}.seed_a").read_bytes()[:32], (d / f"call{u['index']}.ea_codes").read_bytes()
         lines = [ea[32 * r:32 * r + 32] for r in range(len(ea) // 32)]
         seed_a = C.S512Seed(seed_a)
         rows_ok = [lines[i] == bytes(C.sample_line(x, 0, 0, 0)) for i, x in enumerate(seeds)]
-        pad_ok = [lines[r] == bytes(C.sample_line(seed_a, 0, 0, r)) for r in range(u["m"], len(lines))]
+        pad = C.PAD_SEED if s.a_tap else seed_a
+        pad_ok = [lines[r] == bytes(C.sample_line(pad, 0, 0, r)) for r in range(u["m"], len(lines))]
         dig = d / f"call{u['index']}.rowdig_a"
         digests = dig.read_bytes()[:64 * u["m"]] == b"".join(C.row_digest(x) for x in rows)
         out.append({"call": u["index"], "m16": u["m"], "padded": len(lines), "seed_a": seed_a == s.noise(ctx).seed_a,

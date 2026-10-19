@@ -44,7 +44,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
-SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR = 16, 8, 75, 76
+SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75, 76, 97, 1
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
@@ -60,7 +60,8 @@ CUDA = {
     "cuDeviceGetName": [C.c_char_p, i32, i32], "cuDeviceGetUuid_v2": [C.c_char_p, i32],
     "cuDeviceGetAttribute": [P(i32), i32, i32], "cuDevicePrimaryCtxRetain": [P(vp), i32], "cuCtxSetCurrent": [vp],
     "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
-    "cuFuncSetAttribute": [vp, i32, i32], "cuMemAlloc_v2": [P(u64), sz], "cuMemFree_v2": [u64],
+    "cuFuncSetAttribute": [vp, i32, i32], "cuFuncGetAttribute": [P(i32), i32, vp], "cuMemAlloc_v2": [P(u64), sz],
+    "cuMemFree_v2": [u64],
     "cuMemsetD8_v2": [u64, C.c_ubyte, sz], "cuMemcpyHtoD_v2": [u64, vp, sz], "cuMemcpyDtoH_v2": [vp, u64, sz],
     "cuMemcpyDtoD_v2": [u64, u64, sz], "cuMemcpyDtoDAsync_v2": [u64, u64, sz, vp], "cuMemGetInfo_v2": [P(sz), P(sz)],
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuCtxSynchronize": [],
@@ -281,6 +282,45 @@ SEGDIG = ("segdig_a", "segdig_b", "segdig_t")
 HM96_WEIGHTS, HM96_TRANSCRIPT, S512_SMALL = 1 << 62, 1 << 63, 128
 
 
+#: hash_decode.cuh's launches at decode, the variants pearl_c_sm120.cu builds (its PD_VARIANT_LIST): pd_commit, A's commitment
+#: in one launch, a CTA a real row (A's pads; each row's digest, hm96 leaf, seed, line key and E_A line; then on the last CTA
+#: to finish A's tree, seed_A, line_a and the filler rows' E_A lines), and pd_tiles, the tile leaves.  pd_commit takes at most
+#: PD_MAX_ROWS rows and k of at most PD_MAX_K (its 192 threads: two warps of pairs a 32 segments, and two more); its paired
+#: compressions take PD_PAIR_SMEM bytes of dynamic shared memory, and PD_GROUP's tiles PD_G a CTA (hash_decode.cuh's)
+PD_SERVED, PD_MAX_ROWS, PD_MAX_K, PD_PAIR_SMEM, PD_G, PD_WHOLE, PD_GROUP = (851, 979), 256, 64 * 256, 2 * 8 * 3080, 4, 64, 128
+
+
+def pd_variant(m_real: int, n: int, k: int) -> int | None:
+    """The pd variant a decode shape takes: 979 (PD_GROUP's tiles, four a CTA) where the tile grid is wide (n at least 16,384)
+    or every row block is full, else 851, the fastest at Llama-3.1-8B's linears at m16 = 32 and 128 (runs
+    r20261018-225110-fbef and r20261018-230602-5632); None outside pd_commit's rows and k."""
+    if m_real > PD_MAX_ROWS or k > PD_MAX_K:
+        return None
+    return 979 if n >= 16384 or m_real % TILE == 0 else 851
+
+
+def pd_setup(dev) -> None:
+    """Once per module: hash_decode.cuh's label states (pd_heads) and hash_fast.cuh's header tables (s512_heads), and each
+    served pd_commit's dynamic shared memory (`pd_smem`), with PD_WHOLE all a CTA may take beside its static, so no side
+    lane's CTA shares its SMs."""
+    if getattr(dev, "pd_smem", None):
+        return
+    if not getattr(dev, "rs_heads", False):
+        dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
+        dev.rs_heads = True
+    dev.launch("pd_heads", 1, 32)
+    optin, smem, tree = dev.get("cuDeviceGetAttribute", MAX_SHARED_OPTIN, dev.dev), {}, {}
+    for v in PD_SERVED:
+        for name, out in (("pd_commit", smem), ("pd_tree", tree)):
+            fn = dev.fn(f"{name}_{v}")
+            out[v] = optin - dev.get("cuFuncGetAttribute", SHARED_SIZE, fn) if v & PD_WHOLE else PD_PAIR_SMEM
+            if out[v] < PD_PAIR_SMEM:
+                raise RuntimeError(f"{name}_{v} gets {out[v]} bytes of dynamic shared memory, not its {PD_PAIR_SMEM}")
+            dev.ck("cuFuncSetAttribute", fn, MAX_DYN, out[v])
+    dev.sync()
+    dev.pd_smem, dev.pd_tree_smem = smem, tree
+
+
 def nonce_args(nonce: int) -> tuple[int, int]:
     """A 64-bit nonce as hm_leaves' i1, i2 (each an int32 slot, its bits)."""
     lo, hi = nonce & 0xFFFFFFFF, nonce >> 32
@@ -314,7 +354,10 @@ class Pipeline:
     which depend on their domains alone), `job` (the weight side, once per weight and epoch), then the call: `commit` (A's
     row tree, seed_A with E_A's line key from its root, and each real row's seed: `seed_a`, `seeds_a`), `forming`, `gemm`
     (gemm_ct, the chain alone, for the split), `cleanup` and `hashing` (the tile leaves and the tile tree); and the
-    baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  The chain runs on 128 x 128
+    baselines' `plain_job`, `plain`, `adopted_job`, `adopted` (at m a multiple of 128 only).  A caller that gives pd's
+    counter (`pd_count`, 16 zero bytes it never writes) gets hash_decode.cuh's launches at decode (`pd`, `pd_variant`'s
+    variant): `commit_a`, pd_commit, does every step of `FUSED` (the commit phase, A's pads and E_A's lines) in one launch,
+    and `hash_leaf` is pd_tiles; the bytes are the same.  The chain runs on 128 x 128
     tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA tiles, but
     A'F_B at 64 x 64 on the `words` kernel's warp tiles.  The 128 x 128 GEMMs run on the mainloop, their operands by the
     tensor maps in `tma` (ML_MAPS).  gemm_pearlc stores C~, U and y.
@@ -337,16 +380,30 @@ class Pipeline:
     kernels' padding, which nothing commits)."""
 
     GEMM_SMEM: dict[str, int] = {}
+    #: the steps one launch does under pd: `commit_a` (pd_commit) for A's pads, row digests, tree, seed_A, row seeds and E_A's
+    #: lines
+    FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea")}
+    #: under `a_tap`: `commit_a` (pd_commit's mode 1) for A's pads, row digests, level 0, row seeds and E_A's lines, and
+    #: `tail_a` (pd_tree) for A's levels and seed_A, which nothing before the tile hashing reads
+    TAP_FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tail_a": ("tree_a", "seed_a")}
 
     def __init__(self, dev: Dev, m: int, n: int, k: int, variant: str, keys: dict[str, int], xa: int, xb: int,
                  bufs: dict[str, int] | None = None, m_real: int | None = None, bm: int | None = None, weight: int = 0,
-                 sha: str | None = None):
+                 sha: str | None = None, a_tap: bool = False):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
-        matmul's, committed and hashed, the rest filler that only the products see."""
+        matmul's, committed and hashed, the rest filler that only the products see.  With `a_tap` (format h4) A's tree is
+        the Commit tap's row table: its row digests are over the BF16 rows xa's FP32 words widen (k u16 words a row, each FP32
+        word's high half: the kernels' narrow mode, so no BF16 copy is staged), under the tap's domain ``dom_a``; and the
+        rows past m_real (the kernels' padding, outside the unit) take their E_A lines under the constant key ``pad``
+        (`pearl_c.PAD_SEED`'s line key), not line_a, so nothing before the GEMM waits on A's root: under pd, `commit_a` is
+        pd_commit's mode 1 and `tail_a` (pd_tree: A's levels, seed_A and line_a) may run after the GEMM (`TAP_FUSED`)."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
+        self.a_tap = a_tap
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
         if self.sha not in ("fast", "ref"):
             raise ValueError(f"sha is 'fast' or 'ref', not {self.sha!r}")
+        if a_tap and (self.sha != "fast" or not keys.get("pad")):
+            raise ValueError("a_tap takes the fast row digests (s512_row_segs' narrow mode) and the pad key ``pad``")
         self.m_real = m if m_real is None else m_real
         self.g = VARIANT_G[variant]
         self.suffix = "" if self.g else "_u"
@@ -365,6 +422,11 @@ class Pipeline:
         self.allocated: list[str] = []
         self.b["xa"], self.b["xb"] = xa, xb
         self.size["xa"], self.size["xb"] = m * self.row_bytes, n * self.row_bytes
+        self.pd = pd_variant(self.m_real, n, k) if self.sha == "fast" and "pd_count" in self.b else None
+        if self.pd is not None:
+            pd_setup(dev)
+            if a_tap:
+                self.FUSED = self.TAP_FUSED
         if self.sha == "fast" and any(x in self.b for x in SEGDIG) and not getattr(dev, "rs_heads", False):
             dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
             dev.sync()
@@ -436,18 +498,25 @@ class Pipeline:
         d, b = self.dev, self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
         block = self.keys["unit"] + 96 if tag == "a" else 0
-        return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
+        narrow = tag == "a" and self.a_tap
+        words = self.k // 2 if narrow else self.k
+        return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count, words,
+                                                            narrow)),
                 (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
-    def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
-        """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
-        s512_row_segs then s512_folds."""
-        d, segs = self.dev, self.k // 256
+    def row_digests(self, x: int, out: int, scratch: int, count: int, k: int | None = None, narrow: bool = False) -> None:
+        """The sha512/row-seg/v1 digests of `count` rows of `k` words (default the pipeline's k) at x into out: s512_rows, or
+        with a scratch buffer s512_row_segs then s512_folds.  `narrow` (h4): x holds 2 k FP32 words a row, each a BF16
+        widened, and the rows hashed are the BF16 rows (s512_row_segs' narrow mode, which s512_rows doesn't have)."""
+        k = k or self.k
+        d, segs = self.dev, k // 256
         if self.sha == "ref" or not scratch:
-            d.launch("s512_rows", count, 128, p=(x, out), i=(count, self.k))
+            if narrow:
+                raise ValueError("s512_rows has no narrow mode: h4's row digests take the segment scratch")
+            d.launch("s512_rows", count, 128, p=(x, out), i=(count, k))
             return
-        d.launch("s512_row_segs", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch), i=(count, self.k))
+        d.launch("s512_row_segs", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch), i=(count, k, int(narrow)))
         d.launch("s512_folds", cdiv(count, RS_FOLD_NT), RS_FOLD_NT, p=(scratch, out), i=(count, segs, count, segs))
 
     def tile_leaves(self) -> None:
@@ -461,6 +530,36 @@ class Pipeline:
         d.launch("s512_tile_segs", cdiv(32 * full + n // TILE * last, RS_FAST_NT), RS_FAST_NT, p=(b["c"], b["u"], b["segdig_t"]),
                  i=(mr, n))
         d.launch("s512_folds", cdiv(self.tiles, RS_FOLD_NT), RS_FOLD_NT, p=(b["segdig_t"], b["leaves"]), i=(self.tiles, 32, full, last))
+
+    def pd_commit(self) -> None:
+        """A's commitment under pd (`FUSED`'s steps), pd_commit in mode 0: a CTA a real row, E_A's lines for all m rows (row
+        i < m_real's under its own line key, the rest under line_a), its counter left zero.  Under `a_tap` (`TAP_FUSED`) mode 1
+        in narrow mode over xa's BF16 halves (k / 2 words a row), the filler lines under the pad key, and no tree above
+        level 0 (`pd_tail`)."""
+        d, b, kk, v = self.dev, self.b, self.keys, self.pd
+        words, mode = (self.k // 2, 1) if self.a_tap else (self.k, 0)
+        s = words // 256
+        d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
+                 p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],
+                    kk["hm"], b["pd_count"], b["seed_a"] if mode == 0 else 0, kk["pad"] if mode else b["line_a"], b["ea_codes"],
+                    0), i=(self.m_real, words, mode, self.m, int(self.a_tap)))
+
+    def pd_tail(self) -> None:
+        """A's tree above level 0, seed_A and line_a after pd_commit's mode 1 (`TAP_FUSED`'s ``tail_a``): pd_tree, one CTA of 128
+        threads, writing no E_A line."""
+        d, b, kk, v = self.dev, self.b, self.keys, self.pd
+        d.launch(f"pd_tree_{v}", 1, 128, d.pd_tree_smem[v],
+                 p=(0, 0, b["tree_a"], 0, 0, kk["unit"], kk["dom_a"], 0, 0, 0, b["seed_a"], b["line_a"], 0, 0),
+                 i=(self.m_real, 0, 0, self.m))
+
+    def pd_tiles(self) -> None:
+        """The tile leaves under pd: pd_tiles, a CTA a tile (32 threads), or with PD_GROUP a CTA of PD_G tiles of a row block."""
+        d, b, v, mr, n = self.dev, self.b, self.pd, self.m_real, self.n
+        p = (b["c"], b["u"], b["leaves"])
+        if v & PD_GROUP:
+            d.launch(f"pd_tiles_{v}", cdiv(mr, TILE) * cdiv(n // TILE, PD_G), 32 * PD_G, PD_PAIR_SMEM // 2, p=p, i=(mr, n))
+        else:
+            d.launch(f"pd_tiles_{v}", self.tiles, 32, p=p, i=(mr, n))
 
     def hm_level0(self, tag: str, x: int, count: int, dom: str, block: int = 0, nonce: tuple[int, int] = (0, 0)) -> None:
         """An `audit.HM96` tree's level 0 over `count` 64-byte values at x: hm_leaves under the salt key, the nonce read at
@@ -557,20 +656,23 @@ class Pipeline:
                ("g", lambda: self.words("fbT128", "faT32", 128, "g")),
                ("pb", lambda: d.launch("pb", cdiv(n * 32, 256), 256, p=(b["epb_codes"], 0, b["bf"], b["g"], b["pb_t"]), i=(n,)))]
         mr, kk, tiles = self.m_real, self.keys, self.tiles
-        ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
+        ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128,
+                                           p=(kk["pad"] if self.a_tap else b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
                                            i=(0, 0, m, NORM_256, mr)))
-        forming = [ea, *form_side("a", m, "xa", "ea_codes", "fa_codes", "at")]
+        pd = self.pd is not None
+        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_cu"])]
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
-        unit = self.tree_setup("a", mr, "dom_a") + self.tree_setup("t", tiles, "dom_t")
-        commit = self.row_tree("a", "xa", mr, "dom_a") + [
+        unit = self.tree_setup("a", mr, "dom_a") * (not pd) + self.tree_setup("t", tiles, "dom_t")
+        fused = [("commit_a", self.pd_commit)] + [("tail_a", self.pd_tail)] * self.a_tap
+        commit = fused if pd else self.row_tree("a", "xa", mr, "dom_a") + [
             ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]), i=(1, 0, 0))),
             ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128, p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]),
                                          i=(mr, 0, 1)))]
-        hashing = [("hash_leaf", self.tile_leaves),
+        hashing = [("hash_leaf", self.pd_tiles if pd else self.tile_leaves),
                    ("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t")),
                    ("tree_t", lambda: self.levels("t", tiles))]
         plain_job = [("plainq_b", lambda: d.launch("plainq", n, 256, p=(b["xb"], b["qb"], b["sb"]), i=(n, k)))]
@@ -624,6 +726,42 @@ def compare(dev: Dev, pipe: Pipeline, name: str, want: bytes, alias: str | None 
             "first": [{"offset": i, "got": got[i:i + 4].hex(), "want": want[i:i + 4].hex()} for i in bad[:6]]}
 
 
+#: what pd's launches write (pd_commit: A's commitment and E_A's lines; pd_tiles: the tile leaves)
+PD_OUTPUTS = ("rowdig_a", "tree_a", "seed_a", "line_a", "seeds_a", "lkeys_a", "ea_codes", "leaves")
+POISON = 0xA5
+
+
+def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
+    """hash_decode.cuh's served launches on `pipe`'s buffers (its C~ and U computed), each variant of PD_SERVED (`commit_a`,
+    then `hash_leaf`) after every output in PD_OUTPUTS is poisoned, against the fixture's bytes; the counter left zero.  The
+    no-write control, the poison with no launch, must fail every output."""
+    count, res = dev.alloc(16), {}
+    pd = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"],
+                  bufs={**pipe.b, "pd_count": count}, m_real=pipe.m_real, bm=BM_D, weight=pipe.weight)
+    if pd.pd is None:
+        dev.free(count)
+        return {"pd@domain": {"ok": False, "why": f"{(pipe.m_real, pipe.n, pipe.k)} is outside pd's domain"}}
+    steps = {nm: fn for nm, _, fn in pd.steps()}
+    for v in (None, *PD_SERVED):
+        for x in PD_OUTPUTS:
+            dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
+        if v is not None:
+            pd.pd = v
+            steps["commit_a"]()
+            steps["hash_leaf"]()
+        dev.sync()
+        for x in PD_OUTPUTS:
+            r = compare(dev, pipe, x, want(x))
+            if v is None:
+                res[f"{x}@pd/no-write"] = {"ok": not r["ok"], "bytes": r["bytes"]}
+            else:
+                res[f"{x}@pd_{v}"] = r
+        if v is not None:
+            res[f"pd_count@pd_{v}"] = {"ok": dev.read(count, 16) == bytes(16), "bytes": 16}
+    dev.free(count)
+    return res
+
+
 def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
     m, n, k = man["shape"]
     load = lambda d, f: open(os.path.join(base, d, f["file"]), "rb").read()  # noqa: E731
@@ -644,6 +782,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             res[name] = compare(dev, pipe, name, want(name))
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
+        res.update(check_pd(dev, pipe, want))
         for tag in ("a", "b"):
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)

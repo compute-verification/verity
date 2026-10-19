@@ -16,6 +16,9 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   kernel directory is the runtime's; naming, gating and selecting one is here, so a bench or a ledger names a variant
   without importing a runtime.
 
+h4 is h3 with A read from the Commit tap (A-BIND, ASK-25's one commitment per tensor): no tree of A's own; A's root and row
+digests are the tap's row table over the linear's BF16 input (`HashFormat.a_rows`).
+
 Stdlib and `verity` only (``tests/test_boundaries.py``).
 """
 from __future__ import annotations
@@ -30,18 +33,23 @@ from typing import Any
 class HashFormat:
     """``seed_a`` is ``unit-root`` when forming reads seed_A from A's root (so A's tree is on the critical path), ``row``
     when each row seeds its own E_A line (h3).  ``row_digest`` is the schema of the row digest a row's seed is keyed on
-    (h3: ``sha512/row-seg/v1``, `rowleaf.sha512_row_seg_digest`), None when rows don't seed."""
+    (h3: ``sha512/row-seg/v1``, `rowleaf.sha512_row_seg_digest`), None when rows don't seed.  ``a_rows`` is what A's
+    committed rows are: ``own``, the scheme's FP32 words in a tree of its own (``audit.activation_binding``), or ``tap``, the
+    Commit tap's row table over the linear's BF16 input (``audit.tap_binding``), whose root and row digests the scheme reads
+    and whose rows it widens to FP32 words in the unit (h4)."""
 
     name: str
     tree_hash: str
     seed_a: str
     row_cap: bool = False
     row_digest: str | None = None
+    a_rows: str = "own"
 
 
 HASH_FORMATS: dict[str, HashFormat] = {
     "h0": HashFormat("h0", "sha256", "unit-root"),
     "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest="sha512/row-seg/v1"),
+    "h4": HashFormat("h4", "hm96-sha512", "row", row_cap=True, row_digest="sha512/row-seg/v1", a_rows="tap"),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``

@@ -271,6 +271,32 @@ def test_a_row_unit_reads_minus_zero_as_zero(side):
     assert run(rows["minus-zero"]) == run(rows["zero"]) and run(rows["minus-zero"])[-1] == 0
 
 
+def test_under_h4_the_a_row_unit_reads_the_taps_bf16_row_and_widens_it_as_wiring():
+    """`Pc8RowATap`'s outputs on a tap row are `Pc8RowA`'s on its widened words (`pearl_c.parse_tap_row`), refused rows
+    included, and those are the scheme's A words; its tile is -h3's; and its ports are `PORTS_H4`, A's bf16 row."""
+    fa, fb = C._basis(SEED, 0, K, C.LINE_NORM_V1), C._basis(SEED, 1, K, C.LINE_NORM_V1)
+    tap = pc8.templates(K, HIDDEN.tile, "sm120", True, "h4")["row_a"]
+    plain = pc8.templates(K, HIDDEN.tile, "sm120", True, "h3")["row_a"]
+    assert tap.id != plain.id and pc8.templates(K, HIDDEN.tile, "sm120", True, "h4")["tile"].id == \
+        pc8.templates(K, HIDDEN.tile, "sm120", True, "h3")["tile"].id
+    e = P.sample_line(SEED, 0, 0, 5)
+    admitted = 0
+    for name, words in _rows("sm120").items():
+        bf = [w >> 16 for w in words]
+        wide = C.parse_f32_row(C.f32_row([b << 16 for b in bf]), K) if all((b >> 7) & 0xFF != 0xFF for b in bf) else None
+        out = evaluate(tap, bf, e, _flat(fa), _flat(fb))
+        assert out == evaluate(plain, [b << 16 for b in bf], e, _flat(fa), _flat(fb)), name
+        if wide is not None:
+            assert C.parse_tap_row(struct.pack(f"<{K}H", *bf), K) == wide, name
+        admitted += out[-1]
+    assert admitted >= 4
+    with pytest.raises(ValueError, match="h3 and h4 only hiding"):
+        pc8.templates(K, HIDDEN.tile, "sm120", False, "h4")
+    CF.check_ports(tap, pc8.PORTS_H4["row_a"], pc8.DERIVATIONS, K, {})
+    with pytest.raises(AssertionError):
+        CF.check_ports(tap, pc8.PORTS["row_a"], pc8.DERIVATIONS, K, {})
+
+
 # ---- the partition ----------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("hidden", [False, True], ids=["plain", "hidden"])

@@ -80,7 +80,7 @@ import verify_run as VR  # noqa: E402
 from verity.ml.commitments import Commitment  # noqa: E402
 from verity.ml.commitments import verify_opening  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
-from verity.core.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, activation_binding, commitment_hash,  # noqa: E402
+from verity.core.protocols.pouw.audit import (ROW_SCHEMA, Transcript, Verifier, a_binding, commitment_hash,  # noqa: E402
                                opened_value, rows_domain, weight_binding)
 from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
@@ -244,7 +244,7 @@ def _openings_ok(job: dict, opened) -> bool:
     epoch, ref = job["epoch"], opened.ref
     u = epoch.workload.matmuls[ref.matmul]
     h = commitment_hash(job["scheme"])
-    da = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, h)
+    da = rows_domain(a_binding(job["scheme"], epoch.salt, u.index), u.index, u.shape.m, h)
     db = rows_domain(weight_binding(u.weight), -2, u.shape.n, h)
     limits = job["verifier"].limits
     return ([o.position for o in opened.a] == list(ref.tile.rows) and [o.position for o in opened.b] == list(ref.tile.cols)

@@ -573,11 +573,11 @@ def test_each_hashing_format_is_on_the_scheme():
     """Each instance carries its format's tree hash, so a device path reads it from the scheme; h0's messages are
     TurboSHAKE128, and a format outside `HASHINGS` is refused."""
     msg = bytes(range(64))
-    assert C.HASHINGS == ("h0", "h3")
+    assert C.HASHINGS == ("h0", "h3", "h4")
     for hashing in C.HASHINGS:
         assert C.PearlC(forming="v1", hashing=hashing).commitment_hash == C.TREE_HASH[hashing]
     assert C.message_digest(msg) == C.turboshake128(msg, C.D_MESSAGE, 32)
-    for bad in ("h1", "h2", "h3s", "h4"):
+    for bad in ("h1", "h2", "h3s", "h5"):
         with pytest.raises(ValueError):
             C.PearlC(hashing=bad)
 
@@ -594,7 +594,7 @@ def test_h3_is_sha512_throughout():
     s, h0 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h3", "h0"))
     assert s.name == "pearl-c-h100-v1-h3" and s.commitment_hash == "hm96-sha512"
     assert "cr/sha-512" in s.certificate.claims and not any("blake3" in c for c in s.certificate.claims)
-    assert dict(s.certificate.parameters)["hashing"] == "h3" and C.ROW_SEEDED == ("h3",)
+    assert dict(s.certificate.parameters)["hashing"] == "h3" and C.ROW_SEEDED == ("h3", "h4")
     assert SchemeId.parse("pearl-c-sm120-v1-h3").hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"]
     assert HASH_FORMATS["h3"].row_digest == "sha512/row-seg/v1"
     ctx, k = CV.ctx_of("h3-rows", (16, 384, 16), 3, 9, wide=True), 384
@@ -682,6 +682,75 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     assert Verifier(s, epoch).check_tile(tr, bad).reason == "activation opening"
     h0 = Verifier(C.PearlC(k_min=32, tile=(16, 16), forming="v1"), epoch).check_tile(tr, opening)
     assert not h0.ok and h0.reason == "activation opening"
+
+
+def test_h4_opens_a_from_the_commit_tap():
+    """-h4 builds no tree of A's own: A's root is the Commit tap's row table over the linear's BF16 rows (hm96-sha512 leaves
+    over each BF16 row's ``sha512/row-seg/v1`` digest, under `tap_binding`), each row's seed is keyed on that digest, and
+    the unit reads A's FP32 words as the BF16 words widened.  The verifier opens A against the tap root under the tap's
+    domain: an honest transcript is accepted; a tampered row, a tile computed from other rows, an -h3 verifier and an -h3
+    transcript are refused."""
+    from dataclasses import replace
+
+    from verity.ml.commitments import CommitmentDomain, hm96
+    from verity.ml.commitments.merkle import tree_levels
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
+    from verity.core.protocols.pouw.audit import (Epoch, Prover, Sampled, Verifier, Workload, a_binding, activation_binding,
+                                                  hm96_salt, reference_kernel, rows_domain, tap_binding)
+    from verity.core.protocols.pouw.serving import HASH_FORMATS, SchemeId
+
+    s4, s3 = (C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing=h) for h in ("h4", "h3"))
+    assert s4.name == "pearl-c-h100-v1-h4" and s4.a_tap and not s3.a_tap and s4.commitment_hash == s3.commitment_hash
+    assert SchemeId.parse("pearl-c-sm120-v1-h4").hashing == "h4" and HASH_FORMATS["h4"].a_rows == "tap"
+    with pytest.raises(ValueError):
+        C.PearlC(forming="v0", hashing="h4")
+    k = 128
+    taps = [C.tap_row([w & 0xFFFF0000 for w in C.parse_f32_row(r, k)]) for r in CV.rows_f32("life", "A", 32, k)]
+    assert all(len(r) == 2 * k for r in taps)
+    assert [C.f32_row(C.parse_tap_row(r, k)) for r in taps] == [C.f32_row([w & 0xFFFF0000 for w in C.parse_f32_row(r, k)])
+                                                               for r in CV.rows_f32("life", "A", 32, k)]
+    rows_b = CV.rows_f32("life", "B", 16, k)
+    work = Workload((Matmul(3, Shape(32, k, 16), 9),))
+    key = bytes(range(100, 132))
+    prover = Prover(s4, {9: rows_b}, salt_key=key)
+    epoch = Epoch.unverified(work, prover.weight_roots, b"beacon")
+    tr = prover.prove(epoch, {3: taps})
+    v = Verifier(s4, epoch)
+    assert v.audit(prover, tr, Sampled(4), b"verifier").accepted
+    assert all(v.check_tile(tr, prover.open(epoch, t)).ok for t in range(2))
+    assert a_binding(s4, epoch.salt, 3) == tap_binding(epoch.salt, 3) != activation_binding(epoch.salt, 3) == a_binding(s3, epoch.salt, 3)
+
+    K = hm96.SHA512.default_key
+    hm = rows_domain(tap_binding(epoch.salt, 3), 3, 32, "hm96-sha512")
+    dom = CommitmentDomain(hm.binding, hm.owner, hm.positions, hash="sha512")
+    hls = [hm96.SHA512.tree_leaf(K, hm96.SHA512.commit_string(K, C.row_digest(r), hm96_salt(key, 3, i))) for i, r in enumerate(taps)]
+    assert tr.activation_roots[0] == tree_levels(dom, [row_leaf(dom, i, hl, SCHEMA_HM96_SHA512_ROW_SEG) for i, hl in enumerate(hls)])[-1][0]
+
+    ctx = Context(epoch.salt, work.matmuls[0], tr.activation_roots[0], prover.weight_roots[9])
+    tile = Tile(tuple(range(16)), tuple(range(16)))
+    ops = s4.encode(ctx, s4.noise(ctx), taps[:16], rows_b, tile)
+    assert ops.a.x == [C.parse_tap_row(r, k) for r in taps[:16]]
+    assert s4.row_seeds(ctx, taps[:2], range(2)) == [C.row_seed(ctx.salt, C.row_digest(r), ctx.root_b, 3, i) for i, r in enumerate(taps[:2])]
+    assert C.row_digest(taps[0]) != C.row_digest(C.f32_row(C.parse_tap_row(taps[0], k)))
+
+    opening = prover.open(epoch, 0)
+    a0 = opening.a[0]
+    bad = replace(opening, a=(replace(a0, value=a0.value[:1] + bytes([a0.value[1] ^ 1]) + a0.value[2:]),) + opening.a[1:])
+    assert v.check_tile(tr, bad).reason == "activation opening"
+    assert Verifier(s3, epoch).check_tile(tr, opening).reason == "activation opening"
+
+    tampered = list(taps)
+    tampered[5] = taps[6]
+    liar = Prover(s4, {9: rows_b}, salt_key=key,
+                  kernel=lambda sc, cx, nz, a, b, ts: reference_kernel(sc, cx, nz, tampered, b, ts))
+    lied = liar.prove(epoch, {3: taps})
+    assert lied.activation_roots == tr.activation_roots
+    assert [v.check_tile(lied, liar.open(epoch, t)).reason for t in range(2)] == ["checked values", ""]
+
+    own = Prover(s3, {9: rows_b}, salt_key=key)
+    tr3 = own.prove(epoch, {3: [C.f32_row(C.parse_tap_row(r, k)) for r in taps]})
+    assert tr3.activation_roots != tr.activation_roots
+    assert v.check_tile(tr3, own.open(epoch, 0)).reason == "activation opening"
 
 
 def test_v1_domain_rules():
