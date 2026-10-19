@@ -676,7 +676,7 @@ def _edu_page(d: dict):
 def fetch_edu(sink: Sink, target: int, rng: random.Random, work: Path) -> None:
     def host(d):
         return ".".join(requests.utils.urlparse(d["url"]).netloc.lower().split(".")[-3:])
-    fetch_cc(sink, target, rng, work, EDU_PREFIXES, _edu_page, host, 4, 1200)
+    fetch_cc(sink, target, rng, work, EDU_PREFIXES, _edu_page, host, 4, 3000)
 
 
 # ----------------------------------------------------------------------------------------------------------- gov-legal
@@ -701,7 +701,7 @@ def fetch_gov_legal(sink: Sink, target: int, rng: random.Random) -> None:
             "fields[]": ["raw_text_url", "title", "type", "publication_date", "document_number", "html_url"]})
         docs = (r.json() if r else {}).get("results", [])
         rng.shuffle(docs)
-        for doc in docs[:30]:
+        for doc in docs[:60]:
             if got >= fr_target or not doc.get("raw_text_url"):
                 continue
             t = get(doc["raw_text_url"])
@@ -737,10 +737,10 @@ def fetch_gov_legal(sink: Sink, target: int, rng: random.Random) -> None:
             time.sleep(1)
         url = d.get("next")
         for _ in range(rng.randrange(0, 4)):
-            if not url:
+            r = get(url) if url else None
+            if not r:
                 break
-            r = get(url)
-            url = r.json().get("next") if r else None
+            url = r.json().get("next")
         print(f"gov-legal court: {got} bytes", file=sys.stderr)
     got = sink.source_bytes.get("GovInfo BILLS", 0)
     r = get(f"https://api.govinfo.gov/published/{DATE}/{UNTIL}", params={
@@ -961,27 +961,34 @@ def assemble(work: Path, out: Path, seed: int) -> None:
             seen_sh |= sh
             ok.append(d)
         kept[stratum] = ok
-    todo = [d for ds in kept.values() for d in ds if d["id"] not in cache]
-    print(f"infini-gram: {len(todo)} documents to check", file=sys.stderr)
+    # documents are checked in the order the splits take them, until a stratum's clean bytes cover them with a margin;
+    # the rest are spare, neither checked nor used
+    need = int((TARGET_BYTES + CALIBRATION_BYTES) * 1.1)
+    unchecked = 0
     with cf.ThreadPoolExecutor(8) as ex:
-        for i, (d, c) in enumerate(zip(todo, ex.map(lambda d: contamination(d["text"]), todo))):
-            cache[d["id"]] = c
-            if i % 100 == 0:
+        for stratum, ds in kept.items():
+            clean_docs, have, i = [], 0, 0
+            while i < len(ds) and (stratum == "mixed" or have < need):
+                batch, i = ds[i:i + 64], i + 64
+                todo = [d for d in batch if d["id"] not in cache]
+                for d, c in zip(todo, ex.map(lambda d: contamination(d["text"]), todo)):
+                    cache[d["id"]] = c
                 cache_path.write_text(json.dumps(cache))
-                print(f"infini-gram: {i}/{len(todo)}", file=sys.stderr)
-    cache_path.write_text(json.dumps(cache))
-    for stratum, ds in kept.items():
-        clean_docs = []
-        for d in ds:
-            c = cache[d["id"]]
-            if c["failed"] > c["probes"] // 2:
-                dropped.append({"id": d["id"], "why": "infini-gram unreachable"})
-            elif c["hits"] >= HIT_LIMIT:
-                dropped.append({"id": d["id"], "why": f"pretraining overlap ({c['hits']} of {c['probes']} spans)"})
-            else:
-                d["overlap"] = c
-                clean_docs.append(d)
-        kept[stratum] = clean_docs
+                for d in batch:
+                    c = cache[d["id"]]
+                    if c["failed"] > c["probes"] // 2:
+                        dropped.append({"id": d["id"], "why": "infini-gram unreachable"})
+                    elif c["hits"] >= HIT_LIMIT:
+                        dropped.append({"id": d["id"],
+                                        "why": f"pretraining overlap ({c['hits']} of {c['probes']} spans)"})
+                    else:
+                        d["overlap"] = c
+                        clean_docs.append(d)
+                        have += len(d["text"].encode())
+            unchecked += len(ds) - min(i, len(ds))
+            print(f"infini-gram {stratum}: {len(clean_docs)} clean of {min(i, len(ds))} checked, {have} bytes",
+                  file=sys.stderr)
+            kept[stratum] = clean_docs
     avail = {s: sum(len(d["text"].encode()) for d in kept[s]) for s in STRATA}
     per = min(TARGET_BYTES, min(avail[s] for s in STRATA if avail[s]) - CALIBRATION_BYTES)
     broad, calib, spare = [], [], []
@@ -1024,7 +1031,7 @@ def assemble(work: Path, out: Path, seed: int) -> None:
              "cap_bytes": CAP_BYTES, "shingle_words": SHINGLE, "near_duplicate": NEAR_DUP, "probes": PROBES,
              "hit_limit": HIT_LIMIT, "indexes": INDEXES, "seed": seed, "common_crawl": CC_CRAWL,
              "per_stratum_bytes": per, "strata": stats, "mixed_docs": len(kept["mixed"]), "b2_docs": len(b2),
-             "b2_bytes": t, "dropped": dropped, "spare": len(spare)}
+             "b2_bytes": t, "dropped": dropped, "spare": len(spare) + unchecked}
     (out / "build.json").write_text(json.dumps(build, indent=1, ensure_ascii=False) + "\n")
     (out / "corpus.py").write_text(Path(__file__).read_text())
     lines = []
