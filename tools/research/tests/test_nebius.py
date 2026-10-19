@@ -963,8 +963,9 @@ def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(t
     fr = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fr)
     monkeypatch.setattr(fr, "disk_pct", lambda path: 0.0)
+    monkeypatch.setattr(fr, "claim", lambda name, k: ("48-55", None))   # cores: test_nebius_fill_timing's pool tests
     started, stopped = [], []
-    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False: started.append((p.name, h)) or fr.running.__setitem__(
+    monkeypatch.setattr(fr, "start", lambda p, h, backfill=False, claim_fd=None: started.append((p.name, h)) or fr.running.__setitem__(
         p.name, {"h": h, "t0": len(fr.running), "pid": 0}))
     monkeypatch.setattr(fr, "stop", lambda name, why, requeue=True: stopped.append(name))
     q = tmp_path / "q"
