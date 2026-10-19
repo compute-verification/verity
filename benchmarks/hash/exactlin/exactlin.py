@@ -16,7 +16,9 @@ use tl.div_rn, an inline cvt.rni, enable_reflect_ftz=False and enable_fp_fusion=
 for exactly these instructions.  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
 bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is `CONFIGS`
 (ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
-self-zeroing `Workspace`, and the last split applies the epilogue.  The product needs no row
+self-zeroing `Workspace`, and the last split applies the epilogue.  A TMA config runs `exactlin_scaled_mm_tma`, the same
+product and epilogue with X and W read through host tensor descriptors (kernel parameters, so a graph captures them;
+out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs no row
 padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (int8_exact pads only because torch._int_mm
 refuses M <= 16).  Non-finite activations are outside the statement and not gated.
 """
@@ -119,6 +121,24 @@ def exactlin_scaled_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, ws_ptr, cnt_ptr, M, 
             _epilogue(tot, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
 
 
+@triton.jit
+def exactlin_scaled_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, M, N, K, stride_cm, BLOCK_M: tl.constexpr,
+                           BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr, WARP_SPECIALIZE: tl.constexpr):
+    pid = tl.program_id(0)
+    num_pid_n = tl.cdiv(N, BLOCK_N)
+    off_m = (pid // num_pid_n) * BLOCK_M
+    off_n = (pid % num_pid_n) * BLOCK_N
+    acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32)
+    # the descriptors' out-of-bounds boxes read zeros, so the tail tiles need no masks
+    for k in tl.range(0, tl.cdiv(K, BLOCK_K), warp_specialize=WARP_SPECIALIZE):
+        a = a_desc.load([off_m, k * BLOCK_K])
+        b = b_desc.load([off_n, k * BLOCK_K])
+        acc = tl.dot(a, b.T, acc, out_dtype=tl.int32)
+    offs_m = off_m + tl.arange(0, BLOCK_M).to(tl.int64)
+    offs_n = off_n + tl.arange(0, BLOCK_N).to(tl.int64)
+    _epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, offs_m < M, offs_n < N, stride_cm)
+
+
 def quant_warps(k: int) -> int:
     return 16
 
@@ -136,22 +156,23 @@ def tiles(m: int, n: int) -> tuple[int, int, int]:
 
 
 class Cfg(tuple):
-    """(BLOCK_M, BLOCK_N, BLOCK_K, num_warps, num_stages, SPLIT_K); `Cfg.parse("32x64x256:w4:s3:k2")`."""
+    """(BLOCK_M, BLOCK_N, BLOCK_K, num_warps, num_stages, SPLIT_K, TMA); `Cfg.parse("32x64x256:w4:s3:k2")`.  TMA 1 is
+    `exactlin_scaled_mm_tma` (host tensor descriptors, SPLIT_K 1), 2 the same warp-specialized, 0 the pointer kernel."""
 
-    def __new__(cls, bm, bn, bk, warps=4, stages=3, split=1):
-        return super().__new__(cls, (bm, bn, bk, warps, stages, split))
+    def __new__(cls, bm, bn, bk, warps=4, stages=3, split=1, tma=0):
+        return super().__new__(cls, (bm, bn, bk, warps, stages, split, tma))
 
     @classmethod
     def parse(cls, text: str) -> Cfg:
         dims, *rest = text.split(":")
-        kw = {"w": 4, "s": 3, "k": 1}
+        kw = {"w": 4, "s": 3, "k": 1, "t": 0}
         for r in rest:
             kw[r[0]] = int(r[1:])
-        return cls(*map(int, dims.split("x")), kw["w"], kw["s"], kw["k"])
+        return cls(*map(int, dims.split("x")), kw["w"], kw["s"], kw["k"], kw["t"])
 
     def __str__(self) -> str:
-        bm, bn, bk, w, s, k = self
-        return f"{bm}x{bn}x{bk}:w{w}:s{s}:k{k}"
+        bm, bn, bk, w, s, k, t = self
+        return f"{bm}x{bn}x{bk}:w{w}:s{s}:k{k}" + (f":t{t}" if t else "")
 
 
 def default_cfg(m: int, n: int, k: int) -> Cfg:
@@ -249,8 +270,16 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
     assert s_a.dtype == torch.float32 and s_a.numel() == m and s_a.is_contiguous()
     assert s_w.dtype == torch.float32 and s_w.numel() == n and s_w.is_contiguous()
     assert y.dtype == torch.bfloat16 and y.shape == (m, n) and y.stride(1) == 1
-    bm, bn, bk, warps, stages, split = cfg or default_cfg(m, n, k)
+    bm, bn, bk, warps, stages, split, tma = cfg or default_cfg(m, n, k)
     tiles_mn = triton.cdiv(m, bm) * triton.cdiv(n, bn)
+    if tma:
+        from triton.tools.tensor_descriptor import TensorDescriptor
+        assert split == 1, cfg
+        a_desc = TensorDescriptor.from_tensor(xq, [bm, bk])
+        b_desc = TensorDescriptor.from_tensor(w, [bn, bk])
+        return exactlin_scaled_mm_tma[(tiles_mn,)](a_desc, b_desc, s_a, s_w, y, m, n, k, y.stride(0), BLOCK_M=bm,
+                                                   BLOCK_N=bn, BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, num_warps=warps,
+                                                   num_stages=stages, **OPTS)
     if split > 1:
         assert work is not None and m * n <= work.ws.numel() and tiles_mn <= work.cnt.numel(), (m, n, tiles_mn)
         ws, cnt = work.ws, work.cnt
@@ -317,7 +346,7 @@ def product(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Ten
                 _WORK[dev] = Workspace(xq.device)
             work = _WORK.get(dev)
             if work is None:
-                cfg = Cfg(*cfg[:5], 1)
+                cfg = Cfg(*cfg[:5], 1, cfg[6])
         scaled_mm(xq, s_a, w, s_w.reshape(-1), y, cfg, work)
     return y
 

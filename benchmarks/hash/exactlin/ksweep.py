@@ -4,7 +4,8 @@ quantizer's warps beside it.
 Per shape (n, k, m), with int8_exact's xq and s_a of the gate's edge-row activations and `kbench.copies_for` weight
 copies (so the weights stream from DRAM):
 
-    coarse   `coarse_grid(m)`: (BLOCK_M, BLOCK_N, BLOCK_K, SPLIT_K) by m, 4 warps, 3 stages: 3 interleaved items
+    coarse   `coarse_grid(m)`: (BLOCK_M, BLOCK_N, BLOCK_K, SPLIT_K) by m, 4 warps, 3 stages (with `--tma` the TMA
+             kernel's too): 3 interleaved items
     refine   the best `top` of coarse across warps x stages: 3 interleaved items
     final    the best `top` of refine, vLLM's tiles (the fused path's default) and stock's triton_scaled_mm on the same
              xq: `reps` interleaved items
@@ -18,6 +19,7 @@ Writes sweep.jsonl (every config's record), best.json ({"arch", "table": {"n,k":
 ...]}}, what exactlin.CONFIGS[arch] takes) and quant.json.
 
     python ksweep.py --out OUT [--models llama-3.1-8b,qwen3-8b] [--ms 1,16,32,64,256] [--top 4] [--reps 9] [--skip-quant]
+                     [--tma]
 """
 from __future__ import annotations
 
@@ -40,12 +42,16 @@ STAGES = (2, 3, 4, 5)
 QUANT_WARPS = (4, 8, 16, 32)
 
 
-def coarse_grid(m: int) -> list[X.Cfg]:
-    """BLOCK_M by m; narrow tiles and split-K only where M is small enough that the tiles fill under a wave."""
+def coarse_grid(m: int, tma: bool = False) -> list[X.Cfg]:
+    """BLOCK_M by m; narrow tiles and split-K only where M is small enough that the tiles fill under a wave.  `tma` adds
+    the TMA kernel, plain and warp-specialized, at BLOCK_K <= 256 (a TMA box is at most 256 a side)."""
     bms = (16,) if m <= 16 else (32,) if m <= 32 else (32, 64) if m <= 64 else (64, 128) if m <= 512 else (128,)
     bns = (16, 32, 64, 128) if m <= 64 else (64, 128, 256)
     splits = (1, 2, 4) if m <= 256 else (1,)
-    return [X.Cfg(bm, bn, bk, 4, 3, sp) for bm in bms for bn in bns for bk in BKS for sp in splits]
+    grid = [X.Cfg(bm, bn, bk, 4, 3, sp) for bm in bms for bn in bns for bk in BKS for sp in splits]
+    if tma:
+        grid += [X.Cfg(bm, bn, bk, 4, 3, 1, t) for bm in bms for bn in bns for bk in (64, 128, 256) for t in (1, 2)]
+    return grid
 
 
 def log(out: Path, rec: dict) -> None:
@@ -130,15 +136,15 @@ def best(med: dict, top: int, skip=()) -> list[X.Cfg]:
     return [X.Cfg.parse(c) for c, _ in sorted(((c, u) for c, u in med.items() if c not in skip), key=lambda cu: cu[1])[:top]]
 
 
-def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock) -> dict:
+def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps: int, clock, tma: bool = False) -> dict:
     from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
         triton_scaled_mm,
     )
     table: dict = {}
     for n, k, m, names in kgate.shapes_of(models, ms):
         shape = Shape(n, k, m)
-        med = stage(out, shape, coarse_grid(m), 3, clock, "coarse")
-        refine = [X.Cfg(*c[:3], w, st, c[5]) for c in best(med, top) for w in WARPS for st in STAGES]
+        med = stage(out, shape, coarse_grid(m, tma), 3, clock, "coarse")
+        refine = [X.Cfg(*c[:3], w, st, *c[5:]) for c in best(med, top) for w in WARPS for st in STAGES]
         med = stage(out, shape, list(dict.fromkeys(refine)), 3, clock, "refine")
         vt = X.default_cfg(m, n, k)
         sa2 = shape.sa.reshape(-1, 1)
@@ -199,6 +205,7 @@ def main() -> int:
     ap.add_argument("--top", type=int, default=4)
     ap.add_argument("--reps", type=int, default=9)
     ap.add_argument("--skip-quant", action="store_true")
+    ap.add_argument("--tma", action="store_true", help="add the TMA kernel's configs to the coarse grid")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -207,7 +214,7 @@ def main() -> int:
     clock = kbench.nvml()
     if not a.skip_quant:
         (out / "quant.json").write_text(json.dumps(quant(out, ms, a.reps, clock), indent=1) + "\n")
-    table = gemm(out, models, ms, a.top, a.reps, clock)
+    table = gemm(out, models, ms, a.top, a.reps, clock, a.tma)
     (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models,
                                                "table": table}, indent=1) + "\n")
     return 0
