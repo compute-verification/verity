@@ -5,6 +5,7 @@ import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.SplitRateMerged
 import Proofs.Accounting.Compose.BindingOfECR
 import Proofs.Accounting.Compose.CircuitWork
+import Proofs.Accounting.Compose.WholeLuckOfEntropy
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -237,7 +238,7 @@ theorem BindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
   exact Binding.bindingOfECR
 
 theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy := by
-  sorry
+  exact Whole.wholeLuckOfEntropy
 
 theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
   exact WorkProof.circuitWork
