@@ -7,9 +7,10 @@
 # kinds: a8_kinds.py on each sent descriptor (inputs/*.json.gz), JSON in $OUT/kinds-<name>.json.
 # audit: a8.py on the sent value slices and checkpoint subset (inputs/a8-values*.tar, inputs/a8-ckpt*.tar, both from
 #   a8_slice.py), or on a8.py --save-values' directory (inputs/a8-saved*.tar, which skips the fold), the probe's table
-#   (inputs/kinds*.json) and the load-time roles (inputs/derive-report.json); records in $OUT/a8.
+#   (inputs/kinds*.json) and the load-time roles (inputs/derive-report.json); records in $OUT/a8. With A8_REPROBE=K1,K2 the
+#   table's kinds K1 and K2 are probed again first (a8_kinds.py --table, $OUT/kinds-reprobe.json) and the audit reads that.
 # env: A8_MODE  A8_MEM_GB (the job's --mem-gb)  A8_JOBS (a8_kinds' --jobs)  A8_CHILD_GB (its --mem-gb)  A8_ONLY (its --only)
-#      A8_K (a8.py's --k)  A8_CACHE (the build cache, kept on the node)  A8_ARGS (more a8.py arguments)
+#      A8_K (a8.py's --k)  A8_CACHE (the build cache, kept on the node)  A8_ARGS (more a8.py arguments)  A8_REPROBE
 # Kept in $OUT/a8: a8's records and logs, the public files and the sessions; never a prover's file (inst-*), a circuit (its
 # pin is kept) or a session's archive.
 set -uo pipefail
@@ -50,8 +51,15 @@ audit)
     VARG=(--values "$V")
   fi
   log "a8: values $(du -sh "$V" | cut -f1) (${VARG[0]}), k ${A8_K:-default}"
+  KINDS=$(ls "$IN"/kinds*.json | head -1)
+  if [ -n "${A8_REPROBE:-}" ]; then
+    log "a8: probing $A8_REPROBE again from $(basename "$KINDS")"
+    "$PY" benchmarks/one_stage/a8_kinds.py --table "$KINDS" --only "$A8_REPROBE" --out "$OUT/kinds-reprobe.json" \
+      --jobs "${A8_JOBS:-4}" --mem-gb "${A8_CHILD_GB:-160}" 2>&1 | tee -a "$OUT/kinds-reprobe.log" | cut -c1-2000
+    KINDS=$OUT/kinds-reprobe.json
+  fi
   # shellcheck disable=SC2086
-  "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" "${VARG[@]}" --kinds "$(ls "$IN"/kinds*.json | head -1)" \
+  "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" "${VARG[@]}" --kinds "$KINDS" \
     --roles "$IN/derive-report.json" --out "$W/a8" ${A8_K:+--k "$A8_K"} ${A8_ARGS:-} \
     2>&1 | tee -a "$OUT/a8.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}

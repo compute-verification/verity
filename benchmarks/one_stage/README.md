@@ -20,7 +20,8 @@ negatives.
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
   unproved can carry and its δ the draw's.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is GLM-5.3 TP8 B1's served step, rank 0: `a8_kinds.py` censuses
-  the request Program's root Calls by Definition kind and tries one unit of each through M0; `a8_slice.py` cuts the
+  the request Program's root Calls by Definition kind and tries one unit of each through M0 (a kind whose word units M0
+  refuses, through its Boolean version's); `a8_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a8.py` stages each lowering kind's
   units from those values, one template each, under the stratified law, proved under `--zk` and held by the Lean verifier;
   `a8_table.py` renders the per-kind table and its gap lines from the audits' summaries.

@@ -24,7 +24,9 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a8_kinds.chain`) give each
   unit's arguments and returns. Each is packed into the unit's rows (`a8_kinds.rows_of`, an output row per output port,
   `a8_kinds.out_rows`) and staged by C-Flock's `UnitStager` bound to the partition, whose IR reference check and the
-  transcript's returns must agree.
+  transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
+  MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
+  same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.
 * **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
   draw; the verifier's Lean stratified draw over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
@@ -432,6 +434,80 @@ def evaluate_units(spec, unit, args: list[np.ndarray], n: int, full_gates: int) 
             "seconds": round(time.time() - t0, 1)}
 
 
+def _reaches(c, unit_id: str) -> bool:
+    return any(s[0] in ("call", "scan") and (s[1].target == unit_id or _reaches(s[1], unit_id)) for s in c.steps)
+
+
+def _run_units(c, args: np.ndarray, unit_id: str, sink: list, n: int) -> np.ndarray:
+    """`evaluation.bits._run`, keeping in ``sink`` the argument and return bits of instance 0's first ``n`` calls of
+    ``unit_id``."""
+    from verity.ml.circuits.evaluation import bits as BS
+    words = args.shape[1]
+    W = np.empty((c.size, words), dtype=np.uint64)
+    W[0] = 0
+    W[1] = ~np.uint64(0)
+    W[2:2 + c.n_params] = args
+    for step in c.steps:
+        if step[0] == "gates":
+            for kind, out, a, b in step[1]:
+                W[out] = W[a] & W[b] if kind == 0 else W[a] ^ W[b] if kind == 1 else ~W[a]
+        elif step[0] == "call":
+            _, child, members, base, w = step
+            if child.target != unit_id and _reaches(child, unit_id):
+                for i, mem in enumerate(members):
+                    W[base + i * w:base + (i + 1) * w] = _run_units(child, W[mem], unit_id, sink, n)
+                continue
+            per = max(1, BS._ROW_BUDGET // (8 * child.size * words))
+            for lo in range(0, len(members), per):
+                m = members[lo:lo + per]
+                k = len(m)
+                rows = W[m].transpose(1, 0, 2).reshape(m.shape[1], k * words)
+                W[base + lo * w:base + (lo + k) * w] = BS._run(child, rows).reshape(w, k, words).transpose(1, 0, 2).reshape(k * w, words)
+            if child.target == unit_id:
+                for i in range(min(len(members), n - len(sink))):
+                    sink.append(([int(x) for x in W[members[i], 0] & np.uint64(1)],
+                                 [int(x) for x in W[base + i * w:base + (i + 1) * w, 0] & np.uint64(1)]))
+        else:
+            if _reaches(step[1], unit_id) or step[1].target == unit_id:
+                raise NotImplementedError(f"{c.target}: a call of {unit_id} inside a scan")
+            _, child, init, xs, shared, nn, cl, base = step
+            carry, ys = W[init], []
+            for m in range(nn):
+                parts = [carry] + [W[r[m * e:(m + 1) * e]] for r, e in xs] + [W[r] for r in shared]
+                r = BS._run(child, np.concatenate(parts) if parts else np.empty((0, words), np.uint64))
+                carry = r[:cl]
+                ys.append(r[cl:])
+            W[base:base + cl] = carry
+            if ys:
+                y = np.concatenate(ys)
+                W[base + cl:base + cl + len(y)] = y
+    return W[c.ret_idx]
+
+
+def boolean_units(spec, unit, args: list[np.ndarray], n: int, full_gates: int) -> dict:
+    """`evaluate_units` for a Boolean Call: ``spec`` evaluated bit-sliced (`evaluation.bits`) on the word operands (element j
+    of a parameter's word view is its word leaf j), its first ``n`` calls of ``unit`` with their argument and return bits, and
+    the Call's returns as words (``call_out``, element j of the return's word view at word leaf j, as `call_twin` reads a
+    word Call's)."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.evaluation import bits as BS
+    t0 = time.time()
+    c = BS.compile(spec)
+    cols = []
+    for pi, (w, t) in enumerate(zip(args, c.params)):
+        widths = BL.elements(t)
+        if w.size != len(widths):
+            raise ValueError(f"parameter {pi}: {w.size} words for {len(widths)} elements")
+        cols.append(BS._to_bits(np.asarray(w, dtype=np.uint64).reshape(1, -1), widths))
+    sink: list = []
+    ret = _run_units(c, BS._pack(np.concatenate(cols, axis=1)), unit.id, sink, n)
+    if not sink:
+        raise ValueError(f"no {unit.id} call in {spec.id}")
+    got = BS._to_words(BS._unpack(ret, 1), BL.elements(c.ret))[0]
+    return {"in": [s[0] for s in sink], "out": [s[1] for s in sink], "call_out": [int(x) for x in got], "gates": spec.gates,
+            "evaluated": spec.gates, "seconds": round(time.time() - t0, 1)}
+
+
 def pack(vals, widths, pad16: bool = False) -> np.ndarray:
     """Leaves little-endian bit-concatenated (`class_statement.unit_lowering`'s rows) as u16 words."""
     bits = []
@@ -485,10 +561,13 @@ def unit_rows(unit, rows_spec, leaves_in: list[list[int]], leaves_out: list[list
     return rows, outs
 
 
-def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit_gates: int, probed: str | None = None):
-    """The kind's Calls in the chosen steps and layers (layer-less Calls too), each with its unit: the deepest Definition of
-    the Call's chain in the probed unit's family. Calls of the probed specialization come first (the unit the table sized;
-    prefill's attention, say, has one per prefix length), then by step preference."""
+def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit_gates: int, probed: str | None = None,
+         boolean: bool = False):
+    """The kind's Calls in the chosen steps and layers (layer-less Calls too), each with the Definition evaluated (the Call's,
+    or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
+    family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
+    prefix length), then by step preference."""
+    from verity_vllm.program.boolean import boolean_version
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:
@@ -500,18 +579,23 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     cands.sort(key=lambda m: (m["spec"] != probed, steps.index(m["step"]), m["event"]))
     for m in cands:
         spec = res.body.nodes[m["node"]].fn
-        unit = next((f for f, _n in reversed(K.chain(spec, unit_gates)) if K.family(f.id) == unit_fam), None)
+        top = boolean_version(spec) if boolean else spec
+        unit = next((f for f, _n in reversed(K.chain(top, unit_gates, boolean)) if K.family(f.id) == unit_fam), None)
         if unit is not None:
-            yield m, spec, unit
+            yield m, spec, top, unit
 
 
 def kind_values(res, store, vals, rec: dict, a) -> dict:
     """One kind: a Call whose operands resolve, evaluated and held to its output snapshot, and its first ``--per-kind`` units'
-    rows; a kind whose unit is the Call itself takes one unit from each of up to ``--per-kind`` Calls of that Definition."""
+    rows; a kind whose unit is the Call itself takes one unit from each of up to ``--per-kind`` Calls of that Definition. A
+    kind the table lowers through its Boolean version (``boolean``) evaluates that version on the Call's operands
+    (`boolean_units`) and stages its unit from it."""
     steps, layers = [int(s) for s in a.steps.split(",")], {int(x) for x in a.layers.split(",")}
     why, tried = [], 0
     acc: dict | None = None
-    for m, spec, unit in pick(res, rec["kind"], K.family(rec["unit"]), steps, layers, a.unit_gates, rec.get("call")):
+    boolean = bool(rec.get("boolean"))
+    evaluate = boolean_units if boolean else evaluate_units
+    for m, spec, top, unit in pick(res, rec["kind"], K.family(rec["unit"]), steps, layers, a.unit_gates, rec.get("call"), boolean):
         if acc is not None and len(acc["in"]) >= a.per_kind:
             break
         if acc is not None and spec.id != acc["spec"]:
@@ -528,7 +612,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
         if rows_spec is None:
             return {"staged": False, "why": f"{unit.id}: the parameters' bits are not whole u16 words"}
         n_want = a.per_kind - (len(acc["in"]) if acc else 0)
-        ev = evaluate_units(spec, unit, args, n_want, a.full_gates)
+        ev = evaluate(top, unit, args, n_want, a.full_gates)
         twin = {**call_twin(store, m, ev.pop("call_out"), write_events(res)), "operands": "snapshot"}
         if twin["agree"] is False:
             try:
@@ -536,7 +620,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             except LookupError:
                 alt = args
             if any(not np.array_equal(x, y) for x, y in zip(alt, args)):
-                ev2 = evaluate_units(spec, unit, alt, n_want, a.full_gates)
+                ev2 = evaluate(top, unit, alt, n_want, a.full_gates)
                 twin2 = {**call_twin(store, m, ev2.pop("call_out"), write_events(res)), "operands": "provenance"}
                 if twin2["agree"] is not False:
                     ev, twin = ev2, twin2
@@ -551,7 +635,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
         acc["calls"].append({"name": m["name"], "step": m["step"], "event": m["event"], "node": m["node"]})
         acc["twins"].append(twin)
         acc["evals"].append(ev)
-        if unit.id != spec.id:
+        if unit.id != top.id:
             break
     if acc is None:
         return {"staged": False, "why": "; ".join(why[-3:]) or "no Call of this kind in the slice's steps and layers"}
@@ -562,7 +646,7 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
     c0 = acc["calls"][0]
     return {"staged": True, "unit": acc["unit"], "spec": acc["spec"], "name": c0["name"], "step": c0["step"], "event": c0["event"],
             "calls": acc["calls"], "rows_spec": acc["rows_spec"], "rows": rows, "outs": outs, "n": len(acc["in"]), "twin": twin,
-            "eval": acc["evals"][0], "skipped_calls": why[-3:]}
+            "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
 
 
 def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:

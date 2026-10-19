@@ -8,15 +8,19 @@ lowered through C-Flock's circuit prover (M0's `UnitStager`, the path `a8.py` st
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a8_kinds.py --descriptor descriptor.json.gz --out kinds.json [--jobs 8] [--mem-gb 96]
+    ... a8_kinds.py --table kinds.json --only MoeSum_v1,TokenSelect_v1 --out kinds-b.json   # those kinds again, census kept
 
 The unit of a kind is the Call's coordinate: from the Call, the callee carrying at least half its gates while the
 Definition has more than `--unit-gates` word gates. A unit M0 cannot compose for its shape (no input row past one SHA-512
-block, or a row that is not whole u16 words) is replaced by the Definition above it, up to the Call. Each kind runs in a
-forked child of the process that decoded the Program, so lowerings registered for one kind never meet another's.
+block, or a row that is not whole u16 words) is replaced by the Definition above it, up to the Call. A kind none of whose
+word units lowers takes its Boolean version's chain (`program.boolean.boolean_version`, descending into Boolean callees) the
+same way; the record then names it (``boolean``) and keeps the word outcome (``word_outcome``). Each kind runs in a forked
+child of the process that decoded the Program, so lowerings registered for one kind never meet another's.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import resource
@@ -50,23 +54,24 @@ def mult(nd) -> int:
     return nd.n if nd.form in ("batch", "scan") else 1
 
 
-def callees(fn) -> tuple[Counter, dict]:
-    """Each composite callee of fn's body: how many times fn calls it, by id."""
+def callees(fn, boolean: bool = False) -> tuple[Counter, dict]:
+    """Each composite callee of fn's body: how many times fn calls it, by id (with ``boolean``, Boolean callees too)."""
     m, defs = Counter(), {}
     for nd in fn.body.nodes:
-        if isinstance(nd.fn, PrimitiveDefinition) or is_boolean(nd.fn):
+        if isinstance(nd.fn, PrimitiveDefinition) or (is_boolean(nd.fn) and not boolean):
             continue
         m[nd.fn.id] += mult(nd)
         defs[nd.fn.id] = nd.fn
     return m, defs
 
 
-def chain(fn, unit_gates: int) -> list[tuple[object, int]]:
+def chain(fn, unit_gates: int, boolean: bool = False) -> list[tuple[object, int]]:
     """The Call and its dominant callees, each with how many times its parent calls it: down while a Definition has more
-    than unit_gates gates and one callee carries at least half of them."""
+    than unit_gates gates and one callee carries at least half of them. A word Call's chain stops at a Boolean Definition (a
+    piece of M0's lowering); ``boolean``, for a Call's Boolean version, descends into them."""
     out = [(fn, 1)]
-    while not isinstance(fn, PrimitiveDefinition) and not is_boolean(fn) and fn.gates > unit_gates:
-        m, defs = callees(fn)
+    while not isinstance(fn, PrimitiveDefinition) and (boolean or not is_boolean(fn)) and fn.gates > unit_gates:
+        m, defs = callees(fn, boolean)
         if not m:
             break
         best = max(m, key=lambda k: m[k] * defs[k].gates)
@@ -169,9 +174,8 @@ def try_lower(fn) -> dict:
             "out_words": st.out_words, "seconds": round(time.time() - t, 1)}
 
 
-def probe_kind(fam: str, fn, unit_gates: int) -> dict:
-    memo: dict = {}
-    ch = chain(fn, unit_gates)
+def descend(ch: list[tuple[object, int]]) -> tuple[list[dict], list[dict]]:
+    """The chain's path, and `try_lower` on its units from the deepest up while M0 refuses one for its shape."""
     per = 1
     path = []
     for f, m in ch:
@@ -189,9 +193,32 @@ def probe_kind(fam: str, fn, unit_gates: int) -> dict:
         if r["outcome"] != "shape":
             break
         i -= 1
+    return path, attempts
+
+
+def probe_kind(fam: str, fn, unit_gates: int) -> dict:
+    """The kind's unit: the word Call's chain, else (no unit of it lowers) its Boolean version's (`program.boolean`), whose
+    batches of small Boolean Definitions give units that read rows past one SHA-512 block where the word coordinate's do not."""
+    from verity_vllm.program.boolean import boolean_version
+    memo: dict = {}
+    ch = chain(fn, unit_gates)
+    path, attempts = descend(ch)
     last = attempts[-1] if attempts else {"outcome": "none", "why": "no composite Definition on the chain"}
     rec = {"kind": fam, "call": fn.id, "call_gates": fn.gates, "path": path, "attempts": attempts, "outcome": last["outcome"],
            "unit": last.get("unit"), "unit_gates": last.get("gates"), "units_per_call": last.get("per_call")}
+    if rec["outcome"] != "lowers":
+        try:
+            bv = boolean_version(fn)
+        except LookupError:
+            bv = None
+        if bv is not None:
+            bpath, battempts = descend(chain(bv, unit_gates, boolean=True))
+            rec["boolean_path"], rec["boolean_attempts"] = bpath, battempts
+            if battempts and battempts[-1]["outcome"] == "lowers":
+                b = battempts[-1]
+                rec.update(boolean=bv.id, word_outcome=rec["outcome"], outcome="lowers", unit=b["unit"], unit_gates=b["gates"],
+                           units_per_call=b["per_call"])
+                return rec
     if last["outcome"] == "no-piece" and last.get("unit"):
         u = next(f for f, _m in ch if f.id == last["unit"])
         rec["missing"] = missing_pieces(u, memo)
@@ -214,6 +241,31 @@ def probe_kind(fam: str, fn, unit_gates: int) -> dict:
     return rec
 
 
+def definition(spec: str):
+    """The registered specialization a Definition id names (``Fam_vN{K=V,...}``, each value a Python literal or else a
+    registered Definition's id)."""
+    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity_vllm.query.call_scope import specialization
+    load_registry()
+    fam, _, body = spec.partition("{")
+    statics, depth, cur = {}, 0, ""
+    for ch in body[:-1] + ",":
+        depth += (ch in "{[(") - (ch in "}])")
+        if ch == "," and depth == 0:
+            k, _, v = cur.partition("=")
+            try:
+                statics[k.strip()] = ast.literal_eval(v.strip())
+            except (ValueError, SyntaxError):
+                statics[k.strip()] = v.strip()
+            cur = ""
+        else:
+            cur += ch
+    fn = specialization(fam, {k: v for k, v in statics.items() if k})
+    if fn.id != spec:
+        raise ValueError(f"{spec} binds as {fn.id}")
+    return fn
+
+
 def census(prog) -> tuple[dict, int]:
     calls, gates, specs = Counter(), Counter(), {}
     for nd in prog.root.body.nodes:
@@ -230,7 +282,9 @@ def census(prog) -> tuple[dict, int]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--descriptor", required=True)
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--descriptor")
+    src.add_argument("--table", help="an earlier run's table: probe its kinds again from their recorded specializations, census kept")
     ap.add_argument("--out", required=True)
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--mem-gb", type=int, default=96, help="each child's address-space cap")
@@ -241,12 +295,22 @@ def main() -> int:
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    prog, digest = load_program(a.descriptor)
-    kinds, comp = census(prog)
-    print(f"A8 census: {len(kinds)} kinds, {comp} computing gates of {prog.gates}, decoded in {time.time() - t0:.0f} s", flush=True)
-    by_id = {}
-    for nd in prog.root.body.nodes:
-        by_id.setdefault(nd.fn.id, nd.fn)
+    if a.table:
+        old = json.loads(Path(a.table).read_text())
+        census_keys = ("calls", "gates", "share", "specs", "spec")
+        kinds = {f: {k: r[k] for k in census_keys if k in r} for f, r in old["kinds"].items()}
+        digest, gates_all, comp = old.get("program_digest"), old.get("gates"), old.get("computing_gates")
+        todo_ids = {kinds[f]["spec"] for f in (a.only.split(",") if a.only else kinds) if f in kinds}
+        by_id = {s: definition(s) for s in todo_ids}
+        print(f"A8 table {a.table}: {len(kinds)} kinds, probing {sorted(todo_ids)}", flush=True)
+    else:
+        prog, digest = load_program(a.descriptor)
+        kinds, comp = census(prog)
+        gates_all = prog.gates
+        print(f"A8 census: {len(kinds)} kinds, {comp} computing gates of {prog.gates}, decoded in {time.time() - t0:.0f} s", flush=True)
+        by_id = {}
+        for nd in prog.root.body.nodes:
+            by_id.setdefault(nd.fn.id, nd.fn)
     todo = [f for f in sorted(kinds, key=lambda f: -kinds[f]["gates"]) if kinds[f]["gates"] > 0]
     if a.only:
         todo = [f for f in todo if f in a.only.split(",")]
@@ -297,8 +361,11 @@ def main() -> int:
         reap(block=False)
         if running:
             time.sleep(2)
-    doc = {"descriptor": a.descriptor, "program_digest": digest, "gates": prog.gates, "computing_gates": comp,
-           "kinds": {f: {**kinds[f], **results.get(f, {"outcome": "not probed"})} for f in sorted(kinds, key=lambda f: -kinds[f]["gates"])},
+    unprobed = (lambda f: old["kinds"][f]) if a.table else (lambda f: {**kinds[f], "outcome": "not probed"})
+    doc = {"descriptor": a.descriptor or old.get("descriptor"), "program_digest": digest, "gates": gates_all, "computing_gates": comp,
+           **({"table": a.table, "reprobed": sorted(results)} if a.table else {}),
+           "kinds": {f: {**kinds[f], **results[f]} if f in results else unprobed(f)
+                     for f in sorted(kinds, key=lambda f: -kinds[f]["gates"])},
            "seconds": round(time.time() - t0, 1)}
     out.write_text(json.dumps(doc, indent=1, default=str))
     tally = Counter(r.get("outcome") for r in doc["kinds"].values() if r["gates"] > 0)
