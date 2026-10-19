@@ -1,6 +1,7 @@
 """The circuit database (`verity_vllm.records`): the index, a TP row published from its row dir, pinned and loaded back by row id, its
 conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
-supersedes, a job's bundle read with no store, and a checkpoint's staging event."""
+supersedes, a row file not done only at its public cap refused before anything is written, a job's bundle read with no store, and a
+checkpoint's staging event."""
 from __future__ import annotations
 
 import gzip
@@ -76,15 +77,22 @@ def _row_dir(tmp_path: Path, digest: str | None = None) -> Path:
     return d
 
 
+def _capped(doc: dict) -> dict:
+    return {**doc, "sampling": {**doc["sampling"], "ignore_eos": True}}
+
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    """The store the research CLI selects: a local root with a directory as its remote; and no capture map but the test's."""
+    """The store the research CLI selects: a local root with a directory as its remote; no capture map but the test's; and ROW's
+    file done only at its public cap, as the file of a row `publish` indexes must be."""
     (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
     monkeypatch.setattr(records, "INDEX", tmp_path / "records.json")
     (tmp_path / "maps").mkdir()
     monkeypatch.setattr(CM, "MAPS", tmp_path / "maps")
+    _w(tmp_path / "workloads" / f"{ROW}.json", _capped(json.loads((WORKLOADS / f"{ROW}.json").read_text())))
+    monkeypatch.setattr(CR, "WORKLOADS", tmp_path / "workloads")
     return LocalStore(tmp_path / "store", config_path=tmp_path / "store.toml")
 
 
@@ -205,6 +213,31 @@ def test_publish_refuses_a_failed_row_another_builds_commit_and_a_build_without_
     with pytest.raises(UsageError, match="lacks 1 Program descriptor"):
         records.publish(d, ROW, evidence=records.evidence_of(short), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=SUMMARY)
     assert records.index() == {}
+
+
+def test_publish_refuses_a_row_not_done_only_at_its_public_cap_before_it_writes_anything(tmp_path, store):
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    wl, eos = CR.WORKLOADS / f"{ROW}.json", json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    publish = lambda: records.publish(d, ROW, evidence=records.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits",  # noqa: E731
+                                      tier="fast", summary=_served(d))
+    stored = store.artifact_ids()
+    for doc, why in ((eos, r"its done source is 'eos-token' \(sampling.ignore_eos is None\)"),
+                     ({**_capped(eos), "sampling": {**_capped(eos)["sampling"], "stop_token_ids": [128001]}},
+                      r"sampling\.stop_token_ids \[128001\] stops a request before its cap")):
+        _w(wl, doc)
+        with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and {why}.*"
+                                             r"publishes nothing"):
+            publish()
+        assert store.artifact_ids() == stored and not records.INDEX.exists(), "a refused row writes no record and no index"
+    _w(wl, _capped(eos))
+    art = publish()
+    stored, indexed = store.artifact_ids(), records.index()
+    _w(wl, eos)
+    with pytest.raises(UsageError, match=rf"{ROW}: a row of record .* its done source is 'eos-token'"):
+        publish()
+    assert store.artifact_ids() == stored and records.index() == indexed and indexed[ROW]["record"] == art, \
+        "a row of record whose file no longer is at its cap is not re-published"
 
 
 def test_evidence_ids_are_checked():

@@ -62,7 +62,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import RowId, UsageError, option
+from verity_vllm.config import RowId, UsageError, done_source_refusal, option
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline.store_data import data, fetch, listing
 
@@ -306,9 +306,13 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     record (with `newest`, one `evidence` leaves out cites `newest_capture`) or named a gap, then label it `row=<id>`, preserve it
     with its label and index it with its Programs as the row's pins (`tier`: its neutrality rebuild's, by default the index's).
     A switched row's (`config_record.aot_of`) are its AOT Build's predicted Programs: a Build that traced one is refused, and the
-    row keeps its `aot`.  Returns its art: id."""
+    row keeps its `aot`.  The row it indexes is a row of record, so a row file not done only at its public cap
+    (`config.done_source_refusal`) is refused before anything is written.  Returns its art: id."""
     if not TREE.fullmatch(tree):
         raise UsageError(f"--tree {tree!r}: REF@SHA, the code the row was built and served from")
+    wl = CR.WORKLOADS / f"{row}.json"
+    if why := done_source_refusal(json.loads(wl.read_text()) if wl.is_file() else {"sweep": {"row_id": row}}, of_record=True):
+        raise UsageError(f"{why}; publish would index it as one, so it publishes nothing")
     tier = _tier(row, tier)
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
     if rec["outcome"] != "PASS":

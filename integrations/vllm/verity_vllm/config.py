@@ -301,12 +301,13 @@ def done_source(workload: Mapping[str, Any]) -> str:
     return "public-cap" if isinstance(s, Mapping) and s.get("ignore_eos") is True else "eos-token"
 
 
-def done_source_refusal(workload: Mapping[str, Any]) -> str | None:
-    """Why a row of record (its ``sweep.row_id`` in ``RECORDS``) is not done only at its public cap; None for a row that is, and for
-    every research row (its EOS stops are its own).  Row files (:meth:`RowConfig.of`), the row precheck and GP-01 refuse with it."""
+def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False) -> str | None:
+    """Why a row of record (its ``sweep.row_id`` in ``RECORDS``, or any row with ``of_record``: the row ``records publish`` indexes)
+    is not done only at its public cap; None for a row that is, and for every research row (its EOS stops are its own).  Row files
+    (:meth:`RowConfig.of`), the row precheck, GP-01 and ``records publish`` refuse with it."""
     sw = workload.get("sweep")
     row = sw.get("row_id") if isinstance(sw, Mapping) else None
-    if row not in rows_of_record():
+    if not of_record and row not in rows_of_record():
         return None
     s = workload.get("sampling") if isinstance(workload.get("sampling"), Mapping) else {}
     if done_source(workload) != "public-cap":
