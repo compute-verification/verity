@@ -27,6 +27,7 @@ import Proofs.Flock.Claims.ZK.Masked
 import Proofs.Flock.Claims.ZK.MaskTape
 import Proofs.Flock.Claims.ZK.MaskFamily
 import Proofs.Flock.Claims.ZK.OneTape
+import Proofs.Flock.Claims.ZK.Round0
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -153,6 +154,9 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   words in `TapeZk.mask`), the tape `Masked.TapePlan.ofLayout`, read with fibers of one size at every statement
   (`Masked.fibersEq_ofLayout`); `Flock.zk_deployZk_masked_layout_gap` is `Flock.zk_deployZk_masked_gap` with `hT`
   discharged, under the round plan's `Causal` and the three rounds.
+* `Round0`: toward the first round, level 0's tree at a `--zk` table places every position at its index at every coin
+  vector (`Composed.coinedOf_s0_val`), so its column at tree position `p` is the code at `ω_p` (`Composed.colAt`,
+  `Composed.coinedOf_col0At`), the same at every coin vector.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
