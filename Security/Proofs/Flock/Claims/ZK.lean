@@ -67,6 +67,7 @@ import Proofs.Flock.Claims.ZK.FinExe
 import Proofs.Flock.Claims.ZK.FinPads
 import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.FinTau
+import Proofs.Flock.Claims.ZK.FinInner
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -324,13 +325,16 @@ import Proofs.Flock.Claims.ZK.Stop
 * `InnerBatched`: `Masked.innerBatched`, the batched constraint over the shared phases' constraints holds at the honest
   pads.
 * `SimLig`: `Masked.simLig`, hybrid 1 against hybrid 2: Ligerito from the cut's source is the session's.
-* `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids and the per-rep statements `RepOpenFinal`,
-  `RepExact` and `RepPoints` (`Masked.finExe_of_open`).
+* `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids and the per-rep statements `RepTau` and
+  `RepOpenRest` (`Masked.finExe_of_rest`), and `FinalRest`'s level-0 half: level 0's opened rows and salts read from the
+  views are the session's (`Masked.repOpenRest_l0`).
 * `FinPads`: `Masked.repOpenRest_pads`, `FinalRest`'s pads half: the pads' opened columns and salts read from the views
   are the session's.
 * `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
 * `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
   shared phases, at the rep's `ε` slot's coins.
+* `FinInner`: `Masked.repOpenRest` (both halves of `FinalRest`) and `Masked.finExe_of_inner`, `FinExe` from `LiveEnd`,
+  `SimCommit`, the three hybrids and `InnerTauVal`.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from
   `SplitInner`'s `InnerTauVal`, `CausalExe`, and `FinExe`'s `RepOpenFinal`, `RepExact` and `RepPoints`: `hstep` from
   `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop`,
