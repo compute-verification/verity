@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["requests", "trafilatura", "warcio", "py3langid", "beautifulsoup4", "lxml"]
+# dependencies = ["requests", "trafilatura", "warcio", "py3langid", "beautifulsoup4", "lxml", "mwparserfromhell"]
 # ///
 """Build the evaluation corpus of the routed-mixture probes: the Notion page's section 4 (CPU only).
 
@@ -90,6 +90,10 @@ def get(url: str, *, tries: int = 4, pause: float = 2.0, **kw) -> requests.Respo
             return r
         if r is not None and r.status_code in (403, 404, 410, 451):
             return None
+        if r is not None and r.status_code == 429:
+            wait = r.headers.get("Retry-After", "")
+            time.sleep(min(300, int(wait)) if wait.isdigit() else 60)
+            continue
         time.sleep(pause * (2 ** i))
     return None
 
@@ -417,9 +421,41 @@ def wiki_api(lang: str, **params) -> dict | None:
     return r.json() if r else None
 
 
-def _wiki_batch(lang: str, start: dt.datetime) -> list[tuple[str, dt.date, str]]:
+#: link prefixes that aren't article text: files, categories and interlanguage links in the six languages
+WIKI_NONTEXT = {"file", "image", "media", "category", "datei", "bild", "kategorie", "fichier", "catégorie", "archivo",
+                "imagen", "categoría", "файл", "изображение", "категория", "ファイル", "画像", "カテゴリ"}
+
+
+def wiki_plain(wikitext: str) -> str:
+    """Plain text of an article's wikitext: templates, references and non-text links removed, headings kept as
+    ``== Title ==`` lines (as the TextExtracts API gives them)."""
+    import mwparserfromhell as mw
+
+    code = mw.parse(wikitext)
+    for tag in code.filter_tags(recursive=False, matches=lambda t: str(t.tag).lower() in ("ref", "references", "gallery")):
+        try:
+            code.remove(tag)
+        except ValueError:
+            pass
+    for link in code.filter_wikilinks(recursive=True):
+        prefix = str(link.title).lstrip(":").split(":", 1)
+        if len(prefix) == 2 and (prefix[0].strip().lower() in WIKI_NONTEXT
+                                 or re.fullmatch(r"[a-z]{2,3}(-[a-z]+)?", prefix[0].strip())):
+            try:
+                code.remove(link)
+            except ValueError:
+                pass
+    for h in code.filter_headings(recursive=False):
+        code.replace(h, f"\n\u27e6{h.level}\u27e7{h.title.strip_code().strip()}\u27e6/\u27e7\n")
+    text = code.strip_code(normalize=True, collapse=True)
+    text = re.sub(r"[^\S\n]{2,}", " ", text)
+    return re.sub("\u27e6(\\d)\u27e7(.*?)\u27e6/\u27e7", lambda m: f"{'=' * int(m[1])} {m[2]} {'=' * int(m[1])}", text)
+
+
+def _wiki_batch(lang: str, start: dt.datetime, known: set) -> list[tuple[str, dt.date, str]]:
     """(title, creation day, plain text) of every article of at least 9,000 wikitext bytes among the 500 created in
-    ``lang`` from ``start`` on."""
+    ``lang`` from ``start`` on, but those whose ids are ``known``. Wikitext comes 50 pages a request (TextExtracts
+    gives one full page a request, and Wikimedia rate-limits anonymous clients)."""
     res = wiki_api(lang, action="query", list="logevents", letype="create", lenamespace=0, ledir="newer",
                    lestart=start.strftime("%Y-%m-%dT%H:%M:%SZ"), lelimit=500)
     created = {e["title"]: parse_day(e["timestamp"]) for e in (res or {}).get("query", {}).get("logevents", [])
@@ -427,13 +463,17 @@ def _wiki_batch(lang: str, start: dt.datetime) -> list[tuple[str, dt.date, str]]
     titles = sorted(created)
     out = []
     for i in range(0, len(titles), 50):
-        info = wiki_api(lang, action="query", prop="info", titles="|".join(titles[i:i + 50]))
-        for p in (info or {}).get("query", {}).get("pages", []):
-            if p.get("missing") or p.get("redirect") or p.get("length", 0) < 9000 or p["title"] not in created:
+        q = wiki_api(lang, action="query", prop="revisions", rvprop="content|size", rvslots="main",
+                     titles="|".join(titles[i:i + 50]))
+        for p in (q or {}).get("query", {}).get("pages", []):
+            rev = (p.get("revisions") or [{}])[0]
+            if (p.get("missing") or rev.get("size", 0) < 9000 or p["title"] not in created
+                    or f"wikipedia:{lang}:{p['title']}" in known):
                 continue
-            ex = wiki_api(lang, action="query", prop="extracts", explaintext=1, exsectionformat="wiki", titles=p["title"])
-            pages = (ex or {}).get("query", {}).get("pages", [])
-            text = pages[0].get("extract", "") if pages else ""
+            wikitext = rev.get("slots", {}).get("main", {}).get("content", "")
+            if wikitext.lstrip().startswith("#"):
+                continue
+            text = wiki_plain(wikitext)
             if text and "may refer to" not in text[:500]:
                 out.append((p["title"], created[p["title"]], text))
     return out
@@ -441,14 +481,16 @@ def _wiki_batch(lang: str, start: dt.datetime) -> list[tuple[str, dt.date, str]]
 
 def fetch_wikipedia(sink: Sink, target: int, rng: random.Random) -> None:
     span = (UNTIL - DATE).days * 86400
+    rng = random.Random(f"{rng.random()}:{len(sink.ids)}")  # a resumed fetch draws new batches
     for lang, share in WIKI_SHARE.items():
         want = int(target * share)
         got = sum(len(cap(json.loads(line)["text"]).encode()) for line in sink.path.open()
                   if line.startswith('{"id": "wikipedia:%s:' % lang)) if sink.path.exists() else 0
         starts = [dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(seconds=rng.randrange(span))
                   for _ in range(400)]
-        with cf.ThreadPoolExecutor(8) as ex:
-            futs = [ex.submit(_wiki_batch, lang, s) for s in starts]
+        # Wikimedia answers 429 to an anonymous client that runs much faster than this
+        with cf.ThreadPoolExecutor(2) as ex:
+            futs = [ex.submit(_wiki_batch, lang, s, set(sink.ids)) for s in starts]
             for fut in cf.as_completed(futs):
                 for title, first, text in fut.result():
                     if got < want and sink.add(f"wikipedia:{lang}:{title}", f"{title}\n\n{text}",
@@ -839,9 +881,10 @@ def fetch_mixed(work: Path, rng: random.Random, pairs: int = 220) -> None:
     while have["arxiv+code"] < pairs and tries < 40:
         tries += 1
         month = rng.randrange(1, 10)
+        # the phrase matches about 1,600 abstracts a month (abs:github alone about 130)
         r = get("https://export.arxiv.org/api/query", params={
-            "search_query": f"abs:github AND submittedDate:[2026{month:02d}01 TO 2026{month:02d}28]",
-            "start": rng.randrange(0, 2000), "max_results": 100})
+            "search_query": f'abs:"github.com" AND submittedDate:[2026{month:02d}010000 TO 2026{month:02d}282359]',
+            "start": rng.randrange(0, 1400), "max_results": 100})
         time.sleep(3)
         if not r:
             continue
@@ -890,49 +933,66 @@ def shingles(text: str) -> set[int]:
 
 
 def probes(text: str, n: int = PROBES) -> list[str]:
+    """``n`` evenly spaced 13-word spans, each moved past the words the query language reads as operators."""
     w = words(text)
     if len(w) < SHINGLE * 2:
         return []
     step = (len(w) - SHINGLE) / n
-    return [" ".join(w[int(i * step):int(i * step) + SHINGLE]) for i in range(n)]
+    out = []
+    for i in range(n):
+        s = int(i * step)
+        while s + SHINGLE < len(w) and {"AND", "OR"} & set(w[s:s + SHINGLE]):
+            s += 1
+        if not {"AND", "OR"} & set(w[s:s + SHINGLE]):
+            out.append(" ".join(w[s:s + SHINGLE]))
+    return out
 
 
-_ig_lock = threading.Semaphore(8)
+#: the API refuses (403) bursts of concurrent queries but serves a few a second
+_ig_lock, _ig_last, IG_INTERVAL = threading.Lock(), [0.0], 0.25
 
 
 def infinigram(query: str, index: str) -> int | None:
-    with _ig_lock:
-        for i in range(5):
-            try:
-                r = http().post("https://api.infini-gram.io/", json={"index": index, "query_type": "count",
-                                                                       "query": query}, timeout=60)
-                d = r.json()
-                if "count" in d:
-                    return int(d["count"])
-            except (requests.RequestException, ValueError):
-                pass
-            time.sleep(2 ** i)
+    for i in range(6):
+        with _ig_lock:
+            time.sleep(max(0.0, _ig_last[0] + IG_INTERVAL - time.monotonic()))
+            _ig_last[0] = time.monotonic()
+        try:
+            r = http().post("https://api.infini-gram.io/", json={"index": index, "query_type": "count",
+                                                                   "query": query}, timeout=60)
+            d = r.json()
+            if "count" in d:
+                return int(d["count"])
+        except (requests.RequestException, ValueError):
+            pass
+        time.sleep(5 * 2 ** i)
     return None
 
 
 def contamination(text: str) -> dict:
+    """How many probes occur in any index. Probes go four to a query (an OR, the most a clause takes), and only a
+    group that occurs is asked one probe at a time."""
     qs = probes(text)
-    hits, failed = 0, 0
-    for q in qs:
-        found = False
-        for ix in INDEXES:
-            c = infinigram(q, ix)
+    found, failed = set(), 0
+    for ix in INDEXES:
+        for g in range(0, len(qs), 4):
+            group = [j for j in range(g, min(g + 4, len(qs))) if j not in found]
+            if not group:
+                continue
+            c = infinigram(" OR ".join(qs[j] for j in group), ix)
             if c is None:
-                failed += 1
-            elif c > 0:
-                found = True
-                break
-        hits += found
-    return {"probes": len(qs), "hits": hits, "failed": failed}
+                failed += len(group)
+                continue
+            for j in group if c > 0 else []:
+                cj = infinigram(qs[j], ix) if len(group) > 1 else c
+                if cj is None:
+                    failed += 1
+                elif cj > 0:
+                    found.add(j)
+    return {"probes": len(qs), "hits": len(found), "failed": failed}
 
 
 def assemble(work: Path, out: Path, seed: int) -> None:
-    rng = random.Random(seed)
     out.mkdir(parents=True, exist_ok=True)
     cache_path = work / "contamination.json"
     cache = json.loads(cache_path.read_text()) if cache_path.exists() else {}
@@ -941,7 +1001,7 @@ def assemble(work: Path, out: Path, seed: int) -> None:
     for stratum in [*STRATA, "mixed"]:
         p = work / "raw" / f"{stratum}.jsonl"
         docs = [json.loads(line) for line in p.open()] if p.exists() else []
-        rng.shuffle(docs)
+        random.Random(f"{seed}:{stratum}").shuffle(docs)
         seen_hash, seen_sh = set(), set()
         ok = []
         for d in docs:
