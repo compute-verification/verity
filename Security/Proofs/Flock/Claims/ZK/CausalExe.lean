@@ -1422,6 +1422,77 @@ theorem honestAt_E (h0 : B0Agree Tz st c c' r) (hl : c.rest.lane r = c'.rest.lan
 
 end Honest
 
+section Fields
+
+variable (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st))
+
+theorem coinedOf_nu (w q v) : ((coinedOf P Tz st).T c).tab.nu w q v = ∑ y : Fin (2 ^ (Tz.S.m - 7)),
+    if y.val ∈ maskWordsOf st then 0
+    else fOf (eqWord (pointsOf c.rest q) y.val) * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val) := rfl
+
+theorem coinedOf_eqw (q y) :
+    ((coinedOf P Tz st).T c).tab.eqw q y = fOf (eqWord (pointsOf c.rest q) ((maskWordsOf st).getD y.val 0)) := rfl
+
+theorem coinedOf_sReg (w q v) : ((coinedOf P Tz st).T c).tab.sReg w q v = ∑ y : Fin (2 ^ (Tz.S.m - 7)),
+    fOf (eqWord (regionPtOf st c.rest.link q) y.val) * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val) := rfl
+
+theorem coinedOf_rho (r i) : ((coinedOf P Tz st).T c).tab.ρ r i =
+    if i = 0 then FlockLevel3.GF256.of (c.rho r).1 else FlockLevel3.GF256.of (c.rho r).2 := rfl
+
+theorem coinedOf_beta (r) : ((coinedOf P Tz st).T c).tab.β r = fOf (c.beta r) := rfl
+
+theorem coinedOf_rep (k) : ((coinedOf P Tz st).T c).rep k = if k.val < 2 then 0 else 1 := rfl
+
+theorem coinedOf_embed : ((coinedOf P Tz st).T c).tab.embed = FlockLevel3.embed := rfl
+
+variable (c' : CoinsZK (RestOf Tz st))
+
+theorem claimsOf_congr (r : Fin 2) (h1 : c.rest.zc r = c'.rest.zc r) (h2 : c.rest.rho r = c'.rest.rho r)
+    (h3 : c.rest.rOuter r = c'.rest.rOuter r) (h4 : c.rest.rPrime r = c'.rest.rPrime r)
+    (h5 : c.rest.ts r = c'.rest.ts r) : claimsOf c.rest r = claimsOf c'.rest r := by
+  simp only [claimsOf, h1, h2, h3, h4, h5]
+
+theorem coined_rankOn {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkView.Coined K W Hi VL z)
+    (Pr : Fin z.nC → Prop) (h : ∀ k, Pr k → T.eqw k = T'.eqw k) : T.tab.RankOn Pr ↔ T'.tab.RankOn Pr := by
+  unfold ZK.Table.RankOn
+  have e : (fun (u : Fin z.nMask → ZMod 2) (k : {k // Pr k}) => ∑ y, T.eqw k.1 y * ZK.Table.castF (F := 𝔽) (u y)) =
+      fun u k => ∑ y, T'.eqw k.1 y * ZK.Table.castF (F := 𝔽) (u y) := by
+    funext u k
+    rw [h k.1 k.2]
+  exact Iff.of_eq (congrArg Function.Surjective e)
+
+theorem eqw_congr (q) (h : pointsOf c.rest q = pointsOf c'.rest q) :
+    ((coinedOf P Tz st).T c).eqw q = ((coinedOf P Tz st).T c').eqw q := by
+  funext y
+  show fOf (eqWord (pointsOf c.rest q) ((maskWordsOf st).getD y.val 0)) =
+    fOf (eqWord (pointsOf c'.rest q) ((maskWordsOf st).getD y.val 0))
+  rw [h]
+
+/-- **The rank check reads its claims' points** (of the reps up to `r`). -/
+theorem rankOn_congr (r : Fin 2)
+    (h : ∀ k, ((coinedOf P Tz st).T c).rep k ≤ r → pointsOf c.rest k = pointsOf c'.rest k) :
+    ((coinedOf P Tz st).T c).tab.RankOn (fun k => ((coinedOf P Tz st).T c).rep k ≤ r) ↔
+      ((coinedOf P Tz st).T c').tab.RankOn (fun k => ((coinedOf P Tz st).T c').rep k ≤ r) := by
+  show _ ↔ ((coinedOf P Tz st).T c').tab.RankOn (fun k => ((coinedOf P Tz st).T c).rep k ≤ r)
+  exact coined_rankOn _ _ _ fun k hk => eqw_congr P Tz st c c' k (h k hk)
+
+/-- **The restart's check reads its pair coins.** -/
+theorem wr_congr (r : Fin 2) (h : c.rho r = c'.rho r) :
+    Function.Bijective (fun p : 𝔽 × 𝔽 => ((coinedOf P Tz st).T c).tab.Wr r p.1 p.2) ↔
+      Function.Bijective (fun p : 𝔽 × 𝔽 => ((coinedOf P Tz st).T c').tab.Wr r p.1 p.2) := by
+  have e : (fun p : 𝔽 × 𝔽 => ((coinedOf P Tz st).T c).tab.Wr r p.1 p.2) =
+      fun p => ((coinedOf P Tz st).T c').tab.Wr r p.1 p.2 := by
+    funext p
+    simp only [ZK.Table.Wr, coinedOf_rho, coinedOf_embed, h]
+  rw [e]
+
+/-- **The inner proof's check reads its `β`.** -/
+theorem beta_congr (r : Fin 2) (h : c.beta r = c'.beta r) :
+    ((coinedOf P Tz st).T c).tab.β r ≠ 0 ↔ ((coinedOf P Tz st).T c').tab.β r ≠ 0 := by
+  rw [coinedOf_beta, coinedOf_beta, h]
+
+end Fields
+
 end FlockSoundness.Discharge.Composed.Cx
 
 namespace FlockComplete.ZkTables
@@ -1682,6 +1753,43 @@ theorem srcAgree_of (h : RepOk) : SrcAgree := by
 
 theorem causalExe_of_rep (h : RepOk) : CausalExe := causalExe_of (srcAgree_of h)
 
+/-! ## The pads layout's positions -/
+
+section Layout
+
+variable (m kl k0 : ℕ)
+
+theorem pl_r1ab (i : ℕ) : (_root_.Flock.Zk.PadLayout.new m kl k0).r1ab i = i := rfl
+theorem pl_r1c (i : ℕ) : (_root_.Flock.Zk.PadLayout.new m kl k0).r1c i = 64 + i := rfl
+theorem pl_ml (i t : ℕ) : (_root_.Flock.Zk.PadLayout.new m kl k0).ml i t = 128 + 2 * i + t := rfl
+theorem pl_fa : (_root_.Flock.Zk.PadLayout.new m kl k0).fa = 128 + 2 * (m - 6) := rfl
+theorem pl_fb : (_root_.Flock.Zk.PadLayout.new m kl k0).fb = 129 + 2 * (m - 6) := by
+  show 128 + 2 * (m - 6) + 1 = _
+  omega
+theorem pl_fc : (_root_.Flock.Zk.PadLayout.new m kl k0).fc = 130 + 2 * (m - 6) := by
+  show 128 + 2 * (m - 6) + 2 = _
+  omega
+theorem pl_lc (i t : ℕ) : (_root_.Flock.Zk.PadLayout.new m kl k0).lc i t = 131 + 2 * (m - 6) + 2 * i + t := by
+  show 128 + 2 * (m - 6) + 2 + 1 + 2 * i + t = _
+  omega
+theorem pl_zp (i : ℕ) : (_root_.Flock.Zk.PadLayout.new m kl k0).zp i = 131 + 2 * (m - 6) + 2 * (kl - 6) + i := by
+  show 128 + 2 * (m - 6) + 2 + 1 + 2 * (kl - 6) + 0 + i = _
+  omega
+theorem pl_lgOod (i : ℕ) :
+    (_root_.Flock.Zk.PadLayout.new m kl k0).lgOod i = 195 + 2 * (m - 6) + 2 * (kl - 6) + i := by
+  show 128 + 2 * (m - 6) + 2 + 1 + 2 * (kl - 6) + 0 + 64 + i = _
+  omega
+theorem pl_lgMsg (i t : ℕ) :
+    (_root_.Flock.Zk.PadLayout.new m kl k0).lgMsg i t = 196 + 2 * (m - 6) + 2 * (kl - 6) + 4 * i + t := by
+  show 128 + 2 * (m - 6) + 2 + 1 + 2 * (kl - 6) + 0 + 64 + 1 + 4 * i + t = _
+  omega
+theorem pl_lgE (i t : ℕ) :
+    (_root_.Flock.Zk.PadLayout.new m kl k0).lgE i t = 196 + 2 * (m - 6) + 2 * (kl - 6) + 4 * k0 + 2 * i + t := by
+  show 128 + 2 * (m - 6) + 2 + 1 + 2 * (kl - 6) + 0 + 64 + 1 + 4 * k0 + 2 * i + t = _
+  omega
+
+end Layout
+
 /-! ## The cut's fields -/
 
 section CutFields
@@ -1692,6 +1800,8 @@ variable {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.Co
 
 theorem cutAt_masked (i) : (cutAt C cz wt ω lv j).masked r i =
     ((C j).T (cz j)).tab.vals r (wt j) (ω j).1 (ω j).2.1.2.1 i + ((ω j).2.2.1 r).1 i := rfl
+
+theorem cutAt_sReg : (cutAt C cz wt ω lv j).sReg = ((C j).T (cz j)).tab.sReg (wt j) := rfl
 
 end CutFields
 
@@ -1727,6 +1837,34 @@ theorem masked_congr (k : ℕ)
   · rw [dite_eq_left hk, dite_eq_left hk, cutTab_masked, cutTab_masked, h]
     rfl
   · rw [dite_eq_right hk, dite_eq_right hk]
+
+open Classical in
+theorem cutTab_sHat (q) : (cutAt (tabC PE x) cz wt ω lv j).sHat q =
+    if (famSent (fun j => ((tabC PE x j).T (cz j)).tab) (fun j => ((tabC PE x j).T (cz j)).rep) j).cl q then
+      some (fun v => ((tabC PE x j).T (cz j)).tab.nu (wt j) q v +
+        ∑ y, ((tabC PE x j).T (cz j)).tab.eqw q y * FlockSoundness.ZK.Table.castF ((ω j).1 y v))
+    else none := rfl
+
+
+theorem sv_congr (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) (cut' : ∀ j, ((tabC PE x j).T (cz' j)).tab.Cut)
+    (k : ℕ) (h1 : k < 2 → ∀ h : 2 * r.val + k < (tabC PE x j).z.nC,
+      (cut j).sHat ⟨2 * r.val + k, h⟩ = (cut' j).sHat ⟨2 * r.val + k, h⟩)
+    (h2 : ¬ k < 2 → ∀ h : k - 2 < (tabC PE x j).z.nR, (cut j).sReg ⟨k - 2, h⟩ = (cut' j).sReg ⟨k - 2, h⟩) :
+    (repSrcCut PE x cz cut j r).sv k = (repSrcCut PE x cz' cut' j r).sv k := by
+  simp only [repSrcCut]
+  by_cases hk : k < 2
+  · rw [ite_eq_left hk, ite_eq_left hk]
+    by_cases hc : 2 * r.val + k < (tabC PE x j).z.nC
+    · rw [dite_eq_left (show 2 * r.val + k < ((tabC PE x j).T (cz j)).tab.nC from hc),
+        dite_eq_left (show 2 * r.val + k < ((tabC PE x j).T (cz' j)).tab.nC from hc), h1 hk hc]
+    · rw [dite_eq_right (show ¬ 2 * r.val + k < ((tabC PE x j).T (cz j)).tab.nC from hc),
+        dite_eq_right (show ¬ 2 * r.val + k < ((tabC PE x j).T (cz' j)).tab.nC from hc)]
+  · rw [ite_eq_right hk, ite_eq_right hk]
+    by_cases hc : k - 2 < (tabC PE x j).z.nR
+    · rw [dite_eq_left (show k - 2 < ((tabC PE x j).T (cz j)).tab.nR from hc),
+        dite_eq_left (show k - 2 < ((tabC PE x j).T (cz' j)).tab.nR from hc), h2 hk hc]
+    · rw [dite_eq_right (show ¬ k - 2 < ((tabC PE x j).T (cz j)).tab.nR from hc),
+        dite_eq_right (show ¬ k - 2 < ((tabC PE x j).T (cz' j)).tab.nR from hc)]
 
 end Masked
 
