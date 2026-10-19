@@ -141,7 +141,7 @@ theorem lincheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFo
 `n` bodies sent, where the cut's switched vector `k` is the session's `switchVec` of claim `k` wherever claim `k`'s
 body is sent (`l.size + k ≤ n`), the two run alike and return the same. -/
 theorem ringSwitchCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (tr : Trace) (sv : ℕ → Array F128)
-    {claims claims' : Array Claim} (hsz : claims.size = claims'.size) (hx : ∀ k, claims[k]!.x = claims'[k]!.x)
+    {claims claims' : Array Claim} (hsz : claims.size = claims'.size) (hx : ∀ k : ℕ, claims[k]!.x = claims'[k]!.x)
     (t : Transcript) (l : Array Claims.Msg) (hn : l.size ≤ n)
     (hsv : ∀ k < claims'.size, l.size + k ≤ n → sv k = switchVec tr claims'[k]!) :
     GoAlike (fun a b _ => a = b)
@@ -236,7 +236,7 @@ theorem piopCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay 
   try dsimp only
   refine alike_bind_eq rfl fun _ t₃ l₃ e₃ => ?_
   have hs₃ : l₃.size = l₂.size := by rw [(rankCheckP_go e₃).2]
-  have hx : ∀ k, (abcClaims st.m st.kLog zc lc ++ extras)[k]!.x = (abcClaims st.m st.kLog zc' lc' ++ extras)[k]!.x := by
+  have hx : ∀ k : ℕ, (abcClaims st.m st.kLog zc lc ++ extras)[k]!.x = (abcClaims st.m st.kLog zc' lc' ++ extras)[k]!.x := by
     obtain ⟨hx₀, hx₁⟩ := abc_x (m := st.m) (kLog := st.kLog) (hρ.trans hρ'.symm) (hr.trans hr'.symm)
       (hi.trans hi'.symm)
     exact claims_x (A := abcClaims st.m st.kLog zc lc) (B := abcClaims st.m st.kLog zc' lc') rfl rfl hx₀ hx₁
