@@ -146,13 +146,63 @@ def test_a_session_from_before_the_stated_window_replays_under_its_shortest(serv
     assert row["made"]["window_ns"].startswith(f"{shortest},")
 
 
-def test_a_refused_registration_has_no_verdict_to_replay(server, tmp_path) -> None:
+def refused() -> dict:
+    """The record `verifier.py` writes of a second registration for a node with one live: the refusal and the
+    registry after it."""
+    registry = audit.Registry()
+    reg = M.Run().store.registration
+    registry.register(M.SOURCE, reg.node, reg.blocks, reg.payload_root, reg.codec, nonce=bytes(32))
+    with pytest.raises(audit.RegistryError) as e:
+        registry.register(M.SOURCE, reg.node, reg.blocks, reg.payload_root, reg.codec, nonce=bytes(32))
+    return {"schema": "verity/remote-session/verifier/v0", "refused": str(e.value), "registry": registry.to_json()}
+
+
+def test_a_refused_registration_replays_on_the_registry_before_it(server, tmp_path) -> None:
     path = tmp_path / "verifier.json"
-    path.write_text(json.dumps({"schema": "verity/remote-session/verifier/v0", "refused": "node 00 has a live "
-                                "registration", "registry": audit.Registry().to_json()}))
+    path.write_text(json.dumps(refused()))
     row, = R.replay_record(path, server)
-    assert row["agree"] is None and row["held"] is None and row["recorded"] == "registration refused"
+    assert row["recorded"] == "registration refused" and row["agree"] and row["held"] and row["registry"], row
     assert R.main(["record", str(path)]) == 0
+
+
+def test_a_refusal_by_another_registration_than_the_recorded_one_is_caught(server, tmp_path) -> None:
+    v = refused()
+    v["registry"]["live"][M.NODE.hex()]["registration"] = "11" * 64
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] and row["held"] is False, row
+    assert R.main(["record", str(path)]) == 1
+
+
+def test_a_refusal_with_no_registry_recorded_has_no_verdict_to_replay(server, tmp_path) -> None:
+    v = refused()
+    del v["registry"]
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["agree"] is None and row["held"] is None
+    assert R.main(["record", str(path)]) == 0
+
+
+def test_a_recorded_registry_both_verifiers_cannot_read_back_is_caught(server, tmp_path) -> None:
+    v = verifier_json(run("honest")) | {"registry": refused()["registry"]}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    assert R.replay_record(path, server)[0]["registry"] is True
+    v["registry"]["closed"] = [{"node": M.NODE.hex(), "registration": "00" * 63, "sessions": []}]
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["registry"] is False and row["agree"] and row["held"], row
+    assert R.main(["record", str(path)]) == 1
+
+
+def test_a_registration_with_no_session_is_one_row_with_its_digest(server, tmp_path) -> None:
+    v = verifier_json(run("honest")) | {"sessions": []}
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["recorded"] == "no session" and row["agree"] is None and row["digest"] is True
 
 
 def test_case_of_keeps_the_recorded_parameters_and_clock() -> None:

@@ -6,6 +6,7 @@
   "Proofs.Pouw",
   "Proofs.NetworkCertifier",
   "Proofs.Flock",
+  "Proofs.Hash",
   "Proofs.Accounting",
   "Proofs.Accounting.Bandwidth",
   "Proofs.Population"

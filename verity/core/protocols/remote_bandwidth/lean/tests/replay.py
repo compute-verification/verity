@@ -22,15 +22,17 @@ A record is one of two kinds:
     in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
     the root it rejected, whose arrival the verifier records only once `Session.receive` takes it (so not a late one).
   Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
-  registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record of
-  a registration the verifier's registry refused (a second one for a node with one live) has no session: its row says
-  so, with no verdict to replay, since the Lean has no registry.
+  registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record
+  that keeps the verifier's registry (`--registry`) has both verifiers read it back, which must write it out as
+  recorded. A record of a registration the registry refused (a second one for a node with one live) has no session:
+  its refusal replays on the registry as it stood before (the recorded one, less the refusal's count), where both
+  must refuse the node again, by its live registration, and leave the recorded registry.
 
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ...
     uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... [--out ROWS.json]
 
-One row a session, printed and with `--out` written as JSON. Exit status 1 if the verifiers differ on any session, or a
-verdict isn't the recorded one.
+One row a session (one for a record with none), printed and with `--out` written as JSON. Exit status 1 if the verifiers
+differ on any row, a verdict isn't the recorded one, or a recorded digest or registry isn't the verifiers'.
 """
 
 from __future__ import annotations
@@ -49,9 +51,12 @@ import verity_difftest as D
 from verity.core.protocols.remote_bandwidth import audit, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE)
+REGISTRY = D.Port(M.EXE, "registry", M.registry, None, package=M.PACKAGE, rejects=M.REFUSALS)
 #: The failures whose cause a `verifier.json` keeps: a window's passes.
 KEPT = frozenset({"few"})
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
+#: `Registry.register`'s refusal, which a refused record keeps.
+REFUSED = re.compile(r"node ([0-9a-f]+) has a live registration, ([0-9a-f]+)…")
 
 
 def server() -> D.Server:
@@ -229,13 +234,57 @@ def run_of(path: Path) -> str:
     return found[-1] if found else str(path)
 
 
+def registries(case: dict, s: D.Server) -> tuple[bool, dict | None]:
+    """Both verifiers' registries on one case: whether they agree, and the Lean's answer."""
+    python = REGISTRY.python(case)
+    try:
+        lean = REGISTRY.lean(s, case)
+    except D.ProtocolError as e:
+        lean = ("error", str(e))
+    agree = "error" not in (lean[0], python[0]) and REGISTRY.key(lean) == REGISTRY.key(python)
+    return agree, json.loads(lean[1]) if lean[0] == "output" else None
+
+
+def read_back(registry: dict | None, s: D.Server) -> bool | None:
+    """Whether both verifiers read a record's registry/v0 back and write it out as recorded; None if it keeps none."""
+    if registry is None:
+        return None
+    agree, out = registries({"source": "00", "registry": registry, "ops": []}, s)
+    return agree and out is not None and out["registry"] == registry
+
+
+def refusal(v: dict, s: D.Server) -> dict:
+    """A refused registration's record replayed: its node registered again on the registry as it stood before (the
+    recorded one, the node's refusals one fewer), which both verifiers must refuse, leaving the recorded registry."""
+    m, after = REFUSED.match(v["refused"]), v.get("registry")
+    if m is None or after is None or m[1] not in after.get("refused", {}):
+        return {"agree": None, "held": None, "why": "the record keeps no registry to replay its refusal in"}
+    node, prefix = m[1], m[2]
+    before = copy.deepcopy(after)
+    before["refused"][node] -= 1
+    if not before["refused"][node]:
+        del before["refused"][node]
+    op = {"op": "register", "node": node, "blocks": 1, "payload_root": "00" * 64, "codec": M.codec_json(M.P512),
+          "receipt": receipts.DEFAULT, "bind": False, "layout": receipts.LAYOUT,
+          "rows": receipts.sketch_rows(receipts.DEFAULT), "nonce": "00" * audit.NONCE_BYTES}
+    agree, out = registries({"source": "00", "registry": before, "ops": [op]}, s)
+    if not agree:
+        return {"agree": False, "held": False, "why": "the verifiers differ"}
+    live = after["live"].get(node, {}).get("registration", "")
+    ok = (out["results"] == [{"refused": True}] and out["registry"] == after and live.startswith(prefix))
+    return {"agree": True, "held": ok, "why": "refused again, by the node's live registration, the recorded registry "
+            "after it" if ok else f"replayed {D.canonical(out['results'])}, the registry after it "
+            f"{'as' if out['registry'] == after else 'not as'} recorded"}
+
+
 def replay_record(path: Path, s: D.Server) -> list[dict]:
     v = json.loads(path.read_text())
     if v.get("schema") != "verity/remote-session/verifier/v0":
         raise ValueError(f"{path}: not a verity/remote-session/verifier/v0 record")
     if "registration" not in v and "refused" in v:
-        return [{"run": run_of(path), "recorded": "registration refused", "agree": None, "held": None,
-                 "why": f"the registry refused it ({v['refused'][:80]}): no session, and no registry in the Lean"}]
+        return [{"run": run_of(path), "recorded": "registration refused", "registry": read_back(v.get("registry"), s)}
+                | refusal(v, s)]
+    registry = read_back(v.get("registry"), s)
     reg = registration_of(v["registration"])
     lean_digest, py_digest = digests(reg, s)
     earlier = [k for k in LATER if k not in v["registration"]]
@@ -245,7 +294,7 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
                "windows": session["windows"], "passes": sum(w["passes"] for w in session.get("windows_seen") or []),
                "window_ns": session["window_ns"],
                "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"])
-               and session.get("registration") == v["registration"]["digest"]}
+               and session.get("registration") == v["registration"]["digest"], "registry": registry}
         if not session.get("windows_seen"):
             rows.append(row | {"agree": None, "held": None, "why": "no window seen"})
             continue
@@ -255,7 +304,9 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
         row |= replay(case, s) | {"made": made}
         row["held"], row["why"] = held(session, row["lean"]) if row["agree"] else (False, "the verifiers differ")
         rows.append(row)
-    return rows
+    return rows or [{"run": run_of(path), "recorded": "no session", "agree": None, "held": None,
+                     "digest": None if earlier else lean_digest == py_digest == ("output", v["registration"]["digest"]),
+                     "registry": registry, "why": "the registration ran no session"}]
 
 
 def replay_transcript(path: Path, s: D.Server) -> list[dict]:
@@ -272,7 +323,9 @@ def line(row: dict) -> str:
            f"drew {len(v['drawn'])} windows" if "drawn" in v else next(iter(v.items()), ("?", ""))[0])
     head = f"{who} #{row['session']}: recorded {row['recorded']}; " if "session" in row else f"{who}: "
     return (f"{head}replayed {got}; agree {row['agree']}, held {row['held']}"
-            + (f", digest {row['digest']}" if "digest" in row else "") + (f" ({row['why']})" if row.get("why") else "")
+            + (f", digest {row['digest']}" if "digest" in row else "")
+            + (f", registry {row['registry']}" if row.get("registry") is not None else "")
+            + (f" ({row['why']})" if row.get("why") else "")
             + (f"\n    difference: {D.canonical(row['difference'])}" if row.get("difference") else ""))
 
 
@@ -294,11 +347,15 @@ def main(argv: list[str] | None = None) -> int:
             rows += got
     if ns.out:
         ns.out.write_text(json.dumps(rows, indent=1) + "\n")
-    bad = [r for r in rows if r.get("agree") is False or r.get("held") is False or r.get("digest") is False]
-    print(f"{sum(1 for r in rows if r.get('agree') is not None)} sessions replayed; "
+    bad = [r for r in rows if False in (r.get("agree"), r.get("held"), r.get("digest"), r.get("registry"))]
+    refusals = [r for r in rows if r.get("recorded") == "registration refused" and r.get("agree") is not None]
+    print(f"{sum(1 for r in rows if 'session' in r and r.get('agree') is not None)} sessions and {len(refusals)} "
+          f"refused registrations replayed; "
           f"{sum(1 for r in rows if r.get('agree') is False)} where the verifiers differ; "
           f"{sum(1 for r in rows if r.get('held') is False)} not the recorded verdict; "
-          f"{sum(1 for r in rows if r.get('agree') is None)} records with no verdict to replay")
+          f"{sum(1 for r in rows if r.get('agree') is None)} records with no verdict to replay; "
+          f"{sum(1 for r in rows if r.get('registry') is not None)} rows of a recorded registry, "
+          f"{sum(1 for r in rows if r.get('registry') is False)} not read back as recorded")
     return 1 if bad else 0
 
 
