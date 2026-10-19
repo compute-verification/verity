@@ -55,6 +55,8 @@ Which form each takes:
   `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
+* `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-service pieces as named premises, binding
+  in its fork form (RT2-LOGIC-2), so the headlines' binding is `√δ_fork` and no advantage bound.
 * `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
   the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
   every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
@@ -245,6 +247,28 @@ wrong every word that isn't fixed is in its round's share, and the rounds carry 
 def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
     (Nw : ℝ) : Prop :=
   ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+
+/-- `accounting-ts-proofs-sound` (binding in its fork form, the 8 Oct ruling's; `cr/sha-512` bounds it at a finder that
+runs the window twice from round `w`). **Binding's fork form at `δ_fork`**: at every round `w`, two runs off one
+commitment, the second continuing from round `w` on fresh coins, are both accepted and open round `w`'s leaves
+differently with probability at most `δ_fork` over the pair (`ProofLayer.Forked`). Different openings of hm96 rows of
+one frame-v3-sha512 tree are two inputs hashed to one SHA-512 digest along their paths. `BindingOfFork` gives binding
+at `√δ_fork` from it. -/
+def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ) : Prop :=
+  ∀ w, prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) ≤ δfork
+
+/-- `accounting-ts-proofs-sound` (proof soundness; C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` for a session).
+**Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation with
+probability at most `δ_ZK` over the window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover
+making `t` hash calls, so it gives `δ_ZK` only for a cheater whose hash calls over the window are capped
+(RT2-LOGIC-2). -/
+def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δzk : ℝ) : Prop :=
+  pf.SoundAt δzk
+
+/-- `accounting-ts-proofs-sound` (the Definitions' pinning; main's circuit Definitions meet it since PIN, #2417).
+**The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation are right
+for their derivations. -/
+def ProofsPin {Ω : Type} {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) : Prop := pf.Pins
 
 open Classical in
 /-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit with its fold clause, proved on paper; the rounds' equal shares).

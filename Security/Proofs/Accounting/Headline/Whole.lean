@@ -221,6 +221,13 @@ theorem sheetDIdealFloor_whole {K P T L U F X : Type} [Fintype K] [Fintype P] [D
     (fun x => (h6 x).1) (fun x => scalarRoute_half Z _ (hSplit x) (h6 x) hq hqT hb) (fun x => (h7 x).2)
     (fun x => (h7 x).1) hF hX hG hPin hL hWL hPS
 
+/-- Binding at `√δ_fork` from its fork form at `δ_fork` (`BindingOfFork`). -/
+theorem moved_le_sqrt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ)
+    (hB : BindingForkAt pf δfork) (w : Fin S) : prob (fun x => pf.Moved x w) ≤ Real.sqrt δfork := by
+  have h := Accounting.SecurityProofs.TS.BindingOfFork Ω S nπ pf w
+  rw [← Real.sqrt_sq (prob_nonneg (fun x => pf.Moved x w))]
+  exact Real.sqrt_le_sqrt (le_trans h (hB w))
+
 /-- The headlines' `Λ = max(κ/l, (κ + f)/l₀)` is `≥ 0` and meets both of `dIdealFloor_whole`'s bounds. -/
 theorem max_budget {κ f l l0 : ℝ} (hκ : 0 ≤ κ) (hl : 0 < l) (hl0 : 0 < l0) :
     0 ≤ max (κ / l) ((κ + f) / l0) ∧ κ ≤ max (κ / l) ((κ + f) / l0) * l ∧

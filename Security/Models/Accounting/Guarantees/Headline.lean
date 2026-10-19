@@ -47,9 +47,13 @@ the larger of two branches':
 The `2^-40` event is split in two: binding and soundness cost at most `2^-41` over the window, and the luck's tail is
 `δ′ = 2^-41`, so both branches' logarithm is `ln(1/δ′) = 41 ln 2`. Compose (#2638) puts its logarithm at its
 `δ_s = 2^-40` instead; at this convention its 0.744% is 0.748% (RT-INT's N3, note:20261019T0528Z-draft-rt-int).
+Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct ruling's, no advantage bound) and read at
+`√δ_fork` (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves (RT2-LOGIC-2).
 
 The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vector the folded branch binds
-(`0.591%`). `ProofLayer.Pins` is met by main's circuit Definitions since PIN (#2417).
+(`0.591%`). The proof service's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness
+(`ProofSoundAt`) and the Definitions' pinning (`ProofsPin`, met by main's circuit Definitions since PIN, #2417), beside
+`RightFixed`. `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/` (RT2-LOGIC-2).
 
 The statements:
 
@@ -66,6 +70,20 @@ of 48,000 give ε < 1% only from 9,496 rounds (sheet) and 8,320 (measured), and 
 and 41 (measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
 RT-INT-1 (note:20261019T0528Z-draft-rt-int) finds the same kind of floor on Compose's live line: ε < 1% there needs
 at least 10,552 equal live rounds a window, whatever the draw. The windows run so far have at most 18 rounds.
+
+The window's shape asks four things of the protocol, which the statements carry in their types and the verifier must
+enforce on every window (RT2-LOGIC-6, note:20261019T1140Z-draft-rt2-logic):
+
+* **An all-or-nothing verdict.** A window is accepted only if every proof of every round is (`ProofLayer.Of`), so one
+  caught round voids the whole window's credit; the luck term `ln(1/δ′)/S` prices exactly that. Credited round by
+  round, the same per-round luck lets a prover who skips every round keep about 7/8 of the credit. With no retries, an
+  honest per-round failure rate `q` keeps `(1 − q)^48,000` of honest windows (62% at `q = 10⁻⁵`).
+* **Equal rounds.** `RightFixed` charges each round `1/S` of the window's words: the equal shares are the protocol's.
+* **Fresh coins.** Each round's coin is uniform and independent of the earlier ones (the product measure on `Ω^S`
+  that the luck premises' "whatever the past" is over); one salt an epoch expanded into the rounds' coins isn't.
+* **A cap on the cheater's hash calls over the window.** The budget asks `δ_ZK ≤ 2^-41/(48,000·n_π)` a proof and
+  `δ_fork ≤ (2^-41/48,000)²` a round, and C-Flock's soundness and `cr/sha-512` give such bounds only for a cheater
+  whose hash calls are bounded: against C-Flock's `t·2^-λ`, `t ≤ 2^(λ − 56.6)/n_π` over the window.
 
 The sheet reading's ε rests on A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot), which no
 vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with a
@@ -92,9 +110,10 @@ if the labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded 
 words it folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned
 (`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck
 premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at
-most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with
-probability at most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed
-value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted
+most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), two runs off one
+commitment open it differently with probability at most `δ_fork` a round (`BindingForkAt`, binding at `√δ_fork`), every
+proof is sound up to `δ_ZK` (`ProofSoundAt`), the relations pin every committed value (`ProofsPin`) and E1(c) holds
+(`RightFixed`), then outside an event of probability at most `2^-40` every accepted
 window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
 hypothesis: H1 + fx1 has no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
 
@@ -114,8 +133,8 @@ uniform-pipe row and 100% with none (RT-MACHINE-4). Measured, it holds at satura
 stream no kernel's total rate exceeds 1 over 279 measurements (r20261019-120714-132b, RT2-120-4). -/
 def Sm120SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
-    (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
-    (Sm120.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ),
+    (Sm120.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sm120.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sm120.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm120.sheet (Pl.run x).run) →
     (∀ x, SheetSmem Sm120.sheet (Pl.run x).run) → (∀ x, SheetWords Sm120.model (Pl.run x)) →
@@ -123,8 +142,7 @@ def Sm120SheetHeadline : Prop :=
     (∀ x, FoldOptFoldedAt Sm120.model (Pl.run x) ((1 - Uf.share x / Sm120.checks) * Sm120.model.Nw)
       (onFacet Sm120.piStar)) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
-    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
-    pf.Pins → RightFixed Pl pf Sm120.model.Nw →
+    pf.Of Pl → BindingForkAt pf δfork → ProofSoundAt pf δzk → ProofsPin pf → RightFixed Pl pf Sm120.model.Nw →
     prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm120.model.credit Sm120.flat < 1 - 656 / 100000) ≤
       (1 / 2) ^ 40
 
@@ -139,9 +157,10 @@ every run's fold at the words it folds (its unfolded share `Uf`), the play's ide
 openings are pinned
 (`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck
 premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at
-most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with
-probability at most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed
-value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted
+most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), two runs off one
+commitment open it differently with probability at most `δ_fork` a round (`BindingForkAt`, binding at `√δ_fork`), every
+proof is sound up to `δ_ZK` (`ProofSoundAt`), the relations pin every committed value (`ProofsPin`) and E1(c) holds
+(`RightFixed`), then outside an event of probability at most `2^-40` every accepted
 window's time is at least `1 − 591/100000` (`1 − 0.591%`) of the credit `T_cred = B_♭/f_max`. (I5) `SideUnits` and
 FILL-OPT are not hypotheses: the model has no side unit and no filler, so they hold at any run. On the lane route (I3)
 at `9/8` is what `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once
@@ -160,16 +179,16 @@ loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`). The
 first term, where the sheet's reads `1/8`: 0.588% at the data, under 0.591%. -/
 def Sm120MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
-    (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
-    (Sm120.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
+    (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ),
+    (Sm120.checks : ℝ) * (Real.sqrt δfork + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, FacetCeilings Sm120Measured.machine (Pl.run x).run) →
     (∀ x, WordsWritten Sm120Measured.model (Pl.run x)) → (∀ x, ScalarRoute Sm120Measured.model (Pl.run x)) →
     (∀ x, NoSum (Pl.run x)) →
     (∀ x, FoldOptFoldedAt Sm120Measured.model (Pl.run x)
       ((1 - Uf.share x / Sm120.checks) * Sm120Measured.model.Nw) (onFacet Sm120Measured.piStar)) →
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
-    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
-    pf.Pins → RightFixed Pl pf Sm120Measured.model.Nw →
+    pf.Of Pl → BindingForkAt pf δfork → ProofSoundAt pf δzk → ProofsPin pf →
+    RightFixed Pl pf Sm120Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40
 

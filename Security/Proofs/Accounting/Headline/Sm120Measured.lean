@@ -315,14 +315,16 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 
 /-- sm_120's headline on VF3s-16: `Whole.dIdealFloor_whole` at `π*`, `p = 7/8`, `p₀ = ½`,
 `Λ = max(κ/ln(8/7), (κ + f)/ln 2)`, `S = 48,000` and `δ = 2^-40`, (I7) from the receipt split
-(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`), (I5) `SideUnits` and FILL-OPT from the data,
+(`luck_of_receipt_half`), (I8) from its pieces (`ProofsSoundOfPinned`, binding at `√δ_fork` by
+`Whole.moved_le_sqrt`), (I5) `SideUnits` and FILL-OPT from the data,
 and the terms bounded by `Whole.headline_of_branches`: the folded branch by `sm120m_eps_le`, the unfolded one by
 `sm120m_unfolded`. -/
 theorem Sm120MeasuredHeadline : Accounting.Guarantees.TS.Sm120MeasuredHeadline := by
-  intro Ω _ Pl G Uf V nπ pf δbind δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  intro Ω _ Pl G Uf V nπ pf δfork δzk hδ hSplit h1 hW hSR hN hF hG hPinG hOp hRL hWL hOf hB hZK hPin hRF
+  set δbind := Real.sqrt δfork
   have hL := luck_of_receipt_half Pl.game G hG hPinG hOp hRL
-  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120Measured.model.Nw δbind δzk hOf hB hZK
-    hPin hRF
+  have hPS := ProofsSoundOfPinned Ω Sm120.checks nπ Pl pf Sm120Measured.model.Nw δbind δzk hOf
+    (Whole.moved_le_sqrt pf δfork hB) hZK hPin hRF
   have hδlo : (1 / 2 : ℝ) ^ 41 ≤ (1 / 2) ^ 40 - (Sm120.checks : ℝ) * (δbind + nπ * δzk) := by
     have e : ((1 : ℝ) / 2) ^ 40 = 2 * (1 / 2) ^ 41 := by norm_num
     linarith
