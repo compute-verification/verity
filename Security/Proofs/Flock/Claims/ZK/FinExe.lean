@@ -860,6 +860,139 @@ theorem not_refused_of_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → Floc
     rw [← (coinReads_czExe PE x c ⟨j, hjJ⟩ ⟨r, hr⟩).1, (hA ⟨j, hjJ⟩).1 ⟨r, hr⟩] at hβ
     cases hβ
 
+/-! ## A rep from the cut against the session's, its final-only data forgotten
+
+`SimSession`'s hybrid chain (`repMix 0` is the cut's rep at the erased commitments, `repMix 3` the session's rep, both
+with what only the final message reads forgotten), restated here so that this file imports `Split` alone. -/
+
+namespace FinRep
+
+open FlockComplete
+
+theorem eraseC_cap (cm : Commit) : (eraseC cm).cap = cm.cap := rfl
+
+theorem eraseIC_root (ic : InnerCommit) : (eraseIC ic).root = ic.root := rfl
+
+theorem innerCut_eraseIC (io : Asks FlockComplete.PS) (lay : _root_.Flock.Zk.PadLayout) (ic : InnerCommit)
+    (finalC : _root_.Flock.F128) (src : RepSrc) (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    eraseIP <$> innerCut io lay (eraseIC ic) finalC src cons = eraseIP <$> innerCut io lay ic finalC src cons := by
+  unfold innerCut
+  simp only [map_bind, map_pure, apply_ite (Functor.map (f := _root_.Flock.TMW FlockComplete.PS) eraseIP),
+    eraseIP, eraseIC, Array.size_map, Array.map_map, Function.comp_def]
+
+theorem bind_eraseZ {xa xb : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.InnerProof}
+    (h : eraseIP <$> xa = eraseIP <$> xb) (p : _root_.Flock.Proof) (zl : _root_.Flock.Zk.Level0Msgs) :
+    (xa >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) =
+      (xb >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) := by
+  have e : ∀ xc : _root_.Flock.TMW FlockComplete.PS _root_.Flock.Zk.InnerProof,
+      (xc >>= fun inner => pure (eraseZ { proof := p, level0 := zl, inner })) =
+        (fun ip => ({ proof := { p with ligerito := eraseL p.ligerito }, level0 := zl, inner := ip } :
+          _root_.Flock.Zk.ZkProof)) <$> (eraseIP <$> xc) := fun xc => by
+    rw [← comp_map, ← bind_pure_comp]
+    rfl
+  rw [e, e, h]
+
+theorem repCut_mix0 (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (src : RepSrc) :
+    repMix 0 io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words src =
+      eraseZ <$> repCut io hs st sch rep dom (eraseC cm0) extras (eraseIC ic) src prior words := by
+  unfold repMix repCut
+  simp only [↓reduceIte, Nat.zero_le, eraseC_cap, eraseIC_root]
+  rw [map_bind]; refine bind_congr fun ⟨zp, lp, ss, T, sws⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun ⟨lg, zl, rec⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun tr' => ?_
+  rw [map_bind]; refine bind_congr fun ⟨rp, _⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun lgc => ?_
+  rw [map_bind]
+  simp only [map_pure]
+  exact bind_eraseZ (innerCut_eraseIC _ _ _ _ _ _).symm _ _
+
+theorem replay_eraseL (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (cap : Array ByteArray)
+    (params : _root_.Flock.PcsParams) (zp : _root_.Flock.ZerocheckProof) (lp : _root_.Flock.LincheckProof)
+    (ss : Array (Array _root_.Flock.F128)) (lg : _root_.Flock.LigeritoProof) (root : ByteArray) :
+    _root_.Flock.Zk.replay st lay
+        { cap, params, zerocheck := zp, lincheck := lp, ringSwitches := ss, ligerito := eraseL lg } root =
+      _root_.Flock.Zk.replay st lay
+        { cap, params, zerocheck := zp, lincheck := lp, ringSwitches := ss, ligerito := lg } root := by
+  unfold _root_.Flock.Zk.replay
+  dsimp only
+
+theorem ligeritoConstraints_eraseL (lay : _root_.Flock.Zk.PadLayout) (rec : _root_.Flock.Zk.L0Rec)
+    (lg : _root_.Flock.LigeritoProof) (zl : _root_.Flock.Zk.Level0Msgs) :
+    _root_.Flock.Zk.ligeritoConstraints lay rec (eraseL lg) zl = _root_.Flock.Zk.ligeritoConstraints lay rec lg zl := by
+  unfold _root_.Flock.Zk.ligeritoConstraints eraseL
+  dsimp only
+
+theorem eraseL_eraseL (lg : _root_.Flock.LigeritoProof) : eraseL (eraseL lg) = eraseL lg := by
+  simp only [eraseL, eraseLP, Array.map_map, Function.comp_def]
+
+theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS) (st : _root_.Flock.Setup)
+    (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (tr : FlockComplete.Trace) (t : Array _root_.Flock.F128)
+    (cm0 : Commit) (extras : Array _root_.Flock.Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) (src : RepSrc) :
+    repMix 3 io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words src =
+      eraseZ <$> repPZk io hs st sch tPad rep dom tr t cm0 extras pads ic extra lanePad salt nonce prior words := by
+  unfold repMix repPZk piopPZk
+  simp only [show ¬((3 : ℕ) = 0) by decide, show ¬((3 : ℕ) ≤ 1) by decide, show ¬((3 : ℕ) ≤ 2) by decide,
+    ↓reduceIte]
+  rw [bind_assoc, map_bind]; refine bind_congr fun ⟨zp, zc⟩ => ?_; dsimp only
+  rw [bind_assoc, map_bind]; refine bind_congr fun ⟨lp, lc⟩ => ?_; dsimp only
+  rw [bind_assoc, map_bind]; refine bind_congr fun _ => ?_
+  rw [bind_assoc, map_bind]; refine bind_congr fun ⟨ss, T, sws⟩ => ?_; dsimp only
+  rw [pure_bind]; dsimp only
+  rw [map_bind]; refine bind_congr fun ⟨lg, zl, rec⟩ => ?_; dsimp only
+  rw [pure_bind]; dsimp only
+  simp only [replay_eraseL, ligeritoConstraints_eraseL]
+  rw [map_bind]; refine bind_congr fun tr' => ?_
+  rw [map_bind]; refine bind_congr fun ⟨rp, _⟩ => ?_; dsimp only
+  rw [map_bind]; refine bind_congr fun lgc => ?_
+  rw [map_bind]; refine bind_congr fun inner => ?_
+  rw [map_pure]
+  simp only [eraseZ, eraseL_eraseL]
+
+end FinRep
+
+/-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`): at opened coins
+every table admits (so no refusal shows, `not_refused_of_admits`), from its first round, at the erased commitments and
+the cut's source, through the hybrids `SimPiop`, `SimLig`, `SimInner`. -/
+theorem repCut_erased (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) {x : Msg} (hx : Live x) {w : Claims.Flock.Wit}
+    (hw : RZk x w) (τ : UE.Tape) {c : Fin (refK x) → FlockDeploy.Coin} (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j))
+    {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (j : Fin (jOf x)) (r : Fin 2) (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
+    (extras : Array _root_.Flock.Claim) (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
+    (l : Array Msg) (hl : l.size = repBase x (2 * j.val + r.val)) :
+    (((FlockComplete.eraseZ <$> FlockComplete.repCut (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[j.val]!
+        (zkTab x j).sch r.val dom (FlockComplete.eraseC cm0) extras (FlockComplete.eraseIC ic)
+        ((srcE x c w τ j.val).rep r.val) (priorE c j.val r.val)
+        (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!).run (_root_.Flock.Transcript.init #[] dom)).go l) =
+      (((FlockComplete.eraseZ <$> FlockComplete.repPZk (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[j.val]!
+        (zkTab x j).sch (zkTab x j).tPad r.val dom (trsE x w (UE.tapeZk τ))[j.val]!
+        (FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (FlockDeploy.tabsOf (stsOf x))[j.val]!.m) cm0 extras
+        (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+          (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+            (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)) ic
+        ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)
+        ((UE.tapeZk τ).nonce j.val r.val) (priorE c j.val r.val)
+        (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!).run (_root_.Flock.Transcript.init #[] dom)).go l) := by
+  have hn := not_refused_of_admits hx hA (refK x)
+  rw [← FinRep.repCut_mix0 (tPad := (zkTab x j).tPad) (tr := (trsE x w (UE.tapeZk τ))[j.val]!)
+    (t := FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (FlockDeploy.tabsOf (stsOf x))[j.val]!.m)
+    (pads := FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+      (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+        (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0))
+    (extra := (UE.tapeZk τ).extra j.val) (lanePad := (UE.tapeZk τ).lanePad j.val)
+    (salt := (UE.tapeZk τ).salt j.val r.val) (nonce := (UE.tapeZk τ).nonce j.val r.val)]
+  change ((mixE 0 x w τ c (refK x) j r dom cm0 extras ic).run _).go l = _
+  rw [h0 x hx w hw τ c _ hn s spec hsx j r dom cm0 ic extras he l hl,
+    h1 x hx w hw τ c _ hn s spec hsx j r dom cm0 ic extras he l hl,
+    h2 x hx w hw τ c _ hn s spec hsx j r dom cm0 ic extras he l hl]
+  unfold mixE
+  rw [FinRep.repMix3_eq]
+
 end Masked
 
 end Claims.ZKMal
