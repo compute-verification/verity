@@ -244,3 +244,21 @@ def test_a_keyed_steps_pass_names_its_entry_under_its_existing_key(P, tmp_path):
     assert agree.state == "passed" and agree.found == [{"source": "own", "paths": ["check/lean-agreement/a1.json"], "key": "a1"}]
     assert rust.state == "must-run" and rust.key == "r1"
 
+
+def test_a_circuit_targets_pass_names_its_entry_and_the_task_list_that_keys_it(P, tmp_path, monkeypatch):
+    """A target's key comes only from the task list's entry (`CIRCUIT_PROGRAM`), so its pass is that target's entry and the
+    task list's, each under its existing key, from whichever source held them."""
+    import json
+    import subprocess as sp
+
+    (tmp_path / "tools" / "verity" / "circuit_check").mkdir(parents=True)
+    C = _fake_check(tmp_path, {})
+    own, pack = P.Source("own", tmp_path / "own", [tmp_path / "own-tests"]), P.Source("pack:r1", tmp_path / "p", [], "r1", "s")
+    got = {"repo": str(tmp_path), "untraced": [], "list": {"source": "pack:r1", "entry": "L", "key": "v1/ll"},
+           "targets": [{"kind": "def", "target": "a", "key": "v1/aa", "found": [["own", "E"]]},
+                       {"kind": "def", "target": "b", "key": "v1/bb", "found": []}]}
+    monkeypatch.setattr(P.subprocess, "run", lambda *a, **k: sp.CompletedProcess(a, 0, "CIRCUIT-PLAN " + json.dumps(got), ""))
+    a, b = P.circuit_parts(C, [own, pack])
+    assert (a.part, a.key, a.state, b.state) == ("circuit-check:a", "v1/aa", "passed", "must-run")
+    assert a.found == [{"source": "own", "paths": ["check/circuit-check/v1/aa/E.json", "check/circuit-check/v1/ll/L.json"],
+                        "entry": "E"}]
