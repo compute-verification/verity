@@ -281,9 +281,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
-    if ns.on == "auto" and (why := _auto_placement(ns, harness_opts, command)):
+    if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
+    if getattr(ns, "auto", False):
+        _auto_size(ns, harness_opts, command)
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -957,12 +959,11 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
-def _auto_placement(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> str | None:
+def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
     """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
-    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), except that a suites.py run of named
-    suites takes the memory and time their `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size) where it
-    gives no --mem-gb, or no --timeout or --max-min. The workload runs in the shipped tree unless --cwd says otherwise (its
-    environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
+    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min; a suites.py run of named suites,
+    `_auto_size`), and the workload runs in the shipped tree unless --cwd says otherwise (its environment is the workload's to
+    sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
     if not ns.source:
@@ -971,28 +972,36 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str], command: li
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
     ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
+    ns.auto = True
     ns.project = ns.project or AUTO_PROJECT
     if remote.flag_value(harness_opts, "--cwd") is None:
         harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
     if ns.queue_kind == "adhoc":
         ns.queue_kind = AUTO_KIND
-    timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
-    if ns.queue_kind == AUTO_KIND and (ns.mem_gb is None or not timed):
-        from . import suite_size
-
-        if shape := suite_size.size(Path(ns.source), command, ns.cpus):
-            said = []
-            if ns.mem_gb is None and "mem_gb" in shape:
-                ns.mem_gb = shape["mem_gb"]
-                said.append(f"{ns.mem_gb} GB")
-            if not timed and "max_s" in shape:
-                ns.max_min = math.ceil(shape["max_s"] / 60)
-                said.append(f"{ns.max_min} min")
-            if said:
-                print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {', '.join(shape['suites'])}",
-                      file=sys.stderr)
     print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
     return None
+
+
+def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
+    """`--on auto` as AUTO_KIND, of a suites.py run of named suites: the memory and time their `[tool.verity.tests]` worker_gb and
+    timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or --max-min."""
+    timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
+    if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
+        return
+    from . import suite_size
+
+    if not (shape := suite_size.size(Path(ns.source), command, ns.cpus)):
+        return
+    said = []
+    if ns.mem_gb is None and "mem_gb" in shape:
+        ns.mem_gb = shape["mem_gb"]
+        said.append(f"{ns.mem_gb} GB")
+    if not timed and "max_s" in shape:
+        ns.max_min = math.ceil(shape["max_s"] / 60)
+        said.append(f"{ns.max_min} min")
+    if said:
+        print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {', '.join(shape['suites'])}",
+              file=sys.stderr)
 
 
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
