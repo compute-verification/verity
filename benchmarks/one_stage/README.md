@@ -32,7 +32,8 @@ negatives.
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
   per-statement and per-unit costs with their standard errors, writing `costfit` observations.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
-  the request Program's root Calls by Definition kind and tries one unit of each through M0; `a11_slice.py` cuts the
+  the request Program's root Calls by Definition kind and tries one unit of each through M0 (a kind whose word units M0
+  refuses, through its Boolean version's); `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
   units from those values, one template each, under the stratified law, proved under `--zk` and held by the Lean verifier;
   `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
