@@ -378,13 +378,36 @@ def discover() -> list[Suite]:
             if s.path != "." else s for s in suites]
 
 
+#: the git tree of the Lean verifier's sources, per checkout (`built_from`): they don't change while a run keys its suites
+_SOURCES: dict[Path, str] = {}
+
+
+def built_from(artifact: str) -> str | None:
+    """What a build output the Lean verifier's `lake build` makes (under its `.lake/build/`) is keyed by: the git tree of the
+    verifier's directory (its sources, lakefile, manifest and toolchain pin), not the bytes built, while its lakefile requires no
+    other package.
+    check runs a suite that declares one only after its lean-build step has built them from that tree (`AFTER_LEAN`), and this
+    runner builds them first (`lean_build`), so a plan that builds nothing (`check.py --plan`) keys such a suite as the check
+    does.  None for any other output, or with no verifier."""
+    lean = flock_lean()
+    if not (lean / "lakefile.toml").is_file() or not (ROOT / artifact).resolve().is_relative_to((lean / ".lake" / "build").resolve()):
+        return None
+    if "require" in (lean / "lakefile.toml").read_text():          # the build reads another package then, which its tree misses
+        return None
+    if ROOT not in _SOURCES:
+        _SOURCES[ROOT] = object_ids(worktree(), [lean.relative_to(ROOT).as_posix()])[lean.relative_to(ROOT).as_posix()]
+    return f"built from {_SOURCES[ROOT]}"
+
+
 def artifact_ids(suite: Suite) -> dict[str, str]:
-    """Each declared build output as the key sees it: a file's sha256, "directory", or "absent" (git ignores build outputs, so the
-    tree's object ids never see them)."""
+    """Each declared build output as the key sees it: what the Lean verifier builds, by its sources (`built_from`); any other, a
+    file's sha256, "directory", or "absent" (git ignores build outputs, so the tree's object ids never see them)."""
     out = {}
     for a in suite.artifacts:
         p = ROOT / a
-        if p.is_file():
+        if src := built_from(a):
+            out[a] = src
+        elif p.is_file():
             with open(p, "rb") as f:
                 out[a] = hashlib.file_digest(f, "sha256").hexdigest()
         else:

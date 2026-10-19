@@ -231,7 +231,8 @@ def suite_parts(C, sources: list[Source], lean: bool) -> list[Part]:
     try:
         for s in suites:
             step = "lean-suites" if lean and s.name in C.AFTER_LEAN else "pytest"
-            if needs := [a for a in s.artifacts if (C.ROOT / a).resolve().is_relative_to(built)]:
+            if needs := [a for a in s.artifacts if (C.ROOT / a).resolve().is_relative_to(built)
+                         and not (hasattr(S, "built_from") and S.built_from(a))]:
                 out.append(Part(f"suite:{s.name}", step, None, "unkeyed", why=f"its key reads {needs[0]}, which lean-build builds"))
                 continue
             ids = S.input_ids(tree, sorted(set(inputs[s]) | set(S.RUNNER)), S.markdown(s), cuts[s])
