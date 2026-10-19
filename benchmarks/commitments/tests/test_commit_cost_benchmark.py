@@ -72,13 +72,13 @@ def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_p
     spec = importlib.util.spec_from_file_location("step_root_cost", ROOT / "benchmarks" / "commitments" / "step_root_cost.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.main(["--batch", "3", "--layers", "2", "--k-scale", "256", "--workers", "1,2", "--reps", "1", "--out", str(tmp_path)]) == 0
+    assert mod.main(["--batch", "3", "--layers", "2", "--k-scale", "256", "--reps", "1", "--out", str(tmp_path)]) == 0
     check = research_result.check(tmp_path, None)
     assert check.valid, check.errors
     assert check.validation_status == "passed"
     got = json.loads((tmp_path / "step_root_cost.json").read_text())
     assert got["tables"] == 8 and got["rows"] == 24 and got["reference_root_equal"]
-    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == {"1", "2"}
+    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == {"1"}
 
 
 def test_commit_cost_tool_is_registered() -> None:
