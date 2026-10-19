@@ -82,8 +82,9 @@ def test_every_recorded_root_has_its_coin_and_each_coin_its_place():
         "commit coin 0: coin is the epoch's other coin 0, not its commit coin 0"
     assert C.order_reason(ch.commitment, LABEL, roots, ops[:1] + [dataclasses.replace(ops[1], salt=bytes(192))] + ops[2:]) \
         == "commit coin 1: coin does not open against the epoch's coin commitment"
-    assert C.order_reason(ch.commitment, LABEL, roots, ops[:1] + [dataclasses.replace(ops[1], coin=ops[1].coin[:31])]
-                          + ops[2:]) == "commit coin 1: coin opening is malformed"
+    for short in (ops[1].coin[:32], ops[1].coin[:-1]):
+        assert C.order_reason(ch.commitment, LABEL, roots, ops[:1] + [dataclasses.replace(ops[1], coin=short)]
+                              + ops[2:]) == "commit coin 1: coin opening is malformed"
     with pytest.raises(C.CoinError, match="no noise family"):
         C.order_reason(ch.commitment, "noise", [], [])
     with pytest.raises(C.CoinError, match="no commit coin 4"):
@@ -101,6 +102,32 @@ def test_the_record_asks_for_each_coin_only_after_recording_its_root():
     assert rec.reason() is None
     with pytest.raises(C.CoinError, match="no noise family"):
         C.LiveRecord(ch, "noise")
+
+
+def test_the_record_logs_each_release_after_the_root_it_follows():
+    """`LiveRecord.log` is the release order on the record's clock: root i's receipt, then coin i's release.  That the
+    challenger released coin i only after receiving root i is trusted (`trusted-nebius-host`), not checked: the log
+    records the order, and `order_reason` reads only the roots the openings name."""
+    ticks = iter(range(100))
+    ch = C.LiveChallenger("verity/test/coins/v1", 3, [("other", 1), (LABEL, 3)], entropy("t"))
+    rec = C.LiveRecord(ch, LABEL, clock=lambda: float(next(ticks)))
+    roots = [bytes([i + 1]) * 64 for i in range(3)]
+    ops = [rec.record(r) for r in roots]
+    assert [(e["event"], e["label"], e["index"]) for e in rec.log] == \
+        [(event, LABEL, i) for i in range(3) for event in ("root", "release")]
+    assert [e["received_at"] if e["event"] == "root" else e["released_at"] for e in rec.log] == [0., 1., 2., 3., 4., 5.]
+    assert [e["root"] for e in rec.log[::2]] == [r.hex() for r in roots] == [e["after"] for e in rec.log[1::2]]
+    assert rec.reason() is None and all(len(o.coin) == C.COIN_BYTES == 64 for o in ops)
+    with pytest.raises(C.CoinError, match="every commit coin of the epoch is open"):
+        rec.record(b"\x04" * 64)
+    assert len(rec.log) == 6
+
+    ch = C.LiveChallenger("verity/test/coins/v1", 3, [(LABEL, 2)], entropy("u"))
+    early = C.LiveRecord(ch, LABEL, clock=lambda: float(next(ticks)))
+    ch.open(LABEL, 0, b"\x09" * 64)
+    with pytest.raises(C.CoinError, match="commit coin 0 is already open"):
+        early.record(b"\x01" * 64)
+    assert [e["event"] for e in early.log] == ["root"] and early.reason() == "commit coin 0 was never opened"
 
 
 def test_one_coin_and_a_family_of_many_open_alike():
