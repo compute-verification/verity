@@ -42,6 +42,7 @@ def rowNames : List String := [
   "JI3t_28", "JI3t_29", "JI3t_30", "JI3t_31", "JI3t_32", "JI3t_33", "JI3t_34", "JI3t_35", "JI3t_36", "JI3t_37",
   "JI3t_38", "EFFMB0", "EFFMB1"]
 
+set_option maxRecDepth 32768 in
 /-- VF3s-16's coefficients, row by row: `(class index, numerator, denominator)`. -/
 def vf3s16 : List Sparse := [
   -- 0: issue

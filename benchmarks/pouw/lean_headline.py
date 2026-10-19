@@ -559,6 +559,7 @@ open Accounting.TS
 /-- {VECTOR}'s rows, in index order. -/
 def rowNames : List String := {_list([f'"{r}"' for r in m.rows], "  ")}
 
+set_option maxRecDepth 32768 in
 /-- {VECTOR}'s coefficients, row by row: `(class index, numerator, denominator)`. -/
 def {vf} : List Sparse := [
 {chr(10).join(rows)}]
