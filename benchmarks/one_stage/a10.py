@@ -342,7 +342,8 @@ class Committed:
         outs, interior = {}, []
         for k, (clo, chi) in enumerate(comps):
             member = ports.get(str(k))
-            if member is None and not ports and len(members) == 1 and k == len(comps) - 1:
+            # a one-output relation's return is its one member whatever its port is named, as the replay holds it
+            if member is None and len(members) == 1 and (len(comps) == 1 or (not ports and k == len(comps) - 1)):
                 member = next(iter(members))
             if member not in members:
                 interior.append(k)
