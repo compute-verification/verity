@@ -1,7 +1,7 @@
-"""PoUW's check as a core protocol (`core_check`), the Python reference of the Lean port `pouw_check`.
+"""PoUW's check as a core protocol (`core_check`), the Python reference beside the Lean `pouw_check`.
 
 `verity/core/protocols/pouw/lean/check/tests/pouw_check_cases.py` generates `serve` cases (honest windows, and one
-mutation each aimed at one refusal); that package's `tests/test_difftest.py` holds `pouw-check serve` to this module on
+mutation each aimed at one refusal); that package's `tests/test_difftest.py` holds this module to `pouw-check serve` on
 them, on the shared harness. The tests here hold this module to PoUW's rule: each mutation reaches the refusal it aims
 at, and an accepted window publishes exactly `window.PUBLIC`."""
 from __future__ import annotations

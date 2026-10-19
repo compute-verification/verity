@@ -1,7 +1,8 @@
-"""The differential test of a Lean port against today's Python (`README.md` in this distribution's directory).
+"""The differential test of core's Lean, the verifier of record, against the Python that mirrors it (`README.md` in this
+distribution's directory).
 
-A port is a Lean executable that answers one canonical JSON line per request, the Python reference it must agree with, and a
-Hypothesis strategy of inputs, invalid ones included. There are two kinds, sharing the server, the run and the shrinking:
+A port is a Lean executable that answers one canonical JSON line per request, the Python it must agree with (`reference`),
+and a Hypothesis strategy of inputs, invalid ones included. There are two kinds, sharing the server, the run and the shrinking:
 
 * `Port`: one function behind `Difftest.serve` (`lean/Difftest.lean`), requests `{"fn", "input"}`. Lean and Python must
   give the same output as canonical JSON (`canonical`: compact, keys sorted, integers only), or both reject (reject parity:
