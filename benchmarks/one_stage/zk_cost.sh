@@ -24,7 +24,24 @@ unset CARGO_TARGET_DIR
 for c in "$FLOCK_WORK/cuda-root" /workspace/cache/flock/cuda-root; do
   [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ] && [ -x "$c/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$c/usr/local/cuda-13.3
 done
-[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; exit 1; }
+# else its packages unpacked under FLOCK_WORK without root, as 71-gemm-slowdown.sh does (an R580 driver runs 13.3)
+if [ ! -x /usr/local/cuda-13.3/bin/nvcc ] && [ -z "${CUDA_TK:-}" ]; then
+  CR=$FLOCK_WORK/cuda-root
+  todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
+  while [ -n "$todo" ]; do
+    set -- $todo; q=$1; shift; todo="$*"
+    case " $seen " in *" $q "*) continue ;; esac
+    seen="$seen $q"
+    todo="$todo $(apt-cache show "$q" 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
+      | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
+  done
+  (exec 8>"$FLOCK_WORK/cuda-root.lock"; flock 8; [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || {
+    mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
+      echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) \
+      && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done; }) > "$O/cuda-unpack.log" 2>&1
+  [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] && export CUDA_TK=$CR/usr/local/cuda-13.3
+fi
+[ -x /usr/local/cuda-13.3/bin/nvcc ] || [ -n "${CUDA_TK:-}" ] || { log "no CUDA 13.3 on this node"; tail -5 "$O/cuda-unpack.log"; exit 1; }
 C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; } > "$O/host.txt" 2>&1
 
