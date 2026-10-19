@@ -6580,6 +6580,18 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Accounting.SecurityProofs.Isa.IsaSheet": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.Isa.Sm120Sheet": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.Isa.Sm90Sheet": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.Isa.Sm100Sheet": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -7434,7 +7446,11 @@
    "Accounting.SecurityProofs.RequirementStepsOuter": "completeness: an inclusion over a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean): when each device of X paces its engine steps and begins the window's first step at or before ts and its end at or after td, W's region over the ticks is among its gates on X at those steps; a lemma of the honest model run's credits, about no function of the code.",
    "Accounting.SecurityProofs.RequirementCreditsSteps": "completeness: on a declared circuit's placed execution (Security/Definitions/Accounting/Requirement.lean, Security/Definitions/Accounting/Requirement/Placed.lean), when the node runs W as placed and each device of X paces its engine steps inside the window, PouwWork.credits is at least the work of W's gates on X at the whole steps inside it; about the actual run of a node that runs W as placed (Placement.actual takes the leaf and ticks as given, its operations constants, with no outputs and no coins among its gates), so it says what an honest node is credited or helped, not what a node that passes PoUW ran; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
-   "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code."
+   "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
+   "Accounting.SecurityProofs.Isa.IsaSheet": "lemma: A6 (SheetWords) and A7 (SheetSemantics) from a device's instruction table (Accounting.Isa) whose rows pass the decided discipline, a model that reads it, and the table's premises (Models.Accounting.Assumptions.Isa: the class list's completeness, the labelling, one premise per row family); arithmetic over the table and the labelled run, not a Lean function.",
+   "Accounting.SecurityProofs.Isa.Sm120Sheet": "lemma: IsaSheet on sm_120's table (Accounting.Isa.Sm120.row), its discipline decided row by row and its absent families (wgmma, tcgen05, tensor memory) vacuous; not a Lean function.",
+   "Accounting.SecurityProofs.Isa.Sm90Sheet": "lemma: IsaSheet on sm_90a's table (Accounting.Isa.Sm90.row), its discipline decided row by row and its absent families (tcgen05, tensor memory) vacuous; not a Lean function.",
+   "Accounting.SecurityProofs.Isa.Sm100Sheet": "lemma: IsaSheet on sm_100a's table (Accounting.Isa.Sm100.row), its discipline decided row by row and its absent family (wgmma) vacuous; not a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

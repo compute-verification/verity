@@ -11,6 +11,7 @@ import Models.Accounting.Guarantees.Confidence
 import Models.Accounting.Guarantees.FillerLuck
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.Gates
+import Models.Accounting.Guarantees.Isa
 import Models.Accounting.Guarantees.Joint
 import Models.Accounting.Guarantees.Localization
 import Models.Accounting.Guarantees.Memory
@@ -51,4 +52,5 @@ theorem, runtime corollary, localization, composition and fit, the obligations B
 guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′ for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for receipts bound to the matmul, what a relay of the deployed bound
 receipt's sketch must exchange, the bandwidth audit's guarantee, their per-run forms, PoUW's work lower bound on an isolated node,
 a declared circuit's live and read bits from the blocks the audit credits, PoUW's credits and help as its placed
-execution's gates, and the grinding premium under hashed seeds and the deployed tile's moment. -/
+execution's gates, the grinding premium under hashed seeds and the deployed tile's moment, and the data-sheet axioms
+A6 and A7 from a device's instruction table, sm_120's among them. -/
