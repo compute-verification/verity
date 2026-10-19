@@ -127,3 +127,14 @@ own index and UUID. Each `clocks-*.txt` starts with the same id and answer.
 the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's SeqRoot root) run as in a timed run. No limit,
 audit or control runs, so there is no certificate gate and no storage profile. `bench-result.json` and `result.json`'s
 fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no audit or latency number is cited from it.
+
+`streamed_wipe/` times the streamed-label wipe (`verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe")
+on one node: the labels one GPU derives (`labels.cu`, gated against `streamed_wipe.label`), what reaches pinned host
+memory, the NIC's line rate and RDMA loopback, and 74,000-challenge round trips at batch sizes from 1 to 74,000, plus one
+whole reference session. `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, takes one GPU through
+`gpu-lease` and writes `timing.json`:
+
+~~~bash
+research run --on <RTX PRO 6000 node> --project verity --source . --cwd source --campaign streamed-wipe \
+  -- bash benchmarks/pous/streamed_wipe/run.sh
+~~~
