@@ -18,6 +18,7 @@ ruling, because the commitment's hash is a design rule ("One hash", AGENTS.md).
 | `bytes/` | fewer SHA-512 compressions with the hash kept: values out of the Commit and leaf-format changes, priced through `model/` |
 | `overlap/` | hm96-sha512 hashing of a Qwen3-8B prefill step beside its GEMMs (cuBLASLt, CUTLASS, a persistent hash server) |
 | `loop/` | the standard loop: one iteration's served_commit runs on three GPUs (`iterate.sh`), their collection and labels (`collect.py`), and the plot from the evidence store (`plot.py`) |
+| `maxtput/` | the Commit at vLLM's maximum throughput: native compiled vLLM at saturation against the Commit's arms on the same load, each a loop row |
 | `dedup/` | Pearl-C's A rows read from a precomputed root against today's -h3, and the timing of compute accounting's -h4 branch |
 | `memsat/` | memory accounting's remote audit at saturation (receipts and codec against plain serving), through `benchmarks/remote_session` |
 
