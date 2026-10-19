@@ -248,10 +248,15 @@ OP_KERNEL(emp_reg, 384) {
   const Tiles t = emp_tiles(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
   uint32_t out;
-  // Each role folds its own state inside its branch: the lane role at 40 registers must not hold the accumulators live.
+  // setmaxnreg.inc is a retry loop (USETMAXREG.TRY_ALLOC) until the lane role's registers are released, so both run
+  // before the clock starts. Each role folds its own state inside its branch: the lane role at 40 registers must not
+  // hold the accumulators live.
+  if (mma_role)
+    asm volatile("setmaxnreg.inc.sync.aligned.u32 232;" ::: "memory");
+  else
+    asm volatile("setmaxnreg.dec.sync.aligned.u32 40;" ::: "memory");
   OP_BEGIN_STOP
   if (mma_role) {
-    asm volatile("setmaxnreg.inc.sync.aligned.u32 232;" ::: "memory");
     int d[64] = {};
     OP_LOOP(it) {
       emp_group4n128(d, t);
@@ -262,7 +267,6 @@ OP_KERNEL(emp_reg, 384) {
     wgmma_hold(d);
     out = emp_fold(d);
   } else {
-    asm volatile("setmaxnreg.dec.sync.aligned.u32 40;" ::: "memory");
     Lane l((uint32_t)threadIdx.x);
     OP_UNTIL(n) { lane_ops<L_IMAD, 64>(l); }
     OP_TRIPS(n)
