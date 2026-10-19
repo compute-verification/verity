@@ -29,7 +29,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training"]
 
 HANDLES = [*HANDLES, "training"]
 
@@ -1126,10 +1126,11 @@ def test_ask_daniels_dry_run_prints_both_shapes_and_sends_nothing(route, registr
 
 
 class FakeNotion:
-    """Notion's API for the Asks for Daniel database: page creation, a property patch, a data source query and comments."""
+    """Notion's API for the Asks for Daniel database: page creation, a property patch, a data source query, comments, and
+    reading a page (`pages`, by id)."""
 
     def __init__(self):
-        self.requests, self.results, self.comments, self.answer = [], [], {}, None
+        self.requests, self.results, self.comments, self.answer, self.pages = [], [], {}, None, {}
 
     def handle(self, method: str, path: str, body: dict | None, headers) -> tuple[int, dict]:
         self.requests.append((method, path, body, headers.get("Authorization"), headers.get("Notion-Version")))
@@ -1143,6 +1144,8 @@ class FakeNotion:
             return 200, {"results": self.results}
         if method == "GET" and path.startswith("/v1/comments?block_id="):
             return 200, {"results": self.comments.get(path.split("=")[1].split("&")[0], [])}
+        if method == "GET" and path.startswith("/v1/pages/") and path[len("/v1/pages/"):] in self.pages:
+            return 200, {"object": "page", **self.pages[path[len("/v1/pages/"):]]}
         return 404, {"code": "object_not_found", "message": "no such object"}
 
 
@@ -1286,6 +1289,47 @@ def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comme
                                       {"property": "Lane", "select": {"equals": "infra"}}]
     rc, out, _ = run(capsys, "ask-daniel", "pages", "--json")
     assert rc == 0 and json.loads(out)[0]["decision"] == "Option B, and restate gamma"
+
+
+@pytest.mark.parametrize("to", ["@daniel", "daniel"])
+def test_ask_to_daniel_makes_his_page_and_card_as_ask_daniel_page_does(route, notion, fake, registry, tmp_path, capsys, to):
+    """One `ask` verb whose target picks the store: a handle's Linear team, or the Asks for Daniel database."""
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, out, err = run(capsys, "ask", "--to", to, *card_argv("--page", str(page), "--area", "Process", link=None)[1:])
+    assert rc == 0 and out.split()[0] == "42" and "page https://app.notion.com/p/p1" in err
+    via_ask = (list(notion.requests), list(route.requests))
+    notion.requests.clear()
+    route.requests.clear()
+    assert run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))[0] == 0
+    assert via_ask == (notion.requests, route.requests) and [r[:2] for r in notion.requests] == [("POST", "/v1/pages"), ("PATCH", "/v1/pages/p-1")]
+    assert COORD not in fake.messages                                  # no tag in #agent-coordination, and no Linear issue
+
+
+def test_ask_to_daniel_names_exactly_the_flags_it_lacks_and_sends_nothing(route, notion, fake, registry, tmp_path, capsys):
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@daniel", "--question", "Adopt it?", "--page", str(page))
+    assert rc == 2 and "it needs --kind, --why, --option, --recommend, --default, --deadline, --area;" in err
+    assert "asking-daniel/SKILL.md" in err and "`ask-daniel --link`" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "daniel")
+    assert rc == 2 and "it needs --kind, --question, --why, --option, --recommend, --default, --deadline, --page, --area;" in err
+    full = card_argv("--page", str(page), "--area", "Process", link=None)[1:]
+    rc, _, err = run(capsys, "ask", "--to", "@daniel", *full, "--text", "the brief")
+    assert rc == 2 and "give its Markdown as --page FILE.md" in err
+    rc, _, err = run(capsys, "ask", "--to", "@daniel", *full, "--urgent")
+    assert rc == 2 and "--kind blocking" in err
+    rc, _, err = run(capsys, "ask", "--to", "@daniel", *full, "--deadline", "1:00 PM")
+    assert rc == 2 and "has passed" in err                             # then the card's own checks, as ask-daniel makes them
+    assert not notion.requests and not route.requests and not fake.calls
+
+
+def test_ask_to_daniels_dry_run_prints_the_page_and_the_card_and_sends_nothing(route, notion, fake, registry, tmp_path, capsys):
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, out, err = run(capsys, "ask", "--to", "@daniel", *card_argv("--page", str(page), "--area", "Process", "--dry-run", link=None)[1:])
+    assert rc == 0 and not out and f"dry-run: POST {slack.NOTION_API}/pages" in err and f"dry-run: POST {slack.ASK_DANIEL}" in err
+    assert not notion.requests and not route.requests and not fake.calls
 
 
 # ---- routing: `@name` at the start of a post rings that name's doorbell ---------------------------------------------------------------
@@ -1872,9 +1916,9 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
     assert {d["name"] for d in rep["dropped"]} == {"no-such-lane", "subteam^SRETIRED"}
-    assert {"ts": retired["ts"], "by": "top", "to": []} in rep["unanswered"]
+    assert {"ts": retired["ts"], "by": "top", "to": [], "record": "slack", "ref": None, "state": "no reply or reaction"} in rep["unanswered"]
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
-    assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out
+    assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out and out.count(": Slack, no record: no reply or reaction") >= 2
     stale = [s["ts"] for s in rep["unanswered"]]
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
@@ -1967,6 +2011,7 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     filed_started = ask_at(fake, proofs, 200, "lean", linked.replace("PRF-1", "PRF-2"))   # filed straight into In Progress
     later = ask_at(fake, proofs, 300, "lean", linked.replace("PRF-1", "PRF-3"))           # answered after --now
     lost = ask_at(fake, proofs, 400, "lean", linked.replace("PRF-1", "PRF-404"))          # Linear can't read it
+    settled = ask_at(fake, proofs, 450, "infra", linked.replace("PRF-1", "PRF-5"))         # filed already Done
     eyes = ask_at(fake, circuits, 500, "infra", "@circuits a second look at the lowering?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
     both = ask_at(fake, circuits, 550, "infra", "@circuits @proofs who owns the cut?", reactions=[{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}])
     for box, dt in ((proofs, 551), (circuits, 552)):                                          # `deliver` rang circuits again
@@ -1987,6 +2032,7 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
                        comments=[(t + 30, "infra"), (t + 600, "~Daniel")]),                  # the asker's comment isn't an answer
         "PRF-2": issue(t + 99, moves=[(t + 99, "backlog", "started")], comments=[(t + 99 + 1800, "proofs")]),
         "PRF-3": issue(t + 199, moves=[(now + 60, "backlog", "started")], comments=[(now + 30, "proofs")]),
+        "PRF-5": issue(t + 349, moves=[(t + 349, "backlog", "completed")]),
     })
     monkeypatch.setattr(linear, "_http", fake_linear)
     monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
@@ -1995,7 +2041,8 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     by = {(a["lane"], a["ts"]): a for a in rep["asks"]}
     assert (by["circuits", renamed["ts"]]["minutes"], by["circuits", renamed["ts"]]["answer_by"]) == (3.0, "old-circuits")
     assert [by["proofs", x["ts"]]["answer_by"] for x in (linear_ask, filed_started)] == [None, "proofs"]   # the app moved it
-    assert rc == 0 and len(rep["asks"]) == 10 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404"]
+    assert rc == 0 and len(rep["asks"]) == 11 and sorted(fake_linear.asked) == ["PRF-1", "PRF-2", "PRF-3", "PRF-404", "PRF-5"]
+    assert (by["proofs", settled["ts"]]["first"], by["proofs", settled["ts"]]["minutes"]) == ("linear-filed", None)   # untimed
     assert (by["circuits", slack_ask["ts"]]["first"], by["circuits", slack_ask["ts"]]["minutes"]) == ("slack-reply", 10.0)
     assert (by["proofs", linear_ask["ts"]]["first"], by["proofs", linear_ask["ts"]]["minutes"]) == ("linear-state", 5.0)
     assert (by["proofs", filed_started["ts"]]["first"], by["proofs", filed_started["ts"]]["minutes"]) == ("linear-comment", 30.0)
@@ -2005,16 +2052,132 @@ def test_traffic_latency_takes_each_lanes_first_answer_on_slack_or_linear(fake, 
     assert by["circuits", both["ts"]]["first"] is None and by["proofs", both["ts"]]["first"] is None   # whose 👀? unknown
     assert by["circuits", fresh["ts"]]["age_minutes"] == round((now - float(fresh["ts"])) / 60, 1)
     assert rep["lanes"] == [
-        {"lane": "circuits", "asks": 5, "answered": 3, "slack": 2, "linear": 0, "untimed": 1, "median_min": 3.0,
+        {"lane": "circuits", "asks": 5, "answered": 3, "slack": 2, "linear": 0, "notion": 0, "untimed": 1, "median_min": 3.0,
          "p90_min": 10.0, "unanswered": 2, "stale": 1},
-        {"lane": "proofs", "asks": 5, "answered": 2, "slack": 0, "linear": 2, "untimed": 0, "median_min": 5.0,
+        {"lane": "proofs", "asks": 6, "answered": 3, "slack": 0, "linear": 2, "notion": 0, "untimed": 1, "median_min": 5.0,
          "p90_min": 30.0, "unanswered": 3, "stale": 3}]
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
     lines = out.splitlines()
     assert rc == 0 and lines[0].startswith("ask latency over the last 24 h")
-    assert lines[2].split() == ["@circuits", "5", "3", "2", "0", "1", "3.0", "10.0", "2", "1"]
-    assert lines[3].split() == ["@proofs", "5", "2", "0", "2", "0", "5.0", "30.0", "3", "3"]
+    assert lines[2].split() == ["@circuits", "5", "3", "2", "0", "0", "1", "3.0", "10.0", "2", "1"]
+    assert lines[3].split() == ["@proofs", "6", "3", "0", "2", "0", "1", "5.0", "30.0", "3", "3"]
     assert lines[4] == "  linear: 1 issue(s) unread, counted from Slack alone: PRF-404: Linear: Entity not found: Issue"
+
+
+PAGE_A, PAGE_B, PAGE_C, PAGE_D = ("0123456789abcdef" * 2, "fedcba9876543210" * 2, "00112233445566778899aabbccddeeff",
+                                  "ffeeddccbbaa99887766554433221100")
+URL_A, URL_B = f"https://app.notion.com/p/{PAGE_A}", f"https://www.notion.so/verity/Adopt-KeyBinding-{PAGE_B}?pvs=4"
+URL_C, URL_D = f"https://app.notion.com/p/{PAGE_C}", f"https://app.notion.com/p/{PAGE_D}"
+
+
+def notion_page(status: str, edited: float) -> dict:
+    return {"last_edited_time": iso(edited), "properties": {"Status": {"type": "status", "status": {"name": status}}}}
+
+
+def card_at(fake, dt: float, asker: str, url: str | None = None, mention_url: str | None = None, **kw) -> dict:
+    """A #ask-daniel card at T0 + dt as the route posts it, its question and asker in its blocks and its page's link (`url`)
+    on a button; or (`mention_url`) the link only in its asker's mention in the thread, as `ask-daniel` posts it."""
+    blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "`DEFAULT` *Adopt it?*"}},
+              *([{"type": "actions", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Open"}, "url": url}]}] if url else []),
+              {"type": "context", "elements": [{"type": "mrkdwn", "text": f"asked by <https://cursor.com/agents/bc-x|{asker}> (agent `bc-x`)"}]}]
+    m = fake.add(ASK, text="Adopt it?", username="Verity", bot_id=BOT, blocks=blocks, ts=f"{T0 + dt:.6f}", **kw)
+    if mention_url:
+        m["reply_count"] = m.get("reply_count", 0) + 1
+        fake.add(ASK, text=f"<@UDANIEL> a decision for you: Adopt it? Read it, comment or decide on its page: {mention_url} (card `42`)",
+                 username=asker, bot_id=BOT, thread_ts=m["ts"], ts=f"{T0 + dt + 1:.6f}")
+    return m
+
+
+def test_notion_page_id_reads_each_url_shape_and_nothing_else():
+    assert slack.notion_page_id(URL_A) == PAGE_A and slack.notion_page_id(URL_B) == PAGE_B
+    assert slack.notion_page_id("https://www.notion.so/01234567-89ab-cdef-0123-456789abcdef") == PAGE_A
+    assert slack.notion_page_id(f"https://github.com/x/{PAGE_A}") is None and slack.notion_page_id("https://app.notion.com/p/p1") is None
+
+
+def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fake, registry, routes_dirs, notion, capsys, monkeypatch):
+    """An ask lives in one record, and answered is that record's state: a handle's linked ask by its Linear issue, whatever its
+    thread shows; Daniel's card by its page's Status, whatever its thread or reactions show; and Slack's reply or reaction only
+    for an ask with no record.  A card that links no page isn't counted, and a page Notion can't read leaves its card unanswered."""
+    from research import linear
+    inbox(fake, routes_dirs, "proofs")
+    linked = "@proofs the opening's soundness error?\nLinear: <https://linear.app/x/issue/PRF-1|PRF-1>"
+    eyes = [{"name": "eyes", "users": ["U0VERITYBOT"], "count": 1}]
+    backlog = fake.add(COORD, text=linked, username="infra", bot_id=BOT, ts=f"{T0:.6f}", reply_count=1, reactions=eyes)
+    fake.add(COORD, text="2^-80", username="proofs", bot_id=BOT, thread_ts=backlog["ts"], ts=f"{T0 + 60:.6f}")   # its issue: still Backlog
+    moved = fake.add(COORD, text=linked.replace("PRF-1", "PRF-2"), username="infra", bot_id=BOT, ts=f"{T0 + 1:.6f}")
+    reacted = fake.add(COORD, text="@proofs no issue", username="infra", bot_id=BOT, ts=f"{T0 + 2:.6f}",
+                       reactions=[{"name": "white_check_mark", "users": ["U0VERITYBOT"], "count": 1}])
+    silent = fake.add(COORD, text="@proofs nothing yet", username="infra", bot_id=BOT, ts=f"{T0 + 3:.6f}")
+    waiting = card_at(fake, 10, "memory-accounting", url=URL_A, mention_url=URL_A, reactions=eyes)   # a mention and 👀: no answer
+    approved = card_at(fake, 20, "lean", url=URL_B)
+    revising = card_at(fake, 30, "proofs", mention_url=URL_C)
+    card_at(fake, 40, "infra")                                                       # links no page: predates the database
+    lost = card_at(fake, 50, "infra", url=URL_D)                                     # Notion can't read it
+    notion.pages = {PAGE_A: notion_page("Waiting on Daniel", T0 + 11), PAGE_B: notion_page("Approved", T0 + 600),
+                    PAGE_C: notion_page("Revising", T0 + 700)}
+    by_asker = {"botActor": {"userDisplayName": "infra"}, "user": None, "body": "any news?"}
+    monkeypatch.setattr(linear, "_http", FakeLinearIssues({"PRF-1": {"state": {"type": "backlog"}, "comments": {"nodes": [by_asker]}},
+                                                           "PRF-2": {"state": {"type": "started"}, "comments": {"nodes": []}}}))
+    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
+    now = f"{T0 + 86400:.0f}"
+    rc, out, _ = run(capsys, "traffic", "--hours", "48", "--now", now, "--json")
+    rep = json.loads(out)
+    un, ans = {x["ts"]: x for x in rep["unanswered"]}, {x["ts"]: x for x in rep["answered"]}
+    assert rc == 0 and set(un) == {backlog["ts"], silent["ts"], waiting["ts"], lost["ts"]}
+    assert set(ans) == {moved["ts"], reacted["ts"], approved["ts"], revising["ts"]}
+    assert [un[backlog["ts"]][k] for k in ("record", "ref", "state")] == ["linear", "PRF-1", "in Backlog, no comment but the asker's"]
+    assert [ans[moved["ts"]][k] for k in ("record", "ref", "state")] == ["linear", "PRF-2", "left Backlog (started)"]
+    assert [ans[reacted["ts"]][k] for k in ("record", "ref", "state")] == ["slack", None, "reacted"]
+    assert un[silent["ts"]]["state"] == "no reply or reaction"
+    assert un[waiting["ts"]] == {"ts": waiting["ts"], "by": "memory-accounting", "to": ["daniel"], "record": "notion", "ref": URL_A,
+                                 "state": "Status Waiting on Daniel"}
+    assert (ans[approved["ts"]]["ref"], ans[approved["ts"]]["state"]) == (URL_B, "Status Approved")
+    assert (ans[revising["ts"]]["ref"], ans[revising["ts"]]["by"], ans[revising["ts"]]["state"]) == (URL_C, "proofs", "Status Revising")
+    assert un[lost["ts"]]["state"].startswith(f"unreadable (GET {slack.NOTION_API}/pages/{PAGE_D}: Notion can't see it")
+    rc, out, _ = run(capsys, "traffic", "--hours", "48", "--now", now)
+    assert rc == 0 and "answered: 4 ask(s), by their record: 1 on Linear, 2 on Notion, 1 on Slack (no record)" in out
+    assert f"UNANSWERED {backlog['ts']} by @infra to @proofs" in out and "): Linear PRF-1 in Backlog, no comment but the asker's" in out
+    assert f"UNANSWERED {waiting['ts']} by @memory-accounting to @daniel" in out and f"): Notion page {URL_A} Status Waiting on Daniel" in out
+    assert f"UNANSWERED {silent['ts']} by @infra to @proofs" in out and "): Slack, no record: no reply or reaction" in out
+
+
+def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_alone(fake, registry, routes_dirs, notion,
+                                                                                                 capsys, monkeypatch):
+    """Daniel's card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
+    property history); a status reached after --now doesn't count.  A lane's reply under a linked ask is no answer while its
+    issue sits in Backlog.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
+    from research import linear
+    proofs = inbox(fake, routes_dirs, "proofs")
+    now = T0 + 86400
+    linked = ask_at(fake, proofs, 0, "infra", "@proofs the cut's error?\nLinear: <https://linear.app/x/issue/PRF-5|PRF-5>")
+    reply_at(fake, linked, 60, "proofs", "on it")
+    approved = card_at(fake, 100, "lean", url=URL_A)
+    waiting = card_at(fake, 200, "lean", url=URL_B)
+    late = card_at(fake, 300, "lean", mention_url=URL_C)
+    notion.pages = {PAGE_A: notion_page("Approved", T0 + 100 + 2700), PAGE_B: notion_page("Waiting on Daniel", T0 + 300),
+                    PAGE_C: notion_page("Decided otherwise", now + 60)}
+    monkeypatch.setattr(linear, "_http", FakeLinearIssues({"PRF-5": issue(T0 - 1, comments=[(T0 + 30, "infra")])}))
+    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
+    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
+    rep = json.loads(out)
+    by = {a["ts"]: a for a in rep["asks"]}
+    assert rc == 0 and [by[linked["ts"]][k] for k in ("lane", "record", "ref", "first")] == ["proofs", "linear", "PRF-5", None]
+    assert {k: by[approved["ts"]][k] for k in ("lane", "by", "record", "ref", "state", "first", "minutes")} == \
+        {"lane": "daniel", "by": "lean", "record": "notion", "ref": URL_A, "state": "Approved", "first": "notion-status", "minutes": 45.0}
+    assert (by[waiting["ts"]]["first"], by[waiting["ts"]]["state"]) == (None, "Waiting on Daniel")
+    assert (by[late["ts"]]["first"], by[late["ts"]]["state"]) == (None, "Decided otherwise")
+    assert next(x for x in rep["lanes"] if x["lane"] == "daniel") == {
+        "lane": "daniel", "asks": 3, "answered": 1, "slack": 0, "linear": 0, "notion": 1, "untimed": 0, "median_min": 45.0,
+        "p90_min": 45.0, "unanswered": 2, "stale": 2}
+    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
+    lines = out.splitlines()
+    assert rc == 0 and lines[1].split()[:6] == ["lane", "asks", "answered", "slack", "linear", "notion"]
+    assert lines[2].split() == ["@daniel", "3", "1", "0", "0", "1", "0", "45.0", "45.0", "2", "2"]
+    assert lines[3].split() == ["@proofs", "1", "0", "0", "0", "0", "0", "-", "-", "1", "1"]
+    monkeypatch.delenv("NOTION_API_KEY")
+    rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
+    assert rc == 0 and out.splitlines()[2].split()[:3] == ["@daniel", "3", "0"]
+    assert re.search(r"\n  notion: 3 page\(s\) unread, counted unanswered: https://\S+: no \$NOTION_API_KEY \(", out)
 
 
 def test_nearest_rank_takes_the_ceiling_rank_and_nothing_of_nothing():
@@ -2392,10 +2555,53 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
             return {"issue": {"state": {"type": "backlog"}, "comments": {"nodes": nodes}}}
 
     monkeypatch.setattr(linear, "Linear", Fake)
-    assert slack.issue_taken("INF-1", "infra", {}) is False and "body" in asked[0]
+    assert slack.issue_state("INF-1", "infra", {}) == (False, "in Backlog, no comment but the asker's") and "body" in asked[0]
     nodes.append({"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "@circuits: on it"})
-    assert slack.issue_taken("INF-1", "infra", {}) is True
+    assert slack.issue_state("INF-1", "infra", {}) == (True, "commented on by circuits")
     nodes[1:] = [{"botActor": {"userDisplayName": "infra"}, "user": None, "body": "still waiting"}]
-    assert slack.issue_taken("INF-1", "infra", {}) is False
+    assert slack.issue_state("INF-1", "infra", {})[0] is False
     nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
-    assert slack.issue_taken("INF-1", "infra", {}) is True
+    assert slack.issue_state("INF-1", "infra", {}) == (True, "commented on by Daniel Reuter")
+
+
+def test_a_bare_run_suffix_needs_a_letter_and_a_digit():
+    """18 Oct: "work dead through the weights" named run `dead`, so a reply under top's program announcement rang comms,
+    which had named its own PR beside "dead code" earlier in the thread."""
+    assert slack.run_ids("prove from r20261018-234409-19cd, after dd21 and 2584; dead code, a bead, the face of 2026") == {"19cd", "dd21"}
+    assert slack.run_ids("r20261018-234409-dead") == {"dead"}
+
+
+def test_a_reply_in_a_channel_the_bot_cannot_read_posts_in_the_thread_it_was_given(fake, registry, capsys, monkeypatch):
+    """#ask-the-team: the bot may post there but lacks channels:history, so finding a reply's thread failed the whole post
+    (top, 19 Oct). A refused read keeps the thread as given; any other failure still stops it."""
+    root = fake.add(COORD, text="a question from Daniel", username="daniel", bot_id=BOT)
+    real, error = slack.post, ["missing_scope"]
+
+    def unreadable(url, data, headers):
+        if url.endswith("conversations.replies"):
+            return {"ok": False, "error": error[0], "needed": "channels:history"}
+        return real(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", unreadable)
+    rc, _, err = run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "the node is free")
+    assert rc == 0, err
+    assert [m["text"].split("\n")[0] for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]] == ["the node is free"]
+    error[0] = "channel_not_found"
+    assert run(capsys, "send", "--as", "infra", "--thread", root["ts"], "--text", "again")[0] == 2
+
+
+def test_ring_run_rings_the_launching_lanes_inbox_once_per_run(fake, registry, routes_dirs, capsys, monkeypatch):
+    """The control pod rings a run's end: the lane whose route holds the launching agent, or `--to` for a worker, once."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    box = inbox(fake, routes_dirs, "circuits")
+    rc, _, err = run(capsys, "ring-run", "--run", "r20261019-051500-ab12", "--rc", "0", "--agent", "bc-circuits",
+                     "--text", "TP8 decode point done")
+    assert rc == 0 and "route @circuits: rang for run r20261019-051500-ab12" in err
+    assert [m["text"] for m in bells(fake, box)] == ["from runs, run r20261019-051500-ab12 rc 0 (bc-circuits): TP8 decode point done"]
+    assert run(capsys, "ring-run", "--run", "r20261019-051500-ab12", "--rc", "0", "--agent", "bc-circuits")[0] == 0
+    assert len(bells(fake, box)) == 1                                                  # the pod may call it twice
+    rc, _, err = run(capsys, "ring-run", "--run", "r20261019-051600-cd34", "--rc", "1", "--agent", "bc-01234567")
+    assert rc == 2 and "pass --to @LANE" in err                                        # a worker holds no handle
+    assert run(capsys, "ring-run", "--run", "r20261019-051600-cd34", "--rc", "1", "--agent", "bc-01234567",
+               "--to", "@circuits")[0] == 0
+    assert len(bells(fake, box)) == 2 and bells(fake, box)[-1]["text"].startswith("from runs, run r20261019-051600-cd34 rc 1 (bc-01234567): ")
