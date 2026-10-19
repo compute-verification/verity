@@ -32,6 +32,7 @@ import Proofs.Flock.Claims.ZK.ExeLayout
 import Proofs.Flock.Claims.ZK.Refusals
 import Proofs.Flock.Claims.ZK.FirstRefusal
 import Proofs.Flock.Claims.ZK.Stopped
+import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -193,6 +194,10 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   throw does stop `honestPR` (`Masked.honestPR_thrown`: the session stops right after the send whose reply it refused,
   within the openings' answers), so `Flock.zk_deployZk_masked_exe_live_gap` drops that premise: left are the encoding
   at the rounds after the first where no refusal is seen, the plan's `Causal`, its round `0` and the last round.
+* `Sent`: at a round after the first where no refusal is seen, `honestPR` sends the masked session's next body at the
+  openings' answers, tagged `0` (`Masked.honestPR_live`, from `FlockComplete.ZkTables.honestPR_sent`), so
+  `Flock.zk_deployZk_masked_exe_sent_gap` asks the encoding there against that run: that the session sends past the
+  openings (`hsend`) and that the encoding is its next body (`hbody`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
