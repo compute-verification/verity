@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 its runs that end well (`ExactOn`), and rejects on the others before the slot, has the count where it ends well and
 only rejected outcomes elsewhere. Where `Φ` vanishes on two rejected outcomes that is enough for `SlotAt`:
 
-* `Out.playsT`, `Out.of_interleave`, `Reach.out`: an outcome is played on some run; an outcome of two interleaved games
+* `Out.playsT_rej`, `Out.of_interleave_rej`, `Reach.out_rej`: an outcome is played on some run; an outcome of two interleaved games
   is a pair of their outcomes; an outcome a strategy reaches is an outcome;
 * `DistR`, `DistR.bind_on`: `Dist` with a `rej` case, every outcome rejected; a lockstep with no table node of the slot,
   exact on its runs that end well, followed by a continuation that rejects after the others, adds the shape's coins;
@@ -23,7 +23,7 @@ namespace FlockSoundness.Game
 
 variable {α β : Type}
 
-theorem Out.playsT {g : Game α} {b : α} (h : Out g b) : ∃ ts, PlaysT g ts b := by
+theorem Out.playsT_rej {g : Game α} {b : α} (h : Out g b) : ∃ ts, PlaysT g ts b := by
   induction h with
   | ret b => exact ⟨[], .ret b⟩
   | send m _ ih =>
@@ -33,38 +33,38 @@ theorem Out.playsT {g : Game α} {b : α} (h : Out g b) : ∃ ts, PlaysT g ts b 
       obtain ⟨ts, h⟩ := ih
       exact ⟨_, .coin c h⟩
 
-theorem Out.of_interleaveWith {g₁ : Game α} {adv : Game β → Game (α × β)} {fin : β → Game (α × β)}
+theorem Out.of_interleaveWith_rej {g₁ : Game α} {adv : Game β → Game (α × β)} {fin : β → Game (α × β)}
     (hadv : ∀ g₂ c, Out (adv g₂) c → Out g₁ c.1 ∧ Out g₂ c.2) (hfin : ∀ b c, Out (fin b) c → Out g₁ c.1 ∧ c.2 = b) :
     ∀ {g₂ : Game β} {c : α × β}, Out (interleaveWith adv fin g₂) c → Out g₁ c.1 ∧ Out g₂ c.2
   | .ret b, c, h => ⟨(hfin b c h).1, by rw [(hfin b c h).2]; exact .ret b⟩
   | .send _ _, c, .send first h => by
       cases first
       · cases h with
-        | send m h => exact ⟨(Out.of_interleaveWith hadv hfin h).1, .send m (Out.of_interleaveWith hadv hfin h).2⟩
+        | send m h => exact ⟨(Out.of_interleaveWith_rej hadv hfin h).1, .send m (Out.of_interleaveWith_rej hadv hfin h).2⟩
       · exact hadv _ c h
   | @Game.coin _ _ _ _ _, c, .send first h => by
       cases first
       · cases h with
-        | coin x h => exact ⟨(Out.of_interleaveWith hadv hfin h).1, .coin x (Out.of_interleaveWith hadv hfin h).2⟩
+        | coin x h => exact ⟨(Out.of_interleaveWith_rej hadv hfin h).1, .coin x (Out.of_interleaveWith_rej hadv hfin h).2⟩
       · exact hadv _ c h
 
 /-- **An outcome of two interleaved games is a pair of their outcomes.** -/
-theorem Out.of_interleave :
+theorem Out.of_interleave_rej :
     ∀ {g₁ : Game α} {g₂ : Game β} {c : α × β}, Out (interleave g₁ g₂) c → Out g₁ c.1 ∧ Out g₂ c.2
   | .ret a, _, _, h => by
       obtain ⟨b, hb, rfl⟩ := Out.of_map h
       exact ⟨.ret a, hb⟩
   | .send _ _, _, _, h =>
-      Out.of_interleaveWith
+      Out.of_interleaveWith_rej
         (fun _ _ h => by
           cases h with
-          | send m h => exact ⟨.send m (Out.of_interleave h).1, (Out.of_interleave h).2⟩)
+          | send m h => exact ⟨.send m (Out.of_interleave_rej h).1, (Out.of_interleave_rej h).2⟩)
         (fun _ _ h => by obtain ⟨a, ha, rfl⟩ := Out.of_map h; exact ⟨ha, rfl⟩) h
   | @Game.coin _ _ _ _ _, _, _, h =>
-      Out.of_interleaveWith
+      Out.of_interleaveWith_rej
         (fun _ _ h => by
           cases h with
-          | coin x h => exact ⟨.coin x (Out.of_interleave h).1, (Out.of_interleave h).2⟩)
+          | coin x h => exact ⟨.coin x (Out.of_interleave_rej h).1, (Out.of_interleave_rej h).2⟩)
         (fun _ _ h => by obtain ⟨a, ha, rfl⟩ := Out.of_map h; exact ⟨ha, rfl⟩) h
 
 end FlockSoundness.Game
@@ -73,10 +73,10 @@ namespace FlockSoundness.Game.Lock
 
 open FlockSoundness.Discharge.Exec
 
-theorem Reach.out {β : Type} : ∀ {g : Game β} {σ : Strategy g} {b : β}, Reach g σ b → Out g b
+theorem Reach.out_rej {β : Type} : ∀ {g : Game β} {σ : Strategy g} {b : β}, Reach g σ b → Out g b
   | .ret _, _, _, h => by subst h; exact .ret _
-  | .send _ k, σ, _, h => .send σ.1 (Reach.out (g := k σ.1) (σ := σ.2) h)
-  | @Game.coin _ _ _ _ k, σ, _, ⟨c, h⟩ => .coin c (Reach.out (g := k c) (σ := σ c) h)
+  | .send _ k, σ, _, h => .send σ.1 (Reach.out_rej (g := k σ.1) (σ := σ.2) h)
+  | @Game.coin _ _ _ _ k, σ, _, ⟨c, h⟩ => .coin c (Reach.out_rej (g := k c) (σ := σ c) h)
 
 /-- **Every path meets `slot`'s table node after exactly `j` coins**, or meets no such node, or ends only in `Rej`
 outcomes. -/
@@ -145,7 +145,7 @@ theorem out_bind_of_none {β γ : Type} {g' : Game β} {f' : β → Game γ} {P 
     ∀ c, Out (g'.bind f') c → Rej c := by
   intro c hc
   obtain ⟨b, hb, hc⟩ := Out.of_bind hc
-  obtain ⟨ts, hp⟩ := hb.playsT
+  obtain ⟨ts, hp⟩ := hb.playsT_rej
   exact hR b (fun hP => hn ⟨ts, b, hp, hP⟩) c hc
 
 /-- **A distance after a lockstep with no table node of the slot, exact on its runs that end well**, adds the shape's
@@ -290,7 +290,7 @@ theorem SlotAtDR.slotAt {Dead Rej : β → Prop} {plur : Chooser T D β} {Φ : D
   | here σ' => exact .here σ'
   | dead hσ => exact .nul (forkE_of_reach plur slot hΦ _ _ hσ)
   | noSlot h0 => exact .of_noSlot h0 _
-  | rej hR => exact .nul (forkE_of_reach plur slot hΦR _ _ fun b hb => hR b (Reach.out hb))
+  | rej hR => exact .nul (forkE_of_reach plur slot hΦR _ _ fun b hb => hR b (Reach.out_rej hb))
 
 theorem SlotAtDR.of_distR {Dead Rej : β → Prop} {j : ℕ} {i : I} {g : Game α} {g' : Game β}
     {L : Lock T D get R i g g'} (h : DistR slot Rej j L) (σ' : Strategy g') : SlotAtDR slot Dead Rej j L σ' := by
@@ -431,7 +431,7 @@ theorem SlotAtDR.rightSame_followR {Dead Rej : γ × β → Prop} {Dead' Rej' : 
     fun h0 => .noSlot (h0.rightSame _)
   have hrej : ∀ {h : Game γ} {g' : Game β} {σ : Strategy (interleave h g')} {k : ℕ} {i : I} {g : Game α}
       (L : Lock T D get R i g g'), (∀ b, Out g' b → Rej' b) → SlotAtDR slot Dead Rej k (Lock.rightSame h L) σ :=
-    fun _ hR => .rej fun x hx => hRj x (hR x.2 (Out.of_interleave hx).2)
+    fun _ hR => .rej fun x hx => hRj x (hR x.2 (Out.of_interleave_rej hx).2)
   induction hF with
   | dead hσ => exact fun _ _ _ => .dead hσ
   | spent _ =>
@@ -480,7 +480,7 @@ theorem SlotAtDR.leftSame_followL {Dead Rej : β × γ → Prop} {Dead' Rej' : �
     fun h0 => .noSlot (h0.leftSame _)
   have hrej : ∀ {g' : Game β} {h : Game γ} {σ : Strategy (interleave g' h)} {k : ℕ} {i : I} {g : Game α}
       (L : Lock T D get R i g g'), (∀ b, Out g' b → Rej' b) → SlotAtDR slot Dead Rej k (Lock.leftSame L h) σ :=
-    fun _ hR => .rej fun x hx => hRj x (hR x.1 (Out.of_interleave hx).1)
+    fun _ hR => .rej fun x hx => hRj x (hR x.1 (Out.of_interleave_rej hx).1)
   induction hF with
   | dead hσ => exact fun _ _ _ => .dead hσ
   | spent _ =>
@@ -646,7 +646,7 @@ theorem SlotAtDR.lead_fst {Rej₁ : β₁ → Prop} (hKn : ∀ i a b (hr : RPair
       (∀ b, Out g₁' b → Rej₁ b) → SlotAtDR slot Dead Rej j (Lock.bind hK (interleaveLock hd L₁ L₂)) σ :=
     fun {_ _ _ _ _ _} _ {_ _} _ hR => .rej fun c hc => by
       obtain ⟨x, hx, hc⟩ := Out.of_bind hc
-      exact hRj x c (hR x.1 (Out.of_interleave hx).1) hc
+      exact hRj x c (hR x.1 (Out.of_interleave_rej hx).1) hc
   induction hS with
   | dead hσ =>
       intro _ _ _ _ _ _ _ _ _
