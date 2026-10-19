@@ -7,11 +7,13 @@ The executors, as they stand:
 - **vy-nebius-2, GPUs:** `gpu-lease N --wait`, with the job's flags, around the workload; the runner is in the CPU scope
   below. Under the node agent's live mode, gpu-lease's wait file is the brain's queue and its grant is the brain's
   decision; with the agent down, gpu-lease's own rules decide.
-- **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden. A guest runs at
-  nice 19 on its share's CPUs, and node 2's ops daemon pauses it through a timed window. The scope holds the CPUs itself
-  (`AllowedCPUs=`), so a workload's own `taskset` can't leave them; systemd drops that without a word where user@.service
-  doesn't delegate cpuset (research's pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the
-  scope's cpuset is the pin.
+- **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden, and node 2's ops
+  daemon pauses a guest through a timed window. A guest gets `cpus` CPUs of its share in whole cores of its own (`cores` in
+  the placement: the machine's `research cpu-hold` claims them, waits while none are free, and puts them in this wrapper in
+  place of the share), at nice 0: every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice
+  orders nothing between scopes. The scope holds the CPUs itself (`AllowedCPUs=`), so a workload's own `taskset` can't
+  leave them; systemd drops that without a word where user@.service doesn't delegate cpuset (research's
+  pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the scope's cpuset is the pin.
 - **vy-nebius-1, CPUs only:** the same scope on the CPUs outside the reserved pools, idle (`CPUWeight=idle`): GPU jobs' host
   threads share those CPUs, and network's timing chunks among them stalled for seconds behind Lean audits' replays
   (network-accounting, art:894c0447). An idle scope runs only on CPU time its siblings leave. A job that takes its GPUs
@@ -80,11 +82,12 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
                       f"GPUs (n1_lease.py borrows beyond it only while every waiter is --preemptible), and this asks for {j.gpus}")
     guest = cluster.standing(j.project, node) != OWNER
     pin = cpuset.format(allowed_cpus(cluster, cluster.nodes[node], j))
+    nice = guest and not claims_cores(cluster, j, node)
     runner = ["env", f"GPU_LEASE_WHO={f'{kind}:' if kind else ''}{j.submitter}", f"RESEARCH_RUN_ID={run_id}", "CUDA_VISIBLE_DEVICES=",
               "systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", f"cluster-{run_id}",
               "-p", f"MemoryMax={j.memory_gib}G", "-p", "MemorySwapMax=0", "-p", f"AllowedCPUs={pin}",
               *(["-p", "CPUWeight=idle"] if node == NODE1 and not j.gpus and not gpu_host else []), "--",
-              "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if guest else [])]
+              "sh", "-c", CPUSET_CHECK, "cpuset-check", pin, "taskset", "-c", pin, *(["nice", "-n", "19"] if nice else [])]
     if not j.gpus:
         return runner, []
     lease = ["env", *N1_LEASE_ENV, GPU_LEASE_N1] if node == NODE1 else [GPU_LEASE]
@@ -95,8 +98,14 @@ def wrappers(cluster: Cluster, j: Job, node: str, run_id: str, kind: str | None 
     return runner, [*lease, "--"]
 
 
+def claims_cores(cluster: Cluster, j: Job, node: str) -> bool:
+    """Whether the job takes whole cores of its share on the machine (`research cpu-hold`): a guest's CPU job on node 2."""
+    return node == NODE2 and not j.gpus and cluster.standing(j.project, node) != OWNER
+
+
 def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = None, gpu_host: bool = False) -> dict[str, Any]:
-    """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`. The router's node first, then any other node
+    """Where the job runs and under what: `{node, machine, why, job, wrap, workload_wrap}`, and `cores` (`{cpus, n}`: n CPUs of
+    the pin cpus, which the wrapper names) when the job claims whole cores on the machine. The router's node first, then any other node
     that could run it (only the pinned one when `j.node` is set); Refused with each node's reason when none can."""
     first = place(cluster, j, {}, now)
     if first.node is None:
@@ -113,8 +122,10 @@ def resolve(cluster: Cluster, j: Job, run_id: str, now: int, kind: str | None = 
         except Refused as e:
             reasons.append(f"{name}: {e}")
             continue
+        cores = {"cores": {"cpus": cpuset.format(allowed_cpus(cluster, cluster.nodes[name], pinned)), "n": pinned.cpus}} \
+            if claims_cores(cluster, pinned, name) else {}
         return {"node": name, "machine": name, "why": first.why if name == first.node else f"{reasons[-1]}; so {name}",
-                "job": job_to_dict(pinned), "wrap": wrap, "workload_wrap": workload_wrap}
+                "job": job_to_dict(pinned), "wrap": wrap, "workload_wrap": workload_wrap, **cores}
     raise Refused("; ".join(reasons))
 
 
@@ -151,4 +162,4 @@ def submit(cluster: Cluster, registry: dict[str, Kind], *, run_id: str, now: int
     return out
 
 
-__all__ = ["CPUSET_CHECK", "GPU_LEASE", "GPU_LEASE_N1", "N1_POOL_QUEUE", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]
+__all__ = ["CPUSET_CHECK", "claims_cores", "GPU_LEASE", "GPU_LEASE_N1", "N1_POOL_QUEUE", "UNSEEN_POOL", "Refused", "job", "wrappers", "resolve", "submit"]

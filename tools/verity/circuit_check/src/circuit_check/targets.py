@@ -437,7 +437,6 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "mhc_post": {"HC": 4, "N": 7168}, "hc_head": {**mhc, "H": 7168, "TH": 128},
             "dsv4_qnorm_rope_kv_insert": DQ.DSV4_INSERT, "dsv4_compress_c4": DC.DSV4_COMPRESSOR,
             "dsv4_compress_c128": DC.DSV4_COMPRESSOR, "dsv4_inv_rope_quant_head": {"CHUNKS": 4, "QG": 128, "ROPE": 64},
-            "dsv4_indexer_compress": {"D": 128, "ROPE": 64, "EPS": 1e-6},
             "flashmla_decode": {**FM.FLASHMLA_DSV4, "NH": 1, "SPLITS": (0, 1), "NW": 64},
             "flashmla_gather_row": FP.FLASHMLA_GATHER_DSV4, "flashmla_prefill": {**FP.FLASHMLA_PREFILL_DSV4, "NH": 1, "NP": 1},
             "silu_mul_clamp": {"I": 4, "LIMIT": 10.0}, "moe_router_hash": router, "moe_router_sqrtsoftplus": router,
@@ -449,6 +448,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
             "all_reduce_rmsnorm_mnnvl": {"WORLD": 8, "N": 512, "SHOT": 1, "CLUSTER": 2, "EPS": 1e-5, "FMA": False},
             "all_reduce_custom": {"WORLD": 8, "SIZE": 64, "STAGE": 2},
             "all_reduce_multimem": {"WORLD": 8, "SIZE": 128, "TREES": trees, "FTZ": False},
+            "all_reduce_nccl_tree": {"WORLD": 4, "SIZE": 8, "CHAIN": (0, 1, 2, 3)},
             "dsa_indexer_k_row": {"D": 128, "ROPE": 64, "EPS": 1e-6}, "dsa_indexer_q": {"H": 32, "D": 128, "ROPE": 64},
             "dsa_mqa_logits": {"N": 4, "H": 32, "D": 128},
             "cublas_splitk_gemm": {"K": 64, "N": 3, "SPLIT_K": 4, "DOT": hop},
@@ -518,7 +518,7 @@ _CALLS: set[str] = set()
 #: doesn't (``uncertified``)
 _SHORT: dict[str, set[str]] = {}
 #: the catalog's roots, made without building a body (`binding_roots`), each part once: ``bindings`` (`_kinds_and_templates`) and
-#: ``roots`` (the registered ones, every other root function's and each model's)
+#: ``roots`` (the registered ones, every other root function's and each model's); ``unbound``, the vocabulary kinds that made none
 _BOUND: dict[str, list[Any]] = {}
 
 
@@ -553,21 +553,32 @@ def _kinds_and_templates() -> list[Any]:
     if "bindings" not in _BOUND:
         load_registries()
         units = _root_bindings("_vocabulary_roots")[0][0]
-        out = _produce(units, lambda: [fn for _label, fn in _vocabulary_bindings() if not isinstance(fn, str)])
+        unbound: list[str] = []
+
+        def kinds() -> list[Any]:
+            bound = _vocabulary_bindings()
+            unbound.extend(f"{label}: {fn}" for label, fn in bound if isinstance(fn, str))
+            return [fn for _label, fn in bound if not isinstance(fn, str)]
+
+        out = _produce(units, kinds)
         for _label, sub, sts in templates():
             out += _produce((_template_unit(sub.template.id),), lambda sub=sub, sts=sts: [sub.definition(**st) for st in sts])
-        _BOUND["bindings"] = out
+        _BOUND["bindings"], _BOUND["unbound"] = out, unbound
     return _BOUND["bindings"]
 
 
 def word_call_families() -> set[str]:
     """The word Call families of a served Program: the replay's row families (`verity_vllm.program.kernels.rows.ROWS`), every
-    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog."""
+    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's."""
     if "words" not in _SHORT:
         load_registries()
         from verity_vllm.program.kernels import rows
 
-        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in _kinds_and_templates()}
+        made = _kinds_and_templates()
+        if _BOUND["unbound"]:
+            raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {_BOUND['unbound']}")
+        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in made}
     return _SHORT["words"]
 
 

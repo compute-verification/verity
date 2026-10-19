@@ -2,7 +2,7 @@
 # Lane soundness-fixes (2026-09-22): the B gate after the statement-binding fix (PROTOCOL.md 12.5, red team F1-F3).
 #   research run --on vy-cpu3 -- bash archive/direct/run_soundness_gate.sh [gate|battery|timing|all]
 # gate    : cargo test --release (unit negatives, chain + statement tests), vu-neg (52) and vu-bench 64 VUs, both fields
-# battery : fixtures/redteam/vu-battery/v1/run_battery.sh must exit 0 (the two former forgeries rejected)
+# battery : retired with the vu-battery fixtures (art:9188754f…, red team, 18 Oct); refuses
 # timing  : 4096-VU BabyBear at 2^-128 (166 queries, PoW 16), bound vs the pre-fix unbound path, same binary, same box
 # Everything lands in $RESEARCH_RUN_DIR.  Instances: /workspace/bench-instances/v1 (positives copied from vy-cpu2;
 # sha256 checked against the committed manifest before use).
@@ -59,14 +59,9 @@ if [ "$WHAT" = gate ] || [ "$WHAT" = all ]; then
 fi
 
 if [ "$WHAT" = battery ] || [ "$WHAT" = all ]; then
-    echo "== red-team vu-battery (must exit 0)"
-    mkdir -p "$RUN_DIR/battery"
-    set +e
-    RESEARCH_RUN_DIR="$RUN_DIR/battery" VERITY_GKR_THREADS="$RAYON_NUM_THREADS" bash fixtures/redteam/vu-battery/v1/run_battery.sh "$RUN_DIR/battery" 2>&1 | tee "$RUN_DIR/battery/run_battery.log" | tail -45
-    rc=${PIPESTATUS[0]}
-    set -e
-    echo "run_battery.sh exit=$rc" | tee "$RUN_DIR/battery/exit.txt"
-    [ "$rc" = 0 ] || exit "$rc"
+    echo "the vu-battery left the tree (red team ruling, 18 Oct): its cases, runner and verdicts are" \
+         "art:9188754fa61e0ea2523ec5bcd2ac883fdba6e85105158146382dcbc71fe0eca9 (research data fetch ART --to DIR)" >&2
+    exit 2
 fi
 
 if [ "$WHAT" = timing ] || [ "$WHAT" = all ]; then

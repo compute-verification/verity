@@ -314,7 +314,8 @@ def test_profile_counts_wrong_units():
 
 def _v0(registration, draw, delta):
     """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
-    6746f408), kept as the oracle for the bytes recorded runs hold."""
+    6746f408), kept as the oracle for the bytes recorded runs hold, but for a Bernoulli law's bound: then the linear
+    relaxation (`worst_case`), now the exact one the Lean computes (`Bernoulli.count_bound`, `Bound.bernoulliBound`)."""
     from verity.ml.circuits.partition import Level
     from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
     n, law = registration["population"], D.law_of(draw)
@@ -334,7 +335,7 @@ def _v0(registration, draw, delta):
     out = {"delta": delta, "of": n}
     rule = "except with probability delta, an accepted transcript has at most `bound` wrong units"
     if core is None:
-        out["bound"], out["rule"] = single.worst_case(lambda m: float(m)), rule
+        out["bound"], out["rule"] = Bernoulli(Fraction(draw["p"])).count_bound(n, delta), rule
     else:
         out["bound"], out["rule"] = core.count_bound(delta), rule
         if draw["law"] == "stratified":

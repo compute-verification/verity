@@ -1162,14 +1162,26 @@ def pr_branches(nums: set[str], log=None) -> dict[str, str]:
     return {n: cache[n] for n in nums if n in cache}
 
 
+UNREADABLE = ("missing_scope", "not_in_channel")           # a token that may post in a channel but not read it
+
+
+def _unreadable(e: SlackError) -> bool:
+    return any(w in str(e) for w in UNREADABLE)
+
+
 def watch_context(api: Slack, ch: str, msg: dict, root: dict | None, now: float, log=None) -> tuple[list[dict], dict[str, str]]:
     """For a reply under an announcement, what `pr_watchers` reads: the thread's replies before it in the last HISTORY_S, and
     the branch of every PR they or it name.  Nothing for any other post."""
     thread = msg.get("thread_ts")
     if not thread or thread == msg.get("ts") or not is_announcement(root):
         return [], {}
-    history = [m for m in api.paged("conversations.replies", "messages", channel=ch, ts=thread, oldest=f"{now - HISTORY_S:.6f}")
-               if m.get("ts") not in (thread, msg.get("ts")) and float(m.get("ts") or 0) < float(msg.get("ts") or now)]
+    try:
+        replies = api.paged("conversations.replies", "messages", channel=ch, ts=thread, oldest=f"{now - HISTORY_S:.6f}")
+    except SlackError as e:
+        if not _unreadable(e):
+            raise
+        replies = []
+    history = [m for m in replies if m.get("ts") not in (thread, msg.get("ts")) and float(m.get("ts") or 0) < float(msg.get("ts") or now)]
     nums = {n for m in [msg, *history] for n in named_prs(m.get("text") or "")[0]}
     return history, pr_branches(nums, log) if nums else {}
 
@@ -1181,7 +1193,14 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     pulled since a name opened, reopened, closed or changed holder rings what the published table says (`_newer`)."""
     log = log or sys.stderr
     thread = msg.get("thread_ts") if msg.get("thread_ts") not in (None, msg.get("ts")) else None
-    root = api.root(ch, thread) if thread else None
+    notes: list[str] = []
+    try:
+        root = api.root(ch, thread) if thread else None
+    except SlackError as e:                                          # posting still rings the names it starts with
+        if not _unreadable(e):
+            raise
+        root = None
+        notes.append(f"thread {thread} unreadable ({e}): only the names the post starts with ring")
     routes.refresh([*lead_names(msg.get("text", ""), reg), *(h["handle"] for h in reg["handles"])])
     reg = with_routes(reg, routes)
     inboxes = routes.inboxes()
@@ -1189,7 +1208,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     history, branches = watch_context(api, ch, msg, root, now, log)
     author = poster(msg, reg) or "?"
     urgent = urgent or "urgent" in tags_of(msg.get("text", ""))
-    src, lines, missed = thread or msg.get("ts") or "", [], []
+    src, lines, missed = thread or msg.get("ts") or "", notes, []
     if msg.get("bot_id") and not ours(msg, reg):
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
@@ -1211,7 +1230,12 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         if to == author:
             continue
         try:
-            rung = api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}")
+            try:
+                rung = api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"], oldest=f"{now - 3600:.6f}")
+            except SlackError as e:                                  # unread, it rings unchecked: a repeat may ring twice
+                if not _unreadable(e):
+                    raise
+                rung = []
             rung = [m for m in rung if m.get("ts") != r["inbox_ts"] and is_doorbell(m, reg)]
             if any(_rang(m.get("text") or "", msg.get("ts") or "") for m in rung):
                 continue

@@ -1,9 +1,21 @@
 {
  "roots": ["NciCheck"],
  "exempt": {
+  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and prints NciCheck.Desc.check (or, with --unrolled, NciCheck.check) on it; IO around the audited check, not a proof",
+  "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
+  "NciCheck.DescDifftestMain": {
+   "why": "3,648 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, and 24 on each distinct descriptor of the circuits fixtures) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "args": ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}", "{desc_difftest/python.jsonl}", "3648"],
+   "data": {
+    "desc_difftest/expanded.jsonl": "f0e6e107db1f62d872c072876639968333d708cb2a559503b01102fdb85fb8e4",
+    "desc_difftest/instances.jsonl": "52b9ba4f1559315c079551306951ce82a53503c26578f17fd7766cccca7f30f6",
+    "desc_difftest/python.jsonl": "6f93fa5a9145b0f0c14f2102073008f4126c8d034dd98ba73502cd92972ede5b"
+   },
+   "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
   "NciCheck.DifftestMain": {
    "why": "4,000 random declarations and divisions on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4000"],
@@ -19,6 +31,11 @@
    "imports": ["Std", "Flock.Program"],
    "except": [],
    "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security (the coordinator's ruling for this port)"
+  },
+  "NciCheck.Desc": {
+   "imports": ["Std", "Flock.Program", "NciCheck.Check"],
+   "except": [],
+   "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   }
  },
  "guarantees": {},

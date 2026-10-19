@@ -65,6 +65,12 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "for bit, on every rank.  Apart from that verdict, h7168.ok says the same at vLLM's defaults of 7168-wide "
              "tensor_model_parallel_all_reduce (the hidden-7168 pass): FlashInfer's to 36 tokens, multimem past it at its own probe's "
              "trees and FTZ."),
+    Property("tp4_nccl_tree_capture", "verity-vllm/tp4-nccl-tree-capture/v1",
+             "In a TP4 capture on 4 RTX PRO 6000s under vLLM's batch invariance with NCCL_P2P_DISABLE=1 (its recorded NCCL pins "
+             "checked), every recorded all-reduce is on the route tp_allreduce.covered names at world 4 on that device over SHM, "
+             "every tensor matches the sha256 its row records, and every received word on every rank equals that route's "
+             "AllReduceNcclTree_v2 (its coordinate on every element), AllReduceNcclTree_v1 and tp_allreduce_check.nccl_tree_rows, "
+             "bit for bit."),
     Property("glm53_bf16_gemm_capture", "verity-vllm/glm53-bf16-gemm-capture/v5",
              "On the capture's Hopper GPU, the two served workloads' MoE gates (GateLinear) run cuteDSL ll_bf16_gemm on the "
              "kernel's registered dispatch at M <= 16 and cuBLAS past it, and under vLLM's default cuBLAS route every f32 gate word "
