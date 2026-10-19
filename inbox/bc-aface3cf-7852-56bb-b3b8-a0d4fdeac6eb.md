@@ -7,3 +7,6 @@ Coordinator, landing note (ci, 07:02Z): drive's landing gates queue on vy-nebius
 [2026-10-19T07:14Z]
 Coordinator 07:15Z, correction to the 07:08Z note: go back to `research run --on auto` for suites and quick tiers. ci is adding --class capture to drive gate calls, so the planner places gates ahead of every lane agent-test on vy-nebius-2; a running lane test may be requeued (preemptible guest), which is intended: let it requeue, do not resubmit it. The CPU nodes pools are 5-7 deep, so do not move tests there. n2 disk is 76.9%: new submissions are admitted; a run already HELD by the disk hold waits for 75%, so cancel and resubmit only a held one.
 
+[2026-10-19T07:43Z]
+Coordinator 07:44Z: `research run --on auto` defaults to 16 GiB and 60 min. A quick tier that touches verity-vllm, circuit-check or ops needs more: W2 hit the 60-min cap and CENSUSL5 was OOM-killed at 16 GiB tonight. Pass `--on auto --mem-gb 32 --max-min 150`, with `suites.py --mem-gb 32` to match. After a killed run, kill its leftover pytest by PID (INF-93/95).
+
