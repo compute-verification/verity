@@ -904,7 +904,9 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
         + "; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 (3,956,736) and r20260923-002320-6fbf "
         "(3,956,736); kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and r20260923-001903-c420 (1,028,096; K=128 chain); "
         "the signed-underflow alternative misses 14,710 / 14,384 / 14,734 / 5,535 (D13 holds on sm_100 too). The parameters "
-        "are BLACKWELL_SM120_MXF4's."
+        "are BLACKWELL_SM120_MXF4's. The floor is sharp on the B200 too (lane B200-FP8, r20261019-080611-3d1d, driver "
+        "580.173.02, GPU-2e39ef52: kind::mxf4nvf4 2X, the subnormal and UE8M0 extreme / underflow families and random scales, "
+        "0 / 3,670,016, while grid_floor -173 / -175 miss 85 / 67 and -170 / -178 365 / 257)."
     ),
 )
 
