@@ -1291,10 +1291,128 @@ theorem ligOodE : LigOodE := by
 
 end Ood
 
-/-- **`SimLig` from the five remaining value statements**: `ligOodE` discharges the out-of-domain field. -/
-theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hybar : LigYbarE) (hsalt : LigSaltE) :
-    SimLig :=
-  simLig_of_fields ligOodE hmsg hsum hy1 hybar hsalt
+/-! ### The restart's `ȳ`
+
+The deployed source's `ȳ` is the cut's view's, the table's `ȳ` of the tape's paddings (`srcE_ybar_L`, unguarded by
+the cut). Its lane sum is the executable's fold under `eqTableK` of the lane challenges (`eqTableK_eqList`, the lane
+coins at `p₀ + 2 + l`), and its pair's terms are `rhoS`'s times the extra lanes' paddings (`rhoAt` at `p₀ + 2 + k₀`)
+(`ligYbarE`). -/
+
+section Ybar
+
+/-- **The deployed source's `ȳ`** is the cut's view's: the table's `ȳ` of the tape's lane paddings and extra lanes'. -/
+private theorem srcE_ybar_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (r : Fin 2) :
+    ((srcE x c w τ j.val).rep r.val).ybar = Array.ofFn fun i =>
+      kVal (((tabC PE x j).T (czExe PE x c j)).tab.ybar ((UE.tape x τ).1 j).2.1.1 ((UE.tape x τ).1 j).2.1.2.2 r i) := by
+  unfold srcE tabSrcCut
+  rw [dite_eq_left j.isLt]
+  show (if hr : r.val < 2 then repSrcCut PE x (czExe PE x c) (cutE x c w τ) j ⟨r.val, hr⟩ else default).ybar = _
+  rw [dite_eq_left r.isLt]
+  rfl
+
+/-- **The table's `ȳ`**: the lane paddings under `eq(r̄)` plus the pair's coins times the extra lanes' paddings. -/
+private theorem tab_ybar_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2)
+    (μ0 : Fin (tabC PE x j).z.nL → Fin (tabC PE x j).z.tpad → FlockLevel3.GF128)
+    (μR : Fin 2 → Fin 2 → Fin (tabC PE x j).z.tpad → FlockLevel3.GF128) (i : Fin (tabC PE x j).z.tpad) :
+    ((tabC PE x j).T (czExe PE x c j)).tab.ybar μ0 μR r i =
+      ∑ l, Composed.eqLane ((czExe PE x c j).rest.lane r) l.val * FlockLevel3.embed (μ0 l i) +
+        (FlockLevel3.GF256.of (rhoAt c j.val r.val).1 * FlockLevel3.embed (μR r 0 i) +
+          FlockLevel3.GF256.of (rhoAt c j.val r.val).2 * FlockLevel3.embed (μR r 1 i)) := rfl
+
+private theorem kVal_eq_of {a : FlockLevel3.GF256} {b : _root_.Flock.F256} (h : a = FlockSoundness.Refine.gOf b) :
+    kVal a = b := by
+  rw [h]
+  rfl
+
+private theorem gOf_foldl_smul (E : Array _root_.Flock.F256) (lp : ℕ → _root_.Flock.F128) :
+    ∀ (L : List ℕ) (a : _root_.Flock.F256),
+      FlockSoundness.Refine.gOf (L.foldl (fun acc l => acc + (E[l]!).smul (lp l)) a) =
+        FlockSoundness.Refine.gOf a + (L.map fun l =>
+          FlockSoundness.Refine.gOf E[l]! * FlockLevel3.embed (FlockSoundness.Refine.fOf (lp l))).sum
+  | [], a => by simp
+  | l :: L, a => by
+    rw [List.foldl_cons, gOf_foldl_smul E lp L, FlockSoundness.Refine.gOf_add, FlockSoundness.Refine.gOf_smul,
+      List.map_cons, List.sum_cons, add_assoc]
+
+private theorem sum_fin_range {M : Type} [AddCommMonoid M] {a b : ℕ} (h : a = b) (f : Fin a → M) (g : ℕ → M)
+    (hfg : ∀ l (hl : l < a), f ⟨l, hl⟩ = g l) : ∑ l, f l = ∑ l ∈ Finset.range b, g l := by
+  subst h
+  rw [← Fin.sum_univ_eq_sum_range]
+  exact Finset.sum_congr rfl fun l _ => hfg l l.isLt
+
+private theorem prod_fin_range {M : Type} [CommMonoid M] {a b : ℕ} (h : a = b) (f : Fin a → M) (g : ℕ → M)
+    (hfg : ∀ l (hl : l < a), f ⟨l, hl⟩ = g l) : ∏ l, f l = ∏ l ∈ Finset.range b, g l := by
+  subst h
+  rw [← Fin.prod_univ_eq_prod_range]
+  exact Finset.prod_congr rfl fun l _ => hfg l l.isLt
+
+/-- Table `j`'s rep `r`'s rounds past its PIOP, from `p₀`. -/
+private theorem repSlot_p0 {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (j : Fin (jOf x)) (r : Fin 2) (f : _root_.Flock.Schedule → ℕ) :
+    repSlot x (2 * j.val + r.val) f = ligP0 x j r + f (zkTab x j).sch := by
+  have hz' : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
+    rw [stsOf_half]
+    exact (zkTab x j).hz
+  unfold ligP0
+  rw [repSlot_eq hs hz' f, repSlot_eq hs hz' fun _ => 0, Nat.add_zero]
+
+theorem ligYbarE : LigYbarE := by
+  intro x hx w hw τ c n hn s spec hs j r extras he
+  dsimp only
+  intro _ _
+  obtain ⟨hnL, -, htp, -, -, -⟩ := tabC_z PE x j
+  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
+  unfold ligSrc
+  rw [srcE_ybar_L]
+  apply Array.ext
+  · simp only [Array.size_ofFn, Array.size_map, Array.size_range]
+    exact htp
+  · intro i h1 h2
+    simp only [Array.size_map, Array.size_range] at h2
+    have hi : i < (tabC PE x j).z.tpad := by rw [htp]; exact h2
+    rw [Array.getElem_ofFn, Array.getElem_map, Array.getElem_range]
+    apply kVal_eq_of
+    refine (tab_ybar_L x c j r _ _ _).trans ?_
+    rw [gOf_foldl_smul, FlockSoundness.Refine.gOf_add, FlockSoundness.Refine.gOf_smul,
+      FlockSoundness.Refine.gOf_smul, FlockLevel3.list_sum_range]
+    refine (add_comm _ _).trans (congrArg₂ (· + ·) ?_ ?_)
+    · have hρ : rhoAt c j.val r.val = FlockComplete.LigLock.rhoS (ligCoin c) (ligP0 x j r) (zkTab x j).sch.k0 := by
+        unfold rhoAt rhoSlot
+        rw [repSlot_p0 hs j r]
+        unfold FlockComplete.LigLock.rhoS ligCoin
+        rw [show ligP0 x j r + ((zkTab x j).sch.k0 + 2) = ligP0 x j r + 2 + (zkTab x j).sch.k0 by omega,
+          show ligP0 x j r + 2 + (zkTab x j).sch.k0 + 1 = ligP0 x j r + 3 + (zkTab x j).sch.k0 by omega]
+      have e0 := (agrees0_exe PE).extPad x τ j r 0 ⟨i, hi⟩
+      have e1 := (agrees0_exe PE).extPad x τ j r 1 ⟨i, hi⟩
+      simp only [Fin.val_zero, Fin.val_one, Nat.add_zero, lv0] at e0 e1
+      rw [← Nat.add_assoc] at e1
+      rw [hρ]
+      exact congrArg₂ (· + ·) (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e0))
+        (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e1))
+    · refine sum_fin_range (by rw [hnL]; rfl) _ _ fun l hl => ?_
+      have hp := (agrees0_exe PE).pad x τ j ⟨l, hl⟩ ⟨i, hi⟩
+      refine congrArg₂ (· * ·) ?_ (congrArg FlockLevel3.embed hp)
+      unfold lv0 at hnL
+      have hl' : l < 2 ^ (zkTab x j).sch.k0 := by rw [← hl0, ← hnL]; exact hl
+      rw [FlockSoundness.Refine.eqTableK_eqList _ l (by simpa using hl'), FlockSoundness.Refine.eqList_eq]
+      unfold Composed.eqLane
+      refine prod_fin_range (by simp; rfl) _ _ fun q hq => ?_
+      have hq' : q < (zkTab x j).sch.k0 := hq
+      rw [List.getD_eq_getElem _ _ (by simpa using hq')]
+      simp only [List.getElem_map, Array.getElem_toList, Array.getElem_map, Array.getElem_range]
+      have e : (czExe PE x c j).rest.lane r ⟨q, hq⟩ = FlockComplete.LigLock.chS (ligCoin c) (ligP0 x j r) q := by
+        show kAt c (repSlot x (2 * j.val + r.val) fun _ => 2 + q) = _
+        rw [repSlot_p0 hs j r]
+        simp only [kAt, FlockComplete.LigLock.chS, ligCoin, Nat.add_assoc]
+      rw [e]
+
+end Ybar
+
+/-- **`SimLig` from the four remaining value statements**: `ligOodE` and `ligYbarE` discharge the out-of-domain value
+and the restart's `ȳ`. -/
+theorem simLig_of_rest (hmsg : LigMsgE) (hsum : LigSumsE) (hy1 : LigY1E) (hsalt : LigSaltE) : SimLig :=
+  simLig_of_fields ligOodE hmsg hsum hy1 ligYbarE hsalt
 
 end Masked
 
