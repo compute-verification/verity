@@ -49,9 +49,8 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
     if len(apps) != len(probe):
         raise RuntimeError(f"tp_links: {len(apps)} collective rule applications vs {len(probe)} probed collectives")
     aligns = [a for a in rep.provenance["applications"] if a.get("schedule")]      # the align rule tags its applications, in call order
-    keyed = [r for r in sched if r.get("form") != "linked"]                        # a linked call runs no align of its own
-    if len(aligns) != len(keyed):
-        raise RuntimeError(f"tp_links: {len(aligns)} align rule applications vs {len(keyed)} probed align calls with keys")
+    if len(aligns) != len(sched):
+        raise RuntimeError(f"tp_links: {len(aligns)} align rule applications vs {len(sched)} probed align calls")
     links = []
     for k, (p, a) in enumerate(zip(probe, apps)):
         peers = [{"rank": pr, "input": peer_names[k * len(peer_ranks) + j], "operand": f"part_rank{pr}", "collective_k": k} for j, pr in enumerate(peer_ranks)]
@@ -74,17 +73,13 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
                             "weight root commits to the shard, the run root binds every rank's weight root (rank-tagged)",
            "links": links}
     if sched:
-        apps = iter(aligns)
         doc["schedule_input"] = user[n_own]
-        doc["schedule"] = [r if r.get("form") == "linked" else
-                           {**r, "node": (a := next(apps))["node"], "module": module_in_model_vocabulary(a.get("module_path"), model_root)}
-                           for r in sched]
+        doc["schedule"] = [{**r, "node": a["node"], "module": module_in_model_vocabulary(a.get("module_path"), model_root)}
+                           for r, a in zip(sched, aligns)]
         doc["schedule_binding"] = ("align call k's keys are schedule_input[offset : offset + pairs], shaped as its router ids: each pair's "
                                    "position in the sorted_token_ids that call's moe_align_block_size wrote on this rank's GPU, a witness "
                                    "(registry.marlin_moe.MoeAlignRanks then MoeAlignBlocks give a schedule the kernel can produce "
-                                   "for any key); a call of form `linked` (a launch shared with other requests) takes "
-                                   "schedule_input[offset : offset + words], its pairs' blocks then the launch's block count, linked to "
-                                   "the workload Program's unit of that launch")
+                                   "for any key)")
     json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
     return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": n_own, "file": "tp_links.json"}
 

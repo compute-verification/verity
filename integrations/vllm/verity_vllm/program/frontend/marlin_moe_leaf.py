@@ -11,9 +11,7 @@ as `vllm_iface.marlin_moe_mxfp4_gemm` on those weights: `moe_align_block_size` a
 `vllm_iface.marlin_moe_align`, the w13 launch, the experts' activation, the w2 launch (top_k 1, the router weights multiplied in)
 and the experts' `moe_sum`.  The align kernel ranks each expert's pairs in atomicAdd's order, so `marlin_moe_align` reads a key
 per pair, the TP rank Program's `schedule` input (`CollectiveBus.schedule_key`): a TP1 export has no such input and refuses.
-At a launch that also routes other requests' tokens (`traced_launch_tokens`) the block size is the launch's and the align sorts
-every request's pairs, so the call takes its pairs' blocks and the launch's block count from the `schedule` input instead
-(`CollectiveBus.launch_schedule`), words the workload Program links to that launch's unit.  Only W4A16 float4_e2m1f weights without bias, zero points, act order, global scales or an expert map are modelled; anything else
+Only W4A16 float4_e2m1f weights without bias, zero points, act order, global scales or an expert map are modelled; anything else
 refuses at export.
 """
 
@@ -71,7 +69,6 @@ def mxfp4_marlin_moe_leaf(model=None):
     if not layers:
         yield
         return
-    from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_step, traced_launch_tokens
     from verity_vllm.program.frontend.rules.vllm_iface import iface
     oracle, site, parallel_state = (importlib.import_module(m) for m in (_ORACLE, _MARLIN_MOE, _PARALLEL_STATE))
     e2m1 = importlib.import_module("vllm.scalar_type").scalar_types.float4_e2m1f
@@ -90,12 +87,8 @@ def mxfp4_marlin_moe_leaf(model=None):
                                       "(CollectiveBus.schedule_key); this export has no TP bus")
         M, K = hidden_states.shape
         E, topk, N = w1.shape[0], topk_ids.shape[1], w2.shape[2] * 2
-        L, experts = traced_launch_tokens(M), E if global_num_experts == -1 else global_num_experts
-        block_m = marlin_block_size_m(L, topk, E, global_num_experts)
-        if L == M:
-            blk, par = iface.marlin_moe_align(topk_ids, bus.schedule_key(topk_ids), experts, block_m)
-        else:
-            blk, par = bus.launch_schedule(topk_ids, step=traced_launch_step(), launch_tokens=L, E=experts, BM=block_m)
+        block_m = marlin_block_size_m(M, topk, E, global_num_experts)
+        blk, par = iface.marlin_moe_align(topk_ids, bus.schedule_key(topk_ids), E if global_num_experts == -1 else global_num_experts, block_m)
         up = iface.marlin_moe_mxfp4_gemm(hidden_states, w1, w1_scale, topk_ids, blk, par, topk_weights, block_m, topk, False)
         act = torch.empty((M * topk, N), dtype=hidden_states.dtype, device=hidden_states.device)
         activation_func(activation, act, up, topk_ids=topk_ids, expert_map=None)

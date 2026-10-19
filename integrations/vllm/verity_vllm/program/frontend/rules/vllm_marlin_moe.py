@@ -14,10 +14,9 @@ The launch's thread config (TK, TN) and its GRID, 132 SMs times the blocks per S
 gave the JIT'd kernel, which no host code sees: `MARLIN_SERVED` is the config the H200 capture saw each launch run at each decode
 batch it swept, and a batch it did not sweep takes the config ops.cu's rule gives under every per-config limit consistent with the
 sweep at its moe block (`marlin_moe_rows.served_config`), and refuses where those differ.  The moe block and the config are read at
-the launch's token count (`launch_tokens_of`).  At a launch that also routes other requests' tokens `moe_align_block_size` sorts
-every pair of the launch, so this request's blocks and the launch's block count, which place its pairs in Marlin's split-K
-partition, read their routing: the leaf takes them from the `schedule` input there (`CollectiveBus.launch_schedule`, linked to the
-workload Program's launch unit), and an align call at such a launch is refused.  A role the vocabulary lacks refuses by name.
+the launch's token count (`launch_tokens_of`).  A launch that also routes other requests' tokens is refused: `moe_align_block_size`
+sorts every pair of the launch, so this request's blocks and the launch's block count, which place its pairs in Marlin's split-K
+partition, read their routing, and no input of this request's Program holds it.  A role the vocabulary lacks refuses by name.
 """
 
 from __future__ import annotations
@@ -104,8 +103,7 @@ class MarlinMoeAlignRule(OpRule):
         M = shape(ctx, a["topk_ids"])[0]
         if (L := launch_tokens_of(node, M)) != M:
             return (f"numerics_unregistered: the launch routes {L} tokens, {L - M} of them other requests': moe_align_block_size sorts "
-                    f"every pair of the launch, so this request's blocks and the launch's block count read their routing, which the "
-                    f"leaf takes from the schedule input (CollectiveBus.launch_schedule)")
+                    f"every pair of the launch, so this request's blocks and the launch's block count read their routing")
         return True
 
     def emit(self, node, ctx):
@@ -127,8 +125,7 @@ class MarlinMoeGemmRule(OpRule):
     at the config `served_config` gives; the node is the [M * TOPK, N] rows."""
     modes = frozenset({"profile"})
     info = RuleInfo("MarlinMoeGemm[vllm-marlin-moe]", 1, "op-binding", applies_to="vllm_iface.marlin_moe_mxfp4_gemm",
-                    preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's, or "
-                                   "the schedule input's linked words at a shared launch)",
+                    preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's)",
                                    "w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
                                    "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]",
                                    "w a u8 value [E, N, K / 2] and w_scale a u8 value [E, N, K / 32] (the e8m0 bytes Mxfp4MoEMethod holds)",

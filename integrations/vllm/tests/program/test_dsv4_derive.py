@@ -1207,7 +1207,7 @@ def test_a_marlin_launch_the_capture_does_not_give_refuses_by_name(block_m, swee
                                             ([[MARLIN_M, 0], [1, 9]], "the launch routes 4 tokens, 1 of them other requests'")])
 def test_a_marlin_launch_that_routes_other_requests_tokens_refuses(batch, refusal, served, monkeypatch):
     """Alone in its launch the request's MoE derives as before; beside another request's token the align sorts that token's pairs
-    too, which no input of this Program holds, so an align call there is refused (the leaf takes the launch's blocks instead)."""
+    too, which no input of this Program holds."""
     rng = np.random.default_rng(11)
     model = _Launched(_MarlinLaunches(rng), [batch])
     rep, _ = _derive_launched(lambda m, xs: _derive_marlin(m, xs, monkeypatch), model, _marlin_inputs(rng))
@@ -1215,63 +1215,6 @@ def test_a_marlin_launch_that_routes_other_requests_tokens_refuses(batch, refusa
         assert rep.program is not None, rep.unsupported
     else:
         assert rep.program is None and refusal in rep.unsupported.hint, rep.unsupported
-
-
-def _placeholder_of(n):
-    while n.op != "placeholder":
-        n = n.args[0]
-    return n
-
-
-def test_at_a_launch_shared_with_another_request_the_marlin_moe_reads_its_blocks_from_the_schedule(marlin_site, served):
-    """Beside another request's token the launch sorts both requests' pairs at the launch's moe block: the leaf runs no align of its
-    own, and both GEMMs read the pairs' blocks and the launch's block count, the next words of the `schedule` input."""
-    bus = sys.modules[mml._PARALLEL_STATE]._TP.bus
-    model = _Launched(_Routed(_MarlinMoe(marlin_site)), [[[3, 0], [1, 9]]])
-    with fxt.preserve_node_meta(), mml.mxfp4_marlin_moe_leaf(model):
-        torch.export.export(model, _prompt(), strict=False)
-        assert bus.schedule_record == [{"k": 0, "shape": [3, 2], "pairs": 6, "offset": 0, "form": "linked", "words": 7, "step": 0,
-                                        "launch_tokens": 4, "E": 4, "BM": 8}]
-        wrapped, inputs = with_peers(model, _prompt(), bus)
-        ep = torch.export.export(wrapped, inputs, strict=False)
-    assert isinstance(wrapped, ScheduledWithPeers) and [tuple(t.shape) for t in inputs] == [(3, 64), (7,)]
-    _, schedule = [n for n in ep.graph.nodes if n.op == "placeholder" and n.name in ep.graph_signature.user_inputs]
-    assert not [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_align.default"]
-    gemms = [n for n in ep.graph.nodes if str(n.target) == "vllm_iface.marlin_moe_mxfp4_gemm.default"]
-    blk, par = gemms[0].args[4:6]
-    assert [n.args[4:6] for n in gemms] == [(blk, par)] * 2 and _placeholder_of(blk) is _placeholder_of(par) is schedule
-    assert [tuple(n.meta["val"].shape) for n in (blk, par, *gemms)] == [(6,), (1,), (6, 64), (6, 64)] and [n.args[7] for n in gemms] == [8, 8]
-
-
-class _MarlinLinked(_MarlinLaunches):
-    """`_MarlinLaunches` at a launch shared with another request: the pairs' blocks and the launch's block count are the `schedule`
-    words `CollectiveBus.launch_schedule` hands out."""
-
-    def forward(self, x, ids, linked, weights, act):
-        blk, par = linked[:-1], linked[-1:]
-        up = iface.marlin_moe_mxfp4_gemm(x, self.w13, self.s13, ids, blk, par, weights, self.block_m, MARLIN_TOPK, False)
-        down = iface.marlin_moe_mxfp4_gemm(act, self.w2, self.s2, ids, blk, par, weights, self.block_m, 1, True)
-        return up, down
-
-
-def test_at_a_shared_launch_the_expert_gemms_derive_over_the_launchs_schedule_word_for_word_the_twin(served, monkeypatch):
-    """The GEMMs of a request whose launch also sorted another request's token, over its pairs' blocks and that launch's block count:
-    at the launch's config (4 tokens), word for word the twin at the launch's schedule."""
-    rng = np.random.default_rng(11)
-    x, ids, key, g, act = _marlin_inputs(rng)
-    P, other = MARLIN_M * MARLIN_TOPK, rng.permutation(MARLIN_E)[:MARLIN_TOPK].astype(np.int32)
-    blk, par = _align(np.concatenate([ids.reshape(-1), other]), rng.permutation(P + MARLIN_TOPK), MARLIN_E, 8)
-    model = _Launched(_MarlinLinked(rng), [[[MARLIN_M, 0], [1, 9]]])
-    sweep = {k: {MARLIN_M + 1: c[MARLIN_M]} for k, c in MARLIN_SMALL.items()}
-    xs = (x, ids, np.append(blk[:P], par).astype(np.int32), g, act)
-    rep, inputs = _derive_launched(lambda m, a: _derive_marlin(m, a, monkeypatch, sweep), model, xs)
-    assert rep.program is not None, rep.unsupported
-    gemms = [a for a in rep.provenance["applications"] if a["rule"] == "MarlinMoeGemm[vllm-marlin-moe]_v1"]
-    assert len(gemms) == 2 and not [a for a in rep.provenance["applications"] if a["rule"].startswith("MarlinMoeAlign")]
-    m, e, pair = model.model, ids.reshape(-1), np.arange(P)
-    up = MR.launch(x[pair // MARLIN_TOPK], blk[:P], par, e, m.codes13, m.bytes13, np.arange(2 * MARLIN_I), TK=64, TN=128, GRID=132)
-    down = MR.launch(act, blk[:P], par, e, m.codes2, m.bytes2, np.arange(MARLIN_H), TK=64, TN=128, GRID=264, g=g.reshape(-1))
-    assert _run(rep, model, inputs) == up.reshape(-1).tolist() + down.reshape(-1).tolist()
 
 
 class _Fp8Linear(nn.Module):
