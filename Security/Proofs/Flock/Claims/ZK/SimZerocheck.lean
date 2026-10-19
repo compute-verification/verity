@@ -96,8 +96,7 @@ theorem forIn_alike {σ τ : Type} (body : ℕ → σ → TMW PS (ForInStep σ))
   | zero =>
     intro a s s' t l ha hl hI
     have e : a = n := by omega
-    subst e
-    exact .inr ⟨s, s', t, l, rfl, rfl, hI, by omega⟩
+    exact .inr ⟨s, s', t, l, rfl, rfl, e ▸ hI, by omega⟩
   | succ k ih =>
     intro a s s' t l ha hl hI
     rw [List.range'_succ, List.forIn_cons, List.forIn_cons]

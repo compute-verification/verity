@@ -239,10 +239,10 @@ import Proofs.Flock.Claims.ZK.Stop
   value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
   round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
   `hstep` after the third round only.
-* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at layout indices `i` and
-  `64 + i` are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace whose bits are the
-  model's tables (`Composed.honestAt_r1ab`, `Composed.honestAt_r1c`, from `Replay.Zc.r1ab_eq`); a rep's outer coin is
-  read at the round after its first (`Masked.outerAt_eq`).
+* `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at `round1_ab`'s and
+  `round1_c`'s layout indices are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace
+  whose bits are the model's tables (`Composed.honestAt_r1ab_exe`, `Composed.honestAt_r1c_exe`, from
+  `Replay.Zc.r1ab_eq`); a rep's outer coin is read at the round after its first (`Masked.outerAt_eq`).
 * `SimZerocheck`: `SimPiop`'s zerocheck: two runs in lockstep (`FlockComplete.GoAlike`), `asksCut`'s squeezes, and the
   cut's zerocheck against the session's where the cut's masked values are the plain prover's plus their pads
   (`FlockComplete.zerocheckCut_alike`).
