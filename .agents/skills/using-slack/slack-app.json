@@ -1,11 +1,11 @@
 {
   "display_information": {
-    "name": "Verity",
+    "name": "Agents",
     "description": "Verity's coordinators post, read and route their asks, announcements and doorbells through it (research msg)."
   },
   "features": {
     "bot_user": {
-      "display_name": "Verity",
+      "display_name": "Agents",
       "always_online": true
     }
   },

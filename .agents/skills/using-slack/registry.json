@@ -2,7 +2,7 @@
   "schema": "verity/slack-registry/v1",
   "workspace": "computeverification.slack.com",
   "bot_id": "B0C5VQ1KKFW",
-  "slack_app_id": null,
+  "slack_app_id": "A0C5KPM2LN7",
   "humans": [
     {
       "name": "Daniel Reuter",
