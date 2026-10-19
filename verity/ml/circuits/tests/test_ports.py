@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import re
 
 import pytest
 
@@ -14,7 +15,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind, primiti
 from verity.ml.circuits.evaluation.reference import evaluate, standalone_call
 from verity.ml.circuits.ports import In, Leaves, Out, PortError, Ports
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import array_of, tuple_of
+from verity.ml.circuits.refs import Affine, Coll, PartLog, Strided, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
 
 V8, V16, V32 = Value(8), Value(16), Value(32)
@@ -172,13 +173,34 @@ def test_a_full_bound_assumes_nothing():
     Program(comp("PortsTestFull", [("x", V16)], V16, lambda B, S, x: B.call(AnyBound, B.call(Add16, x, x))))
 
 
-def test_an_input_bound_is_the_inputs_interval():
-    ports = Ports(params={"x": In(bound=(-128, 127))})
-    f = comp("PortsTestInB", [("x", V16)], V32, lambda B, S, x: B.call(Mul, x, x), ports=ports)
-    prog = Program(f)
-    desc, dec = roundtrip(prog)
-    assert desc["definitions"][desc["root"]]["ports"] == {"inputs": [[0, 0, 1, {"bound": [-128, 127]}]]}
-    assert P.facts(dec.root).node(0).one == P.fact((-128, 127), ("input",))
+def test_an_input_bound_narrower_than_its_type_is_refused():
+    """A declared bound is never taken on trust: a program function's parameter declaring one narrower than its type is refused,
+    built and decoded, whatever its binding time or kind. A full bound assumes nothing; a range check narrows the input instead;
+    a harness takes the bounds of the Definition it evaluates, and is never decoded."""
+    trusted = comp("PortsTestInB", [("x", V16)], V32, lambda B, S, x: B.call(Mul, x, x), ports=Ports(params={"x": In(bound=(-128, 127))}))
+    for kw in ({}, {"registered": ("x",)}, {"theta": ("x",)}):
+        refused("E_PORT_BOUND", lambda: Program(trusted, **kw), "program function PortsTestInB_v1: parameter 'x' leaves [0, 1) "
+                "declare the bound [-128, 127], narrower than Value<16>, but a run input's bound is never taken on trust",
+                "range-check Definition")
+    coin = comp("PortsTestInCoinB", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)),
+                ports=Ports(params={"key": In(bound=(0, 255), kind="coin")}))
+    refused("E_PORT_BOUND", lambda: Program(coin), "parameter 'key' leaves [0, 1) declare the bound [0, 255], narrower than Value<32>")
+    full = comp("PortsTestInFull", [("x", V16)], V16, lambda B, S, x: B.call(AnyBound, x), ports=Ports(params={"x": In(bound=(-32768, 32767))}))
+    desc, dec = roundtrip(Program(full))
+    assert desc["definitions"][desc["root"]]["ports"] == {"inputs": [[0, 0, 1, {"bound": [-32768, 32767]}]]}
+    assert P.facts(dec.root).node(0).one == P.fact((-32768, 32767), ("input",))
+    tampered = copy.deepcopy(desc)
+    tampered["definitions"][desc["root"]]["ports"]["inputs"][0][3]["bound"] = [-128, 127]
+    refused("E_PORT_BOUND", lambda: decode_program(tampered, REGISTRY), "input node 0: leaves [0, 1) declare the bound "
+            "[-128, 127], narrower than Value<16>, but an input's bound is never taken on trust")
+    checked = Program(comp("PortsTestInRange", [("x", V16)], V32, lambda B, S, x: B.call(Mul, B.call(Quant, x), B.call(Quant, x))))
+    _desc, dec = roundtrip(checked)
+    F = P.facts(dec.root)
+    assert F.node(0).one == P.fact(None, ("input",)) and F.node(1).one.interval == (-128, 127)
+    prog, _call = standalone_call(bind(trusted))
+    assert P.facts(prog.root).node(0).one == P.fact((-128, 127), ("input",))
+    assert evaluate(bind(trusted), (-5) & 0xFFFF) == (25,)
+    refused("E_PORT_BOUND", lambda: decode_program(encode_program(prog), REGISTRY), "only a harness's")
 
 
 def test_intervals_flow_down_through_calls_joined_over_instances():
@@ -269,9 +291,21 @@ def chain(name: str, ivs=None, acc_param: bool = False) -> CompositeDefinition:
     return comp(name, params, Array(2, V32), body, ports=Ports(params={"a": S8, "b": S8}, ret=ret))
 
 
+@primitive("PortsTestRange7", 1, (("x", V16),), V16, ports=Ports(ret=Out(interval=(-7, 7))))
+def Range7(x):
+    """A range check: its operand clamped to [-7, 7], the interval it declares."""
+    return max(-7, min(7, _s(x, 16))) & 0xFFFF
+
+
+@primitive("PortsTestRangeNeg3", 1, (("x", V16),), V16, ports=Ports(ret=Out(interval=(-3, 0))))
+def RangeNeg3(x):
+    """A range check: its operand clamped to [-3, 0]."""
+    return max(-3, min(0, _s(x, 16))) & 0xFFFF
+
+
 def test_a_transfer_gives_each_instance_its_operands_interval():
     """An exact step's return carries the interval its transfer gives from that instance's operands: the chain's words from
-    s8 operands, and narrower ones from narrower inputs; a constant's interval is its value."""
+    s8 operands, and narrower ones from inputs range checks narrow; a constant's interval is its value."""
     f = comp("PortsTestChainUse", [("x", Array(8, V16))], Array(2, V32),
              lambda B, S, x: B.call(chain("PortsTestChainT"), B.batch(Quant, x, axes=(0,)), B.batch(Quant, x, axes=(0,))))
     prog = Program(f)
@@ -282,8 +316,8 @@ def test_a_transfer_gives_each_instance_its_operands_interval():
     assert desc["definitions"]["PortsTestDot4_v1"]["ports"] == {
         "params": [[1, 0, 4, {"bound": [-128, 127]}], [2, 0, 4, {"bound": [-128, 127]}]], "transfer": True}
     narrow = comp("PortsTestChainNarrow", [("a", Array(8, V16)), ("b", Array(8, V16))], V32,
-                  lambda B, S, a, b: B.call(Dot4, B.call(Zero32), a[0:4], b[0:4]),
-                  ports=Ports(params={"a": In(bound=(-7, 7)), "b": In(bound=(-3, 0))}))
+                  lambda B, S, a, b: B.call(Dot4, B.call(Zero32), B.batch(Range7, a[0:4], axes=(0,)),
+                                            B.batch(RangeNeg3, b[0:4], axes=(0,))))
     root = Program(narrow).root
     fn = P.facts(root)
     k_zero, k_dot = (next(k for k, n in enumerate(root.body.nodes) if n.fn is p) for p in (Zero32, Dot4))
@@ -429,21 +463,280 @@ def test_a_harness_evaluates_a_definition_with_coin_and_static_ports():
         decode_program(encode_program(prog), REGISTRY)
 
 
+# --- model weights ------------------------------------------------------------------------------------------------------------
+
+def _weighted(name: str) -> CompositeDefinition:
+    return comp(name, [("prompt", V16), ("weights", Record(("w", Array(2, V16)), ("b", V32))), ("eps", V16)], V16,
+                lambda B, S, prompt, weights, eps: B.call(Add16, B.call(Add16, prompt, weights.field("w")[0]), eps))
+
+
+def _origins(root) -> list[set]:
+    F = P.facts(root)
+    return [set(F.node(k).one.origin) for k in range(4)]
+
+
+def test_the_weights_are_marked_theta_outside_every_digest():
+    """The weights record lowers to input nodes 1 and 2, whose leaves have origin theta whatever their binding time; the marking
+    is the annotation alone, so the descriptor's digest and every definition entry are the unmarked Program's."""
+    f = _weighted("PortsTestTheta")
+    plain, marked = Program(f), Program(f, theta=("weights",))
+    desc = encode_program(marked)
+    assert desc["annotations"] == {"theta": [1, 2]} and encode_program(plain)["annotations"] == {}
+    assert program_digest(desc) == program_digest(plain) and desc["definitions"] == encode_program(plain)["definitions"]
+    assert _origins(plain.root) == [{"input"}] * 4
+    assert _origins(marked.root) == [{"input"}, {"theta"}, {"theta"}, {"input"}]
+    assert _origins(decode_program(desc, REGISTRY).root) == _origins(marked.root)
+    registered = Program(f, theta=("weights",), registered=("weights", "eps"))
+    assert _origins(registered.root) == [{"input"}, {"theta"}, {"theta"}, {"registered"}]
+    assert program_digest(registered) == program_digest(Program(f, registered=("weights", "eps")))
+
+
+def test_a_coin_is_never_a_weight_and_theta_names_parameters():
+    """A theta coin is refused, theta names parameters, and a `theta` annotation passed in (another layout's, when a Program is
+    rebuilt from one) is dropped rather than read."""
+    coin = comp("PortsTestThetaCoin", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)), ports=COIN)
+    refused("E_PORT_KIND", lambda: Program(coin, theta=("key",)), "input node 0: a coin is the verifier's, never a model weight")
+    with pytest.raises(ValueError, match=re.escape("has no parameter ['w'] to mark theta")):
+        Program(_weighted("PortsTestThetaName"), theta=("w",))
+    carried = Program(_weighted("PortsTestThetaAnn"), annotations={"theta": [1], "note": "kept"})
+    assert carried.annotations == {"note": "kept"} and _origins(carried.root) == [{"input"}] * 4
+
+
+def test_the_decoder_ignores_the_marking_and_the_facts_check_it():
+    """The decoder's verdict and digest don't read the annotation; `ports.facts` refuses one that names a coin or anything but
+    the root's input nodes."""
+    desc = encode_program(Program(comp("PortsTestThetaTamper", [("key", V32)], V8,
+                                       lambda B, S, key: B.call(Noise, key, B.call(Tag)), ports=COIN)))
+    for theta, code, needle in (([0], "E_PORT_KIND", "never a model weight"), ([1], "E_PORT_DECL", "lists input nodes"),
+                                ("0", "E_PORT_DECL", "lists input nodes"), ([True], "E_PORT_DECL", "lists input nodes")):
+        bad = copy.deepcopy(desc)
+        bad["annotations"]["theta"] = theta
+        dec = decode_program(bad, REGISTRY)
+        assert program_digest(encode_program(dec)) == program_digest(desc)
+        refused(code, lambda: P.facts(dec.root), needle)
+
+
 # --- rule 5: one type per committed word --------------------------------------------------------------------------------------
 
 def test_a_runtime_word_is_read_only_as_its_producers_type():
     pun = comp("PortsTestPun", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, B.call(Acc, x)))
     refused("E_PORT_WORD", lambda: Program(pun), "reads a s8x4 word, but its value is a runtime s32 word",
-            "split a runtime word into limbs with a registered Definition")
+            "Split a runtime word into limbs with a registered LimbSplit Definition")
     untyped = comp("PortsTestPunUntyped", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, B.call(Add32, x, x)))
     refused("E_PORT_WORD", lambda: Program(untyped), "runtime untyped word")
     Program(comp("PortsTestSplit", [("x", V32)], V8, lambda B, S, x: B.call(LimbSplit, B.call(Acc, x))))
 
 
-def test_inputs_constants_and_registered_words_may_be_reinterpreted():
+def test_an_untyped_input_or_constant_takes_its_readers_type_and_a_typed_input_keeps_its_own():
     for reg in ((), ("x",)):
         prog = Program(comp("PortsTestReinterp", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, x)), registered=reg)
         roundtrip(prog)
+    typed = Ports(params={"x": In(word="s32")})
+    for reg in ((), ("x",)):
+        roundtrip(Program(comp("PortsTestTypedIn", [("x", V32)], V8, lambda B, S, x: B.call(LimbSplit, x), ports=typed), registered=reg))
+        refused("E_PORT_WORD", lambda: Program(comp("PortsTestTypedPun", [("x", V32)], V8, lambda B, S, x: B.call(Limbs, x), ports=typed),
+                                               registered=reg),
+                "reads a s8x4 word, but its value is a s32 word", "a typed input's at its port")
+
+
+def _limbs(w: int) -> tuple[list[int], list[int]]:
+    """The balanced s8 limbs of a word read as s32 (low first, each in [-128, 127], the top one modulo 256), and the carry into
+    each limb past the first: 1 when the limb below it is negative."""
+    v, limbs = _s(w, 32), []
+    for _ in range(4):
+        limbs.append(((v + 128) & 0xFF) - 128)
+        v = (v - limbs[-1]) >> 8
+    return limbs, [int(x < 0) for x in limbs[:3]]
+
+
+LIMB_INDEX = [primitive(f"PortsTestLimbIndex{k}", 1, (), V8)(lambda k=k: k) for k in range(4)]
+SPLIT_PORTS = Ports(params={"w": In(word="s32"), "k": In(kind="static")})
+
+
+@primitive("PortsTestLimbAt", 1, (("w", V32), ("k", V8)), V8, ports=SPLIT_PORTS)
+def LimbAt(w, k):
+    """Limb k of an s32 word's balanced s8 decomposition."""
+    return _limbs(w)[0][k] & 0xFF
+
+
+@primitive("PortsTestCarryAt", 1, (("w", V32), ("k", V8)), Value(1), ports=SPLIT_PORTS)
+def CarryAt(w, k):
+    """The carry into limb k (k >= 1) of an s32 word's balanced s8 decomposition."""
+    return _limbs(w)[1][k - 1]
+
+
+#: an explicit limb split: it reads the word as its producer's type and computes four s8 limbs and the carry into each past the
+#: first (the stacking property budgets those carries at this node)
+LIMB_SPLIT = comp("PortsTestLimbSplitS32", [("w", V32)], TupleT(Array(4, V8), Array(3, Value(1))),
+                  lambda B, S, w: tuple_of(array_of([B.call(LimbAt, w, B.call(LIMB_INDEX[k])) for k in range(4)]),
+                                           array_of([B.call(CarryAt, w, B.call(LIMB_INDEX[k])) for k in range(1, 4)])),
+                  ports=Ports(params={"w": In(word="s32")}))
+
+
+@primitive("PortsTestId8", 1, (("x", V8),), V8)
+def Id8(x):
+    return x
+
+
+@primitive("PortsTestLo8", 1, (("w", V32),), V8)
+def Lo8(w):
+    """The low byte of a word: a gate that computes an 8-bit lane."""
+    return w & 0xFF
+
+
+def lanes(c: Coll, n: int = 32) -> Coll:
+    """`n` references to the one leaf of `c`, typed as `n` 8-bit lanes."""
+    return Coll(Array(n, V8), concat([c.refs] * n))
+
+
+def test_a_limb_split_is_a_definition_that_computes_the_limbs_and_their_carries():
+    use = comp("PortsTestLimbSplitUse", [("x", V32)], TupleT(Array(4, V8), Array(3, Value(1))),
+               lambda B, S, x: B.call(LIMB_SPLIT, B.call(Acc, x)))
+    roundtrip(Program(use))
+    for w in (0, 0x7F80FF01, 0x80000000, 0xFFFFFFFF, 0x12345678):
+        out = evaluate(bind(use), w)
+        limbs, carries = _limbs(w)
+        assert out == tuple(x & 0xFF for x in limbs) + tuple(carries)
+        assert sum(_s(x, 8) << (8 * k) for k, x in enumerate(out[:4])) % (1 << 32) == w
+    with pytest.raises(TypeError, match="E_REINTERPRET.*a runtime word is split into limbs only by a registered LimbSplit "
+                                        "Definition, which computes the limbs and their carries"):
+        Program(comp("PortsTestLimbPun", [("x", V32)], Array(4, V8), lambda B, S, x: lanes(B.call(Acc, x), 4)))
+
+
+# --- E_REINTERPRET: a leaf is read at the width it was committed with ---------------------------------------------------------
+
+def used(f: CompositeDefinition) -> CompositeDefinition:
+    """A program function that calls `f`, so that `f`'s body is a composite's (the root inlines its program function's)."""
+    params, ret = bind(f).signature()
+    return comp(f"{f.name}Use", params, ret, lambda B, S, *args: B.call(f, *args))
+
+
+def test_an_s32_word_typed_as_s8_lanes_is_refused_as_an_argument_and_as_a_return():
+    """`Coll(Array(32, S8), refs to one s32 word)` names a 32-bit leaf at every 8-bit position: the Builder refuses it where a
+    node reads it and where the body returns it, whether the word is a node's or a parameter's."""
+    arg = comp("PortsTestLanesArg", [("x", V32)], Array(32, V8), lambda B, S, x: B.batch(Id8, lanes(B.call(Pair, x)), axes=(0,)))
+    with pytest.raises(TypeError, match=r"E_REINTERPRET: node 1 \(batch PortsTestId8_v1\) argument 'x': leaf 0 is typed "
+                                        r"Value<8> but names leaf 0 of node 0, a Value<32>: a silent reinterpretation"):
+        Program(used(arg))
+    ret = comp("PortsTestLanesRet", [("x", V32)], Array(32, V8), lambda B, S, x: lanes(B.call(Pair, x)))
+    with pytest.raises(TypeError, match=r"E_REINTERPRET: the body's return: leaf 0 is typed Value<8> but names leaf 0 of node 0"):
+        Program(used(ret))
+    param = comp("PortsTestLanesParam", [("x", V32)], Array(32, V8), lambda B, S, x: lanes(x))
+    with pytest.raises(TypeError, match="the body's return: leaf 0 is typed Value<8> but names leaf 0 of parameter 'x', a Value<32>"):
+        Program(used(param))
+    with pytest.raises(TypeError, match=r"E_REINTERPRET: node 1 \(batch PortsTestId8_v1\) argument 'x': leaf 0 is typed "
+                                        r"Value<8> but names leaf 0 of node 0, a Value<32>"):
+        Program(comp("PortsTestLanesRoot", [("x", V32)], Array(32, V8), lambda B, S, x: B.batch(Id8, lanes(x), axes=(0,))))
+
+
+def _retarget(refs, src: int, dst: int):
+    """`refs` (a descriptor's reference JSON) with every reference to node `src` naming node `dst` instead."""
+    if isinstance(refs, dict):
+        return {k: _retarget(v, src, dst) for k, v in refs.items()}
+    if isinstance(refs, list):
+        if len(refs) >= 3 and refs[0] == "n" and refs[1] == src:
+            return ["n", dst, *refs[2:]]
+        return [_retarget(r, src, dst) for r in refs]
+    return refs
+
+
+def test_the_decoder_refuses_a_tampered_word_typed_as_s8_lanes():
+    """The same reinterpretation written into a descriptor, at a node's argument and at the return: lanes of an 8-bit word
+    retargeted to the s32 word."""
+    f = comp("PortsTestLanesOk", [("x", V32)], TupleT(Array(32, V8), Array(32, V8)),
+             lambda B, S, x: (lambda y, lo: tuple_of(B.batch(Id8, lanes(lo), axes=(0,)), lanes(lo)))(B.call(Pair, x), B.call(Lo8, x)))
+    desc, _ = roundtrip(Program(used(f)))
+    body = desc["definitions"]["PortsTestLanesOk_v1"]["body"]
+    assert [n["form"] for n in body["nodes"]] == ["primitive", "primitive", "batch"]
+    for where, leaf, edit in (("node 2 (batch PortsTestId8_v1) argument 'x'", 0, lambda b: b["nodes"][2]["args"][0].update(
+                                  refs=_retarget(b["nodes"][2]["args"][0]["refs"], 1, 0))),
+                              ("the body's return", 32, lambda b: b.update(ret=_retarget(b["ret"], 1, 0)))):
+        tampered = copy.deepcopy(desc)
+        edit(tampered["definitions"]["PortsTestLanesOk_v1"]["body"])
+        with pytest.raises(ValueError, match=re.escape(f"definition 'PortsTestLanesOk_v1': E_REINTERPRET: {where}: leaf {leaf} is "
+                                                       f"typed Value<8> but names leaf 0 of node 0, a Value<32>")):
+            decode_program(tampered, REGISTRY)
+
+
+def test_a_node_naming_itself_or_a_later_node_at_another_width_decodes_for_its_checkers():
+    """A node that names itself or a later node is an order violation, which decodes so that its checkers name it (PROTOCOL.md
+    §4.4): the width check reads only the parameters and earlier nodes, so it doesn't preempt them whatever the widths."""
+    from verity.ml.circuits.partition_object import order_violation
+    f = comp("PortsTestLanesOk", [("x", V32)], TupleT(Array(32, V8), Array(32, V8)),
+             lambda B, S, x: (lambda y, lo: tuple_of(B.batch(Id8, lanes(lo), axes=(0,)), lanes(lo)))(B.call(Pair, x), B.call(Lo8, x)))
+    desc, _ = roundtrip(Program(used(f)))
+    for node, target in ((1, 1), (0, 2)):
+        tampered = copy.deepcopy(desc)
+        tampered["definitions"]["PortsTestLanesOk_v1"]["body"]["nodes"][node]["args"][0]["refs"] = {"affine": ["n", target, 0, 1]}
+        bad = order_violation(decode_program(tampered, REGISTRY))
+        assert bad == {"definition": "PortsTestLanesOk_v1", "node": node, "arg": 0, "reference": ["n", target],
+                       "why": "not topological"}
+
+
+@primitive("PortsTestPair", 1, (("x", V32),), V32)
+def Pair(x):
+    """A 32-bit word no port types."""
+    return x
+
+
+def test_a_word_read_at_its_own_width_builds():
+    """A same-width reshape, an aligned mixed tuple, strided views of an array of records and a whole read of it as another type
+    of the same layout read every leaf at its width; the misaligned ones are refused at the first leaf they misread."""
+    rec = comp("PortsTestRec", [("x", V32)], TupleT(V32, V8), lambda B, S, x: tuple_of(B.call(Pair, x), B.call(Lo8, x)))
+    n = 100
+
+    def case(name, ret, view):
+        """`view(B, x, r)` over r, node 0: an `Array<n, (Value<32>, Value<8>)>`."""
+        return used(comp(name, [("x", Array(4, V32)), ("v", Array(n, V32))], ret,
+                         lambda B, S, x, v: view(B, x, B.batch(rec, v, axes=(0,)))))
+
+    ok = [
+        (Array(2, Array(2, V32)), lambda B, x, r: Coll(Array(2, Array(2, V32)), B.batch(Pair, x, axes=(0,)).refs)),
+        (TupleT(V8, V32), lambda B, x, r: tuple_of(r[0][1], r[1][0])),
+        (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), Strided("n", 0, 0, 1, 2, 0, n))),
+        (Array(n, V8), lambda B, x, r: Coll(Array(n, V8), Strided("n", 0, 1, 1, 2, 0, n))),
+        (Array(n, Record(("a", V32), ("b", V8))), lambda B, x, r: Coll(Array(n, Record(("a", V32), ("b", V8))), r.refs)),
+    ]
+    for i, (ret, view) in enumerate(ok):
+        roundtrip(Program(case(f"PortsTestWidthOk{i}", ret, view)))
+    bad = [
+        (TupleT(V32, V8), lambda B, x, r: Coll(TupleT(V32, V8), tuple_of(r[0][1], r[1][0]).refs), 0,
+         "Value<32> but names leaf 1 of node 0, a Value<8>"),
+        (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), Strided("n", 0, 1, 1, 2, 0, n)), 0, "names leaf 1 of node 0, a Value<8>"),
+        (Array(n, TupleT(V8, V32)), lambda B, x, r: Coll(Array(n, TupleT(V8, V32)), r.refs), 0, "names leaf 0 of node 0, a Value<32>"),
+        (Array(n, V32), lambda B, x, r: Coll(Array(n, V32), concat([Strided("n", 0, 0, 1, 2, 0, n - 1), Affine("n", 0, 1, 1)])),
+         n - 1, "names leaf 1 of node 0, a Value<8>"),
+    ]
+    for i, (ret, view, leaf, why) in enumerate(bad):
+        with pytest.raises(TypeError, match=re.escape(f"the body's return: leaf {leaf} is typed")) as e:
+            Program(case(f"PortsTestWidthBad{i}", ret, view))
+        assert why in str(e.value), (why, str(e.value))
+
+
+def test_a_part_log_cut_is_checked_past_its_longest_checked_cut():
+    """Cuts of one `PartLog` (the key rows of successive attention calls) are checked part by part only past the longest cut
+    already checked at that width; a tail of another width is still refused."""
+    logs = []
+
+    def body(B, S, x, tail):
+        log = PartLog()
+        logs.append(log)
+        outs = []
+        for t in range(6):
+            log.append(B.call(Quant, x[t]).refs)
+            if t >= 1:
+                extra = [B.call(Add32, tail, tail).refs] if tail is not None and t == 5 else []
+                outs.append(B.batch(AnyBound, Coll(Array(t + 1 + len(extra), V16), log.cut(t + 1, extra)), axes=(0,)))
+        return tuple_of(*outs)
+
+    rets = TupleT(*(Array(t + 1, V16) for t in range(1, 6)))
+    prog = Program(comp("PortsTestLogOk", [("x", Array(6, V16))], rets, lambda B, S, x: body(B, S, x, None)))
+    roundtrip(prog)
+    token, done = logs[0].memo["defs.widths"]
+    assert done == {16: 6}
+    rets_bad = TupleT(*(Array(t + 1 + (t == 5), V16) for t in range(1, 6)))
+    with pytest.raises(TypeError, match="argument 'a': leaf 6 is typed Value<16> but names leaf 0 of node .*, a Value<32>"):
+        Program(comp("PortsTestLogBad", [("x", Array(6, V16)), ("y", V32)], rets_bad, lambda B, S, x, y: body(B, S, x, y)))
 
 
 def test_a_composite_keeps_the_words_it_returns():

@@ -245,15 +245,17 @@ Wide64 = prim("TWide64", [], V64, lambda: 1 << 60)
 
 def typed_programs():
     """Programs whose Definitions declare ports (`test_ports`): declared intervals, a coin, a constant and a transfer; input
-    bounds on part of an input; and constants at the root, one wider than the canonical JSON's integers."""
+    bounds on part of an input (a harness's, the one Program whose inputs may declare one: `ports.harness`); and constants at
+    the root, one wider than the canonical JSON's integers."""
     yield "codec", TP._typed_program()
     yield "chain", Program(TP.comp("TChainUse", [("x", Array(8, V16))], Array(2, V32),
                                    lambda Bd, S, x: Bd.call(TP.chain("TChainT", TP.T_S8), Bd.batch(TP.Quant, x, axes=(0,)),
                                                             Bd.batch(TP.Quant, x, axes=(0,)))))
-    yield "input-bounds", Program(TP.comp("TInB", [("x", Array(4, V16))], Array(4, V32),
-                                          lambda Bd, S, x: array_of([Bd.call(TP.Mul, x[t], x[t]) for t in range(2)] +
-                                                                    [Bd.call(TP.Mul, Bd.call(TP.Quant, x[t]), x[0]) for t in (2, 3)]),
-                                          ports=TP.Ports(params={"x": TP.Leaves(((0, 2, TP.In(bound=(-128, 127))),))})))
+    yield "input-bounds", TP.standalone_call(bind(TP.comp(
+        "TInB", [("x", Array(4, V16))], Array(4, V32),
+        lambda Bd, S, x: array_of([Bd.call(TP.Mul, x[t], x[t]) for t in range(2)] +
+                                  [Bd.call(TP.Mul, Bd.call(TP.Quant, x[t]), x[0]) for t in (2, 3)]),
+        ports=TP.Ports(params={"x": TP.Leaves(((0, 2, TP.In(bound=(-128, 127))),))}))))[0]
     yield "constants", Program(comp("TConsts", [("x", V64)], Tuple(V64, V64, V8),
                                     lambda Bd, S, x: tuple_of(Bd.call(Wide64), x, Bd.call(TP.Tag))))
 

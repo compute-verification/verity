@@ -329,7 +329,7 @@ def split_graph_wiring(path: str) -> dict[str, Any]:
                     role[key] = sname
             attention.append({"layer": attn_index[n], "submod": n, **role})
         else:
-            wiring.append({"piece": piece_index[n], "submod": n, "args": srcs, "arg_kinds": kinds,
+            wiring.append({"piece": piece_index[n], "submod": n, "args": srcs, "raw_args": args, "arg_kinds": kinds,
                            "n_ret": 1 + max([m for (q, m) in getitems.values() if q == n], default=-1)})
     return {"path": path, "pieces": len(pieces), "wiring": wiring, "attention": attention}
 
@@ -389,10 +389,12 @@ def tokens_at(schedule: list[dict[str, Any]], step: int) -> list[tuple[str, int]
 def assign_wrappers(wrappers: list[dict[str, Any]], graph: dict[str, Any]) -> list[dict[str, Any]]:
     """Each compiled piece of the split graph -> the ONE Inductor wrapper whose positional signature matches it (argument count and
     tensor/int kinds = the submodule's forward() placeholders, number of returned values = the values the graph takes from it).
-    Ambiguity or no match is a refusal: the artifact set does not describe the graph."""
+    Ambiguity or no match is a refusal: the artifact set does not describe the graph.  A layer-name placeholder is an argument of
+    no kind get_args() names ("?")."""
     out = []
     for pc in graph["wiring"]:
-        cands = [w for w in wrappers if len(w["args"]) == len(pc["args"]) and w["arg_kinds"] == pc["arg_kinds"] and len(w["returns"]) == pc["n_ret"]]
+        kinds = ["?" if k == "layer" else k for k in pc["arg_kinds"]]
+        cands = [w for w in wrappers if len(w["args"]) == len(pc["args"]) and w["arg_kinds"] == kinds and len(w["returns"]) == pc["n_ret"]]
         sigs = {_sig(w["launches"]) for w in cands}
         if not cands or len(sigs) != 1:
             raise SystemExit(f"compiled_manifest: piece {pc['piece']} ({pc['submod']}, {len(pc['args'])} args, {pc['n_ret']} returns): "
@@ -640,12 +642,14 @@ def main(a: BuildOptions | VerifyOptions) -> int:
                "rebuilt_digest": rebuilt.get("manifest_digest"), "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt.get("program_digest"),
                "used_identities": len(used.get("identities") or []), "rebuilt_identities": (rebuilt.get("populations") or {}).get("identities"),
                "rebuilt_complete": rebuilt.get("complete"), "rebuilt_from": a.rebuilt,
+               "used_artifact": (used.get("artifact") or {}).get("digest"), "rebuilt_artifact": (rebuilt.get("artifact") or {}).get("digest"),
                "method": "compiled rows (P_compiled): no derive_step Program dir exists; the rebuild is compiled_manifest.build over the TREATMENT "
                          "process's own Inductor output code + split graph x the workload schedule (the manifest used was built the same way from "
                          "the CONTROL process's) -- equal program_digest = the treatment executed the control's Program (kernel set x launch "
-                         "tables x dataflow), equal manifest_digest = the same required-value population"}
+                         "tables x dataflow), equal manifest_digest = the same required-value population; a served Build's compile artifact "
+                         "(served_artifact) equal = the treatment loaded the pinned kernels and autotune winners"}
         rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"]
-                         and rebuilt.get("complete") is True)
+                         and rebuilt.get("complete") is True and rec["used_artifact"] == rec["rebuilt_artifact"])
         if not rec["ok"]:
             why = []
             if rec["used_digest"] != rows_digest:
@@ -657,6 +661,8 @@ def main(a: BuildOptions | VerifyOptions) -> int:
                 why.append(f"program_digest used {str(rec['used_program_digest'])[:16]} != derived from the treatment's output code {str(rec['rebuilt_program_digest'])[:16]}")
             if rebuilt.get("complete") is not True:
                 why.append(f"treatment-derived manifest not complete: unmodelled {rebuilt.get('unmodelled')}")
+            if rec["used_artifact"] != rec["rebuilt_artifact"]:
+                why.append(f"compile artifact used {str(rec['used_artifact'])[:16]} != the treatment's {str(rec['rebuilt_artifact'])[:16]}")
             rec["why"] = "; ".join(why)
         with open(a.out, "w") as f:
             json.dump(rec, f, indent=1)

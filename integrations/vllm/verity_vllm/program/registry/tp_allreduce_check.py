@@ -11,6 +11,8 @@ NaN payloads never reach an output: every output is F2FP's bf16.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR

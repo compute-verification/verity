@@ -66,6 +66,8 @@ whose launches were GO: what `tp_allreduce.CAPTURED` may then cite, with this ru
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import argparse
 import itertools
 import json

@@ -21,12 +21,15 @@ identity on its latent (`LD = NH * (P + VD)`), so its k_nope and v are the norme
 is `DynamicDeepGemmFp8Linear[vllm-default]`'s, tested with it."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import sys
 import types
 
 import numpy as np
 import pytest
 import torch
+import torch.fx.traceback as fxt
 import torch.nn as nn
 
 from verity.ml.circuits import codec
@@ -40,6 +43,7 @@ from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.kernels.serve3_reference import materialize
@@ -180,11 +184,12 @@ class _Model(nn.Module):
 
     def forward(self, *xs):
         outs, k = [], 0
-        for p0, T in self.steps:
-            positions = torch.arange(p0, p0 + T, dtype=torch.int64)
-            for layer in self.layers:
-                outs += list(layer(positions, *xs[k:k + layer.n_inputs]))
-                k += layer.n_inputs
+        for s, (p0, T) in enumerate(self.steps):
+            with launch_region(s, "tokens"):
+                positions = torch.arange(p0, p0 + T, dtype=torch.int64)
+                for layer in self.layers:
+                    outs += list(layer(positions, *xs[k:k + layer.n_inputs]))
+                    k += layer.n_inputs
         return tuple(outs)
 
 
@@ -439,6 +444,24 @@ def test_the_large_gate_binds_the_captured_default_cublas_splitk_route(served):
     }
 
 
+def test_a_gate_in_a_batch_binds_the_route_of_the_launchs_tokens(served):
+    """The request's one decode row in an engine step that also prefills 187 rows: cuBLAS's route at M = 188, one row call."""
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[1, 17], [187, 0]]]}))
+
+    class Gate(_CublasGate):
+        def forward(self, x):
+            with launch_region(0, "tokens"):
+                return super().forward(x)
+
+    with fxt.preserve_node_meta():
+        rep = _derive(Gate(), (torch.empty(1, 6144, device="meta", dtype=torch.bfloat16),))
+    assert rep.program is not None, rep.unsupported
+    (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "CublasRouter[vllm-default]_v1"]
+    kernel, statics = BC.default_cublas_route("router", 188, 6144, 256)
+    assert app["preconditions_checked"] == {"M": 188, "K": 6144, "N": 256, "kernel": kernel, **statics, "DOT": DOT.name}
+    assert len(_ids(rep)) == 1 and app["emitted"].endswith(" x1")
+
+
 def test_the_large_gate_refuses_an_uncaptured_default_cublas_route(served):
     M = BC.CUBLAS_ROUTES["m_max"] + 1
     rep = _derive(_CublasGate(), (torch.empty(M, 6144, device="meta", dtype=torch.bfloat16),))
@@ -598,10 +621,16 @@ def test_large_mla_absorb_is_bound_before_its_composite_transpose(served):
     assert rep.provenance["weight_roles"]["weight"]["role"] == "mla.absorb"
 
 
-def test_large_mla_absorb_refuses_when_the_bmm_intermediate_escapes(served):
+def test_large_mla_absorb_is_not_fused_when_the_bmm_intermediate_escapes(served):
+    """The escaping bmm output is a value of its own, so the chain is not one absorb: the bmm binds alone and the transpose, past the
+    Explicit limit, reads its rows whole."""
     rep = _large_absorb(escape_bmm=True)
-    assert rep.program is None and rep.unsupported.reason == "unsupported_view"
-    assert "permute (1, 0, 2) of 131072 leaves over a composite reference sequence has no O(1) form" in rep.unsupported.hint
+    assert rep.program is not None, rep.unsupported
+    assert "MlaAbsorbTranspose[vllm-dsa]_v1" not in [a["rule"] for a in rep.provenance["applications"]]
+    q = _bf16(np.random.default_rng(5), 256, 16, 33)
+    out = np.array(_run(rep, _LargeMlaAbsorb(True), (q,)))
+    z, y = out[:256 * 16 * 8].reshape(256, 16, 8), out[256 * 16 * 8:].reshape(16, 256, 8)
+    assert (z == y.transpose(1, 0, 2)).all()
 
 
 def test_default_sparse_mla_uses_each_tokens_launched_split_count(served):
@@ -618,6 +647,24 @@ def test_default_sparse_mla_uses_each_tokens_launched_split_count(served):
         for n, ns in zip(keys, splits)
     ]
     assert got == want
+
+
+def test_default_sparse_mla_splits_over_the_declared_batchs_valid_keys(served, monkeypatch):
+    """Each request step's launch holds another sequence too, one past TOPK keys: its top-k has TOPK valid keys."""
+    VB.observe_attention_impls({n: _observation(num_splits=None) for n in NAMES})
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[2, 0], [1, 6]], [[1, 2], [1, 7]]]}))
+    seen = []
+
+    def recorded(valid, *a):
+        seen.append(list(valid))
+        return launch_num_splits(valid, *a)
+
+    monkeypatch.setattr(vllm_dsa, "launch_num_splits", recorded)
+    model = _model()
+    with fxt.preserve_node_meta():
+        rep = _derive(model, _inputs(model))
+    assert rep.program is not None, rep.unsupported
+    assert seen == [[1, 2, TOPK]] * 2 + [[3, TOPK]] * 2
 
 
 def test_a_history_opens_at_the_first_position_a_layer_sees(served):

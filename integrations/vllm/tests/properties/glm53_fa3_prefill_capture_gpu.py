@@ -35,6 +35,8 @@ launches, of the served sequences the plan runs as one split and of those it spl
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import argparse
 import json
 import multiprocessing

@@ -74,6 +74,8 @@ its unique hypothesis fit, the scan ok, and the references equal.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 import argparse
 import ctypes
 import ctypes.util
@@ -132,7 +134,7 @@ LINEAR_M, QUICK_M = (1, 4, 16, 128, 256), (1, 16)
 #: vLLM's default max_num_seqs for the LLM entrypoint on a GPU of 70 GiB or more that is no A100 (engine/arg_utils.py
 #: `get_batch_defaults`): a decode step reaches ENVELOPE tokens
 ENVELOPE = 1024
-#: the scan's decode batches: every M from the last pinned sweep point to the envelope
+#: the scan's decode batches: every M from the last pinned sweep point to the envelope (`--scan-m LO:HI` sets another range)
 SCAN_M = range(256, ENVELOPE + 1)
 #: the output rows and columns the scan keeps per M, enough to see any schedule change and to fit the split count
 SCAN_FIT_ROWS, SCAN_FIT_COLS = 4, 256
@@ -601,7 +603,7 @@ def scan_routes(regimes: list[dict[str, Any]]) -> list[list[int | None]]:
     return runs
 
 
-def scan_sweep(regimes: list[dict[str, Any]], covered: int = SCAN_M[0]) -> list[int]:
+def scan_sweep(regimes: list[dict[str, Any]], covered: int = LINEAR_M[-1]) -> list[int]:
     """The decode batches the scan adds as full cases: for each model class the first M past the already-swept `covered` the
     box serves it at, plus the ENVELOPE endpoint."""
     first: dict[int | None, int] = {}
@@ -631,19 +633,19 @@ def scan_targets(only: set[str], models: list[str]) -> list[tuple[str, str, str]
 
 
 def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, name: str, idx: int) -> dict[str, Any]:
-    """One scan target's operands at ENVELOPE rows and its launch, keep and model pieces (module docstring, `scan`): the
+    """One scan target's operands at the scan's top M rows and its launch, keep and model pieces (module docstring, `scan`): the
     crafted count probe atop a clone of W with an all-ones x row 0 (never for bmm), the fit's operand words, and the serial
     chain's words on the kept window."""
     import torch
     from verity_vllm.program.registry import bf16_gemm_check as BC
 
-    m = MODELS[model]
+    m, top = MODELS[model], SCAN_M[-1]
     gen = torch.Generator(device="cuda").manual_seed(13000 + idx)
     if phase == "router":
         w0, _ = weights.get(model, "mlp.gate")
         gate = gates[model]
         gate.weight.data.copy_(w0)
-        x, w = _activation(gen, ENVELOPE, m.hidden), gate.weight.data
+        x, w = _activation(gen, top, m.hidden), gate.weight.data
         run = lambda M: _primary_output(gate(x[:M]))                               # noqa: E731
         output = "f32"
     elif phase in ("linear", "f32out"):
@@ -651,7 +653,7 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
 
         w0, _ = weights.get(model, name)
         w = w0.clone()                                                             # the probe rows never touch the cached weights
-        x = _activation(gen, ENVELOPE, w.shape[1])
+        x = _activation(gen, top, w.shape[1])
         if phase == "linear":
             gemm, layer, output = dispatch_unquantized_gemm(), torch.nn.Module(), "bf16"
             run = lambda M: gemm(layer, x[:M], w, None)                            # noqa: E731
@@ -662,13 +664,13 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
         b, _ = weights.get(model, name)
         output = "bf16"
         if name == "q_nope_absorb":
-            q = _activation(gen, ENVELOPE, NHL * (QK_NOPE + QK_ROPE)).view(ENVELOPE, NHL, QK_NOPE + QK_ROPE)
+            q = _activation(gen, top, NHL * (QK_NOPE + QK_ROPE)).view(top, NHL, QK_NOPE + QK_ROPE)
             a = q.split([QK_NOPE, QK_ROPE], dim=-1)[0].transpose(0, 1)
             run = lambda M: torch.bmm(a[:, :M], b)                                 # noqa: E731
         else:
-            a = _activation(gen, ENVELOPE, NHL * KV_LORA).view(ENVELOPE, NHL, KV_LORA).transpose(0, 1)
-            buf = torch.empty(ENVELOPE, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
-            out_full = buf.view(ENVELOPE, NHL, V_HEAD).transpose(0, 1)
+            a = _activation(gen, top, NHL * KV_LORA).view(top, NHL, KV_LORA).transpose(0, 1)
+            buf = torch.empty(top, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
+            out_full = buf.view(top, NHL, V_HEAD).transpose(0, 1)
             run = lambda M: torch.bmm(a[:, :M], b, out=out_full[:, :M])            # noqa: E731
     if phase != "bmm":
         # x row 0 all ones and crafted boundary rows atop W: the split count reads out of the words at either output rounding
@@ -695,10 +697,10 @@ def scan_analyze(op: dict[str, Any], segments: list[list[dict[str, Any]]], rows:
     cache: dict[bytes, tuple[list[int], bool]] = {}                                # same kept words, same model: fit each once
     for r in regimes:
         pat = rows[list(SCAN_M).index(r["m0"])]
-        key = pat.tobytes()
+        key, n = pat.tobytes(), pat.shape[-2]                                      # n < SCAN_FIT_ROWS below M = SCAN_FIT_ROWS
         if key not in cache:
-            fits = BC.fit_cublas_split_k(op["xw"], op["ww"], pat, out=op["output"]) if op["xw"] is not None else []
-            cache[key] = (fits, not (~MK._words_equal(pat, op["serial"], f32_words=op["output"] == "f32")).any())
+            fits = BC.fit_cublas_split_k(op["xw"][:n], op["ww"], pat, out=op["output"]) if op["xw"] is not None else []
+            cache[key] = (fits, not (~MK._words_equal(pat, op["serial"][..., :n, :], f32_words=op["output"] == "f32")).any())
         fits, serial = cache[key]
         r["split_fits"], r["serial_fit"] = fits, serial
         r["split"] = fits[0] if r["reduce"] and fits else None
@@ -780,7 +782,7 @@ def scan_subprocess(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
     sub.mkdir(parents=True, exist_ok=True)
     (sub / "scan.json").unlink(missing_ok=True)                                 # a dead process never reuses a stale record
     argv = [sys.executable, str(Path(__file__).resolve()), "--scan-run", "--out", str(sub),
-            "--models", a.models, "--only", a.only]
+            "--models", a.models, "--only", a.only, "--scan-m", f"{SCAN_M[0]}:{SCAN_M[-1]}"]
     argv += (["--scratch", a.scratch] if a.scratch else []) + (["--served-default"] if a.served_default else [])
     proc = subprocess.run(argv, capture_output=True, text=True, cwd=Path(__file__).resolve().parents[2])
     (outdir / "scan.log").write_text(proc.stdout + proc.stderr)
@@ -1297,6 +1299,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global SCAN_M
     ap = argparse.ArgumentParser(description="GLM-5.3's and DeepSeek-V4-Pro's bf16 GEMMs on this Hopper GPU against their Programs")
     ap.add_argument("--out", required=True, help=f"directory for {RECORD}")
     ap.add_argument("--scratch", default=None, help="parent of the scratch directory (operands, Triton cache); default the system temp")
@@ -1314,9 +1317,13 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"skip the decode-batch schedule scan over M in {SCAN_M.start}..{SCAN_M[-1]} (--quick always skips it)")
     ap.add_argument("--scan-run", action="store_true",
                     help="run only the scan and write <out>/scan.json (internal: the scan profiles in its own process)")
+    ap.add_argument("--scan-m", default=f"{SCAN_M[0]}:{SCAN_M[-1]}",
+                    help="LO:HI, the scan's decode batches (the router's cuBLAS tier starts past 16 tokens: scan it from 17)")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
     a = ap.parse_args(argv)
+    lo, hi = (int(v) for v in a.scan_m.split(":"))
+    SCAN_M = range(lo, hi + 1)
     if a.scan_run:
         return scan_run(a)
     return 0 if run(a)["ok"] else 1
