@@ -30,7 +30,9 @@ proved.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay) (``Population.Exfil.tail_cum``),
   where A, the luck factor, turns faulty outputs into skipped work. Each faulty proof block skips its work and injects its output
-  bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
+  bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit, up to all
+  the counted multiplications a block can hold: kappa_block Gamma / 2, kappa_block the densest block the developer can
+  declare, not the reference recipe's average kappa.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
@@ -72,7 +74,8 @@ BLOCK_NAME_BITS = 25
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; a faulty proof block of weight matmuls alone, each multiply-add
+#: two gates and its multiplication counted (kappa_block 1)
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -82,7 +85,7 @@ DEFAULTS = {
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
-    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.6,
+    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.6, "kappa_block": 1.0,
     "kappa_chain": 0.0695, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
@@ -129,6 +132,7 @@ SPEC = [
     {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e)", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
+    {"key": "kappa_block", "label": "Model: kappa of a cheater's faulty proof block, the densest block it can declare (weight matmuls alone 1; a whole training step without attention 2/3; Kimi K2's average 0.60; every gate a counted multiplication 2)", "unit": "", "min": 0.05, "max": 2, "log": False},
     {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695)", "unit": "", "min": 0.01, "max": 1, "log": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
@@ -208,8 +212,9 @@ def chain_products(rates: list[tuple[float, float]], R: float, Z: float) -> floa
 
 
 def full_block_bits(p: dict) -> float:
-    """The reads at which one inference block's thread bound reaches all its work, ``kappa Gamma / 2`` counted multiplications."""
-    target = p["kappa"] * p["Gamma"] / 2
+    """The reads at which one inference block's thread bound reaches all its work, ``kappa_block Gamma / 2`` counted
+    multiplications."""
+    target = p["kappa_block"] * p["Gamma"] / 2
     linear = target * p["b_a"] / p["e"]
     if 2 * linear / (4 * p["d"] * p["b_w"]) <= p["e"]:
         return linear
@@ -274,7 +279,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         per_block = max(1.0, min(k_all, S_full / 28))
         b_bar = max(p["step_bits"], p["step_bits"] + math.log2(math.e * (p["Gamma"] / p["step_flop"]) / per_block))
         bits = k_all * b_bar
-        slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
+        slope = (p["kappa_block"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
         cheat = min(p["m"] * slope * bits, C / gpm)
 
     res_ops = residual_share(p) * C + skipped

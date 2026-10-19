@@ -64,6 +64,8 @@ RANGES = {
     "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
+    "kappa_block": (0.6, 2.0, "Kimi K2's average 0.60 if a block must hold whole training steps; weight matmuls alone "
+                              "1; every gate a counted multiplication 2"),
     "kappa_chain": (0.03, 0.3, "guess, around Kimi K2's dense path 7%"),
     "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
     "e_chain": (4096.0, 49152.0, "guess"),
@@ -163,13 +165,14 @@ def nu(p: dict) -> float:
 
 def chi(p: dict) -> float:
     """The cheating share: a lifetime pool of A I ln(1/delta) ((overhead + replay) / share + floor_steps) faulty proof
-    blocks, each injecting b_bar bits worth sqrt(kappa Gamma / (d b_w b_a)) / 2 counted multiplications, over N F H."""
-    s_full = math.sqrt(p["kappa"] * p["Gamma"] * p["d"] * p["b_w"] * p["b_a"])
+    blocks, each injecting b_bar bits worth sqrt(kappa_block Gamma / (d b_w b_a)) / 2 counted multiplications, 2 / kappa
+    of the reference recipe's gates each, over N F H."""
+    s_full = math.sqrt(p["kappa_block"] * p["Gamma"] * p["d"] * p["b_w"] * p["b_a"])
     pool = (p["luck"] * p["identities"] * math.log(1 / p["p_evade"])
             * ((p["overhead"] + p["replay"]) / p["share"] + p["floor_steps"]))
     b_bar = p["step_bits"] + math.log2(math.e * 28 * p["Gamma"] / (p["step_flop"] * s_full))
     C = p["nodes"] * p["node_flops"] * p["years"] * T.YEAR
-    return pool * b_bar * math.sqrt(p["Gamma"] / (p["kappa"] * p["d"] * p["b_w"] * p["b_a"])) / C
+    return pool * b_bar * math.sqrt(p["kappa_block"] * p["Gamma"] / (p["d"] * p["b_w"] * p["b_a"])) / (p["kappa"] * C)
 
 
 def bound(p: dict, tier: str) -> float:
@@ -325,7 +328,7 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
                 print(f"  no crossing ({cells}): {', '.join(keys)}")
     print("\nClosed forms against evaluate(): eta = s + (1 - s)(min(r + nu, mu) + chi), "
           "mu = 4 R lambda_in / (kappa d b_w b_a F),\nnu = 2 alpha Lambda(K) / (kappa b_a), "
-          "chi = pool b_bar sqrt(Gamma / (kappa d b_w b_a)) / (N F H)")
+          "chi = pool b_bar sqrt(kappa_block Gamma / (d b_w b_a)) / (kappa N F H)")
     print(f"{'probe':26} {'tier':4} {'term':4} {'evaluate':>9} {'closed':>9} {'ratio':>6}  regime")
     for c in checks:
         got, closed = c[c["term"]]

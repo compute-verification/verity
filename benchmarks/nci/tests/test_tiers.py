@@ -128,6 +128,17 @@ def test_the_cheating_pool_does_not_grow_with_the_fleet():
     assert large["cheat_steps"] == pytest.approx(T.DEFAULTS["luck"] * math.log(1 / T.DEFAULTS["p_evade"]) / q)
 
 
+def test_a_faulty_block_is_worth_the_densest_block_not_the_recipes_average():
+    """A faulty proof block's bits are worth the thread bound's chord up to kappa_block Gamma / 2, so chi grows about as
+    sqrt(kappa_block) in the quadratic regime; no other term reads kappa_block."""
+    p = T.DEFAULTS | {"host_share": 0.0}
+    average = T.evaluate(p | {"kappa_block": p["kappa"]}, T.TIERS["T5"])
+    dense = T.evaluate(p, T.TIERS["T5"])
+    assert dense["cheat"] / average["cheat"] == pytest.approx(math.sqrt(p["kappa_block"] / p["kappa"]), rel=0.02)
+    for term in ("unmonitored", "residual", "declared"):
+        assert dense[term] == average[term]
+
+
 def test_the_amplifier_multiplies_every_term():
     """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g (paper red team)."""
     for tier in ("T1", "T5"):

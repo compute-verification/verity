@@ -166,7 +166,10 @@ reference-model and off-policy forwards give 0.47). Expert-specialized fine-tuni
 forwards alone: 0.58 at 32k. A lower \(\kappa\) is
 the defender's conservative side: it lowers the thread bound and raises \(\nu\) and \(\mu\) (`tiers.py`). A cheater's
 own lower-\(\kappa\) recipe (longer contexts, more heads) buys gates that aren't the reference recipe's work: what they
-are worth enters through `m`.
+are worth enters through `m`. A faulty proof block is worth at most the counted multiplications a block can hold, and a
+cheater can declare blocks of weight matmuls alone, so `tiers.py` takes that block's own \(\kappa_{\text{block}} = 1\)
+(every multiply-add's multiplication counted) rather than the recipe's average: the cheating share \(\chi\) grows as
+\(\sqrt{\kappa_{\text{block}}}\), 1.27x what 0.60 gives.
 
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
