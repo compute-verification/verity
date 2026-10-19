@@ -8,7 +8,8 @@
 #     bash -c 'bash "$RESEARCH_RUN_DIR"/inputs/time_branch.sh'
 # ARMS names the arms (default "base arm"): base runs with BASE_ENV (default none, today's -h3 in the same tree), arm with
 # ARM_ENV.  A window runs every arm back to back in one one-GPU preemptible lease (at most LEASE_MIN minutes), in ABBA order
-# across windows, so both arms see the same GPU within minutes.  WINDOWS picks the windows: W4's (r20261018-193331-0f54: eager,
+# across windows, so both arms see the same GPU within minutes; PAIR=0 gives each arm a lease of its own, for a node so loaded
+# that one arm's window takes over half a lease (r20261019-000632-a0b8: model load alone took 7 min).  WINDOWS picks the windows: W4's (r20261018-193331-0f54: eager,
 # whole, eager-nsys, whole-nsys; the default whole eager whole-nsys) or STEP-SPLIT's (eager-8192, whole-8192, eager-2560 and
 # their -nsys).  An nsys window's analysis (served-profile.json) is kept; its report and SQLite are deleted.
 set -uo pipefail
@@ -36,7 +37,7 @@ D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python; CUDA=/usr/local/cuda-13.0
 WINDOWS=${WINDOWS:-whole eager whole-nsys}
 ARMS=${ARMS:-base arm}; BASE_ENV=${BASE_ENV:-}; ARM_ENV=${ARM_ENV:-}
-MEM_GB=${MEM_GB:-128}; LEASE_MIN=${LEASE_MIN:-28}
+MEM_GB=${MEM_GB:-128}; LEASE_MIN=${LEASE_MIN:-28}; PAIR=${PAIR:-1}
 : "${GPU_LEASE_WHO:?pass --env GPU_LEASE_WHO=<id>}"
 case " $WINDOWS " in *" eager-2560"*)
   grep -q -- '--prefill' benchmarks/pouw/pearl_c_vllm/served_profile.sh || {
@@ -54,14 +55,18 @@ tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 export SCHEME=${SCHEME:-pearl-c-sm120-v1-h3} SHIP_TAR=$S/ship.tar WORK OUT BASE_ENV ARM_ENV LEASE_MIN
 
 window() {  # NAME NSYS ARM... -- VAR=VALUE ...
-  local name=$1 nsys=$2 arm W P
-  stamp "lease for $name"
-  gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" --mem-gb "$MEM_GB" -- bash "$0" pair "$@"
-  stamp "lease for $name exited $?"
+  local name=$1 nsys=$2 arm g W P arms=() groups=()
   shift 2
+  while [ "$1" != -- ]; do arms+=("$1"); shift; done; shift
+  if [ "$PAIR" = 1 ]; then groups=("${arms[*]}"); else groups=("${arms[@]}"); fi
+  for g in "${groups[@]}"; do
+    stamp "lease for $name ($g)"
+    # shellcheck disable=SC2086
+    gpu-lease 1 --wait --preemptible --max-min "$LEASE_MIN" --mem-gb "$MEM_GB" -- bash "$0" pair "$name" "$nsys" $g -- "$@"
+    stamp "lease for $name ($g) exited $?"
+  done
   [ "$nsys" = 1 ] || return 0
-  for arm in "$@"; do
-    [ "$arm" = -- ] && break
+  for arm in "${arms[@]}"; do
     W=$OUT/$name-$arm P=$S/$name-$arm
     [ -f "$W/served.nsys-rep" ] || continue
     mkdir -p "$P"; mv "$W/served.nsys-rep" "$P/"
