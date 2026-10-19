@@ -30,13 +30,17 @@
     },
     "ask-daniel": {
       "id": "C0C5UCA0S0Z",
-      "purpose": "Everything that needs Daniel: one question per card (blocking or default); only Daniel (U0BEN96ES8Y) decides.",
+      "purpose": "Everything that needs Daniel: one question per card (blocking or default), each linking its page in the Asks for Daniel Notion database; only Daniel (U0BEN96ES8Y) decides.",
       "subscribers": [
         "infra"
       ],
       "aliases": [
         "approvals"
-      ]
+      ],
+      "pages": {
+        "database": "https://app.notion.com/p/914ab9399fe44f79ae19ff05db87e1fa",
+        "data_source": "9c204dab-e175-407f-b18d-bc3b3bddec61"
+      }
     }
   },
   "handles": [
@@ -52,7 +56,6 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        "benchmarks/judge.py",
         ".cursor/"
       ],
       "branch_suffixes": [
@@ -69,6 +72,11 @@
       "usergroup": "S0C5Q6KJZTQ",
       "linear": "PRF",
       "owns": [
+        "fixtures/typed-obligation-v0/",
+        "fixtures/proof-format-v3/",
+        "Security/Proofs/Flock/",
+        "Security/Proofs/Core/",
+        "Security/Definitions/Core/",
         "verity/",
         "verity/core/protocols/sampled_proofs/",
         "archive/",
@@ -81,7 +89,10 @@
         "benchmarks/private_circuit/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
-        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
+        "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py",
+        "Security/Definitions/Hash/",
+        "Security/Models/Hash/",
+        "Security/Proofs/Hash/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -120,7 +131,13 @@
         "integrations/vllm/manifests/",
         "integrations/vllm/tests/properties/",
         "integrations/vllm/tests/check/test_capture_map.py",
-        "integrations/vllm/tests/check/test_capture_map_versions.py"
+        "integrations/vllm/tests/check/test_capture_map_versions.py",
+        "integrations/vllm/verity_vllm/predict/",
+        "integrations/vllm/tests/predict/",
+        "integrations/vllm/tests/program/",
+        "integrations/vllm/tests/commit/",
+        "integrations/vllm/tests/acquire/",
+        "integrations/vllm/tests/query/"
       ],
       "branch_suffixes": [
         "8c79",
@@ -161,7 +178,39 @@
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_manifest.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_screen.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_triton.py",
-        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py"
+        "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_whole.py",
+        "fixtures/bench-instances/",
+        "fixtures/redteam/",
+        "fixtures/redteam-3/",
+        "fixtures/redteam-zk/",
+        "benchmarks/census/",
+        "Security/Definitions/Accounting/CoinFlow.lean",
+        "Security/Definitions/Accounting/Filler.lean",
+        "Security/Definitions/Accounting/HMu.lean",
+        "Security/Definitions/Accounting/PouwWork.lean",
+        "Security/Definitions/Accounting/TS.lean",
+        "Security/Definitions/Accounting/TS/",
+        "Security/Models/Accounting/Assumptions/PouwFloor.lean",
+        "Security/Models/Accounting/Assumptions/PouwWork.lean",
+        "Security/Models/Accounting/Assumptions/Sheet.lean",
+        "Security/Models/Accounting/Assumptions/Stages.lean",
+        "Security/Models/Accounting/Assumptions/TS.lean",
+        "Security/Models/Accounting/Guarantees/CoinFlow.lean",
+        "Security/Models/Accounting/Guarantees/FillerLuck.lean",
+        "Security/Models/Accounting/Guarantees/HMu.lean",
+        "Security/Models/Accounting/Guarantees/PouwWork.lean",
+        "Security/Models/Accounting/Guarantees/Sheet.lean",
+        "Security/Models/Accounting/Guarantees/TS.lean",
+        "Security/Models/Accounting/Guarantees/TS/",
+        "Security/Proofs/Accounting/ChainWork.lean",
+        "Security/Proofs/Accounting/CoinFlow.lean",
+        "Security/Proofs/Accounting/CoinFlow/",
+        "Security/Proofs/Accounting/FillerLuck.lean",
+        "Security/Proofs/Accounting/HMu.lean",
+        "Security/Proofs/Accounting/HMu/",
+        "Security/Proofs/Accounting/PouwWork.lean",
+        "Security/Proofs/Accounting/TS.lean",
+        "Security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -208,7 +257,70 @@
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
-        "verity/core/protocols/remote_bandwidth/"
+        "verity/core/protocols/remote_bandwidth/",
+        "verity/core/primitives/requirement/",
+        "Security/Definitions/Accounting/Bandwidth.lean",
+        "Security/Definitions/Accounting/Bandwidth/",
+        "Security/Definitions/Accounting/BandwidthAudit.lean",
+        "Security/Definitions/Accounting/BoundReceipt.lean",
+        "Security/Definitions/Accounting/BoundSketch.lean",
+        "Security/Definitions/Accounting/Capacity.lean",
+        "Security/Definitions/Accounting/Gates.lean",
+        "Security/Definitions/Accounting/Gates/",
+        "Security/Definitions/Accounting/Memory.lean",
+        "Security/Definitions/Accounting/RateAudit.lean",
+        "Security/Definitions/Accounting/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/RateAuditHorizon.lean",
+        "Security/Definitions/Accounting/RateAuditInteractive.lean",
+        "Security/Definitions/Accounting/RateAuditJoint.lean",
+        "Security/Definitions/Accounting/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/RateAuditRemote.lean",
+        "Security/Definitions/Accounting/RateAuditSketch.lean",
+        "Security/Definitions/Accounting/RateAuditSketchDeployed.lean",
+        "Security/Definitions/Accounting/RateAuditSketchInteractive.lean",
+        "Security/Definitions/Accounting/RateAuditSketchLayout.lean",
+        "Security/Definitions/Accounting/Remote.lean",
+        "Security/Definitions/Accounting/Remote/",
+        "Security/Definitions/Accounting/Requirement.lean",
+        "Security/Definitions/Accounting/Responder.lean",
+        "Security/Definitions/Accounting/Window.lean",
+        "Security/Models/Accounting/Assumptions/EncodeChain.lean",
+        "Security/Models/Accounting/Assumptions/RateAudit.lean",
+        "Security/Models/Accounting/Assumptions/RateAuditDeployed.lean",
+        "Security/Models/Accounting/Assumptions/Remote.lean",
+        "Security/Models/Accounting/Guarantees/Bandwidth.lean",
+        "Security/Models/Accounting/Guarantees/Bandwidth/",
+        "Security/Models/Accounting/Guarantees/BandwidthAudit.lean",
+        "Security/Models/Accounting/Guarantees/BoundReceipt.lean",
+        "Security/Models/Accounting/Guarantees/BoundSketch.lean",
+        "Security/Models/Accounting/Guarantees/Capacity.lean",
+        "Security/Models/Accounting/Guarantees/Gates.lean",
+        "Security/Models/Accounting/Guarantees/Memory.lean",
+        "Security/Models/Accounting/Guarantees/RateAudit.lean",
+        "Security/Models/Accounting/Guarantees/RateAuditDeployed.lean",
+        "Security/Models/Accounting/Guarantees/RateAuditHorizon.lean",
+        "Security/Models/Accounting/Guarantees/RateAuditNamed.lean",
+        "Security/Models/Accounting/Guarantees/RateAuditPartial.lean",
+        "Security/Models/Accounting/Guarantees/RateAuditRemote.lean",
+        "Security/Models/Accounting/Guarantees/RateAuditSketch.lean",
+        "Security/Models/Accounting/Guarantees/Remote.lean",
+        "Security/Models/Accounting/Guarantees/Requirement.lean",
+        "Security/Models/Accounting/Guarantees/Responder.lean",
+        "Security/Proofs/Accounting/Bandwidth.lean",
+        "Security/Proofs/Accounting/Bandwidth/",
+        "Security/Proofs/Accounting/BandwidthAudit.lean",
+        "Security/Proofs/Accounting/BoundReceipt.lean",
+        "Security/Proofs/Accounting/BoundReceipt/",
+        "Security/Proofs/Accounting/Capacity.lean",
+        "Security/Proofs/Accounting/Gates.lean",
+        "Security/Proofs/Accounting/Memory.lean",
+        "Security/Proofs/Accounting/Memory/",
+        "Security/Proofs/Accounting/RateAudit.lean",
+        "Security/Proofs/Accounting/RateAudit/",
+        "Security/Proofs/Accounting/Remote.lean",
+        "Security/Proofs/Accounting/Requirement.lean",
+        "Security/Proofs/Accounting/Responder.lean",
+        "Security/Proofs/Accounting/Responder/"
       ],
       "branch_suffixes": [
         "3cf5",
@@ -260,7 +372,10 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "tools/research/src/research/drive.py",
+        "tools/research/src/research/mergequeue.py",
+        "tools/research/tests/test_queue_drive.py"
       ],
       "branch_suffixes": [
         "4292",
@@ -298,7 +413,9 @@
         ".agents/skills/using-slack/",
         "tools/research/src/research/slack.py",
         "tools/research/tests/test_slack.py",
-        "tools/research/tests/slack_routing_vectors.json"
+        "tools/research/tests/slack_routing_vectors.json",
+        "tools/research/src/research/linear.py",
+        "tools/research/tests/test_linear.py"
       ],
       "branch_suffixes": [
         "b252",
@@ -326,7 +443,6 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "benchmarks/census/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -335,7 +451,7 @@
     },
     {
       "handle": "vllm",
-      "holder": "the vLLM coordinator (bc-bfa78636-bb35-5c4a-ac9c-cf064e6428d0)",
+      "holder": "the vLLM coordinator (bc-0bd3928c-87e8-56f5-aa82-41779608718d, generation 3, succeeding bc-bfa78636 on 18 Oct)",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
@@ -345,7 +461,8 @@
       "linear": "VLLM",
       "branch_suffixes": [
         "9411",
-        "8350"
+        "8350",
+        "718d"
       ]
     },
     {
@@ -357,7 +474,9 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
-        "benchmarks/specs/"
+        "benchmarks/specs/",
+        "infra/cluster/kinds/benchmarks.toml",
+        "benchmarks/judge.py"
       ],
       "branch_suffixes": [
         "47e4",
@@ -365,16 +484,27 @@
       ]
     },
     {
-      "handle": "hash",
-      "holder": "the hash coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
-      "remit": "A fast commitment hash for served inference: tensor-core friendly, binding proved in Lean, to cut vLLM commit time.",
-      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top)",
+      "handle": "kernels",
+      "holder": "the kernels coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
+      "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
+      "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
         "benchmarks/hash/"
       ],
       "branch_suffixes": [
         "15ad"
+      ]
+    },
+    {
+      "handle": "training",
+      "holder": "Daniel's training agent (bc-b43da88b-5d25-4463-9b8c-da4df6f84207), named 'training'",
+      "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
+      "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
+      "usergroup": "S0CA9EAFKED",
+      "owns": [],
+      "branch_suffixes": [
+        "4207"
       ]
     }
   ]

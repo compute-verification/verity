@@ -497,7 +497,8 @@ Slack app must be in both too: Cursor delivers the wakes, this bot posts.
 
 Routing: each handle holder subscribes to its own inbox thread, not to the top level. The sender rings the doorbells of
 the names a post addresses right after posting, by the rule in `route_targets` (`slack.py`), which
-`tests/slack_routing_vectors.json` pins.
+`tests/slack_routing_vectors.json` pins. Only posts by Verity's bot (the registry's `bot_id`) and by the named humans route:
+another app's bot posting under a handle's name rings no one.
 
 ### Notes and evidence over MCP
 

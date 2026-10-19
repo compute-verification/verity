@@ -19,16 +19,18 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
       remote bandwidth audit over a node's registered store (`remote_bandwidth`) and the network certifier
       (`certifier`), each a Python
-      verifier with the code that runs it. A protocol's Lean code is its `lean/`. NCI is Lean only
-      (`verity/core/protocols/network/nci/`).
+      verifier with the code that runs it, until its Lean is its verifier of record (Design rules). A protocol's Lean
+      code is its `lean/`. NCI is Lean only (`verity/core/protocols/network/nci/`).
     - `claims`: the ids of security claims.
-    - The Lean ports in `primitives`, `devices`, `service` and `protocols`. A port is held to the Python it replaces by
-      `difftest` (`verity_difftest`, with its Lake package `verity_difftest`).
+    - The Lean in `primitives`, `devices`, `service` and `protocols`. `difftest` (`verity_difftest`, with its Lake
+      package `verity_difftest`) holds the Python that mirrors each one to the Lean.
     - `service/flock/`: C-Flock's executable verifier of record (no dependencies).
-  - `verity/ml/` (`verity.ml`): Python and CUDA. These units are on the soundness path, because core's verifiers read
-    them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
+  - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
+    Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
+    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.circuits.targets`, `ml.kernels`,
     `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach). The rest, C-Flock's prover and the private circuits, can't affect soundness.
+    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover and the private circuits, can't affect
+    soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -75,9 +77,10 @@ Code reaches the Nebius nodes only through `research deploy install` from a push
 
 Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 
-- `verity.core` may import the units of `verity.ml` that `ALLOWED` lists for it, which puts them on the soundness path
-  (`SOUNDNESS_PATH`). `verity.ml` never imports `verity.core`, apart from the files `ML_IMPORTS_CORE` names (C-Flock's
-  tests and V*'s builders, and hm96's test of its claims).
+- A verifier imports no `verity.ml` code (Design rules). Until its protocol's verifier of record is Lean, a Python
+  verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none, and
+  what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
+  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
   `core.claims` import no other unit.
@@ -144,6 +147,10 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
   and later from a separate physical calibration.
+- **Lean is the definition and the verifier of record** (Daniel, 18 Oct). Python in `verity.ml` mirrors it, for the
+  prover's speed, and difftest holds that Python to the Lean. A verifier imports no `verity.ml` code. Each protocol still
+  switches by the 8 Oct procedure (the friction skill): until it does, its Python verifier and the ml units it reads stay
+  on `SOUNDNESS_PATH`, which only shrinks, and no core → ml import edge is added (`tests/test_boundaries.py`).
 - **Soundness is one theorem** (see Lean below).
 
 ## Tests
@@ -210,8 +217,9 @@ refuses, and the lander handles what it refuses.
 Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
 right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
 A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
-whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
-landing.
+whose trailing parts passed. Deferred steps run in one post-landing run on `main`'s tip at a time. A failure there reverts
+the one PR it implicates, else every landing since the last verified tip; one that no landing since touches reverts nothing
+and goes to ci.
 
 PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 
@@ -306,9 +314,11 @@ Never print a secret's value.
 - List environment variable names with `compgen -e`, never `env | cut`, `env | grep`, `printenv | …` or tmux's
   `show-environment`: a multi-line value's later lines print as if they were names.
 - `.cursor/hooks.json` refuses any shell command that would print the environment or every process's full command line
-  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook the
-  environment's `start` runs origin/main's `tools/agent-guard/boot.sh`, which writes the hook into `/workspace` and runs
-  `install.sh`.
+  (`tools/agent-guard/shell_hook.py`). Cloud agents read project hooks only, so on a branch older than the hook,
+  origin/main's `tools/agent-guard/boot.sh` writes the hook into `/workspace`, runs `install.sh`, starts the VM's OOM
+  recorder and puts `research` on PATH. The environment's `start` runs it after the GitHub helper (since 18 Oct, INF-71),
+  and every coordinator's launch brief (`infra/cursor/launch_coordinator.py`) runs it first too, for a VM booted from an
+  older environment version.
 - A secret is stored as one line (a key as base64, `NAME_B64`), and `tools/agent-guard/install.sh` puts a redacting `env`
   on the VM.
 
@@ -347,7 +357,7 @@ Never print a secret's value.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
 
-Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
+Each coordinator (a handle's holder, which its inbox route records: `research msg handles`) is a plain Cursor cloud agent on the
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
 quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
@@ -360,6 +370,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **An agent's turn waits on nothing long.** Spawn workers as cloud agents (`Task` with `environment: cloud`) where your
+  Task tool offers it, else with `run_in_background: true`, never in the foreground. Local workers share the agent's one
+  VM, and an out-of-memory kill there stops all of them and the coordinator silently, so heavy work goes through
+  `research run`. No step blocks longer than about 20 minutes: launch detached and check back with
+  `research status RUN`. A worker resumed twice is relaunched fresh from its last checkpoint note.
 - **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
   '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
@@ -391,6 +406,8 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - Lean: `.agents/skills/lean-proofs/SKILL.md`.
 - GPU kernel work (PoUW kernels on sm_120): `.agents/skills/kernel-engineering/SKILL.md`.
 - When something gets in your way, and the rulings: `.agents/skills/friction/SKILL.md`.
+- Asking Daniel for a decision (a page in the Asks for Daniel Notion database, and its `#ask-daniel` card):
+  `.agents/skills/asking-daniel/SKILL.md`.
 - Before adding, changing or retiring a process (a rule here or in the lane contract, a gate in `check` or
   `research merge`, a required review, a file every PR must update), assess its effect on research velocity:
   `.agents/skills/process-design/SKILL.md`.
