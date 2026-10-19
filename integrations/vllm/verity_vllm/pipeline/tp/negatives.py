@@ -24,7 +24,7 @@ def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_
 
 
 def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, list[dict]] | None:
-    """NEGATIVE (R16 tp TP-10): `<rank>:<served param name>:<from_rank>` specs -> {rank: [{"param", "from_rank"}]}; `0:X:1 1:X:0` = the two
+    """NEGATIVE: `<rank>:<served param name>:<from_rank>` specs -> {rank: [{"param", "from_rank"}]}; `0:X:1 1:X:0` = the two
     ranks swap their shards of X.  from_rank must be ANOTHER rank of the world (a rank serving its own shard is the positive, refused here)."""
     if not specs:
         return None
