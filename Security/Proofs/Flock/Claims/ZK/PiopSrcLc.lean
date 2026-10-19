@@ -141,7 +141,7 @@ namespace Masked
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- Table `j`'s rep `r` lincheck coins at the opened coins, after the zerocheck's `3 + (m − 6)`. -/
-abbrev lcE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
+noncomputable abbrev lcE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
     FlockComplete.Replay.Lc.Coins :=
   FlockComplete.lcCoins (fun k i => slotAt c k i)
     (repBase x (2 * j.val + r.val) + 3 + ((zkTab x j).table.S.m - 6)) ((zkTab x j).table.S.kLog - 6)
