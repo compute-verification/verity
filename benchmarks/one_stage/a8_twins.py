@@ -8,7 +8,10 @@ digests the fold's wiring (each node's Definition and argument refs), so that tw
       --out twins.json [--steps 0,1] [--layers 0,3]
 
 Operands as `a8.kind_values` takes them: each operand view's snapshot first, else the producer's output snapshot (provenance),
-and provenance again for a Call that disagrees on the first.
+and provenance again for a Call that disagrees on the first. A component that disagrees with the snapshot at its Call's event
+is held to its allocation's last snapshot before the next Call writes that allocation (``late``, its event): what a reader saw.
+A kernel the capture doesn't see writes after its Call's event: DeepGEMM's MQA logits, folded at their `torch.empty`
+(`dsa.mqa_logits.invisible_deepgemm`), are first held at the top-k's read.
 """
 from __future__ import annotations
 
@@ -30,8 +33,19 @@ import a8  # noqa: E402
 import a8_kinds as K  # noqa: E402
 
 
-def components(store, m: dict, got: list) -> dict[int, dict]:
-    """Each return component an output snapshot holds: its leaves, how many of them differ, the first two that do."""
+def write_events(res) -> dict[int, list[int]]:
+    """Each allocation's writing Calls' events (an output view's), ascending."""
+    w: dict[int, set[int]] = {}
+    for m in res.instances:
+        for v in m["output_views"]:
+            if v is not None:
+                w.setdefault(v.alloc, set()).add(m["event"])
+    return {a: sorted(e) for a, e in w.items()}
+
+
+def components(store, m: dict, got: list, writes: dict[int, list[int]]) -> dict[int, dict]:
+    """Each return component an output snapshot holds: its leaves, how many of them differ, the first two that do; one that
+    differs at the Call's event is held to its allocation's last snapshot before the next write (the module docstring)."""
     from verity_vllm.check.fold_compare import _component_ranges
     comps, views = _component_ranges(m), m["output_views"]
     out = {}
@@ -40,9 +54,18 @@ def components(store, m: dict, got: list) -> dict[int, dict]:
         s = None if view is None else store.find(view, at=m["event"])
         if s is None:
             continue
-        want = store.extract(s, view)
-        d = [i for i in range(lo, hi) if got[i] is not None and int(got[i]) != int(want[i - lo])]
+
+        def differ(snap, lo=lo, hi=hi, view=view):
+            want = store.extract(snap, view)
+            return [i for i in range(lo, hi) if got[i] is not None and int(got[i]) != int(want[i - lo])]
+        d = differ(s)
         out[k] = {"leaves": hi - lo, "differ": len(d), "first": d[:2]}
+        nxt = next((e for e in writes.get(view.alloc, []) if e > m["event"]), None)
+        later = [x for x in store.by_alloc.get(view.alloc, []) if x.event > m["event"] and (nxt is None or x.event < nxt)
+                 and store.covers(x, view)]
+        if d and later:
+            d2 = differ(later[-1])
+            out[k].update({"differ": len(d2), "first": d2[:2], "late": later[-1].event, "differ_at_event": len(d)})
     return out
 
 
@@ -73,6 +96,7 @@ def main() -> int:
     print(f"A8 twins fold: {len(res.instances)} Calls to step {max(steps)}, {fold_s} s", flush=True)
     doc: dict = {"values": a.values, "steps": steps, "layers": sorted(layers), "fold_s": fold_s,
                  "unsupported": res.report.unsupported, "kinds": {}}
+    writes = write_events(res)
     for kind in kinds:
         t0, calls = time.time(), []
         for m in res.instances:
@@ -89,7 +113,7 @@ def main() -> int:
             except LookupError as e:
                 calls.append({**entry, "error": str(e)[:300]})
                 continue
-            comp = components(store, m, a8.evaluate_units(spec, spec, args, 1, 0)["call_out"])
+            comp = components(store, m, a8.evaluate_units(spec, spec, args, 1, 0)["call_out"], writes)
             entry["operands"] = "snapshot"
             if any(c["differ"] for c in comp.values()):
                 try:
@@ -97,16 +121,18 @@ def main() -> int:
                 except LookupError:
                     alt = args
                 if any(not np.array_equal(x, y) for x, y in zip(alt, args)):
-                    comp2 = components(store, m, a8.evaluate_units(spec, spec, alt, 1, 0)["call_out"])
+                    comp2 = components(store, m, a8.evaluate_units(spec, spec, alt, 1, 0)["call_out"], writes)
                     if not any(c["differ"] for c in comp2.values()):
                         comp, entry["operands"] = comp2, "provenance"
             calls.append({**entry, "components": comp})
         pattern = Counter("error" if "error" in c else ",".join(str(k) for k, v in c["components"].items() if v["differ"]) or "agree"
                           for c in calls)
-        doc["kinds"][kind] = {"calls": len(calls), "agree": pattern.get("agree", 0),
+        late = sum(any("late" in v for v in c.get("components", {}).values()) for c in calls)
+        doc["kinds"][kind] = {"calls": len(calls), "agree": pattern.get("agree", 0), "late": late,
                               "differing_components": dict(sorted(pattern.items())), "seconds": round(time.time() - t0, 1),
                               "each": calls}
-        print(f"A8 twins {kind}: {len(calls)} Calls, " + json.dumps(dict(sorted(pattern.items()))), flush=True)
+        print(f"A8 twins {kind}: {len(calls)} Calls, " + json.dumps(dict(sorted(pattern.items()))) + f", {late} held late",
+              flush=True)
     doc["wiring_sha256"] = wiring(res)
     print(f"A8 twins wiring: {doc['wiring_sha256']} over {len(res.body.nodes)} nodes", flush=True)
     Path(a.out).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
