@@ -95,9 +95,11 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit.
 
     With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
-    commit's second parent (the train drive merged onto a moved main): a landing made with `--defer` lands while its check runs,
-    or cancels it then (#2544), so no passed attempt is in the store to find (CI-81)."""
-    m = CHECK_RE.search(git("log", "-1", "--format=%B", commit, cwd=cwd))
+    commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
+    a train commit's own second parent is a PR's head, which no check of the train ran on): a landing made with `--defer` lands
+    while its check runs, or cancels it then (#2544), so no passed attempt is in the store to find (CI-81)."""
+    body = git("log", "-1", "--format=%B", commit, cwd=cwd)
+    m = CHECK_RE.search(body)
     if m and attempt in (None, m.group(1)):
         return m.group(1)
     sha = git("rev-parse", "--verify", f"{commit}^{{commit}}", cwd=cwd, check=False)
@@ -107,10 +109,13 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     if attempt is None:
         return passed(sha)
     src = source_of(attempt)
-    if src and src in (sha, git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd, check=False)):
+    merged = re.search(rf"^Checked: {re.escape(attempt)} ", body, re.M) and git("rev-parse", "--verify", "-q", f"{sha}^2", cwd=cwd,
+                                                                                 check=False)
+    if src and src in (sha, merged):
         return attempt
     print(f"post-train: {attempt} ran on {src[:12] if src else 'no commit its attempt or run record names'}, which is neither "
-          f"{sha[:12]} nor the train it merged (its second parent), so it is no check of this landing", file=sys.stderr)
+          f"{sha[:12]} nor the train it merged (its second parent, with `Checked: {attempt}`), so it is no check of this landing",
+          file=sys.stderr)
     return None
 
 
@@ -250,8 +255,9 @@ def main(argv: list[str] | None = None) -> int:
     sha = git("rev-parse", "--verify", f"{a.commit}^{{commit}}")
     attempt = check_attempt(sha, attempt=a.attempt)
     if not attempt and not a.dry_run:
-        print(f"post-train: {sha[:12]} has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main"
-              if not a.attempt else f"post-train: {sha[:12]} is no landing of main on {a.attempt}; nothing labelled", file=sys.stderr)
+        why = (f"is no landing of main on {a.attempt}; nothing labelled" if a.attempt else
+               "has no `Check:` trailer and is no checked commit of origin/main, so it is no landing of main")
+        print(f"post-train: {sha[:12]} {why}", file=sys.stderr)
         return 2
     with open(LOCK, "a") as lock:
         try:
