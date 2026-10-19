@@ -27,7 +27,7 @@ device's primary context:
   The row digests and the tile leaves run as hash_fast.cuh's segment and fold launches, over each shape's segment scratch
   (``segdig_a``, ``segdig_t``) and, for B's tree at install, a scratch dropped after it (``segdig_b``).
 * **The records** (`pearl_c_work.UnitRecord`): each call's real rows and width, and the rows that fail the per-row rules
-  (`pearl_c_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
+  (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
   `pearl_c.live_row` from its retained words.
 * **Each pass** (`begin`, `end`): the transcript is every call's A root and one tile tree over every leaf, in call order,
