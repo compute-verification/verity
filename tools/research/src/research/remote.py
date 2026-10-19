@@ -14,7 +14,8 @@
                         rate_usd_per_hour = 14.40      # the attempt's cost rate (a runpod pod reports its own)
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
-                    which snapshot ran.  No pip, no editable install, no credentials on the machine.
+                    which snapshot ran.  No pip, no editable install, no credentials on the machine.  The workload's PATH starts
+                    with <root>/cache/bin/<content-sha>/, whose `research` runs that snapshot, and ends with ~/.elan/bin.
     version check   PYTHONPATH does not guarantee which `research` answers (a wrapper python, a `research/` earlier on sys.path, an
                     altered snapshot).  The launcher sends tool_identity() of the package it shipped: `launch-request --expect-tool ID`
                     refuses before the claim, and the runner again before the workload, with ResearchVersionMismatch naming the
@@ -1552,6 +1553,25 @@ def _runner_failed(req: dict[str, Any], request_path: Path, run_dir: Path, proc:
             "runner_pid": proc.pid, "rc": proc.returncode}
 
 
+def _research_bin(tool: str, runs_root: Path) -> Path:
+    """<root>/cache/bin/<snapshot>/, holding a `research` that runs the run's shipped tool (`python -m research` with it on
+    PYTHONPATH), so a workload's `research data put` is the launcher's research and not whatever the machine's PATH has (INF-102)."""
+    d = runs_root.parent / "cache" / "bin" / Path(tool).name
+    text = f'#!/bin/sh\nPYTHONPATH={shlex.quote(tool)}${{PYTHONPATH:+:$PYTHONPATH}} exec {shlex.quote(sys.executable)} -m research "$@"\n'
+    shim = d / "research"
+    try:
+        if shim.read_text() == text:
+            return d
+    except OSError:
+        pass
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".research.{os.getpid()}"
+    tmp.write_text(text)
+    tmp.chmod(0o755)
+    os.replace(tmp, shim)
+    return d
+
+
 def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remote: dict[str, Any]) -> dict[str, str]:
     """The runner's environment, which a preflight also runs in: the workload's --env, and with a shipped tree its PYTHONPATH behind
     the tool snapshot (recorded in `remote`)."""
@@ -1569,9 +1589,14 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         remote["pythonpath"] = [p for p in env["PYTHONPATH"].split(":") if p]
         remote["pythonpath_derived"] = {"roots": derived["roots"], "missing": derived["missing"], "source": derived["source"],
                                         **({"shim": derived["shim"]} if derived["shim"] else {})}
+    path = [p for p in (env.get("PATH") or os.defpath).split(os.pathsep) if p]
     if req.get("tool"):
         env["PYTHONPATH"] = req["tool"] + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         env["RESEARCH_TOOL_SNAPSHOT"] = Path(req["tool"]).name
+        path.insert(0, str(_research_bin(req["tool"], runs_root)))
+    if (elan := Path.home() / ".elan" / "bin").is_dir() and str(elan) not in path:
+        path.append(str(elan))                    # `lake` for a Lean job: vy-nebius-2 has it only there (rc 127, r20261019-072345-9757)
+    env["PATH"] = os.pathsep.join(path)
     gpus = req.get("gpus")
     if _kueue_owns_every_gpu():
         # a direct run must not open CUDA beside the queue's pods, whatever its --env says: GPU work goes through Kueue
