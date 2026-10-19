@@ -61,9 +61,10 @@ Arms:
                  (provisional)): exact-fused's quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
-                 dither-a the second where HB_H1U is set.  Each with -zu commits z as one hiding leaf a 32 x 32 unit
-                 (the epilogue stores z unit-major), and with -y commits no z at all (y only: the z leaves' cost floor,
-                 never credited; its gate is its tokens)
+                 dither-a the second where HB_H1U is set.  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the side stream
+                 builds each call's table after its receipts), and with -y commits no z at all (y only: the leaves'
+                 cost floor, never credited; its gate is its tokens)
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
                  ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
@@ -328,7 +329,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 
 DITHER_A = {f"dither-a{u}{z}": (unit, zm) for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"))
-            for z, zm in (("", "row"), ("-zu", "unit"), ("-y", "none"))}
+            for z, zm in (("", "row"), ("-zy", "zy"), ("-y", "none"))}
 
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",

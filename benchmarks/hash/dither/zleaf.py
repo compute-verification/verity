@@ -1,20 +1,22 @@
-"""z's commitment for one step on Llama-3.1-8B's 128 linears, in its two layouts, gated against `served_h1/commit.py`
-and timed: `row`, dither_one's z table (each slot's N int32 a hiding leaf, domain 'z-table', z row-major) and `unit`,
-dither_a's (each 32 x 32 unit's z a hiding leaf, domain `dither_a.ZU_KIND`, z unit-major as dither_a's epilogue
-stores it).  The leaves cost what this times beside the y-only arm, which builds no z table at all.
+"""The z commitment's hashing for one step on Llama-3.1-8B's 128 linears, gated against `served_h1/commit.py` and timed,
+in two forms: `row`, dither_one's z table (each slot's N int32 a hiding leaf, domain 'z-table'), and `zy`, CA's z/y
+leaves as dither_a commits them (one hiding leaf a `dither_a.UNIT` unit, its record its z int32 then its y bf16, domain
+`dither_a.ZY_KIND`).  The y-only arm builds neither; what the leaves cost is this.
 
-    gate     T slots (--t), step s, m live rows: z random int32 in rows < m, zero past m, in each layout from the same
-             values; every table's levels poisoned with 0xA5 first; one h1c_build of the step's 128 tables per layout;
-             every call's root = commit.py's over the same bytes (a pool of CPU workers); no poison left in a root; a
-             control: one z word of one live row flipped moves that call's root and no other
-    time     each layout's 128 tables in one h1c_build (the between-steps build), captured as a CUDA graph and replayed
-             between CUDA events
+    gate     T slots (--t): each table's bytes random (the hash reads bytes, whatever they hold); every table's levels
+             and roots poisoned with 0xA5 first; one h1c_build of the step's 128 tables; every call's root = commit.py's
+             over the same bytes (a pool of CPU workers); no poison left in a root; a control: one byte of call 5 flipped
+             moves that call's root and no other
+    time     each form's 128 tables in one h1c_build (`batch`: a between-steps build) and in 128 h1c_builds of one table
+             each (`percall`: what the side stream issues, one a call), each captured as a CUDA graph and replayed
+             between CUDA events; with the bytes each reads and writes
 
     python zleaf.py --lib libh1c.so --out OUT [--t 64,256]
 """
 from __future__ import annotations
 
 import argparse
+import ctypes as C
 import json
 import os
 import statistics
@@ -22,109 +24,107 @@ import sys
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-import numpy as np
 import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from dither_a import ZU_KIND, zu_fields_of  # noqa: E402
+import h1c as H1CM  # noqa: E402
+from dither_a import UNIT, ZY_KIND, zy_bytes, zy_fields_of  # noqa: E402
 from h1c import CM, H1C, Dom, Tab, unwords  # noqa: E402
 from h1cgate import POISON, linears  # noqa: E402
 
-LAYOUTS = ("row", "unit")
+FORMS = ("row", "zy")
 
 
-def fields(layout: str, window: str, s: int, w: int, module: str, t: int, n: int) -> dict:
-    if layout == "unit":
-        return zu_fields_of(window, s, w, module, t, n)
+def fields(form: str, window: str, s: int, w: int, module: str, t: int, n: int) -> dict:
+    if form == "zy":
+        return zy_fields_of(window, s, w, module, t, n, UNIT)
     return {"window": window, "step": s, "linear": w, "module": module, "slots": t, "n": n, "schema": CM.SCHEMA}
 
 
-def unit_major(z: torch.Tensor) -> torch.Tensor:
-    t, n = z.shape
-    return z.reshape(t // 32, 32, n // 32, 32).permute(0, 2, 1, 3).contiguous().reshape(t, n)
+def shape(form: str, t: int, n: int) -> tuple[int, int, str]:
+    """(leaves, leaf bytes, domain kind) of one call's table."""
+    if form == "zy":
+        return (t // UNIT[0]) * (n // UNIT[1]), zy_bytes(UNIT), ZY_KIND
+    return t, 4 * n, "z-table"
 
 
-class Layout:
-    def __init__(self, lib: H1C, layout: str, window: str, t: int, lin, dev):
-        self.layout, self.lib, self.t, self.lin = layout, lib, t, lin
-        self.z = [torch.zeros(t, n, dtype=torch.int32, device=dev) for _, n, _ in lin]
-        tabs = []
+class Form:
+    def __init__(self, lib: H1C, form: str, window: str, t: int, lin, dev, seed: int):
+        self.form, self.lib, self.t, self.lin = form, lib, t, lin
+        g = torch.Generator(device="cpu").manual_seed(seed)
+        self.data, tabs = [], []
         for w, (name, n, _) in enumerate(lin):
-            if layout == "row":
-                cnt, size, kind = t, 4 * n, "z-table"
-            else:
-                cnt, size, kind = (t // 32) * (n // 32), 4096, ZU_KIND
-            tabs.append(Tab(Dom(kind, fields(layout, window, 0, w, name, t, n), cnt, {"step": (1, 0)}), cnt,
-                            data=self.z[w].view(torch.uint8), stride=size, body=size, length=size, lab=("z/", f"/{w}")))
+            cnt, size, kind = shape(form, t, n)
+            self.data.append(torch.randint(0, 256, (cnt * size,), dtype=torch.uint8, generator=g).to(dev))
+            tabs.append(Tab(Dom(kind, fields(form, window, 0, w, name, t, n), cnt, {"step": (1, 0)}), cnt,
+                            data=self.data[w], stride=size, body=size, length=size,
+                            lab=("zy/" if form == "zy" else "z/", f"/{w}")))
         self.set = lib.set(tabs)
-        self.step = torch.zeros(1, dtype=torch.int32, device=dev)
+        self.step = torch.zeros(2, dtype=torch.int32, device=dev)
+        self.tb = C.sizeof(H1CM._Tab)
 
-    def fill(self, zs: list[torch.Tensor]) -> None:
-        for d, z in zip(self.z, zs):
-            d.copy_(z if self.layout == "row" else unit_major(z))
-
-    def build(self) -> None:
+    def batch(self) -> None:
         self.lib.build(self.set, self.step)
+
+    def percall(self) -> None:
+        st, cs = self.set, torch.cuda.current_stream().cuda_stream
+        for w in range(len(self.lin)):
+            rc = self.lib.lib.h1c_build(C.addressof(st.host) + self.tb * w, st.dev.data_ptr() + self.tb * w, 1,
+                                        self.step.data_ptr(), self.lib.btab.data_ptr(), 1, cs)
+            if rc:
+                raise RuntimeError(f"h1c_build({w}) returned {rc}")
 
     def roots(self) -> list[bytes]:
         return [unwords(self.set.root(w)) for w in range(len(self.lin))]
 
-    def cpu_args(self, window: str, key: bytes, s: int, w: int) -> list[tuple]:
-        """commit.leaves pool tasks for call w's leaves: its domain's binding and its rows, in chunks."""
-        name, n, _ = self.lin[w]
-        tab = self.set.tabs[w]
-        dom = CM.domain(fields(self.layout, window, s, w, name, self.t, n), tab.count, tab.dom.kind)
-        rows = self.z[w].cpu().numpy().astype("<i4").view(np.uint8).reshape(tab.count, -1)
-        step = max(1, tab.count // 8)
-        return [(dom.binding, tab.count, key, f"z/{s}/{w}", i, [bytes(r) for r in rows[i:i + step]])
-                for i in range(0, tab.count, step)]
-
     def cpu_roots(self, pool, window: str, key: bytes, s: int) -> list[bytes]:
         out = []
-        for w in range(len(self.lin)):
+        for w, (name, n, _) in enumerate(self.lin):
             tab = self.set.tabs[w]
-            dom = CM.domain(fields(self.layout, window, s, w, self.lin[w][0], self.t, self.lin[w][1]), tab.count,
-                            tab.dom.kind)
-            leaves = b"".join(pool.map(CM.leaves, self.cpu_args(window, key, s, w)))
-            out.append(CM.levels(dom, CM.split(leaves))[-1][0])
+            dom = CM.domain(fields(self.form, window, s, w, name, self.t, n), tab.count, tab.dom.kind)
+            rows = self.data[w].cpu().numpy().reshape(tab.count, tab.length)
+            lab = f"{tab.lab[0]}{s}{tab.lab[1]}"
+            step = max(1, tab.count // 16)
+            jobs = [(dom.binding, tab.count, key, lab, i, [bytes(r) for r in rows[i:i + step]])
+                    for i in range(0, tab.count, step)]
+            out.append(CM.levels(dom, CM.split(b"".join(pool.map(CM.leaves, jobs))))[-1][0])
         return out
 
-
-def operands(lin, t: int, m: int, seed: int) -> list[torch.Tensor]:
-    g = torch.Generator(device="cpu").manual_seed(seed)
-    zs = []
-    for _, n, _ in lin:
-        z = torch.randint(-2 ** 31, 2 ** 31 - 1, (t, n), dtype=torch.int32, generator=g)
-        z[m:] = 0
-        zs.append(z.cuda())
-    return zs
+    def bytes_moved(self) -> dict:
+        tabs = self.set.tabs
+        data = sum(x.count * x.length for x in tabs)
+        segs = sum(x.count * ((x.length + 1023) // 1024) for x in tabs)
+        leaves = sum(x.count for x in tabs)
+        return {"leaves": leaves, "data_read": data, "segment_digests": 64 * segs, "leaves_and_levels": 64 * 2 * leaves}
 
 
-def gate(lay: Layout, pool, window: str, key: bytes, s: int, m: int, zs) -> dict:
-    lay.fill(zs)
-    lay.step.fill_(s)
-    lay.set.level.fill_(POISON)
-    lay.set.roots.fill_(POISON)
-    lay.build()
+def gate(f: Form, pool, window: str, key: bytes, s: int) -> dict:
+    f.step.fill_(s)
+    f.set.level.fill_(POISON)
+    f.set.roots.fill_(POISON)
+    f.batch()
     torch.cuda.synchronize()
-    got = lay.roots()
+    got = f.roots()
     poisoned = [w for w, r in enumerate(got) if b"\xa5" * 8 in r]
-    ref = lay.cpu_roots(pool, window, key, s)
+    ref = f.cpu_roots(pool, window, key, s)
     bad = [w for w in range(len(got)) if got[w] != ref[w]]
-    w0 = 5
-    zs[w0][min(3, m - 1), 7] ^= 1
-    lay.fill(zs)
-    lay.build()
+    f.set.roots.fill_(POISON)
+    f.percall()
     torch.cuda.synchronize()
-    after = lay.roots()
-    zs[w0][min(3, m - 1), 7] ^= 1
+    percall_bad = [w for w, r in enumerate(f.roots()) if r != got[w]]
+    w0 = 5
+    f.data[w0][100] ^= 1
+    f.batch()
+    torch.cuda.synchronize()
+    after = f.roots()
+    f.data[w0][100] ^= 1
     control = {"tampered_call_moved": after[w0] != got[w0],
                "others_kept": all(after[w] == got[w] for w in range(len(got)) if w != w0)}
-    ok = not bad and not poisoned and all(control.values())
-    return {"layout": lay.layout, "s": s, "m": m, "calls": len(got), "roots_vs_commit_bad": bad,
-            "roots_poisoned": poisoned, "control": control, "leaves": sum(t.count for t in lay.set.tabs), "ok": ok}
+    ok = not bad and not poisoned and not percall_bad and all(control.values())
+    return {"form": f.form, "s": s, "calls": len(got), "roots_vs_commit_bad": bad, "percall_vs_batch_bad": percall_bad,
+            "roots_poisoned": poisoned, "control": control, "ok": ok}
 
 
 def timed(g: torch.cuda.CUDAGraph, reps: int) -> list[float]:
@@ -157,33 +157,33 @@ def main() -> int:
     window = os.environ.get("RESEARCH_RUN_ID") or "gate"
     lib = H1C(a.lib, key, dev)
     lin = linears()
-    doc: dict = {"gpu": torch.cuda.get_device_name(), "by_t": {}}
+    doc: dict = {"gpu": torch.cuda.get_device_name(), "unit": list(UNIT), "by_t": {}}
     with ProcessPoolExecutor(a.workers) as pool:
         for t in (int(x) for x in a.t.split(",")):
-            m = 32 if t == 64 else t
-            zs = operands(lin, t, m, t)
-            d = doc["by_t"][t] = {"t": t, "m": m, "z_bytes": sum(4 * t * n for _, n, _ in lin)}
-            lays = {x: Layout(lib, x, window, t, lin, dev) for x in LAYOUTS}
-            for x, lay in lays.items():
-                d[x] = {"gate": gate(lay, pool, window, key, 7, m, zs)}
-                print(json.dumps({"t": t, **d[x]["gate"]}), flush=True)
-            d["gate_ok"] = all(d[x]["gate"]["ok"] for x in LAYOUTS)
+            d = doc["by_t"][t] = {"t": t}
+            forms = {x: Form(lib, x, window, t, lin, dev, t) for x in FORMS}
+            for x, f in forms.items():
+                d[x] = {"gate": gate(f, pool, window, key, 7), "bytes": f.bytes_moved()}
+                print(json.dumps({"t": t, **d[x]["gate"], "bytes": d[x]["bytes"]}), flush=True)
+            d["gate_ok"] = all(d[x]["gate"]["ok"] for x in FORMS)
             (out / "zleaf.json").write_text(json.dumps(doc, indent=1) + "\n")
             if not d["gate_ok"]:
                 print("zleaf: GATE FAILED", flush=True)
                 return 2
-            for x, lay in lays.items():
-                lay.fill(zs)
-                g = torch.cuda.CUDAGraph()
-                with torch.cuda.graph(g):
-                    lay.build()
-                ms = timed(g, a.reps)
-                d[x]["build_ms"] = round(statistics.median(ms), 4)
-                d[x]["build_ms_all"] = [round(v, 4) for v in ms]
-                print(json.dumps({"t": t, "layout": x, "build_ms": d[x]["build_ms"]}), flush=True)
-            d["unit_over_row"] = round(d["unit"]["build_ms"] / d["row"]["build_ms"], 3)
+            for x, f in forms.items():
+                for how in ("batch", "percall"):
+                    g = torch.cuda.CUDAGraph()
+                    with torch.cuda.graph(g):
+                        getattr(f, how)()
+                    ms = timed(g, a.reps)
+                    d[x][f"{how}_ms"] = round(statistics.median(ms), 4)
+                    d[x][f"{how}_ms_all"] = [round(v, 4) for v in ms]
+                d[x]["percall_us"] = round(1e3 * d[x]["percall_ms"] / len(lin), 2)
+                print(json.dumps({"t": t, "form": x, **{k: d[x][k] for k in ("batch_ms", "percall_ms", "percall_us")}}),
+                      flush=True)
+            d["zy_over_row_batch"] = round(d["zy"]["batch_ms"] / d["row"]["batch_ms"], 3)
             (out / "zleaf.json").write_text(json.dumps(doc, indent=1) + "\n")
-            del lays, zs
+            del forms
             torch.cuda.empty_cache()
     doc["gate_ok"] = True
     (out / "zleaf.json").write_text(json.dumps(doc, indent=1) + "\n")
