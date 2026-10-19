@@ -328,7 +328,7 @@ structure EpochTie {ι Q R S : Type} (L : Layout) (F : Form) (W : ℕ) (Cd : ℕ
 `perCall`, and `perCall` first reaches 10,552 rounds, RT-INT-1's count for `ε < 1%` (`eps.py`, and
 r20261019-055920-6d6f's `rounds_floor_live_scope`, a statement not on main), at 83 steps. -/
 def Llama31Rounds : Prop :=
-  (∀ F, F ≠ .perCall → Form.rounds llama31_8b F = 18) ∧ Form.rounds llama31_8b .perCall = 2304 ∧
+  (∀ F : Form, F ≠ .perCall → Form.rounds llama31_8b F = 18) ∧ Form.rounds llama31_8b .perCall = 2304 ∧
     Form.rounds { llama31_8b with steps := 82 } .perCall < 10552 ∧
     10552 ≤ Form.rounds { llama31_8b with steps := 83 } .perCall
 
