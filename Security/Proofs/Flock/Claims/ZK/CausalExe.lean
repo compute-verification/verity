@@ -1420,6 +1420,95 @@ theorem honestAt_E (h0 : B0Agree Tz st c c' r) (hl : c.rest.lane r = c'.rest.lan
     ite_eq_right (show ¬ k < (layOf Tz st).lgMsg 0 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).lgE 0 0 by omega),
     ite_eq_left (show k < (layOf Tz st).hab by omega), h]
 
+theorem bFold_congr (h0 : B0Agree Tz st c c' r) (hl : c.rest.lane r = c'.rest.lane r) :
+    bFold Tz st c r = bFold Tz st c' r := by
+  have hc := laneCh_congr Tz st c c' r (j := Tz.sch.k0) fun a _ => congrFun hl a
+  funext col
+  simp only [bFold, laneB_congr Tz st c c' r (laneB0_congr Tz st c c' r h0) hc]
+
+theorem honestAt_end {k : ℕ} (hk : 200 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0 ≤ k) :
+    honestAt Tz st c r zw R k = 0 := by
+  have := lay_zp Tz st 0
+  have := lay_zp Tz st 64
+  have := lay_lgMsg Tz st 0 0
+  have := lay_lgE Tz st 0 0
+  have := lay_hab Tz st
+  rw [honestAt_past Tz st c r zw R k (by omega)]
+  simp only [ite_eq_right (show ¬ k < (layOf Tz st).zp 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).zp 64 by omega),
+    ite_eq_right (show ¬ k < (layOf Tz st).lgMsg 0 0 by omega), ite_eq_right (show ¬ k < (layOf Tz st).lgE 0 0 by omega),
+    ite_eq_right (show ¬ k < (layOf Tz st).hab by omega)]
+
+/-- **Every masked value of rep `r` reads only the coins of its PIOP and level 0's lane phase.** -/
+theorem honestAt_all (h0 : B0Agree Tz st c c' r) (hz : c.rest.zc r = c'.rest.zc r)
+    (ha : c.rest.lcAlpha r = c'.rest.lcAlpha r) (hb : c.rest.lcBeta r = c'.rest.lcBeta r)
+    (hl : c.rest.lane r = c'.rest.lane r) (k : ℕ) :
+    honestAt Tz st c r zw R k = honestAt Tz st c' r zw R k := by
+  by_cases h1 : k < 128
+  · exact honestAt_r1 Tz st c c' r zw R h0.rOuter h1
+  by_cases h2 : k < 128 + 2 * (st.m - 6)
+  · exact honestAt_ml Tz st c c' r zw R h0.rOuter hz (i := (k - 128) / 2) (fun a _ => congrFun h0.rho a)
+      (by omega) (by omega) (by omega)
+  by_cases h3 : k < 131 + 2 * (st.m - 6)
+  · exact honestAt_f Tz st c c' r zw R h0.rOuter hz h0.rho (by omega) h3
+  by_cases h4 : k < 131 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6)
+  · exact honestAt_lc Tz st c c' r zw R hz ha hb h0.rho (j := (k - (131 + 2 * (st.m - 6))) / 2)
+      (fun a _ => congrFun h0.ts a) (by omega) (by omega) (by omega)
+  by_cases h5 : k < 195 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6)
+  · exact honestAt_zp Tz st c c' r zw R h0.rho h0.ts (by omega) h5
+  by_cases h6 : k < 196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6)
+  · exact honestAt_ood Tz st c c' r zw R h0.oodPt (by omega)
+  by_cases h7 : k < 196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0
+  · exact honestAt_msg Tz st c c' r zw R h0 (j := (k - (196 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6))) / 4)
+      (fun a _ => congrFun hl a) (by omega) (by omega) (by omega)
+  by_cases h8 : k < 200 + 2 * (st.m - 6) + 2 * (st.c.kLog - 6) + 4 * Tz.sch.k0
+  · exact honestAt_E Tz st c c' r zw R h0 hl (by omega) h8
+  · exact (honestAt_end Tz st c r zw R (by omega)).trans (honestAt_end Tz st c' r zw R (by omega)).symm
+
+/-- What rep `r`'s inner proof reads of its coins: level 0's basis, the PIOP's, the lanes, the restart's pair, `ε`
+and the `γ`s. -/
+structure InAgree extends B0Agree Tz st c c' r : Prop where
+  zc : c.rest.zc r = c'.rest.zc r
+  lcAlpha : c.rest.lcAlpha r = c'.rest.lcAlpha r
+  lcBeta : c.rest.lcBeta r = c'.rest.lcBeta r
+  rPrime : c.rest.rPrime r = c'.rest.rPrime r
+  lane : c.rest.lane r = c'.rest.lane r
+  rhoP : c.rho r = c'.rho r
+  zeta : c.rest.zeta r = c'.rest.zeta r
+  gammas : c.rest.gammas r = c'.rest.gammas r
+
+/-- **Rep `r`'s ten constraints read its coins and its two masked claims' `ŝ`.** -/
+theorem rowsOf_congr {nE nC : ℕ} (v : Fin nE → 𝔽) (sh sh' : Fin nC → Fin 128 → 𝔽) (T' : 𝕂) (ρσ : 𝔽 × 𝔽)
+    (hA : InAgree Tz st c c' r) (hs0 : sHatAt sh (2 * r.val) = sHatAt sh' (2 * r.val))
+    (hs1 : sHatAt sh (2 * r.val + 1) = sHatAt sh' (2 * r.val + 1)) :
+    rowsOf Tz st c r v sh T' ρσ = rowsOf Tz st c' r v sh' T' ρσ := by
+  have e0 : shArr sh (2 * r.val) = shArr sh' (2 * r.val) := by unfold shArr; rw [hs0]
+  have e1 : shArr sh (2 * r.val + 1) = shArr sh' (2 * r.val + 1) := by unfold shArr; rw [hs1]
+  have hsw : ∀ k, swAt Tz st c r sh k = swAt Tz st c' r sh' k := fun k => by
+    unfold swAt
+    rw [hs0, hs1, hA.link]
+  have hT : openT Tz st c r sh = openT Tz st c' r sh' := by
+    unfold openT
+    simp only [hsw, hA.rsGamma, hA.rpp]
+  have hrun : ∀ j, laneRun Tz st c r v sh j = laneRun Tz st c' r v sh' j := by
+    intro j
+    induction j with
+    | zero => simp only [laneRun, hT, hA.ood]
+    | succ j ih => simp only [laneRun, ih, laneCh, hA.lane]
+  simp only [rowsOf, rowCEval, rowAB, rowLC, rowRsAb, rowRsC, laneRow, abClaim, cClaim, combvOf, zcF, rF, rhoF, tsF,
+    innerEps, rhoK, e0, e1, hrun, hA.zc, hA.rOuter, hA.rho, hA.lcAlpha, hA.lcBeta, hA.ts, hA.rPrime, hA.rhoP, hA.zeta]
+
+/-- **The inner proof's batched coefficients read rep `r`'s masked values, its two masked claims' `ŝ`, the restart's
+`T'`, the triple's `(ρ, σ)` and its coins.** -/
+theorem lamOf_congr {z : Sizes} (pre pre' : PreOf z) (hA : InAgree Tz st c c' r) (hv : pre.2.1 r = pre'.2.1 r)
+    (hs0 : sHatAt pre.1 (2 * r.val) = sHatAt pre'.1 (2 * r.val))
+    (hs1 : sHatAt pre.1 (2 * r.val + 1) = sHatAt pre'.1 (2 * r.val + 1))
+    (hT : (pre.2.2.2.2.2 r).1 = (pre'.2.2.2.2.2 r).1) (hρσ : pre.2.2.2.2.1 r = pre'.2.2.2.2.1 r) :
+    lamOf Tz st z c r pre = lamOf Tz st z c' r pre' := by
+  funext i
+  unfold lamOf
+  have hg : innerGamma Tz st c r = innerGamma Tz st c' r := funext fun k => by simp only [innerGamma, hA.gammas]
+  rw [hv, hT, hρσ, rowsOf_congr Tz st c c' r _ _ _ _ _ hA hs0 hs1, hg]
+
 end Honest
 
 section Fields
@@ -1495,6 +1584,15 @@ theorem coined_val_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' :
   show (fun v => T.nu w q v + ∑ y, T.eqw q y * ZK.Table.castF (F := 𝔽) (u y v)) =
     fun v => T'.nu w q v + ∑ y, T'.eqw q y * ZK.Table.castF (F := 𝔽) (u y v)
   rw [h1, h2]
+
+/-- **`τ` reads its batched coefficients** (and the base's `μ`). -/
+theorem coined_tau_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkView.Coined K W Hi VL z) (w : W)
+    (b : ZkView.Base z Hi) (r : Fin 2)
+    (h : T.lam r (T.tab.view w (T.randOf b 0)).pre = T'.lam r (T'.tab.view w (T'.randOf b 0)).pre) :
+    (T.tab.view w (T.randOf b 0)).tau r = (T'.tab.view w (T'.randOf b 0)).tau r := by
+  show ∑ i, T.lam r (T.tab.view w (T.randOf b 0)).pre i * b.2.2.2.2.2.1 r i =
+    ∑ i, T'.lam r (T'.tab.view w (T'.randOf b 0)).pre i * b.2.2.2.2.2.1 r i
+  rw [h]
 
 /-- **The rank check reads its claims' points** (of the reps up to `r`). -/
 theorem rankOn_congr (r : Fin 2)
@@ -1982,6 +2080,20 @@ theorem cutAt_ybar_congr (hrbar : ((C j).T (cz j)).rbar r = ((C j).T (cz' j)).rb
         ((C j).T (cz' j)).ρ r 1 * ((C j).T (cz' j)).embed ((ω j).2.1.2.2 r 1 i)))
   rw [hrbar, hρ, he]
 
+/-- **A rep's `τ` commitment reads its `τ`** (at the executable's leaves). -/
+theorem cutC_tauCom_congr (p : ZkView.Leaves (fun j => (C j).z) → ZkView.Bits × ByteArray)
+    (htau : (((C j).T (cz j)).tab.view (wt j) (((C j).T (cz j)).randOf (ω j) 0)).tau r =
+      (((C j).T (cz' j)).tab.view (wt j) (((C j).T (cz' j)).randOf (ω j) 0)).tau r) :
+    (cutAt C cz wt ω (fun l => ZkView.leafH (digOf C cz wt ω l + (p l).1, (p l).2)) j).tauCom r =
+      (cutAt C cz' wt ω (fun l => ZkView.leafH (digOf C cz' wt ω l + (p l).1, (p l).2)) j).tauCom r := by
+  show ZkView.leafH (ZkView.bitsOf (_root_.Flock.Sha512.hash (_root_.Flock.Zk.TAU_TAG ++ _root_.Flock.F128.toBytes
+        ((((C j).T (cz j)).tab.view (wt j) (((C j).T (cz j)).randOf (ω j) 0)).tau r))) + (p ⟨j, .inr (.inr r)⟩).1,
+      (p ⟨j, .inr (.inr r)⟩).2) =
+    ZkView.leafH (ZkView.bitsOf (_root_.Flock.Sha512.hash (_root_.Flock.Zk.TAU_TAG ++ _root_.Flock.F128.toBytes
+        ((((C j).T (cz' j)).tab.view (wt j) (((C j).T (cz' j)).randOf (ω j) 0)).tau r))) + (p ⟨j, .inr (.inr r)⟩).1,
+      (p ⟨j, .inr (.inr r)⟩).2)
+  rw [htau]
+
 end CutFields
 
 section Masked
@@ -2122,6 +2234,64 @@ theorem rep_y_congr
       (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω lv') j r).y :=
   (repSrcCut_y x cz j r _).trans
     ((cutAt_y_congr (tabC PE x) cz wt ω lv j r cz' lv' hfin hβ ha hb).trans (repSrcCut_y x cz' j r _).symm)
+
+/-- **Rep `r`'s `τ` reads only its coins below the inner proof's `β`** and its own masked claims' points. -/
+theorem view_tau_congr (hA : Composed.Cx.InAgree (zkTab x j).table (stAt x j) (cz j) (cz' j) r)
+    (hpt : ∀ k (h : k < (tabC PE x j).z.nC), (k = 2 * r.val ∨ k = 2 * r.val + 1) →
+      Composed.pointsOf ((cz j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩ =
+        Composed.pointsOf ((cz' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩) :
+    (((tabC PE x j).T (cz j)).tab.view (wt j) (((tabC PE x j).T (cz j)).randOf (ω j) 0)).tau r =
+      (((tabC PE x j).T (cz' j)).tab.view (wt j) (((tabC PE x j).T (cz' j)).randOf (ω j) 0)).tau r := by
+  have hrbar := Composed.Cx.rbar_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j) r hA.lane
+  have hρ := Composed.Cx.ρ_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j) r hA.rhoP
+  have he := Composed.Cx.embed_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  have hla := Composed.Cx.lanes_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  have hζ : ((tabC PE x j).T (cz j)).ζ r = ((tabC PE x j).T (cz' j)).ζ r :=
+    Composed.Cx.ζ_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j) r hA.zeta
+  have hia : ((tabC PE x j).T (cz j)).ia = ((tabC PE x j).T (cz' j)).ia :=
+    Composed.Cx.ia_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  have hib : ((tabC PE x j).T (cz j)).ib = ((tabC PE x j).T (cz' j)).ib :=
+    Composed.Cx.ib_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  refine Composed.Cx.coined_tau_congr ((tabC PE x j).T (cz j)) ((tabC PE x j).T (cz' j)) (wt j) (ω j) r
+    (Composed.Cx.lamOf_congr (zkTab x j).table (stAt x j) (cz j) (cz' j) r _ _ hA ?_ ?_ ?_ ?_ ?_)
+  · funext i
+    show Composed.honestAt (zkTab x j).table (stAt x j) (cz j) r (Composed.zWith (stAt x j) (wt j) (ω j).1)
+        ((ω j).2.1.2.1 r) i.val + ((ω j).2.2.1 r).1 i =
+      Composed.honestAt (zkTab x j).table (stAt x j) (cz' j) r (Composed.zWith (stAt x j) (wt j) (ω j).1)
+        ((ω j).2.1.2.1 r) i.val + ((ω j).2.2.1 r).1 i
+    rw [Composed.Cx.honestAt_all _ _ _ _ r _ _ hA.toB0Agree hA.zc hA.lcAlpha hA.lcBeta hA.lane]
+  · unfold Composed.sHatAt
+    split_ifs with h
+    · exact Composed.Cx.coined_val_congr ((tabC PE x j).T (cz j)) ((tabC PE x j).T (cz' j)) (wt j)
+        ⟨2 * r.val, h⟩ (ω j).1 (Composed.Cx.nu_congr PE _ _ _ _ (wt j) ⟨2 * r.val, h⟩ (hpt _ h (.inl rfl)))
+        (Composed.Cx.eqw_congr PE _ _ _ _ ⟨2 * r.val, h⟩ (hpt _ h (.inl rfl)))
+    · rfl
+  · unfold Composed.sHatAt
+    split_ifs with h
+    · exact Composed.Cx.coined_val_congr ((tabC PE x j).T (cz j)) ((tabC PE x j).T (cz' j)) (wt j)
+        ⟨2 * r.val + 1, h⟩ (ω j).1 (Composed.Cx.nu_congr PE _ _ _ _ (wt j) ⟨2 * r.val + 1, h⟩ (hpt _ h (.inr rfl)))
+        (Composed.Cx.eqw_congr PE _ _ _ _ ⟨2 * r.val + 1, h⟩ (hpt _ h (.inr rfl)))
+    · rfl
+  · show ∑ col : Fin (tabC PE x j).z.L, ((tabC PE x j).T (cz j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r col *
+        Composed.bFold (zkTab x j).table (stAt x j) (cz j) r col.val =
+      ∑ col : Fin (tabC PE x j).z.L, ((tabC PE x j).T (cz' j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r col *
+        Composed.bFold (zkTab x j).table (stAt x j) (cz' j) r col.val
+    rw [y1'_congr (tabC PE x) cz wt ω j r cz' hrbar hρ he hla,
+      Composed.Cx.bFold_congr _ _ _ _ r hA.toB0Agree hA.lane]
+  · show (((tabC PE x j).T (cz j)).ζ r * ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz j)).ia + ((ω j).2.2.1 r).2.1,
+        ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz j)).ib + ((ω j).2.2.1 r).2.2) =
+      (((tabC PE x j).T (cz' j)).ζ r * ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz' j)).ia + ((ω j).2.2.1 r).2.1,
+        ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz' j)).ib + ((ω j).2.2.1 r).2.2)
+    rw [hζ, hia, hib]
+
+theorem rep_tauCom_congr (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+    (htau : (((tabC PE x j).T (cz j)).tab.view (wt j) (((tabC PE x j).T (cz j)).randOf (ω j) 0)).tau r =
+      (((tabC PE x j).T (cz' j)).tab.view (wt j) (((tabC PE x j).T (cz' j)).randOf (ω j) 0)).tau r) :
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω fun l =>
+        ZkView.leafH (digOf (tabC PE x) cz wt ω l + (p l).1, (p l).2)) j r).tauCom =
+      (repSrcCut PE x cz' (cutAt (tabC PE x) cz' wt ω fun l =>
+        ZkView.leafH (digOf (tabC PE x) cz' wt ω l + (p l).1, (p l).2)) j r).tauCom :=
+  cutC_tauCom_congr (tabC PE x) cz wt ω j r cz' p htau
 
 end Masked
 
@@ -2392,5 +2562,163 @@ theorem cl_agree (q : Fin (tabC PE x j).z.nC) (hq : (if q.val < 2 then (0 : Fin 
         (fun j => ((tabC PE x j).T (czExe PE x c' j)).rep) j r' .opening) hq)).symm)
 
 end Slots
+
+theorem repOk : RepOk := by
+  intro x hx wt ω p c c' n hcc s spec hsx j r e he
+  have hp2 := FlockComplete.ZkTables.points_of_setup hx.1 hsx
+  have hm14 : 14 ≤ (stAt x j).m := (schOk_of (zkTab x j)).m
+  have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
+  have hbase := repBase_eq hsx (2 * j.val + r.val)
+  have hout := outerSlot_at hsx j r
+  have hlig : FlockComplete.CutEq.ligAt (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+      (_root_.Flock.Setup.ofCircuit (stAt x j)) e = FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+        FlockComplete.piopRoundsZk spec (stAt x j) := by
+    unfold FlockComplete.CutEq.ligAt FlockComplete.piopRoundsZk
+    rw [he, hp2]
+    show _ + 3 + ((stAt x j).m - 6) + (3 + ((stAt x j).c.kLog - 6)) + _ + 1 = _
+    omega
+  generalize hB : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) = B at hbase hout hlig ⊢
+  have em : (_root_.Flock.Setup.ofCircuit (stAt x j)).m = (stAt x j).m := rfl
+  have ef : (_root_.Flock.Setup.ofCircuit (stAt x j)).fold.kLog = (stAt x j).c.kLog := rfl
+  have ek : (_root_.Flock.Setup.ofCircuit (stAt x j)).kLog = (stAt x j).c.kLog := rfl
+  have hO : B + 2 ≤ n → ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rOuter r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rOuter r := fun hn =>
+    rOuter_agree j r hcc (by omega)
+  have hz : B + 3 ≤ n → ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).zc r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).zc r := fun hn =>
+    zc_agree j r hcc (by omega)
+  have hpiop : FlockComplete.piopRoundsZk spec (stAt x j) =
+      (stAt x j).m + (stAt x j).c.kLog - 6 + (2 + 2 * (stAt x j).regions.size + 1) := by
+    unfold FlockComplete.piopRoundsZk
+    rw [hp2]
+  have h0 : B + FlockComplete.piopRoundsZk spec (stAt x j) + 2 ≤ n →
+      Composed.Cx.B0Agree (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r := fun hn =>
+    ⟨link_agree j hcc (by omega), hO (by omega), rho_agree j r hcc (by omega), ts_agree j r hcc (by omega),
+      rpp_agree j r hcc (by omega), rsGamma_agree hsx j r hcc (by omega), oodPt_agree hsx j r hcc (by omega),
+      ood_agree hsx j r hcc (by omega)⟩
+  refine ⟨fun hn i hi => ?_, fun i hi hn => ?_, fun hn => ?_, fun i hi hn => ?_, fun hn i hi => ?_, ?_,
+    fun hn => ?_, fun i hi hn t ht => ?_, fun hn a ha t ht => ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simp only [layOf, pl_r1ab, pl_r1c]
+    exact ⟨masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_r1 _ _ _ _ r zw R (hO hn) (by omega),
+      masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_r1 _ _ _ _ r zw R (hO hn) (by omega)⟩
+  · simp only [layOf, pl_ml, em] at hi ⊢
+    exact ⟨masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_ml _ _ _ _ r zw R (hO (by omega)) (hz (by omega))
+          (rho_agree_lt j r hcc (by omega)) hi (by omega) (by omega),
+      masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_ml _ _ _ _ r zw R (hO (by omega)) (hz (by omega))
+          (rho_agree_lt j r hcc (by omega)) hi (by omega) (by omega)⟩
+  · simp only [layOf, pl_fa, pl_fb, pl_fc, em] at hn ⊢
+    have hρ := rho_agree j r hcc (by omega)
+    exact ⟨masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_f _ _ _ _ r zw R (hO (by omega)) (hz (by omega)) hρ (by omega) (by omega),
+      masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_f _ _ _ _ r zw R (hO (by omega)) (hz (by omega)) hρ (by omega) (by omega),
+      masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_f _ _ _ _ r zw R (hO (by omega)) (hz (by omega)) hρ (by omega) (by omega)⟩
+  · simp only [layOf, pl_lc, em, ek, ef] at hi hn ⊢
+    have hρ := rho_agree j r hcc (by omega)
+    have ha := lcAlpha_agree j r hcc (by omega)
+    have hb := lcBeta_agree j r hcc (by omega)
+    exact ⟨masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_lc _ _ _ _ r zw R (hz (by omega)) ha hb hρ (ts_agree_lt j r hcc (by omega)) hi
+          (by omega) (by omega),
+      masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+        Composed.Cx.honestAt_lc _ _ _ _ r zw R (hz (by omega)) ha hb hρ (ts_agree_lt j r hcc (by omega)) hi
+          (by omega) (by omega)⟩
+  · simp only [layOf, pl_zp, em, ek, ef] at hn ⊢
+    exact masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+      Composed.Cx.honestAt_zp _ _ _ _ r zw R (rho_agree j r hcc (by omega)) (ts_agree j r hcc (by omega))
+        (by omega) (by omega)
+  · intro k hk hn
+    simp only [em, ef] at hn
+    have hg : gateAt spec x j r .opening ≤ n := by simp only [gateAt]; rw [hB]; omega
+    refine sv_congr x _ _ j r _ _ k (fun hk2 hc => ?_) (fun hk2 hc => ?_)
+    · have hq := rep_two r hk2
+      have hpt := points_agree hsx j r hcc ⟨2 * r.val + k, hc⟩ (le_of_eq hq) hg
+      have hcl := cl_agree hsx j r hcc ⟨2 * r.val + k, hc⟩ hq hg
+      rw [cutTab_sHat, cutTab_sHat]
+      split_ifs with h1 h2 h2
+      · exact congrArg some (Composed.Cx.coined_val_congr _ _ (wt j) ⟨2 * r.val + k, hc⟩ (ω j).1
+          (Composed.Cx.nu_congr PE _ _ _ _ (wt j) ⟨2 * r.val + k, hc⟩ hpt)
+          (Composed.Cx.eqw_congr PE _ _ _ _ ⟨2 * r.val + k, hc⟩ hpt))
+      · exact absurd (hcl.1 h1) h2
+      · exact absurd (hcl.2 h2) h1
+      · rfl
+    · rw [cutAt_sReg, cutAt_sReg]
+      exact Composed.Cx.sReg_congr PE _ _ _ _ (wt j) ⟨k - 2, hc⟩ (link_agree j hcc (by omega))
+  · simp only [layOf, pl_lgOod, em, ek] at hn ⊢
+    exact masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+      Composed.Cx.honestAt_ood _ _ _ _ r zw R (oodPt_agree hsx j r hcc (by omega)) (by omega)
+  · simp only [layOf, pl_lgMsg, em, ek] at hn ⊢
+    exact masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+      Composed.Cx.honestAt_msg _ _ _ _ r zw R (h0 (by omega)) (lane_agree_lt hsx j r hcc (by omega)) hi
+        (by omega) (by omega)
+  · simp only [layOf, pl_lgE, em, ek] at hn ⊢
+    have ek0 : (zkTab x j).table.sch.k0 = (zkTab x j).sch.k0 := rfl
+    exact masked_congr x _ _ wt ω _ _ j r _ fun zw R =>
+      Composed.Cx.honestAt_E _ _ _ _ r zw R (h0 (by omega))
+        (funext fun a => lane_agree_lt hsx j r hcc (i := (zkTab x j).sch.k0) (by omega) a a.isLt) (by omega)
+        (by omega)
+  · intro hn
+    have ek0 : (zkTab x j).table.sch.k0 = (zkTab x j).sch.k0 := rfl
+    have hg : gateAt spec x j r .restart ≤ n := by simp only [gateAt]; rw [hB]; omega
+    have hy := passes_agree hsx j r hcc .restart hg
+    have hl : ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r =
+        ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r :=
+      funext fun a => lane_agree_lt hsx j r hcc (i := (zkTab x j).sch.k0) (by omega) a a.isLt
+    have hrbar := Composed.Cx.rbar_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r hl
+    have hρ := Composed.Cx.ρ_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
+      (rhoPair_agree hsx j r hcc (by omega))
+    have he := Composed.Cx.embed_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j)
+    have hla := Composed.Cx.lanes_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j)
+    exact ⟨rep_y1_congr x _ _ wt ω _ _ j r hy hrbar hρ he hla, rep_ybar_congr x _ _ wt ω _ _ j r hrbar hρ he,
+      hiSalt_congr x _ _ j r _ _ (cutTab_lig_congr x _ _ wt ω _ _ j r hy)⟩
+  · intro hn
+    simp only [innerAt] at hn
+    have hζ := zeta_agree hsx j r hcc (by simp only [innerOff]; omega)
+    exact rep_inner_congr x _ _ wt ω _ _ j r
+      (Composed.Cx.ζ_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r hζ)
+      (Composed.Cx.ia_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j))
+      (Composed.Cx.ib_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j))
+  · intro hn
+    simp only [innerAt] at hn
+    have ek0 : (zkTab x j).table.sch.k0 = (zkTab x j).sch.k0 := rfl
+    have hg : gateAt spec x j r .opening ≤ n := by simp only [gateAt]; rw [hB]; omega
+    have hl : ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r =
+        ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r :=
+      funext fun a => lane_agree_lt hsx j r hcc (i := (zkTab x j).sch.k0) (by omega) a a.isLt
+    have hA : Composed.Cx.InAgree (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r :=
+      { toB0Agree := h0 (by omega)
+        zc := hz (by omega)
+        lcAlpha := lcAlpha_agree j r hcc (by omega)
+        lcBeta := lcBeta_agree j r hcc (by omega)
+        rPrime := rPrime_agree j r hcc (by omega)
+        lane := hl
+        rhoP := rhoPair_agree hsx j r hcc (by omega)
+        zeta := zeta_agree hsx j r hcc (by simp only [innerOff]; omega)
+        gammas := gammas_agree hsx j r hcc (by simp only [innerOff]; omega) }
+    have hrep : ∀ k, (k = 2 * r.val ∨ k = 2 * r.val + 1) → (if k < 2 then (0 : Fin 2) else 1) ≤ r := by
+      intro k hk
+      rcases hk with rfl | rfl
+      · exact le_of_eq (rep_two r (k := 0) (by omega))
+      · exact le_of_eq (rep_two r (k := 1) (by omega))
+    exact rep_tauCom_congr x _ _ wt ω j r p (view_tau_congr x _ _ wt ω j r hA fun k hk hk2 =>
+      points_agree hsx j r hcc ⟨k, hk⟩ (hrep k hk2) hg)
+  · intro hn
+    simp only [innerAt] at hn
+    have hg : gateAt spec x j r .inner ≤ n := by simp only [gateAt, innerOff]; rw [hB]; omega
+    exact rep_y_congr x _ _ wt ω _ _ j r (passes_agree hsx j r hcc .inner hg)
+      (Composed.Cx.β_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
+        (beta_agree hsx j r hcc (by simp only [innerOff]; omega)))
+      (Composed.Cx.ia_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j))
+      (Composed.Cx.ib_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j))
+  · exact fun _ => ⟨(repSrcCut_tau x _ j r _).1.trans (repSrcCut_tau x _ j r _).1.symm,
+      (repSrcCut_tau x _ j r _).2.trans (repSrcCut_tau x _ j r _).2.symm⟩
+
+/-- **Sent's `hc`**: every value the executable sends reads only the coins drawn before it. -/
+theorem causalExe : CausalExe := causalExe_of_rep repOk
 
 end Claims.ZKMal.Masked
