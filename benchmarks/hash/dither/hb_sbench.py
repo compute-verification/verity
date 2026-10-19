@@ -13,8 +13,8 @@
                    tokens reported against exact's, not gated (it serves the dithered product).
     dither-1s-hbp  dither-1s-hb peeled (CA's peel, 11:02Z): hb_one's kh_one_peel (from the .so HB_H1U_PEEL names, else
                    HB_H1U's), whose z is today's A B^T from the same stream, so y is today's; gated by hb_peel.py
-                   (`dither_one.check` with z held to A B^T, y equal to today's on every call) on the same four captures,
-                   and its tokens must equal exact's: the gate's, and every decode rep's (else exit 4 after the reps).
+                   (`dither_one.check` with z held to A B^T, y equal to today's on every call) on the same four captures
+                   and a fifth, CA's flipped xa (hb_peel.install), and its tokens must equal exact's: the gate's, and every decode rep's (else exit 4 after the reps).
                    The gate's tokens come from the same generation run first with the window disarmed: in one stream
                    the control serves y from the poisoned slot and both faults move y by design, so the armed
                    generation's tokens can't be exact's; the checks read the armed generation's captures.
@@ -52,6 +52,7 @@ def build(arm: str, scratch, gpu_mem: float):
         import hb_one
         import hb_peel
         hb_one.patch(os.environ.get("HB_H1U_PEEL") or os.environ["HB_H1U"], peel=True)
+        hb_peel.install()
         llm = _build("dither-1s", scratch, gpu_mem)
         llm.dither_mod = hb_peel
         clean_gate_tokens(llm)

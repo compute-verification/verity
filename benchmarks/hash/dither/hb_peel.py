@@ -1,7 +1,8 @@
 """The `dither-1s-hbp` arm's gate: `dither_one.check` with z held to today's A B^T (CA's peel, 11:02Z), for hb_one's
 peeled unit (h1u.cu's kh_one_peel: z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T) = A B^T, xa where
-the int8 X = A + b wraps). `llm.dither_mod` for that arm, so sbench runs this module's `check` on the gate, control, fault
-and fault_wb captures and `gate_verdict` over them.
+the int8 X = A + b wraps). `llm.dither_mod` for that arm, so sbench runs this module's `check` on the gate, control,
+fault, fault_wb and fault_xa captures and `gate_verdict` over them; `install()` (before the engine is built) makes the
+window raise F_FAULT_XA on the fault_xa step.
 
 Unchanged from `dither_one.check`: every call's A, admit and z roots and the step's round against commit.py; every receipt
 against h1r v1 (the receipts don't move with the peel); y (dumped) = dequant of the kernel's own z; wb's density by
@@ -15,7 +16,9 @@ h1o_ref's v3 z:
   * fault: z off A B^T by 2^FAULT_SHIFT at unit 0's cell (0, 0) of every call and nowhere else, that unit's receipt off
     h1r's and no other, y = dequant of that z and moved there;
   * fault_wb: every receipt unmoved, z off A B^T only in column 0 of unit 0, by `dither_one.wb_fault_expected` on
-    CPU_CALLS and by multiples of 256 elsewhere, y = dequant of that z.
+    CPU_CALLS and by multiples of 256 elsewhere, y = dequant of that z;
+  * fault_xa (CA's flipped-xa fault, 12:03Z): every receipt unmoved, z off A B^T only in row 0 of unit 0, by
+    `xa_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, y = dequant of that z.
 """
 from __future__ import annotations
 
@@ -28,8 +31,32 @@ import dither_fused as DF
 import dither_one as DO
 from dither_fused import CM, CR, H1R, Call
 
-CAPTURES, LIB_ENV, M32 = DO.CAPTURES, DO.LIB_ENV, DO.M32
+CAPTURES, LIB_ENV, M32 = DO.CAPTURES + ("fault_xa",), DO.LIB_ENV, DO.M32
 CG = None
+F_FAULT_XA = 32     # h1u.cu's: xa of unit 0's row 0 at k = 0 flipped (kh_one_peel only)
+
+
+def install() -> None:
+    """The window's step hook raises F_FAULT_XA on the fault_xa capture (dither_one's sets the other captures' flags)."""
+    before = DO.Window.before
+
+    def before_xa(self: DO.Window, m: int) -> None:
+        before(self, m)
+        if self.cap == "fault_xa":
+            self.flags |= F_FAULT_XA
+            self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
+
+    DO.Window.before = before_xa
+
+
+def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
+    """F_FAULT_XA's move of unit 0's z row 0 (rows of `a`, 32 x K; `b` the unit's 32 B rows), mod 2^32: xa at entry
+    (0, 0) flipped changes it by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0], xa = [A = 127 and b = 1]."""
+    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.core.protocols.pouw.circuit import seeds as SD
+    rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
+    d = -1 if int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1 else 1
+    return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 
 
 def _s32(v: np.ndarray) -> np.ndarray:
@@ -147,6 +174,19 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                 fault_bad.append({"call": w, "receipt_units_off": rdiff[:4], "z_cells_off": cells[:4],
                                   "dz_col0": col[:4], "exact_checked": w in cpu_calls})
             fault_moved.append(len(cells))
+        elif which == "fault_xa":
+            row = dz[0, :32].tolist()
+            if w in cpu_calls:
+                exp = xa_fault_expected(g["a"][w][:32].cpu().numpy(), win.wt[w][:32].cpu().numpy(),
+                                        g["salt"] if "salt" in g else win.salt_bytes, s * win.u_step + win.offs[w],
+                                        (a_cpu[w], g["b_roots"][w]))
+                exact = row == exp
+            else:
+                exact = all(v % 256 == 0 for v in row)
+            if not (not rdiff and all(i == 0 and j < 32 for i, j in cells) and exact):
+                fault_bad.append({"call": w, "receipt_units_off": rdiff[:4], "z_cells_off": cells[:4],
+                                  "dz_row0": row[:4], "exact_checked": w in cpu_calls})
+            fault_moved.append(len(cells))
         else:
             if rdiff:
                 rc_bad.append(w)
@@ -163,10 +203,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
     doc["xa"] = {"entries": int(sum(int(((g["a"][w][:m] == 127)).sum()) for w in range(L))),
                  "note": "A = 127 entries of the live rows (xa needs b = 1 too: about half of them)"}
-    if which in ("fault", "fault_wb"):
+    if which in ("fault", "fault_wb", "fault_xa"):
         doc["fault_shift"] = shift
         doc["fault_bad"] = fault_bad
-        if which == "fault_wb":
+        if which in ("fault_wb", "fault_xa"):
             doc["z_cells_moved"] = {"min": min(fault_moved), "max": max(fault_moved)}
         doc["conforming"] = (not fault_bad and not y_bad and not doc["a_roots_bad"] and all(doc["round"].values())
                              and not doc["z_roots_bad"])
@@ -226,4 +266,10 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     return doc
 
 
-gate_verdict = DO.gate_verdict
+def gate_verdict(gate: dict, control: dict, fault: dict, fault_wb: dict, fault_xa: dict) -> dict:
+    """`dither_one.gate_verdict`, and the flipped xa conforms (only row 0 of unit 0's z and y moved, by 256 (1 - 2 xa) B,
+    no receipt)."""
+    v = DO.gate_verdict(gate, control, fault, fault_wb)
+    v["fault_xa_conforming"] = bool(fault_xa.get("conforming"))
+    v["ok"] = v["ok"] and v["fault_xa_conforming"]
+    return v

@@ -29,7 +29,10 @@ Gates before any timing (a failed gate exits 4 and its build is not timed):
     - F_FAULT (2^24 into unit 0's cell (0, 0) after segment 0) must move that cell's z by exactly 2^24, unit 0's
       receipt and no other, nothing else in z, and y = dequantize(z);
     - F_FAULT_WB (unit 0's column-0 wb+ at k = 0 flipped) must move exactly the cells (i, 0) of unit 0 with X[i][0] != 0,
-      each by 256 dWB X[i][0], no receipt, nothing else in z, and y = dequantize(z).
+      each by 256 dWB X[i][0], no receipt, nothing else in z, and y = dequantize(z);
+    - the peeled arms only, F_FAULT_XA (unit 0's xa at row 0, k = 0 flipped; CA's flipped-xa fault, 12:03Z) must move
+      exactly the cells (0, j) of unit 0 with B[j][0] != 0, each by 256 dxa B[j][0], no receipt, nothing else in z, and
+      y = dequantize(z).
 The wrap bits' density (wb+ and wb- over the checked units' entries, from h1zref) is recorded per shape, never assumed.
 """
 from __future__ import annotations
@@ -60,7 +63,7 @@ from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB = 1, 2, 4, 8, 16
+F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32
 M32 = (1 << 32) - 1
 SEED_WORDS = 4
 A5 = -1515870811  # 0xA5A5A5A5 as an int32 word
@@ -219,6 +222,21 @@ def gate_one(oc: OneCall, picks: list[int], ref_t: torch.Tensor, ref: dict, shif
                        "receipt_units": runits_w[:4], "y_equal_dequant": y_ok(gw)}
     doc["fault_wb"]["ok"] = got == want and len(want) > 0 and not runits_w and doc["fault_wb"]["y_equal_dequant"]
     doc["ok"] = doc["clean"] and doc["control_refused"] and doc["fault"]["ok"] and doc["fault_wb"]["ok"]
+    if oc.lib.peel:
+        # F_FAULT_XA: one flipped xa (unit 0, row 0, k = 0) reaches exactly row 0's z (and y) in unit 0, no receipt
+        gx = oc.once(F_FAULT_XA)
+        b0 = c.b[:32, 0].tolist()
+        xa00 = int(int(c.a[0, 0]) == 127 and x0[0] == -128)
+        dxa = -1 if xa00 else 1
+        want_x = {(0, j): (256 * dxa * b0[j]) & M32 for j in range(32) if b0[j]}
+        got_x = {(i, j): int(zdiff(gx["z"][i:i + 1, j:j + 1], g0["z"][i:i + 1, j:j + 1]))
+                 for i, j in (gx["z"] != g0["z"]).nonzero().tolist()}
+        runits_x = (gx["out"] != g0["out"]).any(dim=1).nonzero().flatten().tolist()
+        doc["fault_xa"] = {"xa00": xa00, "dxa": dxa, "cells_want": len(want_x), "cells_got": len(got_x),
+                           "receipt_units": runits_x[:4], "y_equal_dequant": y_ok(gx)}
+        doc["fault_xa"]["ok"] = (got_x == want_x and len(want_x) > 0 and not runits_x
+                                 and doc["fault_xa"]["y_equal_dequant"])
+        doc["ok"] = doc["ok"] and doc["fault_xa"]["ok"]
     return doc
 
 

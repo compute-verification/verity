@@ -210,9 +210,10 @@ __global__ void __launch_bounds__(256) h1s_noise(const u64* __restrict__ seeds, 
 // O' - sum_d 128^d D_d + 256 X WB^T mod 2^32, WB = wb+ - wb- (wrapw) from B and the noise, carried by a third MMA set a
 // segment into its own accumulator; then y = RN_bf16(RN32(RN32(z) s_a[row]) s_w[col]) (int8_exact.dequantize), s_a = 0
 // for rows >= m. The step (m, flags) is read from the device, as dither_one's H1OStep {parity, m, pad, flags}.
-enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8, F_FAULT_WB = 16 };
+enum { F_DUMP = 1, F_NW_TILES = 2, F_NW_UNITS = 4, F_FAULT = 8, F_FAULT_WB = 16, F_FAULT_XA = 32 };
 // F_FAULT: 2^FAULT_SHIFT added to unit 0's accumulator of cell (0, 0) after segment 0's MMAs, before its set is folded;
-// F_FAULT_WB: wb+ of unit 0's column 0 at k = 0 flipped (WB moves by +1 where wb+ was clear, else -1); F_NW_TILES writes
+// F_FAULT_WB: wb+ of unit 0's column 0 at k = 0 flipped (WB moves by +1 where wb+ was clear, else -1); F_FAULT_XA (the
+// peel only): xa of unit 0's row 0 at k = 0 flipped (row 0's z moves by +-256 B[col][0]; no receipt word); F_NW_TILES writes
 // no z, F_NW_UNITS no receipt (the gate's no-write control); F_DUMP copies y rows < m to ydump
 constexpr int FAULT_SHIFT = 24;
 
@@ -465,6 +466,12 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
               xa[mt][2 + h] = __vcmpeq4(a8.y, 0x7F7F7F7Fu) & e1;
               xany |= xa[mt][h] | xa[mt][2 + h];
             }
+          }
+        }
+        if constexpr (PL) {
+          if ((flags & F_FAULT_XA) && u == 0 && lane == 0 && sg == 0) {
+            xa[0][0] ^= 1u;
+            xany = 1;
           }
         }
         u32 wbf[OS ? 4 : 1][2], cf[PL ? 4 : 1][2], b0[PL ? 4 : 1][2];  // PL: c as 0/1 B fragments, B itself
