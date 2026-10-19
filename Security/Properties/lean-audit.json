@@ -35,7 +35,8 @@
   "Properties.Proofs.Pous.Run",
   "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement",
-  "Properties.Accounting.Compose"
+  "Properties.Accounting.Compose",
+  "Properties.Accounting.Served"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -191,13 +192,18 @@
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": ["Properties.Accounting.Compose"],
+   "except": ["Properties.Accounting.Compose", "Properties.Accounting.Served"],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.Accounting.Compose": {
    "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
    "except": [],
    "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
+  },
+  "Properties.Accounting.Served": {
+   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw", "Properties.Accounting.Compose"],
+   "except": [],
+   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`SampledProofs.Slots.layout`, `SampledProofs.Partition.units`) and the verifier's population draw (`SampledProofs.Draw.drawUnits`, from bytes as `Properties.SampledProofs.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   }
  },
  "reads_exempt": {

@@ -37,6 +37,7 @@ import Definitions.Accounting.Remote
 import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Requirement
 import Definitions.Accounting.Responder
+import Definitions.Accounting.Served
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
 import Definitions.Accounting.Window
