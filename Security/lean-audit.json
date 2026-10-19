@@ -6586,6 +6586,12 @@
   },
   "Accounting.SecurityProofs.Isa.Sm120Sheet": {
    "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.Isa.Sm90Sheet": {
+   "owner": "@compute-accounting"
+  },
+  "Accounting.SecurityProofs.Isa.Sm100Sheet": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
@@ -7442,7 +7448,9 @@
    "Accounting.SecurityProofs.RequirementUncredited": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and the audit's store (Security/Definitions/Accounting/Requirement.lean): once the store is W's (StoreMatches) and the live values in incomplete blocks lie in one block per group (OneBlockEach), W's live bits exceed its credited live bits by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.Isa.IsaSheet": "lemma: A6 (SheetWords) and A7 (SheetSemantics) from a device's instruction table (Accounting.Isa) whose rows pass the decided discipline, a model that reads it, and the table's premises (Models.Accounting.Assumptions.Isa: the class list's completeness, the labelling, one premise per row family); arithmetic over the table and the labelled run, not a Lean function.",
-   "Accounting.SecurityProofs.Isa.Sm120Sheet": "lemma: IsaSheet on sm_120's table (Accounting.Isa.Sm120.row), its discipline decided row by row and its absent families (wgmma, tcgen05, tensor memory) vacuous; not a Lean function."
+   "Accounting.SecurityProofs.Isa.Sm120Sheet": "lemma: IsaSheet on sm_120's table (Accounting.Isa.Sm120.row), its discipline decided row by row and its absent families (wgmma, tcgen05, tensor memory) vacuous; not a Lean function.",
+   "Accounting.SecurityProofs.Isa.Sm90Sheet": "lemma: IsaSheet on sm_90a's table (Accounting.Isa.Sm90.row), its discipline decided row by row and its absent families (tcgen05, tensor memory) vacuous; not a Lean function.",
+   "Accounting.SecurityProofs.Isa.Sm100Sheet": "lemma: IsaSheet on sm_100a's table (Accounting.Isa.Sm100.row), its discipline decided row by row and its absent family (wgmma) vacuous; not a Lean function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {

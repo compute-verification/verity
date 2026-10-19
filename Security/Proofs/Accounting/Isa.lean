@@ -11,7 +11,8 @@ import Models.Accounting.Guarantees.Isa
   route, and a route's words are its heads.
 * `sideUnits_of_table`: a side unit's words are its class's heads, at most `words` an instruction.
 * `sheetWords_of_table`: A6 from the rows' words: a writer kind's class at most `ω`, a vector class at most 64.
-* `Sm120Sheet`: sm_120's discipline decided row by row; its absent families are vacuous.
+* `Sm120Sheet`, `Sm90Sheet`, `Sm100Sheet`: each device's discipline decided row by row, over the shared classes
+  (`sync_ok`, `base_ok`) and its own; its absent families are vacuous.
 -/
 
 namespace Accounting.SecurityProofs.Isa
@@ -153,15 +154,41 @@ theorem IsaSheet : Accounting.Guarantees.Isa.IsaSheet := by
   exact ⟨sheetWords_of_table hok hread hsplit hlab hrows, noSum_of_table hok hcomp hlab hrows,
     sideUnits_of_table hok hread hsplit hlab hrows⟩
 
+section Classes
+
+theorem sync_ok (s : Sync) : s.row.ok = true := by cases s <;> decide +kernel
+theorem base_ok (c : Base) : c.row.ok = true := by cases c <;> decide +kernel
+theorem gmma_ok (g : Gmma) : g.row.ok = true := by cases g <;> decide +kernel
+theorem tc05_ok (t : Tc05) : t.row.ok = true := by cases t <;> decide +kernel
+theorem tmem_ok (m : Tmem) : m.row.ok = true := by cases m <;> decide +kernel
+
+theorem sync_fam (s : Sync) : s.row.fam = .mma := by cases s <;> rfl
+theorem gmma_fam (g : Gmma) : g.row.fam = .wgmma := by cases g <;> rfl
+theorem tc05_fam (t : Tc05) : t.row.fam = .tcgen05 := by cases t <;> rfl
+theorem tmem_fam (m : Tmem) : m.row.fam = .tmem := by cases m <;> rfl
+
+/-- No class outside the tensor cores is in a tensor family. -/
+theorem base_fam (c : Base) :
+    c.row.fam ≠ .mma ∧ c.row.fam ≠ .wgmma ∧ c.row.fam ≠ .tcgen05 ∧ c.row.fam ≠ .tmem := by
+  cases c <;> decide +kernel
+
+theorem ne_of_fam {r : Row} {f g : Family} (h : r.fam = f) (hfg : f ≠ g) : r.fam ≠ g := by
+  rw [h]
+  exact hfg
+
+end Classes
+
 /-- Every sm_120 row passes the discipline. -/
-theorem sm120_ok : ∀ k, (Sm120.row k).ok = true := by
-  intro k
-  cases k <;> decide +kernel
+theorem sm120_ok : ∀ k, (Sm120.row k).ok = true
+  | .sync s => sync_ok s
+  | .base c => base_ok c
 
 /-- sm_120 has no wgmma, tcgen05 or tensor-memory class. -/
-theorem sm120_fam (k : Sm120) :
-    (Sm120.row k).fam ≠ .wgmma ∧ (Sm120.row k).fam ≠ .tcgen05 ∧ (Sm120.row k).fam ≠ .tmem := by
-  cases k <;> decide +kernel
+theorem sm120_fam :
+    ∀ k : Sm120, (Sm120.row k).fam ≠ .wgmma ∧ (Sm120.row k).fam ≠ .tcgen05 ∧ (Sm120.row k).fam ≠ .tmem
+  | .sync s => ⟨ne_of_fam (sync_fam s) (by decide), ne_of_fam (sync_fam s) (by decide),
+      ne_of_fam (sync_fam s) (by decide)⟩
+  | .base c => (base_fam c).2
 
 /-- **A6 and A7 on sm_120.** -/
 theorem Sm120Sheet : Accounting.Guarantees.Isa.Sm120Sheet := by
@@ -169,5 +196,43 @@ theorem Sm120Sheet : Accounting.Guarantees.Isa.Sm120Sheet := by
   exact IsaSheet Sm120.row σ Z A H sm120_ok hread hsplit hcomp hlab hmma
     (fun k hk => absurd hk (sm120_fam k).1) (fun k hk => absurd hk (sm120_fam k).2.1)
     (fun k hk => absurd hk (sm120_fam k).2.2) hlane huni hmem hbulk htex hwarp
+
+/-- Every sm_90a row passes the discipline. -/
+theorem sm90_ok : ∀ k, (Sm90.row k).ok = true
+  | .sync s => sync_ok s
+  | .gmma g => gmma_ok g
+  | .base c => base_ok c
+
+/-- sm_90a has no tcgen05 or tensor-memory class. -/
+theorem sm90_fam : ∀ k : Sm90, (Sm90.row k).fam ≠ .tcgen05 ∧ (Sm90.row k).fam ≠ .tmem
+  | .sync s => ⟨ne_of_fam (sync_fam s) (by decide), ne_of_fam (sync_fam s) (by decide)⟩
+  | .gmma g => ⟨ne_of_fam (gmma_fam g) (by decide), ne_of_fam (gmma_fam g) (by decide)⟩
+  | .base c => (base_fam c).2.2
+
+/-- **A6 and A7 on sm_90a.** -/
+theorem Sm90Sheet : Accounting.Guarantees.Isa.Sm90Sheet := by
+  intro R T L U F X _ _ _ σ Z A H hread hsplit hcomp hlab hmma hwgmma hlane huni hmem hbulk htex hwarp
+  exact IsaSheet Sm90.row σ Z A H sm90_ok hread hsplit hcomp hlab hmma hwgmma
+    (fun k hk => absurd hk (sm90_fam k).1) (fun k hk => absurd hk (sm90_fam k).2) hlane huni hmem hbulk htex hwarp
+
+/-- Every sm_100a row passes the discipline. -/
+theorem sm100_ok : ∀ k, (Sm100.row k).ok = true
+  | .sync s => sync_ok s
+  | .tc05 t => tc05_ok t
+  | .tmem m => tmem_ok m
+  | .base c => base_ok c
+
+/-- sm_100a has no wgmma class. -/
+theorem sm100_fam : ∀ k : Sm100, (Sm100.row k).fam ≠ .wgmma
+  | .sync s => ne_of_fam (sync_fam s) (by decide)
+  | .tc05 t => ne_of_fam (tc05_fam t) (by decide)
+  | .tmem m => ne_of_fam (tmem_fam m) (by decide)
+  | .base c => (base_fam c).2.1
+
+/-- **A6 and A7 on sm_100a.** -/
+theorem Sm100Sheet : Accounting.Guarantees.Isa.Sm100Sheet := by
+  intro R T L U F X _ _ _ σ Z A H hread hsplit hcomp hlab hmma htc htmem hlane huni hmem hbulk htex hwarp
+  exact IsaSheet Sm100.row σ Z A H sm100_ok hread hsplit hcomp hlab hmma (fun k hk => absurd hk (sm100_fam k)) htc
+    htmem hlane huni hmem hbulk htex hwarp
 
 end Accounting.SecurityProofs.Isa
