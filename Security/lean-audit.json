@@ -1186,7 +1186,12 @@
    "type_hash": "5178cb51049d4fc076696646c8d3b1136dbf27dff64a5e9dc8dcf655da2afd2f"
   },
   "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax : Accounting.Guarantees.ComposePeriod.PeriodTailMax"
+   ],
+   "assumptions": [],
+   "type_hash": "b170f79f6698ef2d144aa9d0b7c874c75b9d88540ad24ab12f75d289c6de86b7"
   },
   "Accounting.SecurityProofs.Composition": {
    "owner": "@memory-accounting",
@@ -7914,7 +7919,7 @@
    ]
   },
   "Definitions.Accounting.ComposePeriod": {
-   "digest": "8e3a14a4979c772187d58617d4fca01c8bc9748e6713d72a52ff07566e8cc7f9",
+   "digest": "c201e67a369ea12045880895439b1e0ef6691d1065915972f3cf8393d4f1d813",
    "definitions": {
     "Accounting.Compose.Period": "13d14cade7896245c98de63e7b9b333a94bde2f918d0c4c727f58b320b0596bc",
     "Accounting.Compose.Period.EveryWindow": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c",
@@ -7925,10 +7930,15 @@
     "Accounting.Compose.Period.done": "7d16ae838104b949137991d7652c34c2cf15c04446846cd71d7787d99b2330d5",
     "Accounting.Compose.Period.rec": "0adacc7d014142c938755d3cae5f6bd5e3d72fb4ea3a9bd8aaf22de7600610a4",
     "Accounting.Compose.Period.window": "f39dcb3af3972c3864f161ba68c3322dab3be434611c25337dd93763f73a8216",
+    "Accounting.Compose.RoundGame.acceptsUpTo": "7f24c520abbb1dae862a06cf3eeadacf1f0d8ffcbf0d8aa37c2c5ff9bfdc9db1",
+    "Accounting.Compose.RoundGame.deficiencyUpTo": "ec618fe1e854b9e09bee48e05dd7fcbf16e09ff910f6a155de253f780864cf3a",
     "Accounting.Compose.consGame": "c2028e515abf2a609322d707f397836d556d0ee509301d3ea18d80d0dadd2f26",
     "Accounting.Compose.periodGame": "76b742254a2efa587efbd4559c05ffb95b6365ab78ce00e53287b4ffda0ae169"
    },
-   "guarantees": ["Accounting.SecurityProofs.ComposePeriod.PeriodBudget"]
+   "guarantees": [
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax"
+   ]
   },
   "Definitions.Accounting.Confidence": {
    "digest": "8f0f17fed4f0fe12353bd5c626eef6260396dd53fa330f78c0fd405bc0b8e70f",
@@ -9431,6 +9441,7 @@
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
@@ -15144,6 +15155,7 @@
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
     "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax",
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
@@ -20502,11 +20514,15 @@
    ]
   },
   "Models.Accounting.Guarantees.ComposePeriod": {
-   "digest": "e7f3c1ba867928cf42e1bf0af502a28692be2e272f3395ec96a51a21ed7abfc4",
+   "digest": "b577ad7a28a2636c1f8b64d2ae45b8707d2f2944943ca3eb76ef7e101a06bcc7",
    "definitions": {
-    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "854184f4b0a891ea10efec5a1619e331e2f77fd82bea4c5e4c2c5f575afee155"
+    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "854184f4b0a891ea10efec5a1619e331e2f77fd82bea4c5e4c2c5f575afee155",
+    "Accounting.Guarantees.ComposePeriod.PeriodTailMax": "9ab8417f568e72412d8aabc831652ed12f28fb7995c20b016baee7d88410743e"
    },
-   "guarantees": ["Accounting.SecurityProofs.ComposePeriod.PeriodBudget"]
+   "guarantees": [
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax"
+   ]
   },
   "Models.Accounting.Guarantees.Confidence": {
    "digest": "efce790a6464ea41d877ef6d1bf1c6db1c02c97c43a096e52b0936b6c9b035dc",
