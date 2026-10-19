@@ -238,7 +238,7 @@ def _eps_table(args, pi: E.Machine) -> int:
 def run(args) -> int:
     pi = E.machine(args.vector or "", args.data)
     if args.uni_issue is not None and E.uniform_issue_charged(pi):
-        sheet = E.ISSUE[1] in pi.c.get(E.UNI, {})
+        sheet = "DS_issue" in pi.c.get(E.UNI, {})
         print(f"eps: {pi.vector}'s census charges a uniform instruction on the issue rows already; --uni-issue "
               f"{args.uni_issue:g} changes nothing" + ("; on a data sheet, `machine-model sheet --eps --uni C` prices "
                                                        "it at C of a slot" if sheet else ""), file=sys.stderr)

@@ -476,13 +476,10 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
     return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda, uniform_forms=m.uniform_forms)
 
 
-ISSUE = ("issue", "DS_issue")   # the issue rows: the measured census's and the data sheet's (A2)
-
-
 def uniform_issue_charged(pi: Machine) -> bool:
-    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; every DS
-    vector, whose `DS_issue` is A2u)."""
-    return any(v > 0 and (r in ISSUE or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; a DS vector's
+    `DS_issue`, A2u)."""
+    return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
 
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
@@ -492,7 +489,7 @@ def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
     if uniform_issue_charged(pi):
         return pi
     c = {k: dict(v) for k, v in pi.c.items()}
-    rows = [r for r in pi.rows if r in ISSUE or (r.startswith("JI") and r.endswith("_0"))]
+    rows = [r for r in pi.rows if r == "issue" or r.endswith("_issue") or (r.startswith("JI") and r.endswith("_0"))]
     for k in ("UNI", "UNI64"):
         for r in rows:
             if k in c and r in c["ALU"]:
