@@ -3902,7 +3902,6 @@
    "DotBf16_v2{K=576,DOT=HopperBF16WgmmaDot16_v1}",
    "DotBf16_v2{K=64,DOT=AmpereBF16TcDot16_v2}",
    "DotBf16_v2{K=64,DOT=HopperBF16WgmmaDot16_v1}",
-   "DotBf16_v3{K=16,DOT=AmpereBF16TcDot16_v3}",
    "DotBf16_v3{K=16,DOT=HopperBF16WgmmaDot16_v2}",
    "DotBf16_v3{K=32,DOT=HopperBF16WgmmaDot16_v2}",
    "DotBf16_v3{K=64,DOT=AmpereBF16TcDot16_v3}",
