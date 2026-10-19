@@ -5,7 +5,7 @@ The receipts bind extra work beside cuBLASLt's served y, not the served kernel's
 (``pouw:eps1-sm120-h1fx1``, `verity_vllm.protocol_options.pouw_h1`) hands over each int8-exact linear call's s8 rows and scales
 and its layer, and holds its own stand-in root(B) per layer (`pouw_h1.weight_root`), their weights' root and the epoch's
 64-byte salt from the challenger's salt coin (`pouw_h1.program_salt`).  Its own per-call positions, padding and stand-in
-roots follow the step's real rows, so this window doesn't use them (the seeded mode keeps the option's salt).  Instead:
+roots follow the step's real rows, so this window doesn't use them (the salt form keeps the option's salt).  Instead:
 
 * **Public parameters**: the model, the batch slots (vLLM's ``max_num_seqs``), ``T`` rows a step (``max_num_batched_tokens``:
   the scheduler never puts more of a step's tokens in a linear), ``S`` steps and the max tokens.
@@ -34,13 +34,15 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
   There is one receipt tree per call.
-* **Coins** (``--coins``): live by default, a round a step from the proof service's challenger; or seeded, the option's
-  one salt, opened at install before serving, and labelled seeded in the record.  Live coins come from the challenger
-  (`pouw.window.live_challenger`, `sampled_proofs.challenger.LiveRecord`), whose salt coin opens first, against the
-  registration root over the weights' root and the queue's root.  Step s's round
-  root, over its A root and its admit root, is recorded before round s's coin opens, and the step's units take the round's
-  salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise
-  reads is committed before that noise's coin.
+* **Coins** (``--coins``): seeded in either form, and the record says so (`coin_kind`, SG-11).  The challenger runs in
+  this process, on the prover's node, and AGENTS.md makes a challenger the auditor's device, never a process on the
+  prover's node.  So its coins are seeded until it runs off the node: allowed under Daniel's 17 Oct exception, labelled
+  seeded and priced with GRIND's premium.  The forms: ``rounds`` (the default), the live protocol's form, a round a step
+  from `pouw.window.live_challenger` and `sampled_proofs.challenger.LiveRecord`, whose salt coin opens first, against the
+  registration root over the weights' root and the queue's root; or ``salt``, the option's one salt, opened at install
+  before serving.  Under ``rounds``, step s's round root, over its A root and its admit root, is recorded before round
+  s's coin opens, and the step's units take the round's salt (`h1tile.live_salt`: `window.round_key(...).stream(0, 64)`),
+  so every candidate and every selection a round's noise reads is committed before that noise's coin.
 * **Credit**: only the admitted slots (`credit.tally`, in 16-bit limbs, every tally unit always proved): Cr = Σ admitted
   rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.  The padded compute (the non-admitted rows of
   live units, noised) is shown and not credited; dead units cost only their emptiness check.
@@ -53,9 +55,9 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   wrap      the fraction of weights that W' = B + c + U mod 2^8 wraps, per layer and site (`wrap_counts`)
   reference the prompts generated with no option installed, the scheduler's record taken (`schedule_tap`)
   queue     the request queue from that record, committed
-  install   the option (its own stand-in weight roots and salt, unused under live coins)
+  install   the option (its own stand-in weight roots and salt, unused under the rounds form)
   weights   every linear's B table and root(B), the weights' root, and the registration root over it and the queue's root,
-            which the live challenger's salt coin opens against
+            which the rounds form's salt coin opens against
   serve     the prompts again with the option; inside its `record`, each call's A table, admit words and receipts; then the
             empty steps; the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
@@ -67,12 +69,12 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             --gate-draw units over the window's positions (`gate_draw`), then a self-check from the same key, live and
             dead units of real and empty steps; each against the gated `h1tile.reference` (receipt) and the served
             integer product (z), with no unit picked from the prover's own entropy; controls: the unit at the next
-            position, a flipped receipt bit, root(A) rebuilt (and a tampered row, real or empty), the tile's 32 A rows opened against root(A) and the step's A root and A' = -b
-            (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
-            tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
-            dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
-            and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, a live unit not
-            empty
+            position, a flipped receipt bit, root(A) rebuilt (and a tampered row, real or empty), the tile's 32 A rows
+            opened against root(A) and the step's A root and A' = -b (the tile's B rows negated) refused there, its
+            re-commitment moving both roots (CMP-38), root(B) rebuilt, the tile's 32 B rows opened against it and a
+            tampered weight row refused, the admit root rebuilt from the queue, a dead unit's rows empty and its skipped
+            noise real work, a junk row in a slot the queue leaves unassigned refused and not admitted, the canonical
+            empty row in a slot the queue selects refused and not admitted, a live unit not empty
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -113,6 +115,19 @@ def site_of(name: str) -> tuple[int, str]:
 #: the gate's draw key: the challenger's draw coin, opened once after the window's receipts root
 GATE_DRAW_DOMAIN = "verity/pouw/served-h1-gate-draw/v1"
 
+#: why every coin serve.py draws is seeded (SG-11, the coordinator's ruling of 19 Oct 12:04Z)
+SEEDED = ("the challenger runs in serve.py's process, on the prover's node, and AGENTS.md makes a challenger the "
+          "auditor's device, never a process on the prover's node: its coins are seeded, not live, until it runs off "
+          "the prover's node (allowed under Daniel's 17 Oct exception: labelled seeded, priced with GRIND's premium, "
+          "p_eff <= G·p)")
+
+
+def coin_kind(challenger: Any) -> dict:
+    """The coins' kind as the record states it.  Every challenger serve.py holds (`pouw.coins.Challenger`,
+    `sampled_proofs.challenger.LiveChallenger`) is an object in its own process that opens its own coins, and nothing
+    here can tell where else one runs, so the kind is seeded by construction: no path in serve.py records live coins."""
+    return {"kind": "seeded", "challenger": f"{type(challenger).__qualname__}, in serve.py's process", "reason": SEEDED}
+
 
 def receipts_root(window: str, calls: list[dict]) -> bytes:
     """The window's receipts root, the tree over its calls' receipt roots in call order ('receipts-window'): what the draw
@@ -122,9 +137,9 @@ def receipts_root(window: str, calls: list[dict]) -> bytes:
 
 
 def open_draw(challenger: Any, after: bytes) -> dict:
-    """The epoch's draw coin, opened once after `after` (live: `window.live_challenger`'s ``pouw/draw`` coin; seeded: the
-    epoch coins' ``draw``, `pouw.coins.Challenger`) and checked against the challenger's commitment as the verifier checks
-    it; a second open raises (a retry never redraws)."""
+    """The epoch's draw coin, opened once after `after` (the rounds form: `window.live_challenger`'s ``pouw/draw`` coin; the
+    salt form: the epoch coins' ``draw``, `pouw.coins.Challenger`) and checked against the challenger's commitment as the
+    verifier checks it; a second open raises (a retry never redraws).  Its kind is `coin_kind`'s: seeded either way."""
     from verity.core.protocols.pouw import coins as Co
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.sampled_proofs import challenger as Ch
@@ -135,7 +150,8 @@ def open_draw(challenger: Any, after: bytes) -> dict:
         o = challenger.open("draw", after)
         why = Co.coin_reason(challenger.commitment, o, "draw", after)
     return {"coin": o.coin, "opening": o.to_json(), "commitment": challenger.commitment.to_json(), "after": after.hex(),
-            "reason": why, "epoch": challenger.commitment.epoch, "coins_root": challenger.commitment.root}
+            "reason": why, "epoch": challenger.commitment.epoch, "coins_root": challenger.commitment.root,
+            "coins": coin_kind(challenger)}
 
 
 def gate_draw(draw: dict, k: int, population: int) -> tuple[list[int], random.Random]:
@@ -511,10 +527,10 @@ def run(a: argparse.Namespace) -> dict:
         if dev.type == "cuda":
             torch.cuda.synchronize()
 
-    live = a.coins == "live"
+    per_round = a.coins == "rounds"
     pending: list[tuple] = []
     round_log: list[dict] = []
-    if live:
+    if per_round:
         from verity.core.protocols.pouw import window as Wd
         from verity.core.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
@@ -534,7 +550,7 @@ def run(a: argparse.Namespace) -> dict:
         data[i]["receipts"], data[i]["live"] = rc, lu
 
     def close_round(s: int) -> None:
-        """Round s (step s) under live coins: its root over the step's A root and admit root, recorded before its coin
+        """Round s (step s) under the rounds form: its root over the step's A root and admit root, recorded before its coin
         opens; then the step's receipts under the round's 64-byte salt (`h1tile.live_salt`)."""
         st = step_roots(window, s, [calls[i] for i, _ in pending])
         opening = rounds.record(st["root"])
@@ -547,7 +563,7 @@ def run(a: argparse.Namespace) -> dict:
 
     def table(s: int, w: int, xq, sa: np.ndarray) -> None:
         """Call (s, w): its T-slot A table from the step's m real rows `xq` [m, K] (on the device) and scales, its admit
-        words; its receipts now (seeded) or once the step's round closes (live)."""
+        words; its receipts now (the salt form) or once the step's round closes (the rounds form)."""
         m, k = int(xq.shape[0]), int(layers[w].weight.shape[1])
         n = int(layers[w].weight.shape[0])
         name = names[w]
@@ -574,7 +590,7 @@ def run(a: argparse.Namespace) -> dict:
                       "hollow": len(CR.hollow(rows, CR.queue_select(queue, s)))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
                      "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
-        if not live:
+        if not per_round:
             receipts(len(calls) - 1, slots, h1.salt)
             return
         pending.append((len(calls) - 1, slots))
@@ -717,8 +733,8 @@ def run(a: argparse.Namespace) -> dict:
     a_window = CM.step_root(CM.domain(w_fields, len(steps), "a-window"), [st["a_step"] for st in steps])
     a_roots = {"a_step": [st["a_step"].hex() for st in steps], "admit_step": [st["admit_step"].hex() for st in steps],
                "a_window": a_window.hex(), "a_window_fields": w_fields}
-    coins = {"mode": a.coins, "ok": True}
-    if live:
+    coins = {"form": a.coins, **coin_kind(lch if per_round else epoch_coins), "ok": True}
+    if per_round:
         roots = [bytes.fromhex(r["root"]) for r in round_log]
         openings = [Ch.LiveOpening.from_json(r["opening"]) for r in round_log]
         commitment = Ch.LiveCommitment.from_json(lch.commitment.to_json())
@@ -745,8 +761,8 @@ def run(a: argparse.Namespace) -> dict:
     manifest = {"schema": SCHEMA, "scheme": SCHEME, "tile": [RC.R, RC.C_], "framing": FRAMING, "not_covered": NOT_COVERED,
                 "window": window, "public": public, "epoch": a.epoch, "option": option, "commitment": h1.commits,
                 "coins": coins, "salt": h1.salt.hex(),
-                "salt_rule": ("live: each call's salt is its round's (coins.rule); manifest.salt is the option's, unused"
-                              if live else
+                "salt_rule": ("rounds: each call's salt is its round's (coins.rule); manifest.salt is the option's, unused"
+                              if per_round else
                               "pouw_h1.program_salt: SHA-512(b'verity/pouw/h1/program-salt/v1\\0' || the epoch's 32-byte "
                               "salt), the epoch's salt audit.Epoch.start's from the challenger's salt coin opened after the "
                               "weights' root (pouw.weights_root over every layer's pouw_h1.weight_root)"),
@@ -769,8 +785,9 @@ def run(a: argparse.Namespace) -> dict:
                                         "root ('queue-requests', {window, requests}: (start, stop) u16 LE per index, the "
                                         "null request first, padded to S T + 1)] ('queue', {window, leaves})",
                           "registration": registration.hex(), "registration_fields": reg_fields,
-                          "registration_rule": "the tree over [weights_root, the queue's root] ('registration'): live, "
-                                               "the challenger's salt coin opens against it before every other coin"},
+                          "registration_rule": "the tree over [weights_root, the queue's root] ('registration'): under "
+                                               "the rounds form the challenger's salt coin opens against it before every "
+                                               "other coin"},
                 "positions": "call (s, w) at base s U + off(w), U = sum_w (T / 32)(N_w / 32), off(w) the sum over linears "
                              "before w; unit u = slot rows 32 (u // (N_w / 32)) .., weight rows 32 (u % (N_w / 32)) ..",
                 "u_step": u_step, "offsets": offs, "units": s_max * u_step,
@@ -791,20 +808,21 @@ def run(a: argparse.Namespace) -> dict:
                            "salts": "SHA-512(SALT_TAG || key || u32be len(label) || label || u64be i || u8 c), c = 0..2, "
                                     "labels a/<s>/<w>, s/<s>/<w>, r/<s>/<w>, t, b/<w>, q and qr; the key is the prover's"},
                 "credit": {**{k: v for k, v in credit.items() if k != "tally"},
+                           "coins": {k: coins[k] for k in ("kind", "reason")},
                            "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited; slot i of step "
                                    "t is admitted iff the request queue (committed before the first coin) assigns it a "
                                    "request live at t and its row's scale is nonzero (pouw.circuit.admit.PouwQueueAdmit: "
                                    "the row can withhold admission, never grant it; RT-ALGO-4), written by an "
                                    "always-proved admit unit into its own leaf, which refuses a slot not admitted whose row "
                                    "is not the canonical empty row and a slot the queue selects whose row is; the admit "
-                                   "leaves are committed (live) in the round "
+                                   "leaves are committed (the rounds form) in the round "
                                    "root before the round's coin; the tally is 16-bit limbs, every tally unit always "
                                    "proved; Pub = point(level(floor_point(Cr)))"},
                 "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
     try:
-        draw = open_draw(lch if live else epoch_coins, receipts_root(window, calls))
+        draw = open_draw(lch if per_round else epoch_coins, receipts_root(window, calls))
         rec.step("gate", gate(a, calls, data, levels, layers, public["model"], names, queue, weights, key, E, t_max, done,
                               draw))
     except Exception as e:  # noqa: BLE001
@@ -820,7 +838,8 @@ def run(a: argparse.Namespace) -> dict:
     rec.save()
     pool.close()
     print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={s['units']} steps={done}/{s_max} "
-          f"tokens_equal={all(equal)} static={s['static']} gate={rec.doc['steps']['gate']['ok']}", flush=True)
+          f"tokens_equal={all(equal)} static={s['static']} gate={rec.doc['steps']['gate']['ok']} coins={coins['kind']}",
+          flush=True)
     return rec.doc
 
 
@@ -976,7 +995,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
         units.append(r)
         print(f"[served-h1] gate {json.dumps(r)}", flush=True)
     law = {"law": f"subset:{len(drawn)} over {population}", "units": drawn, "domain": GATE_DRAW_DOMAIN,
-           "opening": draw["opening"], "after": draw["after"], "commitment": draw["commitment"],
+           "opening": draw["opening"], "after": draw["after"], "commitment": draw["commitment"], "coins": draw["coins"],
            "self_check": "the units not drawn: stratified per site (live, partly dead, empty steps) from the draw key's "
                          "self-check stream, a check of the receipts against the reference, not the window's draw"}
     return {"ok": bool(ok and units), "draw": law, "units": units}
@@ -1032,9 +1051,10 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--gate-draw", type=int, default=8, help="K, the units the draw coin draws for the gate (W2's 8)")
     ap.add_argument("--workers", type=int, default=0)
     ap.add_argument("--skip-timing", action="store_true")
-    ap.add_argument("--coins", default="live", choices=["live", "seeded"],
-                    help="live (the default): a round a step, its coin opened after its A tables' root (the proof "
-                         "service's challenger); seeded: the option's one salt, labelled seeded in the record")
+    ap.add_argument("--coins", default="rounds", choices=["rounds", "salt"],
+                    help="rounds (the default): the live protocol's form, a round a step, its coin opened after its A "
+                         "tables' root; salt: the option's one salt.  Seeded either way while the challenger runs in "
+                         "this process (coin_kind)")
     return ap
 
 

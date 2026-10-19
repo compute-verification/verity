@@ -241,7 +241,7 @@ def test_the_gate_draws_from_the_challengers_draw_coin():
     """RT-INT-3 (note:20261019T0528Z-draft-rt-int): the gate's units are the epoch's draw coin's, opened once after the
     window's receipts root and checked as the verifier checks it, never the prover's own entropy: subset:K over the
     window's unit positions (W2's sampler), the same for the same coin and another for another; a coin opened after
-    another root is refused, a second open never redraws, and the seeded epoch coins' draw coin serves a seeded window."""
+    another root is refused, a second open never redraws, and the epoch coins' draw coin serves the salt form."""
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.sampled_proofs import challenger as Ch
 
@@ -274,12 +274,27 @@ def test_the_gate_draws_from_the_challengers_draw_coin():
     assert seeded["reason"] is None and len(SV.gate_draw(seeded, 5, population)[0]) == 5
 
 
-def test_coins_default_to_live():
-    """RT-INT-3: SERVE-H1 serves under live coins unless told seeded, and the gate draws W2's 8 units by default."""
+def test_coins_drawn_in_process_are_recorded_seeded():
+    """SG-11 (the coordinator's ruling, 19 Oct 12:04Z): the challenger runs in serve.py's process, on the prover's node,
+    and AGENTS.md makes a challenger the auditor's device, never a process there, so its coins are not live.  Every
+    challenger serve.py holds, the live protocol's (`window.live_challenger`) and the epoch coins, is recorded seeded with
+    that reason, in the coins record and on the draw the gate keeps; no `--coins` form records live coins.  The default
+    form is still the live protocol's rounds, and the gate still draws W2's 8 units."""
+    from verity.core.protocols.pouw import window as Wd
+    from verity.core.protocols.pouw.coins import Challenger
+
     SV = _load("serve")
+    for ch in (Wd.live_challenger(1, 3, _entropy("d")), Challenger(1, _entropy("e"))):
+        kind = SV.coin_kind(ch)
+        assert kind["kind"] == "seeded" and kind["reason"] == SV.SEEDED and "process" in kind["challenger"]
+        assert "prover's node" in kind["reason"] and "GRIND" in kind["reason"]
+        assert SV.open_draw(ch, b"\x00" * 64)["coins"] == kind
     a = SV.parser().parse_args(["--out", "o", "--at", "2026-10-19T00:00:00Z", "--by", "x"])
-    assert a.coins == "live" and a.gate_draw == 8
-    assert SV.parser().parse_args(["--out", "o", "--at", "t", "--by", "x", "--coins", "seeded"]).coins == "seeded"
+    assert a.coins == "rounds" and a.gate_draw == 8
+    assert SV.parser().parse_args(["--out", "o", "--at", "t", "--by", "x", "--coins", "salt"]).coins == "salt"
+    for old in ("live", "seeded"):
+        with pytest.raises(SystemExit):
+            SV.parser().parse_args(["--out", "o", "--at", "t", "--by", "x", "--coins", old])
 
 
 class _Layer:
