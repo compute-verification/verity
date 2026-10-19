@@ -27,6 +27,7 @@ fi
 
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 [ -x "$NVCC" ] || NVCC=$(command -v nvcc) || { echo "f8_sm100.sh: no nvcc" >&2; exit 2; }
+export PATH="$(dirname "$NVCC"):$PATH"
 cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
 [ "$cap" = 10.0 ] || { echo "f8_sm100.sh: needs sm_100a (B200), the device reports '$cap'" >&2; exit 2; }
 "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
