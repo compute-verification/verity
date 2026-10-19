@@ -27,13 +27,16 @@ editing on the pod.
 | Store index, every 5 min (`research data index --postgres` into Neon's `store_private`, and `--public` into `store_public` once `store-export.env` exists) | `store_index.sh`, deployed as `/data/infra/store_index.sh` | `/data/infra/store-index-src` (a `tools/research` tree; its `COMMIT` file names it) | `/data/infra/store-index.log` |
 | Fixture export, every 5 min (`research data export` of main's `fixtures/artifacts.json` to the public export, so nobody exports a new fixture by hand; the relay's `fixtures-public` monitor alerts on one still missing) | `fixtures_export.sh`, deployed as `/data/infra/fixtures_export.sh` | `/data/infra/fixtures-export-repo` (a checkout of origin/main it fetches each pass with the deploy key) | `/data/infra/fixtures-export.log` |
 | Store panels, every 10 min | `/data/console/console-loop.sh` (`tools/research/console/`) | `/data/console` | `/data/console/console.log` |
-| Agent watch (INF-69): follows every running cloud agent's run stream and cancels and continues a run held 15 min after a finished tool call, and records a coordinator ready to wake (no run 30 min after its turn ended, or a doorbell pending 10 min; `--wake` would start a run, off) (`verity_ops/agent_watch.py`) | `agent_watch.sh`, deployed as `/data/infra/agent_watch.sh`; waits for `/data/agent-watch/cursor.env` (root, 0600, `CURSOR_API_KEY=`) | `/data/infra/agent_watch.py` (a copy of `infra/ops/verity_ops/agent_watch.py`); coordinators from `/data/infra/fixtures-export-repo`'s registry and `/data/steward/research-notes/routes.d`, doorbells from the relay's `/data/agent-watch/doorbells.json` | `/data/agent-watch/watch.log`; findings in `/data/agent-watch/events.jsonl`; each sweep's snapshot in `/data/agent-watch/status.json` (schema `verity/agent-watch-status/v1`, read by console); what must outlive a restart in `/data/agent-watch/state.json`; with `/root/.config/verity/store-index.env` present, the same snapshot in Neon's `store_private.agent_watch_status` (newest 60) |
+| Agent watch (INF-69): follows every running cloud agent's run stream and cancels and continues a run held 15 min after a finished tool call, and records a coordinator ready to wake (no run 30 min after its turn ended, or a doorbell pending 10 min), and starts a run on it while `/data/agent-watch/wake` exists (`--wake`) (`verity_ops/agent_watch.py`) | `agent_watch.sh`, deployed as `/data/infra/agent_watch.sh`; waits for `/data/agent-watch/cursor.env` (root, 0600, `CURSOR_API_KEY=`) | `/data/infra/agent_watch.py` (a copy of `infra/ops/verity_ops/agent_watch.py`); coordinators from `/data/infra/fixtures-export-repo`'s registry and `/data/steward/research-notes/routes.d`, doorbells from the relay's `/data/agent-watch/doorbells.json` | `/data/agent-watch/watch.log`; findings in `/data/agent-watch/events.jsonl`; each sweep's snapshot in `/data/agent-watch/status.json` (schema `verity/agent-watch-status/v1`, read by console); what must outlive a restart in `/data/agent-watch/state.json`; with `/root/.config/verity/store-index.env` present, the same snapshot in Neon's `store_private.agent_watch_status` (newest 60) |
+| Cloud watch (INF-73), every 15 min: each loop above's success marker, R2's size and growth by top-level prefix and the Lean cache's last publish, Neon, spend against budgets.toml's lines, the GitHub rate limit, jobs nobody claims and the Vercel site's endpoints; posts only anomalies in #agent-alerts naming @infra (once when one opens, once when it clears) and a digest at 15:00Z, naming each check a missing key leaves unmonitored (`cloud_watch.py`'s docstring) | `cloud_watch.sh`, deployed as `/data/infra/cloud_watch.sh`; sources `r2.env`, `relay.env` and `store-index.env` | `/data/infra/cloud_watch.py` and `/data/infra/cloud_watch.toml` (copies of this directory's) | `/data/cloud-watch/watch.log`; state in `/data/cloud-watch/state.json` |
 
-The pod holds no Slack credential, so its disk alert runs elsewhere: `control_disk_alert.py` runs on infra's VM (tmux
-`control-disk-alert`), reads `df` on the pod every 5 minutes over ssh, and posts in #agent-alerts at 90% and 95%, again under
+The disk alert, `control_disk_alert.py`, ran on infra's VM (tmux `control-disk-alert`) while the pod held no Slack credential.
+Since 13 Oct the pod has `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), and a copy runs on the pod from
+`/data/infra/control-disk/run.sh`, started by hand: `post_start.sh` doesn't start it, so a reset stops it (the cloud watch
+alerts when its `seen.json` goes stale). It reads `df` every 5 minutes and posts in #agent-alerts at 90% and 95%, again under
 85%, and when the pod has been unreadable for 30 minutes. The same pass alerts when the steward's notes sync stalls (HEAD
 detached, an `index.lock` older than 10 minutes, or a change unpushed for an hour, on two reads in a row) and notes when it
-flows again. It stops when that VM is suspended. The agent watch's findings reach Slack the same way: `agent_watch_relay.py`
+flows again. The agent watch's findings reach Slack from infra's VM: `agent_watch_relay.py`
 (tmux `agent-watch-relay` on infra's VM) posts each new line of `events.jsonl` in #agent-alerts, leading with @top and ringing @top's inbox for what the watch leaves for a person (erroring, stuck, a refused cancel, held again, a run unreadable for an hour); the watch frees runs without it.
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
@@ -46,7 +49,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/boot` | `/post_start.sh` | `post_start.sh` |
 | `/data/state/root-research` | `/root/.research` | the guard's and the steward's state |
 | `/data/state/runpod` | `/root/.runpod` | the RunPod CLI config and its ssh key |
-| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
+| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
 | `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts` |
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |
 | `/data/steward` | `/workspace/steward` | the verity clone, the research-notes clone, the steward's store, `run.sh`, `render-src` |
@@ -69,6 +72,10 @@ $CP "cat > /data/boot/post_start.sh" < infra/control/post_start.sh
 $CP "cat > /data/steward/run.sh" < infra/control/steward-run.sh
 $CP "cat > /data/infra/store_index.sh && chmod +x /data/infra/store_index.sh" < infra/control/store_index.sh
 $CP "cat > /data/infra/fixtures_export.sh && chmod +x /data/infra/fixtures_export.sh" < infra/control/fixtures_export.sh
+$CP "cat > /data/infra/cloud_watch.sh && chmod +x /data/infra/cloud_watch.sh" < infra/control/cloud_watch.sh
+$CP "cat > /data/infra/cloud_watch.py" < infra/control/cloud_watch.py
+$CP "cat > /data/infra/cloud_watch.toml" < infra/control/cloud_watch.toml
+$CP "/data/infra/cloud_watch.sh once --dry-run --digest"     # what it would post, posting nothing and writing no state
 git archive HEAD tools/research | $CP "rm -rf /data/infra/store-index-src.new && mkdir /data/infra/store-index-src.new && tar -x --strip-components=2 -C /data/infra/store-index-src.new && echo $(git rev-parse HEAD) > /data/infra/store-index-src.new/COMMIT && rm -rf /data/infra/store-index-src && mv /data/infra/store-index-src.new /data/infra/store-index-src"
 ~~~
 

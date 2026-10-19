@@ -32,5 +32,7 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/notes_sync.py",
           "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",
           "tools/research/src/research/telemetry/procs.py", "tools/research/src/research/telemetry/pyspy.py",
-          "tools/research/src/research/telemetry/run.py", "tools/research/src/research/flags.py"]
+          "tools/research/src/research/telemetry/run.py", "tools/research/src/research/flags.py",
+          # the control pod's cloud watch, tested here: its code, its config and the boot script whose loops it watches
+          "infra/control/cloud_watch.py", "infra/control/cloud_watch.toml", "infra/control/post_start.sh"]
 parallel = true
