@@ -1,20 +1,18 @@
-import Proofs.Flock.Claims.ZK.ExeLayout
+import Proofs.Flock.Claims.ZK.SaltProver
 
 /-!
 # Levels ≥ 1's salts at the executable's indices
 
 A Ligerito prover of levels ≥ 1 (`Composed.LigProver`) gets rep `r`'s levels ≥ 1 salts as one array `HiOf Tz`, and the
 masked prover reads them by level and position (`ligeritoPZk`'s `salt l q`, `1 ≤ l < |levels|`, `q < 2^d`). Here the
-array is read at `hiIdx`, the order `TapeLayout.exe` lays them out in, so the later rounds' prover reads the tape's
-salts.
+array is read at `hiIdx` (`hiSalt`), the order `TapeLayout.exe` lays them out in, so the later rounds' prover reads the
+tape's salts.
 
-* `hiSalt`: level `l`'s salt at position `p` of an array of levels ≥ 1's salts, at `hiIdx`; empty off the schedule.
 * `hiSalt_exe`: at the executable's layout, the salts the model hands table `j`'s rep `r` (`Base`'s last field, as
   `Coined.randOf` and the view read it) are, at every level `l ≥ 1` and position `p` of its tree, the masked prover's
   tape's `salt j r l p` (`exeTape`); `hiSalt_exe_eq` as functions, empty off the schedule.
-* `ofSalts`: the Ligerito prover of a prover `Pc` that reads salts by level and position, reading them at `hiIdx`.
-  At the executable's layout it sends what `Pc` sends on the tape's salts on the schedule, empty off it
-  (`ofSalts_exe_on`), so on the tape's salts once `Pc` reads only the schedule's levels ≥ 1 and their positions
+* `ofSalts_exe_on`: so at the executable's layout, `ofSalts Pc` sends what `Pc` sends on the tape's salts on the
+  schedule, empty off it; on the tape's salts once `Pc` reads only the schedule's levels ≥ 1 and their positions
   (`ofSalts_exe`, `SaltsOn`).
 -/
 
@@ -27,18 +25,6 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 namespace Masked
-
-/-- A level `l ≥ 1` of the schedule and a position `p` of its tree. -/
-def HiAt (ls : List FlockSoundness.Accounting.Level) (l p : ℕ) : Prop :=
-  1 ≤ l ∧ l < ls.length ∧ p < 2 ^ (ls.getD l default).logLen
-
-instance (ls : List FlockSoundness.Accounting.Level) (l p : ℕ) : Decidable (HiAt ls l p) := by
-  unfold HiAt; infer_instance
-
-/-- **Level `l`'s salt at position `p`** of the array `hi` of levels ≥ 1's salts in level order (`hiIdx`), empty off the
-schedule. -/
-def hiSalt (ls : List FlockSoundness.Accounting.Level) {n : ℕ} (hi : Fin n → ZkView.Salt) (l p : ℕ) : ByteArray :=
-  if HiAt ls l p then fAt ByteArray.empty (fun k => ZkView.saltBytes (hi k)) (hiOff ls l + p) else ByteArray.empty
 
 theorem hiOff_length (ls : List FlockSoundness.Accounting.Level) :
     hiOff ls ls.length = (ls.tail.map fun lv => 2 ^ lv.logLen).sum := by
@@ -117,23 +103,6 @@ theorem hiSalt_exe_eq (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.z
   · exact hiSalt_exe P x t j r h
   · unfold hiSalt
     rw [ite_eq_right h]
-
-/-- **A prover of Ligerito's levels ≥ 1 reading salts by level and position**: rep `r`'s bytes after `T'` from the
-table, the statement, the coins, the restart `y₁'` and the salts, level `l`'s at position `p` (`ligeritoPZk`'s
-`salt l p`). -/
-abbrev SaltProver : Type :=
-  ∀ {mPts : ℕ} (Tz : ZkSession.TabZK 𝔽 mPts) (st : _root_.Flock.Stmt), Composed.CoinsZK (Composed.RestOf Tz st) →
-    Fin 2 → (L : ℕ) → (Fin L → 𝕂) → (ℕ → ℕ → ByteArray) → ByteArray
-
-/-- **`Pc` reads only the schedule's levels ≥ 1 and their positions**: salts that agree there give the same bytes. -/
-def SaltsOn (Pc : SaltProver) : Prop :=
-  ∀ {mPts : ℕ} (Tz : ZkSession.TabZK 𝔽 mPts) (st : _root_.Flock.Stmt) (c : Composed.CoinsZK (Composed.RestOf Tz st))
-    (r : Fin 2) (L : ℕ) (y : Fin L → 𝕂) (s s' : ℕ → ℕ → ByteArray),
-    (∀ l p, HiAt Tz.sch.levels l p → s l p = s' l p) → Pc Tz st c r L y s = Pc Tz st c r L y s'
-
-/-- **The Ligerito prover of `Pc`**: levels ≥ 1's salts read at `hiIdx` (`hiSalt`). -/
-def ofSalts (Pc : SaltProver) : Composed.LigProver :=
-  fun Tz st c r L y hi => Pc Tz st c r L y (hiSalt Tz.sch.levels hi)
 
 /-- **At the executable's layout the later rounds' prover reads the tape's salts on the schedule**: `ofSalts Pc` on table
 `j`'s rep `r` salts sends what `Pc` sends on the masked prover's tape's (`exeTape`'s `salt j r`) at the schedule's levels
