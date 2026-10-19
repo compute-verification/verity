@@ -9,7 +9,8 @@ looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity_
 `NoBooleanVersion` names each Definition it finds none for.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`) has its
-Boolean version made on demand too (`_families`), since no module can register one per constant or vocabulary size ahead.
+Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
+vocabulary size ahead.
 
 `sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
 the Boolean version of its Definition, over the bits each word operand occupies (`lift`'s replay); `boolean_version` serves it
@@ -188,16 +189,23 @@ def _families() -> tuple:
 _FAMILIES: list = []
 
 
+def made_on_demand(fid: str) -> FunctionDefinition | None:
+    """The Boolean version `_families` makes for the word Definition ``fid`` names (`Const32[0x00000000]_v1`,
+    `GatherI32x16_v1`, ...), bound; None when no family made on demand has ``fid``."""
+    for pat, make in _families():
+        if (m := pat.match(fid)) is not None:
+            d = make(m)
+            return bind(d) if isinstance(d, CompositeDefinition) else d
+    return None
+
+
 def _find(fn: FunctionDefinition, fid: str) -> FunctionDefinition:
     if isinstance(fn, PrimitiveDefinition) and BL.is_boolean(fn):
         return fn
     exact, by_name, errors = _load()
     cands = [bind(d) for d in exact.get(fid, ())]
-    if not cands:
-        for pat, make in _families():
-            if (m := pat.match(fid)) is not None:
-                d = make(m)
-                cands.append(bind(d) if isinstance(d, CompositeDefinition) else d)
+    if not cands and (d := made_on_demand(fid)) is not None:
+        cands.append(d)
     bindings = getattr(fn, "bindings", None) or {}
     notes: list[str] = []
     if isinstance(fn, SpecializedDefinition) and bindings:
@@ -630,5 +638,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["NoBooleanVersion", "boolean_version", "bit_offsets", "lift", "sigma_lift", "sigma_check", "boolean_function", "derived",
-           "purity", "dry_run", "derived_calls", "Options", "main"]
+__all__ = ["NoBooleanVersion", "boolean_version", "made_on_demand", "bit_offsets", "lift", "sigma_lift", "sigma_check",
+           "boolean_function", "derived", "purity", "dry_run", "derived_calls", "Options", "main"]

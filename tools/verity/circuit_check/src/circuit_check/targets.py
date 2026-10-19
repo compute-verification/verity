@@ -496,21 +496,30 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     out = {f"{d.name}_v{d.version}" for ds in exact.values() for d in ds
            if family(bind(d.word) if isinstance(d.word, CompositeDefinition) else d.word) in word_calls}
     out.update(f"{d.name}_v{d.version}" for name, ds in by_name.items() if name in names for d in ds)
-    return out
+    return out | on_demand_boolean_families(word_calls)
+
+
+def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
+    """The Boolean version's family of each word Call family made on demand, by its id (`verity_vllm.program.boolean.
+    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`).  No module registers such a family's members ahead,
+    so these come from the families' own patterns, not from the catalog."""
+    from verity_vllm.program.boolean import made_on_demand
+
+    return {family(d) for f in word_calls if (d := made_on_demand(f)) is not None}
 
 
 def certified_boolean_calls(word_calls: set[str]) -> set[str]:
     """Families of `boolean_call_families` of ``word_calls`` that the vocabulary and template bindings show without the catalog:
     the Boolean version's family of each binding of a word Call family that is no reference and not Boolean, with at most
-    `MAX_GATES` gates.  Each such binding is a catalog root `select` keeps, so the suite holds it whatever else the catalog
-    reaches."""
+    `MAX_GATES` gates (each such binding is a catalog root `select` keeps, so the suite holds it whatever else the catalog
+    reaches), and `on_demand_boolean_families`."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
 
     roots = [fn for _label, fn in _vocabulary_bindings() if not isinstance(fn, str)]
     roots += [sub.definition(**st) for _label, sub, sts in templates() for st in sts]
-    out: set[str] = set()
+    out: set[str] = on_demand_boolean_families(word_calls)
     for fn in roots:
         if not isinstance(fn, (PrimitiveDefinition, SpecializedDefinition)) or family(fn) not in word_calls \
                 or fn.gates > MAX_GATES or BL.is_boolean(fn):
@@ -524,12 +533,13 @@ def certified_boolean_calls(word_calls: set[str]) -> set[str]:
 
 def boolean_call_families(word_calls: set[str]) -> set[str]:
     """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.program.boolean.boolean_version` (the
-    switch's table of `word=` links) of each catalog specialization of a word Call family that has one."""
+    switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
+    family made on demand (`on_demand_boolean_families`)."""
     from verity.ml.circuits.evaluation import ScalarReference
     from verity.ml.circuits import boolean as BL
     from verity_vllm.program.boolean import NoBooleanVersion, boolean_version
 
-    out: set[str] = set()
+    out: set[str] = on_demand_boolean_families(word_calls)
     for fn in suite().values():
         if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
             continue
