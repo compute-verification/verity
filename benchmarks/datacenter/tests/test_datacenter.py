@@ -115,22 +115,38 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     Program is placed like any other, read at the census's grain without expanding a gate: the salt enters at the block's
     certifier, so it is trusted data the block consumes and the salt compute's custody counts, and the unit's work comes
     out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its exact products as int8 multiply-adds.
-    Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. Slow: compiling builds the
-    unit's 15 million gates (about 40 s), and no other test has a compiled Program."""
+    Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
+    proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved". Slow: compiling builds the unit's 15
+    million gates (about 40 s), and no other test has a compiled Program."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
     from verity.core.protocols.pouw.circuit import compile as pouw
     from verity.core.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
+    spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
+    PT = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(PT)
     compiled = pouw.compile(s8_grid(), h1tile.SCHEME).program
     assert [n for n, b in zip(names(compiled), compiled.bindings) if b == "registration"] == ["w"]
-    p = place(compiled, datacenter(), "a.gpu", registration=register(compiled, {"w": [1] * 16 * 64 * 8}),
+    dc = datacenter()
+    p = place(compiled, dc, "a.gpu", registration=register(compiled, {"w": [1] * 16 * 64 * 8}),
               deliver="world", x="world", **{"pouw.salt": "a.cert", "pouw.positions": "world", "pouw.roots": "world"})
     assert [p.source(k) for k in range(5)] == ["outside", "registered", "trusted", "outside", "outside"]
-    profile = p.public(Plan(EPOCH))
-    assert profile.work == {"a": {"cuda:gate": 13250921, "mac:int8": 4 * 16 * 64}, "b": {}}
+    work = p.public(Plan(EPOCH)).work
+    assert work == {"a": {"cuda:gate": 13250921, "mac:int8": 4 * 16 * 64}, "b": {}}
+    ticks = PT.proved_block_ticks(PT.placed(work["a"]), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
+                                  gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
+    profile = p.public(Plan(EPOCH), ticks={"a": ticks})
     assert census_of(compiled)["totals"]["served_macs"] == 4 * 16 * 64
     assert profile.salt["a"] == profile.forced["a"] == 512 and profile.pinned["a"] == 0
     assert {x.value.name for x in crossings(p) if x.dst == "world"} == {"pouw[0][0:2048]", "pouw[0][2048:2304]"}
+    # the claim an accepted window gives, in place of `audit`'s re-execution of the unit's gates
+    acc = account([Computed("a", profile.credit("a"), EPOCH)], profile, assume=(FLEET_CLOSED,))
+    assert [c for c in acc.credits if c.resource.startswith("compute")] == [
+        Credit("a", "compute", EPOCH, ticks, "fleet-closed", "proved")]
 
 
 def test_work_counts_by_kind_is_credited_at_its_weight_and_takes_time_at_its_rate():
