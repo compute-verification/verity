@@ -24,10 +24,23 @@ proved.
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
   reads 2 b_p bits, and the developer relays only as many partial sums as buy more declared work than the relay's gates
   would train directly.
+* The verdict lag: from its first faulty proof block until the halt (a window plus the verdict delay), a developer can skip
+  all declared work, once per identity, in every tier; that capacity joins the residual. Detection must end the
+  identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
-  A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay) (``Population.Exfil.tail_cum``),
-  where A, the luck factor, turns faulty outputs into skipped work. Each faulty proof block skips its work and injects its output
-  bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
+  A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
+  (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns faulty outputs into skipped work. A block that
+  injects a chosen output fails its proof whenever it is drawn, so luck doesn't multiply those: ln(1/delta) / q of them
+  inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
+  worth at most ``chord``, the steepest secant from K of one inference block's thread bound.
+
+The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
+multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
+against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
+only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D is a hardware
+multiple: how many times more hardware-time the developer needs than an unconstrained developer with the same recipe on
+the same hardware, who reaches model-FLOP utilization mfu. Unmonitored compute trains like the unconstrained developer;
+the other terms are counted at peak, so 1/D <= s + (min(r + nu, mu) + chi) / mfu, and D is at least 1.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -49,25 +62,31 @@ T_AUDIT = 0.3635
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
-#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual at compute-accounting's modelled design (floor
-#: credit with verified filler, about 1% of device time; served windows today credit 10.3% of padded MACs) and the host
-#: CPUs at their AMX datasheet peak (two Xeon 6776Ps, about 5% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
-#: today's proof-of-space certificate (rho_PoS = 18/19, which k = 86 rounds certify at delta = 1/100, plus the floor at the
-#: deployed D = 2) and the memory the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap); disks
+#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max, 1 - (1 - eps)
+#: ((1 - phi)/q_sched + phi)/q_clock = 0.326: honest kernels run 1.72x the floor at the nodes' locked clock (run
+#: r20261017-123922-e558), diluted by the training window's filler (the C7 dossier; 0.217 with an attested clock; 1%
+#: needs eight conditions; today nothing in a training window is credited); the GPU clock above what PoUW credits
+#: (NVIDIA's dense headline implies 2,597 MHz against the credited 2,430: 6.4%, C4 dossier); the host CPUs at their INT8
+#: AMX datasheet peak (two Xeon 6776Ps, 128 cores x 2,048 ops per cycle x 3.6 GHz: 11.8% of the GPUs' FP8 rate);
+#: 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
+#: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
+#: MEM-51) and the memory
+#: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading no further than
+#: ThreadedOfLayered certifies any for a reference circuit C1 allows, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.01, "host_share": 0.05,
-    "pous_rounds": 86.0, "unfilled_gb": 51.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
-    "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0047, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
+    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
+    "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
+    "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
-    "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
+    "tau": 860.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
-    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0,
+    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
-    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.667,
-    "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
+    "K": 2e7, "Gamma": 6.4e16, "d": 505.0, "e": 37248.0, "kappa": 0.6, "thread_bits": 2.1e8, "block_mults": 1.0,
+    "kappa_chain": 0.0695, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
 
@@ -75,22 +94,24 @@ DEFAULTS = {
 #: it is one of the few shown up front
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit with filler: about 1%, modelled; served windows today: about 0.9)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
-    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (about 5%; 0 once a CPU filler or a physical cap bounds them)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
-    {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (today's 1/19 certificate: 86; under 1 GB: about 12,000)", "unit": "", "min": 10, "max": 1e6, "log": True},
-    {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
+    {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
+    {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (6.4%: 2,597 MHz against 2,430; 0 once credit uses the true maximum or auditor hardware reads the clock offset)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
+    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (Xeon 6776P INT8 AMX 11.8%; hosts without matrix units, two EPYC 9015s, 0.21%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
+    {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
+    {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
     {"key": "b_w", "main": True, "label": "Compression: bits per updated weight", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "b_a", "main": True, "label": "Compression: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "f", "label": "Exhaustion: declared share of HBM", "unit": "", "min": 0, "max": 0.999, "log": False},
     {"key": "pous_delta", "label": "Proof-of-space failure probability per certificate", "unit": "", "min": 1e-12, "max": 0.5, "log": True},
-    {"key": "pous_floor", "label": "Proof-of-space certificate floor (0.47% at the deployed D = 2; 0 with labels streamed from the challenger)", "unit": "", "min": 1e-6, "max": 0.05, "log": True, "zero": True},
+    {"key": "pous_floor", "label": "Proof-of-space share the developer can rebuild at any k: 0 when the permutation is ideal or labels are streamed (the slack counts it once); about 0.985 under the broken reference permutation", "unit": "", "min": 1e-6, "max": 1, "log": True, "zero": True},
     {"key": "disk_gb", "label": "Disk per server left in place and unwiped (0 when unplugged)", "unit": "GB", "min": 1, "max": 1e5, "log": True, "zero": True},
     {"key": "t_read", "label": "Wipe read deadline (helpers within it refill proof-of-space blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
     {"key": "wipe_s", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},
     {"key": "hbm_gb", "label": "HBM per server", "unit": "GB", "min": 80, "max": 4000, "log": True},
     {"key": "host_gb", "label": "Host memory per server (filled with proof of space)", "unit": "GB", "min": 1, "max": 10000, "log": True, "zero": True},
-    {"key": "tau", "label": "Certified timing channel per server", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
+    {"key": "tau", "label": "Certified timing channel per server (the network appendix's program format: about 860)", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
     {"key": "export", "label": "Export per server: committed values readable outside the declared computation (today 4.4e9; under the export rule about 2.5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
     {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
     {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
@@ -101,14 +122,19 @@ SPEC = [
     {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "m", "label": "Recipe multiplier m: frontier progress per counted multiplication of the developer's best recipe under the mechanisms, against the unconstrained recipe (central 1, adversarial 3)", "unit": "x", "min": 0.1, "max": 10, "log": True},
+    {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
+    {"key": "lag_s", "label": "Verdict lag: from a first faulty proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
-    {"key": "d", "label": "Model: entry fee (smallest inner dimension)", "unit": "", "min": 1, "max": 65536, "log": True},
-    {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
-    {"key": "kappa", "label": "Model: share of training FLOP that are counted multiplications", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "kappa_chain", "label": "Model: share on the proved chain (one forward path)", "unit": "", "min": 0.01, "max": 1, "log": True},
+    {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e; ThreadedOfLayered certifies 505 for Kimi K2 at S = 2e7)", "unit": "", "min": 1, "max": 65536, "log": True},
+    {"key": "e", "label": "Model: fan-out e, multiplications per activation value (37,248 certified for Kimi K2)", "unit": "", "min": 1e3, "max": 1e6, "log": True},
+    {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
+    {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies 512 - E legs below E + 1 lookup columns, none at 512: 512 x 163,840 x 2.5 bits = 2.1e8 for any reference circuit C1 allows, 1.34e9 at bf16 embeddings; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e8, "max": 1e11, "log": True},
+    {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
+    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695)", "unit": "", "min": 0.01, "max": 1, "log": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
@@ -148,8 +174,10 @@ STATUS = [
      "reserve 18.4 GB, host 29.5 GB). No theorem bounds help during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
-    ("Cheating share", "The cumulative bound is proved (Population.Exfil.tail_cum, landing); the deployed draw's pressure "
-     "lemma, the per-block-cap thread theorem and a draw rate fixed against a public N are not. At a 1% total budget "
+    ("Cheating share", "The count of injecting blocks is proved (Population.Exfil.tail_cumPrev and the deployed draw's "
+     "drawPressure, on branches); a draw rate fixed against a public N is not. Each injected bit is valued at the chord "
+     "of one inference block's thread bound, with (1, 0)-threading above thread_bits (threaded_one_zero, proved); that "
+     "rests on T1' and WeightsIncompressible out to the block's full reads, about 1.1e9 bits. At a 1% total budget "
      "today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
      "zero-work templates at a floor of one per window (floor_steps)."),
     ("Unmonitored compute", "No bound: it trains at full efficiency."),
@@ -187,12 +215,34 @@ def chain_products(rates: list[tuple[float, float]], R: float, Z: float) -> floa
 
 
 def full_block_bits(p: dict) -> float:
-    """The reads at which one inference block's thread bound reaches all its work, ``kappa Gamma / 2`` counted multiplications."""
-    target = p["kappa"] * p["Gamma"] / 2
+    """The reads at which one inference block's (d, e) thread bound reaches all its work, ``block_mults Gamma`` counted
+    multiplications."""
+    target = p["block_mults"] * p["Gamma"]
     linear = target * p["b_a"] / p["e"]
     if 2 * linear / (4 * p["d"] * p["b_w"]) <= p["e"]:
         return linear
     return math.sqrt(target * 4 * p["d"] * p["b_w"] * p["b_a"] / 2)
+
+
+def block_cap(p: dict, S: float, threaded: bool) -> float:
+    """The most counted multiplications one inference block reading ``S`` bits holds: ``S^2 / (2 b_w b_a)`` from
+    (1, 0)-threading at every S (``threaded_one_zero``), the (d, e) bound where ``threaded``, at most ``block_mults Gamma``."""
+    one_zero = S * S / (2 * p["b_w"] * p["b_a"])
+    return min(p["block_mults"] * p["Gamma"], one_zero, region_cap(p, S) if threaded else math.inf)
+
+
+def chord(p: dict, bits: float = math.inf) -> float:
+    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` novel bits
+    each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
+    ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
+    on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
+    Gamma)``, on the (1, 0) piece, so d and e below ``thread_bits`` don't move it."""
+    K, tb, reach = p["K"], p["thread_bits"], p["K"] + bits
+    base = block_cap(p, K, K <= tb)
+    s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * p["block_mults"] * p["Gamma"])
+    ends = [(S, True) for S in (2 * p["b_w"] * p["e"], full_block_bits(p), tb, reach) if K < S <= min(tb, reach)]
+    ends += [(S, False) for S in (tb, s_1, reach) if tb < reach and K < S <= reach and S >= tb]
+    return max(((block_cap(p, S, th) - base) / (S - K) for S, th in ends if S < math.inf), default=0.0)
 
 
 def windows_bound(p: dict, H: float, state: float, ingress: float, period: float | None) -> float:
@@ -221,8 +271,9 @@ def ingress(p: dict, mech: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r: the GPUs' uncredited share plus the host CPUs, which count toward it until something credits or bounds them."""
-    return min(1.0, p["residual"] + p["host_share"])
+    """r: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward it
+    until something credits or bounds them."""
+    return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:
@@ -240,19 +291,15 @@ def evaluate(p: dict, mech: dict) -> dict:
     rho_T = p["b_a"] / (alpha * lam(p, p["K"]))
     cap_T = C / rho_T
 
-    k = skipped = bits = cheat = 0.0
+    k = bits = cheat = 0.0
+    skipped = min(C, p["identities"] * p["lag_s"] * p["nodes"] * p["node_flops"])
     if mech["sampled"]:
         L = math.log(1 / p["p_evade"])
         q = p["share"] / (p["overhead"] + p["replay"])
         k = p["luck"] * p["identities"] * L / q
-        skipped = k * p["step_flop"]
-        k_all = k + p["luck"] * p["identities"] * L * p["floor_steps"]
-        S_full = full_block_bits(p)
-        per_block = max(1.0, min(k_all, S_full / 28))
-        b_bar = max(p["step_bits"], p["step_bits"] + math.log2(math.e * (p["Gamma"] / p["step_flop"]) / per_block))
-        bits = k_all * b_bar
-        slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
-        cheat = min(slope * bits, C / gpm)
+        skipped += k * p["step_flop"]
+        bits = p["identities"] * L * (1 / q + p["floor_steps"]) * p["step_bits"]
+        cheat = min(p["m"] * chord(p, bits) * bits, C / gpm)
 
     res_ops = residual_share(p) * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
@@ -288,7 +335,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         relay_res = min(res_ops, relay)
         res_mults = (res_ops - relay_res) / gpm
         unmon = max(0.0, U - (relay - relay_res)) / gpm
-        return min(declared + res_mults, region) + unmon, declared, res_mults, unmon
+        return min(p["m"] * declared + res_mults, p["m"] * region) + unmon, declared, res_mults, unmon
 
     # past the crossing the declared side is flat at the thread bound, so relaying more only costs
     B_hi = B_max
@@ -307,18 +354,20 @@ def evaluate(p: dict, mech: dict) -> dict:
     B = max((0.0, (lo + hi) / 2, B_hi), key=lambda b: outcome(b)[0])
     _, declared, res_mults, unmon = outcome(B)
 
-    monitored = min(declared + res_mults, region)
-    declared_part = min(declared, monitored)
+    monitored = min(p["m"] * declared + res_mults, p["m"] * region)
+    declared_part = min(p["m"] * declared, monitored)
     res_part = monitored - declared_part
     spent = C + U
-    terms = {"unmonitored": gpm * unmon / spent, "residual": gpm * res_part / spent,
-             "declared": gpm * declared_part / spent, "cheat": gpm * cheat / spent}
-    capped = region < declared + res_mults
+    amp = p["g"] * gpm / spent
+    terms = {"unmonitored": amp * unmon, "residual": amp * res_part, "declared": amp * declared_part, "cheat": amp * cheat}
+    capped = p["m"] * region < p["m"] * declared + res_mults
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
         largest = "declared (thread bound)" if declared >= cap_T * (1 - 1e-9) else "declared (partial-sum law)"
+    inverse = terms["unmonitored"] / p["g"] + (terms["residual"] + terms["declared"] + terms["cheat"]) / p["g"] / p["mfu"]
     return {
         "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_residual": capped,
+        "dampener": max(1.0, 1 / inverse) if inverse > 0 else math.inf,
         "rho_T": rho_T, "crossing_bits": B, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
         "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }

@@ -90,7 +90,8 @@
   "family": "architecture",
   "description": "Backprop through an architecture that confines the residual to 1% of its width at boundaries, 16 bits.",
   "sources": [
-   "ramasinghe-2025-protocolmodels"
+   "ramasinghe-2025-protocolmodels",
+   "janson-2026-mapl"
   ],
   "traits": {
    "theorem_applies": true,
@@ -109,7 +110,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "The most aggressive published claim (Subspace Networks, unreplicated, mostly 2-8B).",
+  "notes": "The most aggressive published claim (Subspace Networks, mostly 2-8B). Its one independent replication, at 4-8x rather than 100x, loses 8-15% in loss and falls to m about 0.04 at 1B (subspace-activation-compression).",
   "convention": "attacker"
  },
  {
@@ -2122,7 +2123,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence high); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
+  "notes": "Part of the reference recipe; listed because it is the second scale-dependent gain. Its multiplier is 1, since the reference already allocates this way; its gain over Kaplan allocation (the scaling entries) is base-recipe progress. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. As the reference except where stated. Standardized to compute at equal held-out loss (confidence high); EXTRAPOLATION marks values at 1e24-1e26 FLOP.",
   "scaling": [
    {
     "evidence": [
@@ -2212,13 +2213,12 @@
    }
   ],
   "multiplier": {
-   "value": 10,
-   "trend": "grows-with-scale",
+   "value": 1.0,
+   "trend": "constant",
    "evidence": [
-    "gundlach-2025-origin/10",
-    "gundlach-2025-origin/13"
+    "hoffmann-2022-chinchilla/1"
    ],
-   "metric": "CEG over Kaplan allocation near 2e23 FLOP; 1 against the reference by construction"
+   "metric": "1 against the reference by construction: the reference is Chinchilla-optimal. The scaling entries' 3.7-17.5x are over Kaplan allocation, a gain that belongs in g, not in m_A"
   },
   "confidence": "high",
   "convention": "as-published"
@@ -2595,7 +2595,8 @@
   "sources": [
    "datologyai-2025-beyondweb",
    "gunasekar-2023-phi1",
-   "maini-2024-wrap"
+   "maini-2024-wrap",
+   "kang-2025-synthetic-scaling"
   ],
   "traits": {
    "theorem_applies": true,
@@ -2748,6 +2749,21 @@
     "trend": "unknown",
     "exponent_change": null,
     "note": "Generator compute must be counted, or m is bounded only by the generator; under the policy a registered generator is free."
+   },
+   {
+    "evidence": [
+     "kang-2025-synthetic-scaling/1",
+     "kang-2025-synthetic-scaling/3"
+    ],
+    "metric": "tokens to equal held-out loss at a fixed 1B model, 1B-200B tokens, vs CommonCrawl",
+    "compute_range_flop": [
+     6e+18,
+     1.2e+21
+    ],
+    "multiplier": null,
+    "trend": "grows-with-scale",
+    "exponent_change": null,
+    "note": "5-10x at larger data budgets; fixed model size, so mostly over-trained and not against a compute-optimal reference. An 8B generator does as well as a 70B one; generation compute excluded."
    }
   ],
   "multiplier": {
@@ -3451,7 +3467,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A probably about 1 at Chinchilla budgets, with SGD's state. Traits as published (from the scaling corpus): state at its stored precision, 32 bits per updated parameter. fp32 weights only.",
+  "notes": "No multiplier: the claimed 2x is tokens to equal perplexity below 1x Chinchilla (wen-2025-fantastic-optimizers/8), where matrix optimizers gain most, and tuned matrix optimizers fall to 1.1x by 1.2B (wen-2025-fantastic-optimizers/1), so m_A is probably about 1 at Chinchilla budgets, with SGD's state. Traits as published (from the scaling corpus): state at its stored precision, 32 bits per updated parameter. fp32 weights only.",
   "scaling": [
    {
     "evidence": [
@@ -3476,14 +3492,7 @@
     "note": "Below 1x Chinchilla, where matrix optimizers gain most."
    }
   ],
-  "multiplier": {
-   "value": 2,
-   "trend": "unknown",
-   "evidence": [
-    "ma-2024-swan/1"
-   ],
-   "metric": "tokens to equal perplexity, 350M-1.3B"
-  },
+  "multiplier": null,
   "confidence": "low",
   "convention": "as-published"
  },
@@ -3945,7 +3954,8 @@
   "family": "parallel-communication",
   "description": "Confine activations and their gradients at pipeline cuts to a fixed low-dimensional subspace.",
   "sources": [
-   "ramasinghe-2025-protocolmodels"
+   "ramasinghe-2025-protocolmodels",
+   "janson-2026-mapl"
   ],
   "traits": {
    "theorem_applies": true,
@@ -3964,31 +3974,66 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A about 1 while cutting boundary width about 100x. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. About 100x fewer values per token cross each pipeline cut.",
+  "notes": "No multiplier: the authors' one compute-optimal held-out result (640M, about 12B tokens) gives about 1, and the only independent replication (janson-2026-mapl, at matched tokens) gives 0.1-0.125 at 500M and 6x and 0.034-0.044 at 1B and 8x, read off its own uncompressed curve; nobody measures 100x above 640M. Break-even against full backprop on Kimi K2 is m 0.0103 at this width under the construction and 0.035 under the thread bound, and 0.125 and 0.44 at the replication's 8x, where it fails. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. About 100x fewer values per token cross each pipeline cut.",
   "scaling": [
    {
     "evidence": [
-     "ramasinghe-2025-protocolmodels/5",
-     "ramasinghe-2025-protocolmodels/6"
+     "ramasinghe-2025-protocolmodels/6",
+     "ramasinghe-2025-protocolmodels/10"
     ],
-    "metric": "convergence vs uncompressed, up to 8B",
+    "metric": "C4 training loss against wall-clock time vs centralized, 8B",
     "compute_range_flop": null,
     "multiplier": 1.0,
     "trend": "unknown",
     "exponent_change": null,
-    "note": "99% compression with no convergence loss."
+    "note": "Training loss only, at a run length not stated and not shown compute-optimal; equal throughput, so about equal compute."
+   },
+   {
+    "evidence": [
+     "ramasinghe-2025-protocolmodels/9"
+    ],
+    "metric": "validation perplexity at compute-optimal, 640M, about 12B tokens",
+    "compute_range_flop": [
+     4.6e+19,
+     4.6e+19
+    ],
+    "multiplier": 1.0,
+    "trend": "unknown",
+    "exponent_change": null,
+    "note": "C4 12.53 vs 12.61; compression ratio at this width not stated."
+   },
+   {
+    "evidence": [
+     "janson-2026-mapl/4"
+    ],
+    "metric": "compute at equal held-out loss on the paper's uncompressed curve, 500M, 6x (derived)",
+    "compute_range_flop": [
+     3e+19,
+     3e+19
+    ],
+    "multiplier": 0.11,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Loss 3.09 / 3.12 (P = 4 / 8) vs 2.84; the uncompressed curve, interpolated log-linearly, reaches it at 2.9e18-3.8e18 FLOP: 0.1-0.125."
+   },
+   {
+    "evidence": [
+     "janson-2026-mapl/3",
+     "janson-2026-mapl/4"
+    ],
+    "metric": "compute at equal held-out loss on the paper's uncompressed curve, 1B, 8x (derived)",
+    "compute_range_flop": [
+     1.2e+20,
+     1.2e+20
+    ],
+    "multiplier": 0.04,
+    "trend": "shrinks-with-scale",
+    "exponent_change": null,
+    "note": "Loss 3.05 / 3.08 vs 2.68; the uncompressed curve, interpolated log-linearly, reaches it at 4.1e18-5.3e18 FLOP: 0.034-0.044. The AdamW version (3.38) is above the 150M baseline's loss."
    }
   ],
-  "multiplier": {
-   "value": 1.0,
-   "trend": "unknown",
-   "evidence": [
-    "ramasinghe-2025-protocolmodels/5",
-    "ramasinghe-2025-protocolmodels/6"
-   ],
-   "metric": "convergence vs uncompressed, up to 8B"
-  },
-  "confidence": "medium",
+  "multiplier": null,
+  "confidence": "low",
   "convention": "as-published"
  },
  {
@@ -4104,7 +4149,7 @@
    "description_bits": null,
    "boundary_width_fraction": 1.0,
    "boundary_bits": 16.0,
-   "crossings": 1,
+   "crossings": 2,
    "flops_per_token_per_param": 6.0,
    "data_tokens_per_token": 1.0,
    "decode_flops_per_param": 0.0,
@@ -4113,7 +4158,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A 0.6-0.85 by block count; halves boundary crossings. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Backprop stays inside each block; block boundaries carry forward activations only.",
+  "notes": "m_A 0.6-0.85 by block count. Crossings stay 2: backprop stays inside each block and only the K - 1 block boundaries carry forward activations alone, while the construction cuts a token into thousands of slices, so crossings of 1 would need a block per slice, far past the K = 2-4 the multiplier is measured at, where the gap grows steeply with K (wang-2021-infopro/1). Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter.",
   "scaling": [
    {
     "evidence": [

@@ -678,6 +678,20 @@
    "assumptions": [],
    "type_hash": "3f1a556d64beb730fe1ba2839e7746f3295ff22630ae7a2c1ec263b26b7b9c99"
   },
+  "Accounting.SecurityProofs.Actual.ThreadedRate": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Actual.ThreadedRate.{u_1, u_2} : Accounting.Guarantees.Actual.ThreadedRate"],
+   "assumptions": [],
+   "type_hash": "49bd57b93e2d722fa17c891c16f68c8118848be8d805f043fda4eda3174318f8"
+  },
+  "Accounting.SecurityProofs.Actual.ThreadedRuntime": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime.{u_1, u_2} : Accounting.Guarantees.Actual.ThreadedRuntime"
+   ],
+   "assumptions": [],
+   "type_hash": "63aac0dbcd0d928541bca79551376dbddfa27c9fcf37a7fb4dc262375c34fdfd"
+  },
   "Accounting.SecurityProofs.Actual.Windows": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Actual.Windows.{u_2, u_3} : Accounting.Guarantees.Actual.Windows"],
@@ -5474,7 +5488,9 @@
    "Verity.Guarantees.SoundBatch": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundBind": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
    "Verity.Guarantees.SoundInterleave": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
-   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out"
+   "Verity.Guarantees.SoundMono": "unstated: in a Guarantees module, but no lock lists a theorem that proves it (shape sweep, note:proofs/20261009T0100Z-finding-shape-sweep): its owner lists the theorem under guarantees, or moves the statement out",
+   "Accounting.SecurityProofs.Actual.ThreadedRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each wipe, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance.",
+   "Accounting.SecurityProofs.Actual.ThreadedRuntime": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, and takes the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start, and the named WeightsIncompressible on the reference circuit, per-run hypotheses rather than a function's acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -5528,6 +5544,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
@@ -6025,6 +6043,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered"
@@ -7442,6 +7462,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
@@ -7491,6 +7513,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
@@ -7679,6 +7703,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedTraining",
@@ -7735,6 +7761,8 @@
     "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"
@@ -16804,6 +16832,14 @@
    },
    "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Accounting.SecurityProofs.Actual.Windows"]
   },
+  "Models.Accounting.Guarantees.Actual.Threaded": {
+   "digest": "3e9bfe4e56f20270c6d9abb91eb605bd660e43afe8d9756df1d7118cded47462",
+   "definitions": {
+    "Accounting.Guarantees.Actual.ThreadedRate": "57d1584de42b3919425b9cb0bd254928c24a9779d7beaa7c9a9767728fad3858",
+    "Accounting.Guarantees.Actual.ThreadedRuntime": "0957634d1e3be4bb98d90dfae3044ac393c5fbb66218c58c2bc6be8d52fd6954"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.ThreadedRate", "Accounting.SecurityProofs.Actual.ThreadedRuntime"]
+  },
   "Models.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
    "definitions": {
@@ -17317,6 +17353,8 @@
     "Nci.Assumptions.WeightsIncompressible": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedTraining"

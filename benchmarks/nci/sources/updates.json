@@ -1874,6 +1874,91 @@
     "grade": "measured-at-scale",
     "bears_on": "Expert selection alone leaves U in GB; it must be combined with low-rank or tiny adapters to approach K.",
     "from_review": "updates"
+   },
+   {
+    "id": "wang-2024-esft/3",
+    "claim": "ESFT's main runs select each layer's experts until their relevance reaches p = 0.1 of the gate mass (ESFT-Gate) or 0.2 of the token selections (ESFT-Token).",
+    "quote": "The threshold p is set to 0.1 for ESFT-Gate and 0.2 for ESFT-Token, respectively.",
+    "location": "Section 4.3 (Backbone Model and Training Settings)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.2,
+      "unit": "relevance threshold p",
+      "condition": "ESFT-Token; 0.1 for ESFT-Gate"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Sets the share of a token's routed slots that reach updated experts, the numerator of the ESFT row's kappa.",
+    "from_review": "updates"
+   },
+   {
+    "id": "wang-2024-esft/4",
+    "claim": "At p = 0.2, ESFT-Token's trained experts take about 20% of the expert choices.",
+    "quote": "Results show that our method, even handling only about 20% of expert choices, covers a wide range of key task-relevant words.",
+    "location": "Appendix E (Qualitative Examples of the Expert Choices)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 0.2,
+      "unit": "share of routed slots on updated experts",
+      "condition": "ESFT-Token, p = 0.2, DeepSeek-V2-Lite"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "kappa.py's ESFT updates 0.2 of a token's routed slots: kappa 0.11 on Kimi K2 (0.058 at 0.1, 0.16 at 0.3).",
+    "from_review": "updates"
+   },
+   {
+    "id": "wang-2024-esft/5",
+    "claim": "Only the selected experts are updated; every other expert and module stays frozen.",
+    "quote": "However, only the selected experts E_{s}^{l} in each layer can be updated; other experts and modules remain frozen.",
+    "location": "Section 3.3 (Expert-Specialized Fine-tuning)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The frozen weights are committed in theta: their products leave the ESFT row's count, and their gradients its work.",
+    "from_review": "updates"
+   },
+   {
+    "id": "wang-2024-esft/6",
+    "claim": "ESFT, LoRA and full fine-tuning all train on 32 sequences of 4096 tokens a step.",
+    "quote": "For hyperparameter settings, all methods use a batch size of 32 and a sequence length of 4096 for training.",
+    "location": "Section 4.3 (Backbone Model and Training Settings)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 131072,
+      "unit": "tokens per step",
+      "condition": "derived: 32 x 4096"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The ESFT row's context length and the batch its optimizer step is spread over.",
+    "from_review": "updates"
+   }
+  ]
+ },
+ {
+  "id": "deepseek-2024-esft-config",
+  "title": "ESFT configs/base.yaml",
+  "authors": "DeepSeek-AI",
+  "year": 2024,
+  "venue": "code repository (GitHub)",
+  "url": "https://github.com/deepseek-ai/ESFT/blob/main/configs/base.yaml",
+  "topics": [
+   "updates"
+  ],
+  "verified": "fetched",
+  "findings": [
+   {
+    "id": "deepseek-2024-esft-config/1",
+    "claim": "ESFT's released training config uses AdamW on 4096-token sequences, one per device on 8 devices with 4 accumulation steps: 32 sequences a step.",
+    "quote": "optim: adamw_torch_fused",
+    "location": "configs/base.yaml (also seq_length: 4096, per_device_batch_size: 1, n_device: 8, gradient_accumulation_steps: 4)",
+    "quantities": [],
+    "grade": "measured-at-scale",
+    "bears_on": "The ESFT row's optimizer step: AdamW over its 1e11 updated weights at 32 x 4096 tokens, 9e6 gates per token; Muon there would add 3.6e10 and give kappa 0.090.",
+    "from_review": "updates"
    }
   ]
  },
