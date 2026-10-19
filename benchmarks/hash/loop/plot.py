@@ -5,7 +5,8 @@ measurements, its iteration (`row`), GPU (`hardware`) and workload (`arm`, e.g. 
 that is one arm) in its labels; a result with no `arm` label is qwen3-8b's; a PoUW result, `arm` pearl-c-*, is drawn as workload
 pouw, its decode step with the hashing against without, `pouw_headline`). Results whose gates passed and that are not labeled
 kernel_outcome=voided are plotted (a failed or voided run stays in the JSON); several at one (iteration, GPU) are averaged, each also drawn as a dot. A what-if row (not an integer, e.g.
-what-if-a) is in the table only. The table marks each row pinned or unpinned (the result's served-pin state).
+what-if-a) is in the table only. Each table line and each plotted line names the served-pin states of the results it reads
+(pinned, unpinned, or both as pinned/unpinned).
 
     python3 benchmarks/hash/loop/plot.py [--out DIR] [--measures a,b,...] [--table] [--no-refresh]   # measures: TPOT, throughput
 
@@ -103,6 +104,20 @@ def series(results: list[dict], measure: str) -> dict[tuple[str, str], list[tupl
     return out
 
 
+def pins(results: list[dict]) -> str:
+    return "/".join(sorted({r["pin"] for r in results}))
+
+
+def line_pins(results: list[dict]) -> dict[tuple[str, str], str]:
+    """(GPU, workload:arm) -> the served-pin states of the results its plotted line averages."""
+    by: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for r in results:
+        if r["valid"] and isinstance(r["row"], int):
+            for arm in {a for a, _ in r["measures"]}:
+                by[(r["hardware"], arm)].append(r)
+    return {k: pins(rs) for k, rs in by.items()}
+
+
 def table(results: list[dict]) -> str:
     lines = [("| N | hypothesis | GPU | arm | TPOT ovh % | tput ovh % | prefill hash ms | decode hash ms | serve lost / co-run ms | "
               "runs | outcome |"), "|---|---|---|---|---:|---:|---:|---:|---:|---|---|"]
@@ -115,14 +130,14 @@ def table(results: list[dict]) -> str:
         first = [f"{WORKLOAD}:{a}" for a in ARMS[1:]]
         rest = {a for x in rs for a, _ in x["measures"]} - set(first)
         for arm in [*first, *sorted(a for a in rest if not a.endswith(":stock") and a != WORKLOAD)]:
-            vals = [[x["measures"].get((arm, k)) for x in rs] for k in cols]
+            xs = [x for x in rs if any(a == arm for a, _ in x["measures"])]
+            vals = [[x["measures"].get((arm, k)) for x in xs] for k in cols]
             if not any(v is not None for v in vals[0]):
                 continue
             cell = lambda vs: " / ".join(f"{v:.2f}" if abs(v) < 10 else f"{v:.1f}" for v in vs if v is not None)  # noqa: E731
-            pins = "/".join(sorted({x["pin"] for x in rs}))
-            lines.append(f"| {row} | {rs[0]['label'][:60]} | {hw} ({pins}) | {arm} | "
+            lines.append(f"| {row} | {xs[0]['label'][:60]} | {hw} ({pins(xs)}) | {arm} | "
                          + " | ".join(cell(v) for v in vals)
-                         + f" | {', '.join(str(x['run']) for x in rs)} | {rs[0]['outcome']} |")
+                         + f" | {', '.join(str(x['run']) for x in xs)} | {xs[0]['outcome']} |")
     return "\n".join(lines)
 
 
@@ -152,6 +167,7 @@ def main() -> int:
     styles = {"stock": ":", "sha512": "-", "blake3": "--", "sha512-layer": "-."}
     markers = {"stock": "s", "sha512": "o", "blake3": "^", "sha512-layer": "v"}
     top = max((r["row"] for r in results if isinstance(r["row"], int)), default=0)
+    pinned = line_pins(results)
     dump = {}
     for wi, workload in enumerate(workloads):
         for mi, measure in enumerate(measures):
@@ -164,7 +180,8 @@ def main() -> int:
                 xs, ys = [p[0] for p in pts], [p[1] for p in pts]
                 kind = arm.split(":", 1)[1] if ":" in arm else arm
                 style = styles.get(kind, "--" if "blake3" in kind else "-.")
-                ax.plot(xs, ys, style, marker=markers.get(kind, "D"), color=colors.get(hw), label=f"{hw} {arm}")
+                ax.plot(xs, ys, style, marker=markers.get(kind, "D"), color=colors.get(hw),
+                        label=f"{hw} {arm} ({pinned.get((hw, arm), '?')})")
                 for row, _, vs in pts:
                     if len(vs) > 1:
                         ax.scatter([row] * len(vs), vs, s=8, color=colors.get(hw), alpha=0.4)
