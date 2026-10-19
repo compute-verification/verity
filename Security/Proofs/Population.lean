@@ -16,6 +16,7 @@ import Proofs.Population.Exfiltration
 import Proofs.Population.ExfiltrationBound
 import Proofs.Population.ExfiltrationExamples
 import Proofs.Population.DrawPressure
+import Proofs.Population.JointPressure
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -73,4 +74,8 @@ trusted model the leak is unbounded.
 probability `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`, so it gives detection pressure `k/n` for a leak
 of at most one per wrong unit, and with probability at least `1 - δ` what leaves through the first detection is below
 `ℓ + (n/k) ln (1/δ)`.
+`JointPressure`: one draw for several claims. The max rule `max_i κ_i harm_i(u)` is the least inclusion that gives
+every claim its detection pressure, the union bound holds every claim's bound through the first detection at once
+except with probability `Σ_i δ_i` (a claim whose count waits for the verdict without the per-window term), and a
+uniform `k`-subset of `N` units escapes `b` wrong ones with probability at most `(1 - k/N)^b`.
 -/
