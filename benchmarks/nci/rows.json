@@ -7,7 +7,7 @@
   "configuration": "all 1.04T weights updated every step; standard transformer; FP4 activations at boundaries",
   "state": "full weights at the scratch-trained rate",
   "inputs": {
-   "kappa": 0.655,
+   "kappa": 0.6,
    "b_w": "b_w.pretrained/frontier-lossy:central",
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2048,
@@ -19,16 +19,18 @@
    "decode_flops": 0,
    "w_cut": 28672,
    "crossings": 2,
-   "flops_per_token": 192000000000.0
+   "flops_per_token": 207000000000.0
   },
   "chain": {
-   "kappa": 0.075,
+   "kappa": 0.0695,
    "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 2.07e11."
   },
-  "notes": "kappa = 0.655: 4 of 6 flops per parameter per token multiply a weight by an activation, less the LM head's forward products (1.2e9 per token of 1.92e11), which no fan-out bound below 163,840 covers. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. d = 2048 (routed-expert width; MLA's kv latent, 512, is narrower); e = 4e4 (the thread draft's MoE estimate, above an MoE input value's 37,248 but below the LM head's 163,840, whose forward products kappa leaves out). w_cut = 7168 x 4 bits.",
+  "notes": "kappa = 0.60 (kappa.py, from the config and the report's schedule): 2|M| = 1.24e11 per token, the forward and the backward to the activations of the 3.05e10 active weights outside the embedding and LM head plus the LM head's backward, over 2.07e11 gates per token: the weight matmuls 1.90e11, attention's score and value products 1.5e10 at 4k (1.2e11 at 32k), Muon's step 7e8 and softmax, norms, SwiGLU and routing 1e8, averaged over 15.9T tokens at 4k and 60B at 32k (0.603 at 4k, 0.396 at 32k). The LM head's forward products (2.3e9 per token) stay out of M, since no fan-out bound below 163,840 covers them, and the embedding is a lookup, not a product. U = 1.04e12 x 2.5 bits; U_token = active 3.2e10 x 2.5. d = 2048 (routed-expert width; MLA's kv latent, 512, is narrower); e = 4e4 (the thread draft's MoE estimate, above an MoE input value's 37,248 but below the LM head's 163,840, whose forward products kappa leaves out). w_cut = 7168 x 4 bits.",
   "sources": [
-   "tseng-2024-qtip"
+   "tseng-2024-qtip",
+   "kimiteam-2025-kimi-k2",
+   "moonshotai-2025-kimi-k2-config"
   ],
   "capability": {
    "demonstrated": "generational",
@@ -44,7 +46,7 @@
   "configuration": "as pretrain-full, but an architecture trained to carry its residual in a 1% subspace across shard boundaries",
   "state": "full weights at the scratch-trained rate; boundary activations compressed 100x",
   "inputs": {
-   "kappa": 0.655,
+   "kappa": 0.6,
    "b_w": "b_w.pretrained/frontier-lossy:central",
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2048,
@@ -56,12 +58,12 @@
    "decode_flops": 0,
    "w_cut": "activation.boundary_bits/d7168:low",
    "crossings": 2,
-   "flops_per_token": 192000000000.0
+   "flops_per_token": 207000000000.0
   },
   "chain": {
-   "kappa": 0.075,
+   "kappa": 0.0695,
    "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 2.07e11."
   },
   "notes": "The activation-compression attack at its most aggressive published claim (Subspace Networks; its one replication, at 8x and matched tokens, loses 14-15% in loss at 1B). Moves the construction, and the proven bound through its cap of b_a at w_cut / d.",
   "sources": [
@@ -76,7 +78,7 @@
   "configuration": "all weights updated from the committed base; delta coded at the SFT rate",
   "state": "dense delta at b_w.delta/sft",
   "inputs": {
-   "kappa": 0.655,
+   "kappa": 0.6,
    "b_w": "b_w.delta/sft:central",
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2048,
@@ -88,14 +90,14 @@
    "decode_flops": 0,
    "w_cut": 28672,
    "crossings": 2,
-   "flops_per_token": 192000000000.0
+   "flops_per_token": 207000000000.0
   },
   "chain": {
-   "kappa": 0.075,
+   "kappa": 0.0695,
    "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 1.92e11."
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 2.07e11."
   },
-  "notes": "U = 1.04e12 x 0.1 bits; U_token = 3.2e10 x 0.1.",
+  "notes": "U = 1.04e12 x 0.1 bits; U_token = 3.2e10 x 0.1. kappa and the work per token are pretrain-full's at 4k; SFT on 32k sequences would be 0.40 at 3.14e11 per token (kappa.py).",
   "sources": [
    "yu-2024-dare",
    "liu-2024-bitdelta"

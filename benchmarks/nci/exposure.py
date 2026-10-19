@@ -61,8 +61,9 @@ RANGES = {
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
     "d": (512.0, 8355.0, "low a guess (fine-grained experts); Kimi K2's experts 2048; dense-70b"),
     "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
-    "kappa": (0.4, 0.9, "guess: long-context attention, to an MLP-heavy model"),
-    "kappa_chain": (0.03, 0.3, "guess, around Kimi K2's dense path 7.5%"),
+    "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
+                          "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
+    "kappa_chain": (0.03, 0.3, "guess, around Kimi K2's dense path 7%"),
     "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
     "e_chain": (4096.0, 49152.0, "guess"),
     "b_p": (8.25, 64.0, "b_a.activation/tp-partial-sums-training central; 32; high a guess"),
