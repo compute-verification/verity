@@ -94,6 +94,7 @@ inductive Ty
   | bf16
   | tf32
   | fp4
+  | fp4_f8f6f4
   deriving DecidableEq
 
 /-- A1, f_max: 1965 MHz. Grade: measured only (the driver's maximum). Source: no NVIDIA document read states a B200
@@ -167,6 +168,16 @@ derived at the implied clock; its classes unmeasured. Source: Technical Brief V2
 Guide 12.9 §18.9.1 lists no FP4, and the census measures no FP4 class. -/
 def peakFp4 : ℝ := 16384
 
+/-- A3, fp4_f8f6f4: 8192 dense MACs an SM clock, the document's dense figure, 4500 × 10¹² a second, over 2 · 148 SMs at
+the implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: vendor documentation per kind
+(CUTLASS), at the data sheet's FP8 figure; per clock derived at the implied clock; its class unmeasured. Source: NVIDIA
+CUTLASS, 'Blackwell SM100 GEMMs' (media/docs/cpp/blackwell_functionality.md at 1b5b7d3062):
+'tcgen05.mma(.sp).cta_group::[1|2].kind::f8f6f4 | 2x Hopper Fp8 Tensor Core | Mixed precision MMA with A={f4,f6,f8} x
+B={f4,f6,f8}', against 'kind::mxf4.block_scale | 4x Hopper Fp8 Tensor Core'; so the kind's rate is the FP8 one,
+Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'. On sm_120, all five kind::f8f6f4 types
+run at one QMMA rate (r20261019-052144-b4a4, note:20261019T0456Z-draft-rt-machine). -/
+def peakFp4_f8f6f4 : ℝ := 8192
+
 /-- A3: each type's dense MACs an SM clock. -/
 def Ty.peak : Ty → ℝ
   | .s8 => peakS8
@@ -177,6 +188,7 @@ def Ty.peak : Ty → ℝ
   | .bf16 => peakBf16
   | .tf32 => peakTf32
   | .fp4 => peakFp4
+  | .fp4_f8f6f4 => peakFp4_f8f6f4
 
 /-- A4, the alu pipe: 64 results an SM clock, 2 SMSP-cycles a warp instruction. Grade: Programming Guide and Nsight
 Compute. Source: CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 10.0: 32-bit integer add 64, compare/minimum/maximum
@@ -241,7 +253,7 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .UTCIMMA_M64_N64 => some (.s8, 64 * 64 * 32 / 1)
   | .UTCOMMA_MXF4NVF4_M128_N256 => some (.fp4, 128 * 256 * 64 / 1)
   | .UTCOMMA_MXF4_M128_N256 => some (.fp4, 128 * 256 * 64 / 1)
-  | .UTCQMMA_E2M1_M128_N256 => some (.fp4, 128 * 256 * 32 / 1)
+  | .UTCQMMA_E2M1_M128_N256 => some (.fp4_f8f6f4, 128 * 256 * 32 / 1)
   | .UTCQMMA_E2M3_M128_N256 => some (.fp6, 128 * 256 * 32 / 1)
   | .UTCQMMA_E3M2_M128_N256 => some (.fp6, 128 * 256 * 32 / 1)
   | .UTCQMMA_E4M3_M128_N128 => some (.e4m3, 128 * 128 * 32 / 1)
@@ -333,7 +345,7 @@ def tensorLine : Kind → ℝ
   | .UTCIMMA_M64_N64 => 64
   | .UTCOMMA_MXF4NVF4_M128_N256 => 512
   | .UTCOMMA_MXF4_M128_N256 => 512
-  | .UTCQMMA_E2M1_M128_N256 => 256
+  | .UTCQMMA_E2M1_M128_N256 => 512
   | .UTCQMMA_E2M3_M128_N256 => 512
   | .UTCQMMA_E3M2_M128_N256 => 512
   | .UTCQMMA_E4M3_M128_N128 => 256
@@ -524,7 +536,7 @@ theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k :=
 /-- The tensor row: each class's MACs over a quarter of its type's peak is its census line. -/
 theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by
   cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, Kind.form, Ty.peak, peakS8, peakE4m3, peakE5m2,
-      peakFp6, peakF16, peakBf16, peakTf32, peakFp4]
+      peakFp6, peakF16, peakBf16, peakTf32, peakFp4, peakFp4_f8f6f4]
 
 /-- The alu pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
 theorem machine_alu (k : Kind) : sheet.machine.a (.pipe .alu) k = census (.pipe .alu) k := by
@@ -633,6 +645,15 @@ theorem peakFp4_figure :
     (9000 - 500 : ℝ) * 10 ^ 12 ≤ 2 * peakFp4 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakFp4 * smCount * (impliedMHz * 10 ^ 6) ≤ (9000 + 500 : ℝ) * 10 ^ 12 := by
   norm_num [peakFp4, smCount, impliedMHz]
+
+/-- A3's fp4_f8f6f4 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
+implied clock (no document states one), 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states
+the `implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
+theorem peakFp4_f8f6f4_figure :
+    (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakFp4_f8f6f4 * smCount * (impliedMHz * 10 ^ 6) ∧
+      2 * peakFp4_f8f6f4 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
+  norm_num [peakFp4_f8f6f4, smCount, impliedMHz]
 
 end
 

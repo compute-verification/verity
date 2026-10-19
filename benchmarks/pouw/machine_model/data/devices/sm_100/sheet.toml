@@ -113,6 +113,17 @@ clock = "implied"
 grade = "data sheet per second; per clock derived at the implied clock; its classes unmeasured"
 source = "Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and the census measures no FP4 class"
 
+# FP4 (E2M1) operands in kind::f8f6f4, unscaled: the brief's FP4 figure is the block-scaled kinds', and the vendor's
+# per-kind table puts kind::f8f6f4 at the FP8 rate whatever its operand types.
+[peaks.fp4_f8f6f4]
+macs = 8192
+sheet = 4500
+sparse = false
+tol = 50
+clock = "implied"
+grade = "vendor documentation per kind (CUTLASS), at the data sheet's FP8 figure; per clock derived at the implied clock; its class unmeasured"
+source = "NVIDIA CUTLASS, 'Blackwell SM100 GEMMs' (media/docs/cpp/blackwell_functionality.md at 1b5b7d3062): 'tcgen05.mma(.sp).cta_group::[1|2].kind::f8f6f4 | 2x Hopper Fp8 Tensor Core | Mixed precision MMA with A={f4,f6,f8} x B={f4,f6,f8}', against 'kind::mxf4.block_scale | 4x Hopper Fp8 Tensor Core'; so the kind's rate is the FP8 one, Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'. On sm_120, all five kind::f8f6f4 types run at one QMMA rate (r20261019-052144-b4a4, note:20261019T0456Z-draft-rt-machine)"
+
 # Each Nsight Compute pipe's results an SM clock (A4).
 [pipes.alu]
 width = 64
@@ -144,8 +155,8 @@ source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with
 # (RT-B200-EMP-2, note:20261019T0520Z-draft-rt-b200-emp; the census measures none of them): kind::f16 BF16, kind::tf32,
 # kind::f8f6f4 with E5M2, E2M3, E3M2 and E2M1 operands, kind::mxf8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 at twice
 # f8f6f4's K (PTX ISA 9.4 §9.7.18.10.10.1), and kind::i8 2:4 sparse (`sparse`: k its logical k, its dense MACs half
-# m · n · k). Each is at its dense i8 twin's 512 but FP4 in kind::f8f6f4: K 32 at the FP4 peak is 256, since A3 per
-# type bounds it no tighter (no document gives f8f6f4's rate with E2M1 operands).
+# m · n · k). Each is at its dense i8 twin's 512: FP4 in kind::f8f6f4 at the kind's own peak (`fp4_f8f6f4`), not the
+# block-scaled kinds' FP4 figure, which would put it at 256.
 [kinds]
 ALU = { pipe = "alu" }
 FFMA = {}
@@ -176,7 +187,7 @@ UTCIMMA_M64_N256 = { type = "s8", m = 64, n = 256, k = 32, warps = 1 }
 UTCIMMA_M64_N64 = { type = "s8", m = 64, n = 64, k = 32, warps = 1 }
 UTCOMMA_MXF4NVF4_M128_N256 = { type = "fp4", m = 128, n = 256, k = 64, warps = 1 }
 UTCOMMA_MXF4_M128_N256 = { type = "fp4", m = 128, n = 256, k = 64, warps = 1 }
-UTCQMMA_E2M1_M128_N256 = { type = "fp4", m = 128, n = 256, k = 32, warps = 1 }
+UTCQMMA_E2M1_M128_N256 = { type = "fp4_f8f6f4", m = 128, n = 256, k = 32, warps = 1 }
 UTCQMMA_E2M3_M128_N256 = { type = "fp6", m = 128, n = 256, k = 32, warps = 1 }
 UTCQMMA_E3M2_M128_N256 = { type = "fp6", m = 128, n = 256, k = 32, warps = 1 }
 UTCQMMA_E4M3_M128_N128 = { type = "e4m3", m = 128, n = 128, k = 32, warps = 1 }
