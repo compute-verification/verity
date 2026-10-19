@@ -2,7 +2,7 @@ import Randomness
 import PouwCommit.Coins
 
 /-!
-# The salts and draws PoUW derives (`verity.core.protocols.pouw`: `audit`, `schemes.pearl_c_work`)
+# The salts and draws PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's draws, `benchmarks/pouw/clear`)
 
 Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under PoUW's domains:
 
@@ -17,7 +17,7 @@ Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under
 refused in `coin_reason`'s words, "the salt's …", as `Epoch.start` refuses it. `drawCoin` is `draw_coin`'s check of the
 epoch's draw coin. A key's source is nonempty bytes, which `derive` refuses otherwise.
 
-`weightedDraw` is the work-weighted draw with replacement of `Sampled.select` and `pearl_c_work.draw`: draw `j` is
+`weightedDraw` is the work-weighted draw with replacement of `Sampled.select` and `clear_work.draw`: draw `j` is
 `bisect_right(cumulative, key.uniform(total, j))` over the tickets' running sums. Python reads `uniform`'s stream for as long
 as it needs; the port reads `DRAW_WORDS` words of it and throws past them, which an exact draw reaches with probability
 below `2^(-64·DRAW_WORDS)`.
@@ -102,7 +102,7 @@ def weightedDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except Strin
     | some r => pure (bisectRight cumulative r)
     | none => throw s!"draw {j} read {DRAW_WORDS} words of its stream without one below the limit"
 
-/-- `pearl_c_work.draw` over tickets numbered by position: the draws among the tickets above 0, by their positions, and none
+/-- `clear_work.draw` over tickets numbered by position: the draws among the tickets above 0, by their positions, and none
 when no ticket is above 0. -/
 def pearlDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except String (List Nat) := do
   let tk := tickets.zipIdx.filter (·.1 > 0)

@@ -1,5 +1,5 @@
 """Pearl-C's Python accounting is the Lean's on every pinned FP8 price twin (`harness/price_twins.json`) and on the H100's
-rev1 pins, as exact rationals: γ, the credit, and the debit cap the verifier's tile rule admits (`pearl_c_work.tile_cap`).
+rev1 pins, as exact rationals: γ, the credit, and the debit cap the verifier's tile rule admits (`clear_work.tile_cap`).
 The verifier must admit no more than the rule its guarantee is proved for, rev1's (`DeviceRev1.lean`: `creditDevRev1`,
 `tileDebitRev1`, `wrefDevRev1K`), so a credit or cap that drifts from it fails here, as the first promotion add of every
 word did before rev1.  A pinned twin of a statement this file doesn't price (a hot start's, Pearl-C4's) fails too, until it
@@ -23,6 +23,8 @@ from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "clear"))
+import clear_work as CW  # noqa: E402
 
 import price_twins as P  # noqa: E402
 
@@ -98,15 +100,15 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
     credit = lean_credit(Fraction(twin["gamma"]), n, rho, Fraction(s.prices.forming_a_only), c)
     assert s.wref(sh) - s.credit_of(sh) == s.prices.forming_a_only * n * n and s.credit_of(sh) == credit
     record = W.UnitRecord(Matmul(0, sh, 0), n, n)
-    assert rho * W.cell_credit(s, record) * n * n == rho * credit
+    assert rho * CW.cell_credit(s, record) * n * n == rho * credit
     rows, cols = 2, 3
     share = Fraction(rows * cols, n * n)
     if s.device.g:
-        debit, cap = W.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols)
+        debit, cap = CW.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols)
         assert cap == rho * credit * share
         assert debit >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
     else:
-        assert rho * W.cell_credit(s, record) * rows * cols == rho * credit * share
+        assert rho * CW.cell_credit(s, record) * rows * cols == rho * credit * share
 
 
 @pytest.mark.parametrize("twin", [t for t in TWINS if t["shape"] is None], ids=lambda t: t["pin"].split(".")[-1])
@@ -144,4 +146,4 @@ def test_the_zero_word_debits_every_later_promotion():
     record = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, k)
     atoms, zeros = D.chain_debit([[0] * k], [[0] * k], s.device)
     assert zeros == k // s.device.window - 1
-    assert W.tile_cap(s, record, [[0] * k], [[0] * k])[0] == D.debit_units(atoms, 0, s.prices, s.device, zeros=zeros)
+    assert CW.tile_cap(s, record, [[0] * k], [[0] * k])[0] == D.debit_units(atoms, 0, s.prices, s.device, zeros=zeros)

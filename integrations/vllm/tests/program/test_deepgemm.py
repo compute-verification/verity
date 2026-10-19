@@ -16,6 +16,8 @@ grouped `wo_a` einsum, against models of their kernels and against their twins (
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
+
 from fractions import Fraction
 
 import numpy as np

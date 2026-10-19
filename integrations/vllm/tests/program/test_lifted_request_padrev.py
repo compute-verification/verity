@@ -10,13 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits import Program
-from verity.ml.circuits.codec import encode_program
-from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.program import workload as W
-from verity_vllm.program.registry import b1, lifted as L
+from verity_vllm.program.registry import lifted as L
 from verity_vllm.program.kernels import serve3_reference as ref
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
+from tests.program.test_serve3 import D_MAX, EOS_FOR, TINY, _inputs
+from tests.program.test_lifted_request import tiny_component
 from verity.ml.circuits.types import Value
 
 CAP = D_MAX + 1
@@ -26,8 +23,7 @@ NEVER = 0x7FFFFFFF
 
 @pytest.fixture(scope="module")
 def component():
-    desc = encode_program(Program(b1.serve_v2(TINY, LP, D_MAX)))
-    return W.request_component(desc, REGISTRY, None)
+    return tiny_component(D_MAX)
 
 
 def _inputs_per_param(params, words):
@@ -185,8 +181,7 @@ def test_a3_a_served_shape_component_is_refused_against_the_declared_cap():
     """F-pad-15 (CLOSED lane/r16-pad 859dc5d22): at d40b22bb5 the population was read from the body's boundary count alone and a
     component derived at the SERVED shape (row_pod's eos-truncated build_request_LP32_T11, exec M-0140) lifted with cap = served length."""
     served_steps = D_MAX - 3  # a request Program derived at T = the served length − 1, not at cap − 1
-    desc = encode_program(Program(b1.serve_v2(TINY, LP, served_steps)))
-    comp = W.request_component(desc, REGISTRY, None)
+    comp = tiny_component(served_steps)
     with pytest.raises(ValueError):
         L.lift_request_component(comp.fn, (17,), boundary_prefix=BOUNDARY, max_tokens=CAP, lag=0)  # declared cap ≠ the body's population
 
@@ -195,8 +190,7 @@ def test_the_served_shape_component_lifts_only_under_its_own_cap_and_is_a_differ
     """Companion for F-pad-15: the served-shape component lifts only when the caller declares ITS cap (max_tokens = served length) — a
     different Program (id) from the declared population's; the record tool must never be handed that component."""
     served_steps = D_MAX - 3
-    desc = encode_program(Program(b1.serve_v2(TINY, LP, served_steps)))
-    comp = W.request_component(desc, REGISTRY, None)
+    comp = tiny_component(served_steps)
     lifted = L.lift_request_component(comp.fn, (17,), max_tokens=served_steps + 1, lag=0, boundary_prefix=BOUNDARY)
     assert lifted.cap == served_steps + 1 != CAP
     full = L.lift_request_component(component.fn, (17,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)

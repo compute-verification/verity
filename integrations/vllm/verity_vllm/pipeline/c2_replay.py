@@ -206,7 +206,8 @@ def programs_of_record(s: Site, _rl: dict[str, str]) -> tuple[dict[str, dict], d
                 _of_record.add(str(_c["program_digest"]))
     if getattr(args, "programs_root", None):
         _fx = {"requests": [{"request_id": _rl[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
-                             "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1)} for r in reqs]}
+                             "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "cached": int(r.get("cached") or 0)}
+                            for r in reqs]}
         _loaded = MF.programs_for(_fx, args.programs_root)
     else:
         _l1 = MF.load_program(args.program_dir)
@@ -281,7 +282,7 @@ def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_ste
 
     sampling = s.sampling
     return [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
-             "prompt_token_ids": list(r["prompt_token_ids"]),
+             "prompt_token_ids": list(r["prompt_token_ids"]), "cached": int(r.get("cached") or 0),
              "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),
              "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
              "program_steps": _pi_steps.get(_rl[str(r.get("request_id"))]),
@@ -290,6 +291,13 @@ def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_ste
              "steps": SR.linkage_horizon(_arr[_rl[str(r.get("request_id"))]], int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
                                          _pi_steps.get(_rl[str(r.get("request_id"))]),
                                          executed=(None if _horizons is None else _horizons.get(_rl[str(r.get("request_id"))])))} for r in s.reqs]
+
+
+def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str, dict[str, Any]]:
+    """Each warm request's cached rows and the label of the request that computed each cached block (`load_workload`: `cached`,
+    `cached_from`): what the replay resolves its `prefix` reads to (`driver.populate`)."""
+    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()]}
+            for r in reqs if int(r.get("cached") or 0)}
 
 
 def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -> tuple[dict[str, Any], Any]:
@@ -396,7 +404,7 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
                # [R17-3 / reqval] Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                worker_peak=getattr(args, "replay_worker_peak", None),
-               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, **_sr_kw)
+               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl), **_sr_kw)
     if planner is not None:
         t0 = time.perf_counter()
         got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,

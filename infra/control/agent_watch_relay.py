@@ -6,7 +6,9 @@ cancel, held again within the hour, and a run unreadable for an hour; the first 
 @top, and rings @top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
-the doorbell also counts toward the coordinator's own ready-to-wake rule). The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes
+the doorbell also counts toward the coordinator's own ready-to-wake rule). A silent agent (ACTIVE 90 min with no note and no push)
+and a `research run` that ended on a node lead with the record's handle and ring it the same way: a coordinator's own, a worker's
+launcher's, for a run whose sender is a lane, the lane's. The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes
 from the offset it last posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
@@ -50,9 +52,12 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "unreadable": "has a latest run the API won't read ({status}) since {since} ({minutes} min): left for a person",
        "ready_to_wake": "is idle with nothing waking it: {reason}; the watch {action}",
        "worker_idle": "went idle at {at}; if it didn't report back, resume it with Task",
-       "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task"}
+       "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task",
+       "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
+       "run_ended": "ended rc={rc} after {after} on {node}"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
+HANDLE = WORKER | {"silent", "run_ended"}       # rung to the record's handle
 
 
 def log(msg: str) -> None:
@@ -63,7 +68,7 @@ def rung(rec: dict) -> str | None:
     """The handle whose inbox the alert rings, if any."""
     if rec.get("kind") in TOP:
         return "top"
-    if rec.get("kind") in WORKER and rec.get("handle") in {h["handle"] for h in REG.get("handles") or []}:
+    if rec.get("kind") in HANDLE and rec.get("handle") in {h["handle"] for h in REG.get("handles") or []}:
         return rec["handle"]
     return None
 
@@ -71,11 +76,23 @@ def rung(rec: dict) -> str | None:
 def text(rec: dict) -> str:
     link = f"<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>"
     line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
-                                                         "reason": "?", "status": "?", "at": "?", "hours": "?", **rec})
+                                                         "reason": "?", "status": "?", "at": "?", "hours": "?", "rc": "?",
+                                                         "after": "?", "node": "?", "active_minutes": "?", **rec})
     lead = f"{slack.tag(slack.entry(REG, to))} " if (to := rung(rec)) else ""
+    name = rec.get("name") or "(unnamed)"
+    if rec.get("kind") == "silent":
+        again = " Second window: the last ring until it shows activity." if rec.get("window") == 2 else ""
+        return f"{lead}*Agent watch:* agent {name} ({link}) {line}.{again}"
+    if rec.get("kind") == "run_ended":
+        run = f"run {rec.get('run')} ({rec.get('what') or '?'})"
+        if rec.get("role") == "worker":
+            return f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task."
+        if rec.get("role") == "coordinator":
+            return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
+        return f"{lead}*Agent watch:* {run} of lane {rec.get('handle')} {line}."
     if rec.get("kind") in WORKER:
         lane = f" of lane {rec['lane']}" if rec.get("lane") else ""
-        return f"{lead}*Agent watch:* worker {rec.get('name') or '(unnamed)'} ({link}){lane} {line}."
+        return f"{lead}*Agent watch:* worker {name} ({link}){lane} {line}."
     handle = rec.get("handle") or HOLDERS.get(rec.get("agent"))
     who = f"@{handle}'s coordinator" if handle else (rec.get("name") or "an agent")
     return (f"{lead}*Agent watch:* {who} ({link}, run {rec.get('run')}) {line}."

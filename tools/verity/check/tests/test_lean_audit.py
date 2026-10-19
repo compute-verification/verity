@@ -259,7 +259,9 @@ def test_a_package_that_may_read_beyond_its_directory_is_keyed_by_its_path(tmp_p
 def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     """b201 (r20261004-150518-b201) audited all 8 packages again, 69 min, partly on edits to `tools/verity/lean/README.md` and
     `tools/verity/lean/tests/`, which no audit reads, and so is the pin file `lean-deps.json` (preflight's, read before the
-    audit). They stay out of the scratch tree too, so an audit that read one would fail."""
+    audit). So are the directory's other files that `NOT_READ` lists: 4 of the 19 landings under it in the week to 18 Oct
+    changed only `merge.py` or `lean_changed.py`, and each audited all 29 packages again on every node. They stay out of the
+    scratch tree too, so an audit that read one would fail."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     assert _run(tmp_path, 1)[0] == 0
@@ -271,6 +273,20 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": ["tools/verity/lean/tests/fixtures/control.lean"]}))
     rc, _ran, doc = _run(tmp_path, 3)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 4)[1] == []                  # the policy of run 2 again: its pass answers
+    files = LA.COMMON.tracked_files()
+    for i, name in enumerate(sorted(LA.NOT_READ), 5):
+        f = f"tools/verity/lean/{name}"
+        (root / f).write_text(f"{i}\n")
+        monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None, files=sorted({*files, f}): files)
+        files = LA.COMMON.tracked_files()
+        rc, ran, doc = _run(tmp_path, i)
+        assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"], name
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": [f"tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]}))
+    rc, _ran, doc = _run(tmp_path, 99)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
+    assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
 
 
 def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
@@ -684,6 +700,9 @@ def test_the_real_packages_and_their_inputs():
     assert "tools/verity/lean/check.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/verity/lean/Replay.lean" in got and "tools/verity/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/verity/lean/tests/")]
+    assert {"tools/verity/lean/upstream.py", "tools/verity/lean/setup.sh", "tools/verity/lean/cache.py"} <= set(got)
+    assert not {f"tools/verity/lean/{n}" for n in LA.NOT_READ} & set(got)
+    assert {f"tools/verity/lean/{n}" for n in LA.NOT_READ} <= set(files), "an entry of NOT_READ names no file: remove it"
 
 
 def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():

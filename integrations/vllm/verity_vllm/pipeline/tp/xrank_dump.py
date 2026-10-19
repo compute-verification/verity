@@ -2,9 +2,10 @@
 
 Every member is opened and verified against this rank's run root (the reader of the value check and the sampled replay); a member
 that does not verify is a pick without bytes, named, which the driver's check fails.  Per pick: the rank's partial rows and the rows
-of the received collective output as this rank committed it.  A world-8 all-reduce pick also names the routed Definition the rank
-Program binds at the call (`route_of`: `registry.tp_allreduce`'s route for the call's M and N under the engine's all-reduce switches,
-the fused norm's when `fused_allreduce_rms_norm` takes FlashInfer's path), held to the specs the rank's Programs bind
+of the received collective output as this rank committed it.  An all-reduce pick on a captured route also names the routed Definition
+the rank Program binds at the call (`route_of`: `registry.tp_allreduce`'s route for the call's M and N under the engine's all-reduce
+switches at the rank's world and GPU, the fused norm's when `fused_allreduce_rms_norm` takes FlashInfer's path), held to the specs the
+rank's Programs bind
 (`program_binds`); its received member is the norm's `<norm>/all_reduce` on the other path, and the fused norm's are `<norm>/0` and
 `<norm>/1` with its residual (the previous call's `<norm>/1`, the embedding for the first) and the norm's weight.  Picks are drawn
 identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt.
@@ -21,28 +22,35 @@ from verity_vllm.check.match import xrank_collectives as XC
 ROUTED_WORLD = 8
 
 
-def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = None) -> dict[str, Any] | None:
+def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = None, device: Any = None) -> dict[str, Any] | None:
     """The routed Definition of one bf16 [M, N] all-reduce: {"spec", "family", "statics", "fused"}, {"why"} when no captured route
-    covers it, or None off the routed world (the AllReduce_v2 chain).  `norm`: the RMSNorm a `fused_allreduce_rms_norm` call passes,
-    which takes the fused route exactly where the export shim authors it (FlashInfer on, M <= `fused_max_tokens`, a captured entry)."""
+    covers it at the routed world, or None at world 2 and, off the routed world, where no captured route covers it (the AllReduce_v2
+    chain).  `norm`: the RMSNorm a `fused_allreduce_rms_norm` call passes, which takes the fused route exactly where the export shim
+    authors it (FlashInfer on, M <= `fused_max_tokens`, a captured entry).  `device`: the rank's GPU (`tp_allreduce.device_of`), which
+    the routes keyed on a device read with the switches' NCCL transport."""
     from verity.ml.circuits.defs import bind
     from verity_vllm.program.registry import tp_allreduce as T
 
-    if int(world) != ROUTED_WORLD:
+    world = int(world)
+    if world <= 2:
         return None
     setting, route = T.served_route(settings, M, N)
     if setting is None:
-        return {"why": f"all-reduce switches {settings!r} name no captured setting"}
+        return {"why": f"all-reduce switches {settings!r} name no captured setting"} if world == ROUTED_WORLD else None
+    facts = {"world": world, "device": device, "transport": settings.get("nccl_transport")}
     fused = None
     if norm is not None and settings.get("flashinfer") and M <= T.fused_max_tokens(N, world):
-        fused = T.covered(setting, N, "fused", M)
+        fused = T.covered(setting, N, "fused", M, **facts)
     if fused is not None:
         defn, statics = T.AllReduceRmsNormMnnvl, {"WORLD": world, "N": N, "SHOT": T.mnnvl_shot(M, N, world), "CLUSTER": T.mnnvl_grid(M, N)[1],
                                                   "EPS": float(norm.variance_epsilon), "FMA": bool(fused.statics["FMA"])}
     else:
-        c = T.covered(setting, N, route, M)
+        c = T.covered(setting, N, route, M, **facts)
         if c is None:
-            return {"why": f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}"}
+            if world != ROUTED_WORLD:
+                return None
+            return {"why": f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}, world={world}, "
+                           f"device={facts['device']!r}, transport={facts['transport']!r}"}
         defn, statics = T.route_binding(c, world, M, N)
     spec = bind(defn, **statics).id
     return {"spec": spec, "family": spec.split("{", 1)[0], "statics": statics, "fused": fused is not None}
@@ -90,8 +98,8 @@ def _routed(pk: dict[str, Any], route: dict[str, Any], site_mod: Any, order: lis
 
 
 def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex: str, pair: int, per_stratum: int = 2,
-         max_rows: int = 16) -> dict[str, Any]:
-    """THIS rank's picks -> `out_dir/xrank_pair<pair>_rank<r>.pt`; the record the driver reads beside it."""
+         max_rows: int = 16, device: Any = None) -> dict[str, Any]:
+    """THIS rank's picks -> `out_dir/xrank_pair<pair>_rank<r>.pt`; the record the driver reads beside it.  `device`: `route_of`'s."""
     import torch
 
     from verity_vllm.acquire.sources.partial_source import _committed
@@ -134,7 +142,8 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
         if pk["kind"] == "all_reduce" and pm is not None and len(pm.shape) != 2 and world == ROUTED_WORLD:
             extra = {"route_why": f"partial {pm.name} of shape {tuple(pm.shape)}, not [M, N]"}
         elif pk["kind"] == "all_reduce" and pm is not None and len(pm.shape) == 2:
-            route = route_of(settings, int(pm.shape[0]), int(pm.shape[1]), world, norm=mods.get(pk["site"]) if order and pk["site"] in order else None)
+            route = route_of(settings, int(pm.shape[0]), int(pm.shape[1]), world, norm=mods.get(pk["site"]) if order and pk["site"] in order else None,
+                             device=device)
             if route is not None and "why" not in route:
                 route = path_disagrees(route, paths.get(step), order, pk["site"]) or route
             if route is not None and "why" in route:

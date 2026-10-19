@@ -8,6 +8,10 @@ staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's c
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE]
 
+``stage`` refuses an inner session whose record holds no draw (`rec_live.inner_draw`, exit 2): the verifier refuses every
+session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
+(``rec_live --draw``).
+
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
 table's shape as its setup derives it (`shape`), each rep's coins (its stream's rounds), the fold points they give
 (`rec_algebra.fold_points`, ``points``), the extra claims at the link points and the comb at the fold points (``fold.json``,
@@ -576,6 +580,11 @@ def main(argv=None) -> int:
         pts["points_s"] = round(time.perf_counter() - t0, 2)
         print(json.dumps(pts))
         return 0
+    try:
+        RL.inner_draw((Path(a.inner) / "session" / "session.json").read_text())
+    except ValueError as e:
+        print(json.dumps({"refused": str(e)}), flush=True)
+        return 2
     levels = None if a.levels == "all" else [] if a.levels == "none" else [int(x) for x in a.levels.split(",")]
     pts = json.loads(Path(a.points).read_text()) if a.points else None
     fold = json.loads(Path(a.fold).read_text())

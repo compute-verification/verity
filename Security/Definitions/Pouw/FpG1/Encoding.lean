@@ -24,8 +24,7 @@ and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1
   H200 on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin.
   sm_120's 60 and 5 are FPX-DESIGN's, derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1
   (co32c-u16, weights to ±110), so on H1 they are conservative; g1's values fit both (RT2-FP-2,
-  note:20261019T1100Z-draft-rt2-fp). No Program checks `Grids.On` and no guarantee reads it: it describes what an
-  honest g1 prover commits.
+  note:20261019T1100Z-draft-rt2-fp). No Program checks `Grids.On`: it describes what an honest g1 prover commits.
 -/
 
 namespace Pouw.FpG1
