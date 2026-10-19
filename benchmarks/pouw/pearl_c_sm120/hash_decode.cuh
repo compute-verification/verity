@@ -35,10 +35,11 @@
 // pairs at cw = 2 they share SMSPs with, the templates' builders in the pairs' idle buffers.
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
-// later (wm_put64, at any byte offset).  pd_host.cpp builds this file for the host tests.
+// later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
+// builds the served variants (its PD_VARIANT_LIST); run.py's Pipeline launches them at decode (`PD_SERVED`).
 #pragma once
-#include "../../pouw/pearl_c/hash_h3.cuh"
-#include "../../pouw/pearl_c_sm120/hash_fast.cuh"
+#include "../pearl_c/hash_h3.cuh"
+#include "hash_fast.cuh"
 
 #ifndef PD_HOST
 #include <cuda_bf16.h>
@@ -64,7 +65,9 @@ inline uint32_t pd_smid() { return 0; }
 
 constexpr int PD_ROUNDS = 1, PD_ROLLED = 2, PD_CALL = 4, PD_PREFETCH = 8, PD_PAIR = 16, PD_STAMP = 32, PD_WHOLE = 64,
               PD_GROUP = 128, PD_LOOP = 256, PD_LATE = 512;
+#ifndef PD_VARIANT_LIST
 #define PD_VARIANT_LIST(X) X(19) X(211) X(307) X(339) X(467) X(819) X(851) X(979)
+#endif
 
 // ---------------------------------------------------------------- tables, once per module (pd_heads)
 enum { PD_SEED_A = 0, PD_NOISE_LINE = 1, PD_LINE = 2 };
@@ -484,29 +487,28 @@ DEV void pd_seed(const uint32_t* unit, const uint64_t* x, uint64_t iota, uint32_
       }
       pd_cmp<V, P>(st, w);
     }
-    s512_out32(st, key);
-    return;
+  } else {
+#pragma unroll
+    for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
+#pragma unroll
+    for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? x[i - 4]
+                                              : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
+    pd_cmp<V, P>(st, w);
+#pragma unroll
+    for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[16 + 2 * i], unit[17 + 2 * i]) : 0;
+    w[4] = rs_be64((uint32_t)iota, (uint32_t)(iota >> 32));
+    w[5] = 0x8000000000000000ull;
+    w[15] = 8 * (128 + 168);
+    pd_cmp<V, P>(st, w);
+    s512_out32(st, seed);
+#pragma unroll
+    for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_NOISE_LINE][t];
+#pragma unroll
+    for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
+    w[4] = 0x8000000000000000ull;
+    w[15] = 8 * (128 + 32);
+    pd_cmp<V, P>(st, w);
   }
-#pragma unroll
-  for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_SEED_A][t];
-#pragma unroll
-  for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[2 * i], unit[2 * i + 1]) : i < 12 ? x[i - 4]
-                                            : rs_be64(unit[8 + 2 * (i - 12)], unit[9 + 2 * (i - 12)]);
-  pd_cmp<V, P>(st, w);
-#pragma unroll
-  for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(unit[16 + 2 * i], unit[17 + 2 * i]) : 0;
-  w[4] = rs_be64((uint32_t)iota, (uint32_t)(iota >> 32));
-  w[5] = 0x8000000000000000ull;
-  w[15] = 8 * (128 + 168);
-  pd_cmp<V, P>(st, w);
-  s512_out32(st, seed);
-#pragma unroll
-  for (int t = 0; t < 8; t++) st[t] = PD_LABELS[PD_NOISE_LINE][t];
-#pragma unroll
-  for (int i = 0; i < 16; i++) w[i] = i < 4 ? rs_be64(seed[2 * i], seed[2 * i + 1]) : 0;
-  w[4] = 0x8000000000000000ull;
-  w[15] = 8 * (128 + 32);
-  pd_cmp<V, P>(st, w);
   s512_out32(st, key);
 }
 
@@ -745,19 +747,19 @@ DEV void pd_row_leaf(uint64_t hm, const uint64_t* xr, const uint64_t* mk, const 
       }
       pd_cmp<V, P>(lt, w);
     }
-    return;
+  } else {
+#pragma unroll
+    for (int q = 0; q < 8; q++) { lt[q] = mid[8 + q]; w[q] = rs_bswap64(rs_bswap64(xr[q]) ^ mk[q]); w[8 + q] = cc[q]; }
+    pd_cmp<V, P>(lt, w);
+    pd_padc<V, P>(lt, 256);
+#pragma unroll
+    for (int q = 0; q < 16; q++) w[q] = ftw[16 + q];
+    w[16] = 0;
+    wm_put64<PD_LEAF_AT>(w, lt);
+#pragma unroll
+    for (int q = 0; q < 8; q++) lt[q] = ftm[q];
+    pd_cmp<V, P>(lt, w);
   }
-#pragma unroll
-  for (int q = 0; q < 8; q++) { lt[q] = mid[8 + q]; w[q] = rs_bswap64(rs_bswap64(xr[q]) ^ mk[q]); w[8 + q] = cc[q]; }
-  pd_cmp<V, P>(lt, w);
-  pd_padc<V, P>(lt, 256);
-#pragma unroll
-  for (int q = 0; q < 16; q++) w[q] = ftw[16 + q];
-  w[16] = 0;
-  wm_put64<PD_LEAF_AT>(w, lt);
-#pragma unroll
-  for (int q = 0; q < 8; q++) lt[q] = ftm[q];
-  pd_cmp<V, P>(lt, w);
 }
 // row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr (shared); stored if on
 template <int V, int P = 0>
@@ -1057,7 +1059,7 @@ template <int V> DEV void pd_tile_seg(const Args& a, int cols, int ti, int tj, i
   rs_seg_head(st, j, s);
   const auto blk = [&](int c) {
     const size_t row = 64 * (size_t)ti + 2 * j + c / 4;
-    return reinterpret_cast<const uint4*>(a.p[c & 1]) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
+    return reinterpret_cast<const uint4*>(c & 1 ? a.p[1] : a.p[0]) + (row * cols + 64 * tj + 32 * (c >> 1 & 1)) / 4;
   };
   if constexpr ((V & PD_PREFETCH) != 0) {
 #pragma unroll

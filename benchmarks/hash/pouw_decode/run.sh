@@ -45,7 +45,8 @@ EOF
 cat "$OUT/sass_ops.txt"
 grep -E "pd_|spill|stack" "$OUT/ptxas_pd.txt" | head -80 || true
 
-g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.so" "$HERE/pd_host.cpp"
+g++ -O2 -std=c++20 -pthread -shared -fPIC -Wno-unknown-pragmas -o "$SCR/pd_host.so" \
+  "$ROOT/benchmarks/pouw/pearl_c_sm120/hash_decode_host.cpp"
 PYTHONPATH="$ROOT" python3 "$HERE/host_test.py" "$SCR/pd_host.so" > "$OUT/host_test.txt" 2>&1
 tail -3 "$OUT/host_test.txt"
 

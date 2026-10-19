@@ -1,8 +1,9 @@
-// pd.cuh and the hash_h3.cuh / hash_fast.cuh kernels built for the host (host_test.py): the CUDA builtins they use, and
+// hash_decode.cuh and the hash_h3.cuh / hash_fast.cuh kernels built for the host (tests/test_pearl_c_hash_decode.py,
+// benchmarks/hash/pouw_decode/host_test.py): the CUDA builtins they use, and
 // `pd_run`, which runs a 1-D grid's CTAs in order, a CTA's threads as host threads under one barrier (__syncthreads), a
 // barrier per warp (__syncwarp) and the named barriers (pd_bar_sync / pd_bar_arrive, each made at its first use with its
 // thread count).  Buffers are host memory: Args' pointers are host addresses.
-//   g++ -O2 -std=c++20 -pthread -shared -fPIC -o pd_host.so pd_host.cpp
+//   g++ -O2 -std=c++20 -pthread -shared -fPIC -o hash_decode_host.so hash_decode_host.cpp
 #include <algorithm>
 #include <atomic>
 #include <barrier>
@@ -93,7 +94,7 @@ static uint8_t pd_e4m3(float f) {   // __nv_cvt_float_to_fp8(f, __NV_SATFINITE, 
   return sign | (uint8_t)std::min(code, 0x7E);
 }
 
-#include "pd.cuh"
+#include "hash_decode.cuh"
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); };

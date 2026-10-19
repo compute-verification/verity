@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""pd.cuh on the host (pd_host.cpp's build), held byte for byte to Pearl-C's own kernels built beside it (s512_row_segs and
+"""hash_decode.cuh on the host (hash_decode_host.cpp's build), held byte for byte to Pearl-C's own kernels built beside it (s512_row_segs and
 s512_folds, hm_leaves, s512_frame_leaves, s512_pads, s512_tree_small, s512_seeds, s512_tile_segs) and to the Python
 references (refs.py; E_A's lines against Python alone), at row counts with and without pads and filler rows and segment
-counts odd and even and one or two segment warps, in every variant (pd.cuh's PD_VARIANT_LIST) and both pd_commit modes;
+counts odd and even and one or two segment warps, in every variant (hash_decode.cuh's PD_VARIANT_LIST) and both pd_commit modes;
 every pd output starts poisoned.  pd_probe's variants are held to each other, and its paired chain to its compressions'.
 Exit 1 on any difference.
 
@@ -26,12 +26,12 @@ import refs  # noqa: E402
 from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
 
 RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_STAMP, PD_GROUP, PD_LATE = 128, 0xA5, 5, 16, 32, 128, 512
-SRC = open(os.path.join(HERE, "pd.cuh")).read()
-#: pd.cuh's PD_VARIANT_LIST, a launch each
+SRC = open(os.path.join(HERE, "..", "..", "pouw", "pearl_c_sm120", "hash_decode.cuh")).read()
+#: hash_decode.cuh's PD_VARIANT_LIST, a launch each
 VARIANTS = tuple(int(x) for x in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SRC).group(1)))
-#: PD_GROUP's tiles a CTA (pd.cuh's PD_G)
+#: PD_GROUP's tiles a CTA (hash_decode.cuh's PD_G)
 GROUP = int(re.search(r"PD_G = (\d+)", SRC).group(1))
-#: PD_STAMP's stamps: PD_SLOTS (timer, clock) pairs a row; a row's slots PS_* and the tail's PT_* (pd.cuh's enums)
+#: PD_STAMP's stamps: PD_SLOTS (timer, clock) pairs a row; a row's slots PS_* and the tail's PT_* (hash_decode.cuh's enums)
 SLOTS, MAX_LEVELS = (int(re.search(rf"{x} = (\d+)", SRC).group(1)) for x in ("PD_SLOTS", "PD_MAX_LEVELS"))
 PS = dict(zip(re.search(r"enum \{ (PS_START[^}]*) \}", SRC).group(1).replace(" ", "").split(","), range(16)))
 PT = {"PT_START": 0, "PT_LEVEL": 1, "PT_SEED_A": 1 + MAX_LEVELS, "PT_FILLERS": 2 + MAX_LEVELS, "PT_ENTRY": 3 + MAX_LEVELS,
@@ -43,9 +43,9 @@ class Args(C.Structure):
 
 
 def build() -> str:
-    out = os.path.join(tempfile.mkdtemp(), "pd_host.so")
+    out = os.path.join(tempfile.mkdtemp(), "hash_decode_host.so")
     subprocess.run(["g++", "-O2", "-std=c++20", "-pthread", "-shared", "-fPIC", "-Wno-unknown-pragmas", "-o", out,
-                    os.path.join(HERE, "pd_host.cpp")], check=True)
+                    os.path.join(HERE, "..", "..", "pouw", "pearl_c_sm120", "hash_decode_host.cpp")], check=True)
     return out
 
 

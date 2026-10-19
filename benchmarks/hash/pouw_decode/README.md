@@ -1,11 +1,11 @@
 # pouw_decode
 
 Pearl-C -h3's hashing per decode call (`pearl-c-sm120-v1-h3`, vLLM's `pouw` option) on one RTX PRO 6000, measured
-against Pearl-C's own launches, and pd's launches that make the same bytes in fewer, shallower launches. Nothing here is
-served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/pearl_c_sm120`, `benchmarks/pouw/pearl_c`,
-`verity/core/protocols/pouw`, vLLM's `pouw_pearl_c_*`) this directory reads, builds and imports, and never edits.
+against Pearl-C's own launches, and pd's launches that make the same bytes in fewer, shallower launches. pd's source is
+Pearl-C's (`benchmarks/pouw/pearl_c_sm120/hash_decode.cuh`), whose served variants `run.py`'s Pipeline launches at decode;
+this directory builds every variant (`pd.cu`) to measure them against the launches they replace.
 
-- `pd.cuh` (`pd.cu`): the launches.
+- `hash_decode.cuh` (`pd.cu`): the launches.
   - `pd_commit` makes A's commitment in one launch, one CTA per row. In parallel it hashes the row's segments, its hm96
     salt (across a warp), its frame leaf's first block and the tree's node templates. It then folds the row digest, makes
     the hm96 leaf, the frame leaf, the row seed, its line key and the row's E_A line (the served call's `lines_ea`). In
@@ -41,7 +41,8 @@ served: pd is a candidate for compute accounting, whose code (`benchmarks/pouw/p
     sequentially consistent one. Pearl-C's unrolled
     compression is about 3,500 instructions (56 KB), and a call's serial compressions are each at a site of their own,
     so inlined they are each fetched cold. On its thread the schedule is a third of a compression's cycles.
-- `pd_host.cpp`: the same source run on the CPU (`pd_run`), with Pearl-C's own hash kernels, for `host_test.py`.
+- `hash_decode_host.cpp` (beside `hash_decode.cuh`): the same source run on the CPU (`pd_run`), with Pearl-C's own hash
+  kernels, for `host_test.py`.
 - `refs.py`: the Python references (`pearl_c.row_digest`, `row_seed`, `unit_seed_a`, `line_key`, `sample_line` and
   `leaf`, and `audit.HM96`'s tree).
 - `host_test.py`: pd's launches against Pearl-C's kernels and the Python references on the CPU: pads, odd segment counts,
