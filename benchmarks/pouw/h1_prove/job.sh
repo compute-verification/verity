@@ -9,15 +9,16 @@
 #      serves, draws, opens, checks the openings and has the drawn units staged
 #   3. one loopback --zk session per statement (the drawn units; the other window's unit), every instance drawn
 #   4. the Lean checks of run.py's plan (honest ACCEPT; flipped-z, wrong-receipt, other-window REJECT; other-window-own
-#      ACCEPT), one at a time at K = 4096 (each about 5x the circuit text resident), and the selftest build's controls on
+#      ACCEPT), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
+#      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
 #   5. run.py summarize: out/summary.json
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
-#      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (60) and H1_PROVE_PCT (33):
+#      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
 #      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
-#      instances the serve died at a 126 GB cap and the prover peaked at 80 GB resident)  HZ_RUNS (1)  HZ_WARM (0)
+#      instances the serve passes 131 GB resident and the prover 100 GB, so H1_MEM_GB=500)  HZ_RUNS (1)  HZ_WARM (0)
 #      HZ_CACHE, HZ_STAGE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=h1 HZ_MEM_GB=${H1_MEM_GB:?} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
@@ -29,7 +30,7 @@ H=$SRC/benchmarks/pouw/h1_prove
 K=${H1_K:-4096} COLS=${H1_COLS:-0} DRAW=${H1_DRAW:-8} TOKENS=${H1_TOKENS:-16} LAYER=${H1_LAYER:-0}
 HUB=${H1_HUB:-/workspace/hf/hub}
 if [ "$K" = 4096 ]; then CONTROLS=${H1_CONTROLS:-}; else CONTROLS=${H1_CONTROLS:-honest output_row_committed_false}; fi
-SERVE_GB=$(( MEM_GB * ${H1_SERVE_PCT:-60} / 100 )) PROVE_GB=$(( MEM_GB * ${H1_PROVE_PCT:-33} / 100 ))
+SERVE_GB=$(( MEM_GB * ${H1_SERVE_PCT:-36} / 100 )) PROVE_GB=$(( MEM_GB * ${H1_PROVE_PCT:-32} / 100 ))
 SW=$W/stage WK=$W/work
 mkdir -p "$OUT/lean"
 
