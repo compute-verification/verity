@@ -3474,14 +3474,15 @@
     "            Eq (RecDeploy.scopeCheck ivScope x) Bool.true →",
     "              Eq (FlockComplete.ready FlockDeploy.sha512 (RecDeploy.xIOf x)) Bool.true →",
     "                instLTNat.lt ms.length (RecDeploy.stopRounds IV x) →",
-    "                  (∀ (i : Nat), instLENat.le i ms.length → Not (RecDeploy.badAt x (List.take i ms))) →",
-    "                    Eq",
-    "                      ((RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H",
-    "                        (RecDeploy.stopRounds IV x) x ms)",
-    "                      Bool.false))))"
+    "                  RecDeploy.Coined ms →",
+    "                    (∀ (i : Nat), instLENat.le i ms.length → Not (RecDeploy.badAt x (List.take i ms))) →",
+    "                      Eq",
+    "                        ((RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H",
+    "                          (RecDeploy.stopRounds IV x) x ms)",
+    "                        Bool.false))))"
    ],
    "assumptions": [],
-   "type_hash": "8fcd9f7d66ee730d81f010d2a85d086f90dee972ba90b4a568920d85bd2be102"
+   "type_hash": "bfe9e8dc24fc93281e425d5d0d298bc4f46d6e07c2e3320f25397fcd6bbf8381"
   },
   "Claims.Witness.Recursion.ZKStop_meets_ready": {
    "owner": "@proofs",
@@ -3522,14 +3523,15 @@
     "                  And (∀ (st : Flock.Stmt), Array.instMembership.mem sts st → FlockComplete.RegionsFit st)",
     "                    (FlockComplete.RecordFitsAt FlockDeploy.sha512 (RecDeploy.xIOf x) spec sts)) →",
     "              instLTNat.lt ms.length (RecDeploy.stopRounds IV x) →",
-    "                (∀ (i : Nat), instLENat.le i ms.length → Not (RecDeploy.badAt x (List.take i ms))) →",
-    "                  Eq",
-    "                    ((RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x)",
-    "                      x ms)",
-    "                    Bool.false))"
+    "                RecDeploy.Coined ms →",
+    "                  (∀ (i : Nat), instLENat.le i ms.length → Not (RecDeploy.badAt x (List.take i ms))) →",
+    "                    Eq",
+    "                      ((RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H",
+    "                        (RecDeploy.stopRounds IV x) x ms)",
+    "                      Bool.false))"
    ],
    "assumptions": [],
-   "type_hash": "fdfd6cdfc024225d0440e776ac2df257938ba5808ae7863caa8f63ce2ceb2552"
+   "type_hash": "555f445f7b3d5893a18832159b834beeac77773c42928df142c3b0610dc07e50"
   },
   "Claims.Witness.Recursion.ZK_fails": {
    "owner": "@proofs",
@@ -10742,7 +10744,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "fd37b517f7e19ea6733d347da0b8304cca500805d06d921bd81835996bdb6ef4",
+   "digest": "efdbc741e483a2d9b44a43ad2b890fae957f78f7db196710ae51dc76c740a28f",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -10754,7 +10756,7 @@
     "Claims.Recursion.Bound.IVStar": "137185c636e2d70008f163623204e09d545ee6f84b00bef985d3b712a748a51a",
     "Claims.Recursion.Bound.LastBinds": "5167cb9e4d264b017e58940bf2d6c97f379eb03198c659d263b53d25a0a1ac7d",
     "Claims.Recursion.Bound.PlainKSAbort": "f47c0563127f50809311f993df9976a067d626327d299d7e006aca87de994f34",
-    "Claims.Recursion.Bound.WeightCovers": "98f13a0569a184852aaf63eddc5ab60fc4727824b019d3f5a250948263cc0b3e",
+    "Claims.Recursion.Bound.WeightCovers": "e6d07126d527a1ec5f74d003d99004de880bdcf436598eeea6a6dbdbf5ba0edb",
     "Claims.Recursion.Bound.agrees": "982e8be0c9ef0c131c539dc4a724e86617d1e608837aaef142f82b4e630ff3f6",
     "Claims.Recursion.Bound.ans": "85036cba90398af117e13745fe4f4f660695c4c9174b7cc85a327d25565ffb7a",
     "Claims.Recursion.Bound.deploy": "234ebc0264cf9160ac85ed0c14d9c4d939ed04d8599ab17781001d669247c9b3",
@@ -10762,7 +10764,6 @@
     "Claims.Recursion.Bound.join": "5eff9438bf04ffe582d18f5ae7ce442da87b3324053fe287b9502c8e287f045a",
     "Claims.Recursion.Bound.mask": "138f7c7c24f20375bc23399f67bb25f942a0fe60851d59dc85e7ba9b21e47f25",
     "Claims.Recursion.Bound.nAt": "9c3ee943568be62696103e6f11d3be09bd09c2f73b1c239fd6bce3f7b881522d",
-    "Claims.Recursion.Bound.nOpen": "b24fd873a3172c7fda2be593825d748a211777ac1a27b754f0ffc0654c75bc4f",
     "Claims.Recursion.Bound.openView": "9dbabe1f515252529904c23d7932e020aeb660d299752d161478bd5ae25c775c",
     "Claims.Recursion.Bound.opened": "a89007bf591d5f76f01b330e30908f2858d4849996dd32da8b7def7fa3bb5935",
     "Claims.Recursion.Bound.opens": "e2bd916861258c89e8744324c8aa825af9b18a19128f475b2f249a964c3e88fa",

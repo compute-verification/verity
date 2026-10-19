@@ -48,6 +48,7 @@ import Proofs.Flock.Claims.Recursion.BindsDeployed
 import Proofs.Flock.Claims.Recursion.BoundAccepts
 import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.BoundBridge
+import Proofs.Flock.Claims.Recursion.BoundWeight
 import Proofs.Flock.Claims.Recursion.LastBindsE
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
