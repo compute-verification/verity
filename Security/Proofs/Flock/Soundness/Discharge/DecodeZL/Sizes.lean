@@ -196,10 +196,8 @@ theorem post_bind_switches {β : Type} {want : ℕ} {w : String} {f : Array (Arr
 theorem decodeProof_sizes : DecodeSizes := by
   intro sh bytes p h
   unfold decodeProof at h
-  obtain ⟨⟨p', r'⟩, hrun, hp⟩ := ebind_ok h
-  have hp' : p' = p := Except.ok.inj hp
-  rw [← hp']
-  refine (?_ : Post _ (ProofSizes sh)) p' ⟨_, _, hrun⟩
+  obtain ⟨r', hrun, -⟩ := Flock.Reader.runAll_ok h
+  refine (?_ : Post _ (ProofSizes sh)) p ⟨_, _, hrun⟩
   dsimp only
   refine post_bind_vecBytes fun cap hcap hcapE => ?_
   refine post_bind fun m _ => post_bind fun lir _ => post_bind fun lbs _ => post_bind fun profile _ => ?_

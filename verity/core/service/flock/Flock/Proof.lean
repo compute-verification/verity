@@ -115,7 +115,7 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
     -- lincheck
     let lr ← vecExact (sh.kLog - 6) (do let a ← f128; let b ← f128; pure (a, b)) "lincheck rounds"
     let zp ← vecExact 64 f128 "z_partial"
-    let _ ← vecAny 32 (do let _ ← f128; let _ ← f128; pure ()) "matrix_evals"
+    let _ ← vecExact 0 (do let _ ← f128; let _ ← f128; pure ()) "matrix_evals"
     let _ ← vecExact 0 u64 "lincheck grinding_nonces"
     -- opening
     let rs ← vecExact sh.claims (do
@@ -151,10 +151,8 @@ def decodeProof (sh : Shape) (bytes : ByteArray) : V Proof := do
     let _ ← vecExact 0 u64 "fold_grinding_nonces"
     let cbn ← vecExact (3 * R + 2) u64 "claim_batch_grinding_nonces"
     let con ← vecExact (R + 1) u64 "consistency_batch_grinding_nonces"
-    -- bytes after the pair are ignored (§8.1)
     return { cap, params, zerocheck := ⟨r1ab, r1c, rounds, fa, fb, fc⟩, lincheck := ⟨lr, zp⟩, ringSwitches := rs,
              ligerito := ⟨icap, iproof, rcaps, rproofs, fproof, msgs, qn, ood, cbn, con⟩ }
-  let (p, _) ← prog.run ⟨bytes, 0⟩
-  return p
+  runAll prog bytes "proof"
 
 end Flock

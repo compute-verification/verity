@@ -132,6 +132,32 @@ def vecAny {α} (minSize : Nat) (elem : M α) (what : String) : M (Array α) := 
     out := out.push (← elem)
   return out
 
+/-- `m` read from the first byte of `bytes`, refused unless it stops after the last (§8.1): a file is the one encoding of
+what it decodes to, so every byte the record's digest binds (S17) is one the verifier reads. -/
+def runAll {α} (m : M α) (bytes : ByteArray) (what : String) : V α :=
+  match m.run ⟨bytes, 0⟩ with
+  | .error e => .error e
+  | .ok (a, r) =>
+    if r.pos = bytes.size then .ok a
+    else .error s!"{what}: the file has {bytes.size} bytes and its encoding ends at byte {r.pos}"
+
+theorem runAll_ok {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} (h : runAll m bytes what = .ok a) :
+    ∃ r : Reader, m.run ⟨bytes, 0⟩ = .ok (a, r) ∧ r.pos = bytes.size := by
+  unfold runAll at h
+  split at h
+  · cases h
+  · rename_i a' r hm
+    split at h
+    · cases h
+      exact ⟨r, hm, by assumption⟩
+    · cases h
+
+theorem runAll_of_run {α} {m : M α} {bytes : ByteArray} {what : String} {a : α} {r : Reader}
+    (h : m.run ⟨bytes, 0⟩ = .ok (a, r)) (hr : r.pos = bytes.size) : runAll m bytes what = .ok a := by
+  unfold runAll
+  rw [h]
+  simp only [hr, ite_true]
+
 end Reader
 
 end Flock
