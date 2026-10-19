@@ -140,9 +140,10 @@ GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 BATCH_INVARIANT = "batch-invariant"
 #: (compute capability, SMs) of the RTX PRO 6000 Blackwell Server Edition
 RTX_PRO_6000 = ("12.0", 188)
-#: Llama-3.1-70B int8's TP4 capture on vy-nebius-1 (GPUs 2, 3, 6, 7, NCCL 2.29.7) and the replay of its every all-reduce through
-#: `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py`)
-NCCL_TREE_RUNS = ("r20261018-213408-ac4a",)
+#: Llama-3.1-70B int8's TP4 capture on vy-nebius-1 (GPUs 2, 3, 6, 7, NCCL 2.29.7), the replay of its every all-reduce through
+#: `AllReduceNcclTree_v1` (`tests/properties/tp4_nccl_tree_replay.py replay`: 5152 calls, 1,514,110,976 rank words, GO) and
+#: NCCL's tree probed on GPUs 0, 1, 2, 5 (``probe``: the same chain, NaNs 0x7FFF)
+NCCL_TREE_RUNS = ("r20261018-213408-ac4a", "r20261018-234106-807f", "r20261018-235000-713a")
 
 
 class Captured(NamedTuple):
