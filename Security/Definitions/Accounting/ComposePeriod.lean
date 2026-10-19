@@ -50,6 +50,8 @@ the cheater may steer, and the tail at a stopping time is `budget_tail`'s maxima
 * `creditedLive`, `LiveWorkAt`, `rOfPrefix`: the credited windows' live words; `WorkAt` on live words, with the
   shares over the declared words; the period's logical bound over its accepted prefix of `j` windows,
   `Λ·ln(1/δ_s) + j·min(a, b)·D₀`.
+* `epsPrefix`, `creditPrefix`: that bound as a share `ε(j)` of the prefix's live words, and the period's credit in
+  live words, `(1 − ε(j))₊` of them (RT4-INT-8, note:compute-accounting/20261019T2300Z-draft-rt4-int).
 -/
 
 namespace Accounting.Compose
@@ -246,5 +248,17 @@ credited window carries and no draw detects. Per credited window it is `Λ·ln(1
 is `rOf`. -/
 noncomputable def rOfPrefix {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) (a b Λ δs : ℝ) : ℝ :=
   Λ * Real.log (1 / δs) + j * (min a b * zeroCone Sc Cd Np)
+
+/-- **The period's `ε` at its accepted prefix, in live words**: `ε(j) = r(j)·N_w/(min(a, b)·N_live)`, the logical bound
+at the realized prefix `j` (`rOfPrefix`) as a share of the prefix's live words `N_live` (`creditedLive`). Under
+`LiveWorkAt` the words not fixed right are at most `(d_F + d₀)·N_w`, and `min(a, b)·(d_F + d₀) ≤ a·d_F + b·d₀ < r(j)`,
+so they are fewer than `ε(j)·N_live`. It is read at the realized prefix, never at the period's cap `n`. -/
+noncomputable def epsPrefix {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) (Nlive a b Λ δs : ℝ) : ℝ :=
+  rOfPrefix Sc Cd Np j a b Λ δs * (wordsOf Sc Cd : ℝ) / (min a b * Nlive)
+
+/-- **The period's credit in live words**: `(1 − ε(j))₊·N_live`, the prefix's live words discounted by `ε` at the
+realized prefix (`epsPrefix`). A prefix whose `ε` is at least `1` earns nothing. -/
+noncomputable def creditPrefix {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) (Nlive a b Λ δs : ℝ) : ℝ :=
+  max (1 - epsPrefix Sc Cd Np j Nlive a b Λ δs) 0 * Nlive
 
 end Accounting.Compose

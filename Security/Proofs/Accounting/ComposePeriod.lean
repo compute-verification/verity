@@ -738,4 +738,62 @@ theorem circuitWorkPeriod_of_covers (hC : PeriodCoversStmt) :
   refine (prob_mono hsub).trans ((prob_or_le _ _).trans ?_)
   linarith
 
+/-! ## `CircuitCreditPeriod` -/
+
+/-- **The credit is below the work**: under `LiveWorkAt` at `r(j)` with `a, b > 0`, the words not fixed right,
+`(d_F + d₀)·N_w`, are at most `r(j)·N_w/min(a, b) = ε(j)·N_live`, so `(1 − ε(j))₊·N_live` is at most the words fixed
+right when those aren't negative. -/
+theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) {Nlive a b Λ δs F fd : ℝ}
+    (ha : 0 < a) (hb : 0 < b) (hN : 0 ≤ Nlive) (hF : 0 ≤ F)
+    (h : LiveWorkAt Nlive (wordsOf Sc Cd : ℝ) a b (rOfPrefix Sc Cd Np j a b Λ δs) F fd) :
+    creditPrefix Sc Cd Np j Nlive a b Λ δs ≤ F := by
+  obtain ⟨dF, d0, hdF, hd0, hfix, -, hlt⟩ := h
+  have hm : 0 < min a b := lt_min ha hb
+  have hNw : (0 : ℝ) ≤ wordsOf Sc Cd := Nat.cast_nonneg _
+  have hsum : min a b * (dF + d0) < rOfPrefix Sc Cd Np j a b Λ δs := by
+    nlinarith [mul_le_mul_of_nonneg_right (min_le_left a b) hdF, mul_le_mul_of_nonneg_right (min_le_right a b) hd0]
+  have hdef : (dF + d0) * (wordsOf Sc Cd : ℝ) ≤ rOfPrefix Sc Cd Np j a b Λ δs * (wordsOf Sc Cd : ℝ) / min a b := by
+    rw [le_div_iff₀ hm]
+    nlinarith [mul_le_mul_of_nonneg_right hsum.le hNw]
+  unfold creditPrefix
+  rcases hN.lt_or_eq with hpos | hzero
+  · have heps : epsPrefix Sc Cd Np j Nlive a b Λ δs * Nlive =
+        rOfPrefix Sc Cd Np j a b Λ δs * (wordsOf Sc Cd : ℝ) / min a b := by
+      unfold epsPrefix
+      rw [div_mul_eq_mul_div, mul_div_mul_right _ _ hpos.ne']
+    rcases le_total (1 - epsPrefix Sc Cd Np j Nlive a b Λ δs) 0 with hle | hle
+    · rw [max_eq_right hle, zero_mul]
+      exact hF
+    · rw [max_eq_left hle, sub_mul, one_mul, heps]
+      linarith
+  · rw [← hzero, mul_zero]
+    exact hF
+
+/-- **`CircuitCreditPeriod` from the period layer's covers**: `circuitWorkPeriod_of_covers` at `a, b > 0`; on an
+accepted run `UnitFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
+theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
+    Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod := by
+  intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
+    hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
+  have hW := circuitWorkPeriod_of_covers hC Sc Cd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
+    hρ hρN hwmax hlk ha.le hb.le hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
+  obtain ⟨hwf, -, -, -, hlc⟩ := hS
+  have hFix := hUF (hC Sc Cd hr hK Wp pr hwf hlc).1
+  have hfix0 : ∀ x, Pl.accepts x → 0 ≤ (Pl.run x).fixed := by
+    intro x hx
+    refine le_trans ?_ (hFix x hx).1
+    exact div_nonneg (Finset.sum_nonneg fun w _ => Finset.sum_nonneg fun t _ => ite_nonneg (Nat.cast_nonneg _) le_rfl)
+      (Nat.cast_nonneg _)
+  have hsub : ∀ x, (Pl.accepts x ∧ n * (Pl.run x).fixed <
+      creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) →
+      Pl.accepts x ∧ ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
+        (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x) := by
+    rintro x ⟨hacc, hlt⟩
+    refine ⟨hacc, fun hw => (not_lt.mpr ?_) hlt⟩
+    have hNl : 0 ≤ creditedLive Sc Cd Wp pr x := by
+      unfold creditedLive
+      exact Finset.sum_nonneg fun w _ => ite_nonneg (Finset.sum_nonneg fun t _ => Nat.cast_nonneg _) le_rfl
+    exact creditPrefix_le Sc Cd Np _ ha hb hNl (mul_nonneg (Nat.cast_nonneg _) (hfix0 x hacc)) hw
+  exact (prob_mono hsub).trans hW
+
 end Accounting.SecurityProofs.ComposePeriod

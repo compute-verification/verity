@@ -7,8 +7,9 @@ import Models.Accounting.Assumptions.Compose
 INT-PERIOD's statement (note:compute-accounting/20261019T0739Z-draft-int-period), RT-INT's fix (c)
 (note:compute-accounting/20261019T0528Z-draft-rt-int): `CircuitWork` restated over a period of `n` windows of one
 declared circuit, each window with its own live coins and its own draw, its words counted on its live tiles only. It
-changes what the live guarantee says, so it is for Daniel to take or leave (the card in the note), and it is stated,
-not proved: the red team and the card come first.
+changes what the live guarantee says, and Daniel took it (ASK-64 = A, 19 Oct: `ε` quoted per accounting period,
+credited on live tiles up to the first refused window) after the red teams' rounds; its credit in live words is
+`CircuitCreditPeriod` (RT4-INT-8, note:compute-accounting/20261019T2300Z-draft-rt4-int).
 
 RT-INT-1: both live lines are quoted at 48,000 equal live rounds, and each has its own round floor for `ε < 1%`. On
 Compose's line (`CircuitWork`, 0.744% at #2638, `a = 0.218`, `b = 0.998`) it is at least 10,552 equal live rounds a
@@ -37,12 +38,17 @@ probability `(1 − f)^n`, 63% at a per-window failure rate `f = 10^-5`, and dro
   that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
   (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
   `expect_weight_le` does, with the bound for every threshold `D` in the induction.
-* `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix; not its credit
-  (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives. Not proved; it follows from `CircuitWork`'s
-  lemmas, not from its conclusion (a per-window tail at `δ` can't be averaged into `ε/n`): `ServiceBudget` per window
-  at the window's detected live weights, `PeriodBudget`, `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at
-  `n` rounds, the period layer's `Covers` on the credited windows' live tiles and `WriterReads` (`ServiceCovers`'
+* `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved from the period
+  layer's covers (`Proofs.Accounting.ComposePeriod.circuitWorkPeriod_of_covers`, reading `PeriodCoversStmt`, which
+  training's worker proves in `Proofs.Accounting.ComposePeriod.Covers`): from `CircuitWork`'s lemmas, not from its
+  conclusion (a per-window tail at `δ` can't be averaged into `ε/n`): `ServiceBudget` per window at the window's
+  detected live weights, `PeriodBudget`, `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the
+  period layer's `Covers` on the credited windows' live tiles and `WriterReads` (`PeriodCoversStmt`: `ServiceCovers`'
   argument with a window index) and `UnitFixed`'s sums.
+* `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
+  realized prefix `j` (`creditPrefix`). Proved from `PeriodCoversStmt` as `CircuitWorkPeriod` is
+  (`circuitCreditPeriod_of_covers`). Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement
+  here gives.
 -/
 
 namespace Accounting.Guarantees.ComposePeriod
@@ -111,8 +117,10 @@ the prefix's total (`n·fixed` against `creditedLive`), and divided by `j` about
 window. Windows past the prefix count as skipped whole, their words neither credited nor charged, so a failure costs
 the windows after it, not the period. The prefix ends at a stopping time the cheater may steer, which `PeriodTailMax`
 prices: `ln(1/δ_s)` once, whatever `j` is, so ending a period early only shortens what the budget is spread over. It
-states work, not credit: the credit `(1 − ε)·j·T_cred` would be `CircuitCredit` over the period
-(`CircuitCreditPeriod`, not stated), whose sheet premises read one window's run, not a prefix's total.
+states work, not credit. The credit in live words is `CircuitCreditPeriod`'s, `(1 − ε(j))₊` of the prefix's live words
+at the realized `j`, never at the cap: undiscounted, an all-skip window that passes with `p0^K_d = 2^-8` earns 1.95
+times an honest stream's credit per unit of work (RT4-INT-8). The time credit `(1 − ε)·j·T_cred` would be
+`CircuitCredit` over the period, whose sheet premises read one window's run, not a prefix's total: not stated.
 
 *Live tiles on the served gate.* `live` is the gate's. SERVE-GATE's `PouwQueueAdmit_v3` (#2731,
 `cursor/ca-serve-gate-ea24` at 166e5e573d) admits a slot iff the request queue, committed before the window's first
@@ -214,5 +222,49 @@ def CircuitWorkPeriod : Prop :=
       ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
         δs + n * (δbind + δks)
+
+/-- **(L)'s credit in live words over an accounting period's accepted prefix, live coins** (RT4-INT-8,
+note:compute-accounting/20261019T2300Z-draft-rt4-int). Under `CircuitWorkPeriod`'s premises with `a, b > 0`, an
+accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its prefix's live words fixed right
+(`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and `ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized
+prefix `j = PeriodRun.prefixLen` (`epsPrefix`), except with probability `δ_s + n·(δ_bind + δ_ks)`. So a period may be
+credited `(1 − ε(j))₊` of its prefix's live words, and a prefix's deficit is at most what the discount takes. `ε` is
+read at the prefix the period realized, never at its cap `n`: a short prefix, whose `ε` is at least `1`, earns
+nothing, and where the prefix ends, which the cheater may steer, is priced by `PeriodTailMax`.
+
+It counts words, each one unit, so its best line is at `a = b = 1` (`r(j)/min(a, b)` is homogeneous in `(a, b)` and
+least at `a = b`): `Λ = 3.070` at SERVE-H1's window shape with W2's draw (`Λ·ln(1/δ_s) = 85.1` windows of declared
+words, `D₀ = 0`). Then `ε(j) ≥ 1` up to 85 windows with every tile live, 180 at r20261019-012935-2c52's live words
+(17/36 of units) and 824 of the gate's credit (`u = 119/1152`), and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows.
+The headline's line is the time credit, at the physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where
+`ε(j) ≥ 1` up to 20, 43 and 201 windows and `ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit,
+`(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live words' `T_cred`, needs `CreditOfWork` on each credited
+window's run, which the period's one `Pl.run` doesn't give, and is not stated. Everything `CircuitWorkPeriod` doesn't
+say, this doesn't either: in particular no served path keeps the period record it reads (*The period's order and
+its record*). -/
+def CircuitCreditPeriod : Prop :=
+  ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
+    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
+    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
+    Scope Sc Cd δs →
+    0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) →
+    (∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax) →
+    (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
+    0 < a → 0 < b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
+    Pl.game = periodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
+    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
+    PrefixOf (Cd.periodLayer hr hK pr) Pl.game →
+    (∀ w, prob (fun x => (Cd.periodLayer hr hK pr).MovedIn x w) ≤ δbind) →
+    (Cd.periodLayer hr hK pr).JointSound δks → (Cd.periodLayer hr hK pr).Pins →
+    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    UnitFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
+      creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) ≤ δs + n * (δbind + δks)
 
 end Accounting.Guarantees.ComposePeriod

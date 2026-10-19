@@ -4,8 +4,9 @@ import Proofs.Accounting.Compose.SplitRateClosed
 /-!
 # An honest period meets `CircuitWorkPeriod`'s premises
 
-The positive twin of `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod` (brief rule I, as I8-COIN's `Keyed.lean`
-twins are of their layers): a period of `n ≥ 1` windows of a circuit of one gate, one credited word, one tile and one
+The positive twin of `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod` and `CircuitCreditPeriod` (brief rule I,
+as I8-COIN's `Keyed.lean` twins are of their layers), whose premises are the same at `a, b > 0`: a period of `n ≥ 1`
+windows of a circuit of one gate, one credited word, one tile and one
 live round, every tile live in every window, every stage paid with its words right and its checked values honest, and
 every drawn tile's proof accepted (`honest_meets`). It meets every premise at live numbers: `K_d = 1`, `ρ = 1`,
 `w_max = 1`, lucks `p = p0 = ½` (the operand luck pinned, `r_B = ½`, the guess bound `½`), costs `a = b = 1` and
@@ -288,6 +289,17 @@ theorem honest_conclusion (hC : PeriodCoversStmt) (n : ℕ) (hn : 0 < n) {δs : 
     honest_meets n hn hδs
   exact circuitWorkPeriod_of_covers hC scheme circuit hn hN Nat.one_pos le_rfl (period n) (play n) (run n)
     (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one (by norm_num) hSR
+    hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
+
+/-- **`CircuitCreditPeriod`'s conclusion at the honest period**: `honest_meets` again, at `a = b = 1 > 0`. -/
+theorem honest_credit (hC : PeriodCoversStmt) (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
+    prob (fun x => (play n).accepts x ∧ n * ((play n).run x).fixed <
+      creditPrefix scheme circuit 1 ((run n).prefixLen x) (creditedLive scheme circuit (period n) (run n) x) 1 1 4
+        δs) ≤ δs + n * (0 + 0) := by
+  obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
+    honest_meets n hn hδs
+  exact circuitCreditPeriod_of_covers hC scheme circuit hn hN Nat.one_pos le_rfl (period n) (play n) (run n)
+    (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk one_pos one_pos (by norm_num) hSR
     hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
 end Accounting.SecurityProofs.ComposePeriod.Honest
