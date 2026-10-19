@@ -255,6 +255,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "An instruction of an MMA kind or a uniform class writes at most ω words (128 for m16n8, 64 for m8n8k16, 1 for "
           "a uniform instruction), so the owned right words it heads are at most ω per instruction",
           "TS words per instruction", "measured"),
+    Entry("accounting-ts-slot-step", "assumption",
+          "(M): every tensor instruction holds the tensor pipe at least the credited instruction's time a slot per "
+          "output slot, shallower shapes included (measured on sm_120 for IMMA.16816, IMMA.SP.16832, HMMA.1684 and "
+          "DMMA; unmeasured on H200 and B200; false on sm_89)", "TS slot step (M)", "measured"),
     Entry("accounting-ts-scalar-route", "assumption",
           "SCALAR-ROUTE at a per-instruction cap κ (every ALU instruction creates at most κ incidences): every right "
           "fresh gather-free vector-headed committed word costs at least 2.03 lane-instructions net of the fold and of "
