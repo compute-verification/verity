@@ -53,12 +53,15 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    prover are salted apart, so a tile computed once is credited to one of them. p is global, the certifier's window on
    its trusted clock with a salt drawn once from fresh randomness, so no epoch is bound. That salt binds no weights, and
    the prover holds it from p's first ingress tick, so a certified window passes only weights, a stream and a prover
-   recorded before p's salt was drawn: PoUW hands the certifier `pouw_record` of them, SHA-512(b"verity/pouw-record/v1"
-   ‖ weights_root ‖ stream ‖ prover), one 64-byte record for p, only while p's first ingress tick (the draw) is ahead
-   (`Proxy.commit_weights`), and the verifier reads it with `salt.committed` (`Proxy.committed`, on `reveal`'s
-   conditions). A window with no record made before its draw, or under another stream or prover, is refused. So one
-   proxy records one stream and prover for p. `salt.Credits` credits p once per stream and prover: its tiles are
-   private, so that is the finest public key, and a second registration under them is refused.
+   recorded before p's salt was drawn: the prover hands the certifier `pouw_record` of them, SHA-512(b"verity/pouw-record/v1"
+   ‖ weights_root ‖ stream ‖ prover), one 64-byte record for p, signed by the key the certifier registers for it
+   (`Proxy(prover_key=…)`, whose id is `salt.prover_id`, over `weights_message` under the stream), only while p's first
+   ingress tick (the draw) is ahead (`Proxy.commit_weights`), and the verifier reads it with `salt.committed`
+   (`Proxy.committed`, on `reveal`'s conditions). A window with no record made before its draw, or under another stream
+   or prover, is refused. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
+   only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW window by
+   default), so one registration of p, made after p's work, gets it. `salt.Credits` credits p once per stream and
+   prover: its tiles are private, so that is the finest public key, and a second registration under them is refused.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
    and the index. The scheme derives its noise from (salt, matmul, roots); every tile yields checked values and a digest.
    The useful output is assembled from the tiles.

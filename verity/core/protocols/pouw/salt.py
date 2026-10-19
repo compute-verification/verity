@@ -3,20 +3,24 @@
 PoUW window p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier draws p's 512-bit
 salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,
 registration)` once the proof service registered p (the receipt the registration's) and p's last ingress record is
-published. PoUW doesn't import the certifier: `revealed` reads any object with that `reveal`.
+published, once, and only until its reveal deadline on its own clock after p's end. PoUW doesn't import the certifier:
+`revealed` reads any object with that `reveal`.
 
 * `registered(registration)` is PoUW's reader of the window a registration is for, the certifier's
   `Proxy(registered=…)`: PoUW's served window ``{"kind": "served", "context", "public"}`` (`core_check.commitment`'s),
   whose context names PoUW window p as ``<prefix>/pouw-window/<p>/<the pass manifest's SHA-512>`` (`context`).
 * `revealed(certifier, p, registration)` is p's certifier salt, or `Unrevealed`: it fails closed when the registration
   isn't p's (unregistered), when the certifier refuses (a receipt that isn't the registration's: unregistered; before
-  t_d: early; a salt never drawn, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
+  t_d: early; past the reveal deadline: late; a second reveal of p, so a second registration naming p gets none; a salt
+  never drawn, or the salt off: missing), and when what it gives isn't 64 bytes (missing).
 * `committed(certifier, p, registration)` is what PoUW recorded with the certifier for p before it drew p's salt
-  (`Proxy.commit_weights`), given on `reveal`'s conditions (`Proxy.committed`), or `Unrevealed` (uncommitted): the
-  `pouw_record` of the weights' root, the stream and the prover. The salt binds no weights, so a certified window passes
-  only weights, a stream and a prover recorded before its salt (`core_check.pass_epoch`).
+  (`Proxy.commit_weights`, which takes only a record the prover registered with the certifier signed), given on
+  `reveal`'s conditions but the once (`Proxy.committed`), or `Unrevealed` (uncommitted): the `pouw_record` of the
+  weights' root, the stream and the prover. The salt binds no weights, so a certified window passes only weights, a
+  stream and a prover recorded before its salt (`core_check.pass_epoch`).
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in window p, the one function that states its form,
-  and `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt.
+  `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
+  64-byte id of the prover whose key the certifier verifies records under.
 * `Credits` is the certified windows' credit: one credit per PoUW window, stream and prover.
 * `pouw_window(windows, k)` is the PoUW window certifier windows make up, refusing any that aren't one whole, aligned
   PoUW window.
@@ -39,6 +43,8 @@ SALT_BYTES = 64
 SALT_TAG = b"verity/pouw-salt/v1"
 #: `pouw_record`'s domain tag
 RECORD_TAG = b"verity/pouw-record/v1"
+#: `prover_id`'s domain tag
+PROVER_TAG = b"verity/pouw-prover/v1"
 #: `audit.weights_root`, a SHA-512 `tagged`
 WEIGHTS_ROOT_BYTES = 64
 #: a certified window's stream, the SHA-512 digest that names it, and its prover, the 64-byte id it is registered under
@@ -94,6 +100,15 @@ def pouw_record(weights_root: bytes, stream: bytes, prover: bytes) -> bytes:
     return hashlib.sha512(RECORD_TAG + weights_root + _bound(stream, prover)).digest()
 
 
+def prover_id(public_key: bytes) -> bytes:
+    """The 64-byte id a certified window's prover is registered under: SHA-512(`PROVER_TAG` ‖ the public key the
+    certifier verifies its records under, `Proxy(prover_key=…)`'s bytes). A record naming the id is taken only signed by
+    that key."""
+    if type(public_key) is not bytes or not public_key:
+        raise DomainError("a prover's public key is non-empty bytes")
+    return hashlib.sha512(PROVER_TAG + public_key).digest()
+
+
 class Credits:
     """The certified windows' credit: a PoUW window is credited once per stream and prover, to one registration. A
     window's tiles are private, so this is the finest public key there is. Two registrations of one window under one
@@ -144,8 +159,8 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
     """PoUW window `window`'s certifier salt, `certifier.reveal(window, registration)`, given the window's registration
     as the proof service returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the certifier (its receipt isn't the registration's; early, before the window's
-    last ingress record is published; missing, a salt never drawn or the salt off), or missing (what the certifier gave
-    isn't a 64-byte salt)."""
+    last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never drawn or
+    the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
@@ -160,9 +175,9 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
 def committed(certifier: Any, window: int, registration: Registration | None) -> bytes:
     """What PoUW recorded with the certifier for PoUW window `window` before it drew the window's salt, the 64-byte
     `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
-    (`Proxy.commit_weights` records it), given the window's registration. It fails closed (`Unrevealed`): unregistered,
-    as `revealed`; refused by the certifier (on `reveal`'s conditions, or uncommitted: nothing recorded before the
-    draw); or uncommitted, when what the certifier gives isn't 64 bytes."""
+    (`Proxy.commit_weights` records it, signed by the registered prover), given the window's registration. It fails
+    closed (`Unrevealed`): unregistered, as `revealed`; refused by the certifier (on `reveal`'s conditions but the once,
+    or uncommitted: nothing recorded before the draw); or uncommitted, when what the certifier gives isn't 64 bytes."""
     if registered(registration) != _window(window):
         raise Unrevealed(f"unregistered: no registration of PoUW window {window}")
     try:
@@ -187,6 +202,6 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["Credited", "Credits", "PROVER_BYTES", "RECORD_TAG", "SALT_BYTES", "SALT_TAG", "STREAM_BYTES", "Unrevealed",
-           "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_record", "pouw_salt", "pouw_window",
-           "registered", "revealed", "window_of"]
+__all__ = ["Credited", "Credits", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "SALT_BYTES", "SALT_TAG", "STREAM_BYTES",
+           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_record", "pouw_salt",
+           "pouw_window", "prover_id", "registered", "revealed", "window_of"]
