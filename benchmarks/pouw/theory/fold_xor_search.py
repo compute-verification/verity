@@ -238,12 +238,14 @@ def target(name: str, x, y, K):
     raise SystemExit(f"unknown target {name}")
 
 
-def initial_inputs(rng: random.Random) -> list[tuple[int, int]]:
+def initial_inputs(rng: random.Random, edge_only: bool = False) -> list[tuple[int, int]]:
+    """The edge pairs, whose products with any value are shifts, negations or alternating masks, then 4 random."""
     edge = [(0, 0), (M32, M32), (0, M32), (M32, 0), (1, 0), (0, 1), (0x55555555, 0xAAAAAAAA), (1 << 31, 0)]
-    return edge + [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(4)]
+    return edge + ([] if edge_only else [(rng.getrandbits(32), rng.getrandbits(32)) for _ in range(4)])
 
 
-def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED) -> dict:
+def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: int = SEED,
+          edge_only: bool = False) -> dict:
     """One sequence of opcodes: unsat (no program of it computes the target), FOUND (one does, with its wiring), or
     unknown (a timeout)."""
     rng = random.Random(f"{seed}:{label(ops)}:{tname}")
@@ -259,7 +261,7 @@ def cegis(ops: tuple[str, ...], tname: str = "xor", timeout_ms: int = 0, seed: i
         inputs.append((x, y))
         syn.add(evaluate(prog, bv(x), bv(y)) == target(tname, bv(x), bv(y), K))
 
-    for x, y in initial_inputs(rng):
+    for x, y in initial_inputs(rng, edge_only):
         add(x, y)
     X, Y = z3.BitVec("X", 32), z3.BitVec("Y", 32)
     general = evaluate(prog, X, Y) != target(tname, X, Y, K)
@@ -306,11 +308,14 @@ def sequences(k: int, fp: bool) -> list[tuple]:
 
 
 def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_ms: int = 0, stream=None,
-           part: str = "all", shard: tuple[int, int] = (0, 1)) -> dict:
+           part: str = "all", shard: tuple[int, int] = (0, 1), labels: set | None = None,
+           edge_only: bool = False) -> dict:
     """Every sequence of k opcodes (`part` int: those without an FP form, fp: those with one); each result is also
     written to `stream` (JSON lines) as it finishes."""
     seqs = [s for s in sequences(k, fp)
             if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
+    if labels is not None:
+        seqs = [s for s in seqs if label(s) in labels]
     res = []
 
     def done(r):
@@ -321,11 +326,11 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
 
     if jobs > 1:
         with ProcessPoolExecutor(jobs) as ex:
-            for f in as_completed([ex.submit(cegis, s, tname, timeout_ms) for s in seqs]):
+            for f in as_completed([ex.submit(cegis, s, tname, timeout_ms, SEED, edge_only) for s in seqs]):
                 done(f.result())
     else:
         for s in seqs:
-            done(cegis(s, tname, timeout_ms))
+            done(cegis(s, tname, timeout_ms, SEED, edge_only))
     tally = {r: sum(1 for x in res if x["result"] == r) for r in ("unsat", "FOUND", "unknown")}
     return {"k": k, "fp": fp, "part": part, "shard": list(shard), "target": tname, "sequences": len(seqs),
             "tally": tally, "proved": tally["unsat"] == len(seqs), "results": res}
@@ -344,12 +349,15 @@ def main() -> int:
     ap.add_argument("--part", default="all", choices=("all", "int", "fp"),
                     help="only the sequences without (int) or with (fp) an FP form, to split a run across machines")
     ap.add_argument("--shard", default="0/1", help="i/n: every n-th sequence from the i-th")
+    ap.add_argument("--labels", help="only the sequences whose labels are this file's lines")
+    ap.add_argument("--edge-only", action="store_true", help="start CEGIS from the edge pairs alone")
     a = ap.parse_args()
     out, rc = [], 0
     stream = open(a.stream, "a", encoding="utf-8") if a.stream else None
     for k in range(a.from_k, a.k + 1):
+        labels = set(open(a.labels, encoding="utf-8").read().splitlines()) if a.labels else None
         r = search(k, not a.no_fp, a.target, a.jobs, a.timeout_ms, stream, a.part,
-                   tuple(int(v) for v in a.shard.split("/")))
+                   tuple(int(v) for v in a.shard.split("/")), labels, a.edge_only)
         out.append(r)
         print(f"k = {k}: {r['sequences']} sequences, {r['tally']}" + ("  -- proved" if r["proved"] else ""),
               flush=True)
