@@ -102,6 +102,18 @@ def test_an_honest_session_checks_against_what_the_challenger_signed_and_logged(
         assert C.order_reason(commitment, label, roots[label], record.openings) is None
 
 
+def test_the_challenger_hangs_up_only_after_the_client_so_its_last_frame_arrives(tmp_path):
+    host = Host(tmp_path)
+    with socket.create_connection(host.listener.getsockname()) as s:
+        s.sendall(frame({"type": "hello"}))
+        assert reply(s)["type"] == "commitment"
+        s.sendall(frame({"type": "close"}))
+        assert reply(s) == {"type": "closed"}
+        assert s.recv(1) == b""
+        assert host._thread.is_alive()
+    assert host.ended() is None
+
+
 def test_the_challenger_serves_only_once_its_record_is_written(tmp_path):
     ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
     a, b = socket.socketpair()
@@ -148,8 +160,8 @@ def test_every_malformed_or_out_of_order_frame_is_refused_and_ends_the_session(t
         s.sendall(frames[-1])
         answer = reply(s)
         assert answer["type"] == "refused"
-        assert host.ended() == answer["reason"]
         assert s.recv(1) == b""
+    assert host.ended() == answer["reason"]
     assert host.error is None
     commitment, roots = R.trusted_session(host.directory, verifier_key(), lms_verify)
     assert sum(len(r) for r in roots.values()) == opened

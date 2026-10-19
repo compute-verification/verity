@@ -139,10 +139,21 @@ def _release(head: dict, records: dict[str, LiveRecord], log: Any) -> LiveOpenin
     return opening
 
 
+def _hang_up(sock: socket.socket) -> None:
+    try:
+        sock.shutdown(socket.SHUT_WR)
+        while sock.recv(1 << 16):
+            pass
+    except OSError:
+        pass
+
+
 def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.PathLike,
           clock: Callable[[], float] = time.monotonic) -> str | None:
     """Serve one client's session on the connected stream `sock`, the challenger's record and release log in `directory`
-    (`open_session`), on the release log's clock `clock`: None when the client closed it, else why it ended."""
+    (`open_session`), on the release log's clock `clock`: None when the client closed it, else why it ended.  After its
+    last frame it ends its side of the stream and returns only once the client ends its own, so a tunnel torn down after
+    `serve` returns never cuts that frame."""
     d = Path(directory)
     if challenger.record is None or not (d / RECORD).is_file() or not (d / RELEASES).is_file():
         raise CoinError("the challenger serves only once its record is signed and written (open_session)")
@@ -157,6 +168,7 @@ def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.P
                 head = wire.recv()
                 if head == {"type": "close"}:
                     wire.send({"type": "closed"})
+                    _hang_up(sock)
                     return None
                 wire.send({"type": "opening", "opening": _release(head, records, log).to_json()})
     except CoinError as e:
@@ -167,6 +179,7 @@ def serve(sock: socket.socket, challenger: LiveChallenger, directory: str | os.P
         wire.send({"type": "refused", "reason": reason})
     except OSError:
         pass
+    _hang_up(sock)
     return reason
 
 
