@@ -852,8 +852,9 @@ def named_prs(text: str) -> tuple[list[str], list[str]]:
 
 def run_ids(text: str) -> set[str]:
     """The run ids a post names, as their last 4 characters (`dd21` for r20261009-035518-dd21); a bare 4-character word counts
-    only with a letter in it, so a year or a PR number doesn't."""
-    return {a or b for a, b in RUN_ID_RE.findall(SUBTEAM_RE.sub(" ", text or "")) if a or re.search(r"[a-f]", b)}
+    only with a letter and a digit in it, so a year, a PR number or an English word ("dead", "face") doesn't."""
+    return {a or b for a, b in RUN_ID_RE.findall(SUBTEAM_RE.sub(" ", text or ""))
+            if a or (re.search(r"[a-f]", b) and re.search(r"\d", b))}
 
 
 def pr_watchers(msg: dict, reg: dict, history: list[dict] | tuple = (), branches: dict[str, str] | None = None) -> list[str]:

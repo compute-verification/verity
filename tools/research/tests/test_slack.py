@@ -2553,3 +2553,10 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
     assert slack.issue_state("INF-1", "infra", {})[0] is False
     nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
     assert slack.issue_state("INF-1", "infra", {}) == (True, "commented on by Daniel Reuter")
+
+
+def test_a_bare_run_suffix_needs_a_letter_and_a_digit():
+    """18 Oct: "work dead through the weights" named run `dead`, so a reply under top's program announcement rang comms,
+    which had named its own PR beside "dead code" earlier in the thread."""
+    assert slack.run_ids("prove from r20261018-234409-19cd, after dd21 and 2584; dead code, a bead, the face of 2026") == {"19cd", "dd21"}
+    assert slack.run_ids("r20261018-234409-dead") == {"dead"}
