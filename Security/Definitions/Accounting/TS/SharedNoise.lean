@@ -3,27 +3,46 @@ import Definitions.Accounting.TS.Receipt
 /-!
 # One noise seed a call: the call's coin and a tile's own part of it (trusted)
 
-J10 (note:compute-accounting/20261019T0825Z-draft-j10-shared-noise, a draft for the red team): H1 + fx1's noise derived
-once a call row and once a call column from one seed a call, where `h1tile` derives it once a tile, with each tile's
-fold keys still its own (σ_R of its position, decision 121). A tile then shares its rows' noise with its call row's
-other tiles and its columns' noise with its call column's, so no part of the call's noise is a tile's own; its keys
-are.
+J10 (note:compute-accounting/20261019T0825Z-draft-j10-shared-noise; red team
+note:compute-accounting/20261019T1054Z-finding-j10-redteam): H1 + fx1's noise derived from one seed a call, where
+`h1tile` derives it once a tile. Banded, a call row block's row streams are shared along a band of at most 64 column
+tiles, its column streams carry the row block, and each tile's fold keys stay its own (σ_R of its position, decision
+121).
 
-* `CallCoin m n Rw Cl Ky`: an `m × n` grid of tiles under one seed a call: each call row block's noise `Rw` (its rows'
-  dither bits and digit coins), each call column block's `Cl` (its columns' coin bits and `U`), and each tile's fold
-  keys `Ky`.
+* `CallCoin m n Rw Cl Ky`: an `m × n` grid of tiles under one seed a call: each row block's noise `Rw` (its rows'
+  dither bits and digit coins), each column block's `Cl` (its columns' coin bits and `U`), and each tile's fold keys
+  `Ky`.
 * `CallRest` and `CallCoin.keySplit t`: the call's coin as tile `t`'s keys and the rest (every block's noise and every
   other tile's keys).
 * `ReceiptGame.CondReceiptLuck e pr`: `ReceiptLuck pr` with the coin split by `e` into a rest and an own part, at every
-  value of the rest, over the own part alone. `CondOperandLuck` is `OperandLuck` so.
+  value of the rest, over the own part alone.
+
+**No new premise.** The composed statements (#2482, #2638) read three luck premises per tile, each stated over the
+stage's whole coin `C`, so their Lean form already allows tiles whose coins correlate. Under one seed a call they are
+read at `C = CallCoin`, at the values they have today:
+
+* `PerTile … OperandHMu` at `μ = ¾` (`accounting-ts-operand-h-mu`). No part of the noise is a tile's own, so it is the
+  point mass over the call's coin, its view free to read every neighbour's noise and every word the cheater computed.
+  The conditional form (given the rest, over a tile's own part) would be false: a tile's own part is its keys, which
+  its skipped values don't read.
+* `PerTile … ReceiptLuckAt` at `r_B = ½` (`accounting-ts-receipt-luck`), the marginal `ReceiptLuck` over the call's
+  coin. The argument for it is the keys': fx1's word step is a bijection of the state and the keys are σ_R's stream at
+  the tile's own position, so a tile's receipt keeps its luck given every block's noise and every other tile's keys,
+  over its keys alone (`CondReceiptLuck` at `keySplit t`), and `Guarantees.TS.CondReceiptLuckMarginal` averages that
+  into the marginal. The conditional form is strictly stronger, so it is the argument, not the premise.
+* `PerTile … GuessLuckAt` at `p0 = ½` (`accounting-compose-guess-luck`), word for word: the fold state starts from the
+  tile's keys.
+
+What changes is the scope of those three claims (one seed a call, rows shared along a band), not their statements;
+that scope goes to Daniel.
 -/
 
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity
 
-/-- **The call's coin under one noise seed a call**: `m` call row blocks' noise, `n` call column blocks' noise, and
-each of the `m × n` tiles' fold keys. -/
+/-- **The call's coin under one noise seed a call**: `m` row blocks' noise, `n` column blocks' noise, and each of the
+`m × n` tiles' fold keys. -/
 abbrev CallCoin (m n : ℕ) (Rw Cl Ky : Type) : Type := (Fin m → Rw) × (Fin n → Cl) × (Fin m × Fin n → Ky)
 
 /-- Everything of the call's coin but tile `t`'s keys: the blocks' noise and the other tiles' keys. -/
@@ -51,18 +70,6 @@ def CondReceiptLuck {Z O : Type} [Fintype O] (e : Ω ≃ Z × O) (pr : ℝ) : {n
       (∀ z, prob (fun o => same (e.symm (z, o)) ∧ ¬right (e.symm (z, o)) ∧ 0 < d (e.symm (z, o))) ≤
           pr * prob (fun o => ¬right (e.symm (z, o)) ∧ 0 < d (e.symm (z, o)))) ∧
         ∀ ω, CondReceiptLuck e pr (next ω)
-
-/-- **The operand luck at `p` given the rest**: every round's share lies in `[0, 1]`, and at every round, whatever the
-past, and at every value `z` of the rest, a deficient round's deficient words are all right with probability at most
-`p` over the own part alone. Under one seed a tile it is (H-μ) given the other tiles' coins, the tile's own coin its
-own part; under one seed a call no part of the noise is a tile's own, and (H-μ) is taken over the call's whole coin. -/
-def CondOperandLuck {Z O : Type} [Fintype O] (e : Ω ≃ Z × O) (p : ℝ) : {n : ℕ} → ReceiptGame Ω n → Prop
-  | _, .done => True
-  | _, .round d _ right _ next =>
-      (∀ ω, 0 ≤ d ω ∧ d ω ≤ 1) ∧
-        (∀ z, prob (fun o => right (e.symm (z, o)) ∧ 0 < d (e.symm (z, o))) ≤
-          p * prob (fun o => 0 < d (e.symm (z, o)))) ∧
-        ∀ ω, CondOperandLuck e p (next ω)
 
 end ReceiptGame
 
