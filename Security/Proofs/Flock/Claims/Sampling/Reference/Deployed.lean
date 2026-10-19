@@ -9,7 +9,7 @@ import Proofs.Flock.Claims.Sampling.Reference.Complete
 over the statements of the reference prover's sessions at `x` (`Reference.sessErrAt`), from
 `Reference.complete_of_sessions` with the record's facts. What remains, each a hypothesis:
 
-* `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `ZkTables.honestP` at `ZkTables.δc H`.
+* `hF : Claims.Flock.Complete H (deployZk rel)`: Flock's masked completeness, of `ZkTables.honestPR` at `ZkTables.δc H`.
 * `DrawFixed` (`Sampling.Session`) and `DrawSlots` (`Sampling.Select.DrawLaw`), the sampled verifier's, as for KS: the
   checked units' sessions are in the second stage and the draw doesn't read them; the draw is `Slots.select`'s, so it
   checks at most the statement's proof units (`checkedLe_of_slots`).
@@ -30,7 +30,7 @@ over the statements of the reference prover's sessions at `x` (`Reference.sessEr
   (`Reference.DeployedCode`'s `sessionSlots_of_one`); one session per unit at the proof units' count, from `DrawSlots`
   (`sessionSlots_units`).
 
-What is proved here: the reference prover's session messages are `ZkTables.honestP`'s on what it reveals
+What is proved here: the reference prover's session messages are `ZkTables.honestPR`'s on what it reveals
 (`refP_session`), it says the framing outside them (`refP_say`), what it reveals opens under the roots and is the
 committed value (`found_opens`, `found_val`, `found_covers`), and Flock's masked error is nonnegative
 (`δcZkT_nonneg`).
@@ -102,7 +102,7 @@ theorem δcZkT_nonneg (H : Msg → Msg) (x : Msg) : 0 ≤ FlockComplete.ZkTables
   unfold FlockComplete.ZkTables.δc FlockComplete.εZk
   split_ifs <;> positivity
 
-/-- **At the deployed record, a checked unit's session is `ZkTables.honestP`'s run** on what the reference prover
+/-- **At the deployed record, a checked unit's session is `ZkTables.honestPR`'s run** on what the reference prover
 reveals. -/
 theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : SessionsScope c H)
     (hwit : SessionWit rel c H) : HonestSessions H (deploy rel c) := by
@@ -117,7 +117,7 @@ theorem honestSessions_deploy (H : Msg → Msg) (hframe : Framed c H) (hscope : 
   cases hP'
   obtain ⟨xS, emb, hinj, hemb, hrun⟩ :=
     hframe x (Reference.refP c.step c.parse c.reads (commit c) c.wit w) ω r u hu
-  have hr := hrun (FlockComplete.ZkTables.honestP (c.wit s xS (found H (commit c) s.roots w (c.reads s xS)))) (ω xS)
+  have hr := hrun (FlockComplete.ZkTables.honestPR (c.wit s xS (found H (commit c) s.roots w (c.reads s xS)))) (ω xS)
     fun hist hS h => refP_session H c.step c.parse c.reads (commit c) c.wit w hs h ω
   have h0 := hr r fun _ _ => rfl
   exact ⟨xS, c.wit s xS (found H (commit c) s.roots w (c.reads s xS)), ω xS, emb, hinj, hemb,

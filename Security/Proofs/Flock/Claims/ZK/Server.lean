@@ -941,7 +941,7 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The ZK server at `flock-circuit --zk`'s masked record**: for every worker, the server whose frame at honest workers
-is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestP` behind
+is the record's reference prover's message (`ZkServer.Ref` at `(S.zkD rel coinOf tapeOf t).prover`, `ZkTables.honestPR` behind
 `refP`'s `Hello` and coin-tree checks) and whose masked checks are sound (`ZkServer.CheckSound`) releases, on every
 event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork` of `Flock.zk_zkD_ref`,
 plus the checks' errors, under `Claims.Hm96Hiding`, the session's five Props and `RefSession.HonestMsgs`. -/

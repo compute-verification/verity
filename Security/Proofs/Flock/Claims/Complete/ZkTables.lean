@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Honest
+import Proofs.Flock.Claims.Complete.ZkTables.Faithful
 import Proofs.Flock.Claims.Complete.ZkTables.Ready
+import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 import Proofs.Flock.Claims.Complete.ZkTables.Run
 import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
@@ -30,9 +32,16 @@ import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
 import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
 import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
+import Proofs.Flock.Claims.Complete.ZkTables.Round0
+import Proofs.Flock.Claims.Complete.ZkTables.Pass
+import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+import Proofs.Flock.Claims.Complete.ZkTables.Round1
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
-table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the masked
+table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
+prover is `flock-circuit --zk`'s (`Faithful`: `honestPR`, `honestP` at the tape's mask words, `maskWOf`, stopped at an
+outer coin `1`), whose run is `honestP`'s outside `BadZk` (`Ready`: `run_honestPR`), at a witness the deployed relation
+still holds (`MaskFree`: `maskFree_relation`); the masked
 verifier's error drops `readyZk`'s one-table condition and asks the regions and the honest record to fit (`Ready`:
 `ready`, `RecordFitsAt`, `δc`, `complete_of`; `δc H` is `δcZk H` where both `readyZk` and `ready` hold); the honest run
 is the pure masked session (`Run`: `run_acc_of`, `honestRun_eq`); the skeleton is `Zk/Skeleton.lean`'s at this run
@@ -94,4 +103,13 @@ salts and 64-byte path entries, and a file under `2^64` bytes at a good case's a
 (`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
 mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` and `Zk.Level0Verifier` prove level 0's four
 (`L0.complete_jsonT_closed`), and `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification
-alone (`L0.complete_jsonT_of_spec`). -/
+alone (`L0.complete_jsonT_of_spec`).
+For zero knowledge, `honestPR`'s first message is the link of
+the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
+`honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,
+pair-coin and rank refusals at their slots (`Pass`: `sessionPZk_pass`, each rep sending exactly its rounds,
+`repPZk_exact`, its rank check at its claim points at its sends' coins, `repPZk_rank`),
+so one that does not return is sent as `[]` once its sends are answered (`Refuse`: `honestP_err`, `honestPR_err`,
+`feed_sim_ge`). The session's second body is table `0` rep `0`'s first zerocheck squeeze, from the domain's transcript
+with the digest, the level-0 cap and the pads' root absorbed, or, where that table's extra claims throw, the session
+stops after the link message (`Round1`: `sessionPZk_go_round1`, `sessionPZk_go_round1_err`). -/

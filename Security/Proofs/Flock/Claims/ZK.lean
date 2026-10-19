@@ -22,7 +22,21 @@ import Proofs.Flock.Claims.ZK.CoinLayer
 import Proofs.Flock.Claims.ZK.Tape
 import Proofs.Flock.Claims.ZK.Capacity
 import Proofs.Flock.Claims.ZK.Session
+import Proofs.Flock.Claims.ZK.MaskedTables
 import Proofs.Flock.Claims.ZK.Masked
+import Proofs.Flock.Claims.ZK.MaskTape
+import Proofs.Flock.Claims.ZK.MaskFamily
+import Proofs.Flock.Claims.ZK.OneTape
+import Proofs.Flock.Claims.ZK.Round0
+import Proofs.Flock.Claims.ZK.ExeLayout
+import Proofs.Flock.Claims.ZK.Refusals
+import Proofs.Flock.Claims.ZK.FirstRefusal
+import Proofs.Flock.Claims.ZK.Stopped
+import Proofs.Flock.Claims.ZK.Sent
+import Proofs.Flock.Claims.ZK.Round1
+import Proofs.Flock.Claims.ZK.Round1Pads
+import Proofs.Flock.Claims.ZK.Round1Root
+import Proofs.Flock.Claims.ZK.Round1Enc
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -56,7 +70,7 @@ import Proofs.Flock.Claims.ZK.Stop
   (`zkmalR_congr`).
 * `Pin`: `Claims.Flock.ZK` reads the masked record's own reference prover (`ZkDeploy.prover`) and simulator; the proofs
   prove `Claims.Flock.ZKAt` at a committed-coin protocol's prover. The masked record at a protocol `G` (`zkOf`) has
-  `ZkTables.honestP` behind `G`'s `Hello` and opening checks; where `G`'s messages are `ZkTables.honestP`'s (`Proto.Honest`, a named
+  `ZkTables.honestPR` behind `G`'s `Hello` and opening checks; where `G`'s messages are `ZkTables.honestPR`'s (`Proto.Honest`, a named
   Prop), `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf` (`zk_zkOf`).
 * `Forced`: the forced run at `c` with the honest prover's messages at `c` opens all of `c` exactly when the real run
   opens `c`, and is then the real run (`fcls_succ_iff`, `forced_eq_of_cls`, `real_eq_of_fcls`); one that stops before a
@@ -112,7 +126,7 @@ import Proofs.Flock.Claims.ZK.Stop
   admit the coins); `Binding` holds of it with no hypothesis (`Proto.binding_of_open`), `TablesOK` from `Tables` and
   `TMsgLink` from `Complete`, `DummyReg`, `Causal` and `TapeOK` (`viewPre_viewExe`: the real views' pre-final part is
   the cut view the round messages encode): `Flock.zkAt_deployZk_ref` at `refP`'s prover, and `Flock.zk_zkD_ref` at the session's masked record
-  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `ZkTables.honestP`'s, a named Prop), each also at the
+  `RefSession.zkD` under `RefSession.HonestMsgs` (`refP`'s messages are `ZkTables.honestPR`'s, a named Prop), each also at the
   pinned key's hiding gap (`_gap`).
 * `CoinLayer`: the deployed masked record `zkDeployed`, `RefSession.zkD` at `coin-tree/hm96-sha512/v2`'s coin layer
   (the 32-byte nonce, `Hello`'s frame with its hex, `Hello`'s answer of root and hm96 key, the keyed tree, the
@@ -122,19 +136,96 @@ import Proofs.Flock.Claims.ZK.Stop
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
   (`RefSession.not_tapeOK`): the masked scope bounds no table count.
-* `Capacity`: the tape asked for on a class `A` of statements only (`RefSession.TapeOKOn`, `RefSession.HonestMsgsOn`),
-  as a tape of bounded size can meet it where `A` bounds the tables, at the record whose parser refuses the rest
+* `Capacity`: the tape asked for on a class `A` of statements only (`RefSession.TapeOKOn`, `RefSession.HonestMsgsOn`,
+  the latter at the relation's witnesses, the only ones zero knowledge reads the prover at), as a tape of bounded size
+  can meet it where `A` bounds the tables, at the record whose parser refuses the rest
   (`deployOn`): `Flock.zk_zkD_ref_on`, `Claims.Flock.ZK` at `RefSession.zkD` at `Flock.zk_zkD_ref`'s `ε_zk` on `A`
   and `1` outside it (`zkmalR_on`). `RefSession.tapeOKOn_of_tape`: `TapeOKOn A` from the tape read with fibers of one
   size at each statement in `A`, each table's randomness being read from it so (`fibersEq_tabRand`). With it,
   **`Flock.zk_deployZk_ref_on`** (and `_gap`) at `zkDeployed`, the tape asked for only as the tables' tape read with
   fibers of one size on `A`, where `Flock.zk_deployZk_ref`'s `TapeOK` fails at every unbounded table count.
-* `Session`: `RefSession.HonestMsgsOn A` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`, `fin`
-  and `off` each `ZkTables.honestP`'s message), and `Flock.zk_deployZk_ref_on_rounds` at them.
-* `Masked`: the deployed masked session's table data (`Masked.tableData`): its tables `setupOf true x`'s, each
-  `coinedOf` at its `TabZK`, the witness's table witnesses its shares; the tables' plan (`TabPlan`) and the rest
-  (`SessionPlan`: tape, coins, dummy, round encodings) named. `Masked.tables_hidden`: `Tables` there at the
-  hidden-output form. `Masked.OneTableLowers`: the lowering's completeness at one table, which `Complete` needs.
+* `Session`: `RefSession.HonestMsgsOn A R` as its three rounds (`HonestPreOn`, `HonestFinOn`, `HonestOffOn`: `enc`,
+  `fin` and `off` each `ZkTables.honestPR`'s message at a witness in `R`), and `Flock.zk_deployZk_ref_on_rounds` at them,
+  at the relation.
+* `MaskedTables`: the deployed masked session's tables (`Masked.tabC`): `setupOf true x`'s, each `coinedOf` at its
+  `--zk` table from its statement alone (`ZkHidden.ZkTab.table`), on the statements each of whose tables has one
+  (`Masked.Live`, the masked scope at a witness: `live_iff`). `Tables` (`setupTable_tabC`), `DummyReg` at a witness of
+  the regions (`dummyReg_tabC`) and `Complete` at each table's share (`complete_tabC`, from `Readable.tableLowers`;
+  its one-table case `Readable.oneTableLowers`) hold there.
+* `Masked`: the masked session's table data (`Masked.tableData`) at those tables, a round plan (`RoundPlan`: coins,
+  round encodings) and a tape plan (`TapePlan`). **`Flock.zk_deployZk_masked`**: `Claims.Flock.ZK` at `zkDeployed`
+  there at `ε_zk` on the masked scope, under the round plan's `Causal`, the tape plan read with fibers of one size on
+  `Live`, and the three rounds; `Flock.zk_deployZk_masked_at`, at one statement's tape (`TapePlan.at`), without the
+  tape premise; each at the pinned key's hiding gap with no hiding premise (`…_gap`).
+* `MaskTape`: the tape plan whose masked prover's tape carries the tables' mask words (`Masked.TapePlan.atMask`,
+  `TapeZk.mask` the packing of each table's base's slot bits), at which each table's share of `ZkTables.honestPR`'s
+  witness is the tables' `zWith` (`Masked.zOf_maskOf`); `Flock.zk_deployZk_masked_atMask_gap` at it, and
+  `Flock.zk_deployZk_masked_atMask_stop_gap` at a stopping round plan, its third round `honestPR`'s alone.
+* `MaskFamily`: the masked claim on a class of statements (`Flock.zk_deployZk_masked_on`), whose tape bounds the class's
+  table count (`Masked.jOf_lt_card_on`; no tape at every `Live` statement once they have every table count:
+  `Masked.not_fibersEq_live`), and on statement-indexed tapes: `ZKfam`, `Claims.ZKmalRx`'s body at a family of masked
+   records, at the mask tape of each statement with no tape premise (`Flock.zk_deployZk_masked_atMask_rx`, `…_stop_rx`).
+* `OneTape`: the masked scope caps the table count at `zkTableCap` (`Masked.jOf_le_cap`), so one tape serves every
+  statement: a cell per table (`Masked.TapeLayout`, read as each table's randomness with fibers of one size, its mask
+  words in `TapeZk.mask`), the tape `Masked.TapePlan.ofLayout`, read with fibers of one size at every statement
+  (`Masked.fibersEq_ofLayout`); `Flock.zk_deployZk_masked_layout_gap` is `Flock.zk_deployZk_masked_gap` with `hT`
+  discharged, under the round plan's `Causal` and the three rounds.
+* `Round0`: toward the first round, level 0's tree at a `--zk` table places every position at its index at every coin
+  vector (`Composed.coinedOf_s0_val`), so its column at tree position `p` is the code at `ω_p` (`Composed.colAt`,
+  `Composed.coinedOf_col0At`), the same at every coin vector; such a column's `row0` is `encodeRowsZk`'s row
+  (`FlockComplete.row0_eq_encodeRowsZk`), and every `--zk` schedule's level 0 has the sizes this reads
+  (`Masked.zkLevel0`). Round `0`'s encoding `Masked.enc0` reads no coin (`Masked.enc0_causal`) and is `honestPR`'s
+  first message where `hOf H` is SHA-512, at a layout agreeing with the executable's tape at round `0`
+  (`Masked.honest_round0`, `Masked.Agrees0`).
+* `ExeLayout`: the layout at the executable's indices (`Masked.TapeLayout.exe`): a cell per table holding each
+  `TapeZk` field as an array at its executable indices (`Masked.ExeCell`), each statement reading its tables'
+  coordinates at the indices its sizes give, with fibers of one size (`Masked.fibersEq_exeRead`), levels ≥ 1's salts
+  by level and position (`Masked.hiIdx`); the masked prover's tape read from the cells (`Masked.exeTape`, PoW nonces
+  `0`). The layout agrees with it at round `0` (`Masked.agrees0_exe`), so `HonestPreOn` there is its rounds after the
+  first (`Masked.honestPreOn_exe_of_pos`, `RefSession.HonestPreOnPos`), and `Flock.zk_deployZk_masked_exe_gap` is
+  `Flock.zk_deployZk_masked_layout_gap` at this layout with round `0` discharged.
+* `Refusals`: the last round where a table refuses, at a stopping round plan (`RoundPlan.stop`, `off = []`), refusal by
+  refusal (`Masked.honestOffOn_stop_of`): an outer coin `1` is `honestPR_stop`'s at a plan reading each rep's outer
+  coins at their slots (`Masked.OuterReads`, met by any plan with its outer coins so read, `Masked.withOuter`;
+  `Masked.outerHit_of`); `β = 0`, a rank-deficient mask slot and `ρ₀, ρ₁`
+  dependent are one premise each. `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a
+  stopping plan with them in place of `HonestOffOn`.
+* `FirstRefusal`: `β = 0`, `ρ₀, ρ₁` dependent and a rank-deficient mask slot, from the session's first refusal: at a
+  plan reading each rep's `β`, pair coins and claim points at the executable's rounds (`Masked.CoinReads`,
+  `Masked.PointReads`, met by `Masked.withPoints`), a refused one leaves the masked session not returning
+  (`FlockComplete.ZkTables.sessionPZk_pass`), so `honestPR` sends `[]` (`Masked.honestPR_refused`,
+  `Masked.honestPR_rank`). `Flock.zk_deployZk_masked_exe_reads_gap` is `Flock.zk_deployZk_masked_exe_stop_gap` without
+  the first two premises, `Flock.zk_deployZk_masked_exe_refusals_gap` without all three.
+* `Stopped`: the rounds after a refusal the coins show (`Masked.Refused`: an answered outer coin `1`, or a throw whose
+  coins are all answered, `Masked.Thrown`), which reads the coins below its round only (`Masked.refused_congr`). A plan
+  whose encoding sends `[]` there (`Masked.encStop`) is causal where its encoding is (`Masked.causal_encStop`), and its
+  `HonestPreOnPos` is its encoding's at the rounds where no refusal is seen, given that a seen throw stops `honestPR`
+  (`Masked.honestPreOnPos_stop`; a seen outer coin `1` is `Masked.outerHit_of_lt`'s).
+  `Flock.zk_deployZk_masked_exe_stopped_gap` is `Flock.zk_deployZk_masked_exe_refusals_gap` at such a plan. A seen
+  throw does stop `honestPR` (`Masked.honestPR_thrown`: the session stops right after the send whose reply it refused,
+  within the openings' answers), so `Flock.zk_deployZk_masked_exe_live_gap` drops that premise: left are the encoding
+  at the rounds after the first where no refusal is seen, the plan's `Causal`, its round `0` and the last round.
+* `Sent`: at a round after the first where no refusal is seen, `honestPR` sends the masked session's next body at the
+  openings' answers, tagged `0` (`Masked.honestPR_live`, from `FlockComplete.ZkTables.honestPR_sent`), so
+  `Flock.zk_deployZk_masked_exe_sent_gap` asks the encoding there against that run (`hstep`): that the session sends
+  past the openings and the encoding is its next body, or that it stops within them and the encoding is `[]`
+  (`Masked.honestPR_stopped`), as where table `0`'s extra claims throw right after the link message.
+* `Round1`: round `1` of that run at a live statement (`Masked.liveRun_round1`): where table `0`'s extra claims at the
+  link points throw, the session stops after the link message; else its second body is table `0` rep `0`'s first
+  zerocheck squeeze, of the domain's transcript with the digest, the level-0 cap and the pads' root absorbed
+  (`FlockComplete.sessionPZk_go_round1`).
+* `Round1Pads`: toward that body on the model's side, a live table's rep `r` pads leaf at tree position `p` commits
+  `padColAt` at `X = p + 1`, each pad at its layout index and padding symbol `j` at `len + j`, at every coin vector
+  (`Masked.colPAt_tabC`), so its digest reads no coin (`Masked.digOf_pads`); a cut's pads leaf at tree position `q`
+  (`Masked.leafAtP_cutAt`).
+* `Round1Root`: and on the executable's side, `innerCommitP`'s root is `layerOf`'s of its leaves
+  (`FlockComplete.innerCommitP_root_layerOf`); at the executable's layout each is the executable's pads leaf of the cut's
+  view at that tree position (`Masked.exeOf_pads`), so table `j`'s rep `r` pads root is `layerOf`'s of the cut's pads
+  leaves by tree position (`Masked.innerRoot_exe`).
+* `Round1Enc`: round `1`'s encoding (`Masked.enc1`): that body of the cut's level-0 and pads leaves by tree position, at
+  the link points of round `0`'s coin, and `[]` where the extra claims there throw. It reads round `0`'s coin only
+  (`Masked.enc1_causal`), and at the executable's layout it is round `1`'s `hstep` (`Masked.honest_round1_exe`), so
+  `Flock.zk_deployZk_masked_exe_round1_gap` asks `hstep` after the second round only.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
