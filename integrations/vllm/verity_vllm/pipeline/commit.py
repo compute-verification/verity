@@ -467,8 +467,8 @@ def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, 
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
 
-from verity_vllm.check.commit_rules import (HIDDEN_CLASS_BY_FA, REQUIRED_CLASSES_DEFAULT, class_coverage, hidden_classes_required,  # noqa: E402
-                                            required_classes_default)
+from verity_vllm.check.commit_rules import HIDDEN_CLASS_BY_FA, hidden_classes_required  # noqa: E402
+from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
 from verity_vllm.check.verdict import commit_verdict  # noqa: E402  (X-03/REL-02 fail-closed verdict)
 
 

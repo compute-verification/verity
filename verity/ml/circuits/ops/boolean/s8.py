@@ -89,10 +89,10 @@ def _word(word: Any) -> Any:
     return of
 
 
-S8Dot.word = _word(S8.S8Dot)  # type: ignore[attr-defined]
-S8Dot.counts = S8.counts  # type: ignore[attr-defined]
 S8Matmul.word = _word(S8.S8Matmul)  # type: ignore[attr-defined]
 S8Matmul.counts = S8.counts  # type: ignore[attr-defined]
+S8Dot.word = _word(S8.S8Dot)  # type: ignore[attr-defined]
+S8Dot.counts = S8.counts  # type: ignore[attr-defined]
 
 
 # -- limb splits ---------------------------------------------------------------------------------------------------------
