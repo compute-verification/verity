@@ -852,6 +852,10 @@ def test_positions_and_inputs():
     assert salt == SD.halves(SALT) and pos == [0, 6, 0, 7] and roots == SD.halves(b"".join(_roots(c)[0]))
     with pytest.raises(ValueError):
         c.inputs(SALT, _roots(c) * 2)
+    for short in (SALT[:32], SALT + b"\0", SALT.hex()):
+        for f in (c.inputs, c.seeds):
+            with pytest.raises(ValueError, match="64-byte salt"):
+                f(short, _roots(c))
 
 
 def test_seed_reads_every_field():

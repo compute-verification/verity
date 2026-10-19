@@ -890,6 +890,11 @@ def _check_roots(roots: Sequence[tuple[bytes, bytes]], n: int) -> None:
         raise ValueError(f"one (root_a, root_b) per seed group: {n}, not {len(roots)}")
 
 
+def _check_salt(salt: bytes) -> None:
+    if not isinstance(salt, (bytes, bytearray)) or len(salt) != 64:
+        raise ValueError(f"`{SALT}` is the epoch's 64-byte salt")
+
+
 def _sites(plan: _Plan) -> tuple[Site, ...]:
     return tuple(Site(s, sp.node, sp.dot, sp.a_rows, sp.b_rows, sp.pairs) for s, sp in enumerate(plan.sites))
 
@@ -1029,13 +1034,16 @@ class Compiled:
         return [base + u.slot for u in self.units]
 
     def seeds(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[bytes]:
-        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``."""
+        """Each unit's seed_j, as its proof derives it (`seeds.seed`), from its seed group's operand roots ``roots[group]``,
+        under the epoch's 64-byte `salt` (a certified epoch's, `audit.Epoch.certified`)."""
+        _check_salt(salt)
         _check_roots(roots, len(self.groups))
         return [SD.seed(salt, p, *roots[self.group_of[u.site]]) for u, p in zip(self.units, self.positions(base))]
 
     def inputs(self, salt: bytes, roots: Sequence[tuple[bytes, bytes]], base: int = 0) -> list[list[int]]:
-        """The leaves of `pouw.salt`, `pouw.positions` and `pouw.roots` (a pair per seed group), the arguments after the
-        served ones."""
+        """The leaves of `pouw.salt` (the epoch's 64-byte salt, a certified epoch's), `pouw.positions` and `pouw.roots`
+        (a pair per seed group), the arguments after the served ones."""
+        _check_salt(salt)
         _check_roots(roots, len(self.groups))
         b = self.boolean
         return [SD.leaves(salt, b), [v for p in self.positions(base) for v in SD.position_leaves(p, b)],
