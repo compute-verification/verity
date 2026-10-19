@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.SimPiopOf
 import Proofs.Flock.Claims.ZK.Round3Vals
 import Proofs.Flock.Claims.ZK.OneTape
 import Proofs.Flock.Claims.Complete.ZkTables.RunsGo

@@ -167,7 +167,7 @@ theorem tsF_lc {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x
       FlockComplete.Replay.pushes (lcE c j r).τ ((zkTab x j).table.S.kLog - 6) := by
   refine arr_eq_pushes (by unfold Composed.tsF; exact Array.size_ofFn) fun k hk => ?_
   unfold Composed.tsF
-  rw [getElem!_pos _ k (by simpa using hk), Array.getElem_ofFn]
+  rw [getElem!_pos _ k (by rw [Array.size_ofFn]; exact hk), Array.getElem_ofFn]
   show slotAt c (repBase x (2 * j.val + r.val) + (5 + ((stAt x j).m - 6) + k)) 0 =
     slotAt c (repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) + 2 + k) 0
   exact congrArg (fun q => slotAt c q 0) (by omega)
