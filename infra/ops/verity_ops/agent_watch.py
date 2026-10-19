@@ -96,9 +96,11 @@ does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, depl
 node names, the ssh options with the key, optionally `machines_d`), the watch reads each node's runs that ended since its last
 read over one ssh (`RUNS_READER`, host, port, user and runs root from the node's machines.d entry in the notes clone), and
 records each once as **run_ended** for whoever sent it (the request's `submitted_by`, else the command's `--by`, else the job's
-lane): a coordinator's own handle, a worker's launcher's (its coordinator resumes it with Task: Cursor refuses a run on a worker),
-else the lane's when that is a handle; a run no handle owns, or one whose handle `quiet_handles` lists (ci: drive reads its own
-train checks' ends), is skipped. `run_ends.json` keeps each node's last read and the runs
+lane): a coordinator's own handle, or a former one's (`lineage`), a worker's launcher's (its coordinator resumes it with Task:
+Cursor refuses a run on a worker), or its parent's when the watch learned it from a Task call, else the lane's (`--by`, the
+job's lane, or a handle `submitted_by` names) when that is a handle. The runs of one read whose sender no handle owns are one
+`run_ended` with role `unknown`, each run with its `sender`, for the relay to ring @infra once; a run whose handle
+`quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
 
 The run's end also starts a clock (`awaiting` in `state.json`) on whoever must act on it: the sender when the list has it, a
@@ -1098,8 +1100,7 @@ class Watch:
                 continue
             p = c["parent"]
             if p not in parents:
-                parents[p] = (lineage(self.registry, coords, p) or self.owners.get(p)
-                              or (self.workers.get(p) or {}).get("handle"))
+                parents[p] = self.parent_handle(p, coords)
             handle = parents[p]
             if agent in listed and handle:
                 self.owners[agent] = handle
@@ -1215,11 +1216,16 @@ class Watch:
         if changed:
             self.save()
 
+    def parent_handle(self, parent: str, coords: dict[str, str]) -> str | None:
+        """The handle a worker's `parent` answers to: its own (`lineage`), the coordinator that launched it, or its own launcher's."""
+        return lineage(self.registry, coords, parent) or self.owners.get(parent) or (self.workers.get(parent) or {}).get("handle")
+
     def run_ends(self, coords: dict[str, str], t: float) -> None:
         """Every `every_s` of `--nodes` (`{"nodes": [...], "ssh": [...], "machines_d"?, "every_s"?}`), each node's runs that
         ended since its last read (`RUNS_READER`, one ssh per node, host and root from its machines.d entry), each recorded once
-        as `run_ended` for the handle of whoever sent it: a coordinator's own, a worker's launcher's (only its coordinator can
-        resume it, with Task), else its lane's (`--by`, or the job's lane) when that is a handle. A run no handle owns is skipped.
+        as `run_ended` for the handle of whoever sent it: a coordinator's own or a former one's, a worker's launcher's or its
+        parent's (only its coordinator can resume it, with Task), else its lane's (`--by`, the job's lane, or a handle named in
+        `submitted_by`) when that is a handle. The read's runs no handle owns are one record, with no handle and role `unknown`.
         `run_ends.json` keeps each node's last read and the runs already seen; runs that ended before the first read are not
         rung."""
         cfg = read_json(self.nodes)
@@ -1232,6 +1238,7 @@ class Watch:
               "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
         handles = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
         quiet = {str(h) for h in cfg.get("quiet_handles") or []}
+        unknown: list[dict] = []
         for node in nodes:
             since = max(st["since"], st["nodes"].get(node, st["since"])) - RUN_ENDS_SLACK_S
             rows, why = node_runs(cfg, self.notes, node, since, self.sh)
@@ -1244,34 +1251,52 @@ class Watch:
                     continue
                 st["seen"][key] = t
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
-                if ended >= st["since"]:
-                    self.ring_run(node, row, coords, handles, ended, quiet)
+                if ended >= st["since"] and (u := self.ring_run(node, row, coords, handles, ended, quiet)):
+                    unknown.append(u)
+        if unknown:
+            self.record("run_ended", Run("", unknown[0]["run"] if len(unknown) == 1 else f"{len(unknown)} runs"), judged=False,
+                        handle=None, role="unknown", count=len(unknown), runs=unknown,
+                        senders=sorted({u["sender"] for u in unknown}))
         self.ends = st
         write_atomic(self.ends_path, (json.dumps(st, sort_keys=True) + "\n").encode())
 
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
-                 quiet: set[str] = frozenset()) -> None:
-        by = AGENT_RE.search(str(row.get("submitted_by") or ""))
+                 quiet: set[str] = frozenset()) -> dict | None:
+        """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
+        record with the read's others as one (93 such senders sent 753 runs in 14 h on 19 Oct: one ring each would bury @infra)."""
+        sent = str(row.get("submitted_by") or "")
+        by = AGENT_RE.search(sent)
         agent = by[0] if by else ""
-        lane = next((x for x in (row.get("by"), row.get("lane")) if x in handles), None)
+        words = re.findall(r"[a-z0-9-]+", re.sub(r"https?://\S+", " ", sent))
+        lane = next((x for x in (row.get("by"), row.get("lane"), *words) if x in handles), None)
         w = self.workers.get(agent) or {}
+        with self.kids_lock:
+            kid = self.children.get(agent) or {}
+        parent = w.get("parent") or kid.get("parent")
         if agent in coords:
             handle, role, name = coords[agent], "coordinator", self.names.get(agent, "")
+        elif agent and (h := lineage(self.registry, coords, agent)):
+            handle, role, name = h, "coordinator", self.names.get(agent, "")
         elif w.get("handle"):
             handle, role, name = w["handle"], "worker", str(w.get("name") or "")
+        elif parent and (h := self.parent_handle(parent, coords)):
+            handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or "")
         elif lane:
             handle, role, name = lane, "lane", ""
         else:
-            print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {row.get('submitted_by') or row.get('by') or '?'}"
-                  ", which no handle owns: not rung", file=sys.stderr, flush=True)
-            return
+            handle, role, name = "", "unknown", ""
         if handle in quiet:
-            return
+            return None
         what = row.get("job") or row.get("stage") or " ".join(str(row.get("command") or "").split()[:4]) or "?"
+        if role == "unknown":
+            print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {sent or row.get('by') or '?'}, which no "
+                  "handle owns: recorded for @infra to route", file=sys.stderr, flush=True)
+            return {"run": str(row.get("run")), "node": node, "sender": sent or str(row.get("by") or ""), "what": what[:80],
+                    "rc": row.get("rc"), "state": row.get("state"), "after": duration(row.get("wall_s")), "at": iso(ended)}
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
                     what=what[:80],
                     rc=row.get("rc"), state=row.get("state"), after=duration(row.get("wall_s")), at=iso(ended),
-                    lane=w.get("lane") or lane or "")
+                    lane=w.get("lane") or lane or "", **({"parent": parent} if role == "worker" and parent else {}))
         # who must act on it: its sender when the list has it or it is a worker, else the lane's handle's coordinator
         target = agent if agent in self.names or role == "worker" else next((a for a, h in coords.items() if h == handle), None)
         if target:
@@ -1279,6 +1304,7 @@ class Watch:
             e["runs"] = [*e["runs"], {"run": str(row.get("run")), "node": node, "what": what[:80], "rc": row.get("rc"),
                                       "state": row.get("state"), "after": duration(row.get("wall_s")), "ended": ended}][-10:]
             self.save()
+        return None
 
     def turn(self, a: dict, judges: dict[str, dict], live: dict[str, dict], t: float) -> tuple[dict | None, float | None]:
         """(the run a listed agent is judged by, its last activity): the later of that run's `updatedAt` and its last stream

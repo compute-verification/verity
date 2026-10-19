@@ -177,6 +177,26 @@ def test_a_worker_whose_lane_no_handle_owns_rings_infra_and_says_so_never_posted
     assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"], KERNELS_INBOX["inbox_ts"], INFRA_INBOX["inbox_ts"]]
 
 
+def test_runs_whose_sender_no_handle_owns_are_one_post_that_rings_infra(relay):
+    """Before, the watch dropped these to its log ("which no handle owns: not rung", 753 runs of 93 senders on 19 Oct)."""
+    infra, aede = relay.slack.tag(relay.slack.entry(relay.REG, "infra")), "bc-aede327f-c2cf-5f24-a40a-309e7bb815f4"
+    runs = [{"run": "r20261019-052718-24a9", "node": "vy-nebius-2", "sender": f"https://cursor.com/agents/{aede}",
+             "what": "r20261019-052718-24a9", "rc": 8, "state": "failed", "after": "6 s", "at": "2026-10-19T05:28:12Z"},
+            {"run": "r20261019-195000-0001", "node": "vy-nebius-1", "sender": "", "what": "python -m bench", "rc": 0,
+             "state": "done", "after": "1 min", "at": "2026-10-19T19:50:00Z"}]
+    many = [{**runs[1], "run": f"r20261019-2000{i:02d}-0001"} for i in range(relay.UNSENT_LISTED + 2)]
+    relay.log_text["text"] = "\n".join(json.dumps({"kind": "run_ended", "agent": "", "name": "", "run": "2 runs", "handle": None,
+                                                   "role": "unknown", "count": len(r), "runs": r}) for r in (runs, many)) + "\n"
+    relay.once()
+    assert relay.posts[0] == (
+        f"{infra} *Agent watch:* 2 research runs ended whose sender no handle owns (not a coordinator, a worker the watch knows, "
+        f"its parent, or a lane): r20261019-052718-24a9 on vy-nebius-2 (r20261019-052718-24a9, failed rc=8) sent by "
+        f"<https://cursor.com/agents/{aede}|bc-aede327f>; r20261019-195000-0001 on vy-nebius-1 (python -m bench, done rc=0) sent "
+        "by no `submitted_by` or `--by`. @infra is rung to find who sent them.")
+    assert relay.posts[1].count(" sent by ") == relay.UNSENT_LISTED and "; and 2 more. @infra is rung" in relay.posts[1]
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]] * 2
+
+
 def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
     """Cursor answers 409 for an agent waiting on background work, every hour the watch tries; the post would say nothing new."""
     relay.log_text["text"] = "\n".join([

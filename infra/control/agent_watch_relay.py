@@ -9,7 +9,8 @@ handle and rings that inbox the same way, for its coordinator to resume it with 
 the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker alert is never posted unrung: one whose
 lane no handle owns (nor its parent's) leads with @infra and says its lane is unknown. A silent agent (ACTIVE 90 min with no note and no push)
 and a `research run` that ended on a node lead with the record's handle and ring it the same way: a coordinator's own, a worker's
-launcher's, for a run whose sender is a lane, the lane's. A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
+launcher's, for a run whose sender is a lane, the lane's; the runs of one read whose sender no handle owns are one post that leads
+with @infra, naming each run's sender. A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
 worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
 with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
@@ -71,6 +72,7 @@ WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: onl
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
 UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
+UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 #: a renamed handle's old name -> its new one, from the registry's "renamed from @OLD" (hash -> kernels, 18 Oct): lanes' notes
 #: and workers.d still carry the old name
 RENAMED = {old: h["handle"] for h in REG.get("handles") or []
@@ -106,6 +108,8 @@ def rung(rec: dict) -> str | None:
         return handle
     if is_worker(rec):
         return lane_of(rec) or UNROUTED
+    if rec.get("kind") == "run_ended":
+        return UNROUTED
     return None
 
 
@@ -131,6 +135,14 @@ def member(rec: dict) -> str:
     return f"{name} (<https://cursor.com/agents/{rec.get('agent')}|{str(rec.get('agent'))[:11]}>) {what}{wake}"
 
 
+def unsent(u: dict) -> str:
+    """One run of an unknown sender: the run, its node and result, and who `submitted_by` says sent it."""
+    s = str(u.get("sender") or "")
+    a = re.search(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", s)
+    who = f"<https://cursor.com/agents/{a[0]}|{a[0][:11]}>" if a else (f"`{s}`" if s else "no `submitted_by` or `--by`")
+    return f"{u.get('run')} on {u.get('node')} ({u.get('what') or '?'}, {u.get('state')} rc={u.get('rc')}) sent by {who}"
+
+
 def text(rec: dict) -> str:
     link = f"<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>"
     line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
@@ -148,6 +160,13 @@ def text(rec: dict) -> str:
             return f"{lead}*Agent watch:* {run} of worker {name} ({link}) {line}; resume {name} with Task.{unknown(rec)}"
         if rec.get("role") == "coordinator":
             return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
+        if rec.get("role") == "unknown":
+            runs = rec.get("runs") or []
+            listed = "; ".join(unsent(u) for u in runs[:UNSENT_LISTED]) + (
+                f"; and {len(runs) - UNSENT_LISTED} more" if len(runs) > UNSENT_LISTED else "")
+            return (f"{lead}*Agent watch:* {len(runs)} research run{'s' if len(runs) != 1 else ''} ended whose sender no handle "
+                    f"owns (not a coordinator, a worker the watch knows, its parent, or a lane): {listed}. @{UNROUTED} is rung "
+                    "to find who sent them.")
         return f"{lead}*Agent watch:* {run} of lane {rec.get('handle')} {line}."
     if rec.get("kind") == "workers_failed":
         members = rec.get("members") or []

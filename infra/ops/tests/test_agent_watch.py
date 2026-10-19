@@ -1616,7 +1616,10 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
     clock.t += 5 * 60
     w.sweep(lambda r: None)
     got = {r["run"]: {k: r.get(k) for k in ("agent", "name", "handle", "role", "node", "what", "rc", "state", "after", "lane")}
-           for r in ended(tmp_path)}
+           for r in ended(tmp_path) if r["role"] != "unknown"}
+    (unsent,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert (unsent["handle"], unsent["count"], [(u["run"], u["sender"]) for u in unsent["runs"]]) == (
+        None, 1, [("r20261018-195500-0005", "https://cursor.com/agents/bc-unknown")]), "the run nobody's handle owns, for @infra"
     assert got == {
         "r20261018-195000-0002": {"agent": CO, "name": "verity: circuits", "handle": "circuits", "role": "coordinator",
                                   "node": "vy-nebius-1", "what": "sweep-a", "rc": 0, "state": "done", "after": "1 h 06 min",
@@ -1625,8 +1628,7 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                                   "what": "python bench/run.py --n 8", "rc": 3, "state": "failed", "after": "12 min",
                                   "lane": "zk-port"},
         "r20261018-195500-0004": {"agent": "", "name": "", "handle": "vllm", "role": "lane", "node": "vy-nebius-2",
-                                  "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}, \
-        "the run nobody's handle owns is skipped"
+                                  "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}
     assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
     for _ in range(3):
         clock.t += 5 * 60
@@ -1634,7 +1636,45 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
     restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
                         notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
     restarted.sweep(lambda r: None)
-    assert len(ended(tmp_path)) == 3, "each run rings once, across restarts"
+    assert len(ended(tmp_path)) == 4, "each run rings once, across restarts"
+
+
+def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
+    """The pod's watch log, 19 Oct: 847 run ends "which no handle owns: not rung" since 05:28Z. Among them, vy-nebius-2's
+    r20261019-043737-f6de (05:28:58Z) sent by CENSUSAND (bc-fe356a9d), a worker learned from a Task call of circuits' generation
+    3 (bc-21f3d3de); r20261019-132935-493f (13:29:54Z) sent by compute-accounting's generation 2 (bc-ebc09a9a) after its
+    handover; and runs of workers the watch never learned: r20261019-052718-24a9 (bc-aede327f) and vy-nebius-cpu-2's
+    r20261019-192229-3606 (bc-df15df07, here on vy-nebius-1). The first two now ring their handle; the rest of a read are one
+    record, rung to @infra. A `submitted_by` that names a lane ($RESEARCH_AGENT_URL is free text) rings that lane."""
+    url = "https://cursor.com/agents/{}".format
+    censusand, circuits3, ca2 = ("bc-fe356a9d-81e7-54a8-a5da-fbf425245da5", "bc-21f3d3de-28db-5e5d-964b-d357187449aa",
+                                 "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac")
+    aede, df15 = "bc-aede327f-c2cf-5f24-a40a-309e7bb815f4", "bc-df15df07-8eff-531b-97bc-f5cbbdeda23e"
+    assert (W.generation("circuits", circuits3), W.generation("compute-accounting", ca2)) == (3, 2)
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    reg = json.loads((tmp_path / "registry.json").read_text())
+    reg["handles"].append({"handle": "compute-accounting", "holder": f"the compute-accounting coordinator ({LANE})"})
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    w.sweep(lambda r: None)
+    w.child(circuits3, {"args": {"agentId": censusand, "description": "CENSUSAND: merge #2765 fix into #2738"}}, clock.t)
+    api.workers[censusand] = worker("ACTIVE", W.iso(clock.t), "CENSUSAND: merge #2765 fix into #2738")
+    clock.t += 60
+    node_run(roots["vy-nebius-2"], "r20261019-043737-f6de", clock.t, by=url(censusand), state="failed", rc=130, wall_s=3068.6)
+    node_run(roots["vy-nebius-2"], "r20261019-132935-493f", clock.t, by=url(ca2), state="failed", rc=127, wall_s=0.47)
+    node_run(roots["vy-nebius-2"], "r20261019-052718-24a9", clock.t, by=url(aede), state="failed", rc=8, wall_s=6.8)
+    node_run(roots["vy-nebius-1"], "r20261019-192229-3606", clock.t, by=url(df15), state="failed", rc=143, wall_s=1200)
+    node_run(roots["vy-nebius-1"], "r20261019-195000-0001", clock.t, by="circuits lane, Daniel's laptop")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["run"]: (r["agent"], r["name"], r["handle"], r["role"]) for r in ended(tmp_path) if r["role"] != "unknown"}
+    assert got == {"r20261019-043737-f6de": (censusand, "CENSUSAND: merge #2765 fix into #2738", "circuits", "worker"),
+                   "r20261019-132935-493f": (ca2, "", "compute-accounting", "coordinator"),
+                   "r20261019-195000-0001": ("", "", "circuits", "lane")}
+    (unsent,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert (unsent["handle"], unsent["count"], unsent["senders"]) == (None, 2, sorted([url(aede), url(df15)]))
+    assert sorted((u["run"], u["node"], u["rc"]) for u in unsent["runs"]) == [
+        ("r20261019-052718-24a9", "vy-nebius-2", 8), ("r20261019-192229-3606", "vy-nebius-1", 143)]
+    assert censusand in w.awaiting, "the worker's end starts its clock, for its coordinator to resume it"
 
 
 def test_a_quiet_handles_runs_are_not_rung(tmp_path):
