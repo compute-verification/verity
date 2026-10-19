@@ -33,7 +33,7 @@ design = "dither-2s-licpw-redux-p1-l32"
 conditions = ["ffill is credited at p = 1: no check reads its chains (PouwWarpCheck's li absorbs H1's call words only; RT-LOGIC-12, decision 99)",
               "LI-CP-W redux at its lane instructions a word is the cheapest fold (FOLD-OPT, decision 94): on DS-90 ε_machine first rises at 0.992 a word, 5.9% under li's 1.055 (RT-HB-HEAD-2)",
               "LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
-sheet = { vector = "DS-90" }
+sheet = { vector = "DS-90", conditions = ["A3 per SM clock, at the clock each tensor figure is stated at (SheetTensor; RT-H200-EMP-1): s8's 4096 MACs a SM-clock is the data sheet's figure over 132 SMs at the 1830 MHz tensor boost clock (H100 SXM5 whitepaper), and the H200's tensor lines are measured within 0.01% of the sheet's (r20261019-053910-d2c9). Read per second at f_max (1980 MHz, ×1.082 the figure's clock), A3 gives 3786 and this row is 1.942% (#2695's `sheet --eps`): ε first moves with every tensor line 1.063× the sheet's, the tensor side of FOLD-OPT's 5.9% (MM-SHEETS)"] }
 measured = { vector = "DC-90-ri", conditions = ["over 1% at q* = 1.22: with ffill uncredited ♭ is LI-CP's alone, and ε_machine is 0.583% (the cheater's words 98% on the tensor route); a check that reads ffill's chains would credit it and take DC-90-ri to 0.713% (RT-HB-HEAD-1)"] }
 
 [family.sm_100]
