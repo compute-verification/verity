@@ -30,6 +30,10 @@
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
                                                             then the machine --on auto would take; --json, the documents
+    uv run python tools/verity/check/check.py --plan [COMMIT] [--json]
+                                                            each part's key at COMMIT (default HEAD) and whether a recorded
+                                                            pass under it is here or in a pack `gather_verdicts` would take;
+                                                            runs nothing (`plan.py`), read by `research merge --verdicts`
     uv run python tools/verity/check/check.py --lean-deps-files    the `--send` for those URLs, for `research merge --train`
     python tools/verity/check/check.py --preflight                 the preflight alone, for `research merge --train --prepare`
     ... [--verdicts-in PACK]                                import the passes another machine stored (`verdicts.py`) before

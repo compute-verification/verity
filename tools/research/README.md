@@ -97,6 +97,7 @@ research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree
 research tele SUBCOMMAND ...             # the harness's own surface
 research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
+research merge REF --verdicts [--verdicts-from RUN] [--dry-run]         # opt-in: REF's `check.py --plan`, every part passed in recorded packs
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
@@ -120,6 +121,13 @@ not, plus check.py's own flags only), a result kind it produces (`check/v1`, nev
 listed twice. Anything else, unreadable included, passes no gate, and a refusal exits 3. The merge commit carries a `Check:
 <attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/verity/check`). `--canary` checks, in scratch
 stores, that every gate refuses each bad attempt in `CANARY` and admits a good one.
+
+`research merge REF --verdicts` (opt-in, CI-33; the exact-attempt gate stays the default) holds REF to the same checks before any
+verdict, then admits it when the target's `check.py --plan REF` shows every part it requires passed under its key at REF, each by
+a pass in the verdict pack of a recorded check: a `check` attempt that ended and ran the declared command, whose run files list
+that pack by sha256. Every Lake package's audit and every step `merge_requires` asks of the change must have such a pass; a skip,
+a part with no key, or a pass held only in a machine's cache counts as none. The merge commit carries `Verdicts: <attempt id>...`.
+It takes no `--train` or `--push`: the push guard admits only a passing attempt of the tree.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
 (so its commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
