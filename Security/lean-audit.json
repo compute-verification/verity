@@ -1768,16 +1768,72 @@
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
   },
   "FlockSoundness.Audit.Adaptive.harm_budget": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Adaptive.harm_budget {n : Nat} {π h : Fin n → Real} {lam : Real} {err : Nat → ENNReal}",
+    "  (hlam0 : Real.instLE.le 0 lam) (hlam : ∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)) (H : Real)",
+    "  {N : Nat} (P : FlockSoundness.Audit.Adaptive.Play n N)",
+    "  (hL : FlockSoundness.Audit.Adaptive.Play.Laws (fun L => L.Design π) P)",
+    "  (hD : FlockSoundness.Audit.Adaptive.Play.Drawn err P) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Audit.Adaptive.Play.prEv h (fun acc x => And (Eq acc Bool.true) (Real.instLE.le H x)) P 0)",
+    "    (instHAdd.hAdd (ENNReal.ofReal (Real.exp (Real.instNeg.neg (instHMul.hMul lam H))))",
+    "      ((Finset.range N).sum fun m => err m))"
+   ],
+   "assumptions": [],
+   "type_hash": "1dfdd07f965289af44ce80854e0b76c2e23e9e50bd7429afbbe94802dab05c5e"
   },
   "FlockSoundness.Audit.Adaptive.harm_count": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Adaptive.harm_count {n num den : Nat} [NeZero den] (hq : instLTNat.lt num den)",
+    "  {err : Nat → ENNReal} (K : Nat) {N : Nat} (P : FlockSoundness.Audit.Adaptive.Play n N)",
+    "  (hL : FlockSoundness.Audit.Adaptive.Play.Laws (fun L => Eq L (FlockSoundness.Audit.Law.bernoulli n num den)) P)",
+    "  (hD : FlockSoundness.Audit.Adaptive.Play.Drawn err P) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Audit.Adaptive.Play.prEv (fun x => 1)",
+    "      (fun acc x => And (Eq acc Bool.true) (Real.instLE.le K.cast x)) P 0)",
+    "    (instHAdd.hAdd (instHPow.hPow (FlockSoundness.Audit.Law.bernFactor num den 0) K)",
+    "      ((Finset.range N).sum fun m => err m))"
+   ],
+   "assumptions": [],
+   "type_hash": "6c33b28cd7f5b68f55554c7f48c55844e3a8074006c0356dc2a7932660bb6c0c"
   },
   "FlockSoundness.Audit.Adaptive.harm_count_kstar": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Adaptive.harm_count_kstar {n num den : Nat} [NeZero den] (h0 : instLTNat.lt 0 num)",
+    "  (hq : instLTNat.lt num den) {p : Real} (hp : Real.instLT.lt p 1) {err : Nat → ENNReal} {H : Real}",
+    "  (hH : Real.instLE.le (FlockSoundness.Audit.Adaptive.kStar num den p) H) {N : Nat}",
+    "  (P : FlockSoundness.Audit.Adaptive.Play n N)",
+    "  (hL : FlockSoundness.Audit.Adaptive.Play.Laws (fun L => Eq L (FlockSoundness.Audit.Law.bernoulli n num den)) P)",
+    "  (hD : FlockSoundness.Audit.Adaptive.Play.Drawn err P) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Audit.Adaptive.Play.prEv (fun x => 1) (fun acc x => And (Eq acc Bool.true) (Real.instLE.le H x)) P",
+    "      0)",
+    "    (instHAdd.hAdd (ENNReal.ofReal (instHSub.hSub 1 p)) ((Finset.range N).sum fun m => err m))"
+   ],
+   "assumptions": [],
+   "type_hash": "f4c20d17c7723c77bf64fa1e55e38804f6bc97c53521b5e5aaa5efebbbcd8004"
   },
   "FlockSoundness.Audit.Adaptive.life_harm_budget": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.Adaptive.life_harm_budget {n : Nat} {L : Nat → FlockSoundness.Audit.Law n} {Reg : Nat → Type}",
+    "  {session : (m : Nat) → Finset (Fin n) → Reg m → FlockSoundness.Game Bool}",
+    "  (A : (m : Nat) → FlockSoundness.Audit.Analysis (L m) (Reg m) (session m)) {εks δlink : Nat → ENNReal}",
+    "  (hks : ∀ (m : Nat), (A m).KnowledgeSound (εks m)) (hlink : ∀ (m : Nat), (A m).LinkSound (δlink m))",
+    "  {π h : Fin n → Real} (hL : ∀ (m : Nat), (L m).Design π) {lam : Real} (hlam0 : Real.instLE.le 0 lam)",
+    "  (hlam : ∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)) (H : Real) (N : Nat)",
+    "  (s : (FlockSoundness.Audit.Adaptive.life L Reg session N).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Audit.Adaptive.Play.prEv h (fun acc x => And (Eq acc Bool.true) (Real.instLE.le H x))",
+    "      (FlockSoundness.Audit.Adaptive.lifePlay A N s) 0)",
+    "    (instHAdd.hAdd (ENNReal.ofReal (Real.exp (Real.instNeg.neg (instHMul.hMul lam H))))",
+    "      ((Finset.range N).sum fun m => instHAdd.hAdd (εks m) (δlink m)))"
+   ],
+   "assumptions": [],
+   "type_hash": "8cce025887058f45fb1f0afbcd764f4859918cf5c5ab2bebd8735dedd2d5648a"
   },
   "FlockSoundness.Audit.Law.closure_escape": {
    "owner": "@proofs",
@@ -19886,6 +19942,48 @@
     "FlockSoundness.Audit.Partitioning.Witness.refinement"
    ]
   },
+  "Proofs.Flock.Soundness.Audit.HarmBudget": {
+   "digest": "49a3cfae242370cdf2d635966e7dcfebf19b762c39bcad4ef6401a20ac09f60a",
+   "definitions": {
+    "FlockSoundness.Audit.Adaptive.Play": "417d426616e21e848c506d4cf833e1d7a737d2078d1da5905a65d3a3f9ed478a",
+    "FlockSoundness.Audit.Adaptive.Play.Drawn": "95df2a145c2096b29904657d9fc2cc155f202589e100fda5a4522518423ca878",
+    "FlockSoundness.Audit.Adaptive.Play.Laws": "9264db5098c104ab446d60b84c5fed6d3b6ba28b5e0041fec1785f2755e6176f",
+    "FlockSoundness.Audit.Adaptive.Play.below": "069401a6a2e287fdd05f226d80d956c7a4889b8400deb0ab387ecb7153b9fad1",
+    "FlockSoundness.Audit.Adaptive.Play.brecOn": "fb8633595a1fdb4e7287d096d8cbce907f44150ba8bc2b7410802aa927a55d19",
+    "FlockSoundness.Audit.Adaptive.Play.brecOn.go": "f7172fc9b718acc6edfa4d2847c24ea141e559bcfb7f77ffe66d58cb42ace8dc",
+    "FlockSoundness.Audit.Adaptive.Play.casesOn": "c5a86aeb35787ff8156dd309d6dee299b083e21124377361bf0f45d28b1e03c1",
+    "FlockSoundness.Audit.Adaptive.Play.coin": "b715c55b4bbb6cf2e5f7137d6e464579f04c3198c2b5176035f4bbbd2c7d0d6c",
+    "FlockSoundness.Audit.Adaptive.Play.pass": "ec62ee685385645dd5aa265e5216b3ad644cc423c4f3a272ab5c48a2e0568767",
+    "FlockSoundness.Audit.Adaptive.Play.prEv": "75c5b26c5ac2b32d06ef0777ee3e3ebded0fc17744e23fbb723dba6caaaa643c",
+    "FlockSoundness.Audit.Adaptive.Play.rec": "1efa62226430b1c7e27f08bc2a7cb82da8c7660815bc4d9f13d5b2cc04ecfdf1",
+    "FlockSoundness.Audit.Adaptive.Play.round": "bc3f48a0a9b5fda2f284ab642abfd73bf8424a7b302d60f528d7ff623c076aba",
+    "FlockSoundness.Audit.Adaptive.Play.stop": "71fbf884c36f9e8ebd91c2272e35700b35418825956b6bb8cda1367239216ef4",
+    "FlockSoundness.Audit.Adaptive.kStar": "b93bce9d80a4cddeee881029d53f392a39316430aea00e9d49f7fffc5efb9714",
+    "FlockSoundness.Audit.Law.Design": "75c9749a2c2e0c07cc3a043b9b78b491e4f64eea1fe11eb4aaaf2697467456cb",
+    "FlockSoundness.Audit.Law.bernRate": "893edb2502f84b7754824bb369fad8e00271b66ab2131153227d26ee06c3e76d"
+   },
+   "guarantees": [
+    "FlockSoundness.Audit.Adaptive.harm_budget",
+    "FlockSoundness.Audit.Adaptive.harm_count",
+    "FlockSoundness.Audit.Adaptive.harm_count_kstar",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget"
+   ]
+  },
+  "Proofs.Flock.Soundness.Audit.HarmBudgetLife": {
+   "digest": "7b6f8b92de75832e8163fc020f21dba60ea323142a5f2e5c3ded2ccb6b8ac0c9",
+   "definitions": {
+    "FlockSoundness.Audit.Adaptive.afterAudit": "c89196120513106a8b2ab925d1a5be809cda94064b000de91c0c91a89dccd4fb",
+    "FlockSoundness.Audit.Adaptive.contPlay": "f782472ef6842fae0a2304361b4cdfd6f9b6b99c90c3986ffaf99969f557558b",
+    "FlockSoundness.Audit.Adaptive.goPlay": "1b0c672e11272bb39a7996315503db7fae325259525cca5197ae16e35cb44454",
+    "FlockSoundness.Audit.Adaptive.life": "a9cafb2ee381bb7b464e3b59344a2739d8b5c22077e994347bcf50d9847195bd",
+    "FlockSoundness.Audit.Adaptive.lifePlay": "7d88ab66d21b848e5fd766ecdd6913cc4e807b9600790319b37328e380bc34cf",
+    "FlockSoundness.Audit.Adaptive.ofBindPlay": "58fd9a4ff5a59a7b44e85be0116a2437a822fab67ae9ff50ff19dfc2a9d91003",
+    "FlockSoundness.Audit.Adaptive.roundPlay": "9381f2b239b9fafc42c782a839f2e860b9e24f311a5843a4756f30e3774e59af",
+    "FlockSoundness.Audit.Adaptive.stage": "2fe61b4ab9e4e77f616ae005ea101093c70e18746de9789157cfded835bc9ff7",
+    "FlockSoundness.Audit.Adaptive.stagePlay": "deb33d785f8fe49608a05e24adee4af0ee24557b3dafdd8651587b0a955dd802"
+   },
+   "guarantees": ["FlockSoundness.Audit.Adaptive.life_harm_budget"]
+  },
   "Proofs.Flock.Soundness.Audit.Influence": {
    "digest": "7dfa9a6314851dba47e1a5ca17834ef69f14e6bf372a1c55036268f559ba46b0",
    "definitions": {
@@ -19898,9 +19996,10 @@
    "guarantees": ["FlockSoundness.Audit.Partition.audit_exfiltration"]
   },
   "Proofs.Flock.Soundness.Audit.Law": {
-   "digest": "a77100297020ff04630e7649609f1b73416aee869faadbc1c8e40b6f23221565",
+   "digest": "46f3c6c24c5d2b00dca6ad0330a1a77325f0539bbd89f387cbc4ad370b67d0bb",
    "definitions": {
     "FlockSoundness.Audit.Law": "b1c204e017af5bb6aa902ec06acf3cb78a691b879095cd7b24e39eb599e5ddc4",
+    "FlockSoundness.Audit.Law.bernFactor": "f98f38edc55f8fb4b7524c19d35377b7afa3b770677143fadf5b2b977563d464",
     "FlockSoundness.Audit.Law.bernoulli": "2f16d1d541405db53864a529c73be6b7317f3cfdd24019a56ed83ff8576703e5",
     "FlockSoundness.Audit.Law.draw": "25176231b8f5791fbcfa94fd3f40216ba705a18d0167f9909672de5676d63b86",
     "FlockSoundness.Audit.Law.escape": "8dca2af149d09f76f11b001a4ac128eb8e9060a013b88cdd1555b89b8c44e2e9",
@@ -19921,6 +20020,10 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "FlockSoundness.Audit.Adaptive.harm_budget",
+    "FlockSoundness.Audit.Adaptive.harm_count",
+    "FlockSoundness.Audit.Adaptive.harm_count_kstar",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
@@ -19982,6 +20085,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.audit_profile",
     "FlockSoundness.Audit.audit_window_split_of_record",
@@ -24060,6 +24164,10 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "FlockSoundness.Audit.Adaptive.harm_budget",
+    "FlockSoundness.Audit.Adaptive.harm_count",
+    "FlockSoundness.Audit.Adaptive.harm_count_kstar",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
@@ -24230,8 +24338,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Game.Prob": {
-   "digest": "f532c4201eb0d4ddc12df36be942ed315ceea104587eaae2641a2098364e6d81",
+   "digest": "82e09bc18f6dbab83b318051fcb130ba9b87d1bd93c41f6818017d83f4a853e1",
    "definitions": {
+    "FlockSoundness.Game.Strategy.ofBind": "e636ca798ccbc7a027623ac7b1c49711cbcb025ea1bbb8fa626166e47c3843ae",
     "FlockSoundness.Game.Strategy.ofMap": "d45c1c43a350061bcf18d74128ee9d5b0e766c26ccbe1bc90098f0a774247d72"
    },
    "guarantees": [
@@ -24245,6 +24354,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.audit_profile",
     "FlockSoundness.Audit.audit_window_split_of_record",
