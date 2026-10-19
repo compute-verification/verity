@@ -70,9 +70,9 @@ class Const:
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
     read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `bits` a tuple of n values: an
-    `Array<n,Value<width>>` parameter, one instance per value in order (the int8 attention's K scales).  `shared`: one instance
-    per value for the whole resolution, as a Build rule that caches its constants per call (`vllm_dsv4`'s `i32`).  As a `Pieces`
-    piece it stands for `count` copies of its instance."""
+    `Array<n,Value<width>>` parameter, one instance per value in order (the int8 attention's K scales).  `shared`: one instance per
+    value for the whole resolution, as a Build rule that caches its constants per call (`vllm_dsv4`'s `i32`).  As a `Pieces` piece
+    it stands for `count` copies of its instance."""
 
     width: int
     bits: int | tuple[int, ...]
