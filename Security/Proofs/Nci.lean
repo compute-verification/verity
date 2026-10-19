@@ -11,6 +11,7 @@ import Proofs.Nci.Threads
 import Proofs.Nci.Layered
 import Proofs.Nci.Contained
 import Proofs.Nci.Fit
+import Proofs.Nci.FitSlotsWitness
 import Proofs.Nci.FitRate
 import Proofs.Nci.FitWitness
 import Proofs.Nci.Dampener

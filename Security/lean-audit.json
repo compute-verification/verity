@@ -194,6 +194,10 @@
    "owner": "@lean",
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
   },
+  "Nci.Assumptions.FitsSlots": {
+   "owner": "@lean",
+   "digest": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -205,6 +209,10 @@
   "Nci.Assumptions.Reach": {
    "owner": "@lean",
    "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
+  },
+  "Nci.Assumptions.ReachSlots": {
+   "owner": "@lean",
+   "digest": "4436244a4f03e9402ffa3017bdc51c0b9e8970eba16359509eab7ba56a5061c3"
   },
   "Nci.Assumptions.ReferenceLayered": {
    "owner": "@lean",
@@ -5199,6 +5207,12 @@
    "assumptions": [],
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
   },
+  "Nci.SecurityProofs.FitBoundSlots": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.FitBoundSlots : Nci.Guarantees.FitBoundSlots"],
+   "assumptions": [],
+   "type_hash": "3c31f9877b2753b9bd067ce2f820b64cf846a13f3cb0d77a894bbde938f2e2bd"
+  },
   "Nci.SecurityProofs.FitRate": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FitRate.{u_1, u_2} : Nci.Guarantees.FitRate"],
@@ -7738,7 +7752,8 @@
    "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "unstated: StagedFloorK restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
    "Nci.SecurityProofs.FitRate": "frozen (no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (Security/Models/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance.",
    "Accounting.SecurityProofs.Actual.WipePool": "frozen (no-function): It states the lifetime pool over an abstract run tree of wipes (Accounting.WipePlay.prEv) under the named timed-round premise Accounting.Assumptions.TimedRoundSound, a bound on a probability over the prover's strategies rather than a property of a function's acceptance.",
-   "Accounting.SecurityProofs.Actual.WipePoolDelta": "frozen (no-function): It is the lifetime pool at H = ln(1/δ)/k, over the same abstract run tree of wipes (Accounting.WipePlay.prEv) under Accounting.Assumptions.TimedRoundSound, rather than a property of a function's acceptance."
+   "Accounting.SecurityProofs.Actual.WipePoolDelta": "frozen (no-function): It is the lifetime pool at H = ln(1/δ)/k, over the same abstract run tree of wipes (Accounting.WipePlay.prEv) under Accounting.Assumptions.TimedRoundSound, rather than a property of a function's acceptance.",
+   "Nci.SecurityProofs.FitBoundSlots": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -10774,6 +10789,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
@@ -10826,6 +10842,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -10934,6 +10951,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -11138,6 +11156,7 @@
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
@@ -11196,13 +11215,18 @@
    ]
   },
   "Definitions.Nci.Fit": {
-   "digest": "8ffbf58c1c7939a8457980abca63aee69243a3d821d109419b7fb0ba1820aff9",
+   "digest": "6c87e9452fdac4330733e7b802d55477fce203d9c7f5391b170669ff39f87e72",
    "definitions": {
+    "Nci.Threading.Slots": "6eabc019831672cafbb50c4951c94169fff002d8a72b4d0961ddb37ba513679f",
+    "Nci.Threading.Slots.p": "bbdd6323abae5f843ac69a99c807be8d9ad4821fc87d9b4ff413dc065fb7d2a4",
+    "Nci.Threading.Slots.slot": "a68a39962a85ef9e14c1e99ca2a4c5c9442d6465b6ed3fae1ae52af244d4317b",
+    "Nci.Threading.Slots.slotsUsed": "4eddbdd7df4eb71f8dbeebd953eb93dc16415ea0c41b1fdab103e3b9552ffda6",
+    "Nci.Threading.Slots.threadSlots": "fd1ce6d3512f9397d660e7261a0446e3216c5fb29cadec052d98eb129543f78d",
     "Nci.Threading.entered": "43d16564a07afa5f83564464b9eef70f25fe27fd6ac0b415efbb83d0bd533301",
     "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
     "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitRate"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots", "Nci.SecurityProofs.FitRate"]
   },
   "Definitions.Nci.Info": {
    "digest": "8fb3a35e7925ba55540307fa339b42bb6815b9a48b751456a64f404a260a9898",
@@ -11290,6 +11314,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.FitBound",
+    "Nci.SecurityProofs.FitBoundSlots",
     "Nci.SecurityProofs.FitRate",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -21676,12 +21701,14 @@
    ]
   },
   "Models.Nci.Assumptions.Fit": {
-   "digest": "2295c39543e2983aa540f65bf6927e7c85d6f59a7513eb4831b1aaff7d9f3b47",
+   "digest": "ae61196a0d5e168b94fb5aebf54519f2cec0fb925e5ce7e396f1f02a82637eaa",
    "definitions": {
     "Nci.Assumptions.Fits": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864",
-    "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
+    "Nci.Assumptions.FitsSlots": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941",
+    "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5",
+    "Nci.Assumptions.ReachSlots": "4436244a4f03e9402ffa3017bdc51c0b9e8970eba16359509eab7ba56a5061c3"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitRate"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots", "Nci.SecurityProofs.FitRate"]
   },
   "Models.Nci.Assumptions.Info": {
    "digest": "00bdbe965111c5d8b58cba8d227486e05eb84da8d908fcde9586ce5ff5e4b421",
@@ -21784,11 +21811,12 @@
    ]
   },
   "Models.Nci.Guarantees.Fit": {
-   "digest": "3d92b64776e296c500c51f41702c1c64a88e05c0b951aab58c8607f6f7e04304",
+   "digest": "a46dfe2c21230f4d607f38fc72d6f0b91836a35ad245b574853f6474ee085941",
    "definitions": {
-    "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69"
+    "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69",
+    "Nci.Guarantees.FitBoundSlots": "e1e73559ecf1454b2951214fa2c0d1494084262c5396fa161c1deca2085105a8"
    },
-   "guarantees": ["Nci.SecurityProofs.FitBound"]
+   "guarantees": ["Nci.SecurityProofs.FitBound", "Nci.SecurityProofs.FitBoundSlots"]
   },
   "Models.Nci.Guarantees.FitRate": {
    "digest": "2cecfce7569747177d84fadf7d4b8a7d9d8a3dfb95c1235062fdf4b4671eb8d4",
