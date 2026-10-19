@@ -22,8 +22,8 @@ in the served output and in what a receipt unit reads of it (`Form`):
 * `yOpen`, the alternative kernels prices: no second tree; each receipt unit opens the Commit's own `y` rows of its tile
   and its Program checks `dequant(z) = y`, `z` an inner wire.
 
-The served partition's sampled units prove the Commit's `y` in every form, so integrity never reads the form. The
-link from that `y` to the proved product does (`Form.ServedLink`): `beside` has none (no unit reads the served `y`);
+Integrity of the Commit's `y` is its served partition's sampled units' (proofs' framing, not read here), so it never
+reads the form. The link from that `y` to the proved product does (`Form.ServedLink`): `beside` has none (no unit reads the served `y`);
 `zTree` has it under a premise on the prover's fused kernel, that the `y` it serves is `dequant` of the `z` it commits,
 which nothing checks and the design rules exclude (nothing the prover runs is trusted); `yOpen` has it from the tie,
 whose `linked` field puts the Commit's `y` in every receipt unit, and the Program's check, with no premise. So `yOpen`
@@ -199,9 +199,9 @@ def Form.Links {ι : Type} (Cd : Declared ι) (cls : ℕ → Cls) : Form → ℕ
 is `dequant` of the `z` rows it commits): `beside` has no link (`False`); `zTree` has it exactly under `fused`, a
 premise on code the prover runs, which no run-time check reaches; `yOpen` has it from `Tie.linked` and the receipt
 Program's `dequant(z) = y` check over the opened `y` (a fact of that Program's Definition, which doesn't exist yet),
-with no premise. It is an equality of values: useful-work credit needs it, and it doesn't give that credit, since in
-every form the receipts' GEMM follows the served one (the module docstring). Integrity reads none of it: the served
-partition's units prove the Commit's `y` in every form. -/
+with no premise, given the run-time check that the unit's `served` words open under the Commit's `y` root: `Tie`
+doesn't tell a `served` run input from an `act` one. It is an equality of values: useful-work credit needs it, and it doesn't give that credit, since in
+every form the receipts' GEMM follows the served one (the module docstring). Integrity reads none of it. -/
 def Form.ServedLink (fused : Prop) : Form → Prop
   | .beside => False
   | .zTree => fused
