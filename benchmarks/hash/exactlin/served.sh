@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # exactlin's served standard number on node 2 (RTX PRO 6000), vy-dc-h200 or vy-dc-b200: dither's sbench.py (the arms stock,
-# stock-cutlass on sm_90, exact and exact-fused, which need none of Dither's libraries) on one leased GPU for at most
-# SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
+# stock-percall, stock-cutlass on sm_90, exact and exact-fused, which need none of Dither's libraries) on one leased GPU for
+# at most SERVED_MAX_MIN (25) minutes, with the clocks read before and after, and with an exact-fused arm only after kgate.py's
 # bitwise gate (every config row, both models) passed in the same lease.  Extra arguments go to sbench.py; stock first, so its
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
 # SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0

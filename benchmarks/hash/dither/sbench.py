@@ -18,6 +18,9 @@ Arms:
     stock-humming  the same with Triton disabled too: vLLM's third choice, HummingInt8ScaledMMLinearKernel
     stock-cutlass  the same with nothing disabled: CutlassInt8ScaledMMLinearKernel where it serves int8 (sm_90, vLLM's
                  default there; it applies the weight scale first, so it is not the exact epilogue's order)
+    stock-percall  stock with triton_scaled_mm behind a custom op (`exactlin/percall.py`), so its tile heuristic runs on each
+                 call's M, not once at the traced M; the same values, so its tokens must equal stock's (gated), and its
+                 stats are the op's calls by M
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
                  as SERVE-H1 runs it (eager, batch-invariant)
     exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
@@ -129,7 +132,7 @@ def engine_args(gpu_mem: float) -> dict:
             "kernel_config": {"enable_flashinfer_autotune": False}}
 
 
-DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel",
+DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "CutlassInt8ScaledMMLinearKernel",
             "stock-humming": "CutlassInt8ScaledMMLinearKernel,TritonInt8ScaledMMLinearKernel"}
 
 
@@ -154,6 +157,13 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         os.environ.pop("VLLM_DISABLED_KERNELS", None)
     if arm in ("stock", "stock-humming", "stock-cutlass"):
         return LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
+    if arm == "stock-percall":
+        sys.path.insert(0, str(HERE.parent / "exactlin"))
+        import percall
+        percall.install()
+        llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
+        llm.dither_stats = percall.summary
+        return llm
     if arm == "exact-eager":
         vllm_dir = ROOT / "integrations" / "vllm"
         sys.path.insert(0, str(vllm_dir))
@@ -224,9 +234,9 @@ REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dith
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
           "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
           "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
-          "exact-fused": "exact"}
+          "exact-fused": "exact", "stock-percall": "stock"}
 # an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
-TOKENS_ONLY = {"exact-fused"}
+TOKENS_ONLY = {"exact-fused", "stock-percall"}
 PROF_N = (8, 24)
 PROF_RANGE = "verity/exactlin/prof"
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
