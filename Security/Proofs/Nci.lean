@@ -20,6 +20,7 @@ import Proofs.Nci.Info
 import Proofs.Nci.Fmt
 import Proofs.Nci.Fmt2
 import Proofs.Nci.Training
+import Proofs.Nci.Activations
 
 /-!
 # Proofs of NCI's guarantees

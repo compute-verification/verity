@@ -13,6 +13,7 @@ import Models.Nci.Guarantees.Info
 import Models.Nci.Guarantees.Fmt
 import Models.Nci.Guarantees.Fmt2
 import Models.Nci.Guarantees.Training
+import Models.Nci.Guarantees.Activations
 import Models.Pous.Assumptions
 import Models.Pous.Guarantees
 import Models.Pouw.Assumptions
