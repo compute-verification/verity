@@ -109,6 +109,12 @@ Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (2:06 PM PDT, ASK-72 and ASK-73 approved): the recursion. (1) The deployed bound record states its inner
+  claim at IVStar at the weight `coverW` of `deployPlainTrim`'s weight, the least at which the knowledge-soundness
+  route's premise P3 (`Bound.WeightCovers`) holds, at about 4 bits of λ. (2) The recursion's security level is below
+  the 100-bit floor under every weight, about 65 bits at the deployed shape (`Claims.Recursion.lam`; its third, the
+  extraction finder's, term is below 128 by construction). Its guarantee keeps its statement, and every table, README or
+  claim that cites it gives its λ and says it is below the floor, while proofs researches a tighter extraction bound.
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
   he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
   cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.
