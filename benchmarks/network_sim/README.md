@@ -93,17 +93,18 @@ certifier verdicts: `r20261018-065536-38c4`, before the declarations, and `r2026
 
 `run --salt` turns each certifier's per-window salt on (`Proxy(salt=active.fresh_salt)`, the certifier's
 `PROTOCOL.md`): at each window's first bucket the ingress side puts one salt frame, which carries the window and the
-salt's commitment, in the block's ingress record, and sends the salt itself to the block's server on a connection of
-its own. Once a block's run is over, `run` makes the verifier's "reveal" call to its proxy and keeps the salts in
-`DIR/b0/salts.json`. The record check declares each ingress window with its salt frame first, and the certifier's audit
-(`active_replay.audit_salt`) reads each commitment against the revealed salt and counts the salt frames in each
-ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
+placeholder (64 zero bytes) and never the salt, in the block's ingress record, and sends the salt itself to the block's
+server on a connection of its own. Once a block's run is over, `run` makes the verifier's "reveal" call to its proxy
+and keeps the salts in `DIR/b0/salts.json`. The record check declares each ingress window it has a salt for with its
+salt frame first, and the certifier's audit (`active_replay.audit_salt`) reads each window's salt frame and the
+revealed salt's width and counts the salt frames in each ingress window and in egress. The salt takes one of the ingress side's frames in each window's first bucket, so a
 request enqueued in that bucket can go out a bucket later.
 
-Run `r20261018-092640-66bf` (`run --salt`), on vy-nebius-cpu-2 at a load of about 35, gave the table's verdicts on
-every block, under both audits. On every block, each ingress window held one salt frame and egress none, no egress
-frame held a salt or its commitment, the certifier's audit accepted each window's commitment against the revealed
-salt, and the block's server received every salt. The latest tick was 4.3 ms late against the 25 ms slack.
+Run `r20261018-092640-66bf` (`run --salt`), on vy-nebius-cpu-2 at a load of about 35, before the salt frame carried
+the placeholder instead of the salt's commitment, gave the table's verdicts on every block, under both audits. On
+every block, each ingress window held one salt frame and egress none, no egress frame held a salt or its commitment,
+the certifier's audit accepted each window's commitment against the revealed salt, and the block's server received
+every salt. The latest tick was 4.3 ms late against the 25 ms slack.
 
 ### Maintenance
 
@@ -297,8 +298,8 @@ What is public, each with its reason:
 - The port's end of its link, 0 for egress and 1 for ingress (protocol structure). It names the leaf of N2's commitment
   the unit opens.
 - Hiding commitments: the layout's root, N2's record root and the units' outbox roots, each with its domain id. A salted
-  window also has its window number and its revealed salt commitment, which NET-18 makes public once the salt is
-  revealed.
+  window also has its salt frame's payload, its window number and the 64 bytes the live certifier fills with the
+  placeholder, protocol structure.
 - The output, the ok bit.
 
 What is committed, by whom and when:
@@ -336,8 +337,8 @@ What is committed, by whom and when:
   window. The firewall keeps the records and salts, and the challenger receives the root alone. Here `Certifier` stands
   in for the certifier and the firewall: a small LMS key signs each head, and the salts come from a seed.
 - With NET-18, the ingress certifier also puts its own SALT frame (kind 3 on stream 0xFFFFFFFF; the window and the
-  salt's 64-byte commitment) ahead of the arrivals in each window's first bucket. It is not a crossing, so it has no
-  descriptor. The unit takes the frame's slot as witness and checks the frame against the revealed commitment.
+  placeholder, 64 zero bytes) ahead of the arrivals in each window's first bucket. It is not a crossing, so it has no
+  descriptor. The unit takes the frame's slot as witness and checks the frame against the public payload.
   `workload/lab.py` and `workload/n3.py` still refuse it as malformed.
 
 The layout is per frame, in each port's send order, not per window. The buckets frames arrive in decide which frames
@@ -440,11 +441,14 @@ Open items:
   rows is the committer's opening, not a proof (`verity/core/protocols/sampled_proofs/README.md`). N3 on served traffic
   needs the crossings bound to the commitment the compute proofs read: serving's record in hm96 itself, or a unit that
   opens the vllm-v1 leaves.
-- **Trailing frames.** A port that stops short of its declared frames passes. Each window it recorded matches its
-  descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's responses
-  are refused only because their record's status says coverage was never established. The declared count is private,
-  so the closing check needs a unit: one per port that opens the layout at the position after the port's last recorded
-  frame and shows that the descriptor there is the invalid one.
+- **Trailing frames.** Here a port that stops short of its declared frames passes. Each window it recorded matches
+  its descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's
+  responses are refused only because their record's status says coverage was never established. N2 closes it where
+  the link declares its occupancy profile (`LinkWindows.occupancy`, public, as the occupancy above is): N2 checks every
+  link-window, and holds each head's counts to the profile's, so a window with a frame fewer or more than the profile is
+  rejected, and N3's frames root holds the unit's N to those counts' sum. These windows don't build N2's outcome yet
+  (`Certifier` only commits). Without a profile the closing check needs a unit: one per port that opens the layout at
+  the position after the port's last recorded frame and shows that the descriptor there is the invalid one.
 - **What the size class discloses.** FMT gives the run's widest prefix and suffix, the most segments any frame reads,
   and each unit's outbox depth; G gives the most segments of the port's frames. A port's occupancy already bounds the
   bytes it carried, but a depth is per unit, which is new where one port carries several units' traffic. Padding every

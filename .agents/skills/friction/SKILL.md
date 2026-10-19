@@ -1,9 +1,9 @@
 ---
 name: friction
 description: >
-  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask Daniel only when it is money,
-  keys or a claim, record his ruling so nobody asks the same question twice, or leave a short friction note
-  when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
+  What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask Daniel only when it is keys
+  or a claim (spend, cloud workers included, is the lead's call), record his ruling so nobody asks the same question
+  twice, or leave a short friction note when you can't fix it now. Holds the rulings so far on which changes an agent makes without asking (spend, gates in
   `check`, tests, shared tools, other lanes' work) and the `kind: friction` note format with its `severity: incident` flag.
   Use when you worked around something, a step bit you twice, you see a better abstraction, you're unsure whether a change
   is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or a command fails for
@@ -103,12 +103,17 @@ the note in its report, and its coordinator saves it. The notes are public: noth
 
 **The admin's pass.** The admin (`@top`) reads new friction notes once a day in its existing loop
 (`research notes mcp`, `search_notes` with `kind: friction` and `since`). It turns a repeat into a fix assigned to its owner.
-Only a repeat whose fix needs money, keys or a claim becomes a question for Daniel.
+Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 ## Rulings so far
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
+  he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
+  cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.
+- 2026-10-19 (04:49Z, to circuits): fix landing throughput and silent agents, whatever it takes, without old CI
+  habits. Rolled out as AGENTS.md "Stay reachable" and "Landing is drive's"; the two-open-PR cap is retired.
 - 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
   for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
   commands: `.agents/skills/asking-daniel/SKILL.md`.
@@ -149,13 +154,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   handle and do no work — then are archived. The admin enforces all of it: audits for splits, assigns each a fate, and
   tells Daniel when an abstraction fails, is abused or turns into red tape.
 - 2026-10-14 (11:34 AM PDT, broadening his 10:14 AM ruling): every coordinator and worker opens and edits its own PRs
-  with no approval step, through Cursor's PR tool or gh through the broker, whichever works (for a branch other than
-  the agent's own run branch, which the PR tool refuses: `research queue open --head BRANCH --title T --body-file F`,
-  which goes through the broker and refuses a duplicate or a moved head). Waiting on dashboard
-  clicks cost about six hours across fourteen finished PRs overnight on 14 Oct; the launcher no longer pins PR
-  creation off per run. A cloud agent whose launch-time run rules still gate both paths registers the request and
-  posts the exact payload where it registered it, so a capable hand opens it without a duplicate; the ruling reaches
-  such an agent at its next launch.
+  with no approval step, now with `research queue open` (AGENTS.md "Landing is drive's"). Waiting on dashboard clicks
+  cost about six hours across fourteen finished PRs overnight on 14 Oct.
 - 2026-10-13 (11:01 PM PDT, cards 2e0ff59b and 54bd993d): a guarantee's checked family may fold in a check the compiled
   verifier already runs, and a new fail-closed refusal modelled the same way: the statement moves toward what the
   verifier refuses, and the landing DM shows the moved records. The same night: a free statement parameter whose
@@ -332,10 +332,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - a lane works toward one or two outcomes a night, each with a done-condition anyone can check; its lead proposes them
     and Daniel approves or edits them in one pass. The coordinator's reports lead with which outcomes moved and what
     blocked the rest, not with landing counts;
-  - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
-    back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
-    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived. Since 12 Oct, ci's
-    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses (11 Oct);
+  - a lane marks its PR ready and goes back to research, hearing back only if it fails; since 12 Oct ci's
+    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses;
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
@@ -423,12 +421,10 @@ Newest first. Each is Daniel's unless it names the coordinator.
   circuit accepting implies the verifier of record accepts; completeness stays a test.
 - 2026-10-05 (rewritten 8 Oct): a lead resumes or re-dispatches a turn cut off by a console drop or a provider outage on
   its own judgment, and tells its coordinator.
-- 2026-10-05 (1:27 PM PDT): a coordinator never loses contact with a worker it launched. Nothing reaches a running agent:
-  a `Task` resume is refused, another agent's `SendToAgent` refuses it ("not a worker of this coordinator") and its
-  dashboard follow-up box is disabled. So the Lean move lead went 85 minutes unreachable. Every brief therefore names an
-  inbox branch, `cursor/inbox-<first 8 of the worker's id>-<launcher's suffix>`, and the worker runs `git fetch` on it
-  at every checkpoint (at least every 20 minutes, contract §3), acting on each new commit message. The launcher writes
-  there with empty commits; the inbox is a channel, not a note. A worker silent for 30 minutes gets one inbox message,
+- 2026-10-05 (1:27 PM PDT), superseded on 18 Oct by AGENTS.md's agent norms ("Lanes") but for its first sentence: a
+  coordinator never loses contact with a worker it launched. The rest read: nothing reaches a running agent, so each
+  brief names an inbox branch the worker fetches at every checkpoint (at least every 20 minutes), acting on each new
+  commit message. A worker silent for 30 minutes gets one inbox message,
   and only if that brings no answer does the launcher start a parallel lane. A worker that is IDLE in
   `list-cloud-agents` with no result delivered was stopped: report it to your coordinator, don't resume it.
 - 2026-10-04 (2:21 PM PDT): the repository migration finishes in short serial time. A lead launches workers for every

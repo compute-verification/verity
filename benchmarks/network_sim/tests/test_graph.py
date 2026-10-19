@@ -59,7 +59,7 @@ def test_the_capacities_are_memory_accountings_and_the_censuss(ex):
     assert gpu.on_chip.value == timing.GPU_CHIP_BYTES * 8 and gpu.memory.value == 96 * 2**30 * 8
     assert gpu.bandwidth.value == timing.GPU_READ_BYTES_PER_S * 8
     assert gpu.rate["oracle"].value == timing.GPU_SHA512_PER_S
-    assert 1.597 * gpu.rate["square-1024"].value == timing.GPU_SQUARINGS_PER_S["p1024"]
+    assert 1.67 * gpu.rate["square-1024"].value == timing.GPU_SQUARINGS_PER_S["p1024"]
     assert 1.567 * gpu.rate["square-512"].value == timing.GPU_SQUARINGS_PER_S["p512"]
     assert 2 * cpu.on_chip.value == timing.HOST_CHIP_BYTES * 8
     assert 2 * cpu.bandwidth.value == timing.HOST_READ_BYTES_PER_S * 8

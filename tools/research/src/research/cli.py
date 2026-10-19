@@ -7,7 +7,9 @@
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
   research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
-                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given)
+                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
+                                                 # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
+                                                 # on whole cores of its own, waiting on the node while none are free
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -15,9 +17,9 @@
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
-  research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group, recorded as a manual
-                                                 # cancel; never the runner, never SIGKILL, so it still records the exit and publishes
-                                                 # custody.  From any VM: a run another VM launched is found as `inspect` finds it
+  research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
+                                                 # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
+                                                 # itself), records the exit and publishes custody.  From any VM: as `inspect` finds runs
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
@@ -199,9 +201,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
-                         "and reserve them for the run; else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
+                         "and reserve them for the run, which the workload reads as $RESEARCH_RUN_MEM_GB (a reservation sets no cgroup "
+                         "cap); else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
                          "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
-    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S", help="with --mem-gb: wait up to S seconds for the memory instead of refusing")
+    ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S",
+                    help="with --mem-gb: wait up to S seconds for the memory instead of refusing, in line behind older waiters "
+                         "(first come first served, research.mem)")
     ap.add_argument("--preflight", default=None, metavar="TOOL",
                     help="with --on --source: run TOOL's declared preflight (Tool.preflight) on the machine before this run, as a --tool TOOL "
                          "run does, and refuse the run when it fails")
@@ -282,6 +287,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
+    if getattr(ns, "auto", False):
+        _auto_size(ns, harness_opts, command)
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -948,17 +955,18 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 
 
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
-#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: nice 19 inside its check slots, so never a slot a
-#: train waits for) as kind AUTO_KIND (infra/cluster/kinds/infra.toml). Not node 1, whose CPUs trains and lanes' direct runs already
-#: oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and proofs' Lean slots have reserved (03:01Z).
+#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
+#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml).
+#: Not node 1, whose CPUs trains and lanes' direct runs already oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and
+#: proofs' Lean slots have reserved (03:01Z).
 AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
 def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
     """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
-    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), and the workload runs in the shipped tree
-    unless --cwd says otherwise (its environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in
-    place; a reason when it can't."""
+    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min; a suites.py run of named suites,
+    `_auto_size`), and the workload runs in the shipped tree unless --cwd says otherwise (its environment is the workload's to
+    sync, as suites.py does). Fills `ns` and `harness_opts` in place; a reason when it can't."""
     if ns.queue or ns.pool:
         return "it takes no --queue or --pool: it is the queue itself"
     if not ns.source:
@@ -967,6 +975,7 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
             return "--source GITDIR: no git checkout here to ship"
         ns.source = top.stdout.strip()
     ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
+    ns.auto = True
     ns.project = ns.project or AUTO_PROJECT
     if remote.flag_value(harness_opts, "--cwd") is None:
         harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
@@ -974,6 +983,28 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
         ns.queue_kind = AUTO_KIND
     print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
     return None
+
+
+def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
+    """`--on auto` as AUTO_KIND, of a suites.py run of named suites: the memory and time their `[tool.verity.tests]` worker_gb and
+    timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or --max-min."""
+    timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
+    if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
+        return
+    from . import suite_size
+
+    if not (shape := suite_size.size(Path(ns.source), command, ns.cpus)):
+        return
+    said = []
+    if ns.mem_gb is None and "mem_gb" in shape:
+        ns.mem_gb = shape["mem_gb"]
+        said.append(f"{ns.mem_gb} GB")
+    if not timed and "max_s" in shape:
+        ns.max_min = math.ceil(shape["max_s"] / 60)
+        said.append(f"{ns.max_min} min")
+    if said:
+        print(f"research run --on auto: {' and '.join(said)}, from the [tool.verity.tests] of {', '.join(shape['suites'])}",
+              file=sys.stderr)
 
 
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
@@ -1098,6 +1129,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
               file=sys.stderr)
     if launch.get("first_record") == "disk-hold":
         print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
+    if launch.get("first_record") == "cpu-hold":
+        print(f"research: {ns.on} holds it until whole cores of its own are free (research cpu-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     if getattr(ns, "wait", False):
         return wait_remote(run_id, run_dir, every_s=ns.wait_every)
@@ -1203,7 +1236,9 @@ def cmd_fetch(argv: list[str]) -> int:
 
 def cmd_cancel(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research cancel", description="stop a remote run the one way that keeps its custody: SIGTERM to its "
-                                                                     "workload's process group, recorded as a manual cancel (remote.cancel)")
+                                                                     "workload's process group and its whole cgroup scope, recorded as a "
+                                                                     "manual cancel; the runner SIGKILLs what is left 20 s later "
+                                                                     "(remote.cancel)")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
@@ -1221,6 +1256,15 @@ def cmd_cancel(argv: list[str]) -> int:
         return 1
     print(f"research cancel: {run_dir.name}: SIGTERM to its workload's process group {out['pgid']} ({out['processes']} process(es)), "
           f"recorded as a manual cancel; the runner records the exit and publishes custody (`research fetch {run_dir.name}`)")
+    scope = out.get("scope") or {}
+    if scope.get("scopes"):
+        print(f"research cancel: {run_dir.name}: and to the {(scope.get('SIGTERM') or {}).get('n', 0)} other process(es) of its scope(s) "
+              f"{', '.join(p.rsplit('/', 1)[-1] for p in scope['scopes'])}")
+    if scope.get("fallback"):
+        print(f"research cancel: {run_dir.name}: {scope['fallback']}")
+    if scope.get("runner_kills_after_s") is not None:
+        print(f"research cancel: {run_dir.name}: the runner SIGKILLs what is left of the run {scope['runner_kills_after_s']:g} s after the "
+              f"SIGTERM and records it in status.json (`scope_end`)")
     if ran := _ran_text(R.summarize(run_dir), datetime.now(timezone.utc)):
         print(f"research cancel: {run_dir.name} {ran}")
     return 0
@@ -1521,7 +1565,6 @@ def cmd_inspect(argv: list[str]) -> int:
         print(f"observed  {json.dumps(s['fingerprint_observed'], sort_keys=True)}")
     if s["measurements"]:
         print("measured  " + "; ".join(f"{m['name']}={m['value']} {m['unit']}" for m in s["measurements"][:12]))
-    tool = s["tool"]
     print(f"tool      {_tool_line(s['tool'])}")
     cost = s["cost"]
     print(f"cost      {('$' + str(cost['usd']) + ' est. (' + cost['basis'] + ')') if cost.get('usd') is not None else 'unknown: ' + str(cost.get('reason'))}")
@@ -1650,6 +1693,10 @@ def main(argv: list[str] | None = None) -> int:
         from .disk import main as disk_main
 
         return disk_main(rest)
+    if cmd == "cpu-hold":
+        from .cores import main as cores_main
+
+        return cores_main(rest)
     if cmd == "job-exec":
         from .jobuser import main as job_exec_main
 

@@ -34,6 +34,9 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Own a subdirectory and namespace** (`Proofs/Flock/Soundness/Knowledge/`, namespace `FlockSoundness.Knowledge`), with
   one aggregator module that imports its files. The area's root imports the aggregator once, when the area is created,
   so parallel lanes don't edit the same root file.
+- **Code the verifier runs costs O(description)** (AGENTS.md "Design rules"): summarize per Definition and multiply
+  through batch members and scan iterations, never walk the unrolled circuit; `tests/test_verifier_cost.py` refuses the
+  walk, and its failure says the fix.
 - **Parallel proof work runs against fixed statements** (Daniel, 8 Oct). Before any worker starts, the final theorem's
   statement and each open piece's statement are on the branch; each worker proves its piece against that statement, and
   integration builds the final theorem against them continuously. What isn't closed by the deadline is a gap list on the
@@ -45,8 +48,8 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   its own worktree. Seed its dependencies from a checkout with the same `lake-manifest.json` and `lean-toolchain`:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. Copy, never symlink, because Lake
   rewrites `.olean` files in place. After the copy, `lake build` compiles only the package's own modules.
-- **A reviewer or red-team subagent works in its own worktree**, under AGENTS.md's checkout rule (Lanes): a checkout in
-  another agent's tree switches that agent's files under it.
+- **A reviewer or red-team subagent is a cloud worker** (AGENTS.md "Lanes"), so it works in its own checkout: a checkout
+  in another agent's tree switches that agent's files under it.
 
 ## Build, iterate, check
 
@@ -218,6 +221,12 @@ simp with that.
 
 These are Daniel's rulings, newest first.
 
+- 2026-10-18 (18:11Z): "I'm fine with verifier doing O(circuit description length) stuff, but not O(unrolled circuit
+  length) stuff." Lean the verifier runs reads the descriptor once per specialized Definition, and never lays out the
+  canonical circuit gate by gate (`Prog.gate`, a loop to a Definition's `gates`). On bits the unrolled circuit is about
+  1,000× the word-level one, so a gate-by-gate walk that passes at word level fails there. A gate-by-gate version may stay
+  as the reference the description-sized one is difftested against, as `NciCheck.check` is for `NciCheck.Desc`
+  (AGENTS.md "Design rules"; `tests/test_verifier_cost.py`).
 - 2026-10-17 (6:28 PM PDT): a guarantee goes statement first, then red team, then a card to Daniel for each new premise,
   then the proof, in that order. Memory accounting's stacking guarantee was restated four times, and its cards updated
   three times, because the red team read it after its proofs. Freeze the statement (above), have a red team attack it

@@ -413,6 +413,48 @@ def test_ldtm_loop_counts_takes_the_larger_loop(tmp_path):
     assert ld.loop_counts(out)["mw_2"] == {"FFMA": 1, "LDTM.x128": 1, "BRA": 1}
 
 
+def test_emp_prices_every_loop_on_ds90_facets(tmp_path):
+    """emp.py charges every opcode between the gated loop's head and tail at the trip rate: a wgmma s8 n256 loop at
+    1/32 a SM-clock fills the tensor facet exactly, a 2:4 sparse form at its dense equivalent, BGMMA only issue, and a
+    loop 1% faster is reported above the sheet. The event clock is the longest block's cycles over the time a call."""
+    emp = _load("emp")
+    run, sass = tmp_path / "run" / "sm90_emp", tmp_path / "sass"
+    run.mkdir(parents=True)
+    sass.mkdir()
+    bodies = {"wg": ["IGMMA.64x256x32.S8.S8 R24, gdesc[UR4], R24"] * 4 + ["FFMA R1, R1, 1, R1"] * 8 +
+                    ["WARPGROUP.ARRIVE", "UIADD3 UR4, UR4, 1, URZ", "ISETP.LE.AND P0, PT, R2, 8, PT", "@P0 BRA 0x10"],
+              "sp": ["IGMMA.SP.64x256x64.S8.S8 R24, gdesc[UR4], R24, R2, 0x0"] * 4 + ["@P0 BRA 0x10"],
+              "b1": ["BGMMA.64x256x256.AND.POPC R24, gdesc[UR4], R24"] * 4 + ["@P0 BRA 0x10"]}
+    rates = {"wg": 1 / 32, "sp": 1 / 32, "b1": 1 / 32, "fast": 1.01 / 32}
+    text, verdicts, rows = [], [], []
+    for probe, rate in rates.items():
+        kern = "wg" if probe == "fast" else probe
+        if probe != "fast":
+            body = bodies[kern]
+            text.append(f"\t\tFunction : {kern}\n" + "\n".join(f"        /*{16 * (i + 1):04x}*/   {op} ;   /* 0x0 */"
+                                                              for i, op in enumerate(body)))
+        op = bodies[kern][0].split()[0]
+        verdicts.append({"probe": probe, "verdict": {"kernel": kern, "loops": [
+            {"head": "0x0010", "tail": hex(16 * len(bodies[kern])), "counts": {op: 4}}]}})
+        rows.append(json.dumps({"binary": "sm90_emp", "probe": probe, "run": "r1", "sm_mhz": 1965, "spread": 0.0,
+                                "tags": [], "counted": op, "rate": rate, "rates": {f"0:{op}": rate}}))
+    (sass / "sm90_emp.sass").write_text("\n".join(text) + "\n")
+    (run / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    (run / "rows.jsonl").write_text("\n".join(rows) + "\n")
+    (run / "times.jsonl").write_text(json.dumps({"op": "time", "probe": "wg", "calls": 10, "ms": 20.0,
+                                                 "cyc": [3_900_000, 3_960_000]}) + "\n")
+    res = {r["probe"]: r for r in emp.analyze(tmp_path / "run", emp.read_sass(sass))}
+    wg = res["wg"]
+    assert abs(wg["occupancy"]["tensor"] - 1.0) < 1e-12 and abs(wg["macs_sm_clk"] - 4096) < 1e-9
+    assert abs(wg["occupancy"]["issue"] - 16 / 128 / 4) < 1e-12 and abs(wg["uniform_issue"] - 1 / 512) < 1e-12
+    assert abs(wg["occupancy"]["alu"] - 2 / 512) < 1e-12 and wg["event_mhz"] == 1980.0
+    assert abs(res["sp"]["occupancy"]["tensor"] - 1.0) < 1e-12 and abs(res["sp"]["macs_sm_clk"] - 4096) < 1e-9
+    assert "tensor" not in res["b1"]["occupancy"] and res["b1"]["worst"] == "issue" and res["b1"]["event_mhz"] is None
+    assert res["fast"]["worst"] == "tensor" and abs(res["fast"]["worst_occ"] - 1.01) < 1e-12
+    assert emp.main([str(tmp_path / "run"), str(sass), "--json", str(tmp_path / "out.json")]) == 1
+    assert json.loads((tmp_path / "out.json").read_text())["over"] == ["fast"]
+
+
 def test_uniform_write_census_is_idempotent(tmp_path):
     """--write replaces UNI's lines and the UP row, puts UP in the current vector's rows once, and census.py --write
     keeps both."""
