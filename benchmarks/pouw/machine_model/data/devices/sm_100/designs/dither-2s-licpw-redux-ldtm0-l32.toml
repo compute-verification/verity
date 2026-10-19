@@ -1,0 +1,30 @@
+# dither-2s-licpw-redux-heavy-l32 credited at what the checks read. Its fold is plain LI-CP-W redux, as honest runs it
+# (dc100-licpw-redux-l32: ALU 544, IMAD 512, SHFL 24 a MMA) and PouwWarpCheck recomputes it (PouwLiAbsorb_v2: two half
+# steps a chain a set, no extra keyed round), so ♭ credits none of the heavy design's extra keyed rounds, which no
+# Definition reads (RT-LOGIC-12, RT-HB-HEAD-1). ♭ credits no tcgen05.ld either: honest still runs its 8
+# LDTM.32x32b.x128 a MMA, but the operands-free cheater (decision 89) never pays them. Each lowers the credit, which is
+# sound for any program. ♭ is 1089.7 issue cycles a unit on DC-100-ri (1857.7 at the heavy fold), so the skippable work
+# is a larger share of it: core 0.803% on DC-100-ri, 0.705% on DS-100.
+base = "dither-2s-licpw-redux-heavy-l32"
+name = "dither-2s-licpw-redux-ldtm0-l32"
+title = "Dither-2S, LI-CP-W redux, ♭ crediting no tcgen05.ld, L = 32"
+summary = "Dither-2S on the B200 at L = 32, credited at what the checks read: the plain LI-CP-W redux fold and no tcgen05.ld in ♭ (honest runs its 8 LDTM a MMA; no extra keyed round)"
+
+[operands]
+floor = { LDTM_32X32B_X128 = 0.0 }
+source = "the floor program's operand-delivery floor φ_del is credited at 0: tcgen05.mma reads both operands from shared memory by descriptor, so delivery costs no warp instruction, and the accumulator's 8 tcgen05.ld.32x32b.x128 a MMA that honest runs to fold its words on lanes are not credited, since the operands-free cheater skips them. Honest still runs them: its time over the credit counts them"
+
+[fold]
+name = "li"          # LI-CP-W redux: 0.53125 ALU, 0.5 IMAD, one redux.sync.xor and the store on SHFL
+ALU = 0.53125
+IMAD = 0.5
+SHFL = 0.0234375
+
+[skip.served]
+eps = 0.008025
+at = { "DC-100-ri" = 0.008025, "DS-100" = 0.006849 }
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip at this design's own ♭ (decision 90), the plain LI-CP-W redux fold and no LDTM, so the skippable work is a larger share of a smaller ♭ than the heavy design's. The most is at Llama-3.1-8B 2K prefill, all P·V's peel. On DC-100-ri (`at`) ♭ is DC-100's; on DS-100 the tail is at DS-100's price (RT-HB-HEAD, r20261019-083808-1f18)"
+
+[mand.fold]
+eps = 0.0
+source = "named assumption: LI-CP-W redux, at its lane instructions a word, is the cheapest implementation of the fold (FOLD-OPT; on DS-100 ε_machine first rises at 0.496 lane instructions a word, 53% under li's 1.055, RT-HB-HEAD-2); there is no filler, so FILL-OPT is not read. With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read (note:LI-ALT)"
