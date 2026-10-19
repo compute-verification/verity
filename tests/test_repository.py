@@ -37,10 +37,6 @@ ALLOWED_EXTRA = (
 #: discrepancies (indexed by its ``DISCREPANCIES.md``).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
                        "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md"}
-#: The one evidence file left in the tree: not read by code, kept with the rest of fixtures/redteam until the red team rules
-#: on it.  The frozen campaign evidence that code reads (the overhead ledger, the run results the frozen backends' report
-#: scripts compare against) is in the evidence store (``verity_numerical.bench.frozen``).
-PINNED_EVIDENCE = ("fixtures/redteam/vu-battery/v1/a/results_r20260922-070024-e7d1.jsonl",)
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
 GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
@@ -98,7 +94,7 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
 
 def test_no_report_genre_basenames() -> None:
     offenders = [p for p in _tracked() if REPORT_GENRE.search(os.path.basename(p))
-                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES and p not in PINNED_EVIDENCE]
+                 and os.path.splitext(p)[1] not in SOURCE_SUFFIXES]
     assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\n" + "\n".join(offenders)
 
 
@@ -127,17 +123,10 @@ def test_generated_output_patterns() -> None:
 def test_no_generated_output() -> None:
     """Rendered tables, reports, plots, evidence copies and run results are regenerated from code plus the evidence store, or
     fetched from it by ``art:`` id (``research data put --preserve``); none is tracked."""
-    offenders = [f"{p} ({why})" for p in _tracked() if p not in PINNED_EVIDENCE and (why := generated_output(p))]
+    offenders = [f"{p} ({why})" for p in _tracked() if (why := generated_output(p))]
     assert not offenders, (
         "generated output belongs in the evidence store, not Git (AGENTS.md \"Where writing goes\"):\n" + "\n".join(offenders)
     )
-
-
-def test_pinned_evidence_still_exists() -> None:
-    """Drop an entry from PINNED_EVIDENCE when its file leaves the tree."""
-    tracked = set(_tracked())
-    missing = [p for p in PINNED_EVIDENCE if p not in tracked]
-    assert not missing, "PINNED_EVIDENCE lists files that are no longer tracked; remove them:\n" + "\n".join(missing)
 
 
 def split_dir(path: str) -> str | None:

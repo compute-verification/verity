@@ -1,8 +1,8 @@
 """Commit overhead as a share of serve time, projected from committed bytes per step and a hash's throughput.
 
     python commit_model.py                       # the card, then the seeded H200 tables: SHA-512 today, the throughput 5% needs
-    python commit_model.py --card [GPU ...]      # the recommendation card: Qwen3-8B B32 per GPU, card rows x hashes, hm96 rates
-    python commit_model.py --card --hm96 'H200/SHA-512/pre=520,300'   # the card with a new 4 KiB rate (prefill, decode GB/s)
+    python commit_model.py --card [GPU ...]      # the recommendation card: Qwen3-8B B32 per GPU, fused per-Call units, hm96 rates
+    python commit_model.py --card --hm96 'H200/SHA-512 sharaw/step=480'   # with a new SHA-512 prefill rate (or =PREFILL,DECODE)
     python commit_model.py --gbps 900 --leaf 4096 [--hash-name X]   # one candidate hash at a measured GB/s
     python commit_model.py --rate 7.13e9 --per-leaf 44 --leaf 4096  # or at compressions/s and compressions per leaf
     python commit_model.py --target 0.05 --json  # every number as JSON
@@ -61,8 +61,8 @@ class Workload:
     name: str
     gpu: str
     phases: tuple[Phase, ...]
-    #: unit -> fraction of the non-logit bytes it keeps; "call" is today
-    units: dict[str, float]
+    #: unit -> fraction of the non-logit bytes it keeps ("call" is today), or the bytes it keeps a step, by phase name
+    units: dict[str, float | dict[str, float]]
     source: str
 
 
@@ -83,8 +83,21 @@ def _frac(per_token_layer: float, today: float) -> float:
 LLAMA_TODAY, QWEN_TODAY = 84_736, 145_180
 UNITS_LLAMA = {"call": 1.0, "block": _frac(18_432, LLAMA_TODAY), "layer": _frac(10_240, LLAMA_TODAY),
                "layer-folded": _frac(6_144, LLAMA_TODAY)}
+#: Per-Call units with fused epilogues, the served Commit's (proofs, PRF-62/64/68, 18 Oct): RMSNorm inside the next dot's unit,
+#: the residual add inside o_proj's and down's, silu(x Wg) (x Wu) inside gate/up's, so no norm output, gate/up output or down output
+#: is committed. Of today's 145,180 B a token a layer they keep 71,680: qkv 12,288, rope_q 8,192, kv_k 2,048, attention 8,192,
+#: the post-attention residual 8,192 (o_proj's unit outputs it, in o_proj's place: the MLP's units read it), the post-MLP residual
+#: 7,964 (35 of 36 layers), activation 24,576 and down where no residual follows it (228). Bytes a step are layout_bytes.py's
+#: all-three unit (origin/cursor/commit-speed-21f3) on r20261018-031955-d2b3 run 2: 26.657 GB over the 4 prefill steps and
+#: 4.674 GB of decode, spread over 64 steps like the per-Call bytes; 31.331 GB a run, 0.498 of today.
+QWEN_FUSED = {"prefill": 26.656692032e9 / 4, "decode": 4.674396352e9 / 64}
 UNITS_QWEN = {"call": 1.0, "block": _frac(36_864, QWEN_TODAY), "layer": _frac(20_480, QWEN_TODAY),
-              "layer-folded": _frac(12_288, QWEN_TODAY)}
+              "layer-folded": _frac(12_288, QWEN_TODAY), "fused": QWEN_FUSED}
+
+
+def set_fused_bytes(prefill: float, decode: float) -> None:
+    """Price another Commit at the fused units: bytes a prefill and a decode step, logits included, in QWEN_FUSED's place."""
+    UNITS_QWEN["fused"] = {"prefill": prefill, "decode": decode}
 
 WORKLOADS = (
     Workload(
@@ -123,29 +136,72 @@ RATES = (
 #: Data-sheet HBM bandwidth, GB/s: a hash that reads committed bytes back from memory runs no faster than this.
 HBM_GBPS = {"H200": 4800.0, "RTX PRO 6000": 1792.0, "B200": 8000.0}
 
-HASHES = ("SHA-512", "BLAKE3 keyed", "SHA-512 r32", "SHA-512 r24")
-HM96_RUNS = {"RTX PRO 6000": "r20261018-074305-3fd5", "H200": "r20261018-074230-9ff4", "B200": "r20261018-074256-26b4",
-             "L40S": "r20261018-074239-8faa"}
-#: hm96-format leaves at 4 KiB, GB/s of committed bytes: gpu -> hash -> salts "pre" (computed off the step) or "step" (inside
-#: the leaf kernel) -> (prefill, decode). Prefill reads the 1 GiB window's rate, decode the 142 MB one (a decode step's bytes at
-#: per-Call units). note:hash/20261018T0632Z-draft-intpipe section 4, runs HM96_RUNS.
+#: The card's columns. Reduced-round SHA-512 is out (broken below 35 steps).
+COLUMNS = ("SHA-512", "SHA-512 sharaw", "BLAKE3 keyed")
+MODES = ("pre", "step")
+HM96_RUNS = {"RTX PRO 6000": "r20261018-074305-3fd5", "H200": "r20261018-074230-9ff4", "B200": "r20261018-074256-26b4"}
+#: hm96-format leaves at 4 KiB, GB/s of committed bytes: gpu -> hash -> salts "pre" (read ahead of the step, digest computed
+#: off it) or "step" (inside the leaf kernel) -> (1 GiB window, 142 MB window). note:hash/20261018T0632Z-draft-intpipe section 4,
+#: runs HM96_RUNS.
 HM96: dict[str, dict[str, dict[str, tuple[float, float]]]] = {
-    "RTX PRO 6000": {"SHA-512": {"pre": (565, 296), "step": (446, 182)}, "SHA-512 r32": {"pre": (990, 540), "step": (742, 318)},
-                     "SHA-512 r24": {"pre": (1042, 614), "step": (794, 363)},
-                     "BLAKE3 keyed": {"pre": (1152, 703), "step": (944, 450)}},
-    "B200": {"SHA-512": {"pre": (425, 238), "step": (337, 150)}, "SHA-512 r32": {"pre": (1133, 493), "step": (761, 282)},
-             "SHA-512 r24": {"pre": (1526, 666), "step": (988, 370)}, "BLAKE3 keyed": {"pre": (1411, 725), "step": (1057, 433)}},
-    "H200": {"SHA-512": {"pre": (390, 214), "step": (306, 129)}, "SHA-512 r32": {"pre": (1042, 458), "step": (707, 256)},
-             "SHA-512 r24": {"pre": (1389, 605), "step": (897, 324)}, "BLAKE3 keyed": {"pre": (1278, 681), "step": (1010, 408)}},
-    "L40S": {"SHA-512": {"pre": (409, 251), "step": (317, 165)}, "SHA-512 r32": {"pre": (485, 359), "step": (392, 246)},
-             "SHA-512 r24": {"pre": (492, 392), "step": (404, 273)}, "BLAKE3 keyed": {"pre": (558, 437), "step": (491, 330)}},
+    "RTX PRO 6000": {"SHA-512": {"pre": (565, 296), "step": (446, 182)}, "BLAKE3 keyed": {"pre": (1152, 703), "step": (944, 450)}},
+    "B200": {"SHA-512": {"pre": (425, 238), "step": (337, 150)}, "BLAKE3 keyed": {"pre": (1411, 725), "step": (1057, 433)}},
+    "H200": {"SHA-512": {"pre": (390, 214), "step": (306, 129)}, "BLAKE3 keyed": {"pre": (1278, 681), "step": (1010, 408)}},
 }
+HM96_SMALL_RUNS = {"B200": "r20261018-082407-e58b", "H200": "r20261018-082416-39e9", "RTX PRO 6000": "r20261018-082443-2c46"}
+SMALL_LEAVES = (1221, 2441, 4883, 9766)
+#: The same arms' latency, µs (eager, events around the window), at SMALL_LEAVES leaves of 4 KiB (5 / 10 / 20 / 40 MB):
+#: intpipe section 5, runs HM96_SMALL_RUNS. gpu -> hash -> mode -> µs at each size.
+HM96_SMALL: dict[str, dict[str, dict[str, tuple[float, ...]]]] = {
+    "B200": {"SHA-512": {"pre": (231, 251, 304, 358), "step": (449, 488, 560, 636)},
+             "BLAKE3 keyed": {"pre": (74, 80, 96, 113), "step": (147, 160, 185, 209)}},
+    "H200": {"SHA-512": {"pre": (238, 258, 305, 416), "step": (460, 499, 568, 705)},
+             "BLAKE3 keyed": {"pre": (66, 73, 88, 125), "step": (133, 145, 168, 207)}},
+    "RTX PRO 6000": {"SHA-512": {"pre": (206, 224, 245, 297), "step": (394, 431, 472, 542)},
+                     "BLAKE3 keyed": {"pre": (70, 78, 83, 102), "step": (138, 151, 166, 190)}},
+}
+LEAVES_142MB, BYTES_1GIB = 34_737, 2 ** 30
+
+
+def hm96_rate(gpu: str, hash_name: str, mode: str, nbytes: float) -> float:
+    """GB/s for one window of `nbytes`: latency interpolated linearly in bytes between the measured windows (5, 10, 20, 40 MB,
+    142 MB, 1 GiB), the 5 MB latency below them and the 1 GiB rate above."""
+    big = HM96[gpu][hash_name][mode]
+    pts = [(n * 4096, us) for n, us in zip(SMALL_LEAVES, HM96_SMALL[gpu][hash_name][mode])]
+    pts += [(LEAVES_142MB * 4096, LEAVES_142MB * 4096 / (big[1] * GB) * 1e6), (BYTES_1GIB, BYTES_1GIB / (big[0] * GB) * 1e6)]
+    if nbytes >= pts[-1][0]:
+        return big[0]
+    if nbytes <= pts[0][0]:
+        return nbytes / (pts[0][1] * 1e-6) / GB
+    for (b0, t0), (b1, t1) in zip(pts, pts[1:]):
+        if nbytes <= b1:
+            return nbytes / ((t0 + (nbytes - b0) / (b1 - b0) * (t1 - t0)) * 1e-6) / GB
+    raise AssertionError
+
+
+#: sharaw's SHA-512 at the 13.49 GB prefill step, salts in the commit (note:hash/20261018T0650Z-draft-sharaw: v1_cg8 on H200
+#: r20261018-080737-be25 and B200 r20261018-080746-d042, inl lf0_cg on RTX PRO 6000 r20261018-081929-15b3). Salts read ahead
+#: take the salt's 5 of 44 compressions off (H200's measured split, 33.49 -> 26.83 ms without sr_salt8, would give 1.25x).
+SHARAW_PREFILL = {"H200": 402.6, "B200": 446.0, "RTX PRO 6000": 615.0}
+#: A decode commit on a second stream beside a memory-bound stand-in for the decode step (intpipe section 6): the stand-in's
+#: slowdown and the same commit's critical path alone, µs, (pre, step), at the measured window nearest a fused decode step's
+#: 73 MB: one tree over 4 x 18.9 MB = 75.6 MB. Slowdown: r20261018-100805-647b (B200), -093252-72b2 (H200), -093301-8e6e
+#: (RTX PRO 6000); alone: r20261018-090115-e4ef, -085249-443d, -085257-dde2. Measured for SHA-512 only; the card applies the
+#: same hidden fraction to BLAKE3 keyed.
+OVERLAP_75MB = {"B200": ((201, 244), (428, 723)), "H200": ((187, 215), (502, 830)), "RTX PRO 6000": ((56, 66), (367, 613))}
+
+
+def hidden_fraction(gpu: str, mode: str) -> float:
+    (slow, alone), i = OVERLAP_75MB[gpu], MODES.index(mode)
+    return 1 - slow[i] / alone[i]
 #: Served rows-sha512 today (per-Call, 256 B leaves, salts in the leaf kernel): hashing GPU ms per (prefill, decode) step, from
 #: the serve runs whose stock times the Qwen3-8B workloads carry.
 SERVED_256: dict[str, tuple[float, float]] = {"RTX PRO 6000": (167.0, 1.73), "H200": (227.0, 2.88), "B200": (205.0, 2.49)}
 
 
-def kept_bytes(p: Phase, frac: float) -> float:
+def kept_bytes(p: Phase, frac: float | dict[str, float]) -> float:
+    if isinstance(frac, dict):
+        return frac[p.name]
     return p.logits_bytes_per_step + (p.bytes_per_step - p.logits_bytes_per_step) * frac
 
 
@@ -199,50 +255,75 @@ def table_required(target: float, ref: Rate = RATES[0], ref_leaf: int = 4096) ->
     return "\n".join(rows)
 
 
-CARD_ROWS = (("per-Call, 256 B leaves (today)", "call", 256), ("per-Call, 4 KiB", "call", 4096),
-             ("per-block, 4 KiB", "block", 4096), ("per-layer, 4 KiB", "layer", 4096),
-             ("residual-folded per-layer, 4 KiB", "layer-folded", 4096))
+CARD_ROWS = ("per-Call today, 256 B leaves", "per-Call fused, 4 KiB", "per-Call fused, 4 KiB, decode commit on a second stream")
+Overrides = dict[tuple[str, str, str], tuple[float, float | None]]
 
 
 def qwen(gpu: str) -> Workload:
     return next(w for w in WORKLOADS if w.name == f"Qwen3-8B B32 compiled, {gpu}")
 
 
-def card_cells(gpu: str, hm96=HM96, served=SERVED_256) -> dict[str, dict[str, dict[str, float] | None]]:
-    """Run overhead (whole B32 run's hashing over its stock serve) per card row and hash, salts "pre" and "step"; None where
-    nothing is measured. At 256 B only served SHA-512 is measured, with salts on the step; "pre" removes the salt's 5 of 14
-    compressions."""
+def fused_rates(gpu: str, col: str, mode: str, overrides: Overrides | None = None) -> dict[str, float]:
+    """GB/s per phase for the fused rows: hm96's rate at each phase's window, sharaw's prefill rate in its column, then any
+    override (a prefill rate, and a decode rate if given)."""
+    w = qwen(gpu)
+    h = "BLAKE3 keyed" if col == "BLAKE3 keyed" else "SHA-512"
+    r = {p.name: hm96_rate(gpu, h, mode, kept_bytes(p, w.units["fused"])) for p in w.phases}
+    if col == "SHA-512 sharaw":
+        full = sha512_leaf_compressions(4096)
+        r["prefill"] = SHARAW_PREFILL[gpu] * (1 if mode == "step" else full / (full - SHA512_SALT))
+    if overrides and (gpu, col, mode) in overrides:
+        p, d = overrides[(gpu, col, mode)]
+        r["prefill"] = p
+        if d is not None:
+            r["decode"] = d
+    return r
+
+
+def fused_cost(gpu: str, col: str, mode: str, second_stream: bool, overrides: Overrides | None = None) -> dict[str, float]:
+    """A whole run's hashing ms per phase and its share of the run's stock serve time, for the fused rows. With the decode
+    commit on a second stream, decode costs what the stand-in measured it doesn't hide."""
+    w = qwen(gpu)
+    r = fused_rates(gpu, col, mode, overrides)
+    ms = {p.name: kept_bytes(p, w.units["fused"]) * p.steps / (r[p.name] * GB) * 1e3 for p in w.phases}
+    if second_stream:
+        ms["decode"] *= 1 - hidden_fraction(gpu, mode)
+    serve = sum(p.serve_ms_per_step * p.steps for p in w.phases)
+    return {**{f"{k}_ms": v for k, v in ms.items()}, "serve_ms": serve, "run": sum(ms.values()) / serve,
+            **{f"{k}_gbps": v for k, v in r.items()}}
+
+
+def card_cells(gpu: str, overrides: Overrides | None = None) -> dict[str, dict[str, dict[str, float] | None]]:
+    """Run overhead per card row and column, salts "pre" (read ahead) and "step"; None where nothing is measured. The 256 B row
+    is served rows-sha512 as measured (salts on the step); its "pre" takes the salt's 5 of 14 compressions off."""
     w = qwen(gpu)
     serve = sum(p.serve_ms_per_step * p.steps for p in w.phases)
-    out: dict[str, dict[str, dict[str, float] | None]] = {}
-    for label, unit, leaf in CARD_ROWS:
-        row: dict[str, dict[str, float] | None] = {}
-        for h in HASHES:
-            if leaf == 256:
-                if h != "SHA-512" or gpu not in served:
-                    row[h] = None
-                    continue
-                step = sum(ms * p.steps for ms, p in zip(served[gpu], w.phases)) / serve
-                row[h] = {"pre": step * (sha512_leaf_compressions(256) - SHA512_SALT) / sha512_leaf_compressions(256),
-                          "step": step}
-            else:
-                row[h] = {m: overhead(w, dict(zip(("prefill", "decode"), hm96[gpu][h][m])), unit)["run"] for m in ("pre", "step")}
-        out[label] = row
+    step = sum(ms * p.steps for ms, p in zip(SERVED_256[gpu], w.phases)) / serve
+    today = {"pre": step * (sha512_leaf_compressions(256) - SHA512_SALT) / sha512_leaf_compressions(256), "step": step}
+    out: dict[str, dict[str, dict[str, float] | None]] = {CARD_ROWS[0]: {c: today if c == "SHA-512" else None for c in COLUMNS}}
+    for label, second in zip(CARD_ROWS[1:], (False, True)):
+        out[label] = {c: {m: fused_cost(gpu, c, m, second, overrides)["run"] for m in MODES} for c in COLUMNS}
     return out
 
 
-def smallest_change(gpu: str, target: float = 0.05, hash_name: str = "SHA-512", hm96=HM96, served=SERVED_256) -> str:
-    """The first card row (coarsening order) where `hash_name` is under `target`, salts on the step if that suffices."""
-    for label, row in card_cells(gpu, hm96, served).items():
-        c = row[hash_name]
-        if c and c["step"] < target:
-            return f"{label}, salts on the step ({_pct(c['step'])})"
-        if c and c["pre"] < target:
-            return f"{label}, salts precomputed off the step ({_pct(c['pre'])}; on the step {_pct(c['step'])})"
-    return f"none: {hash_name} stays above {_pct(target)} at every row"
+def verdict(gpu: str, hash_name: str, target: float = 0.05, overrides: Overrides | None = None) -> str:
+    """Whether `hash_name` ("SHA-512": either SHA-512 column; or "BLAKE3 keyed") gets under `target` on the fused rows, where
+    first, and if not, the gap and the prefill GB/s that would close it with the second stream's decode cost."""
+    cols = ("SHA-512", "SHA-512 sharaw") if hash_name == "SHA-512" else (hash_name,)
+    cells = [(fused_cost(gpu, c, m, s, overrides), c, m, s) for s in (False, True) for m in ("step", "pre") for c in cols]
+    for cost, c, m, s in cells:
+        if cost["run"] < target:
+            return (f"{hash_name} under {_pct(target)}: yes, {_pct(cost['run'])} ({c}, salts "
+                    f"{'read ahead' if m == 'pre' else 'on the step'}{', decode on a second stream' if s else ''})")
+    best, c, m, _ = min(cells, key=lambda x: x[0]["run"])
+    room = target * best["serve_ms"] - best["decode_ms"]
+    need = (f"prefill would need {qwen(gpu).units['fused']['prefill'] * 4 / (room * 1e-3) / GB:,.0f} GB/s against "
+            f"{best['prefill_gbps']:,.0f}" if room > 0 else "decode alone is over the target")
+    return (f"{hash_name} under {_pct(target)}: no; best {_pct(best['run'])} ({c}, salts read ahead, decode on a second stream), "
+            f"{100 * (best['run'] - target):.2g} points over; {need}")
 
 
-def card(gpu: str, target: float = 0.05, hm96=HM96, served=SERVED_256) -> str:
+def card(gpu: str, target: float = 0.05, overrides: Overrides | None = None) -> str:
     w = qwen(gpu)
     serve = sum(p.serve_ms_per_step * p.steps for p in w.phases)
 
@@ -252,23 +333,24 @@ def card(gpu: str, target: float = 0.05, hm96=HM96, served=SERVED_256) -> str:
         ok = lambda x: " ✓" if x < target else ""
         return f"{_pct(c['pre'])}{ok(c['pre'])} (step {_pct(c['step'])}{ok(c['step'])})"
 
-    rows = [f"| {gpu} (B32 run serve {serve:,.0f} ms) | " + " | ".join(HASHES) + " |", "|---|" + "---|" * len(HASHES)]
-    rows += [f"| {label} | " + " | ".join(cell(row[h]) for h in HASHES) + " |"
-             for label, row in card_cells(gpu, hm96, served).items()]
-    rows.append(f"\nSHA-512 under {_pct(target)}: {smallest_change(gpu, target, 'SHA-512', hm96, served)}.")
+    rows = [f"| {gpu} (B32 run serve {serve:,.0f} ms) | " + " | ".join(COLUMNS) + " |", "|---|" + "---|" * len(COLUMNS)]
+    rows += [f"| {label} | " + " | ".join(cell(row[c]) for c in COLUMNS) + " |" for label, row in card_cells(gpu, overrides).items()]
+    rows.append("")
+    rows += [f"- {verdict(gpu, h, target, overrides)}." for h in ("SHA-512", "BLAKE3 keyed")]
     return "\n".join(rows)
 
 
-def parse_hm96(specs: list[str], base=HM96) -> dict:
-    """`GPU/HASH/MODE=PREFILL[,DECODE]` (GB/s at 4 KiB; one number sets both phases) over a copy of `base`."""
-    out = {g: {h: dict(m) for h, m in hs.items()} for g, hs in base.items()}
+def parse_overrides(specs: list[str]) -> Overrides:
+    """`GPU/COLUMN/MODE=PREFILL[,DECODE]`, GB/s for the fused rows: one number replaces the prefill rate, two both."""
+    out: Overrides = {}
     for s in specs:
         key, _, val = s.partition("=")
-        gpu, h, mode = key.split("/")
-        nums = [float(x) for x in val.split(",")]
-        if gpu not in out or h not in out[gpu] or mode not in ("pre", "step") or len(nums) not in (1, 2):
-            raise ValueError(f"--hm96 {s!r}: want GPU/HASH/{{pre,step}}=PREFILL[,DECODE], GPU in {sorted(out)}, HASH in {HASHES}")
-        out[gpu][h][mode] = (nums[0], nums[-1])
+        parts = key.split("/")
+        nums = [float(x) for x in val.split(",") if x]
+        if len(parts) != 3 or parts[0] not in SERVED_256 or parts[1] not in COLUMNS or parts[2] not in MODES or len(nums) not in (1, 2):
+            raise ValueError(f"--hm96 {s!r}: want GPU/COLUMN/{{pre,step}}=PREFILL[,DECODE], GPU in {list(SERVED_256)}, "
+                             f"COLUMN in {COLUMNS}")
+        out[(parts[0], parts[1], parts[2])] = (nums[0], nums[1] if len(nums) == 2 else None)
     return out
 
 
@@ -300,6 +382,17 @@ def check(tol: float = 0.05) -> list[str]:
         got = sum(p.bytes_per_step * p.steps for p in by_name[name].phases)
         if abs(got / total - 1) > 1e-3:
             bad.append(f"{name}: phases sum to {got / GB:.3f} GB, the run commits {total / GB:.3f} GB")
+    for g in SERVED_256:
+        got = sum(kept_bytes(p, qwen(g).units["fused"]) * p.steps for p in qwen(g).phases)
+        if abs(got / 31.331088384e9 - 1) > 1e-6:
+            bad.append(f"{qwen(g).name}: fused units sum to {got / GB:.3f} GB, layout_bytes.py's all-three gives 31.331 GB")
+    for g in HM96:
+        for h in HM96[g]:
+            for m in MODES:
+                at = hm96_rate(g, h, m, LEAVES_142MB * 4096), hm96_rate(g, h, m, SMALL_LEAVES[-1] * 4096)
+                want = HM96[g][h][m][1], SMALL_LEAVES[-1] * 4096 / (HM96_SMALL[g][h][m][-1] * 1e-6) / GB
+                if any(abs(x / y - 1) > 1e-9 for x, y in zip(at, want)):
+                    bad.append(f"hm96_rate({g}, {h}, {m}) misses its measured windows: {at} against {want}")
     return bad
 
 
@@ -312,8 +405,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--leaf", type=int, default=4096, help="leaf bytes the candidate's rate is for (default 4096)")
     ap.add_argument("--hash-name", default="candidate")
     ap.add_argument("--card", nargs="*", metavar="GPU", help=f"only the recommendation card's tables (default all of {list(SERVED_256)})")
-    ap.add_argument("--hm96", action="append", default=[], metavar="GPU/HASH/MODE=PREFILL[,DECODE]",
-                    help="replace an hm96 4 KiB rate, GB/s, e.g. 'H200/SHA-512/pre=520,300' (repeatable)")
+    ap.add_argument("--hm96", action="append", default=[], metavar="GPU/COLUMN/MODE=PREFILL[,DECODE]",
+                    help="replace a fused row's rate, GB/s: one number the prefill rate, two prefill and decode, e.g. "
+                         "'H200/SHA-512 sharaw/step=480' (repeatable)")
+    ap.add_argument("--fused-bytes", metavar="PREFILL,DECODE",
+                    help="the fused rows' bytes a prefill and a decode step, logits included (default QWEN_FUSED, 31.33 GB a run)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
@@ -322,12 +418,17 @@ def main(argv: list[str] | None = None) -> int:
         bad = check()
         print("\n".join(bad) if bad else f"ok: {len(CHECKS)} cells of circuits' table, leaf counts and run bytes reproduce")
         return 1 if bad else 0
+    if a.fused_bytes:
+        try:
+            set_fused_bytes(*(float(x) for x in a.fused_bytes.split(",")))
+        except (TypeError, ValueError):
+            ap.error(f"--fused-bytes {a.fused_bytes!r}: want PREFILL,DECODE bytes a step")
     try:
-        hm96 = parse_hm96(a.hm96)
+        ov = parse_overrides(a.hm96)
     except ValueError as e:
         ap.error(str(e))
     gpus = a.card or list(SERVED_256)
-    cards = "\n\n".join(card(g, a.target, hm96) for g in gpus)
+    cards = "\n\n".join(card(g, a.target, ov) for g in gpus)
     if a.card is not None and not a.json:
         print(cards)
         return 0
@@ -345,13 +446,16 @@ def main(argv: list[str] | None = None) -> int:
             "overhead": {w.name: {r.name: {str(L): {u: overhead(w, g, u) for u in w.units} for L, g in r.gbps.items()} for r in rates}
                          for w in WORKLOADS},
             "required_gbps": {w.name: {u: required_gbps(w, a.target, u) for u in w.units} for w in WORKLOADS},
-            "hm96": hm96,
-            "card": {g: card_cells(g, hm96) for g in gpus},
-            "smallest_change_sha512": {g: smallest_change(g, a.target, "SHA-512", hm96) for g in gpus},
+            "overrides": {"/".join(k): v for k, v in ov.items()},
+            "card": {g: card_cells(g, ov) for g in gpus},
+            "card_inputs": {g: {c: {m: {f"second_stream={s}": fused_cost(g, c, m, s, ov) for s in (False, True)}
+                                    for m in MODES} for c in COLUMNS} for g in gpus},
+            "hidden_fraction": {g: {m: hidden_fraction(g, m) for m in MODES} for g in gpus},
+            "verdicts": {g: {h: verdict(g, h, a.target, ov) for h in ("SHA-512", "BLAKE3 keyed")} for g in gpus},
         }, indent=1, ensure_ascii=False))
         return 0
     print(f"Recommendation card: Qwen3-8B B32 compiled, a whole run's hashing over its stock serve time, hm96 leaves, salts "
-          f"precomputed (step: salts on the step), ✓ under {_pct(a.target)}:\n\n{cards}\n")
+          f"read ahead (step: salts on the step), ✓ under {_pct(a.target)}:\n\n{cards}\n")
     leaves = sorted({L for r in rates for L in r.gbps}) if rates is not RATES else (256, 4096)
     print(f"Overhead at today's bytes (per-Call units), hashing over stock serve time:\n\n{table_today(rates, leaves)}\n")
     print(f"Throughput a hash needs for {_pct(a.target)} of serve time:\n\n{table_required(a.target)}")

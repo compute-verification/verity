@@ -13,13 +13,15 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   with the honest outcome's answer (in a window stopped before its outcome, the controls with `NO_OUTCOME` and
   ``receive-honest`` not at all), and every ``outcome-*`` the run wrote (its ``outcome.json`` and ``audit.json``).  The
   params are the request's (`params.json`), the check item and the query the request registration's: ``receive-honest``
-  REGISTERED says they were the verifier's own.  A REGISTERED or ACCEPT check must get accept; a REFUSED registration a
-  reject by a registration rule (before ``outcome:``); a REJECT outcome a reject.  An accept's public outputs must be the
-  recorded ``outcome.json``'s.  A window recorded before the fixed-length rule (Daniel, 19 Oct, ASK-39: no ``length``
-  item) is replayed under the verifier's length of its request (`LENGTH`, where its params name none), and a REGISTERED
-  or ACCEPT of it must now get a reject as not of record (``window-form: no-fixed-length``).
+  REGISTERED says they were the verifier's own.  A REGISTERED check must pass every registration rule (the honest
+  outcome it is paired with may still reject); an ACCEPT check must get accept; a REFUSED registration a reject by a
+  registration rule (before ``outcome:``); a REJECT outcome a reject.  An accept's public outputs must be the recorded
+  ``outcome.json``'s.  A window recorded before the fixed-length rule (Daniel, 19 Oct, ASK-39: no ``length`` item) is
+  replayed under the verifier's length of its request (`LENGTH`, where its params name none), and a REGISTERED or ACCEPT
+  of it must now get a reject as not of record (``window-form: no-fixed-length``).
 * **openings** (``open-u<t>``, ``open-filler``, ``open-foreign-*``), as `job.sh` maps them, go to `core_check.opening`
-  and Lean's: every recorded window predates the 336-byte entry rows, so these compare Python with Lean only.
+  and Lean's.  In a window of the 336-byte entry rows (9 Oct on) an ACCEPT opening must open and a REJECT one must not;
+  the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
 * **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
   draw from the challenger's coin commitment, its draw coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
@@ -324,15 +326,33 @@ def registration_stage(reason: str | None) -> bool:
 
 
 def judged(recorded: str, a: dict, public: Any, old: bool = False) -> bool:
-    """Whether core_check's outcome `a` is the recorded verdict; a window registered before the fixed-length rule (`old`)
-    that the run registered or accepted must now be refused as not of record."""
+    """Whether core_check's outcome `a` is the recorded verdict: REGISTERED is the registration's, so an outcome past
+    the registration rules holds it; a window registered before the fixed-length rule (`old`) that the run registered or
+    accepted must now be refused as not of record."""
     if recorded in ("REGISTERED", "ACCEPT") and old:
         return a["verdict"] == "reject" and (a["reason"] or "").startswith(NO_FIXED_LENGTH)
-    if recorded in ("REGISTERED", "ACCEPT"):
-        return a["verdict"] == "accept" and (public is None or D.canonical(a["public"]) == D.canonical(public))
+    if a["verdict"] == "accept" and public is not None and D.canonical(a["public"]) != D.canonical(public):
+        return False
+    if recorded == "REGISTERED":
+        return a["verdict"] == "accept" or not registration_stage(a["reason"])
+    if recorded == "ACCEPT":
+        return a["verdict"] == "accept"
     if recorded == "REFUSED":
         return a["verdict"] == "reject" and registration_stage(a["reason"])
     return recorded == "REJECT" and a["verdict"] == "reject"
+
+
+def entry_rows(out: Path) -> bool:
+    """Whether the run's window holds the 336-byte entry rows (its advice's entries are `Entry.to_json`'s)."""
+    p = out / "request/advice.json"
+    keys = set(Wd.Entry("none").to_json())
+    return p.is_file() and all(isinstance(x, dict) and set(x) == keys for x in load(p).get("entries") or [None])
+
+
+def opening_judged(recorded: str, py: tuple[str, Any]) -> bool:
+    """Whether core_check.opening's outcome is the recorded verdict: an ACCEPT opening opens, a REJECT one does not."""
+    opens = py == ("output", None)
+    return opens if recorded == "ACCEPT" else recorded == "REJECT" and not opens
 
 
 def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
@@ -360,10 +380,12 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
         mapped.add(name)
         row["cases"].append({"check": name, "recorded": recorded, "verdict": a["verdict"], "reason": a["reason"],
                              "lean_same": same, "same_verdict": judged(recorded, a, public, legacy(case))})
+    rows = entry_rows(out)
     for name, x in opening_inputs(out, checks, summary):
         py, same = sides.open(x)
         mapped.add(name)
-        row["openings"].append({"check": name, "recorded": checks[name]["verdict"], "python": py, "lean_same": same})
+        o = {"check": name, "recorded": checks[name]["verdict"], "python": py, "lean_same": same}
+        row["openings"].append({**o, "same_verdict": opening_judged(o["recorded"], py)} if rows else o)
     for name, kind, x, recorded in coin_inputs(out, checks, summary, passes):
         lean, same = sides.coin(kind, x)
         mapped.add(name)
@@ -430,7 +452,8 @@ def main(argv: list[str] | None = None) -> int:
     opens = [o for v in cur.values() for o in v["openings"]]
     older = [c for v in report["runs"].values() if v.get("version") != CC.SCHEME for c in v.get("cases", [])]
     every = cases + coins + opens + older + report["v2"]["registrations"]
-    judged_ = cases + coins
+    opened = [o for o in opens if "same_verdict" in o]
+    judged_ = cases + coins + opened
     negative = ("REFUSED", "REJECT", "CONTROL")
     t = {"runs": len(report["runs"]), "current": len(cur), "cases": len(judged_),
          "same_verdict": sum(c["same_verdict"] for c in judged_),
@@ -439,15 +462,18 @@ def main(argv: list[str] | None = None) -> int:
          "coin_cases": len(coins), "generated_controls": sum(c["recorded"] == "CONTROL" for c in coins),
          "controls_by_rule": sum(c["recorded"] in ("REFUSED", "REJECT") and registration_stage(c["reason"])
                                  for c in cases),
-         "lean_same": sum(c["lean_same"] for c in every), "compared": len(every), "openings": len(opens),
+         "lean_same": sum(c["lean_same"] for c in every), "compared": len(every),
+         "openings": len(opens) - len(opened), "opened": len(opened),
+         "opening_controls": sum(o["recorded"] == "REJECT" for o in opened),
          "older_runs": sorted(k for k in report["runs"] if k not in cur), "older_cases": len(older),
          "v2": len(report["v2"]["registrations"]),
          "apart": dict(sorted(Counter(n.split("-")[0] for v in cur.values() for n in v["apart"]).items()))}
     report["totals"] = t
     t["line"] = (f"{t['current']} runs, {t['same_verdict']}/{t['cases']} same verdict, {t['controls']} negative controls "
                  f"({t['controls_same']} same; {t['controls_by_rule']} refused by a registration rule, "
-                 f"{t['controls'] - t['controls_by_rule'] - t['generated_controls']} by the service or the coin rule, "
-                 f"{t['generated_controls']} generated draw controls; {t['coin_cases']} coin cases); Lean = Python on "
+                 f"{t['controls'] - t['controls_by_rule'] - t['generated_controls'] - t['opening_controls']} by the "
+                 f"service or the coin rule, {t['opening_controls']} foreign openings, {t['generated_controls']} "
+                 f"generated draw controls; {t['coin_cases']} coin cases, {t['opened']} openings); Lean = Python on "
                  f"{t['lean_same']}/{t['compared']} inputs "
                  f"({t['openings']} pre-layout openings, {t['older_cases']} cases of {len(t['older_runs'])} older runs, "
                  f"{t['v2']} v2 registrations apart)")

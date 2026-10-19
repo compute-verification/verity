@@ -3,6 +3,7 @@ import PouwWindow.Json
 import PouwWindow.Length
 import PouwWindow.Statement
 import PouwWindow.Inputs
+import PouwWindow.Rounds
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
@@ -27,6 +28,8 @@ suite (`tests/test_difftest.py`) draws the inputs and holds each to Python.
 * the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
 * the public inputs: `session_cap` (`k_log`, `per_block`); `sessions` (`k`, `cap`); `instance_ts` (`registration`,
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
+* a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
+  `coin`, `round`, `root`).
 
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
@@ -180,6 +183,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("public_inputs", fun j => do
     pure (hexJ (← publicInputs? (← get j "registration") (← arr j "drawn").toList (← get j "sigma") (← int j "cap")
       (← hex j "domain_h3")))),
+  ("live_epoch_reason", fun j => do
+    pure (toJson (liveEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+  ("round_key", fun j => do
+    let c ← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment")
+    pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),
   ("layout_constants", fun _ => pure <| Json.mkObj [("T_BITS", toJson tBits),
     ("DEPTHS", Json.mkObj (sides.map fun s => (s.name, toJson s.depth))), ("PORT", toJson port),
     ("ENTRY_SCHEMA", toJson entrySchema), ("ENTRY_BYTES", toJson entryBytes), ("TILE", toJson tile),

@@ -8,6 +8,7 @@ whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, artifacts)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -21,8 +22,9 @@ each file under its path relative to its package (a module's is its name), never
   otherwise stays a path in the key;
 - `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
-  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs) or its `*.md`, which the audit never reads: the
-  scratch tree leaves them out too, so a read of one would fail there.
+  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
+  (the merge driver, the lean-changed step, the daily publish, ...), which the audit never reads: the scratch tree leaves them
+  out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
 scratch tree can't guard is a package reading beyond its directory by a relative path, which would find other files once it
 moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain or policy, or an `include_str` in a module,
@@ -143,11 +145,23 @@ def provers(pkg: str) -> list[str]:
 FLAGS = ["--build"]
 
 
+#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
+#: read of one fails the audit
+NOT_READ = {
+    "lean-deps.json": "the dependency bundles' pins, which preflight reads",
+    "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
+    "merge.py": "git's merge driver for lean-audit.json",
+    "run_daily.py": "the build cache's daily publish",
+    "tool.py": "the store's declarations of the scheduled runs",
+    "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
+    "pyproject.toml": "the tools/verity/lean suite's settings",
+}
+
+
 def tool_files(files: list[str]) -> list[str]:
-    """The auditor's files: `tools/verity/lean/` less its tests, its docs and `lean-deps.json` (the dependency bundles' pins,
-    which preflight reads and the audit doesn't), and the helpers it imports."""
+    """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
-            and f != LEAN_TOOL + "lean-deps.json"]
+            and f[len(LEAN_TOOL):] not in NOT_READ]
     return sorted({*tool, "tools/verity/check/common.py"})
 
 
@@ -402,8 +416,8 @@ class WarmDeps:
     ones it moved in; another run at the same time finds them absent and builds cold. Missing ones come from the store
     when ``urls`` has the pinned bundle's."""
 
-    def __init__(self, store: Path, urls: dict[str, str] | None = None):
-        self.store, self.urls = store, urls or {}
+    def __init__(self, store: Path, urls: dict[str, str] | None = None, kept: int | None = None):
+        self.store, self.urls, self.kept = store, urls or {}, DEPS_KEPT if kept is None else kept
         self.held: dict[Path, Path] = {}
 
     def _lock(self, k: str):
@@ -449,6 +463,12 @@ class WarmDeps:
                 if home.exists():
                     shutil.rmtree(home, ignore_errors=True)
                 _move(src, home)
+                os.utime(home)
+        self.evict()
+
+    def evict(self) -> int:
+        """Remove all but the `kept` dependency trees last given back (`evict_lru`); the number removed."""
+        return evict_lru(self.store, self.kept)
 
     def export(self, pkgs: dict[str, str], dest: Path, log=print) -> dict:
         """Bundle the kept dependencies of ``pkgs`` ({package: deps_key}, packages that passed) into ``dest``, with the
@@ -508,6 +528,12 @@ def prune(pkg: Path) -> int:
 #: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
 #: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk)
 BUILDS_KEPT = 24
+#: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
+#: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
+DEPS_KEPT = 8
+#: the replay cache's entries a node keeps, newest first: one per module and key, about 3k a version of the tree, and
+#: vy-nebius-2 held 180k on 18 Oct
+REPLAYS_KEPT = 20_000
 
 
 class WarmBuilds:
@@ -555,26 +581,50 @@ class WarmBuilds:
         self.evict()
 
     def evict(self) -> int:
-        """Remove all but the `kept` builds last given back or copied from (a rename keeps a directory's mtime, so each sets it),
-        each only when its lock is free: a run holding it is taking it or giving it back. The number removed."""
-        held = []
-        for home in self.store.iterdir() if self.store.is_dir() else ():
+        """Remove all but the `kept` builds last given back or copied from (`evict_lru`); the number removed."""
+        return evict_lru(self.store, self.kept)
+
+
+def evict_lru(store: Path, kept: int) -> int:
+    """Remove all but the ``kept`` directories of ``store`` last used (a rename keeps a directory's mtime, so each use sets
+    it), each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking it or giving it back. The number
+    removed."""
+    held = []
+    for home in store.iterdir() if store.is_dir() else ():
+        try:
+            if home.is_dir():
+                held.append((home.stat().st_mtime, home))
+        except OSError:                                # taken while listed
+            pass
+    n = 0
+    for _, home in sorted(held, reverse=True)[kept:]:
+        with open(store / f"{home.name}.lock", "w") as f:
             try:
-                if home.is_dir():
-                    held.append((home.stat().st_mtime, home))
-            except OSError:                            # taken while listed
-                pass
-        n = 0
-        for _, home in sorted(held, reverse=True)[self.kept:]:
-            with open(self.store / f"{home.name}.lock", "w") as f:
-                try:
-                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    continue
-                if home.is_dir():
-                    shutil.rmtree(home, ignore_errors=True)
-                    n += 1
-        return n
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            if home.is_dir():
+                shutil.rmtree(home, ignore_errors=True)
+                n += 1
+    return n
+
+
+def prune_replays(cache: Path, kept: int | None = None) -> int:
+    """Remove all but the ``kept`` (`REPLAYS_KEPT`) newest replay entries of ``cache`` (`check.py --replay-cache`): each is
+    one module's pass under its key, so one dropped costs that module one replay. The number removed."""
+    kept = REPLAYS_KEPT if kept is None else kept
+    try:
+        entries = [(e.stat().st_mtime, e) for e in os.scandir(cache) if e.name.endswith(".json")]
+    except OSError:
+        return 0
+    n = 0
+    for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
+        try:
+            os.unlink(e.path)
+            n += 1
+        except OSError:
+            pass
+    return n
 
 
 #: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go
@@ -961,6 +1011,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
+            if n := prune_replays(cache.parent / "lean-replay"):
+                log(f"lean-audit: {n} old replay entries removed")
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
@@ -1155,6 +1207,13 @@ def main(argv: list[str]) -> int:
         return pin(argv[1])
     if argv[:1] == ["--restore"] and len(argv) == 2:
         return restore_into(argv[1])
+    if argv[:1] == ["--prune"]:
+        root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
+        got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
+               "lean-replay": prune_replays(root / "lean-replay"),
+               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune()}
+        print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
+        return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
         cache = Path(argv[3]) if len(argv) == 4 and argv[2] == "--cache" else COMMON.cache_dir() / "lean-audit"
         rc, lines = explain(argv[1], cache)

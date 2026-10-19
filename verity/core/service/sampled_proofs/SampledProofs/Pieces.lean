@@ -24,11 +24,16 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
 * `replay_units`, `proof_units`: the two-stage law's samplers on given bytes of the verifier's own coins
   (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
+* `two_stage_profile`, `check_probability`: the two-stage law's profile over a class's RUs and one proof unit's marginal
+  probability of being checked (`TwoStage.profile`, `TwoStage.checkProbability`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
+* `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
+  (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
-`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it) and `hello`.
+`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it),
+`two_stage_profile`, `check_probability` and `hello`.
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
@@ -36,6 +41,7 @@ import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
 import SampledProofs.Hello
+import SampledProofs.Challenger
 
 namespace SampledProofs.Pieces
 
@@ -171,6 +177,65 @@ def bound (j : Json) : V Json := do
   if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
   return Json.mkObj [("bound", Lean.toJson (Bound.countBound strata δ)),
     ("per_stratum", Json.mkObj (strata.toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s δ))))]
+
+/-- `{"population", "p", "delta"}` to `{"bound"}` (`Bernoulli.count_bound`); refused where `Bernoulli` is: `p` not a
+ratio in [0, 1], δ not in (0, 1). -/
+def bernoulliBound (j : Json) : V Json := do
+  if keys? j != some #["delta", "p", "population"] then throw "exactly {population, p, delta}"
+  let some population := nat? (getD j "population") | throw "population is not a natural number"
+  let .str p := getD j "p" | throw "p is not a ratio"
+  let p ← Core.Ratio.ofString p "p"
+  if p.den < p.num then throw "p is not in [0, 1]"
+  let .str d := getD j "delta" | throw "delta is not a ratio"
+  let δ ← Core.Ratio.ofString d "delta"
+  if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
+  return Json.mkObj [("bound", Lean.toJson (Bound.bernoulliBound population p δ))]
+
+private def natOrNull (j : Json) (k : String) : V (Option Nat) :=
+  match getD j k with
+  | .null => pure none
+  | x => match nat? x with
+    | some n => pure (some n)
+    | none => throw s!"{k} is null or a natural number"
+
+private def strings (j : Json) (k : String) : V (Array String) :=
+  match getD j k with
+  | .arr xs => xs.mapM fun | .str s => pure s | _ => throw s!"{k} is a list of strings"
+  | _ => throw s!"{k} is a list of strings"
+
+/-- `{"law", "class", "units", "n_r", "n_v", "delta", "facts"}` to `TwoStageLaw.profile`'s `to_json`, δ as the ratio
+`Core.Integrity.toJson` writes: the law as `TwoStage.lawOfJson` reads it, `class` a string, `units` null or
+`[[index, class, n_v]]`, `n_r` and `n_v` null or natural numbers, δ a ratio, and `facts` exactly `{"programs",
+"prescribed", "linked", "covered", "drawn"}` (lists of strings, a boolean, an object of integers). -/
+def twoStageProfile (j : Json) : V Json := do
+  if keys? j != some #["class", "delta", "facts", "law", "n_r", "n_v", "units"] then
+    throw "exactly {law, class, units, n_r, n_v, delta, facts}"
+  let law ← TwoStage.lawOfJson (getD j "law")
+  let .str cls := getD j "class" | throw "class is a string"
+  let units ← match getD j "units" with
+    | .null => pure none
+    | u => some <$> TwoStage.rusOfJson u
+  let .str d := getD j "delta" | throw "delta is not a ratio"
+  let δ ← Core.Ratio.ofString d "delta"
+  let f := getD j "facts"
+  if keys? f != some #["covered", "drawn", "linked", "prescribed", "programs"] then
+    throw "facts are exactly {programs, prescribed, linked, covered, drawn}"
+  let .bool linked := getD f "linked" | throw "linked is a boolean"
+  let .obj _ := getD f "drawn" | throw "drawn is an object of integers"
+  let drawn ← (entries (getD f "drawn")).mapM fun (k, v) => match int? v with
+    | some n => pure (k, n)
+    | none => throw "drawn is an object of integers"
+  let facts : TwoStage.Facts := { programs := ← strings f "programs", prescribed := ← strings f "prescribed", linked,
+                                  covered := ← strings f "covered", drawn }
+  return (← TwoStage.profile law cls units (← natOrNull j "n_r") (← natOrNull j "n_v") δ facts).toJson
+
+/-- `{"law", "class", "n_v"}` to `{"p"}`, `check_probability`'s ratio. -/
+def checkProbability (j : Json) : V Json := do
+  if keys? j != some #["class", "law", "n_v"] then throw "exactly {law, class, n_v}"
+  let law ← TwoStage.lawOfJson (getD j "law")
+  let .str cls := getD j "class" | throw "class is a string"
+  let some nv := nat? (getD j "n_v") | throw "n_v is a natural number"
+  return Json.mkObj [("p", Json.str (← TwoStage.checkProbability law cls nv).toString)]
 
 /-- `{"verdicts": {name: {...}}}` to `{"verdict"}`. -/
 def verdict (j : Json) : V Json := do
@@ -338,14 +403,18 @@ def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("registration", registration), ("registered", registered),
    ("domain", domain), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
-   ("bound", bound),
+   ("bound", bound), ("bernoulli_bound", bernoulliBound),
+   ("two_stage_profile", twoStageProfile), ("check_probability", checkProbability),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
-   ("proof_units", proofUnits), ("hello", Hello.check)]
+   ("proof_units", proofUnits), ("hello", Hello.check), ("challenger_commitment", Challenger.commitmentPiece),
+   ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
+   ("challenger_order", Challenger.orderPiece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check)]
+   ("check_verdicts", checkVerdicts), ("run", run), ("two_stage_profile", twoStageProfile),
+   ("check_probability", checkProbability), ("hello", Hello.check)]
 
 end SampledProofs.Pieces

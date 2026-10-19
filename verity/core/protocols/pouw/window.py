@@ -53,24 +53,37 @@ holds those to the entries.  It is not proved yet: no Program states it.
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
+
+**Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
+(`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
+derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+(`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
+`live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
+from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  Round r's coin opens once, after the
+verifier recorded round r's root, the root of the values round r commits, and round r's noise key is `round_key` of that
+coin and that root.  `rounds_reason` is the rule on a window's round coins (Lean: `PouwWindow.Rounds`).
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import math
+import os
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from typing import Any, Mapping, Sequence
 
+from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.ml.randomness import Key, derive
 
 GRID_BITS = 3
 
@@ -93,6 +106,12 @@ REGISTERED = ("work", "check", "sampling", "length", "root_W")
 #: what a registration made before the fixed-length rule (19 Oct) carries: no `length`, so not of record
 LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
 KINDS = ("call", "filler", "none")
+#: the check item's coin mode (`mode`), Compose's `CoinMode`
+COINS = "coins"
+MODES = ("live", "seeded")
+LIVE_SCHEME = "verity/pouw/epoch-coins/live/v1"
+SALT, DRAW, ROUND = "pouw/salt", "pouw/draw", "pouw/round"
+ROUND_NOISE_DOMAIN = "verity/pouw/round-noise/v1"
 
 
 # ---- the grid ---------------------------------------------------------------------------------------------------------------
@@ -713,9 +732,48 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 
 
-__all__ = ["DEPTHS", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED", "LENGTH_KEYS", "M_MAX", "PORT",
-           "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "STOP_FIXED", "T_BITS", "Work", "bucket",
-           "entry_bc", "entry_digest", "entry_leaf", "floor_point", "instance_ts", "k_prime", "layout_problem",
-           "length_item", "length_problem", "level", "levels", "on_grid", "pad_node", "pass_tiles", "point",
-           "public_inputs", "record_digest", "record_problem", "sampling", "session_cap", "sessions", "side_domain",
-           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
+# ---- live windows -----------------------------------------------------------------------------------------------------------
+
+def mode(check: Mapping[str, Any]) -> str:
+    """A window's coin mode (`MODES`), its check item's ``coins``: seeded when the item names none."""
+    return check.get(COINS, "seeded")
+
+
+def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
+    """A live epoch's coin layout: its salt coin, its draw coin and `rounds` round coins, the most rounds a window takes."""
+    return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
+
+
+def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes] = os.urandom) -> Ch.LiveChallenger:
+    return Ch.LiveChallenger(LIVE_SCHEME, epoch, live_families(rounds), entropy)
+
+
+def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+    """Why `commitment` is not a live epoch's coin commitment (`LIVE_SCHEME`, `live_families`); None when it is."""
+    if commitment.scheme != LIVE_SCHEME:
+        return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
+    f = commitment.families
+    if len(f) != 3 or f[0] != (SALT, 1) or f[1] != (DRAW, 1) or f[2][0] != ROUND:
+        return "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
+    return None
+
+
+def rounds_reason(commitment: Ch.LiveCommitment, roots: Sequence[bytes], openings: Sequence[Ch.LiveOpening]) -> str | None:
+    """Why `openings` are not a live window's round coins over the round roots the verifier recorded, `roots` in order:
+    round r's coin opened once, after round r's root, and every recorded round's coin opened; None when they are."""
+    return live_epoch_reason(commitment) or Ch.order_reason(commitment, ROUND, roots, openings)
+
+
+def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -> Key:
+    """Round r's noise key, from its opened coin and the round's root: no Fiat–Shamir over the prover's roots."""
+    return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
+
+
+__all__ = ["COINS", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED", "LENGTH_KEYS",
+           "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED",
+           "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "STOP_FIXED", "T_BITS", "Work", "bucket", "entry_bc", "entry_digest",
+           "entry_leaf", "floor_point", "instance_ts", "k_prime", "layout_problem", "length_item", "length_problem",
+           "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode", "on_grid", "pad_node",
+           "pass_tiles", "point", "public_inputs", "record_digest", "record_problem", "round_key", "rounds_reason",
+           "sampling", "session_cap", "sessions", "side_domain", "side_index", "side_levels", "side_path", "side_row",
+           "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]

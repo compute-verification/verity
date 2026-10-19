@@ -7,6 +7,7 @@ import Definitions.Pouw
 import Definitions.NetworkCertifier
 import Definitions.Accounting
 import Definitions.Claims
+import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion
 import Definitions.Claims.Sampling
 import Definitions.Hash

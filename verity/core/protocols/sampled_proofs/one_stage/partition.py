@@ -9,8 +9,11 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   record made before the canonical envelope names `{"program", "query"}`; `digest` gives it the envelope's rule,
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
 * **Units** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
-  `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries,
-  `Q_word` v1 at `X = 16` (the served query) and `Q_call` v1 at `X <= 16` are the ones applied here, so that a `Q_word`
+  `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries (the
+  served ones: a served window registers a population program under one), `Q_word` v1 at `X = 16` and `Q_call` v1 at
+  `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
+  activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
+  (`benchmarks/verifier_cost/`'s `partition`). Their `X` is at most 16 so that a `Q_word`
   or `Q_call` unit commits at most `UNIT_BITS` bits, the literal limit: `Q_word`'s width rule lets a unit of one value
   commit up to `W` bits and `Q_call`'s counts computing gates only, so a program with a wider unit (for `Q_call`, its
   Definition's activation's committed bits, constants and Input gates counted) is refused, as is one with a template of

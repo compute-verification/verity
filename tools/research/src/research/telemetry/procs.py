@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from pathlib import Path
 from typing import Any
 
 CLK_TCK = os.sysconf("SC_CLK_TCK") if hasattr(os, "sysconf") else 100
