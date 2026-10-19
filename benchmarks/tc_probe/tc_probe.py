@@ -26,8 +26,8 @@ Instructions (``--instruction``; ``--arch`` is derived from the entry and may be
     sm90.wgmma.m64n8k32.e5m2    sm_90a     wgmma_e5m2_m64n8k32_tiles    32  HYPOTHESIS hopper_e4m3_wgmma_k32 with e5m2 products
     sm90.wgmma.m64n8k16.bf16    sm_90a     wgmma_bf16_m64n8k16_tiles    16  hopper_bf16_wgmma_k16 (total semantics: specials asserted);
                                        (_rs_tiles: --a-source registers)     control HYPOTHESIS ampere_bf16_m16n8k16
-    sm100.mma.m16n8k16.bf16     sm_100a    mma_bf16_m16n8k16_tiles      16  HYPOTHESES hopper_bf16_m16n8k16 (sm_120's), control ampere_bf16_m16n8k16
-    sm100.tcgen05.mma.bf16      sm_100a    tcgen05_bf16_m128n8k16_tiles 16  HYPOTHESES hopper_bf16_wgmma_k16 (total), control ampere_bf16_m16n8k16 (total)
+    sm100.mma.m16n8k16.bf16     sm_100a    mma_bf16_m16n8k16_tiles      16  hopper_bf16_m16n8k16 (sm_120's), control ampere_bf16_m16n8k16
+    sm100.tcgen05.mma.bf16      sm_100a    tcgen05_bf16_m128n8k16_tiles 16  hopper_bf16_wgmma_k16 (total), control ampere_bf16_m16n8k16 (total)
 
 A pinned model's mismatches fail ``validation``; a HYPOTHESIS model only yields agreement counts (validation ``not_run`` when no
 pinned model is compared) and the raw capture is recorded regardless.  The E5M2 product (``_e5m2_product``) is a local
@@ -441,9 +441,9 @@ INSTRUCTIONS: dict[str, Instruction] = {
         # pipeline is the control that the tiles distinguish one group of 16 / 26 bits from two groups of 8 / 25 bits.
         _wgmma("sm90.wgmma.m64n8k16.bf16", BF16, (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True), Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
         # Blackwell datacenter (B200): the mma.sync FA2 runs (JIT from its sm_80 PTX) and the tcgen05 k16 step cuBLAS's GEMMs issue, each
-        # against Hopper's k16 pipeline as the hypothesis and Ampere's as the control that the families tell them apart.
-        _mma("sm100.mma.m16n8k16.bf16", "sm_100a", BF16, (Model(S.HOPPER_BF16_M16N8K16, declared=False), Model(S.AMPERE_BF16_M16N8K16, declared=False))),
-        _tcgen05("sm100.tcgen05.mma.bf16", (Model(TCM.HOPPER_BF16_WGMMA_K16, declared=False, total=True),
+        # against Hopper's k16 pipeline (r20261018-234914-864e: 0 mismatches) with Ampere's as the control that the families tell them apart.
+        _mma("sm100.mma.m16n8k16.bf16", "sm_100a", BF16, (Model(S.HOPPER_BF16_M16N8K16), Model(S.AMPERE_BF16_M16N8K16, declared=False))),
+        _tcgen05("sm100.tcgen05.mma.bf16", (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True),
                                             Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
     )
 }
