@@ -155,20 +155,18 @@ class Concat(Refs):
             j += self.count
         if not (0 <= j < self.count):
             raise IndexError(j)
-        k = bisect.bisect_right(self.starts, j) - 1
+        k = _bisect(bisect.bisect_right, self.starts, j) - 1
         return self.parts[k][j - self.starts[k]]
 
     def slice(self, lo: int, hi: int) -> Refs:
         lo, hi = max(lo, 0), min(hi, self.count)
         out: list[Refs] = []
-        starts, parts = self.starts, self.parts
-        k, n = max(bisect.bisect_right(starts, lo) - 1, 0), len(parts)
-        while k < n and starts[k] < hi:
-            st, p = starts[k], parts[k]
+        starts = self.starts
+        k0, k1 = max(_bisect(bisect.bisect_right, starts, lo) - 1, 0), _bisect(bisect.bisect_left, starts, hi)
+        for st, p in zip(starts[k0:k1], self.parts[k0:k1]):
             a, b = max(lo, st) - st, min(hi, st + p.count) - st
             if b > a:
                 out.append(p.slice(a, b))
-            k += 1
         return concat(out)
 
     def to_json(self):
@@ -256,6 +254,8 @@ class _Prefix:
 
     def __getitem__(self, i):
         n = self.n
+        if type(i) is int and 0 <= i < n:
+            return self.base[i]
         if isinstance(i, slice):
             lo, hi, step = i.indices(n + len(self.tail))
             if step != 1:
@@ -288,6 +288,15 @@ class _Prefix:
 
     def __repr__(self) -> str:
         return repr(list(self))
+
+
+def _bisect(search, a, x) -> int:
+    """`search(a, x)` for `search` one of `bisect`'s, on an ascending list or `_Prefix`; a `_Prefix` is searched in C, not item by
+    item through `__getitem__`."""
+    if type(a) is not _Prefix:
+        return search(a, x)
+    k = search(a.base, x, 0, a.n)
+    return k if k < a.n else a.n + search(a.tail, x)
 
 
 class PartLog:

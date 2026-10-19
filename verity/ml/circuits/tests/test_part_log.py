@@ -108,6 +108,31 @@ def test_a_cut_is_the_same_sequence_whatever_is_appended_to_its_log_later():
         assert c.slice(3, c.count - 2).to_json() == Concat(parts).slice(3, c.count - 2).to_json()
 
 
+def test_slicing_and_indexing_a_cut_give_what_the_same_parts_give():
+    """`slice` and `[j]` search a cut's shared prefix in C rather than item by item; every slice and leaf is the plain `Concat`'s,
+    at part boundaries, across empty parts and into the cut's own tail, after the log has grown."""
+    rng = random.Random(11)
+    for _ in range(60):
+        parts: list = []
+        for _ in range(rng.randrange(1, 12)):
+            parts.append(_part(rng, parts[-1] if parts else None))
+        log = PartLog(parts)
+        cuts = []
+        for j in range(len(parts) + 1):
+            extra = [_part(rng, None) for _ in range(rng.randrange(3))]
+            cuts.append((log.raw_cut(j, extra), Concat(parts[:j] + extra)))
+        for _ in range(3):
+            log.append(_part(rng, None))
+        for c, want in cuts:
+            n = want.count
+            assert [c[i] for i in range(n)] == [want[i] for i in range(n)]
+            edges = sorted({e for s in want.starts for e in (s - 1, s, s + 1)} | {-1, 0, n, n + 1})
+            pairs = [(rng.choice(edges), rng.choice(edges)) for _ in range(40)]
+            pairs += [(lo, lo + rng.randrange(-1, n + 2)) for lo in (rng.randrange(-1, n + 2) for _ in range(20))]
+            for lo, hi in pairs:
+                _same(c.slice(lo, hi), want.slice(lo, hi))
+
+
 def test_a_cut_costs_the_same_memory_at_any_length():
     """A cut shares its log's prefix: cutting at row 2000 allocates what cutting at row 20 does (copied, it was 100 times more)."""
     import tracemalloc
