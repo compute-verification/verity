@@ -124,13 +124,17 @@ premise false (RT2-INT's `guess_false_dead`), and one that names a live tile dea
 admitted rows, which lie in live tiles, so as a share of the gate's credit the deficit is at most
 `(d_F + d₀)·N_w/N_adm`, `N_adm/N_w = u` the prefix's admitted rows over its declared rows.
 
-*The period's order* (RT2-INT-4, RT3-INT-13). `Period` makes the order the model's. The service's record must show the
-period's cap `n` and circuit committed before window 0's first coin, each window's first coin opened after the
-previous window's draw, and the period closed at its first window with a refused proof or at its `n`-th window, every
-window up to its close recorded, none replaced or dropped. A stream's committed periods must be disjoint: each window
-in at most one period, and one period open at a time, the next committed only after the last closes. Two periods that
-share windows count those windows twice, and a prover that commits `P` overlapping periods and claims whichever is
-accepted pays `P·δ_s`, not `δ_s`. No check of the record does this today. The challenger's `order_reason`
+*The period's order and its record* (RT2-INT-4, RT3-INT-13, RT4-INT-6). `Period` makes the order the model's. The
+statement needs a period record, kept by the service, from which the credit is read: the period's cap `n` and circuit
+committed before window 0's first coin; each window's first coin opened after the previous window's draw (the
+challenger's `order_reason` over one family, below); and the record closed at the first window with a refused proof
+or at the `n`-th window, every window up to its close recorded, none replaced or dropped. A stream's committed periods
+must be disjoint: each window in at most one period, and one period open at a time, the next committed only after the
+last closes. Two periods that share windows count those windows twice, and a prover that commits `P` overlapping
+periods and claims whichever is accepted pays `P·δ_s`, not `δ_s`. No check of the record does this today. The served
+path has no period: `Credits` (SALT-WIRE's, #2847) registers a window once when it is received, before its draw coin
+is open or any proof, and nothing closes a stream at its first refused window, so the running ledger credits each
+window on its own, which is dropping failed windows (*Liveness*, below). The challenger's `order_reason`
 (`SampledProofs.Challenger.orderReason`, #2731, not on main) checks one family of an epoch's coins: coin `i` opened
 once, after the `i`-th recorded root, and every recorded root's coin opened. That is the order within a window. Run
 over one family holding every window's round coins and draw in order, with `n` and the circuit in the epoch's
