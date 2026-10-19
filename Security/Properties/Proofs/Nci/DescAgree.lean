@@ -182,7 +182,8 @@ theorem nodeOwnerFold_ok (P : Prog) (owner : Array Json) (own : Array (Option �
     ?_ _ own h
   rintro n own own' ⟨hs, hk⟩ hstep
   rcases hx : Desc.ownerStep (inputs P)[n]! (decide ((rootOffs P)[n + 1]! - (rootOffs P)[n]! > 0)) owner[n]! with e | o
-  · simp [hx, Functor.map, Except.map] at hstep
+  · rw [hx] at hstep
+    cases hstep
   simp only [hx, Functor.map, Except.map, Except.ok.injEq] at hstep
   subst hstep
   obtain ⟨ho, hkind⟩ := descOwnerStep_ok _ _ _ _ hx
@@ -362,6 +363,17 @@ theorem mem_nodeGates (P : Prog) (k g : ℕ) :
   simp only [nodeGates, List.mem_range'_1, rootOffs, rootBody]
   omega
 
+/-- **The case `Desc.isInputNode` once got wrong.** A root node that calls a composite holds no input gate, whatever the
+composite's key. `Input16_v1` is a well-formed key of a static-free composite, which the decoder admits, and
+`Desc.isInputNode` read an input node off the key alone, so it admitted such a node's computed gates to θ and to no IU,
+where `evaluate` refuses them (`theta-not-input`, `gate-in-no-iu`). The difftest's last six vectors are such programs. -/
+theorem call_gates_computed (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputsAtRoot P = true) {k : ℕ}
+    (hk : k < nodeCount P) (hprim : (P.defs[((rootBody P).nodes[k]!).fn]!).prim = false) {g : ℕ}
+    (hg : g ∈ nodeGates P k) : ¬ IsInput P g := by
+  rintro ⟨p, ops, sc, hgate, hp⟩
+  rw [gate_input P hl hi hgate hk ((mem_nodeGates P k g).1 hg), inputs_get P hk] at hp
+  simp [Desc.isInputNode, hprim] at hp
+
 theorem mem_thetaGates (P : Prog) (theta : Array Json) (g : ℕ) :
     g ∈ thetaGates P theta ↔ ∃ t < theta.size, ∃ k, natOf? theta[t]! = some k ∧ g ∈ nodeGates P k := by
   simp only [thetaGates, List.mem_flatMap, Array.mem_toList_iff]
@@ -467,6 +479,8 @@ def ownerOf' (P : Prog) (owner : Array Json) : Array Json :=
 end DescAgree
 
 open DescAgree
+open Lean (Json toJson)
+open Flock.Program (Prog)
 
 /-! ## The open statements -/
 
