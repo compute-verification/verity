@@ -948,9 +948,10 @@ THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"
 
 
 #: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
-#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: nice 19 inside its check slots, so never a slot a
-#: train waits for) as kind AUTO_KIND (infra/cluster/kinds/infra.toml). Not node 1, whose CPUs trains and lanes' direct runs already
-#: oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and proofs' Lean slots have reserved (03:01Z).
+#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: whole cores of its own inside its check slots,
+#: never a slot a train waits for; it waits on the node while none are free) as kind AUTO_KIND (infra/cluster/kinds/infra.toml).
+#: Not node 1, whose CPUs trains and lanes' direct runs already oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and
+#: proofs' Lean slots have reserved (03:01Z).
 AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
 
 
@@ -1098,6 +1099,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
               file=sys.stderr)
     if launch.get("first_record") == "disk-hold":
         print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
+    if launch.get("first_record") == "cpu-hold":
+        print(f"research: {ns.on} holds it until whole cores of its own are free (research cpu-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     if getattr(ns, "wait", False):
         return wait_remote(run_id, run_dir, every_s=ns.wait_every)
@@ -1650,6 +1653,10 @@ def main(argv: list[str] | None = None) -> int:
         from .disk import main as disk_main
 
         return disk_main(rest)
+    if cmd == "cpu-hold":
+        from .cores import main as cores_main
+
+        return cores_main(rest)
     if cmd == "job-exec":
         from .jobuser import main as job_exec_main
 
