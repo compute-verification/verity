@@ -30,7 +30,7 @@ A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 rec
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet.  `verdict` is what a verifier checks of a signed session; its public output is the verdict and the egress the
-network certifier counted, in whole MiB (16 bits), which the bound reads.  `retained_bits` and `challenges_for` are the
+network certifier counted, in whole MiB (15 bits), which the bound reads.  `retained_bits` and `challenges_for` are the
 guarantee's bound, which says how much of the prior content can survive an accepted wipe.
 """
 
@@ -337,8 +337,9 @@ class Prover:
 
 EGRESS_UNIT_BITS = 8 << 20
 """The public egress count's unit: one MiB."""
-EGRESS_MAX_UNITS = (1 << 16) - 1
-"""A proof unit's output is at most 16 bits, so the count saturates at 64 GiB less one MiB."""
+EGRESS_MAX_UNITS = (1 << 15) - 1
+"""A proof unit's outputs are at most 16 bits, the verdict's one and the count's 15, so the count saturates at 32 GiB
+less one MiB."""
 
 
 def egress_units(egress_bits: int) -> int:
