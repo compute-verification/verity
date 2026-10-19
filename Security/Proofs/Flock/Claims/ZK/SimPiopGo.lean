@@ -99,7 +99,7 @@ theorem lincheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) (c : CircuitFo
         s'.1 = Lc.combT c full (lcCoins coin l.size (c.kLog - 6)) j ∧
         s'.2.1 = Lc.zrT c m tr zo (lcCoins coin l.size (c.kLog - 6)) j)
     (l.size + 2) (c.kLog - 6) ?hb _ _ ?hl ?h0) ?tail
-  case hl => simp only [Array.size_push] <;> omega
+  case hl => simp only [Array.size_push]
   case h0 => exact ⟨rfl, rfl, rfl, rfl⟩
   case hb =>
     intro j hj s s' t' l' hl' hI
