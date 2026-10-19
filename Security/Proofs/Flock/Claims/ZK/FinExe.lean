@@ -144,7 +144,7 @@ theorem quiet_bind_ok {α β : Type} {x : V α} {y : PS α} (hq : quietS.R x y) 
 
 /-- **The link message through `asksCut`**: recorded, then answered by round `0`'s coin unless the session stops
 there. -/
-theorem asksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Claims.Msg) :
+theorem finAsksCut_link_go (coin : ℕ → ℕ → F128) (n : ℕ) (a b : Array ByteArray) (l : Array Claims.Msg) :
     ((asksCut coin n).link a b).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (coin l.size),
         l.push (FlockDeploy.linkBody a.toList b.toList)) := by
@@ -215,7 +215,7 @@ def afterLinkCut (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Arra
 
 /-- **The session from the source in three parts** (`sessionPZk_eq`'s): the schedules, level 0's commitments from the
 leaves, the link message, and the rest. -/
-theorem sessionCut_eq (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
+theorem finSessionCut_eq (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
     (words : Array (List Nat)) (src : Nat → TabSrc) :
     sessionCut io hs spec tabs words src = (do
       let schs ← schedsPZk tabs
@@ -476,7 +476,7 @@ abbrev hsV : _root_.Flock.Hashes _root_.Flock.V := _root_.Flock.Hashes.ofSha512 
 def domE (spec : _root_.Flock.SessionSpec) (i r : ℕ) : ByteArray := (spec.domain spec.tables[i]! r).toUTF8
 
 /-- Table `i`'s pads layout. -/
-noncomputable def layE (x : Msg) (i : ℕ) (hi : i < jOf x) : _root_.Flock.Zk.PadLayout :=
+noncomputable def finLayE (x : Msg) (i : ℕ) (hi : i < jOf x) : _root_.Flock.Zk.PadLayout :=
   _root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[i]!.m (FlockDeploy.tabsOf (stsOf x))[i]!.kLog
     (zkTab x ⟨i, hi⟩).sch.k0
 
@@ -489,7 +489,7 @@ noncomputable def repHE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin
   (FlockComplete.repPZk (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch
     (zkTab x ⟨i, hi⟩).tPad r (domE spec i r) (trsE x w (UE.tapeZk τ))[i]!
     (FlockComplete.packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m) cm0 extras
-    (FlockComplete.padsOf (UE.tapeZk τ) i r (layE x i hi)) ic ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i)
+    (FlockComplete.padsOf (UE.tapeZk τ) i r (finLayE x i hi)) ic ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i)
     ((UE.tapeZk τ).salt i r) ((UE.tapeZk τ).nonce i r) (priorE c i r)
     (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))
 
@@ -504,7 +504,7 @@ def RepCtx (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) →
     FlockComplete.commitPZk hsV (FlockDeploy.tabsOf (stsOf x))[i]!.merkle ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default)
       (zkTab x ⟨i, hi⟩).tPad (FlockComplete.packed (trsE x w (UE.tapeZk τ))[i]! (FlockDeploy.tabsOf (stsOf x))[i]!.m)
       ((UE.tapeZk τ).extra i) ((UE.tapeZk τ).lanePad i) ((UE.tapeZk τ).salt i 0 0) = .ok cm0 ∧
-    FlockComplete.innerCommitP hsV (FlockComplete.padsOf (UE.tapeZk τ) i r (layE x i hi))
+    FlockComplete.innerCommitP hsV (FlockComplete.padsOf (UE.tapeZk τ) i r (finLayE x i hi))
       ((UE.tapeZk τ).innerSalt i r) = .ok ic ∧
     (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsE c spec) = .ok extras ∧ l.size = repBase x (2 * i + r)
 
@@ -515,7 +515,7 @@ def RepFin : Prop :=
   ∀ x w τ c spec i hi r cm0 extras ic l, RepCtx x w τ c spec i hi r cm0 extras ic l →
     ((FlockComplete.repCut (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
         (domE spec i r) (fill0 x c w τ i ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default) cm0) extras
-        (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+        (fillP x c w τ i r (((finLayE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
           2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic) ((srcV x c w τ i).rep r) (priorE c i r)
         (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))).go l =
       (repHE x w τ c spec i hi r cm0 extras ic).go l
@@ -547,7 +547,7 @@ theorem ioE_link_go {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) 
     ((ioE c n).link a b).go l =
       (if n ≤ l.size then .error "past the openings" else .ok (fun i => slotAt c l.size i),
         l.push (FlockDeploy.linkBody a.toList b.toList)) :=
-  FlockComplete.asksCut_link_go _ n a b l
+  FlockComplete.finAsksCut_link_go _ n a b l
 
 theorem tabs_size {x : Msg} (hx : Live x) : (FlockDeploy.tabsOf (stsOf x)).size = jOf x := by
   have hJ : jOf x = (stsOf x).size := by
@@ -638,7 +638,7 @@ theorem simFin_of (hSC : SimCommit) (hF : RepFin) (hE : RepExact) (hP : RepPoint
   refine congrArg Prod.fst ?_
   unfold runCut runExe
   rw [show FlockComplete.asksCut (fun k i => slotAt c k i) (refK x) = ioE c (refK x) from rfl,
-    FlockComplete.sessionCut_eq, FlockComplete.sessionPZk_eq, FlockComplete.go_bind, FlockComplete.go_bind,
+    FlockComplete.finSessionCut_eq, FlockComplete.sessionPZk_eq, FlockComplete.go_bind, FlockComplete.go_bind,
     FlockComplete.schedsPZk_quiet, hs]
   dsimp only
   rw [FlockComplete.go_bind, FlockComplete.go_bind, commits_srcV hSC hx hR τ c hschs hcm,
@@ -1209,7 +1209,7 @@ noncomputable def repVE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin
     FlockComplete.PS (_root_.Flock.Zk.ZkProof × _root_.Flock.Transcript) :=
   (FlockComplete.repCut (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
     (domE spec i r) (fill0 x c w τ i ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default) cm0) extras
-    (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+    (fillP x c w τ i r (((finLayE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
       2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic) ((srcV x c w τ i).rep r) (priorE c i r)
     (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).run (_root_.Flock.Transcript.init #[] (domE spec i r))
 
@@ -1231,13 +1231,13 @@ theorem repFin_of (h0 : SimPiop) (h1 : SimLig) (h2 : SimInner) (hFin : RepFinal)
   have hE := repCut_erased h0 h1 h2 hx hw τ hA hsx ⟨i, hi⟩ ⟨r, hr⟩ (domE spec i r) cm0 ic extras he l hl
   have hsrc : eraseS ((srcV x c w τ i).rep r) = eraseS ((srcE x c w τ i).rep r) :=
     (eraseS_srcV hA w τ hi hr).trans (by rw [← eraseS_srcV hA w τ hi hr]; rfl)
-  have hn : (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+  have hn : (fillP x c w τ i r (((finLayE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
       2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic).ch.size = (FlockComplete.eraseIC ic).ch.size := by
     simp [fillP, FlockComplete.eraseIC, FinRep.innerCommitP_ch hic, FlockComplete.padsOf]
   have E := (FinRep.repCut_eraseC (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
       (domE spec i r) (cm := fill0 x c w τ i ((zkTab x ⟨i, hi⟩).sch.levels.getD 0 default) cm0)
       (cm' := FlockComplete.eraseC cm0) rfl rfl extras
-      (fillP x c w τ i r (((layE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
+      (fillP x c w τ i r (((finLayE x i hi).len + _root_.Flock.Zk.K_PAD).nextPowerOfTwo *
         2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE) ic) ((srcV x c w τ i).rep r) (priorE c i r)
       (FlockComplete.MaskRank.masksOf (stsOf x))[i]!).trans
     (FinRep.repCut_eraseIS (ioE c (refK x)) hsE (FlockDeploy.tabsOf (stsOf x))[i]! (zkTab x ⟨i, hi⟩).sch r
