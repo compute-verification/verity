@@ -118,14 +118,16 @@ theorem squeezeP_cut_ok (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {
       (.ok ((Array.range k).map (coin l.size), afterSq t kind k (coin l.size)),
         l.push (Claims.toMsg (framed t kind k))) := by
   simp only [squeezeP, StateT.run, hk, ite_false]
-  rw [go_bind, asksCut_round_go, ite_eq_right (show ¬ n ≤ l.size by omega)] <;> rfl
+  rw [go_bind, asksCut_round_go, ite_eq_right (show ¬ n ≤ l.size by omega)]
+  rfl
 
 theorem squeezeP_cut_err (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) (t : Transcript)
     {l : Array Claims.Msg} (hl : n ≤ l.size) :
     ((squeezeP (asksCut coin n) kind k).run t).go l =
       (.error "past the openings", l.push (Claims.toMsg (framed t kind k))) := by
   simp only [squeezeP, StateT.run, hk, ite_false]
-  rw [go_bind, asksCut_round_go, ite_eq_left hl] <;> rfl
+  rw [go_bind, asksCut_round_go, ite_eq_left hl]
+  rfl
 
 /-- **A squeeze that returned** was before round `n`, returned the coins at `l.size` and sent the framed bytes. -/
 theorem squeezeP_cut_inv (coin : ℕ → ℕ → F128) {n : ℕ} (kind : UInt8) {k : ℕ} (hk : k ≠ 0) {t t' : Transcript}
@@ -250,7 +252,7 @@ theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
         s'.1 = Zc.tab (m - 6) (zcCoins coin l.size).z (zcCoins coin l.size).ρ tr.az i ∧
         s'.2.1 = Zc.tab (m - 6) (zcCoins coin l.size).z (zcCoins coin l.size).ρ tr.bz i)
     (l.size + 3) (m - 6) ?hb _ _ ?hl ?h0) ?tail
-  case hl => simp only [Array.size_push] <;> omega
+  case hl => simp only [Array.size_push]
   case h0 => exact ⟨rfl, rfl, rfl, rfl⟩
   case hb =>
     intro i hi s s' t' l' hl' hI
