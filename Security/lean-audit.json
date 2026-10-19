@@ -693,7 +693,12 @@
    "type_hash": "63aac0dbcd0d928541bca79551376dbddfa27c9fcf37a7fb4dc262375c34fdfd"
   },
   "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark.{u_1, u_2} : Accounting.Guarantees.Actual.ThreadedRuntimeDark"
+   ],
+   "assumptions": [],
+   "type_hash": "438621e3578864ab81bafabed8a0ba62590cf642adc1a1a117c2c826c95ebf2f"
   },
   "Accounting.SecurityProofs.Actual.Windows": {
    "owner": "@lean",
@@ -5573,6 +5578,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
@@ -6072,6 +6078,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered"
@@ -7491,6 +7498,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
@@ -7547,6 +7555,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -7747,6 +7756,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.Windows",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -7776,6 +7786,7 @@
     "Nci.PartialContainment.dark": "b291a4876caed5c07228e2b04e2eed6425f410a83fa3063f9ab1c5fbe5f65b48"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.ThreadedThrottledDark",
@@ -7827,6 +7838,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
@@ -16900,12 +16912,17 @@
    "guarantees": ["Accounting.SecurityProofs.Actual.Runtime", "Accounting.SecurityProofs.Actual.Windows"]
   },
   "Models.Accounting.Guarantees.Actual.Threaded": {
-   "digest": "3e9bfe4e56f20270c6d9abb91eb605bd660e43afe8d9756df1d7118cded47462",
+   "digest": "89b9f4e4d04286c83dd88cb31e7625a4bd39c689fc4d9f7f38c17b2e3fc10f38",
    "definitions": {
     "Accounting.Guarantees.Actual.ThreadedRate": "57d1584de42b3919425b9cb0bd254928c24a9779d7beaa7c9a9767728fad3858",
-    "Accounting.Guarantees.Actual.ThreadedRuntime": "0957634d1e3be4bb98d90dfae3044ac393c5fbb66218c58c2bc6be8d52fd6954"
+    "Accounting.Guarantees.Actual.ThreadedRuntime": "0957634d1e3be4bb98d90dfae3044ac393c5fbb66218c58c2bc6be8d52fd6954",
+    "Accounting.Guarantees.Actual.ThreadedRuntimeDark": "d5809ab32e5fc281909fffaed2f7ae948c881b0f60ac3397442748092ea66003"
    },
-   "guarantees": ["Accounting.SecurityProofs.Actual.ThreadedRate", "Accounting.SecurityProofs.Actual.ThreadedRuntime"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Actual.ThreadedRate",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark"
+   ]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
@@ -17424,6 +17441,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRate",
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
+    "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
