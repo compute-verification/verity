@@ -50,11 +50,14 @@ The result (checks below):
 - **Bijection and X1:** key_mul is odd, so fx_chain is a bijection of the word (the fold binds it as duo does), and
   f = 4 (fx1), 5 (fx2) >= 2.53 (X1).
 
-Verdict: FOLD-OPT(fx1) and FOLD-OPT(fx2) are validated and turned into mechanical facts, in the count form (>= f issue
-slots a word) and the price form (mu_f = 0 on the binding joint-issue row). No counterexample: fx1 is the cheapest keyed
-chain reaching f = 4 that provably does not collapse, because it ends on a multiply. Residual (as #2240): a fully general
-multi-op superoptimiser over the complete ISA explodes; the no-collapse + no-merge + op-type argument and the width-4
-exhaustive searches cover it, and a heavy exhaustive search would go on a pod.
+Verdict: FOLD-OPT(fx1) and FOLD-OPT(fx2) are validated, in the count form (>= f issue slots a word) and the price form
+(mu_f = 0 on the binding joint-issue row). No counterexample: fx1 is the cheapest keyed chain reaching f = 4 that provably
+does not collapse, because it ends on a multiply. What is mechanical: the one-instruction checks at 32 bits, and the
+multi-instruction searches at width 4. Reducing every word mod 2^4 commutes with LOP3, IADD3, IMAD and LEA, and y' uses
+only those, so for y' over those forms the width-4 search covers 32 bits. It doesn't commute with IMAD.HI, LEA.HI,
+IMAD.WIDE's high word or a rotation, and z' rotates; there the 32-bit claim is the no-collapse + no-merge + op-type
+argument, by hand, with the two-instruction searches repeated at width 8 as evidence (r20261019-075453-84ff, RT-MACHINE-17).
+A fully general multi-op superoptimiser over the complete ISA at 32 bits explodes.
 
 Run: `python fold_opt_fx.py [--mutations] [--wide3] [--verdict PATH]`. Stdlib + exact_kit only; `--wide3` builds
 fold_wide3.c with gcc.
