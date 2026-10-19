@@ -192,7 +192,7 @@ def modifiers(op: str, tag: str) -> dict:
     return {}
 
 
-# ---- the program skeleton and its evaluation --------------------------------------------------------------------------
+# ---- the program skeleton and its evaluation -------------------------------------------------------------------------
 
 def label(ops: tuple) -> str:
     return " ".join(op if isinstance(op, str) else f"{op[0]}{list(op[1])}" for op in ops)
@@ -327,8 +327,8 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
         for s in seqs:
             done(cegis(s, tname, timeout_ms))
     tally = {r: sum(1 for x in res if x["result"] == r) for r in ("unsat", "FOUND", "unknown")}
-    return {"k": k, "fp": fp, "part": part, "shard": list(shard), "target": tname, "sequences": len(seqs), "tally": tally,
-            "proved": tally["unsat"] == len(seqs), "results": res}
+    return {"k": k, "fp": fp, "part": part, "shard": list(shard), "target": tname, "sequences": len(seqs),
+            "tally": tally, "proved": tally["unsat"] == len(seqs), "results": res}
 
 
 def main() -> int:

@@ -27,7 +27,8 @@ def _val(e) -> int:
 def test_cover_is_the_sheets_menu():
     """Every opcode the search covers is one DS-100 prices on the IMAD or FP pipe, every form it names is modelled, and
     what's off the menu isn't; fold_xor.py's menu and its 78's SASS forms are among the covered."""
-    assert {op: class_of(op) for op in S.COVER} == {op: "FFMA" if S.COVER[op] in S.FP_OPS else "IMAD" for op in S.COVER}
+    want = {op: "FFMA" if S.COVER[op] in S.FP_OPS else "IMAD" for op in S.COVER}
+    assert {op: class_of(op) for op in S.COVER} == want
     assert set(S.COVER.values()) == set(S.FORMS) == set(S.INT_OPS + S.FP_OPS)
     assert all(class_of(op) not in ("IMAD", "FFMA") for op in S.OFF_MENU)
     assert {"IMAD", "IMAD.HI.U32", "IDP.4A.U8.U8", "IDP.2A.LO.U16.U8", "FFMA2", "FADD2", "FMUL2", "FFMA"} <= set(S.COVER)
