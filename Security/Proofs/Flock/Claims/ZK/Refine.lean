@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.ZK.Release
 the deferred release releases a frame, it is that prover's message. That prover is the committed-coin strategy
 (`Claims.ZKMal.strat`): `Hello` first, then, while every opening so far passes its coin-tree check, its message at the
 coins they open (`RefSession.swMsgAt`: `enc` before the last coin, then `fin` or `off`), and `abort` from the first
-opening that fails (`strat_cons_eval`).
+opening that fails (`strat_eval_cons`).
 
 * **The coin stops** (`stopRefine_of_sessionStops`): `StopRefine` holds once the session's `abort` is the frame's stop and
   its message is the stop after every history whose openings pass and whose last coins the frame refuses
@@ -140,16 +140,6 @@ theorem answer_congr {c c' : Cfg} (s : Masker) (cs : Array _root_.Flock.F128) (h
   unfold Masker.answer
   rw [hl, ho]
 
-/-- **The committed-coin strategy after `Hello`'s answer**: its message at the coins the openings open while every
-opening so far passes `acc` against the commitment, else `abort`. -/
-theorem strat_cons_eval {Coin : Type} (H : Msg → Msg) (hello abort : Msg) (dec : Msg → Coin)
-    (acc : Msg → ℕ → Msg → OC Bool) (gen : List Coin → OC Msg) (m ρ₀ : Msg) (ops : List (Msg × Msg)) :
-    ((strat hello abort dec acc gen ((m, ρ₀) :: ops)).eval H).1 =
-      if ((allOk (acc ρ₀) 0 (ops.map Prod.snd)).eval H).1 then ((gen (ops.map fun p => dec p.2)).eval H).1
-      else abort := by
-  simp only [strat, ocBind_eval]
-  cases ((allOk (acc ρ₀) 0 (ops.map Prod.snd)).eval H).1 <;> rfl
-
 namespace LeanRelease
 
 /-- At the empty history the frame has no coins to take, so it refuses none. -/
@@ -200,7 +190,7 @@ theorem stopRefine_of_sessionStops (S : RefSession) (vs : S.SwVals)
     obtain ⟨m₀, ρ₀⟩ := p
     show ((strat ((S.swP vs).hello x ν) (S.swP vs).abort (S.swP vs).dec ((S.swP vs).chk x ν)
       ((S.swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = L.stop
-    rw [strat_cons_eval]
+    rw [strat_eval_cons]
     split
     next hok => exact hS ν t m₀ ρ₀ ops hok hr
     next => exact hA
@@ -227,7 +217,7 @@ theorem release_eq_abort_of_liveRefine (S : RefSession) (vs : S.SwVals)
   have he := hL (ν, t) κ ((m₀, ρ₀) :: ops) v hl hr hv
   have hm : ((strat ((S.swP vs).hello x ν) (S.swP vs).abort (S.swP vs).dec ((S.swP vs).chk x ν)
       ((S.swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = S.abort := by
-    rw [strat_cons_eval, hok] <;> rfl
+    rw [strat_eval_cons, hok] <;> rfl
   exact he.symm.trans hm
 
 /-- The frame's taking of the coins is the same on every tape. -/
@@ -303,11 +293,12 @@ theorem liveRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
     show ((strat (((S.withStops Rf L.stop).swP vs).hello x ν) ((S.withStops Rf L.stop).swP vs).abort
       ((S.withStops Rf L.stop).swP vs).dec (((S.withStops Rf L.stop).swP vs).chk x ν)
       (((S.withStops Rf L.stop).swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = _
-    rw [strat_cons_eval]
+    rw [strat_eval_cons]
     split
     next hok =>
-      exact (S.swMsgAt_withStops_go Rf L.stop x _ _ t _ ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans
-        (hE.2 ν t κ m₀ ρ₀ ops v hl hok hr hv).symm
+      show (S.withStops Rf L.stop).swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2) = _
+      exact (S.swMsgAt_withStops_go Rf L.stop x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
+        ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans (hE.2 ν t κ m₀ ρ₀ ops v hl hok hr hv).symm
     next hok =>
       have h1 := hO ν t m₀ ρ₀ ops (by simpa using hok)
       cases h1.symm.trans hr
@@ -343,11 +334,12 @@ theorem fillRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
     show ((strat (((S.withStops Rf L.stop).swP vs).hello x ν) ((S.withStops Rf L.stop).swP vs).abort
       ((S.withStops Rf L.stop).swP vs).dec (((S.withStops Rf L.stop).swP vs).chk x ν)
       (((S.withStops Rf L.stop).swP vs).msg x w ν t) ((m₀, ρ₀) :: ops)).eval H).1 = _
-    rw [strat_cons_eval]
+    rw [strat_eval_cons]
     split
     next hok =>
-      exact (S.swMsgAt_withStops_go Rf L.stop x _ _ t _ ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans
-        (hE.2 ν t κ m₀ ρ₀ ops hlt hl hok hr).symm
+      show (S.withStops Rf L.stop).swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2) = _
+      exact (S.swMsgAt_withStops_go Rf L.stop x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2)
+        ((hR ν t m₀ ρ₀ ops hok).symm.trans hr)).trans (hE.2 ν t κ m₀ ρ₀ ops hlt hl hok hr).symm
     next hok =>
       have h1 := hO ν t m₀ ρ₀ ops (by simpa using hok)
       cases h1.symm.trans hr
