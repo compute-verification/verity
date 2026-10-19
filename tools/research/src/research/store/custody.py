@@ -67,6 +67,10 @@ STORE_TOML = "store.toml"
 DEFAULT_TTL = "6h"
 ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2", "ListMultipartUploads", "ListParts",
            "PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload")
+# `research run --store-read`: a second, read-only key for the workload itself (its `research data fetch`), staged apart from
+# custody's in <root>/requests/<run-id>/store-read/; unlike custody's it is put in the workload's environment (INF-70)
+READ_DIR_NAME = "store-read"
+READ_ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2")
 PUSH_TRIES = 3
 PUSH_RETRY_S = 20.0
 TRIAGE_STATES = ("fetched", "r2", "forced-unverified", "attempt-no-record", "attempt-unpreserved", "conflict", "no-custody", "running",
@@ -349,16 +353,33 @@ def mark_failed(run_dir: Path, rep: dict[str, Any]) -> None:
 def mint_for_machine(ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
     """(public facts for request.json, [(relative path, bytes)] to stage under <requests>/<id>/custody/).  MintError when this machine
     cannot mint (no parent key, a temporary credential in the environment, no endpoint/bucket)."""
+    return _mint(ttl, ACTIONS, DIR_NAME, "--custody-r2", environ)
+
+
+def mint_reader(ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
+    """`--store-read`: a read-only key (READ_ACTIONS) for the workload, as mint_for_machine's, staged under READ_DIR_NAME."""
+    return _mint(ttl, READ_ACTIONS, READ_DIR_NAME, "--store-read", environ)
+
+
+def _mint(ttl: str | int, actions: tuple[str, ...], dir_name: str, flag: str,
+          environ: dict[str, str] | None) -> tuple[dict[str, Any], list[tuple[str, bytes]]]:
     from . import credentials as C
 
-    cred = C.mint(via="auto", actions=list(ACTIONS), ttl_s=C.parse_ttl(ttl), environ=environ)
-    toml = ("# written by `research run --custody-r2`; the credential is in cred.json beside it (mode 600)\n[remote]\ntype = \"s3\"\n"
+    cred = C.mint(via="auto", actions=list(actions), ttl_s=C.parse_ttl(ttl), environ=environ)
+    toml = (f"# written by `research run {flag}`; the credential is in cred.json beside it (mode 600)\n[remote]\ntype = \"s3\"\n"
             f"bucket = {json.dumps(cred['bucket'])}\nendpoint = {json.dumps(cred['endpoint'])}\nregion = \"auto\"\n"
             "access_key_id_env = \"AWS_ACCESS_KEY_ID\"\nsecret_access_key_env = \"AWS_SECRET_ACCESS_KEY\"\nsession_token_env = \"AWS_SESSION_TOKEN\"\n")
     secret = {"AWS_ACCESS_KEY_ID": cred["accessKeyId"], "AWS_SECRET_ACCESS_KEY": cred["secretAccessKey"], "AWS_SESSION_TOKEN": cred["sessionToken"],
               "expires_utc": cred["expires_utc"]}
-    public = {"schema": SCHEMA, "expires_utc": cred["expires_utc"], "ttl_s": cred["ttl_s"], "via": cred["via"], "actions": list(ACTIONS)}
-    return public, [(f"{DIR_NAME}/{STORE_TOML}", toml.encode()), (f"{DIR_NAME}/{CRED_FILE}", (json.dumps(secret) + "\n").encode())]
+    public = {"schema": SCHEMA, "expires_utc": cred["expires_utc"], "ttl_s": cred["ttl_s"], "via": cred["via"], "actions": list(actions)}
+    return public, [(f"{dir_name}/{STORE_TOML}", toml.encode()), (f"{dir_name}/{CRED_FILE}", (json.dumps(secret) + "\n").encode())]
+
+
+def reader_env(read_dir: Path) -> dict[str, str]:
+    """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the three AWS_* variables."""
+    d = Path(read_dir)
+    cred = json.loads((d / CRED_FILE).read_text())
+    return {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}}
 
 
 @contextlib.contextmanager
@@ -763,5 +784,6 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
 
 
 __all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
-           "drop_credentials", "force_refusal", "has_custody", "mark_failed", "marker_problem", "mint_for_machine", "push_run",
+           "drop_credentials", "force_refusal", "has_custody", "mark_failed", "marker_problem", "mint_for_machine", "mint_reader",
+           "READ_ACTIONS", "READ_DIR_NAME", "reader_env", "push_run",
            "put_run_record", "ran_evidence", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]

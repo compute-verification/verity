@@ -20,6 +20,11 @@ number of egress values the observer can tell apart is the leakage, in bits its 
   Amplification needs no hypothesis: a correct unit that routes secrets to the egress does so inside the cone, which
   `E` prices. `scale_coneEgress` and `scale_amp` show the bound is attained, and `vmStatic_coneEgress` that a machine's
   step reaches the whole egress, where the bound says nothing.
+* **Bounded reach.** With every input fixed, the adversary's choice over the egress at the wrong set `B` (its control
+  reach) is at most `min(|W(B)|, |O ∩ cone(B)|)` slots (`card_egress_le_reach`), so with at most `m` wrong units
+  `Reach_ctl(O) ≤ min(m w, Reach_inf(O)) + log C(|U|, ≤ m)` (`card_egressAt_le_reach`). Leakage about the secrets
+  beyond the honest egress is at most `Reach_inf(O) + log C(|U|, ≤ m)` (`card_leak_le_reach`), with no `m w` term, since
+  inside the cone a value may be any function of the secrets.
 * `card_leak_le`, **control times amplification**: at most `K · α` egress values, `K = (∑_{j ≤ m} C(n, j)) |V| ^ (m w)`
   the control count of `Egress.card_egressAt_le` and `α` a bound on every amplification set (`amp`): the egress values
   the rest of the population makes of the secrets once the wrong units and their writes are fixed. The count needs no
@@ -231,6 +236,118 @@ theorem card_leak_le_coneEgress_sum [Fintype U] (hc : P.Covered) (ha : P.Acyclic
     ((P.card_coneEgress_le O B).trans (mem_filter.1 hB).2)).trans (le_of_eq ?_))
   rw [sum_const]
   simp
+
+/-! ## Bounded reach
+
+With every input fixed (the weights included), `egress f a ∅ O B` is what the adversary can choose over `O` at the wrong
+set `B`: its control reach is the logarithm of its size. The influence reach is `|O ∩ cone(B)|`, the slots of `O` the
+wrong units can touch at all (`coneEgress`). -/
+
+/-- **Control reach is at most influence reach**: with the inputs fixed, the egress at the wrong set `B` takes at most
+`|V| ^ |O ∩ cone(B)|` values. -/
+theorem card_egress_le_coneEgress [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
+    (f : P.Fns V) (a : S → V) (O : Finset S) (B : Finset U) :
+    (P.egress f a ∅ O B).card ≤ Fintype.card V ^ (P.coneEgress O B).card := by
+  classical
+  have key : ∀ e ∈ P.egress f a ∅ O B,
+      ∃ σ : S → V, (P.Holds a ∅ σ ∧ P.wrong f σ ⊆ B) ∧ (fun o : O => σ o) = e := by
+    intro e he
+    simpa only [egress, mem_image, mem_filter, mem_univ, true_and] using he
+  let g : P.egress f a ∅ O B → (P.coneEgress O B → V) := fun e t =>
+    e.1 ⟨t.1, (P.mem_coneEgress.1 t.2).1⟩
+  have hg : Function.Injective g := by
+    intro e e' h
+    obtain ⟨⟨hσa, hσw⟩, hσe⟩ := Classical.choose_spec (key e.1 e.2)
+    obtain ⟨⟨hτa, hτw⟩, hτe⟩ := Classical.choose_spec (key e'.1 e'.2)
+    apply Subtype.ext
+    funext o
+    by_cases ho : o.1 ∈ P.coneEgress O B
+    · exact congrFun h ⟨o.1, ho⟩
+    · have hoc : o.1 ∉ P.writesOf (P.down B) := fun h' => ho (P.mem_coneEgress.2 ⟨o.2, h'⟩)
+      rw [← hσe, ← hτe]
+      exact P.eq_off_cone hc ha f (fun t ht => (hσa t ht (by simp)).trans (hτa t ht (by simp)).symm) hσw hτw hoc
+  calc (P.egress f a ∅ O B).card = Fintype.card (P.egress f a ∅ O B) := (Fintype.card_coe _).symm
+    _ ≤ Fintype.card (P.coneEgress O B → V) := Fintype.card_le_of_injective g hg
+    _ = Fintype.card V ^ (P.coneEgress O B).card := by rw [Fintype.card_fun, Fintype.card_coe]
+
+/-- **Control reach at a wrong set**: `min(|W(B)|, |O ∩ cone(B)|)` slots' worth of choice. -/
+theorem card_egress_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
+    (f : P.Fns V) (a : S → V) (O : Finset S) (B : Finset U) :
+    (P.egress f a ∅ O B).card ≤ Fintype.card V ^ min (P.writesOf B).card (P.coneEgress O B).card := by
+  rcases le_total (P.writesOf B).card (P.coneEgress O B).card with h | h
+  · rw [min_eq_left h]
+    exact P.card_egress_le hc ha f a (by simp)
+  · rw [min_eq_right h]
+    exact P.card_egress_le_coneEgress hc ha f a O B
+
+/-- **Control reach with at most `m` wrong units**: with the inputs fixed, every unit writing at most `w` slots and every
+wrong set of at most `m` units touching at most `R` slots of `O`, the egress takes at most
+`(∑_{j ≤ m} C(|U|, j)) · |V| ^ min(m w, R)` values: `Reach_ctl(O) ≤ min(m w, Reach_inf(O)) + log C(|U|, ≤ m)`. This
+bounds what any information, not only the secrets, can put on the egress. -/
+theorem card_egressAt_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
+    [Nonempty V] (f : P.Fns V) (a : S → V) (O : Finset S) (m w R : ℕ) (hw : ∀ u, (P.writes u).card ≤ w)
+    (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R) :
+    (P.egressAt f a ∅ O m).card ≤
+      (∑ j ∈ range (m + 1), (Fintype.card U).choose j) * Fintype.card V ^ min (m * w) R := by
+  classical
+  let small : Finset (Finset U) := (range (m + 1)).biUnion fun j => powersetCard j univ
+  have hsub : P.egressAt f a ∅ O m ⊆ small.biUnion fun B => P.egress f a ∅ O B := by
+    intro e he
+    simp only [egressAt, mem_image, mem_filter, mem_univ, true_and] at he
+    obtain ⟨σ, ⟨hσa, hσm⟩, rfl⟩ := he
+    simp only [mem_biUnion]
+    refine ⟨P.wrong f σ, ?_, ?_⟩
+    · simp only [small, mem_biUnion, mem_range, mem_powersetCard]
+      exact ⟨_, Nat.lt_succ_of_le hσm, subset_univ _, rfl⟩
+    · simp only [egress, mem_image, mem_filter, mem_univ, true_and]
+      exact ⟨σ, ⟨hσa, le_rfl⟩, rfl⟩
+  have hB : ∀ B ∈ small, (P.egress f a ∅ O B).card ≤ Fintype.card V ^ min (m * w) R := by
+    intro B hB
+    simp only [small, mem_biUnion, mem_range, mem_powersetCard] at hB
+    obtain ⟨j, hj, -, hBj⟩ := hB
+    have hBm : B.card ≤ m := by omega
+    refine (P.card_egress_le_reach hc ha f a O B).trans (Nat.pow_le_pow_right Fintype.card_pos ?_)
+    refine min_le_min ?_ (hR B hBm)
+    calc (P.writesOf B).card ≤ ∑ u ∈ B, (P.writes u).card := P.card_writesOf_le B
+      _ ≤ ∑ _u ∈ B, w := sum_le_sum fun u _ => hw u
+      _ = B.card * w := by simp
+      _ ≤ m * w := Nat.mul_le_mul_right _ hBm
+  have hsmall : small.card ≤ ∑ j ∈ range (m + 1), (Fintype.card U).choose j := by
+    refine card_biUnion_le.trans (le_of_eq (sum_congr rfl fun j _ => ?_))
+    rw [card_powersetCard, card_univ]
+  calc (P.egressAt f a ∅ O m).card ≤ (small.biUnion fun B => P.egress f a ∅ O B).card := card_le_card hsub
+    _ ≤ ∑ B ∈ small, (P.egress f a ∅ O B).card := card_biUnion_le
+    _ ≤ ∑ _B ∈ small, Fintype.card V ^ min (m * w) R := sum_le_sum hB
+    _ = small.card * Fintype.card V ^ min (m * w) R := by simp
+    _ ≤ _ := Nat.mul_le_mul_right _ hsmall
+
+/-- **Leakage about the secrets is at most influence reach**: with at most `m` wrong units, each wrong set touching at
+most `R` slots of `O`, the egress takes at most `#honest · (∑_{j ≤ m} C(|U|, j)) · |V| ^ R` values, so the leakage beyond
+the honest egress is at most `Reach_inf(O) + log C(|U|, ≤ m)`. Inside the cone a value may be any function of the
+secrets (`scale_amp`), so the wrong units' own width `m w` does not bound it. -/
+theorem card_leak_le_reach [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V] [DecidableEq V]
+    [Nonempty V] (f : P.Fns V) (O : Finset S) (m R : ℕ)
+    (hR : ∀ B : Finset U, B.card ≤ m → (P.coneEgress O B).card ≤ R) {ι : Type} (Cl : Finset ι)
+    (σ honest : ι → S → V) (hin : ∀ i ∈ Cl, ∀ t ∈ P.input, σ i t = honest i t)
+    (hh : ∀ i ∈ Cl, ∀ u, P.Correct f (honest i) u) (hm : ∀ i ∈ Cl, (P.wrong f (σ i)).card ≤ m) :
+    (Cl.image fun i (o : O) => σ i o).card ≤ (Cl.image fun i (o : O) => honest i o).card *
+      (∑ j ∈ range (m + 1), (Fintype.card U).choose j) * Fintype.card V ^ R := by
+  classical
+  let small : Finset (Finset U) := (range (m + 1)).biUnion fun j => powersetCard j univ
+  have hB : ∀ i ∈ Cl, ∃ B ∈ small, P.wrong f (σ i) ⊆ B := fun i hi => ⟨_, by
+    simp only [small, mem_biUnion, mem_range, mem_powersetCard]
+    exact ⟨_, Nat.lt_succ_of_le (hm i hi), subset_univ _, rfl⟩, Subset.refl _⟩
+  refine (P.card_leak_le_cone hc ha f O small Cl σ honest hin hh hB).trans ?_
+  rw [Nat.mul_assoc]
+  refine Nat.mul_le_mul_left _ ?_
+  calc ∑ B ∈ small, Fintype.card V ^ (P.coneEgress O B).card ≤ ∑ _B ∈ small, Fintype.card V ^ R := by
+        refine sum_le_sum fun B hB => Nat.pow_le_pow_right Fintype.card_pos (hR B ?_)
+        simp only [small, mem_biUnion, mem_range, mem_powersetCard] at hB
+        obtain ⟨j, hj, -, hBj⟩ := hB
+        omega
+    _ = small.card * Fintype.card V ^ R := by simp
+    _ ≤ _ := Nat.mul_le_mul_right _ (card_biUnion_le.trans (le_of_eq (sum_congr rfl fun j _ => by
+        rw [card_powersetCard, card_univ])))
 
 end Population.Dataflow
 
