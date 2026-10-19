@@ -32,6 +32,10 @@ OTHER_FAMILIES = {
     "hopper": ({"Fa3InvSum", "HopperBF16WgmmaDot16"}, "FA3's reciprocal primitive and the Hopper BF16 dot (the B1 Hopper profile)"),
     "fp8": ({"E4M3"}, "the e4m3 type of DSA's quantized indexer keys"),
     "topp_word_gates": ({"I32ToF32"}, "the int-to-float conversion primitive DSA's top-k reads"),
+    "value_inputs": ({"AttentionHeadV10", "AttentionHeadV12", "AttentionHeadV13", "AttentionV10", "AttentionV12", "AttentionV13",
+                      "AttnBlockV10", "AttnBlockV12", "AttnBlockV13", "AttentionHeadSoftcapV5", "AttentionSoftcapV5",
+                      "AttnBlockSoftcapV5"},
+                     "the chains with the softmax scale or the softcap's words an input, which the Boolean versions lower"),
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models

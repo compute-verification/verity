@@ -11,7 +11,7 @@ import pytest
 
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import Builder, bind
+from verity.ml.circuits.defs import Builder, bind, composite
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.pipeline import boolean_replay as BR
@@ -75,12 +75,18 @@ def test_a_call_is_evaluated_on_bits_by_its_boolean_version_and_equals_its_word_
     assert ev(_Index({}), r, {}, [gu]).keys() == {"out"}                     # an interior row: keyed by its port
 
 
+@composite("WordOnlyFixture", 1, ["K"], lambda S: ((("x", Array(S.K, W16)),), W16), conformance="protocol-defined")
+def WordOnlyFixture(B, S, x):
+    """A word Definition no registered Boolean Definition names as its word."""
+    return x[0]
+
+
 def test_a_call_without_a_boolean_version_is_not_evaluated_by_name(tmp_path) -> None:
-    nodes, r = _row(bind(b1.Gemm, K=4, N=2), Array(4, W16), Array(2, Array(4, W16)))
+    nodes, r = _row(bind(WordOnlyFixture, K=4), Array(4, W16))
     ev = BR.BooleanRows(nodes, 0, tmp_path / "rows.jsonl")
     with pytest.raises(Declined, match="no Boolean version"):
-        ev(_Index({}), r, {}, [np.zeros(4, np.uint16), np.zeros(8, np.uint16)])
-    assert ev.sigma == {r["spec"]: None} and "Gemm" in ev.why[r["spec"]]
+        ev(_Index({}), r, {}, [np.zeros(4, np.uint16)])
+    assert ev.sigma == {r["spec"]: None} and "WordOnlyFixture" in ev.why[r["spec"]]
     assert "no Boolean version" in json.loads((tmp_path / "rows.jsonl").read_text())["why"]
     with pytest.raises(Declined, match="is no row of the Program"):
         ev.version("Unknown_v1")
@@ -110,7 +116,7 @@ def test_a_picks_stated_peak_bounds_what_its_evaluation_allocates(tmp_path) -> N
 
     assert held() <= ev.peak_bytes(r)
     assert held() <= ev.peak_bytes(r) / BR.PEAK_MARGIN
-    nodes, r = _row(bind(b1.Gemm, K=4, N=2), Array(4, W16), Array(2, Array(4, W16)))
+    nodes, r = _row(bind(WordOnlyFixture, K=4), Array(4, W16))
     assert BR.BooleanRows(nodes, 0).peak_bytes(r) == 0                   # declined before it allocates
 
 
