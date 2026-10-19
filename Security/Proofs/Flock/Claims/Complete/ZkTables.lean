@@ -81,7 +81,8 @@ from the JSON specification and those four (`complete_jsonT`); at table `0` of a
 (`CaseZk.toCase`, `RunZk.toRun`) they give `complete_zk`'s `RepShapedZk`, `ProverRunsZk`, `LigeritoZk` and `Inner`
 (`repShapedZk_of`, `proverRunsZk_of`, `lgInnerZk_of`). For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
-`honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β` and
-pair-coin refusals at their slots (`Pass`: `sessionPZk_pass`, each rep sending exactly its rounds, `repPZk_exact`),
+`honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,
+pair-coin and rank refusals at their slots (`Pass`: `sessionPZk_pass`, each rep sending exactly its rounds,
+`repPZk_exact`, its rank check at its claim points at its sends' coins, `repPZk_rank`),
 so one that does not return is sent as `[]` once its sends are answered (`Refuse`: `honestP_err`, `honestPR_err`,
 `feed_sim_ge`). -/
