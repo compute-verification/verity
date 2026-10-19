@@ -38,7 +38,11 @@ def SheetClock (S : Sheet K P) (Q : Run K) : Prop := 0 < Q.clock ∧ Q.clock ≤
 at most one warp instruction a cycle, whatever its pipe, so the run's warp instructions per SMSP are at most its cycles
 per SMSP (whitepapers Volta through Blackwell: four partitions an SM, each with one warp scheduler and one dispatch
 unit). **A2u**: the classes `K` include the uniform-datapath instructions, each taking an issue slot; no vendor
-document states it (decision 84's issue ceiling). -/
+document states it (decision 84's issue ceiling). **Catch-all**: every warp instruction takes at least one issue slot,
+whether or not its class is listed, so `K` counts every warp instruction the run issues, one no other class names in
+the device's catch-all class, priced at its issue slot alone (sm_120's `NOROW`, the exporter's `CATCH_ALL`). A device
+whose classes have none leaves an unlisted instruction free on every row (RT2-HOPPER-2,
+note:20261019T1140Z-draft-rt2-hopper). -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's
@@ -69,7 +73,9 @@ wgmma m64n256k32: 4096 a warp; tcgen05.mma 128 × 256: 32768; a uniform instruct
 (`vec`) is a lane class whose destination is at most 64 bits, so the vector- and table-headed words are at most two a
 lane of the vector instructions the labelling gives them. A table word's head is the vector instruction that reads
 the table, not the load that brings it, which is operand delivery (priced by `b_T`) and may write more: a 128-bit load
-writes four words a lane (RT2-120-6). -/
+writes four words a lane (RT2-120-6). sm_120's catch-all `NOROW` (A2) is a vector class, so A6 takes every
+instruction no other class names to head at most two words a lane; one with a wider destination is assumed to be a
+memory access (`LDL.128`, `LD.128`), whose words are operand delivery like a listed load's. -/
 def SheetWords (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   (∀ t, A.words (.writer t) ≤ Z.omega t * A.nword (.writer t) (Z.cls t)) ∧
     A.words .vector ≤ 2 * (32 * ∑ k ∈ Z.vec, A.nword .vector k) ∧

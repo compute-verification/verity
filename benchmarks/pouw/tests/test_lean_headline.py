@@ -76,6 +76,17 @@ def test_the_instance_meets_the_headline():
     assert set(H.VEC_64) <= set(i.vec) and len(set(i.vec)) == len(i.vec)
 
 
+def test_the_catch_all_takes_its_issue_slot_alone():
+    """A2's catch-all (RT2-HOPPER-2): the census counts MOV in NOROW, and DS-120 prices NOROW at one issue slot and on
+    no other row, so an instruction no other class names, counted there, is never free; `instance` refuses a class off
+    one slot on DS_issue, so counting it there moves no bound."""
+    i = H.instance()
+    k = H.CATCH_ALL["sm_120"]
+    assert loads.class_of("MOV") == k and k in i.vec
+    rows = ["DS_issue", "DS_tensor", "DS_smem", *H.SM120.pipes]
+    assert {r: H.coef(i, r, k) for r in rows} == {r: Fraction(r == "DS_issue") for r in rows}
+
+
 def test_the_measured_instance_meets_its_reading():
     """On VF3s-16 π* is JI3t_0 alone and ♭'s bound is its load there, w* is honest's IMMA16832 at its 128 words, no
     writer kind is the forms' fallback line or UNI64, and the bound Sm120MeasuredHeadline's proof reads off the identity

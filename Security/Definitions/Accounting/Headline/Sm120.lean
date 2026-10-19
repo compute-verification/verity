@@ -7,7 +7,8 @@ Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`be
 checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
 file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
 
-* `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them.
+* `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them. `NOROW` is A2's
+  catch-all: every warp instruction no other class names counts there, at its issue slot alone.
 * `ds120`, `sheet`: the RTX PRO 6000's data sheet (DS-120): f_max 2430 MHz (the driver's reported maximum, SPEC's P1: no
   data sheet states it); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense
   equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes IMAD, LOP, XU and SHFL with their

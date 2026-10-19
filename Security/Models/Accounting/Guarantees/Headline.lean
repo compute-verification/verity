@@ -130,7 +130,9 @@ IMAD.WIDE meets it (RT2-120-6).
 This ε rests on A2u: A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which no vendor
 document states, and DS-120 has no uniform-pipe row. Without A2u the machine model's LP gives 2.79% with a measured
 uniform-pipe row and 100% with none (RT-MACHINE-4). Measured, it holds at saturation: beside a saturating vector
-stream no kernel's total rate exceeds 1 over 279 measurements (r20261019-120714-132b, RT2-120-4). -/
+stream no kernel's total rate exceeds 1 over 279 measurements (r20261019-120714-132b, RT2-120-4). A2's catch-all
+counts an instruction the 122 classes don't name in `NOROW`, at its issue slot alone, so no instruction is free at
+`π*`, where every class costs one slot; no coefficient the bound reads moves (RT2-HOPPER-2). -/
 def Sm120SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ),
@@ -176,7 +178,11 @@ bit-exact census programs load VF3r-16's `π*`, JI3s_0, at up to 1.0383, and hon
 (I1) on its rows is false of runs that ran (RT2-LOGIC-9, note:20261019T1140Z-draft-rt2-logic). No census program
 loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`). The credit is 2.9% lower: ♭'s bound
 `B_♭` is 19.259 a unit at JI3t_0 against VF3r-16's 19.829 at JI3s_0. The ε reads `ln(8/7) ≥ 2/15`, its series'
-first term, where the sheet's reads `1/8`: 0.588% at the data, under 0.591%. -/
+first term, where the sheet's reads `1/8`: 0.588% at the data, under 0.591%.
+
+(I1) has no catch-all: VF3s-16's rows price the 122 census classes it measured, and an instruction none of them names
+is on no row. A2's catch-all is the sheet's: VF3s-16 itself prices some listed classes (UNI64, the TMA forms) at no
+issue slot, so "at its issue slot alone" is no measured fact here (RT2-HOPPER-2). -/
 def Sm120MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δfork δzk : ℝ),

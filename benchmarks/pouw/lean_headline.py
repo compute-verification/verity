@@ -96,6 +96,7 @@ SM120 = Family(
     "an IMMA.16832 at L = 32",
     "fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions a word) and alone on the uniform datapath (4 a word)")
 FAMILIES = (SM120,)
+CATCH_ALL = {"sm_120": "NOROW"}    # A2's catch-all by device: every warp instruction no other class names, issue alone
 
 DEVICE, DESIGN, FMAX = SM120.device, SM120.design, SM120.fmax
 UNIFORM, SKIP, EPS = SM120.uniform, SM120.skip, SM120.eps
@@ -223,6 +224,8 @@ def instance(fam: Family = SM120) -> Instance:
             raise SystemExit(f"{fam.device}: {k} is on pipes {on} at {c}, not one pipe at 128/width")
         pipe.append(pipes[on[0]] if on else None)
         smem.append(int(c["DS_smem"] * 32) if "DS_smem" in c else 0)
+        if k == CATCH_ALL.get(fam.key) and set(c) != {"DS_issue"}:
+            raise SystemExit(f"{fam.device}: the catch-all {k} is priced at {c}, not at its issue slot alone")
     words = h.words * h.depth / d.L
     if words != int(words):
         raise SystemExit(f"{fam.design}: {words} committed words an MMA is not whole")
@@ -411,7 +414,9 @@ def render(i: Instance) -> str:
         f" and the uniform {' and '.join(uni)}" if uni else "")
     bullets = [
         f"`classes`: the {len(i.classes)} instruction classes of the {f.device} census, in the order `Fin "
-        f"{len(i.classes)}` indexes them.",
+        f"{len(i.classes)}` indexes them." + (
+            f" `{CATCH_ALL[f.key]}` is A2's catch-all: every warp instruction no other class names counts there, "
+            f"at its issue slot alone." if f.key in CATCH_ALL else ""),
         f"`{f.device.replace('-', '').lower()}`, `sheet`: the {f.gpu}'s data sheet ({f.device}): f_max {f.fmax} MHz "
         f"({f.fmax_src}); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense "
         f"equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
