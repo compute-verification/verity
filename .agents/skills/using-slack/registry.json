@@ -83,6 +83,7 @@
         "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
+        "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocol_options/sampled_proofs.py"
