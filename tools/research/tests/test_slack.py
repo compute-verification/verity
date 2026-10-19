@@ -2,6 +2,7 @@
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
+import base64
 import email.message
 import http.server
 import io
@@ -15,7 +16,7 @@ import tempfile
 import threading
 import urllib.error
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -246,7 +247,9 @@ def match(capsys, handle, ev) -> tuple[int, str]:
 def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
-    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel", "ask-the-team"}
+    assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel", "ask-the-team", "resource-accounting"}
+    assert slack.subscribers(reg, "resource-accounting") == ["compute-accounting", "memory-accounting", "network-accounting",
+                                                            "proofs", "kernels"]
     assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
@@ -1283,6 +1286,95 @@ def test_chat_dry_run_prints_the_plan_and_changes_nothing(fake, registry, people
     rc, out, _ = run(capsys, "chat", "close", "luke", "--dry-run")
     assert rc == 0 and len(fake.calls) == calls and (people_d / "luke.json").read_text() == before
     assert "plan: archived #chat-luke" in out and '"closed": "2026-10-19T17:30Z"' in out
+
+
+def test_chat_expect_publishes_someone_invited_with_no_channel_and_open_takes_them_over(fake, registry, people_d, capsys,
+                                                                                       monkeypatch):
+    """Daniel invites a newcomer to the workspace: `expect` publishes them as expected, with no channel and no Slack call,
+    which `chat list` shows and no command routes by.  Once they join, `open` (the Slack events service's, at team_join)
+    makes their chat and the record becomes an open one, keeping the note."""
+    rc, out, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org", "--note", "a visiting researcher")
+    assert rc == 0, err
+    expected = {"schema": slack.PERSON_SCHEMA, "name": "Luke", "slack_user": None, "email": "luke@example.org",
+                "note": "a visiting researcher", "status": "expected", "channel": {"key": "chat-luke", "id": None},
+                "expected": "2026-10-19T17:30Z", "opened": None, "closed": None}
+    assert json.loads((people_d / "luke.json").read_text()) == expected and "pushed" in out and not fake.calls
+    assert "the Slack events service opens #chat-luke when they join the workspace (team_join)" in out
+    assert run(capsys, "chat", "list")[1] == \
+        "#chat-luke (no channel): Luke (no Slack id yet, luke@example.org), expected since 2026-10-19T17:30Z, no channel yet\n"
+    reg = slack.load_registry(registry)
+    assert reg["collaborators"] == [] and "chat-luke" not in slack.chat_channels(reg)
+    assert [r["name"] for r in slack.ChatPeople().expected()] == ["Luke"] and slack.ChatPeople().open() == []
+    assert "unchanged" in run(capsys, "chat", "expect", "luke", "--email", "luke@example.org")[1]     # the note is kept
+    for argv, says in ((["luke-two", "--email", "luke@example.org"], "luke@example.org is #chat-luke's already"),
+                       (["grace"], "chat expect needs --email E"), (["grace", "--email", "grace"], "chat expect needs --email E"),
+                       (["daniel", "--email", "d@example.org"], "posts as 'daniel', which a handle or another person has")):
+        rc, _, err = run(capsys, "chat", "expect", *argv)
+        assert rc == 2 and says in err, (argv, err)
+
+    chat_users(fake)
+    monkeypatch.setattr(slack, "_now", lambda: OPENED + timedelta(days=1))
+    rc, out, err = run(capsys, "chat", "open", "luke", "--user", LUKE, "--start-here", START)
+    assert rc == 0, err
+    (c,) = fake.channels.values()
+    assert c["members"] == [BOT_USER, CURSOR_BOT, LUKE] and len(fake.pins) == 1 and fake.bookmarks[0]["link"] == START
+    assert json.loads((people_d / "luke.json").read_text()) == {
+        "schema": slack.PERSON_SCHEMA, "name": "Luke Example", "slack_user": LUKE, "email": "luke@example.org",
+        "note": "a visiting researcher", "channel": {"key": "chat-luke", "id": c["id"]}, "opened": "2026-10-20T17:30Z",
+        "closed": None}
+    assert slack.ChatPeople().expected() == [] and slack.person({"user": LUKE}, slack.load_registry(registry))[1] == "collaborator"
+    rc, _, err = run(capsys, "chat", "expect", "luke", "--email", "luke@example.org")
+    assert rc == 2 and "#chat-luke is open already (Luke Example)" in err
+
+
+def test_an_expected_person_is_closed_without_an_archive_and_the_newer_copy_counts():
+    luke = chat_person("chat-luke", None, "Luke", channel={"key": "chat-luke", "id": None}, status="expected",
+                       email="luke@example.org", expected="2026-10-19T17:30Z", opened=None)
+    opened = chat_person("chat-luke", LUKE, "Luke Example", opened="2026-10-19T18:00Z")
+    assert slack._person_ok(luke, "luke") and not slack._person_ok({**luke, "email": None}, "luke")
+    assert not slack._person_ok({**luke, "channel": {"key": "chat-luke", "id": "CCHATLUKE"}}, "luke")
+    assert slack._newer(luke, opened) == opened and slack._newer(opened, luke) == opened      # the clone's, or a stale publish
+    again = {**luke, "expected": "2026-10-21T09:00Z"}
+    closed = {**opened, "closed": "2026-10-20T09:00Z"}
+    assert slack._newer(closed, again) == again and slack._newer(again, closed) == again          # expected anew after a close
+    assert slack._newer({**opened, "opened": "2026-10-19T17:30Z"}, luke)["slack_user"] == LUKE    # one minute: the open one
+
+
+def test_chat_close_of_an_expected_person_archives_nothing(fake, registry, people_d, capsys):
+    assert run(capsys, "chat", "expect", "grace", "--email", "grace@example.org")[0] == 0
+    rc, out, _ = run(capsys, "chat", "close", "grace")
+    assert rc == 0 and "Grace is no longer expected (#chat-grace was never opened)" in out
+    assert [m for m, _ in fake.calls] == [] and json.loads((people_d / "grace.json").read_text())["closed"] == "2026-10-19T17:30Z"
+    assert slack.ChatPeople().expected() == []
+
+
+def test_without_a_notes_clone_a_person_is_published_and_listed_through_githubs_contents_api(tmp_path, monkeypatch):
+    """The Slack events service runs with no clone and no git: it publishes people.d through the notes repo's contents API
+    (with the file's sha when it exists) and lists the directory there; the raw host lists nothing."""
+    (tmp_path / "no-clone").mkdir()
+    monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "dummy-notes-token")
+    monkeypatch.delenv("RESEARCH_ROUTES_URL", raising=False)
+    calls = []
+
+    def api(method, rel, body=None):
+        calls.append((method, rel, body))
+        if method == "GET" and rel == "people.d":
+            return [{"name": "grace.json", "type": "file"}, {"name": "README.md", "type": "file"}, {"name": "Bad.json"}]
+        return {"sha": "abc123"} if method == "GET" else {"content": {}}
+    monkeypatch.setattr(slack, "notes_api", api)
+    rec = chat_person("chat-grace", "UGRACE", "Grace Hopper")
+    assert slack.publish_route(tmp_path / "no-clone", rec, "chat open grace", slack.PEOPLE_DIR, "grace") == \
+        "notes: pushed people.d/grace.json (GitHub's contents API)"
+    (get, put) = calls
+    assert get == ("GET", "people.d/grace.json", None) and put[:2] == ("PUT", "people.d/grace.json")
+    assert put[2]["sha"] == "abc123" and put[2]["branch"] == "main" and put[2]["message"] == "chat open grace"
+    assert json.loads(base64.b64decode(put[2]["content"])) == rec
+    book = slack.ChatPeople(root=tmp_path / "no-clone", get=lambda url: None)
+    assert book.published() == ["grace"]
+    assert slack.ChatPeople(root=tmp_path / "no-clone", base="https://example.org/routes.d/", get=lambda url: None).published() == []
+    monkeypatch.delenv("RESEARCH_NOTES_TOKEN")
+    with pytest.raises(slack.SlackError, match="no notes clone"):
+        slack.publish_route(tmp_path / "no-clone", rec, "chat open grace", slack.PEOPLE_DIR, "grace")
 
 
 def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_and_its_doorbell_carries_no_text(

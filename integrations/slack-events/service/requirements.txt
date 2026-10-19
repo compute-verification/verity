@@ -1,4 +1,0 @@
-fastapi==0.149.0
-vercel-queue==0.9.2
-upstash-redis==1.8.0
-tzdata==2026.5
