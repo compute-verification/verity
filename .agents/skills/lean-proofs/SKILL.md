@@ -62,8 +62,11 @@ Build on a CPU machine; `Security/Proofs` (package `security_proofs`, on ArkLib)
 update`, and never change a `require`, a revision or `lean-toolchain` in a feature PR. Its build of C-Flock's soundness
 proofs peaks at 15–24 GB of memory, so `check.py` and the fast path refuse a package that pins ArkLib on a machine with
 less than 24 GiB (memory and swap, within its cgroup) and print the fast path's line on a node; a 16 GB agent VM runs
-it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). Give a queued job
-`--mem-gb 32`.
+it there. `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor (0: none, say after adding a swapfile). A whole-Security audit
+(`Security`, which audits Security/Proofs beside it) needs more: with 48 replay threads it peaked at 189 GiB, in its kernel
+replays, and died at 64 and 96 GiB (r20261018-175656-1c85). `check.py` now gives a heavy replay one thread per 4 GiB and
+runs heavy replays one at a time, and refuses that audit below 64 GiB. For a record, use the fast path, which skips the
+replay; a queued `check.py --build` of Security takes `--kind lean-audit`, which brings its memory.
 
 To check your records, or get the `--update` printout of what changed (what Daniel's DM carries), without a build of
 your own, use the fast path on a shared machine. Don't run `check.py --build --update` from a fresh tree there: that took
