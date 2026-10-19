@@ -9,12 +9,13 @@ flags) as a `Claims.Verifier`, built as `FlockDeploy.V true` is: the same messag
 rounds, the last message, each round answered by its live coin) and the same decision (`FlockDeploy.decision`: the
 shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks), at the recursive setup
 (`RecIns.setup`) where `FlockDeploy.V` has Flock's (`Ins.setup`), which refuses every V* statement; then the verdict's
-last refusal (`fullDrawO`: `RecSetup.fullDraw` at the record's draw, which refuses a recursive session without
-`--rec-inner` and, under it, a draw short of every unit), which `FlockDeploy.V` doesn't run.
+last refusals (`fullDrawO`: `RecSetup.fullDraw` at the record's draw, which refuses a recursive session without
+`--rec-inner` and, under it, a draw short of every unit; then `RecSetup.innerDrawn`, which refuses a session over an
+inner session whose record holds no draw), which `FlockDeploy.V` doesn't run.
 
 `nextO_rej`, `nextO_coin` and `nextO_decide` are its three steps; at the SHA-512 oracle a decision accepts exactly when
 the deployed `Zk.verify` accepts the record and proof files at the recursive setup's tables, the custody checks pass and
-so does the full-draw refusal (`nextO_decide_sha512`).
+so do the verdict's last refusals (`fullDrawO`, `nextO_decide_sha512`).
 
 `deployZkRec rel` is the record Flock's claims read at that verifier: `deployZk rel`'s code, decoder spec and numbers,
 each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtableO`, `N₀O`, `weightO`).
@@ -59,14 +60,30 @@ def recOfO (x : Claims.Msg) : Bool :=
   | some s => s.part.isSome || s.bindings.isSome || s.rows.isSome
   | none => false
 
-/-- **The verdict's last refusal** (`RecSetup.fullDraw`, as `verifyCmd` calls it at the record's draw): a recursive
-session without the verifier's inner shape (`RecSetup.noInner`), and under that shape a V* session whose record's draw
-is not every unit of its population. -/
-def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
-  (RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record).isOk
+/-- Check 5's source at the statement (`RecCoins.filesInput`'s, with the inner session's record), where it reads. -/
+def srcOfO (x : Claims.Msg) : Option RecCoins.Source := (insO x).bind (·.src)
 
-/-- The outer verifier's next message: at a decision, the decision, then the verdict's full-draw refusal, which makes no
-SHA-512 call. -/
+/-- **The verdict's last refusals**, as `verifyCmd` calls them: `RecSetup.fullDraw` at the record's draw (a recursive
+session without the verifier's inner shape, `RecSetup.noInner`, and under that shape a V* session whose record's draw is
+not every unit of its population), then `RecSetup.innerDrawn` (a session over an inner session whose record holds no
+draw). -/
+def fullDrawO (x : Claims.Msg) (f : Final) : Bool :=
+  (do
+    RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record
+    RecSetup.innerDrawn (srcOfO x)).isOk
+
+/-- Where the verdict's last refusals pass, so does `RecSetup.fullDraw`, the first of them. -/
+theorem fullDrawO_fullDraw {x : Claims.Msg} {f : Final} (h : fullDrawO x f = true) :
+    (RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record).isOk = true := by
+  unfold fullDrawO at h
+  cases hf : RecSetup.fullDraw (innerOfO x) (recOfO x) (Witness.recordDraw f.record) f.record with
+  | error e =>
+    rw [hf] at h
+    first | cases h | exact absurd h (by simp [bind, Except.bind, Except.isOk, Except.toBool])
+  | ok u => rfl
+
+/-- The outer verifier's next message: at a decision, the decision, then the verdict's last refusals (`fullDrawO`), which
+make no SHA-512 call. -/
 def nextO (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Claims.OC Claims.Out :=
   match actO x as cs with
   | .rej => .ret .rej
@@ -92,7 +109,7 @@ theorem nextO_coin (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List C
     {c : Coin} (h : actO x as cs = .coin c) : (nextO x as cs).eval H = (.msg c.bytes, []) := by
   simp only [nextO, h, Claims.OC.eval]
 
-/-- At a decision, the step is the decision's, refused where the full-draw refusal fails, with the decision's oracle
+/-- At a decision, the step is the decision's, refused where the verdict's last refusals fail, with the decision's oracle
 log. -/
 theorem nextO_decide_eval (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
@@ -125,7 +142,7 @@ theorem outO_decide (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (s : Ins) (
       | ok u' => simp [bind, Except.bind, hv, hc]
 
 /-- **The outer verifier's decision against `H`**: it accepts exactly when the decision does (`outO_decide`) and the
-verdict's full-draw refusal passes. -/
+verdict's last refusals pass. -/
 theorem nextO_decide (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
@@ -198,7 +215,7 @@ theorem actO_decide_setupWith {x : Claims.Msg} {as : List Claims.Msg} {cs : List
 
 /-- **The outer verifier's decision at SHA-512**: it accepts exactly when the deployed `verify --zk` with the recursive
 inputs (`Zk.verify` at the recursive setup's tables) accepts the record and proof files, the custody checks pass, and
-the verdict's full-draw refusal passes. -/
+the verdict's last refusals pass. -/
 theorem nextO_decide_sha512 {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {f : Final} (h : actO x as cs = .decide s spec sts link c₁ mids f) :
@@ -272,7 +289,7 @@ theorem εtableO_nonneg (x : Claims.Msg) : 0 ≤ εtableO x := by
 /-! ## The instance -/
 
 /-- **The outer verifier**, as the record Flock's claims read: `deployZk rel`'s code and numbers at the recursive
-setup, with `deployZk`'s reference prover and completeness error. -/
+setup, with `deployZk`'s honest prover and completeness error. -/
 noncomputable def deployZkRec (rel : Readable.Parsed → Readable.Relation) :
     Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.ZkTrace where
   zk := true

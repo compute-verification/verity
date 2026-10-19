@@ -11,7 +11,8 @@ of a good case, its rep `r` from the sends after the link's and the `2 i + r` ea
 
 * `TableT`: a table the masked scope admits (`25 ≤ m ≤ 35`, hm96-SHA-512, regions that fit) and its trace, the
   one-table trace from bit `0` of a witness that satisfies it alone at the deployed relation (`Case.tableT`, from
-  `Readable.relS_only`).
+  `Readable.relS_only`), the table a parsed one (`StmtT`: well formed, its matrices `matA`/`matB`, its ranges
+  foldable).
 * `RepIn`: the rep's inputs: the table's `--zk` schedule, its masked level-0 commitment of its packed trace under the
   tape's row, its extra claims at link points of its `m_pts`, and its pads' commitment.
 * `CoinsT`: the coins a good case gives a rep from `n` sends (`Case.coinsT`): its sends fit the verifier's coins (the
@@ -39,12 +40,28 @@ open FlockSoundness.Discharge.Composed (maskWordsOf)
 
 /-! ## A table, its rep's inputs, and its coins -/
 
+/-- **What a parsed table's circuit gives its statement**: it is well formed, its regions are, its placed matrices
+are `matA` and `matB`, and the fold folds each of its ranges (`SlotOk`). -/
+def StmtT (st : Flock.Stmt) : Prop :=
+  (∃ _ : FlockSoundness.Refine.StmtWF st, FlockSoundness.Refine.RegionsWF st ∧
+    ∀ a b : Fin (2 ^ st.c.kLog), FlockLevel3.placedA st a b = FlockSoundness.Refine.matA st a.val b.val ∧
+      FlockLevel3.placedB st a b = FlockSoundness.Refine.matB st a.val b.val) ∧
+  ∀ r ∈ st.c.ranges.toList, SlotOk st.c r
+
+/-- Each table the verifier's parser reads has `StmtT` (`Readable.tableAt_model`, and `HmRow.check`'s range loop). -/
+theorem stmtT_of {r : Readable.Read} {sts : Array Flock.Stmt} (hs : r.tablesOf = some sts)
+    (ht : r.tags.typed = false) (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) : StmtT sts[j] := by
+  obtain ⟨hwf, hrw, hmat⟩ := Readable.tableAt_model hs ht hpi hj
+  obtain ⟨hc, -⟩ := Readable.tableAt hs ht hpi hj
+  obtain ⟨ls, hls⟩ := circuitOf_check ht hc
+  exact ⟨⟨hwf, hrw, hmat⟩, hm_check_kinds hls⟩
+
 /-- **A table and its honest trace**: the masked scope admits the table, and the trace is the one-table trace from bit
-`0` of a witness that satisfies the table alone at the deployed relation. -/
+`0` of a witness that satisfies the table alone at the deployed relation; the table is a parsed one (`StmtT`). -/
 def TableT (st : Flock.Stmt) (tr : Trace) : Prop :=
   25 ≤ st.m ∧ st.m ≤ 35 ∧ st.merkle = MerkleScheme.hm96Sha512 ∧ RegionsFit st ∧
     ∃ (p : Readable.Parsed) (w : Claims.Flock.Wit), p.sts = #[st] ∧
-      Claims.Flock.RelS (Readable.toReadable Readable.relation p) w ∧ tr = traceOf st w.hid.toArray 0
+      Claims.Flock.RelS (Readable.toReadable Readable.relation p) w ∧ tr = traceOf st w.hid.toArray 0 ∧ StmtT st
 
 /-- **A rep's inputs** at the tape's row `i`: the table's `--zk` schedule `v`, its masked level-0 commitment `cm` of
 its packed trace, its extra claims `e` at the points `pts`, each of the table's `m_pts`, and its pads' commitment
@@ -100,12 +117,13 @@ section Props
 
 variable (H : Claims.Msg → Claims.Msg)
 
-/-- **The honest masked rep proof fits its shape**, at a table: on its inputs, each masked proof the rep returns, at
-any earlier claim points and words, is `Shaped` at the shape the masked verifier decodes it at. -/
+/-- **The honest masked rep proof fits its shape**, at a table: on its inputs, at most 2,048 extra claims (a good
+case's, `Case.extras_le`), each masked proof the rep returns, at any earlier claim points and words, is `Shaped` at
+the shape the masked verifier decodes it at. -/
 def RepShapedT : Prop :=
   Claims.Out64 H → ∀ (st : Flock.Stmt) (tr : Trace), TableT st tr → ∀ (ω : TapeZk) (i : ℕ) (d : ByteArray) {k : ℕ}
     (r : Fin k → Coin) (v : Schedule × ℕ) (cm : Commit) (pts : Array (Array F128)) (e : Array Claim) (rep : ℕ)
-    (ic : InnerCommit), RepIn H st tr ω i v cm pts e rep ic → ∀ prior ws,
+    (ic : InnerCommit), RepIn H st tr ω i v cm pts e rep ic → e.size ≤ 2048 → ∀ prior ws,
     Ret (repT H r st tr ω i d v cm e rep ic prior ws) fun pt =>
       FlockSoundness.Discharge.ZkView.Shaped (shapeZk (Setup.ofCircuit st) v.1 e.size) pt.1
 
@@ -181,8 +199,11 @@ theorem Case.tableT (c : Case H Readable.relation) {i : ℕ} (hi : i < c.sts.siz
   have hone : (p.only i).sts = #[c.sts[i]] := by
     show #[p.sts[i]!] = _
     rw [hpe, getElem!_pos c.sts i hi]
+  have htab := Readable.tablesOf_of_parses hps
+  rw [hpe] at htab
   rw [traces_getElem c.sts c.w hi, getElem!_pos c.sts i hi]
-  exact ⟨h1, h2, h3, c.ready_parts.2.2.1 _ (Array.getElem_mem hi), p.only i, _, hone, hJ, rfl⟩
+  exact ⟨h1, h2, h3, c.ready_parts.2.2.1 _ (Array.getElem_mem hi), p.only i, _, hone, hJ, rfl,
+    stmtT_of htab hty hpi hi⟩
 
 /-- The link's points have each table's `m_pts`. -/
 theorem Case.points_mPts (c : Case H rel) {i : ℕ} (hi : i < c.sts.size) :
@@ -197,6 +218,13 @@ theorem extras_size {spec : SessionSpec} {st : Flock.Stmt} {c : Coin} {e : Array
     (he : (Setup.ofCircuit st).extra (pointsOf spec c) = .ok e) : e.size = spec.points * st.regions.size := by
   rw [FlockDeploy.extraClaims_size (st := st) he]
   simp [pointsOf, Nat.mul_comm]
+
+/-- **A good case's table has at most 2,048 extra claims** at the link's points (`Case.points_regions`). -/
+theorem Case.extras_le (c : Case H rel) {st : Flock.Stmt} (hst : st ∈ c.sts) {e : Array Claim}
+    (he : (Setup.ofCircuit st).extra (pointsOf c.spec (Claims.coinSeq c.r 0)) = .ok e) : e.size ≤ 2048 := by
+  rw [extras_size he, c.points_regions.1]
+  have := c.points_regions.2 st hst
+  omega
 
 theorem repRoundsT_eq {spec : SessionSpec} {st : Flock.Stmt} {v : Schedule × ℕ} {e : Array Claim}
     (hv : Zk.schedule st.m = .ok v) (he : e.size = spec.points * st.regions.size) :
@@ -433,7 +461,7 @@ theorem repT_size (H : Claims.Msg → Claims.Msg) {k : ℕ} (r : Fin k → Coin)
 theorem repShapedAt_of (hR : RepShapedT H) (h64 : Claims.Out64 H) (c : Case H Readable.relation) :
     RepShapedAt c := fun i hi v cm e hv hcm hex rep ic hic prior =>
   hR h64 _ _ (c.tableT hi) c.ω i (c.spec.domain c.spec.tables[i]! rep).toUTF8 c.r v cm _ e rep ic
-    ⟨hv, hcm, c.points_mPts hi, hex, hic⟩ prior _
+    ⟨hv, hcm, c.points_mPts hi, hex, hic⟩ (c.extras_le (getElem!_pos c.sts i hi ▸ Array.getElem_mem hi) hex) prior _
 
 /-- **`ProverRunsAt` at every good case** of the deployed relation, from `ProverRunsT` at each table: table `q / 2`'s
 rep `q % 2` runs from `repStartZk` sends, where `¬ BadZk` gives its coins (`Case.coinsT`) and its rank check after
@@ -687,7 +715,8 @@ theorem _root_.FlockComplete.CaseZk.points_mPts (c : CaseZk H rel) {st : Flock.S
 /-- **`RepShapedZk` at the deployed relation**, from `RepShapedT` at the one table. -/
 theorem repShapedZk_of (hR : RepShapedT H) (h64 : Claims.Out64 H) : JsonRT.RepShapedZk H Readable.relation := by
   intro c st v cm e hst hv hcm hex rep ic hic d prior ws
-  exact hR h64 st _ (c.tableT hst) c.ω 0 d c.r v cm _ e rep ic ⟨hv, hcm, c.points_mPts hst, hex, hic⟩ prior ws
+  exact hR h64 st _ (c.tableT hst) c.ω 0 d c.r v cm _ e rep ic ⟨hv, hcm, c.points_mPts hst, hex, hic⟩
+    (c.toCase.extras_le (st := st) (by show st ∈ c.sts; rw [hst]; simp) hex) prior ws
 
 /-- **`ProverRunsZk` at the deployed relation**, from `ProverRunsT` at the one table: rep `0` runs from the link's
 send, where `¬ BadZk` gives its coins, and ends `repRounds` sends later, where rep `1`'s coins are good. -/

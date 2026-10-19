@@ -4,3 +4,4 @@ import RemoteAudit.Plan
 import RemoteAudit.Receipts
 import RemoteAudit.Window
 import RemoteAudit.Session
+import RemoteAudit.Registry
