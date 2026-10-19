@@ -19,12 +19,14 @@ open Pouw.RelativeSecurity
 for every checkpoint `s < n`, `Pr[E_s ∧ E_r for every r < s ∧ whole] ≤ q·Pr[E_r for every r < s ∧ whole]`, where `E_s` is
 "the committed checkpoint after set `s` is the honest one" and `whole` is the tile's being skipped whole. It is a
 condition at the `q` it is given: the live line would read it at `½` (ASK-9's value, per 64-bit checkpoint instead of
-per unit) and the seeded whole branch at `e^-4`, per seed query over its answer. In the scope `GuessLuckAt` states (no
-computed word, and no coin read before the skip, determines a fold state) a whole-skipped unit's committed checkpoints
-read none of its coins, and the sets' fresh coins are independent, so the bound is the honest checkpoint's point mass
-over set `s`'s fresh coins at the state the earlier sets leave: a property of the fold and the noise, not of the
-cheater. It fails where `GuessLuckAt` fails: under a coin event or an instance on which a checkpoint is cheap to compute
-without the product and the fold. -/
+per unit) and the seeded whole branch at `2^-7` (its moment at `θw = K/8` needs `q ≤ 2^-6.24` at `K = 64`), per seed
+query over its answer. In the scope `GuessLuckAt` states (no computed word, and no coin read before the skip, determines
+a fold state) a whole-skipped unit's committed checkpoints read none of its coins, and the sets' fresh coins are
+independent, so the bound is the honest checkpoint's point mass over set `s`'s fresh coins at the state the earlier sets
+leave: a property of the fold and the noise, not of the cheater. That point mass is worst case over the other coins, so
+the events are the `KS` segment sets' (fresh `b`, `c`), and `n = KS`: `O'` and `D_d` read their fresh `z` only through
+`U·A_d`, which is `0` at `U = 0`. It fails where `GuessLuckAt` fails: under a coin event or an instance on which a
+checkpoint is cheap to compute without the product and the fold. -/
 def CheckpointGuessAt {C : Type} [Fintype C] (q : ℝ) (n : ℕ) (E : ℕ → C → Prop) (whole : C → Prop) : Prop :=
   ∀ s < n, prob (fun c => E s c ∧ (∀ r < s, E r c) ∧ whole c) ≤ q * prob (fun c => (∀ r < s, E r c) ∧ whole c)
 
