@@ -768,7 +768,10 @@ int vc_plan_build(const vc_spec* sp, void* out) {
   const std::vector<uint8_t> did(sp->domain_id, sp->domain_id + 64);
   // the frame
   if (sp->schema && (sp->schema_len == 18 || sp->schema_len == 22)) {
-    if (leaf_frame(sp->domain_id, sp->schema, sp->schema_len, c)) { delete p; return -1; }
+    if (leaf_frame(sp->domain_id, reinterpret_cast<const uint8_t*>(sp->schema), sp->schema_len, c)) {
+      delete p;
+      return -1;
+    }
   } else if (sp->schema) {
     delete p;
     return -1;

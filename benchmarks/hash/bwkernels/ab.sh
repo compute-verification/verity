@@ -12,6 +12,7 @@
 # LEASE_ARGS (--preemptible on vy-nebius-2), MAXMIN (the lease, default 40), STEPS (default "gate ab pb"), ROUNDS, REPS.
 set -uo pipefail
 export O=${OUT:?}
+mkdir -p "$O"
 IN=${RESEARCH_RUN_DIR:?}/inputs
 RS=benchmarks/remote_session
 export RS
