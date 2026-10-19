@@ -472,6 +472,113 @@ def test_gpu_lease_leaves_the_gpus_to_an_older_waiter_and_forgets_a_dead_one(tmp
     assert not queued.exists()
 
 
+def smi_env(tmp_path: Path, count: int = 2, script: str = 'cat "$(dirname "$0")/apps.csv"') -> dict[str, str]:
+    """gpu-lease asking a fake nvidia-smi on PATH, which answers its compute apps from bin/apps.csv (or runs `script`)."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir(exist_ok=True)
+    smi = bin_ / "nvidia-smi"
+    smi.write_text(f"#!/bin/sh\n{script}\n")
+    smi.chmod(0o755)
+    (bin_ / "apps.csv").write_text("")
+    return {**gpu_env(tmp_path, count=count), "PATH": f"{bin_}:{os.environ['PATH']}", "GPU_LEASE_SMI": "nvidia-smi",
+            "GPU_LEASE_UUID_TABLE": ",".join(f"GPU-{k}" for k in "ab"[:count]), "GPU_LEASE_WHO": "bc-test"}
+
+
+def _paused() -> subprocess.Popen:
+    p = subprocess.Popen([sys.executable, "-c", "import signal; print('ready', flush=True); signal.pause()"], stdout=subprocess.PIPE,
+                         text=True)
+    assert p.stdout.readline().strip() == "ready"
+    return p
+
+
+@needs_flock
+def test_gpu_lease_never_grants_a_gpu_whose_memory_a_process_under_no_lease_holds(tmp_path):
+    """INF-86 (vy-glm53-eu, 19 Oct 01:20Z): a cancelled run's vLLM TP workers, which hold no lock, kept ~94 GB on each GPU, and
+    gpu-lease handed those GPUs to the next waiter, which failed for lack of memory. A process over 1 GiB on a free GPU that no
+    lease holder owns keeps that GPU from being granted; it is logged, kept in <i>.foreign and shown by `status`; a small one
+    doesn't count."""
+    env = smi_env(tmp_path)
+    stray = _paused()
+    try:
+        (tmp_path / "bin" / "apps.csv").write_text(f"{stray.pid}, 94000 MiB, GPU-a\n{os.getpid()}, 512 MiB, GPU-b\n")
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "sh", "-c", "echo $CUDA_VISIBLE_DEVICES"], env=env,
+                           capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.strip() == "1", r.stderr
+        assert f"not granting a GPU a foreign process holds memory on: 0 pid={stray.pid} mem=94000MiB user=" in r.stderr
+        log = (tmp_path / "gl" / "lease.log").read_text()
+        assert f"foreign: 0 pid={stray.pid} mem=94000MiB" in log and "who=bc-test" in log and " cmd=" in log
+        assert (tmp_path / "gl" / "0.foreign").read_text().startswith(f"pid={stray.pid} mem=94000MiB")
+        assert not (tmp_path / "gl" / "1.foreign").exists()
+        for argv in (["2"], ["1", "--on", "0"]):
+            r = subprocess.run(["bash", str(GPU_LEASE), *argv, "--mem-gb", "0", "--", "true"], env=env, capture_output=True, text=True)
+            assert r.returncode == 75, (argv, r.stderr)
+        status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.splitlines()
+        assert [ln.split()[:3] for ln in status if ln.startswith("foreign ")] == [["foreign", "0", f"pid={stray.pid}"]]
+    finally:
+        stray.kill()
+        stray.wait()
+    status = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout
+    assert "foreign" not in status                                                      # gone with its process
+    r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--mem-gb", "0", "--", "true"], env=env, capture_output=True, text=True)
+    assert r.returncode == 0 and not (tmp_path / "gl" / "0.foreign").exists()
+
+
+@needs_flock
+def test_a_waiter_waits_out_foreign_memory_and_takes_the_gpu_once_its_process_is_gone(tmp_path):
+    env = {**smi_env(tmp_path, count=1), "GPU_LEASE_POLL_S": "0.1"}
+    stray = _paused()
+    (tmp_path / "bin" / "apps.csv").write_text(f"{stray.pid}, 2048 MiB, GPU-a\n")
+    waiter = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--wait", "--mem-gb", "0", "--", "sh", "-c", "echo got=$CUDA_VISIBLE_DEVICES"],
+                              env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert "not granting a GPU a foreign process holds memory on" in waiter.stderr.readline()
+        assert "waiting for 1 GPU(s)" in waiter.stderr.readline()
+    finally:
+        stray.kill()
+        stray.wait()
+    out, _ = waiter.communicate()
+    assert waiter.returncode == 0 and out.strip() == "got=0"
+    assert (tmp_path / "gl" / "lease.log").read_text().count("foreign:") == 1          # logged once, not on every poll
+
+
+@needs_flock
+def test_a_lease_holders_own_processes_and_the_requests_own_ancestors_are_not_foreign(tmp_path):
+    """gpu_adopt.py's rule: a process with a lock owner among its ancestors is that lease's, wherever it runs; and the requester
+    itself (a run that already uses a GPU and asks gpu-lease for one) is not foreign to its own request."""
+    env = smi_env(tmp_path)
+    apps = tmp_path / "bin" / "apps.csv"
+    holder = subprocess.Popen(["bash", str(GPU_LEASE), "1", "--on", "1", "--mem-gb", "0", "--", sys.executable, "-c",
+                               "import os, signal; print(os.getpid(), flush=True); signal.pause()"],
+                              env=env, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    try:
+        worker = int(holder.stdout.readline())
+        apps.write_text(f"{worker}, 90000 MiB, GPU-a\n")
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--on", "0", "--mem-gb", "0", "--", "true"], env=env, capture_output=True,
+                           text=True)
+        assert r.returncode == 0 and "foreign" not in r.stderr, r.stderr
+    finally:
+        holder.terminate()
+        holder.wait()
+    r = subprocess.run(["sh", "-c", f'echo "$$, 90000 MiB, GPU-a" > {apps}; bash {GPU_LEASE} 1 --on 0 --mem-gb 0 -- true; echo rc=$?'],
+                       env=env, capture_output=True, text=True)
+    assert "rc=0" in r.stdout and "foreign" not in r.stderr, r.stderr
+
+
+@needs_flock
+def test_gpu_lease_grants_as_before_and_logs_unverified_when_nvidia_smi_fails_or_never_answers(tmp_path):
+    """A wedged nvidia-smi (a GPU fallen off the bus) must never hold every grant up. The never-answering fake blocks on a FIFO
+    nobody opens, so the 1 s limit is always reached: the outcome doesn't depend on the clock."""
+    fifo = tmp_path / "never"
+    os.mkfifo(fifo)
+    for script, extra in (("exit 9", {}), (f'cat "{fifo}"', {"GPU_LEASE_SMI_TIMEOUT_S": "1"})):
+        env = {**smi_env(tmp_path, count=1, script=script), **extra}
+        r = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "sh", "-c", "echo $CUDA_VISIBLE_DEVICES"], env=env,
+                           capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.strip() == "0", (script, r.stderr)
+        assert "unverified: nvidia-smi gave no answer" in r.stderr and "GPUs 0 go to pid" in r.stderr
+    assert (tmp_path / "gl" / "lease.log").read_text().count("unverified:") == 2
+
+
 @needs_flock
 def test_a_waiter_pinned_with_on_holds_back_only_its_own_gpus(tmp_path):
     """ra-host-tier (12 Oct 19:35Z): a waiting `gpu-lease N --on LIST` deferred every later request, so its waiter kept free GPUs
@@ -2593,8 +2700,12 @@ def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_l
 @needs_flock
 def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu(monkeypatch, tmp_path, reap):
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
+    (tmp_path / "gl" / "2.foreign").write_text(f"pid={os.getpid()} mem=94000MiB user=research seen=2026-10-19T01:20:00Z cmd=vllm worker\n"
+                                               "pid=5000000 mem=2048MiB user=research seen=2026-10-19T01:20:00Z cmd=gone\n")
     s = m.Controller().tick(1_800_000_000.0)
     assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
+    assert [g.get("foreign") for g in s["gpus"]] == [None, None, [{"pid": str(os.getpid()), "mem": "94000MiB", "user": "research",
+                                                                  "seen": "2026-10-19T01:20:00Z", "cmd": "vllm worker"}], None]
     assert "who=kubernetes" in (tmp_path / "gl" / "0.owner").read_text()
     env = {**gpu_env(tmp_path, count=4), "GPU_LEASE_ALLOWED_FILE": str(tmp_path / "gl" / "pool.gpus")}
     got = subprocess.run(["bash", str(GPU_LEASE), "1", "--mem-gb", "0", "--", "sh", "-c", "echo $CUDA_VISIBLE_DEVICES"], env=env,
