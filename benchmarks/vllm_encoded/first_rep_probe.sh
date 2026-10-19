@@ -4,8 +4,9 @@
 # but one engine lifetime per arm with every rep's steps recorded (first_rep_probe.py) into $OUT.
 set -euo pipefail
 WORK=${WORK:-/workspace}
-VENV=${VERITY_BENCH_VENV:-$WORK/venv312}
+VENV=${VERITY_BENCH_VENV:-/workspace/pouw/mvp-e2e/venv312}
 export HF_HOME=${HF_HOME:-$WORK/hf}
+export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8 MKL_NUM_THREADS=8 NUMEXPR_NUM_THREADS=8
 if [ -z "${CUDA_HOME:-}" ]; then
   for c in /usr/local/cuda-13.0 /usr/local/cuda; do [ -d "$c" ] && { export CUDA_HOME=$c; break; }; done
 fi
