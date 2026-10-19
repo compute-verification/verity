@@ -9,7 +9,7 @@ from fractions import Fraction
 import pytest
 
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, closure_of, draw_first
-from verity.core.protocols.sampled_proofs.one_stage import draw as D
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
 
 
 def _seeded(seed: int) -> OwnRandomness:
@@ -167,6 +167,6 @@ def test_draw_first_refuses_what_lean_refuses():
             draw_first(_seeded(0), law, n)
 
 
-def test_the_draws_come_from_the_verifiers_own_randomness():
-    d = draw_first(OwnRandomness(), _work(), 10)
+def test_the_draws_come_from_the_lean_verifiers_coins():
+    d = draw_first(OwnRandomness(V.coins), _work(), 10)
     assert D.check_draw(d, {"population": 10}, _work()).ok

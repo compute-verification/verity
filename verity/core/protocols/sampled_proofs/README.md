@@ -386,10 +386,11 @@ log's history by `tests/test_service_history.py`, and sessions by `tests/test_se
 
 ### The verifier's randomness
 
-The draw of record is `coins.OwnRandomness`: the operating system's generator read directly with the Lean verifier's
-samplers (`Flock.Draw`), with no hash, no derivation and no beacon, after the registration it follows. `draw_first`
-reads the bytes as `Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's
-legacy replay challenge until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
+The draw of record is `coins.OwnRandomness` on the Lean verifier of record's coins (`one_stage.verifier.coins`:
+`IO.getRandomBytes`, A3; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
+hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
+`Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
+until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
 
 ### Verification plans
 

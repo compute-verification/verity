@@ -15,7 +15,6 @@ bytes it read (`one_stage.verifier.select`).  vLLM's legacy replay challenge der
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
 from typing import Any
@@ -96,13 +95,14 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 
 class OwnRandomness:
-    """The verifier's own randomness, read directly: exact samplers over raw bytes from `source` (default the operating
-    system's generator), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
+    """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
+    proof service's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
+    system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
     M0's `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""
 
-    def __init__(self, source: Callable[[int], bytes] = os.urandom) -> None:
+    def __init__(self, source: Callable[[int], bytes]) -> None:
         self._source = source
 
     def read(self, n: int) -> bytes:
