@@ -4,6 +4,7 @@ import Proofs.Accounting.TS
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.SplitRateMerged
 import Proofs.Accounting.Compose.BindingOfECR
+import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -236,7 +237,7 @@ theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy :=
   sorry
 
 theorem CircuitWork : Accounting.Guarantees.Compose.CircuitWork := by
-  sorry
+  exact WorkProof.circuitWork
 
 section Credit
 
