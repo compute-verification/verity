@@ -222,3 +222,25 @@ def test_the_plan_takes_both_packs_of_each_check_of_the_commit_and_of_each_run_g
                                                   ("r-mine", P.REUSED)]
     assert ("r-new", P.REUSED) not in fetched and ("r-new", "verdicts.tar.gz") not in fetched
     assert notes == ["--from r-none: that attempt published no verdict pack"]
+
+
+def _fake_check(tmp_path: Path, keys: dict):
+    """A planned tree's check as `keyed_step_parts` and `circuit_parts` read it: its steps' environment, `STEP_KEYS`, its cache."""
+    import types
+
+    return types.SimpleNamespace(env=lambda: {"PATH": "/usr/bin"}, STORE_REQUIRED_ENV="S", REGRESSION_ENV="R", CUSTODY_ENV="C",
+                                 STEP_KEYS={n: (lambda e, k=k: k) for n, k in keys.items()}, ROOT=tmp_path,
+                                 cache_dir=lambda: tmp_path / "check")
+
+
+def test_a_keyed_steps_pass_names_its_entry_under_its_existing_key(P, tmp_path):
+    """lean-agreement's and flock-rust-tests' passes (`agreement_key`, `rust_tests_key`): what `check.Reused` packs when a
+    check reused one, at the key the step itself looks up."""
+    C = _fake_check(tmp_path, {"lean-agreement": "a1", "flock-rust-tests": "r1"})
+    src = P.Source("own", tmp_path / "check", [tmp_path / "tests"])
+    (tmp_path / "check" / "lean-agreement").mkdir(parents=True)
+    (tmp_path / "check" / "lean-agreement" / "a1.json").write_text("{}")
+    agree, rust = P.keyed_step_parts(C, [src], ["lean-agreement", "flock-rust-tests"])
+    assert agree.state == "passed" and agree.found == [{"source": "own", "paths": ["check/lean-agreement/a1.json"], "key": "a1"}]
+    assert rust.state == "must-run" and rust.key == "r1"
+
