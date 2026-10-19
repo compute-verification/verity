@@ -452,7 +452,7 @@ def dsa_leaves(site, model=None):
     the third op's operands, so each layer's cache is the derive's state (`rules/vllm_dsa.py`).  What the shim does not model is
     refused at export: prefill context parallelism, decode context parallelism, an fp8 query or KV cache, a caller-supplied `q_c_out`
     or `index_k_out`.  `W_UK_T` and `W_UV` are Parameters the engine registers after loading; a meta model gets them from
-    `loader_parity.mla_absorbed_weights_as_the_loader_does`."""
+    `vllm_meta.mla_absorbed_weights_as_the_loader_does`."""
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the ops)
     iface = torch.ops.vllm_iface
     pending: dict[int, tuple] = {}

@@ -634,11 +634,11 @@ class TP2CaptureWorkerExtension:
                         n_requests: int = 1, required_manifest: str | None = None, request_order: list[str] | None = None,
                         arrivals: dict[str, int] | None = None, caps: dict[str, int] | None = None, tp_relabel: dict | None = None,
                         tp_partials_omit_rank: int | None = None, tp_partials_omit_site: dict | None = None,
+                        post_load_tensors: dict[str, list[str]] | None = None,
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
-                        post_load_tensors: dict[str, list[str]] | None = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
