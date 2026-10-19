@@ -38,6 +38,8 @@ For the strata that do no work:
   `f_s` at least `countK σ C s` (`main`'s stratified law's `stratumK C n_s N` for a non-empty stratum and `C ≤ N`,
   `countK_eq`), a set escapes the work law at most as often as its units in those strata escape the stratified law at `C`;
   `audit_work_rest` and `extraction_audit_work_rest` carry any such integrity profile to the audit.
+* `countRule_self`, `countK_self`, `countK_self_miss`: at `C = N` the count law draws every unit of every stratum
+  (`stratumK N n_s N = n_s`), so its sampling term is zero: a recursive inner session's full draw.
 
 Closure draws (a drawn unit proved with the units it reads) are not part of this law. `Law.widen` proves more units than a
 law draws on the same coins, and `escape_widen_le` carries every escape bound to it.
@@ -353,6 +355,26 @@ theorem countK_eq {σ : Fin n → Fin m} {C : ℕ} {s : Fin m} (hC : C ≤ n) (h
   have hnN : (stratum σ s).card ≤ n := by simpa using Finset.card_le_univ (stratum σ s)
   refine min_eq_right (max_le hn1 (Nat.lt_succ_iff.1 ((Nat.div_lt_iff_lt_mul (by omega)).2 ?_)))
   nlinarith
+
+/-- **At the population, the count rule is the stratum's size**: `stratumK N size N = size` for `1 ≤ size`. -/
+theorem countRule_self {size N : ℕ} (h1 : 1 ≤ size) (hN : 0 < N) : countRule N size N = size := by
+  unfold countRule
+  rw [Nat.mul_add_div (by omega : 0 < 2 * N), Nat.div_eq_of_lt (by omega : N < 2 * N), Nat.add_zero,
+    max_eq_right h1]
+
+/-- **The count law at `C = N` draws every unit of every stratum**: `countK σ N s` is stratum `s`'s size. -/
+theorem countK_self (σ : Fin n → Fin m) (s : Fin m) : countK σ n s = (stratum σ s).card := by
+  unfold countK
+  rcases Nat.eq_zero_or_pos (stratum σ s).card with h0 | hpos
+  · rw [h0]; exact Nat.zero_min _
+  · have hn : 0 < n := hpos.trans_le (by simpa using Finset.card_le_univ (stratum σ s))
+    rw [countRule_self hpos hn, min_self]
+
+/-- **The count law at `C = N` has no sampling term** (a recursive inner session's full draw, `rec_live.full_draw`): its
+draw is every unit (`stratified_draw_full`), so `miss K = 0` for `K ≥ 1`. -/
+theorem countK_self_miss (σ : Fin n → Fin m) {K : ℕ} (hK : 1 ≤ K) :
+    (stratified σ (countK σ n) (countK_le σ n)).miss K = 0 :=
+  stratified_full_miss σ _ _ (countK_self σ) hK
 
 theorem choose_mul_choose_succ_le (a n j : ℕ) (ha : a ≤ n) :
     a.choose (j + 1) * n.choose j ≤ a.choose j * n.choose (j + 1) := by

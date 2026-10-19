@@ -1,8 +1,20 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen3-30B-A3B",
  "case": "QWEN3_30B_A3B",
- "tokenizer_revision": "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39",
+ "engine": {
+  "revision": "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 1152,
+   "tensor_parallel_size": 2,
+   "disable_custom_all_reduce": true
+  },
+  "env": {
+   "NCCL_P2P_DISABLE": "1"
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,12 +40,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 128,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 1152,
-  "tensor_parallel_size": 2,
-  "disable_custom_all_reduce": true
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 aeb13307a71acd8f (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   9,
@@ -1077,19 +1083,19 @@
     33707,
     264
    ],
-   "prompt_text": "\u201cI might as well inquire,\u201d replied she, \u201cwhy, with so evident a design of offending and insulting me, you chose to tell me that you liked me against your will, against your reason, and even against your character? Was not this some excuse for incivility, if I _was_ uncivil? But I have other provocations. You know I have. Had not my own feelings decided against you, had they been indifferent, or had they even been favourable, do you think that any consideration would tempt me to accept the man who has been the means of ruining, perhaps for ever, the happiness of a most beloved sister?\u201d Elizabeth awoke the next morning to the same thoughts and meditations which had at length closed her eyes. She could not yet recover from the surprise of what had happened: it was impossible to think of anything else; and, totally indisposed for employment, she resolved soon after breakfast to indulge herself in air and exercise. She was proceeding directly to her favourite walk, when the recollection of Mr. Darcy\u2019s sometimes coming there stopped her, and instead of entering the park, she turned up the lane which led her farther from the turnpike road. The park paling was still the boundary on one side, and she soon passed one of the gates into the ground. She perfectly remembered everything that had passed in conversation between Wickham and herself in their first evening at Mr. Philips\u2019s. Many of his expressions were still fresh in her memory. She was _now_ struck with the impropriety of such communications to a stranger, and wondered it had escaped her before. She saw the indelicacy of putting himself forward as he had done, and the inconsistency of his professions with his conduct. She remembered that he had boasted of having no fear of seeing Mr. Darcy--that Mr. Darcy might leave the country, but that _he_ should stand his ground; yet he had avoided the Netherfield ball the very next week. She remembered, also, that till the Netherfield family had quitted the country, he had told his story to no one but herself; but that after their removal, it had been everywhere discussed; that he had then no reserves, no scruples in sinking Mr. Darcy\u2019s character, though he had assured her that respect for the father would always prevent his exposing the son. The two gentlemen left Rosings the next morning; and Mr. Collins having been in waiting near the lodges, to make them his parting obeisance, was able to bring home the pleasing intelligence of their appearing in very good health, and in as tolerable spirits as could be expected, after the melancholy scene so lately gone through at Rosings. To Rosings he then hastened to console Lady Catherine and her daughter; and on his return brought back, with great satisfaction, a message from her Ladyship, importing that she felt herself so dull as to make her very desirous of having them all to dine with her. Their engagements at Rosings were as frequent during the last week of her stay as they had been at first. The very last evening was spent there; and her Ladyship again inquired minutely into the particulars of their journey, gave them directions as to the best method of packing, and was so urgent on the necessity of placing gowns in the only right way, that Maria thought herself obliged, on her return, to undo all the work of the morning, and pack her trunk afresh. It was the second week in May, in which the three young ladies set out together from Gracechurch Street for the town of ----, in Hertfordshire; and, as they drew near the appointed inn where Mr. Bennet\u2019s carriage was to meet them, they quickly perceived, in token of the coachman\u2019s punctuality, both Kitty and Lydia looking out of a dining-room upstairs. These two girls had been above an hour in the place, happily employed in visiting an opposite milliner, watching the sentinel on guard, and dressing a salad and cucumber. She had not been many hours at home, before she found that the Brighton scheme, of which Lydia had given them a hint at the inn, was under frequent discussion between her parents. Elizabeth saw directly that her father had not the smallest intention of yielding; but his answers were at the same time so vague and equivocal, that her mother, though often disheartened, had never yet despaired of succeeding at last. \u201cAnd yet I meant to be uncommonly clever in taking so decided a dislike to him, without any reason. It is such a spur to one\u2019s genius, such an opening for wit, to have a dislike of that kind. One may be continually abusive without saying anything just; but one cannot be always laughing at a man without now and then stumbling on something witty.\u201d The first week of their return was soon gone. The second began. It was the last of the regiment\u2019s stay in Meryton, and all the young ladies in the neighbourhood were drooping a",
+   "prompt_text": "“I might as well inquire,” replied she, “why, with so evident a design of offending and insulting me, you chose to tell me that you liked me against your will, against your reason, and even against your character? Was not this some excuse for incivility, if I _was_ uncivil? But I have other provocations. You know I have. Had not my own feelings decided against you, had they been indifferent, or had they even been favourable, do you think that any consideration would tempt me to accept the man who has been the means of ruining, perhaps for ever, the happiness of a most beloved sister?” Elizabeth awoke the next morning to the same thoughts and meditations which had at length closed her eyes. She could not yet recover from the surprise of what had happened: it was impossible to think of anything else; and, totally indisposed for employment, she resolved soon after breakfast to indulge herself in air and exercise. She was proceeding directly to her favourite walk, when the recollection of Mr. Darcy’s sometimes coming there stopped her, and instead of entering the park, she turned up the lane which led her farther from the turnpike road. The park paling was still the boundary on one side, and she soon passed one of the gates into the ground. She perfectly remembered everything that had passed in conversation between Wickham and herself in their first evening at Mr. Philips’s. Many of his expressions were still fresh in her memory. She was _now_ struck with the impropriety of such communications to a stranger, and wondered it had escaped her before. She saw the indelicacy of putting himself forward as he had done, and the inconsistency of his professions with his conduct. She remembered that he had boasted of having no fear of seeing Mr. Darcy--that Mr. Darcy might leave the country, but that _he_ should stand his ground; yet he had avoided the Netherfield ball the very next week. She remembered, also, that till the Netherfield family had quitted the country, he had told his story to no one but herself; but that after their removal, it had been everywhere discussed; that he had then no reserves, no scruples in sinking Mr. Darcy’s character, though he had assured her that respect for the father would always prevent his exposing the son. The two gentlemen left Rosings the next morning; and Mr. Collins having been in waiting near the lodges, to make them his parting obeisance, was able to bring home the pleasing intelligence of their appearing in very good health, and in as tolerable spirits as could be expected, after the melancholy scene so lately gone through at Rosings. To Rosings he then hastened to console Lady Catherine and her daughter; and on his return brought back, with great satisfaction, a message from her Ladyship, importing that she felt herself so dull as to make her very desirous of having them all to dine with her. Their engagements at Rosings were as frequent during the last week of her stay as they had been at first. The very last evening was spent there; and her Ladyship again inquired minutely into the particulars of their journey, gave them directions as to the best method of packing, and was so urgent on the necessity of placing gowns in the only right way, that Maria thought herself obliged, on her return, to undo all the work of the morning, and pack her trunk afresh. It was the second week in May, in which the three young ladies set out together from Gracechurch Street for the town of ----, in Hertfordshire; and, as they drew near the appointed inn where Mr. Bennet’s carriage was to meet them, they quickly perceived, in token of the coachman’s punctuality, both Kitty and Lydia looking out of a dining-room upstairs. These two girls had been above an hour in the place, happily employed in visiting an opposite milliner, watching the sentinel on guard, and dressing a salad and cucumber. She had not been many hours at home, before she found that the Brighton scheme, of which Lydia had given them a hint at the inn, was under frequent discussion between her parents. Elizabeth saw directly that her father had not the smallest intention of yielding; but his answers were at the same time so vague and equivocal, that her mother, though often disheartened, had never yet despaired of succeeding at last. “And yet I meant to be uncommonly clever in taking so decided a dislike to him, without any reason. It is such a spur to one’s genius, such an opening for wit, to have a dislike of that kind. One may be continually abusive without saying anything just; but one cannot be always laughing at a man without now and then stumbling on something witty.” The first week of their return was soon gone. The second began. It was the last of the regiment’s stay in Meryton, and all the young ladies in the neighbourhood were drooping a",
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b651",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b652",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b653",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b654",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b655",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b656",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b657",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b658",
-     "Project Gutenberg #1342: Pride and Prejudice (public domain) \u00b659"
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶51",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶52",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶53",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶54",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶55",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶56",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶57",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶58",
+     "Project Gutenberg #1342: Pride and Prejudice (public domain) ¶59"
     ]
    }
   },
@@ -1115,7 +1121,7 @@
    "origin": {
     "corpus": "corpus_coverage.json",
     "paragraphs": [
-     "Project Gutenberg #84: Frankenstein (public domain) \u00b682"
+     "Project Gutenberg #84: Frankenstein (public domain) ¶82"
     ]
    }
   }

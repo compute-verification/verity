@@ -16,6 +16,10 @@ Two runs at one tape send one link message (`run_head`), so their openings at `q
 rows they collide in the two runs' joined logs (`tiedColl_of_openings`, `tiedColl_of_opens`), which is
 `ConflictTied` (`plain_conflictTied`, `zk_conflictTied`). That leaves `TableBoundθ` for KS at SHA-512
 (`plain_KS_of_table`, `zk_KS_of_table`).
+
+The plain opening holds of every column a rep opens, before `distinctBelow` keeps one per position (`plainRawCols`,
+`plain_opening_raw`), so two such columns of one accepted run at one position that differ collide in its own log
+(`plain_selfClash_tied`).
 -/
 
 namespace FlockDeploy.KS
@@ -27,21 +31,23 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## An opening, and two of one position -/
 
-/-- **An opening of position `q` to `row`** under `hm96-sha512/v1` at level `lv` against a cap that flattens to
-`root`, its siblings digests, with every SHA-512 input of the opening a query of `L`. -/
-def Opening (lv : Flock.Level) (lanes : ℕ) (root : ByteArray) (L : List (Claims.Msg × Claims.Msg)) (q : ℕ)
-    (row : Array F128) : Prop :=
+/-- **An opening of position `q` to `row`** under `ms` (`hm96-sha512/v1`, or plain SHA-512 leaves) at level `lv`
+against a cap that flattens to `root`, its siblings digests, with every SHA-512 input of the opening a query of `L`. -/
+def Opening (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (root : ByteArray) (L : List (Claims.Msg × Claims.Msg))
+    (q : ℕ) (row : Array F128) : Prop :=
+  (ms = MerkleScheme.hm96Sha512 ∨ ms = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") ∧
   ∃ (cap : Array ByteArray) (salt : ByteArray) (sibs : List ByteArray),
     cap.size = 2 ^ lv.cap ∧ (∀ b ∈ cap.toList, b.size = 64) ∧ cap.foldl (· ++ ·) ByteArray.empty = root ∧
-      opens MerkleScheme.hm96Sha512 cap lv.cap lv.d lanes q row salt sibs = true ∧ (∀ b ∈ sibs, b.size = 64) ∧
-      ∀ b ∈ opensIns row salt q sibs, Claims.toMsg b ∈ L.map Prod.fst
+      opens ms cap lv.cap lv.d lanes q row salt sibs = true ∧ (∀ b ∈ sibs, b.size = 64) ∧
+      ∀ b ∈ opensInsOf ms row salt q sibs, Claims.toMsg b ∈ L.map Prod.fst
 
 /-- **Two openings of one position to different rows, against one root, collide in the joined logs.** -/
-theorem tiedColl_of_openings {lv : Flock.Level} {lanes : ℕ} {root : ByteArray} {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
-    {q : ℕ} {row₁ row₂ : Array F128} (h₁ : Opening lv lanes root L₁ q row₁) (h₂ : Opening lv lanes root L₂ q row₂)
+theorem tiedColl_of_openings {ms : MerkleScheme} {lv : Flock.Level} {lanes : ℕ} {root : ByteArray}
+    {L₁ L₂ : List (Claims.Msg × Claims.Msg)} {q : ℕ} {row₁ row₂ : Array F128}
+    (h₁ : Opening ms lv lanes root L₁ q row₁) (h₂ : Opening ms lv lanes root L₂ q row₂)
     (hr : row₁ ≠ row₂) : Claims.TiedColl sha512 (L₁ ++ L₂) := by
-  obtain ⟨cap₁, y₁, s₁, hc₁, hw₁, hf₁, ho₁, hs₁, hl₁⟩ := h₁
-  obtain ⟨cap₂, y₂, s₂, hc₂, hw₂, hf₂, ho₂, hs₂, hl₂⟩ := h₂
+  obtain ⟨hms, cap₁, y₁, s₁, hc₁, hw₁, hf₁, ho₁, hs₁, hl₁⟩ := h₁
+  obtain ⟨-, cap₂, y₂, s₂, hc₂, hw₂, hf₂, ho₂, hs₂, hl₂⟩ := h₂
   have hcap : cap₁ = cap₂ := by
     apply Array.ext'
     refine entries_eq_of_flat _ _ hw₁ hw₂ (by simp [hc₁, hc₂]) ?_
@@ -49,9 +55,15 @@ theorem tiedColl_of_openings {lv : Flock.Level} {lanes : ℕ} {root : ByteArray}
     simp only [← Array.foldl_toList, flat_data] at e
     simpa using e
   subst hcap
-  exact tiedColl_of_opens hs₁ hs₂ ho₁ ho₂ hr
-    (fun b hb => by rw [List.map_append]; exact List.mem_append_left _ (hl₁ b hb))
-    (fun b hb => by rw [List.map_append]; exact List.mem_append_right _ (hl₂ b hb))
+  have hl₁' : ∀ b ∈ opensInsOf ms row₁ y₁ q s₁, Claims.toMsg b ∈ (L₁ ++ L₂).map Prod.fst :=
+    fun b hb => by rw [List.map_append]; exact List.mem_append_left _ (hl₁ b hb)
+  have hl₂' : ∀ b ∈ opensInsOf ms row₂ y₂ q s₂, Claims.toMsg b ∈ (L₁ ++ L₂).map Prod.fst :=
+    fun b hb => by rw [List.map_append]; exact List.mem_append_right _ (hl₂ b hb)
+  rcases hms with rfl | rfl
+  · rw [opensInsOf_hm96] at hl₁' hl₂'
+    exact tiedColl_of_opens hs₁ hs₂ ho₁ ho₂ hr hl₁' hl₂'
+  · rw [opensInsOf_plain] at hl₁' hl₂'
+    exact tiedColl_of_opensP hs₁ hs₂ ho₁ ho₂ hr hl₁' hl₂'
 
 /-! ## The reader's columns, at the verifier's -/
 
@@ -151,32 +163,46 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
 
 /-! ## An accepted plain run's openings -/
 
-/-- **An accepted plain run opens a column only as a Merkle opening** of table 0's level 0 in its own log: at the
-statement's setup, table 0's `fast100` schedule and the link of the tape's first message, a column `u` the run's
-reader opens at `q` is an opened row whose opening against `root_B[0]` of the link passed, every SHA-512 input of it
-in the run's verifier log. -/
-theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V false).k x) → Coin}
-    {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
-    (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) q = some u) :
+/-- **The columns table 0's reps open in a plain record**, every one, before `distinctBelow` keeps one per position. -/
+def plainRawCols (s : Claims.Seen) : List (ℕ × List 𝔽) :=
+  match runOf false s 0 with
+  | some r => r.reps.flatMap fun y => Claims.Flock.plainRepColsOf r.plainShape y.1 y.2
+  | none => []
+
+theorem mem_plainRawCols {s : Claims.Seen} {p : ℕ × List 𝔽} (h : p ∈ cols false s 0) : p ∈ plainRawCols s := by
+  unfold cols at h
+  unfold plainRawCols
+  cases hr : runOf false s 0 with
+  | none => simp [hr] at h
+  | some r =>
+    simp only [hr, Bool.false_eq_true, ↓reduceIte, Claims.Flock.plainRunCols] at h ⊢
+    exact mem_of_distinctBelow h
+
+/-- **An accepted plain run's reps open a column only as a Merkle opening** of table 0's level 0 in its own log: at
+the statement's setup, table 0's `fast100` schedule and the link of the tape's first message, a column `u` a rep opens
+at `q` is an opened row whose opening under table 0's scheme against `root_B[0]` of the link passed, every SHA-512
+input of it in the run's verifier log. -/
+theorem plain_opening_raw {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) :
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
       (link : List ByteArray × List ByteArray) (row : Array F128),
       setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
-      Opening (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes) link.1.toArray[0]!
-        (Claims.run sha512 P (V false) x ω r).vLog q row ∧ u = row.toList.map FlockLevel3.GF128.of := by
+      Opening (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes)
+        link.1.toArray[0]! (Claims.run sha512 P (V false) x ω r).vLog q row ∧
+      u = row.toList.map FlockLevel3.GF128.of := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
   generalize hL : (Claims.run sha512 P (V false) x ω r).vLog = L at hv ⊢
   obtain ⟨hx, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hc
   obtain ⟨hroot, -⟩ := Claims.Bridge.Custody.custody_ok hcu
-  unfold cols at hu
+  unfold plainRawCols at hu
   split at hu
   swap
-  · simp [Claims.Flock.lookCol] at hu
+  · simp at hu
   rename_i rr hrr
   obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eq hf hx hs hlv hrr
-  simp only [Bool.false_eq_true, ↓reduceIte] at hu
-  have hmem := lookCol_mem hu
-  obtain ⟨ρ, hρ, hp⟩ := List.mem_flatMap.1 (mem_of_distinctBelow hmem)
+  obtain ⟨ρ, hρ, hp⟩ := List.mem_flatMap.1 hu
   obtain ⟨k, hk, rfl⟩ : ∃ k < 2, ρ = (lv.streams.getD k #[], f.proofs.getD k ByteArray.empty) := by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hρ
     rcases hρ with rfl | rfl
@@ -232,26 +258,44 @@ theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : 
     rw [← hcolsEq]
     exact hp
   obtain ⟨j, hj, -, hjq, hju⟩ := mem_zkRepCols hp2
-  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 0 hsts0
-    rw [hst0] at this
-    exact this
-  rw [hms] at hmc
+  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
+      (Setup.ofCircuit st).merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
+    rcases checks_leaf hc (setupOf_some hs).2 0 hsts0 with h | ⟨-, h⟩
+    · rw [hst0] at h
+      exact Or.inl h
+    · rw [hst0] at h
+      exact Or.inr h
+  have hdl : (Setup.ofCircuit st).merkle.digestLen = 64 := by
+    rcases hms with e | e <;> rw [e] <;> rfl
   have hruns := With.merkleCheckWith_sim (back (L.map Prod.fst))
-    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) MerkleScheme.hm96Sha512)
-    MerkleScheme.hm96Sha512 _ _ _ _ _ _ _ _ () hmc
-  rw [opsWith_hm96] at hruns
-  obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
+    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) (Setup.ofCircuit st).merkle)
+    (Setup.ofCircuit st).merkle _ _ _ _ _ _ _ _ () hmc
+  obtain ⟨hpure, hlog⟩ := merkleCheck_logsOf hms hruns
   obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
   refine ⟨s, spec, sts, st, sch, link, p.ligerito.initialProof.rows[j]!, hs, hst, hsch, hlink,
-    ⟨p.cap, p.ligerito.initialProof.salts.getD j ByteArray.empty,
+    ⟨hms, p.cap, p.ligerito.initialProof.salts.getD j ByteArray.empty,
       sibsOf p.ligerito.initialProof.siblings ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) j,
-      hcs, hcw, ?_, ?_, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure j, ?_⟩, hju⟩
+      hcs, fun b hb => (hcw b hb).trans hdl, ?_, ?_,
+      fun b hb => (merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure j b hb).trans hdl, ?_⟩, hju⟩
   · rw [hcap, hrB, ← hroot, Array.toArray_toList]
   · rw [← hjq]
     exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure j hj
   · rw [← hjq]
     exact hlog j hj
+
+/-- **An accepted plain run opens a column only as a Merkle opening** of table 0's level 0 in its own log: a column
+`u` the run's reader opens at `q` is one a rep opens (`plain_opening_raw`). -/
+theorem plain_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((V false).k x) → Coin}
+    {q : ℕ} {u : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (hu : Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) q = some u) :
+    ∃ (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (st : Stmt) (sch : Flock.Schedule)
+      (link : List ByteArray × List ByteArray) (row : Array F128),
+      setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧
+      linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
+      Opening (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes)
+        link.1.toArray[0]! (Claims.run sha512 P (V false) x ω r).vLog q row ∧
+      u = row.toList.map FlockLevel3.GF128.of :=
+  plain_opening_raw h (mem_plainRawCols (lookCol_mem hu))
 
 /-! ## An accepted masked run's openings -/
 
@@ -266,8 +310,9 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
       (link : List ByteArray × List ByteArray) (row : Array F128),
       setupOf true x = some (s, spec, sts) ∧ sts[0]? = some st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
       linkOf ((P.next x [] ω).eval sha512).1 = some link ∧
-      Opening (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES)
-        link.1.toArray[0]! (Claims.run sha512 P (V true) x ω r).vLog q row ∧
+      Opening MerkleScheme.hm96Sha512 (sch.levels.getD 0 default)
+        (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) link.1.toArray[0]!
+        (Claims.run sha512 P (V true) x ω r).vLog q row ∧
       u = (row.toList.map FlockLevel3.GF128.of).take (2 ^ (sch.levels.getD 0 default).lanes) := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := acc_within h
   generalize hL : (Claims.run sha512 P (V true) x ω r).vLog = L at hv ⊢
@@ -342,7 +387,7 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
   obtain ⟨rfl, rfl⟩ := hqw
   obtain ⟨j, hj, -, hjq, hju⟩ := mem_zkRepCols hw
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 := by
-    have := checks_hm96 hc (setupOf_some hs).2 0 hsts0
+    have := checks_hm96 hc (setupOf_some hs).2 (setupOf_zk hs) 0 hsts0
     rw [hst0] at this
     exact this
   rw [hms] at hmc
@@ -353,14 +398,14 @@ theorem zk_opening {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
   obtain ⟨hpure, hlog⟩ := merkleCheck_logs hruns
   obtain ⟨hcs, hcw⟩ := merkleCheck_cap hpure
   refine ⟨s, spec, sts, st, sch, tPad, link, zp.proof.ligerito.initialProof.rows[j]!, hs, hst, hsch, hlink,
-    ⟨zp.proof.cap, zp.proof.ligerito.initialProof.salts.getD j ByteArray.empty,
+    ⟨Or.inl rfl, zp.proof.cap, zp.proof.ligerito.initialProof.salts.getD j ByteArray.empty,
       sibsOf zp.proof.ligerito.initialProof.siblings
         ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) j,
       hcs, hcw, ?_, ?_, merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure j, ?_⟩, by rw [hju]⟩
   · rw [hcap, hrB, ← hroot, Array.toArray_toList]
   · rw [← hjq]
     exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure j hj
-  · rw [← hjq]
+  · rw [opensInsOf_hm96, ← hjq]
     exact hlog j hj
 
 /-! ## `ConflictTied` -/
@@ -383,6 +428,31 @@ theorem plain_conflictTied (rel : Readable.Parsed → Readable.Relation) :
   rw [hlink] at hlink'
   cases hlink'
   exact tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e])
+
+theorem tiedColl_of_append_self {H : Claims.Msg → Claims.Msg} {l : List (Claims.Msg × Claims.Msg)}
+    (h : Claims.TiedColl H (l ++ l)) : Claims.TiedColl H l := by
+  obtain ⟨u, v, hc, hu, hv⟩ := h
+  simp only [List.map_append, List.mem_append, or_self] at hu hv
+  exact ⟨u, v, hc, hu, hv⟩
+
+/-- **A self-clash among an accepted plain run's columns collides in its own log**: two columns table 0's reps open at
+one position that differ give a collision among the run's verifier calls, at SHA-512. -/
+theorem plain_selfClash_tied {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {r : Fin ((V false).k x) → Coin} {q : ℕ} {u v : List 𝔽} (h : (Claims.run sha512 P (V false) x ω r).out = .acc)
+    (hu : (q, u) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen)
+    (hv : (q, v) ∈ plainRawCols (Claims.run sha512 P (V false) x ω r).seen) (huv : u ≠ v) :
+    Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω r).vLog := by
+  obtain ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, ho, hu'⟩ := plain_opening_raw h hu
+  obtain ⟨s', spec', sts', st', sch', link', row', hs', hst', hsch', hlink', ho', hv'⟩ := plain_opening_raw h hv
+  rw [hs] at hs'
+  cases hs'
+  rw [hst] at hst'
+  cases hst'
+  rw [hsch] at hsch'
+  cases hsch'
+  rw [hlink] at hlink'
+  cases hlink'
+  exact tiedColl_of_append_self (tiedColl_of_openings ho ho' fun e => huv (by rw [hu', hv', e]))
 
 /-- **`ConflictTied` at the deployed masked (`--zk`) record**: two accepted runs at one tape that open different
 columns at one position collide in their joined verifier logs, at SHA-512. -/

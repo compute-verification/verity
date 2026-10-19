@@ -8,7 +8,9 @@
 # Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, L<l>/ and forged-L<l>/ (stage.json,
 # time-stage.txt, time-prove.txt, prove.txt/.err, serve.log, lean.log, replay.txt), summary.json.
 # Lean checks each statement's coefficients and positions against the verifier's own coins (verify --rec-inner-*,
-# RecCoins.check): the inner statement REC_STMT and INNER's session, the one the verifier served, for the forged level too.
+# RecCoins.check): the inner statement REC_STMT and INNER's session, the one the verifier served, for the forged level too,
+# and holds its link points and the tops its openings climb to to the coin server's transcript, INNER/public.json
+# (RecCoins.checkLink, RecVStar.checkTopRows).
 # env: INNER=DIR (required: public.json, private.json, session/)  LEVELS=0,1,2,3 (default: every level)  NEG_LEVEL (default:
 #      the last)  LINK=1 (the opened rows read from the prover's registration of them: rec_outer --link-rows)  CPUS=32
 #      FLOCK_WORK (as 80-rec-inner.sh)  REC_STMT=DIR (the inner statement: circuit.txt, pub-N.bin and the verity/partition/v1
@@ -32,7 +34,7 @@ LEVELS=${LEVELS:-$ALL}; NEG_LEVEL=${NEG_LEVEL:-${ALL##*,}}
 LINK_ROWS=; [ "${LINK:-0}" = 1 ] && LINK_ROWS=--link-rows
 REC_STMT=${REC_STMT:-$INNER/stage}; REC_PUB=($REC_STMT/pub-*.bin)
 REC_INNER=(--rec-inner-circuit $REC_STMT/circuit.txt --rec-inner-public ${REC_PUB[0]} --rec-inner-partition $REC_STMT/partition.json
-  --rec-inner-session $INNER/session)
+  --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json)
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 

@@ -75,7 +75,8 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     theirs = record(t=thm([F]), v=thm([H], "P.h n = n", "00000000000000cc"))
     merged, why = M.merge(base, ours, theirs)
     assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["guarantees"]
-    assert M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})[1] == ["meaning: changed on both sides, differently"]
+    both, why = M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})
+    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge (#2600)"
 
 
 def test_a_key_both_sides_changed_refuses():
@@ -290,3 +291,100 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
     subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
     git(repo, "merge", "--no-edit", "b")
     assert g.read_text() == "import G.Actual\nimport G.Memory\nimport G.Joint\n"
+
+
+LAKEFILE = '''# Properties: the code's properties.
+name = "security_properties"
+
+[[require]]
+name = "security"
+path = ".."
+
+[[require]]
+name = "pouw_window"
+path = "../../pouw/window"
+
+[[lean_lib]]
+name = "Properties"
+roots = ["Properties.Pouw", "Properties.Proofs.Pouw",
+  "Properties.Nci", "Properties.Proofs.Nci"]
+'''
+
+
+def _lakefile(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp / n).write_text(t)
+    return M.lakefile(tmp / "base", tmp / "ours", tmp / "theirs")
+
+
+def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
+    """#1541 against #1573 and the Properties lakefile's other conflicts (Oct): each side required a package after the same
+    block and appended roots to the same line; the merge keeps both, wrapped as ours wraps, and stays TOML."""
+    import tempfile
+    import tomllib
+    tmp = Path(tempfile.mkdtemp())
+    req = lambda n: f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
+    anchor = 'path = "../../pouw/window"\n'
+    tail = '"Properties.Proofs.Nci"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]')
+    theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
+        tail, '"Properties.Proofs.Nci", "Properties.Network"]')
+    text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
+    assert left == 0, text
+    doc = tomllib.loads(text)
+    assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Properties.Proofs.Pouw", "Properties.Nci",
+                                           "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"]
+    assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
+    gone = LAKEFILE.replace(', "Properties.Proofs.Pouw"', "")
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Properties.Proofs.Nci", "Properties.Pous"]'), theirs)
+    assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
+        "Properties.Pouw", "Properties.Nci", "Properties.Proofs.Nci", "Properties.Network", "Properties.Pous"], text
+    comment = lambda s: LAKEFILE.replace("the code's properties.", s)
+    text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
+    assert left == 1 and "<<<<<<< ours" in text, "a comment both sides changed stays git's"
+    text, left = _lakefile(tmp, LAKEFILE, LAKEFILE.replace('"security_properties"', '"a"'),
+                           LAKEFILE.replace('"security_properties"', '"b"'))
+    assert left == 1, "so does a value"
+
+
+def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_driver(tmp_path, monkeypatch):
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    for f in ("merge.py", "check.py"):
+        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+    (repo / ".gitattributes").write_text(f"lakefile.toml merge={M.LAKEFILE}\n")
+    lf = repo / "lakefile.toml"
+    anchor = 'path = "../../pouw/window"\n'
+    git(repo, "init", "-q", "-b", "main")
+    for name, extra in (("main", ""), ("a", '\n[[require]]\nname = "x"\npath = "x"\n'),
+                        ("b", '\n[[require]]\nname = "y"\npath = "y"\n')):
+        if name != "main":
+            git(repo, "checkout", "-q", "-b", name, "main")
+        lf.write_text(LAKEFILE.replace(anchor, anchor + extra))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", name)
+    git(repo, "checkout", "-q", "a")
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    git(repo, "merge", "--no-edit", "b")
+    assert 'name = "x"\npath = "x"\n\n[[require]]\nname = "y"\npath = "y"\n' in lf.read_text()
+
+
+def test_lists_of_names_merge_where_both_sides_append_one():
+    """#2600 against next (18 Oct, proofs): each side appended a module to `meaning`, which merged as one value and refused
+    the merge; every list of names (`meaning`, `claims.modules`, `shape.premises`...) merges as a list, as `roots` did."""
+    base = {"meaning": ["A"], "claims": {"modules": ["C"], "witnesses": {}}, "shape": {"premises": ["P"]}}
+    ours = {"meaning": ["A", "B"], "claims": {"modules": ["C", "D"], "witnesses": {}}, "shape": {"premises": ["P", "Q"]}}
+    theirs = {"meaning": ["A", "C"], "claims": {"modules": ["C", "E"], "witnesses": {}}, "shape": {"premises": ["P", "R"]}}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == []
+    assert merged["meaning"] == ["A", "C", "B"] or merged["meaning"] == ["A", "B", "C"]
+    assert set(merged["meaning"]) == {"A", "B", "C"} and set(merged["claims"]["modules"]) == {"C", "D", "E"}
+    assert set(merged["shape"]["premises"]) == {"P", "Q", "R"}
+    merged, why = M.merge(base, {**ours, "meaning": []}, theirs)
+    assert why == [] and merged["meaning"] == ["C"], "what one side removed stays removed"
+    _, why = M.merge({"roots": ["X"], "x": 1}, {"roots": ["X"], "x": 2}, {"roots": ["X"], "x": 3})
+    assert why and "x" in why[0], "a value both sides changed still refuses"

@@ -12,18 +12,19 @@ Each of Flock's claims (`Definitions.Claims`, `Claims.Flock`) fails at a toy rec
   `ScopeMatches_fails`: its scope is empty and its check takes everything.
 * `compD`: the verifier rejects after one round, and every statement parses as `inStmt`, in scope (`m = 22`,
   `k_log = 6`, the forms the proof covers) with an empty circuit, so every witness is in the relation.
-  `Complete_fails`: every prover with a tape fails at `δ_c < 1`. `Nontrivial_fails`: a recorded run is rejected.
-* `ZK_fails` (`ZKMal.not_flockZK_collSim_toy`): the colliding simulator, which met the form before `Fork`, fails at
-  `ZKMal.toyD`.
+  `Complete_fails`: its reference prover fails at its error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
+* `ZK_fails` (`ZKMal.not_flockZK_toyZD`): the colliding simulator, which met the form before `Fork`, fails as the
+  simulator of `ZKMal.toyZD`, a masked record whose reference prover is quiet.
 * `effD`: a decoder that lists the one trace and counts one step. `Efficient_fails`: at `p = 0` its count exceeds
   `p`. Before the count was the record's (`Flock.Deploy.dec`), a count of `0` passed as an argument met the claim.
 * `ListWithin_fails`: the decoder that lists nothing, at a code with a trace (`not_listWithin_nil`).
 
-Two of the claims are still met by a trivial instance, both because they read the honest prover as a parameter:
-
-* `Complete_vacuous`: a prover with no tape meets `Complete` at `δ_c = 0`, at every record.
-* `ZK_vacuous`: at every masked record, a prover that ignores its witness and calls nothing meets `ZK` at `ε_zk = 0`
-  and `γ = 0` (`ZKmalR_vacuous`).
+`Complete` is of the record's reference prover (`Flock.Deploy.P`) on a nonempty tape type, so the prover with no tape
+that met its first form at every record is gone. `ZK` reads the masked record's own reference prover and simulator
+(`ZkDeploy.prover`, `ZkDeploy.S`), so it is not met at every masked record (`ZK_vacuous_refuted`, at `ε_zk = 0` and
+`γ = 0`): a prover that ignores its witness meets it only at a record whose own prover does (`ZK_of_quiet_record`;
+`ZK_quiet_toyZD`, where every witness is in the relation). At the deployed masked record (`ZKMal.zkDeployed`) the coin
+layer is the deployed one, not such a record's (`ZK_meets`, `ZK_coins_fails`).
 -/
 
 namespace Claims.Witness.Flock
@@ -48,6 +49,9 @@ noncomputable def ksD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   weight _ := 0
   waits _ := 4
   cap _ := 1024
+  Tape := Unit
+  P _ := silentP
+  δc _ _ := 0
 
 /-- A statement in Flock's scope, with an empty circuit. -/
 def inStmt : Claims.Flock.Stmt where
@@ -81,6 +85,9 @@ def compD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   weight _ := 0
   waits _ := 0
   cap _ := 0
+  Tape := Unit
+  P _ := silentP
+  δc _ _ := 0
 
 /-- The empty column, the zero of a word of field-element lists. -/
 local instance zeroCol : Zero (List Bool) := ⟨[]⟩
@@ -103,13 +110,16 @@ def effD (Coin : Type) : Claims.Flock.Deploy Coin (List Bool) Unit where
   weight _ := 0
   waits _ := 0
   cap _ := 0
+  Tape := Unit
+  P _ := silentP
+  δc _ _ := 0
 
 theorem listWithin_unit {Col : Type} [DecidableEq Col] [Zero Col] (len : Unit → ℕ) (enc : Unit → ℕ → Col)
     (θ : Unit → ℝ) : Claims.Flock.ListWithin len enc θ fun _ => [()] :=
   fun _ _ _ => List.mem_singleton.2 rfl
 
 theorem inStmt_inScope : Claims.Flock.InScope false inStmt := by
-  refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, rfl, by decide, by decide,
+  refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, Or.inl rfl, by decide, by decide,
     fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl⟩
 
 theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ => rfl
@@ -188,35 +198,43 @@ theorem ScopeMatches_fails : ¬ Claims.Flock.ScopeMatches (ksD Coin) := fun h =>
   simp [ksD] at hs
 
 omit [Nonempty Coin] in
-/-- **Flock's `Complete` fails** at `compD`, at every prover with a tape and every `δ_c < 1`. -/
-theorem Complete_fails {Ω : Type} [Nonempty Ω] (P : Claims.Flock.Wit → Prover Ω) (δc : Msg → ℝ) (x : Msg)
-    (hδ : δc x < 1) : ¬ Claims.Flock.Complete constH (compD Coin) P δc :=
-  Witness.Complete_fails P _ _ δc (w := ⟨[]⟩) ⟨inStmt, rfl, inStmt_inScope⟩ ⟨inStmt, rfl, inStmt_relS _⟩ hδ
-
-omit [Nonempty Coin] in
-/-- **Flock's `Complete` is met at a prover with no tape**, at every hash and record and `δ_c = 0`. -/
-theorem Complete_vacuous {Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) :
-    Claims.Flock.Complete H D noTape 0 :=
-  Witness.Complete_vacuous H D.V _ _
+/-- **Flock's `Complete` fails** at `compD`, whose reference prover is silent, at its error `δ_c = 0`. -/
+theorem Complete_fails : ¬ Claims.Flock.Complete constH (compD Coin) :=
+  Witness.Complete_fails (compD Coin).P _ _ ((compD Coin).δc constH) (x := []) (w := ⟨[]⟩) ⟨inStmt, rfl, inStmt_inScope⟩
+    ⟨inStmt, rfl, inStmt_relS _⟩ (show (0 : ℝ) < 1 from zero_lt_one)
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- **Flock's `Nontrivial` fails** at `compD`, which rejects the recorded run. -/
 theorem Nontrivial_fails (H : Msg → Msg) : ¬ Claims.Flock.Nontrivial H (compD Coin) [⟨[], [], fun _ => default⟩] :=
   fun h => Witness.Nontrivial_fails H h.1
 
-/-- **Flock's `ZK` fails** at the colliding simulator, at `ZKMal.toyD`, the quiet prover, every `ε_zk < 1` and every
-`γ`. -/
-theorem ZK_fails {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg) (u v : Msg)
-    (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
-    ¬ Claims.Flock.ZK H ZKMal.toyD (fun _ => ZKMal.quietP N Ω []) (ZKMal.collSim u v) εzk γ :=
-  ZKMal.not_flockZK_collSim_toy H u v εzk γ x hε
+/-- **Flock's `ZK` fails** at the colliding simulator, as the simulator of `ZKMal.toyZD`, whose reference prover is
+quiet, at every `ε_zk < 1` and every `γ`. -/
+theorem ZK_fails (H : Msg → Msg) (u v : Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
+    ¬ Claims.Flock.ZK H (ZKMal.toyZD [] (ZKMal.collSim u v)) εzk γ :=
+  ZKMal.not_flockZK_toyZD H [] u v εzk γ x hε
+
+/-- **Flock's `ZK` is not met at every masked record**, at `ε_zk = 0` and `γ = 0`. -/
+theorem ZK_vacuous_refuted (H : Msg → Msg) :
+    ¬ ∀ D : Claims.Flock.ZkDeploy Unit Unit Unit, D.zk = true → Claims.Flock.ZK H D 0 0 :=
+  ZKMal.not_forall_flockZK H
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **Flock's `ZK` is met by a prover that ignores its witness**, at every masked record, `ε_zk = 0` and `γ = 0`. -/
-theorem ZK_vacuous {Col T N Ω : Type} [DecidableEq Col] [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω]
-    (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) (hzk : D.zk = true) :
-    Claims.Flock.ZK H D (fun _ => ZKMal.quietP N Ω []) (quietSim fun x => D.V.k x + 1) 0 0 :=
-  ⟨hzk, ZKmalR_vacuous H _ _⟩
+/-- **Flock's `ZK` at a record whose own reference prover ignores its witness**: at `quietSim`, `ε_zk = 0` and
+`γ = 0` (`ZKmalR_vacuous`). -/
+theorem ZK_of_quiet_record {Col T : Type} [DecidableEq Col] (H : Msg → Msg) (D : Claims.Flock.ZkDeploy Coin Col T)
+    (hzk : D.zk = true) (hP : ∀ w x hist ω, ((D.prover w).next x hist ω).eval H = ([], []))
+    (hS : D.S = quietSim fun x => D.V.k x + 1) : Claims.Flock.ZK H D 0 0 := by
+  refine ⟨hzk, ?_⟩
+  rw [hS]
+  exact ZKMal.zkmalR_congr_eq (P := fun _ => ZKMal.quietP D.Nonce D.Rest [])
+    (fun w x hist ω _ => (hP w x hist ω).symm) (ZKmalR_vacuous H _ _)
+
+/-- **Such a record**: `ZKMal.toyZD` at `quietSim`, whose relation holds everywhere and whose reference prover sends
+`[]`. -/
+theorem ZK_quiet_toyZD (H : Msg → Msg) :
+    Claims.Flock.ZK H (ZKMal.toyZD [] (quietSim fun x => ZKMal.toyD.V.k x + 1)) 0 0 :=
+  ZK_of_quiet_record H _ rfl (fun w x hist ω => ZKMal.toyZD_prover H [] _ w x hist ω) rfl
 
 /-- **Flock's `Efficient` fails** at `effD` and `p = 0`: its decoder counts one step. -/
 theorem Efficient_fails (H : Msg → Msg) : ¬ Claims.Flock.Efficient H (effD Coin) 0 := fun h => by

@@ -1,7 +1,7 @@
 """facet_break: SASS opcodes to census classes, a program's load on every facet (IMMA.16832 through the generic MMA lines,
 every other form only through its own), the R1 and KFFMA0 violation TENSOR's interleaved points make at VF3n-16, the hull
-refit and the family refit (`family`, `--forms`), the L2 facet (only loads that skip L1 count), and the generator's grid
-(seeded, unique names, exact SASS counts).
+refit and the family refit (`family`, `--forms`), the L2 facet (only loads that skip L1 count), the full count (`--full`:
+every instruction of the gate's loop), and the generator's grid (seeded, unique names, exact SASS counts).
 `test_grid_slice_builds_and_gates` builds a
 slice of the grid with nvcc and gates it; it skips without nvcc and nvdisasm.
 """
@@ -98,9 +98,27 @@ def test_a_tld_takes_its_width_from_the_program_and_unpriced_loads_are_listed(ce
 
 def test_fine_grid_sweeps_the_near_frontier_and_the_ji3n_0_form():
     names = [g["name"] for g in gen.grid(0, 0, family="fine")]
-    assert len(set(names)) == len(names) == 968
+    assert len(set(names)) == len(names) == 1346
     assert {"mx_h16816f16_ffma_q128_p0_w16", "mx_i16832_imad_q34_p0_w16", "mx_i16832_ffma_q192_p0_w32",
             "mx_i16832_dfma_q1_p1_w16"} <= set(names)
+
+
+def test_rt_families_are_unique_and_hold_the_programs_that_broke_ji3s_and_ji3t():
+    sizes = {"rt": 726, "rt2": 408, "rt3": 120, "rt4": 95, "rt5": 168, "rt6": 192, "rt7": 144, "rt8": 377}
+    names = {f: [g["name"] for g in gen.grid(0, 0, family=f)] for f in sizes}
+    assert {f: len(set(n)) for f, n in names.items()} == {f: len(n) for f, n in names.items()} == sizes
+    assert "jm_i16832_fmuli_q120_p0_a3u20_w8" in names["rt4"]
+    assert "jm_isp16864_fmuli_q128_p0_a2u16_w8" in names["rt5"]
+    assert {"jx_i16832_isp16864_fmuli_q128_a1u20_w8", "jx_i16832_osf16864_none_q0_a8u4_w8", "al_mufu_popc_w16",
+            "jm_isp16864_fmuli_q128_p0_a2u20_w8_k3"} <= set(names["rt8"])
+
+
+def test_two_forms_take_their_accumulators_and_unroll_and_keep_the_ji_names():
+    g = gen._jx("i16832", "isp16864", "fmuli", 128, 2, na=1, u=20)
+    assert gen.expect_of(g) == ("IMMA.16832.S8.S8=80,IMMA.SP.16864.S8.S8=80,FMUL=2560", "", 0)
+    assert "FB_JMIX2(jx_i16832_isp16864_fmuli_q128_a1u20_w8, I16832, ISP16864, 1, 20, L_FMULI, L_NONE, L_NONE, 128, 256)" \
+        in gen.emit_cu([g | {"name": gen.name_of(g)}])
+    assert gen.name_of(gen._jx("i16832", "h1688t", ("fmuli", "axi"), 96, 4)) == "jx_i16832_h1688t_fmuli_axi_q96_w16"
 
 
 def test_mem_grid_is_seeded_unique_and_counts_each_slot():
@@ -214,6 +232,34 @@ def test_old_first_tensor_kinds_build_lane_is_iadd3_alone(tmp_path):
                                     "ops_per_sm": 1, "mma_warps": 0, "op_warps": 32})
     x = loads.load_rows([path])[0]["x"]
     assert set(x) == {"IMMA16832", "ALU"}
+
+
+def test_full_counts_every_instruction_of_the_gates_loop_and_unclassed_ones_on_issue_alone(tmp_path, census):
+    c, cu = census
+    out = tmp_path / "r20261017-214111-18e4" / "out"
+    (out / "sass").mkdir(parents=True)
+    body = (["IMAD R0, R1, R2, RZ", "MOV R4, RZ"] + ["IMMA.16832.S8.S8 R8, R12, R16, R8"] * 2
+            + ["FMUL R20, R20, R21"] * 6
+            + ["@!P0 MOV R5, R4", "IADD3 R6, R6, 0x1, RZ", "ISETP.NE.AND P0, PT, R6, R7, PT", "BRA 0x0020", "EXIT"])
+    sass = "\n\tcode for sm_120\n\t\tFunction : jm_t\n" + "".join(
+        f"        /*{16 * i:04x}*/                   {ins} ;      /* 0x000fe20000000f00 */\n"
+        for i, ins in enumerate(body))
+    (out / "sass" / "fb_000.sass").write_text(sass + "\t\tFunction : jm_u\n")
+    loop = {"head": "0x0020", "tail": "0x00d0", "counts": {"IMMA.16832.S8.S8": 2, "FMUL": 6}}
+    (out / "gate-build.json").write_text(json.dumps({"verdicts": [
+        {"probe": p, "passed": True, "verdict": {"kernel": p, "loops": [loop]}} for p in ("jm_t", "jm_u")]}))
+    one = {"probe": "jm_t", "rates": {"0:IMMA.16832.S8.S8": 0.2, "0:FMUL": 0.6}}
+    two = {"probe": "jm_u", "rates": {"0:IMMA.16832.S8.S8": 0.2, "1:FMUL": 0.6}}
+    p = out / "rows.jsonl"
+    p.write_text("".join(json.dumps(r) + "\n" for r in (one, two)))
+    want = ["IMMA.16832.S8.S8"] * 2 + ["FMUL"] * 6 + ["MOV", "IADD3", "ISETP.NE.AND", "BRA"]
+    assert loads.gate_loops(out)["jm_t"] == want
+    full, other = loads.load_rows([p], full=True)
+    assert full["x"] == pytest.approx({"IMMA16832": 0.05, "FFMA": 0.15, "NOROW": 0.025, "ALU": 0.025})
+    assert full["x_issue"] == pytest.approx(0.05)
+    assert "x" not in other
+    counted = loads.program(one, c, cu)["load"]["issue"]
+    assert loads.program(full, c, cu)["load"]["issue"] == pytest.approx(counted + 0.1) and counted == pytest.approx(0.2)
 
 
 def test_grid_is_seeded_unique_and_pinned():

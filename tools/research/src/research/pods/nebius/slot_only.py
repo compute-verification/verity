@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""`python3 slot_only.py [--runs DIR] [--marker FILE] [--log FILE] [--dry-run]`: on a machine whose MARKER exists (deploy.toml
-installs it on vy-nebius-cpu-1), stop every live `research run` whose workload did not come through a check slot (`through_slot`).
+"""`python3 slot_only.py [--runs DIR] [--marker FILE] [--log FILE] [--dry-run] [--renice N]`: on a machine whose MARKER exists
+(deploy.toml installs it on vy-nebius-cpu-1), stop every live `research run` whose workload did not come through a check slot
+(`through_slot`).
+
+With `--renice N` (vy-nebius-1's vy-direct-nice.timer, marker /etc/vy/direct-runs-nice) it stops nothing: it renices each such
+run's processes to N, so the train checks' slots win the cores (top, 18 Oct: node 1 at load 410-468 on 192 cores, most of it lanes'
+direct runs), and logs each run once, when it is first reniced.
 
 A run outside slot.py lands beside the slots' checks without their lock or cores, and on cpu-1 three did in one night (8 Oct),
 taking the slice from 586G to 647G beside a merge check. research.remote's launcher refuses such a run before it starts; this
@@ -127,18 +132,34 @@ def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = F
             "why": "not through a check slot (slot.py)"}
 
 
+def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = False) -> dict:
+    """Renice every process of the run to `nice` (its runner too); the record of the pids it moved."""
+    moved = []
+    for p in members(o["dir"], proc):
+        try:
+            if os.getpriority(os.PRIO_PROCESS, p) < nice:
+                if not dry_run:
+                    os.setpriority(os.PRIO_PROCESS, p, nice)
+                moved.append(p)
+        except (ProcessLookupError, PermissionError):
+            pass
+    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+            "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="slot_only.py", description=__doc__.splitlines()[0])
     ap.add_argument("--runs", type=Path, default=RUNS)
     ap.add_argument("--marker", type=Path, default=MARKER)
     ap.add_argument("--log", type=Path, default=LOG)
     ap.add_argument("--dry-run", action="store_true", help="print what it would stop, signal nothing")
+    ap.add_argument("--renice", type=int, default=None, metavar="N", help="renice such runs to N instead of stopping them")
     a = ap.parse_args(argv)
     if not a.marker.exists():
         return 0
     for o in offenders(a.runs):
-        rec = stop(o, dry_run=a.dry_run)
-        if not rec["sigterm"]:
+        rec = stop(o, dry_run=a.dry_run) if a.renice is None else renice(o, a.renice, dry_run=a.dry_run)
+        if not rec.get("sigterm" if a.renice is None else "reniced"):
             continue
         line = json.dumps(rec, sort_keys=True)
         print(line, flush=True)

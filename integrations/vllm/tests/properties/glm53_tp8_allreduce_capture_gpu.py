@@ -66,6 +66,8 @@ whose launches were GO: what `tp_allreduce.CAPTURED` may then cite, with this ru
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import argparse
 import itertools
 import json
@@ -84,6 +86,7 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.config import RowEngine
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.registry import tp_allreduce as T
 from verity_vllm.program.registry import tp_allreduce_check as K
@@ -121,7 +124,7 @@ PROBE_M = {1: 10, 2: FUSED_MAX}
 SPECIAL = (("special1", 3, 1), ("special2", 11, 2))
 SCALE_LOG2 = (-8.0, 2.0)
 SCREEN_CHUNK, SCREEN_MAX = 500, 20_000
-#: the workload's `env_required`, and vLLM's defaults for the all-reduce's routes stated
+#: the row's `engine.env`, and vLLM's defaults for the all-reduce's routes stated
 SERVED_ENV = {"VLLM_BATCH_INVARIANT": "0", "VLLM_USE_DEEP_GEMM": "0", "VLLM_ALLREDUCE_USE_SYMM_MEM": "1",
               "VLLM_ALLREDUCE_USE_FLASHINFER": "1"}
 SWITCH_ENV = {**SERVED_ENV, "VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}
@@ -221,13 +224,13 @@ def stage_of(M: int, N: int | None = None) -> int:
 
 
 def workload_setting(path: Path | None = None) -> dict[str, Any]:
-    """The served engine's setting from the workload's ``engine_args_required``: "custom-off" when it sets
+    """The served engine's setting from the row's ``engine.args``: "custom-off" when it sets
     ``disable_custom_all_reduce`` true, else "defaults", vLLM's own default being false (`vllm/config/parallel.py:214`) for a
     workload that states none; with what it read."""
     path = WORKLOAD_PATH if path is None else path
     if not path.is_file():
         return {"setting": "defaults", "disable_custom_all_reduce": None, "source": f"vLLM's default: no {path.name}"}
-    v = json.loads(path.read_text()).get("engine_args_required", {}).get("disable_custom_all_reduce")
+    v = RowEngine.of(json.loads(path.read_text())).args.get("disable_custom_all_reduce")
     if v is not None and not isinstance(v, bool):
         raise ValueError(f"{path.name}: disable_custom_all_reduce={v!r}, not a bool")
     return {"setting": "custom-off" if v else "defaults", "disable_custom_all_reduce": v,

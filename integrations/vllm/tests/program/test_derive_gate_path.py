@@ -104,6 +104,58 @@ def test_unresolved_unrooted_entries_are_counted_for_the_provenance():
     assert ctx.unresolved_module_paths == {"orphan": 3}               # the resolved router is not counted
 
 
+class _SharedExperts(torch.nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self._layer = layer                  # the block's shared expert MLP (vLLM SharedExperts)
+
+
+class _Mlp(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gate_up_proj, self.act_fn, self.down_proj = torch.nn.Linear(4, 8), torch.nn.SiLU(), torch.nn.Linear(4, 4)
+
+
+class _GlmMoe(torch.nn.Module):
+    """GLM-5.3's `DeepseekV2MoE`: the shared expert registered first, then the runner holding it as `_shared_experts._layer`."""
+
+    def __init__(self):
+        super().__init__()
+        self.gate = torch.nn.Linear(4, 4)
+        self.shared_experts = _Mlp()
+        self.experts = _Runner(self.gate)
+        self.experts._shared_experts = _SharedExperts(self.shared_experts)
+
+
+class _GlmDecoder(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mlp = _GlmMoe()
+
+
+class _GlmModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layers = torch.nn.ModuleList([_GlmDecoder(), _GlmDecoder()])
+
+
+@pytest.mark.parametrize("container", [True, False], ids=["with-SharedExperts-entry", "without"])
+def test_glm53_shared_expert_entries_resolve_per_layer(container):
+    """The runner's `_forward_impl` calls the shared expert as `_shared_experts._layer`: every entry below it is qualified from the
+    runner, so the manifest of record named all 75 MoE layers' shared-expert Calls `_shared_experts._layer.act_fn` (one identity).
+    Each resolves to the layer's `mlp.shared_experts.<leaf>`, the capture map's `shared.*` taps."""
+    ctx = _ctx(_GlmModel())
+    for k in (0, 1):
+        head = (("", _GlmModel), (f"layers.{k}", _GlmDecoder), (f"layers.{k}.mlp", _GlmMoe), (f"layers.{k}.mlp.experts", _Runner))
+        mid = (("_shared_experts", _SharedExperts),) if container else ()
+        for leaf in ("gate_up_proj", "act_fn", "down_proj"):
+            n = _node(*head, *mid, ("_shared_experts._layer", _Mlp), (f"_shared_experts._layer.{leaf}", torch.nn.Module))
+            assert ctx.stack_path(n) == f"layers.{k}.mlp.shared_experts.{leaf}"
+        assert ctx.stack_path(_node(*head, *mid, ("_shared_experts._layer", _Mlp))) == f"layers.{k}.mlp.shared_experts"
+        assert ctx.stack_path(_node(*head, ("gate", torch.nn.Linear))) == f"layers.{k}.mlp.gate"
+    assert ctx.unresolved_module_paths == {}
+
+
 def test_without_a_module_the_trace_path_is_used():
     ctx = Ctx.__new__(Ctx)
     ctx._module_paths, ctx._canonical_path = module_registrations(None)

@@ -1,8 +1,12 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-7B",
- "checkpoint_revision": "d149729398750b98c0af14eb82c78cfe92750796",
  "case": "B7",
+ "engine": {
+  "revision": "d149729398750b98c0af14eb82c78cfe92750796",
+  "vllm": "d9105ea80",
+  "args": {}
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -61,5 +65,5 @@
    "prompt_text": "In the summer of 1969, three astronauts left Earth aboard a Saturn V rocket and travelled for three days before entering orbit around the Moon, where"
   }
  ],
- "note": "[GEN ov-easy 2026-09-17] B7 (Qwen2.5-7B) one-request workload for the capture-derived program: 32 prompt tokens, 16 greedy tokens (1 prefill + 15 decode steps), logprobs=None (D62). No accepted_token_ids: the clean uninstrumented control run of run_config.py is the token reference (RULES \u00a71/\u00a75). Engine: --engine-arg gpu_memory_utilization=0.95 (15.2 GB of bf16 weights on a 24 GB RTX 4090)."
+ "note": "[GEN ov-easy 2026-09-17] B7 (Qwen2.5-7B) one-request workload for the capture-derived program: 32 prompt tokens, 16 greedy tokens (1 prefill + 15 decode steps), logprobs=None (D62). No accepted_token_ids: the clean uninstrumented control run of run_config.py is the token reference (RULES §1/§5). Engine: --engine-arg gpu_memory_utilization=0.95 (15.2 GB of bf16 weights on a 24 GB RTX 4090)."
 }

@@ -3,6 +3,8 @@ against FlashMLA's quant.py, its operands, the prefill's workspace restated in t
 its comparison jobs on twin-made kernel words, its verdicts and its main loop with the GPU stood in for."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import contextlib
 import copy
 import json
@@ -70,15 +72,23 @@ def test_the_statics_are_dsv4s() -> None:
 
 
 def test_the_prefill_statics_are_dsv4s() -> None:
-    """`_forward_prefill`'s index rows round_up(top_k + 128, 128) wide (128, 1152, 256), NP = ceil(ceil(n / 64) / 2) and at least
-    one, the compressed caches' page blocks the decode's, the C4 tokens over every NP of a 1152-wide row and both parities of their
-    block counts, and the Definitions' statics the capture's."""
-    assert [X.prefill_width(k) for k in ("swa", "c4", "c128")] == [128, 1152, 256]
+    """`_forward_prefill`'s index rows round_up(top_k + 128, 128) wide (128, 1152, 256, 8320), NP = ceil(ceil(n / 64) / 2) and at
+    least one, the compressed caches' page blocks the decode's, the C4 tokens over every NP of a 1152-wide row and both parities
+    of their block counts, the `c128l` tokens on the W ladder's full-row boundaries past 9 (17, 33, 65 at both block parities of
+    65 and 17, the longest the full 8320-wide row), and the Definitions' statics the capture's."""
+    assert [X.prefill_width(k) for k in ("swa", "c4", "c128", "c128l")] == [128, 1152, 256, 8320]
     assert [X.prefill_pairs(n) for n in (0, 1, 64, 65, 128, 129, 513, 1088, 1152)] == [1, 1, 1, 1, 1, 2, 5, 9, 9]
-    assert all(X.PREFILL_LAYERS[k][1] == X.LAYERS[k][0] for k in ("c4", "c128")) and X.PREFILL_LAYERS["c4"][2] == X.C4_TOPK
+    assert [X.prefill_pairs(n) for n in (2112, 2176, 4224, 8202, 8320)] == [17, 17, 33, 65, 65]
+    assert all(X.PREFILL_LAYERS[k][1] == X.LAYERS[k][0] for k in ("c4", "c128", "c128l"))
+    assert X.PREFILL_LAYERS["c4"][2] == X.C4_TOPK and X.PREFILL_LAYERS["c128l"][2] == X.LAYERS["c128l"][1] == 8192
     n = np.array([kc + w for _, kc, w in X.PREFILL_LENS["c4"]])
     assert sorted({X.prefill_pairs(int(v)) for v in n}) == list(range(1, X.prefill_pairs(X.prefill_width("c4")) + 1))
     assert set((-(-n // X.BN) % 2).tolist()) == {0, 1} and n.max() == X.prefill_width("c4")
+    n = np.array([kc + w for _, kc, w in X.PREFILL_LENS["c128l"]])
+    pairs = np.array([X.prefill_pairs(int(v)) for v in n])
+    assert sorted(set(pairs.tolist())) == [1, 17, 33, 65] and int(n.max()) == X.prefill_width("c128l")
+    nb = -(-n // X.BN)
+    assert set((nb[pairs == 65] % 2).tolist()) == {0, 1} and set((nb[pairs == 17] % 2).tolist()) == {0, 1}
     st = P.FLASHMLA_PREFILL_DSV4
     assert (st["NH"], st["D"], st["BN"], st["SCALE"]) == (X.NH, X.D, X.BN, X.SCALE) and st["DOT"] is F.FLASHMLA_DSV4["DOT"]
     assert P.FLASHMLA_GATHER_DSV4 == {"DN": X.DN, "DR": X.DR, "QT": X.QT}
@@ -88,10 +98,10 @@ def test_every_prefill_token_reads_its_requests_gathered_rows() -> None:
     """Each token's indices as `PREFILL_LENS` lays them out: distinct compressed rows of its request, then consecutive window rows
     within its request's, every one a row the gathers write, -1 past its length; no block table onto a reserved block; and
     `prefill_token` the token's 2 NP 64 rows at those indices."""
-    for case in ("swa", "c4", "c128"):
+    for case in ("swa", "c4", "c128", "c128l"):
         o = X.prefill_operands(case)
         nc, m = (int(v) for v in o["geom"])
-        r_ = len(X.PREFILL_REQS)
+        r_ = len(X.prefill_reqs(o["layer"]))
         assert nc == int(o["comp_lens"].max()) and m == nc + int(o["gather_lens"].max())
         assert not o["q"][:, X.NH:].any() and np.all(o["sink"][X.NH:] == X.F_NINF)
         assert np.all(o["swa_table"] < X.CACHE_BLOCKS["swa"] - 1)
@@ -124,11 +134,12 @@ def test_the_workspace_is_each_requests_rows_dequantised() -> None:
     """`workspace`, the two gathers' rows, restated in torch: request r's compressed positions 0.. and its last gather_len window
     positions through their block tables, each e4m3 byte as bf16 times its tile's UE8M0 byte shifted into a bf16's exponent, then
     the bf16 RoPE, at rows 0.. and N_c..; the sentinel everywhere else."""
-    for case in ("c4", "c128"):
+    for case in ("c4", "c128", "c128l"):
         o = X.prefill_operands(case)
         nc, m = (int(v) for v in o["geom"])
-        want = np.full((len(X.PREFILL_REQS), m, X.D), X.SENTINELS[1], np.uint16)
-        for r, (s, g) in enumerate(X.PREFILL_REQS):
+        reqs = X.prefill_reqs(o["layer"])
+        want = np.full((len(reqs), m, X.D), X.SENTINELS[1], np.uint16)
+        for r, (s, g) in enumerate(reqs):
             n = int(o["comp_lens"][r])
             want[r, :n] = _dequantised(o["extra_cache"], o["extra_table"], r, np.arange(n), int(o["extra_pbs"][0]))
             want[r, nc:nc + g] = _dequantised(o["swa_cache"], o["swa_table"], r, np.arange(s - g, s), X.SWA_PBS)
@@ -178,42 +189,110 @@ def test_the_rows_quantize_as_quant_py() -> None:
     assert np.array_equal(rope, torch.from_numpy(r).to(torch.bfloat16).view(torch.int16).numpy().view(np.uint16))
 
 
-def test_every_case_plans_and_hands_each_token_its_rows() -> None:
+@pytest.mark.parametrize("case,quick", [(c, False) for c in DECODE if c not in X.BATCHES] + [(c, True) for c in X.BATCHES]
+                         + [pytest.param(c, False, marks=pytest.mark.slow) for c in X.BATCHES])
+def test_every_case_plans_and_hands_each_token_its_rows(case: str, quick: bool) -> None:
     """Every case's tokens through the planner port and `token_inputs`: the window's NW rows from the SWA cache then
     ceil64(extra_len) compressed rows, the indices -1 past each length, the lengths, and SPLITS tiling the token's blocks; no
     token but `edge`'s reads a reserved block."""
-    for case in DECODE:
-        o = X.case_operands(case)
-        m, ns = X.twin_sched(o)
-        a = X.case_arrays(o, np.zeros((o["q"].shape[0], X.H_Q, X.D), np.uint16), m, ns)
-        metas, nsl = X._metas(a)
-        w = X.extra_width(o)
-        assert not o["q"][:, X.NH:].any() and np.all(o["sink"][X.NH:] == X.F_NINF)
-        for t in range(o["q"].shape[0]):
-            x = X.token_inputs(a, t, metas, nsl)
-            s = int(o["swa_lens"][t])
-            e = int(o["extra_lens"][t]) if w else 0
-            assert x["NW"] == max(-(-s // 64), 1) * 64 and x["N"] == x["NW"] + -(-e // 64) * 64
-            assert x["SPLITS"][0] == 0 and x["SPLITS"][-1] == x["N"] // 64 and len(x["SPLITS"]) - 1 == nsl[t + 1] - nsl[t]
-            assert [int(v) for v in x["lens"]] == [s] + ([e] if x["N"] > x["NW"] else [])
-            idx = x["idx"].view(np.int32)
-            assert np.array_equal(idx[:x["NW"]], o["swa_idx"][t, :x["NW"]])
-            assert np.array_equal(idx[x["NW"]:], o["extra_buf"][t, :x["N"] - x["NW"]]) if w else x["N"] == x["NW"]
-            if case != "edge":
-                assert np.all(idx[:x["NW"]][s:] == -1) and np.all(idx[x["NW"]:][e:] == -1)
-                assert np.all(o["swa_idx"][t] < (X.CACHE_BLOCKS["swa"] - 1) * X.SWA_PBS)
-                if w:
-                    assert np.all(o["extra_buf"][t, :w] < (X.CACHE_BLOCKS[o["layer"]] - 1) * X.LAYERS[o["layer"]][0])
-            nope, scale, rope = X.gather_rows(o["swa_cache"], idx[:x["NW"]], X.SWA_PBS)
-            assert np.array_equal(x["nope"][:x["NW"]], nope) and np.array_equal(x["rope"][:x["NW"]], rope)
+    o = X.case_operands(case, quick)
+    m, ns = X.twin_sched(o)
+    a = X.case_arrays(o, np.zeros((o["q"].shape[0], X.H_Q, X.D), np.uint16), m, ns)
+    metas, nsl = X._metas(a)
+    w = X.extra_width(o)
+    assert not o["q"][:, X.NH:].any() and np.all(o["sink"][X.NH:] == X.F_NINF)
+    for t in range(o["q"].shape[0]):
+        x = X.token_inputs(a, t, metas, nsl)
+        s = int(o["swa_lens"][t])
+        e = int(o["extra_lens"][t]) if w else 0
+        assert x["NW"] == max(-(-s // 64), 1) * 64 and x["N"] == x["NW"] + -(-e // 64) * 64
+        assert x["SPLITS"][0] == 0 and x["SPLITS"][-1] == x["N"] // 64 and len(x["SPLITS"]) - 1 == nsl[t + 1] - nsl[t]
+        assert [int(v) for v in x["lens"]] == [s] + ([e] if x["N"] > x["NW"] else [])
+        idx = x["idx"].view(np.int32)
+        assert np.array_equal(idx[:x["NW"]], o["swa_idx"][t, :x["NW"]])
+        assert np.array_equal(idx[x["NW"]:], o["extra_buf"][t, :x["N"] - x["NW"]]) if w else x["N"] == x["NW"]
+        if case != "edge":
+            assert np.all(idx[:x["NW"]][s:] == -1) and np.all(idx[x["NW"]:][e:] == -1)
+            assert np.all(o["swa_idx"][t] < (X.CACHE_BLOCKS["swa"] - 1) * X.SWA_PBS)
+            if w:
+                assert np.all(o["extra_buf"][t, :w] < (X.CACHE_BLOCKS[o["layer"]] - 1) * X.LAYERS[o["layer"]][0])
+        nope, scale, rope = X.gather_rows(o["swa_cache"], idx[:x["NW"]], X.SWA_PBS)
+        assert np.array_equal(x["nope"][:x["NW"]], nope) and np.array_equal(x["rope"][:x["NW"]], rope)
+
+
+def _plan(case: str, quick: bool = False) -> tuple[np.ndarray, int]:
+    """A case's splits per request and the most requests a partition holds, from its lengths alone."""
+    lens = X.case_lens(case, quick)
+    o = {"layer": X.CASE_LAYERS[case][0], "swa_lens": np.array([s for s, _ in lens]), "extra_lens": np.array([e or 0 for _, e in lens])}
+    m, ns = X.twin_sched(o)
+    shared = max(int(e) - int(b) + 1 for b, e in m[:, :2] if b < len(lens))
+    return np.diff(ns), shared
 
 
 def test_the_cases_cover_the_planners_regimes() -> None:
     """The lone token is cut into 18 splits, `batch` shares partitions between requests (some split, some whole), and the
-    window-only tokens of length 0 and 1 are one block each."""
-    per = {c: np.diff(X.twin_sched(X.case_operands(c))[1]) for c in DECODE}
+    window-only tokens of length 0 and 1 are one block each.  The batch cases: the 2^20-position token in 65 splits eagerly and 44
+    padded to 24 (two partials on a combine lane), `max` in 127 (four), and at 512, 1024 and 2048 tokens up to 10, 18 and 23
+    requests in a partition, each in one or two splits."""
+    plan = {c: _plan(c) for c in DECODE}
+    per = {c: p for c, (p, _) in plan.items()}
     assert per["lone"].tolist() == [18] and set(per["batch"].tolist()) == {1, 2} and per["swa"][:2].tolist() == [1, 1]
     assert per["c4"].max() == 18 and per["c128"].min() >= 2
+    assert per["long17"][0] == per["long17"].max() == 65 and per["long24"][0] == per["long24"].max() == 44
+    assert per["max"].tolist() == [127]
+    assert {c: (len(per[c]), set(per[c].tolist()), plan[c][1]) for c in ("graph", "eager", "mtp", "swagraph")} == {
+        "graph": (512, {1, 2}, 10), "eager": (1024, {1, 2}, 18), "mtp": (2048, {1, 2}, 23), "swagraph": (512, {1, 2}, 5)}
+
+
+def test_the_batch_cases_are_vllms_batches() -> None:
+    """Each batch case is a CUDA graph's size with its pads trailing, or unpadded (17 tokens, eager; one past the largest graph;
+    or already a size); its tokens' lengths are their positions'; a `c128l` case's longest sequence makes vLLM's C128 width 8192
+    (sparse_mla.py:246-252); `long24` is `long17` padded and `mtp` pairs each token with its draft; a pad has swa_len 0 over -1
+    and extra_len 0."""
+    assert max(X.GRAPH_SIZES) == 512 and 17 not in X.GRAPH_SIZES and X.MAX_NUM_SEQS == 1024
+    for quick in (False, True):
+        for case, (real, pads) in (X.QUICK_BATCHES if quick else X.BATCHES).items():
+            layer = X.CASE_LAYERS[case][0]
+            lens, pos = X.case_lens(case, quick), X.case_positions(case, quick)
+            graph = min(g for g in X.GRAPH_SIZES if g >= real) if real <= 512 else None
+            assert len(pos) == real and len(lens) == (graph if pads else real) and (pads == 0 or graph != real)
+            assert lens[:real] == tuple(X.token_lens(layer, p) for p in pos) and 0 <= min(pos) and max(pos) <= X.MAX_POS
+            assert lens[real:] == ((0, None if layer == "swa" else 0),) * pads
+            if layer == "c128l":
+                top = (max(pos) + 1) // 128
+                assert min(max(1 << (top - 1).bit_length(), 128), (X.MAX_POS + 1) // 128) == X.LAYERS[layer][1] == 8192
+        assert X.case_lens("long24", quick)[:17] == X.case_lens("long17", quick)
+        pos = np.array(X.case_positions("mtp", quick))
+        assert np.array_equal(pos[1::2], pos[::2] + 1)
+    for case in ("long24", "swagraph"):
+        o, b, pads = X.case_operands(case, quick=True), len(X.case_lens(case, True)), X.case_pads(case, True)
+        assert pads and np.all(o["swa_lens"][b - pads:] == 0) and np.all(o["swa_idx"][b - pads:] == -1)
+        if X.extra_width(o):
+            rows = o["extra_buf"][b - pads:, :X.extra_width(o)]
+            assert np.all(o["extra_lens"][b - pads:] == 0) and np.all(rows < (X.CACHE_BLOCKS["c128l"] - 1) * 2) and (rows >= 0).any()
+
+
+@pytest.mark.parametrize("layer", ["swa", "c4", "c128l"])
+def test_every_batch_to_vllms_default_plans_into_the_definitions(layer: str) -> None:
+    """Batches of 1 to 2048 tokens (MAX_NUM_SEQS sequences, two tokens each under MTP) at log-uniform positions, those of up to 512
+    padded to their CUDA graph: every request's SPLITS tile its blocks and bind `FlashMlaDecodeHead_v1` and `FlashMlaCombine_v1`,
+    and none has more than 127 splits, the most one token alone reaches (`max`)."""
+    rng = np.random.default_rng(len(layer))
+    w = X.LAYERS[layer][1] if layer != "swa" else 0
+    for b in (1, 2, 17, 24, 100, 160, 161, 256, 500, 512, 513, 1024, 2048):
+        lens = [X.token_lens(layer, int(p)) for p in np.exp2(rng.uniform(0, 20, b)).astype(np.int64) - 1]
+        lens += [(0, None if layer == "swa" else 0)] * ((min(g for g in X.GRAPH_SIZES if g >= b) if b <= 512 else b) - b)
+        metas, ns = T.sched_meta([s for s, _ in lens], [e for _, e in lens] if w else None, topk=X.WINDOW, extra_topk=w,
+                                 parts=T.num_sm_parts(X.H_Q))
+        for r, (s, e) in enumerate(lens):
+            sp = T.request_splits(metas, ns, r, T.request_blocks(s, e)[1] // X.BN)
+            assert F.check_splits(sp) == T.request_blocks(s, e)[1] // X.BN and len(sp) - 1 <= 127
+            if len(sp) > 2:
+                F.check_combine_statics(len(sp) - 1)
+    if w:
+        alone = {e: int(np.diff(T.sched_meta([X.WINDOW], [e], topk=X.WINDOW, extra_topk=w, parts=132)[1])[0])
+                 for e in range(0, w + 1, X.BN)}
+        assert max(alone.values()) == (127 if layer == "c128l" else 18) and alone.get(8000, 127) == 127
 
 
 def test_the_edge_words_land_where_they_are_meant_to(tmp_path) -> None:
@@ -364,8 +443,10 @@ def _doc() -> dict:
                                         (("errors", "stack"), "boom"), (("launches", 2, "checks", "sched"), False),
                                         (("launches", 0, "checks", "rerun"), False), (("comparisons", 1, "mismatch"), 1),
                                         (("comparisons", 4, "twin_mismatch"), 3), (("comparisons", 5, "reference"), 0),
-                                        (("launches", 7, "checks", "gather_rerun"), False), (("comparisons", 6, "words"), 0),
-                                        (("comparisons", 9, "twin_mismatch"), 1), (("totals", "mismatch"), 1)])
+                                        (("launches", len(DECODE) + 1, "checks", "gather_rerun"), False),
+                                        (("comparisons", len(DECODE), "words"), 0),
+                                        (("comparisons", len(DECODE) + 3, "twin_mismatch"), 1),
+                                        (("comparisons", len(DECODE) - 1, "reference"), 0), (("totals", "mismatch"), 1)])
 def test_the_verdict_needs_every_check(path: tuple, value) -> None:
     assert X._verdict(_doc())
     doc = _doc()

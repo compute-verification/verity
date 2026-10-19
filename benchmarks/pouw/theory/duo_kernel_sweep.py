@@ -11,9 +11,12 @@ rotations, and how many key assignments it swept and how many had a kernel eleme
   the four positions of an MMA, every odd pair.
 - ``sample``: independent random odd keys and nonzero rotations at each position, for lengths the exhaustive sweep
   can't reach.
+- ``deployed``: keys that meet `DuoQuadKeysOk` at every position, as both deployed schedules' do, at widths 5 and 6
+  (the least where such keys exist) and five to seven words: past `DuoQuadNoKernel`, below `DuoLongRunKernel`'s bound.
 
     python duo_kernel_sweep.py --set quick            # seconds: the tests' rows
     python duo_kernel_sweep.py --set pod --out DIR    # the pod rows (see the note), one process per core
+    python duo_kernel_sweep.py --set deployed --out DIR
 """
 from __future__ import annotations
 
@@ -75,6 +78,22 @@ def sample(n: int, L: int, mode: str, count: int, seed: int) -> list[tuple]:
              tuple(rng.randrange(1 << n) | 1 for _ in range(L))) for _ in range(count)]
 
 
+def deployed(n: int, L: int, count: int | None = None, seed: int = 0) -> list[tuple]:
+    """Keys that meet `DuoQuadKeysOk` at every position, the deployed schedules' shape at a small width: a rotation
+    2 <= r <= n - 3 at each position that matters (r = 1 leaves no odd multiplier that isn't -1 mod 2^r), and odd
+    multipliers (a0, a1) alternating, each not -1 modulo two to the previous position's rotation. Every assignment, or
+    `count` of them drawn with `seed`."""
+    m = L - 1
+    jobs = []
+    for rots in itertools.product(range(2, n - 2), repeat=m):
+        rot = rots + (2,)
+        for a0, a1 in itertools.product(range(1, 1 << n, 2), repeat=2):
+            a = [a0 if t % 2 == 0 else a1 for t in range(L)]
+            if all((a[t + 1] + 1) % (1 << rot[t]) for t in range(m - 1)):
+                jobs.append((n, L, "full", tuple(range(L)), rot, 0, tuple(a)))
+    return jobs if count is None or count >= len(jobs) else random.Random(seed).sample(jobs, count)
+
+
 def plan(name: str) -> list[tuple]:
     if name == "quick":
         return (generic(4, 3, "full") + generic(6, 3, "full") + generic(4, 4, "full") + pfill(6, 4)
@@ -92,6 +111,10 @@ def plan(name: str) -> list[tuple]:
         jobs += generic(4, 3, "proj") + generic(4, 3, "proj-K") + generic(4, 4, "proj") + generic(4, 4, "proj-K")
         jobs += generic(6, 3, "proj") + generic(6, 3, "proj-K") + sample(8, 3, "proj", 1000, 5)
         return jobs
+    if name == "deployed":
+        # the longest first; the control's keys fail the rule (47 = -1 mod 2^3) and have a kernel
+        return (deployed(5, 7) + deployed(6, 6, 64, 12) + deployed(5, 6) + deployed(5, 5) + deployed(6, 5, 2000, 11)
+                + [(6, 5, "full", (0, 1), (3, 5, 3, 5, 3), 0, (49, 47))])
     raise SystemExit(f"unknown set {name}")
 
 

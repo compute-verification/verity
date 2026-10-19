@@ -6,8 +6,8 @@
 family name appears).  `verity_vllm.engine.profiles.derived_<ROLE>[_tp<W>]` (and the X-07 name `dense_<ROLE>`) is materialised on import by the
 finder below, so every `importlib.import_module(f"verity_vllm.engine.profiles.{name}")` consumer (resolve_log, compare, gates, run_config,
 tp2_fold_match, cb_a) works unchanged in a fresh process.  The two protected base modules (`vllm_d9105ea80_sm89_eager`, `..._qwen15`) stay
-as the κ pin record and the golden corpus's profiles; `derived_B0` / `derived_B1` are the same profiles derived from config.json
-(`tests/test_profiles_generic.py` pins the agreement)."""
+as the κ pin record and the golden corpus's profiles; `derived_B0` is the base module's profile derived from config.json, behind the
+target's tuned GEMM (`tests/engine/test_profiles_generic.py` pins the agreement)."""
 
 
 class _DerivedProfileFinder:

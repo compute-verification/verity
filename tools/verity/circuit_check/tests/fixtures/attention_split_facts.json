@@ -4722,7 +4722,7 @@
    "ScaledMmFp8BlockSharedScale_v1{K=128,N=192,G=128}",
    "ScaledMmFp8BlockSharedScale_v1{K=256,N=192,G=128}",
    "ScaledMmFp8BlockSharedScale_v1{K=256,N=256,G=128}",
-   "ScaledMmFp8BlockSharedScale_v2{K=64,N=32,G=32}",
+   "ScaledMmFp8BlockSharedScale_v2{K=64,N=2,G=32}",
    "ScaledMmFp8BlockSharedScale_v3{K=256,N=192,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
    "ScaledMmFp8BlockSharedScale_v3{K=256,N=256,G=128,DOT=BlackwellE4m3QmmaDot32_v1}",
    "ScaledMmFp8BlockSharedScale_v4{K=64,N=32,G=32,DOT=BlackwellE4m3QmmaDot32_v2}",

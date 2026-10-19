@@ -656,14 +656,15 @@ theorem KSFlock_of_flockKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (DI DO
     (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO) (hS : SessionAccepts D)
     (hR : ∀ decI, SessionRuns H D (Inner.ofFlock DI decI) DO)
     (hV : ∀ decI, InnerViewRun H D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord H D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen H D (Inner.ofFlock DI decI) DO opening)
+    (hT : ∀ decI, CallsTrue H D (Inner.ofFlock DI decI) DO)
+    (hL : ∀ decI, CallsLogColl H D (Inner.ofFlock DI decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed H D (Inner.ofFlock DI decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts H D (Inner.ofFlock DI decI) DO)
     (hpc : ∀ decI, PublicCoin H (Inner.ofFlock DI decI) decC) (hN0 : CallsNil H D) : KSFlockA H D DI DO :=
   fun decI h => KS_of_flockKS H D _ DO opening decC hF
     (KSAbort_of_tableBoundOnAcc H DI NI Ok decC hNI hεI hVkI hKI hkI hone hz hok hconf htab
       (coinsShown_of_publicCoin (hpc decI)) hlastI hfreeI hrefI decI h) hRef hRounds hN hε
-    (hRd decI) hS (hR decI) (hV decI) (hC decI) (hO decI) (hAcc decI) (hpc decI) hN0
+    (hRd decI) hS (hR decI) (hV decI) (hT decI) (hL decI) (hO decI) (hAcc decI) (hpc decI) hN0
 
 end RecursionKS
 

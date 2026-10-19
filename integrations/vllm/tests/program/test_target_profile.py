@@ -243,6 +243,7 @@ def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypa
     t = TargetProfile(moe_backend="triton")
     monkeypatch.setattr(B.torch.cuda, "get_device_properties",
                         lambda i: types.SimpleNamespace(major=t.compute_capability[0], minor=t.compute_capability[1], multi_processor_count=t.num_sms))
+    monkeypatch.setattr(B, "flash_attn_versions", lambda model: {t.effective_flash_attn_version()})
     monkeypatch.setattr(B, "observed_flash_attn_version", lambda model: t.effective_flash_attn_version())
     monkeypatch.setattr(B, "compilation_facts", lambda llm: {})
 
@@ -252,6 +253,38 @@ def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypa
     assert B.target_mismatches(engine(_Layer(type("DeepGemmExperts", (), {})))) == [
         "moe_backend declared 'triton' (TritonExperts), layers report 'DeepGemmExperts'"]
     assert B.target_mismatches(engine()) == ["moe_backend declared 'triton' (TritonExperts), layers report None"]
+
+
+class _Attn:
+    def __init__(self, impl) -> None:
+        self.impl = impl
+
+
+class _Tree:
+    def __init__(self, *impls) -> None:
+        self.mods = [_Attn(i) for i in impls]
+
+    def named_modules(self):
+        return iter([("", self)] + [(f"layers.{i}.attn", m) for i, m in enumerate(self.mods)])
+
+
+def test_an_engine_whose_attention_carries_no_fa_version_is_no_fa_version_question(monkeypatch):
+    """GLM-5.3's sparse MLA impl (`FlashAttnMLASparseImpl`) carries no `vllm_flash_attn_version`, as the Build's read-back skips MLA
+    layers: the engine is judged on its device and kernels; a FlashAttention impl at another version is still a mismatch."""
+    pytest.importorskip("torch")
+    import types
+    from verity_vllm.engine import build as B
+    t = TargetProfile(compute_capability=(9, 0), num_sms=132)
+    monkeypatch.setattr(B.torch.cuda, "get_device_properties", lambda i: types.SimpleNamespace(major=9, minor=0, multi_processor_count=132))
+    monkeypatch.setattr(B, "compilation_facts", lambda llm: {})
+    sparse_mla, fa2, fa3 = object(), types.SimpleNamespace(vllm_flash_attn_version=2), types.SimpleNamespace(vllm_flash_attn_version=3)
+
+    def bad(*impls):
+        return B.target_mismatches(types.SimpleNamespace(target=t, llm=None, model=_Tree(*impls)))
+    assert B.flash_attn_versions(_Tree(sparse_mla, sparse_mla)) == set() and bad(sparse_mla, sparse_mla) == []
+    assert bad(fa3, sparse_mla) == []
+    assert bad(fa2) == ["flash_attn_version declared None (effective 3), layers report 2"]
+    assert bad(fa2, fa3) == ["flash_attn_version declared None (effective 3), layers report None"]
 
 
 def test_parse_target_arg_accepts_the_fp8_field_that_the_default_omits():

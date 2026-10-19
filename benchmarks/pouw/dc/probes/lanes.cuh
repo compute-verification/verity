@@ -4,7 +4,9 @@
 #include "../dc.cuh"
 
 // mix: add.u32 and FFMA alternating (ptxas splits the adds between IADD3 and IMAD.IADD); duo: the fold, 3 ops a word.
-enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA };
+// redux: one redux.sync.xor.b32 (the whole warp's XOR in one instruction, sm_80+); reduce: the same by 5 butterfly
+// shuffles and 5 XORs (the fallback). LI-CP-W's per-segment checkpoint is one of these a warp a segment.
+enum { L_MIX, L_IMAD, L_LOP3, L_SHFL, L_DUO, L_IADD, L_FFMA, L_SHF, L_LEA, L_REDUX, L_REDUCE };
 struct Lane {
   uint32_t r[8];
   float f[8];
@@ -31,6 +33,18 @@ struct Lane {
     // rotl(x, 13) + y: ptxas fuses it into one LEA.HI (duo's third op)
     if constexpr (X == L_LEA)
       asm volatile("{\n.reg .b32 t;\nshf.l.wrap.b32 t,%1,%1,13;\nadd.u32 %0,%0,t;\n}" : "+r"(r[s]) : "r"(r[t]));
+    // XOR the whole warp into r[s] in one instruction (REDUX in SASS).
+    if constexpr (X == L_REDUX) asm volatile("redux.sync.xor.b32 %0,%0,0xffffffff;" : "+r"(r[s]));
+    // The same reduction by 5 butterfly shuffles and 5 XORs (xor.b32 lowers to LOP3.LUT): the pre-sm_80 fallback.
+    if constexpr (X == L_REDUCE)
+      asm volatile(
+          "{\n.reg .b32 t;\n"
+          "shfl.sync.bfly.b32 t,%0,16,0x1f,0xffffffff;\nxor.b32 %0,%0,t;\n"
+          "shfl.sync.bfly.b32 t,%0, 8,0x1f,0xffffffff;\nxor.b32 %0,%0,t;\n"
+          "shfl.sync.bfly.b32 t,%0, 4,0x1f,0xffffffff;\nxor.b32 %0,%0,t;\n"
+          "shfl.sync.bfly.b32 t,%0, 2,0x1f,0xffffffff;\nxor.b32 %0,%0,t;\n"
+          "shfl.sync.bfly.b32 t,%0, 1,0x1f,0xffffffff;\nxor.b32 %0,%0,t;\n}"
+          : "+r"(r[s]));
   }
   // p is a word of the chain's own state, so ptxas can't fold it to a constant.
   template <int T>

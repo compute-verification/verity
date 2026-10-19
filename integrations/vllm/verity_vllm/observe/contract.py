@@ -217,7 +217,7 @@ def site_and_slot(hint: str | None, name: str | None, spec: str | None) -> tuple
 
 def _reads(operand_refs: Any, form: str, n_input_nodes: int | None) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """(root node ids read, root parameter indices read) of a row's `operand_refs` in either stored form: runs `[space, idx, lo, hi]` or
-    [R17 mfast F2] node-space progressions `["N", idx, lo, hi, dI, dL, dH, count]` (only the DISTINCT node ids matter to resolution)."""
+    [R17 mfast F2] progressions `["N"|"P", idx, lo, hi, dI, dL, dH, count]` (only the DISTINCT node / parameter ids matter to resolution)."""
     nodes: set[int] = set()
     params: set[int] = set()
     for a in operand_refs or ():
@@ -229,12 +229,13 @@ def _reads(operand_refs: Any, form: str, n_input_nodes: int | None) -> tuple[tup
                 params.add(int(r[1]))
             elif sp == "n":
                 nodes.add(int(r[1]))
-            elif sp == "N":
+            elif sp in ("N", "P"):
+                ids = nodes if sp == "N" else params
                 idx, dI, c = int(r[1]), int(r[4]), int(r[7])
                 if dI == 0 or c <= 1:
-                    nodes.add(idx)
+                    ids.add(idx)
                 else:
-                    nodes.update(idx + k * dI for k in range(c))
+                    ids.update(idx + k * dI for k in range(c))
     return tuple(sorted(nodes)), tuple(sorted(params))
 
 

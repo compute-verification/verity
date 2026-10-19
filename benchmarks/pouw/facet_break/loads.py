@@ -12,10 +12,17 @@ every SASS opcode of class k (warp instructions/SM/clk), divided by 4 (SMSPs an 
 maps a SASS opcode to its census class. Only opcodes whose class is certain are counted, so a reported load is a lower
 bound and a reported violation is real.
 
+`--full` counts the rest of a single-loop program's timed loop too (the loop its run's gate verdict names, read from the
+run's `sass/` listings): each instruction the gate didn't pin runs once an iteration, at a pinned instruction's rate, in
+its census class, or on `issue` alone when it has none (BRA, ISETP, NOP). The machine model's `Run.n` counts every
+executed instruction, so the full load is the one a row must hold; it is still a lower bound (an unclassed instruction
+loads only `issue`).
+
   python loads.py loads OUT/rows.jsonl... [--epoch E] [--probe NAME] [--top N]   # each program's heaviest facets
   python loads.py summary OUT/rows.jsonl... [--epoch E] [--margin 0] [--json]    # every violation (load > 1 + margin)
   python loads.py refit OUT/rows.jsonl... --row R [--epoch E]                    # the refit line a violation needs
   python loads.py table OUT/rows.jsonl... [--epoch E]                            # every program's loads, a JSON line each
+  python loads.py summary OUT/rows.jsonl... --full                               # with every loop instruction counted
 
 `--generic` loads every MMA form through the generic `MMA` lines where its own kind has none (advisory). The generator of
 the programs is `generate.py`, the batch `run.sh`.
@@ -26,6 +33,7 @@ import argparse
 import json
 import re
 import sys
+from fnmatch import fnmatchcase
 from itertools import combinations
 from pathlib import Path
 
@@ -71,6 +79,7 @@ CLASS_RULES: list[tuple[str, str]] = [
     (r"^STSM\.8\.MT1616$", "STSM8T_X1"), (r"^STSM\.8\.MT1616\.2$", "STSM8T_X2"), (r"^STSM\.8\.MT1616\.4$", "STSM8T_X4"),
     # scalar / CUDA lane classes (floors.csv and census share these names)
     (r"IMAD\.WIDE", "IMADW"), (r"IADD\.64", "ALU64"), (r"DFMA|DADD", "W2"), (r"DMUL", "DMUL"),
+    (r"^IDP\.", "IMAD"),  # IDP.4A: the IMAD pipe's (rows.csv's I, the dp4a design's IMAD lanes)
     (r"IMAD|IMUL|IADD3|IADD|LEA\b|LEA\.HI", "ALU_OR_IMAD"),  # resolved below
     (r"LOP3|SHF\b|SHF\.|PRMT|LOP\b", "ALU"),
     (r"HFMA2", "HFMA2"), (r"HADD2|HMUL2", "HFMA2"),
@@ -222,11 +231,14 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
 def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | None = None) -> dict:
     x = row["x"] if "x" in row else rates_by_class(row)
     load = facet_loads(x, c, cycle_u, generic)
+    if row.get("x_issue") and "issue" in load:
+        load["issue"] += row["x_issue"]
     bps = l2_bytes_per_s(row)
     if l2 and bps > 0:
         load[L2_ROW] = bps / l2
     return {"probe": row.get("probe"), "run": row.get("run"), "sass": (row.get("sass_sha256") or "")[:16],
-            "sm_mhz": row.get("sm_mhz"), "tags": row.get("tags", []), "x": x, "load": load, "l2_bps": bps}
+            "sm_mhz": row.get("sm_mhz"), "tags": row.get("tags", []), "x": x, "load": load, "l2_bps": bps,
+            "full": "x_issue" in row}
 
 
 #: tensor_kinds (EPS1 TENSOR M1, `cursor/eps1-tensor-ea24`): each form name's census kind, and each mode's lane op split
@@ -264,17 +276,67 @@ def from_tensor_kinds(d: dict, run: str, mixed_lane: str = "iadd3_ffma") -> dict
     return {"probe": name, "run": run, "x": x, "sm_mhz": d.get("mhz"), "tags": []}
 
 
-def load_rows(paths: list[Path]) -> list[dict]:
-    """Every program in the given files: an opcode probe's `rows.jsonl` (rates by SASS pattern) or tensor_kinds.jsonl."""
+#: a cuobjdump listing's function header, and an instruction's address and dotted opcode (past any guard predicate)
+_SASS_FUNC = re.compile(r"\n\s*Function : (\S+)\n")
+_SASS_INS = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)")
+
+
+def gate_loops(out: Path) -> dict[str, list[str]]:
+    """Each gated program's timed loop (its gate verdict's loop 0, from `gate-build.json` or `gate.json` in the run's
+    `out/`) as the opcodes of its instructions in `out/sass/`'s listings; empty when the run kept neither."""
+    gate = next((g for g in (out / "gate-build.json", out / "gate.json") if g.exists()), None)
+    if gate is None or not (out / "sass").is_dir():
+        return {}
+    bodies: dict[str, str] = {}
+    for s in sorted((out / "sass").glob("*.sass")):
+        parts = _SASS_FUNC.split("\n" + s.read_text())
+        bodies |= dict(zip(parts[1::2], parts[2::2]))
+    loops = {}
+    for v in json.loads(gate.read_text())["verdicts"]:
+        ver = v.get("verdict") or {}
+        body = bodies.get(ver.get("kernel") or v.get("probe"))
+        if v.get("passed") and ver.get("loops") and body is not None:
+            lo, hi = int(ver["loops"][0]["head"], 16), int(ver["loops"][0]["tail"], 16)
+            loops[v["probe"]] = [m.group(2) for m in _SASS_INS.finditer(body) if lo <= int(m.group(1), 16) <= hi]
+    return loops
+
+
+def full_x(row: dict, loop: list[str]) -> tuple[dict[str, float], float] | None:
+    """The program's x with every instruction of its timed loop counted, and the x of the loop's instructions with no
+    census class (one `issue` cycle each, on no other row). A loop instruction runs once an iteration, so one the gate
+    didn't pin runs at the pinned instructions' rate over their number in the loop. None for a program timed over more
+    than one loop, or whose listed loop holds none of its pinned opcodes."""
+    rates = row.get("rates") or {}
+    if not rates or any(k.split(":", 1)[0] != "0" for k in rates):
+        return None
+    pats = [k.split(":", 1)[1] for k in rates]
+    free = [op for op in loop if not any(fnmatchcase(op, p) for p in pats)]
+    if len(free) == len(loop):
+        return None
+    per = sum(rates.values()) / SMSPS / (len(loop) - len(free))
+    x, other = rates_by_class(row), 0.0
+    for op in free:
+        if (k := class_of(op)) is None:
+            other += per
+        else:
+            x[k] = x.get(k, 0.0) + per
+    return x, other
+
+
+def load_rows(paths: list[Path], full: bool = False) -> list[dict]:
+    """Every program in the given files: an opcode probe's `rows.jsonl` (rates by SASS pattern) or tensor_kinds.jsonl.
+    With `full`, a single-loop program whose run kept its gate verdicts and listings takes `full_x`'s x."""
     out = []
     for p in paths:
         run = next((s for s in p.parts if s.startswith("r20")), "")
         recs = [json.loads(ln) for ln in p.read_text().splitlines() if ln.strip()]
         mixed = "iadd3_32" if any(d.get("mode") == "opalone" and d.get("form") == "iadd3_32" for d in recs) \
             else "iadd3_ffma"
+        loops = gate_loops(p.parent) if full else {}
         for d in recs:
             if d.get("rates"):
-                out.append(d)
+                f = full_x(d, loops[d["probe"]]) if d.get("probe") in loops else None
+                out.append(d if f is None else {**d, "x": f[0], "x_issue": f[1]})
             elif (t := from_tensor_kinds(d, run, mixed)) is not None:
                 out.append(t)
     return out
@@ -294,7 +356,7 @@ def cmd_loads(a) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
-    for row in load_rows(a.rows):
+    for row in load_rows(a.rows, a.full):
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         top = sorted(p["load"].items(), key=lambda t: -t[1])[: a.top]
         if a.probe and p["probe"] != a.probe:
@@ -311,7 +373,7 @@ def cmd_table(a) -> int:
     epoch = a.epoch or m.current
     c = census(m, epoch)
     vrows = in_vector(epoch)
-    for row in load_rows(a.rows):
+    for row in load_rows(a.rows, a.full):
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         top = max(p["load"].items(), key=lambda t: t[1]) if p["load"] else ("", 0.0)
         print(json.dumps({"epoch": epoch, **p, "max_row": top[0], "max_load": top[1], "max_in_vector": top[0] in vrows,
@@ -325,7 +387,7 @@ def cmd_summary(a) -> int:
     c = census(m, epoch)
     vrows = in_vector(epoch)
     viol = []
-    for row in load_rows(a.rows):
+    for row in load_rows(a.rows, a.full):
         p = program(row, c, m.cycle_u, a.generic, a.l2)
         for r, v in p["load"].items():
             if v > 1 + a.margin:
@@ -336,7 +398,7 @@ def cmd_summary(a) -> int:
     if a.json:
         print(json.dumps(viol, indent=1))
         return 1 if viol else 0
-    rows = load_rows(a.rows)
+    rows = load_rows(a.rows, a.full)
     print(f"epoch {epoch}: {len(rows)} programs, margin {a.margin}")
     free: dict[str, tuple[float, str]] = {}
     for row in rows:
@@ -376,7 +438,7 @@ def cmd_refit(a) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
-    progs = [program(row, c, m.cycle_u, a.generic, a.l2) for row in load_rows(a.rows)]
+    progs = [program(row, c, m.cycle_u, a.generic, a.l2) for row in load_rows(a.rows, a.full)]
     hits = [p for p in progs if a.row in p["load"]]
     if not hits:
         print(f"no program loads {a.row}", file=sys.stderr)
@@ -458,7 +520,8 @@ def _close(m, epoch: str, rows: list[str]) -> list[str]:
 def cmd_family(a) -> int:
     """A beaten family of joint rows refitted as one (the VF3m-16 rule, `eps1.py facets --prior`): the upper hull of the
     old rows' vertices and every measured program, at the margin. Over an axis class (`--axis`, default MMA: the generic
-    lines, which IMMA16832 takes) and one class (`--kind`); or, with `--forms`, the joint issue rows: each MMA form its own
+    lines, which IMMA16832 takes, and with `--all-forms` every form) and one class (`--kind`); or, with `--forms`, the
+    joint issue rows: each MMA form its own
     axis beside the rows' vector classes summed by their coefficients (so `V` is a vector instruction), each form's hull
     taken alone, and every new row at a vector coefficient one of those hulls has, each form at the most it can carry
     there. `--emit EPOCH` prints the rows.csv and census/EPOCH.csv lines and the old lines to close."""
@@ -466,14 +529,14 @@ def cmd_family(a) -> int:
     epoch = a.epoch or m.current
     c = census(m, epoch)
     cu, s = m.cycle_u, 1 - a.margin
-    progs = [program(row, c, cu, a.generic, a.l2) for row in load_rows(a.rows)]
+    progs = [program(row, c, cu, a.generic, a.l2) for row in load_rows(a.rows, a.full)]
     rows = a.family
     on = {k for k in c if any(r in c[k] for r in rows)}
     sys.path.insert(0, str(HERE.parent / "opcode_probe"))
     from eps1 import facets
     runs = a.runs or " ".join(sorted({p["run"] for p in progs if p["run"]}))
     if not a.forms:
-        axis = {"MMA", MMA_MEASURED_WITH} if a.axis == "MMA" else {a.axis}
+        axis = ({"MMA", MMA_MEASURED_WITH} | (MMA_FORMS if a.all_forms else set())) if a.axis == "MMA" else {a.axis}
         lines = [(c.get(a.axis, {}).get(r, 0.0) / cu, c.get(a.kind, {}).get(r, 0.0) / cu) for r in rows]
         pts = polygon(lines, s, "+".join(rows))
         n = 0
@@ -585,6 +648,9 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("--epoch")
         s.add_argument("--generic", action="store_true",
                        help="load every MMA form through MMA's lines where it has none (advisory, not the model)")
+        s.add_argument("--full", action="store_true",
+                       help="count every instruction of a single-loop program's timed loop (from its run's gate "
+                            "verdicts and sass/), not only the gate's pinned opcodes")
         s.add_argument("--l2", type=float, default=l2_default(),
                        help="the L2 facet, read bytes a second (default: machine_model/data/table.toml's l2; none: "
                             "no L2tbl row)")
@@ -603,6 +669,8 @@ def main(argv: list[str] | None = None) -> int:
     fam.add_argument("--axis", default="MMA")
     fam.add_argument("--kind")
     fam.add_argument("--forms", action="store_true", help="the joint issue rows: each MMA form its own axis")
+    fam.add_argument("--all-forms", action="store_true",
+                     help="every MMA form on the generic MMA axis (ε prices a form without lines of its own there)")
     fam.add_argument("--margin", type=float, default=0.02)
     fam.add_argument("--emit", metavar="EPOCH", help="print the rows.csv and census lines for EPOCH")
     fam.add_argument("--runs", help="the new rows' runs in rows.csv (default: every run read)")

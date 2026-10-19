@@ -25,6 +25,7 @@ def test_seal_binds_ok_and_every_field_to_the_digest():
 
 def test_the_registry_names_each_harness_schema_once():
     from tests.properties import (
+        deepgemm_capture_gpu,
         dsv4_compressor_capture_gpu,
         dsv4_decode_index_row_capture_gpu,
         dsv4_decode_metadata_capture_gpu,
@@ -42,7 +43,10 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_block_fp8_capture_gpu,
         glm53_dsa_capture_gpu,
         glm53_tp8_allreduce_capture_gpu,
+        glm53_fa3_prefill_capture_gpu,
+        glm53_fused_rmsnorm_capture_gpu,
         sigmoid_router_capture_gpu,
+        tp4_nccl_tree_replay,
     )
 
     assert len(BY_SCHEMA) == len(REGISTRY) and all(p.claim for p in REGISTRY.values())
@@ -50,12 +54,16 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["fa2_target_capture"].schema == fa2_target_capture_gpu.SCHEMA
     assert REGISTRY["fa2_softcap_capture"].schema == fa2_softcap_capture_gpu.SCHEMA
     assert REGISTRY["glm53_block_fp8_capture"].schema == glm53_block_fp8_capture_gpu.SCHEMA
+    assert REGISTRY["deepgemm_capture"].schema == deepgemm_capture_gpu.SCHEMA
     assert REGISTRY["glm53_bf16_gemm_capture"].schema == glm53_bf16_gemm_capture_gpu.SCHEMA
     assert REGISTRY["glm53_dsa_capture"].schema == glm53_dsa_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_marlin_capture"].schema == dsv4_marlin_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_indexer_capture"].schema == dsv4_indexer_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_mhc_capture"].schema == dsv4_mhc_capture_gpu.SCHEMA
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == glm53_tp8_allreduce_capture_gpu.SCHEMA
+    assert REGISTRY["tp4_nccl_tree_capture"].schema == tp4_nccl_tree_replay.SCHEMA
+    assert REGISTRY["glm53_fa3_prefill_capture"].schema == glm53_fa3_prefill_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_fused_rmsnorm_capture"].schema == glm53_fused_rmsnorm_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_flashmla_capture"].schema == dsv4_flashmla_capture_gpu.SCHEMA

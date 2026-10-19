@@ -113,6 +113,16 @@ theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
   rw [parse_leafScheme s.parse, hl, Exec.find_hm96] at hf
   exact (Option.some.inj hf).symm
 
+/-- **The leaf scheme, plain**: under tags with plain SHA-512 leaves, a statement `Stmt.setupHidden` accepts commits its
+rows with `MerkleScheme.sha512 "flock-leaf/sha512-unsalted"`. -/
+theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
+  have s := setupHidden_spec' h
+  have hf := s.merkle
+  rw [parse_leafScheme s.parse, hl, Exec.find_plain] at hf
+  exact (Option.some.inj hf).symm
+
 /-- **The statement is well formed** (`StmtWF`, `RegionsWF`), as `setupH_wf` for `Stmt.setupH`. -/
 theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     StmtWF st ∧ RegionsWF st := by

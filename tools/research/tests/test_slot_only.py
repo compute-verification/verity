@@ -49,6 +49,25 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
     assert "--pool" not in capsys.readouterr().err
 
 
+def test_a_pool_run_takes_no_launch_time_memory_reservation_beside_its_slots(tmp_path, monkeypatch, capsys):
+    """INF-61 (cpu-3, 18 Oct): a `--pool` run's --mem-gb reserved at launch and held that through its wait in the slot line, beside
+    the slot's own reservation once it ran; two waiting runs held 128 GB and admission sat at -89 GB. The slot's mem= admits it."""
+    from research import remote
+    from research.cli import main
+
+    seen = []
+
+    def launch(**kw):
+        seen.append(kw["mem_gb"])
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    monkeypatch.setattr(remote, "launch", launch)
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+            "--pool", "proofs", "--as", "proofs"]
+    assert main([*argv, "--mem-gb", "96", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
+    assert seen == [None, None] and "--mem-gb 96 is dropped" in capsys.readouterr().err
+
+
 def _run(runs, rid, state, command, *, pgid=None, runner=None):
     d = runs / rid
     d.mkdir(parents=True)
@@ -92,3 +111,25 @@ def test_it_stops_every_process_of_a_live_run_outside_the_slots_but_its_runner(t
     assert sent == [(20, signal.SIGTERM), (21, signal.SIGTERM), (40, signal.SIGTERM)]
     rec = json.loads(log.read_text())
     assert rec["run"] == "r-off" and rec["workload_group_seen"] and rec["sigterm"] == [20, 21, 40]
+
+
+def test_renice_moves_a_direct_runs_processes_to_nice_19_once_and_leaves_slot_runs_alone(tmp_path, monkeypatch, capsys):
+    """Node 1 (top, 18 Oct): lanes' direct runs took the cores the train checks need. `--renice 19` stops nothing: it renices every
+    process of a live run outside the slots, its runner too, and logs a run only while it moved a process."""
+    runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "direct-runs-nice", tmp_path / "direct-nice.jsonl"
+    gate = _run(runs, "r-gate", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=10, runner=9)
+    off = _run(runs, "r-off", "running", ["uv", "run", "pytest", "-x"], pgid=20, runner=19)
+    for pid, run in ((10, gate), (19, off), (20, off), (21, off)):
+        _proc(proc, pid, pid, run)
+    nice = {10: 0, 19: 0, 20: 0, 21: 5}
+    monkeypatch.setattr(S.os, "getpriority", lambda which, pid: nice[pid])
+    monkeypatch.setattr(S.os, "setpriority", lambda which, pid, n: nice.__setitem__(pid, n))
+    monkeypatch.setattr(S.os, "kill", lambda *a: (_ for _ in ()).throw(AssertionError("--renice stops nothing")))
+    monkeypatch.setattr(S, "renice", lambda o, n, dry_run=False, _r=S.renice: _r(o, n, proc=proc, dry_run=dry_run))
+    marker.write_text("")
+    argv = ["--runs", str(runs), "--marker", str(marker), "--log", str(log), "--renice", "19"]
+    assert S.main(argv) == 0
+    assert nice == {10: 0, 19: 19, 20: 19, 21: 19}
+    rec = json.loads(log.read_text())
+    assert rec["run"] == "r-off" and rec["reniced"] == [19, 20, 21] and rec["nice"] == 19
+    assert S.main(argv) == 0 and len(log.read_text().splitlines()) == 1, "a run already at 19 isn't logged again"

@@ -1,7 +1,7 @@
 """The fused-MoE expert GEMMs with the target's k16 step (`registry.moe` `MoeExpertGemm_v2` / `MoeExpertGemmW_v2{E,K,N,DOT}`, bound
-through `frontend.targets.moe_expert_dot`): only the families whose fused_moe_kernel correspondence ran bind them (cc 12.0; cc 8.x and
-9.0 keep the `_v1` ids), with the Ampere step they are the `_v1` Definitions, with the sm_120 step they are that step's ascending chain
-(and the step is observable), and the vocabulary, the replay rows, the VU export and GP-01 read the same families."""
+through `frontend.targets.moe_expert_dot`): only the families whose fused_moe_kernel correspondence ran bind them (cc 9.0 and 12.0;
+cc 8.x keeps the `_v1` ids), with the Ampere step they are the `_v1` Definitions, with the Hopper step they are that step's ascending
+chain (and the step is observable), and the vocabulary, the replay rows, the VU export and GP-01 read the same families."""
 from __future__ import annotations
 
 import json
@@ -35,17 +35,28 @@ def _bf16(rng, n: int, wide: bool = False) -> np.ndarray:
 
 
 def test_only_the_measured_families_bind_the_dot_forms():
-    for cc in ((8, 0), (8, 9), (9, 0)):
+    for cc in ((8, 0), (8, 9)):
         assert T.moe_expert_dot(_tp(cc)) is None
-    assert T.moe_expert_dot(_tp((12, 0))) is HopperBF16WgmmaDot16
+    for cc in ((9, 0), (12, 0)):
+        assert T.moe_expert_dot(_tp(cc)) is HopperBF16WgmmaDot16
     with pytest.raises(T.UnregisteredTarget):
         T.moe_expert_dot(_tp((10, 0)))
     assert T.moe_expert_gemm_spec(_tp((8, 9)), 64, 2048, 2048, routed=False).id == "MoeExpertGemm_v1{E=64,K=2048,N=2048}"
-    assert T.moe_expert_gemm_spec(_tp((9, 0)), 64, 1024, 2048, routed=True).id == "MoeExpertGemmW_v1{E=64,K=1024,N=2048}"
-    assert T.moe_expert_gemm_spec(_tp((12, 0)), 64, 2048, 2048, routed=False).id == \
-        "MoeExpertGemm_v2{E=64,K=2048,N=2048,DOT=HopperBF16WgmmaDot16_v1}"
-    assert T.moe_expert_gemm_spec(_tp((12, 0)), 64, 1024, 2048, routed=True).id == \
-        "MoeExpertGemmW_v2{E=64,K=1024,N=2048,DOT=HopperBF16WgmmaDot16_v1}"
+    assert T.moe_expert_gemm_spec(_tp((8, 9)), 64, 1024, 2048, routed=True).id == "MoeExpertGemmW_v1{E=64,K=1024,N=2048}"
+    for cc in ((9, 0), (12, 0)):
+        assert T.moe_expert_gemm_spec(_tp(cc), 64, 2048, 2048, routed=False).id == \
+            "MoeExpertGemm_v2{E=64,K=2048,N=2048,DOT=HopperBF16WgmmaDot16_v1}"
+        assert T.moe_expert_gemm_spec(_tp(cc), 64, 1024, 2048, routed=True).id == \
+            "MoeExpertGemmW_v2{E=64,K=1024,N=2048,DOT=HopperBF16WgmmaDot16_v1}"
+
+
+def test_a_tuned_bf16_tile_is_modelled_on_cc90_at_any_k16_multiple():
+    tuned = TargetProfile(compute_capability=(9, 0), batch_invariant=False)
+    for kb in (64, 128, 256):
+        assert T.moe_tuned_tile_refusal(tuned, kb) is None
+    assert T.moe_tuned_tile_refusal(TargetProfile(compute_capability=(9, 0), batch_invariant=True), 64) is None
+    assert "multiple of the k16 step" in T.moe_tuned_tile_refusal(tuned, 40)
+    assert "cc 9.0 only" in T.moe_tuned_tile_refusal(TargetProfile(compute_capability=(12, 0), batch_invariant=False), 128)
 
 
 def test_the_dot_forms_with_the_ampere_step_are_the_v1_definitions():

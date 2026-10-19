@@ -11,7 +11,7 @@ law gives a consumer is its escape function: the probability that a draw misses 
 
 * `escape L B`: the draw is disjoint from `B`;
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
-  curve `δ(K) = miss K + ε`;
+  curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a law that draws every unit (`miss_eq_zero_of_draw_univ`);
 * `incl L u`: the probability that `u` is drawn; a single unit escapes with `1 - incl L u`
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).
@@ -98,6 +98,15 @@ theorem miss_le_one (L : Law n) (K : ℕ) : L.miss K ≤ 1 :=
 /-- The count curve falls as `K` grows. -/
 theorem miss_anti (L : Law n) {K K' : ℕ} (h : K ≤ K') : L.miss K' ≤ L.miss K :=
   iSup₂_le fun _ hB => L.escape_le_miss (h.trans hB)
+
+/-- **A law that draws every unit has no sampling term**: no non-empty set escapes it, so `miss K = 0` for `K ≥ 1`. -/
+theorem miss_eq_zero_of_draw_univ (L : Law n) (hL : ∀ ω, L.draw ω = Finset.univ) {K : ℕ} (hK : 1 ≤ K) :
+    L.miss K = 0 := by
+  refine le_antisymm (iSup₂_le fun B hB => ?_) (zero_le)
+  obtain ⟨u, hu⟩ := Finset.card_pos.1 (show 0 < B.card by omega)
+  refine (prCoin_mono (q := fun _ => False) fun ω h => ?_).trans prCoin_false.le
+  rw [hL ω] at h
+  exact Finset.disjoint_left.1 h (Finset.mem_univ u) hu
 
 /-! ## The uniform `k`-subset -/
 

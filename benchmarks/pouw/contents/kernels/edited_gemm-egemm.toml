@@ -1,0 +1,4 @@
+order = 40
+tool = "The adopted design's edited GEMM (decision 29), its receipt folds and its profile, also ncu's against the machine model (eps_sched, the fold-cost sweep)"
+files = "`edited_gemm/egemm.cu`, `egemm_ref.py`, `prof.cu`, `run.sh`, `profile.sh`, `eps_profile.py`"
+includes = "`masked_gemm/lpgemm.cu`"

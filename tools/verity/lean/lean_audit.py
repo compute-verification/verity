@@ -3,9 +3,12 @@ whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
+                                                      [--regenerate] (a train's check: record differences pass, and
+                                                      audit.json's `regenerated` names the records the train commits)
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, artifacts)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -19,8 +22,9 @@ each file under its path relative to its package (a module's is its name), never
   otherwise stays a path in the key;
 - `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
-  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs) or its `*.md`, which the audit never reads: the
-  scratch tree leaves them out too, so a read of one would fail there.
+  `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
+  (the merge driver, the lean-changed step, the daily publish, ...), which the audit never reads: the scratch tree leaves them
+  out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
 scratch tree can't guard is a package reading beyond its directory by a relative path, which would find other files once it
 moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain or policy, or an `include_str` in a module,
@@ -141,11 +145,23 @@ def provers(pkg: str) -> list[str]:
 FLAGS = ["--build"]
 
 
+#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
+#: read of one fails the audit
+NOT_READ = {
+    "lean-deps.json": "the dependency bundles' pins, which preflight reads",
+    "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
+    "merge.py": "git's merge driver for lean-audit.json",
+    "run_daily.py": "the build cache's daily publish",
+    "tool.py": "the store's declarations of the scheduled runs",
+    "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
+    "pyproject.toml": "the tools/verity/lean suite's settings",
+}
+
+
 def tool_files(files: list[str]) -> list[str]:
-    """The auditor's files: `tools/verity/lean/` less its tests, its docs and `lean-deps.json` (the dependency bundles' pins,
-    which preflight reads and the audit doesn't), and the helpers it imports."""
+    """The auditor's files: `tools/verity/lean/` less its tests, its docs and `NOT_READ`, and the helpers it imports."""
     tool = [f for f in files if f.startswith(LEAN_TOOL) and not f.startswith(LEAN_TOOL + "tests/") and not f.endswith(".md")
-            and f != LEAN_TOOL + "lean-deps.json"]
+            and f[len(LEAN_TOOL):] not in NOT_READ]
     return sorted({*tool, "tools/verity/check/common.py"})
 
 
@@ -400,8 +416,8 @@ class WarmDeps:
     ones it moved in; another run at the same time finds them absent and builds cold. Missing ones come from the store
     when ``urls`` has the pinned bundle's."""
 
-    def __init__(self, store: Path, urls: dict[str, str] | None = None):
-        self.store, self.urls = store, urls or {}
+    def __init__(self, store: Path, urls: dict[str, str] | None = None, kept: int | None = None):
+        self.store, self.urls, self.kept = store, urls or {}, DEPS_KEPT if kept is None else kept
         self.held: dict[Path, Path] = {}
 
     def _lock(self, k: str):
@@ -447,6 +463,12 @@ class WarmDeps:
                 if home.exists():
                     shutil.rmtree(home, ignore_errors=True)
                 _move(src, home)
+                os.utime(home)
+        self.evict()
+
+    def evict(self) -> int:
+        """Remove all but the `kept` dependency trees last given back (`evict_lru`); the number removed."""
+        return evict_lru(self.store, self.kept)
 
     def export(self, pkgs: dict[str, str], dest: Path, log=print) -> dict:
         """Bundle the kept dependencies of ``pkgs`` ({package: deps_key}, packages that passed) into ``dest``, with the
@@ -506,6 +528,12 @@ def prune(pkg: Path) -> int:
 #: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
 #: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk)
 BUILDS_KEPT = 24
+#: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
+#: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
+DEPS_KEPT = 8
+#: the replay cache's entries a node keeps, newest first: one per module and key, about 3k a version of the tree, and
+#: vy-nebius-2 held 180k on 18 Oct
+REPLAYS_KEPT = 20_000
 
 
 class WarmBuilds:
@@ -553,26 +581,50 @@ class WarmBuilds:
         self.evict()
 
     def evict(self) -> int:
-        """Remove all but the `kept` builds last given back or copied from (a rename keeps a directory's mtime, so each sets it),
-        each only when its lock is free: a run holding it is taking it or giving it back. The number removed."""
-        held = []
-        for home in self.store.iterdir() if self.store.is_dir() else ():
+        """Remove all but the `kept` builds last given back or copied from (`evict_lru`); the number removed."""
+        return evict_lru(self.store, self.kept)
+
+
+def evict_lru(store: Path, kept: int) -> int:
+    """Remove all but the ``kept`` directories of ``store`` last used (a rename keeps a directory's mtime, so each use sets
+    it), each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking it or giving it back. The number
+    removed."""
+    held = []
+    for home in store.iterdir() if store.is_dir() else ():
+        try:
+            if home.is_dir():
+                held.append((home.stat().st_mtime, home))
+        except OSError:                                # taken while listed
+            pass
+    n = 0
+    for _, home in sorted(held, reverse=True)[kept:]:
+        with open(store / f"{home.name}.lock", "w") as f:
             try:
-                if home.is_dir():
-                    held.append((home.stat().st_mtime, home))
-            except OSError:                            # taken while listed
-                pass
-        n = 0
-        for _, home in sorted(held, reverse=True)[self.kept:]:
-            with open(self.store / f"{home.name}.lock", "w") as f:
-                try:
-                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    continue
-                if home.is_dir():
-                    shutil.rmtree(home, ignore_errors=True)
-                    n += 1
-        return n
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            if home.is_dir():
+                shutil.rmtree(home, ignore_errors=True)
+                n += 1
+    return n
+
+
+def prune_replays(cache: Path, kept: int | None = None) -> int:
+    """Remove all but the ``kept`` (`REPLAYS_KEPT`) newest replay entries of ``cache`` (`check.py --replay-cache`): each is
+    one module's pass under its key, so one dropped costs that module one replay. The number removed."""
+    kept = REPLAYS_KEPT if kept is None else kept
+    try:
+        entries = [(e.stat().st_mtime, e) for e in os.scandir(cache) if e.name.endswith(".json")]
+    except OSError:
+        return 0
+    n = 0
+    for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
+        try:
+            os.unlink(e.path)
+            n += 1
+        except OSError:
+            pass
+    return n
 
 
 #: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go
@@ -891,9 +943,12 @@ def transient(rep: dict) -> bool:
 
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
-           log, urls: dict[str, str] | None = None, comps: dict | None = None) -> tuple[list[str], list[str]]:
+           log, urls: dict[str, str] | None = None, comps: dict | None = None,
+           regenerate: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
-    Returns (the failed, the audited)."""
+    ``regenerate`` (`check.py --regenerate`, a train's check) passes a package whose every failure is a record difference;
+    such a pass is never stored, since its lock changes when the train commits the record.  Returns (the failed, the
+    audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -924,7 +979,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             *([] if fresh else ["--replay-cache", str(cache.parent / "lean-replay"),
                                                 "--artifacts", str(artifacts.store)]),
-                            "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
+                            *(["--regenerate"] if regenerate else []), "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
@@ -932,7 +987,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             p = os.path.relpath(rep["package"], work)
             rep["package"] = p
             reports[p] = rep
-            if not rep["failures"] and r.returncode in (0, 1) and p in keys and not fresh:
+            if not rep["failures"] and not rep.get("settled") and r.returncode in (0, 1) and p in keys and not fresh:
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
                 tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
@@ -956,6 +1011,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             except OSError as e:
                 log(f"lean-audit: the artifact cache was not written: {e}")
             builds.give_back(work, kept)
+            if n := prune_replays(cache.parent / "lean-replay"):
+                log(f"lean-audit: {n} old replay entries removed")
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
@@ -971,7 +1028,7 @@ def select(pkgs: list[str], only: list[str] | None) -> list[str]:
 
 
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
-        export: Path | None = None, only: list[str] | None = None) -> int:
+        export: Path | None = None, only: list[str] | None = None, regenerate: bool = False) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -996,7 +1053,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -1005,8 +1062,12 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         time.sleep(RETRIES[attempt])
         todo = retry
     failed += [p for p in pkgs if p not in reports and p not in failed]
+    regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
+    for p, f in regenerated.items():
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the train commits over {p}/lean-audit.json")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
-                                                "packages": [reports[p] for p in pkgs if p in reports]}, indent=1) + "\n")
+                                                "packages": [reports[p] for p in pkgs if p in reports],
+                                                "regenerated": regenerated}, indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
     if export is not None:
         ok = {p: k for p in pkgs if p in reports and not reports[p].get("failures") and (k := deps_key(ROOT / p))}
@@ -1146,6 +1207,13 @@ def main(argv: list[str]) -> int:
         return pin(argv[1])
     if argv[:1] == ["--restore"] and len(argv) == 2:
         return restore_into(argv[1])
+    if argv[:1] == ["--prune"]:
+        root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
+        got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
+               "lean-replay": prune_replays(root / "lean-replay"),
+               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune()}
+        print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
+        return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
         cache = Path(argv[3]) if len(argv) == 4 and argv[2] == "--cache" else COMMON.cache_dir() / "lean-audit"
         rc, lines = explain(argv[1], cache)
@@ -1159,9 +1227,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
+    ap.add_argument("--regenerate", action="store_true", help="a train's check: `check.py --regenerate`, so a package whose "
+                    "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
+                    "cache key, and such a pass is never stored")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
-    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package)
+    return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package,
+               regenerate=a.regenerate)
 
 
 if __name__ == "__main__":

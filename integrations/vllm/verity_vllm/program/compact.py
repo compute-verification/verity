@@ -102,6 +102,13 @@ class _Acc:
         self.out[-1] = (sp, b0, d0, c0 + (count - 5))         # runs 4 .. count-2 closed into it
         self.open = (space,) + _add(base, delta, count - 1)     # the last run stays open
 
+    def splice(self, progs: list[Prog]) -> None:
+        """A finished greedy list pushed into an EMPTY accumulator, in one list copy: by the prefix property pushing its runs one by one
+        leaves the list without its last run closed and that run open (its runs are maximal: no two consecutive ones are contiguous)."""
+        sp, base, delta, c = progs[-1]
+        self.out = progs[:-1] + ([(sp, base, delta if c > 2 else (0,) * len(base), c - 1)] if c > 1 else [])
+        self.open = (sp,) + _add(base, delta, c - 1)
+
     def finish(self) -> list[Prog]:
         if self.open is not None:
             self._close()
@@ -119,11 +126,8 @@ def _walk(acc: _Acc, j, alias: Callable[[int, int], list[Prog]] | None) -> None:
         if inner_stride == 1 or inner == 1:
             rows = count // inner
             acc.progression(space, (idx, base, base + inner), (0, outer, outer), rows)
-        else:   # a leaf per reference (refs.runs' generic branch): O(count), the rare shape
-            for jj in range(count):
-                q, r = divmod(jj, inner)
-                leaf = base + q * outer + r * inner_stride
-                acc.run(space, idx, leaf, leaf + 1)
+        else:   # scattered rows (a transposed / gathered block): per row one progression of its unit runs -- O(count/inner),
+            _scattered_strided(acc, space, idx, base, inner, outer, inner_stride, count)   # not the per-leaf O(count)
     elif "concat" in j:
         for x in j["concat"]:
             _walk(acc, x, alias)
@@ -131,11 +135,29 @@ def _walk(acc: _Acc, j, alias: Callable[[int, int], list[Prog]] | None) -> None:
         k, a = j["alias"]
         if alias is None:
             raise ValueError("alias reference without an alias resolver")
-        for space, base, delta, c in alias(k, a):
+        src = alias(k, a)
+        if src and not acc.out and acc.open is None:   # [GLM-5.3] an operand opening with an alias of a ~2048-progression weight read
+            acc.splice(src)
+            return
+        for space, base, delta, c in src:
             acc.progression(space, base, delta, c)
     else:
         for r in j["explicit"]:
             acc.run(r[0], r[1], r[2], r[2] + 1)
+
+
+def _scattered_strided(acc: _Acc, space: str, idx: int, base: int, inner: int, outer: int, inner_stride: int, count: int) -> None:
+    """A Strided whose rows are not contiguous (`inner != 1` and `inner_stride` not 1): row q's references are the unit runs
+    `base + q*outer + r*inner_stride`, one progression of delta `(0, inner_stride, inner_stride)` per row.  Exactly the runs the
+    per-leaf loop pushed (`_Acc.progression` == pushing its runs one by one), in O(count / inner) instead of O(count) -- the
+    GLM-5.3 MLA-absorb transposed-weight read is ~1e6 leaves per operand, one operand per token per layer."""
+    rows, last = divmod(count, inner)
+    for q in range(rows):
+        b = base + q * outer
+        acc.progression(space, (idx, b, b + 1), (0, inner_stride, inner_stride), inner)
+    if last:
+        b = base + rows * outer
+        acc.progression(space, (idx, b, b + 1), (0, inner_stride, inner_stride), last)
 
 
 def from_json(j, alias: Callable[[int, int], list[Prog]] | None = None) -> list[Prog]:
@@ -209,8 +231,7 @@ def _walk_refs(acc: _Acc, r) -> None:
             rows = r.count // r.inner
             acc.progression(r.space, (r.idx, r.base, r.base + r.inner), (0, r.outer_stride, r.outer_stride), rows)
         else:
-            for space, idx, leaf in r:
-                acc.run(space, idx, leaf, leaf + 1)
+            _scattered_strided(acc, r.space, r.idx, r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
     elif tr is Explicit:
         for space, idx, leaf in r.items:
             acc.run(space, idx, leaf, leaf + 1)
@@ -269,13 +290,32 @@ def n_runs(progs: Iterable[tuple]) -> int:
     return sum(t[-1] for t in progs)
 
 
+HASH_RLE_RUNS = 1 << 16
+
+
+def hash_operand(items: list[tuple]) -> list | dict:
+    """One canonical operand as `program_compare._canonical_hash` serialises it: the record's per-run tuples, except an operand in
+    progression form (`Prog.canon` without unfolding: `rle_mapped`'s normal form) of more than HASH_RLE_RUNS runs, which is serialised
+    as `{"rle": its progressions}`.  The normal form is a function of the run list and expands back to it, so equal hashes still mean
+    equal run lists; the tag keeps the two serialisations apart.  [GLM-5.3] a strided W_UK_T / W_UV read is ~1e6 runs in ~2048
+    progressions, 156 such reads a decode step: expanding them is ~5e9 tuples a hash.  A record-form Prog expands every operand, so the
+    two forms' hashes agree on every operand of at most HASH_RLE_RUNS runs."""
+    if items and all(is_prog(t) for t in items) and n_runs(items) > HASH_RLE_RUNS:
+        return {"rle": [list(t) for t in items]}
+    return [list(t) for t in expand_mixed(items)]
+
+
 # ---- the STORED form (F2, COORD R17-34 (2)): instances.jsonl `operand_refs` items ------------------------------------------------------
 # An operand in the file is a list of items in reference order.  Record form (verity-gen/instances/v1): every item a maximal run
-# ["space", idx, lo, hi].  Progressions form (v2): parameter-space runs ["p", idx, lo, hi] exactly as before (the GM-01 loader's retained
-# view, O(instances)); NODE-space references as progressions ["N", idx, lo, hi, dI, dL, dH, count] -- "N" (upper case) is the marker, one
-# progression per maximal arithmetic run sequence of the compact form above with count >= 2; a single node-space run stays ["n", idx, lo, hi].  `file_items_from_runs` is lossless:
+# ["space", idx, lo, hi].  Progressions form (v2): node- and parameter-space references as progressions
+# ["N"|"P", idx, lo, hi, dI, dL, dH, count] -- the UPPER-CASE space is the marker, one progression per maximal arithmetic run sequence of
+# the compact form above with count >= 2; a single run stays ["n"|"p", idx, lo, hi], and any other space is expanded to its runs.  ("P"
+# since the GLM-5.3 scattered weight reads: a transposed-weight operand is ~2048 parameter-space progressions over ~1e6 runs, which the
+# first v2 form, node-space progressions only, stored run by run.)  `file_items_from_runs` is lossless:
 # `runs_from_file_items(file_items_from_runs(R)) == R` for every run list R (the greedy rule is a function of the run list and expands back).
 FILE_PROG = "N"
+_FILE_MARKERS = {"n": "N", "p": "P"}   # space -> stored progression marker
+_FILE_SPACES = {"N": "n", "P": "p"}    # stored progression marker -> space
 
 
 def file_items_from_refs_json(j) -> list[list]:
@@ -298,8 +338,9 @@ def file_items_from_runs(runs_: Iterable[tuple]) -> list[list]:
 def _file_items(progs: list[tuple]) -> list[list]:
     out: list[list] = []
     for space, (idx, lo, hi), (dI, dL, dH), c in progs:
-        if space == "n" and c > 1:
-            out.append([FILE_PROG, idx, lo, hi, dI, dL, dH, c])
+        m = _FILE_MARKERS.get(space)
+        if m is not None and c > 1:
+            out.append([m, idx, lo, hi, dI, dL, dH, c])
         elif c == 1:
             out.append([space, idx, lo, hi])
         else:
@@ -308,22 +349,58 @@ def _file_items(progs: list[tuple]) -> list[list]:
 
 
 def runs_from_file_items(items: Iterable) -> list[tuple]:
-    """Every stored item as the record's run tuples `(space, idx, lo, hi)`: a v1 file passes through, a v2 "N" progression expands."""
+    """Every stored item as the record's run tuples `(space, idx, lo, hi)`: a v1 file passes through, a v2 "N"/"P" progression expands."""
     out: list[tuple] = []
     for it in items:
-        if len(it) == 8 and it[0] == FILE_PROG:
+        if len(it) == 8 and (sp := _FILE_SPACES.get(it[0])) is not None:
             _, idx, lo, hi, dI, dL, dH, c = it
             if c == 1:
-                out.append(("n", idx, lo, hi))
+                out.append((sp, idx, lo, hi))
             else:
-                _expand_into(out, ("n",), (idx, lo, hi), (dI, dL, dH), c)
+                _expand_into(out, (sp,), (idx, lo, hi), (dI, dL, dH), c)
         else:
             out.append(tuple(it))
     return out
 
 
 def is_file_prog(it) -> bool:
-    return len(it) == 8 and it[0] == FILE_PROG
+    return len(it) == 8 and it[0] in _FILE_SPACES
+
+
+def p_item_indices(r) -> tuple[int, ...]:
+    """The parameter indices a stored parameter-space item reads: a "p" run's one, a "P" progression's `count` (O(1) when dI == 0,
+    the weight reads' shape).  Any other item reads none."""
+    if r[0] == "p":
+        return (r[1],)
+    if r[0] != "P":
+        return ()
+    idx, dI, c = r[1], r[4], r[7]
+    return (idx,) if dI == 0 or c <= 1 else tuple(range(idx, idx + c * dI, dI))
+
+
+def p_item_weight_span(r, w_param: int) -> tuple[int, int] | None:
+    """[lo, hi) union bounds of the runs of a stored parameter-space item that read parameter `w_param`; None when it reads none."""
+    if r[0] == "p":
+        return (r[2], r[3]) if r[1] == w_param else None
+    if r[0] != "P":
+        return None
+    _, idx, lo, hi, dI, dL, dH, c = r
+    if dI == 0:
+        if idx != w_param:
+            return None
+        last = c - 1
+        return min(lo, lo + last * dL), max(hi, hi + last * dH)
+    q, rem = divmod(w_param - idx, dI)
+    if rem or not 0 <= q < c:
+        return None
+    return lo + q * dL, hi + q * dH
+
+
+def expanded_file_args(args: Iterable) -> list:
+    """Each operand of a stored instance row as the record form's per-leaf run lists, bit-identical to what `runs()` wrote (v1):
+    a record-form operand passes through as the same object, one with any "N"/"P" progression item expands (`runs_from_file_items`).
+    The read-side choke point of the Build's `instances.json.gz` (v2, `derive_step._instance_rows`): every reader sees v1 rows."""
+    return [a if all(len(it) != 8 for it in a) else [list(t) for t in runs_from_file_items(a)] for a in args]
 
 
 def first_runs(progs: Iterable[tuple], n: int) -> list[tuple]:

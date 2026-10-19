@@ -709,7 +709,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
     for r in (0, 1):
         gp[r].write_text(json.dumps({"toy": True, "rank": r}))
 
-    def gm_inproc(py, rank_dir, gprog_path, workload, within, timeout):
+    def gm_inproc(py, rank_dir, gprog_path, workload, within, timeout, reuse=False, x09=None):
         # the GM-01 leg's plumbing only (the checker of record runs on the real row); the toy has no GP-01 workload Program
         ok = gprog_path.exists() and workload.exists()
         return {"rc": 0 if ok else 2, "seconds": 0.0, "verdict": "PASS" if ok else "FAIL", "ok": ok, "failed_checks": [], "checks": {},
@@ -717,7 +717,7 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
 
     monkeypatch.setattr(FM, "global_match_rank", gm_inproc)
 
-    def fold_inproc(py, log, profile, out, timeout):
+    def fold_inproc(py, log, profile, out, timeout, reuse=False):
         rank = int(str(log.name).split("rank")[1].split(".")[0])
         result = fold_rank(rank, mut=(rank1_mut if rank == 1 else None))
         out.mkdir(parents=True, exist_ok=True)

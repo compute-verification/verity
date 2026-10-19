@@ -36,8 +36,8 @@ def _ports(prog, q, n: int) -> dict:
             for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", 2 * n))}
 
 
-def _registration(n: int = 6, window=SERVED):
-    prog = P.population_program(PAIR, n)
+def _registration(n: int = 6, window=SERVED, version: int = 1):
+    prog = P.population_program(PAIR, n, version=version)
     q = P.template_instance_query(PAIR.id)
     ports = _ports(prog, q, n)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
@@ -113,6 +113,86 @@ def test_several_templates_one_population():
         with pytest.raises(P.QueryRefused):
             P.units(prog, bad)
     assert P.digest(P.partition(prog, q)) != P.digest(P.partition(P.mixed_population_program([(PAIR, 3), (XOR3, 4)]), q))
+
+
+# ---- the population programs' versions: v1 names its templates, v0 (kept for old records) its counts alone -----------------
+
+EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
+                               lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
+#: the program and registration record digests of `_registration(6, version=0)`: what an old record holds
+V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
+             "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
+V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
+               "4ae03cca27ecd15b541e99f4769335f0aef7c726024f30fbbee1c35cdc764c53")
+#: v1's program digests of `population_program(PAIR, 6)` and `mixed_population_program([(PAIR, 3), (XOR3, 5)])`
+V1_PAIR_6 = ("e8e632dcd15c1ebfde2fa1250164377934de456593abe8d655f36953ffd6ec09"
+             "3aea8ce599b6fe1fb99faaa4a4335e6d9e3c15ff4b79f853f709daf3fb84fccc")
+V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a36ddc"
+                    "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
+
+
+def _xor8_registry() -> Registry:
+    reg = Registry()
+    reg.add(XOR8)
+    return reg
+
+
+def test_v1_names_the_templates_a_population_batches_and_v0_does_not():
+    """Two populations of equal counts over different templates are different programs. v0's Definitions (and their roots)
+    share one id all the same, which an id-keyed lookup would confuse; v1's ids name the templates."""
+    def ids(p):
+        return codec.descriptor_id(p.fn), p.root.id
+
+    for version, shared in ((0, True), (1, False)):
+        pairs = ((P.population_program(PAIR, 3, version=version), P.population_program(XOR3, 3, version=version)),
+                 (P.mixed_population_program([(PAIR, 3), (XOR3, 5)], version=version),
+                  P.mixed_population_program([(XOR3, 3), (PAIR, 5)], version=version)))
+        for a, b in pairs:
+            assert P.program_digest(a) != P.program_digest(b)
+            assert (ids(a) == ids(b)) is shared, (version, ids(a), ids(b))
+    assert codec.descriptor_id(P.population_program(PAIR, 3, version=0).fn) == "TemplateInstances_v0{N=3}"
+    assert codec.descriptor_id(P.mixed_population_program([(PAIR, 3), (XOR3, 5)], version=0).fn) == \
+        "TemplatePopulations_v0{counts=[3,5]}"
+    assert codec.descriptor_id(P.population_program(PAIR, 3).fn) == 'TemplateInstances_v1{template="OneStageTestPair_v0",N=3}'
+    assert codec.descriptor_id(P.mixed_population_program([(PAIR, 3), (XOR3, 5)]).fn) == \
+        'TemplatePopulations_v1{templates=["OneStageTestPair_v0","OneStageTestTriple_v0"],counts=[3,5]}'
+    for build in (lambda: P.population_program(PAIR, 3, version=2), lambda: P.mixed_population_program([(PAIR, 3)], version=2)):
+        with pytest.raises(ValueError, match="no population program v2"):
+            build()
+
+
+def test_v1_digests_are_pinned():
+    assert P.program_digest(P.population_program(PAIR, 6)) == V1_PAIR_6
+    assert P.program_digest(P.mixed_population_program([(PAIR, 3), (XOR3, 5)])) == V1_PAIR_3_XOR3_5
+
+
+def test_v1_names_a_template_by_its_descriptor_id_and_decodes_from_its_descriptor():
+    """v1's record holds each template's descriptor id, so a float or string static is written canonically (not the readable
+    `EPS=1e-05`). The decoder rebuilds either version's body from the descriptor's definitions, at the program's digest, ids
+    and units."""
+    prog = P.population_program(EPS, 2)
+    assert prog.fn.bindings["template"] == codec.descriptor_id(EPS) != EPS.id
+    assert codec.descriptor_id(prog.fn) == \
+        'TemplateInstances_v1{template="OneStageTestEps_v0{EPS={\\"f64\\":\\"0x1.4f8b588e368f1p-17\\"},NAME=\\"a\\\\\\"b\\"}",N=2}'
+    one, both = P.template_instance_query(EPS), P.template_instances_query([PAIR.id, EPS])
+    cases = [(prog, one), (P.population_program(EPS, 2, version=0), one)]
+    cases += [(P.mixed_population_program([(PAIR, 3), (EPS, 2)], version=v), both) for v in P.POPULATION_VERSIONS]
+    for p, q in cases:
+        back = codec.decode_program(json.loads(json.dumps(codec.encode_program(p))), _xor8_registry())
+        assert (back.program_fn_id, back.root.id, codec.program_digest(back)) == \
+            (codec.descriptor_id(p.fn), p.root.id, P.program_digest(p))
+        assert P.ranges(back, q) == P.ranges(p, q) and P.digest(P.partition(back, q)) == P.digest(P.partition(p, q))
+
+
+def test_an_old_v0_record_still_decodes_and_verifies():
+    """A registration made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
+    copy, built or decoded from its descriptor; v1's program of the same population is another program, which it refuses."""
+    old, q, rec = _registration(6, version=0)
+    assert (rec["program"], R.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
+    decoded = codec.decode_program(json.loads(json.dumps(codec.encode_program(old))), _xor8_registry())
+    for prog in (old, decoded):
+        assert _check(rec, prog, q).ok
+    assert "R2-program" in _check(rec, P.population_program(PAIR, 6), q).codes
 
 
 def test_partition_digest_is_the_named_query_over_the_program():
@@ -234,7 +314,8 @@ def test_profile_counts_wrong_units():
 
 def _v0(registration, draw, delta):
     """The record's `profile` and `wrong_units` as `audit.py` computed them before the profile was one type (`main` at
-    6746f408), kept as the oracle for the bytes recorded runs hold."""
+    6746f408), kept as the oracle for the bytes recorded runs hold, but for a Bernoulli law's bound: then the linear
+    relaxation (`worst_case`), now the exact one the Lean computes (`Bernoulli.count_bound`, `Bound.bernoulliBound`)."""
     from verity.ml.circuits.partition import Level
     from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
     n, law = registration["population"], D.law_of(draw)
@@ -254,7 +335,7 @@ def _v0(registration, draw, delta):
     out = {"delta": delta, "of": n}
     rule = "except with probability delta, an accepted transcript has at most `bound` wrong units"
     if core is None:
-        out["bound"], out["rule"] = single.worst_case(lambda m: float(m)), rule
+        out["bound"], out["rule"] = Bernoulli(Fraction(draw["p"])).count_bound(n, delta), rule
     else:
         out["bound"], out["rule"] = core.count_bound(delta), rule
         if draw["law"] == "stratified":

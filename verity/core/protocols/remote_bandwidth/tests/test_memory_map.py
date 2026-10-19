@@ -50,6 +50,41 @@ def test_a_memory_map_round_trips_through_its_lines() -> None:
     assert memory_map.dumps(parsed_head, steps) == text
 
 
+def test_a_line_carries_withdrawn_only_if_its_step_withdraws_a_block() -> None:
+    """`withdrawn` is optional, empty by default: a map without withdrawals is the lines it was before the key, and a
+    line with an empty list reads as one without."""
+    head = Header(bytes(64), N)
+    s = Step(3, (), written(1, [4], N), (N + 1,))
+    assert s.to_json() == {"freed": [], "step": 3, "withdrawn": [N + 1],
+                           "written": [[4, N, codec.digest(page(4, 1)).hex()]]}
+    assert "withdrawn" not in memory_map.dumps(head, serving(head))
+    assert list(memory_map.parse(memory_map.dumps(head, [s]).splitlines())[1]) == [s]
+    bare = json.dumps({"freed": [], "step": 3, "withdrawn": [], "written": []})
+    assert list(memory_map.parse([json.dumps(head.to_json()), bare])[1]) == [Step(3, (), ())]
+
+
+def test_a_withdrawn_index_takes_its_place_among_its_line_s_fresh_ones_and_joins_no_plan() -> None:
+    """Step 1 completes blocks in slots 4, 5 and 100 (4 and 5 registered filler, freed at step 1, which reached them),
+    sent as one append, N … N + 2.  The request holding slot 5 ends before the append's encode lands, in step 3's
+    line, so that line writes slots 4 and 100 at N and N + 2 and withdraws N + 1: no write, no free.  The release
+    covers N + 1 and names it withdrawn, no plan's change adds or removes it, and the step has no append tree of its
+    own.  A line may withdraw blocks and write none."""
+    head = Header(bytes(64), N)
+    r = Replay(head)
+    assert r.apply(Step(1, (4, 5), ())).released == ((4, 2),)
+    assert r.take(2) == ((), ((4, 2),))
+    c = r.apply(Step(3, (), (Written(4, N, codec.digest(page(4, 1))), Written(100, N + 2, codec.digest(page(100, 1)))),
+                     (N + 1,)))
+    assert (c.first, c.count, c.indices, c.released, c.withdrawn) == (N, 2, (N, N + 2), ((N + 1, 1),), ((N + 1, 1),))
+    assert (r.extent, r.holds(4), r.holds(5), r.holds(100)) == (N + 3, N, None, N + 2)
+    assert r.take(4) == (((N, 1), (N + 2, 1)), ())
+    with pytest.raises(MemoryMapError, match="withdraws a block"):
+        c.append_tree(bytes(64), salts(b"s", 2))
+    c = r.apply(Step(5, (), (), (N + 3, N + 4)))
+    assert (c.first, c.count, c.indices, c.released, c.withdrawn) == (N + 3, 0, (), ((N + 3, 2),), ((N + 3, 2),))
+    assert r.take(6) == ((), ()) and r.extent == N + 5
+
+
 def test_replay_turns_each_step_into_appends_releases_and_plan_changes() -> None:
     """Indices are the store's next fresh ones.  A write releases the block its slot held (registered filler, or a
     block written before), a free releases its slot's block and leaves the slot empty, and a block appended and
@@ -143,6 +178,42 @@ def test_a_pass_covers_the_blocks_resident_at_its_step() -> None:
     assert r.apply(Step(2, (), ())).step == 2
 
 
+def test_a_block_whose_write_is_recorded_two_steps_after_it_completed_is_resident_from_the_pass_after() -> None:
+    """Deferred residency: step 1 completes a block in slot 4 (registered filler, freed at step 1, which reached it),
+    and its append goes out at once; the device encodes it in place once the coin is back, and step 4 is the first
+    whose attention reads it encoded, so its write is recorded at step 3, two steps after it was completed.  Until then
+    it is in no record: the passes at steps 2 and 3 don't hold it, and the pass at step 4 adds it.  The verifier takes
+    the append before the record writes the block, the record's write names the append's index and digest, and every
+    pass is accepted with every receipt drawn."""
+    st = store()
+    head = Header(st.registration.digest, N)
+    replay, run = Replay(head, st.registration), Run(st)
+    assert run.run(change=replay.take(0), step=0) is None
+    freed = replay.apply(Step(1, (4,), ()))
+    assert (freed.count, freed.released, replay.holds(4)) == (0, ((4, 1),), None)
+    assert run.s.release(freed.released) is None
+    a = st.append([page(4, 1)], salts(b"deferred page", 1))
+    assert run.commit(a.root, a.count) == N
+    assert replay.take(2) == ((), ((4, 1),))
+    assert run.run(change=((), ((4, 1),)), step=2) is None
+    assert replay.take(3) == ((), ())
+    assert run.run(change=((), ()), step=3) is None
+    wrote = replay.apply(Step(3, (), written(1, [4], N)))
+    assert (wrote.first, wrote.digests, wrote.released) == (a.first, a.digests, ())
+    assert replay.holds(4) == N
+    assert replay.take(4) == (((N, 1),), ())
+    assert run.run(change=(((N, 1),), ()), step=4) is None
+    run.boundary()
+    assert run.run(change=replay.take(5), step=5) is None
+    run.boundary()
+    assert run.finish() == [audit.Verdict(0, True), audit.Verdict(1, True)]
+    rec = run.s.record()
+    assert [w.steps for w in rec.windows] == [(0, 2, 3, 4), (5,)]
+    assert [w.lengths for w in rec.windows] == [(8, 7, 7, 8), (8,)]
+    assert [w.post_seed for w in rec.windows] == [(0, 0, 0, 1), (1,)]
+    assert (rec.appended, rec.released) == (1, 1)
+
+
 @pytest.mark.parametrize("steps, match", [
     ([Step(0, (), ()), Step(0, (), ())], "strictly increase"),
     ([Step(1, (100,), ())], "frees slot 100, which holds no block"),
@@ -150,7 +221,13 @@ def test_a_pass_covers_the_blocks_resident_at_its_step() -> None:
     ([Step(0, (7, 7), ())], "frees a slot twice"),
     ([Step(0, (), (Written(7, N, bytes(64)), Written(7, N + 1, bytes(64))))], "writes a slot twice"),
     ([Step(0, (), (Written(7, N + 1, bytes(64)),))], "not the store's next fresh one, 8"),
-], ids=["order", "outside", "freed", "freed-twice", "written-twice", "index"])
+    ([Step(0, (), (), (N + 1,))], r"withdraws \[9\]"),
+    ([Step(0, (), (), (N + 1, N))], "in increasing order"),
+    ([Step(0, (), (), (N, N))], "in increasing order"),
+    ([Step(0, (), (Written(7, N, bytes(64)),), (N,))], "not the store's next fresh one, 9"),
+    ([Step(0, (), (), (N,)), Step(1, (), (Written(7, N, bytes(64)),))], "not the store's next fresh one, 9"),
+], ids=["order", "outside", "freed", "freed-twice", "written-twice", "index", "withdrawn-outside", "withdrawn-order",
+        "withdrawn-twice", "written-withdrawn", "written-after-withdrawn"])
 def test_replay_refuses_a_map_that_breaks_its_rules(steps, match) -> None:
     r = Replay(Header(bytes(64), N))
     with pytest.raises(MemoryMapError, match=match):
@@ -163,6 +240,8 @@ def test_a_refused_step_changes_nothing() -> None:
     r.apply(Step(0, (), (Written(100, N, bytes(64)),)))
     with pytest.raises(MemoryMapError, match="next fresh"):
         r.apply(Step(1, (100,), (Written(3, N + 5, bytes(64)),)))
+    with pytest.raises(MemoryMapError, match="withdraws"):
+        r.apply(Step(1, (100,), (Written(3, N + 2, bytes(64)),), (N + 1, N + 4)))
     assert (r.moved, r.extent, r.last, r.holds(3)) == ({100: N}, N + 1, 0, 3)
 
 
@@ -185,7 +264,11 @@ def test_a_malformed_header_is_refused(line, match) -> None:
     ({"step": 0, "freed": [1 << 63], "written": []}, "freed slot"),
     ({"step": True, "freed": [], "written": []}, "a step is an integer"),
     ({"step": 0, "freed": [], "written": [], "pages": []}, "step's line"),
-], ids=["hex", "short", "negative", "slot-limit", "bool", "keys"])
+    ({"step": 0, "freed": [], "written": [], "withdrawn": 3}, "are lists"),
+    ({"step": 0, "freed": [], "written": [], "withdrawn": [-1]}, "withdrawn index"),
+    ({"step": 0, "freed": [], "written": [], "withdrawn": [True]}, "withdrawn index"),
+], ids=["hex", "short", "negative", "slot-limit", "bool", "keys", "withdrawn-list", "withdrawn-negative",
+        "withdrawn-bool"])
 def test_a_malformed_step_is_refused(line, match) -> None:
     head = json.dumps(Header(bytes(64), N).to_json())
     _, steps = memory_map.parse([head, json.dumps(line)])

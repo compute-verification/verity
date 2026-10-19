@@ -12,7 +12,11 @@ The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (s
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
 input from serving) and `timing.py` (the honest schedule, and where the sketch's bound is read). Every byte format below is pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
-checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8).
+checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
+definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
+`RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record; `audit.py` is still the verifier
+of record (`README.md`). The Lean refuses a registration that binds PoUW's tiles.
 
 ## 1. What an accepted session certifies
 
@@ -52,11 +56,12 @@ opened like any other, but not credited.
 The protocol bounds the first four, prices \(\mu_{\text{rebuild}}\) from the record's codec (its name and parameters)
 at a stated squaring ceiling, passes \(\mu_{\text{host}}\) and \(\mu_{\text{link}}\) through (the record can't bound
 them; a protocol carries no policy parameter), and reads \(\mu_{\text{carrier}}\) off the property's verdict. `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
-codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.597 ×
+codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.67 ×
 `kv.cu`'s 1.499·10^10 squarings a second at 1,024 bits for each RTX PRO 6000 with its share of the host
-(ra-squaring-ceiling, #1887; 1.567 × 5.13·10^10 at 512 bits), 1.915·10^11 for the node's eight. There, and at the
-node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is 0.062% under the default codec, 0.093% at k = 2 and
-0.31% under p512/k2 (`timing.SQUARINGS_PER_S`, `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
+(ra-squaring-ceiling's rule, #1887, on `kv.cu`'s FOLD 6, Daniel's card e2a13d4a; 1.567 × 5.13·10^10 at 512 bits),
+2.003·10^11 for the node's eight. There, and at the node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is
+0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
+`timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt. Under the default receipt kind, sketch-sha512, a receipt also rests on `RateAuditSketch`, which adds at most
 \(C \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(C\) SHA-512 compressions (`timing.sketch_failure`, §4):
@@ -77,10 +82,10 @@ charged \(A\) and the rest of the pass in flight at its challenge, where the ses
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
-`timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.885–0.917% in the worst
+`timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.888–0.920% in the worst
 window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\)
 (0.0083%), with its whole γ (0.66%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ with
-\(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about 372 GB over every tier (44 GB a GPU) no \(T\) meets 1%
+\(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about 373 GB over every tier (44 GB a GPU) no \(T\) meets 1%
 (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s and 11,091 openings every
 window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.26–1.35%, and at 1 s and 2,773 its
 \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–11%.
@@ -111,9 +116,10 @@ DDR5-6400), which no measured kernel reaches, so at spec every reading also carr
 \(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.82–5.85% for the worst
 stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions so far are one GPU's, over
 an 85 GiB store: both honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window
-(#2005, #2028; verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). At one GPU's constants they read 0.0997
-and 0.0999 at spec and 0.0659 and 0.0661 measured. At the node's \(S_{\text{chip}}\) and \(C_{\text{sq}}\) they
-certify 416.10 and 416.01 TB of the 433.9 TB their receipts claim over 300 s (431.4 TB at one GPU's), and their γ
+(#2005, #2028; verifier r20261014-193042-3d4f, prover r20261014-193057-8fec). As the verifier recorded them, at one
+GPU's constants and the 1.597× ceiling then stated, they read 0.0997 and 0.0999 at spec and 0.0659 and 0.0661
+measured. At the node's \(S_{\text{chip}}\) and \(C_{\text{sq}}\) they certify 415.99 and 415.90 TB of the 433.9 TB
+their receipts claim over 300 s (431.4 TB at one GPU's as recorded), and their γ
 against the node's \(R\) is 0.898 at spec and 0.893 measured, nearly all of it the idle node. Either reading's \(R\)
 is the verifier's, never the prover's: a node's own calibration can only raise it, because every term but the timing
 term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more
@@ -381,18 +387,33 @@ So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encodi
 plan holds it: a plan received before the append that commits one of its blocks rejects with `plan`. Only then does
 the prover encode the append's blocks, each under its bound key \(b_j(c_a)\), keeping \(d_j\) beside it
 (`Store.append` commits, `Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
-pass and its step"): a block written at step \(s\) is appended after the root of the pass before \(s + 1\), encoded
-after its coin arrives, and read from step \(s + 1\)'s pass on, so the append goes out after that root and before
-pass \(s + 1\)'s reads, and the pass's seed binds it (below). Each coin is live and drawn once: the challenger commits
-none ahead, a retry never redraws one, and an append whose coin is never used is a failure in the record. A coin is
-used once a root follows its append, the append then joining that root's window (the lifetime cap, below). The
-rejections are `coin`: an append whose root was sent before (a retry; no coin is drawn), an append after the last
-window's roots are final (no root can follow it; no coin is drawn), and, at the last window's close, an append no root
-followed (`Session.close`). A block the prover stops holding is released (`Session.release`, runs of the store), and a
-plan received after its release that holds it rejects with `plan`; its receipts from earlier passes can still be
-drawn, so the prover keeps it until its windows are drawn. An append that is malformed or would take the store past its
-codec's `max_blocks` rejects with `append`, and a release of a block outside the store or released already with
-`release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
+pass and its step"), with residency deferred to the encode, so the coin's round trip is off serving's critical path.
+A block completed at step \(s\) is appended once it is complete, and stays plaintext in its slot, which serving reads
+in the clear, until its coin arrives and the device encodes it in place. Its write is recorded at the step before the
+first step \(t\) whose reads see it encoded, at \(t - 1\) (at \(s\) itself when the coin is back before step
+\(s + 1\)'s reads), so it is resident, and planned, from pass \(t\) on. Until then it is in no record and uncredited,
+as a partly written block is (memory-map/v1, `memory_map.py`). The append therefore goes out before the record writes
+the block, the root of every pass whose plan holds the block follows the append, and that pass's seed binds it
+(below). The record's step follows from the encode, and moving it gains nothing: recorded later, the block's encoded
+reads go uncredited; recorded earlier, a plan holds bytes that are not its encoding, and their receipts fail. The
+convention is unchanged: step \(t - 1\)'s record takes effect after that step's reads. Each coin is live and drawn
+once: the challenger commits none ahead, a retry never redraws one, and an append whose coin is never used is a
+failure in the record. A coin is used once a root follows its append, the append then joining that root's window
+(the lifetime cap, below). The rejections are `coin`: an append whose root was sent before (a retry; no coin is
+drawn), an append after the last window's roots are final (no root can follow it; no coin is drawn), and, at the last
+window's close, an append no root followed (`Session.close`). A block the prover stops holding is released
+(`Session.release`, runs of the store), and a plan received after its release that holds it rejects with `plan`; its
+receipts from earlier passes can still be drawn, so the prover keeps it until its windows are drawn. A block freed
+before its encode lands is *withdrawn*: its values' last read is at or before the step its write would be recorded
+at, so it gets no write, no free and no credit. It was never resident encoded, and a block no step reads while it's
+resident is in no record, so the line its write would be in lists its index in `withdrawn` instead (memory-map/v1's
+per-step list, optional and empty by default, so a map without withdrawals reads as before). A line's writes and
+withdrawals take the store's next fresh indices together, and a withdrawn index is never written. The prover's
+release covers the index and names it withdrawn (`Session.release(runs, withdrawn)`), and the verifier checks it was
+never written: an appended block, inside the release's runs, that no plan received before held. An append that is
+malformed or would take the store past its codec's `max_blocks` rejects with `append`, and a release of a block
+outside the store or released already, or one naming withdrawn a block that is registered, outside its runs or held
+by a plan, with `release`. Appends are a session's: the next session over the store starts again from \(N\) (§8).
 
 **No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
 its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
@@ -413,9 +434,18 @@ after that one may hold it (`Params.lifetime`, `LIFETIME`: 60 windows, an hour a
 rejects with `lifetime`. So every post-seed block leaves the credited store within \(L\) windows, and the stacked
 stock the carrier term charges is the input rate times \(L\) (§1, §8). A block the prover keeps longer, a prefix
 cache's for instance, is re-keyed: released, and its payload appended again at the store's next fresh index, which
-draws a fresh coin and so gives it a fresh bound key (§3), so its encoding is computed anew. A re-key is only at the
-cap (§8, "The memory map's choices"), so its time is the map's, not a choice made after the coin. The record names
-\(L\) (`lifetime`), and the remote session sends it with the session, so the prover re-keys in time.
+draws a fresh coin and so gives it a fresh bound key (§3), so its encoding is computed anew. A re-key's free is the
+one exception to a free at its values' last read (§8, "The pass and its step"). The re-key's step frees the old
+index, and the new index is written when its encode lands (deferred residency, above), so the value is uncredited in
+between, and withdrawn if its last read comes first. A re-key is only at the cap (§8, "The memory map's choices"),
+so its time is the map's, not a choice made after the coin. Under deferred residency a block appended in window
+\(w\), the one its append joined, is resident from \(w\) or \(w + 1\). Its re-key, recorded at a step before the
+first pass of window \(w + L\), therefore falls at age \(L - 1\) at the latest. At \(L = 1\) that is the window it was
+appended in, before it may be resident, and a block whose encode lands after the boundary is never credited. So a
+session that defers residency has \(L \ge 2\) (`Params.deferred`; the verifier refuses one at \(L = 1\)). Counting
+the lifetime from residency instead of from the append would allow \(L = 1\); that is a later decision, and it would
+change the Lean port's lifetime check and the property `LifetimeCapped`. The record names \(L\) (`lifetime`), and
+the remote session sends it with the session, so the prover re-keys in time.
 
 **Fiat–Shamir, and what grinding buys.** A seed after the first depends on the prover's own root, so the prover can
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
@@ -760,8 +790,21 @@ kind, `bind` and the rows (§4), and `ledger` takes a link term only from a reco
 \(\mu_{\text{rebuild}}\) is priced from the record's codec (§1, §3), and `ledger` refuses a rebuild model of any
 other; and the layout says which bytes a credited block is (§4). Each
 `WindowRecord` carries its passes' lengths \(L_{t,i}\), their post-seed reads \(a_{t,i}\) (`post_seed`, which
-`ledger` credits only on a verdict, §1) and their steps (`steps`, strictly increasing, §4), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so
-its span \(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. That is every input of
+`ledger` credits only on a verdict, §1), their steps (`steps`, strictly increasing, §4), their heads (`heads`, the
+chain over the appends received before each pass's root, which its seed binds, null before the first), their stale
+bounds (`stale`, `Session._stale_below`), its challenge's release \(b_{t-1}\), its deadline \(D_t\) (so its span
+\(\Sigma_t\), `span_ns`), its openings coin's release, and an `IntegrityProfile`. The stale bound of a pass of window
+\(t\) is \(N + \sum \{\text{count}_a : w_a \le t - L\}\) over the session's appends \(a\), \(w_a\) the window \(a\)
+joined (that of the first root received after it, the first pass whose head chains it): the store index below which
+every appended block is past the cap, the same for every pass of a window. `public()` lists the heads and stale
+bounds per window too (`heads`, `stale`), which the memory-map unit's verdict is on (§8): each head is a hiding
+commitment, a hash over hiding append roots and their public indices like `appends`, and each stale bound is
+protocol structure, a function of \(N\) (`blocks`), \(L\) (`lifetime`), the heads, and the appends' extents (first,
+count), which the verifier sees in the clear with each append and `appends` commits to. So `stale` adds nothing beyond
+the appends' extents and the windows they joined; the record lists the extents only as their chain and total
+(`appended`), so read from it alone `stale` shows the blocks appended \(L\) windows back, window by window. Whether the
+extents should be public at all is a separate question about `appends` (the counts per window depend on the
+workload). That is every input of
 \(\gamma_t\) but the node's measured \(R\) and \(S_{\text{chip}}\) and the models, so the every-window claim is
 checkable from the record (§1). `Record.end_ns` is the last deadline, which the next session over the store waits
 out.
@@ -776,17 +819,79 @@ as the core protocol interface provides for a protocol whose acceptance isn't on
 profile is its own: each window's `IntegrityProfile` with its schedule. `ledger` computes every γ term, the session's
 and each window's, from it plus the node's capacities.
 
+### Declared outputs
+
+A session's outputs are these, and only these (decided 18 Oct, 17:10Z, under proofs' rule that a protocol publishes
+its structure, its outputs, the verifier's coins and draws, and hiding commitments):
+
+- **The verdict**, per window and for the session: accepted, or the failure that ended it (one of `FAILURES`, at the
+  window it ended in).
+- **γ**, per window (\(\gamma_t\)) and over the session, each against both \(R\): the node's specified read bandwidth,
+  the headline, and its measured one (§1, "Which \(R\) is the headline"). The session's is read both ways, per window at
+  \(W\delta\) and over the horizon at \(\delta\) (§10), each with its failure probability. γ is over the registered
+  store only: a receipt of a block appended after the codec seed is drawn and opened like any other but not credited
+  (`credit_post_seed` is None, so \(\mu_{\text{carrier}}\) is 0), and γ doesn't depend on what the workload appends.
+  A paced session's windows, for γ, are its stretches. A paced session is one whose windows are each a group of at
+  most \(k\) passes under a live coin of its own, every pass reading every registered block, with the groups taken a
+  stretch of about \(T\) at a time and the last stretch closing the session: its reads back the credited span's end,
+  and it is not credited.
+- **The memory line**, a session total only, in three forms, each with its ε and δ: the registered bytes the session
+  shows held in node memory are at least \((1 - \varepsilon) N b\), except with probability δ.
+  - *Snapshot*: the registered blocks in node memory at the start of each credited pass, averaged over those passes.
+  - *Time-held*: the registered blocks in node memory at each instant of the credited span, averaged over the span.
+    Only a paced session has one.
+  - *Link-charged*: the time-held line with the node's boundary links charged as carrying blocks back into node
+    memory at their ceiling, which drops Identity.
+
+  Every form charges the blocks the node could re-encode from their payloads (its squaring ceiling at the record's
+  codec) and read from its own disks (their measured read ceiling), and its on-chip storage \(S_{\text{chip}}\). δ is
+  the horizon's error plus the sketch's (`timing.sketch_failure`).
+
+\(R\), \(S_{\text{chip}}\), the squaring ceiling and the disks' and links' ceilings are the verifier's: the node's
+stated or measured capacities, protocol structure, never the prover's report (§1).
+
+Everything else that follows the workload is a value, not public: the blocks the session appended and released and
+the chain over its appends, each pass's plan, its post-seed reads \(a_{t,i}\), its step and its root's arrival, and any
+memory line per window or by kind (weights, KV, host). Each window's receipts \(U_t\) stay public, since its draws are
+over them. Until `public()` is trimmed to match (after #2519, which keeps `stale` out of it), it still carries
+`appended`, `released` and each window's `post_seed`.
+
 ## 8. What deployment changes, and what is open
 
 - **Zero knowledge.** Every protocol is zero-knowledge, with no clear mode, and an opened block decodes to a KV page,
-  which is user data. Deployed, each opening is a proof unit the proof service proves in zero knowledge, and the
-  verifier sees only its result. The unit's statement is §6's checks 2, 3 and 5 (and 4 under a registration that binds
-  \(z\)), with the opening's fields as witness and
-  public inputs the pass's root, its seed, its plan's digest, \(p\), \(j\), the payload root and the registration (and,
-  for an appended block, its append's root and coin \(c_a\), a verifier's coin). The
-  clear checks here are the specification of what each unit proves. The formats already hide: payload blocks and
-  receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and the coins are hm96 leaves until released, so the
-  formats don't change when the openings move into proofs.
+  which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
+  proves. Deployed, each drawn receipt is one proof unit that the proof service proves in zero knowledge, and the
+  verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
+  binds \(z\)), plus the link from the block's payload to the circuit's committed values:
+  - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
+    hiding commitments): the registration (its digest, \(N\), \(b\), the codec and the receipt kind); the draw
+    (window \(t\), pass \(i\), the position in the pass, and \(L_{t,i}\)); the pass's root \(\text{root}_{(t,i)}\)
+    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\sigma_t\), \(i\) and that
+    root; the plan's commitment (v0's plan digest); the payload root; for an appended block, its append's root and
+    coin \(c_a\); and the roots of the circuit's value commitments.
+  - *Witness*: the block \(E_j\), its payload \(\text{payload}_j\) and digest \(d_j\), the index \(j\), the receipt
+    leaf's receipts, and every salt and path: the receipt leaf's, the payload leaf's, the plan's at the position, and
+    the value leaves'.
+  - *What it proves.* Check 1 is the unit's shape: each witness fills its port's fixed size, and the position is the
+    draw's. Check 2: the receipt leaf, under the seed, the plan and the leaf's salt, has its path to the pass's root,
+    and \(j\) is the plan's entry at the position. Check 3: every word of \(E_j\) is below \(p\), and \(E_j\) decodes
+    to \(\text{payload}_j\), under the seed's key for a registered block and under \(b_j(c_a)\) for an appended one,
+    with \(d_j = \text{sha512/row/v2}(\text{payload}_j)\) and the payload leaf on its path, at \(j\), to the payload
+    root or to the append's root. Check 5: the receipt at the position, recomputed from \(j\) and \(E_j\) (and \(z\)
+    if bound) under the registration's kind, is the leaf's. And for an appended block, \(\text{payload}_j\) is the
+    committed KV values the circuit wrote to block \(j\), under the layout: each of those values opens under its
+    value commitment's root (the vLLM Commit's hiding leaves). So the receipted block is the circuit's KV, not bytes
+    the prover chose.
+  - *Output*: the unit's verdict, accepted or §6's failure name, within the 16-bit output limit. The record and
+    `ledger` read only verdicts, and nothing an opening carries leaves the unit.
+
+  The formats already hide: payload blocks and receipt leaves are `hm96-sha512/row/v2` leaves under fresh salts, and
+  the coins are hm96 leaves until released, so the formats don't change when the openings move into proofs. A public
+  \(c_a\) and append root say which append the drawn block belongs to, but not its index or its contents. Which value
+  leaves a block's payload bytes are is the memory-map unit's public row's (`map_value_leaves` in
+  `verity.ml.circuits.requirement_units`: a present value \(k\) is leaf \(\text{pos}[k]\) of the value commitments,
+  and payload \(c\) is store index \(\text{first} + c\)). Open: the units' circuits; and the plan's commitment in
+  place of v0's clear plan ("What the plan shows", below).
 - **Where \(z\) comes from,** under a registration that binds it. \(z\) comes from Pearl-C's k-slice accumulators,
   inside Pearl-C's domain, with Pearl-C's noise for the pass derived from the pass's seed. That gives \(|z|/|E| = 4m/k_s\), at least 1 for batch
   \(\ge k_s/4\), where the tile's final output would give \(4m/k\) (1/16 at batch 64). All-zero weights needn't be
@@ -820,27 +925,42 @@ and each window's, from it plus the node's capacities.
   blocks the circuit reads at \(s\), `readBlocks s` (`PlanMatches`). For a store that holds only what the circuit
   keeps live, that is the store resident when \(s\) begins (`Store.resident s`, under `StoreMatches`): the blocks
   registered or written at a step before \(s\), less those freed or overwritten at one. So a step's memory-map record
-  takes effect after the step's reads: its writes are of values the step produced, and its frees are of blocks whose
-  values the step read last. A writer therefore records a free at the step of its values' last read, not at the next
-  write's. The prover's audit side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass
-  at a step whose record it has applied, or before the last pass's, and a record of a step before the last pass's
-  (`memory_map.py`). The step is public structure, and the map and the plan are witness. Because the steps strictly
-  increase, a step has at most one pass, so its reads are credited at most once; a step with no pass is credited
-  nothing. Open:
+  takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step did and the
+  device has since encoded (deferred residency, §4), and its frees are of blocks whose values the step read last. A
+  writer therefore records a free at the step of its values' last read, not at the next write's. The prover's audit
+  side gives each pass its plan's change at its step (`Replay.take(s)`). It refuses a pass at a step whose record it
+  has applied, or before the last pass's, and a record of a step before the last pass's (`memory_map.py`). The step
+  is public structure, and the map and the plan are witness. Because the steps strictly increase, a step has at most
+  one pass, so its reads are credited at most once; a step with no pass is credited nothing. Open:
   - *The plan's check.* That a pass's plan is the circuit's reads at its step, block for block, is the plan's proof
     unit's to check, inside zero knowledge, against the prover's memory map and the circuit's requirement (I4). The
     verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would.
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
+    handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
+    the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
+    reads it, so serving writes into memory whose block was released at step \(r\) only once no pass yet to read is
+    at a step up to \(r\) (the free fence). A write that skips the fence lands over a block a pass has yet to read,
+    and a drawn receipt of it, of other bytes than the opening's block, rejects (§6). The record is memory-map/v1's
+    as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
+    and the verifier sees the same messages, so what it accepts is unchanged.
 - **The requirement's link.** What the audit credits is the node's reads of its store. Counting them as the served
   circuit's reads needs A1's link (`StoreMatches`, `PlanMatches`, note:20261017T1847Z-draft-a1-requirement), and three
   of its gaps are on the audit's side. `ledger` takes the link as `requirement`, a `RequirementLink`: whether its
   proofs hold, the density \(D\), the circuit's read bits at each step, and the memory-map unit's verdict on the
-  session's appends (`mapped`, below). On it, a pass's credit is its credited
+  session's appends and its passes' heads and stale bounds (`mapped`, below). On it, a pass's credit is its credited
   receipts at \(D\) bits each, at most the circuit's read bits at the pass's step, and the ledger says it is linked
   (`Ledger.linked`); without it, the credit is the store's, flagged as such. The checks behind the link belong to the
-  units named below, and the ledger takes them as given.
+  units named below, and the ledger takes them as given. Those units are sampled, so the link carries what their draw
+  established: \(\varepsilon\), the most share of the linked credit the units it leaves unproved can carry (the
+  passes whose plan unit is wrong and those holding a block a wrong memory-map unit wrote), except with
+  probability \(\delta\). The session is credited \((1 - \varepsilon)\sum_\text{passes} \min(nD, r_s)\), a window
+  its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
+  to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
+  the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
+  share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts. Their receipts are capped at
     the circuit's reads at the pass's step (`read_bits`, `requirement.Requirement.read_bits`). That each receipted
@@ -870,22 +990,37 @@ and each window's, from it plus the node's capacities.
     choices because W's memory map fixes them: memory-map/v1's frees and writes are functions of the served
     steps, fixed before the coins. That the session's appends, releases and plans are that map's is the memory-map
     unit's to prove (proofs', I4), inside zero knowledge, and the audit relies on it for exactly this:
-    1. every append is a write of the map, of a value produced at the write's step, appended at or after that step
-       and before any plan holds it (§4 checks the latter);
+    1. every append is a write of the map, of a block completed at the write's step or before it (§4's deferred
+       residency records the write at the step before the block's first encoded read), appended once complete and
+       before any plan holds it (§4 checks the latter), and sent after the passes of the steps up to its production
+       step and before the rest: each pass's head is the chain through the appends of the steps below its own, so no
+       append is bound into a seed at or before its step's;
     2. the appends are in the map's order, each at the index the verifier gave it (the store's next fresh one), and
-       the map has no write the session doesn't append and no append it doesn't write, so there are no dummy appends;
+       the map has no write the session doesn't append and no appended block it neither writes nor withdraws, a
+       withdrawn one being a block it completed whose values' last read came at or before its encode landed (§4), so
+       there are no dummy appends;
     3. a re-key (a release and the payload appended again, §4's lifetime cap) is the map's, at the cap, of the same
-       payload, so \(d_j\) is unchanged and only its index, its coin and its key are fresh (KB-6);
-    4. every free is at its values' last read, of a registered block or a written one (above);
+       payload, so \(d_j\) is unchanged and only its index, its coin and its key are fresh (KB-6), its free at the
+       re-key's step and its new index's write when that encode lands; at the cap means its old index is below the
+       stale bound of the first pass after its step (`WindowRecord.stale`), so the old block may be in no plan from
+       that pass on, and no earlier re-key is taken: which blocks are re-keyed or freed stays witness;
+    4. every free but a re-key's is at its values' last read, of a registered block or a written one (above);
     5. the map is the one the plan unit's plans are of (`PlanMatches` reads the same map).
 
-    The unit's public input is the record's `appends`, the chain \(a\) over the session's appends (§4, §7), together
-    with each pass's seed, which binds the chain up to that pass's root, so the appends' places among the passes are
-    bound too. Its witness is the map, the appends' digests \(d_j\) and salts, and the plans. The releases stay
+    The unit's public input is the record's `appends`, the chain \(a\) over the session's appends (§4, §7), each
+    pass's step and head (`WindowRecord.heads`, the chain its seed binds), and each pass's stale bound
+    (`WindowRecord.stale`). The units chain their own appends step by step, and the link holds only if every pass's
+    head is that chain through the appends of the steps below the pass's step (item 1) and the whole chain is
+    `appends`, so the appends' places among the passes are bound; each map instance takes the stale bound of the pass
+    after its step and refuses moving a value whose old index isn't below it (item 3). A prover that runs serving ahead
+    (`Ahead`, "The pass and its step" above) still meets item 1: its steps without a pass have their appends sent
+    between the passes around them, since it hands serving's records over, and sends their appends, only before the
+    next pass's root. Its witness is the map, the appends' digests \(d_j\) and salts, and the plans. The releases stay
     witness, held to the map through the plans; the verifier here sees them in the clear and keeps released blocks
     out of later plans, a check deployment moves into the plan unit. `ledger` takes the unit's verdict as
-    `RequirementLink.mapped(record.appends)` and refuses a link whose verdict isn't true of the record's chain: without
-    it the credit is the store's, as without a link. The proof is proofs'; the audit side is the chain and the hook.
+    `RequirementLink.mapped(record)` and refuses a link whose verdict isn't true of the record's chain, heads and stale
+    bounds: without it the credit is the store's, as without a link. The proof is proofs'; the audit side is the
+    chain, the heads, the stale bounds and the hook.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
   but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
@@ -905,10 +1040,13 @@ and each window's, from it plus the node's capacities.
     Carrying appends over needs the next session to take the previous one's append roots and releases as its
     starting store.
   - *The device side.* A KV page's index is the store's next fresh one, not \(\text{slot} \cdot \text{LAYERS} +
-    \text{layer}\): serving records each block it completes, with its slot, the index it gave it and its \(d_j\), and
-    each slot it frees, step by step (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its
-    slot held, and vLLM's `kv_free` is a free, recorded at its values' last read, so the store's filler plan leaves the
-    released blocks out), and the prover's audit side turns the record into appends, releases and plan changes (`Replay`). The record is the prover's: \(d_j\) is witness, and the
+    \text{layer}\): serving records each block it completes, once the device has encoded it (§4's deferred
+    residency), with its slot, the index it gave it and its \(d_j\), each slot it frees, and each appended block it
+    withdrew, freed before its encode landed, step by step
+    (memory-map/v1, the program's I3, `memory_map.py`; a write releases the block its slot held, and vLLM's `kv_free`
+    is a free, recorded at its values' last read, so the store's filler plan leaves the released blocks out), and the
+    prover's audit side turns the record into appends, releases and plan changes (`Replay`; deferred, a step's
+    appended blocks are those of appends already sent). The record is the prover's: \(d_j\) is witness, and the
     verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
     the wire: each append its own message, answered with its coin (§4), sent after the root before the pass that
     first reads it and before that pass's reads, its blocks encoded once the coin arrives; then each root's message
@@ -1044,32 +1182,32 @@ a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. 
 
 | \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.062% | 0.885–0.917% | 5.817–5.847% | 10 | 0.0083% | 0.657–0.660% |
-| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.58% | 0.117% | 0.062% | 1.073–1.105% | 5.995–6.025% | 10 | 0.0083% | 0.897–0.900% |
-| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.21% | 0.120% | 0.062% | 1.766–1.797% | 6.653–6.683% | 10 | 0.0083% | 1.654–1.657% |
-| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.062% | 5.562–5.592% | 10.261–10.289% | 10 | 0.0079% | 5.345–5.348% |
-| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.38% | 0.115% | 0.062% | 1.256–1.350% | 6.169–6.258% | 30 | 0.0083% | 0.657–0.660% |
-| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.58% | 0.117% | 0.062% | 1.508–1.602% | 6.408–6.497% | 30 | 0.0083% | 0.897–0.900% |
-| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.20% | 0.120% | 0.062% | 2.031–2.124% | 6.905–6.993% | 30 | 0.0083% | 1.654–1.657% |
-| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.16–1.18% | 0.115–0.118% | 0.062% | 4.922–6.661% | 9.653–11.305% | 600 | 0.0017% | 1.647–1.650% |
-| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.35–0.36% | 0.105–0.106% | 0.062% | 9.438–11.031% | 13.944–15.457% | 600 | 0.0017% | 0.651–0.654% |
-| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.062% | 0.984–1.004% | 5.910–5.930% | 6 | 0.042% | 0.696–0.700% |
+| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.888–0.920% | 5.819–5.849% | 10 | 0.0083% | 0.660–0.663% |
+| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.58% | 0.117% | 0.065% | 1.076–1.107% | 5.998–6.028% | 10 | 0.0083% | 0.900–0.903% |
+| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.21% | 0.120% | 0.065% | 1.768–1.799% | 6.656–6.685% | 10 | 0.0083% | 1.657–1.660% |
+| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.565–5.595% | 10.263–10.292% | 10 | 0.0079% | 5.348–5.351% |
+| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.38% | 0.115% | 0.065% | 1.259–1.353% | 6.172–6.261% | 30 | 0.0083% | 0.660–0.663% |
+| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.58% | 0.117% | 0.065% | 1.511–1.604% | 6.411–6.500% | 30 | 0.0083% | 0.900–0.903% |
+| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.20% | 0.120% | 0.065% | 2.034–2.127% | 6.908–6.996% | 30 | 0.0083% | 1.657–1.660% |
+| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.16–1.18% | 0.115–0.118% | 0.065% | 4.925–6.664% | 9.655–11.308% | 600 | 0.0017% | 1.650–1.653% |
+| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.35–0.36% | 0.105–0.106% | 0.065% | 9.441–11.033% | 13.947–15.460% | 600 | 0.0017% | 0.654–0.657% |
+| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.986–1.007% | 5.913–5.932% | 6 | 0.042% | 0.699–0.703% |
 
 At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\) at the measured \(R\):
-0.885–0.917% with 94 GB a GPU over every tier, and 1.07–1.11% at 62 GB a GPU. At spec it is 5.8% at best, the
+0.888–0.920% with 94 GB a GPU over every tier, and 1.08–1.11% at 62 GB a GPU. At spec it is 5.8% at best, the
 measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone is 5.56–5.59%, host DRAM's idle
 4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
 (0.25%) and not for the whole \(\gamma_t\), which is 1.26% at best. At \(T\) = 90 s with 11,091 a window it is
-0.98–1.00%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
+0.99–1.01%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
 nearly all \(\mu_{\text{timing}}\): the window's idle ends, which the record states exactly.
 
 **The store floor.** No \(T\) brings every window under 1% on too small a store. As \(T\) grows, a window's
 \(\mu_{\text{sample}}\) (at 555 openings a second) and its ends vanish, and its \(\gamma_t\) tends to
 \((g + (S_{\text{chip}} + \Lambda)/R + \mu_{\text{rebuild}}(t_{\text{pass}} + g))/(t_{\text{pass}} + g)\),
 where \(t_{\text{pass}}\) is the store's read at \(R\) and \(\Lambda\) a pass's `named_bits` and `slack_log2` in bytes,
-whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 371.9 GB over every tier
-(44.3 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
-at \(g\) = 50 µs, no \(T\) meets 1% below 449.6 GB (53.6 GB a GPU). The suite checks the closed form against `ledger`
+whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 373.2 GB over every tier
+(44.5 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
+at \(g\) = 50 µs, no \(T\) meets 1% below 451.1 GB (53.7 GB a GPU). The suite checks the closed form against `ledger`
 on a 20-minute window, 2% either side of it.
 
 **The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (Daniel,
@@ -1078,9 +1216,9 @@ on a 20-minute window, 2% either side of it.
 \(\mu_{\text{chip}}\) (the node's \(S_{\text{chip}}\) over its store, 0.39% at 94 GB a GPU over every tier) exceeds
 0.15% by itself, and λ (37.9 bits a 4 KiB block, 0.116%) does with \(\mu_{\text{rebuild}}\). Neither λ nor
 \(\mu_{\text{chip}}\) shrinks with more openings or longer windows. The whole γ meets 0.15% at no
-\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.156–0.159%: the
+\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.159–0.162%: the
 chain's steady state (0.082% at \(g\) = 50 µs and 61 ms passes, 0.086–0.089% with the session's ends),
-\(\mu_{\text{rebuild}}\) (0.062%) and the pooled \(\mu_{\text{sample}}\).
+\(\mu_{\text{rebuild}}\) (0.065%) and the pooled \(\mu_{\text{sample}}\).
 
 **What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 789 GB over every tier and 61 ms
 passes). λ is AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, bounded by \(q^k/k!\), which takes no assumption:
@@ -1118,8 +1256,8 @@ into the next pass. That needs three things:
   (unmeasured). That adds 0.04–0.17% to the steady state.
 
 At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon's whole γ is 0.66% (0.74% bounded
-by \(q^k\)). 16 KiB receipts make it 0.57%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
-from 0.885% to 0.80% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
+by \(q^k\)). 16 KiB receipts make it 0.58%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
+from 0.888% to 0.80% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
 steady state and \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
 
 ## Appendix A. Live coins, and why the protocol doesn't use them

@@ -24,6 +24,32 @@ a bucket after h(k) is late: the declared sync didn't cover it, and the window i
 **Ingress.** A frame read from the link at time s is enqueued at bucket ⌈s/τ_in⌉ (`calibration.size_ingress_ms`'s
 model) and released by the ingress `Certifier` at r_in into its stream's server connection.
 
+**The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
+certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
+certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier draws p's salt
+and enqueues its own salt frame ahead of that bucket's arrivals (`Bucketer(first=…)`): kind `SALT` on `SALT_STREAM`,
+its payload u64be p followed by `PLACEHOLDER`, 64 zero bytes. The frame and its slot are fixed by the window and the
+traffic, so every record is a function of the traffic alone and none depends on the salt. When the ingress certifier
+releases that frame (the `Bucketer` knows it by its place in the queue, so a link frame of the same bytes is never taken
+for it), the proxy writes the salt frame with the salt in place of the placeholder (the header, p and the salt, no fill)
+on a server connection of its own, which it never reads: nothing the server writes there reaches egress. The egress
+side never sees the salt.
+
+The certifier's record cells are its grids and one sealed slot per PoUW window, `_salts[p]`, which holds the salt and
+is opened only by `reveal`. So the record's open cells (`Accounting.Attribution.openCells`) are the grids, a function
+of the traffic, and what the certifier sends into the block is a function of its record. `reveal(p, registration)`
+takes the PoUW window's registration as the proof service returned it (`sampled_proofs.service.Registration`) and fails
+closed without it: it refuses unless the receipt is that registration's (`one_stage.registration.receipt`) and
+`registered` reads p off the registration, while p's last ingress record is unpublished (t_d), and for a window whose
+salt was never drawn. `check_salts` is the audit's read of it: p's first raw ingress record holds exactly one salt
+frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
+
+**Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
+of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
+the first egress frame it takes is the Program's at position p, the frames before it being those of the windows before.
+It carries nothing from before: a window it was down for has no record. The windows before k are another proxy's, the
+same certifier's before it went down (`windows`, which ends a proxy's run early), or none.
+
 **Advice.** The proxy runs the windows of its declared syncs, one per window, which the prover gives before the run,
 or which an online prover (`online.Prover`, with a lag of 1 … T − 1 buckets) declares at each window's first tick. A
 frame anchored past them is never handed, nor is any frame behind it (`schedule.handing_buckets`). The online
@@ -69,13 +95,15 @@ import math
 import multiprocessing
 import os
 import resource
+import secrets
 import struct
 import time
-from collections import deque
-from collections.abc import Awaitable, Callable, Sequence
+from collections import defaultdict, deque
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
+from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.grid import (
     GridParams,
     Reason,
@@ -86,10 +114,17 @@ from verity.core.protocols.certifier.grid import (
 )
 from verity.core.protocols.certifier.online import Prover, Refused
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.service import Registration
 
 HEADER = struct.Struct(">BII")
-PAD, DATA, LAST = 0, 1, 2
+PAD, DATA, LAST, SALT = 0, 1, 2, 3
 EVENT_END = b"\n\n"
+SALT_STREAM = 0xFFFF_FFFF
+SALT_BITS = 512
+SALT_BYTES = SALT_BITS // 8
+PLACEHOLDER = bytes(64)
+SALT_FRAME_BYTES = HEADER.size + 8 + len(PLACEHOLDER)
 
 
 def encode_frame(kind: int, stream: int, payload: bytes, frame_bytes: int) -> bytes:
@@ -103,6 +138,28 @@ def decode_frame(frame: bytes) -> tuple[int, int, bytes]:
     """(kind, stream, payload) of a link frame; padding is (`PAD`, 0, b"")."""
     kind, stream, n = HEADER.unpack_from(frame)
     return kind, stream, bytes(frame[HEADER.size : HEADER.size + n])
+
+
+def fresh_salt(window: int, nbytes: int = SALT_BYTES) -> bytes:
+    """PoUW window `window`'s salt, `nbytes` bytes of the certifier's own randomness. A source of coins handed to the
+    certifier has the same signature."""
+    return secrets.token_bytes(nbytes)
+
+
+def salt_frame(window: int, value: bytes, frame_bytes: int) -> bytes:
+    """PoUW window `window`'s salt frame, carrying `value`: `PLACEHOLDER` in the grid, the salt on the server's
+    connection."""
+    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + value, frame_bytes)
+
+
+def served_window(registration: Registration) -> int | None:
+    """The window a registration's provenance names when it is exactly `{"kind": "served", "window": w}` (the network
+    certifier's own, `service.LinkWindows.provenance`), else None."""
+    window = registration.record.get("window") if isinstance(registration.record, Mapping) else None
+    if isinstance(window, Mapping) and set(window) == {"kind", "window"} and window["kind"] == "served" and \
+            type(window["window"]) is int:
+        return window["window"]
+    return None
 
 
 def event_position(event: bytes) -> int | None:
@@ -144,15 +201,22 @@ class Shaper:
     the first `windows` windows' syncs at the window's first tick, before anything is handed. The proxy's is
     `LaggedChoices`, whose `declare` only takes a choice already made; an `online.Prover` chooses at the tick. A
     declaration it refuses (`online.Refused`) faults the window `monitor-unavailable`, and the next one, on the frames
-    it has read, is the window's."""
+    it has read, is the window's.
+
+    With `start`, it begins at window `start`'s first bucket, its certifier at that window, and the first frame it
+    takes is the one at `position`: a shaper back from maintenance, which carries nothing from before."""
 
     def __init__(self, certifier: Certifier, syncs: Sequence[ClockSync], sync_set: SyncSet,
-                 prover: Prover | LaggedChoices | None = None, windows: int | None = None) -> None:
+                 prover: Prover | LaggedChoices | None = None, windows: int | None = None, start: int = 0,
+                 position: int = 0) -> None:
         self.certifier, self.syncs, self.sync_set = certifier, list(syncs), sync_set
         self.prover, self.windows = prover, len(self.syncs) if windows is None else windows
+        if start:
+            certifier.window = start
         self.pending: dict[int, tuple[LogicalFrame, int]] = {}
-        self.next = 0
-        self.h = self.last = self.t = self.queued = 0
+        self.next = position
+        self.h = self.last = self.queued = 0
+        self.t = start * certifier.params.buckets
         self.hands: list[int] = []
         self._check_advice()
 
@@ -211,22 +275,44 @@ class Shaper:
 
 class Bucketer:
     """The ingress certifier on one link, fed frames as they arrive (no I/O): a frame arriving at bucket time s is
-    `arrive`d with ⌈s⌉ and enqueued at that tick; `tick` returns the released row, with the record at a window's end."""
+    `arrive`d with ⌈s⌉ and enqueued at that tick; `tick` returns the released row, with the record at a window's end.
+    With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, ahead of
+    that bucket's arrivals. The bucketer follows it by its place in the queue, never by its bytes: `own` maps each slot
+    of the row last released that holds one to its window, and one a fault drops is never released. With `start`, it
+    begins at window `start`'s first bucket, its certifier at that window."""
 
-    def __init__(self, certifier: Certifier) -> None:
+    def __init__(self, certifier: Certifier, first: Callable[[int], bytes | None] | None = None,
+                 start: int = 0) -> None:
         self.certifier = certifier
+        self.first = first
+        if start:
+            certifier.window = start
         self.waiting: deque[tuple[int, bytes]] = deque()
-        self.t = 0
+        self.t = start * certifier.params.buckets
+        self.own: dict[int, int] = {}
+        self._own: list[tuple[int, int]] = []  # (place in the queue, window) of each own frame queued
 
     def arrive(self, frame: bytes, bucket: int) -> None:
         self.waiting.append((bucket, frame))
 
     def tick(self) -> tuple[Row, Record | None]:
+        c, T = self.certifier, self.certifier.params.buckets
+        if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
+            self._own.append((c.queued, self.t // T))
+            c.enqueue(frame)
         while self.waiting and self.waiting[0][0] <= self.t:
-            self.certifier.enqueue(self.waiting.popleft()[1])
-        row = self.certifier.tick()
+            c.enqueue(self.waiting.popleft()[1])
+        row = c.tick()
+        if self._own:
+            n = row_count(row)
+            # a fault empties the queue, and its window enqueues nothing after it
+            kept = [(place, w) for place, w in self._own if place < c.queued + n]
+            self.own = {place: w for place, w in kept if place < n}
+            self._own = [(place - n, w) for place, w in kept if place >= n]
+        elif self.own:
+            self.own = {}
         self.t += 1
-        return row, self.certifier.close_window() if self.t % self.certifier.params.buckets == 0 else None
+        return row, c.close_window() if self.t % T == 0 else None
 
 
 def _choose(snapshot: Prover) -> tuple[ClockSync, float]:
@@ -364,6 +450,13 @@ class Proxy:
     - `frames` logs every egress frame read, as (position, stream, index, anchor, ready), and `shaper.hands` its hand
       bucket by position; `lateness` holds each tick's lateness in seconds, per grid; `link_frames_read` and
       `requests_released` count the ingress frames read and the requests released to the server;
+    - with `salt`, a source of one salt of `salt_bits` bits per PoUW window of `pouw_window` certifier windows, such as
+      `fresh_salt`, the ingress grid carries each PoUW window's salt frame at its first bucket, the server receives
+      the salt on its own connection (`salts_released` and `salts_delivered` count them), and `reveal(p,
+      registration)` gives the verifier PoUW window p's salt once p is registered (`registered` reads the window off
+      a registration, by default `served_window`) and its last ingress record is published;
+    - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
+      egress frame the Program's at `position`;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -372,18 +465,38 @@ class Proxy:
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  egress_link: str = "responses", ingress_link: str = "requests",
-                 prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None) -> None:
+                 prover: Prover | None = None, windows: int | None = None, executor: Executor | None = None,
+                 salt: Callable[[int, int], bytes] | None = None, salt_bits: int = SALT_BITS, pouw_window: int = 1,
+                 registered: Callable[[Registration], int | None] = served_window, start: int = 0,
+                 position: int = 0) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
         if prover is not None and syncs:
             raise ValueError("an online prover declares every window's sync")
+        if salt is not None and ingress.frame_bytes < SALT_FRAME_BYTES:
+            raise ValueError(f"a salt frame needs ingress frames of at least {SALT_FRAME_BYTES} bytes")
+        if not (type(salt_bits) is int and salt_bits > 0 and salt_bits % 8 == 0):
+            raise ValueError(f"a salt is a positive whole number of bytes, not {salt_bits!r} bits")
+        if not (type(pouw_window) is int and pouw_window >= 1):
+            raise ValueError(f"a PoUW window is a positive number of certifier windows, not {pouw_window!r}")
         self.upstream, self.egress, self.ingress = upstream, egress, ingress
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
+        if not 0 <= start <= self.windows or position < 0:
+            raise ValueError(f"a proxy starts at one of windows 0 … {self.windows}, at a position ≥ 0")
+        if start and prover is not None:
+            raise ValueError("an online prover declares from window 0 on: a proxy back from maintenance takes syncs")
+        self.start = start
         reserve_fds()
         self.choices = None if prover is None else LaggedChoices(prover, executor or worker())
-        self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows)
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress))
+        self.shaper = Shaper(Certifier(egress_link, egress), syncs, sync_set, self.choices, self.windows, start,
+                             position)
+        self.salt, self.salt_bits, self.pouw_window, self.registered = salt, salt_bits, pouw_window, registered
+        self._salts: dict[int, bytes] = {}
+        self._salt_out: asyncio.Queue | None = None
+        self._salt_task: asyncio.Task | None = None
+        self.salts_released = self.salts_delivered = 0
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, params: self.records.append(record))
         self.streams: dict[int, _Stream] = {}
@@ -405,10 +518,10 @@ class Proxy:
             await asyncio.gather(self._egress(writer), self._ingress())
         finally:
             link.cancel()
-            for st in self.streams.values():
-                if st.task is not None:
-                    st.task.cancel()
-            await asyncio.gather(link, *(st.task for st in self.streams.values() if st.task), return_exceptions=True)
+            tasks = [st.task for st in self.streams.values() if st.task] + [t for t in (self._salt_task,) if t]
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(link, *tasks, return_exceptions=True)
             writer.close()
             if self.choices is not None:
                 await asyncio.to_thread(self.choices.executor.shutdown, True, cancel_futures=True)
@@ -419,7 +532,7 @@ class Proxy:
 
     async def _ticks(self, params: GridParams, lateness: list[float], certifier: Certifier):
         tau = params.bucket_ms / 1000
-        for t in range(self.windows * params.buckets):
+        for t in range(self.start * params.buckets, self.windows * params.buckets):
             deadline = self.origin + t * tau
             await self.sleep(deadline - self.clock())
             late = self.clock() - deadline
@@ -479,7 +592,11 @@ class Proxy:
         async for t in self._ticks(p, self.lateness["ingress"], self.bucketer.certifier):
             row, record = self.bucketer.tick()
             anchor = t * p.bucket_ms // self.egress.bucket_ms
-            for frame in row[: row_count(row)]:
+            own = self.bucketer.own
+            for i, frame in enumerate(row[: row_count(row)]):
+                if i in own:
+                    self._release_salt(own[i] // self.pouw_window)
+                    continue
                 kind, s, payload = decode_frame(frame)
                 if kind not in (DATA, LAST):
                     continue
@@ -493,6 +610,71 @@ class Proxy:
             if record is not None:
                 self.publish(record, p)
             self._changed.set()
+
+    def _draw_salt(self, window: int) -> bytes | None:
+        """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
+        placeholder's."""
+        if window % self.pouw_window:
+            return None
+        p, n = window // self.pouw_window, self.salt_bits // 8
+        salt = self.salt(p, n)
+        if len(salt) != n:
+            raise ValueError(f"the salt source gave {len(salt)} bytes, not {n}")
+        self._salts[p] = salt
+        return salt_frame(p, PLACEHOLDER, self.ingress.frame_bytes)
+
+    def _release_salt(self, p: int) -> None:
+        """Queue PoUW window p's salt for the server, its frame being released. A frame of kind `SALT` read from the
+        link is never the certifier's, and is left alone like any frame of another kind."""
+        self.salts_released += 1
+        if self._salt_out is None:
+            self._salt_out = asyncio.Queue()
+            self._salt_task = asyncio.create_task(self._salt_upstream(self._salt_out))
+        salt = self._salts[p]
+        self._salt_out.put_nowait(salt_frame(p, salt, HEADER.size + 8 + len(salt)))
+
+    async def _salt_upstream(self, out: asyncio.Queue) -> None:
+        """The salt stream's server connection: written, never read, so that nothing on it reaches egress."""
+        try:
+            _, writer = await asyncio.open_connection(*self.upstream)
+        except OSError:
+            self.bucketer.certifier.fault(Reason.DELIVERY_REFUSED)
+            return
+        try:
+            while True:
+                writer.write(await out.get())
+                await writer.drain()
+                self.salts_delivered += 1
+                self._changed.set()
+        finally:
+            writer.close()
+
+    def reveal(self, window: int, registration: Registration | None) -> bytes:
+        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
+        it. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which `registered`
+        reads `window`, while the window's last ingress record is unpublished (t_d), and for a window whose salt wasn't
+        drawn (one this proxy was down for at its start). The receipt isn't signed, so this holds only while `reveal` is
+        called on the auditor's hosts; beyond them it needs an authenticated caller or an LMS-signed receipt."""
+        if self.salt is None:
+            raise ValueError("the salt is off")
+        if not self._registers(window, registration):
+            raise RuntimeError(f"no registration of window {window} with its receipt, so its salt isn't revealed")
+        if (window + 1) * self.pouw_window > self.bucketer.certifier.window:
+            raise RuntimeError(f"window {window}'s ingress records aren't all published, so its salt isn't revealed")
+        if window not in self._salts:
+            raise RuntimeError(f"window {window}'s salt wasn't drawn")
+        return self._salts[window]
+
+    def _registers(self, window: int, registration: Registration | None) -> bool:
+        if not isinstance(registration, Registration) or not isinstance(registration.receipt, Mapping):
+            return False
+        try:
+            digest = R.digest(registration.record)
+        except (AttributeError, TypeError, ValueError):
+            return False
+        receipt = registration.receipt
+        return receipt.get("format") == R.RECEIPT and receipt.get("registration") == digest == registration.digest \
+            and self.registered(registration) == window
 
     async def _read_link(self, reader: asyncio.StreamReader) -> None:
         size, buffer = self.ingress.frame_bytes, bytearray()
@@ -552,3 +734,31 @@ class Proxy:
         self.frames.append((position, s, st.count, st.anchor, ready))
         st.count += 1
         self.shaper.arrive(position, frame, ready)
+
+
+def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int, salts: Mapping[int, bytes], *,
+                pouw_window: int = 1, salt_bits: int = SALT_BITS) -> list[Verdict]:
+    """The audit's read of the salt on ingress link `link` for certifier windows 0 … windows − 1, given the salts
+    `reveal` gave by PoUW window of `pouw_window` certifier windows: PoUW window p, at its first certifier window
+    w = p·`pouw_window`, is accepted if w has exactly one raw record, which holds exactly one salt frame of p, carrying
+    `PLACEHOLDER`, and p's revealed salt has `salt_bits` bits. Anything else, a missing salt included, is a `salt`
+    violation at w. The verdicts join `audit`'s. A committed or certified record doesn't show its frames, so a proof
+    opens the salt frame there."""
+    by_window: dict[int, list[Record]] = defaultdict(list)
+    for r in records:
+        if not isinstance(r, Record):
+            raise ValueError("the salt check reads raw records")
+        if r.link == link:
+            by_window[r.window].append(r)
+    out = []
+    for w in range(0, windows, pouw_window):
+        p = w // pouw_window
+        found, salt, prefix = by_window.get(w, []), salts.get(p), p.to_bytes(8, "big")
+        accepted = False
+        if len(found) == 1 and salt is not None and 8 * len(salt) == salt_bits:
+            held = [x for row in found[0].grid for k, s, x in map(decode_frame, row[: row_count(row)])
+                    if k == SALT and s == SALT_STREAM and x[:8] == prefix]
+            accepted = held == [prefix + PLACEHOLDER]
+        out.append(Verdict(link, w, None if accepted else "salt"))
+    audit.verdicts.extend(out)
+    return out

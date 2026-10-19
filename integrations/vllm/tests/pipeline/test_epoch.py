@@ -50,3 +50,17 @@ def test_digests_and_row_state_read_the_row_dir(tmp_path: Path) -> None:
     assert r["programs"]["0"]["step"] == "s0" and r["programs"]["0"]["requests"] == {"request": "p0"} and r["partition_digests"] == ["pd"]
     fams, outcome, mv = epoch.row_state(d, str(tmp_path / "header.json"))
     assert (fams, outcome, mv) == ([], None, None) and json.loads((tmp_path / "header.json").read_text())["manifest_digest"] == "m0"
+
+
+def test_a_tp_rows_digests_are_its_build_summarys_ranks(tmp_path: Path) -> None:
+    """`row_records.tp_build_summary` keeps every rank's Builds under `ranks`; no rank has a summary of its own."""
+    d = tmp_path / "row"
+    d.mkdir()
+    rank = lambda r: {"build_step": {"program_digest": f"s{r}"}, "build_request_LP8_T4": {"program_digest": f"q{r}"}, "workload": {"workload_digest": f"w{r}"}}  # noqa: E731
+    (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "ranks": {"rank1": rank(1), "rank0": rank(0)}, "step": {"program_digest": "s0"}}))
+    progs = epoch.row_digests(d)["programs"]
+    assert progs == {str(r): {"step": f"s{r}", "workload": f"w{r}", "requests": {"build_request_LP8_T4": f"q{r}"}} for r in (0, 1)}
+    assert list(progs) == ["0", "1"]
+    meta = epoch.store_meta(d, kind="build", role="R", rownum=1, run_id="r", epoch_sha="x", gpu="", pod="", epoch="e")
+    assert meta["program_digests"] == {"rank0/step": "s0", "rank0/build_request_LP8_T4": "q0", "rank1/step": "s1", "rank1/build_request_LP8_T4": "q1"}
+    assert meta["workload_digests"] == {"rank0": "w0", "rank1": "w1"}

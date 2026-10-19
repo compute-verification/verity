@@ -12,8 +12,8 @@ import Flock.ProvedScope
 the draw-less session's refusal, and refuses the session when it fails. So what the verifier accepts is `Verifies`
 (under `--zk`, `VerifiesZK`, and with `--registered F` `VerifiesZKR`): the setup and verdict
 `Accepts` models, and the check. Every condition on the statement's form that the headlines took as a hypothesis follows
-from the check: an untyped statement (`Checks.typed`), retained rounds and `hm96-sha512/v1` leaves, at most one table
-without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
+from the check: an untyped statement (`Checks.typed`), retained rounds, `hm96-sha512/v1` leaves or, at hidden outputs
+without `--zk`, plain SHA-512 leaves (`Checks.merkleLeaf`), at most one table without `--zk`, the circuit and public file as the headlines read them (`circ`, `pubOf`), no shared-row public file
 unless the session is `--zk`, the statement has hidden outputs and the verifier holds its own registered reads
 (`Checks.tables`; without them, `Checks.tables_none`) and `Layout.scopeOk` (`Checks.scope`, by `scopeOk_eq`: the
 executable's `ProvedScope.scopeOk` is `Layout.scopeOk`, its port bits a mask), or under hidden outputs `Layout.scopeOkI`
@@ -121,7 +121,9 @@ def pubOf (t : Tags) (I : Inputs) : Public :=
 
 theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
     {reg : Bool} (h : ProvedScope.check t zk cf pf tables count false reg = .ok ()) :
-    (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
+    (t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧
+      (t.merkleLeaf = "hm96-sha512/v1" ∨
+        (zk = false ∧ t.hiddenOutputs = true ∧ t.merkleLeaf = "flock-leaf/sha512-unsalted")) ∧
       (zk = true ∨ count ≤ 1)) ∧
     ∃ c pub, ProvedScope.circuitOf t cf tables = .ok c ∧ ProvedScope.publicOf t c pf = .ok pub ∧
       (pub.tables = none ∨ ProvedScope.sharedRowsOk t zk reg = true) ∧
@@ -139,7 +141,12 @@ theorem check_ok {t : Tags} {zk : Bool} {cf pf : ByteArray} {tables : List (Stri
   simp only [ProvedScope.statementRules, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq,
     Bool.not_eq_true', Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, Bool.not_false] at hall
   obtain ⟨h1, h2, h3, h4, h5, -⟩ := hall
-  refine ⟨⟨h1, h2, h3, h4, (Bool.eq_false_or_eq_true zk).imp id fun hz => by simpa [hz] using h5⟩, ?_⟩
+  have h4' : t.merkleLeaf = "hm96-sha512/v1" ∨
+      (zk = false ∧ t.hiddenOutputs = true ∧ t.merkleLeaf = "flock-leaf/sha512-unsalted") := by
+    revert h4
+    unfold ProvedScope.leafOk
+    cases zk <;> cases t.hiddenOutputs <;> simp
+  refine ⟨⟨h1, h2, h3, h4', (Bool.eq_false_or_eq_true zk).imp id fun hz => by simpa [hz] using h5⟩, ?_⟩
   split at h
   · cases h
   rename_i c hc
@@ -188,7 +195,14 @@ theorem hm96Rows : t.hm96Rows = true := (check_ok h).1.1
 
 theorem retainRounds : t.retainRounds = true := (check_ok h).1.2.2.1
 
-theorem merkleLeaf : t.merkleLeaf = "hm96-sha512/v1" := (check_ok h).1.2.2.2.1
+/-- `hm96-sha512/v1` leaves, or plain SHA-512 leaves at hidden outputs without `--zk` (`ProvedScope.leafOk`). -/
+theorem merkleLeaf : t.merkleLeaf = "hm96-sha512/v1" ∨
+    (zk = false ∧ t.hiddenOutputs = true ∧ t.merkleLeaf = "flock-leaf/sha512-unsalted") :=
+  (check_ok h).1.2.2.2.1
+
+/-- **`hm96-sha512/v1` leaves** under `--zk` and at public outputs. -/
+theorem merkleLeaf_hm96 (hz : zk = true ∨ t.hiddenOutputs = false) : t.merkleLeaf = "hm96-sha512/v1" :=
+  h.merkleLeaf.resolve_right fun ⟨h1, h2, _⟩ => by rcases hz with hz | hz <;> simp_all
 
 theorem circuit_ok : ProvedScope.circuitOf t I.circuitFile I.tables = .ok (circ t I) := by
   obtain ⟨c, -, hc, -⟩ := (check_ok h).2
@@ -330,7 +344,7 @@ theorem ScopeZ.retainRounds {I : Inputs} (h : ScopeZ I) : I.tags.retainRounds = 
   rw [← zkTags_retainRounds]; exact Checks.retainRounds h
 
 theorem ScopeZ.merkleLeaf {I : Inputs} (h : ScopeZ I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
-  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf h
+  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf_hm96 h (Or.inl rfl)
 
 theorem ScopeZ.parse {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
@@ -372,7 +386,7 @@ theorem ScopeZR.retainRounds {I : Inputs} (h : ScopeZR I) : I.tags.retainRounds 
   rw [← zkTags_retainRounds]; exact Checks.retainRounds h
 
 theorem ScopeZR.merkleLeaf {I : Inputs} (h : ScopeZR I) : I.tags.merkleLeaf = "hm96-sha512/v1" := by
-  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf h
+  rw [← zkTags_merkleLeaf]; exact Checks.merkleLeaf_hm96 h (Or.inl rfl)
 
 theorem ScopeZR.parseH {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs = true) :
     HmOut.parse (zkTags I) I.circuitFile I.tables = .ok (circZ I) :=
@@ -409,7 +423,15 @@ theorem Scope.typed {I : Inputs} (h : Scope I) : I.tags.typed = false := Checks.
 
 theorem Scope.retainRounds {I : Inputs} (h : Scope I) : I.tags.retainRounds = true := Checks.retainRounds h
 
-theorem Scope.merkleLeaf {I : Inputs} (h : Scope I) : I.tags.merkleLeaf = "hm96-sha512/v1" := Checks.merkleLeaf h
+/-- At public outputs, `hm96-sha512/v1` leaves. -/
+theorem Scope.merkleLeaf {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
+    I.tags.merkleLeaf = "hm96-sha512/v1" :=
+  Checks.merkleLeaf_hm96 h (Or.inr hh)
+
+/-- The leaves the non-ZK headlines cover: `hm96-sha512/v1`, or plain SHA-512 leaves (`flock-leaf/sha512-unsalted`). -/
+theorem Scope.leaf {I : Inputs} (h : Scope I) :
+    I.tags.merkleLeaf = "hm96-sha512/v1" ∨ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted" :=
+  (Checks.merkleLeaf h).imp id fun h' => h'.2.2
 
 theorem Scope.parse {I : Inputs} (h : Scope I) (hh : I.tags.hiddenOutputs = false) :
     HmRow.parse I.tags I.circuitFile I.tables = .ok (circS I) := Checks.parse h hh

@@ -10,6 +10,9 @@
                       (package data), FA2's inverse sum, div.full's range scaling; numpy kernels for all but tanh
     verity.ml.circuits.ops.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER;
                       the sm_120 GemmCoordinateE4m3 / GemmCoordinateNvf4 / GemmCoordinateMxf4 and their GEMM_SM120_* bindings
+    verity.ml.circuits.ops.s8      IR composites: the exact s8 matmul family S8Dot / S8Matmul over the s8 and u8 x s8 IMMA steps
+                      (prefix words, tail atoms, operand bounds, noise, limbs and committed layout as statics), and
+                      LimbSplit, the registered split of a runtime s32 word into s8 limbs; `ops.boolean.s8` has them on bits
     verity.ml.circuits.ops.boolean word arithmetic as Boolean circuits, built with `verity.ml.circuits.boolean`'s builders
                       (`forms`, `gather`, the multiplexer tree, and `trace`, Boolean Definitions from builders) and
                       `verity.ml.circuits.silicon`'s (`fp`, `tc_step`, `fp4`): `softmax`, attention's circuits over `forms`,

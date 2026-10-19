@@ -1,5 +1,6 @@
 """The exactness gates. Every integer product is gated on every call (its operands within int8, or within the bound a
-block-scaled grid declares, and its accumulator within s32 by an a priori bound); on the check window
+block-scaled grid declares, and its accumulator within s32 by an a priori bound, or within float64's exact integers on
+a wide grid's route), and every limb emulation against the product it emulates; on the check window
 (methodology.CHECK_WINDOW), every layer: each product against a float64 recomputation, every peel identity (per KV group
 and P block, and per linear), and the engine's bf16 layer against HF's. The integer softmax (`lut`): on every call, its
 fixed-point A within uint32 and m - S within the kernel's 32 bits. A run with any failed gate reports no perplexity
@@ -9,7 +10,8 @@ from __future__ import annotations
 import torch
 
 S32 = 2 ** 31 - 1
-NAMES = ("int8_range", "grid_range", "accumulator", "product_exact", "peel", "lut", "hf_reference", "windows", "tokens")
+NAMES = ("int8_range", "grid_range", "accumulator", "product_exact", "peel", "emulation", "lut", "hf_reference",
+         "windows", "tokens")
 
 
 class Gates:

@@ -6,6 +6,8 @@ prints for its routes, and the committer's identity check passes on them with th
 other route, a missing one, an unlisted hook name or a layer without a route fails the step."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import types
 from typing import Any
 
@@ -93,7 +95,7 @@ def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
     kv_b = [f"model.layers.{i}.self_attn.kv_b_proj/0" for i in range(L)]
     assert set(kv_b) <= set(steps[0]) and not set(kv_b) & set(steps[1]) and set(kv_b) <= set(steps[2])
     assert set(steps[2]) == set(steps[0]) | set(steps[1]) and sorted(steps[3]) == sorted(steps[1])
-    assert {n.rsplit("/", 1)[1] for n in set(steps[2]) - set(steps[0])} == {"attn_mqa", "v_absorb", "topk"}, \
+    assert {n.rsplit("/", 1)[1] for n in set(steps[2]) - set(steps[0])} == {"attn_mqa", "out", "topk"}, \
         "a mixed step adds what its decode rows' MQA produces"
     wq_b = "model.layers.0.self_attn.indexer.wq_b/0"
     assert wq_b in steps[0] and wq_b in steps[1], "DeepseekV32Attention.forward runs the indexer's wq_b before it decides the route"

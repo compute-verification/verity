@@ -292,6 +292,69 @@ DC_DEV void ld_until_mma(const OpArgs& a) {
   OP_SINK(x)
 }
 
+// The honest LI loop beside the saturated MMA, exact by OP_UNTIL (as ld_until_mma): warp 0 fixed on tcgen05.mma, LW
+// loader warps reading the accumulator from TMEM and folding it with LI (LOP3 to absorb a word, IMAD to multiply by an
+// odd a), a segment of 128 words a trip (4 tcgen05.ld.32x32b.x32). CP 0 is the bare fold (LI); CP 1 adds LI-CP-W's
+// checkpoint with `redux.sync.xor.b32`, CP 2 with the 5-shuffle fallback: each lane XORs its 8 chains (4 LOP3) and the
+// warp reduces once a segment. The three throughputs' ratio is what the checkpoint costs the latency-bound loop, which
+// the honest profile scales dc100-li-l32's measured cycles by (note:LI-ALT asked this of DC).
+template <int CP, int LW>
+DC_DEV void tcli_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  constexpr uint32_t idesc = idesc_of<0>(128, 256);
+  const uint32_t w = warp_u(), sub = (w - 4u) >> 2, base = tmem + ((32u * (w & 3u)) << 16) + 256u;
+  const bool loader = w >= 4 && w < 4 + LW;
+  Lane l(threadIdx.x);
+  auto mma = [&] {
+    if (elect_one()) {
+      umma_i8(tmem, da, db, idesc, 0);
+      umma_i8(tmem, da, db, idesc, 1);
+      umma_i8(tmem, da, db, idesc, 1);
+      umma_i8(tmem, da, db, idesc, 1);
+    }
+    __syncwarp();
+  };
+  auto seg = [&] {
+    uint32_t r0[32], r1[32];
+#pragma unroll
+    for (int g = 0; g < 2; g++) {
+      tmem_ld32(base + (64u * (g + sub)) % 256u, r0);
+      tmem_ld32(base + (64u * (g + sub) + 32u) % 256u, r1);
+      tmem_wait_ld();
+#pragma unroll
+      for (int c = 0; c < 32; c++) {
+        asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(l.r[c & 7]) : "r"(r0[c]), "r"(0x85EBCA6Bu));
+        asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(l.r[c & 7]) : "r"(0x9E3779B9u), "r"(r1[c]));
+      }
+    }
+    if constexpr (CP > 0) {
+      l.op<L_LOP3>(0); l.op<L_LOP3>(2); l.op<L_LOP3>(4); l.op<L_LOP3>(6);
+      if constexpr (CP == 1) l.op<L_REDUX>(0);
+      else l.op<L_REDUCE>(0);
+    }
+  };
+  OP_BEGIN_STOP
+  if (w == 0) {
+    OP_LOOP(it) { mma(); }
+    OP_DONE
+  } else if (loader) {
+    OP_UNTIL(n) { seg(); }
+    OP_TRIPS(n)
+  }
+  OP_END_STOP
+  if (w == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t x = sink_ld(tmem, 0) ^ l.fold();
+  teardown(tmem);
+  OP_SINK(x ^ threadIdx.x)
+}
+
 DC_DEV void mma_s8k32(int32_t* d, const uint32_t* a, const uint32_t* b) {
   asm volatile("mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
                : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
@@ -430,6 +493,77 @@ DC_DEV void lane_beside_mma(const OpArgs& a) {
   teardown(tmem);
   OP_SINK(v ^ threadIdx.x)
 }
+// TMA bulk-async copies beside the saturated tcgen05.mma (DC EPS1 r10): one side warp's lane 0 issues cp.async.bulk (SASS
+// UBLKCP, a move) or cp.reduce.async.bulk.add.u32 (UBLKRED, a combine), 4 KB (1024 words) an op, DC_BULK_R a trip, into
+// the block's own global region, with a group bound so the queue stays full. Warp 0 runs tcgen05.mma flat out (OP_LOOP),
+// the bulk warp only while it does (OP_UNTIL). A TMA bulk op takes uniform operands (addresses from blockIdx and the op's
+// slot, not the lane), so lane 0 issues one warp instruction an op; the measured tensor fraction says whether that steals
+// the MMA's issue (the facet question), and the bulk's rate is the TMA engine's words a SM-clock.
+enum { BULK_CP, BULK_RED };
+constexpr int DC_BULK_R = 8;
+template <int S>
+DC_DEV void bulk_trip(const OpArgs& a, unsigned sbase) {
+  constexpr unsigned B = 4096;
+  unsigned char* region = a.g + (size_t)blockIdx.x * (DC_BULK_R * B);
+#pragma unroll
+  for (int q = 0; q < DC_BULK_R; q++) {
+    unsigned char* p = region + q * B;
+    if constexpr (S == BULK_CP)
+      asm volatile("cp.async.bulk.global.shared::cta.bulk_group [%0], [%1], %2;" ::"l"(p), "r"(sbase), "n"(B) : "memory");
+    else
+      asm volatile("cp.reduce.async.bulk.global.shared::cta.bulk_group.add.u32 [%0], [%1], %2;" ::"l"(p), "r"(sbase),
+                   "n"(B) : "memory");
+  }
+  asm volatile("cp.async.bulk.commit_group;\n\tcp.async.bulk.wait_group.read 2;" ::: "memory");
+}
+template <int S>
+DC_DEV void bulk_until_mma(const OpArgs& a) {
+  __shared__ __align__(1024) Smem s;
+  const uint32_t tmem = setup<0>(s, a.mode);
+  const uint64_t da = desc_a(s), db = desc_b(s);
+  const unsigned sbase = smem_u32(s.tile);
+  const int lane = threadIdx.x & 31;
+  OP_BEGIN_STOP
+  if (warp_u() == 0) {
+    OP_LOOP(it) {
+      if (elect_one()) mma4<0, 128, 256>(tmem, da, db);
+      __syncwarp();
+    }
+    OP_DONE
+  } else if (warp_u() == 4) {
+    OP_UNTIL(n) {
+      if (lane == 0) bulk_trip<S>(a, sbase);
+    }
+    OP_TRIPS(n)
+    if (lane == 0) asm volatile("cp.async.bulk.wait_group 0;" ::: "memory");
+  }
+  OP_END_STOP
+  if (warp_u() == 0) {
+    if (elect_one()) umma_commit(&s.bar);
+    __syncwarp();
+  }
+  mbar_wait(&s.bar, 0);
+  tc_after_sync();
+  const uint32_t v = sink_ld(tmem, 0);
+  teardown(tmem);
+  OP_SINK(v ^ threadIdx.x)
+}
+template <int S>
+DC_DEV void bulk_solo_tc(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[4096];
+  for (uint32_t i = threadIdx.x; i < 1024; i += blockDim.x) reinterpret_cast<uint32_t*>(sm)[i] = i;
+  __syncthreads();
+  const unsigned sbase = smem_u32(sm);
+  const int lane = threadIdx.x & 31;
+  OP_BEGIN
+  OP_LOOP(it) {
+    if (lane == 0) bulk_trip<S>(a, sbase);
+  }
+  if (lane == 0) asm volatile("cp.async.bulk.wait_group 0;" ::: "memory");
+  OP_END
+  OP_SINK(threadIdx.x)
+}
+
 // lane_beside_mma exact on both sides: the MMA warp fixed, the lane warps running only while it does (OP_UNTIL).
 template <int X, int R>
 DC_DEV void lane_until_mma(const OpArgs& a) {
@@ -502,9 +636,20 @@ OP_KERNEL(tclane_mix_r256, 512) { lane_beside_mma<L_MIX, 256>(a); }
 OP_KERNEL(tclane_imad_r128, 512) { lane_beside_mma<L_IMAD, 128>(a); }
 OP_KERNEL(tclane_lop3_r128, 512) { lane_beside_mma<L_LOP3, 128>(a); }
 OP_KERNEL(tclane_duo_r192, 512) { lane_beside_mma<L_DUO, 192>(a); }
+OP_KERNEL(tclane_redux_r64, 512) { lane_beside_mma<L_REDUX, 64>(a); }
+OP_KERNEL(tclane_reduce_r8, 512) { lane_beside_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_mix, 512) { lane_until_mma<L_MIX, 64>(a); }
 OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
+OP_KERNEL(tclaneU_redux, 512) { lane_until_mma<L_REDUX, 64>(a); }
+OP_KERNEL(tclaneU_reduce, 512) { lane_until_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
+OP_KERNEL(tcliU_base, 384) { tcli_until_mma<0, 8>(a); }
+OP_KERNEL(tcliU_redux, 384) { tcli_until_mma<1, 8>(a); }
+OP_KERNEL(tcliU_reduce, 384) { tcli_until_mma<2, 8>(a); }
+OP_KERNEL(tcbulk_cp, 256) { bulk_until_mma<BULK_CP>(a); }
+OP_KERNEL(tcbulk_red, 256) { bulk_until_mma<BULK_RED>(a); }
+OP_KERNEL(bulkcp, 32) { bulk_solo_tc<BULK_CP>(a); }
+OP_KERNEL(bulkred, 32) { bulk_solo_tc<BULK_RED>(a); }
 
 #define UI "UTCIMMA*=4"
 #define P_TC(NAME, PAT) \
@@ -556,9 +701,19 @@ static const OpProbe PROBES[] = {
     {.name = "tclane_imad_r128", .kernel = (const void*)tclane_imad_r128, .tpb = 512, .expect = UI ";IMAD=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_lop3_r128", .kernel = (const void*)tclane_lop3_r128, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048},
     {.name = "tclane_duo_r192", .kernel = (const void*)tclane_duo_r192, .tpb = 512, .expect = UI ";LOP3.LUT=64,IMAD=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclane_redux_r64", .kernel = (const void*)tclane_redux_r64, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048},
+    {.name = "tclane_reduce_r8", .kernel = (const void*)tclane_reduce_r8, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048},
     {.name = "tclaneU_mix", .kernel = (const void*)tclaneU_mix, .tpb = 512, .expect = UI ";FFMA=32", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
-    {.name = "tclaneU_duo", .kernel = (const void*)tclaneU_duo, .tpb = 512, .expect = UI ";LOP3.LUT=16,IMAD=16", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_redux", .kernel = (const void*)tclaneU_redux, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_reduce", .kernel = (const void*)tclaneU_reduce, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tcbulk_cp", .kernel = (const void*)tcbulk_cp, .tpb = 256, .expect = UI ";UBLKCP*=8", .counted = "UBLKCP*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
+    {.name = "tcbulk_red", .kernel = (const void*)tcbulk_red, .tpb = 256, .expect = UI ";UBLKRED*=8", .counted = "UBLKRED*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
+    {.name = "bulkcp", .kernel = (const void*)bulkcp, .tpb = 32, .expect = "UBLKCP*=8", .words = 1024, .iters = 1024},
+    {.name = "bulkred", .kernel = (const void*)bulkred, .tpb = 32, .expect = "UBLKRED*=8", .words = 1024, .iters = 1024},
+    {.name = "tcliU_base", .kernel = (const void*)tcliU_base, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=64,IMAD=64", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tcliU_redux", .kernel = (const void*)tcliU_redux, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=68,IMAD=64,REDUX*=1", .warps = "1;8", .iters = 2048, .until = 2},
+    {.name = "tcliU_reduce", .kernel = (const void*)tcliU_reduce, .tpb = 384, .expect = UI ";LDTM.x32=4,LOP3.LUT=73,IMAD=64,SHFL.BFLY=5", .warps = "1;8", .iters = 2048, .until = 2},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

@@ -13,9 +13,25 @@ wires, where they feed the unit or the outputs, are acyclic.
 
 namespace Flock.Readable
 
+/-- `leafOk`, as a proposition: `hm96-sha512/v1` leaves, or plain SHA-512 leaves with hidden outputs without `--zk`. -/
+def LeafOk (t : Tags) (zk : Bool) : Prop :=
+  t.merkleLeaf = "hm96-sha512/v1" ∨
+    (zk = false ∧ t.hiddenOutputs = true ∧ t.merkleLeaf = "flock-leaf/sha512-unsalted")
+
+theorem leafOk_iff (t : Tags) (zk : Bool) : ProvedScope.leafOk t zk = true ↔ LeafOk t zk := by
+  unfold ProvedScope.leafOk LeafOk
+  cases zk <;> cases t.hiddenOutputs <;> simp
+
+/-- Under `--zk`, and wherever outputs are public, the leaves `leafOk` covers are `hm96-sha512/v1`. -/
+theorem LeafOk.hm96 {t : Tags} {zk : Bool} (h : LeafOk t zk) (hz : zk = true ∨ t.hiddenOutputs = false) :
+    t.merkleLeaf = "hm96-sha512/v1" := by
+  rcases h with h | ⟨h1, h2, -⟩
+  · exact h
+  · rcases hz with hz | hz <;> simp_all
+
 /-- The rules of `statementRules`, as propositions. -/
 def Rules (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) : Prop :=
-  t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ t.merkleLeaf = "hm96-sha512/v1" ∧
+  t.hm96Rows = true ∧ t.typed = false ∧ t.retainRounds = true ∧ LeafOk t zk ∧
     count ≤ (if zk then ProvedScope.zkTableCap else 1) ∧ pi = false
 
 theorem firstFailure_none_iff (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) :
@@ -23,7 +39,7 @@ theorem firstFailure_none_iff (t : Tags) (zk : Bool) (count : Nat) (pi : Bool) :
   unfold ProvedScope.firstFailure
   rw [Option.map_eq_none_iff, List.find?_eq_none]
   simp only [ProvedScope.statementRules, List.mem_cons, List.mem_nil_iff, or_false, forall_eq_or_imp, forall_eq,
-    Bool.not_eq_true', Rules]
+    Bool.not_eq_true', Rules, ← leafOk_iff]
   cases t.typed <;> cases pi <;> cases zk <;> simp
 
 /-- `scopeOk` holds only where the wires feed neither the unit nor the outputs. -/

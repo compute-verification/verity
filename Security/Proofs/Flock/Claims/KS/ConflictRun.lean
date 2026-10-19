@@ -15,8 +15,8 @@ What an accepted run of the deployed verifier (`Deploy.V`, plain or `--zk`) give
   `hashesIn (vLog.map Prod.fst)`, through `within`), and the custody checks pass;
 * the link the decision reads is the prover's first message, which depends on the tape alone (`run_head`,
   `act_decide_link`), so two runs at one tape decide on one link;
-* the scope check those checks run pins `hm96-sha512/v1` leaves, so every table's Merkle scheme is `hm96Sha512`
-  (`checks_hm96`).
+* the scope check those checks run pins every table's Merkle scheme to `hm96Sha512` or, for a statement read
+  without `--zk`, plain SHA-512 leaves (`checks_leaf`); under `--zk` it is `hm96Sha512` (`checks_hm96`).
 -/
 
 namespace FlockDeploy.KS
@@ -206,11 +206,13 @@ theorem acc_within {zk : Bool} {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Ms
 
 /-! ## The tables' Merkle scheme -/
 
-/-- **The checks pin `hm96-sha512/v1`**: every table the statement sets up commits under `hm96Sha512`. -/
-theorem checks_hm96 {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+/-- **The checks pin the tables' Merkle scheme**: every table the statement sets up commits under `hm96Sha512`, or,
+for a statement read without `--zk`, under plain SHA-512 leaves. -/
+theorem checks_leaf {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     {sts : Array Stmt} (hc : checks zk s spec x link c₁ mids f = .ok ()) (hs : s.setup = .ok (spec, sts)) :
-    ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 := by
+    ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 ∨
+      (s.read.zk = false ∧ sts[j].merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") := by
   unfold checks at hc
   obtain ⟨_, -, hc⟩ := ebind_ok hc
   obtain ⟨_, -, hc⟩ := ebind_ok hc
@@ -230,6 +232,27 @@ theorem checks_hm96 {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
   obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset
   intro j hj
   obtain ⟨d, hd, -⟩ := hall j hj
-  exact FlockSoundness.Discharge.HiddenExec.setupOne_tagsAt_hm96 hl hd
+  rcases hl with hl | ⟨hz, hh, hl⟩
+  · exact Or.inl (FlockSoundness.Discharge.HiddenExec.setupOne_tagsAt_hm96 hl hd)
+  · rcases FlockSoundness.Discharge.HiddenExec.setupOne_tagsAt_leaf (Or.inr ⟨hh, hl⟩) hd with ⟨-, hm⟩ | ⟨-, hm⟩
+    · exact Or.inl hm
+    · exact Or.inr ⟨hz, hm⟩
+
+/-- A statement set up at `zk` is read at `zk`. -/
+theorem setupOf_zk {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (h : setupOf zk x = some (s, spec, sts)) : s.read.zk = zk :=
+  readOf_zk (x := x) (by simp [readOf, (setupOf_some h).1])
+
+/-- **The checks pin `hm96-sha512/v1` under `--zk`**: every table a masked statement sets up commits under
+`hm96Sha512`. -/
+theorem checks_hm96 {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
+    {sts : Array Stmt} (hc : checks zk s spec x link c₁ mids f = .ok ()) (hs : s.setup = .ok (spec, sts))
+    (hz : s.read.zk = true) : ∀ (j : ℕ) (hj : j < sts.size), sts[j].merkle = MerkleScheme.hm96Sha512 := by
+  intro j hj
+  rcases checks_leaf hc hs j hj with h | ⟨h, -⟩
+  · exact h
+  · rw [hz] at h
+    cases h
 
 end FlockDeploy.KS

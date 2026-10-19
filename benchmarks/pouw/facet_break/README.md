@@ -20,10 +20,15 @@ research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd 
 python benchmarks/pouw/facet_break/loads.py summary ~/.research/runs/*/out/rows.jsonl ~/.research/runs/*/out/tensor_kinds.jsonl
 python benchmarks/pouw/facet_break/loads.py refit RUN/out/rows.jsonl --row R1
 python benchmarks/pouw/facet_break/loads.py family RUN/out/rows.jsonl --family R1 KFFMA0 --name EFFMA --kind FFMA --emit VF3q-16
+python benchmarks/pouw/facet_break/loads.py summary RUN/out/rows.jsonl --full --epoch VF3s-16
 ~~~
 
-A load counts only the instructions whose class is certain (`loads.class_of`; NOP and MOV are left out, and a uniform
-instruction is UNI), so it is a lower bound and a reported violation is real. A TLD's class is its width, which its
+A load counts only the gate's pinned opcodes, each in its class when the class is certain (`loads.class_of`; NOP, BRA
+and ISETP have none, MOV is NOROW and a uniform instruction is UNI), so it is a lower bound and a reported violation is
+real. `--full` counts the rest of a single-loop program's timed loop too, from its run's gate verdicts and `sass/`: each
+other loop instruction runs once an iteration, at a pinned instruction's rate, in its class, or on `issue` alone when it
+has none. The machine model's `Run.n` counts every executed instruction, so the full load is the one a row must hold, and
+it is still a lower bound. A TLD's class is its width, which its
 opcode doesn't show, so a generated program's name carries it (`_tld4_`). A load whose class has no line at the epoch
 (LDS.64, LDG.E.64, the 256-bit load and the L1-skipping loads before VF3q-16: Π prices it at 0) is listed by `summary`
 as unpriced. A violation goes in the lane's note with its row, load,

@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.ZkTables
 import Proofs.Flock.Claims.KS.ZkKS
+import Proofs.Flock.Claims.KS.ZkSessionSC
 
 /-!
 # Every masked table's bound from masked sessions after `Commit`
@@ -13,7 +14,7 @@ events and its share of `k` (`cZ_sum_le_tableWeight`), so the joined escapes fit
 (`joinEscZ_fitsFork_zk`), and every table's old escapes' term is at most theirs (`oldEscZ_term_le_join`).
 
 At table `j`, everything `ZkBound` proves at table 0 holds as it is: the old masked session theorems speak of the table
-at position `pre.length` of a batch after `Commit` (`session_sound_of_table_accZ`, `epsSZ`), the old padded table's
+at position `pre.length` of a batch after `Commit` (`session_sound_of_table_accZ_sc`, `epsSZ`), the old padded table's
 bound is at most table `j`'s error (`bound_le_tableErr_zk`), which is at most `ε_table` (`tableErr_le_εtable`), and a
 table of witness-lane columns that does not extract table `j` is not committed to table `j`'s model statement
 (`zk_not_committedJ`), since a satisfying old witness of it reads as a witness of table `j`'s own statement
@@ -592,7 +593,8 @@ prover at padded tables `T j`. Every prover has, at each table `j`, old masked f
 `rd j` and a one-run event, such that at each tape, each table `j` of the statement and each table `C` of its word
 that `Ok` allows, a mixture `σ` of masked sessions after a `Commit` of cap `cap₀`, table `j` at position
 `pre.length` of the batch, bounds the deployed runs accepting with no column of table `j` off `C` by its acceptance
-there with no level-0 opening off `C`, and table `j`'s events bound its `Adv`s and self-clash. -/
+there with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound its `Adv`s and self-clash.
+-/
 def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
@@ -616,7 +618,8 @@ def ZkSessJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] 
                   u ≠ C p) ≤
             (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
                 (outs.getD pre.length dfltOutZC).accepted = true ∧
-                  ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC))
+                  ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+                    ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
               (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ ∧
           (∀ r ℓ, (∑ t, advRSZ A Hs (T j) pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤
             Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
@@ -637,7 +640,8 @@ open Classical in
 ZK's padded table there, not committed to `C`, with table `j`'s old masked events, at injective rounds, bounding a
 mixture `σ` of masked sessions after `Commit` as `ZkSessJ` asks. `ε_ω` is at most the deployed runs' probability of
 accepting with no column of table `j` off `C`, at most the mean `ε_c⁻` of table `j`'s mixture
-(`session_sound_of_table_accZ`, its term off `C` empty), at most `ε_table` and table `j`'s old escapes' term
+(`session_sound_of_table_accZ_sc`, its term off `C` without a self-clash empty), at most `ε_table` and table `j`'s
+old escapes' term
 (`mean_epsSZ_leJ`), at most the joined escapes' (`oldEscZ_term_le_join`); plus that of accepting with one off `C`,
 which the bound keeps. -/
 theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
@@ -669,7 +673,8 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
             u ≠ C p) ≤
       (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
           (outs.getD pre.length dfltOutZC).accepted = true ∧
-            ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC))
+            ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+              ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
         (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ)
     (hadv : ∀ r ℓ, (∑ t, advRSZ A Hs (T j) pre post cap₀ r.val (ℓ.val + 1) (σ t)) / Fintype.card τ ≤
       Claims.Pr fun s : (Fin ((V true).k x) → Coin) × (Fin ((V true).k x) → Coin) =>
@@ -694,29 +699,35 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
   obtain ⟨h25, h35, hsch, ht, he, hS, hN, hq, hδ, -⟩ := hT j hj
   have hper : ∀ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
         (outs.getD pre.length dfltOutZC).accepted = true ∧
-          ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC))
+          ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+            ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t) ≤ epsSZ A Hs (T j) pre post cap₀ (σ t) := by
     intro t
-    have hs := session_sound_of_table_accZ A hA Hs (T j) pre post cap₀
+    have hs := session_sound_of_table_accZ_sc A hA Hs (T j) pre post cap₀
       (fun outs => (outs.getD pre.length dfltOutZC).accepted = true ∧
-        ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC))
+        ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+          ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
     have e : (ind fun outs : List (OutZC 𝔽 D Sl) =>
         ((outs.getD pre.length dfltOutZC).accepted = true ∧
-          ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC)) ∧
+          ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+            ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ (T j).Committed A (Claims.Flock.oracleOf C)) = ind fun outs =>
         (outs.getD pre.length dfltOutZC).accepted = true ∧
-          ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) :=
+          ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+            ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)) :=
       congrArg ind (funext fun _ => propext (and_iff_left hTc))
     have e₀ : (ind fun outs : List (OutZC 𝔽 D Sl) =>
         ((outs.getD pre.length dfltOutZC).accepted = true ∧
-          ¬ Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC)) ∧
+          ¬ (Off₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
+            ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
+          ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC) ∧
           ∃ p, Rewinding.Off (op₀Z Hs.H Hs.E Hs.Lf (T j) cap₀) (rowTW _ _ (Claims.Flock.oracleOf C))
             (outs.getD pre.length dfltOutZC) p) = fun _ => 0 := by
       funext outs
       unfold ind
       split_ifs with h0
-      · exact absurd h0.2 h0.1.2
+      · exact absurd ⟨h0.2.2, h0.2.1⟩ h0.1.2
       · rfl
     rw [e, e₀, expect_const, add_zero] at hs
     exact hs

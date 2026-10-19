@@ -119,13 +119,14 @@ theorem KSFlock_of_flockKS_V {Col T : Type} [DecidableEq Col] [Zero Col] (zk : B
     (hN : SessionNums D DO) (hε : TableErrNonneg D) (hRd : ∀ decI, SessionRounds D (Inner.ofFlock DI decI) DO)
     (hS : SessionAccepts D) (hR : ∀ decI, SessionRuns sha512 D (Inner.ofFlock DI decI) DO)
     (hV : ∀ decI, InnerViewRun sha512 D (Inner.ofFlock DI decI) DO)
-    (hC : ∀ decI, CallsRecord sha512 D (Inner.ofFlock DI decI) DO)
-    (hO : ∀ decI, CallsOpen sha512 D (Inner.ofFlock DI decI) DO opening)
+    (hT : ∀ decI, CallsTrue sha512 D (Inner.ofFlock DI decI) DO)
+    (hL : ∀ decI, CallsLogColl sha512 D (Inner.ofFlock DI decI) DO)
+    (hO : ∀ decI, CallsOpenPlayed sha512 D (Inner.ofFlock DI decI) DO opening)
     (hAcc : ∀ decI, InnerAccepts sha512 D (Inner.ofFlock DI decI) DO)
     (hpc : ∀ decI, PublicCoin sha512 (Inner.ofFlock DI decI) decC) (hN0 : CallsNil sha512 D) :
     KSFlockA sha512 D DI DO :=
   KSFlock_of_flockKS sha512 D DI DO opening decC hF NI Ok hNI hεI hVkI hKI hkI hone hz hok hconf htab
     (hVI ▸ accLast_V_sha512 zk) (hVI ▸ decideFree_V sha512 zk) (hVI ▸ refusable_V sha512 zk) hRef hRounds hN hε
-    hRd hS hR hV hC hO hAcc hpc hN0
+    hRd hS hR hV hT hL hO hAcc hpc hN0
 
 end FlockDeploy

@@ -1,0 +1,16 @@
+{
+ "pieces": {
+  "S32ByteCarry_v1": {
+   "and": 31
+  },
+  "S32ClampRest_v1": {
+   "and": 69
+  },
+  "S32ClampS8_v1": {
+   "and": 71
+  },
+  "S32LowByte_v1": {
+   "and": 0
+  }
+ }
+}

@@ -38,11 +38,16 @@ def test_a_build_takes_the_custom_all_reduce_its_workload_states(tmp_path, monke
     assert _construct_engine_args(tmp_path, monkeypatch, str(WL / f"{row}.json"), tp) == engine_args
 
 
-def test_a_tp_build_of_a_workload_without_the_field_keeps_it_off(tmp_path, monkeypatch):
+def test_a_tp_build_of_a_workload_without_the_field_is_refused(tmp_path, monkeypatch):
     doc = json.loads((WL / f"{GLM53}.json").read_text())
-    del doc["engine_args_required"]["disable_custom_all_reduce"]
+    del doc["engine"]["args"]["disable_custom_all_reduce"]
     (tmp_path / "wl.json").write_text(json.dumps(doc))
-    assert _construct_engine_args(tmp_path, monkeypatch, str(tmp_path / "wl.json"), 8) == {"disable_custom_all_reduce": True}
+    monkeypatch.setattr(B, "_construct", lambda *a, **k: pytest.fail("constructed"))
+    monkeypatch.setattr(B.engine_env, "apply_target", lambda env: None)
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    assert B.main(B.Options(out=str(tmp_path / "out"), workload=str(tmp_path / "wl.json"), tp=8)) == 2
+    res = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert res["exception"] == "ValueError" and "disable_custom_all_reduce" in res["message"]
 
 
 def test_a_tp_build_without_a_workload_leaves_vllm_meta_s_default(tmp_path, monkeypatch):

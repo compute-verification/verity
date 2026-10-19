@@ -9,9 +9,9 @@ device's committed census alone, how much room an adversary has to beat one:
   rises (`flip`). The `issue` ceiling (one warp instruction a SMSP-cycle, the hardware issue width, decision 73) is
   flagged: no silicon beats it.
 - `margin_audit` runs decision 76's joint margin (every near measured facet moved `m` in the cheater's favour at once,
-  default 2%) and names the single row that drives it. It mirrors eps.py's headline margin test
-  (`_worst_core_under_margin`): a facet's *measured lane coefficient* is the small one it shares, so the move leaves the
-  tensor-pipe MMA value alone; the issue slot and the exact operand floor are axioms, not measured rows, so they are
+  default 2%) and names the single row that drives it. A facet's *measured lane coefficient* is the one its CUDA lane
+  classes share, so the move leaves the tensor-pipe MMA value alone; the issue slot and the exact operand floor are
+  axioms, not measured rows, so they are
   left alone too. Moving a whole row's column (the MMA coefficient included) mis-prices the tensor route and is not
   decision 76 — see note:20261017T2016Z-draft-rt-dc for the round-1 retraction it caused.
 - `least_filler` finds the least verified filler a word (in a class mix) that holds a margin: the cheapest add-on that
@@ -32,7 +32,7 @@ from pathlib import Path
 from verity_machine_model import eps as E
 
 NEAR = 0.90                        # a row within this fraction of binding is a near facet
-MARGIN_NEAR = 0.95                # decision 76's audit moves the rows this near (eps.py's _worst_core_under_margin)
+MARGIN_NEAR = 0.95                # decision 76's audit moves the rows this near
 ISSUE_CEILING = "issue"           # 1 warp instruction a SMSP-cycle: the hardware issue width (decision 73), not a facet
 
 
@@ -83,14 +83,21 @@ class LeastFill:
     base_worst: float             # the joint margin's worst core at the design as built
 
 
+UNIFORM = ("UNI", "UNI64")       # the uniform-datapath classes: a measured coefficient of their own on a joint row
+
+
 def _lane_coef(pi: E.Machine, row: str) -> tuple[float, tuple[str, ...]]:
-    """The small (lane) coefficient a row shares and the classes at it. Decision 76 moves this one: a joint facet's
-    small coefficient is its lane cost (ALU, IMAD, …); the large one is the saturated tensor pipe, which silicon cannot
-    cheapen, so it is left alone."""
+    """The small (lane) coefficient a row shares and the classes it moves. Decision 76 moves this one: a joint facet's
+    small coefficient is its vector lane cost (the CUDA lane classes, `pi.cuda`); the large one is the saturated tensor
+    pipe, which silicon cannot cheapen, so it is left alone. A uniform class's coefficient on the row is measured on its
+    own (UNI on JI90_0: 0.965 on DC-90, 0.000186 beside the async wgmma on DC-90-ri), so it never stands for the lane
+    coefficient, and it moves with it. A row no lane class is on falls back to the least non-uniform coefficient."""
     cols = {k: pi.c[k][row] for k in pi.c if row in pi.c[k]}
-    small = min(cols.values())
-    hit = tuple(k for k, v in cols.items() if abs(v - small) < 1e-9)
-    return small, hit
+    lanes = ({k: v for k, v in cols.items() if k in pi.cuda}
+             or {k: v for k, v in cols.items() if k not in UNIFORM} or cols)
+    small = min(lanes.values())
+    hit = tuple(k for k, v in lanes.items() if abs(v - small) < 1e-9)
+    return small, hit + tuple(k for k in cols if k in UNIFORM and k not in hit)
 
 
 def _single(pi: E.Machine, row: str, f: float) -> E.Machine:
@@ -111,7 +118,7 @@ def _worst_single(core, pi: E.Machine, row: str, m: float) -> float:
 
 def _joint_worst(core, pi: E.Machine, near: list[str], m: float) -> float:
     """Decision 76's joint worst core: every row in `near` moved m in the cheater's favour at once, each in the
-    direction that raises the core (greedy, as eps.py's _worst_core_under_margin)."""
+    direction that raises the core (greedy)."""
     cc = {k: dict(v) for k, v in pi.c.items()}
     for r in near:
         _, hit = _lane_coef(pi, r)
@@ -139,9 +146,10 @@ def _flip(d: E.Design, pi: E.Machine, data: Path, q: float, row: str, base: floa
     return None, None
 
 
-def audit(design: str, data: Path, q: float = 1.22, operands: str = "free", credit: str = "floor") -> Audit:
-    """The red-team audit of `design` on the device directory `data`'s Π at q*."""
-    pi = E.machine("", data)
+def audit(design: str, data: Path, q: float = 1.22, operands: str = "free", credit: str = "floor",
+          vector: str = "") -> Audit:
+    """The red-team audit of `design` on the device directory `data`'s Π (`vector`, default its current) at q*."""
+    pi = E.machine(vector, data)
     d = E.design(design, data)
     e = E.eps(d, pi, q, data, operands=operands, credit=credit)
     c = e.cheat
@@ -163,14 +171,14 @@ def audit(design: str, data: Path, q: float = 1.22, operands: str = "free", cred
 
 
 def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MARGIN_NEAR, q: float = 1.22,
-                 operands: str = "free", credit: str = "floor") -> Margin:
+                 operands: str = "free", credit: str = "floor", vector: str = "") -> Margin:
     """Decision 76's margin on `design`: move each near measured facet's lane coefficient m in the cheater's favour.
 
     Returns the core as built, the joint worst (every near facet moved at once), and the single row that drives it (the
-    one whose move alone raises the core most). Mirrors eps.py's headline margin test `_worst_core_under_margin`: the
-    small (lane) coefficient a facet shares moves, not its tensor-pipe MMA value; the issue slot (decision 73) and the
+    one whose move alone raises the core most). The small (lane) coefficient a facet shares moves, not its tensor-pipe
+    MMA value (`_lane_coef`); the issue slot (decision 73) and the
     exact operand floor are axioms, not measured rows, so both are left alone."""
-    pi = E.machine("", data)
+    pi = E.machine(vector, data)
     d = E.design(design, data)
     core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
     base = core(pi)
@@ -183,20 +191,23 @@ def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MAR
 
 def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, target: float | None = None,
                  m: float = 0.02, near_thr: float = MARGIN_NEAR, step: float = 0.005, cap: float = 0.30,
-                 q: float = 1.22, operands: str = "free", credit: str = "floor") -> LeastFill:
+                 q: float = 1.22, operands: str = "free", credit: str = "floor", vector: str = "") -> LeastFill:
     """The least verified filler a word, in class mix `mix` (default the design's), that holds decision 76's margin:
     its joint worst core is ≤ `target` (default the design's base core, the floor it sits at). The filler replaces the
-    design's own and sweeps in `step` up to `cap`. Returns the per_word, the worst core there and honest's γ."""
-    pi = E.machine("", data)
+    design's own and sweeps in `step` up to `cap`, checked as the design's filler is (its p and luck), or by a receipt
+    the check recomputes (p = 0) when the design has none. Returns the per_word, the worst core there and honest's γ."""
+    pi = E.machine(vector, data)
     d0 = E.design(design, data)
     mix = mix or (d0.filler[0].mix if d0.filler and d0.filler[0].mix else {"FFMA": 1.0})
+    check = d0.filler[0] if d0.filler else E.Filler(p=0.0, luck=E.PINNED)
     base_core = E.eps(d0, pi, q, data, operands=operands, credit=credit).core()
     target = base_core if target is None else target
     base_worst = _joint_worst(lambda p: E.eps(d0, p, q, data, operands=operands, credit=credit).core(), pi,
                               _near_rows(pi, d0, data, q, near_thr, operands, credit), m)
 
     def at(x: float) -> tuple[E.Design, float, float]:
-        d = replace(d0, filler=(E.Filler(per_word=x, mix=mix, route="lanes", source="redteam.least_filler"),))
+        d = replace(d0, filler=(E.Filler(per_word=x, mix=mix, route="lanes", p=check.p, luck=check.luck,
+                                         source="redteam.least_filler"),))
         core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
         near = _near_rows(pi, d, data, q, near_thr, operands, credit)
         return d, _joint_worst(core, pi, near, m), E.eps(d, pi, q, data, operands=operands, credit=credit).gamma
@@ -212,7 +223,7 @@ def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, t
 
 
 def uniform_gap(design: str, data: Path, q: float = 1.22, issue_cost: float = 0.9838, pipe_rate: float = 0.4999,
-                operands: str = "free", credit: str = "floor") -> tuple[float, float, tuple[str, ...]]:
+                operands: str = "free", credit: str = "floor", vector: str = "") -> tuple[float, float, tuple[str, ...]]:
     """Bound the ε a uniform datapath would open on a device whose census has none (no UNI class).
 
     A uniform instruction is credited `issue_cost` of an ALU's slot on every issue-type row (`issue` and the joint
@@ -220,7 +231,7 @@ def uniform_gap(design: str, data: Path, q: float = 1.22, issue_cost: float = 0.
     other pipes (the cheater's best case). The defaults are sm_90's measured uniform datapath (UP 0.4999 instr a
     SMSP-cycle, 0.9838 of an issue slot). Returns (core as built, core with the route open, the cheater's binding);
     where the census already has a UNI class the route is measured and the two cores are equal."""
-    pi = E.machine("", data)
+    pi = E.machine(vector, data)
     d = E.design(design, data)
     base = E.eps(d, pi, q, data, operands=operands, credit=credit).core()
     if "UNI" in pi.c:

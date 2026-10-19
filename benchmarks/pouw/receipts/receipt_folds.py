@@ -243,9 +243,12 @@ FOLDS = {
                    "DuoPairNoKernel, DuoTripleNoKernel); false at four words for odd keys with r1 + r3 = 0 mod 32, "
                    "a2 = -1 mod 2^r1 and a3 = ±1 mod 2^(33 - r1), which key_ok and both schedules' rotations exclude. "
                    "At four words a kernel needs a2 = -1 mod 2^r1, for odd a1, a2, a3, 0 < r2, r3 < n and "
-                   "0 < r1 <= n - 3 (Lean DuoQuadNoKernel), so both schedules' keys have none; open for five or more "
-                   "words, and for the served receipt y ^ rotl(z, 16) at any length "
-                   "(note:20261017T1000Z-draft-fold-r §6.5)"},
+                   "0 < r1 <= n - 3 (Lean DuoQuadNoKernel), so both schedules' keys have none. At any length, two "
+                   "runs with the same final states differ at two words at least four positions apart "
+                   "(DuoWindowNoKernel), a run checkpointed every four words has no kernel (DuoCheckpointNoKernel), "
+                   "and every run of more than 2*4^n words has one (DuoLongRunKernel); open for five or more words "
+                   "at the deployed keys, and for the served receipt y ^ rotl(z, 16) at any length "
+                   "(note:20261017T1000Z-draft-fold-r §6.5, §8)"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),

@@ -16,7 +16,7 @@ COMPILED_ROW = "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-
 
 
 def _wl(tmp_path, row_id: str | None, execution: str | None = None) -> str:
-    doc = {"schema": "verity-vllm/workload/v1", "requests": [], "sampling": {"variant": "greedy"}, "variants": {"greedy": {"temperature": 0.0}}}
+    doc = {"schema": "verity-vllm/workload/v2", "requests": [], "sampling": {"variant": "greedy"}, "variants": {"greedy": {"temperature": 0.0}}}
     if row_id:
         doc["sweep"] = {"row_id": row_id}
     if execution:
@@ -57,8 +57,9 @@ def test_adapter_execution_of_workload_and_labels():
     assert va.execution_of_workload({"requests": []}) is None
     assert va.execution_of_workload(None) is None
     assert va.execution_label_of(True) == "bi-eager" and va.execution_label_of(False) == "bi-compiled" and va.execution_label_of(None) is None
-    for k, v in rc._EXECUTION_ENFORCE_EAGER.items():
-        assert va.EXECUTION_ENFORCE_EAGER[k] is v          # laptop mirror == pod table
+    assert va.execution_label_of(True, False) == "eager" and va.execution_label_of(False, False) == "compiled"
+    assert va.execution_label_of(False, None) is None
+    assert va.EXECUTION_ENFORCE_EAGER is rc.ENFORCE_EAGER          # the laptop's table is the pod's
 
 
 def test_load_workload_carries_row_id_and_execution(tmp_path):
@@ -79,6 +80,7 @@ def _no_llm(monkeypatch):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
     fake.LLM = LLM
     monkeypatch.setitem(sys.modules, "vllm", fake)
+    monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")             # build_engine applies the label's; the test's process gets its own back
     from verity_vllm.engine import engine_profile as prof
     monkeypatch.setattr(prof, "apply_env", lambda: {})
     monkeypatch.setattr(prof, "checkpoint_for", lambda case, ck: {"local_path": "/nonexistent", "repo": "x", "revision": "y"})

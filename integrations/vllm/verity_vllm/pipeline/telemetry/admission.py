@@ -806,8 +806,6 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
 # ---------------------------------------------------------------------------------------------------------------------
 # Data path (a): increment A telemetry (events*.jsonl spans + alloc/free marks; resources*.jsonl cgroup/process rows).
 # ---------------------------------------------------------------------------------------------------------------------
-ALLOC_MARK = {"kind": "mark", "name": "alloc", "fields": ["obj", "bytes", "alloc_id", "stage"]}
-FREE_MARK = {"kind": "mark", "name": "free", "fields": ["obj", "alloc_id", "stage"]}
 
 
 def observe_increment_a(attempt_dir: str) -> dict[str, Any]:
@@ -1033,7 +1031,7 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     steps = int(w.get("expected_engine_steps") or o_max)
     lp_max = max((int(r.get("prompt_len") or 0) for r in reqs), default=i_max)
     t_max = max((int(r.get("max_tokens") or 0) for r in reqs), default=o_max)
-    ea = w.get("engine_args_required") or {}
+    ea = (w.get("engine") or {}).get("args") or {}
     key = model_key_for_row(row)
     notes = []
     if key not in MODELS:

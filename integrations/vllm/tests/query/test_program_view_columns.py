@@ -215,3 +215,60 @@ def test_a_body_that_is_not_columnar_or_units_that_are_not_a_partition_go_to_bou
                   (VerificationUnit("a", frozenset(range(1, 9))),)):                                        # 8 is not a Call
         with pytest.raises(PartitionError):
             boundary_without_literals(P, lambda _P, units=units: units, frozenset())
+
+
+def test_a_wide_record_resolves_by_bisection_to_the_linear_scans_ports():
+    """A weights struct of hundreds of fields: each parameter run's ports, found by bisection, are the linear scan's, in table order;
+    a table whose ports overlap keeps the linear scan."""
+    rng = random.Random(5)
+    edges = sorted(rng.sample(range(1, 50_000), 299))
+    table = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [50_000])))
+    runs = [("p", 0, a, a + rng.choice((1, 7, 400, 9_000))) for a in (rng.randrange(0, 49_000) for _ in range(500))]
+    for t in (table, table[:3] + (pv.Port("over", 0, 50_000, 50_000, 16),)):
+        b = pv._Builder((pv.InputView(-1, "weights", "x", t),))
+        assert (b._param_lo[0] is None) == (t is not table)
+        b.add(0, "Gemm_v1{K=4,N=8}", "call", "x", pv.definition_ports("Gemm_v1{K=4,N=8}"), [runs])
+        got = [b.c.port_names[p] for p in b.c.read_port]
+        want, seen = [], set()
+        for _s, _i, lo, hi in runs:
+            for p in t:
+                if p.lo < hi and lo < p.hi and p.name not in seen:
+                    seen.add(p.name)
+                    want.append(p.name)
+        assert got == want
+
+
+def test_stored_progressions_resolve_to_the_columns_of_their_runs():
+    """v2 rows (node and parameter progressions, `compact.file_items_from_runs`) build the same columns as their per-leaf v1 runs:
+    every Value in the same order, for strided weight reads of a wide record, gathers over producer Calls and overlapping runs."""
+    from verity_vllm.program import compact as C
+    rng = random.Random(9)
+    edges = sorted(rng.sample(range(1, 40_000), 199))
+    wide = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [40_000])))
+    ins = (pv.InputView(-1, "weights", "x", wide), pv.InputView(-2, "prompt", "y", (pv.Port("0", 0, 4, 4, 32),)))
+    spec = f"RMSNormFusedCuda_v2{{N=4,EPS={EPS}}}"
+    rows = []
+    for i in range(40):
+        ops = []
+        for _ in range(3):
+            kind = rng.randrange(4)
+            if kind == 0:                        # a strided weight read: one parameter progression
+                w, st, b = rng.choice((1, 3, 64)), rng.choice((64, 200, 7_000)), rng.randrange(0, 1_000)
+                runs = [("p", 0, b + k * st, b + k * st + w) for k in range(rng.randrange(2, 30)) if b + k * st + w <= 40_000]
+            elif kind == 1 and i:                # a gather over earlier Calls
+                runs = [("n", j, rng.choice((0, 2, 4)), 8) for j in range(0, i, max(1, i // 5))]
+            elif kind == 2:
+                runs = [("p", 1, 0, 4)] * 2
+            else:
+                runs = [("p", 0, a, a + rng.randrange(1, 900)) for a in (rng.randrange(0, 39_000) for _ in range(5))]
+            ops.append(runs or [("p", 1, 0, 4)])
+        rows.append((i, ops))
+    cols = []
+    for v2 in (False, True):
+        b = pv._Builder(ins)
+        for i, ops in rows:
+            args = [C.file_items_from_runs(o) if v2 else [list(r) for r in o] for o in ops]
+            b.add(i, spec, "call", f"r{i}", pv.definition_ports(spec), args)
+        cols.append((list(b.c.read_call), list(b.c.read_port), list(b.c.pread_call), list(b.c.pread_port), list(b.c.read_off)))
+    assert any(len(it) == 8 for _i, ops in rows for o in ops for it in C.file_items_from_runs(o))
+    assert cols[0] == cols[1]

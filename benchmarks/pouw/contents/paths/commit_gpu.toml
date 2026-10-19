@@ -1,0 +1,4 @@
+order = 250
+path = "`commit_gpu/`"
+runs_on = "RTX PRO 6000"
+what = "The GPU hm96-sha512 committer, its small path beside a GEMM, and its byte gate against `verity.ml.commitments` (`reference.py`)"

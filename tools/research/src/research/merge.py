@@ -385,6 +385,74 @@ def tree_identical(repo: Path, commit: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
 
 
+#: a Lake package's lock, which a train's check may regenerate (`check.py --regenerate`, the report's `regenerated`)
+LOCK = "lean-audit.json"
+
+
+def _run_files(store, run_id: str) -> str | None:
+    out = (store.get_attempt(run_id) or {}).get("outputs") or {}
+    return out.get("run_files") or out.get("run_record")
+
+
+def _under_run(path: str) -> str:
+    """A path the Lean check's report names, as a path among the run's files (`lean-audit/...`)."""
+    if "/lean-audit/" in path:
+        return "lean-audit/" + path.split("/lean-audit/", 1)[1]
+    return path if path.startswith("lean-audit/") else f"lean-audit/{path}"
+
+
+def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[str, tuple[str, Path | None]]:
+    """{package: (sha256 of its regenerated lock, the fetched file under ``dest`` or None)} of a check that passed its Lean
+    check by regenerating records (the report's `regenerated`); empty when it regenerated none or its files aren't in the store."""
+    if not (art := _run_files(store, run_id)):
+        return {}
+    try:
+        rows = {f["path"]: f["sha256"] for f in store.listing(art)}
+    except Exception:  # noqa: BLE001  (no listing: nothing to vouch for)
+        return {}
+    if "lean-audit/audit.json" not in rows:
+        return {}
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            audit = json.loads((store.fetch(art, Path(d), paths=["lean-audit/audit.json"]) / "lean-audit" / "audit.json").read_text())
+        except (OSError, ValueError):
+            return {}
+    want = {pkg: _under_run(str(p)) for pkg, p in (audit.get("regenerated") or {}).items()}
+    if not want or any(p not in rows for p in want.values()):
+        return {}
+    got = store.fetch(art, dest, paths=sorted(want.values())) if dest is not None else None
+    return {pkg: (rows[p], (got / p) if got is not None else None) for pkg, p in want.items()}
+
+
+def _blob_sha256(repo: Path, commit: str, path: str) -> str:
+    import hashlib  # noqa: PLC0415
+
+    r = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
+    return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else ""
+
+
+def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
+                       maps=None) -> str | None:
+    """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
+    packages' locks, names exactly those in its `Regenerated:` trailer, and each is byte for byte the lock that attempt
+    regenerated for its package, so the tree that lands is the one that check audited (CI-64)."""
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
+    if len(parents) != 1:
+        return None
+    parent = parents[0]
+    files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
+    said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
+                                     commit).stdout.replace("\n", ",").split(",") if f.strip()}
+    if not files or set(files) != said or not all(os.path.basename(f) == LOCK for f in files):
+        return None
+    tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
+    for rid in passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo):
+        recs = regenerated_records(store, rid)
+        if all(recs.get(os.path.dirname(f) or ".", ("",))[0] == _blob_sha256(repo, commit, f) for f in files):
+            return rid
+    return None
+
+
 def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print, remote: str = "origin") -> tuple[str, str]:
     """(commit, attempt id) when ``ref`` may be merged into ``into``; `Refused` naming why otherwise, including a pull request it
     merges whose head on ``remote`` moved, or that is stacked on one neither on ``into`` nor below it (`unstacked`)."""
@@ -412,6 +480,8 @@ def gate(repo: Path, ref: str, into: str, store, tool: str = "check", log=print,
     tree = _git(repo, "rev-parse", f"{commit}^{{tree}}").stdout.strip()
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     ids = passing(store, commit, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
+    if not ids and (via := regenerated_parent(repo, commit, store, tool=tool, kinds=kinds, command=command, maps=maps)):
+        ids = [via]
     if not ids:
         rows = store.index.sql("SELECT id, state, rc, source_dirty FROM attempts WHERE tool = ? AND source_commit = ?", (tool, commit))
         why = {r[0]: refused(store, r[0], kinds, tool, commit, command, repo) for r in rows if r[1] == "done" and r[2] == 0 and not r[3]}
@@ -449,7 +519,8 @@ printf '%s\\n' "$lines" | PYTHONPATH={src} exec {python} -m research merge --gua
 def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", tool: str = "check") -> list[str]:
     """The tips a push (git's pre-push lines: `local_ref local_sha remote_ref remote_sha`) would move ``into`` to without a
     passing ``tool`` attempt of their tree, the merge gate's rule: the tip's own attempt (a `--train` fast-forward), or, as a
-    `research merge` commit has, its merged parent's when the two trees are equal."""
+    `research merge` commit has, its merged parent's when the two trees are equal, or, for a commit of the locks a train's
+    check regenerated, that check (`regenerated_parent`)."""
     bad = []
     kinds, command = produced(repo, tool), declared_command(repo, tool)
     for line in lines:
@@ -460,7 +531,8 @@ def unchecked_pushes(repo: Path, lines: list[str], store, into: str = "main", to
         tree = _git(repo, "rev-parse", f"{tip}^{{tree}}").stdout.strip()
         parents = _git(repo, "rev-list", "--parents", "-n", "1", tip).stdout.split()[1:]
         if not any(_git(repo, "rev-parse", f"{x}^{{tree}}").stdout.strip() == tree
-                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree, repo=repo) for x in [tip, *parents[1:]]):
+                   and passing(store, x, tool, kinds=kinds, command=command, tree=tree, repo=repo) for x in [tip, *parents[1:]]) \
+                and not regenerated_parent(repo, tip, store, tool=tool, kinds=kinds, command=command):
             bad.append(tip)
     return bad
 
@@ -1250,11 +1322,13 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
     return tree
 
 
-def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen) -> list[str] | None:
+def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.Popen, attempt: str = "") -> list[str] | None:
     """Start what the target's own declaration of ``tool`` runs after a landing (`Tool.after_land`, read from the checkout as
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
-    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  Returns
-    the argv started, None when the declaration names none."""
+    does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
+    ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
+    `Check:` trailer, and one made with `--defer` has no passed attempt in the store yet (CI-81).  Returns the argv started,
+    None when the declaration names none."""
     from .store import tools_registry
 
     try:
@@ -1263,7 +1337,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
         return None
     if not argv:
         return None
-    argv.append(commit)
+    argv += [commit, "--attempt", attempt] if attempt else [commit]
     out = Path(tempfile.gettempdir()) / f"research-after-land-{commit[:12]}.log"
     tree = _own_tree(repo, commit)
     run = argv if tree is None else ["sh", "-c", AFTER_LAND_THEN_REMOVE, str(tree), str(repo), *argv]
@@ -1304,7 +1378,8 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
               runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip (a later landing's `post_train.py` tests the ones before it too), post each landing to the merge thread
+    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), post each
+    landing to the merge thread
     (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM
     (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
     when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
@@ -1351,7 +1426,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             log(f"research merge: the steps after a landing last ran for {mark[:12]}; catching up {n} commit(s) of main to {tip[:12]}")
         if remote == "origin" and (name := mirror_name()):
             push_mirror(repo, tip, name)
-        after_land(repo, tool, tip, log=log)
+        after_land(repo, tool, tip, log=log, attempt=(runs or {}).get(tip, ""))
         if remote == "origin":
             report_landings(repo, start, tip, log=log, runs=runs)
             label_landed(repo, start, tip, log=log, runs=runs)

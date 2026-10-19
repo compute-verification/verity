@@ -1,8 +1,15 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "HuggingFaceTB/SmolLM2-135M",
  "case": "B0",
- "tokenizer_revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+ "engine": {
+  "revision": "93efa2f097d58c2a74874c7e644dbc9b0cee75a2",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 64
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +35,6 @@
   "depends_on": "the PAD-INT workload only"
  },
  "expected_engine_steps": 32,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 64
- },
  "tokenizer_note": "prompt_token_ids copied verbatim from the PAD-INT stage-0 workload (tokenizer revision 93efa2f0, add_special_tokens=False); prompt_text is the decode (informational)",
  "prompt_lengths": [
   32
@@ -227,7 +230,7 @@
   "lengths_only": false,
   "panel": false,
   "lane": "pad",
-  "label": "padded baseline (experimental) \u2014 not a panel row"
+  "label": "padded baseline (experimental) — not a panel row"
  },
- "note": "R16 lane pad, MIXED BATCH (BRIEF \u00a77B): B=2, both arrive at step 0 \u2014 request 0 (de2d6bfc) stops early (measured EOS at output index 10), request 1 (7cc7c3bb, the INT-PAD-2 certified record's prompt) runs to the cap (measured finish_reason=length at 16; expected length at 32). The batch shrinks from 2 to 1 at engine step 11: the lifted fixed Program keeps both requests at D_MAX = 31 decode steps; the early stop's inactive steps must not touch request 1's values (no cross-request poisoning). NOT a panel row; 'padded baseline (experimental)'."
+ "note": "R16 lane pad, MIXED BATCH (BRIEF §7B): B=2, both arrive at step 0 — request 0 (de2d6bfc) stops early (measured EOS at output index 10), request 1 (7cc7c3bb, the INT-PAD-2 certified record's prompt) runs to the cap (measured finish_reason=length at 16; expected length at 32). The batch shrinks from 2 to 1 at engine step 11: the lifted fixed Program keeps both requests at D_MAX = 31 decode steps; the early stop's inactive steps must not touch request 1's values (no cross-request poisoning). NOT a panel row; 'padded baseline (experimental)'."
 }

@@ -131,5 +131,5 @@ for r in "$O"/ncu/*.ncu-rep; do
 done
 cat "$O/rc.txt"
 $PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
-  --toml-arms "c_l7qs,c_l7qs_o,c_l7qs_v,h_l7qs,e_l7qs,e_plains,plain" > "$O/profile.md" 2> "$O/profile.err"
+  --toml-arms "${CG_TOML_ARMS:-c_l7qs,c_l7qs_o,c_l7qs_v,h_l7qs,e_l7qs,e_plains,plain}" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
-from verity_vllm.config import option
+from verity_vllm.config import RowEngine, option
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes (the factor of the original F-dA-15 warning)
@@ -273,10 +273,6 @@ def host_cap() -> tuple[int | None, str | None]:
     return None, None
 
 
-def _cgroup_cap() -> int | None:
-    return host_cap()[0]
-
-
 @dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload",
@@ -301,7 +297,7 @@ class Options:
 def main(a: Options) -> int:
     wl = json.loads(Path(a.workload).read_text())
     sizing = json.loads(Path(a.sizing).read_text())
-    mnbt = (wl.get("engine_args_required") or {}).get("max_num_batched_tokens") or (sizing.get("envelope") or {}).get("max_num_batched_tokens")
+    mnbt = RowEngine.of(wl).args.get("max_num_batched_tokens") or (sizing.get("envelope") or {}).get("max_num_batched_tokens")
     cap, cap_src = (a.cap_bytes, "--cap-bytes") if a.cap_bytes is not None else host_cap()
     # the sizing record's envelope bound describes ITS row: carry it only when the record was sized for this workload's envelope
     env = sizing.get("envelope") or {}

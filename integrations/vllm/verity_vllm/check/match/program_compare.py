@@ -7,7 +7,8 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
 
   1. spec sequence — exact; then with attention `T` normalised (the only per-position static);
   2. operand wiring — every operand run is canonicalised to a source: (`W`, weight field name, lo, hi) for an input
-     weight, (`TOK`, lo, hi) for the prompt, (`N`, producer step, producer index-within-step, lo, hi) for a node
+     weight, (`TOK`, lo, hi) for the prompt, (`WIT`, name, lo, hi) for a rank Program's witness input (`load_derived`),
+     (`N`, producer step, producer index-within-step, lo, hi) for a node
      output — and compared 1:1 when the spec sequences align (the weight name comes from each program's own record:
      the derive report's field list / the oracle's `instances.jsonl` hints); cross-step (`KV`) sources are reported apart;
   3. unfolding (padded vs flat) — the padded program's pad-kind instances (`Const*`, `I32Eq`, `BitNot`, `BitAnd`,
@@ -16,10 +17,11 @@ runs), segmented into engine steps at `TokenSelect` boundaries (one sampling eve
      muxes themselves are audited: per decode step ONE live bit keys the token slot and every layer's K and V row,
      against ONE zero gate; a mux anywhere else is reported (a real mismatch, never normalised).
 
-Every difference is reported with counts and examples; nothing is dropped silently.
+Every difference is reported with counts and examples; nothing is dropped silently.  `--operands progressions` holds both sides'
+operands in compact form (program.compact), for Programs whose strided reads are ~1e6 runs each (GLM-5.3's W_UK_T / W_UV).
 
     verity-vllm program-compare --a <dir with descriptor.json.gz + derive-report.json> \\
-        --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a]
+        --b <oracle dir with program.json + instances.jsonl | derived dir> --out compare.json [--unfold-a | --operands progressions]
 """
 
 from __future__ import annotations
@@ -39,8 +41,9 @@ from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.peer_reads import PeerReads
+from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
-from verity_vllm.config import option
+from verity_vllm.config import UsageError, option
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
@@ -72,7 +75,7 @@ def _registry():
     return reg
 
 
-class Prog(PeerReads):
+class Prog(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
     compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
@@ -112,10 +115,8 @@ class Prog(PeerReads):
                     continue
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})
-            # [R16 global, F-global-mem / GM-01 at LP 4096] the decoded IR (`body.nodes`: node objects + Refs trees, O(LP^2) leaves for the
-            # attention K/V gathers of a long prefill) is NOT retained: every comparison reads `inst` (spec, form, operand RUNS, out) only.
-            # Keeping `self.nodes` alive doubled the resident Program (fold 148 GB / comparator 172 GiB / GM-01 > 351 GiB on the 4096/512
-            # row, capacity M-0815).  `n_nodes` keeps the count; nothing in cb_a read the node objects after this loop.
+            # the decoded IR (node objects + Refs trees, O(LP^2) leaves for a long prefill's K/V gathers) is not retained: comparisons read
+            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096, M-0815).  `n_nodes` keeps the count.
             self.n_nodes = len(body.nodes)
             self.nodes = None
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
@@ -139,6 +140,9 @@ class Prog(PeerReads):
         # `peers_layout`).  A read canonicalises as ("PEER", k, lo, hi) with lo/hi relative to the field on BOTH sides.  Set by the loaders.
         self.peer_fields: dict[int, list[tuple[int, int]]] = {}
         self.peer_index: dict[int, int] = {}       # fold side: peers Input node -> request index (batch_decomp ownership)
+        # a rank Program's WITNESS inputs (a user input the link table names neither a prompt nor a peer input: the MoE align `schedule`):
+        # Input node -> its name; a read canonicalises as ("WIT", name, lo, hi), never as an unnamed weight.  Set by `load_derived`.
+        self.witness_fields: dict[int, str] = {}
         self.supplied_fields: dict[int, list[tuple[int, str, int]]] = {}   # `supplied_inputs`, set by the loaders
         self.supplied_owner: dict[int, int | None] = {}
         self.split_statics = split_selects.as_fold_selects(self.inst)       # a select specialised on S compares as the fold's
@@ -153,16 +157,11 @@ class Prog(PeerReads):
 
     def _bind_splits(self) -> None:
         """[R16 stoch/global, COORD M-0169 (4)] Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
-
-        Fold side: the operand is a `Const32[S]` instance emitted right before the select -- the constant is REMOVED from the instance
-        sequence (it is the value of a prescribed input, not a computation of the Program), its value kept in `splits_values[select node]`
-        and the operand canonicalises as ("SPLITS", e, e+1) with e the select's event ordinal in this Prog's segmentation (a request
-        projection: the request's e-th sampling event).  Program side: the operand reads an Input batch that is neither the prompt nor a
-        seed nor a weight field -- the request-owned `splits` input; `splits_nodes` holds it and every read of it canonicalises as
-        ("SPLITS", lo, hi) = ("SPLITS", s, s+1) for event s.  Both sides therefore agree exactly when the fold's e-th select of the request
-        carries the constant the Program's event e reads: no value is compared here (GM-01 checks S_t against the live count).  A select
-        whose splits operand is neither form (the R15 {V,S} static form has no 6th operand) binds nothing and compares as before; a
-        `Const32` read by anything other than a select's splits operand is never removed.  A single-request Program's own binds alike."""
+        Fold side: the `Const32[S]` emitted right before the select is REMOVED from the sequence (a prescribed input's value), kept in
+        `splits_values[select node]`, and the operand canonicalises as ("SPLITS", e, e+1), e the select's event ordinal.  Program side:
+        the request-owned `splits` Input (neither prompt, seed nor weight; `splits_nodes`) read as ("SPLITS", s, s+1) for event s.  Both
+        agree exactly when the fold's e-th select carries the constant the Program's event e reads (GM-01 checks S_t against the live
+        count).  Any other select binds nothing; a `Const32` read by anything but a splits operand is never removed."""
         self.splits_values: dict[int, int] = {}      # select node k -> S (fold side)
         self.splits_nodes: set[int] = set()          # Input nodes read as the splits operand (Program side)
         bound_consts: dict[int, int] = {}            # const instance index -> select node k
@@ -272,7 +271,7 @@ class Prog(PeerReads):
                 mapped: list[tuple] = []
                 for p in a:
                     mapped.extend(self._srcP(p, unfold))
-                out.append(rle_mapped(mapped))
+                out.append(rle_mapped(PX.merge_reads(mapped, True) if self.pfx else mapped))
             return out
         for ai, a in enumerate(r["args"]):
             if bound and ai == SPLITS_OPERAND:
@@ -280,7 +279,8 @@ class Prog(PeerReads):
                 e = self.i2step[i][0]
                 out.append([("SPLITS", e, e + 1)])
                 continue
-            out.append([self._src(r, unfold) for run in a for r in self._split_peer(run)])
+            mapped = [self._src(r, unfold) for run in a for r in self._split_peer(run)]
+            out.append(PX.merge_reads(mapped, False) if self.pfx else mapped)
         return out
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
@@ -306,6 +306,10 @@ class Prog(PeerReads):
                 return [("SPLITS", (lo0, hi0), (dL, dH), c)]
             if idx0 in getattr(self, "peer_fields", ()):
                 return self._peer_srcP(p, unfold)   # [R17 D90] the k-th received-collective peer input of the request
+            if idx0 in self.pfx:
+                return self._pfx_srcP(p, unfold)
+            if idx0 in getattr(self, "witness_fields", ()):
+                return [("WIT", self.witness_fields[idx0], (lo0, hi0), (dL, dH), c)]
             if idx0 in self.weight_fields:
                 return [("W", _field_name(self.weight_fields[idx0]), (lo0, hi0), (dL, dH), c)]
             wr = getattr(self, "oracle_wmap", None)
@@ -371,6 +375,10 @@ class Prog(PeerReads):
                 return ("SPLITS", lo, hi)   # [M-0169 (4)] the request-owned derived split count, entry per sampling event
             if idx in getattr(self, "peer_fields", ()):
                 return self._peer_src(idx, lo, hi)   # [R17 D90] the k-th received-collective peer input of the request
+            if idx in self.pfx:
+                return self._pfx_src(idx, lo, hi)
+            if idx in getattr(self, "witness_fields", ()):
+                return ("WIT", self.witness_fields[idx], lo, hi)
             if idx in self.weight_fields:
                 return ("W", _field_name(self.weight_fields[idx]), lo, hi)
             wr = getattr(self, "oracle_wmap", None)
@@ -422,21 +430,27 @@ def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fal
     P = cls(label, desc, fields, tok_node=0, compact=compact)
     SI.set_supplied(P, [(n_user, None, reg)] if reg else [], d)
     # [R17 D90] a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
-    # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0).  Refused by name when the
-    # link table and the report disagree on how many user inputs there are.
+    # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0), and so is each WITNESS (a
+    # user input the table lists neither among `prompt_inputs` nor `peer_inputs`: the MoE align `schedule`), bound by its name.  Refused
+    # by name when the link table and the report disagree on how many user inputs there are.
     tl = os.path.join(d, "tp_links.json")
     if os.path.exists(tl):
         links = json.load(open(tl))
         names = list(links.get("user_inputs") or [])
         if len(names) != n_user:
             raise ValueError(f"{d}: tp_links.json names {len(names)} user inputs, derive-report has {n_user}")
+        listed = set(links.get("prompt_inputs", names[:1])) | set(links.get("peer_inputs") or ())
         for j, nm in enumerate(names):
-            if nm.startswith("peers_"):
-                if j not in P.inputs:
-                    raise ValueError(f"{d}: user input {j} ({nm}) is not an Input node of the Program")
+            peer, witness = nm.startswith("peers_"), nm not in listed
+            if (peer or witness) and j not in P.inputs:
+                raise ValueError(f"{d}: user input {j} ({nm}) is not an Input node of the Program")
+            if peer:
                 P.peer_fields[j] = [(0, int(nm[len("peers_"):]))]
+            elif witness:
+                P.witness_fields[j] = nm
         P.tp = {"rank": links.get("rank"), "world": links.get("world")}
         P.tp_links = links.get("links") or []
+    PX.load_layout(P, d)
     return P
 
 
@@ -444,9 +458,9 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
     # [R17 mfast, rev F-r17-12] the checker reads the FILES OF RECORD and nothing beside them: a compact copy written into the fold dir by
     # the record's producer (unit 7's sidecars, withdrawn) is prover input whose content nothing the checker owns authenticates -- a forged
     # sidecar with the sources' true digests/sizes/sha256 pasted in was accepted (M-0497).  `instances.jsonl` itself may be stored in either
-    # form (F2, run_config.INSTANCES_SCHEMA_V2: node-space operand references as progressions); this loader keeps only the parameter-space
-    # "p" runs, which both forms list run by run, so its semantics do not depend on the form.  The form read is stated (LOAD_NOTES ->
-    # impl.config.fold_load) so two documents of one capture under two stores are distinguishable by content.
+    # form (F2, run_config.INSTANCES_SCHEMA_V2: operand references as progressions); this loader keeps only the parameter-space items --
+    # "p" runs and [GLM-5.3] "P" progressions, read without expansion (a scattered weight operand is ~1e6 runs) -- so its semantics do not
+    # depend on the form.  The form read is stated (LOAD_NOTES -> impl.config.fold_load) so two documents of one capture under two stores are distinguishable by content.
     # [R17 mfast n2, COORD R17-37 (2) / F-r17-15 (iii)] the two record files are hashed AS READ (one pass: every byte the loader consumes
     # goes through sha256 before it is decoded), and the digests are stated beside the form (LOAD_NOTES -> impl.fold_load[dir].program_sha256 /
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
@@ -477,9 +491,10 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
                 # the same references `Prog.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
                 # operand, possibly empty) so `operand_roots[k]` still names operand k below.
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
-                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] == "p"] for a in (o.get("operand_refs") or [])],
+                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # [X-09] the fold's own attribution when recorded
+                             "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
                              "operand_roots": o.get("operand_roots")})  # [R15 fp8] per-operand weight names (multi-weight Computes)
     if d not in LOAD_NOTES:     # a pre-header instances.jsonl (no schema line): the form is the default, the digests are still stated
         LOAD_NOTES[d] = {"source": "record files", "instances_schema": None, "operand_refs_form": "runs", "program_sha256": program_sha}
@@ -499,7 +514,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     # [R15 fp8] the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
     # not `n_input_nodes - 1`: a Record that is not width-homogeneous (FP8: e4m3 weights, f32 block scales, bf16 norms) is encoded as
     # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count no longer says how many prompt parameters there are.
-    p_idx = {r[1] for o in rows for a in (o.get("operand_refs") or []) for r in a if r[0] == "p"}
+    p_idx = {i for o in rows for a in (o.get("operand_refs") or []) for r in a for i in _p_indices(r)}
     w_param = max(p_idx) if p_idx else n_in - 1
     # [R17 D90] the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
     # (exact, even for a fold whose instances read no weight -- a fixture) and cross-checked against the instances' largest "p" index.
@@ -554,9 +569,9 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         for k, a in enumerate(o.get("operand_refs") or []):
             nm = oroots[k] if k < len(oroots) and oroots[k] else name
             for r in a:
-                if r[0] == "p" and r[1] == w_param:
-                    sp = span.setdefault(nm, [r[2], r[3]])
-                    sp[0], sp[1] = min(sp[0], r[2]), max(sp[1], r[3])
+                if (w := _p_w_span(r, w_param)) is not None:
+                    sp = span.setdefault(nm, [w[0], w[1]])
+                    sp[0], sp[1] = min(sp[0], w[0]), max(sp[1], w[1])
     byrange: dict[tuple[int, int], str] = {}
     for name, (lo, hi) in span.items():
         byrange.setdefault((lo, hi), name)
@@ -573,25 +588,19 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     return p
 
 
-from verity_vllm.program.compact import expand_mixed as _expand_mixed, n_crosses_step as _n_crosses_step  # noqa: E402  [R17 mfast]
+from verity_vllm.program.compact import expand_mixed as _expand_mixed, hash_operand as _hash_operand, n_crosses_step as _n_crosses_step, p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # noqa: E402  [R17 mfast; GLM-5.3 "P"]
 
 
 def _norm_T(spec: str) -> str:
     return _T_RE.sub("{T=*,", spec)
 
 
-# [R18 x09, F-r18-x09-1] The divergence REPORT of a step whose spec sequences differ.  The record ran difflib.SequenceMatcher
-# (autojunk=False) over the WHOLE step: O(n*m) worst case, and a prefill step of an LP-row request-wrapper Program is ONE step of
-# LP x layers x ops instances (329,730 for LP 1024 x 32 layers).  When the sequences differ throughout -- a Build for another target's
-# kernel families (#60: Hopper Build, L40S fold), or a displaced co-scheduled request under the `dag` within-step criterion -- that one
-# alignment ran 40 min to 3 h per leg at 100 % CPU, flat memory (measured n^2.2: 32 K items 13.8 s, 329.7 K items hours).  No verdict
-# depends on it: spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check; the alignment only fills
-# `first_divergences_T_normalised` ("the first 6 divergent opcodes, 3 examples each") and `n_divergent_opcodes`.  Now the common prefix
-# and suffix are located in O(n) and the matcher runs over the differing CORE only, over at most `_DIVERGENCE_WINDOW` items of each
-# side -- the first divergences lie at the start of the core, exactly where the report looks.  A core longer than the window is reported
-# truncated BY NAME (`divergence_window`): the count then covers the window, never a guess.  An equal step never enters this path, so a
-# PASS record's bytes are unchanged.  The matcher's cost is ~ W^2 x matching blocks (measured on a 9-op row with 5 of 9 equal: W 512
-# 0.1 s, 1024 0.8 s, 2048 6 s, 4096 49 s), so the window is 1024: <= 1 s per divergent step, whatever the step holds.
+# [R18 x09, F-r18-x09-1] The divergence REPORT of a step whose spec sequences differ.  difflib.SequenceMatcher over a WHOLE step is
+# O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, and a step differing throughout ran 40 min to 3 h per leg.
+# No verdict depends on it (spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check); it only fills
+# `first_divergences_T_normalised` and `n_divergent_opcodes`.  So the common prefix and suffix are located in O(n) and the matcher runs
+# over the differing CORE only, at most `_DIVERGENCE_WINDOW` items of each side (the first divergences lie at its start); a longer core
+# is reported truncated BY NAME (`divergence_window`).  An equal step never enters this path.  Cost ~ W^2 (W 1024: 0.8 s, 4096: 49 s).
 _DIVERGENCE_WINDOW = 1024
 
 
@@ -704,9 +713,8 @@ def _canonical_hash(P: Prog, seqs: list[list[int]], unfold: bool, canon_step_rel
         for i in idxs:
             r = P.inst[i]
             cs = canon_step_relative(P, i, seqs, unfold)
-            if compact:   # [R17 mfast] the record's BYTES: the run-per-tuple serialisation (canonical_sha256 is on X-09's record)
-                cs = [_expand_mixed(c) for c in cs]
-            h.update(json.dumps([r["spec"], r["form"], [list(map(list, c)) for c in cs], r["out"]],
+            ops = [_hash_operand(c) for c in cs] if compact else [list(map(list, c)) for c in cs]   # the record's BYTES (compact.hash_operand)
+            h.update(json.dumps([r["spec"], r["form"], ops, r["out"]],
                                 separators=(",", ":"), default=str).encode())
         h.update(b"|step|")
     return h.hexdigest()
@@ -732,9 +740,11 @@ def _canon_step_relative(P: Prog, i: int, seqs: list[list[int]], unfold: bool):
         for s, idxs in enumerate(seqs):
             for j, ii in enumerate(idxs):
                 pos[ii] = (s, j)
-        P._pos_cache, P._pos_cache_key = pos, (unfold, id(seqs))
-    out = []
+        P._pos_cache, P._pos_cache_key, P._pos_ident = pos, (unfold, id(seqs)), not unfold and seqs == P.steps
     compact = getattr(P, "compact", False)
+    if compact and P._pos_ident:   # the remap is the identity: canon's normal-form progressions compare exactly as their runs
+        return [tuple(arg) for arg in P.canon(i, False)]
+    out = []
     for arg in P.canon(i, unfold):
         if compact:   # [R17 mfast] the record's per-run tuples: each run's producer is remapped on its own
             arg = _expand_mixed(arg)
@@ -807,12 +817,15 @@ class Options:
                             help="A is a padded program: drop pad kinds, follow muxes")
     label_a: str = option("--label-a", default="derived")
     label_b: str = option("--label-b", default="oracle")
+    operands: str = option("--operands", default="runs", choices=("runs", "progressions"), help="both sides' operand form (progressions: compact)")
 
 
 def main(a: Options) -> int:
-    t0 = time.time()
-    A = load_derived(a.a, a.label_a)
-    B = load_oracle(a.b, a.label_b) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b)
+    t0, cp = time.time(), a.operands == "progressions"
+    if cp and a.unfold_a:
+        raise UsageError("--operands progressions compares without unfolding only: an unfolded side's operands are runs")
+    A = load_derived(a.a, a.label_a, compact=cp)
+    B = load_oracle(a.b, a.label_b, compact=cp) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b, compact=cp)
     res = {"schema": "cb-a/compare/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "a_dir": a.a, "b_dir": a.b, "unfold_a": a.unfold_a}
     res["digests"] = {"a": A.digest, "b": B.digest, "equal": A.digest == B.digest}
     res["histograms"] = {"a": spec_histograms(A), "b": spec_histograms(B)}

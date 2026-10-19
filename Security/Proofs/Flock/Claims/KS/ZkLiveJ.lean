@@ -13,8 +13,8 @@ tables are `T 0, …, T (n - 1)` (`tabsJ`), and the strategy after `Commit` is a
 `ZkLiveAtJ` is `ZkLiveAt` at every table: the escapes at injective fork rounds of every table, and at each tape, table
 `j` and table `C` of its word, live strategies with common roots whose verdict bounds the deployed runs accepting with
 no column of table `j` off `C`, a verdict on each table's output the decoder is right for, table `j`'s implying
-acceptance with no level-0 opening off `C`, and table `j`'s events bounding its `Adv`s and self-clash. It gives
-`ZkSessJ` (`zkSessJ_of_liveJ`), so every table's bound (`zk_tableBoundJAt_of_liveJ`).
+acceptance with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bounding its `Adv`s and
+self-clash. It gives `ZkSessJ` (`zkSessJ_of_liveJ`), so every table's bound (`zk_tableBoundJAt_of_liveJ`).
 
 At the deployed masked record, `T j` is C-Flock ZK's padded table of the statement's table `j` (`zkTabs`, `zkTab` at
 table `j`'s layout, link layout and `Zk.schedule`'s schedule), at C-Flock ZK's parameters (`zkTab_m1`) and
@@ -184,8 +184,8 @@ hypothesis on the deployed prover, the masked session's tables `T 0, …` up to 
 prover has escapes at every table `j`'s fork rounds `rd j`, no two one, such that, at each tape, each table `j` and
 each table `C` of its word `Ok` allows, live strategies `σL` whose roots agree bound the deployed runs accepting with
 no column of table `j` off `C` by their verdict `pL`, the decoder is right for a verdict `ok` on each table's output,
-table `j`'s implying it accepted with no level-0 opening off `C`, and table `j`'s events bound the simulated
-strategies' `Adv`s and self-clash after `Commit` at table `j` (`simAtJZ`). -/
+table `j`'s implying it accepted with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound
+the simulated strategies' `Adv`s and self-clash after `Commit` at table `j` (`simAtJZ`). -/
 def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
     (T : ℕ → TabZK 𝔽 mPts) : Prop :=
@@ -209,8 +209,8 @@ def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D
           (fin : Fin (tabsJ (tables true x).length T).length → Fin 2 → Array ByteArray → List Msg)
           (capOf : Array ByteArray → Fin (tabsJ (tables true x).length T).length → Model.Cap D) (N : ℕ)
           (rootB₀ : Array ByteArray)
-          (_hok : ∀ o, ok (finJ T hj) o →
-            o.accepted = true ∧ ¬ Off₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o)
+          (_hok : ∀ o, ok (finJ T hj) o → o.accepted = true ∧
+            ¬ (Off₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o ∧ ¬ SelfClashZ Hs (T j) o))
           (hdec : ∀ i, DecodesTable (outJ Hs (tabsJ (tables true x).length T)) ok pL opn dec one fin capOf
             (repJ A Hs (tabsJ (tables true x).length T)) i)
           (τ : Type) (_ : Fintype τ) (_ : Nonempty τ)

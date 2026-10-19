@@ -1,0 +1,92 @@
+{
+ "appended": [
+  {
+   "at": "2026-10-17T19:49:41Z",
+   "by": "vllm-int8-profile",
+   "note": "new entry only (role LLAMA31_8B_INT8, the verity-int8-channel127/v1 recipe pin made from LLAMA31_8B on vy-nebius-1 by run r20261017-194941-1d69)",
+   "repos": [
+    "verity-int8/Llama-3.1-8B-INT8"
+   ]
+  }
+ ],
+ "checkpoints": [
+  {
+   "config_sha256": "341d3592326ebb6b6f29ca479250cd894d6f0beedec19af5231b3e4780875d26",
+   "downloaded": false,
+   "files": {
+    "config.json": {
+     "digest_source": "recipe",
+     "sha256": "341d3592326ebb6b6f29ca479250cd894d6f0beedec19af5231b3e4780875d26",
+     "size": 1086
+    },
+    "generation_config.json": {
+     "digest_source": "base",
+     "sha256": "46097458fa97e44251c131fb384df37a37ec0a9334d7a001100782fc9f1fc0bd",
+     "size": 235
+    },
+    "model-00001-of-00004.safetensors": {
+     "digest_source": "recipe",
+     "sha256": "b0bf72d5dc2c12b9c4fe5157cddabf476d878d9502a992455612878d56184c7e",
+     "size": 3015319520
+    },
+    "model-00002-of-00004.safetensors": {
+     "digest_source": "recipe",
+     "sha256": "9799674c4136b5ad476dcddeb7afbf5249fc6289265c3295aaff79b6257aa9fa",
+     "size": 2501997040
+    },
+    "model-00003-of-00004.safetensors": {
+     "digest_source": "recipe",
+     "sha256": "1720f03840074c9bdcfb513f086455c5e29602eced17c6b549b885d135d24f11",
+     "size": 2460012128
+    },
+    "model-00004-of-00004.safetensors": {
+     "digest_source": "recipe",
+     "sha256": "4aef61d5d8bf466cb8c362116c7e189f98b96d1e4d1dd850e8ae408931d54374",
+     "size": 1109435040
+    },
+    "model.safetensors.index.json": {
+     "digest_source": "recipe",
+     "sha256": "3ba4b0dcbb471ef0ccec0c8659b260407765c4932ac42c6696843460e529b13b",
+     "size": 43463
+    },
+    "special_tokens_map.json": {
+     "digest_source": "base",
+     "sha256": "32f404d626cf7b1b6eea36c241ae7cbd6ec29c777a8701ea48c0fe9ebb94c9b1",
+     "size": 459
+    },
+    "tokenizer.json": {
+     "digest_source": "base",
+     "sha256": "6b9e4e7fb171f92fd137b777cc2714bf87d11576700a1dcd7a399e7bbe39537b",
+     "size": 17209920
+    },
+    "tokenizer_config.json": {
+     "digest_source": "base",
+     "sha256": "590b9837d3c2a8790e2aaf920f4c69f9181c3ca8fe52e6579ad3a3f654e59a9b",
+     "size": 50642
+    }
+   },
+   "gated": false,
+   "int8_of": "unsloth/Llama-3.1-8B",
+   "local_path": "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7",
+   "note": "made offline by `verity-vllm int8-checkpoint` (verity-int8-channel127/v1) from the unsloth/Llama-3.1-8B pin; no hub repo holds it",
+   "recipe": {
+    "base_repo": "unsloth/Llama-3.1-8B",
+    "base_revision": "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814",
+    "id": "verity-int8-channel127/v1"
+   },
+   "repo": "verity-int8/Llama-3.1-8B-INT8",
+   "resolved_at": "2026-10-17T19:49:41Z",
+   "resolved_by": "vllm-int8-profile",
+   "revision": "723d342ac443b040931242c768df342b0f6f15a7",
+   "role": "LLAMA31_8B_INT8",
+   "safetensors_sha256": {
+    "model-00001-of-00004.safetensors": "b0bf72d5dc2c12b9c4fe5157cddabf476d878d9502a992455612878d56184c7e",
+    "model-00002-of-00004.safetensors": "9799674c4136b5ad476dcddeb7afbf5249fc6289265c3295aaff79b6257aa9fa",
+    "model-00003-of-00004.safetensors": "1720f03840074c9bdcfb513f086455c5e29602eced17c6b549b885d135d24f11",
+    "model-00004-of-00004.safetensors": "4aef61d5d8bf466cb8c362116c7e189f98b96d1e4d1dd850e8ae408931d54374"
+   }
+  }
+ ],
+ "hf_home": "/workspace/hf",
+ "schema": "verity-vllm/checkpoints/v1"
+}

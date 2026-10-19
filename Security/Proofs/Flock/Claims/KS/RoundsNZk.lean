@@ -1,16 +1,17 @@
 import Proofs.Flock.Claims.KS.RoundsN
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 
 /-!
 # The coins each recorded masked round issues
 
-`RoundsN` at `--zk`: where a masked rep accepts, every round of its stream issued the number of coins the statement
-fixes, whatever the hashes (`ReadsN`): the masked replay's, zerocheck's and lincheck's at `m` and `kLog`
-(`replayWith_readsN`), the ring switch's at its claims (`rsNs`), masked Ligerito's at the schedule (`ligNsZ`, the plain
-count with the lane phase's `ρ` pair after the last lane challenge) and the inner proof's (`innerNsZ`: `ε`, the ten
-constraints' `γ`s, `β` and the `Q` column queries), in that order (`repNsZ`, `zkVerifyRepWith_readsN`). So each rep
-stream of an accepted masked record issued its table's `zkRepNs` (`streams_ns_zk`), its rounds in `spec.repStreams`
-order the session's `zkNs` (`rounds_ns_zk`), and custody reads each round message's coin at that count
-(`custody_vals_zk`).
+`RoundsN` for `--zk`. Where a masked rep accepts, every round of its stream issued the number of coins the statement
+fixes, whatever the hashes (`ReadsN`): the masked replay's zerocheck and lincheck at `m` and `kLog` (`zcNs`, `lcNs`, as
+plain; `replayWith_readsN`), the ring switch's at its claims (`rsNs`), masked Ligerito's at the `--zk` schedule
+(`zkLigNs`: the plain count with the lane phase's `ρ` pair after the last lane challenge; `zkLigeritoWith_readsN`) and
+the inner proof's `ε`, its ten batching coins, `β` and its `Q` column queries (`innerNs`; `verifyInnerWith_readsN`), in
+that order (`zkRepNs`, `zkVerifyRepWith_readsN`). So each rep stream of an accepted masked record issued its table's
+`zkRepNsOf` (`streams_ns_zk`), its rounds in `spec.repStreams` order the session's `zkNs` (`rounds_ns_zk`), and custody
+reads each round message's coin at that count (`custody_vals_zk`).
 -/
 
 namespace FlockDeploy
@@ -19,8 +20,6 @@ open Flock Transcript FlockSoundness.Refine
 
 /-! ## The masked replay and the inner proof -/
 
-/-- **The masked replay's coins are zerocheck's and lincheck's**, at `m` and `kLog`, and it hands the inner proof three
-constraints. -/
 theorem replayWith_readsN (hs : Hashes Flock.V) {st : Setup} {lay : Zk.PadLayout} {p : Proof} {root : ByteArray}
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (h : Zk.replayWith hs st lay p root t = .ok (rp, t')) :
     t'.rounds = t.rounds ∧ t'.k = t.k + (zcNs st.m ++ lcNs st.kLog).length ∧
@@ -62,7 +61,8 @@ theorem replayWith_readsN (hs : Hashes Flock.V) {st : Setup} {lay : Zk.PadLayout
       obtain ⟨-, nn₃, tt₃, rr₃, kk₃, hb⟩ := sampleWith_bind hs hb
       obtain ⟨rfl, rfl⟩ := pure_ok hb
       rw [kk₂.2, kk₁.2, kk₂.1, kk₁.1] at nn₃
-      exact ⟨nn₃, by rw [rr₃, kk₂.2, kk₁.2], by rw [kk₃, kk₂.1, kk₁.1], _, rfl⟩) (st.kLog - 6) 0 _ t₁₇ t₁₈ s' hloop'
+      exact ⟨nn₃, by rw [rr₃, kk₂.2, kk₁.2], by rw [kk₃, kk₂.1, kk₁.1], _, rfl⟩) (st.kLog - 6) 0 _ t₁₇ t₁₈ s'
+        hloop'
   try dsimp only at h
   cases hf : st.fold.folded ((t₁₅.rounds[t₁₅.k]!).coins.getD 0 0) ((t₁₆.rounds[t₁₆.k]!).coins.getD 0 0)
       (skipWeights ((t₁₀.rounds[t₁₀.k]!).coins.getD 0 0)) (s.2.extract 0 (st.kLog - 6)) s'.2 with
@@ -95,22 +95,18 @@ theorem replayWith_readsN (hs : Hashes Flock.V) {st : Setup} {lay : Zk.PadLayout
     simp only [zcNs, lcNs, List.length_append, List.length_cons, List.length_nil, List.length_replicate]
     omega
   · refine readsN_append (readsN_cons n₇ rfl (readsN_cons n₈ rfl (readsN_cons n₁₁ (by omega) R₁₂))) ?_
-      (readsN_append (readsN_append (readsN_cons n₁₆ rfl (readsN_cons n₁₇ rfl (readsN_nil _ _))) rfl R₁₈) ?_
-        (readsN_cons n₂₀ rfl (readsN_nil _ _)))
-    · simp only [zcNs, List.length_append, List.length_cons, List.length_nil, List.length_replicate]
-      omega
-    · simp only [List.length_append, List.length_cons, List.length_nil, List.length_replicate]
-      omega
+      (readsN_append (readsN_append (readsN_cons n₁₆ rfl (readsN_cons n₁₇ rfl (readsN_nil _ _))) ?_ R₁₈) ?_
+        (readsN_cons n₂₀ rfl (readsN_nil _ _))) <;>
+      simp only [zcNs, List.length_append, List.length_cons, List.length_nil, List.length_replicate] <;> omega
 
-/-- The inner proof's coins at `c` constraints before the triple's: `ε`, the `c + 3` constraints' `γ`s, `β` and the `Q`
-column queries. -/
-def innerNsZ (c : ℕ) : List ℕ := [1, c + 3, 1, Zk.Q]
+/-- The inner proof's coins at its constraints' count: `ε`, the batching coins of those and the triple's three, `β`,
+and the `Q` column queries. -/
+def innerNs (n : ℕ) : List ℕ := [1, n + 3, 1, Zk.Q]
 
-/-- **The inner proof's coins** (`innerNsZ`) at its `cons`. -/
 theorem verifyInnerWith_readsN (hs : Hashes Flock.V) {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128}
     {cons : Array (String × Zk.Lin)} {t t' : Transcript} {u : Unit}
     (h : Zk.verifyInnerWith hs lay pr finalC cons t = .ok (u, t')) :
-    t'.rounds = t.rounds ∧ t'.k = t.k + (innerNsZ cons.size).length ∧ ReadsN t.rounds t.k (innerNsZ cons.size) := by
+    t'.rounds = t.rounds ∧ t'.k = t.k + (innerNs cons.size).length ∧ ReadsN t.rounds t.k (innerNs cons.size) := by
   unfold Zk.verifyInnerWith at h
   simp only [liftTM_V] at h
   obtain ⟨-, h⟩ := check_bind h
@@ -140,31 +136,22 @@ theorem verifyInnerWith_readsN (hs : Hashes Flock.V) {lay : Zk.PadLayout} {pr : 
       obtain ⟨-, hb⟩ := check_bind hb
       obtain ⟨rfl, rfl⟩ := pure_ok hb
       exact ⟨rfl, rfl⟩) _ _ _ _ _ hloop
+  have hsz : (cons ++ Zk.triple lay ((t₂.rounds[t₂.k]!).coins.getD 0 0) pr.rho pr.sigma).size = cons.size + 3 := by
+    simp [Zk.triple]
+  rw [hsz] at n₅
   rw [k₂.2, k₁.2, k₂.1, k₁.1] at n₃
   rw [k₄.2, r₃, k₂.2, k₁.2, k₄.1, kk₃, k₂.1, k₁.1] at n₅
   rw [k₆.2, r₅, k₄.2, r₃, k₂.2, k₁.2, k₆.1, kk₅, k₄.1, kk₃, k₂.1, k₁.1] at n₇
   rw [k₈.2, r₇, k₆.2, r₅, k₄.2, r₃, k₂.2, k₁.2, k₈.1, kk₇, k₆.1, kk₅, k₄.1, kk₃, k₂.1, k₁.1] at n₉
-  simp only [Array.size_append, Zk.triple, List.size_toArray, List.length_cons, List.length_nil] at n₅
-  refine ⟨by rw [hr₁₀, r₉, k₈.2, r₇, k₆.2, r₅, k₄.2, r₃, k₂.2, k₁.2], ?_, ?_⟩
-  · rw [hk₁₀, kk₉, k₈.1, kk₇, k₆.1, kk₅, k₄.1, kk₃, k₂.1, k₁.1]
-    rfl
-  · exact readsN_cons n₃ rfl (readsN_cons n₅ rfl (readsN_cons n₇ rfl (readsN_cons n₉ rfl (readsN_nil _ _))))
-
-/-- **Level 0's lane-phase constraints are two.** -/
-theorem ligeritoConstraints_size {lay : Zk.PadLayout} {rc : Zk.L0Rec} {lg : LigeritoProof} {msgs : Zk.Level0Msgs}
-    {v : Array (String × Zk.Lin)} (h : Zk.ligeritoConstraints lay rc lg msgs = .ok v) : v.size = 2 := by
-  unfold Zk.ligeritoConstraints at h
-  dsimp only at h
-  split at h
-  · obtain ⟨_, h0, _⟩ := ebind_ok h; cases h0
-  · obtain ⟨_, -, h⟩ := ebind_ok h
-    obtain ⟨_, -, h⟩ := ebind_ok h
-    cases h
-    rfl
+  refine ⟨by rw [hr₁₀, r₉, k₈.2, r₇, k₆.2, r₅, k₄.2, r₃, k₂.2, k₁.2], ?_,
+    readsN_cons n₃ rfl (readsN_cons n₅ rfl (readsN_cons n₇ rfl (readsN_cons n₉ rfl (readsN_nil _ _))))⟩
+  rw [hk₁₀, kk₉, k₈.1, kk₇, k₆.1, kk₅, k₄.1, kk₃, k₂.1, k₁.1]
+  rfl
 
 /-! ## Masked Ligerito -/
 
-/-- `queryLevel0With lv`: level 0's query coins, then its consistency coins (`qNs`). -/
+open FlockSoundness.Discharge.ZkExec in
+/-- `Zk.queryLevel0With lv`: level 0's query coins, then its consistency coins (`qNs`). -/
 theorem queryLevel0With_readsN {β : Type} (hs : Hashes Flock.V) {ms : MerkleScheme} {p : LigeritoProof}
     {lv : Flock.Level} {cap : Array ByteArray} {fold : Array F256} (hq : lv.q ≠ 0)
     {f : Array ℕ × Array F128 × F256 → LM β} {st st' : LState} {t t' : Transcript} {b : β}
@@ -200,21 +187,45 @@ theorem queryLevel0With_readsN {β : Type} (hs : Hashes Flock.V) {ms : MerkleSch
     exact ⟨readsN_cons hn₄ rfl (readsN_cons hn₆ rfl (readsN_nil _ _)), _, _, _, by rw [hr₆, e₅r],
       by rw [hk₆, e₅k], h₂⟩
 
-/-- The masked lane loop's coins at step `i` of `k0`: one lane challenge, and after the last the `ρ` pair. -/
-def laneNsZ (k0 i _x : ℕ) : List ℕ := if i + 1 = k0 then [2, 2, 2] else [2]
+/-- The masked lane loop: each of its `k0` steps reads one `K` coin, and the last two more (the lane phase's `ρ`
+pair), so `n ≥ 1` steps read `n + 2` coins of two field elements. -/
+theorem lforIn_lanes_readsN {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (k0 : ℕ)
+    (hbody : ∀ i s st t b st' t', i < k0 → body i s st t = .ok ((b, st'), t') →
+      t'.rounds = t.rounds ∧ t'.k = t.k + (if i + 1 = k0 then 3 else 1) ∧
+        ReadsN t.rounds t.k (List.replicate (if i + 1 = k0 then 3 else 1) 2) ∧ ∃ s', b = .yield s') :
+    ∀ (n a : ℕ) (s : σ) (st : LState) (t : Transcript) (out : σ) (st' : LState) (t' : Transcript),
+      a + n = k0 → forIn (List.range' a n) s body st t = .ok ((out, st'), t') →
+      t'.rounds = t.rounds ∧ t'.k = t.k + (n + if n = 0 then 0 else 2) ∧
+        ReadsN t.rounds t.k (List.replicate (n + if n = 0 then 0 else 2) 2) := by
+  intro n
+  induction n with
+  | zero =>
+    intro a s st t out st' t' _ h
+    simp only [List.range'_zero, List.forIn_nil] at h
+    obtain ⟨rfl, rfl, rfl⟩ := lpure_ok h
+    exact ⟨rfl, by simp, readsN_nil _ _⟩
+  | succ n ih =>
+    intro a s st t out st' t' ha h
+    rw [List.range'_succ, List.forIn_cons] at h
+    obtain ⟨b, st₁, t₁, h₁, h₂⟩ := lbind_ok h
+    obtain ⟨hr₁, hk₁, R₁, s', rfl⟩ := hbody a s st t b st₁ t₁ (by omega) h₁
+    obtain ⟨hr, hk, R⟩ := ih (a + 1) s' st₁ t₁ out st' t' (by omega) h₂
+    rw [hr₁] at R
+    have hc : (if a + 1 = k0 then 3 else 1) + (n + if n = 0 then 0 else 2) = n + 1 + 2 := by
+      by_cases hn : n = 0
+      · rw [ite_eq_left (show a + 1 = k0 by omega), ite_eq_left hn]
+        omega
+      · rw [ite_eq_right (show ¬ a + 1 = k0 by omega), ite_eq_right hn]
+        omega
+    have e : List.replicate (n + 1 + if n + 1 = 0 then 0 else 2) 2 =
+        List.replicate (if a + 1 = k0 then 3 else 1) 2 ++ List.replicate (n + if n = 0 then 0 else 2) 2 := by
+      rw [← List.replicate_add, hc, ite_eq_right (Nat.succ_ne_zero n)]
+    refine ⟨hr.trans hr₁, ?_, e ▸ readsN_append R₁ (by rw [hk₁, List.length_replicate]) R⟩
+    rw [hk, hk₁, ite_eq_right (Nat.succ_ne_zero n), Nat.add_assoc, hc]
 
-/-- The masked lane loop's steps `a, …, k0 − 1` read `k0 − a + 2` two-coin rounds. -/
-theorem loopNs_laneNsZ {k0 : ℕ} : ∀ (n a x : ℕ), a + n = k0 → n ≠ 0 →
-    loopNs (laneNsZ k0) (fun _ _ => 0) a n x = List.replicate (n + 2) 2
-  | 0, _, _, _, h => absurd rfl h
-  | 1, a, x, ha, _ => by simp [loopNs, laneNsZ, show a + 1 = k0 by omega]
-  | n + 2, a, x, ha, _ => by
-    rw [loopNs, loopNs_laneNsZ (n + 1) (a + 1) 0 (by omega) (by omega), laneNsZ, ite_eq_right (by omega)]
-    rfl
-
-/-- Masked Ligerito's coins at `sch`: the plain count's (`ligNs`), with the lane phase's `ρ` pair after the `k0` lane
-challenges. -/
-def ligNsZ (sch : Schedule) : List ℕ :=
+/-- Masked Ligerito's coins at `sch`: the plain count's (`ligNs`), with the lane phase's `ρ` pair, two `K` coins, after
+the `k0` lane challenges. -/
+def zkLigNs (sch : Schedule) : List ℕ :=
   [sch.n, 1] ++ List.replicate (sch.k0 + 2) 2 ++ [sch.n - sch.k0 + 1, 1] ++ [sch.n - sch.k0 + 1, 1] ++
     qNs (sch.levels.getD 0 default) ++ [1] ++
     loopNs (levelNs sch) (levelDim sch) 0 (sch.levels.size - 1) (sch.n - sch.k0 + 1)
@@ -225,7 +236,7 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
     (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (h2 : 2 ≤ sch.levels.size)
     (hq : ∀ i < sch.levels.size, (sch.levels.getD i default).q ≠ 0) {t t' : Transcript} {rc : Zk.L0Rec}
     (h : Zk.ligeritoWith hs ms sch T cap p basisAt zl t = .ok (rc, t')) :
-    t'.rounds = t.rounds ∧ t'.k = t.k + (ligNsZ sch).length ∧ ReadsN t.rounds t.k (ligNsZ sch) := by
+    t'.rounds = t.rounds ∧ t'.k = t.k + (zkLigNs sch).length ∧ ReadsN t.rounds t.k (zkLigNs sch) := by
   unfold Zk.ligeritoWith at h
   simp only [liftTM_V, liftLM_V] at h
   obtain ⟨-, h⟩ := check_bind h
@@ -248,8 +259,8 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
   have h₄ := lmodify_bind h₄
   obtain ⟨lane, st₁₀, t₁₀, h₁₀, h₄⟩ := lbind_ok h₄
   rw [lforIn_range_eq] at h₁₀
-  obtain ⟨hr₁₀, hk₁₀, R₁₀⟩ := lforIn_readsN_loop _ (fun _ => 0) (laneNsZ sch.k0) (fun _ _ => 0) (by
-      intro i v st tt b st' tt' hb
+  obtain ⟨hr₁₀, hk₁₀, R₁₀⟩ := lforIn_lanes_readsN _ sch.k0 (by
+      intro i v st tt b st' tt' _ hb
       obtain ⟨nn₁, r, tt₁, hr₁, hk₁, hb⟩ := lsampleKWith_bind hs hb
       have hb := lmodify_bind hb
       try dsimp only at hb
@@ -278,22 +289,20 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
         obtain ⟨m, tt₉, -, k₉, hb⟩ := nextMsg_bind hb
         have hb := lmodify_bind hb
         obtain ⟨rfl, rfl, rfl⟩ := lpure_ok hb
-        have e₃r : tt₃.rounds = tt.rounds := by rw [k₃.2, k₂.2, hr₁]
-        have e₃k : tt₃.k = tt.k + 1 := by rw [k₃.1, k₂.1, hk₁]
-        rw [e₃r, e₃k] at nn₄
-        rw [hr₄, e₃r, hk₄, e₃k] at nn₅
-        rw [laneNsZ, ite_eq_left hj]
-        refine ⟨by rw [k₉.2, k₈.2, k₇.2, k₆.2, hr₅, hr₄, e₃r], by rw [k₉.1, k₈.1, k₇.1, k₆.1, hk₅, hk₄, e₃k]; rfl,
-          readsN_cons nn₁ rfl (readsN_cons nn₄ rfl (readsN_cons nn₅ rfl (readsN_nil _ _))), _, rfl, rfl⟩
+        rw [k₃.2, k₂.2, hr₁, k₃.1, k₂.1, hk₁] at nn₄
+        rw [hr₄, k₃.2, k₂.2, hr₁, hk₄, k₃.1, k₂.1, hk₁] at nn₅
+        rw [ite_eq_left hj]
+        refine ⟨by rw [k₉.2, k₈.2, k₇.2, k₆.2, hr₅, hr₄, k₃.2, k₂.2, hr₁], ?_,
+          readsN_cons nn₁ rfl (readsN_cons nn₄ rfl (readsN_cons nn₅ rfl (readsN_nil _ _))), _, rfl⟩
+        rw [k₉.1, k₈.1, k₇.1, k₆.1, hk₅, hk₄, k₃.1, k₂.1, hk₁]
       · rw [ite_eq_right (show ¬ (i + 1 == sch.k0) = true by simp [hj])] at hb
         try simp only [pure_bind] at hb
         obtain ⟨m, tt₉, -, k₉, hb⟩ := nextMsg_bind hb
         have hb := lmodify_bind hb
         obtain ⟨rfl, rfl, rfl⟩ := lpure_ok hb
-        rw [laneNsZ, ite_eq_right hj]
-        exact ⟨by rw [k₉.2, hr₁], by rw [k₉.1, hk₁]; rfl, readsN_cons nn₁ rfl (readsN_nil _ _), _, rfl, rfl⟩)
-    sch.k0 0 _ _ t₉ lane st₁₀ t₁₀ h₁₀
-  rw [loopNs_laneNsZ sch.k0 0 _ (by omega) (by omega)] at hk₁₀ R₁₀
+        rw [ite_eq_right hj]
+        exact ⟨by rw [k₉.2, hr₁], by rw [k₉.1, hk₁], readsN_cons nn₁ rfl (readsN_nil _ _), _, rfl⟩)
+    sch.k0 0 _ _ t₉ lane st₁₀ t₁₀ (by omega) h₁₀
   try dsimp only at h₄
   obtain ⟨_, t₁₁, h₁₁, h₄⟩ := lift_bind h₄
   have k₁₁ := absorbBytes_ok h₁₁
@@ -384,6 +393,8 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
         simp only [qNs, List.length_append, List.length_replicate, List.length_cons, List.length_nil]
   obtain ⟨hrL, hkL, RL⟩ := hL
   obtain rfl := finalProgZ_ok hcont
+  have hk0' : ¬ sch.k0 = 0 := by omega
+  rw [ite_eq_right hk0'] at hk₁₀ R₁₀
   have e₃r : t₃'.rounds = t.rounds := by rw [k₃'.2, k₃.2, k₂.2, k₁.2]
   have e₃k : t₃'.k = t.k := by rw [k₃'.1, k₃.1, k₂.1, k₁.1]
   have e₇r : t₇.rounds = t.rounds := by rw [k₇.2, k₆.2, hr₅, e₃r]
@@ -391,8 +402,7 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
   have e₉r : t₉.rounds = t.rounds := by rw [k₉.2, hr₈, e₇r]
   have e₉k : t₉.k = t.k + 2 := by rw [k₉.1, hk₈, e₇k]
   have e₁₁r : t₁₁.rounds = t.rounds := by rw [k₁₁.2, hr₁₀, e₉r]
-  have e₁₁k : t₁₁.k = t.k + 2 + (sch.k0 + 2) := by
-    rw [k₁₁.1, hk₁₀, e₉k, List.length_replicate]
+  have e₁₁k : t₁₁.k = t.k + 2 + (sch.k0 + 2) := by rw [k₁₁.1, hk₁₀, e₉k]
   have e₁₆r : t₁₆.rounds = t.rounds := by rw [k₁₆.2, k₁₅.2, hr₁₄, hr₁₃, hr₁₂, e₁₁r]
   have e₁₆k : t₁₆.k = t.k + 2 + (sch.k0 + 2) + 2 + 2 + 2 := by rw [k₁₆.1, k₁₅.1, hk₁₄, hk₁₃, hk₁₂, e₁₁k]
   rw [e₃r, e₃k] at n₅
@@ -405,7 +415,7 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
   rw [hr₁₇, e₁₆r, hk₁₇, e₁₆k] at RL
   refine ⟨by rw [hrL, hr₁₇, e₁₆r], ?_, ?_⟩
   · rw [hkL, hk₁₇, e₁₆k]
-    simp only [ligNsZ, qNs, List.length_append, List.length_replicate, List.length_cons, List.length_nil]
+    simp only [zkLigNs, qNs, List.length_append, List.length_replicate, List.length_cons, List.length_nil]
     omega
   · refine readsN_append (readsN_append (readsN_append (readsN_append (readsN_append (readsN_append
       (readsN_cons n₅ rfl (readsN_cons n₈ rfl (readsN_nil _ _))) ?_ R₁₀) ?_ R₁₂) ?_ R₁₃) ?_ R₁₄) ?_
@@ -414,15 +424,15 @@ theorem zkLigeritoWith_readsN (hs : Hashes Flock.V) (ms : MerkleScheme) (sch : S
 
 /-! ## One masked rep -/
 
-/-- A masked rep's coins at `m`, `kLog`, `claims` claims and the schedule `sch`: the replay's, the ring switch's,
-masked Ligerito's and the inner proof's at the replay's three constraints, the ring switch's two and the lane phase's
-two. -/
-def repNsZ (m kLog claims : ℕ) (sch : Schedule) : List ℕ :=
-  zcNs m ++ lcNs kLog ++ rsNs claims ++ ligNsZ sch ++ innerNsZ 7
+/-- A masked rep's coins at `m`, `kLog`, `claims` claims and the `--zk` schedule `sch`: the replay's, the ring
+switch's, masked Ligerito's and the inner proof's at its ten constraints (the replay's three, the ring switch's two,
+the lane phase's two and the triple's three). -/
+def zkRepNs (m kLog claims : ℕ) (sch : Schedule) : List ℕ :=
+  zcNs m ++ lcNs kLog ++ rsNs claims ++ zkLigNs sch ++ innerNs 7
 
 open FlockSoundness.Discharge.ZkExec in
 /-- **A masked rep's rounds issued its statement's coins**: when `Zk.verifyRepWith hs` accepts rep `r` of table `i` at
-the table's `--zk` schedule, whatever the hashes `hs` are, its stream's rounds issued `repNsZ` at `m`, `kLog` and
+the table's `--zk` schedule, whatever the hashes `hs` are, its stream's rounds issued `zkRepNs` at `m`, `kLog` and
 `2 + |extras|` claims, one count per round. -/
 theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
     {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
@@ -430,7 +440,7 @@ theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : 
     ∃ (stream : StreamRec) (extras : Array Claim),
       sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧
       st.extra sess.points = .ok extras ∧
-      stream.rounds.toList.map Round.n = repNsZ st.m st.kLog (2 + extras.size) sch := by
+      stream.rounds.toList.map Round.n = zkRepNs st.m st.kLog (2 + extras.size) sch := by
   obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := zk_schedule_seams _ _ _ hsch
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   unfold Zk.verifyRepWith at h
@@ -475,10 +485,17 @@ theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : 
   obtain ⟨lg, t₄, h₄, hrun'⟩ := bind_ok hrun
   clear hrun
   obtain ⟨rfl, rfl⟩ := pure_ok h₄
-  obtain ⟨hr₅, hk₅, R₅⟩ := verifyInnerWith_readsN hs hrun'
-  simp only [Array.size_append, List.size_toArray, List.length_cons, List.length_nil, Nat.reduceAdd] at R₂ hk₂
-  simp only [Array.size_append, hc₁, ligeritoConstraints_size hv, List.size_toArray, List.length_cons,
-    List.length_nil, Nat.reduceAdd] at R₅ hk₅
+  obtain ⟨-, hk₅, R₅⟩ := verifyInnerWith_readsN hs hrun'
+  have hsz : (#[({ (rp.claims[0]!) with value := Zk.claimCheck rp.claims[0]! zp.proof.ringSwitches[0]! } : Claim),
+      { (rp.claims[1]!) with value := Zk.claimCheck rp.claims[1]! zp.proof.ringSwitches[1]! }] ++ extras).size =
+      2 + extras.size := by simp [Nat.add_comm]
+  rw [hsz] at R₂ hk₂
+  have hcons : (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]!
+      zp.proof.ringSwitches[0]!)), ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]!
+      zp.proof.ringSwitches[1]!))] ++ lg).size = 7 := by
+    rw [Array.size_append, Array.size_append, hc₁, ligeritoConstraints_size hv]
+    rfl
+  rw [hcons] at R₅ hk₅
   rw [hr₁] at R₂
   rw [hr₂, hr₁] at R₃
   rw [hr₃, hr₂, hr₁] at R₅
@@ -487,23 +504,26 @@ theorem zkVerifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : 
     (by rw [hk₃, hk₂, hk₁]; simp only [List.length_append]; omega) R₅
   refine map_n_of_readsN R ?_
   rw [← c2, hk₅, hk₃, hk₂, hk₁]
-  simp only [Transcript.init, repNsZ, List.length_append]
+  simp only [Transcript.init, zkRepNs, List.length_append]
   omega
 
 /-! ## The masked session -/
 
-/-- A masked rep's coins at its table's statement: `repNsZ` at the table's `m`, `kLog`, claims and `--zk` schedule. -/
-def zkRepNs (spec : SessionSpec) (st : Stmt) : List ℕ :=
-  repNsZ st.m st.c.kLog (2 + spec.points * st.regions.size) (Claims.Flock.zkSched st.m).1
+/-- A masked rep's coins at its table's statement: `zkRepNs` at the table's `m`, `kLog`, claims and `--zk` schedule,
+none where the schedule refuses `m`. -/
+def zkRepNsOf (spec : SessionSpec) (st : Stmt) : List ℕ :=
+  match Zk.schedule st.m with
+  | .ok (sch, _) => zkRepNs st.m st.c.kLog (2 + spec.points * st.regions.size) sch
+  | .error _ => []
 
 /-- **Each masked rep stream's rounds issued its table's coins**: when the masked verdict accepts the record at any
 hashes and `liveOf` reads it, there are two rep streams per table, and the rounds of stream `k` (table `k / 2`'s rep
-`k % 2`) issued `zkRepNs spec sts[k / 2]`, one count per round, so the statement fixes every round's coin count. -/
+`k % 2`) issued `zkRepNsOf spec sts[k / 2]`, one count per round. -/
 theorem streams_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())
     (hl : liveOf spec record = .ok lv) :
     lv.streams.size = 2 * sts.size ∧
-      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = zkRepNs spec sts[k / 2]! := by
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].toList.map Round.n = zkRepNsOf spec sts[k / 2]! := by
   obtain ⟨hsz, hall⟩ := rep_zk hs hv hl
   refine ⟨hsz, fun k hk => ?_⟩
   obtain ⟨sess, sch, tPad, stream, c, -, hpn, hf, hrep, hfind, hfa⟩ := hall k hk
@@ -511,14 +531,14 @@ theorem streams_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array St
   rw [hfind] at hfind'
   cases hfind'
   have hx : extras.size = sts[k / 2]!.regions.size * sess.points.size := extraClaims_size hex
-  have hsch : (Claims.Flock.zkSched sts[k / 2]!.m).1 = sch := by
-    simp only [Claims.Flock.zkSched, hf]
-  rw [map_n_of_forall₂ hfa, hns, hx, hpn, zkRepNs, hsch, Nat.mul_comm]
+  rw [map_n_of_forall₂ hfa, hns, hx, hpn, zkRepNsOf]
+  simp only [hf]
+  rw [Nat.mul_comm]
   rfl
 
-/-- The masked session's coins, round by round in `spec.repStreams` order: each table's two reps' `zkRepNs`. -/
+/-- The masked session's coins, round by round in `spec.repStreams` order: each table's two reps' `zkRepNsOf`. -/
 def zkNs (spec : SessionSpec) (sts : Array Stmt) : List ℕ :=
-  (List.range (2 * sts.size)).flatMap fun k => zkRepNs spec sts[k / 2]!
+  (List.range (2 * sts.size)).flatMap fun k => zkRepNsOf spec sts[k / 2]!
 
 /-- **An accepted masked record's rounds issued the session's coins**: when the masked verdict accepts the record at
 any hashes and `liveOf` reads it, its rounds, in `spec.repStreams` order, issued `zkNs spec sts`, one count per
@@ -538,8 +558,8 @@ theorem rounds_ns_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stm
   rw [getElem!_pos lv.streams k hk']
   exact hall k hk'
 
-/-- **Custody reads each masked round's coin at the statement's count**: where the masked verdict accepts the record
-at any hashes and its custody passes on the round messages `mids`, each message's coin is read at its round's count in
+/-- **Custody reads each masked round's coin at the statement's count**: where the masked verdict accepts the record at
+any hashes and its custody passes on the round messages `mids`, each message's coin is read at its round's count in
 `zkNs spec sts`, by a recorded round of that count carrying the message. -/
 theorem custody_vals_zk (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt} {record : String}
     {proofs : Array ByteArray} {lv : Live} (hv : Zk.verifyWithM hs spec (tabsOf sts) record proofs = .ok ())

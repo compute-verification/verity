@@ -969,3 +969,39 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
             assert e.code == 2, argv
         else:
             raise AssertionError(f"{argv} is a usage error")
+
+
+#: a passing check whose Lean check regenerated pkg's lock (`check.py --regenerate`): its report and the record, in its run files
+_REGENERATING = ("import json, os; d = os.environ['RESEARCH_RUN_DIR']; os.makedirs(d + '/lean-audit/audit-pkg'); "
+                 "open(d + '/lean-audit/audit-pkg/lean-audit.json', 'w').write('{\"records\": 2}\\n'); "
+                 "json.dump({'passed': True, 'regenerated': {'pkg': d + '/lean-audit/audit-pkg/lean-audit.json'}}, "
+                 "open(d + '/lean-audit/audit.json', 'w')); "
+                 "json.dump({'schema': 'research/result/v0.1', 'kind': 'check/v1', 'run_id': os.environ['RESEARCH_RUN_ID'], "
+                 "'workload_fingerprint': {}, 'validation': {'status': 'passed', 'checker': 't'}, 'measurements': [], "
+                 "'steps': [{'step': 'agree', 'status': 'passed'}], 'artifacts': ['lean-audit/']}, open(d + '/result.json', 'w'))")
+
+
+def _relock(feat: Path, text: str, trailer: str | None) -> str:
+    (feat / "pkg").mkdir(exist_ok=True)
+    (feat / "pkg" / "lean-audit.json").write_text(text)
+    _git(feat, "add", "pkg/lean-audit.json")
+    _git(feat, "commit", "-q", "-m", "Lock records regenerated" + (f"\n\nRegenerated: {trailer}" if trailer else ""))
+    return _git(feat, "rev-parse", "HEAD")
+
+
+def test_a_commit_of_the_locks_a_passing_check_regenerated_merges_on_that_check(tmp_path, monkeypatch, capsys):
+    """CI-64 (Daniel through top, 18 Oct): a train's Lean check passes by regenerating records, and drive lands the train with
+    those locks committed on top.  That commit's tree is the one the check audited, byte for byte, so the check vouches for it;
+    other bytes, another file or no `Regenerated:` trailer don't."""
+    main, feat, tip = _repos(tmp_path)
+    assert _checked(tmp_path, feat, monkeypatch, _REGENERATING) == 0
+    _relock(feat, '{"records": 1}\n', "pkg/lean-audit.json")                     # not what the check wrote
+    monkeypatch.chdir(main)
+    assert merge_main(["feat", "--dry-run"]) == 3 and "no passing `check` attempt" in capsys.readouterr().err
+    _git(feat, "reset", "-q", "--hard", tip)
+    _relock(feat, '{"records": 2}\n', None)                                       # the bytes, but no trailer
+    assert merge_main(["feat", "--dry-run"]) == 3
+    capsys.readouterr()
+    _git(feat, "reset", "-q", "--hard", tip)
+    regen = _relock(feat, '{"records": 2}\n', "pkg/lean-audit.json")
+    assert merge_main(["feat", "--dry-run"]) == 0 and f"({regen[:12]}) may be merged into main" in capsys.readouterr().out

@@ -30,7 +30,8 @@ LD_REGS = {"ld_32x32b_x32": 32, "ld_32x32b_x16": 16, "ld_16x256b_x4": 16, "ld_16
            "ld_32x32b_x4": 4, "ld_32x32b_x1": 1, "ld16w_32x32b_x32": 32, "ld16w_32x32b_x16": 16,
            "ld_32x32b_x64": 64, "ld_32x32b_x128": 128}
 TENSOR = ("IGMMA", "QGMMA", "HGMMA", "BGMMA", "UTC", "LDTM", "IMMA", "HMMA", "BMMA")
-LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo"}
+LANE_ALONE = {"mix": "s_mix", "imad": "s_imad", "lop3": "s_lop3", "shfl": "s_shfl", "duo": "s_duo",
+              "redux": "s_redux", "reduce": "s_reduce"}
 
 
 def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
@@ -105,7 +106,7 @@ def slots_sm100(name: str, row: dict) -> dict | None:
 
 
 def lane_of(name: str) -> str | None:
-    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo)", name)
+    m = re.fullmatch(r"(?:wgspec|wgmix|tclane)_([a-z0-9]+)_r\d+|(?:tclaneU|wgU)_(mix|imad|lop3|duo|redux|reduce)", name)
     return (m.group(1) or m.group(2)) if m else None
 
 
@@ -208,6 +209,23 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
+            elif name.startswith("wgli_") and t_alone:
+                # the honest LI-CP-W loop (static-trip): its wgmma rate over the wgmma alone is the profile's tensor
+                # fraction, and dc90-licpw's measured cycles a MMA = the plain GEMM's cycles over it
+                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
+                                "issue": issue_rates(row, verdicts.get(name))}
+            elif name.startswith("wgbulk_") and t_alone:
+                # a TMA bulk op beside the saturated wgmma: the wgmma's rate over its alone rate (does the bulk steal the
+                # wgmma's issue), and the bulk's own words a SM-clock (UBLKCP a copy, UBLKRED a reduce; 1024 words an op)
+                op = "UBLKCP" if name.endswith("_cp") else "UBLKRED"
+                br = rate_of(row, op)
+                joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone,
+                                "bulk_words_per_clk": br * 1024 if br else None,
+                                "issue": issue_rates(row, verdicts.get(name))}
+            elif name in ("bulkcp", "bulkred"):
+                op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
+                br = rate_of(row, op)
+                joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
             elif name.startswith("wgU_sync") and t_alone:
                 joints[name] = {"tensor_fraction": rate_of(row, "IGMMA") / t_alone, "exact": True,
                                 "issue": issue_rates(row, verdicts.get(name)),
@@ -223,7 +241,7 @@ def analyze(family: str, d: Path) -> dict:
         for name, row in rows.items():
             if lane_of(name) or name.startswith(("ldmma_", "syncmma_")):
                 joints[name] = joint(name, row, rows, verdicts.get(name), t_alone)
-            elif name.startswith(("ldU_", "mmaU_", "syncU_")) and t_alone:
+            elif name.startswith(("ldU_", "mmaU_", "syncU_", "tcliU_", "tcbulk_")) and t_alone:
                 # OP_UNTIL points: both rates exact (neither includes time at the barrier)
                 j = {"tensor_fraction": rate_of(row, "UTC") / t_alone, "exact": True,
                      "issue": issue_rates(row, verdicts.get(name))}
@@ -231,7 +249,14 @@ def analyze(family: str, d: Path) -> dict:
                     j["ld_words"] = rate_of(row, "LDTM") * 32 * 32
                 if rate_of(row, "IMMA"):
                     j["sync_slots"] = rate_of(row, "IMMA") * SYNC_SLOTS
+                for op in ("UBLKCP", "UBLKRED"):   # a TMA bulk op moves 1024 words; its rate beside the saturated MMA
+                    if rate_of(row, op):
+                        j["bulk_words_per_clk"] = rate_of(row, op) * 1024
                 joints[name] = j
+            elif name in ("bulkcp", "bulkred"):
+                op = "UBLKCP" if name == "bulkcp" else "UBLKRED"
+                br = rate_of(row, op)
+                joints[name] = {"bulk_words_per_clk": br * 1024 if br else None}
         rho5 = t5["slots"] if t5 else 256.0
         for name in [n for n in joints if n.startswith("ldmma_")]:
             ld = loop_rate(rows[name], 1, ("LDTM",))

@@ -54,8 +54,9 @@ def PlainLiveAccAt (Ok : Claims.Msg → List 𝔽 → Prop) {x : Claims.Msg} {sp
           (N : ℕ) (rootB₀ : Array ByteArray)
           (hdec : ∀ j, DecodesTable
             (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leaf512 cap pend os)
-            (fun _ o => o.accepted = true ∧ ¬ Off₀L Refine.H512 Refine.enc512 Refine.leaf512
-              ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o)
+            (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Refine.leaf512
+              ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOf rootB₀ ⟨0, Nat.one_pos⟩) (Claims.Flock.oracleOf C) o ∧
+              ¬ SelfClashL Refine.H512 Refine.enc512 Refine.leaf512 ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
             pL opn dec one fin capOf
             (fun j => repsOf (D := Refine.Dig) execArith
               ([plainTab L m k0 l₀ l₁ rest ext hsch hm ptLocal hlay].get j))
@@ -177,11 +178,10 @@ theorem plain_tableBoundθAccAt (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V fal
     obtain ⟨ins, spec, sts, -, -, hset, -, -⟩ := acc_check hno
     exact plain_tableBoundθAccAt_live hs hin hset (hl x hno)
 
-/-- **The deployed plain verifier: KS**, at SHA-512 at the deployed relation, from the live sessions' bound with
-escapes on accepted runs at the statements some run accepts, and `Extendθ` at full-width columns. -/
-theorem plain_KS_of_liveAcc (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveAcc x)
-    (hext : Claims.Flock.Extendθ (deployPlain Readable.relation) (wordLen false) (wide false)) :
-    Claims.Flock.KS sha512 (deployPlain Readable.relation) :=
-  plain_KS_of_live (fun x hno => plainLive_of_acc (hl x hno)) hext
+/-- **The deployed plain verifier: KS**, at SHA-512 at the trimmed record at the deployed relation, from the live
+sessions' bound with escapes on accepted runs at the statements some run accepts. -/
+theorem plain_KS_of_liveAcc (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → PlainLiveAcc x) :
+    Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) :=
+  plain_KS_of_live fun x hno => plainLive_of_acc (hl x hno)
 
 end FlockDeploy.KS

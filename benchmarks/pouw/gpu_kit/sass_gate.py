@@ -69,6 +69,12 @@ WRITES = frozenset({"ST", "STG", "STS", "STSM", "RED", "REDG", "ATOM", "ATOMG", 
 WRITE_PREFIX = ("UBLK", "UTMASTG", "UTMARED", "REDAS", "UTCIMMA", "UTCQMMA", "UTCHMMA", "UTCOMMA")
 #: a store after the timed region whose value can carry the loop's results out of the kernel
 STORES = frozenset({"ST", "STG", "RED", "REDG", "ATOM", "ATOMG"})
+#: the only opcodes that may carry a tensor-memory operand (`tmem[...]`) on sm_100, the whole of PTX's tcgen05 data
+#: movement: LDTM (tcgen05.ld) reads TMEM into registers, STTM (tcgen05.st) writes registers into it, UTCCP (tcgen05.cp)
+#: copies shared memory into it, UTCSHIFT (tcgen05.shift) shifts within it, and the UTC*MMA tensor cores read an A operand
+#: from it and accumulate into it. Of these only LDTM moves a word out to registers (and so to lanes); the rest write it or
+#: feed the tensor core. A non-tcgen05 opcode with a tmem operand would be a new, unproven TMEM→register path.
+TMEM_OPS = frozenset({"LDTM", "STTM", "UTCCP", "UTCSHIFT", "UTCIMMA", "UTCQMMA", "UTCHMMA", "UTCOMMA"})
 _MANGLED = re.compile(r"_Z(\d+)")
 
 
@@ -237,6 +243,15 @@ def judge_kernel(fn, expect: list[dict[str, int]], forbid=FORBID, smem: list[dic
     if bad:
         reasons.append(f"forbid: {len(bad)} {'/'.join(sorted({insns[k].op[0] for k, _ in bad}))} (first at "
                        f"{_addr(fn, bad[0][0])}): the kernel spills; cut its live registers or its unroll")
+
+    tmem = [k for k, ins in enumerate(insns) if any("tmem[" in a for a in ins.args)]
+    rec["tmem"] = [f"{_addr(fn, k)} {insns[k].name}" for k in tmem[:H.MAX_LISTED]]
+    strange = [k for k in tmem if insns[k].op[0] not in TMEM_OPS]
+    if strange:
+        reasons.append(f"tmem: {len(strange)} {'/'.join(sorted({insns[k].op[0] for k in strange}))} (first at "
+                       f"{_addr(fn, strange[0])}) read or write tensor memory outside tcgen05: a word leaves tensor "
+                       "memory only by LDTM (tcgen05.ld), the one TMEM→register move; everything else only writes it or "
+                       "feeds the tensor core")
 
     clocks = clock_reads(fn)
     rec["clock_reads"] = [_addr(fn, k) for k in clocks]

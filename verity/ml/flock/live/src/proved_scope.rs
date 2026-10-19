@@ -3,7 +3,8 @@
 //! them, so a form no theorem covers is never accepted; the live server does the same ([`crate::StatementVerifier::refusal`]),
 //! so its verdicts are the Lean verifier's.
 //!
-//! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, so the Lean
+//! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, or, ZK off, plain
+//! SHA-512 leaves (a circuit whose META names [`crate::circuit::leaf_scheme_plain`]; `ProvedScope.leafOk`), so the Lean
 //! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
 //! all have hidden outputs, so the circuit's check is `scopeOkI` once the wires passed: the general instance form.
 

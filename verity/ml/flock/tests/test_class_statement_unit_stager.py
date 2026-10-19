@@ -152,6 +152,42 @@ def test_a_stagers_rounds_share_its_pin_and_are_each_the_statement_of_their_own_
 
 
 @pytest.mark.slow
+def test_a_bound_stager_names_its_definition_and_the_partition_and_its_rounds_their_global_units(tmp_path):
+    """Bound to a template query's partition of a two-member program, the stager's META names the toy as the circuit's one
+    template (core's digest of its Program), the partition and the program; a round's header names the units it is given; the
+    class is the unbound stager's; a round staged as another input set, on the one circuit, binds other frame domains; and
+    only a bound stager's round takes indices."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import descriptor_id, program_digest
+    from verity.ml.circuits.program import Program
+
+    args, rows, _kw = _toy(0)
+    program = P.mixed_population_program([(TOY, 3), (TOY, 5)])
+    query = P.template_instances_query([TOY])
+    obj = P.partition(program, query)
+    bind = {"partition": P.digest(obj), "program": obj["program"]}
+    st, plain = CS.UnitStager(*args, bind=bind), CS.UnitStager(*args)
+    meta = st.meta
+    assert meta["program_digests"] == {descriptor_id(TOY): program_digest(Program(TOY))}
+    assert meta["partition"] == {"rule": FC.PARTITION_V1, "digest": bind["partition"]} and meta["program_sha512"] == bind["program"]
+    assert st.class_sha512 == plain.class_sha512 and st.pin != plain.pin
+    st.stage(rows, tmp_path / "bound", b"k" * 32, indices=range(3, 8))
+    header = json.loads((tmp_path / "bound" / "pub.bin").read_bytes().split(b"\n", 1)[0])
+    assert header["units"]["indices"] == [3, 4, 5, 6, 7] and header["set"] == st.iset.name
+    st.stage(rows, tmp_path / "other-set", b"k" * 32, indices=range(3, 8), set_name="toy-c1")
+    h2 = json.loads((tmp_path / "other-set" / "pub.bin").read_bytes().split(b"\n", 1)[0])
+    assert h2["set"] == "toy-c1" and h2["circuit_sha512"] == header["circuit_sha512"] == st.pin
+    doms, doms2 = header["frame_v3"]["domain_ids"], h2["frame_v3"]["domain_ids"]
+    assert doms.keys() == doms2.keys() and all(doms[p] != doms2[p] for p in doms)
+    with pytest.raises(ValueError, match="global indices"):
+        st.stage(rows, tmp_path / "no-indices", b"k" * 32)
+    with pytest.raises(ValueError, match="global indices"):
+        plain.stage(rows, tmp_path / "plain", b"k" * 32, indices=range(5))
+    with pytest.raises(ValueError, match="exactly partition and program"):
+        CS.UnitStager(*args, bind={"partition": bind["partition"]})
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("which", ["toy", "anchor"])
 def test_a_lowering_output_that_is_not_the_references_is_refused_naming_the_first_such_instance(which, tmp_path, monkeypatch):
     """With bit 0 of the lowering's first output word wrong on every odd instance, the round is refused by one `evaluate_batch`

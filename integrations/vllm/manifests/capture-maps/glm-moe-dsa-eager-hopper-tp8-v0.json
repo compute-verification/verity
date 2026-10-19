@@ -17,8 +17,7 @@
    "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69"
   },
   "inventory_runs": {
-   "VLLM_USE_DEEP_GEMM=0": "r20261003-072626-b966 (inv-tp8-cutlass.json, ranks 0-7, the target profile; tests/check/fixtures/glm_moe_dsa)",
-   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0: DeepGemmFp8BlockScaledMMKernel; check-default.txt: 11 problems, 2 switches and 9 kernel expectations); r20261003-062327-45fd (ranks 0-7)",
+   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0) and r20261003-062327-45fd (ranks 0-7), with the pinned source's dynamic FlashInfer/DeepGEMM class and GLM-5.3 shapes confirmed by deepgemm_sm90_capture/v1 GO r20261013-115825-d357",
    "VLLM_BATCH_INVARIANT=1": "r20261003-062327-45fd (log-bi.txt: refused, no sparse MLA backend supports batch invariance)"
   }
  },
@@ -42,22 +41,20 @@
     0
    ],
    "num_sms": 132,
-   "batch_invariant": false,
-   "fp8_block_gemm": "cutlass"
+   "batch_invariant": false
   },
   "env": {
-   "VLLM_USE_DEEP_GEMM": "0",
    "VLLM_BATCH_INVARIANT": "0"
   },
   "switches": {
    "VLLM_BATCH_INVARIANT": false,
-   "VLLM_USE_DEEP_GEMM": false,
-   "deep_gemm_e8m0": false,
+   "VLLM_USE_DEEP_GEMM": true,
+   "deep_gemm_e8m0": true,
    "VLLM_USE_FUSED_MOE_GROUPED_TOPK": true,
    "sparse_mla_num_splits": null
   },
   "env_reasons": {
-   "VLLM_USE_DEEP_GEMM": "0 puts every dense FP8 linear on CutlassFp8BlockScaledMMKernel, the kernel fp8.ScaledMmFp8Block@1 models (exact-model-tested on H100 with VLLM_USE_DEEP_GEMM=0). The default (1) selects DeepGemmFp8BlockScaledMMKernel with ue8m0 activation scales and weights requantized to ue8m0 at load: a different function with no Program yet. The indexer's DeepGEMM logits kernels are gated on the package, not on this variable, and still run.",
+   "VLLM_USE_DEEP_GEMM": "unset: vLLM's true default selects FlashInferFp8DeepGEMMDynamicBlockScaledKernel on sm_90. It runs FlashInfer below 32 tokens and DeepGEMM fp8_gemm_nt from 32, with ue8m0 activation scales and GLM-5.3's f32 weight scales requantized to ue8m0 at load. FlashInferFp8Linear_v1 and DeepGemmFp8Linear_v1 model the two branches.",
    "VLLM_BATCH_INVARIANT": "1 is refused at engine build on sm_90: FLASH_ATTN_MLA_SPARSE, FLASHMLA_SPARSE and FLASHINFER_MLA_SPARSE_SM90 all report 'batch invariance not supported'. The Commit runs without it and replay uses the same batch layout.",
    "VERITY_SPARSE_MLA_NUM_SPLITS": "off by default (unset or 0): the target serves vLLM's standard setup, FA3's heuristic split-KV and its combine in FlashAttnMLASparseImpl.forward_mqa (every decode step and a prefill over more than TOPK keys), which binds only to a Program of the split and its combine (cursor/fa3-sparse-split-8c79). 1 pins num_splits=1 (verity_vllm.engine.sparse_mla, read back as the switch sparse_mla_num_splits = 1), whose function is SparseMlaHead_v1: H200 run r20261012-224647-aacf (20,480 of 20,480 words), and run r20261013-001802-7e95 through the switch (GLM53-DSA GO; the heuristic differs on 3,240 of its 57,344 words). Its price, run r20261013-001656-57d6 (one TP8 rank: 8 heads, top-2048, CUDA-graph replay): 13.6 -> 57.7 us per layer at B1, 15.9 -> 58.4 us at B8 (about +3.3 ms per decode step over 78 layers), 50.7 -> 64.4 us at B64, the same at 4k and 32k context. Serving with it is pending a decision; the meta inventory with it on is run r20261013-002721-e2f9, otherwise equal to the pinned one."
   }
@@ -66,8 +63,7 @@
   "attention_backend": "FLASH_ATTN_MLA_SPARSE (FlashAttnMLASparseImpl, masked_mha_available false): decode and long prefill take the absorbed MQA path",
   "prefill_backend": "FlashAttnPrefillBackend, vllm_flash_attn_version 3 (qk head 256, v head 256, 8 heads per rank, scale 1/16): the dense-mha route",
   "fp8_linear_kernel": {
-   "VLLM_USE_DEEP_GEMM=0": "CutlassFp8BlockScaledMMKernel",
-   "default": "DeepGemmFp8BlockScaledMMKernel"
+   "default": "FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInfer fp8_blockscale_gemm for M < 32, DeepGEMM fp8_gemm_nt for M >= 32"
   },
   "fp8_moe_backend": "TRITON (oracle.fp8: on sm_90 with 128x128 block FP8 and no expert parallelism Triton is moved to the front)",
   "router": "GroupedTopKRouter -> _C.grouped_topk (sigmoid, n_group 1, topk_group 1, renormalize, routed_scaling_factor 2.5 inside the kernel)",
@@ -156,22 +152,18 @@
    ],
    "note": "one rank of VocabParallelEmbedding: the row table[tok - START] when the rank owns the token, else zeros (START = rank * VS)"
   },
-  "fp8-block-linear": {
+  "fp8-block-linear-deepgemm": {
    "status": "exists",
    "definitions": [
-    "Fp8GroupQuant_v1",
-    "ScaledMmFp8BlockSharedScale_v1",
-    "ScaledMmFp8Block_v1"
+    "FlashInferFp8Linear_v1",
+    "DeepGemmFp8Linear_v1"
    ],
-   "note": "_C.per_token_group_fp8_quant + CUTLASS sm_90 blockwise GEMM (128x128 weight blocks, f32 promotion per 128-wide K block), exact-model-tested on H100 (VLLM_USE_DEEP_GEMM=0). Weights are the checkpoint words. The target's fp8_scale_construction (shared-per-block, the default) binds ScaledMmFp8BlockSharedScale_v1, ScaledMmFp8Block_v1's function with the scale products committed; per-coordinate binds ScaledMmFp8Block_v1."
-  },
-  "fp8-block-linear-deepgemm": {
-   "status": "tonight",
-   "definitions": [],
-   "note": "DeepGemmFp8BlockScaledMMKernel: fp8_gemm_nt with ue8m0 (power-of-two) activation scales and weights requantized to ue8m0 at load (requant_weight_ue8m0_inplace). Only if the serve keeps VLLM_USE_DEEP_GEMM=1.",
-   "branch": "cursor/hopper-block-fp8-8c79",
-   "alternative_to": "fp8-block-linear",
-   "when": "VLLM_USE_DEEP_GEMM=1 (the default)"
+   "captures": [
+    "deepgemm_capture"
+   ],
+   "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands.",
+   "branch": "cursor/deepgemm-sm90-8c79",
+   "when": "vLLM's defaults on sm_90"
   },
   "silu-mul": {
    "status": "exists",
@@ -186,7 +178,11 @@
     "SiluMulFp8BlockQuant_v1",
     "SiluMulFp8BlockQuant_v2"
    ],
-   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200"
+   "captures": [
+    "glm53_block_fp8_capture"
+   ],
+   "note": "ops.silu_and_mul_per_block_quant(intermediate_cache1, group_size=128, e4m3) (csrc fused_silu_mul_block_quant.cu), which TritonExperts.apply launches in place of silu_and_mul + the w2 input's group quant for SiLU with 128x128 block FP8, no LoRA and no DeepGEMM e8m0: per element f32 silu(gate) * up kept in registers (never rounded to bf16), per 128-group max |y|, scale = max / 448 floored by the kernel's minimum, then e4m3 RN of y / scale. fp8_moe.SiluMulFp8BlockQuant_v1{I, G} (Boolean _v2); its two outputs are the w2 Program's xq and sx; tests/properties/glm53_block_fp8_capture_gpu.py compares the served w2 input against it on the H200. Not the served path: with DeepGEMM's ue8m0 quant on (vLLM's sm_90 default) TritonExperts.apply runs silu_and_mul (silu-mul) and the ue8m0 group quant (fp8-moe-triton) instead",
+   "alternative_to": "silu-mul"
   },
   "bf16-add": {
    "status": "exists",
@@ -229,26 +225,38 @@
     "MoeRouterSigmoidBias_v1",
     "MoeRouterSigmoidBias_v2"
    ],
-   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on sm_120, not yet cc 9.0"
+   "captures": [
+    "sigmoid_router_capture"
+   ],
+   "note": "_C.grouped_topk(logits, n_group=1, topk_group=1, topk=8, renormalize=True, routed_scaling_factor=2.5, bias, scoring_func=1): sigmoid scores, + e_score_correction_bias for selection only, top-8 of 256, renormalise, x2.5. MoeRouterSigmoidBias_v1{E, TOPK, SCALE, KERNEL} per token row: inputs logits (Array(E, F32), the gate's f32 row) and bias (Array(E, F32), e_score_correction_bias); output (topk_weights Array(TOPK, F32), topk_ids Array(TOPK, I32)) as the kernel writes them; KERNEL block (single_group_topk_block_kernel, M <= 1024 at E = 256) or warp. Registered (moe.MoeRouterSigmoidBias_v1, Boolean _v2); its capture GO is on the H200 (sigmoid_router_capture, run r20261012-220523-6aa4) and on sm_120"
   },
   "fp8-moe-triton": {
    "status": "port",
    "definitions": [
     "Fp8GroupQuant_v1",
     "Fp8GroupQuant_v2",
-    "MoeExpertFp8BlockGemm_v1",
-    "MoeExpertFp8BlockGemm_v2",
-    "MoeExpertFp8BlockGemmW_v1",
-    "MoeExpertFp8BlockGemmW_v2"
+    "Fp8GroupQuantUe8m0_v1",
+    "Fp8GroupQuantUe8m0_v2",
+    "MoeExpertFp8Gemm_v1",
+    "MoeExpertFp8Gemm_v2",
+    "MoeExpertFp8GemmW_v1",
+    "MoeExpertFp8GemmW_v2"
    ],
-   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): per_token_group_quant_fp8 of the expert input (ue8m0 iff DeepGEMM e8m0 is in use: off with VLLM_USE_DEEP_GEMM=0), w13 launch, then the w2 launch with MUL_ROUTED_WEIGHT. Registered (fp8.Fp8GroupQuant_v1, fp8_moe.MoeExpertFp8BlockGemm(W)_v1, Booleans _v2); tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics on the H200"
+   "captures": [
+    "glm53_block_fp8_capture"
+   ],
+   "note": "Triton fused_moe with 128x128 block FP8 (Fp8MoeBackend.TRITON): the cc 9.0 oracle moves Triton to the front for dynamic-128 activations, static 128-block weights and no expert parallelism even when DeepGEMM is enabled by default. The expert input quant is per_token_group_quant_fp8 with use_ue8m0 = is_deep_gemm_e8m0_used(): True at vLLM's sm_90 defaults (DeepGEMM on), binding deepgemm.Fp8GroupQuantUe8m0_v1; False binding fp8.Fp8GroupQuant_v1. Both quants (the input's before the w13 launch, the activation's before the w2 launch) are this group quant; the launches are fp8_moe_experts.MoeExpertFp8Gemm(W)_v1{E, K, N, G, KB, SWAP, DOT} per (token, slot) pair, Booleans _v2; tests/properties/glm53_block_fp8_capture_gpu.py pins the launches' statics and compares both quants on the H200"
   },
   "fused-rmsnorm-triton": {
    "status": "port",
    "definitions": [
-    "RMSNormTriton_v1"
+    "DsaRMSNorm_v1",
+    "DsaRMSNorm_v2"
    ],
-   "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel: f32 tl.sum(x*x)/N, tl.rsqrt(+eps), * f32(w), to bf16. Its reduction tree and rsqrt must be pinned against the existing Triton RMSNorm family"
+   "captures": [
+    "glm53_fused_rmsnorm_capture"
+   ],
+   "note": "deepseek_v32 common/kernels.py _rms_norm inside _fused_norm_rope_kernel (program 2 q_a_layernorm N=2048, program 1 kv_a_layernorm N=512, eps 1e-5; one CTA of 128 threads a row): DsaRMSNorm_v1{N,EPS=1e-05} (DsaRMSNorm_v2 on bits), read from Triton 3.7.1's sm_90 PTX of the H200 run r20261013-001802-7e95: each thread an FMA chain over its 16- or 8-byte vector loads, warp xor-butterflies, (w0 + w2) + (w1 + w3), r = rsqrt.approx.ftz(eps + div.full(sum, N)), bf16((r * x) * w). Not RMSNormTriton_v1 (1024-column chunks from +0, 1 / sqrt.approx(fma(1/N, sum, eps))): the scales differ on about half of served rows and the words almost never, so the capture probes weights where they do. port until the H200 capture (tests/properties/glm53_fused_rmsnorm_capture_gpu.py) pins the kernel and a Build rule binds the taps"
   },
   "rmsnorm-cuda": {
    "status": "exists",
@@ -258,6 +266,9 @@
     "RMSNormCudaVector8_v2",
     "RMSNormFusedCudaVector8_v2"
    ],
+   "captures": [
+    "glm53_cuda_rmsnorm_capture"
+   ],
    "note": "vLLM's default non-batch-invariant BF16 rms_norm / fused_add_rms_norm width-8 paths. The Program records BLOCK because M < 256 launches rms_norm at min(N/8,1024) and fused_add_rms_norm at min(N,1024), while M >= 256 launches both at 256; the H200 capture checks M 1,42,43,64,256,2048 at GLM-5.3 N=6144 and DeepSeek-V4-Pro N=7168"
   },
   "fused-rope-triton": {
@@ -265,6 +276,9 @@
    "definitions": [
     "RoPEHeadGptJ_v2",
     "RoPEHeadGptJ_v3"
+   ],
+   "captures": [
+    "glm53_dsa_capture"
    ],
    "note": "interleaved (GPT-J) RoPE on the 64 rope dims inside _fused_norm_rope_kernel (k_pe) and fused_q (q_pe): f32 from the bf16 cos_sin_cache, out[2i] = bf16(fma(x1, c, -RN(x2 s))) and out[2i+1] = bf16(fma(x1, s, RN(x2 c))) (x1, x2 = x[2i], x[2i+1]): RoPEHeadGptJ_v2{D=64} per head. The H200 capture (tests/properties/glm53_dsa_capture_gpu.py, run r20261012-222325-ce92) settles both k_pe and q_pe on it; RoPEHeadGptJ_v1 differs on 48 and 384 of their words"
   },
@@ -275,12 +289,18 @@
     "AllReduceMultimem_v1",
     "AllReduceCustom_v1"
    ],
+   "captures": [
+    "glm53_tp8_allreduce_capture"
+   ],
    "note": "the TP8 all-reduce on 8xH200 at WORLD 8 (registry/tp_allreduce.py): FlashInfer's MNNVL all-reduce to 42 tokens at H=6144 (AllReduceMnnvl_v1, one-shot to 10 tokens, two-shot past), torch's multimem_all_reduce_ past it to 5461 (AllReduceMultimem_v1, parameterised by one f32 add tree per owner rank and FTZ, which the capture pins), at vLLM's defaults and with the custom all-reduce off alike: beside symmetric memory the custom all-reduce's cap is 256 KiB, inside FlashInfer's 0.5 MiB, so it takes none of them. Only under VLLM_ALLREDUCE_USE_SYMM_MEM=0 (the switch) does vLLM's custom all-reduce run, to 682 tokens (AllReduceCustom_v1, 2-stage there). Covered (tp_allreduce.CAPTURED; runs r20261013-085842-2147, r20261013-091723-e383 and r20261013-115512-5ff3): at H=6144, FlashInfer 1-42 and multimem 43-2048 both at the defaults and with the custom all-reduce off; at H=7168, FlashInfer 1-36 and multimem 37-2048 at the defaults, with the same trees and IEEE adds; and the custom all-reduce 43-682 under the switch. NCCL's routes are not covered. Port until a Build rule binds them. Every rank's partial is a tap, so the Program checks against the same root"
   },
   "fused-allreduce-rmsnorm": {
    "status": "port",
    "definitions": [
     "AllReduceRmsNormMnnvl_v1"
+   ],
+   "captures": [
+    "glm53_tp8_allreduce_capture"
    ],
    "note": "FlashInfer's allreduce_fusion on its MNNVL workspace (kARResidualRMSNorm, fp32_acc, weight_bias 0) on decode steps: AllReduceRmsNormMnnvl_v1 at the shot mnnvl_shot names, its sum * rcp(N) + eps contraction decided per shot by the H200 capture (FMA in both shots); on prefill steps the TP8 all-reduce (tp-allreduce) then fused_add_rms_norm (rmsnorm-cuda). _can_use_flashinfer reads neither the custom all-reduce nor symmetric memory, so the split at 42 tokens is the same at every setting. Covered (tp_allreduce.CAPTURED) at 1-42 tokens both at vLLM's defaults and with the custom all-reduce off. Port until a Build rule binds it"
   },
@@ -293,6 +313,9 @@
     "BatchedGemm_v2",
     "CublasSplitKGemm_v1",
     "CublasSplitKGemm_v2"
+   ],
+   "captures": [
+    "glm53_bf16_gemm_capture"
    ],
    "note": "cuBLAS/cuBLASLt BF16 GEMM at vLLM's default: a non-split output coordinate is core's Gemm_v2{K, N, HopperBF16WgmmaDot16_v1} (Boolean Gemm_v3); a split-K bf16 output is cublas_bf16.CublasSplitKGemm_v1{K, N, SPLIT_K, DOT} / _v2, with SPLIT_K pinned by bf16_gemm_check.default_cublas_split_k for cuBLAS 12.9.1 on the H200. q_nope_absorb and v_absorb (torch.bmm on the load-derived W_UK_T / W_UV views) are cublas_bf16.BatchedGemm_v1{NHL, K, N, DOT} / _v2. tests/properties/glm53_bf16_gemm_capture_gpu.py pins each kernel, grid, split count, cuBLAS version, hypothesis fit and every output word on the H200; its split-K-off run remains a named comparison variant"
   },
@@ -312,14 +335,25 @@
     "CublasSplitKGemmF32Out_v1",
     "CublasSplitKGemmF32Out_v2"
    ],
+   "captures": [
+    "glm53_bf16_gemm_capture"
+   ],
    "note": "GateLinear bf16 x bf16 -> f32, by M as bf16_gemm_check.dispatch_sm90 names vLLM's kernel: M <= 4 cuteDSL ll_bf16 dotprod (LlBf16DotprodGemm_v1{256, 6144, BS 128, VEC 8, FMA}; FMA the H200 capture decides), 5 <= M <= 16 ll_bf16 split-K (LlBf16SplitKGemm_v1{256, 6144, SPLIT_K 6, or 8 at M 9 and 11, TILE_K 256, WARPS 4, HopperBF16WgmmaDot16_v1}), M > 16 default cuBLAS torch.mm(out_dtype=f32), either GemmF32Out_v1 / _v2 or CublasSplitKGemmF32Out_v1 / _v2 at bf16_gemm_check.default_cublas_split_k's H200 split count. tests/properties/glm53_bf16_gemm_capture_gpu.py pins the dispatch, cuBLAS selection, hypotheses and words on the H200"
   },
   "fa3-prefill-attention": {
    "status": "port",
    "definitions": [
-    "AttentionFA3_v1"
+    "Attention_v4",
+    "AttentionHead_v4",
+    "AttnBlock_v4",
+    "Attention_v9",
+    "AttentionHead_v9",
+    "AttnBlock_v9"
    ],
-   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256. AttentionFA3_v1 is FA3 at head dim 128 (kBlockN 128, RescaleOBeforeGemm false); the head-256 tile geometry and rescale order must be pinned before it binds"
+   "captures": [
+    "glm53_fa3_prefill_capture"
+   ],
+   "note": "FA3 dense causal prefill (FlashAttnPrefillBackend.run_prefill_new_tokens -> flash_attn_varlen_func, fa_version 3) at qk head 256 / v head 256: vllm-flash-attn 506341a1 runs TileShape 128x80x256 (tile_size_fwd_sm90, hdim > 192, not local), 16 QK and 5 P.V wgmma k16 steps a block. RescaleOBeforeGemm (true above head 128) moves O's rescale before the next P.V gemm, the same per-element recurrence, so a row is Attention_v4{T,NH=8,KVH=8,D=256,BN=80,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM} (targets.attention_spec; Attention_v9 on bits). vLLM passes num_splits=0: per rank (8 heads, 132 SMs) a launch whose longest sequence has 321..1664 tokens splits KV (fa3_model.num_splits) and runs FlashAttnFwdCombine, which no Program models. port until the H200 capture (tests/properties/glm53_fa3_prefill_capture_gpu.py) pins the tile and a Build rule binds the tap"
   },
   "mla-sparse-attention": {
    "status": "port",
@@ -329,9 +363,17 @@
     "SparseMlaBlock_v1",
     "SparseMla_v2",
     "SparseMlaHead_v2",
-    "SparseMlaBlock_v2"
+    "SparseMlaBlock_v2",
+    "SparseMlaSplit_v1",
+    "SparseMlaHeadSplit_v1",
+    "SparseMlaSplit_v2",
+    "SparseMlaHeadSplit_v2"
    ],
-   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition. SparseMlaHead_v1 is FA3 at num_splits=1 (H200, run r20261012-224647-aacf: 20,480 of 20,480 words); forward_mqa passes no num_splits, so FA3's heuristic splits the keys and combines the partials, which the Definition does not state (3,835 of the same 20,480 words differ, run r20261012-222325-ce92). The target serves the heuristic (target.switches: sparse_mla_num_splits null), so this binds to a Program of the split and its combine, or to SparseMlaHead_v1 under VERITY_SPARSE_MLA_NUM_SPLITS=1 (target.env_reasons; run r20261013-001802-7e95: GLM53-DSA GO). Port until then"
+   "captures": [
+    "glm53_dsa_capture",
+    "glm53_fa3_split_capture"
+   ],
+   "note": "FlashAttnMLASparseImpl.forward_mqa -> FA3 flash_attn_varlen_func (FLASH_ATTN_MLA_SPARSE: bf16 MLA cache, no DCP): per query token the NHL heads over the row's valid_counts selected rows [kv_c 512 | k_pe 64] in the top-k's order, scale 1/16: SparseMla_v1{T=valid count,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}. FlashInfer's sparse path (FLASHINFER_MLA_SPARSE_SM90) runs only with an fp8 KV cache or a named --attention-backend and has no Definition. SparseMlaHead_v1 is FA3 at num_splits=1 (H200, run r20261012-224647-aacf: 20,480 of 20,480 words); forward_mqa passes no num_splits, so FA3's heuristic splits the keys and combines the partials, which the Definition does not state (3,835 of the same 20,480 words differ, run r20261012-222325-ce92). The target serves the heuristic (target.switches: sparse_mla_num_splits null), so this binds to a Program of the split and its combine, or to SparseMlaHead_v1 under VERITY_SPARSE_MLA_NUM_SPLITS=1 (target.env_reasons; run r20261013-001802-7e95: GLM53-DSA GO).. The Build binds the split: SparseMlaSplit_v1{T, NS, ...} over SparseMlaHeadSplit_v1 at the split count launch_num_splits derives (glm53_fa3_split_capture, H200 run r20261013-115914-f406)"
   },
   "dsa-indexer-q": {
    "status": "port",
@@ -345,6 +387,9 @@
     "DsaUe8m0Quant_v2",
     "DsaUe8m0Scale_v2"
    ],
+   "captures": [
+    "glm53_dsa_capture"
+   ],
    "note": "fused_q (Triton _fused_q_kernel, num_warps 1; the CuTe DSL branch needs capability >= 100): per head the interleaved RoPE of the first 64 dims and the ue8m0 FP8 quantisation (q_fp8, port 1), and the head weight times the q scale, 128^-0.5 and 32^-0.5 (weights, port 2): DsaIndexerQ_v1{H=32,D=128,ROPE=64} per token; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
   },
   "dsa-indexer-k": {
@@ -357,6 +402,9 @@
     "DsaUe8m0Quant_v2",
     "DsaUe8m0Scale_v2"
    ],
+   "captures": [
+    "glm53_dsa_capture"
+   ],
    "note": "_fused_norm_rope_kernel, program 0: k_norm (LayerNorm, eps 1e-6, f32 weight and bias), the interleaved RoPE of the first 64 dims and the ue8m0 FP8 quantisation, written as the cache row (128 e4m3 bytes + one f32 scale): DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06} per row; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
   },
   "dsa-mqa-logits": {
@@ -367,6 +415,9 @@
     "DsaMqaLogits_v4",
     "DsaMqaLogit_v4"
    ],
+   "captures": [
+    "glm53_dsa_capture"
+   ],
    "note": "DeepGEMM fp8_mqa_logits (prefill) / fp8_paged_mqa_logits (decode), clean_logits False: per (query row, key) the sum over the 32 heads of relu(q_h . k) * w_h in the kernels' order, each lane's first product contracted into its second add as nvcc emits it, times the key's scale: DsaMqaLogits_v3{N=keys,H=32,D=128} per row (DsaMqaLogit_v1, the source's order, differs on 828 of 19,513 prefill and 354 of 7,292 paged logits of the H200 capture, run r20261012-222325-ce92). Only a row's keys are written (clean_logits False), so only those columns are compared; port until a Build rule binds it"
   },
   "dsa-topk": {
@@ -374,6 +425,9 @@
    "definitions": [
     "DsaTopKShortRow_v1",
     "DsaTopKShortRow_v2"
+   ],
+   "captures": [
+    "glm53_dsa_capture"
    ],
    "when": "every row has at most TOPK = 2048 keys",
    "note": "top_k_per_row_prefill (prefill) / cooperative_topk (decode, at most 64 rows; else persistent_topk): a row of at most 2048 keys takes each kernel's shortcut, slot i = i when i < the row's length, else -1: DsaTopKShortRow_v1{TOPK=2048}. A longer row is a radix selection whose order (ties included) the kernels leave to their atomics, with no Definition; port until the H200 capture (tests/properties/glm53_dsa_capture_gpu.py) pins the kernel variant and a Build rule binds it"
@@ -383,7 +437,7 @@
   "module_hook": "the committer's forward hooks on the modules of its acquired classes whose forward runs (commit/committer/native_host.py _make_hook, _make_pre_hook): <module> for a tensor output, <module>/<k> for tuple element k, <module>/in for an acquired input",
   "sampler": "the committer's runner.sample wrap: runner.sampler/sampled_token_ids",
   "tp_partial": "TPPartialSource (acquire/sources/partial_source.py): a collective's rank-local input, <site>/part_rank<r> or <site>/shard_rank<r>",
-  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block",
+  "moe": "MoeBlockSource (acquire/sources/moe_source.py): moe/L<i>/<plane>, snapshotted after each kernel of the fused-MoE block, and on a TP rank <module>/out of a MoE module that does not all-reduce its output",
   "allreduce_norm": "TPPartialSource's fused_allreduce_rms_norm wrap (acquire/sources/allreduce_norm.py): on every call the partial as <norm>/part_rank<r>, copied before the call; on the FlashInfer path, where the norm module never runs, the returns as <norm>/0 and <norm>/1. On the all-reduce + RMSNorm path the norm module runs and the module hook binds those two names, so a step commits the same names on either path",
   "attention": "AttentionSource (acquire/sources/attention_source.py), on every attention layer: _sparse_indexer_and_attn's arguments before it runs (fused_norm_rope's q_c, kv_c_out and k_pe_out, the W_UK_T product, fused_q's outputs) and the layer's cache rows at the step's slot mapping, read from the caches fused_norm_rope was given; after it returns, the rows of output that forward_mqa's rows were up-projected into and topk_indices_buffer[:M, :TOPK]; impl.forward_mqa's return; impl.forward_mha's output argument after it returns (not bound with a chunked context). <attn>/<value> for the layer's values, <indexer>/<value> and <k_cache>/rows for the indexer's"
  },
@@ -870,7 +924,7 @@
     "M",
     "KVA"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1028,7 +1082,7 @@
     "M",
     "=NHL * QKH"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1097,7 +1151,7 @@
     "M",
     "=NHL * (DN + DV)"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1169,7 +1223,7 @@
    "target_only": false,
    "manifest_family": "instance_outputs",
    "commit": {
-    "name": "model.layers.{i}.self_attn/mqa_q",
+    "name": "model.layers.{i}.self_attn/q_pe",
     "binder": "attention"
    }
   },
@@ -1235,7 +1289,7 @@
    ],
    "note": "the rows of output forward_mqa's rows were up-projected into: every row on the sparse route; on a dense-mha step with decode tokens the first num_decode_tokens, through forward_impl's _v_up_proj (the same bmm)",
    "commit": {
-    "name": "model.layers.{i}.self_attn/v_absorb",
+    "name": "model.layers.{i}.self_attn/out",
     "binder": "attention"
    }
   },
@@ -1255,7 +1309,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -1323,7 +1377,7 @@
     "M",
     "=IH * ID"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "replicated",
    "rank_identical": true,
    "target_only": false,
@@ -1366,7 +1420,7 @@
    "manifest_family": "instance_outputs",
    "note": "computed on both routes; only the sparse route scores with it",
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer/q_fp8",
+    "name": "model.layers.{i}.self_attn/index_q",
     "binder": "attention"
    }
   },
@@ -1394,7 +1448,7 @@
    "manifest_family": "instance_outputs",
    "note": "computed on both routes; only the sparse route scores with it",
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer/weights",
+    "name": "model.layers.{i}.self_attn/index_weights",
     "binder": "attention"
    }
   },
@@ -1407,12 +1461,12 @@
    "site": {
     "kind": "cache_rows",
     "target": "model.layers.{i}.self_attn.indexer.k_cache.kv_cache",
-    "detail": "the rows at this step's slot_mapping written by fused_norm_rope: k_norm (LayerNorm, f32 weight and bias) + RoPE + FP8 e4m3 with a ue8m0 scale: 128 value bytes + one f32 scale"
+    "detail": "the rows at this step's slot_mapping written by fused_norm_rope: k_norm (LayerNorm, f32 weight and bias) + RoPE + FP8 e4m3 with a ue8m0 scale: each row's 128 value bytes (its f32 scale is indexer.k_scale)"
    },
    "dtype": "uint8",
    "shape": [
     "M",
-    "=ID + 4"
+    "ID"
    ],
    "program": "dsa-indexer-k",
    "tp": "replicated",
@@ -1430,7 +1484,33 @@
     }
    ],
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer.k_cache/rows",
+    "name": "model.layers.{i}.self_attn/index_k",
+    "binder": "attention"
+   }
+  },
+  {
+   "id": "indexer.k_scale",
+   "op": "layers.{i}.self_attn.indexer.k_cache.scale",
+   "port": 1,
+   "layers": "indexer",
+   "module": "model.layers.{i}.self_attn.indexer.k_cache",
+   "site": {
+    "kind": "cache_rows",
+    "target": "model.layers.{i}.self_attn.indexer.k_cache.kv_cache",
+    "detail": "the f32 ue8m0 scale of each row indexer.k_cache reads, at the same slots: the 4 bytes after its block's key rows"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    1
+   ],
+   "program": "dsa-indexer-k",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": true,
+   "manifest_family": "instance_outputs",
+   "commit": {
+    "name": "model.layers.{i}.self_attn/index_k_scale",
     "binder": "attention"
    }
   },
@@ -1482,7 +1562,7 @@
    "route": "sparse-mqa",
    "note": "bound after _sparse_indexer_and_attn returns, on a step whose layer ran forward_mqa (the sparse route, or decode tokens): every row the indexer scored. A dense-mha step without decode tokens leaves the buffer untouched and binds none",
    "commit": {
-    "name": "model.layers.{i}.self_attn.indexer.indexer_op/topk",
+    "name": "model.layers.{i}.self_attn/topk",
     "binder": "attention"
    }
   },
@@ -1502,7 +1582,7 @@
     "M",
     "=2 * IL"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1561,7 +1641,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -1704,6 +1784,60 @@
    }
   },
   {
+   "id": "moe.in_q",
+   "op": "layers.{i}.mlp.experts.moe_in_quant",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w13 launch's A: qhidden_states, the e4m3 output of moe_kernel_quantize_input's per_token_group_fp8_quant(hidden_states, 128, use_ue8m0=True)"
+   },
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    "M",
+    "H"
+   ],
+   "program": "fp8-moe-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/in_q",
+   "commit": {
+    "name": "moe/L{i}/in_q",
+    "binder": "moe"
+   }
+  },
+  {
+   "id": "moe.in_scale",
+   "op": "layers.{i}.mlp.experts.moe_in_quant",
+   "port": 1,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w13 launch's A_scale: a1q_scale, one power-of-two f32 scale per 128 elements of each token row"
+   },
+   "dtype": "float32",
+   "shape": [
+    "M",
+    "=H // B"
+   ],
+   "program": "fp8-moe-triton",
+   "tp": "replicated",
+   "rank_identical": true,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/in_scale",
+   "commit": {
+    "name": "moe/L{i}/in_scale",
+    "binder": "moe"
+   }
+  },
+  {
    "id": "moe.up",
    "op": "layers.{i}.mlp.experts.moe_up",
    "port": 0,
@@ -1746,43 +1880,70 @@
    "module": "model.layers.{i}.mlp.experts.routed_experts",
    "site": {
     "kind": "launch_wrap",
-    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
-    "detail": "the w2 launch's A: qintermediate_cache2, the e4m3 output of ops.silu_and_mul_per_block_quant (triton_moe.py TritonExperts.apply)"
+    "target": "torch.ops._C.per_token_group_fp8_quant (csrc per_token_group_quant.cu)",
+    "detail": "the input of the activation's group quant whose e4m3 output is the w2 launch's A: intermediate_cache2, torch.ops._C.silu_and_mul's output (apply_moe_activation)"
    },
-   "dtype": "float8_e4m3fn",
+   "dtype": "bfloat16",
    "shape": [
     "=M * K",
     "MIL"
    ],
-   "program": "silu-mul-block-quant",
+   "program": "silu-mul",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "moe_block_stream",
    "source": "moe/L{i}/act",
-   "note": "no bf16 activation exists on this path: with SiLU, 128x128 block FP8, no LoRA and no DeepGEMM e8m0 TritonExperts.apply fuses silu_and_mul and the w2 input's group quant into one kernel, so apply_moe_activation never runs. Likewise the w13 launch reads qhidden_states, the group quant of post_attention_layernorm's output, which fp8-moe-triton recomputes",
+   "note": "on the served path (DeepGEMM's ue8m0 quant on) TritonExperts.apply runs silu_and_mul into this bf16 activation and quantizes it as it does the input (moe.act_q, moe.act_scale). Without ue8m0 vLLM fuses the SiLU and the quant (silu-mul-block-quant) and no bf16 activation exists: the source then binds no act",
    "commit": {
     "name": "moe/L{i}/act",
     "binder": "moe"
    }
   },
   {
+   "id": "moe.act_q",
+   "op": "layers.{i}.mlp.experts.moe_act_quant",
+   "port": 0,
+   "layers": "moe",
+   "module": "model.layers.{i}.mlp.experts.routed_experts",
+   "site": {
+    "kind": "launch_wrap",
+    "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
+    "detail": "the w2 launch's A: qintermediate_cache2, the e4m3 output of per_token_group_fp8_quant(intermediate_cache2, 128, use_ue8m0=True)"
+   },
+   "dtype": "float8_e4m3fn",
+   "shape": [
+    "=M * K",
+    "MIL"
+   ],
+   "program": "fp8-moe-triton",
+   "tp": "column",
+   "rank_identical": false,
+   "target_only": false,
+   "manifest_family": "moe_block_stream",
+   "source": "moe/L{i}/act_q",
+   "commit": {
+    "name": "moe/L{i}/act_q",
+    "binder": "moe"
+   }
+  },
+  {
    "id": "moe.act_scale",
-   "op": "layers.{i}.mlp.experts.moe_act",
+   "op": "layers.{i}.mlp.experts.moe_act_quant",
    "port": 1,
    "layers": "moe",
    "module": "model.layers.{i}.mlp.experts.routed_experts",
    "site": {
     "kind": "launch_wrap",
     "target": "vllm/model_executor/layers/fused_moe/fused_moe.py:invoke_fused_moe_triton_kernel",
-    "detail": "the w2 launch's A_scale: a2q_scale, one f32 scale per 128 elements of each act row"
+    "detail": "the w2 launch's A_scale: a2q_scale, one power-of-two f32 scale per 128 elements of each act row"
    },
    "dtype": "float32",
    "shape": [
     "=M * K",
     "=MIL // B"
    ],
-   "program": "silu-mul-block-quant",
+   "program": "fp8-moe-triton",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1872,7 +2033,7 @@
     "M",
     "=2 * SIL"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "column",
    "rank_identical": false,
    "target_only": false,
@@ -1931,7 +2092,7 @@
     "M",
     "H"
    ],
-   "program": "fp8-block-linear",
+   "program": "fp8-block-linear-deepgemm",
    "tp": "partial",
    "rank_identical": false,
    "target_only": false,
@@ -1969,7 +2130,11 @@
    "rank_identical": false,
    "target_only": false,
    "manifest_family": "tp_rank_partials",
-   "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False). Not committed under its own name: its words are committed as the next layer's input_layernorm.partial (the last layer's as norm.partial)"
+   "note": "MoERunner.forward: shared_output + fused_output (routed scale already in the router weights; reduce_results=False). The moe source binds it after the forward on every TP rank, since no all-reduce of the module reads it; its words are also the next layer's input_layernorm.partial (the last layer's norm.partial)",
+   "commit": {
+    "name": "model.layers.{i}.mlp.experts/out",
+    "binder": "moe"
+   }
   }
  ],
  "modules": [
@@ -2186,7 +2351,8 @@
    "type": "LayerNorm",
    "disposition": "fused",
    "taps": [
-    "indexer.k_cache"
+    "indexer.k_cache",
+    "indexer.k_scale"
    ],
    "reason": "its weight and bias are read by fused_norm_rope, which writes the normed, roped, quantized k straight into the indexer cache",
    "when": "indexer"
@@ -2196,7 +2362,8 @@
    "type": "DeepseekV32IndexerCache",
    "disposition": "taps",
    "taps": [
-    "indexer.k_cache"
+    "indexer.k_cache",
+    "indexer.k_scale"
    ],
    "when": "indexer"
   },
@@ -2277,8 +2444,11 @@
    "type": "RoutedExperts",
    "disposition": "taps",
    "taps": [
+    "moe.in_q",
+    "moe.in_scale",
     "moe.up",
     "moe.act",
+    "moe.act_q",
     "moe.act_scale",
     "moe.down",
     "moe.sum"
@@ -2458,109 +2628,109 @@
    "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
    "type": "DeepSeekV2FusedQkvAProjLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.fused_qkv_a_proj",
    "type": "DeepSeekV2FusedQkvAProjLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.q_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.q_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.kv_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.kv_b_proj",
    "type": "ColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.o_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.o_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.indexer.wq_b",
    "type": "ReplicatedLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.self_attn.indexer.wq_b",
    "type": "ReplicatedLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.gate_up_proj",
    "type": "MergedColumnParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.fp8_linear.type",
-   "value": "vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel"
+   "value": "vllm.model_executor.kernels.linear.scaled_mm.flashinfer.FlashInferFp8DeepGEMMDynamicBlockScaledKernel"
   },
   {
    "pattern": "model.layers.{i}.mlp.shared_experts.down_proj",
    "type": "RowParallelLinear",
    "path": "kernels.quant_method.is_scale_e8m0",
-   "value": false
+   "value": true
   },
   {
    "pattern": "model.layers.{i}.self_attn.indexer.wk_weights_proj",
@@ -2687,12 +2857,12 @@
   {
    "item": 1,
    "work": "moe_source: add vllm._custom_ops.grouped_topk as the router launch site (it wraps topk_softmax today: router_w = topk_values, router_ids = topk_indices) and accept the FP8 block launches of invoke_fused_moe_triton_kernel (A_scale, B_scale, block_shape)",
-   "done": "moe source: grouped_topk_router.grouped_topk bound as router_w / router_ids (the custom op is reached inside that function's torch.compile region, so the wrapper sits at the call-time global _compute_routing reads), with the kernel per step; the block-FP8 launches bound unchanged"
+   "done": "moe source: grouped_topk_router.grouped_topk bound as router_w / router_ids (the custom op is reached inside that function's torch.compile region, so the wrapper sits at the call-time global _compute_routing reads), with the kernel per step; the block-FP8 launches' (A, A_scale) bound as in_q / in_scale (w13) and act_q / act_scale (w2)"
   },
   {
    "item": 2,
    "work": "moe_source: bind act at fused_moe.apply_moe_activation's output argument (bf16) rather than A of the MUL_ROUTED_WEIGHT launch, which is FP8 e4m3 under block quant; the six-tensors-per-MoE-layer-per-step check is unchanged",
-   "done": "moe source: no bf16 activation exists on this path (TritonExperts.apply fuses SiLU and the w2 quant into silu_and_mul_per_block_quant); act is the w2 launch's e4m3 A and act_scale its A_scale, seven tensors per MoE layer"
+   "done": "moe source: on the served path (DeepGEMM's ue8m0 quant on) silu_and_mul writes a bf16 activation that per_token_group_fp8_quant quantizes; act is the input of the quant whose output is the w2 launch's A (torch.ops._C.per_token_group_fp8_quant wrapped), ten tensors per MoE layer; nine when vLLM fuses the SiLU and the quant (silu_and_mul_per_block_quant)"
   },
   {
    "item": 3,

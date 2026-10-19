@@ -14,7 +14,7 @@ template <int X>
 DC_DEV void s_alone(const OpArgs& a) {
   Lane l(threadIdx.x ^ (uint32_t)a.mode);
   OP_BEGIN
-  OP_LOOP(it) { lane_ops<X, X == L_DUO ? 3 * R / 2 : R>(l); }
+  OP_LOOP(it) { lane_ops<X, X == L_DUO ? 3 * R / 2 : (X == L_REDUCE ? R / 8 : R)>(l); }
   OP_END
   OP_SINK(l.fold() ^ threadIdx.x)
 }
@@ -35,6 +35,8 @@ OP_KERNEL(s_ffma, 1024) { s_alone<L_FFMA>(a); }
 OP_KERNEL(s_shf, 1024) { s_alone<L_SHF>(a); }
 OP_KERNEL(s_lea, 1024) { s_alone<L_LEA>(a); }
 OP_KERNEL(s_shfl, 1024) { s_alone<L_SHFL>(a); }
+OP_KERNEL(s_redux, 1024) { s_alone<L_REDUX>(a); }
+OP_KERNEL(s_reduce, 1024) { s_alone<L_REDUCE>(a); }
 OP_KERNEL(s_duo, 1024) { s_alone<L_DUO>(a); }
 OP_KERNEL(p_imad_lop3, 1024) { s_pair<L_IMAD, L_LOP3>(a); }
 OP_KERNEL(p_imad_iadd, 1024) { s_pair<L_IMAD, L_IADD>(a); }
@@ -60,6 +62,8 @@ static const OpProbe PROBES[] = {
     P(s_shf, "SHF.L.W.U32.HI=64"),
     P(s_lea, "LEA.HI=64"),
     P(s_shfl, "SHFL.BFLY=64"),
+    P(s_redux, "REDUX*=64"),
+    P(s_reduce, "SHFL.BFLY=40,LOP3.LUT=40"),
     P(s_duo, "LOP3.LUT=32,IMAD=32,LEA.HI=32"),
     P(p_imad_lop3, "IMAD=32,LOP3.LUT=32"),
     P(p_imad_iadd, "IMAD=32,I*ADD*=32"),

@@ -259,7 +259,7 @@ IMMASP16864,DS_tensor,,,16,,,,note:20261017T1818Z-draft-axioms
 IMMASP16864S4,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 IMMASP16864S4,DS_tensor,,,8,,,,note:20261017T1818Z-draft-axioms
 LDS128,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
-LDS128,DS_smem,,,16,,,,note:20261017T1818Z-draft-axioms
+LDS128,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDS32,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 LDS32,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDSM_X1,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
@@ -267,13 +267,13 @@ LDSM_X1,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDSM_X1T,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 LDSM_X1T,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDSM_X2,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
-LDSM_X2,DS_smem,,,8,,,,note:20261017T1818Z-draft-axioms
+LDSM_X2,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDSM_X2T,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
-LDSM_X2T,DS_smem,,,8,,,,note:20261017T1818Z-draft-axioms
+LDSM_X2T,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDSM_X4,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
-LDSM_X4,DS_smem,,,16,,,,note:20261017T1818Z-draft-axioms
+LDSM_X4,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LDSM_X4T,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
-LDSM_X4T,DS_smem,,,16,,,,note:20261017T1818Z-draft-axioms
+LDSM_X4T,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 LEA,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 LEA,DS_alu,,,2,,,,note:20261017T1818Z-draft-axioms
 QMMA16816,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
@@ -289,7 +289,7 @@ QMMASP16864,DS_tensor,,,16,,,,note:20261017T1818Z-draft-axioms
 SHFL,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 SHFL,DS_shfl,,,4,,,,note:20261017T1818Z-draft-axioms
 STS128,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
-STS128,DS_smem,,,16,,,,note:20261017T1818Z-draft-axioms
+STS128,DS_smem,,,4,,,,note:20261017T1818Z-draft-axioms
 UNI,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 VIMNMX,DS_issue,,,1,,,,note:20261017T1818Z-draft-axioms
 VIMNMX,DS_alu,,,2,,,,note:20261017T1818Z-draft-axioms

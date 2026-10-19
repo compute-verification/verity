@@ -99,8 +99,7 @@ def test_check_header_compares_facts_including_untied_embeddings():
 
 
 def test_x07_name_and_derived_name_are_one_profile():
-    """[P6] `dense_<ROLE>` (the X-07 name recorded runs cite) and `derived_<ROLE>` build the same profile; the hand-authored module it
-    was once compared with is gone (`profiles/expected/derived_LLAMA32_1B.json` pins what both produced)."""
+    """[P6] `dense_<ROLE>` (the X-07 name recorded runs cite) and `derived_<ROLE>` build the same profile."""
     d = importlib.import_module("verity_vllm.engine.profiles.dense_LLAMA32_1B").PROFILE
     g = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B").PROFILE
     assert d.config == g.config and d.id == g.id

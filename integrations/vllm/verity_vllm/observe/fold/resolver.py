@@ -100,6 +100,9 @@ class Collective:
     own: ViewDesc
     kind: str            # "all_reduce" | "all_gather"
     site: str            # issuing module path (e.g. `model.layers.3.self_attn.o_proj`)
+    #: one Compute row over the whole [M,N] partial as M*N words (`Array<W, Array<M*N>>`), the Build's one call per communicator
+    #: all-reduce (`vllm_bindings.AllReduceRule`); the peers fields stay one per (request, peer rank)
+    flat: bool = False
 
 
 @dataclass(frozen=True)

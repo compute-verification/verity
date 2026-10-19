@@ -1,4 +1,4 @@
-"""Backends never need an integration (README "Development": backends must be testable without installing a frontend or
+"""Backends never need an integration (DESIGN.md "Development": backends must be testable without installing a frontend or
 runtime integration).  Today one does: C-Flock takes the vLLM integration's registered Definitions and kernels where core has no
 equivalent yet (the numerical bench, which did too, is a benchmark now, and a benchmark may compose an integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site
 fails, and so does a listed site that is gone, so the list stays exact.
@@ -107,7 +107,7 @@ def test_the_scan_sees_the_backends():
 
 def test_no_backend_imports_an_integration_outside_known():
     new = sorted(_sites() - KNOWN)
-    assert not new, ("a backend imports an integration (README: backends are testable without one); import from core instead, "
+    assert not new, ("a backend imports an integration (DESIGN.md: backends are testable without one); import from core instead, "
                      "or, if the dependency cannot go through core yet, add to KNOWN in tests/test_backend_boundaries.py:\n"
                      + "\n".join(f'    ("{f}", "{m}"),' for f, m in new))
 

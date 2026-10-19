@@ -42,6 +42,21 @@ B = max(1, ceil((D - k - 1) / 8)): at most three node Definitions for D <= 24.
 bytes) is two, a node (274 + L bytes; its level byte in the first block too) three. The layouts' selection is an AND per moved
 value bit: about 1,150 ANDs for a two-byte node, 800 for a two-byte leaf and 1,550 for a three-byte one. ``PARTS`` and ``READS``
 in the tests pin the gates.
+
+**A read at a rank and a position, to a depth.** A domain whose positions don't start at 0 (an append's store indices
+first ... first + count - 1, `RangeIndexedDomain(first, ...)`) has rank = position - first, and a unit that opens leaves of
+trees of several sizes takes each tree's depth as a value:
+
+    FrameV3ReadAt_v1{D, B, SCHEMA}
+        (root: Digest, domain: Digest, value: Digest, rank: Array<D, Value<1>>, position: Array<8 B, Value<1>>,
+         depth: Array<16, Value<1>>, path: Array<D, Digest>) -> Value<1>
+    FrameV3LeafAt_v1{R, B, SCHEMA}  (domain, value, rank: Array<8 R, Value<1>>, position: Array<8 B, Value<1>>) -> Digest
+    FrameV3Pick_v1{D}               (depth: Array<16, Value<1>>, levels: Array<D + 1, Digest>, root) -> Value<1>
+
+The leaf binds uint(rank) and uint(position), each laid out at every length (R = index_bytes(D) by B layouts, all of one
+block count); the climb is the read's on the rank's bits, and the result is 1 iff depth <= D and the digest after the first
+depth levels is ``root`` (a depth-0 tree's root is its one leaf; the levels past depth hash whatever ``path`` holds there, and
+nothing reads them). `opens_at` is its reference.
 """
 from __future__ import annotations
 
@@ -51,7 +66,7 @@ from typing import Callable, Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import OR, ZERO, const_bits
+from verity.ml.circuits.boolean.forms import OR, ZERO, and_reduce, const_bits, or_reduce
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -60,8 +75,9 @@ from ..merkle import _FRAME, _LEAF, _NODE, _hash, _uint
 from .lms import LmsEqual
 from .sha512 import IV, compress_gadget, pad_tail, words_be
 
-__all__ = ["FrameV3Leaf", "FrameV3Node", "FrameV3Read", "MAX_D", "arguments", "index_bytes", "leaf_ref", "node_ref", "opens",
-           "read", "root_ref"]
+__all__ = ["FrameV3Leaf", "FrameV3LeafAt", "FrameV3Node", "FrameV3Pick", "FrameV3Read", "FrameV3ReadAt", "MAX_D", "arguments",
+           "arguments_at", "index_bytes", "leaf_at_ref", "leaf_ref", "node_ref", "opens", "opens_at", "read", "read_at",
+           "root_at_ref", "root_ref"]
 
 BIT = BL.BIT
 WORD = Array(64, BIT)
@@ -96,6 +112,26 @@ def opens(schema: str, root: bytes, domain_id: bytes, value: bytes, pos: int, pa
     return int(root_ref(domain_id, schema, value, pos, path) == root)
 
 
+def leaf_at_ref(domain_id: bytes, schema: str, value: bytes, rank: int, position: int) -> bytes:
+    """The frame-v3-sha512 leaf of ``value`` at ``rank`` and ``position`` (`CommitmentDomain.leaf` over a domain id)."""
+    return _hash(_LEAF, domain_id, _uint(rank), _uint(position), schema.encode("utf-8"), value, hash="sha512")
+
+
+def root_at_ref(domain_id: bytes, schema: str, value: bytes, rank: int, position: int, path: Sequence[bytes]) -> bytes:
+    """The root the path gives ``value`` at ``rank`` and ``position`` (`merkle.verify_opening`'s climb)."""
+    cur = leaf_at_ref(domain_id, schema, value, rank, position)
+    for k, sib in enumerate(path):
+        cur = node_ref(domain_id, k, rank >> (k + 1), *((sib, cur) if rank >> k & 1 else (cur, sib)))
+    return cur
+
+
+def opens_at(schema: str, root: bytes, domain_id: bytes, value: bytes, rank: int, position: int, depth: int,
+             path: Sequence[bytes]) -> int:
+    """`FrameV3ReadAt`'s reference: 1 iff depth <= len(path) and the path's first ``depth`` siblings open ``value`` at
+    ``rank`` and ``position`` to ``root``."""
+    return int(depth <= len(path) and root_at_ref(domain_id, schema, value, rank, position, path[:depth]) == root)
+
+
 def _digest_bits(d: bytes) -> list[int]:
     if len(d) != 64:
         raise ValueError(f"a digest is 64 bytes, not {len(d)}")
@@ -109,6 +145,19 @@ def arguments(root: bytes, domain_id: bytes, value: bytes, pos: int, path: Seque
     if not 0 <= pos < 2 ** D:
         raise ValueError(f"a position in a depth-{D} tree is below 2^{D}")
     return (_digest_bits(root), _digest_bits(domain_id), _digest_bits(value), [(pos >> j) & 1 for j in range(D)],
+            [b for s in path for b in _digest_bits(s)])
+
+
+def arguments_at(B: int, root: bytes, domain_id: bytes, value: bytes, rank: int, position: int, depth: int,
+                 path: Sequence[bytes]) -> tuple[list[int], ...]:
+    """``FrameV3ReadAt_v1{D = len(path), B, SCHEMA}``'s seven arguments, each a flat list of bits in leaf order."""
+    D = len(path)
+    _check_depth(D)
+    _check_bytes(B)
+    if not 0 <= rank < 2 ** D or not 0 <= position < 2 ** (8 * B) or not 0 <= depth < 1 << 16:
+        raise ValueError(f"a rank below 2^{D}, a position below 2^{8 * B} and a u16 depth")
+    return (_digest_bits(root), _digest_bits(domain_id), _digest_bits(value), [(rank >> j) & 1 for j in range(D)],
+            [(position >> j) & 1 for j in range(8 * B)], [(depth >> j) & 1 for j in range(16)],
             [b for s in path for b in _digest_bits(s)])
 
 
@@ -190,6 +239,28 @@ def leaf_hash(C, schema: str, domain, value, x, n: int) -> list:
     return _hash_uint(C, _LEAF, [_bytes(domain)], x, n, tail)
 
 
+def leaf_at_hash(C, schema: str, domain, value, rank, position, nr: int, npos: int) -> list:
+    """leaf(rank, position) of ``value`` (words of forms; rank 8 nr bits and position 8 npos bits, LSB first): the position's
+    layouts selected under each length of uint(rank), then those under the rank's flags."""
+    s = _const_bytes(schema.encode("utf-8"))
+    flags = _flags(C, position, npos)
+    rows = [_select(C, flags, [_message(_LEAF, [_bytes(domain), _uint_bytes(rank, lr), _uint_bytes(position, lp), s, _bytes(value)])
+                               for lp in range(1, npos + 1)]) for lr in range(1, nr + 1)]
+    return _sha512(C, _select(C, _flags(C, rank, nr), rows))
+
+
+def _eqc(C, bits: Sequence, k: int):
+    return and_reduce(C, [x if (k >> i) & 1 else x.inv() for i, x in enumerate(bits)]) if k < 1 << len(bits) else ZERO
+
+
+def pick_root(C, depth, levels: Sequence[Sequence], root) -> list:
+    """1 iff ``levels[depth]`` (each 8 words of forms) is ``root``, depth (16 bits, LSB first) at most len(levels) - 1."""
+    flat = [x for w in root for x in w]
+    hits = [C.AND(_eqc(C, depth, k), and_reduce(C, [(x ^ y).inv() for x, y in zip([x for w in lv for x in w], flat, strict=True)]))
+            for k, lv in enumerate(levels)]
+    return [or_reduce(C, hits)]
+
+
 def node_hash(C, domain, level, index, d, cur, sib, n: int) -> list:
     """node(level, index, l, r), (l, r) = (cur, sib) swapped if ``d`` (level 8 bits, index 8 n bits, LSB first)."""
     t = [[C.AND(d, x ^ y) for x, y in zip(cw, sw)] for cw, sw in zip(cur, sib)]
@@ -214,13 +285,19 @@ def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Calla
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
     d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    # C-Flock lowers an activation by its builder, commits included (`ir_lower._boolean_activation`)
+    d.build = build  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]
     return d
 
 
-def _leaf_blocks(schema: str, n: int) -> set[int]:
+def _leaf_blocks(schema: str, n: int, m: int | None = None) -> set[int]:
+    """The block counts of the leaf messages under ``schema`` as uint(rank) takes 1 ... n bytes and uint(position) 1 ... m
+    (the same length as the rank's, when m is None)."""
     size = 209 + len(schema.encode("utf-8"))
-    return {-(-(size + 2 * L + 17) // 128) for L in range(1, n + 1)}
+    if m is None:
+        return {-(-(size + 2 * L + 17) // 128) for L in range(1, n + 1)}
+    return {-(-(size + a + b + 17) // 128) for a in range(1, n + 1) for b in range(1, m + 1)}
 
 
 def _check_bytes(B: int) -> None:
@@ -270,6 +347,35 @@ FrameV3Node = _part(
     "and sib, cur the right child iff d")
 
 
+def _sig_leaf_at(S):
+    _check_bytes(S.R)
+    _check_bytes(S.B)
+    if not isinstance(S.SCHEMA, str) or not S.SCHEMA:
+        raise ValueError(f"a frame-v3 leaf's SCHEMA is a nonempty str, not {S.SCHEMA!r}")
+    if len(_leaf_blocks(S.SCHEMA, S.R, S.B)) != 1:
+        raise ValueError(f"leaf messages under {S.SCHEMA!r} take {sorted(_leaf_blocks(S.SCHEMA, S.R, S.B))} blocks as uint(rank) "
+                         f"takes 1 ... {S.R} bytes and uint(position) 1 ... {S.B}: one block count per binding")
+    return (("domain", DIGEST), ("value", DIGEST), ("rank", Array(8 * S.R, BIT)), ("position", Array(8 * S.B, BIT))), DIGEST
+
+
+FrameV3LeafAt = _part(
+    "FrameV3LeafAt", ("R", "B", "SCHEMA"), _sig_leaf_at,
+    lambda C, S, *e: leaf_at_hash(C, S.SCHEMA, e[0:8], e[8:16], e[16], e[17], S.R, S.B),
+    "the frame-v3-sha512 leaf of value at rank and position under the domain id domain and SCHEMA; each LSB first, uint(rank) "
+    "1 ... R bytes and uint(position) 1 ... B")
+
+
+def _sig_pick(S):
+    _check_depth(S.D)
+    return (("depth", Array(16, BIT)), ("levels", Array(S.D + 1, DIGEST)), ("root", DIGEST)), BIT
+
+
+FrameV3Pick = _part(
+    "FrameV3Pick", ("D",), _sig_pick,
+    lambda C, S, depth, *e: pick_root(C, depth, [e[8 * k:8 * k + 8] for k in range(S.D + 1)], e[8 * (S.D + 1):]),
+    "1 iff depth <= D and levels[depth] is root: a read's climb compared at the tree's depth")
+
+
 # --- the read ----------------------------------------------------------------------------------------------------------------
 
 def _signature(S):
@@ -311,3 +417,41 @@ FrameV3Read = CompositeDefinition(
 
 def read(D: int, schema: str):
     return bind(FrameV3Read, D=D, SCHEMA=schema)
+
+
+def _signature_at(S):
+    _check_depth(S.D)
+    _sig_leaf_at(SimpleNamespace(R=index_bytes(S.D), B=S.B, SCHEMA=S.SCHEMA))
+    return ((("root", DIGEST), ("domain", DIGEST), ("value", DIGEST), ("rank", Array(S.D, BIT)), ("position", Array(8 * S.B, BIT)),
+             ("depth", Array(16, BIT)), ("path", Array(S.D, DIGEST))), BIT)
+
+
+def _body_at(B, S, root, domain, value, rank, position, depth, path):
+    zero = B.call(BL.constant(0)).refs[0]
+    one = None
+    bits = _refs(rank)
+    n = index_bytes(S.D)
+    cur = B.call(bind(FrameV3LeafAt, R=n, B=S.B, SCHEMA=S.SCHEMA), domain, value,
+                 Coll(Array(8 * n, BIT), TR._refs(bits + [zero] * (8 * n - S.D))), position)
+    levels = _refs(cur)
+    for k in range(S.D):
+        if one is None and k:
+            one = B.call(BL.constant(1)).refs[0]
+        hi = bits[k + 1:]
+        n = index_bytes(len(hi))
+        i = Coll(Array(8 * n, BIT), TR._refs(hi + [zero] * (8 * n - len(hi))))
+        level = Coll(LEVEL, TR._refs([one if k >> j & 1 else zero for j in range(8)]))
+        cur = B.call(bind(FrameV3Node, B=n), domain, level, i, rank[k], cur, path[k])
+        levels += _refs(cur)
+    return B.call(bind(FrameV3Pick, D=S.D), depth, Coll(Array(S.D + 1, DIGEST), TR._refs(levels)), root)
+
+
+FrameV3ReadAt = CompositeDefinition(
+    "FrameV3ReadAt", 1, ("D", "B", "SCHEMA"), _signature_at, _body_at, conformance="exact-model-tested",
+    doc="1 iff depth <= D and the first depth siblings of path open value at rank and position to root in a frame-v3-sha512 "
+        "tree of domain id domain: the leaf binds the domain id, rank, position, SCHEMA and value; level k swaps by rank's bit k "
+        "and hashes the node with the domain id, k and the index rank >> (k + 1)")
+
+
+def read_at(D: int, B: int, schema: str):
+    return bind(FrameV3ReadAt, D=D, B=B, SCHEMA=schema)

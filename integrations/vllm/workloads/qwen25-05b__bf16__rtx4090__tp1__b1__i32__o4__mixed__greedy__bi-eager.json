@@ -1,8 +1,21 @@
 {
- "schema": "verity-vllm/workload/v1",
+ "schema": "verity-vllm/workload/v2",
  "model": "Qwen/Qwen2.5-0.5B",
  "case": "QWEN05",
- "tokenizer_revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+ "engine": {
+  "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+  "vllm": "d9105ea80",
+  "args": {
+   "max_num_batched_tokens": 2048,
+   "max_model_len": 36
+  },
+  "target": {
+   "protocols": [
+    "pouw:ncp-v2",
+    "sampled-proofs:vllm-v1"
+   ]
+  }
+ },
  "seed": 0,
  "variants": {
   "greedy": {
@@ -28,10 +41,6 @@
   "depends_on": "SHA256(row_id) only"
  },
  "expected_engine_steps": 4,
- "engine_args_required": {
-  "max_num_batched_tokens": 2048,
-  "max_model_len": 36
- },
  "tokenizer_note": "prompt_token_ids from tokenizer.json sha256 c0382117ea329cdf (tokenizers, add_special_tokens=False), natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)",
  "prompt_lengths": [
   32
@@ -133,12 +142,6 @@
   "lengths_only": false
  },
  "note": "R12 sweep qwen25-05b__bf16__rtx4090__tp1__b1__i32__o4__mixed__greedy__bi-eager: B=1 I<=32 O<=4 greedy arrivals=none; prompt lens [32], caps [4], arrive steps [0]; every request to max_tokens => 4 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched.  PoUW row (#389): the target declares pouw:ncp-v2 beside sampled proofs; protocols_config fixes the work law's K = 8 (the epoch's coins come from the run's challenger).",
- "target": {
-  "protocols": [
-   "pouw:ncp-v2",
-   "sampled-proofs:vllm-v1"
-  ]
- },
  "protocols_config": {
   "pouw": {
    "draws": 8

@@ -1,6 +1,6 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity` and other Definition
-modules, so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package
-(`tools/migrate/split_dense.py`): `properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
+modules, so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package:
+`properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
 `program.kernels.rmsnorm_fused_sweep`, `program.frontend.gemm_targets`."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pytest
 REGISTRY = "verity_vllm.program.registry"
 REGISTRY_DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
-          "boolean_rope", "gemm_bias", "layer_norm", "gelu_erf_table")
+          "boolean_rope", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, and `sampling.bit_at` (`UnpackF32_v1`)
 READS = ("prims", "b1", "sampling")
 THIRD_PARTY = ("numpy",)
