@@ -2001,6 +2001,7 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
+        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"
             return n[:-len("/bot")].rsplit("/", 1)[0] if n.endswith("/bot") and "/" in n[:-len("/bot")] else n
@@ -2020,9 +2021,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 padding_only_steps.append(int(step))
             names_all = Counter(m.name for m in metas_all) if cols is None else Counter(cols)   # fa2 per-layer uniformity reads every plane of the step (rule (a) planes included)
             names = Counter(m.name for m in metas) if cols is None else names_all
-            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n)})
+            mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             pad_ident = Counter(_identity_of_padding(m.name) for m in pad_metas)
-            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n)})
+            pad_mod_names = Counter({n: 1 for n in pad_ident if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             if padding_only:
                 mod_names = pad_mod_names                                # the identities materialized as ⊥, one each (set semantics below)
             # [R14 TP-03] rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
