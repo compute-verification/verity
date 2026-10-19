@@ -613,6 +613,17 @@ folds the lincheck's comb for its own relation check, as the verifier does. It d
 lincheck, the bulk of the device's arithmetic. What it recomputes is a CPU Ligerito: the commitment over the whole
 witness, and the opening's basis fold `w^r`, which `T'`, `ybar` and levels 1+ all read.
 
+**The pass decision is the Lean frame's.** Each device round goes to the rep's Lean frame with the statement's scheduled
+round in its place: in the algebraic phase the skeleton's round with every value `0` (`Checker::scheduled`), in the opening
+the shadow's. The device round passes when it is the scheduled round byte for byte but for the values the algebraic phase
+masks (`Flock.Firewall.Frame.check`): the same frames, labels, bytes, headers, padding, kinds, lengths and coin count in
+the algebraic phase, and every byte in the opening, level 0's values included. Rust's checks (`firewall::Checker`,
+`ShadowLink::check`) run first and can only fail a round more: a round they fail reaches the frame as the scheduled round
+alone, and a round they pass and the frame fails is refused too (`FIREWALL-REFUSED: the Lean frame failed the round Rust's
+checks passed: …`). `live/src/pass_vectors.json` holds the two to each other (`tests/test_firewall_frame.py`, and
+`firewall.rs`'s test). The scheduled rounds themselves are still Rust's (the skeleton from the statement's replay, the
+shadow's opening).
+
 **A refusal stops the session at its `Finish`, never before.** When a check fails mid-session (a round off the skeleton or
 off the shadow's, the device's level-0 root, the end check on the returned proof, a row that fails on the pads), the
 firewall keeps the reason and keeps releasing the statement's schedule in the device's place, and nothing of the refused
@@ -749,19 +760,23 @@ it), and the prover one `flock-firewall tap` for its other draws (§2), started 
   computed. The rep proves with exactly these draws, and Rust's tree over them must have that root.
 - **prior** (rep 1 only, before its first round): `prior N` and the table's rep 0's `N` algebraic-phase coins, whose claim
   points the rank check covers too.
-- **round**: each round the firewall passed, the device's frames with their values unmasked, answered with the round that
-  leaves: the pads' label and root after the zerocheck's label, each value absorbed in a masked phase as `v + h_i` under
-  the next pad of `Layout::absorbed`'s order, everything else as framed, and no domain frame. A round the firewall's check
-  refused goes to it as the scheduled round, marked `fail` (`round N LEN fail`; the skeleton's round with zero values,
-  `Checker::scheduled`, or the shadow's), and a round it refuses itself releases nothing: either stops the rep, whose
-  every later algebraic value leaves as its pad alone and whose `finish` is `stop`. At the opening's label the frame runs
-  the rank check, and a mask slot of less than full rank is answered `stop WHY`.
+- **round**: each device round Rust's checks passed, its frames with their values unmasked, then the statement's
+  scheduled round in its place (`round N LEN REFLEN`): the frame's pass decision (`check`, §10.1), answered `ok LEN' pass`
+  and the device round's release, or `ok LEN' fail WHY` and the scheduled round's, the rep then stopped. A round leaves
+  with the pads' label and root after the zerocheck's label, each value absorbed in a masked phase as `v + h_i` under the
+  next pad of `Layout::absorbed`'s order, everything else as framed, and no domain frame. A round Rust's checks refused,
+  or the rest of the schedule after a worker that failed, goes to it as the scheduled round alone, marked `fail`
+  (`round N LEN fail`; the skeleton's round with zero values, `Checker::scheduled`, or the shadow's), and a round the
+  frame refuses itself releases nothing: each stops the rep, whose every later algebraic value leaves as its pad alone
+  and whose `finish` is `stop`. At the opening's label the frame runs the rank check, and a mask slot of less than full
+  rank is answered `stop WHY`.
 - **coins**: after each released round, `coins N` and the coins the stream answered it. No round and no `finish` is taken
   while they are owed. A zerocheck outer coin 1, level 0's `ρ_0, ρ_1` dependent over F128 (the four words after its last
   masked value) and the inner proof's `β = 0` are answered `stop WHY`.
-- **the inner proof**: its four rounds (`ε`, the batching coins, `β`, the queries), after the opening's, are rounds like
-  any other: `zk_finish` proves it on a challenger that sends each round through the rep's frame first, and the frame
-  takes one inner proof, after the opening ended, and no round after its fourth.
+- **the inner proof**: its four rounds (`ε`, the batching coins, `β`, the queries), after the opening's, are the
+  firewall's own and come alone (`round N LEN`), which the frame takes nowhere else: `zk_finish` proves it on a
+  challenger that sends each round through the rep's frame first, and the frame takes one inner proof, after the opening
+  ended, and no round after its fourth.
 - **finish**: `ok`, or `stop` for a stopped rep, once every masked phase closed with every pad of the layout used and
   the inner proof's four rounds left. A Lean frame that stopped the rep at its `finish` where the firewall's checks all
   passed is refused (`FIREWALL-REFUSED: the Lean frame stopped the rep`).
@@ -769,7 +784,8 @@ it), and the prover one `flock-firewall tap` for its other draws (§2), started 
 A `stop` ends the rep where the coins stand, as an honest prover's refusal does. The masking challenger still runs as the
 speed reference. Its inner challenger (`firewall::Gate`) frames what it would send, holds that to the Lean round byte for
 byte, refuses on any difference, and hands the stream only the Lean round; the inner proof's rounds go through it the same
-way. The values of `final_c'`, the inner proof, the recheck and the shadow opening are still Rust's (`FirewallComputes`). Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
+way. The values of `final_c'`, the inner proof, the recheck and the shadow opening are still Rust's (`FirewallComputes`),
+as are the scheduled rounds the pass decision reads. Each rep's rank check logs `FRAMERANK` (the frame's) beside `ZKRANK` (Rust's
 reference, over Rust's claim points).
 
 In a session of several tables each table has a firewall of its own in turn: its salt context, recheck, skeleton and shadow,
