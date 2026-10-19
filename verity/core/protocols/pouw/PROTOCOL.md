@@ -75,8 +75,12 @@ and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/`
 in `.agents/skills/friction/SKILL.md`.
 
 **Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
-a public beacon and never Fiat-Shamir over the prover's roots. A scheme's noise is its own derivation from the salt and the
-prover's roots, Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term.
+a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
+`coins`, `live` or `seeded` (`window.mode`, Compose's `CoinMode`; an item that names none is seeded). In a seeded window
+(`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation from the salt and the prover's roots,
+Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term. In a live window
+(`window.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only after the verifier
+recorded round r's root (decision 36).
 
 ## Epoch coins (`coins`)
 
@@ -102,6 +106,41 @@ asked for, that is malformed, that does not open against the epoch's root, or wh
 (`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
+
+**Live coins** come from the proof service's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
+record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
+uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
+family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole
+width (the seeded coins above stay 32 bytes, so a recorded seeded registration reads as it did), and publishes
+
+~~~text
+x_p     = SHA-512(scheme || 0x00 || coin_p)                               coin_p: 64 fresh bytes (`COIN_BYTES`)
+value_p = hm96-sha512 tree_leaf(key, commit_string(key, x_p, salt_p))     salt_p: 192 fresh bytes, key the pinned default
+root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 … K−1, leaf schema the scheme, domain binding
+          identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
+~~~
+
+and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its epoch,
+label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
+roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
+root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
+then asks the challenger for that root's coin.
+
+Timing is a trust assumption, not a check. `after` binds an opening to the root the verifier recorded, but can't show the
+coin was released after it: that rests on the challenger releasing coin i only once it has received root i. The
+challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+`trusted-nebius-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
+(`received_at`) and then coin i's release after it (`released_at`).
+
+**Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
+coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
+(`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
+`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. Round
+r's coin opens after the verifier recorded round r's root, the root of the values round r commits, and round r's noise
+key is `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred
+noised products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
+`PouwCheck.roundsCheck`) is the rule on a window's round coins. A seeded epoch's commitment is unchanged (`SCHEME`, salt
+and draw only).
 
 ## Registered weights (`registration`)
 
@@ -1358,17 +1397,22 @@ name not registered.
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
   after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
   column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
-  The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
+  A dead tile, all-zero rows of A, has the zero receipt through the same gates (each word masked by the tile's live bit), so
+  a padded window's empty tiles cost serving no noise and a drawn one's proof shows nothing of which tiles were dead; in a
+  live window the unit's salt is its round's, `h1tile.live_salt` (`window.round_key`'s stream, 64 bytes), and each unit
+  derives its own noise from it. The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
   ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a
   legal proof unit under the 16-bit output rule, or the warp check must be a unit kind of its own aggregating coordinates, is
   decision 107's, still open.
 
-The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129` and `PouwH1Tile` are
+The seed, the unit's two seeds and the noise block (`_v1` on words, `_v2` on bits), `PouwU129`, the dead tile's
+`PouwAnyByte`, `PouwOrBit` and `PouwMask32`, and `PouwH1Tile` are
 registered Definitions, each checked by circuit-check at its sidecar's binding (`seeds.circuit-check.py`,
 `h1tile.circuit-check.py`); `PouwH1Tile` only where `circuit/segment.py` is on the tree, at one lane (4 × 8, K = 64).
 
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
-site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
+site that fills none, past a dead one (decode's few tokens in a live tile); the vLLM integration serving the compiled
+Program.
 
 ## Not here yet
 

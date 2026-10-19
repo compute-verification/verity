@@ -25,6 +25,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `replay_units`, `proof_units`: the two-stage law's samplers on given bytes of the verifier's own coins
   (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
+* `challenger_commitment`, `challenger_opening`, `challenger_reason`, `challenger_order`: the challenger's live coins
+  (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -36,6 +38,7 @@ import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
 import SampledProofs.Hello
+import SampledProofs.Challenger
 
 namespace SampledProofs.Pieces
 
@@ -341,7 +344,9 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound),
    ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
-   ("proof_units", proofUnits), ("hello", Hello.check)]
+   ("proof_units", proofUnits), ("hello", Hello.check), ("challenger_commitment", Challenger.commitmentPiece),
+   ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
+   ("challenger_order", Challenger.orderPiece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),

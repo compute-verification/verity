@@ -28,6 +28,15 @@ def required_classes_default(flash_attn_version: int | None) -> tuple[str, ...]:
     hidden = HIDDEN_CLASS_BY_FA.get(int(flash_attn_version) if flash_attn_version is not None else 2, "fa2_hidden_m1_stream")
     return tuple(hidden if c == "fa2_hidden_m1_stream" else c for c in REQUIRED_CLASSES_DEFAULT)
 
+def hidden_classes_required(manifest: Mapping[str, Any] | None) -> bool | None:
+    """Whether the required-value manifest names an attention hidden-stream identity (FA2's or FA3's tap); None without a manifest.
+    A Program whose attention is its own Calls (the exact-int8 profile's) names none, and its Commit attaches no hidden tap."""
+    if manifest is None:
+        return None
+    families = (manifest.get("populations") or {}).get("by_family") or {}
+    return any(int(families.get(f, 0) or 0) > 0 for f in HIDDEN_CLASS_BY_FA.values())
+
+
 def json_short(v: dict, n: int = 160) -> str:
     import json
 

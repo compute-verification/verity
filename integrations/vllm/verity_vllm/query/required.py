@@ -155,11 +155,11 @@ NAMED_RESIDUALS: tuple[Residual, ...] = (
     Residual("GemmBias_v2", "out", "0", _LINEAR_WHY + " (the biased linear as one Call)", condition="own_parameter"),
     Residual("ScaledMmFp8Block_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
     Residual("ScaledMmFp8BlockSharedScale_v1", "out", "0", _LINEAR_WHY + " (blockwise-FP8 linear)", condition="own_parameter"),
+    Residual("ScaledMmS8_v1", "out", "0", _LINEAR_WHY + " (the exact-int8 linear's product)", condition="own_parameter"),
     Residual("NcpLinearRow_v1", "out", "0", _LINEAR_WHY + " (the `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     Residual("NcpLinearRowBias_v1", "out", "0", _LINEAR_WHY + " (the fused-bias `pouw:ncp-v2` linear's served y)", condition="own_parameter"),
     *(Residual(f, "out", "0", _LINEAR_WHY + f" ({why})", condition="own_parameter") for f, why in _LINEAR_ROUTES),
-    Residual("DeepGemmFp8Linear_v1", "2", "0", _LINEAR_WHY + " (the M >= 32 block-FP8 linear: its third port y is the op's one output)",
-             condition="own_parameter"),
+    Residual("DeepGemmFp8Linear_v1", "2", "0", _LINEAR_WHY + " (the M >= 32 block-FP8 linear: its third port y is the op's one output)", condition="own_parameter"),
     Residual("DeepGemmFp8Linear_v1", "0", "x_q", _DEEPGEMM_QUANT_WHY),
     Residual("DeepGemmFp8Linear_v1", "1", "x_s", _DEEPGEMM_QUANT_WHY),
     Residual("<all_reduce>", "out", "0", _LINEAR_WHY + " (the row-parallel linear returns the all-reduced tensor as slot 0: an all-reduce of any "
