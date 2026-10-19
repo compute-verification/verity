@@ -1,23 +1,26 @@
 """One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
-outcome, the public-items rule on the registration, the count check against the occupancy profile, and each way a
-link-window fails closed, on injected coins and an injected clock."""
+outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
+profile, and each way a link-window fails closed, on injected coins and an injected clock. Every round's verdict is
+held to the stand-in (`LinkWindows.stand_in`), the in-the-clear verdict the head check replaced."""
 
 import json
 from dataclasses import replace
 
 import pytest
 
+from verity.ml.circuits import codec
 from verity.ml.circuits.program import Program
+from verity.core.protocols.certifier import head_check as HC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.core.protocols.certifier.grid import Certifier, Record, occupancy
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Record, occupancy
 from verity.core.protocols.certifier.schedule import SyncSet, run_shaper
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import root_ref
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, UNIT, VALUE, LinkWindows,
-                                                                      encode, rows)
+from verity.core.protocols.certifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, VALUE, LinkWindows, encode,
+                                                                      rows)
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 
@@ -78,10 +81,14 @@ class Run:
         self.previous = reg.digest
         return reg
 
-    def round(self, opening, delivered=None) -> S.Outcome:
+    def round(self, opening, delivered=None, *, content=False) -> S.Outcome:
+        """One registration through its outcome, held to the stand-in. `content`: the egress frames differ from the
+        Program's grid while the head is the profile's, which the stand-in rejects and N2 leaves to N3."""
         draw = self.stream.select(self.register(opening))
         assert self.stream.deliver(draw, [self.lw.session(delivered or opening, draw)]) is None
-        return self.lw.outcome(self.stream, draw, delivered or opening, FRAMES, SYNCS)
+        out = self.lw.outcome(self.stream, draw, delivered or opening, FRAMES, SYNCS)
+        assert self.lw.stand_in(delivered or opening, draw, FRAMES, SYNCS) == (out.accepted and not content)
+        return out
 
 
 def reject(out: S.Outcome) -> bool:
@@ -119,7 +126,7 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
         f"domain:{VALUE}": "structure", VALUE: "commitment", "parameters": "structure", "charge": "structure",
         "occupancy": "structure", "verdict": "output", "deadline": "output"}
     assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
-    assert lw.spec.check.program == P.program_sha512(Program(UNIT))
+    assert lw.spec.check.program == P.program_sha512(Program(lw.unit))
     assert replace(lw, sync_set=SyncSet(tuple(range(16)), tuple(range(1, 9)))).charge == 7.0
     assert lw.spec.digest() != replace(lw, sync_set=SyncSet((0, 1), (1, 2))).spec.digest()
     assert lw.spec.digest() != replace(lw, run="another").spec.digest()
@@ -158,6 +165,39 @@ def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
     assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
 
 
+def test_under_an_egress_profile_the_head_check_holds_the_egress_grid(tmp_path):
+    """With an egress profile the audit compares no egress grid, and the head check holds the head's status, grid and
+    counts. A window whose frames differ from the Program's grid in content alone is accepted, its content left to N3
+    on the windows it draws, where the stand-in rejects it. An egress head under another parameters digest is rejected
+    though its certificate verifies."""
+    run = Run(tmp_path, occupancy=honest_occupancy())
+    honest = egress_records()[0]
+    slots = [list(row) for row in honest.grid]
+    b, k = next((b, k) for b, row in enumerate(slots) for k, s in enumerate(row) if s is not None)
+    slots[b][k] = bytes(x ^ 0xFF for x in slots[b][k])
+    content = replace(honest, grid=tuple(tuple(row) for row in slots))
+    assert occupancy(content.grid) == occupancy(honest.grid) and content.grid != honest.grid
+    opening = run.lw.commit(0, run.egress(content), run.ingress(ingress_records()[0]), SALTS[0])
+    assert run.round(opening, content=True).accepted
+    unswept = run.issuer.certify(egress_records()[1], EGRESS, PARAMS, parameters_digest(PARAMS))
+    assert reject(run.round(run.lw.commit(1, unswept, run.ingress(ingress_records()[1]), SALTS[1])))
+    assert run.round(run.honest(2)).accepted and run.stream.symbols == ("accept", "reject", "accept")
+
+
+def test_a_head_of_another_size_class_is_a_reject(tmp_path):
+    """An ingress head of 8 buckets on a link whose ingress grid has 4 is longer than the unit's head, so no head check
+    takes it: rejected, though its certificate verifies and its status is complete."""
+    run = Run(tmp_path)
+    wide = GridParams(8, PARAMS.allocation, PARAMS.frame_bytes)
+    ingress = Certifier(LINK, wide)
+    for _ in range(wide.buckets):
+        ingress.tick()
+    signed = run.issuer.certify(ingress.close_window(), INGRESS, wide, parameters_digest(wide))
+    opening = run.lw.commit(0, run.egress(egress_records()[0]), signed, SALTS[0])
+    assert run.lw.head_checks(opening, bytes.fromhex(run.lw.root(opening)))[1] is None
+    assert reject(run.round(opening))
+
+
 def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
     lw = Run(tmp_path).lw
     four = (0,) * PARAMS.buckets
@@ -168,9 +208,31 @@ def test_an_occupancy_row_is_t_counts_within_the_allocation(tmp_path):
     assert replace(lw, occupancy=((four,), (four, four))).declares(1, 1, four)
 
 
+def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
+    """N2's unit holds the certificates' check and each end's head check, at the link's size class: L the name's bytes,
+    T the end's buckets and COUNTS whether the end has a profile, each head check one gate that names its Definition. A
+    profile changes the unit, and so the spec's Program."""
+    lw = Run(tmp_path).lw
+    declared = replace(lw, occupancy=(honest_occupancy()[0], None))
+    assert lw.unit.id == "NetworkLinkWindow_v2{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
+    assert declared.unit.id == "NetworkLinkWindow_v2{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
+    assert lw.spec.check.program != declared.spec.check.program and lw.spec.check.query != declared.spec.check.query
+    defs = codec.encode_program(P.population_program(declared.unit, 1))["definitions"]
+    assert {"NetworkCertificatesCheck_v1", "Gate[NetworkHeadCheck_v1{L=9,T=4,COUNTS=1}]_v1",
+            "Gate[NetworkHeadCheck_v1{L=9,T=4,COUNTS=0}]_v1"} <= set(defs)
+    assert not any(f.startswith(("NetworkHidingRead", "Hm96Sha512Leaf", "Sha512Compress")) for f in defs)
+    params, _ = declared.unit.signature()
+    gate = HC.gate(9, 4, True)
+    assert gate.params == HC.unit(9, 4, True).signature()[0]
+    assert [n for n, _ in params] == ["egress", "ingress", *(f"egress_{n}" for n, _ in gate.params),
+                                      *(f"ingress_{n}" for n, _ in HC.gate(9, 4, False).params)]
+    wide = replace(lw, ingress=GridParams(8, 2, 1))
+    assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
+
+
 def test_the_domain_is_one_stages_served_domain(tmp_path):
     lw = Run(tmp_path).lw
-    part = P.partition(P.population_program(UNIT, 1), lw.spec.check.query)
+    part = P.partition(P.population_program(lw.unit, 1), lw.spec.check.query)
     for w in range(3):
         want = R.served_domain(part["program"], P.digest(part), VALUE, "hm96-sha512/row/v2", 4, f"r-network-test/{LINK}/{w}")
         assert lw.ports(w)[VALUE]["domain"] == want

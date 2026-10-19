@@ -26,7 +26,7 @@ from verity.core.protocols.certifier import audit, lean_audit, service
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey, LmsSigner,
                                                         parameters_digest)
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import Certifier, GridParams
+from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -127,17 +127,19 @@ SERVICE_FRAMES = [LogicalFrame(bytes([i, i]), 2 * i, 0) for i in range(8)]
 SESSION = bytes(range(lms.SESSION_BYTES))
 
 
-def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e):
+def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e, profile=False):
     """`service.py`'s rounds on link "responses": each window's (link-windows, stream, opening, draw, syncs), the egress
-    record passed through `record(w, r)`, certified, then through `certified(w, e)`."""
+    record passed through `record(w, r)`, certified, then through `certified(w, e)`. `profile`: the link declares the
+    honest egress records' occupancy."""
     g, ss = GridParams(3, 2, 2), SyncSet((0, 1), (Fraction(1),))
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
     signer = LmsSigner.create(lms.keygen(lms.Params(8, 8, 4, toy=True), bytes(range(8))), tmp_path / "signer-state.json")
     issuer = Issuer(signer, SESSION)
-    lw = service.LinkWindows("responses", g, ss, signer.public_key(), "r-lean-audit-test", SESSION, proof_deadline=60.0)
+    egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Certifier("responses", g))
+    lw = service.LinkWindows("responses", g, ss, signer.public_key(), "r-lean-audit-test", SESSION, proof_deadline=60.0,
+                             occupancy=(tuple(occupancy(r.grid) for r in egress) if profile else None, None))
     stream = lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test", coins=lambda n: b"\x07" * n,
                        clock=lambda: 0.0)
-    egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Certifier("responses", g))
     ingress, ins = Certifier("responses", g), []
     for _ in range(W):
         for _ in range(g.buckets):
@@ -176,6 +178,47 @@ def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatc
         accepted.append(got["python"]["accepted"])
         assert lw.outcome(stream, draw, opening, SERVICE_FRAMES, syncs).accepted == accepted[-1]
     assert accepted == [True, False, False, False, False, False]
+
+
+def test_under_an_egress_profile_the_adapter_leaves_the_egress_grid_to_the_head_check(lean, tmp_path, monkeypatch):
+    """With the link's egress occupancy declared, `LinkWindows.verify` compares no egress grid (`check_link(grid=False)`)
+    under the adapter as under `audit.Audit`: a window whose frames differ from the Program's in content alone, at the
+    profile's counts, is accepted by both, where the stand-in rejects it, and a forged signature is still rejected. The
+    adapter's `check_link(grid=False)` maps only the Lean's `mismatch` to an accept, and refuses a record that isn't
+    certified, whose grid no head check holds."""
+    def content(w, r):
+        if w != 1:
+            return r
+        slots = [list(row) for row in r.grid]
+        b, k = next((b, k) for b, row in enumerate(slots) for k, s in enumerate(row) if s is not None)
+        slots[b][k] = bytes(x ^ 0xFF for x in slots[b][k])
+        return dataclasses.replace(r, grid=tuple(tuple(row) for row in slots))
+
+    def forged(w, e):
+        return CertifiedRecord(e.head, dataclasses.replace(e.certificate, signature=b"")) if w == 2 else e
+
+    accepted, stood = [], []
+    for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 3, content, forged, profile=True):
+        got = {}
+        for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
+            monkeypatch.setattr(service, "Audit", impl)
+            got[name] = lw.verify(opening, draw, SERVICE_FRAMES, syncs)
+        assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
+        accepted.append(got["python"]["accepted"])
+        stood.append(lw.stand_in(opening, draw, SERVICE_FRAMES, syncs))
+        assert lw.outcome(stream, draw, opening, SERVICE_FRAMES, syncs).accepted == accepted[-1]
+        if opening.window == 1:
+            egress, args = [opening.records[0]], (SERVICE_FRAMES, syncs[:2], lw.sync_set, lw.params, lw.key, SESSION)
+            assert [v.violation for v in lean_audit.Audit(server=lean).check_link("responses", egress, *args)] == \
+                ["no-verdict", "mismatch"]
+            a = lean_audit.Audit(server=lean)
+            assert [v.violation for v in a.check_link("responses", egress, *args, grid=False)] == ["no-verdict", None]
+            assert a.lean == a.reference
+            raw = content(1, run_shaper(SERVICE_FRAMES, [0] * 8, syncs, Certifier("responses", lw.params))[1])
+            for records in ([raw], [commit(raw, lw.params)]):
+                with pytest.raises(ValueError, match="only a certified record's grid is held by its head check"):
+                    lean_audit.Audit(server=lean).check_link("responses", records, *args, grid=False)
+    assert accepted == [True, True, False] and stood == [True, False, False]
 
 
 def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
