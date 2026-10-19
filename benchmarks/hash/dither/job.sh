@@ -25,7 +25,7 @@
 #     --send BUILD_RUN/out/lib/sm_90a/h1u.so --send ... --send BUILD_RUN/out/lib/sm_90a/BUILD.txt \
 #     -- bash benchmarks/hash/dither/job.sh sm_90a h1u
 #
-# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
+# Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -166,7 +166,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ]; then
   bash -c "$bench"
 else
   read -r -a lease <<< "${LEASE:---max-min 14}"
-  GPU_LEASE_WHO=kernels-dither-hb gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
+  GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
 fi
 rc=$?
 echo "lease rc $rc"

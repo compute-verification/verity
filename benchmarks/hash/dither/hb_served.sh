@@ -30,7 +30,7 @@
 # dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), and dither-1s-hbp's at
 # H1V3_PEEL_SHA too (default 4733b9ab0c, v3 with the peel), each from a sent h1v3-SHA.tar.gz (`git archive SHA verity |
 # gzip`; a --cwd source tree has no history), else the source's git.
-# Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
+# Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
@@ -172,7 +172,7 @@ cd integrations/vllm
 printf '%s\n' "$PY $INPUTS/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
 read -r -a lease <<< "${LEASE:---max-min 14}"
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-GPU_LEASE_WHO=kernels-dither-hb gpu-lease 1 --wait "${lease[@]}" -- bash -c '
+GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \
