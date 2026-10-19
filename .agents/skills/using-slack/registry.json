@@ -426,7 +426,8 @@
         "tools/research/tests/test_slack.py",
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
-        "tools/research/tests/test_linear.py"
+        "tools/research/tests/test_linear.py",
+        "integrations/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
