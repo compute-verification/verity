@@ -685,6 +685,80 @@ impl Drop for LeanFrame {
     }
 }
 
+/// The coin tree's opening checks of record on a firewalled session (`coin_tree::Checked::with_lean`): one session's
+/// `flock-firewall coins` process (`Flock.Firewall.Coins` in the Lean verifier), which checks the prover's `Hello`, `Hello`'s
+/// answer and every opening against the committed tree, and refuses everything after its first refusal.
+#[cfg(feature = "sha512")]
+pub struct LeanCoins {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
+}
+
+#[cfg(feature = "sha512")]
+impl LeanCoins {
+    pub fn start(exe: &std::path::Path) -> Result<Self, String> {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("coins").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean coin check {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+        let (stdin, stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
+        Ok(LeanCoins { child, stdin, stdout })
+    }
+
+    /// `head` and `body` sent, the answer: `ok` (`None`), `ok N` (`Some(N)`), or the refusal `stop WHY`.
+    fn ask(&mut self, head: &str, body: &[u8]) -> Result<Result<Option<usize>, String>, String> {
+        use std::io::{BufRead, Write};
+        writeln!(self.stdin, "{head}").and_then(|_| self.stdin.write_all(body)).and_then(|_| self.stdin.flush())
+            .map_err(|e| refused(format!("the Lean coin check's {head}: {e}")))?;
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).map_err(|e| refused(format!("the Lean coin check's answer to {head}: {e}")))?;
+        let line = line.trim_end();
+        if let Some(why) = line.strip_prefix("stop ") {
+            return Ok(Err(why.to_string()));
+        }
+        match line.strip_prefix("ok") {
+            Some("") => Ok(Ok(None)),
+            Some(n) if n.starts_with(' ') => n[1..].parse().map(|n| Ok(Some(n))).map_err(|_| refused(format!("the Lean coin check's answer {line:?}"))),
+            _ => Err(refused(format!("the Lean coin check: {}", line.strip_prefix("err ").unwrap_or(if line.is_empty() { "no answer" } else { line })))),
+        }
+    }
+
+    fn passed(r: Result<Option<usize>, String>) -> Result<(), String> {
+        r.map(|_| ())
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl crate::coin_tree::OpeningCheck for LeanCoins {
+    fn hello(&mut self, hello: &str) -> Result<Result<(), String>, String> {
+        self.ask(&format!("hello {}", hello.len()), hello.as_bytes()).map(Self::passed)
+    }
+
+    fn answer(&mut self, frame: &[u8]) -> Result<Result<(), String>, String> {
+        self.ask(&format!("answer {}", frame.len()), frame).map(Self::passed)
+    }
+
+    fn open(&mut self, stream: &str, n: usize, frame: &[u8]) -> Result<Result<Vec<F128>, String>, String> {
+        use std::io::Read;
+        let k = match self.ask(&format!("open {stream} {n} {}", frame.len()), frame)? {
+            Ok(Some(k)) => k,
+            Ok(None) => return Err(refused(format!("the Lean coin check opened {stream} without its coins"))),
+            Err(why) => return Ok(Err(why)),
+        };
+        let mut b = vec![0u8; 16 * k];
+        self.stdout.read_exact(&mut b).map_err(|e| refused(format!("the Lean coin check's coins of {stream}: {e}")))?;
+        Ok(Ok(b.chunks(16).map(|c| F128::new(u64::from_le_bytes(c[..8].try_into().unwrap()), u64::from_le_bytes(c[8..].try_into().unwrap()))).collect()))
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl Drop for LeanCoins {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
 /// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
