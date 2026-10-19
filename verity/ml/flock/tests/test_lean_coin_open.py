@@ -39,8 +39,8 @@ def _request(step: dict) -> bytes:
 
 
 def _run(requests: list[bytes]) -> tuple[list[dict], int]:
-    """Every request at once; Lean's answers, each `{}` (`ok`), `{"coins": HEX}` (`ok N` and the coins) or
-    `{"stop": WHY}`, and its exit code."""
+    """Every request at once; Lean's answers, each `{}` (`ok`), `{"coins": HEX}` (`ok N` and the coins), `{"stop": WHY}`
+    or `{"err": WHY}` (`err WHY`), and its exit code."""
     p = subprocess.run([str(BIN), "coins"], input=b"".join(requests), capture_output=True)
     out, at, answers = p.stdout, 0, []
     while at < len(out):
@@ -55,7 +55,7 @@ def _run(requests: list[bytes]) -> tuple[list[dict], int]:
         elif line.startswith("stop "):
             answers.append({"stop": line[5:]})
         else:
-            answers.append({"err": line})
+            answers.append({"err": line.removeprefix("err ")})
     return answers, p.returncode
 
 
