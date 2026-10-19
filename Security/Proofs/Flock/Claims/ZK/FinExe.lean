@@ -718,6 +718,66 @@ theorem finExe_of_reps (hL : LiveEnd) (hSC : SimCommit) (hF : RepFin) (hE : RepE
     FinExe :=
   finExe_of hL (simFin_of hSC hF hE hP)
 
+/-! ## Where every table admits, the views' source is the cut's with the final message's data -/
+
+/-- **Every check of the session passes** where every table admits the opened coins (`coin_facts`): the rank check over
+any claims, each `W^r` bijective and each `β ≠ 0`. -/
+theorem famGuard_admits {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
+    (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (j : Fin (jOf x)) (r : Fin 2)
+    (p : FlockSoundness.ZK.Session.Phase) :
+    famGuard (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
+      j r p := by
+  obtain ⟨hrank, hW, hb⟩ := Composed.coin_facts (tabC PE x j) (czExe PE x c j) (hA j) (fun _ => rfl)
+    (fun _ => ⟨rfl, rfl⟩) (fun _ _ => rfl) (fun _ => rfl)
+  cases p
+  · exact FlockSoundness.ZK.Table.Rank.rankOn _ hrank _
+  · exact hW r
+  · exact hb r
+
+/-- **Where every table admits, the cut is the views' with every guarded message sent** (`famGuard_admits`). -/
+theorem cutE_eq_viewCut {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
+    (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
+    cutE x c w τ j = viewCut (viewsE x c w τ j) := by
+  rw [← cutV_viewsE]
+  have hP : ∀ r p, famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab)
+      (fun j => ((tabC PE x j).T (czExe PE x c j)).rep) j r p :=
+    fun _ _ j' r' p' _ => famGuard_admits hA j' r' p'
+  show FlockSoundness.ZK.Table.cut _ (famSent (fun j => ((tabC PE x j).T (czExe PE x c j)).tab)
+    (fun j => ((tabC PE x j).T (czExe PE x c j)).rep) j) (viewPre _ (viewsE x c w τ j)) = _
+  simp only [FlockSoundness.ZK.Table.cut, famSent, hP, ite_true, viewCut, viewPre]
+
+/-- A rep's source without what only the final message reads: `τ`, its salt, and the pads' columns and salts. -/
+def eraseS (s : FlockComplete.RepSrc) : FlockComplete.RepSrc :=
+  { s with tau := 0, tauSalt := ByteArray.empty, ch := fun _ => 0, cm := fun _ => 0,
+           padSalt := fun _ => ByteArray.empty }
+
+theorem eraseS_upd (s : FlockComplete.RepSrc) (a : _root_.Flock.F128) (b : ByteArray) (f g : ℕ → _root_.Flock.F128)
+    (k : ℕ → ByteArray) (h0 : s.tau = 0) (h1 : s.tauSalt = ByteArray.empty) (h2 : s.ch = fun _ => 0)
+    (h3 : s.cm = fun _ => 0) (h4 : s.padSalt = fun _ => ByteArray.empty) :
+    eraseS { s with tau := a, tauSalt := b, ch := f, cm := g, padSalt := k } = s := by
+  cases s
+  simp only at h0 h1 h2 h3 h4
+  subst h0 h1 h2 h3 h4
+  rfl
+
+/-- **Where every table admits, a rep's source from the views is the cut's** but for what only the final message
+reads (`cutE_eq_viewCut`). -/
+theorem eraseS_srcV {x : Msg} {c : Fin (refK x) → FlockDeploy.Coin}
+    (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
+    (hi : i < jOf x) (hr : r < 2) : eraseS ((srcV x c w τ i).rep r) = (srcE x c w τ i).rep r := by
+  have e : (fun j => viewCut (viewsE x c w τ j)) = cutE x c w τ :=
+    funext fun j => (cutE_eq_viewCut hA w τ j).symm
+  show eraseS ((tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).rep r) =
+    (tabSrcCut PE x (czExe PE x c) (cutE x c w τ) i).rep r
+  generalize viewsE x c w τ = v at e ⊢
+  generalize cutE x c w τ = cu at e ⊢
+  subst e
+  unfold tabSrcView tabSrcCut
+  rw [dite_eq_left hi, dite_eq_left hi]
+  dsimp only
+  rw [dite_eq_left hr, dite_eq_left hr]
+  exact eraseS_upd _ _ _ _ _ _ rfl rfl rfl rfl rfl
+
 end Masked
 
 end Claims.ZKMal
