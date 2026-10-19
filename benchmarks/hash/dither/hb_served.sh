@@ -24,8 +24,8 @@
 # hb_sbench.py adds three arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
 # (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); and dither-1s-hb,
 # dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so). The
-# dither-1s arms' gate also runs CA's H1V3 h1tile.reference, from the source's git at H1V3_SHA (default bd702a2c46), else
-# from a sent h1v3-SHA.tar (git archive SHA verity).
+# dither-1s arms' gate also runs CA's H1V3 h1tile.reference at H1V3_SHA (default bd702a2c46), from a sent
+# h1v3-SHA.tar.gz (`git archive SHA verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
@@ -117,7 +117,11 @@ export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so DITHER_H1O=$INP
 # h1tile.reference(stream=True) on a few units
 H1V3_SHA=${H1V3_SHA:-bd702a2c46}
 mkdir -p "$S/h1v3"
-{ git -C "$ROOT" archive "$H1V3_SHA" verity 2>/dev/null || cat "$INPUTS/h1v3-$H1V3_SHA.tar" 2>/dev/null; } | tar -x -C "$S/h1v3" 2>/dev/null
+if [ -f "$INPUTS/h1v3-$H1V3_SHA.tar.gz" ]; then
+  tar -xzf "$INPUTS/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+else
+  git -C "$ROOT" archive "$H1V3_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3" 2>/dev/null
+fi
 [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
   && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "hb_served: no H1V3 tree at $H1V3_SHA"
 echo "h1v3 ${DITHER_H1V3_SHA:-none}" >> "$OUT/env/wrapper.txt"
