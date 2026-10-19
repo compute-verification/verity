@@ -111,7 +111,7 @@ def test_each_leaf_reads_its_word_view() -> None:
     for leaf, word in zip(BI8.INT8_LEAVES, IE.INT8_PRIMITIVES):
         assert TR.word_of(leaf) is word, leaf.id
     assert [d.id for d in BI8.INT8_LEAVES] == ["F32Rint_v2", "F32ToS8Rzi_v2", "S8ToF32_v2", "F32MulWide_v2", "F64Mul_v2",
-                                               "F64ToU32RniSat_v2", "LutIndex_v2", "Exp2Lut127_v3"]
+                                               "F64ToU32RniSat_v2", "LutIndex_v2", "Exp2Lut127_v3", "U8ToU16_v2"]
 
 
 def test_the_quantizer_element_ties_saturates_and_takes_extreme_scales() -> None:

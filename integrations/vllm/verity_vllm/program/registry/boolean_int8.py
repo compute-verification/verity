@@ -6,6 +6,7 @@ row builds Boolean-first (`verity_vllm.program.boolean`).
     Exp2Lut127_v3       (t: Array<8, Value<1>>) -> Array<32, Value<1>>; word view: Exp2Lut127_v1.  `boolean.table.read` (the
                         multiplexer tree of `TableRead{IB}x{EW}_v2`) over fattn's 256 entries as constant bits, which fold: only
                         an entry's 7 low bits are ever set
+    U8ToU16_v2          (t: Array<8, Value<1>>) -> Array<16, Value<1>>; word view: U8ToU16_v1.  No gates: t's bits, then 8 zeros
     Int8QuantElement_v2, Int8RowScale_v2{K}, Int8StaticQuant_v2{K}, Int8RowQuant_v2{K}, Int8Linear_v2{K,N}, Int8AttnScale_v2{SCALE},
     Int8LutSoftmax_v3{S}, Int8AttnOut_v2, Int8LutAttentionRow_v3{D,S,SCALE}, Int8ColumnQuant_v2{S,D}, Int8KvQuant_v2{S,D}
                         σ of the word composite (`boolean.sigma_lift`): its body at each binding with each Call the Boolean
@@ -53,6 +54,8 @@ def _exp2_lut127(C, t):
 Exp2Lut127 = definition("Exp2Lut127", 3, _exp2_lut127, (("t", CODE),), I32, word=IE.Exp2Lut127,
                         doc="fattn's LUT[t] = rint(127 2^(-t/16)) on bits: Exp2Lut127_v1, the table read's multiplexer tree over "
                             "constant entries")
+U8ToU16 = definition("U8ToU16", 2, lambda C, t: [*t, *const_bits(0, 8)], (("t", CODE),), Array(16, BIT), word=IE.U8ToU16,
+                     doc="the byte zero-extended to a 16-bit word on bits: U8ToU16_v1, its high 8 bits the constant 0")
 
 Int8QuantElementV2 = sigma_lift(IE.Int8QuantElement, 2)
 Int8RowScaleV2 = sigma_lift(IE.Int8RowScale, 2)
@@ -66,6 +69,6 @@ Int8LutAttentionRowV3 = sigma_lift(IE.Int8LutAttentionRow, 3)
 Int8ColumnQuantV2 = sigma_lift(IE.Int8ColumnQuant, 2)
 Int8KvQuantV2 = sigma_lift(IE.Int8KvQuant, 2)
 
-INT8_LEAVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127]
+INT8_LEAVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16]
 INT8_SIGMA = [Int8QuantElementV2, Int8RowScaleV2, Int8StaticQuantV2, Int8RowQuantV2, Int8LinearV2, Int8AttnScaleV2,
               Int8LutSoftmaxV3, Int8AttnOutV2, Int8LutAttentionRowV3, Int8ColumnQuantV2, Int8KvQuantV2]
