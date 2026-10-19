@@ -15,7 +15,7 @@ guarantee or of the model's accounting:
 * the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: NCI's thread bound,
   `Nci.Guarantees.ThreadedThrottled`, which `DampenerThreaded` takes as proved rather than as a hypothesis;
 * faulty proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' draw
-  establishes (the cumulative bound, `Population.Exfil.tail_cum`, at a budget);
+  establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
 * the memory cap bounds the residual and the declared computation on the monitored servers together,
   `M_r + M_d ≤ μ κ C/2`: `DampenerWindows` derives it, with `μ` the memory cap and one window of rounding, from the
   servers' windows, each holding at most `K Λ(K)/b_a` counted multiplications: the memory cap over threads
