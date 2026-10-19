@@ -1992,6 +1992,8 @@ def test_proofs_workers_that_stop_together_are_one_alert_to_their_parents_lane_n
     rest = [r for r in records(tmp_path) if r["kind"] != "workers_failed"]
     assert [(r["kind"], r["agent"], r["handle"]) for r in rest] == [("worker_idle", other, "vllm")], \
         "no worker_idle of the 14 on its own; the other coordinator's worker alone, as itself"
+    assert set(rest[0]) == {"t", "kind", "agent", "name", "run", "at", "since", "lane", "handle"}, "posted as before it was held"
+    assert all("idle_t" not in m for m in burst["members"])
     again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d")
     assert again.bursts == {} and set(KIDS.values()) <= set(again.children), "nothing left held; the children kept"
 

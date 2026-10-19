@@ -782,7 +782,10 @@ class Watch:
         due = [k for k, b in self.bursts.items() if t - b.get("last", b["first"]) >= BURST_QUIET_S or t - b["first"] >= BURST_S]
         for key in sorted(due):
             b = self.bursts.pop(key)
-            items = [{**x, **self.wake_of(x["agent"], x.pop("idle_t"))} for x in b["items"]]
+            items = []
+            for x in b["items"]:
+                idle_t = x.pop("idle_t", t)
+                items.append({**x, **self.wake_of(x["agent"], idle_t)})
             if len(items) == 1:
                 x = items[0]
                 self.record(x.pop("kind"), Run(x.pop("agent"), x.pop("run"), x.pop("name")), **x)
