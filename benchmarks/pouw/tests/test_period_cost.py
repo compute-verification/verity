@@ -118,6 +118,25 @@ def test_one_long_window_is_the_least_rounds_under_one_percent_and_certifies_aft
     assert p["days_to_period"] >= p["serving_days"] + p["cert_days"]
 
 
+def test_a_prefix_is_credited_at_its_own_epsilon():
+    # RT4-INT-8: ε at the prefix is at least 1 up to j = 201 at today's gate credit
+    assert PC.first_credit(PC.TODAY) == 202
+    assert PC.credit(201, PC.TODAY) == 0.0 < PC.credit(202, PC.TODAY)
+    n = PC.windows(PC.TODAY)
+    assert PC.credit(n, PC.TODAY) > 1 - PC.TARGET >= PC.credit(n - 1, PC.TODAY)
+    assert PC.all_skip_pays(PC.TODAY) and not PC.all_skip_pays(replace(PC.TODAY, draws=9))
+
+
+def test_the_near_term_needs_no_new_kernel_unit_or_form_and_only_shortens():
+    steps = PC.near_term()
+    assert len(steps) == len(PC.NEAR_TERM) + 1
+    days = [PC.period(c)["days_to_period"] for c in [PC.TODAY, *steps[:-1]]]
+    assert days == sorted(days, reverse=True)
+    for c in steps:
+        assert (c.t_window_s, c.unit_outputs, c.lean_session_s) == (PC.T_WINDOW, PC.TODAY.unit_outputs, None)
+    assert steps[-1].nodes == 8 and all(c.nodes == PC.NODES for c in steps[:-1])
+
+
 def test_no_budget_is_refused():
     with pytest.raises(ValueError, match="no logical budget"):
         PC.windows(replace(PC.TODAY, eps_flat=0.01))
@@ -127,7 +146,8 @@ def test_main_writes_the_report(tmp_path, capsys):
     out, md = tmp_path / "period.json", tmp_path / "period.md"
     assert PC.main(["--json", str(out), "--md", str(md)]) == 0
     rep = json.loads(out.read_text())
-    assert {"rates", "configurations", "levers", "draws_scan", "rounds_scan", "long_windows", "sensitivity"} <= set(rep)
+    assert {"rates", "configurations", "near_term", "levers", "draws_scan", "rounds_scan", "long_windows",
+            "sensitivity"} <= set(rep)
     assert all(p["windows"] == 1 for p in rep["long_windows"])
     assert rep["configurations"][0]["windows"] == 46604
     assert rep["sensitivity"]["delta_s_log2"]["40"] == 4815

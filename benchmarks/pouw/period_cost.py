@@ -10,6 +10,9 @@ sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit rat
 at the lucks a = 0.218, b = 0.998, p = 7/8, p0 = ½, δ_s = 2^-40 and ε_♭ = 0.571% (sm_120 sheet, H1 + fx1). u is the
 period's admitted rows over its declared rows, so the first period at ε < 1% is n = ⌈Λ·ln(1/δ_s)/(u·(1% − ε_♭))⌉ windows.
 At small x, Λ ≈ b·r/((1 − p0)·K_d): what counts is the period's total draws n·K_d, and M past 18 buys nothing.
+A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j (RT4-INT-8), so a prefix
+earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every drawn tile passes with
+p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
 **The served window** (r20261018-234409-19cd, SERVE-H1 on vy-nebius-2): 18 rounds, 16 served steps and 2 empty, 64 rows a
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
@@ -205,6 +208,22 @@ def windows(c: Config) -> int:
     return math.ceil(lam(c.draws, c.r, c.rounds) * c.delta_s_log2 * math.log(2) / (c.u * budget))
 
 
+def credit(j: int, c: Config) -> float:
+    """The share of an accepted prefix of j windows' live words credited, (1 − ε(j))₊ (RT4-INT-8)."""
+    return max(0.0, 1.0 - eps(j, c))
+
+
+def first_credit(c: Config) -> int:
+    """The least prefix that earns any credit: ε(j) < 1."""
+    return math.floor(lam(c.draws, c.r, c.rounds) * c.delta_s_log2 * math.log(2) / (c.u * (1 - c.eps_flat))) + 1
+
+
+def all_skip_pays(c: Config) -> bool:
+    """Whether a window that skips every drawn tile whole passes (p0^K_d) more often than its credit is wrong (1 − b), so
+    that, credited without ε's discount, it out-earns an honest window (RT4-INT-8: at K_d = 8, 1.95×)."""
+    return P0 ** c.draws > 1 - B
+
+
 def statement_lanes(rt: Rates) -> int:
     """The most lanes a statement holds: `m ≤ 35`'s 256, and what one node's memory gives its prover."""
     if rt.prove_lane_gb <= 0:
@@ -242,7 +261,8 @@ def period(c: Config) -> dict:
     last_s = max(statement_s, w["node_s"] / c.nodes)
     return dict(
         name=c.name, windows=n, draws=n * c.draws, lanes=n * w["lanes"], rounds=n * c.rounds,
-        eps=eps(n, c), lam=lam(c.draws, c.r, c.rounds),
+        eps=eps(n, c), lam=lam(c.draws, c.r, c.rounds), credit=credit(n, c), first_credit=first_credit(c),
+        all_skip_pays=all_skip_pays(c),
         statements_per_window=w["statements"], prove_s_per_window=w["prove_s"], lean_s_per_window=w["lean_s"],
         prove_slots=w["prove_slots"], lean_slots=w["lean_slots"],
         prove_process_days=n * w["prove_s"] / DAY, lean_process_days=n * w["lean_s"] / DAY,
@@ -344,6 +364,21 @@ def route(base: Config = TODAY) -> list[Config]:
     return out
 
 
+NEAR_TERM = ("u: every row slot of a served step filled", "r → 1: units of equal work",
+             "Lean: one process checks many windows", "prover: one process proves many windows", "draws per window")
+
+
+def near_term(base: Config = TODAY) -> list[Config]:
+    """`NEAR_TERM`'s levers, which need no new receipt kernel, served unit or proof form, in order, each on the last;
+    then the last on eight nodes (Daniel's spend), its draws tuned again."""
+    out, c = [], base
+    for name in NEAR_TERM:
+        c = apply(lever(name), c)
+        out.append(c)
+    spend = apply(lever("draws per window"), apply(lever(SPEND), c))
+    return [*out, replace(spend, name=f"+ {SPEND} (draws = {spend.draws})")]
+
+
 def configurations(base: Config = TODAY) -> list[Config]:
     """INT-PERIOD's line, `base`, and `route`'s steps, each on the last."""
     line = Config("INT-PERIOD's line: per-draw rates, W2's tile a draw", rates="int-period", unit_outputs=LANE_OUTPUTS,
@@ -411,12 +446,14 @@ def sensitivity() -> dict:
 
 
 def table(rows: list[dict]) -> str:
-    lines = ["| configuration | windows | draws | lanes | statements a window | prove + Lean s a window "
-             "| prove + Lean process-days | node-days | serving d | certifying d | days to period | nodes to keep pace |",
-             "|---" * 12 + "|"]
+    lines = ["| configuration | windows | first credit | all-skip pays | draws | lanes | statements a window "
+             "| prove + Lean s a window | prove + Lean process-days | node-days | serving d | certifying d "
+             "| days to period | nodes to keep pace |",
+             "|---" * 14 + "|"]
     for p in rows:
         lines.append(
-            f"| {p['name']} | {p['windows']:,} | {p['draws']:,} | {p['lanes']:,.0f} | {p['statements_per_window']} | "
+            f"| {p['name']} | {p['windows']:,} | {p['first_credit']:,} | {'yes' if p['all_skip_pays'] else 'no'} | "
+            f"{p['draws']:,} | {p['lanes']:,.0f} | {p['statements_per_window']} | "
             f"{p['prove_s_per_window']:,.0f} + {p['lean_s_per_window']:,.0f} | "
             f"{p['prove_process_days']:,.1f} + {p['lean_process_days']:,.1f} | {p['node_days']:,.1f} | "
             f"{p['serving_days']:,.2f} | {p['cert_days']:,.2f} | {p['days_to_period']:,.2f} | "
@@ -439,7 +476,7 @@ def report() -> dict:
     return dict(
         rates={k: dataclasses.asdict(v) for k, v in RATES.items()},
         lanes_per_unit=lanes_per_unit(), statement_lanes={k: statement_lanes(v) for k, v in RATES.items()},
-        node_gb=NODE_GB, configurations=[period(c) for c in configs],
+        node_gb=NODE_GB, configurations=[period(c) for c in configs], near_term=[period(c) for c in near_term()],
         levers=single_levers(), route_end=end.name,
         draws_scan=scan(end, "draws", DRAWS), rounds_scan=scan(end, "rounds", ROUNDS_SCAN),
         long_windows=[period(long_window(c)) for c in (configs[1], configs[3], end)],
@@ -452,6 +489,8 @@ def markdown(rep: dict) -> str:
            f"{rep['statement_lanes'][TODAY.rates]} lanes at `{TODAY.rates}`'s rates; a node has {NODE_GB} GB.", ""]
     out += [f"- rates `{k}`: {rt['source']}" for k, rt in rep["rates"].items()]
     out += ["", table(rep["configurations"]), "",
+            "Near term (no new receipt kernel, served unit or proof form), each on the last, then on eight nodes:", "",
+            table(rep["near_term"]), "",
             "Each lever alone on today's configuration (work: 1 a parameter, 2 one module, 3 a new path, 4 a new form):",
             "", lever_table(rep["levers"]), ""]
     for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
