@@ -69,7 +69,7 @@ theorem zk_levelOpening {L : List (Claims.Msg × Claims.Msg)} {spec : SessionSpe
   have hsch₀ : Zk.schedule (Setup.ofCircuit sts[j]).m = .ok (sch, tPad) := hsch
   obtain ⟨stream', extras, zp, hfind', hex, hdec, hlev⟩ :=
     zkLevels_verifyRepWith _ spec (Setup.ofCircuit sts[j]) sch tPad sess _ _ _ c hsch₀ hrep
-  obtain rfl : stream' = stream := Option.some.inj (hfind'.symm.trans hfind)
+  obtain rfl : stream = stream' := Option.some.inj (hfind.symm.trans hfind')
   rw [hpts] at hex
   have hx : extras.size = 2 * sts[j].regions.size := by
     rw [extraClaims_size (st := sts[j]) hex, ← hpts, hpn, hp2, Nat.mul_comm]

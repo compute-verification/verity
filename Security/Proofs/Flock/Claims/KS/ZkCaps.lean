@@ -178,8 +178,8 @@ theorem runsAtZCJ_live_caps (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
     rw [hN, hyst] at hdz₀ hdz₁
     refine ⟨hok, spec, sts, y.sch, y.tPad, hj, hs, by rw [← hyst]; exact y.hz, fun r hr => ?_⟩
     obtain rfl | rfl : r = 0 ∨ r = 1 := by omega
-    · exact ⟨zp₀, by rw [Nat.add_zero]; exact hdz₀, by rw [if_pos rfl]; exact hc₀⟩
-    · exact ⟨zp₁, hdz₁, by rw [if_neg Nat.one_ne_zero]; exact hc₁⟩
+    · exact ⟨zp₀, by rw [Nat.add_zero]; exact hdz₀, by rw [ite_eq_left rfl]; exact hc₀⟩
+    · exact ⟨zp₁, hdz₁, by rw [ite_eq_right Nat.one_ne_zero]; exact hc₁⟩
 
 end FlockSoundness.Discharge.Composed
 
@@ -338,8 +338,8 @@ theorem runsAtZCJH_live_caps (I : Inputs) (ht : I.tags.typed = false) {c : Flock
     rw [hN, hyst] at hdz₀ hdz₁
     refine ⟨hok, spec, sts, y.sch, y.tPad, hj, hs, by rw [← hyst]; exact y.hz, fun r hr => ?_⟩
     obtain rfl | rfl : r = 0 ∨ r = 1 := by omega
-    · exact ⟨zp₀, by rw [Nat.add_zero]; exact hdz₀, by rw [if_pos rfl]; exact hc₀⟩
-    · exact ⟨zp₁, hdz₁, by rw [if_neg Nat.one_ne_zero]; exact hc₁⟩
+    · exact ⟨zp₀, by rw [Nat.add_zero]; exact hdz₀, by rw [ite_eq_left rfl]; exact hc₀⟩
+    · exact ⟨zp₁, hdz₁, by rw [ite_eq_right Nat.one_ne_zero]; exact hc₁⟩
 
 end FlockSoundness.Discharge.ZkHidden
 
