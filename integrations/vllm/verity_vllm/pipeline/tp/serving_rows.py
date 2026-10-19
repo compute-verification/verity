@@ -13,7 +13,9 @@ The verifier's own window of rank ``r`` (`window_of_record`) comes from the Comm
 root and every rank's root of its first instrumented run (`record`: ``runs.jsonl``, refused unless the TP run root combines those
 roots), and the population over rank ``r``'s Programs of record (`rank_replay.load`, under the Build's ``rank<r>/``, refused unless of
 record for the rank in ``versions.json`` and the rank's) for the workload the record served.  `source` holds a registration's window to it: ``served``, its run
-``<TP run root>/rank<r>``, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+``<TP run root>/rank<r>`` under a SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A
+served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's, so while the TP run root is SHA-256
+(`tp.run_root`) no TP window passes as served (``sha512``)."""
 from __future__ import annotations
 
 import hashlib
@@ -161,9 +163,13 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
 
 def source(registered: dict[str, Any] | None, mine: Any, held: dict[str, Any]) -> dict[str, Any]:
     """A rank's registration's ``window`` held to the verifier's own (`window_of_record`): ``served`` with no stand-in link, its run
-    the rank's of record, its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    the rank's of record under a SHA-512 TP run root (``sha512``, `deferred_rows.source`'s 64-byte test: `tp.run_root`'s SHA-256 root
+    is refused), its ``tp`` the record's and its served Programs the ones the verifier loaded."""
+    from verity_vllm.pipeline.deferred_rows import SERVED_ROOT
+
     w = registered or {}
-    ok = {"kind": w.get("kind") == "served", "run": w.get("run") == mine.run, "tp": w.get("tp") == held["tp"],
-          "served_programs": w.get("served_programs") == held["served_programs"], "no_link": "of" not in w and "link" not in w}
+    ok = {"kind": w.get("kind") == "served", "run": w.get("run") == mine.run, "sha512": len(held["tp"]["tp_run_root"]) == 2 * SERVED_ROOT,
+          "tp": w.get("tp") == held["tp"], "served_programs": w.get("served_programs") == held["served_programs"],
+          "no_link": "of" not in w and "link" not in w}
     return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
             "detail": {"kind": w.get("kind"), "run": w.get("run"), "tp": w.get("tp")}}

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import multiprocessing
 import sys
@@ -240,6 +241,16 @@ def _mine(c, rank: int, commit_dir=None):
     return SRT.window_of_record(commit_dir or c["commit"], rank, c["partition"], c["build"], c["workload"])
 
 
+def _at_sha512(window, mine, held):
+    """``window``, the verifier's window and its record with held's TP run root replaced by a 64-byte one wherever it appears, as a
+    TP Commit under a SHA-512 TP run root would have them (the fixture's, like every TP Commit's today, is `tp.run_root`'s SHA-256)."""
+    old = held["tp"]["tp_run_root"]
+    new = hashlib.sha512(bytes.fromhex(old)).hexdigest()
+    w = window if window is None else {**window, "run": window["run"].replace(old, new),
+                                       "tp": {**window["tp"], "tp_run_root": window["tp"]["tp_run_root"].replace(old, new)}}
+    return w, dataclasses.replace(mine, run=mine.run.replace(old, new)), {**held, "tp": {**held["tp"], "tp_run_root": new}}
+
+
 def test_each_ranks_registration_is_held_to_the_verifiers_window_of_that_rank(served_tp):
     c = served_tp
     for r in range(2):
@@ -247,11 +258,29 @@ def test_each_ranks_registration_is_held_to_the_verifiers_window_of_that_rank(se
         rec = _registered(c, r)
         assert mine.run == f"{c['tp_run_root']}/rank{r}" and mine.law == {"law": "subset", "k": 2}
         assert [(m.template, m.n) for m in mine.members] == [("SiluMul_v2{I=256}", 8)]
-        assert SRT.source(rec["window"], mine, held) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine.run, "tp": held["tp"]}}
+        w, mine512, held512 = _at_sha512(rec["window"], mine, held)
+        assert SRT.source(w, mine512, held512) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine512.run, "tp": held512["tp"]}}
         assert {x["port"]: {"leaves": x["leaves"], "domain": x["domain"]} for x in rec["roots"]} == CS.expected_ports(mine)
         assert held["tp"]["run_root"] == SRT.record(c["commit"])["roots"][str(r)]
     other, held1 = _mine(c, 1)
-    assert SRT.source(_registered(c, 0)["window"], other, held1)["codes"] == ["run", "tp"]
+    assert SRT.source(*_at_sha512(_registered(c, 0)["window"], other, held1))["codes"] == ["run", "tp"]
+
+
+def test_a_ranks_served_window_under_a_sha256_tp_run_root_is_refused_by_name(served_tp):
+    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): the fixture's
+    windows, under `tp.run_root`'s SHA-256 TP run root and held to the verifier's on everything else, are refused by ``sha512``."""
+    for r in range(2):
+        mine, held = _mine(served_tp, r)
+        assert len(bytes.fromhex(held["tp"]["tp_run_root"])) == 32
+        got = SRT.source(_registered(served_tp, r)["window"], mine, held)
+        assert (got["ok"], got["codes"]) == (False, ["sha512"])
+
+
+def test_a_ranks_served_window_under_a_sha512_tp_run_root_passes(served_tp):
+    for r in range(2):
+        w, mine, held = _at_sha512(_registered(served_tp, r)["window"], *_mine(served_tp, r))
+        assert len(bytes.fromhex(held["tp"]["tp_run_root"])) == 64 and w["run"] == mine.run
+        assert SRT.source(w, mine, held) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine.run, "tp": held["tp"]}}
 
 
 @pytest.mark.parametrize("alter, codes", [
@@ -262,8 +291,8 @@ def test_each_ranks_registration_is_held_to_the_verifiers_window_of_that_rank(se
     (lambda w: None, ["kind", "run", "tp", "served_programs"]),
 ], ids=["stand-in", "other-tp-run-root", "other-rank-root", "other-served-program", "no-window"])
 def test_a_registration_that_is_not_the_ranks_served_window_of_record_is_refused(served_tp, alter, codes):
-    mine, held = _mine(served_tp, 0)
-    got = SRT.source(alter(_registered(served_tp, 0)["window"]), mine, held)
+    w, mine, held = _at_sha512(_registered(served_tp, 0)["window"], *_mine(served_tp, 0))
+    got = SRT.source(alter(w), mine, held)
     assert (got["ok"], got["codes"]) == (False, codes)
 
 
@@ -308,7 +337,7 @@ def test_the_record_is_the_last_commits_into_the_same_out(served_tp, tmp_path):
     d = _copy_commit(served_tp, tmp_path, earlier)
     assert SRT.record(d)["tp_run_root"] == served_tp["tp_run_root"]
     mine, held = _mine(served_tp, 0, d)
-    assert SRT.source(_registered(served_tp, 0)["window"], mine, held)["ok"]
+    assert SRT.source(*_at_sha512(_registered(served_tp, 0)["window"], mine, held))["ok"]
 
 
 def test_a_rank_outside_the_world_has_no_window(served_tp):
