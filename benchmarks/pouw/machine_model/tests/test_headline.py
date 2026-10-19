@@ -14,22 +14,21 @@ from verity_machine_model.model import DATA, device
 PINS = {
     "sheet": {
         "sm_120": (0.004207, 0.001506, 0.000139, 0.005852, 2.2831, "half", None),
-        "sm_90": (0.008458, 0.0, 0.000001, 0.008459, 2.4063, "half", None),
-        "sm_100": (0.006849, 0.000137, 0.000065, 0.007052, 2.6251, "half", None),
+        "sm_90": (0.008583, 0.0, 0.000012, 0.008595, 2.4063, "half", None),
+        "sm_100": (0.006981, 0.0, 0.000001, 0.006982, 2.6251, "half", None),
         "sm_89": (0.001463, 0.006652, 0.000336, 0.008451, 2.9795, "half", None),
         "sm_80": (0.001463, 0.0, 0.0, 0.001463, 5.9347, "half", None),
     },
     "measured": {
         "sm_120": (0.003628, 0.001251, 0.000517, 0.005396, 2.1357, "issue", None),
-        "sm_90": (0.005814, 0.005828, 0.000990, 0.012632, 2.3435, "issue", None),
-        "sm_100": (0.008025, 0.0, 0.000002, 0.008027, 2.5611, "half", None),
+        "sm_90": (0.005927, 0.000473, 0.000990, 0.007391, 2.3435, "issue", None),
+        "sm_100": (0.008145, 0.0, 0.000002, 0.008147, 2.5611, "half", None),
         "sm_89": (0.001470, 0.001126, 0.000468, 0.003065, 3.0144, "issue", None),
         "sm_80": (0.001470, 0.0, 0.0, 0.001470, 4.2263, "half", None),
     },
 }
-#: rows at or over 1%, each with its reason
-OVER_ONE = {("measured", "sm_90"): "ffill is credited at p = 1, since no check reads its chains (RT-LOGIC-12); a check "
-                                   "that reads ffill would take DC-90-ri to 0.713% (RT-HB-HEAD-1)"}
+#: rows at or over 1%, each with its reason (the H200's measured row left at 0.739%: ♭ folds by the REDG checkpoints)
+OVER_ONE: dict[tuple[str, str], str] = {}
 
 
 @pytest.mark.parametrize("reading", H.READINGS)
@@ -52,7 +51,8 @@ def test_each_familys_row_is_pinned(reading):
 def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     """Decision 89's reading needs the 1.22-slot issue floor where ε_machine is above its floor at q* = ½, and states it
     as unproved in Lean; a filler's credit is the theorem its check meets (decision 99), so the H200's ffill, which no
-    check reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads (RT-LOGIC-12)."""
+    check reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads (RT-LOGIC-12). The H200's
+    sheet row holds only with A3 per clock at its figures' 1830 MHz, not per second at f_max (MM-SHEETS)."""
     t = H.spec()
     m = {x.family: x for x in H.rows("measured")}
     assert m["sm_120"].conditions[0] == t["floor"]["issue"] and "Theorem C, unproved in Lean" in t["floor"]["issue"]
@@ -63,6 +63,8 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     assert any("RT-LOGIC-12" in c for c in h.conditions) and any("RT-LOGIC-12" in c for c in m["sm_100"].conditions)
     s = {x.family: x for x in H.rows("sheet")}
     assert all(x.floor == "half" for x in s.values()) and any(c.startswith("A2u") for c in s["sm_89"].conditions)
+    assert any(c.startswith("A3 per SM clock") and "1830 MHz" in c and "f_max (1980 MHz" in c
+               for c in s["sm_90"].conditions)
 
 
 def test_cli(capsys):
@@ -71,7 +73,7 @@ def test_cli(capsys):
     assert out[0] == "## decision 89's measured reading (`measured`): q* = 1.22, operands free, credit ♭"
     head = next(x for x in out if x.startswith("| GPU"))
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
-    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.581% |") for x in out)
+    assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.593% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)

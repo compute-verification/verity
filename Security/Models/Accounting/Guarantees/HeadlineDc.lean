@@ -67,8 +67,9 @@ the H200's sheet reading holds while LI-CP-W redux's fold costs at least 0.992 l
 1.055 (with ffill out of ♭, ♭ on DS_issue is the MMA and the fold alone). On DS-100 it has 53% on count: the cliff is
 0.496 a word (RT-HB-HEAD-2). This statement's π* on DS-100 also prices the pipes apart, a LOP3 at 1.969 and an IMAD or
 FFMA at 0.031, so there FOLD-OPT also says li's XOR of two words has no IMAD- or FP-pipe program of fewer than 63
-instructions (the bit-serial one has 193; at the machine model's π*, a LOP3 at 1.979 and an IMAD at 0.021, it is 93,
-as `headline.toml` and the design file state it). It is false for a keyed round's XOR with a constant, which takes
+instructions. That is open: the cheapest known is 78 instructions, all on the IMAD pipe (33 IMAD, 45 IMAD.HI; FOLD-XOR,
+#2769), and with it the machine model's reading stays 0.7052% (its binding cheater breaks even at 62.54), passing 1%
+only at 3 instructions or fewer. It is false for a keyed round's XOR with a constant, which takes
 1 + 2|B| IMAD-pipe instructions (FOLD-MIN, #2751), but plain li has no such round: every half step absorbs a word. With
 the fold priced at its instruction count alone, which needs no pipe premise, the B200's sheet reading is 1.408% here
 (1.328% in the machine model). With only the proved fan-in floor in its place each reading is tens of percent

@@ -3,8 +3,9 @@
 # steps a chain a set, no extra keyed round), so ♭ credits none of the heavy design's extra keyed rounds, which no
 # Definition reads (RT-LOGIC-12, RT-HB-HEAD-1). ♭ credits no tcgen05.ld either: honest still runs its 8
 # LDTM.32x32b.x128 a MMA, but the operands-free cheater (decision 89) never pays them. Each lowers the credit, which is
-# sound for any program. ♭ is 1089.7 issue cycles a unit on DC-100-ri (1857.7 at the heavy fold), so the skippable work
-# is a larger share of it: core 0.803% on DC-100-ri, 0.705% on DS-100.
+# sound for any program. ♭ is 4.160 SMSP-cycles a 4096-MAC MMA on DC-100-ri, its checkpoint at the fold routes' cheapest
+# mix (4.223 at REDUX; the heavy design's ♭ 7.254), so the skippable work is a larger share of it: core 0.815% on
+# DC-100-ri, 0.698% on DS-100.
 base = "dither-2s-licpw-redux-heavy-l32"
 name = "dither-2s-licpw-redux-ldtm0-l32"
 title = "Dither-2S, LI-CP-W redux, ♭ crediting no tcgen05.ld, L = 32"
@@ -20,11 +21,19 @@ ALU = 0.53125
 IMAD = 0.5
 SHFL = 0.0234375
 
+[fold_routes]       # li with the checkpoint's lane XOR in memory: a LOP3 and b red.global.xor (REDG) a segment, 2a + b ≥ 8
+source = "the H200's RT2-HOPPER-1 routes (dither-2s-licpw-redux-l32's [fold_routes], note:20261019T1140Z-draft-rt2-hopper): after LI's 64 LOP3 and 64 IMAD a lane a 128-word segment, the checkpoint's XOR of a lane's 8 chains and of the warp's 32 lanes in memory as red.global.xor.b32, one issue slot each (sm_100a has the instruction; on the B200 none is timed or checked bit for bit, and the L2's atomic unit is unpriced, which only cheapens a route). The check reads the checkpoint word, not the program that wrote it, so the cheater and the floor program ♭ fold by the cheapest mix of these and REDUX on Π, and honest by its kernel's REDUX"
+cp-red = { ALU = 0.53125, IMAD = 0.5, REDG = 0.0078125 }     # 4 LOP3 + 1 REDG
+cp-red2 = { ALU = 0.5234375, IMAD = 0.5, REDG = 0.015625 }   # 3 LOP3 + 2 REDG
+cp-red4 = { ALU = 0.515625, IMAD = 0.5, REDG = 0.03125 }     # 2 LOP3 + 4 REDG
+cp-red6 = { ALU = 0.5078125, IMAD = 0.5, REDG = 0.046875 }   # 1 LOP3 + 6 REDG
+cp-red8 = { ALU = 0.5, IMAD = 0.5, REDG = 0.0625 }           # 8 REDG
+
 [skip.served]
-eps = 0.008025
-at = { "DC-100-ri" = 0.008025, "DS-100" = 0.006849 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip at this design's own ♭ (decision 90), the plain LI-CP-W redux fold and no LDTM, so the skippable work is a larger share of a smaller ♭ than the heavy design's. The most is at Llama-3.1-8B 2K prefill, all P·V's peel. On DC-100-ri (`at`) ♭ is DC-100's; on DS-100 the tail is at DS-100's price (RT-HB-HEAD, r20261019-083808-1f18)"
+eps = 0.008145
+at = { "DC-100-ri" = 0.008145, "DS-100" = 0.006981 }
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip at this design's own ♭ (decision 90), the plain LI-CP-W fold with its checkpoint at the fold routes' cheapest mix (DC-100: 4.160 SMSP-cycles a 4096-MAC MMA, cp-red2 and cp-red at 133 issue slots a unit; DS-100: 4.169, cp-red2 and a tenth cp-red8; 0.8025% and 0.6849% at REDUX) and no LDTM, so the skippable work is a larger share of a smaller ♭ than the heavy design's. The most is at Llama-3.1-8B 2K prefill, all P·V's peel. On DC-100-ri (`at`) ♭ is DC-100's; on DS-100 the tail is at DS-100's price (RT-HB-HEAD, r20261019-083808-1f18)"
 
 [mand.fold]
 eps = 0.0
-source = "named assumption: LI-CP-W redux, at its lane instructions a word, is the cheapest implementation of the fold (FOLD-OPT; on DS-100 ε_machine first rises at 0.496 lane instructions a word, 53% under li's 1.055, RT-HB-HEAD-2). The machine model's π* on DS-100 prices a LOP3 at 1.979 and an IMAD at 0.021, so there it also says li's XOR of two words has no IMAD- or FP-pipe program under 93 instructions (the bit-serial one is 193; the Lean form's π*, a LOP3 1.969 and an IMAD or FFMA 0.031, makes it 63, HeadlineDc); FOLD-MIN's IMAD-pipe round (1 + 2|B|) is a keyed round's XOR with a constant, and plain li has no such round, every half step absorbing a word (#2751). With the fold priced at its instruction count alone, which needs no pipe premise, DS-100 reads 1.328% in the machine model (1.408% in the Lean form). There is no filler, so FILL-OPT is not read. With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read (note:LI-ALT)"
+source = "named assumption: LI-CP-W, its checkpoint by REDUX or any of the [fold_routes], at their lane instructions a word, is the cheapest implementation of the fold (FOLD-OPT; ♭ folds by their cheapest mix, and on DS-100 ε_machine first rises with ♭'s fold, 1.041 lane instructions a word, at 0.499, 52% under it, RT-HB-HEAD-2). On DS-100 it also covers li's XOR x ⊕ y ⊕ k, two words and a key in one LOP3: a 78-instruction IMAD-pipe program exists (33 IMAD, 45 IMAD.HI; bit-exact on the CPU and the B200; FOLD-XOR, #2769), and with it on the menu DS-100 stays 0.6982%. With the REDG checkpoints on the menu the binding cheater's certificate is DS_issue ⅔ and DS_alu ⅓ (RT2-HOPPER-1), a LOP3 at 2 IMAD-pipe instructions, so that value rests only on no IMAD- or FP-pipe program for it of 1 instruction; with li's XOR, or every LOP3 of the fold, priced at its instruction count alone, which needs no pipe premise, DS-100 reads 0.917% in the machine model. This supersedes #2706's 'under 93 instructions' and the 62.5 (the cheater's break-even with the checkpoint at REDUX), the 0.7163% at 40, the 1.0068% at 3 and the 1.328% at the count alone. FOLD-MIN's IMAD-pipe round (1 + 2|B|) is a keyed round's XOR with a constant, and plain li has no such round, every half step absorbing a word (#2751). There is no filler, so FILL-OPT is not read. With every absorbed word pinned (PIN), the receipt's luck is 0 for a skip that lands on one word of a segment: a checkpoint is injective in each word it absorbed (Lean Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective, odd multipliers only); KLI₂₄, (RT), (G₃) and (HO_U) are not read (note:LI-ALT)"

@@ -2,7 +2,7 @@ import Definitions.Accounting.Headline
 import Models.Accounting.Assumptions.Sheet
 
 /-!
-# The families' headline guarantees (trusted)
+# The headline guarantees (trusted)
 
 One statement per family and reading: the family's credited work is at least `1 − ε` of its credit, `ε` the reading's
 headline, on one device's machine, one design's TS model on it and its floor program ♭, all exact data
@@ -38,19 +38,37 @@ the larger of two branches':
 * the folded branch's `ε_jl` at `p = 7/8`;
 * the unfolded branch's `(N_w w* + N_w φ*)/B_♭ · ln(1/δ′)/(ln 2 · S)`.
 
-The unfolded branch binds on sm_120's sheet (`0.656%`) and on sm_80 (`0.232%`). On sm_120's measured vector the folded
-branch binds (`0.591%`). `ProofLayer.Pins` is met by main's circuit Definitions since PIN (#2417).
+The `2^-40` event is split in two: binding and soundness cost at most `2^-41` over the window, and the luck's tail is
+`δ′ = 2^-41`, so both branches' logarithm is `ln(1/δ′) = 41 ln 2`. Compose (#2638) puts its logarithm at its
+`δ_s = 2^-40` instead; at this convention its 0.744% is 0.748% (RT-INT's N3, note:20261019T0528Z-draft-rt-int).
+
+The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vector the folded branch binds
+(`0.591%`). `ProofLayer.Pins` is met by main's circuit Definitions since PIN (#2417).
 
 The statements:
 
-* `Sm120SheetHeadline`: sm_120 (RTX PRO 6000) at its data sheet, H1 + fx1 at SCALAR-ROUTE's ½ floors: outside an
-  event of probability at most `2^-40`, every accepted window runs at least `1 − 0.656%` of its credit.
-* `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: outside
-  an event of probability at most `2^-40`, every accepted window runs at least `1 − 0.591%` of its credit.
-* `Sm80SheetHeadline`: sm_80 (A100) at its data sheet, Dither-2S at L = 16 at SCALAR-ROUTE's ½ floors: outside an
-  event of probability at most `2^-40`, every accepted window runs at least `1 − 0.232%` of its credit. Words cost
-  nothing at its certificate (`κ = 0`), so skipping a fold is the only saving, and the unfolded branch is its whole
-  luck term.
+* `Sm120SheetHeadline`: sm_120 (RTX PRO 6000) at its data sheet, H1 + fx1 at SCALAR-ROUTE's ½ floors: under its
+  premises, A2u among them (below), outside an event of probability at most `2^-40` every accepted window of 48,000
+  equal live rounds runs at least `1 − 0.656%` of its credit.
+* `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3r-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: under its
+  premises, outside an event of probability at most `2^-40` every accepted window of 48,000 equal live rounds runs at
+  least `1 − 0.591%` of its credit.
+
+The window is in the statements' type: `Sm120.checks = 48,000` equal live rounds, one check a round, so neither says
+anything about a window of another shape. The ε needs that many rounds. The same two branches with `S` rounds in place
+of 48,000 give ε < 1% only from 9,496 rounds (sheet) and 9,652 (measured), and exceed 100% up to 40 rounds (sheet)
+and 49 (measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
+RT-INT-1 (note:20261019T0528Z-draft-rt-int) finds the same kind of floor on Compose's live line: ε < 1% there needs
+at least 10,552 equal live rounds a window, whatever the draw. The windows run so far have at most 18 rounds.
+
+The sheet reading's ε rests on A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot), which no
+vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with a
+measured uniform-pipe row (0.766 a SMSP-cycle) and 100% with none, against its 0.585% with A2u (RT-MACHINE-4,
+note:20261019T0456Z-draft-rt-machine). RT-MACHINE-4 reads its probe r20261019-054518-8cd2 as A2u holding on sm_120: past
+an issue-bound stream's idle slots, at up to 0.954 of issue, each uniform instruction costs about one issue slot.
+
+sm_80 has no headline: FOLD-OPT is false at its ALU-pipe certificate, which doesn't price duo's `IMAD.HI.U32` rotate
+route on the FMA pipe (RT-LOGIC-10).
 -/
 
 namespace Accounting.Guarantees.TS
@@ -59,17 +77,25 @@ open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.Relativ
 
 /-- **sm_120's headline at the data sheet**, under full checking with live coins. On DS-120's machine (`Sm120.sheet`),
 H1 + fx1's TS model (`Sm120.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm120.flat`), at the issue
-facet's certificate (`Sm120.piStar`), over `Sm120.checks = 48,000` rounds on any finite coins `Ω`: for any window's
-play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling
-splits, A1–A7 hold on every run and FOLD-OPT per word folded prices every run's fold at the words it folds (its
-unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned (`Pinned`), whose
-deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck premise), whose
-receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at most `½`
-(`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with probability at
-most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`)
-and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at
-least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: H1 + fx1 has
-no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines. -/
+facet's certificate (`Sm120.piStar`), over a window of `Sm120.checks = 48,000` equal live rounds on any finite coins
+`Ω`: for any window's play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window,
+if the labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded prices every run's fold at the words it
+folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned
+(`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck
+premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at
+most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with
+probability at most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed
+value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted
+window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
+hypothesis: H1 + fx1 has no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
+
+The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
+48,000 its two branches give ε < 1% only from 9,496 rounds (Compose's live line only from 10,552: RT-INT-1), and the
+windows run so far have at most 18.
+
+This ε rests on A2u: A2 (`SheetDispatch`) counts each uniform-datapath instruction in an issue slot, which no vendor
+document states, and DS-120 has no uniform-pipe row. Without A2u the machine model's LP gives 2.79% with a measured
+uniform-pipe row and 100% with none (RT-MACHINE-4). -/
 def Sm120SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 17) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
@@ -88,11 +114,12 @@ def Sm120SheetHeadline : Prop :=
 /-- **sm_120's headline on its measured vector**, under full checking with live coins. On VF3r-16's machine
 (`Sm120Measured.machine`), H1 + fx1's TS model on it (`Sm120Measured.model`: the MMA forms at their committed words an
 instruction, `q = q_T = 9/8`, `b_T = 0`, `N_w = 128`) and its floor program (`Sm120Measured.flat`), at JI3s_0's
-certificate (`Sm120Measured.piStar`), over `Sm120.checks = 48,000` rounds on any finite coins `Ω`: for any window's
-play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling
-splits, (I1) `FacetCeilings` holds on VF3r-16's rows, (I2)/(I4) `WordsWritten` at the model's `ω`, (I3) `ScalarRoute`
-at its floors and (I5) `NoSum` hold on every run and (I6) FOLD-OPT per word folded prices every run's fold at the words
-it folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned
+certificate (`Sm120Measured.piStar`), over a window of `Sm120.checks = 48,000` equal live rounds on any finite coins
+`Ω`: for any window's play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window,
+if the labelling splits, (I1) `FacetCeilings` holds on VF3r-16's rows, (I2)/(I4) `WordsWritten` at the model's `ω`,
+(I3) `ScalarRoute` at its floors and (I5) `NoSum` hold on every run and (I6) FOLD-OPT per word folded prices every
+run's fold at the words it folds (its unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose
+openings are pinned
 (`Pinned`), whose deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck
 premise), whose receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at
 most `½` (`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with
@@ -102,7 +129,11 @@ window's time is at least `1 − 591/100000` (`1 − 0.591%`) of the credit `T_c
 FILL-OPT are not hypotheses: the model has no side unit and no filler, so they hold at any run. On the lane route (I3)
 at `9/8` is what `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once
 writers create at most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside
-`ClassPSlots`. `ε_sample` and the Fiat–Shamir premium are separate lines. -/
+`ClassPSlots`. `ε_sample` and the Fiat–Shamir premium are separate lines.
+
+The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
+48,000 its two branches give ε < 1% only from 9,652 rounds (Compose's live line only from 10,552: RT-INT-1), and the
+windows run so far have at most 18. -/
 def Sm120MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm120.checks (Fin 122) (Fin 15) Unit Empty) (G : ReceiptGame Ω Sm120.checks)
     (Uf : Unfolded Ω Sm120.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm120.checks nπ V) (δbind δzk : ℝ),
@@ -117,36 +148,5 @@ def Sm120MeasuredHeadline : Prop :=
     pf.Pins → RightFixed Pl pf Sm120Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
       (Pl.run x).run.time / Sm120Measured.model.credit Sm120Measured.flat < 1 - 591 / 100000) ≤ (1 / 2) ^ 40
-
-/-- **sm_80's headline at the data sheet**, under full checking with live coins. On DS-80's machine (`Sm80.sheet`),
-Dither-2S at L = 16's TS model (`Sm80.model`, `q = q_T = ½`, `N_w = 128`) and its floor program (`Sm80.flat`), at the
-ALU pipe's certificate (`Sm80.piStar`), over `Sm80.checks = 48,000` rounds on any finite coins `Ω`: for any window's
-play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling
-splits, A1–A7 hold on every run and FOLD-OPT per word folded prices every run's fold at the words it folds (its
-unfolded share `Uf`), the play's ideal game is the receipt game `G`'s, whose openings are pinned (`Pinned`), whose
-deficient words have point mass at most `¾` given the cheater's view (`OperandHMu`, the first luck premise), whose
-receipt luck is at most `½` (`ReceiptLuckAt`, the second, HMU's B′) and whose whole-unit luck is at most `½`
-(`WholeLuckAt`, B′ at a unit whose fold is skipped), the play is the proofs' (`Of`), binding fails with probability at
-most `δ_bind` a round, every proof is sound up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`)
-and E1(c) holds (`RightFixed`), then outside an event of probability at most `2^-40` every accepted window's time is at
-least `1 − 232/100000` (`1 − 0.232%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: Dither-2S has
-no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
-
-`w* = 0` at the ALU facet, so `κ = 0` and `ε_jl = 0`: words cost nothing at the certificate, and skipping a fold is the
-only saving. The whole-unit luck charges it: the unfolded branch is the whole luck term. -/
-def Sm80SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm80.checks (Fin 35) (Fin 23) Unit Empty) (G : ReceiptGame Ω Sm80.checks)
-    (Uf : Unfolded Ω Sm80.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm80.checks nπ V) (δbind δzk : ℝ),
-    (Sm80.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
-    (∀ x, SheetClock Sm80.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
-    (∀ x, SheetTensor Sm80.sheet (Pl.run x).run) → (∀ x, SheetPipe Sm80.sheet (Pl.run x).run) →
-    (∀ x, SheetSmem Sm80.sheet (Pl.run x).run) → (∀ x, SheetWords Sm80.model (Pl.run x)) →
-    (∀ x, SheetSemantics Sm80.model (Pl.run x)) →
-    (∀ x, FoldOptFolded Sm80.model (Pl.run x) ((1 - Uf.share x / Sm80.checks) * Sm80.model.Nw)) →
-    Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
-    pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
-    pf.Pins → RightFixed Pl pf Sm80.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm80.model.credit Sm80.flat < 1 - 232 / 100000) ≤
-      (1 / 2) ^ 40
 
 end Accounting.Guarantees.TS
