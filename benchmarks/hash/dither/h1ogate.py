@@ -14,7 +14,7 @@ stream's O, DITHER_PEEL=1), each gated through `dither_one.check`, then timed ag
           launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved;
           each over block's (else the first form's) as time_over_base
 
-    python h1ogate.py --out OUT [--nl 8] [--reps 15] [--forms split-cpeel,...]
+    python h1ogate.py --out OUT [--nl 8] [--reps 15] [--forms split-cpeel,...] [--a-dist uniform|pertoken]
         (DITHER_H1C, DITHER_H1O: the libraries; sbench.sh's SBENCH_SCRIPT=h1ogate.py builds them and sets the environment)
 """
 from __future__ import annotations
@@ -53,10 +53,22 @@ def model(nl: int, dev) -> None:
             DF.REG[DF.index_of(name)] = (name, SimpleNamespace(weight=w, weight_scale=s))
 
 
+A_DIST = "uniform"
+
+
 def operands(win: DO.Window, seed: int) -> list:
+    """Each call's A rows and scales: uniform full-range int8, or ("pertoken") Gaussian rows quantized per token as the
+    served model's are, round(127 x / max |x|), so A = 127 is as rare as a served row's."""
     g = torch.Generator(device=win.dev).manual_seed(seed)
-    return [(torch.randint(-128, 128, (M, k), dtype=torch.int8, device=win.dev, generator=g),
-             torch.rand(M, device=win.dev, generator=g) * 0.05 + 1e-4) for _, k in win.nk]
+    out = []
+    for _, k in win.nk:
+        if A_DIST == "pertoken":
+            x = torch.randn(M, k, device=win.dev, generator=g)
+            a = torch.round(127 * x / x.abs().amax(dim=1, keepdim=True)).to(torch.int8)
+        else:
+            a = torch.randint(-128, 128, (M, k), dtype=torch.int8, device=win.dev, generator=g)
+        out.append((a, torch.rand(M, device=win.dev, generator=g) * 0.05 + 1e-4))
+    return out
 
 
 def step(win: DO.Window, xs: list, outs: list) -> None:
@@ -122,7 +134,10 @@ def main() -> int:
     ap.add_argument("--nl", type=int, default=8)
     ap.add_argument("--reps", type=int, default=15)
     ap.add_argument("--forms", default=",".join(FORMS), help="the forms gated and timed, in this order")
+    ap.add_argument("--a-dist", choices=("uniform", "pertoken"), default="uniform", help="the A rows (`operands`)")
     a = ap.parse_args()
+    global A_DIST
+    A_DIST = a.a_dist
     forms = a.forms.split(",")
     if not forms or any(f not in FORMS for f in forms):
         raise SystemExit(f"--forms: some of {','.join(FORMS)}")
@@ -130,7 +145,8 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     model(a.nl, dev)
-    doc: dict = {"gpu": torch.cuda.get_device_name(dev), "t": T, "m": M, "nl": a.nl, "shapes": SHAPES, "forms": {}}
+    doc: dict = {"gpu": torch.cuda.get_device_name(dev), "t": T, "m": M, "nl": a.nl, "shapes": SHAPES, "a_dist": A_DIST,
+                 "forms": {}}
     wins = {}
     for form in forms:
         win, outs, caps, verdict = gate(form, dev)

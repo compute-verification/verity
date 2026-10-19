@@ -276,7 +276,8 @@ __device__ __forceinline__ u32 wrap_s8(u32 P, u32 N) {
 // E::PEEL's segment MMAs: Y += X Iᵀ as unpeeled, and cr += 256 (X wbᵀ + xa Bᵀ) - X cᵀ - b Bᵀ a fragment at a time (the
 // 256 terms in a four-word temporary, so cr stays one accumulator), from the fragments of X (af), wb (wf) and B (bf) and
 // the segment's noise words of rows g + 8 j (nb4) and of columns 8 j + g (nc4); the binary operands are made where they
-// are read (xa and -b a row half at a time, -c a column fragment at a time), to keep the builders under their registers
+// are read (xa and -b a row half at a time, -c a column fragment at a time), to keep the builders under their registers.
+// xa B^T is skipped in a row half where no lane has an xa (A = 127 is rare in served rows; kernels-dither-hb's #2752)
 template <class E>
 __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4], const u32 (&af)[2][4],
                                           const u32 (&wf)[4][2], const u32 (&bf)[4][2], const u32 (&IB)[4][2],
@@ -292,6 +293,7 @@ __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4],
       nb[e] = b * 0xFFu;
     }
     ep.xa_fault(u, lane, s, mi, xa);
+    const bool any_xa = __any_sync(0xFFFFFFFFu, (xa[0] | xa[1] | xa[2] | xa[3]) != 0u);
 #pragma unroll
     for (int ni = 0; ni < 4; ++ni) {
       const u32 nc0 = spread4(nc4[ni] >> (4 * q)) * 0xFFu, nc1 = spread4(nc4[ni] >> (16 + 4 * q)) * 0xFFu;
@@ -299,7 +301,7 @@ __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4],
       mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
       mma(t, af[mi], wf[ni][0], wf[ni][1]);
       mma(cr[mi][ni], af[mi], nc0, nc1);
-      mma(t, xa, bf[ni][0], bf[ni][1]);
+      if (any_xa) mma(t, xa, bf[ni][0], bf[ni][1]);
       mma(cr[mi][ni], nb, bf[ni][0], bf[ni][1]);
 #pragma unroll
       for (int e = 0; e < 4; ++e) cr[mi][ni][e] = (int)((u32)cr[mi][ni][e] + ((u32)t[e] << 8));
