@@ -30,14 +30,16 @@ The result (checks below):
   {single, <=2-instruction, <=3-instruction}; the two live outputs would have to be two of them, and both the single and
   the 2-instruction slot are ruled out, so **fx1's (y', z') needs >= 4 instructions** = honest's count. fx2 adds one
   more irreducible op (the leading XOR before the multiply), so **fx2 needs >= 5**.
-- **Two-word instructions.** sm_120 has three lane forms that write two words, IMAD.WIDE, IADD.64 and IMNMX.64
-  (ptxas 13.0 for sm_120a, opcode_probe/isa_accept.sh), so the count above holds only once no instruction writes both
-  outputs. Here, at width 4, no program of at most 2 instructions ending on an IMAD.WIDE writes them, which also
-  completes #2240's >= 3 for duo. `--wide3` (fold_wide3.c, CPU minutes, outside the test suite) settles all three forms
-  at width 4: neither output is a word of a program of at most 2 instructions, so a 3-instruction program would write
-  both as its last instruction's two words, and none does, nor as a last SEL.64's under any predicate. The width-4 ISA
-  is LOP3, IADD3, IMAD, IMAD.HI, LEA, LEA.HI, IMAD.WIDE, IADD.64 and IMNMX.64; it has no IDP, POPC, FLO, BREV, BMSK or
-  wrapping-SHF form, and no predicate but a last SEL.64's: no carry chain (IADD3.X) and no guarded instruction.
+- **Two-word instructions.** sm_120 has four lane forms that write two words: IMAD.WIDE and IADD.64 (ptxas 13.0 for
+  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (FOLD-FANIN's table, TS.lean) and SEL.64 (harness/sass_pins.json). So the
+  count above holds only once no instruction writes both outputs. Here, at width 4, no program of at most 2
+  instructions ending on an IMAD.WIDE writes them, which also completes #2240's >= 3 for duo. `--wide3` (fold_wide3.c,
+  CPU minutes, outside the test suite) settles all four at width 4: neither output is a word of a program of at most 2
+  instructions, so a 3-instruction program would write both as its last instruction's two words, and none does, nor as
+  a last SEL.64's under any predicate. The width-4 ISA is LOP3, IADD3, IMAD, IMAD.HI, LEA, LEA.HI, IMAD.WIDE, IADD.64
+  and IMNMX.64, with SEL.64 as a last instruction only; it has no IDP, POPC, FLO, BREV, BMSK or wrapping-SHF form, and
+  no predicate but a last SEL.64's: no ISETP, no carry chain (IADD3.X) and no guarded instruction. A predicate is one
+  bit, so an instruction that writes one adds no word, and a SEL.64 before the last only picks words the program has.
 - **The three collapse routes the brief names all fail:** (i) the two multiplies do not compose -- y'(w) is not affine in
   w, so (y ^ (w*m1) ^ kx)*a is not w*(m1*a) + c; (ii) the fx IMAD's add slot cannot pre-absorb duo's + z (it feeds the
   XOR, not the + z); (iii) no IMAD.WIDE / IDP.4A / LOP3-of-three produces two words' intermediates in one instruction;
