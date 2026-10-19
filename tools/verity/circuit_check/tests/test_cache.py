@@ -1061,6 +1061,33 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     assert _run(root)["stats"]["task_list"]
 
 
+#: the harness with each target checked in a process of its own, forked from a zygote that is itself forked from the harness's
+#: process once the task list is built (`cli.Zygote` ``fork``, as `circuit-check` runs), so it holds this process's catalog
+FORKED = HARNESS.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
+
+
+def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_does(tmp_path):
+    """b103 (6c4f254) built the catalog twice, in circuit-check's process for the keys and again in the forkserver zygote its
+    434 rerun targets fork from: about 40 of its 125 minutes.  Forked from the process that built it, the zygote builds nothing:
+    its children check the harness's own task list, which a forkserver zygote would build again from the real catalog.  A
+    target's process records what checking it first in this process records (less the probes this process's lookups made of
+    the cache's git-ignored directories, which are always absent); its entry is reused, and an edit reruns only what it reaches."""
+    here, forked = _tree(tmp_path / "here"), _tree(tmp_path / "forked")
+    assert _run(here)["hits"] == [] and _run(forked, FORKED)["hits"] == []
+
+    def held(root: Path, target: str) -> dict:
+        reads = _entry(root, target)["reads"]
+        return {**reads, "probes": {p: v for p, v in reads["probes"].items() if not p.startswith("cache/")}}
+
+    assert held(forked, "SynOther_v1") == held(here, "SynOther_v1")
+    for target in ("SynOther_v1", "SynTop_v1"):
+        assert _values(forked, target) == _values(here, target) and _entry(forked, target)["report"]["peak_gb"] > 0
+    assert _run(forked, FORKED)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    _edit(forked, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
+    out = _run(forked, FORKED)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
 #: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
 #: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
 CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
