@@ -22,7 +22,8 @@ accept whatever they read (`acceptAllE`), (P1) fails at every false statement in
 So (P1) at every `nextE`, as `KSBoundRoute` quantifies it, is false wherever the deployed plain verifier has a false
 statement in scope: `deE` leaves the element-level verifier's steps free, while its `κ` is `deployPlain rel`'s, fixed by
 the deployed numbers. That is why (P1) stays a hypothesis of `KSBoundRoute`; at the deployed plain verifier's own steps
-it is `RecDeploy.plainKSAbort_bd`'s statement.
+it is `RecDeploy.plainKSAbort_bd`'s statement, and at the deployed relation it holds with no premise
+(`RecDeploy.plainKSAbort_deployed`).
 -/
 
 namespace Claims.Recursion
