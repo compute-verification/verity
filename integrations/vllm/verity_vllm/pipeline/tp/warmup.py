@@ -1,6 +1,6 @@
 """`tp-commit`'s warm-up instrumented run: on every rank, the learn-only pass of bounded staging, as the single-rank Commit runs it
-(`pipeline.commit`, `acquire.sources.taps.warmup`).  Every shape class of the workload gets its plan here (same lengths, same schedule as
-the record runs: `throwaway_requests`); a learning step over the transient budget records its plan and discards its windows, so the
+(`pipeline.commit`, `acquire.sources.taps.warmup`).  Every shape class of the workload gets its plan here (same lengths, shared prefixes
+and schedule as the record runs: `throwaway_requests`); a learning step over the transient budget records its plan and discards its windows, so the
 record runs hit every plan and stage bounded.  The run is never a record: its ranks bind, attribute, compare and replay nothing of it
 (`engine.rank_worker.tp2_commit_finalize`)."""
 from __future__ import annotations

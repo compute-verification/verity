@@ -220,13 +220,24 @@ THROWAWAY_SAMPLING_FIELDS = ("seed", "n", "variant", "temperature", "top_p", "to
 
 
 def throwaway_requests(engine: Engine, like: list[dict], seed: int = 0x5EED_7A9B) -> list[dict]:
-    """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway), with the same per-request
-    sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
+    """Warm-up prompts of the same lengths, random tokens, with the same per-request sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the
+    warm-up stages the same layout as the run it stands in for.  A prompt that shares a leading prefix with an earlier one shares it with
+    that request's warm-up prompt (the longest such), so a prefix-cached engine hits the same blocks in the warm-up as in the run."""
     vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
     rng = np.random.default_rng(seed)
+    prompts = [np.asarray(r["prompt_token_ids"]) for r in like]
     out = []
     for i, r in enumerate(like):
-        w = {"request_id": f"warmup-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist(),
+        toks = rng.integers(3, vocab - 1, size=len(prompts[i])).tolist()
+        shared, src = 0, None
+        for j in range(i):
+            m = min(prompts[i].size, prompts[j].size)
+            d = np.flatnonzero(prompts[i][:m] != prompts[j][:m])
+            if (n := int(d[0]) if d.size else m) > shared:
+                shared, src = n, j
+        if src is not None:
+            toks[:shared] = out[src]["prompt_token_ids"][:shared]
+        w = {"request_id": f"warmup-{i}", "prompt_token_ids": toks,
              "max_tokens": int(r["max_tokens"]), "arrive_step": int(r.get("arrive_step") or 0)}   # same schedule shape (D87)
         w.update({k: r[k] for k in THROWAWAY_SAMPLING_FIELDS if k in r})
         out.append(w)

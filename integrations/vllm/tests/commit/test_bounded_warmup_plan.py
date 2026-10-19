@@ -104,3 +104,23 @@ def test_warmup_requests_keep_a_per_request_variant_and_leave_unseeded_requests_
     assert {k: warm[1][k] for k in ("seed", "n", "variant", "temperature", "top_p", "top_k", "arrive_step", "max_tokens")} == \
         {"seed": 7, "n": 2, "variant": "greedy", "temperature": 0.0, "top_p": 1.0, "top_k": 0, "arrive_step": 1, "max_tokens": 2}
     assert [w["request_id"] for w in warm] == ["warmup-0", "warmup-1"]
+
+
+def test_warmup_requests_share_the_leading_prefix_their_records_share():
+    """GLM-5.3 TP8 B1 prefix row (r20261018-232646-7f15): the record's r1 reads 128 cached tokens of r0's 256 and computes 71 rows, but
+    the instrumented warm-up's random prompts shared nothing, so its r1 computed all 199 against the manifest's 71 on every rank."""
+    prefix = list(range(10, 138))
+    recs = [{"request_id": "r0", "prompt_token_ids": prefix + list(range(500, 628)), "max_tokens": 16},
+            {"request_id": "r1", "prompt_token_ids": prefix + list(range(700, 771)), "max_tokens": 16, "arrive_step": 16},
+            {"request_id": "r2", "prompt_token_ids": prefix[:64] + list(range(900, 964)), "max_tokens": 4}]
+    w0, w1, w2 = (w["prompt_token_ids"] for w in throwaway_requests(ENGINE, recs, seed=200))
+    assert [len(w) for w in (w0, w1, w2)] == [256, 199, 128]
+    assert w1[:128] == w0[:128] and w1[128] != w0[128] and w0[:128] != prefix
+    assert w2[:64] == w0[:64] and w2[64] != w0[64]
+
+
+def test_warmup_prompts_that_share_nothing_are_the_seeded_draws():
+    recs = [{"request_id": "a", "prompt_token_ids": [5] * 8, "max_tokens": 4}, {"request_id": "b", "prompt_token_ids": [6] * 3, "max_tokens": 2}]
+    rng = np.random.default_rng(200)
+    assert [w["prompt_token_ids"] for w in throwaway_requests(ENGINE, recs, seed=200)] == \
+        [rng.integers(3, 49151, size=n).tolist() for n in (8, 3)]
