@@ -17,7 +17,7 @@
    "config_sha256": "3ac72612095574542f7fff847ada8e59d9199dd8af44bdf625d7e02615572e69"
   },
   "inventory_runs": {
-   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0) and r20261003-062327-45fd (ranks 0-7), with the pinned source's dynamic FlashInfer/DeepGEMM class and GLM-5.3 shapes confirmed by deepgemm_sm90_capture/v2 GO r20261017-134740-47df (vLLM's defaults read back, a served engine's nvcc on PATH)",
+   "default": "r20261003-072626-b966 (inv-tp8-default.json, rank 0) and r20261003-062327-45fd (ranks 0-7), with the pinned source's dynamic FlashInfer/DeepGEMM class and GLM-5.3 shapes confirmed by deepgemm_sm90_capture/v1 GO r20261013-115825-d357",
    "VLLM_BATCH_INVARIANT=1": "r20261003-062327-45fd (log-bi.txt: refused, no sparse MLA backend supports batch invariance)"
   }
  },
@@ -161,7 +161,7 @@
    "captures": [
     "deepgemm_capture"
    ],
-   "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands. GO (v2, run r20261017-134740-47df, art:ed32605612a39b3a0f4cad575e5b6a325385f28657ddb7f7dbcdb768406a9d01): 28,196,352 words of both branches at vLLM's defaults with a served engine's toolchain, 0 mismatches; FlashInfer's GEMM keeps subnormals (its ftz probe refutes every FTZ model) and both branches compose FFMA(temp, FMUL(sx, ws), acc). vLLM offers FlashInfer's branch only with nvcc on PATH (has_flashinfer), as the row driver gives a served engine.",
+   "note": "The default FlashInferFp8DeepGEMMDynamicBlockScaledKernel: FlashInferFp8Linear_v1 below 32 tokens and DeepGemmFp8Linear_v1 from 32. GLM-5.3's f32 weight scales and e4m3 weights are requantized to ue8m0 at load and declared as the served weight operands.",
    "branch": "cursor/deepgemm-sm90-8c79",
    "when": "vLLM's defaults on sm_90"
   },
@@ -295,7 +295,7 @@
    "captures": [
     "glm53_tp8_allreduce_capture"
    ],
-   "note": "the TP8 all-reduce on 8xH200 at WORLD 8 (registry/tp_allreduce.py): FlashInfer's MNNVL all-reduce to 42 tokens at H=6144 (AllReduceMnnvl_v1, one-shot to 10 tokens, two-shot past), torch's multimem_all_reduce_ past it to 5461 (AllReduceMultimem_v1, parameterised by one f32 add tree per owner rank and FTZ, which the capture pins), at vLLM's defaults and with the custom all-reduce off alike: beside symmetric memory the custom all-reduce's cap is 256 KiB, inside FlashInfer's 0.5 MiB, so it takes none of them. Only under VLLM_ALLREDUCE_USE_SYMM_MEM=0 (the switch) does vLLM's custom all-reduce run, to 682 tokens (AllReduceCustom_v1, 2-stage there). Covered (tp_allreduce.CAPTURED; runs r20261013-085842-2147, r20261013-091723-e383, r20261013-115512-5ff3 and r20261017-152556-86a6, the last at vLLM's served defaults with every rank's switches read back): at H=6144, FlashInfer 1-42 and multimem 43-2048 both at the defaults and with the custom all-reduce off; at H=7168, FlashInfer 1-36 and multimem 37-2048 at the defaults, with the same trees and IEEE adds; and the custom all-reduce 43-682 under the switch. NCCL's routes are not covered. Port until a Build rule binds them. Every rank's partial is a tap, so the Program checks against the same root"
+   "note": "the TP8 all-reduce on 8xH200 at WORLD 8 (registry/tp_allreduce.py): FlashInfer's MNNVL all-reduce to 42 tokens at H=6144 (AllReduceMnnvl_v1, one-shot to 10 tokens, two-shot past), torch's multimem_all_reduce_ past it to 5461 (AllReduceMultimem_v1, parameterised by one f32 add tree per owner rank and FTZ, which the capture pins), at vLLM's defaults and with the custom all-reduce off alike: beside symmetric memory the custom all-reduce's cap is 256 KiB, inside FlashInfer's 0.5 MiB, so it takes none of them. Only under VLLM_ALLREDUCE_USE_SYMM_MEM=0 (the switch) does vLLM's custom all-reduce run, to 682 tokens (AllReduceCustom_v1, 2-stage there). Covered (tp_allreduce.CAPTURED; runs r20261013-085842-2147, r20261013-091723-e383 and r20261013-115512-5ff3): at H=6144, FlashInfer 1-42 and multimem 43-2048 both at the defaults and with the custom all-reduce off; at H=7168, FlashInfer 1-36 and multimem 37-2048 at the defaults, with the same trees and IEEE adds; and the custom all-reduce 43-682 under the switch. NCCL's routes are not covered. Port until a Build rule binds them. Every rank's partial is a tap, so the Program checks against the same root"
   },
   "fused-allreduce-rmsnorm": {
    "status": "port",
