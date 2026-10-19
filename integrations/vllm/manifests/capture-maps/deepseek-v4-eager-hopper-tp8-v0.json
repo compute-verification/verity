@@ -277,7 +277,7 @@
    "status": "exists",
    "definitions": [
     "MoeSum_v1",
-    "MoeSum_v2"
+    "MoeSum_v3"
    ],
    "note": "ops.moe_sum (moe_sum_vec_kernel): per element the f32 sum of the TOPK down rows from 0 in ascending k, rounded to bf16 (the rows already carry the router weights from the w2 launch)"
   },
