@@ -28,7 +28,8 @@ SHAPES = [(8, 2), (6, 1), (5, 2), (10, 1)]
 @pytest.mark.parametrize("ib,ew", SHAPES)
 def test_a_table_read_is_its_boolean_form_on_every_index(ib, ew):
     p = T.table_read(ib, ew)
-    assert IL.PIECES[p.id] is BT.table_read(p, ib).build
+    piece = IL.PIECES[p.id]
+    assert getattr(piece, "__wrapped__", piece) is BT.table_read(p, ib).build, "boolean_export's trace wraps every piece"
     iw, n = p.params[0][1].w, (1 << ib) * ew
     rng = random.Random(ib * 10 + ew)
     lanes = [(i, [rng.getrandbits(16) for _ in range(n)]) for i in range(1 << ib)]
