@@ -17,9 +17,11 @@ A spec-level reference for network accounting's timing channel:
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
   salt frame with a salt-free placeholder, so every record is a function of the traffic alone; the salt sits in the
   certifier's sealed record cell `_salts[p]` until `Proxy.reveal(p, registration)` opens it on the PoUW window's
-  registration after its last ingress record is published, and `active.check_salts` reads the salt frames. The weights'
-  root PoUW's noise seed reads is recorded before the salt's draw (`Proxy.commit_weights(p, root)`, the sealed cell
-  `_weights[p]`) and given on the same conditions (`Proxy.committed(p, registration)`). A proxy back
+  registration after its last ingress record is published, once and only within `reveal_deadline` of the window's
+  end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
+  reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
+  signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
+  (`Proxy.committed(p, registration)`). A proxy back
   from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the
   Program's at position p, and carries nothing from before: a window it was down for has no record.
 
