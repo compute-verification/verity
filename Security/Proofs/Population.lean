@@ -10,6 +10,11 @@ import Proofs.Population.Transfer
 import Proofs.Population.Converse
 import Proofs.Population.HonestCone
 import Proofs.Population.LongValue
+import Proofs.Population.NecessitySkeleton
+import Proofs.Population.NecessityMatrix
+import Proofs.Population.Exfiltration
+import Proofs.Population.ExfiltrationBound
+import Proofs.Population.ExfiltrationExamples
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -47,4 +52,20 @@ cones over its honest runs, with no obliviousness; what needs the padding is iso
 opening before it reads it, so the slot is ⊥ in its view (or the run holds a collision), and its writer and readers are
 wrong; ⊥ is weakly dominated by a short wrong value, and the determinacy, egress, leakage and skipped-work
 theorems hold over `Option V` with `|V| + 1` for `|V|`.
+`NecessitySkeleton`: tier 1 (a transcript committed before the coins and a draw fixed before it, local checks, robust
+determinacy) gives the sampling certificate, and an accepted run's damaged egress lies in its wrong units' cone with
+probability at least `1 − (1 − ε)^k`; a policy is inferable from the certificate exactly when its amplification is
+bounded (`inference_iff`), and each tier-1 item has a counterexample family.
+`NecessityMatrix`: the policy × property matrix's cells a theorem settles: integrity off the always-proved set,
+control at the public widths and what a width bound buys the count draw, the late cone and commit-before-the-work-coin
+each necessary for skippable work, and weight isolation by range restriction.
+`Exfiltration`: under detection pressure `κ` and a per-window leak `ℓ`, what leaves through the first detection reaches
+`x` with probability at most `exp (-κ (x - ℓ))` for every adaptive strategy and horizon (`exp (-κ x)` when a caught
+window's egress is withheld), and at most `j (ℓ + 1/κ)` leaves on average before the `j`-th detection.
+`ExfiltrationBound`: detection pressure from the independent draw and the cone, a checked population's egress changed
+on at most its wrong units' cone egress, and the end-to-end bound: any decoder of the egress and a side channel `Y`
+gets the target with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, also over a
+deployment's windows.
+`ExfiltrationExamples`: the stopping-time bound is attained, and without detection pressure, a halt, bound inputs or a
+trusted model the leak is unbounded.
 -/

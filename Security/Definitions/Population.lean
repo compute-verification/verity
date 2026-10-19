@@ -3,6 +3,8 @@ import Definitions.Population.Partition
 import Definitions.Population.LongValue
 import Definitions.Population.Oblivious
 import Definitions.Population.AddressMap
+import Definitions.Population.Necessity
+import Definitions.Population.Exfiltration
 
 /-! Populations' vocabulary: units over committed value slots with public read and write sets (`Dataflow`), unit
 functions and correctness, what a checker confirms of the dataflow (single assignment, acyclicity), cones and egress,
@@ -12,4 +14,9 @@ circuit's partition as a population over its committed wires, and the orders on 
 hold `Option V`, ⊥ where no opening has the declared width, and the verifier's view of a run's openings. `Oblivious`:
 when a trace's read sets depend on no value (or only on the public inputs), the classical notion that constrains only
 honest runs, address closure, and the padding of a trace into a static population. `AddressMap`: a program's read sets
-without its unit functions, and the static wirings that express it. -/
+without its unit functions, and the static wirings that express it. `Necessity`: the IOP's sampling certificate (a
+transcript before the coins, `k` draws from a distribution fixed before it, an always-proved set), amplification, and
+what each policy's damage is (integrity's damaged egress, control at the public widths, a range-restricted dataflow).
+`Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first
+detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent draw, and deviations from
+the honest egress. -/
