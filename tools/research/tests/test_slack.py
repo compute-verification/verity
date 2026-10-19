@@ -27,6 +27,7 @@ REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
 ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
+BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
            "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels"]
@@ -43,6 +44,12 @@ class FakeSlack:
         self._ts = itertools.count(1)
         self.page = 200
         self.replies_keep_root = False
+        self.channels: dict[str, dict] = {}                 # `chat`'s: id -> {id, name, is_private, is_archived, members}
+        self.users: list[dict] = []
+        self.pins: list[tuple[str, str]] = []
+        self.bookmarks: list[dict] = []
+        self.shared: list[tuple[str, str]] = []             # Slack Connect invites: (channel, emails)
+        self.connect_error: str | None = None               # what conversations.inviteShared answers, when it refuses
 
     def add(self, channel: str, **msg) -> dict:
         msg.setdefault("ts", f"1700000000.{next(self._ts):06d}")
@@ -104,6 +111,53 @@ class FakeSlack:
             g.update({k: p[k] for k in ("name", "handle", "description") if k in p}, **({"date_delete": 0} if method.endswith("enable") else {}),
                      **({"date_delete": 1700000000} if method.endswith("disable") else {}))
             return {"ok": True, "usergroup": g}
+        return self.handle_chat(method, p)
+
+    def handle_chat(self, method: str, p: dict) -> dict:
+        """The channel, invite, pin, bookmark and user methods `chat` calls, as Slack answers a bot token."""
+        if method == "conversations.create":
+            if any(c["name"] == p["name"] for c in self.channels.values()):
+                return {"ok": False, "error": "name_taken"}                                # archived channels keep their names
+            c = {"id": f"CCHAT{len(self.channels) + 1}", "name": p["name"], "is_private": p.get("is_private") == "true",
+                 "is_archived": False, "members": [BOT_USER]}                             # its creator is in it
+            self.channels[c["id"]] = c
+            return {"ok": True, "channel": {k: v for k, v in c.items() if k != "members"}}
+        if method == "users.list":
+            return {"ok": True, "members": self.users, "response_metadata": {"next_cursor": ""}}
+        if method == "users.lookupByEmail":
+            u = next((u for u in self.users if u.get("profile", {}).get("email") == p["email"]), None)
+            return {"ok": True, "user": u} if u else {"ok": False, "error": "users_not_found"}
+        if method == "conversations.list":
+            mine = [{k: v for k, v in c.items() if k != "members"} for c in self.channels.values()
+                    if BOT_USER in c["members"] and (p.get("exclude_archived") != "true" or not c["is_archived"])]
+            return {"ok": True, "channels": mine, "response_metadata": {"next_cursor": ""}}
+        c = self.channels.get(p.get("channel") or p.get("channel_id"))
+        if c is None:
+            return {"ok": False, "error": "channel_not_found"}
+        if method == "conversations.info":
+            return {"ok": True, "channel": {k: v for k, v in c.items() if k != "members"}}
+        if method == "conversations.invite":
+            if p["users"] in c["members"]:
+                return {"ok": False, "error": "already_in_channel"}
+            c["members"].append(p["users"])
+            return {"ok": True, "channel": {"id": c["id"]}}
+        if method == "conversations.inviteShared":
+            if self.connect_error:
+                return {"ok": False, "error": self.connect_error, **({"needed": "conversations.connect:write"}
+                                                                     if self.connect_error == "missing_scope" else {})}
+            self.shared.append((c["id"], p["emails"]))
+            return {"ok": True, "invite_id": "I1"}
+        if method in ("conversations.archive", "conversations.unarchive"):
+            if c["is_archived"] == (method == "conversations.archive"):
+                return {"ok": False, "error": "already_archived" if c["is_archived"] else "not_archived"}
+            c["is_archived"] = method == "conversations.archive"
+            return {"ok": True}
+        if method == "pins.add":
+            self.pins.append((c["id"], p["timestamp"]))
+            return {"ok": True}
+        if method == "bookmarks.add":
+            self.bookmarks.append(p)
+            return {"ok": True, "bookmark": {"id": f"Bk{len(self.bookmarks)}", **p}}
         return {"ok": False, "error": "unknown_method"}
 
 
@@ -1050,6 +1104,154 @@ def test_a_collaborators_ask_rings_its_lane_but_never_them_and_authorizes_nothin
     assert verify(ours) == (0, "allowed: Verity's bot as @top") and verify(ours, "--authorizes")[0] == 1
     rc, out, _ = run(capsys, "handles")
     assert rc == 0 and "collaborator Ada Lovelace (UADA): a visiting researcher (COMM-49)" in out
+
+
+# --- chat channels: `chat open|close|list` and the bridge in them -------------------------------------------------------------
+
+LUKE, CURSOR_BOT = "U0CA897T7MK", "U0CURSOR"
+START = "https://example.org/verity/start"
+
+
+def chat_users(fake) -> None:
+    """The workspace's users: Luke, Cursor's app's bot (and a deleted older one), and another app's bot."""
+    fake.users = [{"id": "U0GRAFANA", "name": "grafana", "real_name": "Grafana", "is_bot": True, "profile": {}},
+                  {"id": "U0OLDCURSOR", "name": "cursor", "real_name": "Cursor", "is_bot": True, "deleted": True, "profile": {}},
+                  {"id": CURSOR_BOT, "name": "cursor-agent", "real_name": "Cursor", "is_bot": True, "profile": {}},
+                  {"id": LUKE, "name": "luke", "real_name": "Luke Example", "is_bot": False,
+                   "profile": {"email": "luke@example.org", "real_name": "Luke Example"}}]
+
+
+def open_chat(capsys, name: str, email: str, host: str, *extra: str) -> tuple[int, str, str]:
+    return run(capsys, "chat", "open", name, "--email", email, "--host", host, *extra)
+
+
+def test_chat_open_makes_a_private_channel_with_cursors_bot_and_the_person_pins_the_guide_and_records_them(fake, registry, capsys):
+    """Luke is in the workspace: the bot creates #chat-luke (so it is in it), invites Cursor's bot (the live one whose name
+    says cursor) and Luke, pins the guide as the host, bookmarks the start page, and writes Luke into the registry. A rerun
+    reuses all of it."""
+    chat_users(fake)
+    rc, out, _ = open_chat(capsys, "luke", "luke@example.org", "proofs", "--start-page", START, "--note", "a visiting researcher (COMM-52)")
+    (c,) = fake.channels.values()
+    assert rc == 0 and c["name"] == "chat-luke" and c["is_private"] and c["members"] == [BOT_USER, CURSOR_BOT, LUKE]
+    (guide,) = fake.messages[c["id"]]
+    assert fake.pins == [(c["id"], guide["ts"])] and guide["username"] == "proofs"
+    assert guide["text"].startswith("*Welcome, Luke.* This channel is yours with Verity's agents. The @proofs lane hosts it")
+    assert "A post that names no lane goes to @proofs." in guide["text"] and "answer in your post's thread" in guide["text"]
+    assert f"you may {slack.COLLABORATOR_MAY}. You can't authorize {slack.COLLABORATOR_NEVER}: only Daniel can." in guide["text"]
+    assert fake.bookmarks == [{"channel_id": c["id"], "title": "Start here", "type": "link", "link": START}]
+    luke = {"name": "Luke Example", "slack_user": LUKE, "email": "luke@example.org", "note": "a visiting researcher (COMM-52)",
+            "channel": {"key": "chat-luke", "id": c["id"]}, "host": "proofs"}
+    assert slack.load_registry(registry)["collaborators"] == [luke]
+    assert f"wrote {registry}: commit it and open a registry PR (Luke Example in #chat-luke, hosted by @proofs)" in out
+
+    rc, out, _ = open_chat(capsys, "luke", "luke@example.org", "proofs")
+    assert rc == 0 and f"#chat-luke {c['id']}: reused" in out and out.count(": already in") == 2
+    assert [m for m, _ in fake.calls].count("conversations.create") == 1 and len(fake.messages[c["id"]]) == len(fake.pins) == 1
+    assert slack.load_registry(registry)["collaborators"] == [luke]                       # the note is kept
+    assert open_chat(capsys, "luke", "luke@example.org", "proofs", "--cursor-bot", "cursor")[0] == 2
+
+
+def test_chat_open_for_someone_outside_the_workspace_invites_through_slack_connect_or_names_daniels_one_step(fake, registry, capsys):
+    """Not in the workspace: Slack Connect invites them by email. Where Slack refuses that (a plan without Connect, a scope
+    not yet approved), the rest is done anyway and the last line is the one step Daniel takes."""
+    chat_users(fake)
+    rc, out, _ = open_chat(capsys, "grace", "grace@example.org", "circuits")
+    assert rc == 0 and fake.shared == [("CCHAT1", "grace@example.org")] and "Daniel:" not in out
+    assert "grace@example.org is not in the workspace: Slack Connect invited them to #chat-grace" in out
+    assert slack.load_registry(registry)["collaborators"] == [
+        {"name": "Grace", "slack_user": None, "email": "grace@example.org", "note": "asks the lanes in #chat-grace",
+         "channel": {"key": "chat-grace", "id": "CCHAT1"}, "host": "circuits"}]
+
+    fake.connect_error = "not_paid"
+    rc, out, _ = open_chat(capsys, "ada", "ada@example.org", "proofs")
+    assert rc == 0 and out.splitlines()[-1] == (
+        "Daniel: invite ada@example.org to #chat-ada yourself: in Slack, open #chat-ada, click its name, choose Add people and "
+        "enter ada@example.org (Slack refused the bot's Slack Connect invite: not_paid). Then rerun this command to record "
+        "their Slack id; everything else is done")
+    assert len(fake.messages["CCHAT2"]) == 1 and fake.pins[-1][0] == "CCHAT2" and fake.shared == [("CCHAT1", "grace@example.org")]
+    assert slack.chat_channels(slack.load_registry(registry))["chat-ada"]["id"] == "CCHAT2"
+
+    fake.connect_error = "missing_scope"
+    rc, out, _ = open_chat(capsys, "alan", "alan@example.org", "proofs")
+    assert rc == 0 and out.splitlines()[-1].startswith(
+        "Daniel: approve the Verity app's new scope conversations.connect:write: open the install page `research msg "
+        "slack-app apply` prints and click Allow")
+
+
+def test_chat_close_archives_and_keeps_the_person_list_shows_each_and_open_again_unarchives(fake, registry, capsys):
+    chat_users(fake)
+    assert open_chat(capsys, "luke", "luke@example.org", "proofs")[0] == 0
+    assert run(capsys, "chat", "list")[1] == "Luke Example (U0CA897T7MK, luke@example.org): #chat-luke (CCHAT1), hosted by @proofs\n"
+    rc, out, _ = run(capsys, "chat", "close", "luke")
+    assert rc == 0 and fake.channels["CCHAT1"]["is_archived"] and "Luke Example stays a collaborator" in out
+    assert slack.load_registry(registry)["collaborators"] == [
+        {"name": "Luke Example", "slack_user": LUKE, "email": "luke@example.org", "note": "asks the lanes in #chat-luke"}]
+    assert run(capsys, "chat", "list")[1] == "Luke Example (U0CA897T7MK, luke@example.org): no channel\n"
+    rc, _, err = run(capsys, "chat", "close", "luke")
+    assert rc == 2 and "no collaborator has #chat-luke" in err
+
+    rc, out, _ = open_chat(capsys, "luke", "luke@example.org", "lean")                  # the name is taken by the archived one
+    assert rc == 0 and "#chat-luke CCHAT1: reused" in out and len(fake.channels) == 1 and not fake.channels["CCHAT1"]["is_archived"]
+    assert len(fake.pins) == 2 and fake.messages["CCHAT1"][-1]["username"] == "lean"      # a new host, a new guide
+    assert slack.chat_channels(slack.load_registry(registry))["chat-luke"]["host"] == "lean"
+
+
+def test_chat_dry_run_prints_the_plan_and_changes_nothing(fake, registry, capsys):
+    chat_users(fake)
+    before = registry.read_text()
+    rc, out, err = open_chat(capsys, "luke", "luke@example.org", "proofs", "--start-page", START, "--dry-run")
+    assert rc == 0 and not fake.calls and registry.read_text() == before
+    assert 'dry-run: conversations.create {"is_private": "true", "name": "chat-luke"}' in err
+    for line in ("plan: #chat-luke <#chat-luke's id>: created, private", "plan: invite Cursor's bot", "plan: invite luke@example.org",
+                 "plan: pinned the guide, posted as @proofs", f"plan: bookmarked {START}", f"plan: write {registry} with "):
+        assert line in out
+    assert open_chat(capsys, "luke", "luke@example.org", "proofs")[0] == 0
+    calls, before = len(fake.calls), registry.read_text()
+    rc, out, err = run(capsys, "chat", "close", "luke", "--dry-run")
+    assert rc == 0 and len(fake.calls) == calls and registry.read_text() == before and "plan: archived #chat-luke" in out
+
+
+def test_a_post_in_a_chat_channel_rings_the_lanes_it_names_else_its_host_else_top(fake, registry, routes_dirs, capsys, monkeypatch):
+    """A person's post in a chat channel goes through no `research msg`, so the watcher hands it to `deliver --channel
+    chat-NAME --event -`, as in #ask-the-team. The lanes it starts with ring; a post that names no one rings the host, or
+    @top while the host has no open inbox; each once, in a doorbell that names the channel. The bot's own posts ring no one."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    chat_users(fake)
+    assert open_chat(capsys, "luke", "luke@example.org", "proofs")[0] == 0
+    boxes = {n: inbox(fake, routes_dirs, n) for n in ("proofs", "circuits", "top")}
+    rung = lambda n: [b["text"] for b in bells(fake, boxes[n])]  # noqa: E731
+
+    def deliver(m):
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"event": {"type": "message", "channel": "CCHAT1", **m}})))
+        return run(capsys, "deliver", "--channel", "chat-luke", "--event", "-")
+
+    ask = fake.add("CCHAT1", text="how do I read a PoUW receipt?", user=LUKE)
+    for _ in range(2):
+        assert deliver(ask)[0] == 0
+    assert rung("proofs") == [f"from luke, #chat-luke thread {ask['ts']}: how do I read a PoUW receipt?"]
+    named = fake.add("CCHAT1", text="@circuits is the TP8 sweep done?", user=LUKE)
+    assert deliver(named)[0] == 0
+    assert rung("circuits") == [f"from luke, #chat-luke thread {named['ts']}: @circuits is the TP8 sweep done?"]
+    assert len(rung("proofs")) == 1 and rung("top") == []
+    assert deliver(fake.messages["CCHAT1"][0])[0] == 0 and len(rung("proofs")) == 1      # the pinned guide, the bot's
+
+    rc, out, _ = run(capsys, "read", "--as", "proofs", "--peek")
+    assert rc == 0 and "one from #chat-luke is answered there, `... --channel chat-luke --thread T`" in out
+    assert run(capsys, "send", "--as", "proofs", "--channel", "chat-luke", "--thread", ask["ts"], "--text", "it proves the sum")[0] == 0
+    assert fake.messages["CCHAT1"][-1]["thread_ts"] == ask["ts"]
+    more = fake.add("CCHAT1", text="and the Lean side?", user=LUKE, thread_ts=ask["ts"])
+    assert deliver(more)[0] == 0
+    assert rung("proofs")[-1] == f"from luke, #chat-luke thread {ask['ts']}, reply {more['ts']}: and the Lean side?"
+
+    add_route(routes_dirs[0], "proofs", boxes["proofs"], closed="2026-10-02T00:00Z")
+    late = fake.add("CCHAT1", text="is anyone there?", user=LUKE)
+    rc, _, err = deliver(late)
+    assert rc == 0 and rung("top") == [f"from luke, #chat-luke thread {late['ts']}: is anyone there?"] and len(rung("proofs")) == 2
+    assert "#chat-luke's host @proofs has no open inbox, so a post there that names no one rings @top" in err
+    rc, _, err = run(capsys, "match", "--as", "top", "--event", json.dumps({"channel": "CCHAT1", **late}), "--why")
+    assert rc == 0 and "top-level post in #chat-luke, which @top subscribes to" in err
+    out = run(capsys, "subscriptions", "--as", "top")[1]
+    assert 'subscribe_slack_channel(channelId="CCHAT1", topLevelOnly=true' in out and "# #chat-luke" in out
 
 
 def test_groups_sync_plans_by_default_then_creates_updates_enables_and_records_ids(fake, registry, capsys):
@@ -2400,6 +2602,21 @@ def test_routing_reads_origin_mains_registry_fetched_at_most_every_30_minutes(re
     assert slack.routing_registry(mine, tmp_path / "not-a-repo" / "registry.json", now=2e10) is mine
     monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
     assert slack.routing_registry(mine, path) is mine
+
+
+def test_routing_keeps_a_chat_channel_this_checkout_opened_before_its_registry_pr_lands(registry, tmp_path, monkeypatch):
+    """`chat open` writes the checkout's registry, and its PR lands later: the checkout's channel routes meanwhile, a
+    collaborator only origin/main has (a stale checkout's) routes too, and origin/main's channel wins once it has one."""
+    monkeypatch.delenv("RESEARCH_SLACK_FRESH_CHECK")
+    path, change = stale_checkout(tmp_path, registry)
+    grace = {"name": "Grace Hopper", "slack_user": "UGRACE", "note": "x", "channel": {"key": "chat-grace", "id": "CCHATG"}, "host": "lean"}
+    change(lambda reg: reg.update(collaborators=[ADA, grace]))
+    mine = slack.load_registry(path)
+    mine["collaborators"] = [{**ADA, **CHAT}]
+    chats = lambda: {k: c["host"] for k, c in slack.chat_channels(slack.routing_registry(mine, path, now=1e9)).items()}  # noqa: E731
+    assert chats() == {"chat-ada": "proofs", "chat-grace": "lean"}
+    change(lambda reg: reg.update(collaborators=[{**ADA, "channel": {"key": "chat-ada", "id": "CCHATADA"}, "host": "circuits"}, grace]))
+    assert slack.routing_registry(mine, path, now=1e9 + slack.FRESH_EVERY_S)["collaborators"][0]["host"] == "circuits"
 
 
 def test_owners_answers_as_origin_main_does_from_a_stale_checkout(registry, tmp_path, monkeypatch, capsys):

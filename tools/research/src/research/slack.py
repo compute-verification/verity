@@ -1351,8 +1351,8 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
     now = _now().timestamp() if now is None else now
     history, branches = watch_context(api, ch, msg, root, now, log)
     host = chat_channels(reg).get(where or "", {}).get("host")
-    if host and (why := unreachable(host, *routes.resolve(host))):
-        notes.append(f"#{where}'s host @{host}: {why}, so a post there that names no one rings @{CHAT_WATCHER}")
+    if host and unreachable(host, *routes.resolve(host)):
+        notes.append(f"#{where}'s host @{host} has no open inbox, so a post there that names no one rings @{CHAT_WATCHER}")
         host = CHAT_WATCHER
     ch = front                                                       # from here on, `ch` is the inboxes' channel
     author = poster(msg, reg) or "?"
