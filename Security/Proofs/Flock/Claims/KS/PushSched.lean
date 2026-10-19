@@ -9,8 +9,8 @@ sends the constant cap at every digest. The schedule predicates of `SlotBatch` a
 choices at `interleave`'s nodes, the messages it sends and the outcomes it reaches, so each holds of the primed prover
 where it holds of the compiled one:
 
-* `pushed_upd`, `reach_push`, `ofMap_oracleStrat_map`: the pushing chooser keeps every cap pushed, reaches only
-  outcomes the compiled prover reaches, and commutes with relabelling;
+* `pushed_upd`, `reach_push`, `reach_push'`, `ofMap_oracleStrat_map`: the pushing chooser keeps every cap pushed,
+  reaches exactly the outcomes the compiled prover reaches, and commutes with relabelling;
 * `firstS_push`, `followR_push`, `followL_push`, `preSched_push`: `Lock.FirstS`, `Lock.FollowR`, `Lock.FollowL` and
   `Lock.PreSched` through `Lock.rightSame`, `Lock.leftSame` and `batchPush`;
 * `lead_push`: `Lock.Lead` through two interleaved locksteps and what follows them.
@@ -48,6 +48,19 @@ theorem reach_push {R : I → α → α → Prop} (hR : ∀ i a b, R i a b → P
       exact ⟨c, reach_push hR (L c) (σ' c) hi hc⟩
   | _, _, _, .send _ L, σ', hi, h => reach_push hR (L σ'.1) σ'.2 hi h
   | _, _, _, .table _ _ _ hs hk L, σ', hi, h => reach_push hR (L (fun _ => σ'.1) σ'.1) σ'.2 (pushed_upd hs hk hi σ'.1) h
+
+/-- **The primed prover reaches every outcome the compiled prover reaches**, along a lockstep whose leaves relate
+equal outputs while every cap is pushed. -/
+theorem reach_push' {R : I → α → α → Prop} (hR : ∀ i a b, R i a b → Pushed get i → a = b) {x : α} :
+    ∀ {i : I} {g g' : Game α} (L : Lock (Cap D) D get R i g g') (σ' : Strategy g'), Pushed get i →
+      Lock.Reach g' σ' x → Lock.Reach g (Lock.oracleStrat pushC L σ') x
+  | _, _, _, .ret hr, _, hi, h => (hR _ _ _ hr hi).trans h
+  | _, _, _, @Lock.coin _ _ _ _ _ _ _ _ C _ _ _ _ L, σ', hi, h => by
+      obtain ⟨c, hc⟩ := h
+      exact ⟨c, reach_push' hR (L c) (σ' c) hi hc⟩
+  | _, _, _, .send _ L, σ', hi, h => reach_push' hR (L σ'.1) σ'.2 hi h
+  | _, _, _, .table _ _ _ hs hk L, σ', hi, h =>
+      reach_push' hR (L (fun _ => σ'.1) σ'.1) σ'.2 (pushed_upd hs hk hi σ'.1) h
 
 /-- **The pushing chooser commutes with relabelling.** -/
 theorem ofMap_oracleStrat_map {β α₂ β₂ : Type} {R : I → α → β → Prop} {R₂ : I → α₂ → β₂ → Prop} (f : α → α₂)
@@ -189,17 +202,20 @@ theorem followR_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead 
         exact .isendC (fun _ => m₂) (ih (L (fun _ => m₂) m₂) (pushed_upd hs hk hi m₂))
 
 /-- **`FollowL` through the pushing chooser**: the lockstep's game follows the primed prover of `τ`. -/
-theorem followL_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead : α × γ → Prop} {b : Option ℕ}
-    {g' : Game α} {h : Game γ} {σ : Strategy (interleave g' h)} {τ : Strategy g'}
-    (hF : Lock.FollowL Dead b g' h σ τ) :
+theorem followL_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead : α × γ → Prop} {Dead' : α → Prop}
+    {b : Option ℕ} {g' : Game α} {h : Game γ} {σ : Strategy (interleave g' h)} {τ : Strategy g'}
+    (hF : Lock.FollowL Dead Dead' b g' h σ τ) :
     ∀ {i : I} {g : Game α} (L : Lock (Cap D) D get R i g g'), Pushed get i →
-      Lock.FollowL Dead b g h (Lock.oracleStrat pushC (Lock.leftSame L h) σ) (Lock.oracleStrat pushC L τ) := by
+      Lock.FollowL Dead Dead' b g h (Lock.oracleStrat pushC (Lock.leftSame L h) σ) (Lock.oracleStrat pushC L τ) := by
   have hR' : ∀ i (a b : α × γ), R i a.1 b.1 ∧ a.2 = b.2 → Pushed get i → a = b :=
     fun i a b hr hp => Prod.ext (hR i _ _ hr.1 hp) hr.2
   induction hF with
   | dead hσ =>
       intro i g L hi
       exact .dead fun x hx => hσ x (reach_push hR' _ _ hi hx)
+  | spent hs =>
+      intro i g L hi
+      exact .spent fun hτ x hx => hs (fun y hy => hτ y (reach_push' hR L _ hi hy)) x (reach_push hR' _ _ hi hx)
   | gret =>
       intro i g L hi
       cases L with
@@ -208,7 +224,8 @@ theorem followL_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead 
       intro i g L hi
       have e := ofMap_oracleStrat_map (R₂ := fun i a b => R i a.1 b.1 ∧ a.2 = b.2) (fun a => (a, c))
         (fun b => (b, c)) (fun _ _ _ hr => ⟨hr, rfl⟩) L (cast (congrArg Strategy (Lock.interleave_ret c g')) σ)
-      have key := Lock.FollowL.hret (Dead := Dead) (b := b) (Lock.oracleStrat pushC (Lock.leftSame L (.ret c)) σ)
+      have key := Lock.FollowL.hret (Dead := Dead) (Dead' := Dead') (b := b)
+        (Lock.oracleStrat pushC (Lock.leftSame L (.ret c)) σ)
       cases L with
       | ret hr => exact .gret
       | coin _ L =>
@@ -265,21 +282,6 @@ theorem followL_push (hR : ∀ i a b, R i a b → Pushed get i → a = b) {Dead 
       | coin _ L =>
         push_unfold
         exact .hsendC m₂ (ih (.coin _ L) hi)
-  | hcoinS _ ih =>
-      intro i g L hi
-      cases L with
-      | send _ L =>
-        push_unfold
-        exact .hcoinS fun c => ih c (.send _ L) hi
-      | table s upd hf hs hk L =>
-        push_unfold
-        exact .hcoinS fun c => ih c (.table s upd hf hs hk L) hi
-  | hcoinC _ ih =>
-      intro i g L hi
-      cases L with
-      | coin _ L =>
-        push_unfold
-        exact .hcoinC fun c => ih c (.coin _ L) hi
 
 /-- **`PreSched` through the pushing chooser** along `batchPush`: each game in front advances and then moves by
 sends as the compiled prover's does, and where the games in front pause the rest is pushed. -/

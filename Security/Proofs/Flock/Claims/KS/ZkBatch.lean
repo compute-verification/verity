@@ -8,8 +8,9 @@ import Proofs.Flock.Claims.KS.PushSched
 and the session's table to its end before the ones after it. The masked simulator does neither: after its live rounds
 it sends every table's final messages and openings (`simEndJ`). Its schedule is `Lock.PreSched`: each table in front
 advances until only sends are left in it, after its coins, and later moves only by sends; then the session's table
-follows its own strategy, rep 0 first, while the tables after it send at any time and flip their coins only once it is
-past the slot (`Lock.FollowL`). The count is the same:
+follows its own strategy, rep 0 first, while the tables after it send at any time; once it is past the slot, the
+strategy may play anything that keeps the table's dead runs dead (`Lock.FollowL`), as the simulator does when it sends
+the table's openings after the later tables' coins. The count is the same:
 
 * `ind_conflictAcc_nul`: `advRSZ`'s event is `0` at a run whose session table opens nothing (`nulOpZ`), as every
   dead branch of the simulator does;
@@ -56,15 +57,17 @@ theorem ind_conflictAcc_nul (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D
   · rfl
 
 /-- **The session's table follows its own strategy, rep 0 first, beside the tables after it**: past the tables in
-front, the primed prover's strategy `σ'` plays the session's table as `σ₁` does, the tables after it flipping coins
-only past `k` of that table's (`Lock.FollowL`), and `σ₁` advances rep 0 until it ends after `n₀` coins (`Lock.Lead`),
-except below parts every reached outcome of which is `Dead`. -/
+front, the primed prover's strategy `σ'` plays the session's table as `σ₁` does, the tables after it moving only by
+sends, for `k` of that table's coins, and from there on keeping its runs `Dead` wherever `σ₁`'s are (`Lock.FollowL`),
+and `σ₁` advances rep 0 until it ends after `n₀` coins (`Lock.Lead`), except below parts every reached outcome of which
+is `Dead`. -/
 def TabFollowZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap₀ : Model.Cap D)
     (post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (pts : Fin 2 → Fin mPts → 𝔽) (k n₀ : ℕ)
     (Dead : List (OutZC 𝔽 D Sl) → Prop)
     (σ' : Strategy (batch (tabAfterZCP A Hs T cap₀ pts ::
       post.map fun g : (Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl) => g pts))) : Prop :=
-  ∃ σ₁, Lock.FollowL (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => Dead (x.1 :: x.2)) (some k)
+  ∃ σ₁, Lock.FollowL (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => Dead (x.1 :: x.2))
+      (fun x => ∀ rest, Dead (x :: rest)) (some k)
       (tabAfterZCP A Hs T cap₀ pts) (batch (post.map fun g : (Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl) => g pts))
       (Strategy.ofMap (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => x.1 :: x.2)
         ((tabAfterZCP A Hs T cap₀ pts).interleave
@@ -103,14 +106,16 @@ theorem slotRSZ_of_batch (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : T
       (pre.map (· pts)) (hF pts)
 
 /-- **`TabFollowZ` played by the compiled prover**: past the tables in front, `σ'` plays the session's table as `σ₁`
-does, the tables after it flipping coins only past `k` of that table's, and `σ₁` advances rep 0 until it ends after
-`n₀` coins, except below parts every reached outcome of which is `Dead`. -/
+does, the tables after it moving only by sends, for `k` of that table's coins, and from there on keeping its runs
+`Dead` wherever `σ₁`'s are, and `σ₁` advances rep 0 until it ends after `n₀` coins, except below parts every reached
+outcome of which is `Dead`. -/
 def TabFollowC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : TabZK 𝔽 mPts) (cap₀ : Model.Cap D)
     (post : List ((Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl))) (pts : Fin 2 → Fin mPts → 𝔽) (k n₀ : ℕ)
     (Dead : List (OutZC 𝔽 D Sl) → Prop)
     (σ' : Strategy (batch (tabAfterZC A Hs T cap₀ pts ::
       post.map fun g : (Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl) => g pts))) : Prop :=
-  ∃ σ₁, Lock.FollowL (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => Dead (x.1 :: x.2)) (some k)
+  ∃ σ₁, Lock.FollowL (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => Dead (x.1 :: x.2))
+      (fun x => ∀ rest, Dead (x :: rest)) (some k)
       (tabAfterZC A Hs T cap₀ pts) (batch (post.map fun g : (Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl) => g pts))
       (Strategy.ofMap (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => x.1 :: x.2)
         ((tabAfterZC A Hs T cap₀ pts).interleave
@@ -151,7 +156,7 @@ theorem tabFollowZ_of_c (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
     (fun x : OutZC 𝔽 D Sl × List (OutZC 𝔽 D Sl) => x.1 :: x.2) (fun _ _ _ h hp => by rw [h.1 hp, h.2])
     (Lock.leftSame (pushTab A Hs T cap₀ pts)
       (batch (post.map fun g : (Fin 2 → Fin mPts → 𝔽) → Game (OutZC 𝔽 D Sl) => g pts))) σ'
-  exact (congrArg (Lock.FollowL _ _ _ _ · _) e).mpr
+  exact (congrArg (Lock.FollowL _ _ _ _ _ · _) e).mpr
     (followL_push (fun _ _ _ hr hp => hr hp) hF (pushTab A Hs T cap₀ pts) pushed_none)
 
 omit [Fintype K] [Inhabited Sl] in

@@ -6,8 +6,9 @@ import Proofs.Flock.Claims.KS.SlotPost
 `SlotAt.batchLock_first` and `SlotAtD.batchLock_nil` count a slot of one position's lockstep where the strategy plays
 each game in front to its end before the next, and the lockstep's own game to its end before the games after it. A
 strategy can instead play a game in front up to a point where only sends are left in it, move on, and send the rest of
-it later; and play the games after the lockstep's at their sends at any time, and at their coins only once the
-lockstep's game has flipped more coins than the slot is away. The count is the same:
+it later; and play the games after the lockstep's at their sends at any time, and once the lockstep's game has
+flipped more coins than the slot is away, play anything that keeps the lockstep's dead runs dead. The count is the
+same:
 
 * `SlotAtD.map`, `SlotAtD.mono`, `NoSlot.rightSame`, `SlotAtD.leftSame_ret`: relabelling keeps the chooser-free count,
   the same game beside a lockstep with no table node of the slot has none, and a finished game after the lockstep
@@ -16,8 +17,9 @@ lockstep's game has flipped more coins than the slot is away. The count is the s
   holds; a slot met after `k` coins from there is met after `n + k`;
 * `FollowR`, `SlotAtD.rightSame_followR`: the game in front moves only by sends while the rest follows `τ`; a slot met
   after `k` coins by `τ` is met after `k`;
-* `FollowL`, `SlotAtD.leftSame_followL`: the lockstep's game follows `τ`, and the games after it move by sends, and by
-  coins only once the lockstep's game has flipped more coins than the slot is away;
+* `FollowL`, `FollowL.dead_of`, `SlotAtD.leftSame_followL`: the lockstep's game follows `τ` and the games after it
+  move by sends until the lockstep's game has flipped more coins than the slot is away, and from there on the run is
+  dead wherever `τ`'s is;
 * `PreSched`, `SlotAtD.batchLock_sched`, `SlotAtD.batchLock_nil_followL`: in a batch, each game in front by `FirstS`
   and then `FollowR`, in order, after `n` coins in all, and the lockstep's game by `FollowL`, put a slot met after `k`
   coins by the lockstep's own strategy at `n + k`.
@@ -268,78 +270,76 @@ def predS : Option ℕ → Option ℕ
   | some (n + 1) => some n
   | _ => none
 
-/-- **The lockstep's game follows `τ`, and the games after it move by sends, and by coins only once the slot is
-behind**: at every choice of `interleave g' h` the strategy advances `g'` as `τ` does (`gcoin…`, `gsend…`), one coin
-off the budget `b` of coins still to go up to the slot at each coin, or sends in `h` (`hsend…`), or flips `h`'s coin
-where the budget is spent (`hcoin…`), until `g'` has ended (`gret`) or `h` has, where `τ` is the strategy read through
-the pairing (`hret`), except below a part of the run every reached outcome of which is `Dead` (`dead`). -/
-inductive FollowL {β γ : Type} (Dead : β × γ → Prop) :
+/-- **The lockstep's game follows `τ`, and the games after it move by sends until the slot is behind**: at every
+choice of `interleave g' h` the strategy advances `g'` as `τ` does (`gcoin…`, `gsend…`), one coin off the budget `b` of
+coins still to go up to the slot at each coin, or sends in `h` (`hsend…`), until `g'` has ended (`gret`) or `h` has,
+where `τ` is the strategy read through the pairing (`hret`), except below a part of the run every reached outcome of
+which is `Dead` (`dead`), and where the budget is spent, below which the run need only be `Dead` wherever the rest of
+`τ`'s is `Dead'` (`spent`). -/
+inductive FollowL {β γ : Type} (Dead : β × γ → Prop) (Dead' : β → Prop) :
     Option ℕ → (g' : Game β) → (h : Game γ) → Strategy (interleave g' h) → Strategy g' → Prop
   | dead {b : Option ℕ} {g' : Game β} {h : Game γ} {σ : Strategy (interleave g' h)} {τ : Strategy g'} :
-      (∀ x, Reach _ σ x → Dead x) → FollowL Dead b g' h σ τ
+      (∀ x, Reach _ σ x → Dead x) → FollowL Dead Dead' b g' h σ τ
+  | spent {g' : Game β} {h : Game γ} {σ : Strategy (interleave g' h)} {τ : Strategy g'} :
+      ((∀ y, Reach g' τ y → Dead' y) → ∀ x, Reach _ σ x → Dead x) → FollowL Dead Dead' none g' h σ τ
   | gret {b : Option ℕ} {a : β} {h : Game γ} {σ : Strategy (interleave (.ret a) h)} {τ : Strategy (.ret a)} :
-      FollowL Dead b (.ret a) h σ τ
+      FollowL Dead Dead' b (.ret a) h σ τ
   | hret {b : Option ℕ} {g' : Game β} {c : γ} (σ : Strategy (interleave g' (.ret c))) :
-      FollowL Dead b g' (.ret c) σ (Strategy.ofMap (·, c) g' (cast (congrArg Strategy (interleave_ret c g')) σ))
+      FollowL Dead Dead' b g' (.ret c) σ
+        (Strategy.ofMap (·, c) g' (cast (congrArg Strategy (interleave_ret c g')) σ))
   | gcoinS {b : Option ℕ} {C : Type} [Fintype C] [Nonempty C] {k : C → Game β} {M₂ : Type} {k₂ : M₂ → Game γ}
       {σ : (c : C) → Strategy (interleave (k c) (.send M₂ k₂))} {τ : (c : C) → Strategy (k c)} :
-      (∀ c, FollowL Dead (predS b) (k c) (.send M₂ k₂) (σ c) (τ c)) →
-        FollowL Dead b (.coin C k) (.send M₂ k₂) ⟨true, σ⟩ τ
+      (∀ c, FollowL Dead Dead' (predS b) (k c) (.send M₂ k₂) (σ c) (τ c)) →
+        FollowL Dead Dead' b (.coin C k) (.send M₂ k₂) ⟨true, σ⟩ τ
   | gcoinC {b : Option ℕ} {C : Type} [Fintype C] [Nonempty C] {k : C → Game β} {C₂ : Type} [Fintype C₂]
       [Nonempty C₂] {k₂ : C₂ → Game γ} {σ : (c : C) → Strategy (interleave (k c) (.coin C₂ k₂))}
       {τ : (c : C) → Strategy (k c)} :
-      (∀ c, FollowL Dead (predS b) (k c) (.coin C₂ k₂) (σ c) (τ c)) →
-        FollowL Dead b (.coin C k) (.coin C₂ k₂) ⟨true, σ⟩ τ
+      (∀ c, FollowL Dead Dead' (predS b) (k c) (.coin C₂ k₂) (σ c) (τ c)) →
+        FollowL Dead Dead' b (.coin C k) (.coin C₂ k₂) ⟨true, σ⟩ τ
   | gsendS {b : Option ℕ} {M : Type} {k : M → Game β} {M₂ : Type} {k₂ : M₂ → Game γ} (m : M)
       {σ : Strategy (interleave (k m) (.send M₂ k₂))} {τ : Strategy (k m)} :
-      FollowL Dead b (k m) (.send M₂ k₂) σ τ → FollowL Dead b (.send M k) (.send M₂ k₂) ⟨true, ⟨m, σ⟩⟩ ⟨m, τ⟩
+      FollowL Dead Dead' b (k m) (.send M₂ k₂) σ τ →
+        FollowL Dead Dead' b (.send M k) (.send M₂ k₂) ⟨true, ⟨m, σ⟩⟩ ⟨m, τ⟩
   | gsendC {b : Option ℕ} {M : Type} {k : M → Game β} {C₂ : Type} [Fintype C₂] [Nonempty C₂] {k₂ : C₂ → Game γ}
       (m : M) {σ : Strategy (interleave (k m) (.coin C₂ k₂))} {τ : Strategy (k m)} :
-      FollowL Dead b (k m) (.coin C₂ k₂) σ τ → FollowL Dead b (.send M k) (.coin C₂ k₂) ⟨true, ⟨m, σ⟩⟩ ⟨m, τ⟩
+      FollowL Dead Dead' b (k m) (.coin C₂ k₂) σ τ →
+        FollowL Dead Dead' b (.send M k) (.coin C₂ k₂) ⟨true, ⟨m, σ⟩⟩ ⟨m, τ⟩
   | hsendS {b : Option ℕ} {M : Type} {k : M → Game β} {M₂ : Type} {k₂ : M₂ → Game γ} (m₂ : M₂)
       {σ : Strategy (interleave (.send M k) (k₂ m₂))} {τ : Strategy (.send M k)} :
-      FollowL Dead b (.send M k) (k₂ m₂) σ τ → FollowL Dead b (.send M k) (.send M₂ k₂) ⟨false, ⟨m₂, σ⟩⟩ τ
+      FollowL Dead Dead' b (.send M k) (k₂ m₂) σ τ →
+        FollowL Dead Dead' b (.send M k) (.send M₂ k₂) ⟨false, ⟨m₂, σ⟩⟩ τ
   | hsendC {b : Option ℕ} {C : Type} [Fintype C] [Nonempty C] {k : C → Game β} {M₂ : Type} {k₂ : M₂ → Game γ}
       (m₂ : M₂) {σ : Strategy (interleave (.coin C k) (k₂ m₂))} {τ : Strategy (.coin C k)} :
-      FollowL Dead b (.coin C k) (k₂ m₂) σ τ → FollowL Dead b (.coin C k) (.send M₂ k₂) ⟨false, ⟨m₂, σ⟩⟩ τ
-  | hcoinS {M : Type} {k : M → Game β} {C₂ : Type} [Fintype C₂] [Nonempty C₂] {k₂ : C₂ → Game γ}
-      {σ : (c : C₂) → Strategy (interleave (.send M k) (k₂ c))} {τ : Strategy (.send M k)} :
-      (∀ c, FollowL Dead none (.send M k) (k₂ c) (σ c) τ) → FollowL Dead none (.send M k) (.coin C₂ k₂) ⟨false, σ⟩ τ
-  | hcoinC {C : Type} [Fintype C] [Nonempty C] {k : C → Game β} {C₂ : Type} [Fintype C₂] [Nonempty C₂]
-      {k₂ : C₂ → Game γ} {σ : (c : C₂) → Strategy (interleave (.coin C k) (k₂ c))} {τ : Strategy (.coin C k)} :
-      (∀ c, FollowL Dead none (.coin C k) (k₂ c) (σ c) τ) → FollowL Dead none (.coin C k) (.coin C₂ k₂) ⟨false, σ⟩ τ
+      FollowL Dead Dead' b (.coin C k) (k₂ m₂) σ τ →
+        FollowL Dead Dead' b (.coin C k) (.send M₂ k₂) ⟨false, ⟨m₂, σ⟩⟩ τ
 
-/-- **A strategy whose lockstep's game follows `τ` reaches only `Dead` outcomes or outcomes whose first part `τ`
-reaches.** -/
-theorem FollowL.reach {β γ : Type} {Dead : β × γ → Prop} {b : Option ℕ} {g' : Game β} {h : Game γ}
-    {σ : Strategy (interleave g' h)} {τ : Strategy g'} (hF : FollowL Dead b g' h σ τ) :
-    ∀ {x : β × γ}, Reach _ σ x → Dead x ∨ Reach g' τ x.1 := by
+/-- **Below a strategy whose lockstep's game follows `τ`, the run is `Dead` wherever `τ`'s is `Dead'`**, where a
+`Dead'` first part makes an outcome `Dead`. -/
+theorem FollowL.dead_of {β γ : Type} {Dead : β × γ → Prop} {Dead' : β → Prop}
+    (hD : ∀ x : β × γ, Dead' x.1 → Dead x) {b : Option ℕ} {g' : Game β} {h : Game γ}
+    {σ : Strategy (interleave g' h)} {τ : Strategy g'} (hF : FollowL Dead Dead' b g' h σ τ) :
+    (∀ y, Reach g' τ y → Dead' y) → ∀ x, Reach _ σ x → Dead x := by
   induction hF with
-  | dead hσ => exact fun hx => .inl (hσ _ hx)
+  | dead hσ => exact fun _ => hσ
+  | spent hs => exact hs
   | @gret b a h σ τ =>
-      intro x hx
+      intro hτ x hx
       obtain ⟨y, _, rfl⟩ := reach_map (fun c => (a, c)) h σ hx
-      exact .inr rfl
+      exact hD _ (hτ a rfl)
   | @hret b g' c σ =>
-      intro x hx
+      intro hτ x hx
       obtain ⟨y, hy, rfl⟩ := reach_map (·, c) g' _ (reach_cast (interleave_ret c g') σ hx)
-      exact .inr hy
+      exact hD _ (hτ y hy)
   | gcoinS _ ih =>
-      rintro x ⟨c, hx⟩
-      exact (ih c hx).imp_right fun h => ⟨c, h⟩
+      rintro hτ x ⟨c, hx⟩
+      exact ih c (fun y hy => hτ y ⟨c, hy⟩) x hx
   | gcoinC _ ih =>
-      rintro x ⟨c, hx⟩
-      exact (ih c hx).imp_right fun h => ⟨c, h⟩
-  | gsendS m _ ih => exact fun hx => ih hx
-  | gsendC m _ ih => exact fun hx => ih hx
-  | hsendS m₂ _ ih => exact fun hx => ih hx
-  | hsendC m₂ _ ih => exact fun hx => ih hx
-  | hcoinS _ ih =>
-      rintro x ⟨c, hx⟩
-      exact ih c hx
-  | hcoinC _ ih =>
-      rintro x ⟨c, hx⟩
-      exact ih c hx
+      rintro hτ x ⟨c, hx⟩
+      exact ih c (fun y hy => hτ y ⟨c, hy⟩) x hx
+  | gsendS m _ ih => exact ih
+  | gsendC m _ ih => exact ih
+  | hsendS m₂ _ ih => exact ih
+  | hsendC m₂ _ ih => exact ih
 
 section Follow
 
@@ -443,18 +443,21 @@ theorem SlotAtD.rightSame_followR {Dead : γ × β → Prop} {Dead' : β → Pro
 lockstep's game follows `τ`, with a budget of `k` coins up to the slot. -/
 theorem SlotAtD.leftSame_followL {Dead : β × γ → Prop} {Dead' : β → Prop} (hD : ∀ x : β × γ, Dead' x.1 → Dead x)
     {b : Option ℕ} {g' : Game β} {h : Game γ} {σ : Strategy (interleave g' h)} {τ : Strategy g'}
-    (hF : FollowL Dead b g' h σ τ) :
+    (hF : FollowL Dead Dead' b g' h σ τ) :
     ∀ {k : ℕ} {i : I} {g : Game α} (L : Lock T D get R i g g'), b = some k → SlotAtD slot Dead' k L τ →
       SlotAtD slot Dead k (Lock.leftSame L h) σ := by
   have hdead : ∀ {b : Option ℕ} {g' : Game β} {h : Game γ} {σ : Strategy (interleave g' h)} {τ : Strategy g'},
-      FollowL Dead b g' h σ τ → ∀ {k : ℕ} {i : I} {g : Game α} (L : Lock T D get R i g g'),
+      FollowL Dead Dead' b g' h σ τ → ∀ {k : ℕ} {i : I} {g : Game α} (L : Lock T D get R i g g'),
         (∀ b, Reach g' τ b → Dead' b) → SlotAtD slot Dead k (Lock.leftSame L h) σ :=
-    fun hF _ _ _ _ hr => .dead fun x hx => (hF.reach hx).elim id fun h => hD x (hr _ h)
+    fun hF _ _ _ _ hr => .dead (hF.dead_of hD hr)
   have hno : ∀ {g' : Game β} {h : Game γ} {σ : Strategy (interleave g' h)} {k : ℕ} {i : I} {g : Game α}
       {L : Lock T D get R i g g'}, NoSlot slot L → SlotAtD slot Dead k (Lock.leftSame L h) σ :=
     fun h0 => .noSlot (h0.leftSame _)
   induction hF with
   | dead hσ => exact fun _ _ _ => .dead hσ
+  | spent _ =>
+      intro k i g L hb
+      cases hb
   | gret =>
       intro k i g L _ _
       cases L with
@@ -532,13 +535,6 @@ theorem SlotAtD.leftSame_followL {Dead : β × γ → Prop} {Dead' : β → Prop
         simp only [Lock.leftSame, Lock.lockWithSame]
         refine .send Bool ?_
         exact .send _ (ih (.coin _ L) hb hL)
-  | hcoinS _ _ =>
-      intro k i g L hb
-      cases hb
-  | hcoinC _ _ =>
-      intro k i g L hb
-      cases hb
-
 end Follow
 
 /-- **The strategy plays each game in front of position `pre.length` by `FirstS` and then `FollowR`, in order**, after
@@ -596,7 +592,8 @@ in front** by a strategy whose lockstep's game follows `τ` (`FollowL`, a budget
 theorem SlotAtD.batchLock_nil_followL (d : ζ) {i : I} {g g' : Game ζ} (L : Lock T D get R i g g')
     (post : List (Game ζ)) {slot k : ℕ} {Dead : List ζ → Prop} {σ' : Strategy (batch (g' :: post))}
     {τ : Strategy g'}
-    (hF : FollowL (fun x : ζ × List ζ => Dead (x.1 :: x.2)) (some k) g' (batch post)
+    (hF : FollowL (fun x : ζ × List ζ => Dead (x.1 :: x.2)) (fun x => ∀ rest, Dead (x :: rest)) (some k) g'
+      (batch post)
       (Strategy.ofMap (fun x : ζ × List ζ => x.1 :: x.2) (g'.interleave (batch post)) σ') τ)
     (hD : SlotAtD slot (fun x => ∀ rest, Dead (x :: rest)) k L τ) :
     SlotAtD slot Dead k (batchLock d L post []) σ' := by
