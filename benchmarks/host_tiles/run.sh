@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The host CPUs' capacity for registered PoUW tile work: gate bit for bit against the Python reference, then time.
-#   taskset -c 48-95 run.sh PHASE...   PHASE = ncp | pearl | shake | latency (cwd = the source tree: research run --cwd source)
+#   taskset -c 48-95 run.sh PHASE...   PHASE = ncp | pearl | shake | latency | lane (cwd = the source tree: research run --cwd source)
 # Threads are placed one per physical core (OMP_PLACES=cores) for the scaling sweep, then on both hyperthreads of every core.
 # Each phase first records how busy its CPUs were over 2 s (idle_*.txt): a busy CPU is someone else's work, not ours.
 set -uxo pipefail
@@ -34,6 +34,7 @@ PY
 gcc -O3 -march=native -fopenmp -o "$B/ncp_amx" $H/ncp_amx.c || exit 4
 gcc -O3 -march=native -fopenmp -o "$B/pearl_c_cpu" $H/pearl_c_cpu.c -lm || exit 4
 gcc -O3 -march=native -fopenmp -o "$B/stream_read" $H/stream_read.c || exit 4
+gcc -O3 -march=native -fopenmp -o "$B/lane_chain" $H/lane_chain.c || exit 4
 for phase in "$@"; do
 idle "$O/idle_$phase.txt"
 
@@ -129,6 +130,15 @@ if [ "$phase" = shake ]; then
   python3 $H/shake_rate.py 1 | tee -a "$O/shake.jsonl"
   for c in $cores; do taskset -c $c python3 $H/shake_rate.py 1 > "$B/shake_$c.json" & done; wait
   cat "$B"/shake_*.json | python3 -c "import json, sys; r = [json.loads(l) for l in sys.stdin]; print(json.dumps({'kernel': 'shake256', 'processes': len(r), 'bytes_per_s': sum(x['bytes_per_s'] for x in r), 'per_core_min': min(x['bytes_per_s'] for x in r)}))" | tee -a "$O/shake.jsonl"
+fi
+
+if [ "$phase" = lane ]; then
+  # A lane filler's mix (LOP3 and IMAD alternating) on AVX-512: what the host computes of a filler whose inputs are public
+  "$B/lane_chain" gate | tee -a "$O/gate_lane.jsonl" || { echo "lane gate failed: no lane timing" | tee "$O/lane_gate_failed.txt"; continue; }
+  for i in 1 2 3; do
+    for t in 1 $C; do OMP_PLACES=cores OMP_NUM_THREADS=$t "$B/lane_chain" bench 4096 20000 | tee -a "$O/lane.jsonl"; done
+    OMP_PLACES=threads OMP_NUM_THREADS=$P "$B/lane_chain" bench 4096 20000 | tee -a "$O/lane.jsonl"
+  done
 fi
 
 if [ "$phase" = latency ]; then
