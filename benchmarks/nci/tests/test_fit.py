@@ -1,3 +1,4 @@
+import json
 import math
 import sys
 from pathlib import Path
@@ -7,7 +8,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import fit as F  # noqa: E402
+import kappa  # noqa: E402
 import tiers as T  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_n_star_depends_on_the_target_not_on_the_loss_floor():
@@ -21,6 +25,32 @@ def test_n_star_depends_on_the_target_not_on_the_loss_floor():
     assert n == pytest.approx(N * (1 + rho) ** (-1 / f["alpha"]), rel=1e-9)
     assert n == pytest.approx(87.6e9, rel=2e-3)
     assert n < F.n_star("besiroglu", L, 1e15) < F.n_star("besiroglu", L, 1e14)
+
+
+def test_reach_at_sequence_threads_kimi_k2():
+    """The falsification test of the conjectures `Nci.Assumptions.Reach` and `ReachSlots` at the threading the fit page
+    uses: one sequence of Kimi K2's pretraining, at its shortest length, uses at least N* weights in its counted
+    multiplications (87.6B, the Besiroglu refit at a 405B-class target) when its tokens' routed slots spread over the
+    experts as kappa.py routes them, 8 of 384 a token, load-balanced; one token uses fewer, so Reach is false at token
+    threads. A token's counted multiplications use its active weights outside the embedding and the LM head, and the LM
+    head, whose backward is counted; a sequence's use every routed expert one of its S tokens reaches, E (1 - (1 - a/E)^S)
+    per MoE layer in expectation. It fails when N* exceeds what a sequence reaches, a sequence routed to fewer than the
+    `fewest` experts per layer among them, or when a token reaches N*, which would leave the conjectures' why stale."""
+    m = kappa.MODELS["kimi-k2"]
+    n_star = F.n_star("besiroglu", F.target_loss("besiroglu", "405b"))
+    E, a, layers = m["experts"], m["active"], kappa.moe_layers(m)
+    expert = sum(r * c for r, c in kappa.expert_shapes(m))
+    token = kappa.active_weights(m) + m["vocab"] * m["d"]
+    S = min(s for _, s in m["schedule"])
+    reached = E * (1 - (1 - a / E) ** S)
+    fewest = a + math.ceil((n_star - token) / (layers * expert))
+    assert token == pytest.approx(31.7e9, rel=0.01) and n_star == pytest.approx(87.6e9, rel=2e-3)
+    assert token < n_star <= token + (reached - a) * layers * expert
+    assert (S, fewest) == (4096, 30) and fewest <= reached
+    entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
+    test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reach_at_sequence_threads_kimi_k2"
+    for name in ("Nci.Assumptions.Reach", "Nci.Assumptions.ReachSlots"):
+        assert entry[name] | {"why": ""} == {"status": "open", "test": test, "why": ""}
 
 
 def test_below_n_star_no_run_reaches_the_target():

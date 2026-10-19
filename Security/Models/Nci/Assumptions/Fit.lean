@@ -8,7 +8,9 @@ measured rather than proved ("The fit bound", Notion, sections 1, 6 and 7): `Rea
 the capacity premise F1 with the boundary premise F4, at window scale. `ReachSlots` and `FitsSlots` are the same
 premises counted in parameter slots (`Threading.Slots`), so that a window spanning several optimizer steps is charged
 once per parameter, not once per version. `Security/lean-audit.json` lists this module under `shape.premises`: each is
-an assumption about the world, not a conjecture.
+an assumption about the world. `Reach` and `ReachSlots` are predicates on the threading `T`, so its `shape.conjectures`
+lists them as open: false at token threads for a token-routed mixture of experts, the per-sequence form at sequence
+threads.
 -/
 
 namespace Nci.Assumptions
@@ -21,9 +23,10 @@ on at least `N*` updated weights, `N*` being the fewest parameters that reach `L
 recipe's loss law: 87.6B for a Llama 3.1 405B-class target under Besiroglu et al.'s refit of Chinchilla's law, and
 17–218B with its exponents at ±1 SE.
 
-It fails when a model reaches `L*` with fewer weights per thread: sequence-routed path composition (the main open
-attack), retrieval, looped models, a better recipe than the one the law is fitted to, or a registered base in `θ` that an
-update stacks on. -/
+It fails when a model reaches `L*` with fewer weights per thread: a token-routed mixture of experts at token threads,
+whose tokens each use fewer than `N*` weights (about 32B a token for Kimi K2), sequence-routed path composition (the
+main open attack), retrieval, looped models, a better recipe than the one the law is fitted to, or a registered base in
+`θ` that an update stacks on. -/
 def Reach (c : Declaration) (T : Threading c) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (T.threadWeights Finset.univ t).card
 
