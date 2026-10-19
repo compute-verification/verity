@@ -60,6 +60,7 @@ import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.FrameTape
 import Proofs.Flock.Claims.ZK.FrameParse
+import Proofs.Flock.Claims.ZK.FrameMask
 import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -363,6 +364,10 @@ import Proofs.Flock.Claims.ZK.Stop
 * `FrameParse`: the frame's round (`roundFree`) at the bytes of a round's frames (`encs fs` then the squeeze) is the fold
   of the frame's step over them (`stepAt`: labels through `Masker.label`, bytes copied, each observed value absorbed and
   free while the algebraic phase masks), then the inner proof's own round and the squeeze (`roundFree_encs`).
+* `FrameMask`: what the frame releases of such a round. The frames come out with domains dropped and each value of a
+  masked phase as `v + h_i` (`maskFrames`, `maskVal`; `roundFree_on`, `roundFree_off`), the pads' label and root
+  following the zerocheck's label (`roundFree_zc`). The pads are taken in the absorbed order: every pad below `h_ab` but
+  `final_c`'s, ascending (`absorbed_toList`), the indices the masked prover pads its sends under.
 * `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
   frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
   `tapeOfDraws` (`padsRoot_tapeOfDraws`).
