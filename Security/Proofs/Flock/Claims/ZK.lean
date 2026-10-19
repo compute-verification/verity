@@ -37,6 +37,7 @@ import Proofs.Flock.Claims.ZK.SaltProver
 import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.ZK.FinExe
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
