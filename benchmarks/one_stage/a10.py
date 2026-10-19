@@ -54,8 +54,9 @@ import a11  # noqa: E402
 import a11_kinds as K  # noqa: E402
 
 COMMIT = "r20261019-074856-7c3a"
-REPLAY = "r20261019-091406-48bd"
-PENDING = f"the Commit's verdict is PENDING (the deferred CPU replay {REPLAY} decides it); rank 0's values only"
+REPLAY = "r20261019-110314-3fd7"
+PENDING = (f"the Commit's verdict is PENDING (the deferred CPU replay {REPLAY} decides it; its attempt 1 r20261019-091406-48bd was "
+           "cancelled); rank 0's values only")
 WINDOW_OF = (f"GLM-5.3 TP8 B1 rank 0's committed step values: row {a11.ROW}'s Commit {COMMIT} (--replay-deferred, retain=host), "
              "its bundle opened against the rank's run root of record and its weights against the committed weights root; " + PENDING)
 LINK = ("provenance, not proof: every value was opened from the Commit's bundle and verified against rank 0's run root of record "
@@ -134,6 +135,7 @@ class Committed:
         dense.tensors = {n: t for n, t in ck.tensors.items() if not EXPERTS.search(n)}
         experts.tensors = {n: t for n, t in ck.tensors.items() if EXPERTS.search(n)}
         words, wd = CPU.open_weights(bdir, tree, root, dense, threads=a.threads, tp={"world": int(dd["world"]), "rank": 0})
+        wd["ue8m0"] = self.rewritten(tree, dense, words, Path(a.roles).parent, p.index.prefix, {"world": int(dd["world"]), "rank": 0})
         ew, we = CPU.open_weights(bdir, tree, root, experts, threads=a.threads, tp={"world": 1, "rank": 0})
         words.update({n: w for n, w in ew.items() if EXPERTS.search(n)})
         self.consumed: set[str] = set()
@@ -148,7 +150,7 @@ class Committed:
             "program": {"dir": next(iter(p.dirs.values())), "digest": p.digs[self.rid], "request": self.rid, "arrive": self.arrive,
                         "prefix": p.index.prefix},
             "required_manifest_sha256": sha,
-            "weights": {"root": root, "dense": {k: wd[k] for k in ("equal", "why", "opened", "servable", "mismatched_n", "mismatched", "unopened_n")},
+            "weights": {"root": root, "dense": {k: wd[k] for k in ("equal", "why", "opened", "servable", "mismatched_n", "mismatched", "unopened_n", "ue8m0")},
                         "experts": {k: we[k] for k in ("equal", "why", "opened", "mismatched_n", "mismatched")},
                         "opened": len(words)},
             "open_s": round(time.time() - t0, 1)}
@@ -156,9 +158,41 @@ class Committed:
         self.calls: dict[str, dict] = {}
         self._ops: dict[int, list[np.ndarray]] = {}    # the last Call's only: one w13 operand is GBs
         self._outs: dict[int, tuple] = {}
+        u = wd["ue8m0"]
         print(f"A10 committed: bundle {b['manifest_sha256'][:16]} of record, Program {p.digs[self.rid][:16]}, weights dense "
-              f"{wd['opened']}/{wd['servable']} opened ({wd['mismatched_n']} mismatched), experts {we['opened']} opened "
+              f"{wd['opened']}/{wd['servable']} opened ({wd['mismatched_n']} mismatched), {u['opened']} more through vLLM's load-time "
+              f"rewrite ({len(u['mismatched'])} composed that way did not open), experts {we['opened']} opened "
               f"({we['mismatched_n']} mismatched), {self.record['open_s']} s; {PENDING}", flush=True)
+
+    @staticmethod
+    def rewritten(tree: dict, ck, words: dict, program_dir: Path, prefix: str, tp: dict) -> dict:
+        """The registered tensors the checkpoint's own words do not open that vLLM rewrites at load (the Build's `weight_roles`:
+        DeepGEMM's ue8m0 requant, MLA's kv_b absorbed into W_UK_T/W_UV), composed through `fp8_ue8m0.Rewrites` as the deferred
+        replay's attempt 2 composes them, each opened only against its committed tensor root; added to ``words``."""
+        from verity_vllm.check import fp8_ue8m0
+        from verity_vllm.check import weights_of_record as WR
+        from verity_vllm.pipeline import cpu_replay as CPU
+        roles = {(f[len(prefix):] if prefix and f.startswith(prefix) else f): r for f, r in fp8_ue8m0.build_roles(str(program_dir)).items()}
+        names = tree["names"]
+        dims = {n: (list(s), CPU.WORDS[dt][0]) for n, dt, s, _b in names if dt in CPU.WORDS}
+        rw = fp8_ue8m0.Rewrites(list(dims), roles, lambda n: WR.compose(n, *dims[n], ck, **tp), ck.config)
+        out = {"roles": len(roles), "covered": 0, "opened": 0, "mismatched": [], "unopened": 0}
+        for i, (n, dt, _s, nb) in enumerate(names):
+            if n in words or n not in dims or not rw.covers(n):
+                continue
+            out["covered"] += 1
+            try:
+                arr, _note = rw.compose(n, dims[n][0])
+            except (KeyError, ValueError):
+                out["unopened"] += 1
+                continue
+            raw = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)
+            if raw.size != int(nb) or CPU.tensor_root(raw, int(tree["chunk"])) != bytes.fromhex(tree["tensor_roots"][i]):
+                out["mismatched"].append(n)
+                continue
+            words[n] = raw.view(CPU.WORDS[dt][1])
+            out["opened"] += 1
+        return out
 
     # ---- the fold's Calls aligned with the Program's rows
     def align(self, res) -> None:
