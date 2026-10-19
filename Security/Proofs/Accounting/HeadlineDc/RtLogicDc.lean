@@ -20,6 +20,8 @@ Builds on #2699's head (`cursor/int-hb-ea24` @ f3c3237e8a; e12b32444a's data are
   words), but no Definition absorbs them. `noFill_bound`: ♭ without its filler is floored at `0.939·B_♭`.
   `not_optPair_noFill`: no labelling of it meets both FOLD-OPT at `N_w` words and FILL-OPT at share 1.
   `not_premises_noFill`: with the same game, `Sm90SheetHeadline`'s two premises fail on it together.
+  `b1_unrated` (RT-LOGIC-15): the two b1 tensor forms are writers at tensor cost `0 / 0 = 0`; `b1_pistar`: π* reads no
+  tensor row, so that zero moves no headline price.
 * The H200 on DC-90-ri (`Sm90Measured`). Its writer kinds are honest's `IGMMA_S8_N256` and `UNI`; the rows price every
   other tensor form at the scalar coefficient, so `NoSum` carries them. `imma_bound` and `n128_bound`: ♭ moved mostly to
   mma.sync m16n8k32 s8, or wholly to wgmma s8 at N = 128, is floored at `0.875·B_♭` and `0.72·B_♭`.
@@ -344,6 +346,17 @@ theorem not_premises_noFill (Ω : Type) [Fintype Ω] [Nonempty Ω]
   · rw [h0]
     norm_num
 
+/-! ### RT-LOGIC-15: DS-90's b1 tensor forms are writers the tensor facet doesn't charge -/
+
+/-- `BGMMA_B1_N256` and `BMMA168256_B1` have `peak = 0` on DS-90, so A3's term and the tensor row are `0 / 0 = 0`;
+both are writer kinds, while honest's `IGMMA_S8_N256` costs 128 there. π* puts no weight on the tensor row, so the
+zero moves no price the headline reads. -/
+theorem b1_unrated : sheetCoef Sm90.ds90 .tensor 1 = 0 ∧ sheetCoef Sm90.ds90 .tensor 2 = 0 ∧
+    sheetCoef Sm90.ds90 .tensor 14 = 128 ∧ (1, 4096) ∈ Sm90.d2s.writers ∧ (2, 128) ∈ Sm90.d2s.writers := by
+  decide +kernel
+
+theorem b1_pistar : Sm90.lamStar .tensor = 0 := rfl
+
 /-! ### RT-LOGIC-13: the H200 on DC-90-ri, where every tensor form but honest's is off the menu -/
 
 /-- DC-90-ri's row `r` as rationals, by class index. -/
@@ -600,3 +613,5 @@ end Accounting.SecurityProofs.TS.HeadlineDc.RtLogic
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.n128_bound
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.n128_off_menu
 #print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.not_noSum_n128
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.b1_unrated
+#print axioms Accounting.SecurityProofs.TS.HeadlineDc.RtLogic.b1_pistar
