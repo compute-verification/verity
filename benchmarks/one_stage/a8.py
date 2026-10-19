@@ -397,22 +397,6 @@ def cost(a, m: dict, out: Path, port: int) -> list[dict]:
     return rows
 
 
-def fit(rows: list[dict]) -> dict:
-    """Per arm, least squares of each time on k (the drawn units): its slope (a unit) and intercept (the session's)."""
-    out = {}
-    for arm in sorted({r["arm"] for r in rows}):
-        rs_ = [r for r in rows if r["arm"] == arm and r["accepted"]]
-        if len({r["k"] for r in rs_}) < 2:
-            continue
-        k = np.array([r["k"] for r in rs_], dtype=float)
-        out[arm] = {}
-        for x in ("wall_s", "cpu_s", "e2e_s", "prover_s"):
-            y = np.array([r["e2e_s"] - (r["wait_s"] or 0) if x == "prover_s" else r[x] for r in rs_], dtype=float)
-            slope, icpt = np.polyfit(k, y, 1)
-            out[arm][x] = {"per_unit": round(float(slope), 4), "fixed": round(float(icpt), 2)}
-    return out
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True)
@@ -523,9 +507,8 @@ def main() -> int:
     if a.points:
         m = members["honest"][0]
         rows = cost(a, m, out / "cost", a.port + 10)
-        summary["cost"] = {"rows": rows, "fit": fit(rows), "ands": m["ands"], "unit_nnz": m["unit_nnz"]}
+        summary["cost"] = {"rows": rows, "ands": m["ands"], "unit_nnz": m["unit_nnz"]}
         ok &= all(r["accepted"] for r in rows) and all(r["lean"]["accepted"] for r in rows if "lean" in r)
-        log(f"cost fit: {json.dumps(summary['cost']['fit'])}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))
     return 0 if ok else 1

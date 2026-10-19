@@ -1,99 +1,92 @@
-"""A8's cost per opening, from its runs' records (`a8.py --points`, each session's ``cost/<arm>-k<k>-r<rep>/prove.log``),
-and what that costs a window of the remote bandwidth audit.
+"""A8's cost points as observations of the one cost model (`verity.core.protocols.sampled_proofs.costfit`, fitted in
+benchmarks/sampling_plan, whose `inputs.py` holds these), and the times each session measured.
 
-    python benchmarks/one_stage/a8_cost.py OUT/a8 [OUT/a8 ...] [--openings 33273] [--window-s 60] [--delta-log2 40]
-      [--statement 512] [--gpus 1,8,64] [--horizon 10]
+    python benchmarks/one_stage/a8_cost.py RUN [RUN ...] [--json]
 
-For each session it reads the prover's LIVE line: ``e2e_s``, ``wait_e2e_s`` (its wait on the verifier inside e2e), the
-proof reps' ``buckets``, and from them the device phase (each rep's ``t.total``: what the prover's device, the GPU under
-``--gpu``, spends on the proof), the host setup (``h.setup``) and the firewall's host recheck (``cpu.firewall_recheck``);
-and the process's wall and CPU seconds from cost.jsonl. Per run and arm it fits each time on k, the drawn units (least
-squares): the slope is an opening's, the intercept the session's. An opening's cost at a full statement of
-``--statement`` units (C-Flock's ceiling, m = 35 at the unit's k_log 26) is (intercept + slope · statement) / statement:
-the device phase alone (the floor: a prover that overlaps every host step), and the cold session's e2e and wall (today's
-prover, one process a statement). A window's ``--openings`` at that cost, in GPU-s, and the GPUs that proves them in
-``--window-s``; then what ``--gpus`` GPUs prove a window (a time the prover doesn't report, the CPU prover's device
-phase, is left out), and the ε that buys at δ = 2^-``--delta-log2``: ε = ln(1/δ)/k for
-the window's k proved openings (each window's own reading), and pooled over ``--horizon`` windows (§10's reading).
+RUN is an A8 run's directory: its records in ``out/a8`` (`a8.py --points`, each session's ``cost/<arm>-k<k>-r<rep>``), and
+``gpu-lease-usage.jsonl`` where `a8_gpu.sh` ran each prover process under a GPU lease. Per session it prints, in seconds
+and per drawn opening: the device phase (each proof rep's ``t.total``, what the prover's device, the GPU under ``--gpu``,
+spends on the proof), the prover's e2e less its wait on the verifier, e2e, the process's wall, the seconds it held its
+lease (the wall less the lease's wait, matched by the session's verifier port), and the process's CPU seconds. Then, of
+each leased run's design arm (``fw``), the `costfit.Observation`s: per (staged, drawn) units, prove the mean seconds its
+cold prover processes held the device, and stage the statement's staging. They carry no verify: a8.py times Lean's by
+wall, and the model's verify is CPU time.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import math
+from dataclasses import asdict
 from pathlib import Path
+from statistics import mean
 
-import numpy as np
+from verity.core.protocols.sampled_proofs.costfit import Observation
+
+PARAMS = ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "P", "DR", "DP", "DV")
 
 
-def sessions(out: Path) -> list[dict]:
-    """Every cost session under ``out`` (an a8 output directory): cost.jsonl's row with its LIVE line's breakdown."""
-    rows = []
+def held(run: Path) -> dict[str, int]:
+    """Each leased prover process's held seconds, by the verifier port on its command line."""
+    f = run / "gpu-lease-usage.jsonl"
+    out: dict[str, int] = {}
+    for line in (f.read_text().splitlines() if f.exists() else []):
+        u = json.loads(line)
+        port = u["cmd"].split("--verifier ", 1)[1].split()[0]
+        if port in out:
+            raise SystemExit(f"{f}: two leases for verifier {port}; a session can't be matched to its lease")
+        out[port] = sum(g["held_s"] for g in u["gpus"])
+    return out
+
+
+def sessions(run: Path) -> list[dict]:
+    """Every cost session of ``run``: cost.jsonl's row with its LIVE line's breakdown and its lease's held seconds."""
+    out, leases, rows = run / "out" / "a8", held(run), []
     for line in (out / "cost" / "cost.jsonl").read_text().splitlines():
         r = json.loads(line)
-        log = out / "cost" / f"{r['arm']}-k{r['k']}-r{r['rep']}" / "prove.log"
-        live = next((json.loads(x[5:]) for x in log.read_text().splitlines() if x.startswith("LIVE\t")), {}) if log.exists() else {}
+        log = (out / "cost" / f"{r['arm']}-k{r['k']}-r{r['rep']}" / "prove.log").read_text().splitlines()
+        live = next((json.loads(x[5:]) for x in log if x.startswith("LIVE\t")), {})
         b = live.get("buckets") or []
-        rows.append({**r, "device_s": sum(x.get("t.total", 0.0) for x in b), "setup_s": sum(x.get("h.setup", 0.0) for x in b),
-                     "recheck_s": sum(x.get("cpu.firewall_recheck", 0.0) for x in b),
-                     "prover_s": r["e2e_s"] - (live.get("wait_e2e_s") or 0.0), "proof_bytes": sum(live.get("proof_bytes") or [])})
+        rows.append({**r, "device_s": sum(x["t.total"] for x in b) if b and all("t.total" in x for x in b) else None,
+                     "prover_s": r["e2e_s"] - (live.get("wait_e2e_s") or 0.0),
+                     "held_s": leases.get(log[0].split("--verifier ", 1)[1].split()[0]) if "--verifier " in log[0] else None})
     return rows
 
 
-TIMES = ("device_s", "prover_s", "e2e_s", "wall_s", "cpu_s")
+def observations(run: Path, rows: list[dict]) -> list[Observation]:
+    """The design arm's points of a leased run, each the mean of its cold processes."""
+    s = json.loads((run / "out" / "a8" / "summary.json").read_text())
+    template = "BlockOpeningCheck_v1{" + ",".join(f"{p}={s['statics'][p]}" for p in PARAMS) + "}"
+    pts: dict[tuple[int, int], list[float]] = {}
+    for r in rows:
+        if r["arm"] == "fw" and r["accepted"] and r["gpu"] and r["held_s"] is not None:
+            pts.setdefault((r["staged"], r["k"]), []).append(r["held_s"])
+    return [Observation(run.name, template, s["honest"]["ands"], c, k, prove=round(mean(p), 2), stage=s["honest"]["stage_s"])
+            for (c, k), p in sorted(pts.items())]
 
 
-def fit(rows: list[dict]) -> dict:
-    ks = np.array([r["k"] for r in rows], dtype=float)
-    out = {"points": sorted({r["k"] for r in rows}), "sessions": len(rows)}
-    for x in TIMES:
-        y = np.array([r[x] for r in rows], dtype=float)
-        if not y.any():
-            continue
-        slope, icpt = np.polyfit(ks, y, 1) if len(set(ks)) > 1 else (float("nan"), float(y.mean()))
-        out[x] = {"per_opening": float(slope), "fixed": float(icpt)}
-    return out
+TIMES = ("device_s", "prover_s", "e2e_s", "wall_s", "held_s", "cpu_s")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("outs", nargs="+")
-    ap.add_argument("--openings", type=int, default=33273)
-    ap.add_argument("--window-s", type=float, default=60.0)
-    ap.add_argument("--delta-log2", type=float, default=40.0)
-    ap.add_argument("--statement", type=int, default=512)
-    ap.add_argument("--gpus", default="1,8,64")
-    ap.add_argument("--horizon", type=int, default=10)
+    ap.add_argument("runs", nargs="+", type=Path)
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    ln = a.delta_log2 * math.log(2)
     report = {}
-    for o in a.outs:
-        rows = [r for r in sessions(Path(o)) if r["accepted"]]
-        for arm in sorted({r["arm"] for r in rows}):
-            f = fit([r for r in rows if r["arm"] == arm])
-            times = [x for x in TIMES if x in f]
-            per = {x: (f[x]["fixed"] + f[x]["per_opening"] * a.statement) / a.statement for x in times}
-            window = {x: per[x] * a.openings for x in times}
-            plan = {}
-            for g in (int(x) for x in a.gpus.split(",")):
-                k = {x: a.window_s * g / per[x] for x in ("device_s", "e2e_s") if per.get(x, 0) > 0}
-                plan[g] = {x: {"openings": int(k[x]), "eps": ln / k[x], "eps_pooled": ln / (k[x] * a.horizon)} for x in k}
-            report[f"{o}:{arm}"] = {"fit": f, "per_opening_at_statement": per, "window_gpu_s": window,
-                                    "gpus_for_window": {x: window[x] / a.window_s for x in times}, "plan": plan}
+    for run in a.runs:
+        rows = sessions(run)
+        report[run.name] = {"sessions": rows, "observations": [asdict(o) for o in observations(run, rows)]}
     if a.json:
         print(json.dumps(report, indent=1))
         return 0
     for name, r in report.items():
-        f = r["fit"]
-        print(f"{name}: points {f['points']} ({f['sessions']} sessions)")
-        for x in r["per_opening_at_statement"]:
-            print(f"  {x:9s} per opening {f[x]['per_opening']:8.4f} s, fixed {f[x]['fixed']:7.2f} s; "
-                  f"an opening at {a.statement} a statement {r['per_opening_at_statement'][x]:.4f} s; "
-                  f"{a.openings} a window {r['window_gpu_s'][x]:9.0f} s = {r['gpus_for_window'][x]:7.1f} devices for {a.window_s:.0f} s")
-        for g, p in r["plan"].items():
-            print(f"  {g} device(s) a window: " + "; ".join(f"{x}: {v['openings']} openings, eps {100 * v['eps']:.2f}% "
-                                                         f"({100 * v['eps_pooled']:.3f}% pooled over {a.horizon})" for x, v in p.items()))
+        print(f"{name}: " + "  ".join(f"{x} (/opening)" for x in TIMES))
+        for s in r["sessions"]:
+            cells = ["-" if s.get(x) is None else f"{s[x]:.1f} ({s[x] / s['k']:.4f})" for x in TIMES]
+            print(f"  {s['arm']:5s} staged {s['staged']} k={s['k']} rep {s['rep']}{'' if s['accepted'] else ' REJECTED'}: "
+                  + "  ".join(cells))
+        for o in r["observations"]:
+            print(f"  observation {json.dumps(o)}")
     return 0
 
 
