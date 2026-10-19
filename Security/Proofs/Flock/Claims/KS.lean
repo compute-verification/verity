@@ -86,6 +86,9 @@ import Proofs.Flock.Claims.KS.ZkClash0
 import Proofs.Flock.Claims.KS.PlainLevels
 import Proofs.Flock.Claims.KS.LevelsAll
 import Proofs.Flock.Claims.KS.ZkLevelsAll
+import Proofs.Flock.Claims.KS.ZkPadsPair
+import Proofs.Flock.Claims.KS.ZkTauFork
+import Proofs.Flock.Claims.KS.ZkTauPair
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
