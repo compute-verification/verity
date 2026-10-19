@@ -38,7 +38,9 @@
 //   kh_unit_ws(A, B, M, N, K, seeds, live, out, ws, J, stream)   ws: kh_ws_bytes(M, N, K) bytes, the caller's
 //   kh_one(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   the one-stream form
 //              (OneOut, below): kh_unit_ws' receipts (kh_unit's if ws is null) and the served z and y from the same MMAs
-//   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_noise_blocks(K), kh_fault_shift()
+//   kh_one_j10(A, B, rows, N, K, seeds, cseed, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream)   kh_one's
+//              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
+//   kh_words(K), kh_digits(K), kh_ws_bytes(M, N, K), kh_j10_ws_bytes(rows, N, K), kh_noise_blocks(K), kh_fault_shift()
 #include "h1sha.cuh"
 #include <cuda_bf16.h>
 
@@ -224,7 +226,7 @@ struct OneOut {
   u32 M;
 };
 
-template <int MD, bool WS, bool OS>
+template <int MD, bool WS, bool OS, bool J10 = false>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
                                                   u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                                   u32* __restrict__ out, const u32* __restrict__ ws, OneOut oo) {
@@ -307,7 +309,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     if (lane == 0) S.nm = nm;
   }
   __syncwarp();
-  const u32* wsu = WS ? ws + 16ull * 32 * (rb + cb) * u : nullptr;
+  const u32* wsu = WS ? (J10 ? ws : ws + 16ull * 32 * (rb + cb) * u) : nullptr;
 
   // P: column n of n-tile nt is rho = 8 nt + n; fragment k = 4 q' + i is segment byte 8 q' + i, k = 16 + 4 q' + i is
   // 8 q' + 4 + i
@@ -351,7 +353,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
     const u32 blk = it == 0 ? chunks : it - 1;
 #pragma unroll 1
     for (int jb = 0; jb < 2; ++jb) {
-      const u64 t = jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk;
+      const u64 t = J10 ? (jb == 0 ? (u64)(32 * ri + lane) * rb + blk : (u64)M * rb + (u64)(32 * cj + lane) * cb + blk)
+                        : (jb == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk);
       u32* dst = jb == 0 ? S.rowbits[lane] : S.colbits[lane];
       if (WS) {
         const uint4* src = reinterpret_cast<const uint4*>(wsu + 16 * t);
@@ -374,8 +377,13 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
       }
     }
     if (WS && H1U_L2PF && it < chunks) {
-      prefetch_l2(wsu + 16 * ((u64)lane * rb + it));
-      prefetch_l2(wsu + 16 * (32ull * rb + (u64)lane * cb + it));
+      if (J10) {
+        prefetch_l2(wsu + 16 * ((u64)(32 * ri + lane) * rb + it));
+        prefetch_l2(wsu + 16 * ((u64)M * rb + (u64)(32 * cj + lane) * cb + it));
+      } else {
+        prefetch_l2(wsu + 16 * ((u64)lane * rb + it));
+        prefetch_l2(wsu + 16 * (32ull * rb + (u64)lane * cb + it));
+      }
     }
     __syncwarp();
     if (it == 0) {
@@ -936,12 +944,12 @@ static void launch_unit(unsigned units, cudaStream_t s, const void* A, const voi
 #endif
 }
 
-template <int MD, bool WS>
+template <int MD, bool WS, bool J10 = false>
 static void launch_one(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N, unsigned K,
                        const void* seeds, const void* live, void* out, const void* ws, const OneOut& oo) {
-  h1u<MD, WS, true><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K,
-                                                                     (const u64*)seeds, (const uint8_t*)live, (u32*)out,
-                                                                     (const u32*)ws, oo);
+  h1u<MD, WS, true, J10><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K,
+                                                                          (const u64*)seeds, (const uint8_t*)live,
+                                                                          (u32*)out, (const u32*)ws, oo);
 }
 
 extern "C" int kh_digits(unsigned K) { return n_digits((int)(K / 32)); }
@@ -1023,6 +1031,39 @@ extern "C" int kh_one(const void* A, const void* B, unsigned rows, unsigned N, u
   } else {
     launch_one<3, false>(units, s, A, B, rows, N, K, seeds, live, out, nullptr, oo);
   }
+  return cudaGetLastError() == cudaSuccess ? 0 : 3;
+}
+
+// J10-R (CA's RT-ALGO r3 at 3dc80591df; measured only, never served or credited until CA adopts J10 and the verifier
+// takes the form): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call scale, row i's blocks
+// at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and columns 32 cj .. of it.
+// cseed: the call's seed as 8 big-endian words (16 read as h1s_noise reads a unit's). Each unit keeps its own fold keys
+// (seeds' sigma_R). ws: kh_j10_ws_bytes(rows, N, K) bytes; kh_one's other arguments.
+extern "C" unsigned long long kh_j10_ws_bytes(unsigned rows, unsigned N, unsigned K) {
+  return 64ull * (K / 512 + 1) * ((unsigned long long)rows + N);
+}
+
+extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
+                          const void* cseed, const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y,
+                          void* ydump, const float* sa, const float* sw, const int* step, unsigned M, void* stream) {
+#if H1U_SPLIT
+  return 2;
+#endif
+  if (K % 512 || rows % 32 || N % 32 || !z || !y || !step || !ws || !J || !cseed) return 2;
+  const int m = n_digits((int)(K / 32));
+  if (m != 2 && m != 3) return 2;
+  const unsigned units = (rows / 32) * (N / 32);
+  if (!units) return 0;
+  const unsigned long long nb = (unsigned long long)(K / 512 + 1) * ((unsigned long long)rows + N);
+  if (nb >> 32) return 2;
+  cudaStream_t s = (cudaStream_t)stream;
+  const OneOut oo{z, zo, (__nv_bfloat16*)y, (__nv_bfloat16*)ydump, sa, sw, step, M};
+  const unsigned long long items = (nb + 32ull * J - 1) / (32ull * J);
+  h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)cseed, 1, 1, (u32)nb, J, nullptr, (u32*)ws);
+  if (m == 2)
+    launch_one<2, true, true>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
+  else
+    launch_one<3, true, true>(units, s, A, B, rows, N, K, seeds, live, out, ws, oo);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 

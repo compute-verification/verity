@@ -4,7 +4,12 @@ alone (seeds, noise, unit), against the plain int8 GEMM it replaces: gamma = os 
 kh_unit_ws is timed beside it (arm NAME-ws, a second product: gamma 1 + ws / plain), and so is H1's noise floor.
 
     python h1zbench.py --lib h1u.so [--variant NAME=h1u_x.so ...] --ref-lib h1zref.so [--noise-lib h1noise.so]
-                       --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused]
+                       --out OUT [--reps 5] [--ms ...] [--linears ...] [--fused] [--no-ws] [--j10r ARM]
+
+--j10r ARM adds arm ARM-j10r (label arm=ARM-j10r:j10r-unsound, noise=j10r): build ARM's one-stream unit on J10-R's
+call-scale noise (kh_one_j10; CA's RT-ALGO r3), measured only, never served or credited. Its gate is gate_one's on
+j10r_ca.py's CPU twin (receipts and z on three units a shape, the noise and z checks of `gate_j10`) after anchors on
+every unit of two small calls.
 
 Gates before any timing (a failed gate exits 4 and its build is not timed):
   * anchors (CPU): every build's kh_one, fused and two-launch, against h1v3_ca.reference(stream=True) (v3's words,
@@ -41,16 +46,19 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2]))
 import h1v3_ca as V3
+import j10r_ca as J10
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
 from h1bench import Lib as NoiseLib
-from h1ubench import Call, Lib, floor_gate, gate_seeds, shape_ref, workspace
+from h1ubench import Call, Lib, be_words, floor_gate, gate_seeds, shape_ref, workspace
 from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import seeds as SD
 
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB = 1, 2, 4, 8, 16
 M32 = (1 << 32) - 1
 SEED_WORDS = 4
+A5 = -1515870811  # 0xA5A5A5A5 as an int32 word
 
 
 def dequantize(z: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
@@ -66,6 +74,10 @@ class OneLib(Lib):
         vp, u32 = ctypes.c_void_p, ctypes.c_uint
         self.h.kh_one.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
         self.two = ws
+        if hasattr(self.h, "kh_one_j10"):
+            self.h.kh_one_j10.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
+            self.h.kh_j10_ws_bytes.restype = ctypes.c_ulonglong
+            self.h.kh_j10_ws_bytes.argtypes = [u32, u32, u32]
 
     @staticmethod
     def has_one(path: str) -> bool:
@@ -198,6 +210,169 @@ def gate_one(oc: OneCall, picks: list[int], ref_t: torch.Tensor, ref: dict, shif
     return doc
 
 
+class J10Call(OneCall):
+    """kh_one_j10 on a Call (measured only, arm NAME-j10r): J10-R's call-scale noise, one stream from the call's seed
+    (j10r_ca.call_seed), into its own workspace, then the one-stream unit reading the call rows and columns it covers."""
+
+    def __init__(self, lib: OneLib, c: Call, M: int, sa: torch.Tensor, sw: torch.Tensor):
+        super().__init__(lib, c, M, sa, sw)
+        rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
+        self.seed_c = J10.call_seed(c.salt, c.roots)
+        self.cseed = torch.tensor(np.array(be_words(self.seed_c) + [0] * 8, dtype=np.uint64).view(np.int64), device="cuda")
+        self.rb, self.nb = k // 512 + 1, (k // 512 + 1) * (rows + n)
+        self.ws = torch.empty((int(lib.h.kh_j10_ws_bytes(rows, n, k)),), dtype=torch.uint8, device="cuda")
+        self.j = auto_j(1, self.nb, torch.cuda.get_device_properties(0).multi_processor_count)
+        self.live: torch.Tensor | None = None
+
+    def run(self) -> None:
+        c = self.c
+        c.lib.seeds(c.data, c.base, c.units, c.seeds)
+        rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
+        rc = self.lib.h.kh_one_j10(c.a.data_ptr(), c.b.data_ptr(), rows, n, k, c.seeds.data_ptr(), self.cseed.data_ptr(),
+                                   None if self.live is None else self.live.data_ptr(), c.out.data_ptr(),
+                                   self.ws.data_ptr(), self.j, self.z.data_ptr(), self.zo.data_ptr(), self.y.data_ptr(),
+                                   None, self.sa.data_ptr(), self.sw.data_ptr(), self.step.data_ptr(), self.M,
+                                   torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"kh_one_j10 rc {rc}")
+
+    def poison(self) -> None:
+        self.c.poison()
+        for t in (self.z, self.zo, self.y, self.ws):
+            t.view(torch.uint8).fill_(0xA5)
+
+
+def ws_bits(ws32: torch.Tensor, first: int, n: int, per: int, use: int) -> torch.Tensor:
+    """The bits of n consecutive streams of `per` blocks from block `first`, their first `use` blocks: [n, 512 use] int16,
+    bit beta of a block the bit beta mod 32 of its half beta // 32 (seeds.leaves)."""
+    w = ws32[16 * first:16 * (first + n * per)].view(n, per * 16)[:, :16 * use]
+    sh = torch.arange(32, device=w.device, dtype=torch.int32)
+    return ((w[:, :, None] >> sh) & 1).to(torch.int16).reshape(n, 512 * use)
+
+
+def ws_u(ws32: torch.Tensor, first: int, n: int, per: int, at: int) -> torch.Tensor:
+    """U of n consecutive column streams: bytes 0..31 of block `at` (byte t the byte t mod 4 of half t // 4, least
+    significant first) as -64 + x mod 129: [n, 32] int16."""
+    w = ws32[16 * first:16 * (first + n * per)].view(n, per * 16)[:, 16 * at:16 * at + 8]
+    x = (w[:, :, None] >> (8 * torch.arange(4, device=w.device, dtype=torch.int32))) & 0xFF
+    return (x.reshape(n, 32) % 129 - 64).to(torch.int16)
+
+
+def s32(v: torch.Tensor) -> torch.Tensor:
+    v = v & M32
+    return torch.where(v >= 1 << 31, v - (1 << 32), v).to(torch.int32)
+
+
+def gate_j10(jc: J10Call, rng: random.Random, rsel: list[int], shift: int) -> dict:
+    """J10-R's gate, on top of gate_one's (receipts, z, zo, y, poison, the no-write control, both faults): its receipts and
+    z on three units (the first, the last, one drawn) against j10r_ca's CPU twin; the workspace with no 0xA5 block left,
+    sampled blocks against seeds.noise_block of the call's seed, and its bits and U equal to the twin's on those units'
+    rows and columns; z on the selected row blocks against X (B + c)^T exactly (float64 over the workspace's bits, itself
+    equal to the twin on its units); the wrap bits' density over all of B against its own call-scale noise."""
+    c = jc.c
+    rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
+    S, ch = c.units, k // 512
+    picks = sorted({0, S - 1, rng.randrange(S)})
+    an, bn = c.a.cpu().numpy(), c.b.cpu().numpy()
+    t0 = time.time()
+    tw = J10.reference(an, bn, c.salt, c.base, c.roots, picks)
+    twin_s = round(time.time() - t0, 2)
+    ref_t = torch.from_numpy(np.array([tw[u][1] for u in picks], dtype=np.uint32).view(np.int32)).cuda()
+    jc.poison()
+    jc.run()
+    torch.cuda.synchronize()
+    ws32 = jc.ws.view(torch.int32)
+    blocks = ws32[:16 * jc.nb].view(jc.nb, 16)
+    poison_blocks = int((blocks == A5).all(dim=1).sum())
+    sample = sorted({0, jc.nb - 1, rows * jc.rb, *(rng.randrange(jc.nb) for _ in range(21))})
+    got = blocks[torch.tensor(sample, device="cuda")].cpu().numpy().view(np.uint32)
+    block_bad = sum(got[i].tolist() != SD.halves(SD.noise_block(jc.seed_c, t)) for i, t in enumerate(sample))
+    bdec, cdec = ws_bits(ws32, 0, rows, jc.rb, ch), ws_bits(ws32, rows * jc.rb, n, jc.rb, ch)
+    udec = ws_u(ws32, rows * jc.rb, n, jc.rb, ch)
+    a16, b16 = c.a.to(torch.int16), c.b.to(torch.int16)
+    X = (a16 + bdec) & 0xFF
+    X = torch.where(X > 127, X - 256, X)
+    W = b16 + cdec
+    noise_bad = z_twin_bad = f64_twin_bad = 0
+    zk = jc.z.clone()
+    for u in picks:
+        ri, cj = divmod(u, n // 32)
+        z_t, _, nr, nc = tw[u]
+        R, C = slice(32 * ri, 32 * ri + 32), slice(32 * cj, 32 * cj + 32)
+        noise_bad += int((bdec[R].cpu() != torch.tensor([nr[i][0] for i in range(R.start, R.stop)], dtype=torch.int16)).sum())
+        noise_bad += int((cdec[C].cpu() != torch.tensor([nc[j][0] for j in range(C.start, C.stop)], dtype=torch.int16)).sum())
+        uu = torch.tensor([[v - 256 if v & 0x80 else v for v in nc[j][1]] for j in range(C.start, C.stop)], dtype=torch.int16)
+        noise_bad += int((udec[C].cpu() != uu).sum())
+        want = s32(torch.tensor(z_t, dtype=torch.int64).view(32, 32))
+        z_twin_bad += int((zk[R, C].cpu() != want).sum())
+        f64_twin_bad += int((s32((X[R].double() @ W[C].double().T).to(torch.int64)).cpu() != want).sum())
+    rr = torch.cat([torch.arange(32 * r, 32 * r + 32) for r in rsel]).cuda()
+    zfull = torch.full((rows, n), POISON, dtype=torch.int32, device="cuda")
+    zfull[rr] = s32((X[rr].double() @ W.double().T).to(torch.int64))
+    s = b16 + cdec + udec.repeat(1, k // 32)
+    wbp, wbm = int((s > 127).sum()), int((s < -128).sum())
+    s00 = int(s[0, 0])
+    probe = torch.tensor(X[:32, 0].tolist() + [1 if s00 > 127 else -1 if s00 < -128 else 0], dtype=torch.int32)
+    del s, W, bdec, cdec
+    doc = gate_one(jc, picks, ref_t, {"z": zfull, "rows": rr, "probe": probe}, shift)
+    doc["j10r"] = {"twin_s": twin_s, "ws_poison_blocks": poison_blocks, "blocks_checked": len(sample),
+                   "block_bad": block_bad, "noise_bad": noise_bad, "z_twin_bad": z_twin_bad, "f64_twin_bad": f64_twin_bad,
+                   "wb_plus": wbp, "wb_minus": wbm, "wb_density": round((wbp + wbm) / (n * k), 6),
+                   "ws_blocks": jc.nb, "j": jc.j}
+    doc["ok"] = doc["ok"] and not (poison_blocks or block_bad or noise_bad or z_twin_bad or f64_twin_bad)
+    return doc
+
+
+def anchors_j10(arm: str, lib: OneLib, rng: random.Random) -> list[dict]:
+    """kh_one_j10 against j10r_ca's CPU twin on every unit of a 64 x 96 x 512 call whose second row block is dead (a
+    column's blocks sit past the call's rows, so N != rows checks the offsets) and of a 32 x 64 x 4608 call (m = 3); and
+    the twin's unit on a unit's own noise against h1v3_ca.reference."""
+    g = random.Random(rng.getrandbits(32))
+    a = [[g.randrange(256) for _ in range(512)] for _ in range(32)]
+    b = [[g.randrange(256) for _ in range(512)] for _ in range(32)]
+    roots = (g.randbytes(64), g.randbytes(64))
+    res = [{"lib": f"{arm}:twin", "ok": J10.injected_is_v3(a, b, g.randbytes(64), g.getrandbits(40), roots)}]
+    for m, n, k, dead in ((64, 96, 512, (1,)), (32, 64, 4608, ())):
+        gen = torch.Generator().manual_seed(rng.getrandbits(32))
+        at = torch.randint(-128, 128, (m, k), dtype=torch.int8, generator=gen)
+        bt = torch.randint(-128, 128, (n, k), dtype=torch.int8, generator=gen)
+        for ri in dead:
+            at[32 * ri:32 * ri + 32] = 0
+        salt, ra, rb = (rng.randbytes(64) for _ in range(3))
+        base = rng.getrandbits(40)
+        ncb = n // 32
+        live_units = [u for u in range((m // 32) * ncb) if u // ncb not in dead]
+        t0 = time.time()
+        tw = J10.reference(at.numpy(), bt.numpy(), salt, base, (ra, rb), live_units)
+        ref_s = round(time.time() - t0, 2)
+        words = 2 * (k // 32 + int(HT.SG.n_digits(k // 32)))
+        want_z = np.zeros((m, n), dtype=np.int64)
+        want_r = []
+        for u in range((m // 32) * ncb):
+            ri, cj = divmod(u, ncb)
+            if u not in tw:
+                want_r.append([0] * words)
+                continue
+            want_z[32 * ri:32 * ri + 32, 32 * cj:32 * cj + 32] = np.array(tw[u][0], dtype=np.int64).reshape(32, 32)
+            want_r.append(tw[u][1])
+        want_z = torch.from_numpy(((want_z + (1 << 31)) % (1 << 32) - (1 << 31)).astype(np.int32)).cuda()
+        want_r = torch.from_numpy(np.array(want_r, dtype=np.uint32).view(np.int32)).cuda()
+        sa = torch.rand(m, device="cuda") * 0.02 + 1e-3
+        sw = torch.rand(n, device="cuda") * 2e-3 + 1e-4
+        jc = J10Call(lib, Call(lib, at.cuda(), bt.cuda(), salt, ra, rb, base), m, sa, sw)
+        jc.live = torch.tensor([0 if ri in dead else 1 for ri in range(m // 32)], dtype=torch.uint8, device="cuda")
+        jc.poison()
+        jc.run()
+        torch.cuda.synchronize()
+        r = {"lib": f"{arm}-j10r", "m": m, "n": n, "k": k, "dead_row_blocks": list(dead), "reference_s": ref_s,
+             "z_bad": int((jc.z != want_z).sum()), "receipt_bad": int((jc.c.out[:jc.c.units] != want_r).sum()),
+             "seed_bad": gate_seeds(jc.c, list(range(jc.c.units))),
+             "y_equal_dequant": bool(torch.equal(dequantize(jc.z, sa, sw).view(torch.int16), jc.y.view(torch.int16)))}
+        r["ok"] = r["z_bad"] == 0 and r["receipt_bad"] == 0 and r["seed_bad"] == 0 and r["y_equal_dequant"]
+        res.append(r)
+    return res
+
+
 def anchors(libs: dict[str, OneLib], ref: Ref, rng: random.Random) -> list[dict]:
     """Every one-stream build, and the reference kernel, against v3's words on the CPU (h1v3_ca.reference, stream=True)
     on two small calls, a dead row block included."""
@@ -286,6 +461,12 @@ def bench(libs: dict, wlibs: dict, nlibs: dict, ref: Ref, args, name: str, n: in
     for arm, oc in ocs.items():
         out["gates"][arm] = g = gate_one(oc, picks, ref_t, rf, shift)
         print(json.dumps({"linear": name, "m": m, "arm": arm, "gate": {x: g[x] for x in g if x != "picks"}}), flush=True)
+    jcs = {}
+    if args.j10r and f"{args.j10r}-os" in libs:
+        jl, jarm = libs[f"{args.j10r}-os"], f"{args.j10r}-j10r"
+        jcs[jarm] = J10Call(jl, call.twin(jl), m, sa, sw)
+        out["gates"][jarm] = g = gate_j10(jcs[jarm], rng, rsel, shift)
+        print(json.dumps({"linear": name, "m": m, "arm": jarm, "gate": {x: g[x] for x in g if x != "picks"}}), flush=True)
     wcs = {arm: call.twin(lib) for arm, lib in wlibs.items()}
     for arm, c in wcs.items():
         from h1ubench import gate_shape
@@ -299,6 +480,7 @@ def bench(libs: dict, wlibs: dict, nlibs: dict, ref: Ref, args, name: str, n: in
         out["error"] = "gate failed: nothing timed"
         return out
     arms: dict = {arm: (lambda oc: lambda i: oc.run())(oc) for arm, oc in ocs.items() if arm not in failed}
+    arms.update({arm: (lambda jc: lambda i: jc.run())(jc) for arm, jc in jcs.items() if arm not in failed})
     arms.update({arm: (lambda c: lambda i: c.run())(c) for arm, c in wcs.items() if arm not in failed})
     if nlibs:
         sj = torch.randint(0, 256, (S, 64), dtype=torch.uint8, device="cuda").view(torch.int64)
@@ -344,11 +526,13 @@ def bench(libs: dict, wlibs: dict, nlibs: dict, ref: Ref, args, name: str, n: in
     plain = {p: med[p] for p in ("int_mm", "cutlass") if p in med}
     fp = min(plain, key=plain.get)
     out.update({"fastest_plain": fp, "plain_us": plain[fp]})
-    out["gamma"] = {arm: round(med[arm] / plain[fp] if arm in ocs else 1 + med[arm] / plain[fp], 4)
+    out["gamma"] = {arm: round(med[arm] / plain[fp] if arm in ocs or arm in jcs else 1 + med[arm] / plain[fp], 4)
                     for arm in med if arm not in plain}
     out["os_over_ws"] = {arm: round(med[arm] / med[arm[:-3] + "-ws"], 4) for arm in ocs
                          if arm in med and arm[:-3] + "-ws" in med}
-    del graphs, ocs, wcs, call
+    out["j10r_over_os"] = {arm: round(med[arm] / med[arm[:-5] + "-os"], 4) for arm in jcs
+                           if arm in med and arm[:-5] + "-os" in med}
+    del graphs, ocs, wcs, jcs, call
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
     return out
@@ -366,6 +550,8 @@ def main() -> int:
     ap.add_argument("--picks", type=int, default=14)
     ap.add_argument("--fused", action="store_true", help="also time each build's fused one-stream form (arm NAME-osf)")
     ap.add_argument("--no-ws", action="store_true", help="skip the receipts-only arms NAME-ws")
+    ap.add_argument("--j10r", metavar="ARM", help="also gate and time build ARM (e.g. h1u-pd2l2) on J10-R's call-scale noise "
+                    "(kh_one_j10, arm ARM-j10r): measured only, never served or credited")
     ap.add_argument("--ms", default=",".join(map(str, MS)))
     ap.add_argument("--linears", default=",".join(LINEARS))
     args = ap.parse_args()
@@ -407,6 +593,20 @@ def main() -> int:
     for arm in bad:
         print(f"h1zbench: {arm} failed an anchor; it is not timed", file=sys.stderr)
         del libs[arm]
+    if args.j10r:
+        jl = libs.get(f"{args.j10r}-os")
+        if jl is None or not hasattr(jl.h, "kh_one_j10"):
+            print(f"h1zbench: --j10r {args.j10r}: no such one-stream build with kh_one_j10", file=sys.stderr)
+            return 2
+        doc["j10r"] = {"arm": f"{args.j10r}-j10r", "label": f"arm={args.j10r}-j10r:j10r-unsound", "noise": "j10r",
+                       "reference": f"j10r_ca.py ({J10.SOURCE}) on h1v3_ca.py", "seed_position": J10.STEP}
+        doc["anchors_j10r"] = anchors_j10(args.j10r, jl, rng)
+        print(json.dumps({"anchors_j10r": doc["anchors_j10r"]}), flush=True)
+        (out / "h1z.json").write_text(json.dumps(doc, indent=1))
+        if not all(x["ok"] for x in doc["anchors_j10r"]):
+            print("h1zbench: a J10-R anchor failed; the j10r arm is not timed", file=sys.stderr)
+            doc["j10r"]["anchor_failed"] = True
+            args.j10r = None
     xs: dict = {}
     ms = [int(v) for v in args.ms.split(",")]
     for name in args.linears.split(","):
@@ -441,14 +641,14 @@ def main() -> int:
     for d in layer.values():
         for arm, v in d["arms"].items():
             full = v["linears"] == d["linears"]
-            one = arm.endswith("-os") or arm.endswith("-osf")
+            one = arm.endswith(("-os", "-osf", "-j10r"))
             v["gamma"] = round((v["us"] / d["plain_us"]) if one else 1 + v["us"] / d["plain_us"], 4) if full else None
     doc["per_layer"] = layer
     doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     (out / "h1z.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({"per_layer": {m: {a: v["gamma"] for a, v in d["arms"].items()} for m, d in layer.items()}}))
     bad_shapes = [r for r in doc["shapes"] if "error" in r or "gate_failed" in r]
-    return 4 if bad_shapes or bad else 0
+    return 4 if bad_shapes or bad or doc.get("j10r", {}).get("anchor_failed") else 0
 
 
 if __name__ == "__main__":
