@@ -21,7 +21,10 @@ published, once, and only until its reveal deadline on its own clock after p's e
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in window p, the one function that states its form,
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
   64-byte id of the prover whose key the certifier verifies records under.
-* `Credits` is the certified windows' credit: one credit per PoUW window, stream and prover.
+* `Registrations` is the certified windows' once-only registration ledger: one registration per PoUW window, stream and
+  prover, taken when the challenger receives the window, before its draw and any proof. It is not the window's credit,
+  which is its outcome's verdict.
+* `unit_reason(unit)` is why a certified window can't credit a drawn unit: it credits only units that read its salt.
 * `pouw_window(windows, k)` is the PoUW window certifier windows make up, refusing any that aren't one whole, aligned
   PoUW window.
 """
@@ -31,6 +34,8 @@ import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
+
+from verity.ml.circuits import ports as _ports
 
 from .protocol import U64, DomainError
 
@@ -59,8 +64,8 @@ class Unrevealed(DomainError):
     early, missing or uncommitted."""
 
 
-class Credited(DomainError):
-    """A PoUW window already credited to a registration of its stream and prover."""
+class Reregistered(DomainError):
+    """A PoUW window already registered under its stream and prover."""
 
 
 def _window(window: Any) -> int:
@@ -109,23 +114,53 @@ def prover_id(public_key: bytes) -> bytes:
     return hashlib.sha512(PROVER_TAG + public_key).digest()
 
 
-class Credits:
-    """The certified windows' credit: a PoUW window is credited once per stream and prover, to one registration. A
-    window's tiles are private, so this is the finest public key there is. Two registrations of one window under one
-    stream and prover have one salt and so one seed per tile, and `credit` refuses the second (`Credited`). Under
-    another stream or prover the seeds differ (`pouw_salt`)."""
+def unit_reason(unit: Any) -> str | None:
+    """Why a certified window can't credit `unit`, its drawn unit's Definition, or None: a certified window credits only
+    units that read its salt, a unit whose ``salt`` parameter is a coin port over the whole 64-byte salt
+    (`ports.In(kind="coin")`), as the compiled Program's units take it (`circuit.compile`, `PouwCompiled_v1`, whose
+    ``salt-flow`` check holds it to each unit's seed). A unit that reads only committed rows passes on rows formed under any
+    salt, so one product formed once would pass in every window and under every stream. This is necessary, not enough:
+    the window that runs such a unit must also hold the proof's coin input to the window's salt."""
+    pt = _ports.port_types(unit)
+    params = unit.signature()[0] if hasattr(unit, "signature") else ()
+    runs = dict(zip((name for name, _ in params), pt.params)).get("salt") if pt is not None else None
+    if runs and all(p.kind == "coin" for _, _, p, _ in runs) and (runs[0][0], runs[-1][1]) == (0, 8 * SALT_BYTES) \
+            and all(a[1] == b[0] for a, b in zip(runs, runs[1:])):
+        return None
+    name = getattr(unit, "id", repr(unit))
+    return (f"a certified window credits only units that read its salt, and {name} reads none: no parameter of it is "
+            f"the {SALT_BYTES}-byte salt as a coin port, as the compiled Program's units take it (`PouwCompiled_v1`), so "
+            "its proof passes on rows formed under any salt")
+
+
+# TODO(#2722): a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
+# window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window.
+# `Registrations` is none of that.
+class Registrations:
+    """The certified windows' once-only registration ledger: a PoUW window registers once per stream and prover, when
+    the challenger receives it, before its draw and before any proof, so a window whose units are never proved, or are
+    refused, keeps its entry. A window's tiles are private, so (window, stream, prover) is the finest public key there
+    is. Two registrations of one window under one stream and prover have one salt and so one seed per tile, and `admit`
+    refuses the second (`Reregistered`). Under another stream or prover the salts differ (`pouw_salt`)."""
 
     def __init__(self) -> None:
-        self._credited: dict[tuple[int, bytes], str] = {}
+        self._registered: dict[tuple[int, bytes], str] = {}
 
-    def credit(self, window: int, stream: bytes, prover: bytes, registration: str) -> None:
-        """Credit PoUW window `window` to `registration` (its digest) under `stream` and `prover`, or refuse
-        (`Credited`) a window already credited under them."""
+    def admit(self, window: int, stream: bytes, prover: bytes, registration: str) -> None:
+        """Record PoUW window `window`'s registration `registration` (its digest) under `stream` and `prover`, or refuse
+        (`Reregistered`) a window already registered under them."""
         key = (_window(window), _bound(stream, prover))
-        if key in self._credited:
-            raise Credited(f"PoUW window {window} is already credited to registration {self._credited[key][:16]} of its "
-                           "stream and prover: a tile is credited once")
-        self._credited[key] = registration
+        if key in self._registered:
+            raise Reregistered(f"PoUW window {window} is already registered ({self._registered[key][:16]}) under its "
+                               "stream and prover: a window registers once")
+        self._registered[key] = registration
+
+    def __contains__(self, key: tuple[int, bytes, bytes]) -> bool:
+        window, stream, prover = key
+        return (_window(window), _bound(stream, prover)) in self._registered
+
+    def __len__(self) -> int:
+        return len(self._registered)
 
 
 def context(prefix: str, window: int, manifest: str) -> str:
@@ -202,6 +237,6 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
     return ws[0] // k
 
 
-__all__ = ["Credited", "Credits", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "SALT_BYTES", "SALT_TAG", "STREAM_BYTES",
-           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_record", "pouw_salt",
-           "pouw_window", "prover_id", "registered", "revealed", "window_of"]
+__all__ = ["PROVER_BYTES", "PROVER_TAG", "RECORD_TAG", "Registrations", "Reregistered", "SALT_BYTES", "SALT_TAG",
+           "STREAM_BYTES", "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_SEGMENT", "committed", "context", "pouw_record",
+           "pouw_salt", "pouw_window", "prover_id", "registered", "revealed", "unit_reason", "window_of"]

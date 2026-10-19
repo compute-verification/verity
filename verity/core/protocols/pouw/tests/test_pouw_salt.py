@@ -6,8 +6,8 @@ one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies `
 the stream and the prover, 64 bytes, which the seeds and the identifier take, with the challenger's draw coin; two
 registrations of one window are salted apart; `core_check.pass_epoch` passes a certified window's pass only when its
 salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
-signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); and `Credits` credits a window
-once per stream and prover. The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
+signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `Registrations` admits a window
+once per stream and prover; and a certified window credits only units that read its salt (`unit_reason`). The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
 verifier's one reveal comes after the registration that names the pass."""
 
 from __future__ import annotations
@@ -444,20 +444,40 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
         assert CC.recorded_reason(r, *bound) == why
 
 
-def test_a_certified_window_is_credited_once_per_stream_and_prover():
-    """`Credits` credits PoUW window p once per stream and prover: a second registration of p under them, which has
-    their salt and so their seeds, is refused (`Credited`), naming the first; p under another stream or prover, and
-    another window under them, are credited. A window that isn't a u64, or a stream or prover that isn't 64 bytes, is
+def test_a_certified_window_registers_once_per_stream_and_prover():
+    """`Registrations` admits PoUW window p once per stream and prover: a second registration of p under them, which has
+    their salt and so their seeds, is refused (`Reregistered`), naming the first; p under another stream or prover, and
+    another window under them, are admitted. A window that isn't a u64, or a stream or prover that isn't 64 bytes, is
     refused."""
     other = hashlib.sha512(b"another").digest()
-    credits = PS.Credits()
-    credits.credit(1, STREAM, PROVER, "aa" * 64)
-    with pytest.raises(PS.Credited, match="PoUW window 1 is already credited to registration aaaaaaaaaaaaaaaa"):
-        credits.credit(1, STREAM, PROVER, "bb" * 64)
+    ledger = PS.Registrations()
+    ledger.admit(1, STREAM, PROVER, "aa" * 64)
+    with pytest.raises(PS.Reregistered, match=r"PoUW window 1 is already registered \(aaaaaaaaaaaaaaaa\)"):
+        ledger.admit(1, STREAM, PROVER, "bb" * 64)
     for window, stream, prover in ((1, other, PROVER), (1, STREAM, other), (2, STREAM, PROVER)):
-        credits.credit(window, stream, prover, "cc" * 64)
-    with pytest.raises(PS.Credited):
-        credits.credit(2, STREAM, PROVER, "dd" * 64)
+        ledger.admit(window, stream, prover, "cc" * 64)
+    with pytest.raises(PS.Reregistered):
+        ledger.admit(2, STREAM, PROVER, "dd" * 64)
     for window, stream, prover in ((-1, STREAM, PROVER), (1, STREAM[:32], PROVER), (1, STREAM, None)):
         with pytest.raises(DomainError):
-            credits.credit(window, stream, prover, "ee" * 64)
+            ledger.admit(window, stream, prover, "ee" * 64)
+    assert len(ledger) == 4 and (1, other, PROVER) in ledger and (3, STREAM, PROVER) not in ledger
+
+
+def test_a_certified_window_credits_only_units_that_read_its_salt():
+    """`unit_reason` refuses the served-zk window's drawn unit, `Pc8TileSide`, which reads two committed side rows and
+    no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
+    port over the 64-byte salt; anything without a signature is refused."""
+    from verity.core.protocols.pouw.circuit import compile as C
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as BG
+
+    side = pc8.side_tile(128)
+    why = PS.unit_reason(side)
+    assert why is not None and side.id in why and "reads none" in why
+    grid = C.Tile(4, 8, tuple((i, j) for i in range(4) for j in range(8)))
+    h1 = bind(H.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8), R=4, C=8, PAIRS=grid.pairs)
+    assert PS.unit_reason(h1) is None
+    assert PS.unit_reason(object()) is not None
