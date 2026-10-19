@@ -42,8 +42,10 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
     PouwWinOk_v1     (r, w: Value<32>, tj, tw, p0: Array<32, Value<32>>, first: Value<1>) -> Value<1>
                      r = w, tj = tw, and (first ? p0 = 0 : 1)
 
-Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The spot check of one thread at
-segment j is
+Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
+(`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
+(`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
+Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Site.other`). The spot check of one thread at segment j is
 
     PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,
@@ -134,8 +136,10 @@ from verity.ml.circuits.boolean.forms import (
     or_reduce,
 )
 from verity.ml.circuits.boolean.trace import definition
+from verity.ml.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
 from verity.ml.circuits.defs import composite, primitive
 from verity.ml.circuits.refs import array_of
+from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP
 from verity.ml.circuits.types import Array, Value
 
 from .boolean import PouwXor32
@@ -1010,6 +1014,9 @@ def _digit_z(C, r, z):
 V512, V256 = Array(32 * 2 * NCH, BIT), Array(32 * NCH, BIT)
 PouwSegDot0 = definition("PouwSegDot0", 2, _seg_dot0, (("a", Array(32, I8)), ("b", Array(32, I8))), U32, word=PouwSegDot0Word,
                          conformance="protocol-defined", doc="sum_k a_k b_k mod 2^32 (int8) on bits: PouwSegDot0_v1")
+for _dot in (PouwSegDot, PouwSegDot0):
+    silicon_step(_dot, BLACKWELL_SM120_S8_M16N8K32_WRAP)
+    _dot.counts = FAMILY_COUNTS[f"{_dot.name}_v{_dot.version}"] = serves_none  # type: ignore[attr-defined]
 PouwDuoAbsorb0 = definition("PouwDuoAbsorb0", 2, lambda C, st: _duo_absorb_bits(C, st, *_zero_set()), (("st", V512),), V512,
                             word=PouwDuoAbsorb0Word, conformance="protocol-defined",
                             doc="duo's state after 32 zero words, on bits: PouwDuoAbsorb0_v1")

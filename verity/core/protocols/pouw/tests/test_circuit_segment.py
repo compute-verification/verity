@@ -1,7 +1,8 @@
 """The receipt spot checks (`verity.core.protocols.pouw.circuit.segment`): LEDGER's meet-in-the-middle
 (note:20261017T1723Z-draft-ledger) opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
-witness, and `PouwSegCheck_v3`, which recomputes every absorbed word, refuses the same committed data; and each new check
-on bits is its word view, 1 on an honest instance and 0 once one receipt bit changes."""
+witness, and `PouwSegCheck_v3`, which recomputes every absorbed word, refuses the same committed data; each new check
+on bits is its word view, 1 on an honest instance and 0 once one receipt bit changes; and census/v1 counts the segment dots
+on bits as unserved `tc:int8` steps."""
 from __future__ import annotations
 
 import random
@@ -10,9 +11,12 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw.circuit import segment as SG
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.census import COUNTERS, PRODUCTS, census
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.types import Value
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.types import Array, Value
 
 M32 = SG.M32
 KS, S = 4, 2
@@ -279,6 +283,22 @@ def test_the_served_receipt_is_not_injective_at_a_state():
     (y1, z1), (y2, z2) = step(0x1632C), step(0x2237A)
     assert y1 ^ SG.rotl(z1, 16) == y2 ^ SG.rotl(z2, 16) == 0x26D90889
     assert (y1, z1) != (y2, z2)
+
+
+def test_segment_dots_are_unserved_int8_tensor_core_steps():
+    """census/v1 reads the segment dots on bits as the wrapping s8 IMMA coordinate's k32: their gates are `tc:int8`, and they
+    perform their 32 products each and serve none (Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Site.other`)."""
+    A = Array(32, SG.I8)
+    lanes = CompositeDefinition("SegTestLanes", 1, (), lambda S: ((("a", A), ("b", A)), SG.U32),
+                                lambda B, S, a, b: B.call(SG.PouwSegDot, B.call(SG.PouwSegDot0, a, b), a, b),
+                                conformance="protocol-defined", register=False)
+    c = census(Program(bind(lanes)), boolean=True)
+    dots = {e["family"]: e for e in c["classes"].values() if e["family"] in PRODUCTS}
+    assert {f: (e["instances"], PRODUCTS[f], e["served_macs"]) for f, e in dots.items()} == {
+        "PouwSegDot_v2": (1, 32, 0), "PouwSegDot0_v2": (1, 32, 0)}
+    assert {k: c["totals"][k] for k in COUNTERS} == dict.fromkeys(COUNTERS, 0) and c["totals"]["served_macs_by_precision"] == {}
+    want = [BS.compile(bind(d)).counts for d in (SG.PouwSegDot, SG.PouwSegDot0)]
+    assert c["totals"]["work"] == {"tc:int8": {"gates": sum(sum(w.values()) for w in want), "and": sum(w["and"] for w in want)}}
 
 
 def test_call_words_take_no_witness():

@@ -24,7 +24,8 @@ takes the K/16 steps of every W row at once, each step one batch over the rows, 
 member, then `F2fpBf16_v2` of each word.  Their only `DOT` on bits is `HopperBF16WgmmaDot16_v2`, cut into `HOPPER_STEP`'s four
 element Definitions (`chain_step`): the first step's from the +0 accumulator, its 32 constant bits folded into the gates, and a
 later step's; and each of those in two, the gates that read only the x block, once per block, and the rest, once per row.  So no
-row computes a value another computes, nor a step a value its accumulator's constant bits fix.  `BatchedGemm_v2` is the function
+row computes a value another computes, nor a step a value its accumulator's constant bits fix.  Each of the four is bound to the
+k16 step's silicon model (`census.silicon_step`), so census/v1 counts their gates as the step's, `tc:bf16`.  `BatchedGemm_v2` is the function
 of `mla.MlaBmm_v1` (vLLM's batch-invariant Triton `bmm_kernel` on sm_120), which names no word; `tests/program/test_bf16_gemm.py`
 checks that they agree.  `bf16_gemm_check` holds the numpy models, `kernels.batched_gemm_rows` and `kernels.cublas_gemm_rows` the
 sampled replay's row kernels.
@@ -45,6 +46,7 @@ from typing import Any, Callable, NamedTuple, Sequence
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import const_bits
 from verity.ml.circuits.boolean.trace import word_of
+from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops import fp32 as F
 from verity.ml.circuits.ops import gemm as G
@@ -124,6 +126,8 @@ _A16 = Array(16, BF16)
 HOPPER_STEP = chain_step("HopperBf16Dot16Step", BG.HopperBF16WgmmaDot16.build, (("acc", F32), ("a", _A16), ("b", _A16)),
                          ("HopperBF16WgmmaDot16_v1(acc, a, b)", "a"))
 HopperBf16Dot16StepFirstX, HopperBf16Dot16StepFirst, HopperBf16Dot16StepX, HopperBf16Dot16Step = HOPPER_STEP
+for _part in HOPPER_STEP:
+    silicon_step(_part, BG.HopperBF16WgmmaDot16.silicon)
 _DOT_STEPS = {BG.HopperBF16WgmmaDot16.id: HOPPER_STEP}
 
 

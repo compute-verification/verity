@@ -9,8 +9,9 @@ merged manifest, and `require_on_every_rank` fails the Commit closed unless ever
 attaches the route source (`route_source`) when a capture map describes its model, and beside it the attention sources
 (`attention_source`, which binds the sparse-MLA call boundaries of the rank's rows to its `attn` tap, and `dsv4_attention_source`,
 which binds DeepSeek-V4's attention body); when the rank's rows name
-`DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); and when they name the MoE align
-Definitions, the Marlin experts' align schedule (`moe_align_source`).  The route, linear quant and align sources: once one rank has
+`DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE align
+Definitions, the Marlin experts' align schedule (`moe_align_source`); and under tp-commit ``--memory-map`` the KV-slots source
+(`kv_slots_source`, for the rank's memory map, never the record).  The route, linear quant and align sources: once one rank has
 one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
 manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
 gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split
@@ -23,9 +24,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source, linear_quant_source,
-                                         moe_align_source, norm_scale_source, route_source, router_softmax_source, scale_products_source,
-                                         vocab_range_source)
+from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source, kv_slots_source,
+                                         linear_quant_source, moe_align_source, norm_scale_source, route_source, router_softmax_source,
+                                         scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.config import option
 from verity_vllm.program.registry.topp_geometry import splits_for_v1
@@ -117,10 +118,11 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
             *([moe_align_source.MoeAlignSource.short_name] if not one and moe_align_source.manifest_names_it(manifest) else [])]
 
 
-def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
+def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, kv_slots: bool = False, **given: Any) -> dict[str, Any]:
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
     map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal; and arm the
-    prescribed split count as `attach` does (`prescribe_idle_splits`: "SplitsFor_v1" when armed)."""
+    prescribed split count as `attach` does (`prescribe_idle_splits`: "SplitsFor_v1" when armed).  With ``kv_slots`` (tp-commit
+    ``--memory-map``) also the KV-slots source, never the record: the rank's map reads it (`pipeline.tp.rank_replay.memory_map`)."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
     mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
     out: dict[str, Any] = {"prescribe_idle_splits": "SplitsFor_v1"} if prescribe_idle_splits(com, mine) else {}
@@ -150,13 +152,18 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
             out["moe_align_source"] = {"layers": len(ma.layers)}
     except (ValueError, RuntimeError, AttributeError) as e:
         out["moe_align_source"] = {"error": repr(e)[:200]}
+    if kv_slots:
+        try:
+            out["kv_slots_source"] = {"layers": len(kv_slots_source.attach(com, model).layers)}
+        except (ValueError, RuntimeError, AttributeError) as e:
+            out["kv_slots_source"] = {"error": repr(e)[:200]}
     return out
 
 
-def for_ranks(taps: TapSources) -> Any:
+def for_ranks(taps: TapSources, *, kv_slots: bool = False) -> Any:
     """What `tp2_commit_make` calls on every rank: `attach_rank` with the taps that are on bound (picklable), also when none is, since
-    every rank arms the prescribed split count and attaches the route source."""
-    return partial(attach_rank, **taps.given())
+    every rank arms the prescribed split count and attaches the route source; ``kv_slots`` bound when on."""
+    return partial(attach_rank, **taps.given(), **({"kv_slots": True} if kv_slots else {}))
 
 
 def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], taps: TapSources, *,

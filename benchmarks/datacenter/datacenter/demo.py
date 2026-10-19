@@ -11,12 +11,12 @@ who tries five things at once, each of which the audit refuses for its own reaso
 from __future__ import annotations
 
 from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Tuple, Value
+from verity.ml.circuits.types import Tuple
 
 from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, Store, Wipe, account, audit, place,
                register, run)
 from .examples import GB, rack
-from .models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, words
+from .models import DOT, LINEAR, MAT, VEC, WEIGHTS, X, program, word, words
 
 IMAGE = words("image", 32)
 S0, S1 = words("salt0", 32), words("salt1", 32)
@@ -30,8 +30,8 @@ def model(B, x, w1, w2, image, temperature, s0, s1):
     return tuple_of(y, temperature)
 
 
-PROGRAM = program("RackNight", {"x": VEC, "w1": MAT, "w2": MAT, "image": VEC, "temperature": Value(16), "s0": VEC,
-                                "s1": VEC}, Tuple(VEC, Value(16)), model, registered=("w1", "w2", "image"))
+PROGRAM = program("RackNight", {"x": VEC, "w1": MAT, "w2": MAT, "image": VEC, "temperature": word(16), "s0": VEC,
+                                "s1": VEC}, Tuple(VEC, word(16)), model, registered=("w1", "w2", "image"))
 REGISTRATION = register(PROGRAM, WEIGHTS | {"image": IMAGE})
 
 

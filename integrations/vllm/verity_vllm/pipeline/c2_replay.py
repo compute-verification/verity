@@ -370,10 +370,11 @@ def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any 
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
                                   _loaded, s.manifest, args.label, _digs)
     if not plan and getattr(args, "memory_map", None):
+        from verity_vllm.acquire.sources.kv_slots_source import caches_of
         from verity_vllm.check.oracle_compare import OpenedReader
         from verity_vllm.pipeline import memory_map as MMP
         MMP.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                         caches=next((x.caches for x in getattr(s.com, "sources", ()) if getattr(x, "short_name", "") == "kv_slots"), None))
+                         caches=caches_of(s.com), session=s.out / MMP.SESSION)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)

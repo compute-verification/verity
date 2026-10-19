@@ -27,8 +27,9 @@ answered its sample by the deadline, and none when the prover could rebuild the 
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
 
-Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, the
-least time over every route) as `compute` on the whole block where the scheme gives one, else the honest routing's
+Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
+of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
+where the scheme gives one, else the honest routing's
 time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
 the rest on the whole datacenter, since PoUW credits the prover system (decision 111); a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
@@ -53,6 +54,9 @@ FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 #: certifier releases only into it pins the work that depends on it, while k, the bits that could carry it out before
 #: registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
+#: a block's proof units counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
+#: Program's partition (proofs, review 4)
+SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
 
 
 def facet(kind: str) -> str:
@@ -221,6 +225,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
                                                      d.on_chip] if a is not None]
+        if profile.partition == "assumed" and profile.units.get(b.name):
+            names.append(SERVED_PARTITION.name)
         bounds: dict[str | None, float] = {None: float("inf")}
         if FLEET_CLOSED.name in premises:
             bounds[FLEET_CLOSED.name] = 0.0
@@ -344,8 +350,8 @@ class Credit:
     work: float
     #: what places it on the unit, for a block's compute (its attribution anchor)
     grade: str | None = None
-    #: for compute, what the time rests on: "proved" (PoUW's bound over every route) or "honest-routing" (each kind on
-    #: its named facet at the declared rates, which no audit proves)
+    #: for compute, what the time rests on: "proved" (PoUW's bound, (1 − ε) of the floor program's time, over every
+    #: route) or "honest-routing" (each kind on its named facet at the declared rates, which no audit proves)
     basis: str | None = None
 
 
