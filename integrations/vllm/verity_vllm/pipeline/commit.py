@@ -1033,11 +1033,11 @@ class Options:
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer)")
     remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.store.remote.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
-    remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override); 0: the engine's own pool, at the row's gpu_memory_utilization (only with --remote-session-lib)")
+    remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.store.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and KV pool encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
-    remote_paged_lib: str | None = option("--remote-paged-lib", default=None, help="paged.cu's build at the codec's field (benchmarks/vllm_encoded): with --remote-session-lib, the int8 attention reads the encoded KV pool through a credited read, each slot decoded under its offset (engine.int8_window, installed by verity_vllm.store.in_place)")
+    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.store.in_place)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --pace 1 runs each pass's step inside its coin's window); 0 for a session in stated windows")
     memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
@@ -1059,13 +1059,12 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     if args.remote_verifier:
         from verity_vllm.store import remote
         _in_place = None
-        if args.remote_paged_lib and not args.remote_session_lib:
-            raise SystemExit("--remote-paged-lib reads the store in place: give --remote-session-lib with it")
         if args.remote_session_lib:
             from verity_vllm.store.in_place import InPlaceBackend
-            _in_place = InPlaceBackend.for_commit(args.remote_session_lib, args.remote_paged_lib)
+            _in_place = InPlaceBackend.for_commit(args.remote_session_lib)
         _rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages or None, weight_blocks=args.remote_weight_blocks,
-                                   kv_lib=args.remote_kv_lib, backend_of=_in_place, out=args.out, step_ms=args.remote_step_ms)
+                                   kv_lib=args.remote_kv_lib, backend_of=_in_place, out=args.out, step_ms=args.remote_step_ms,
+                                   filler_gib=args.remote_filler_gib)
         if args.only_arm == "control" or args.pairs < 1:
             raise SystemExit("--remote-verifier audits the Commit's first instrumented run: not without one (--only-arm control, --pairs 0)")
     if os.environ.get("VERITY_HOT_SUBMIT") == "1" and _HOT is None:
@@ -1864,10 +1863,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 r["remote_session"] = {"audited_steps": _lock.audited, "unaudited_steps": _lock.unaudited, "accepted": _rs_rec["accepted"]}
                 print(f"[delta] remote session over pair {pair}'s {arm} run: {_lock.audited} of its {_lock.audited + _lock.unaudited} engine steps "
                       f"a pass each, {'ACCEPTED' if _rs_rec['accepted'] else 'REJECTED'}" + (f" ({_rs_rec['error']})" if _rs_rec["error"] else ""), flush=True)
-                if args.memory_map and getattr(_rs.backend, "registration", None) is not None:
-                    _mreq = _rs.map_request(args.memory_map)
-                    print(f"[delta] memory-map request takes the session's layout: registration {_mreq['registration'][:16]}…, "
-                          f"{len(_mreq['firsts'])} KV layers, {_mreq['blocks']} registered blocks", flush=True)
             if arm != "control":
                 if getattr(args, "padded_finalize", False):
                     # [B9.1] the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is

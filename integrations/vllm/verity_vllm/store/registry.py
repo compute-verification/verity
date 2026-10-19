@@ -488,8 +488,8 @@ class Store:
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
         (epoch + 1, under ``step``).  Those it reaches while registered or released with their bytes as they were (a
-        plan may still hold them) go first to ``on_write(step, pool blocks)``, if set, before the forward writes them.  One registration record for the step.  A memory map closes the last step's line, opens this one's (`memory_map`)."""
-        t, p, m = time.perf_counter(), self.pool, self.memory_map
+        plan may still hold them) go first to ``on_write(step, pool blocks)``, if set, before the forward writes them.  One registration record for the step.  A memory map closes the last step's line, opens this one's (`memory_map`).  A store with no KV pool takes steps with no appends."""
+        t, p, m = time.perf_counter(), self.pool if appends else self._pool, self.memory_map
         if m is not None:
             m.flush(step)
         key = reached = np.zeros(0, np.int64)

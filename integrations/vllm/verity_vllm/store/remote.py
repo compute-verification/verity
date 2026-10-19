@@ -602,13 +602,15 @@ class CommitSession:
     """The Commit's remote bandwidth session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
 
     ~~~text
-    engine_args  before the build: one GPU, synchronous scheduling, no prefix caching, bf16 KV (refusing anything else),
-                 the KV pool at ``kv_pages`` pages (None: the engine's own, at the row's gpu_memory_utilization)
+    engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV
+                 pool at ``kv_pages`` pages (None: the engine's own, at the row's gpu_memory_utilization)
     target       before the build: the row's target declares synchronous scheduling (its Program's LAG 0)
-    install      before the build: ``binder.Binder(store, passes=False)`` on vLLM's model runner, block pool and
-                 scheduler, registering weight tensors up to ``weight_blocks`` blocks and the KV pool
-    check        after the build: the engine core in this process, scheduling synchronous, the KV cache bf16, the pool
-                 registered
+    install      before the build: ``binder.Binder(store, passes=False, kv=False)`` on vLLM's model runner, block pool
+                 and scheduler, registering weight tensors up to ``weight_blocks`` blocks.  The KV pool stays outside
+                 the registration (served writes do, memory accounting's MEM-39 ruling: live KV is uncredited for chat),
+                 so no step writes a registered block and every pass reads every one
+    check        after the build: the engine core in this process, scheduling synchronous, no KV pool registered; then
+                 ``filler_gib`` GiB of zeros on the engine's GPU registered as the store's filler (`Binder.register_filler`)
     begin        before the Commit's first instrumented run: the session on its own thread, registered before the run
                  goes on, and its first window armed once the run's first step has run (`Serving.ready`).  Its
                  backend is ``backend_of(session, path)``'s (the store read where the engine holds it,
@@ -616,17 +618,15 @@ class CommitSession:
                  on the CPU
     (the run)    each of its engine steps through the returned `Lockstep`: a pass's step while the session lasts, so the
                  memory map, recorded against the registration's digest beside the Commit (``out``), is of the run's
-                 steps from its first, and its KV payloads the run's K and V; the steps after the session unaudited
+                 steps from its first (a header and no line: no step writes the store); the steps after it unaudited
     end          after the run: the session done (failed if it still asked for a step), its record
                  ``remote_session.json`` with the map's agreement with the store (`store_map.agreement`), taken before the run
                  went on, each pass's ``[window, pass, step]`` as the verifier's record has its steps
                  (``pass_steps``, each a step of the map), and the map stopped there (`store.memory_map.end`)
-    map_request  after it, with ``commit --memory-map``: the store's runtime layout into the map's request, for the map
-                 built from the circuit (`pipeline.memory_map`)
     ~~~
 
-    A store serves one session, so ``plan`` is one mode (``serve``, or ``servedrop:K``, the negative that withholds the
-    first K blocks appended) and the session audits one run: with more than one pair, the later instrumented runs are
+    A store serves one session, so ``plan`` is one mode, ``serve`` (``servedrop:K`` withholds blocks appended, and
+    this store appends none), and the session audits one run: with more than one pair, the later instrumented runs are
     committed and unaudited.  The control arm is never audited.  A verifier that paces the session (``--pace 1``: a
     live coin a pass) has each pass's engine step run inside its coin's window, so ``step_ms``, the step's time, goes
     into the calibration's pass times (`StoreBackend.with_step`) and the allowance covers it."""
@@ -635,25 +635,23 @@ class CommitSession:
                  weight_blocks: int | None = None, kv_lib: str | None = None,
                  backend_of: Callable[[CommitSession, Path | None], StoreBackend] | None = None,
                  out: str | Path | None = None, node: str | None = None, codec: rcodec.Codec = rcodec.DEFAULT,
-                 step_ms: float = 0.0, log: Callable[[str], None] = print) -> None:
+                 step_ms: float = 0.0, filler_gib: float = 0.0, log: Callable[[str], None] = print) -> None:
         address(verifier)
-        if not step_ms >= 0:
-            raise ValueError("the engine step a paced pass waits on is a nonnegative time")
+        if not step_ms >= 0 or not filler_gib >= 0:
+            raise ValueError("the engine step a paced pass waits on, and the filler, are nonnegative")
         node = f"verity-vllm/{socket.gethostname()}" if node is None else node
         if not 1 <= len(node.encode()) <= audit.NODE_BYTES:
             raise ValueError(f"the session's node id {node!r} is not 1 to {audit.NODE_BYTES} bytes")
         if "," in plan:
             raise ValueError("a store serves one session: --remote-plan is one mode")
-        session_module("prover").parse_plan(plan)
+        if session_module("prover").parse_plan(plan)[0][0] != "serve":
+            raise ValueError(f"the Commit's session is serve, not {plan!r}: its store (weights and filler) appends nothing")
         if kv_pages is not None and kv_pages < 1:
             raise ValueError("the session's KV pool is at least a page (None: the engine's own)")
         if backend_of is not None and kv_lib is None:
             raise ValueError("a store read in place is encoded in place by kv.cu: give kv_lib with backend_of")
-        if backend_of is None and kv_pages is None:
-            raise ValueError("a host mirror copies every block of the store: give it a KV pool of kv_pages pages, or "
-                             "read the store in place (backend_of)")
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
-        self.kv_lib, self.backend_of, self.step_ms = kv_lib, backend_of, step_ms
+        self.kv_lib, self.backend_of, self.step_ms, self.filler_gib = kv_lib, backend_of, step_ms, filler_gib
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
         self.store, self.binder = Store(), None
         self.lockstep: Lockstep | None = None
@@ -665,8 +663,6 @@ class CommitSession:
         why = []
         if int(engine_args.get("tensor_parallel_size") or 1) != 1 or int(engine_args.get("pipeline_parallel_size") or 1) != 1:
             why.append("parallelism (a store is one GPU's: a TP Commit's session is not wired yet)")
-        if str(engine_args.get("kv_cache_dtype") or "auto") not in ("auto", "bfloat16"):
-            why.append(f"kv_cache_dtype={engine_args['kv_cache_dtype']} (the session's KV pool is bf16)")
         if engine_args.get("async_scheduling"):
             why.append("async scheduling (a pass follows each step's schedule and its output in turn)")
         if engine_args.get("enable_prefix_caching"):
@@ -687,7 +683,7 @@ class CommitSession:
     def install(self) -> None:
         from verity_vllm.store.binder import Binder
 
-        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks).install()
+        self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
 
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
         vc, why = llm.llm_engine.vllm_config, []
@@ -699,13 +695,12 @@ class CommitSession:
             why.append("prefix caching on")
         if vc.parallel_config.tensor_parallel_size != 1:
             why.append(f"tensor parallel size {vc.parallel_config.tensor_parallel_size}")
-        dtypes = sorted({str(t.dtype) for t in runner.kv_caches})
-        if dtypes != ["torch.bfloat16"]:
-            why.append(f"KV cache dtype {dtypes}")
-        if "kv" not in {r.kind for r in self.store.layout().regions}:
-            why.append("no KV pool registered (the binder's initialize_kv_cache hook)")
+        if "kv" in {r.kind for r in self.store.layout().regions}:
+            why.append("a KV pool registered (served writes stay outside the registration)")
         if why:
             raise SystemExit("--remote-verifier: the engine is not one the session serves: " + "; ".join(why))
+        if self.filler_gib:
+            self.binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
         return self.binder.stats()
 
     def begin(self) -> Lockstep:
@@ -741,6 +736,7 @@ class CommitSession:
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
                 "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks, "step_ms": self.step_ms,
+                "filler_gib": self.filler_gib,
                 "encode": ("kv.cu in place" if self.backend_of else "kv.cu") if backend.device is not None else "cpu",
                 "gates": backend.gates, "device": getattr(backend, "session_stats", dict)(),
                 "memory_map": None if trace is None else {
@@ -753,21 +749,6 @@ class CommitSession:
             store_map.end(self.store)
         finally:
             self.lockstep.close()
-
-    def map_request(self, path: str | Path) -> dict[str, Any]:
-        """The runtime layout into the Commit's memory-map request at ``path`` (``commit --memory-map``,
-        `pipeline.memory_map`): the registration the session's map is recorded against, each KV layer region's first
-        block in layer order (``firsts``) and the registered store's blocks (``blocks``), so the map built from the
-        circuit numbers its blocks as this store does.  Returns the request as written."""
-        reg = getattr(self.backend, "registration", None)
-        if reg is None:
-            raise RuntimeError("the session registered no store: there is no layout to send")
-        layout = self.store.layout()
-        kv = sorted((r for r in layout.regions if r.kind == "kv"), key=lambda r: int(r.name.rpartition("/")[2]))
-        req = {**json.loads(Path(path).read_text()), "registration": reg.digest.hex(),
-               "firsts": [r.first for r in kv], "blocks": layout.blocks}
-        Path(path).write_text(json.dumps(req) + "\n")
-        return req
 
     def end(self) -> dict[str, Any]:
         self.lockstep.finish()

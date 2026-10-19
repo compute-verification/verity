@@ -157,6 +157,8 @@ class MemoryMap:
 
     def slots(self, keys: np.ndarray) -> tuple[int, ...]:
         """The store indices of the pool's blocks ``page * per_page + column``, in every layer region, ascending."""
+        if not len(keys):
+            return ()
         p = self.store.pool
         ids = p.ids[keys // p.per_page, keys % p.per_page]
         return tuple(sorted(int(x) for rn in p.regions for x in (self.store.region(rn).first + ids).tolist()))
