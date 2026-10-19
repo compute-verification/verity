@@ -20,7 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import (A6_ANDS, EPILOGUE, HEAD_DIM, HEADS, I, KEY, LAYERS, LINEARS, S8_STEP, SHA512, observations)  # noqa: E402
+from inputs import (EPILOGUE, HEAD_DIM, HEADS, I, KEY, LAYERS, LINEARS, S8_STEP, SHA512, observations,  # noqa: E402
+                    s8_coord_ands)
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
@@ -39,14 +40,9 @@ OPERATING = 0.1
 
 def fitted(v: dict) -> Fitted:
     obs = observations()
-    sweep = [o for o in obs if o.source.startswith("proof_throughput")]
-    slope = fit(sweep, "prove", ["one", "ands*drawn"]).coef["ands*drawn"] * v["zk_unit"]
-    zk = [o for o in obs if o.source == "r20261017-202742-da01"]
-    prove = fit(zk, "prove", ["one", "ands", "ands*drawn"], fixed={"ands*drawn": slope})
-    verify = fit([o for o in obs if o.verify is not None and not o.source.startswith("proof")], "verify",
-                 ["one", "ands*staged"])
-    stage = fit(zk, "stage", ["one", "ands*staged"])
-    return Fitted(prove, verify, stage, v["cpu"], KEY)
+    return Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
+                  fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
+                  fit(obs, "stage", ["one", "ands", "ands*staged"]), v["cpu"], KEY)
 
 
 def cap(ands: int) -> int:
@@ -163,7 +159,7 @@ def summarize(p, w: dict, v: dict, extra: float, alts: dict) -> dict:
 
 def zero_work_cost(costs: CostModel, v: dict) -> float:
     """The zero-work templates at their floor: one unit each in a one-unit statement of a small template."""
-    small = A6_ANDS[2048]
+    small = s8_coord_ands(2048)
     return v["zero_work_templates"] * (costs.statement_fixed + costs.statement_per_and * small
                                        + costs.staged_per_and * small + costs.per_and * small)
 
@@ -266,7 +262,7 @@ def main(argv=None) -> None:
                          "same_cut": p is not None and cut_of(p, alts) == base_cut,
                          "same_structure": p is not None and base_plan is not None
                          and structure(p) == structure(base_plan)})
-    for name in ("tokens_per_s", "replay_layer_step", "commit_per_byte", "zk_unit", "cpu", "step_tokens"):
+    for name in ("tokens_per_s", "replay_layer_step", "commit_per_byte", "cpu", "step_tokens"):
         for end in ("low", "high"):
             vv = {**v, name: getattr(I[name], end)}
             _, ww, cc, oo, cs, aa, _, pl = run(vv, grid=31, cut_grid=21)
