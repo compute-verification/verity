@@ -111,6 +111,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -175,6 +176,7 @@ def cmd_run(argv: list[str]) -> int:
 
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
+    started = time.monotonic()                   # --wait's cap counts the launch too: it bounds the whole tool call
     if "--" not in argv:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
@@ -197,7 +199,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
-                         f"{waitcap.WAIT_CAP_S} s (20 minutes: no tool call blocks longer, Daniel, 19 Oct): past that it stops waiting, "
+                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer, Daniel, 19 Oct): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
                          "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
@@ -285,6 +287,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
+    ns.started = started
     if ns.wait_max is not None:
         try:
             if not ns.wait:
@@ -1114,7 +1117,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         print(f"research: {ns.on} holds it for disk before its runner starts (research disk-hold, in its launcher.log)", file=sys.stderr)
     print(f"research: workload cwd: {rec.get('workload_cwd') or remote.WORKLOAD_CWD_DEFAULT}", file=sys.stderr)
     if getattr(ns, "wait", False):
-        return wait_remote(run_id, run_dir, every_s=ns.wait_every, max_s=waitcap.max_s(ns.wait_max))
+        launched_s = time.monotonic() - getattr(ns, "started", time.monotonic())
+        return wait_remote(run_id, run_dir, every_s=ns.wait_every, max_s=max(1.0, waitcap.max_s(ns.wait_max) - launched_s))
     print(f"research: observe with `research fetch {run_id}`; the workload does not depend on this session staying alive", file=sys.stderr)
     return 0
 
