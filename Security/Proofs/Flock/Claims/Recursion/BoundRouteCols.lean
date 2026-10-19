@@ -200,7 +200,8 @@ theorem Bound.seen_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (m
     ((List.range (Bd.DE.V.k x)).map (coinSeq r))).eval H = d
   rw [hn, Nat.add_sub_cancel, range_map_getD_succ, List.range_succ, List.map_append, List.map_singleton,
     List.dropLast_concat, List.map_map]
-  simp only [List.zip_append, List.length_map, List.length_range, zip_map_range] <;> rfl
+  simp only [List.zip_append, List.length_map, List.length_range, zip_map_range]
+  rfl
 
 /-- **`IVStar`'s run on the representative**: the same decision, the same calls and the same columns of the opened
 view, where its last step reads no last coin. -/
@@ -259,7 +260,7 @@ noncomputable def deployRecC (Bd : Bound Coin Col T) (ivScope : Msg → Bool) (b
 
 /-- The inner view's run, at `deployRecC`, is `IVStar`'s run of the representative messages. -/
 theorem innerRun_C (H : Msg → Msg) (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool)
-    (b : Brings) (x : Msg) (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit) :
+    (b : Brings) (x : Msg) (r : Fin ((deployRecC Bd ivScope b).V.k x) → Coin) (ws : List Claims.Flock.Wit) :
     Claims.Recursion.innerRun H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) x r ws =
       run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val := by
   show run H (replay ((run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).seen.msgs.map
@@ -292,9 +293,11 @@ theorem callsLogColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd 
     intro e he
     rw [innerRun_C] at he
     apply h
-    rw [innerRun_bound H Bd decI ivScope b x r ws,
-      ← (Bd.run_nfC H hCF (xIOf x) (b.rd.msgs x ws) fun i => coinSeq r i.val).2.1]
-    exact he
+    have hv : (run H (replay (msgsC Bd b H x r ws)) Bd.IVStar (xIOf x) () fun i => coinSeq r i.val).vLog =
+        (Claims.Recursion.innerRun H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x r ws).vLog :=
+      (Bd.run_nfC H hCF (xIOf x) (b.rd.msgs x ws) fun i => coinSeq r i.val).2.1.trans
+        (congrArg Claims.Trace.vLog (innerRun_bound H Bd decI ivScope b x r ws)).symm
+    exact (congrArg (fun l => e ∈ l) hv).mp he
   · exact Or.inr h
 
 theorem innerAcceptsColl_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
@@ -327,9 +330,9 @@ theorem E_eval_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Boun
 
 /-- **`KSA` at `deployRecC` is `KSA` at the deployed record**: `E*`'s output is the same (`E_eval_C`), and the bound
 reads no inner view. -/
-theorem ksA_of_C {Col' T' : Type} [DecidableEq Col] [Zero Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
-    (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
-    (hCF : Bd.LastCoinFree H)
+theorem ksA_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
+    (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)
+    (DO : Claims.Flock.Deploy Coin Col' T') (hCF : Bd.LastCoinFree H)
     (h : Claims.Recursion.KSA H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO) :
     Claims.Recursion.KSA H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO := by
   intro decO hdec x Ω _ _ P
