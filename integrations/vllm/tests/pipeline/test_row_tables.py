@@ -145,10 +145,13 @@ def test_the_tables_do_not_depend_on_the_programs_row_order():
 def test_each_tables_root_is_the_cpu_references_under_its_serve_time_domain_and_its_chunks_carry_its_strings(monkeypatch):
     c, s, got = committed(monkeypatch)
     w = c.window
+    for step, ks in w.steps:
+        tabs = [w.row_tables[k] for k in ks]
+        assert b"".join(c.salts[t.port] for t in tabs) == CS.step_salts(ROW_KEY, step, sum(t.n for t in tabs))
     for t, tab in enumerate(w.row_tables):
         units = [row_of(rid, tab.engine_step, tab.op_path, tok) for rid, tok, _i in tab.rows]
         salts = c.salts[tab.port]
-        assert salts == CS.table_salts(ROW_KEY, tab.engine_step, w.places[t], tab.n)
+        assert len(salts) == 192 * tab.n
         ref = RT.commit(RT.table_domain(CTX, tab.engine_step, w.places[t], tab.n), [RT.s8_row(*s.x_of(u)) for u in units],
                         [salts[i * 192:(i + 1) * 192] for i in range(tab.n)])
         assert c.table_roots[tab.port] == ref.root and c.bc[tab.port] == b"".join(ref.strings) and c.table_public(t) == c.bc[tab.port]

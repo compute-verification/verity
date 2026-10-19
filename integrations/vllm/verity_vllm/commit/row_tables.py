@@ -50,10 +50,12 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
     """Engine step ``engine_step``'s root, from its int8 quantize outputs once all are written: ``outputs[op_path] = (rows, codes,
     scales)``, ``rows[b]`` batch row ``b``'s ``(request, token row)``, ``codes`` the (B, K) s8 codes and ``scales`` the (B,) f32
     scales (host copies).  Its tables go in ``serving_rows.table_key`` order, each table's rows by (request, token row), under
-    ``context`` (64 bytes: the live coin commitment's root) and salted under ``key``, the run's row key (32 bytes), which the
-    window's commit takes again as ``row_salt_key``."""
+    ``context`` (64 bytes: the live coin commitment's root) and salted by ``serving_rows.step_salts`` under ``key``, the run's row
+    key (32 bytes), which the window's commit takes again as ``row_salt_key``."""
     order = sorted(outputs, key=CS.table_key)
     rows, ys, domains = {}, {}, {}
+    ss = CS.step_salts(key, engine_step, sum(len(outputs[op][0]) for op in order))
+    at = 0
     for i, op in enumerate(order):
         ids, codes, scales = outputs[op]
         x = np.ascontiguousarray(np.asarray(codes, dtype=np.int8))
@@ -66,7 +68,7 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
             raise ValueError(f"{op}: a (request, token row) twice in one step")
         words = np.concatenate([x.view(np.uint8), s.view("<u4").view(np.uint8).reshape(-1, 4)], axis=1)[perm]
         rows[op] = np.ascontiguousarray(words).view("<u2")
-        ys[op] = CS.table_salts(key, engine_step, i, len(keys))
+        ys[op], at = ss[at:at + len(keys) * CS.SALT_BYTES], at + len(keys) * CS.SALT_BYTES
         domains[op] = RT.table_domain(context, engine_step, i, len(keys))
     roots, _bc = CS.commit_ports(domains, rows, {}, ys, workers=workers, schemas=dict.fromkeys(order, CS.TABLE_SCHEMA))
     tables = tuple((op, roots[op]) for op in order)
