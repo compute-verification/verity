@@ -30,6 +30,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
 | `tiers.py` | compute efficiency eta and the compute dampener D under the verification stack, per tier; `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what eta is most exposed to: ranges, tornados, elasticities, thresholds on 1/eta, and the closed forms of mu, nu and chi |
+| `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `figures.py` | the dampener's talk figures, to the evidence store |
 | `statement.py` | every number the Notion page "The compute dampener: claims, model and tiers" quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
