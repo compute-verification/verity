@@ -1,6 +1,6 @@
 """Render run A8's per-kind table and its gap lines (Markdown) from `a8_kinds.py`'s table and `a8.py`'s summaries.
 
-    python benchmarks/one_stage/a8_table.py --kinds kinds.json [--summary RUN_ID=a8/summary.json ...]
+    python benchmarks/one_stage/a8_table.py --kinds kinds.json [--summary RUN_ID=<run>/out ...]
 
 A row per computing kind (Const32 families, one gate each, left out): its root Calls, gates and share of the step's
 computing gates, the unit M0 was given, its ANDs and k_log, the lowering outcome, and from the audits whether its units were
@@ -12,8 +12,35 @@ acceptance.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
 from pathlib import Path
+
+
+STAGED = re.compile(r"^A8 staged (\S+): (\d+) units of .+? \(cap \d+\), (\d+) ANDs, k_log (\d+), unit twin \w+, "
+                    r"Call twin (\{.*\}), (\{'build'.*\})$")
+
+
+def load_run(path: Path) -> dict:
+    """An audit's summary.json (the file, or a run's ``out`` directory holding ``a8/summary.json``), else, for a run that
+    stopped after its audit record, one rebuilt from ``a8/audit.json`` and ``a8.log``'s staging lines, its negatives not run."""
+    if path.is_file():
+        return json.loads(path.read_text())
+    if (path / "a8" / "summary.json").exists():
+        return json.loads((path / "a8" / "summary.json").read_text())
+    a = json.loads((path / "a8" / "audit.json").read_text())
+    values, members = {}, []
+    for line in (path / "a8.log").read_text().splitlines():
+        m = STAGED.match(line)
+        if m:
+            f, n = m[1], int(m[2])
+            values[f] = {"staged": True, "n": n, "twin": ast.literal_eval(m[5])}
+            members.append({"name": f, "n": n, "ands": int(m[3]), "k_log": int(m[4])})
+    v = a.get("verdicts") or {}
+    return {"values": values, "members": members, "draw_counts": a.get("draw_counts"), "negatives": {}, "negatives_run": False,
+            "audit": {"accepted": a.get("accepted"), "verdicts": {x: y.get("accepted") for x, y in v.items()},
+                      "why": {x: y.get("why") for x, y in v.items() if y.get("accepted") is not True}}}
 
 
 def short(uid: str | None, n: int = 60) -> str:
@@ -105,13 +132,14 @@ def gap(f: str, r: dict, s: dict | None) -> str | None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kinds", required=True)
-    ap.add_argument("--summary", action="append", default=[], help="RUN_ID=PATH, an audit's summary.json (repeatable, oldest first)")
+    ap.add_argument("--summary", action="append", default=[],
+                    help="RUN_ID=PATH, an audit's summary.json or its run's out directory (repeatable, oldest first)")
     a = ap.parse_args()
     t = json.loads(Path(a.kinds).read_text())
     runs = []
     for x in a.summary:
         rid, _, path = x.rpartition("=")
-        runs.append((rid or path, json.loads(Path(path).read_text())))
+        runs.append((rid or path, load_run(Path(path))))
     kinds = {f: r for f, r in t["kinds"].items() if r.get("gates", 0) > 0 and not f.startswith("Const")}
     chosen = {f: pick(f, runs) for f in kinds}
     print("| kind | calls | gates | share | unit | ANDs | k_log | outcome | staged (twin) | M0 | Lean | run |")
@@ -143,9 +171,10 @@ def main() -> int:
         for rid, s in runs:
             au = s.get("audit") or {}
             neg = s.get("negatives") or {}
+            negs = ("negatives not run" if s.get("negatives_run") is False else f"negatives refused {sum(neg.values())} of {len(neg)}"
+                    + ("" if all(neg.values()) else " (not refused: " + ", ".join(x for x, y in neg.items() if not y) + ")"))
             print(f"- {rid}: members {[m['name'] for m in s.get('members', [])]}, draw {s.get('draw_counts')}, "
-                  f"audit accepted {au.get('accepted')}, negatives refused {sum(neg.values())} of {len(neg)}"
-                  f"{'' if all(neg.values()) else ' (not refused: ' + ', '.join(x for x, y in neg.items() if not y) + ')'}")
+                  f"audit accepted {au.get('accepted')}, {negs}")
     print("\nGaps:\n")
     for f, r in sorted(kinds.items(), key=lambda kv: -kv[1]["gates"]):
         g = gap(f, r, chosen[f][1])
