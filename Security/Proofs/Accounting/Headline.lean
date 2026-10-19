@@ -1,5 +1,6 @@
 import Proofs.Accounting.Headline.Encoding
 import Proofs.Accounting.Headline.FpG1
+import Proofs.Accounting.Headline.FpG1Equiv
 import Proofs.Accounting.Headline.Luck
 import Proofs.Accounting.Headline.Sm120
 import Proofs.Accounting.Headline.Sm120Measured
