@@ -25,8 +25,11 @@ Which form each takes:
   the menu heads a fresh word.
 * (I6) `FoldOpt` and `FillOpt` in the price form D-ideal's proof reads. FOLD-OPT's per-word kernel (the duo step
   `u = y ⊕ d ⊕ k`, `y' = u·a + z`, `z' = rotl(u, r) + y'` needs three instructions over the modeled ISA,
-  `benchmarks/pouw/theory/fold_opt.py`, #2240) is a mechanical fact; the multi-round residual, that no program folds
-  below the menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
+  `benchmarks/pouw/theory/fold_opt.py`, #2240; fx1's four, `benchmarks/pouw/theory/fold_opt_fx.py`) is checked, not
+  proved: single instructions over 32-bit words, and the multi-instruction searches exhaustively at width 4, which
+  covers 32-bit programs of reduction-commuting forms; for the rest (`IMAD.HI`, `LEA.HI`, `IMAD.WIDE`'s high word, any
+  rotation, so `z'` itself) it is the op-type argument. The multi-round residual, that no program folds below the
+  menu's price across rounds, is what stays assumed. `FanIn`, the sources the ISA lets an instruction read
   (every form, guarded), gives both at the fan-in menu's price (`Accounting.Guarantees.TS.FoldOptOfFanIn`,
   `FillOptOfFanIn`): for a fold or filler presented as a straight-line dataflow over the words it absorbs, priced at
   least the menu's routes of `a_k/m_k` a word.
@@ -93,8 +96,9 @@ def SideUnits (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 owned right fixed word has a head of the menu. -/
 def NoSum (A : Anatomy K T L U) : Prop := A.fixed ≤ ∑ h, A.words h
 
-/-- `accounting-ts-fold-opt` (assumed; its per-word kernel a mechanical fact). **FOLD-OPT_μ**: at every certificate,
-the run's fold is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
+/-- `accounting-ts-fold-opt` (assumed; its per-word kernel exhaustive at width 4, covering 32-bit programs of
+reduction-commuting forms, and the op-type argument for the rest). **FOLD-OPT_μ**: at every certificate, the run's fold
+is priced at least `(1 − μ_f)·N_w·φ*(π)`. -/
 def FoldOpt (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
   ∀ lam : R → ℝ, IsCert lam → (1 - Z.muF) * Z.Nw * Z.phiStar lam ≤ Z.G.price lam A.nfold
 
