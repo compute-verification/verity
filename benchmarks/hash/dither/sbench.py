@@ -30,7 +30,7 @@ Arms:
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
 its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's, under a CUDA
-profiler range and the NVTX range GATE_RANGE (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
+profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
 kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4).
 
@@ -151,7 +151,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 REF_OF = {"dither": "exact", "dither-side": "exact"}
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
-GATE_RANGE = "verity/dither/gate"   # kernels.py reads the dither worker's kernels inside it
+GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
 
 def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
@@ -200,7 +200,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.synchronize()
                 torch.cuda.profiler.start()
-                torch.cuda.nvtx.range_push(GATE_RANGE)
+                torch.cuda.nvtx.range_push(f"{GATE_RANGE}/{arm}")
             t, outs = gen(ps, GATE_TOKENS)
             if prof:
                 torch.cuda.synchronize()
