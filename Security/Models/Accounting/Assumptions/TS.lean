@@ -10,8 +10,9 @@ instructions (heads, ownership, copies); an assumption over a run is claimed for
 
 Which form each takes:
 
-* (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, rows VF3p-16 on VF3o-16),
-  checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet falsifies it.
+* (I1) `FacetCeilings`: a device-model assumption, scoped by device (sm_120 RTX PRO 6000, on the rows of the vector
+  its statement names), checked by measurement (Daniel, 8 Oct): a corpus program that runs faster than a facet
+  falsifies it.
 * (I2) and the uniform part of (I4): `WordsWritten`, the ISA's `ω` (P12). Lemma 2 (`Accounting.Guarantees.TS.OutputCount`)
   is its counting; the ISA fact that an instruction writes at most `ω` words is the assumption.
 * (I3) `ScalarRoute`: SCALAR-ROUTE at its floors `(q, q_T, b_T)`. QSTAR's joint statement, which gave them from
@@ -79,7 +80,8 @@ variable {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype T] [Fintype L] 
   [Fintype X]
 
 /-- `accounting-ts-facet-ceilings` (measured, device-scoped). **The measured facets are ceilings** for the run `P` on
-the stated device (sm_120 RTX PRO 6000; Π_G = VF3p-16 on VF3o-16, decision 73): the run's counts and cycles are
+the stated device (sm_120 RTX PRO 6000; `G` the measured vector its statement names, VF3s-16 for the measured
+headline, RT2-LOGIC-9): the run's counts and cycles are
 `≥ 0` and its clock is in `(0, f_max]`, every SM-clocked facet's load is at most the run's cycles (S_r), and every
 fixed-clock facet's load, priced at `f_max`, is at most `f_max` times the run's time. Rows take the best configuration
 measured plus a 2% margin; a joint row is a facet on the mixes measured, and beyond them it is a red-team
