@@ -12,19 +12,35 @@ The classes are DS-120's census classes (`benchmarks/pouw/facet_break/loads.py`'
 `machine_model/data/census/DS-120.csv` and `floors.csv`), with four that `isa_escape.py` attacks and `class_of` puts in
 no class: `BMMA168256` (mma.sync .b1), `IMMAS4` (mma.sync and mma.sp .s4), `REDUX` (redux.sync) and `VSIMD` (the SIMD
 video instructions, §9.7.20.2); `LDCU128`, LDCU.128, which `class_of` puts in UNI though it writes four uniform
-registers; the heads the census never probed: global stores (`STG32` … `STG256`), surface stores (`SUST`) and vote
-and match (`VOTE`); and the bulk transfers past sm_120's shared memory: `BULKMAX` and `BULKRED` (a copy or reduction
-up to sm_90a's and sm_100a's 227 KB) and `UTMAMC` (a multicast tensor copy, its box into up to 16 CTAs).
+registers; the heads the census never probed: `DMMA` (mma.sync .f64), global stores (`STG32` … `STG256`), surface
+stores and atomics (`SUST`, `SUATOM`) and vote and match (`VOTE`); and the bulk transfers past sm_120's shared memory:
+`BULKMAX` and `BULKRED` (a copy or reduction up to sm_90a's and sm_100a's 227 KB) and `UTMAMC` (a multicast tensor
+copy, its box into up to 16 CTAs).
 
-**An opcode's class.** `class_of` places the census's forms. Every other opcode that writes a 32-bit word is in the
-class of its unit at the next width up (a class's `words` bounds every form in it): LD and LDL in the LDG class of their
-width, ST and STL in the STG class, STS.32 and STS.64 in STS128, RED.E in RED32 or RED64, mbarrier operations (SYNCS) in
-ATOMS64, SULD in SULD1 or SULD4; the U-prefixed bulk and tensor-memory opcodes, which `class_of`'s uniform rule puts in
-UNI, in their bulk, tcgen05 or tensor-memory class (UBLKRED and UTMAREDG in TMAred512, UTMALDG in the UTMA class of its
-box, UBLKCP in UBLKCP4K, any larger in BULKMAX or BULKRED and a multicast one in UTMAMC, UTC*MMA in `Tc05`, UTCCP and
-UTCSHIFT in `Tmem`); BMMA, which it puts in XU, in BMMA168256; and every other lane instruction that writes at most two
-words a lane and multiplies nothing (P2R, R2P, IABS, SGXT, BMSK, S2R, CS2R, MOVM, ELECT, TXQ) in NOROW. An instruction
-that writes no 32-bit word (a SETP's predicate, a branch, a barrier, a fence) heads no word and is in no class.
+**An opcode's class.** `class_of` places the census's forms. Every other opcode that writes a 32-bit word (the
+instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Blackwell, which
+`benchmarks/pouw/theory/isa_table.py` places one by one) is in the class of its unit at the next width up (a class's
+`words` bounds every form in it):
+
+* memory: LD and LDL in the LDG class of their width; ST, STL and USTGR in the STG class; STS.32 and STS.64 in
+  STS128; STAS in DSMST4P; RED.E and UREDGR in RED32 or RED64; REDS in ATOMS32; LDGMC (a reducing load, four words a
+  lane at most) in ATOMG64; the mbarrier operations (SYNCS, SYNCSU, USYNCS) in ATOMS64.
+* bulk, the U-prefixed opcodes `class_of`'s uniform rule puts in UNI: UBLKRED and UTMAREDG in TMAred512, any larger in
+  BULKRED; UTMALDG and UTMASTG in the UTMA class of their box; UBLKCP in UBLKCP4K, any larger in BULKMAX, a multicast
+  one in UTMAMC; UMEMSETS in BULKMAX.
+* tensor: UTC*MMA in `Tc05`; LDT, LDTM, STT, STTM, UTCCP and UTCSHIFT in `Tmem`; BMMA, which `class_of` puts in XU, in
+  BMMA168256; DMMA in DMMA.
+* texture: SULD in SULD1 or SULD4, TXQ in TEX1, TMML in TEX2, TXD in TEX4.
+* warp and uniform: MATCH in VOTE; CREDUX in REDUX; UTCATOMSWS and every other U-prefixed opcode in UNI or UNI64
+  (`class_of`).
+* lane: FFMA2, FADD2, FMUL2, FSWZADD and the FH forms in FFMA; FSET, HSET2, FMNMX3, VHMNMX, VIADDMNMX and VIMNMX3 in
+  VIMNMX; VIADD, IADD32I, ISCADD, SHL and SHR in ALU; IDP, IDP4A and IMUL in IMAD; VISET in VSIMD; MOV64IUR in MOV64;
+  and every other lane instruction that writes at most two words a lane and multiplies nothing (P2R, R2P, IABS, SGXT,
+  BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC) in NOROW.
+
+An instruction that writes no 32-bit word (a SETP's predicate, a branch, a barrier, a fence, a prefetch or cache
+control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no document gives, are in
+no class yet: a head of either falsifies `Accounting.Assumptions.Isa.IsaComplete`.
 
 A row's `words` is its class's widest form's: a lane class two words a lane (`Row.lane`), an atomic that returns its
 old value its memory and register words together (CAS.128: four of each a lane, 256 a warp instruction), a load or
@@ -35,17 +51,18 @@ an instruction than the row (the atomics), a model reading `floors.csv` doesn't 
 
 namespace Accounting.Isa
 
-/-- **The mma.sync forms** (PTX ISA 9.4 §9.7.16): DS-120's MMA classes, `BMMA168256` and `IMMAS4`. -/
+/-- **The mma.sync forms** (PTX ISA 9.4 §9.7.16): DS-120's MMA classes, `BMMA168256`, `IMMAS4` and `DMMA` (mma.sync
+.f64). -/
 inductive Sync
   | IMMA16832 | IMMA16816 | IMMA8816 | IMMASP16864 | IMMASP16832 | MMA
   | HMMA16816 | HMMASP16832 | HMMA16816F16 | HMMA1688T | HMMA1684T
   | QMMA16832 | QMMASF16832 | QMMASP16864 | OMMASF16864
-  | BMMA168256 | IMMAS4
+  | BMMA168256 | IMMAS4 | DMMA
   deriving DecidableEq, Fintype, Repr
 
 /-- **The mma.sync rows** (§9.7.16.5.14, block scale §9.7.16.3, sparse §9.7.16.6): each m16n8 form writes its 32-bit
 accumulator, 128 words a warp instruction; m8n8k16 (IMMA.8816) 64; HMMA.16816.F16's f16 accumulator, two to a register,
-64. -/
+64; DMMA's m16n8 f64 accumulator, two registers an element, 256. -/
 def Sync.row : Sync → Row
   | .IMMA16832 => Row.mma .mma .s8 .s8 .s32 128
   | .IMMA16816 => Row.mma .mma .s8 .s8 .s32 128
@@ -64,9 +81,10 @@ def Sync.row : Sync → Row
   | .OMMASF16864 => Row.mma .mma .e2m1 .e2m1 .f32 128
   | .BMMA168256 => Row.mma .mma .b1 .b1 .s32 128
   | .IMMAS4 => Row.mma .mma .s4 .s4 .s32 128
+  | .DMMA => Row.mma .mma .f64 .f64 .f64 256
 
 /-- **The classes outside the tensor cores**: DS-120's other classes, `REDUX`, `VSIMD`, `LDCU128`, the global and
-surface stores and `VOTE`. -/
+surface stores, surface atomics and `VOTE`. -/
 inductive Base
   | UNI | UNI64 | LDCU128
   | ALU | IMAD | FFMA | HFMA2 | VIMNMX | F2FS | XU | SEL | NOROW | VSIMD
@@ -90,7 +108,7 @@ inductive Base
   | G4_16 | G4_32 | G4_256 | G4_1K
   | TEX1 | TEX2 | TEX4 | TEXBIL
   | TLD1 | TLD2 | TLD2D1 | TLD2D4 | TLD4G | TLD4w
-  | SULD1 | SULD4 | SUST | SURED
+  | SULD1 | SULD4 | SUST | SURED | SUATOM
   deriving DecidableEq, Fintype, Repr
 
 /-- **The rows outside the tensor cores**, family by family (`Family` cites each family's PTX sections):
@@ -106,7 +124,8 @@ inductive Base
 * `bulk` (§9.7.10.28.4–§9.7.10.28.5): its box's or copy's bytes over four, at most the shared memory's (99 KB on
   sm_120, 227 KB on sm_90a and sm_100a), and a multicast copy's times its CTAs (at most 16, `.multicast::cluster`).
 * `texture` (tex §9.7.12.3, tld4 §9.7.12.4, suld §9.7.13.1, sust §9.7.13.2, sured §9.7.13.3): its texels' or
-  elements' words. -/
+  elements' words; a surface atomic (SUATOM, CUDA Binary Utilities' "Atomic Op on Surface Memory") its old value's
+  and its memory words, at most four a lane. -/
 def Base.row : Base → Row
   | .UNI =>
     { fam := .uniform, exec := .uniform, arith := .mul, dataAddr := true, a := .s32, b := .s32, acc := .s32,
@@ -231,5 +250,6 @@ def Base.row : Base → Row
   | .SULD4 => Row.side .texture .async .convert true 128
   | .SUST => Row.side .texture .async .move true 128
   | .SURED => Row.side .texture .async .add true 32
+  | .SUATOM => Row.side .texture .async .add true 128
 
 end Accounting.Isa

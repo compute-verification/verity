@@ -4,7 +4,7 @@ import Definitions.Accounting.Isa.Classes
 # sm_120's instruction table (trusted)
 
 The RTX PRO 6000's (sm_120) instruction classes (note:20261019T0520Z-draft-mm-isa): the mma.sync forms and the classes
-outside the tensor cores (`Isa/Classes.lean`), 136 in all: DS-120's 122 census classes and the 14 `Isa/Classes.lean`
+outside the tensor cores (`Isa/Classes.lean`), 138 in all: DS-120's 122 census classes and the 16 `Isa/Classes.lean`
 adds. sm_120 has no wgmma, tcgen05 or tensor memory.
 -/
 

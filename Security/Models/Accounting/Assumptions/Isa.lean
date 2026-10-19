@@ -27,11 +27,12 @@ open Accounting.TS Accounting.Isa
 
 variable {K R T L U F X : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U]
 
-/-- `accounting-isa-complete` (PTX ISA 9.4's instruction index; the SASS opcode census, `opcode_probe`). **The class
-list is complete**: every owned right fixed committed word has a head (§1.3, Definition 2), and that head is an instance
-of a class of the table, which the labelling puts on a route (`on`) or on none (`stray`): the run's fixed words are at
-most its heads, class by class. A head that is an instance of no class of the table falsifies it: an opcode the census
-finds that neither `class_of` nor the classes `Isa/Classes.lean` adds to it place. -/
+/-- `accounting-isa-complete` (PTX ISA 9.4's instruction index; the CUDA Binary Utilities' instruction-set lists, §4.3
+Hopper and §4.4 Blackwell; the SASS opcode census, `opcode_probe`). **The class list is complete**: every owned right
+fixed committed word has a head (§1.3, Definition 2), and that head is an instance of a class of the table, which the
+labelling puts on a route (`on`) or on none (`stray`): the run's fixed words are at most its heads, class by class. A
+head that is an instance of no class of the table falsifies it: a word-writing opcode that neither `class_of` nor the
+map of `Isa/Classes.lean` places (today DECOMPRESS and SPARSIFY), or one the lists don't name. -/
 def IsaComplete (A : Anatomy K T L U) (H : Heads K T L U) : Prop :=
   A.fixed ≤ ∑ k, (H.stray k + ∑ h, H.on k h)
 
@@ -80,7 +81,8 @@ a bulk or tensor copy or reduction writes its box's or copy's bytes. -/
 def IsaRowsBulk (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Prop := RowsOf .bulk Tb A H
 
 /-- `accounting-isa-rows-texture` (PTX ISA 9.4 §9.7.12.3 tex, §9.7.12.4 tld4, §9.7.13.1 suld, §9.7.13.2 sust,
-§9.7.13.3 sured). **The texture rows hold**: a texture or surface instruction writes its texels' or elements' words. -/
+§9.7.13.3 sured; CUDA Binary Utilities' SUATOM). **The texture rows hold**: a texture or surface instruction writes its
+texels' or elements' words, and a surface atomic its old value's too. -/
 def IsaRowsTexture (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Prop := RowsOf .texture Tb A H
 
 /-- `accounting-isa-rows-warp` (PTX ISA 9.4 §9.7.10.6 shfl.sync, §9.7.15.10 vote.sync, §9.7.15.11 match.sync,
