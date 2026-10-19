@@ -1,29 +1,32 @@
-"""Compute efficiency of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
-needs, divided by the FLOP the adversary spends, monitored plus unmonitored. The adversary must still compute the
-necessary subcomputation, the counted multiplications (an updated weight times an activation or activation gradient).
+"""Compute efficiency eta of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
+needs, divided by the FLOP the developer spends, monitored plus unmonitored. The developer must still compute the counted
+multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
+"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and DESIGN.md's Glossary.
 
-Efficiency is a sum of four terms, each an upper bound under the model; ``STATUS`` says which steps are proved.
+eta <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
+proved.
 
-* Unmonitored compute trains at full efficiency.
-* The monitored compute residual (monitored compute that PoUW doesn't attest) trains at full efficiency unless memory
-  caps it. A server-window reads its starting state plus what enters during it, ``K_r = state + ingress L``, and
-  contains at most ``K_r Lambda(K_r) / b_a`` counted multiplications (``ThreadedReads`` per region), counting every gate
-  on the server, declared or not. The state is all memory; after a wipe, the on-chip storage no wipe reaches, plus the
-  proof of space's slack on the filled memory, plus what helpers refill within the read deadline; under exhaustion, the
-  HBM the declared workload doesn't hold plus the slack. The slack is set by the proof of space's timed rounds k:
-  rho^k <= delta certifies a held share rho, so the slack is 1 - delta^(1/k) (1/19 at k = 86 and delta = 1/100).
-  Ingress is line rate or, under network accounting, side channels plus certified timing plus the NCI-bounded declared
-  ingress ``alpha Phi``.
-* Declared compute trains at the thread bound, ``rho_T = b_a / (alpha Lambda(K))`` gates per counted multiplication with
-  ``Lambda(K) = max(e, 2K / (4 d b_w))``, or at the tighter partial-sum law when no dark compute can sum the declared
-  blocks' partial sums. The residual reads them on the server for free; unmonitored compute reads them over links (line
-  rate, or side channels plus readable declared egress under network accounting). A relay op reads ``2 b_p`` bits, and
-  the adversary relays only as many partial sums as buy more declared work than the relay's gates would train directly.
-* With sampled proofs at a budget, the adversary's pool of undetected wrong steps is ``A ln(1 / delta) / q`` per
-  identity, ``q = share / (overhead + replay)``, a lifetime constant (the cumulative form, on paper; Lean proves per-round
-  bounds), where ``A = F / (1 - p)`` is the luck factor that turns wrong outputs into skipped work. Each wrong step skips
-  its work and injects its output bits plus the choice of where,
-  worth at most the chord slope of the per-block thread bound per bit.
+* s, the unmonitored compute share, trains at full efficiency.
+* r, the monitored compute residual, is the share of monitored capacity outside the compute certificate (1 - W_cert/C):
+  idle and uncredited time, and engines PoUW doesn't credit. It trains at full efficiency unless the memory cap binds. A
+  spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
+  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedReads`` per window), declared or not. The state is all memory,
+  disks included unless they're unplugged; after a wipe, the wipe residual R: memory the fill doesn't reach, the proof of
+  space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
+  declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
+  delta = 1/100) plus the certificate's floor, the share of the store rebuildable from public data within the deadline.
+  The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
+  computation's novel intake, alpha F under NCI once the count check is in the ZK flow.
+* 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
+  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
+  compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
+  reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
+  reads 2 b_p bits, and the developer relays only as many partial sums as buy more declared work than the relay's gates
+  would train directly.
+* chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
+  A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay) (``Population.Exfil.tail_cum``),
+  where A, the luck factor, turns faulty outputs into skipped work. Each faulty proof block skips its work and injects its output
+  bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -41,47 +44,51 @@ YEAR = 3.156e7
 GB = 8e9
 #: Lemma M's audit window: the most a helper can add to a store under audit is the side channel over it
 T_AUDIT = 0.3635
-#: the band scheme's block, and the bits that name one, for the outsourcing attack on a wipe
+#: the proof-of-space band block, and the bits that name one, for the outsourcing attack on a wipe
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
-#: defaults: the Kimi K2 calibration and forward chain; compute-accounting's residual (CircuitWork, 0.744% at r = 1);
-#: 100,000 eight-GPU servers for a year (only the cheating pool, a lifetime constant, depends on the fleet); today's proof
-#: of space certificate (rho = 18/19, which k = 86 rounds certify at delta = 1/100) and memory-accounting's measured
-#: on-chip storage (3.05 GB on vy-nebius-2); today's uncharged declared egress; declared ingress held to alpha Phi (the
-#: design, once NET-35's count check is in the ZK flow; line rate until then); sampled proofs at a 1% sampling budget on top of
-#: serve-time commitments, at today's sparse-draw cost (about 35 GPU-s a draw), the planner's delta = 2^-40, and luck A = 8
+#: defaults: the Kimi K2 calibration and forward chain; the residual at PoUW's deficit (0.744%), the design target, which
+#: holds only if credited work fills every engine; 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
+#: today's proof-of-space certificate (rho_PoS = 18/19, which k = 86 rounds certify at delta = 1/100, plus the floor at the
+#: deployed D = 2) and the memory the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap); disks
+#: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
+#: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.0074,
-    "pous_rounds": 86.0, "on_chip_gb": 3.05, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
-    "f": 0.95, "pous_delta": 0.01, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 640.0, "host_gb": 2000.0,
-    "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
+    "pous_rounds": 86.0, "unfilled_gb": 51.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
+    "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0047, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
+    "host_gb": 1900.0, "disk_gb": 0.0,
+    "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
-    "luck": 8.0, "step_bits": 16.0, "ingress_x": 1.0,
+    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.667,
     "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
-    "nodes": 1e5, "node_flops": 1.58e16, "years": 1.0,
+    "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
 
 #: one entry per parameter: label, unit, slider range, log scale, whether the leftmost position means zero, and whether
 #: it is one of the few shown up front
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "residual", "main": True, "label": "Monitored compute residual r (PoUW deficit 0.74% if credited work fills every engine; filled GEMM windows about 0.4; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (today's 1/19 certificate: 86; under 1 GB: about 12,000)", "unit": "", "min": 10, "max": 1e6, "log": True},
-    {"key": "on_chip_gb", "main": True, "label": "On-chip storage no wipe reaches, per server (measured 3.05)", "unit": "GB", "min": 0.01, "max": 100, "log": True},
+    {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
     {"key": "b_w", "main": True, "label": "Compression: bits per updated weight", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "b_a", "main": True, "label": "Compression: bits per activation", "unit": "bit", "min": 0.1, "max": 16, "log": True},
     {"key": "f", "label": "Exhaustion: declared share of HBM", "unit": "", "min": 0, "max": 0.999, "log": False},
     {"key": "pous_delta", "label": "Proof-of-space failure probability per certificate", "unit": "", "min": 1e-12, "max": 0.5, "log": True},
-    {"key": "t_read", "label": "Wipe read deadline (helpers within it refill blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
+    {"key": "pous_floor", "label": "Proof-of-space certificate floor (0.47% at the deployed D = 2; 0 with labels streamed from the challenger)", "unit": "", "min": 1e-6, "max": 0.05, "log": True, "zero": True},
+    {"key": "disk_gb", "label": "Disk per server left in place and unwiped (0 when unplugged)", "unit": "GB", "min": 1, "max": 1e5, "log": True, "zero": True},
+    {"key": "t_read", "label": "Wipe read deadline (helpers within it refill proof-of-space blocks)", "unit": "s", "min": 1e-6, "max": 1e-1, "log": True},
     {"key": "wipe_s", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},
     {"key": "hbm_gb", "label": "HBM per server", "unit": "GB", "min": 80, "max": 4000, "log": True},
     {"key": "host_gb", "label": "Host memory per server (filled with proof of space)", "unit": "GB", "min": 1, "max": 10000, "log": True, "zero": True},
     {"key": "tau", "label": "Certified timing channel per server", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
-    {"key": "egress_decl", "label": "Declared egress dark compute can read (today 4.4e9; charged about 5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
+    {"key": "export", "label": "Export per server: committed values readable outside the declared computation (today 4.4e9; under the export rule about 2.5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
     {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
     {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
     {"key": "overhead", "label": "Sampled proofs: proving cost per unit of step work (sparse draws today 4.8e12; 512 per statement 1.7e10; batched throughput 1.6e8)", "unit": "x", "min": 1, "max": 1e14, "log": True},
@@ -90,11 +97,11 @@ SPEC = [
     {"key": "p_evade", "label": "Sampled proofs: certificate failure probability delta (planner 2^-40)", "unit": "", "min": 1e-15, "max": 0.99, "log": True},
     {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
-    {"key": "ingress_x", "label": "Declared ingress, as a multiple of alpha Phi (1 once the count check is in the ZK flow; line rate is about 6.5e5)", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
-    {"key": "K", "label": "NCI: novel bits per block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
-    {"key": "Gamma", "label": "NCI: gates per block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
+    {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
+    {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
     {"key": "d", "label": "Model: entry fee (smallest inner dimension)", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: share of training FLOP that are counted multiplications", "unit": "", "min": 0.05, "max": 1, "log": False},
@@ -103,7 +110,7 @@ SPEC = [
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
     {"key": "nodes", "label": "Fleet: servers", "unit": "", "min": 1e2, "max": 1e7, "log": True},
-    {"key": "node_flops", "label": "Fleet: server compute", "unit": "FLOP/s", "min": 1e15, "max": 1e17, "log": True},
+    {"key": "node_flops", "label": "Fleet: server compute (8 RTX PRO 6000s, FP8 dense)", "unit": "FLOP/s", "min": 1e15, "max": 1e17, "log": True},
     {"key": "years", "label": "Fleet: horizon", "unit": "yr", "min": 0.05, "max": 10, "log": True},
 ]
 
@@ -118,22 +125,27 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared compute, thread bound", "ThreadedThrottled is proved in Lean when the declared circuit contains the whole "
-     "reference circuit; the extension to dark gates (T1') is on paper. Rests on WeightsIncompressible and the Threaded "
-     "(d, e) premise, which nothing proves at Kimi's (2048, 4e4)."),
-    ("Declared compute, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption budget "
-     "is on paper. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
-    ("Memory cap on the residual", "Actual.Windows and ThreadedReads are proved; the composition is on paper and needs "
-     "reads counted by information rather than width (open). It also needs declared ingress held to alpha Phi, which holds "
-     "only once the per-window count check is a gated unit in the ZK flow (NET-35); until then ingress is line rate "
-     "(ingress_x about 6.5e5) and memory caps nothing."),
-    ("Memory a wipe leaves", "The slack of 1/19 is proved (SecureErasureMeetsFamily, ideal primitive, isolation; in no "
-     "lock). Unwipeable memory is declared, not measured. No theorem bounds help during a wipe; the helper term is an "
-     "attack."),
-    ("Exhaustion", "Lemma M is proved and locked per audit; no bound at every instant, which the memory cap needs."),
-    ("Cheated proof steps", "Per-round audit bounds are proved; the cumulative harm budget (PoUW's proved supermartingale is "
-     "the template), the per-block-cap thread theorem and a draw rate fixed against a public N are not. At a 1% total "
-     "budget today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
+    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declared circuit contains the "
+     "whole reference circuit; the extension to dark gates (T1') is being proved. Rests on WeightsIncompressible and the "
+     "Threaded (d, e) premise, which a worker is proving for a defined reference circuit."),
+    ("Declared computation, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption "
+     "budget (PS') is being proved. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
+    ("Monitored compute residual", "PoUW's deficit epsilon_W = 0.74% is proved (CircuitWork and CircuitCredit, draft "
+     "#2638) under named premises, for live coins; it is r only if credited work fills every engine. Uncredited capacity "
+     "is 23-42% of a filled GEMM window and up to 99.98% of decode's tensor pipe, and today's seeded code credits nothing."),
+    ("Memory cap", "Actual.Windows and ThreadedReads are proved; the composition and reads counted by information are "
+     "being proved. Needs the declared computation's novel intake held to alpha F, which holds only once the per-window "
+     "count check is a gated unit in the ZK flow (NET-35); until then intake is line rate (intake_x about 1.3e6) and memory "
+     "caps nothing."),
+    ("Wipe residual", "The slack is proved only in the ideal-permutation model, and the reference permutation is refuted "
+     "(a developer passes from 1.53% of the store), so tier 3 rests on a falsified assumption today. The certificate's "
+     "floor (0.47% at D = 2) can be freed at any k. Memory outside the fill is measured as gaps (on-chip 3.05 GB, GPU "
+     "reserve 18.4 GB, host 29.5 GB). No theorem bounds help during a wipe; the helper term is an attack."),
+    ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
+     "instant, which the memory cap needs."),
+    ("Cheating share", "The cumulative bound is proved (Population.Exfil.tail_cum, landing); the deployed draw's pressure "
+     "lemma, the per-block-cap thread theorem and a draw rate fixed against a public N are not. At a 1% total budget "
+     "today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
      "zero-work templates at a floor of one per window (floor_steps)."),
     ("Unmonitored compute", "No bound: it trains at full efficiency."),
 ]
@@ -164,13 +176,13 @@ def chain_rates(p: dict, steps: int = 400) -> list[tuple[float, float]]:
 
 
 def chain_products(rates: list[tuple[float, float]], R: float, Z: float) -> float:
-    """PS': the most chain products declared blocks reading ``R`` bits compute when dark gates absorb ``Z`` bits of their
+    """PS': the most chain products inference blocks reading ``R`` bits compute when dark gates absorb ``Z`` bits of their
     partial sums."""
     return min((R + (1 - mu) * Z) / rate for mu, rate in rates)
 
 
 def full_block_bits(p: dict) -> float:
-    """The reads at which one block's thread bound reaches all its work, ``kappa Gamma / 2`` counted multiplications."""
+    """The reads at which one inference block's thread bound reaches all its work, ``kappa Gamma / 2`` counted multiplications."""
     target = p["kappa"] * p["Gamma"] / 2
     linear = target * p["b_a"] / p["e"]
     if 2 * linear / (4 * p["d"] * p["b_w"]) <= p["e"]:
@@ -194,12 +206,13 @@ def windows_bound(p: dict, H: float, state: float, ingress: float, period: float
 
 
 def slack(p: dict) -> float:
-    """The share of filled memory a proof-of-space certificate leaves unaccounted: rho^k <= delta certifies rho."""
-    return 1 - p["pous_delta"] ** (1 / p["pous_rounds"])
+    """The share of filled memory a proof-of-space certificate leaves unaccounted: rho_PoS^k <= delta certifies rho_PoS,
+    and the certificate's floor (blocks rebuildable from public data within the deadline) can be freed at any k."""
+    return 1 - p["pous_delta"] ** (1 / p["pous_rounds"]) + p["pous_floor"]
 
 
 def ingress(p: dict, mech: dict) -> float:
-    return p["sigma"] + p["tau"] + p["ingress_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
+    return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
 
 def state_threshold(p: dict, mech: dict) -> float:
@@ -233,7 +246,7 @@ def evaluate(p: dict, mech: dict) -> dict:
 
     res_ops = p["residual"] * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
-    link = p["sigma"] + p["tau"] + p["egress_decl"] if mech["net"] else p["nic"]
+    link = p["sigma"] + p["tau"] + p["export"] if mech["net"] else p["nic"]
     B_max = 2 * p["b_p"] * res_ops + min(2 * p["b_p"] * U, p["nodes"] * H * link)
 
     rates = chain_rates(p)
@@ -242,12 +255,14 @@ def evaluate(p: dict, mech: dict) -> dict:
     def declared_at(B: float) -> float:
         return min(cap_T, share * chain_products(rates, alpha * C, B))
 
-    mem = (p["hbm_gb"] + p["host_gb"]) * GB
+    filled = (p["hbm_gb"] + p["host_gb"]) * GB
+    mem = filled + p["disk_gb"] * GB
     rate_in = ingress(p, mech)
-    help_bits = min(1.0, max(0.0, sigma_eff * p["t_read"] - BLOCK_NAME_BITS) / BLOCK_BITS) * mem
+    help_bits = min(1.0, max(0.0, sigma_eff * p["t_read"] - BLOCK_NAME_BITS) / BLOCK_BITS) * filled
     sl = slack(p)
-    wipe_state = (p["on_chip_gb"] + sl * (p["hbm_gb"] + p["host_gb"])) * GB + help_bits
-    envelope = (p["on_chip_gb"] + p["hbm_gb"] * (1 - p["f"] * (1 - sl)) + p["host_gb"] * sl) * GB + sigma_eff * T_AUDIT
+    wipe_state = (p["unfilled_gb"] + p["disk_gb"] + sl * (p["hbm_gb"] + p["host_gb"])) * GB + help_bits
+    envelope = ((p["unfilled_gb"] + p["disk_gb"] + p["hbm_gb"] * (1 - p["f"] * (1 - sl)) + p["host_gb"] * sl) * GB
+                + sigma_eff * T_AUDIT)
     per_server = math.inf
     if mech["wipes"]:
         per_server = min(per_server, windows_bound(p, H, min(wipe_state, mem), rate_in, p["wipe_s"]))
