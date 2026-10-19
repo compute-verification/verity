@@ -126,13 +126,15 @@ A2TC(S_X, x, 96)
   {.name = #nm, .kernel = (const void*)nm, .tpb = WTPB, .expect = EX, .counted = CNT, .warps = "1;15", \
    .iters = WITERS, .until = 2}
 
+// The OP_UNTIL loop's LDS is its stop poll, which a2u.py tells the two loops apart by.
+#define UNTIL_EX "I*ADD*=64,FFMA=64,LDS=1"
 static const OpProbe PROBES[] = {
-    P_A(a2_mix, "I*ADD*=64,FFMA=64;I*ADD*=64,FFMA=64", "FFMA"),
-    P_A(a2_tc_i0, "UTCIMMA=4;I*ADD*=64,FFMA=64", "UTCIMMA"),
-    P_A(a2_tc_i32, "UIMAD=16,ULOP3.LUT=16,UTCIMMA=4;I*ADD*=64,FFMA=64", "UTCIMMA"),
-    P_A(a2_tc_i64, "UIMAD=32,ULOP3.LUT=32,UTCIMMA=4;I*ADD*=64,FFMA=64", "UTCIMMA"),
-    P_A(a2_tc_i96, "UIMAD=48,ULOP3.LUT=48,UTCIMMA=4;I*ADD*=64,FFMA=64", "UTCIMMA"),
-    P_A(a2_tc_x96, "ULOP3.LUT=141,UTCIMMA=4;I*ADD*=64,FFMA=64", "UTCIMMA"),
+    P_A(a2_mix, "I*ADD*=64,FFMA=64,UIADD3=1,UISETP.NE.AND=1;" UNTIL_EX, "FFMA"),
+    P_A(a2_tc_i0, "UTCIMMA=4,UMOV=2,UIADD3=1,UISETP.NE.AND=1,NOP=1;" UNTIL_EX, "UTCIMMA"),
+    P_A(a2_tc_i32, "UIMAD=16,ULOP3.LUT=16,UTCIMMA=4,UMOV=2,UIADD3=1,UISETP.NE.AND=1;" UNTIL_EX, "UTCIMMA"),
+    P_A(a2_tc_i64, "UIMAD=32,ULOP3.LUT=32,UTCIMMA=4,UMOV=2,UIADD3=1,UISETP.NE.AND=1;" UNTIL_EX, "UTCIMMA"),
+    P_A(a2_tc_i96, "UIMAD=48,ULOP3.LUT=48,UTCIMMA=4,UMOV=2,UIADD3=1,UISETP.NE.AND=1;" UNTIL_EX, "UTCIMMA"),
+    P_A(a2_tc_x96, "ULOP3.LUT=134,UTCIMMA=4,UMOV=3,UIADD3=1,UISETP.NE.AND=1;" UNTIL_EX, "UTCIMMA"),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

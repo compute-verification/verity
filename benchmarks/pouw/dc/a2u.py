@@ -6,9 +6,10 @@ cycle, with the uniform datapath and a saturated tcgen05.mma beside saturated la
 Each probe has two timed loops: warp 0's fixed one (`iters` trips) and the OP_UNTIL one warps 1-15 run until warp 0
 stops (the one that polls the stop flag, an LDS). Both are counted in full from the run's SASS between the loop bounds
 the gate recorded (gate-build.json), so a block's warp instructions are fixed x iters + until x trips, and its issue a
-SMSP-cycle is that over 4 x the stop's cycles. A2u holds at a probe when that is at most 1 (NOP excluded, since ptxas
-pads with NOPs no warp may issue). `uniform_price` is what each added uniform instruction cost the lanes, in issue
-slots, against a2_tc_i0: 1 where the ceiling is tight, 0 where the uniform datapath issued for free.
+SMSP-cycle is that over 4 x the stop's cycles. An until warp may finish the trip it was in when the stop rose, so
+`issue_low` drops one trip a until warp; A2u fails at a probe only when that, NOP excluded (ptxas pads with NOPs no
+warp may issue), is above 1. `uniform_price` is what each added uniform-datapath instruction (U*, the UTCIMMA aside)
+cost the lanes, in issue slots, against a2_tc_i0: 1 where the ceiling is tight, 0 where it issued for free.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from pathlib import Path
 
 SASS_LINE = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)")
 UTC_CYCLES = 128  # SM clocks one UTCIMMA 128x256x32 holds the tensor pipe at the sheet's 8192 MACs an SM clock
+UNTIL_WARPS = 15  # sm100_a2u.cu: warps 1-15 of a 512-thread block
 BASE = "a2_tc_i0"
 
 
@@ -57,9 +59,9 @@ def roles(ls: list[dict[str, int]]) -> tuple[dict[str, int], dict[str, int]]:
 
 
 def issued(c: dict[str, int]) -> tuple[int, int, int]:
-    """(every instruction, NOP excluded, uniform-datapath ones) of one trip."""
+    """(every instruction, NOP excluded, uniform-datapath ones but the tensor op) of one trip."""
     n = sum(c.values())
-    return n, n - c.get("NOP", 0), sum(v for k, v in c.items() if k.startswith("U"))
+    return n, n - c.get("NOP", 0), sum(v for k, v in c.items() if k.startswith("U") and not k.startswith("UTC"))
 
 
 def analyze(out: Path) -> dict:
@@ -80,6 +82,8 @@ def analyze(out: Path) -> dict:
             reps.append({
                 "issue": statistics.median((f_all * it + u_all * tr) / (4 * st) for tr, st in blk),
                 "issue_nonop": statistics.median((f_nonop * it + u_nonop * tr) / (4 * st) for tr, st in blk),
+                "issue_low": statistics.median((f_nonop * it + u_nonop * max(tr - UNTIL_WARPS, 0)) / (4 * st)
+                                               for tr, st in blk),
                 "lanes": statistics.median(u_nonop * tr / (4 * st) for tr, st in blk),
                 "uniform": statistics.median(f_uni * it / (4 * st) for tr, st in blk),
                 "tensor": statistics.median(fixed.get("UTCIMMA", 0) * it * UTC_CYCLES / st for tr, st in blk),
@@ -87,7 +91,8 @@ def analyze(out: Path) -> dict:
             })
         med = {k: statistics.median(r[k] for r in reps) for k in reps[0]}
         res[name] = med | {
-            "issue_nonop_max": max(r["issue_nonop"] for r in reps), "reps": len(reps),
+            "issue_nonop_max": max(r["issue_nonop"] for r in reps), "issue_low_max": max(r["issue_low"] for r in reps),
+            "reps": len(reps),
             "fixed": fixed, "until": until, "fixed_uniform_a_trip": f_uni,
             "sm_mhz": statistics.median(m for t in ts if (m := (t["sm_mhz"]["during"] or t["sm_mhz"]["after"]))) if any(
                 (t["sm_mhz"]["during"] or t["sm_mhz"]["after"]) for t in ts) else None,
@@ -100,21 +105,21 @@ def analyze(out: Path) -> dict:
         added = r["uniform"] - base["uniform"]
         if added > 0:
             r["uniform_price"] = (base["lanes"] - r["lanes"]) / added
-    worst = max(res.values(), key=lambda r: r["issue_nonop_max"], default=None)
-    return {"probes": res, "max_issue_nonop": worst["issue_nonop_max"] if worst else None,
-            "a2u_holds": all(r["issue_nonop_max"] <= 1 for r in res.values())}
+    worst = max(res.values(), key=lambda r: r["issue_low_max"], default=None)
+    return {"probes": res, "max_issue_low": worst["issue_low_max"] if worst else None,
+            "a2u_holds": all(r["issue_low_max"] <= 1 for r in res.values())}
 
 
 def text(a: dict) -> str:
-    lines = [f"{'probe':<12} {'issue':>7} {'no-NOP':>7} {'max':>7} {'lanes':>7} {'uniform':>8} {'tensor':>7} "
-             f"{'u price':>8} {'MHz':>6}"]
+    lines = [f"{'probe':<12} {'issue':>7} {'no-NOP':>7} {'low':>7} {'low max':>7} {'lanes':>7} {'uniform':>8} "
+             f"{'tensor':>7} {'u price':>8} {'MHz':>6}"]
     for name, r in a["probes"].items():
         price = f"{r['uniform_price']:.3f}" if "uniform_price" in r else "-"
-        lines.append(f"{name:<12} {r['issue']:7.4f} {r['issue_nonop']:7.4f} {r['issue_nonop_max']:7.4f} "
-                     f"{r['lanes']:7.4f} {r['uniform']:8.4f} {r['tensor']:7.4f} {price:>8} "
+        lines.append(f"{name:<12} {r['issue']:7.4f} {r['issue_nonop']:7.4f} {r['issue_low']:7.4f} "
+                     f"{r['issue_low_max']:7.4f} {r['lanes']:7.4f} {r['uniform']:8.4f} {r['tensor']:7.4f} {price:>8} "
                      f"{r['sm_mhz'] or 0:6.0f}{' THROTTLED' if r['throttled'] else ''}")
-    lines.append(f"A2u {'holds' if a['a2u_holds'] else 'FAILS'}: the most warp instructions an SMSP-cycle, NOP "
-                 f"excluded, is {a['max_issue_nonop']:.4f}")
+    lines.append(f"A2u {'holds' if a['a2u_holds'] else 'FAILS'}: the most warp instructions an SMSP-cycle (NOP "
+                 f"excluded, one trip a until warp dropped) is {a['max_issue_low']:.4f}")
     return "\n".join(lines)
 
 
