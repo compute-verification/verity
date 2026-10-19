@@ -9,8 +9,9 @@ A masked session that does not return (it throws at a refused coin) is sent by `
 prover sends it once each of the session's sends is answered.
 
 * `feed_sim_ge`: fed at least as many answers as the program sends, `feed` returns the program's result.
-* `honestP_err`: fed `1 + rounds` answers (the session's sends are at most that many, `sessionPZk_sends`), at a session
-  that does not return at those answers, `honestP` sends `[]`; `honestPR_err` is the same for `honestPR`.
+* `honestP_stops`: fed answers at which the session stops having sent at most that many, `honestP` sends `[]`.
+  `honestP_err`: fed `1 + rounds` answers (the session's sends are at most that many, `sessionPZk_sends`), at a session
+  that does not return at those answers. `honestPR_stops` and `honestPR_err` are the same for `honestPR`.
 -/
 
 namespace FlockComplete
@@ -46,28 +47,19 @@ namespace FlockComplete.ZkTables
 
 open Flock FlockDeploy
 
-/-- **A masked session that does not return is sent as `[]`**: fed the answers `bs`, at least `1 + rounds` of them, where
-the session answered by `bs` does not return, the honest masked prover's message is `[]`. -/
-theorem honestP_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
+/-- **A masked session that stops within the answers is sent as `[]`**: fed the answers `bs`, where the session
+answered by `bs` stops having sent at most `|bs|`, the honest masked prover's message is `[]`. -/
+theorem honestP_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
-    (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
-    (bs : List Claims.Msg) (hl : 1 + rounds true spec sts ≤ bs.length)
-    (herr : ∀ r l, (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
-      (MaskRank.masksOf sts) (traces sts w) ω).go #[] ≠ (.ok r, l)) :
+    (bs : List Claims.Msg) {e : String} {L : Array Claims.Msg}
+    (hrun : (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
+      (MaskRank.masksOf sts) (traces sts w) ω).go #[] = (.error e, L)) (hl : L.size ≤ bs.length) :
     ((feed (prog x w ω) bs).eval H).1 = [] := by
   obtain ⟨bs', h1, h2⟩ := sessionPZk_sim H (fun k => bs.getD k []) spec (tabsOf sts) (MaskRank.masksOf sts)
     (traces sts w) ω #[]
-  generalize hY : (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
-    (MaskRank.masksOf sts) (traces sts w) ω).go #[] = res at h1 h2
-  obtain ⟨R, L⟩ := res
-  have hsend := sendsC_ran (sessionPZk_sends (fun k => bs.getD k []) (Claims.hOf H) spec sts (MaskRank.masksOf sts)
-    (traces sts w) ω hspec hm) hY
+  rw [hrun] at h1 h2
   dsimp only at h1 h2
-  obtain ⟨e, rfl⟩ : ∃ e, R = .error e := by
-    cases R with
-    | error e => exact ⟨e, rfl⟩
-    | ok r => exact absurd hY (herr r L)
-  rw [h2, Array.empty_append, List.size_toArray] at hsend
+  rw [h2, Array.empty_append, List.size_toArray] at hl
   simp only [Array.size_empty] at h1
   have hsim : (prog x w ω).sim H (fun k => bs.getD k []) 0 = (bs'.map (List.cons 0), []) := by
     unfold prog
@@ -85,6 +77,24 @@ theorem honestP_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims
   simp only [Nat.zero_add, map_getD_range] at key
   rw [key, hsim]
 
+/-- **A masked session that does not return is sent as `[]`**: fed the answers `bs`, at least `1 + rounds` of them, where
+the session answered by `bs` does not return, the honest masked prover's message is `[]` (`honestP_stops`; the
+session sends at most `1 + rounds`, `sessionPZk_sends`). -/
+theorem honestP_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
+    {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
+    (hspec : spec.tables.size = sts.size) (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
+    (bs : List Claims.Msg) (hl : 1 + rounds true spec sts ≤ bs.length)
+    (herr : ∀ r l, (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
+      (MaskRank.masksOf sts) (traces sts w) ω).go #[] ≠ (.ok r, l)) :
+    ((feed (prog x w ω) bs).eval H).1 = [] := by
+  rcases hY : (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
+    (MaskRank.masksOf sts) (traces sts w) ω).go #[] with ⟨R, L⟩
+  have hsend := sendsC_ran (sessionPZk_sends (fun k => bs.getD k []) (Claims.hOf H) spec sts (MaskRank.masksOf sts)
+    (traces sts w) ω hspec hm) hY
+  cases R with
+  | ok r => exact absurd hY (herr r L)
+  | error e => exact honestP_stops H x w ω hs bs hY (by omega)
+
 /-- **`honestPR` sends `[]` after a session that does not return**: at a history whose answers `bs`, at least
 `1 + rounds` of them, leave the session on the mask witness (`maskWOf`) not returning. -/
 theorem honestPR_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
@@ -100,6 +110,23 @@ theorem honestPR_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claim
     show ((feed (prog x (maskWOf x w ω.mask) ω) (hist.map Prod.snd)).eval H).1 = []
     rw [hh]
     exact honestP_err H x _ ω hs hspec hm bs hl herr
+  · rw [honestPR_stop ho]
+    rfl
+
+/-- **`honestPR` sends `[]` after a session that stops within the answers**: at a history whose answers `bs` leave the
+session on the mask witness (`maskWOf`) stopped having sent at most `|bs|`. -/
+theorem honestPR_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
+    {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
+    (hist : List (Claims.Msg × Claims.Msg)) (bs : List Claims.Msg) (hh : hist.map Prod.snd = bs) {e : String}
+    {L : Array Claims.Msg}
+    (hrun : (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
+      (MaskRank.masksOf sts) (traces sts (maskWOf x w ω.mask)) ω).go #[] = (.error e, L)) (hl : L.size ≤ bs.length) :
+    (((honestPR w).next x hist ω).eval H).1 = [] := by
+  cases ho : outerHit x (hist.map Prod.snd)
+  · rw [honestPR_next ho]
+    show ((feed (prog x (maskWOf x w ω.mask) ω) (hist.map Prod.snd)).eval H).1 = []
+    rw [hh]
+    exact honestP_stops H x _ ω hs bs hrun hl
   · rw [honestPR_stop ho]
     rfl
 
