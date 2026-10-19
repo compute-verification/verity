@@ -3,7 +3,9 @@
 measured 204.25 is wgli_redux's). RT-HOPPER-1 is a real escape only if the RS (or U8S8) form beside the same LI fold runs
 more than 2% faster than SS does; otherwise it is a model gap (the joint rows' default), not a hardware one. The
 `wgli_true` loops fold the wgmma's own accumulators after each wait (RT-HOPPER-8): their cycles a MMA against
-wgli_redux's say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own.
+wgli_redux's say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own:
+unordered (wgli_true), ping-pong on named barriers (wgli_pp, wgli_pp2) and double-buffered on two N128 tiles (wgli_db).
+A N128 wgmma counts as half a N256 one throughout. The facet check prices every loop on DC-90's joint rows.
 
     python rs.py OUT [--json PATH]
 """
@@ -18,22 +20,30 @@ PLAIN = 122.41   # the plain GEMM's SMSP-cycles a MMA on DC-90 (dc90-licpw-redux
 MARGIN = 0.02
 PAIRS = {"li": ("wgli_redux", "wgli_redux_rs", "wgli_redux_u8"), "imad": ("wgmix_imad_r256", "wgmix_imad_r256_rs"),
          "lop3": ("wgmix_lop3_r256", "wgmix_lop3_r256_rs"),
-         "true": ("wgli_true_w2", "wgli_true_w3", "wgli_pp_w2", "wgli_pp_w3")}
+         "true": ("wgli_true_w2", "wgli_true_w3", "wgli_pp_w2", "wgli_pp_w3", "wgli_pp2_w2", "wgli_pp2_w3",
+                  "wgli_db_w1", "wgli_db_w2")}
 # sm_90's census, DC-90: IGMMA_S8_N256's line and the line every other warp instruction carries on each joint row
 JOINT = {"JI90_0": (62.7407638, 0.98054536), "JI90_1": (66.93849, 0.919487525), "JI90_2": (121.566, 0.0822829491)}
 LANE = ("LOP3", "IMAD", "REDUX")   # the lane instructions a facet check counts; control and fences count nothing
 
 
+def n256(op: str) -> float:
+    """An IGMMA opcode's N256-equivalents: IGMMA.64x128x32 is half an IGMMA.64x256x32's MACs and words."""
+    return int(op.split(".")[1].split("x")[1]) / 256
+
+
 def facets(out: Path, rows: dict) -> dict:
-    """Each joint row's lower bound on a timed loop, SMSP-cycles a wgmma, over the loop's measured cycles: above 1, the
-    row isn't a lower bound there. Counts only the lane instructions LANE names, so a ratio is at most the row's."""
+    """Each joint row's lower bound on a timed loop, SMSP-cycles a N256 wgmma, over the loop's measured cycles: above
+    1, the row isn't a lower bound there. Counts only the lane instructions LANE names, so a ratio is at most the
+    row's; a narrower wgmma counts as its N256-equivalents, at IGMMA_S8_N256's line."""
     res = {}
-    for v in json.loads((out / "gate-build.json").read_text())["verdicts"]:
+    gate = out / "gate-build.json" if (out / "gate-build.json").is_file() else out / "probes" / "gate.json"
+    for v in json.loads(gate.read_text())["verdicts"]:
         p, loops = v["probe"], v["verdict"].get("loops") or []
         if p not in rows or len(loops) != 1:
             continue
         top = loops[0]["top"]
-        n_mma = sum(n for k, n in top.items() if k.startswith("IGMMA"))
+        n_mma = sum(n * n256(k) for k, n in top.items() if k.startswith("IGMMA"))
         n_lane = sum(n for k, n in top.items() if k.split(".")[0] in LANE)
         cycles = 4 / gmma(rows[p])
         res[p] = {"lane_a_mma": n_lane / n_mma, "cycles": cycles,
@@ -42,7 +52,8 @@ def facets(out: Path, rows: dict) -> dict:
 
 
 def gmma(row: dict) -> float:
-    return next(r for k, r in row["rates"].items() if k.split(":", 1)[1].startswith("IGMMA"))
+    """The loop's IGMMA rate in N256-equivalents a SM-clock."""
+    return next(r * n256(k.split(":", 1)[1]) for k, r in row["rates"].items() if k.split(":", 1)[1].startswith("IGMMA"))
 
 
 def read(out: Path) -> dict:
@@ -69,7 +80,7 @@ def read(out: Path) -> dict:
     if best and ss:
         res["verdict"]["honest"] = (f"the receipt's own loop runs at {best:.2f} SMSP-cycles a MMA, "
                                     f"{best / ss - 1:+.1%} on wgli_redux's {ss:.2f}")
-    if (out / "gate-build.json").is_file():
+    if (out / "gate-build.json").is_file() or (out / "probes" / "gate.json").is_file():
         res["facets"] = facets(out, rows)
         over = sorted(f"{p} {r} {f[r]:.4f}" for p, f in res["facets"].items() for r in JOINT if f[r] > 1)
         res["verdict"]["joint rows"] = ("not a lower bound at " + ", ".join(over)) if over else "a lower bound at every loop"

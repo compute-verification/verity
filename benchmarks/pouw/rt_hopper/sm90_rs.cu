@@ -5,8 +5,10 @@
 // honest LI-CP-W loop (wgli_redux: 4 wgmma, LI's 256 LOP3 + 256 IMAD, 4 checkpoints of 4 LOP3 and one redux.sync.xor,
 // then wait), and the interleaved IMAD and LOP3 points. The RS form's A fragment is loop-invariant, the cheater's best
 // case (no delivery). wgli_true (RT-HOPPER-8) is the honest loop folding the wgmma's own accumulators, after each
-// wait, and wgli_pp the same loop with its warpgroups ordered (ping-pong). Built and gated by
-// ../opcode_probe/probe.py; rs.sh runs it, rs.py reads it.
+// wait, wgli_pp the same loop with its warpgroups ordered (ping-pong: the next warpgroup's barrier is arrived after the
+// wait), wgli_pp2 with the barrier arrived right after the commit, and wgli_db one warpgroup double-buffering two N128
+// accumulators (fold one while the other's wgmma runs). Built and gated by ../opcode_probe/probe.py; rs.sh builds it
+// on a CPU node and times it on the H200, rs.py reads it.
 #include "../opcode_probe/probe.cuh"
 #include "../dc/dc.cuh"
 #include "../dc/probes/lanes.cuh"
@@ -47,10 +49,11 @@ DC_DEV void group4(int (&d)[128], const Tiles& t, const uint32_t (&a)[4]) {
   wgmma_commit();
 }
 
-DC_DEV uint32_t fold_acc(const int (&d)[128]) {
+template <int N>
+DC_DEV uint32_t fold_acc(const int (&d)[N]) {
   uint32_t x = 0;
 #pragma unroll
-  for (int i = 0; i < 128; i++) x ^= (uint32_t)d[i];
+  for (int i = 0; i < N; i++) x ^= (uint32_t)d[i];
   return x;
 }
 
@@ -116,22 +119,46 @@ DC_DEV void wg_mix(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
 }
 
+// The receipt's LI fold (RT-HOPPER-8): the 8 chains and their multipliers, N/2 pairs of a step's accumulators folded in
+// (y = (y ^ d0 ^ k) * a + d1: one LOP3 and one IMAD a pair), and a segment's checkpoint (the 8 chains XORed by 4 LOP3
+// and reduced by one redux.sync.xor).
+struct Li {
+  uint32_t y[8], m[8], k, cp = 0;
+  DC_DEV Li(int mode) : k(dc_mix32(blockIdx.x * 977u + threadIdx.x)) {
+#pragma unroll
+    for (int c = 0; c < 8; c++) {
+      y[c] = dc_mix32(threadIdx.x * 8u + c);
+      m[c] = dc_mix32(0xA0000000u + c + (uint32_t)mode) | 1u;
+    }
+  }
+  template <int N>
+  DC_DEV void fold(const int (&d)[N]) {
+#pragma unroll
+    for (int p = 0; p < N / 2; p++) {
+      uint32_t x;
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x) : "r"(y[p & 7]), "r"((uint32_t)d[2 * p]), "r"(k));
+      asm volatile("mad.lo.u32 %0,%1,%2,%3;" : "=r"(y[p & 7]) : "r"(x), "r"(m[p & 7]), "r"((uint32_t)d[2 * p + 1]));
+    }
+  }
+  DC_DEV void checkpoint() {
+    uint32_t x0, x1, x2, x3;
+    asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x0) : "r"(y[0]), "r"(y[1]), "r"(y[2]));
+    asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x1) : "r"(x0), "r"(y[3]), "r"(y[4]));
+    asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x2) : "r"(x1), "r"(y[5]), "r"(y[6]));
+    asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x3) : "r"(x2), "r"(y[7]), "r"(cp));
+    asm volatile("redux.sync.xor.b32 %0,%1,0xffffffff;" : "=r"(cp) : "r"(x3));
+  }
+  DC_DEV uint32_t sink() const { return cp ^ y[0] ^ y[7]; }
+};
+
 // wgli_true: the honest LI-CP-W loop with the receipt's data dependence (RT-HOPPER-8). A committed word at L = 32 is a
 // k32 prefix, which is the wgmma's accumulator and readable only after its wait, so each step issues one wgmma, waits,
-// LI-folds that step's 128 words into 8 chains (y = (y ^ d0 ^ k) * a + d1: one LOP3 and one IMAD a pair), XORs the 8
-// chains (4 LOP3) and reduces them by one redux.sync.xor. A warpgroup's fold can't overlap its own wgmma, only another
+// LI-folds that step's 128 words and checkpoints. A warpgroup's fold can't overlap its own wgmma, only another
 // warpgroup's: _w2 has 2 warpgroups a CTA (wgli_redux's), _w3 has 3. Same instructions a MMA as wgli_redux.
 template <class F>
 DC_DEV void wg_li_true(const OpArgs& a) {
   SETUP
-  const uint32_t k = dc_mix32(blockIdx.x * 977u + threadIdx.x);
-  uint32_t y[8], m[8];
-#pragma unroll
-  for (int c = 0; c < 8; c++) {
-    y[c] = dc_mix32(threadIdx.x * 8u + c);
-    m[c] = dc_mix32(0xA0000000u + c + (uint32_t)a.mode) | 1u;
-  }
-  uint32_t cp = 0;
+  Li li(a.mode);
   OP_BEGIN
   OP_LOOP(it) {
 #pragma unroll
@@ -140,40 +167,23 @@ DC_DEV void wg_li_true(const OpArgs& a) {
       F::mma(d, t, af, 1);
       wgmma_commit();
       wgmma_wait<0>();
-#pragma unroll
-      for (int p = 0; p < 64; p++) {
-        uint32_t x;
-        asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x) : "r"(y[p & 7]), "r"((uint32_t)d[2 * p]), "r"(k));
-        asm volatile("mad.lo.u32 %0,%1,%2,%3;" : "=r"(y[p & 7]) : "r"(x), "r"(m[p & 7]), "r"((uint32_t)d[2 * p + 1]));
-      }
-      uint32_t x0, x1, x2, x3;
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x0) : "r"(y[0]), "r"(y[1]), "r"(y[2]));
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x1) : "r"(x0), "r"(y[3]), "r"(y[4]));
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x2) : "r"(x1), "r"(y[5]), "r"(y[6]));
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x3) : "r"(x2), "r"(y[7]), "r"(cp));
-      asm volatile("redux.sync.xor.b32 %0,%1,0xffffffff;" : "=r"(cp) : "r"(x3));
+      li.fold(d);
+      li.checkpoint();
     }
   }
   wgmma_hold(d);
   OP_END
-  OP_SINK(fold_acc(d) ^ cp ^ y[0] ^ y[7] ^ threadIdx.x)
+  OP_SINK(fold_acc(d) ^ li.sink() ^ threadIdx.x)
 }
 
 // wgli_pp: wgli_true's loop with its W warpgroups taking turns at the tensor pipe, as CUTLASS's ping-pong kernel orders
-// its consumers: warpgroup g waits on named barrier 1 + g, issues its wgmma and waits for it, arrives on the next
-// warpgroup's barrier, and folds while the others' wgmma run. Unordered (wgli_true) the warpgroups can fall into one
-// phase, MMA together and fold together. Each barrier counts 256 threads: one warpgroup's arrive and the next's sync.
-template <class F, int W>
+// its consumers: warpgroup g waits on named barrier 1 + g, issues its wgmma, arrives on the next warpgroup's barrier
+// (EARLY: as soon as it has committed, so the next wgmma queues behind it; else once its own has finished) and folds
+// while the others' wgmma run. Each barrier counts 256 threads: one warpgroup's arrive and the next's sync.
+template <class F, int W, bool EARLY>
 DC_DEV void wg_li_pp(const OpArgs& a) {
   SETUP
-  const uint32_t k = dc_mix32(blockIdx.x * 977u + threadIdx.x);
-  uint32_t y[8], m[8];
-#pragma unroll
-  for (int c = 0; c < 8; c++) {
-    y[c] = dc_mix32(threadIdx.x * 8u + c);
-    m[c] = dc_mix32(0xA0000000u + c + (uint32_t)a.mode) | 1u;
-  }
-  uint32_t cp = 0;
+  Li li(a.mode);
   const uint32_t g = threadIdx.x / 128, mine = 1 + g, next = 1 + (g + 1) % W;
   if (g == W - 1) asm volatile("bar.arrive 1, 256;" ::: "memory");
   OP_BEGIN
@@ -184,26 +194,55 @@ DC_DEV void wg_li_pp(const OpArgs& a) {
       wgmma_fence();
       F::mma(d, t, af, 1);
       wgmma_commit();
+      if constexpr (EARLY) asm volatile("bar.arrive %0, 256;" ::"r"(next) : "memory");
       wgmma_wait<0>();
-      asm volatile("bar.arrive %0, 256;" ::"r"(next) : "memory");
-#pragma unroll
-      for (int p = 0; p < 64; p++) {
-        uint32_t x;
-        asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x) : "r"(y[p & 7]), "r"((uint32_t)d[2 * p]), "r"(k));
-        asm volatile("mad.lo.u32 %0,%1,%2,%3;" : "=r"(y[p & 7]) : "r"(x), "r"(m[p & 7]), "r"((uint32_t)d[2 * p + 1]));
-      }
-      uint32_t x0, x1, x2, x3;
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x0) : "r"(y[0]), "r"(y[1]), "r"(y[2]));
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x1) : "r"(x0), "r"(y[3]), "r"(y[4]));
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x2) : "r"(x1), "r"(y[5]), "r"(y[6]));
-      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x3) : "r"(x2), "r"(y[7]), "r"(cp));
-      asm volatile("redux.sync.xor.b32 %0,%1,0xffffffff;" : "=r"(cp) : "r"(x3));
+      if constexpr (!EARLY) asm volatile("bar.arrive %0, 256;" ::"r"(next) : "memory");
+      li.fold(d);
+      li.checkpoint();
     }
   }
   wgmma_hold(d);
   OP_END
   if (g == 0) asm volatile("bar.sync 1, 256;" ::: "memory");
-  OP_SINK(fold_acc(d) ^ cp ^ y[0] ^ y[7] ^ threadIdx.x)
+  OP_SINK(fold_acc(d) ^ li.sink() ^ threadIdx.x)
+}
+
+// wgli_db: the receipt's loop on two N128 tiles a warpgroup, double-buffered, so each step's fold overlaps the other
+// tile's wgmma: issue B's step, wait<1> (A's is done), fold A's 64 words; issue A's next, wait<1>, fold B's. Two N128
+// wgmma write one N256's words at its MACs, the same LI and checkpoints a N256-equivalent as wgli_true. _w1 has one
+// warpgroup a CTA, _w2 two.
+DC_DEV void wg_li_db(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  const Tiles t = fill_tiles(sm, a.mode);
+  int dA[64] = {}, dB[64] = {};
+  Li li(a.mode);
+  wgmma_fence();
+  wgmma_s8_n128(dA, t.da, t.db, 1);
+  wgmma_commit();
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int s = 0; s < 4; s++) {
+      wgmma_fence();
+      wgmma_s8_n128(dB, t.da, t.db, 1);
+      wgmma_commit();
+      wgmma_wait<1>();
+      wgmma_hold(dA);
+      li.fold(dA);
+      wgmma_fence();
+      wgmma_s8_n128(dA, t.da, t.db, 1);
+      wgmma_commit();
+      wgmma_wait<1>();
+      wgmma_hold(dB);
+      li.fold(dB);
+      li.checkpoint();
+    }
+  }
+  wgmma_wait<0>();
+  wgmma_hold(dA);
+  wgmma_hold(dB);
+  OP_END
+  OP_SINK(fold_acc(dA) ^ fold_acc(dB) ^ li.sink() ^ threadIdx.x)
 }
 
 OP_KERNEL(wg_s8_n256_a1, 256) { wg_alone<F_ss>(a); }
@@ -218,11 +257,16 @@ OP_KERNEL(wgmix_lop3_r256, 256) { wg_mix<F_ss, L_LOP3, 256>(a); }
 OP_KERNEL(wgmix_lop3_r256_rs, 256) { wg_mix<F_rs, L_LOP3, 256>(a); }
 OP_KERNEL(wgli_true_w2, 256) { wg_li_true<F_ss>(a); }
 OP_KERNEL(wgli_true_w3, 384) { wg_li_true<F_ss>(a); }
-OP_KERNEL(wgli_pp_w2, 256) { wg_li_pp<F_ss, 2>(a); }
-OP_KERNEL(wgli_pp_w3, 384) { wg_li_pp<F_ss, 3>(a); }
+OP_KERNEL(wgli_pp_w2, 256) { wg_li_pp<F_ss, 2, false>(a); }
+OP_KERNEL(wgli_pp_w3, 384) { wg_li_pp<F_ss, 3, false>(a); }
+OP_KERNEL(wgli_pp2_w2, 256) { wg_li_pp<F_ss, 2, true>(a); }
+OP_KERNEL(wgli_pp2_w3, 384) { wg_li_pp<F_ss, 3, true>(a); }
+OP_KERNEL(wgli_db_w1, 128) { wg_li_db(a); }
+OP_KERNEL(wgli_db_w2, 256) { wg_li_db(a); }
 
 #define S8 "IGMMA.64x256x32.S8.S8*=4"
 #define U8 "IGMMA.64x256x32.U8.S8*=4"
+#define S8H "IGMMA.64x128x32.S8.S8*=8"
 #define LI ",LOP3.LUT=272,IMAD=256,REDUX*=4"
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = PAT, .iters = 4096}
 static const OpProbe PROBES[] = {
@@ -240,6 +284,10 @@ static const OpProbe PROBES[] = {
     {.name = "wgli_true_w3", .kernel = (const void*)wgli_true_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
     P(wgli_pp_w2, S8 LI),
     {.name = "wgli_pp_w3", .kernel = (const void*)wgli_pp_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
+    P(wgli_pp2_w2, S8 LI),
+    {.name = "wgli_pp2_w3", .kernel = (const void*)wgli_pp2_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
+    {.name = "wgli_db_w1", .kernel = (const void*)wgli_db_w1, .tpb = 128, .expect = S8H LI, .iters = 4096},
+    P(wgli_db_w2, S8H LI),
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
