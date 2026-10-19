@@ -38,6 +38,7 @@ import Proofs.Flock.Claims.ZK.CutSession
 import Proofs.Flock.Claims.ZK.ExePlan
 import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.SimCommit
+import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
