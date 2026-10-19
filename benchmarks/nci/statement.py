@@ -56,8 +56,7 @@ RUNGS = {
     "Floor, one-minute verdict lag": FLOOR | {"lag_s": 60.0},
 }
 LADDER_TIERS = tuple(T.TIERS)
-#: the fit bound's wipe residuals, GB: the streamed-label rungs, and 1 GB with the servers' on-chip 3.05 GB on top
-#: (the GPUs' own about 1.6 GB, the rest host caches)
+#: the fit bound's wipe residuals, GB: the streamed-label rungs, and 1 GB with the GPUs' on-chip 3.05 GB on top
 FIT_WIPES = (13.0, 6.0, 4.05, 3.05, 1.0)
 FIT_TARGET = ("besiroglu", "405b")
 FIT_TIERS = ("T3", "T5")
@@ -490,8 +489,7 @@ def render(s: dict) -> str:
     out += [f"## The fit bound (a {target.upper()}-class target, `fit.FITS['{law}']`)", "",
             "`fit.row` at each wipe residual: D by the closed form (T4), and by the fit bound at central w_e (T4, and "
             "T5 with χ on top), at low and high w_e, and at 16 bits per trained weight; L, the window in wipe periods. "
-            f"{num(FIT_WIPES[2])} GB is 1 GB with the servers' on-chip 3.05 GB on top (the GPUs' own is about 1.6 GB, "
-            "the rest host caches).", ""]
+            f"{num(FIT_WIPES[2])} GB is 1 GB with the GPUs' on-chip 3.05 GB on top.", ""]
     out += table(["R_wipe, GB", "L", "D, closed form", "D, fit", "D, fit at T5", "D, fit at low w_e",
                   "D, fit at high w_e", "D, fit at 16 bits"],
                  [[num(r["R_wipe_gb"]), str(r["periods"]), *(num(r[k]) for k in (
