@@ -140,6 +140,12 @@ Daniel's, current. `.agents/skills/friction/SKILL.md` has the dated rulings behi
 
   There are no retries: a failed proof is a visible failure, and a retry never redraws. Outer proofs go through the
   firewall one at a time.
+- **Verifier cost: O(circuit description), never O(unrolled circuit)** (Daniel, 18 Oct). A verifier of record may do
+  work proportional to the descriptor it reads (its Definitions, nodes and references), never to the circuit it unrolls
+  to: no walk over every gate, batch member or scan iteration. Summarize once per specialized Definition and multiply
+  through batches and scans (`NciCheck.Desc`). An unrolled walk stays only as the reference a difftest holds the
+  verifier to. `tests/test_verifier_cost.py` refuses one in `verity/core/`'s Lean, with the walks still open in its
+  `ALLOWED`; `benchmarks/verifier_cost/` measures the cost.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
