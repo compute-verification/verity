@@ -61,7 +61,8 @@ Arms:
                  (provisional)): exact-fused's quantizer and GEMM serve y = dequant(z) and commit z, and a side stream runs each
                  call's A table (form 3), seeds and receipts of the noised product only; its tokens must equal exact's.
                  dither-a-h1r takes h1r's block or split receipts per call, dither-a-kh h1u.cu's kh_unit_ws (HB_H1U),
-                 dither-a the second where HB_H1U is set.  Each with -zy commits CA's z/y leaves (one hiding leaf a
+                 dither-a the second where HB_H1U is set, dither-a-hbk the K split's kh_one (HB_H1U_KSPLIT) for its
+                 receipts only.  Each with -zy commits CA's z/y leaves (one hiding leaf a
                  32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
                  builds every call's table between steps; -zyc the side stream each call's after its receipts),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
@@ -318,6 +319,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         h1u = os.environ.get("HB_H1U")
         unit, z, ao = DITHER_A[arm]
         unit = unit or ("kh" if h1u else "h1r")
+        if unit == "hbk":
+            h1u = os.environ["HB_H1U_KSPLIT"]
         a = engine_args(gpu_mem)
         DA.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], unit=unit,
                  h1u=h1u, z=z, ao=ao)
@@ -330,7 +333,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     raise ValueError(arm)
 
 
-DITHER_A = {f"dither-a{u}{z}{o}": (unit, zm, ao) for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"))
+DITHER_A = {f"dither-a{u}{z}{o}": (unit, zm, ao) for u, unit in (("", None), ("-h1r", "h1r"), ("-kh", "kh"), ("-hbk", "hbk"))
             for z, zm in (("", "row"), ("-zy", "zy"), ("-zyc", "zyc"), ("-y", "none")) for o, ao in (("", False), ("-ao", True))}
 
 

@@ -13,7 +13,8 @@ Side stream, forked after the quantizer (it reads only window-owned buffers): th
 window's form: DITHER_A_FORM, 3 unless set), its seeds (h1r version 0, from the window's salt and root(A_j), root(B_j))
 and its receipts of the noised product T = (A + N_A)(B + N_B)^T only, no peel and no z: h1r's block or split form per
 call (`unit="h1r"`: versions 3 and 4, wide where the call's column blocks outnumber the SMs, as dither-1s-mix's units)
-or h1u.cu's kh_unit_ws (`unit="kh"`), into a staging buffer.  At the forward's last call `dithera_commit` copies the
+or h1u.cu's kh_unit_ws (`unit="kh"`), or the K split build's kh_one (`unit="hbk"`, h1k where the call's live units
+fit, its z and y to scratch, read under a flagless copy of the step), into a staging buffer.  At the forward's last call `dithera_commit` copies the
 staging receipts into the plan's, which the receipt trees commit, unless the step's flags say no-write (F_NW_UNITS),
 and under F_FAULT flips bit FAULT_SHIFT of word 0 of unit 0's receipt of every call.  The side stream joins the serving
 stream at the forward's last call, and under piecewise graphs at every qkv call too (each piece's capture must join its
@@ -67,7 +68,7 @@ FORM = "ASK-71 A (provisional)"
 CAPTURES = ("gate", "control", "fault")
 LIB_ENV = DO.LIB_ENV
 LIB = "dithera"
-UNITS = ("h1r", "kh")
+UNITS = ("h1r", "kh", "hbk")
 # z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
 # (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
 # (bf16), 0 past m, which the epilogue writes as one record a unit and the window commits between steps ("zyc": the side
@@ -286,12 +287,13 @@ class Side:
             self.gemm_done = torch.cuda.Event()
             if z == "zy":
                 win.pre["z"] = self.zyset
-        if unit == "kh":
+        if unit in ("kh", "hbk"):
             if not h1u:
-                raise RuntimeError("dither-a's kh unit needs h1u.so (HB_H1U)")
+                raise RuntimeError(f"dither-a's {unit} unit needs h1u.so (HB_H1U, HB_H1U_KSPLIT for hbk)")
             h = self.h = C.CDLL(h1u)
             vp, u32 = C.c_void_p, C.c_uint
             h.kh_unit_ws.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp]
+            h.kh_one.argtypes = [vp, vp, u32, u32, u32, vp, vp, vp, vp, u32, vp, vp, vp, vp, vp, vp, vp, u32, vp]
             h.kh_ws_bytes.restype = C.c_ulonglong
             h.kh_ws_bytes.argtypes = [u32, u32, u32]
             h.kh_noise_blocks.restype = u32
@@ -304,11 +306,21 @@ class Side:
                 if units != (win.t // 32) * (n // 32) or int(h.kh_words(k)) != nw:
                     raise RuntimeError(f"linear {w}: the plan's {units} units of {nw} words, kh_unit_ws' "
                                        f"{(win.t // 32) * (n // 32)} of {int(h.kh_words(k))}")
+                if unit == "hbk" and (win.wt[w].stride(0) != k or win.slot[w].stride(0) != k):
+                    raise RuntimeError(f"linear {w}: kh_one takes row stride K")
                 self.seed0.append(s0)
                 self.nb.append(int(h.kh_noise_blocks(k)))
                 need = max(need, int(h.kh_ws_bytes(win.t, n, k)))
                 s0 += units
             self.ws = torch.empty((max(need, 64),), dtype=torch.uint8, device=dev)
+        if unit == "hbk":
+            # kh_one (the K split's h1k where the call's live units fit) for its receipts only: its z and y go to
+            # scratch, and it reads a copy of the step with no flags, since dithera_commit and dithera_fault apply the
+            # step's no-write and fault to the receipts as for the other units
+            nmax = max(n for n, _ in win.nk)
+            self.zs = torch.empty((2, win.t, nmax), dtype=torch.int32, device=dev)
+            self.ys = torch.empty((win.t, nmax), dtype=torch.bfloat16, device=dev)
+            self.s_unit = torch.zeros_like(win.S)
 
     def gemm(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, wt: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor):
         win = self.win
@@ -340,7 +352,7 @@ class Side:
                                    wt.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=self.zl,
                                    UR=ur, UC=uc, num_warps=warps, num_stages=stages, **EL.OPTS)
 
-    def units(self, w: int, M: int, st: int) -> int:
+    def units(self, w: int, M: int, st: int, s_w: torch.Tensor) -> int:
         win = self.win
         n, k = win.nk[w]
         tab = win.plan.table.data_ptr() + win.call_bytes * w
@@ -350,6 +362,13 @@ class Side:
         rc = win.r.lib.h1r_launch(tab, 1, win.units[w], self.ks1[w], win.salt.data_ptr(), win.step_base.data_ptr(),
                                   win.plan.seeds.data_ptr(), self.stage.data_ptr(), 0, 0, st)
         live = -(-min(M, win.t) // 32)
+        if self.unit == "hbk":
+            return rc or self.h.kh_one(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
+                                       win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
+                                       self.stage.data_ptr() + 4 * win.plan.offs[w][0], self.ws.data_ptr(),
+                                       auto_j(live * (n // 32), self.nb[w], self.sms), self.zs[0].data_ptr(),
+                                       self.zs[1].data_ptr(), self.ys.data_ptr(), None, win.scale[w].data_ptr(),
+                                       s_w.data_ptr(), self.s_unit.data_ptr(), min(M, win.t), st)
         return rc or self.h.kh_unit_ws(win.slot[w].data_ptr(), win.wt[w].data_ptr(), win.t, n, k,
                                        win.plan.seeds.data_ptr() + 8 * 16 * self.seed0[w], win.live.data_ptr(),
                                        self.stage.data_ptr() + 4 * win.plan.offs[w][0], self.ws.data_ptr(),
@@ -373,11 +392,11 @@ class Side:
             self.a_done.record(self.astream)
             self.side.wait_event(self.a_done)
             self.gemm(w, xq, s_a, wt, s_w, y)
-            rc = rc or self.units(w, M, st)
+            rc = rc or self.units(w, M, st, s_w)
         else:
             self.side.wait_event(self.fork)
             self.gemm(w, xq, s_a, wt, s_w, y)
-            rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st)
+            rc = win.a_call(w, win.slot[w], win.scale[w], st) or self.units(w, M, st, s_w)
         if not rc and self.z == "zyc":
             # the call's z/y leaves and their tree, after its receipts, once its GEMM has written the records
             self.gemm_done.record(main)
@@ -469,6 +488,8 @@ def side() -> Side:
 
         def before_a(self: DO.Window, m: int) -> None:
             before(self, m)
+            if SIDE[0].unit == "hbk":
+                SIDE[0].s_unit.copy_(torch.tensor([0, m, 0, 0], dtype=torch.int32))
             if self.cap:
                 SIDE[0].stage.view(torch.uint8).fill_(DF.POISON)
                 for x in SIDE[0].zy:
