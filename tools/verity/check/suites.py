@@ -1675,10 +1675,22 @@ def failing(out: Path, results: list[Result]) -> None:
     tmp.replace(failing_path(out))
 
 
+_stopping = False
+
+
+def _first_sigterm_stops(signum: int, frame: object) -> None:
+    """The first SIGTERM raises KeyboardInterrupt; a later one is dropped, since `uv run` forwards the SIGTERM the group got and the
+    second one would interrupt the stop the first started (INF-93)."""
+    global _stopping
+    if not _stopping:
+        _stopping = True
+        raise KeyboardInterrupt
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
-    signal.signal(signal.SIGTERM, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, _first_sigterm_stops)
     argv = sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv

@@ -5,7 +5,9 @@ emits span_start, runs CMD in its own process group with RESEARCH_RUN_DIR=D and 
 stdout/stderr tee'd to D/stdout.log / D/stderr.log (or inherited with --inherit-io),
 dumps the workload's Python stacks with py-spy when D has not changed for --stall-dump-s (_StallWatch),
 on timeout writes cancel_intent{actor: timeout} then SIGTERM -> grace -> SIGKILL with cancel_results, records rc/signal/pid/pgid in
-status.json, stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
+status.json; on a timeout, and on a `research cancel` (D/control/cancel, scope.CONTROL_CANCEL), ends every process of the run's own
+cgroup scopes and the run's processes outside its group the same way, SIGKILL once the grace is over, and records them in status.json
+`scope_end` and a `scope_ended` mark (scope.Sweep: never the runner or its sampler), stops the sidecar (SIGTERM, waits <= linger + 5 s), emits span_end{outcome}, runs the classifier, exits with CMD's status
 (128+signal when killed).  The sampler is never the reason the workload stops: a sampler start failure is recorded and CMD still runs.
 On a machine that caps each login session's memory, CMD never starts from a cgroup without a cap of its own (cgroup.uncapped): status
 failed, a no_memory_cap mark, exit 75.
@@ -32,6 +34,7 @@ from .classify import classify, write as write_failure
 from .events import Emitter, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
 from .procs import live_group, stat_fields
+from .scope import CONTROL_CANCEL, Sweep
 
 
 def _tele_argv() -> list[str]:
@@ -110,6 +113,15 @@ class _TimeoutControl:
                 print(f"[tele run] ignoring unparseable {self.path}: {e}", file=sys.stderr)
                 self._bad = raw
             return None
+
+
+def _cancel_request(attempt_dir: Path) -> dict[str, Any] | None:
+    """`research cancel`'s request (scope.CONTROL_CANCEL), once it is there and parses: {"grace_s", "actor", "reason", "scopes"}."""
+    try:
+        doc = json.loads((attempt_dir / CONTROL_CANCEL).read_text())
+        return doc if isinstance(doc, dict) and float(doc.get("grace_s")) >= 0 else None
+    except (OSError, ValueError, TypeError):
+        return None
 
 
 #: Seconds between the stall watch's looks at the attempt dir (a walk of every file in it).
@@ -249,6 +261,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         err_f = open(d / "stderr.log", "ab")
         stdout, stderr = out_f, err_f
     (d / OUT_DIR).mkdir(exist_ok=True)
+    (d / CONTROL_CANCEL).unlink(missing_ok=True)
     t_start, armed = time.monotonic(), clock()
     try:
         proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
@@ -274,6 +287,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     rc: int | None = None
     timeout = a.timeout
     ctl = _TimeoutControl(d)
+    sweep: Sweep | None = None          # set by a timeout or a cancel: the run's processes, ended once `deadline` has passed
+    deadline, stop_actor, stop_grace = 0.0, "timeout", a.grace
     stall = (_StallWatch(d, em, a.stage, a.stall_dump_s, list(a.log), lambda: pyspy.python_tree(proc.pid, starttime))
              if a.stall_dump_s > 0 else None)
     try:
@@ -297,27 +312,45 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 except Exception as e:      # the watch is never the reason the workload stops
                     em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
                     stall = None
+            if sweep is None and (req := _cancel_request(d)) is not None:
+                # research cancel sent SIGTERM to the run's group and scopes already; what is left at the end of its grace is ours to end
+                sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime, scopes=req.get("scopes") or [])
+                stop_actor, stop_grace = (req.get("actor") if req.get("actor") in CANCEL_ACTORS else "manual"), float(req["grace_s"])
+                deadline = clock() + stop_grace
+                em.mark(a.stage, "cancel_seen", actor=stop_actor, grace_s=stop_grace, reason=req.get("reason"))
             if timeout and clock() - armed >= timeout and not timed_out:
                 timed_out = True
                 _marker(d, "timeout", None, proc.pid, signal.SIGTERM, f"stage {a.stage} exceeded timeout_s={timeout}", None, True, a.job)
-                try:
-                    rc = proc.wait(timeout=a.grace)
-                    break
-                except subprocess.TimeoutExpired:
-                    _marker(d, "timeout", None, proc.pid, signal.SIGKILL, f"stage {a.stage} still alive {a.grace}s after SIGTERM", None, True, a.job)
-                    rc = proc.wait()
-                    break
+                if sweep is None:
+                    sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime)
+                    stop_actor, stop_grace, deadline = "timeout", a.grace, clock() + a.grace
+                    sweep.signal(signal.SIGTERM, skip=[st["pid"] for st in live_group(proc.pid)])
+            if sweep is not None and clock() >= deadline:
+                _marker(d, stop_actor, None, proc.pid, signal.SIGKILL, f"stage {a.stage} still alive {stop_grace:g}s after SIGTERM", None,
+                        True, a.job)
+                rc = proc.wait()
+                break
     except KeyboardInterrupt:
         _marker(d, "manual", None, proc.pid, signal.SIGTERM, "tele run interrupted (SIGINT)", None, True, a.job)
         rc = proc.wait()
     t_end = time.monotonic()
+    if sweep is None and (req := _cancel_request(d)) is not None:     # the cancel landed as the workload ended
+        sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime, scopes=req.get("scopes") or [])
+        stop_grace, deadline = float(req["grace_s"]), clock() + float(req["grace_s"])
+    scope_end = None
+    if sweep is not None:
+        scope_end = sweep.end(max(0.0, deadline - clock()), termed=True)
+        em.mark(a.stage, "scope_ended", **scope_end)
+        if not scope_end["empty"]:
+            print(f"[tele run] {a.stage}: {len(scope_end['left'])} of the run's process(es) outlived SIGKILL: {', '.join(scope_end['left'])}",
+                  file=sys.stderr)
     _end_leftovers(em, a.stage, proc.pid)
     sig = -rc if rc is not None and rc < 0 else None
     status_rc = 128 + sig if sig else rc
     outcome = "ok" if rc == 0 else "fail"
     em.span_end(a.stage, sid, outcome=outcome, rc=status_rc, signal=sig, timed_out=timed_out, refs=list(a.declared_output))
     set_status(d, "cancelled" if timed_out else ("done" if rc == 0 else "failed"), rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end,
-               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True)
+               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True, **({"scope_end": scope_end} if scope_end else {}))
     # ---- stop the sampler (it lingers by itself once the root pid is gone; SIGTERM makes it take final readings now)
     if sampler is not None:
         try:
