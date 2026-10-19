@@ -161,9 +161,10 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   none. The block issues at most one warp instruction an SMSP-cycle at every K (0.9996 at K = 32 to 135; the lanes alone
   1.00004), and each added uniform instruction costs the lanes 0.95 to 1.10 of a slot. The tensor starves as K grows
   (1.00 to 0.34) because the chain takes SMSP 0's slots (B200 `r20261019-055605-6cc2`). So A2u holds beside async on
-  the B200, and its joint row JI100_0 0.906 is below the measured ≈ 1, the conservative side. The H200 beside wgmma,
-  where ptxas lowers the chain to lanes, isn't measured at saturation. Pricing its uniform-beside-async route free, the
-  conservative treatment there, moves no headline (`eps`, `credit floor`, `operands free`, q* 1.22,
+  the B200, and its joint row JI100_0 0.906 is below the measured ≈ 1, the conservative side. sm_90 is MEASURED near
+  saturation, no dual-issue (`dc/probes/sm90_emp.cu` `emp_pack3`, `r20261019-064443-0ae6`: the chain uniform beside 4
+  wgmma s8 n128 a group, issue 0.87, each uniform instruction 1.08-1.19 SMSP-cycles). Pricing the H200's
+  uniform-beside-async route free anyway moves no headline (`eps`, `credit floor`, `operands free`, q* 1.22,
   `dither-2s-li-l32`): the H200 rises 0.131% → 0.198%. The B200 stays 0.905% either way (its headline binds the issue
   row, which sits above the async joint row). It breaches 1% only if the issue ceiling *itself* is discounted below
   ~0.012 of a slot, an >80× discount that decision 84 precludes and `a2u` measures absent.
