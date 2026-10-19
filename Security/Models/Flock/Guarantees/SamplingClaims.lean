@@ -14,7 +14,7 @@ namespace Flock.Guarantees
 
 /-- **The sampling claims are stated**: the tuple of the sampling claims (`KS`, `KSCount`, `Binding`, `Universal`,
 `FaultyBoundary`, `Complete`, `ScopeMatches`, `ZK`, `Bits`, `Efficient`, `Nontrivial`), the claims they add (`KSLinOn`,
-`BitsLin`, `ExtractOwnLe`) and the shared ones they instantiate (`ZKmalR`, `Flock.ListWithin`, `Complete`,
+`BitsLin`, `ExtractOwnLe`) and the shared ones they instantiate (`ZKmalRx`, `Flock.ListWithin`, `Complete`,
 `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the named assumptions (`StrictBirthday`,
 `ExpectedCR`) and `trustedBase`, equal to itself. -/
 def SamplingClaimsStated : Prop :=
@@ -22,7 +22,7 @@ def SamplingClaimsStated : Prop :=
     Claims.Sampling.FaultyBoundary, @Claims.Sampling.Complete, @Claims.Sampling.ScopeMatches, @Claims.Sampling.ZK,
     @Claims.Sampling.Bits, @Claims.Sampling.Efficient, @Claims.Sampling.Nontrivial,
     @Claims.Sampling.KSLinOn, @Claims.Sampling.BitsLin, @Claims.Sampling.ExtractOwnLe,
-    @Claims.ZKmalR, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
+    @Claims.ZKmalRx, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.Nontrivial,
     @Claims.StrictBirthday, @Claims.ExpectedCR, Claims.trustedBase)
   claims = claims

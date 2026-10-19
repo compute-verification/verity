@@ -36,6 +36,19 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
         T.table_read(4, 1)
 
 
+def test_a_read_has_its_boolean_form_up_to_max_words():
+    """`table_read` makes `TableRead{IB}x{EW}_v2` with the read (`verity.ml.circuits.boolean.table`, by which C-Flock lowers it) up
+    to `BT.MAX_WORDS` table words, and `gelu_tanh_bf16`'s and `tanh_rn`'s reads, past it, have none."""
+    from verity.ml.circuits.boolean import table as BT
+    from verity.ml.circuits.defs import REGISTRY
+
+    r = T.table_read(6, 1)
+    assert REGISTRY.defs["TableRead6x1_v2"] is BT.table_read(r, 6) and REGISTRY.defs["TableRead6x1_v2"].word is r
+    for name in ("gelu_tanh_bf16", "tanh_rn"):
+        p = T.table_read(*T.TABLES[name])
+        assert f"{p.name}_v2" not in REGISTRY.defs
+
+
 def test_a_program_reading_a_table_decodes_where_it_was_not_built(tmp_path):
     """`TableRead16x1_v1` comes from its lazy family in a process that never built a Definition reading it."""
     import json

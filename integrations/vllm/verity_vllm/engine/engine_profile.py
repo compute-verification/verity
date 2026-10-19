@@ -21,7 +21,6 @@ import json
 import os
 import platform
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -467,7 +466,3 @@ def canonical_json_bytes(doc: Any) -> bytes:
 
 def profile_id_of(manifest: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()[:12]
-
-
-def utc_stamp() -> str:
-    return time.strftime("%Y%m%dT%H%MZ", time.gmtime())
