@@ -128,6 +128,52 @@ def test_the_cheating_pool_does_not_grow_with_the_fleet():
     assert large["cheat_steps"] == pytest.approx(T.DEFAULTS["luck"] * math.log(1 / T.DEFAULTS["p_evade"]) / q)
 
 
+def test_luck_multiplies_skipped_work_but_not_injected_bits():
+    """A block that injects a chosen output fails whenever it is drawn, so ln(1/delta) (1/q + floor_steps) blocks inject
+    step_bits each, whatever the luck factor."""
+    p = T.DEFAULTS | {"floor_steps": 1e9}
+    lucky, unlucky = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"luck": 1.0}, T.TIERS["T5"])
+    assert lucky["cheat_steps"] == pytest.approx(8 * unlucky["cheat_steps"])
+    assert lucky["cheat"] == unlucky["cheat"] > 0
+    q = p["share"] / (p["overhead"] + p["replay"])
+    assert lucky["cheat_bits"] == pytest.approx(math.log(1 / p["p_evade"]) * (1 / q + 1e9) * 16)
+
+
+def _block_bound(p: dict, S: float) -> float:
+    top = p["block_mults"] * p["Gamma"]
+    de = S * max(p["e"], 2 * S / (4 * p["d"] * p["b_w"])) / p["b_a"] if S <= p["thread_bits"] else math.inf
+    return min(top, S * S / (2 * p["b_w"] * p["b_a"]), de)
+
+
+@pytest.mark.parametrize("over", [{}, {"thread_bits": 2.94e9}, {"thread_bits": math.inf}, {"K": 1e5},
+                                  {"block_mults": 0.3, "thread_bits": 1e11}, {"K": 5e8}, {"d": 1.0, "e": 1e6}])
+def test_the_chord_is_the_steepest_secant_of_one_block_bound(over):
+    """Over a fine grid of reads, and out to a finite reach, no secant from K beats the chord, and one comes within
+    0.1% of it."""
+    p = T.DEFAULTS | over
+    K, tb = p["K"], p["thread_bits"]
+    grid = [K * 10 ** (i / 4000) for i in range(1, 24001)] + [tb * (1 + 1e-12)]
+    for bits in (math.inf, 1e5, abs(tb - K), 3e8, 1e12):
+        reads = [S for S in grid if S <= K + bits] + ([K + bits] if bits < math.inf else [])
+        secants = [(_block_bound(p, S) - _block_bound(p, K)) / (S - K) for S in reads]
+        got = T.chord(p, bits)
+        assert max(secants) <= got * (1 + 1e-9)
+        assert max(secants) >= got * (1 - 1e-3)
+
+
+def test_an_injected_bit_buys_a_full_block_at_s_1():
+    """At the defaults (d, e)-threading stops at thread_bits, below S_1 = sqrt(2 b_w b_a Gamma), where (1, 0)-threading
+    first lets one block hold all its gates; with (d, e) to any reads and kappa Gamma / 2 a block, the chord is the
+    secant to the (d, e) bound's full reads."""
+    p = T.DEFAULTS
+    s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * p["Gamma"])
+    assert T.chord(p) == pytest.approx((p["Gamma"] - p["K"] * p["e"] / p["b_a"]) / (s_1 - p["K"]))
+    old = p | {"thread_bits": math.inf, "block_mults": p["kappa"] / 2}
+    S_full = math.sqrt(p["kappa"] * p["Gamma"] * p["d"] * p["b_w"] * p["b_a"])
+    assert T.chord(old) == pytest.approx((p["kappa"] * p["Gamma"] / 2 - T.region_cap(p, p["K"])) / (S_full - p["K"]))
+    assert T.chord(p | {"thread_bits": 2.94e9}) < T.chord(p) / 2
+
+
 def test_the_amplifier_multiplies_every_term():
     """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g (paper red team)."""
     for tier in ("T1", "T5"):

@@ -447,7 +447,7 @@ def nci(out: Path) -> dict:
         f"K = 2 d b_w e = {kink:.3g} bit ({kink / 8e6:.0f} MB; d = 2048, b_w = 2.5, e = 4e4) nu is linear in K, "
         f"above it quadratic. At the default K = 2e7 bit, nu = {nu0:.3g} (tiers.evaluate's declared term at T4 with "
         f"host CPUs bounded: {model:.3g}); at the kink nu = {nu_kink:.3g}; nu reaches the design residual r = 0.01 at "
-        f"K = {K_r:.3g} bit. b_a = 4, kappa = 0.655.")
+        f"K = {K_r:.3g} bit. b_a = {P['b_a']:g}, kappa = {P['kappa']:g}.")
     return {"files": save(fig, out, "5_nci_term"), "title": "NCI's term", "caption": caption,
             "quote": {"nu_default": nu0, "kink_bits": kink, "nu_kink": nu_kink, "K_where_nu_equals_0.01": K_r}}
 
@@ -489,9 +489,10 @@ def cheating(out: Path) -> dict:
     title(fig, r"The cheating share $\chi$ falls with the proving overhead")
     caption = (
         "The cheating share chi at T5 (sampled proofs at share = 1% of compute) against the proving cost per unit of "
-        "step work, log-log, from tiers.evaluate with host CPUs bounded (chi doesn't depend on r). The faulty blocks "
-        "the sampling accepts number luck x ln(1/delta) / q with q = share / (overhead + replay), luck 8, "
-        "delta = 2^-40, replay 1.1e5, step work 1.43e4 FLOP, 16 output bits per step. Marked: "
+        "step work, log-log, from tiers.evaluate with host CPUs bounded (chi doesn't depend on r). The blocks that "
+        "inject a chosen output and pass number ln(1/delta) / q with q = share / (overhead + replay), delta = 2^-40, "
+        "replay 1.1e5, 16 output bits each; a bit is worth the chord of one inference block's thread bound, with "
+        "(1, 0)-threading above 2.1e8 reads. Marked: "
         + "; ".join(f"{k}, {v['overhead']:.2g}: chi = {v['chi']:.2g}" for k, v in quote.items())
         + f". Reference lines: the design residual r = 0.01 and NCI's term nu = {nu:.2g}. Below the replay cost the "
         "overhead stops mattering. " + BASE)

@@ -66,6 +66,9 @@ RANGES = {
     "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
+    "thread_bits": (2.1e8, 2.94e9, "ThreadedOfLayered at 2.5-bit embedding columns for any reference circuit C1 "
+                                   "allows; the whole embedding table at 2.5 bits, under a refined layered theorem"),
+    "block_mults": (0.3, 1.0, "kappa / 2 if each block's counted share were the recipe's; 1, every gate countable"),
     "kappa_chain": (0.03, 0.3, "guess, around Kimi K2's dense path 7%"),
     "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
     "e_chain": (4096.0, 49152.0, "guess"),
@@ -113,7 +116,7 @@ CHECKS = [
     ("side channels 1e7", {"residual": 0.9, "sigma": 1e7}, "T4", "mu", "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = e"),
     ("K 1e9", {"K": 1e9}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
-    ("design", DESIGN, "T5", "chi", "pool above S_full / 28"),
+    ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),
     ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
     ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "lag_s": 0.0}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
@@ -122,7 +125,9 @@ CHECKS = [
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
                               "wipe_s": 1.0, "d": 65536.0}, "T3", "mu",
      "breaks: R_wipe < d b_w e, the cap floors at nu"),
-    ("proofs nearly free", {"overhead": 1.0, "replay": 1.0}, "T5", "chi", "breaks: pool below S_full / 28"),
+    ("whole embedding table", {"thread_bits": 2.94e9}, "T5", "chi",
+     "breaks: threading certified past S_1, the chord ends at thread_bits"),
+    ("proofs nearly free", {"overhead": 1.0, "replay": 1.0}, "T5", "chi", "breaks: the pool can't fill one block"),
 ]
 
 
@@ -164,14 +169,15 @@ def nu(p: dict) -> float:
 
 
 def chi(p: dict) -> float:
-    """The cheating share: a lifetime pool of A I ln(1/delta) ((overhead + replay) / share + floor_steps) faulty proof
-    blocks, each injecting b_bar bits worth sqrt(kappa Gamma / (d b_w b_a)) / 2 counted multiplications, over N F H."""
-    s_full = math.sqrt(p["kappa"] * p["Gamma"] * p["d"] * p["b_w"] * p["b_a"])
-    pool = (p["luck"] * p["identities"] * math.log(1 / p["p_evade"])
-            * ((p["overhead"] + p["replay"]) / p["share"] + p["floor_steps"]))
-    b_bar = p["step_bits"] + math.log2(math.e * 28 * p["Gamma"] / (p["step_flop"] * s_full))
+    """The cheating share: a lifetime pool of I ln(1/delta) ((overhead + replay) / share + floor_steps) injecting proof
+    blocks, each injecting step_bits bits worth (block_mults Gamma - K e / b_a) / (S_1 - K) counted multiplications,
+    S_1 = sqrt(2 b_w b_a block_mults Gamma), times 2 m / kappa, over N F H."""
+    top = p["block_mults"] * p["Gamma"]
+    s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * top)
+    pool = p["identities"] * math.log(1 / p["p_evade"]) * ((p["overhead"] + p["replay"]) / p["share"] + p["floor_steps"])
+    worth = (top - p["K"] * p["e"] / p["b_a"]) / (s_1 - p["K"])
     C = p["nodes"] * p["node_flops"] * p["years"] * T.YEAR
-    return pool * b_bar * math.sqrt(p["Gamma"] / (p["kappa"] * p["d"] * p["b_w"] * p["b_a"])) / C
+    return 2 / p["kappa"] * p["m"] * pool * p["step_bits"] * worth / C
 
 
 def bound(p: dict, tier: str) -> float:
@@ -334,7 +340,7 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
                 print(f"  no crossing ({cells}): {', '.join(keys)}")
     print("\nClosed forms against evaluate(): eta = s + (1 - s)(min(r + nu, mu) + chi), "
           "mu = 4 R lambda_in / (kappa d b_w b_a F),\nnu = 2 alpha Lambda(K) / (kappa b_a), "
-          "chi = pool b_bar sqrt(Gamma / (kappa d b_w b_a)) / (N F H)")
+          "chi = 2 m pool step_bits (block_mults Gamma - K e / b_a) / (kappa (S_1 - K) N F H)")
     print(f"{'probe':26} {'tier':4} {'term':4} {'evaluate':>9} {'closed':>9} {'ratio':>6}  regime")
     for c in checks:
         got, closed = c[c["term"]]

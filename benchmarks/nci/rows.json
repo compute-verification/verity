@@ -111,7 +111,7 @@
   "configuration": "all weights updated; rollouts generated with the fresh weights",
   "state": "dense natural delta, post-hoc 1-bit code",
   "inputs": {
-   "kappa": 0.9,
+   "kappa": 0.39,
    "b_w": "b_w.delta/rl:high",
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2048,
@@ -122,17 +122,19 @@
    "U_token_bits": 32000000000.0,
    "decode_flops": 0,
    "w_cut": 28672,
-   "crossings": 1,
-   "flops_per_token": 64000000000.0
+   "crossings": 2,
+   "flops_per_token": 316000000000.0
   },
   "chain": {
-   "kappa": 0.225,
+   "kappa": 0.0455,
    "d": 1536,
-   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. Priced at rollout cost: kappa = 2 x 7.2e9 / 6.4e10."
+   "path": "per layer q_a (7168 to 1536), q_b (1536 to 12288), o (8192 to 7168), shared-expert up (7168 to 2048) and down (2048 to 7168), forward only: 118M of the layer's 500M updated products, 7.2e9 per token over 61 layers. The routed experts and the backward pass are outside it: a chain names one weight per layer, so a backward layer would charge the forward's weights twice. kappa = 2 x 7.2e9 / 3.16e11."
   },
-  "notes": "Rollouts dominate RL compute and multiply fresh weights by activations, so kappa is high (attention aside). Rows are priced at rollout cost: crossings 1, 2 flops per active parameter per token.",
+  "notes": "kappa = 0.39 (kappa.py's ROWS): the update needs the backward through every sampled token, so the policy-gradient circuit per sampled token is pretraining's at the rollout's length. Its loss is the advantage times the sampled token's log-probability, the same softmax-minus-one-hot gradient as cross-entropy, and attention carries it back through the prompt. The minimal circuit is on-policy, the rollout's forward reused as the training forward: 2|M| = 1.24e11 per token over 3.16e11 gates per token at R1-Zero's 32,768-token cap (deepseek-2025-r1/3): the weight matmuls 1.90e11, attention's score and value products 1.23e11, Muon's step at 512 sequences a step 2.9e9 and the rest 6e8. 0.56 at 8k, 0.28 at 64k. R1-Zero's recipe adds forwards (deepseek-2025-r1/4): the reference model's for the KL term and a fresh one for the 15 of each rollout's 16 minibatches trained after the weights moved, 2.94 forwards a sampled token, which gives 0.47 at 32k (0.66 at 8k, 0.34 at 64k); the row takes the minimal circuit, the lower kappa. A group whose samples all score alike has zero advantage and needs no backward, which would raise kappa; none is assumed. The old 0.9 priced the rollout's forward alone (0.89 at 4k in kappa.py), but the update's backward has twice the forward's weight products. crossings 2: the backward crosses each cut too.",
   "sources": [
-   "shenfeld-2025-rls-razor"
+   "shenfeld-2025-rls-razor",
+   "deepseek-2025-r1",
+   "moonshotai-2025-kimi-k2-config"
   ],
   "capability": {
    "demonstrated": "broad",
@@ -280,7 +282,7 @@
   "configuration": "population 30 for 500 iterations over all weights (ES at Scale)",
   "state": "2.4e5 bits of seeds and fitness values",
   "inputs": {
-   "kappa": 0.9,
+   "kappa": 0.58,
    "b_w": "b_w.delta/rl:central",
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2048,
@@ -292,9 +294,9 @@
    "decode_flops": 1.56e+17,
    "w_cut": 28672,
    "crossings": 1,
-   "flops_per_token": 64000000000.0
+   "flops_per_token": 105000000000.0
   },
-  "notes": "decode = 1.5e4 perturbations x 10 flops x 1.04e12 = 1.6e17. With a committed noise table (only possible without a cap on the committed parameters), decoding costs 2 flops per parameter per direction: 3.1e+16.",
+  "notes": "kappa = 0.58 (kappa.py's ROWS): ES has no backward, so its circuit is each member's forward over its rollouts plus the seeded perturbations: 2|M| = 6.1e10 per token, the forward of the 3.05e10 active weights (each member's perturbed copy of the updated weights), over 1.05e11 gates per token at the RL row's 32,768-token rollouts: attention 4.1e10, the LM head's forward 2.3e9, the rest 3e8, and regenerating each of 30 perturbations three times an iteration (perturb, restore, update) over 30 x 200 rollouts (qiu-2025-es-at-scale/6) 5e6. ES at Scale sampled at most 3,000 tokens per response (qiu-2025-es-at-scale/5): 0.91 there, 0.89 at 4k. decode = 1.5e4 perturbations x 10 flops x 1.04e12 = 1.6e17. With a committed noise table (only possible without a cap on the committed parameters), decoding costs 2 flops per parameter per direction: 3.1e+16.",
   "sources": [
    "qiu-2025-es-at-scale"
   ],
@@ -401,10 +403,10 @@
   "model": "kimi-k2",
   "method": "Expert-specialized fine-tuning",
   "family": "fine-tuning",
-  "configuration": "10% of routed experts updated (ESFT); delta at the SFT rate",
+  "configuration": "ESFT-Token at p = 0.2: 10% of routed experts updated, carrying about 20% of a token's routed slots; attention, router, shared expert, embedding and LM head frozen; delta at the SFT rate",
   "state": "1e11 updated parameters",
   "inputs": {
-   "kappa": 0.067,
+   "kappa": 0.11,
    "b_w": "b_w.delta/sft:central",
    "b_a": "b_a.activation/boundary-training:central",
    "d": 2048,
@@ -412,15 +414,17 @@
    "c": 2,
    "n_updated": 100000000000.0,
    "U_bits": 10000000000.0,
-   "U_token_bits": 290000000.0,
+   "U_token_bits": 420000000.0,
    "decode_flops": 0,
    "w_cut": 28672,
    "crossings": 2,
-   "flops_per_token": 192000000000.0
+   "flops_per_token": 151000000000.0
   },
-  "notes": "A token touches the updated experts among its 8: about 10% of 2.9e10 active expert params x 0.1 bits.",
+  "notes": "kappa = 0.11 (kappa.py's ROWS): only the selected routed experts are updated (wang-2024-esft/5); the frozen weights are committed in theta, where WeightsIncompressible fails, so their products are in the denominator only, and they take no weight gradient or optimizer step. 2|M| = 1.69e10 per token, the forward and the backward to the activations of the 4.2e9 updated expert weights a token reaches (0.2 of its 8 routed slots, wang-2024-esft/4, in 60 MoE layers of 4.4e7 each), over 1.51e11 gates per token at ESFT's 4096-token sequences: the frozen weights' forward 5.3e10 and backward to the activations 5.5e10 (the LM head's included), the updated experts' weight gradients 8.5e9, attention 1.5e10, the LM head's forward 2.3e9, the rest 1.2e8, and AdamW over 1.0e11 updated weights at 32 x 4096 tokens a step 9e6 (wang-2024-esft/6, deepseek-2024-esft-config/1). The old 0.067 at 1.92e11 was 4 x 10% / 6: a uniform 10% of the active weights, with every weight's gradient in the work. ESFT-Gate's p = 0.1 of gate mass would put about 10% of the slots on updated experts: 0.058. The backward below the lowest updated expert (layer 1's MoE input and down, about 2e9 gates) is kept; dropping it gives 0.113. At 32k sequences 0.065. U_token = 0.2 x 2.1e10 routed active expert weights x 0.1 bits = 4.2e8.",
   "sources": [
-   "wang-2024-esft"
+   "wang-2024-esft",
+   "deepseek-2024-esft-config",
+   "moonshotai-2025-kimi-k2-config"
   ]
  },
  {
@@ -431,7 +435,7 @@
   "configuration": "the thread draft's dense example at FP4 weights and activations",
   "state": "full weights at 4 bits",
   "inputs": {
-   "kappa": 0.655,
+   "kappa": 0.61,
    "b_w": 4,
    "b_a": 4,
    "d": 3072,
@@ -443,14 +447,16 @@
    "decode_flops": 0,
    "w_cut": 49152,
    "crossings": 2,
-   "flops_per_token": 600000000000.0
+   "flops_per_token": 651000000000.0
   },
   "chain": {
-   "kappa": 0.278,
+   "kappa": 0.255,
    "d": 12288,
-   "path": "per layer q, o, up and down of a d_model = 12288 transformer with a 4x MLP, forward only: 10 d^2 of the layer's 12 d^2 products; kappa = 0.833 x 2 / 6."
+   "path": "per layer q, o, up and down of a d_model = 12288 transformer with a 4x MLP, forward only: 10 d^2 of the layer's 12 d^2 products, 8.3e10 per token over 55 layers; kappa = 2 x 8.3e10 / 6.51e11."
   },
-  "notes": "The draft's 'about 3e6 with FP4' took e = 7168, which is false: one MLP input value multiplies the up projection's 4 x 12288 = 49152 weights, so the thread bound is 6.9x weaker than the draft's. w_cut assumes d_model = 12288.",
-  "sources": []
+  "notes": "kappa = 0.61 (kappa.py's dense-100b): 2|M| = 4.02e11 per token, the forward and the backward to the activations of the 9.97e10 weights outside the embedding and LM head (55 layers of 12 d^2: q, k, v and o, and a 4x GELU MLP) plus the LM head's backward, over 6.51e11 gates per token: the weight matmuls 6.07e11, attention's score and value products 3.3e10 at 8k (5.3e11 at 128k) and the rest 3e8. The draft states no context schedule, so the row assumes Llama 3 405B's, the one reported dense frontier schedule (grattafiori-2024-llama3/3, /4): 252M tokens at 4k, then 8k, with about 800B of the 15.6T in six stages to 128k, taken as equal tokens at 8k x 16^(k/6); Llama 3's 128,256-entry vocabulary and AdamW. 0.644 at 4k, 0.627 at 8k, 0.35 at 128k. The draft's 'about 3e6 with FP4' took e = 7168, which is false: one MLP input value multiplies the up projection's 4 x 12288 = 49152 weights, so the thread bound is 6.9x weaker than the draft's. w_cut assumes d_model = 12288.",
+  "sources": [
+   "grattafiori-2024-llama3"
+  ]
  }
 ]
