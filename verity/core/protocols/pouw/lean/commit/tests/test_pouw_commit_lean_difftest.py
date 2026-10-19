@@ -1,13 +1,13 @@
-"""The difftest of PoUW's commitments against their Lean port (`PouwCommit`): the Python half.
+"""The Python held to PoUW's commitments in Lean (`PouwCommit`), PoUW's verifier of record (`pouw.verifier`).
 
 `tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
 `weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the draw
-keys and the work-weighted draws). `check` runs the Lean half
-in its Lean audit (`runs` in `lean-audit.json`): `PouwCommit/DifftestMain.lean` computes every case from the port and fails
-on any difference. The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's
-files alone, so the test here is what says the data is still what the Python computes: a change to the protocol's hashing
-changes the data, fails this test, and `check.py --update` records the new data, which makes `check` run the Lean half on it.
-The tests here also check that the cases reach every refusal, and that Lean differs from Python only by refusing.
+keys and the work-weighted draws), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
+case whose Python outcome is not the Lean's, naming the Lean's. `test_the_python_is_the_lean` runs it here on the cases
+this checkout writes, so a change to the Python that the Lean doesn't make fails with the Lean's verdict. `check` also runs
+it in the package's Lean audit (`runs` in `lean-audit.json`) on the data the record pins, whose pass is cached on the Lean
+package's files alone; `test_the_data_is_what_the_audit_pins` says the pinned data is still what the Python computes, and
+`check.py --update` records new data. The tests here also check that the cases reach every refusal.
 """
 
 from __future__ import annotations
@@ -17,9 +17,12 @@ import functools
 import hashlib
 import importlib.util
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
+import verity_difftest as D
 
 from verity.core.protocols.pouw.protocol import tagged
 
@@ -101,12 +104,25 @@ def test_the_salt_and_draw_cases_reach_every_branch():
     assert any(c["python"]["ok"] == [] and c["in"]["t"] > 0 for c in _of("pearl_draw") if "ok" in c["python"]), "none above 0"
 
 
-def test_lean_differs_only_by_refusing():
-    """Where a case says Lean's outcome is not Python's, Lean refuses it, and the case says why."""
-    named = [c for c in cases() if "lean" in c]
-    assert named
-    assert all("error" in c["lean"] and c["why"] for c in named)
-    assert any(c["python"] == {"ok": None} for c in named)
+def test_no_case_names_an_outcome_of_its_own():
+    """Every case is held to the Lean's outcome, none to one it names: an opening whose epoch is not an integer or whose
+    label is not a string, which Python's `==` once compared, is refused on both sides."""
+    assert all(set(c) == {"kind", "in", "python"} for c in cases())
+    odd = [c for c in _of("coins") if type(c["in"]["opening"].get("epoch", 0)) is not int
+           or type(c["in"]["opening"].get("label", "")) is not str]
+    assert odd and all(c["python"] == {"error": "DomainError"} for c in odd)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_the_python_is_the_lean(tmp_path):
+    """The Lean's outcome on every case this checkout writes is the Python's: what the package's Lean audit runs on the
+    pinned data, run here on the data the Python writes now, so a drift fails with the Lean's verdict in the message."""
+    exe = D.build(PACKAGE, "pouw-commit-difftest")
+    path = vectors.write(tmp_path)
+    p = subprocess.run([str(exe), str(path), str(len(cases()))], capture_output=True, text=True)
+    assert p.returncode == 0, f"the Python differs from the Lean, PoUW's verifier of record:\n{p.stderr}{p.stdout}"
+    assert p.stdout.strip() == f"difftest: {len(cases())} cases compared, 0 differences"
 
 
 def test_python_refuses_what_the_cases_never_hold():

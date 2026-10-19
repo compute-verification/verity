@@ -106,7 +106,7 @@ def _worker(cfg, bmap, rc=None, model=None):
 
     s = Stub()
     s._tp2_commit = {"rank": 1, "replay": cfg, "bmap": bmap, "com": types.SimpleNamespace(_layouts={}, weights=None, register_weights=lambda: {"root": "x"}),
-                     "eng": types.SimpleNamespace(model=model)}
+                     "eng": types.SimpleNamespace(model=model), "weights": model}
     return s
 
 

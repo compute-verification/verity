@@ -1,5 +1,8 @@
-"""Trusted code: the verifiers, every part with proven properties or on its way to them. C-Flock's executable verifier of
-record (`service/flock/`, Lean), the Python verifiers (`protocols`, with the integrity profile, and `claims`) and their Lean
-ports (`primitives`, `protocols`, `service`, `devices`, each held to today's Python by `difftest`). `Security/Models/` names
-the verifiers whose properties aren't proven yet. Core imports the parts of `verity.ml` that `tests/test_boundaries.py`'s
-`ALLOWED` lists, which are on the soundness path because core's verifiers read them; `verity.ml` never imports core."""
+"""Trusted code: the verifiers, every part with proven properties or on its way to them. Lean is the definition and the
+verifier of record (Daniel, 18 Oct; AGENTS.md "Design rules"): C-Flock's executable verifier (`service/flock/`), and the
+Lean in `primitives`, `protocols`, `service` and `devices`, which takes over each protocol from its Python verifier
+(`protocols`, with the integrity profile, and `claims`) by the 8 Oct procedure; `difftest` holds the Python that mirrors
+each one to the Lean. `Security/Models/` names the verifiers whose properties aren't proven yet. A verifier imports no
+`verity.ml` code: until its protocol switches, a Python verifier keeps only the edges into `verity.ml` that
+`tests/test_boundaries.py` froze (`CORE_ML_EDGES`), and what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never
+imports core."""

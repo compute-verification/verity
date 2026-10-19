@@ -190,6 +190,23 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
           "which sketches cost less to read than the blocks themselves, such as a table of precomputed sketches, is "
           "outside it", "Rate sketch store as blocks"),
+    # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
+    # a live coin drawn after its root commits its digest, the writers' choices for each append fixed before its coin
+    # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
+    # (Security/Models/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # encoding, and each coin keys a block apart (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
+    Entry("key-binding", "assumption",
+          "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
+          "the codec and the coins of earlier appends (the registration being append 0, whose coin is the seed; every "
+          "appended block keyed by b_j(c_a) = H(DOMAIN || seed || j || d_j || c_a), its append's 32-byte coin c_a drawn "
+          "once, after the append's root has committed every digest d_j), and for any layout of a pass's blocks fixed "
+          "apart from the encodings, the blocks the pass reads are within delta of uniform on every event; in the "
+          "ideal model a round is a random function on pairs {x, p - x} (rho(p - x) = p - rho(x), its output's "
+          "parity its input's Legendre symbol), so delta is at most the writers' advantage at anticipating an "
+          "append's key before its coin, the chance that two round inputs agree up to sign, and the words' values "
+          "at or above p; one live registration per node; a layout chosen from the encodings after their coins is "
+          "not covered",
+          "Key binding", "conjectured"),
     Entry("hash-derived-key", "assumption",
           "A key derived as counter-mode hash output over a public label is not in the 2^-64 fraction of keys for which the "
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
@@ -313,6 +330,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(L) at p under per-stage coins: in every round, at every stage, whatever the past, a unit of the stage that "
           "the cheater skips passes its proof with probability at most p over the stage's coin",
           "TS stage luck at p", "proven"),
+    Entry("accounting-ts-receipt-luck", "assumption",
+          "The receipt luck at pr: given the past, a deficient round whose deficient words are not all right keeps the "
+          "honest committed value with probability at most pr (½ at LEDGER case (b), two or more wrong places a set), "
+          "and a round at a unit whose fold the run skips passes with probability at most p₀ (½, B′'s value, per live "
+          "coin; the whole-unit guess bound 2^-64 is not granted)",
+          "TS receipt luck at pr", "conjectured"),
+    Entry("accounting-ts-operand-h-mu", "assumption",
+          "(H-μ) at the receipt's operands: given the past, a round's deficient words take any one value with "
+          "probability at most μ given a view of the cheater that decides the round's share (¾ in the headlines)",
+          "TS operand H-μ at μ", "conjectured"),
     Entry("accounting-ts-proofs-sound", "assumption",
           "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
           "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
@@ -324,6 +351,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+    Entry("accounting-ts-unit-fixed", "assumption",
+          "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
+          "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
+          "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
+          "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
+          "units not skipped whole over the rounds", "TS unit fixed", "proven"),
 )}
 
 

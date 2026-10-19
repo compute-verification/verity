@@ -1,8 +1,9 @@
-"""Sampled proofs' one-stage audit in Lean (`core_sampled_proofs`) against `one_stage`'s Python: the whole protocol through
-its own `serve` (`sampled-proofs-one-stage`, a `ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s),
-on drawn programs, laws, records, draws and verdicts, valid ones and one or two changes to each.
+"""`one_stage`'s Python held to sampled proofs' one-stage audit in Lean (`core_sampled_proofs`), its definition and verifier
+of record (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
+`ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), on drawn programs, laws, records, draws and
+verdicts, valid ones and one or two changes to each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
 
-The reference is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
+The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `two_stage.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's draw from a Spec's selection rule on
@@ -41,12 +42,12 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as PR
-from verity.core.protocols.profile import Stratified, Stratum
+from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, partition as P, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, draw_first,
-                                                            select_proof_units, select_replay_units)
+from verity.core.protocols.sampled_proofs.two_stage import (OwnRandomness, ReplayUnit, Stage, TwoStageLaw, check_probability,
+                                                            draw_first, select_proof_units, select_replay_units)
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -489,7 +490,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return ("undecided", "verifier of record") if all(v["accepted"] is True for v in ran) else ("reject", "verdict")
     profile = audit.profile(rec, e["draw"], p["delta"]).to_json()
     wrong = out["wrong_units"]
-    public = {"bound": wrong["bound"] if isinstance(wrong["bound"], int) else None, "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
@@ -709,6 +710,17 @@ def bound(j):
         raise D.Reject(str(e)) from None
 
 
+def bernoulli_bound(j):
+    j = _json(j)
+    _exactly(j, {"delta", "p", "population"}, "the input")
+    if not _nat(j["population"]):
+        raise D.Reject("population is not a natural number")
+    p, delta = ratio(j["p"]), ratio(j["delta"])
+    if not 0 <= p <= 1 or not 0 < delta < 1:
+        raise D.Reject("p is not in [0, 1] or delta not in (0, 1)")
+    return {"bound": Bernoulli(p).count_bound(j["population"], delta)}
+
+
 def _fixed_audit():
     """One valid audit whose verdicts the `verdict` piece replaces."""
     s = SETUPS[2]
@@ -851,15 +863,12 @@ def _record_input(j) -> Fraction:
 
 
 def audit_record_of(j) -> dict:
-    """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), the registered roots
-    the verdicts' own for the registration's values, and Bernoulli's float bound null, which the Lean leaves to Python."""
+    """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
+    roots the verdicts' own for the registration's values."""
     delta = _record_input(j)
-    out = audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
-                             j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
-                             audit.session_registered(j["verdicts"], j["registration"]))
-    if j["draw"].get("law") == "bernoulli" and out["wrong_units"]:
-        out["wrong_units"]["bound"] = None
-    return out
+    return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
+                              j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
+                              audit.session_registered(j["verdicts"], j["registration"]))
 
 
 def record(j):
@@ -1075,6 +1084,42 @@ def proof_units(j):
     """`select_proof_units`: each selected RU's index and the positions checked in it, in order, and the bytes read."""
     out, read = _two_stage_draw(j, "selected", select_proof_units)
     return {"read": read, "units": [[i, list(ps)] for i, ps in out.items()]}
+
+
+def two_stage_profile(j):
+    """`TwoStageLaw.profile` (`TwoStage.profile`) on `{"law", "class", "units", "n_r", "n_v", "delta", "facts"}`: its
+    `to_json` with δ the exact ratio, refused where it raises."""
+    j = _json(j)
+    _exactly(j, {"class", "delta", "facts", "law", "n_r", "n_v", "units"}, "the input")
+    law = _two_stage_law(j["law"])
+    if not isinstance(j["class"], str):
+        raise D.Reject("class is a string")
+    units = None if j["units"] is None else _rus(j["units"])
+    if not all(j[k] is None or _nat(j[k]) for k in ("n_r", "n_v")):
+        raise D.Reject("n_r and n_v are null or natural numbers")
+    delta, f = ratio(j["delta"]), j["facts"]
+    _exactly(f, {"covered", "drawn", "linked", "prescribed", "programs"}, "the facts")
+    if not (all(isinstance(f[k], list) and all(isinstance(x, str) for x in f[k]) for k in ("programs", "prescribed", "covered"))
+            and isinstance(f["linked"], bool) and isinstance(f["drawn"], dict) and all(_int(v) for v in f["drawn"].values())):
+        raise D.Reject("the facts are lists of strings, a boolean and an object of integers")
+    try:
+        p = law.profile(j["class"], units, n_r=j["n_r"], n_v=j["n_v"], delta=delta, **f)
+    except (ValueError, KeyError) as e:
+        raise D.Reject(str(e)) from None
+    return {**p.to_json(), "delta": str(delta)}
+
+
+def check_probability_of(j):
+    """`check_probability` (`TwoStage.checkProbability`) on `{"law", "class", "n_v"}`: `{"p"}`, refused where it raises."""
+    j = _json(j)
+    _exactly(j, {"class", "law", "n_v"}, "the input")
+    law = _two_stage_law(j["law"])
+    if not isinstance(j["class"], str) or not _nat(j["n_v"]):
+        raise D.Reject("class is a string and n_v a natural number")
+    try:
+        return {"p": str(check_probability(law, j["class"], j["n_v"]))}
+    except (ValueError, KeyError) as e:
+        raise D.Reject(str(e)) from None
 
 
 def hello(j):
@@ -1716,6 +1761,16 @@ BOUND = D.Port(PIECES, "bound", bound, st.one_of(
               st.sampled_from([{"k": 1, "name": "", "size": 2}, {"k": 3, "name": "z", "size": 2}, {"k": 1, "name": "a", "size": 2},
                                {"k": True, "name": "z", "size": 2}, {"name": "z", "size": 2}, {"k": 1, "name": 5, "size": 2}])),
     st.builds(lambda d: {"delta": d, "strata": []}, DELTA), JSON), package=PACKAGE)
+PROBABILITY = st.builds(lambda d, n: str(Fraction(min(n, d), d)), st.integers(1, 1000), st.integers(0, 1000))
+BERNOULLI_BOUND = D.Port(PIECES, "bernoulli_bound", bernoulli_bound, st.one_of(
+    st.builds(lambda n, p, d: {"delta": d, "p": p, "population": n}, st.integers(0, 5000), PROBABILITY, DELTA),
+    st.builds(lambda n, p, d: {"delta": d, "p": p, "population": n}, st.integers(0, 5000),
+              st.sampled_from(["0", "1", "1/2", "1/1000", "999/1000"]), DELTA),
+    st.builds(lambda n, p, d: {"delta": d, "p": p, "population": n},
+              st.one_of(st.integers(0, 50), st.sampled_from([-1, True, "3", None])),
+              st.one_of(PROBABILITY, st.sampled_from(["3/2", "2/4", "-1/2", "1/0", "a", 1, None])),
+              st.one_of(DELTA, st.sampled_from(["0", "1", "1/1", "3/2", "a"]))),
+    JSON), package=PACKAGE)
 VERDICT_VALUE = st.sampled_from([True, False, None, 1, 0, "yes", [], {}, [0], ""])
 VERDICTS = st.dictionaries(st.sampled_from(["lean", "upstream", "rust"]), st.one_of(
     st.fixed_dictionaries({"accepted": VERDICT_VALUE, "of_record": VERDICT_VALUE}),
@@ -2139,6 +2194,42 @@ PROOF_UNITS = D.Port(PIECES, "proof_units", proof_units, st.one_of(*[two_stage_c
                      package=PACKAGE)
 
 
+@st.composite
+def two_stage_profile_cases(draw) -> dict:
+    """`two_stage_cases`' law and RUs, mostly for a class that has RUs: with them and no counts or the class's own, or
+    without them and its counts, or with them and a count one off; then δ and the facts. Sometimes one change: `drawn`
+    keyed by another level, negative or not an integer, the facts out of form, or δ not in (0, 1) or not a ratio."""
+    case = draw(two_stage_cases("units"))
+    rus = case["units"] if isinstance(case["units"], list) else []
+    present = sorted({u[1] for u in rus if isinstance(u, list) and len(u) == 3 and isinstance(u[1], str)})
+    cls = draw(st.sampled_from(present if present and draw(st.integers(0, 7)) else RU_CLASSES))
+    mine = [u for u in rus if isinstance(u, list) and len(u) == 3 and u[1] == cls]
+    n_r, n_v = len(mine), max((u[2] for u in mine if _nat(u[2])), default=0)
+    mode = draw(st.integers(0, 9))
+    counts = ((draw(st.sampled_from([None, n_r])), draw(st.sampled_from([None, n_v, n_v + 1]))) if mode < 6 else
+              (n_r, n_v) if mode < 8 else (n_r + 1, None) if mode == 8 else (None, max(n_v - 1, 0)))
+    change = draw(st.integers(0, 15))
+    facts = {"programs": draw(st.lists(st.sampled_from(["p0", "p1"]), max_size=2)),
+             "prescribed": draw(st.lists(st.sampled_from(["prompt", "weights"]), max_size=3)),
+             "linked": draw(st.booleans()), "covered": draw(st.lists(st.sampled_from(["c", "d"]), max_size=3)),
+             "drawn": draw(st.sampled_from([{}, {"replay": draw(st.integers(0, 5))}]))}
+    if change == 1:
+        facts["drawn"] = draw(st.sampled_from([{"unit": 1}, {"replay": -1}, {"replay": True}, {"replay": "1"}, []]))
+    if change == 2:
+        facts = draw(st.sampled_from([{}, {**facts, "x": 1}, {**facts, "linked": 1}, {**facts, "programs": [1]}, None]))
+    return {"law": case["law"], "class": cls, "units": case["units"] if mode < 6 or mode > 7 else None,
+            "n_r": counts[0], "n_v": counts[1], "facts": facts,
+            "delta": draw(st.sampled_from(["0", "1", "3/2", "2/4", 1, None]) if change == 3 else DELTA)}
+
+
+TWO_STAGE_PROFILE = D.Port(PIECES, "two_stage_profile", two_stage_profile,
+                           st.one_of(*[two_stage_profile_cases() for _ in range(5)], JSON), package=PACKAGE)
+CHECK_PROBABILITY = D.Port(PIECES, "check_probability", check_probability_of, st.one_of(*[st.builds(
+    lambda case, cls, n_v: {"law": case["law"], "class": cls, "n_v": n_v}, two_stage_cases("units"),
+    st.sampled_from(RU_CLASSES), st.sampled_from([*range(10)] * 3 + [-1, True, "2", None])) for _ in range(5)], JSON),
+    package=PACKAGE)
+
+
 def _key(tag: bytes) -> str:
     """A 256-byte key with bit 2047 zero."""
     h = hashlib.shake_256(tag).hexdigest(256)
@@ -2205,9 +2296,11 @@ pieces = D.server_fixture(DECODE)
 
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500), (VERDICT, 300),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (BERNOULLI_BOUND, 500), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (HELLO, 500)]
+              (RUN, 500), (REPLAY_UNITS, 500), (PROOF_UNITS, 400), (TWO_STAGE_PROFILE, 500), (CHECK_PROBABILITY, 400),
+              (HELLO, 500)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -2463,7 +2556,7 @@ def _accepted_record_case(kind: str, delta: float) -> dict:
 def test_the_record_is_compared_field_by_field(pieces):
     """The whole audit record, field by field, on an accepted audit of each law (with a work law's closure), the same audit
     rejected by its served draw and its sessions' roots, and an accepted v2 audit: every field the Lean writes is
-    `audit_record`'s, Bernoulli's float bound aside (null in the Lean, a number in Python)."""
+    `audit_record`'s, a Bernoulli law's bound on wrong units the exact one (`Bernoulli.count_bound`)."""
     cases = [_accepted_record_case(kind, delta) for kind in ("subset", "bernoulli", "stratified", "work")
              for delta in (0.05, 0.1, 2 ** -20)]
     rejected = _accepted_record_case("subset", 0.25)
@@ -2478,9 +2571,8 @@ def test_the_record_is_compared_field_by_field(pieces):
         for field in sorted(python):
             assert codec.canonical_json(lean[field]) == codec.canonical_json(python[field]), (case["draw"]["law"], field)
         if case["draw"]["law"] == "bernoulli":
-            whole = audit.audit_record(*(case[k] for k in ("registration", "receipt", "draw", "law", "proved_units",
-                                                           "instances", "statement", "verdicts")), float(Fraction(case["delta"])))
-            assert lean["wrong_units"]["bound"] is None and isinstance(whole["wrong_units"]["bound"], int | float)
+            p, n = Fraction(case["draw"]["p"]), case["registration"]["population"]
+            assert lean["wrong_units"]["bound"] == Bernoulli(p).count_bound(n, float(Fraction(case["delta"])))
     assert [json.loads(json.loads(D.replay(RECORD_PORT, c, pieces)[1]))["accepted"] for c in cases] == [True] * 12 + [False, True]
 
 

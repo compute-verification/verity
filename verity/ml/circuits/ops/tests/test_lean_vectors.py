@@ -1,4 +1,4 @@
-"""The Lean transcription of `tc_dot_total` (`Security/Definitions/Core/TC/Spec.lean`) is held to the Python by
+"""The Python `tc_dot_total` is held to its Lean definition (`Security/Definitions/Core/TC/Spec.lean`) by
 vectors: `Verity/SecurityProofs/TC/Vectors.lean` states each one as a theorem the kernel checks against the Lean, and this
 test checks the same vectors against the Python. A change to either side's semantics then fails a build."""
 from __future__ import annotations

@@ -1,0 +1,10 @@
+{
+ "ci": 1500,
+ "circuits": 3600,
+ "compute-accounting": 1200,
+ "infra": 900,
+ "memory-accounting": 1200,
+ "proofs": 1800,
+ "top": 900,
+ "vllm": 3600
+}
