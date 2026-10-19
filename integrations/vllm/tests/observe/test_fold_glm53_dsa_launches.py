@@ -54,7 +54,7 @@ def _ctx(requests):
     D._state(ctx)["topk"] = (TOPK_ALLOC, 0, 2048, (2048, 1))
     D._state(ctx)["modules"][LAYER] = {
         "index_q": view(10, (M, 32, 128), "float8_e4m3fn"), "index_weights": view(11, (M, 32)),
-        "index_k": view(12, (64 * nb, 128), "uint8"), "index_scale": view(12, (64 * nb,), offset=32, strides=(33,)),
+        "index_cache": D._index_cache(view(12, (nb, 64, 132), "uint8"), view(12, (nb, 64, 33)), 64, 132, 128),
         "mqa_after": 1, "mqa_launches": D._indexer_launches(ctx)}
     return ctx
 
