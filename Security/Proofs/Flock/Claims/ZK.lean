@@ -32,6 +32,11 @@ import Proofs.Flock.Claims.ZK.ExeLayout
 import Proofs.Flock.Claims.ZK.Refusals
 import Proofs.Flock.Claims.ZK.FirstRefusal
 import Proofs.Flock.Claims.ZK.Stopped
+import Proofs.Flock.Claims.ZK.HiSalts
+import Proofs.Flock.Claims.ZK.SaltProver
+import Proofs.Flock.Claims.ZK.CutSession
+import Proofs.Flock.Claims.ZK.ExePlan
+import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Round1Pads
@@ -232,6 +237,23 @@ import Proofs.Flock.Claims.ZK.Stop
   value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
   round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
   `hstep` after the third round only.
+* `HiSalts`: levels ≥ 1's salts by level and position (`Masked.hiSalt`, at `Masked.hiIdx`): at the executable's
+  layout, the salts the model hands table `j`'s rep `r` are the masked prover's tape's `salt j r l p` on the schedule's
+  levels `l ≥ 1` and their positions (`Masked.hiSalt_exe`), so a Ligerito prover of levels ≥ 1 built from one reading
+  salts by level and position (`Masked.ofSalts`) sends, there, what it sends on the tape's salts
+  (`Masked.ofSalts_exe`, given `Masked.SaltsOn`).
+* `SaltProver`: `HiSalts`' definitions, and the deployed levels ≥ 1 prover's salts (`Masked.PcExe`: the tape's salts
+  `192` bytes each, by level and position, read back by `Masked.blobSalt`), which read the schedule's levels and
+  positions only (`Masked.saltsOn_PcExe`).
+* `CutSession`: the masked session reading what it sends from a source beside it (`FlockComplete.sessionCut`,
+  `FlockComplete.RepSrc`, `FlockComplete.TabSrc`), stopped after a round (`FlockComplete.asksCut`), and the hybrids
+  between a rep from the source and the session's (`FlockComplete.repMix`).
+* `ExePlan`: the deployed round plan: every coin at its executable round (`Masked.czExe`, extending
+  `Masked.withPoints`), the encoding as `sessionCut`'s body on the cut (`Masked.encExe`, `Masked.tabSrcCut`), the last
+  message as its record on the view (`Masked.finExe`, `Masked.tabSrcView`).
+* `Split`: the open premises of `Flock.zk_deployZk_masked_exe_sent_gap` at the deployed plan, as eight statements
+  (`Masked.PrefixLive`, `Masked.SimPiop`, `Masked.SimLig`, `Masked.SimInner`, `Masked.SimCommit`, `Masked.SimSession`,
+  `Masked.CausalExe`, `Masked.FinExe`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
