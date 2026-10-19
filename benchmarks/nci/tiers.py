@@ -40,11 +40,12 @@ T_AUDIT = 0.3635
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
-#: defaults: the Kimi K2 calibration and forward chain; 100,000 eight-GPU servers for a year (only the cheating pool, a
-#: lifetime constant, depends on the fleet); what a wipe leaves today (the proved slack of 1/19 on 2.6 TB plus main's
-#: declared 16 GB unwipeable); today's uncharged declared egress; the C-Flock CUDA prover's overhead at a 1% budget
+#: defaults: the Kimi K2 calibration and forward chain; compute-accounting's residual (CircuitWork, 0.744% at r = 1);
+#: 100,000 eight-GPU servers for a year (only the cheating pool, a lifetime constant, depends on the fleet); what a wipe
+#: leaves today (the proved slack of 1/19 on 2.6 TB plus main's declared 16 GB unwipeable); today's uncharged declared
+#: egress; the C-Flock CUDA prover's overhead at a 1% budget
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.01,
+    "unmonitored": 0.0, "residual": 0.0074,
     "wipe_left_gb": 155.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "slack": 1 / 19, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 640.0, "host_gb": 2000.0,
     "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
