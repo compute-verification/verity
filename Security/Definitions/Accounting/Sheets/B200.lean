@@ -10,6 +10,10 @@ per-clock peak reproduces the document's per-second figure at the clock that fig
 device totals over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread
 over the SM's four SMSPs.
 
+Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or NVSwitch and sends back (whole
+tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
+tile, and `Device.lean`'s side channels don't list NVLink peer offload (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
+
 `uv run machine-model --device sm_100 sheet --lean` prints this file from
 `benchmarks/pouw/machine_model/data/devices/sm_100/sheet.toml`, and the machine model's tests hold it to that output.
 The grades, and where the sm_120 sheet's structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.

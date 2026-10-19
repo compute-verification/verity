@@ -2,6 +2,8 @@
 # (`Accounting.TS.Sheet.machine`) reads on the H200, its value, the vendor document that states it and its grade, and
 # each DS-90 class's tensor form or pipe. `machine-model sheet --device sm_90` derives every DS-90 line from it and
 # checks them against census/DS-90.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
+# Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
+# channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
 vector = "DS-90"
