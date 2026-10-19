@@ -15,9 +15,11 @@ holds what it returns to the record (binding 4)."""
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import importlib.util
+import json
 import re
 import shutil
 import sys
@@ -31,12 +33,13 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.remote_bandwidth import audit, lean_verdict
-from verity.ml.circuits import post_seed
+from verity.ml.circuits import defs, post_seed
+from verity.ml.circuits import ports as ir_ports
 from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import encode_program, program_digest
 from verity.ml.circuits.ops import prims
-from verity.ml.circuits.ports import In, Ports
+from verity.ml.circuits.ports import In, Out, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
 from verity.ml.circuits.types import Array, Value
@@ -69,6 +72,19 @@ def redteam() -> Any:
     sys.path.insert(0, str(ROOT / "benchmarks/property_redteam"))
     import cases
     return cases
+
+
+@contextlib.contextmanager
+def unchecked() -> Any:
+    """Programs built past the IR's build-time refusals of a word read at another width (`E_REINTERPRET`) and of a run
+    input's declared bound (`E_PORT_BOUND`), where the IR has them: the Lean reads whatever descriptor it is sent, so it is
+    held to the Python on those Programs too, as `test_stacking` holds the property past the first."""
+    with pytest.MonkeyPatch.context() as m:
+        if hasattr(defs, "_Widths"):
+            m.setattr(defs._Widths, "first", lambda self, c: None)
+        if hasattr(ir_ports, "_is_harness"):
+            m.setattr(ir_ports, "_is_harness", lambda fn: True)
+        yield
 
 
 @functools.cache
@@ -328,7 +344,8 @@ def corpus() -> tuple[tuple[str, Any, list[int]], ...]:
            ("compare-split", *S._compare_split_program()), ("table", *_table()), ("two-kinds", *_two_kinds()),
            ("gather-tree", *_gather_tree()), ("bit-at-5", *_bit_at_5()), ("lut-sum", *_lut_sum()),
            ("from-undeclared", *_from("Undeclared", lambda B, c: B.call(S.I32DIV, c[0], c[1])))]
-    out += [(f"reinterpret-{how}", *S._reinterpreting_program(how)) for how in ("broadcast", "affine")]
+    with unchecked():
+        out += [(f"reinterpret-{how}", *S._reinterpreting_program(how)) for how in ("broadcast", "affine")]
     out += [(f"gather-{how}", *S._gather_program(how)) for how in ("same", "two", "mapped")]
     out += [(f"one-{prim.name}-{'-'.join(reg) or 'run'}", *S._one_gate_program(prim, reg)) for prim, reg in (
         (S.GATHER, ()), (S.GATHER, ("col",)), (S.GATHER, ("i",)), (G1, ("col",)), (LG3, ("idx",)), (LG3, ("rows",)),
@@ -352,14 +369,20 @@ REFUSED_FORMS = {
 }
 
 
+#: `test_stacking`'s range check on an s32 word, which a composite's declared return over a run input reads it through
+RANGE = S.stand_in("TestRangeS32", (("a", S.S32),), ports=Ports(ret=Out(interval=S.BOUND)))
+
+
 @functools.cache
 def refused_forms() -> dict[str, tuple[Program, list[int]]]:
+    with unchecked():
+        ret, mixed = S._reinterpreting_program("ret"), S._reinterpreting_program("mixed")
     return {"from-silent": _from("Silent", lambda B, c: B.call(S.SILENT, c)),
-            "reinterpret-ret": S._reinterpreting_program("ret"),
-            "reinterpret-mixed": S._reinterpreting_program("mixed"),
+            "reinterpret-ret": ret,
+            "reinterpret-mixed": mixed,
             "from-declared": _from("Declared", lambda B, c: B.call(S.DIV, c[0], c[1])),
             "from-transfer": _from("Transfer", lambda B, c: B.call(S.REM, c[0], B.call(prims.const(32, 1000)))),
-            "from-composite": _from("Composite", lambda B, c: B.call(S.FIRST, c), S.C0)}
+            "from-composite": _from("Composite", lambda B, c: B.call(S.FIRST, B.batch(RANGE, c, axes=(0,))))}
 
 
 def checks(program: Any, ends: list[int]) -> list[dict]:
@@ -432,7 +455,8 @@ def test_property_v1_agrees_on_the_red_team_s_cases(server) -> None:
     for case in cases.CASES:
         if not case.available:
             continue
-        program = case.program()
+        with unchecked():
+            program = case.program()
         for v in checks(program, [len(program.root.body.nodes)]):
             D.replay(CHECK, v, server)
         judged += 1
@@ -450,10 +474,20 @@ def test_forms_the_lean_doesn_t_cover_are_refused_by_name(server) -> None:
 
 
 def test_a_root_s_own_port_declaration_is_read_as_the_python_reads_it(server) -> None:
-    """A run input's declared bound on the program function itself is not taken on trust (18 Oct), here as in Python."""
-    program, ends = S.int8_program(acc0="input", ports=Ports(params={"c": In(bound=S.BOUND)}))
+    """A run input's declared bound on the program function itself is not taken on trust (18 Oct), here as in Python: the
+    accumulator it feeds is unproven. Where the IR refuses the bound outright (`E_PORT_BOUND`), the Python refuses the Program
+    before judging it, and the Lean still judges that accumulator unproven."""
+    with unchecked():
+        program, ends = S.int8_program(acc0="input", ports=Ports(params={"c": In(bound=S.BOUND)}))
     for v in checks(program, ends):
-        D.replay(CHECK, v, server)
+        kind, why = CHECK.python(v)
+        if kind == "reject" and "E_PORT_BOUND" in why:
+            kind, out = server.call("property_check", v)
+            assert kind == "output", (kind, out)
+            verdict = json.loads(out)
+            assert not verdict["ok"] and "s8-window" in [r["code"] for r in verdict["reasons"]], verdict
+        else:
+            D.replay(CHECK, v, server)
 
 
 def test_property_v1_refuses_what_the_python_refuses(server) -> None:
