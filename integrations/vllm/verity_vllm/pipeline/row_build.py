@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from verity_vllm.pipeline import row_records as R
+from verity_vllm.program import prefix_plan as PP
 
 
 def _tail(path: str, n: int = 300) -> str:
@@ -84,7 +85,7 @@ def follow_compose(row: Any, to: int) -> tuple[Any, str, str]:
             os.remove(f)
     wl = row.path(row.wl)
     dirs = [*([f"{row.d}/build_request"] if (row.LP, row.T) in R.request_shapes(wl) else []),
-            *(f"{row.d}/build_request_LP{lp}_T{t}" for lp, t in R.extra_shapes(wl, row.LP, row.T))]
+            *(f"{row.d}/build_request_{PP.shape_name(s)}" for s in R.extra_shapes(wl, row.LP, row.T))]
     cmd = row.cli("global-program", "--workload", row.wl, *(x for d in dirs for x in ("--derived", d)), "--out", f"{row.d}/build_workload",
                   "--checkpoint-dir", row.ck, "--follow", str(to), "--follow-done", done, "--follow-stop", stop, py=row.py312)
     pool = ThreadPoolExecutor(max_workers=3)

@@ -217,8 +217,10 @@ class Datacenter:
 
 @dataclass
 class Fleet:
-    """Several datacenters under one developer. A link between datacenters is a boundary like any other, so it ends at
-    a certifier on each side; the outside world is everything no certifier covers."""
+    """Several datacenters under one developer, and the links between them. Blocks are the only units the account
+    credits, and coverage is per block: every link off a block passes a certifier of its own, wherever the link's other
+    end is. A link between datacenters is fabric, as a switch is, so it needs no certifier, and the outside world is
+    everything off every block."""
 
     datacenters: list[Datacenter]
     links: list[Link] = field(default_factory=list)
@@ -237,6 +239,8 @@ class Fleet:
                           self.datacenters[0].cadence)
 
     def validate(self) -> list[str]:
+        """Each datacenter's own problems, a device name in two of them (but the outside world's), and a link between
+        them that names an unknown device or leaves a block without passing a certifier."""
         problems = [f"{dc.name}: {p}" for dc in self.datacenters for p in dc.validate()]
         seen: dict[str, str] = {}
         for dc in self.datacenters:
@@ -244,11 +248,12 @@ class Fleet:
                 if d in seen and dev.kind != "outside":
                     problems.append(f"device {d!r} is in both {seen[d]} and {dc.name}")
                 seen[d] = dc.name
+        merged = self.merged()
         for l in self.links:
-            for end in (l.a, l.b):
-                owner = next((dc for dc in self.datacenters if end in dc.devices), None)
-                if owner is None:
-                    problems.append(f"inter-datacenter link {l.a}-{l.b} names an unknown device {end!r}")
-                elif owner.devices[end].kind != "certifier":
-                    problems.append(f"inter-datacenter link {l.a}-{l.b} ends at {end!r}, not a certifier")
+            unknown = [end for end in (l.a, l.b) if end not in merged.devices]
+            problems += [f"inter-datacenter link {l.a}-{l.b} names an unknown device {end!r}" for end in unknown]
+            if unknown or merged.block_of(l.a) is merged.block_of(l.b):
+                continue
+            if merged.port(l.a, l.b) is None and merged.port(l.b, l.a) is None:
+                problems.append(f"inter-datacenter link {l.a}-{l.b} passes no certifier (coverage)")
         return problems

@@ -93,6 +93,7 @@ def zeros(body: Body) -> dict[str, np.ndarray]:
 # -------------------------------------------------------------------------------------------------------------------------------- source
 class CallBoundarySource:
     short_name = "call_boundary"
+    step_rows_at_step_end = True                    # `on_step_end` reads the committer's `step_rows[step]`
 
     def __init__(self, committer: Any, model: Any, plan: Plan) -> None:
         import torch

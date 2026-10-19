@@ -8,7 +8,7 @@ from collections import Counter
 import pytest
 
 from datacenter import Cadence, Port, route
-from datacenter.examples import GB, leaf_spine, rack, rtx_node, with_dpu
+from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu
 
 
 def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie_tree():
@@ -25,8 +25,9 @@ def test_a_node_is_one_block_of_eight_gpus_on_two_sockets_with_the_measured_pcie
         ("n.gpu0", "n.pcie0"), ("n.pcie0", "n.cpu0"), ("n.cpu0", "n.cpu1"), ("n.pcie1", "n.cpu1"), ("n.nic0", "n.pcie1")]
     assert all(e.latency is None and e.delay == 0.0 for e in dc.links)  # not measured: a delay that claims nothing
     gpu = dc.devices["n.gpu0"]
-    assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda", "oracle", "square-1024", "square-512", "gate"}
-    assert gpu.rate["gate"].value == 2.6e13 * 32
+    assert set(gpu.rate) == {"mac:bf16", "mac:fp8", "mac:fp4", "cuda:op", "cuda:gate", "oracle", "square-1024",
+                             "square-512"}
+    assert gpu.rate["cuda:gate"].value == 2.6e13 * 32
 
 
 def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
@@ -80,3 +81,30 @@ def test_the_rack_is_nodes_with_dpus_on_one_leaf_with_a_challenger_and_the_world
     assert all(a.name and a.source in ("datasheet", "measured", "declared") for a in named)
     assert all(a == b for a in named for b in named if a.name == b.name)  # one name, one record
     assert [b.name for b in rack(nodes=1, dpus=False).blocks] == ["n0"] and "n0.dpu" not in rack(1, False).devices
+
+
+def test_two_sites_are_two_leaf_spines_joined_by_a_wan_between_their_spines():
+    """The WAN's capacity and latency are declared assumptions; it is fabric between the two spines, with no certifier
+    and no port, since every block is behind its own certifier; and an east block's way out to the one outside host, on
+    the west site, crosses it."""
+    fleet = two_sites()
+    assert fleet.validate() == []
+    dc = fleet.merged()
+    assert dc.validate() == [] and dc.name == "east+west"
+    assert [b.name for b in dc.blocks] == ["east.b0", "east.b1", "west.b0", "west.b1"]
+    assert [repr(p) for p in dc.ports] == [f"{s}.b{i}.cert:{d}" for s in ("east", "west") for i in range(2)
+                                           for d in ("in", "out")]
+    assert sorted(d.name for d in dc.fabric if d.kind == "certifier") == [f"{s}.b{i}.cert" for s in ("east", "west")
+                                                                           for i in range(2)]
+    (wan,) = fleet.links
+    assert (wan.a, wan.b, wan.kind, wan.delay) == ("east.spine0", "west.spine0", "wan", 20e-3)
+    assert [repr(a) for a in (wan.capacity, wan.latency)] == ["wan/east-west=1e+11 bit/s (declared)",
+                                                             "wan/east-west-latency=0.02 s (declared)"]
+    assert [d.name for d in dc.fabric if d.kind == "outside"] == ["ext0"]
+    assert [(e.a, e.b) for e in route(dc, "east.b0.nic0", "ext0")] == [
+        ("east.b0.nic0", "east.b0.cert"), ("east.b0.cert", "east.leaf0"), ("east.leaf0", "east.spine0"),
+        ("east.spine0", "west.spine0"), ("west.leaf0", "west.spine0"), ("ext0", "west.leaf0")]
+    named = [a for e in dc.links for a in (e.capacity, e.latency) if a]
+    assert all(a == b for a in named for b in named if a.name == b.name)
+    flat = two_sites(spines=0, leaves=1)
+    assert flat.validate() == [] and [(e.a, e.b) for e in flat.links] == [("east.leaf0", "west.leaf0")]

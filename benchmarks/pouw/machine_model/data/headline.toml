@@ -12,6 +12,9 @@ issue = "the 1.22-slot issue floor (Theorem C, unproved in Lean: ClassPPacked is
 title = "data sheet"
 q = 0.5
 conditions = ["Π the data sheet's peaks (DS vectors, A1–A5; decision 96)"]
+# stated on each row whose Π charges a uniform instruction on an issue row: no sheet gives a uniform rate, so without
+# A2u the uniform route is free there (headline.py)
+a2u = "A2u: a uniform instruction takes an issue slot (in no vendor document; decision 84; measured on sm_120 only, beside an issue-bound stream at 0.95 of issue, opcode_probe a2u.cu r20261019-054518-8cd2)"
 
 [reading.measured]
 title = "decision 89's measured reading"
@@ -45,7 +48,7 @@ measured = { vector = "DC-100-ri" }
 gpu = "L40S"
 design = "dither-2s-l16"
 conditions = []
-sheet = { vector = "DS-89", conditions = ["A2u: a uniform instruction takes an issue slot (in no vendor document; decision 84)"] }
+sheet = { vector = "DS-89" }
 measured = { vector = "ADA-89" }
 
 [family.sm_80]

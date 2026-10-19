@@ -8,6 +8,8 @@ partial source commits the whole [M, N] input once per call as `<site>/part_rank
 rows, as wide as the flat output, so each of the W-1 peer parts binds to it."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import pytest
 
 from tests.query.test_module_body import W, _call

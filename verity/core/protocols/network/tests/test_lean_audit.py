@@ -148,7 +148,7 @@ def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e
         e = certified(w, issuer.certify(record(w, egress[w]), Direction.EGRESS, g, parameters_digest(g, ss),
                                         deadline=w != 3))
         i = issuer.certify(ins[w], Direction.INGRESS, g, parameters_digest(g))
-        opening = lw.commit(w, e, i, salts=(bytes([2 * w + 1]) * 192, bytes([2 * w + 2]) * 192))
+        opening = lw.commit(w, e, i, salts=tuple(bytes([4 * w + j + 1]) * 192 for j in range(service.LEAVES)))
         reg = lw.register(stream, lw.registration(opening, previous))
         previous = reg.digest
         draw = stream.select(reg)

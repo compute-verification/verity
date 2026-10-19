@@ -10,6 +10,7 @@ from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, shape
+from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
                                                                            active_target_profile, attn_kind_for, attn_lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
@@ -161,8 +162,16 @@ class UnifiedAttentionWithOutputRule(StateRule):
             pending.pop(layer_name, None)
         elif layer_name in pending:
             refuse("side_input", node, mp, f"a pending KV write to {layer_name!r} was not consumed by this attention call")
+        opened = layer_name not in hist
         krow_list, vrow_list = hist.setdefault(layer_name, ([], []))
+        # a cached prefix (KvPrefix[vllm]) opens the history with its rows: this call is still the prefill, from position C
+        cached = ctx.state.setdefault("kv_cached_rows", {})
+        if opened:
+            cached[layer_name] = KP.seed(ctx, node, layer_name, krow_list, vrow_list, KVH, D)
         P0 = len(krow_list)
+        prefill = P0 == cached.get(layer_name, 0)
+        if not prefill:
+            KP.require_consumed(ctx, node)
         for i in range(T):
             krow_list.append(krows[i])
             vrow_list.append(vrows[i])
@@ -180,20 +189,21 @@ class UnifiedAttentionWithOutputRule(StateRule):
                    f"(D={D}); the registered attention kinds fold softmax_scale = D^-0.5 and no kind takes another scale")
         # [R13 hopper] target-keyed chain: on the accepted target (Ampere step, FA2) the role stays `attention` / `attention_softcap`
         # (digests unchanged); otherwise `attention_dot` = Attention_v2{BN, DOT, INV} with the block size of the launch the target's FA
-        # version issues (FA3's tile rule reads the launch's query rows: this call's T when it opens a history, 1 per request on decode).
+        # version issues (FA3's tile rule reads the launch's query rows: this call's T on the prefill, 1 per request on decode).
         from verity_vllm.program.frontend import targets as TG
         tp = active_target_profile()
         accepted = TG.uses_accepted_kinds(tp)
         geom = None
         # [R15 hopper HOP-03, M-0225] the tile rule reads the LAUNCH's max_seqlen_q, not this request's rows: under varlen every sequence of
-        # the launch runs the tile of the longest one.  The request's step index: 0 when this call opens the layer's history (prefill,
-        # own rows = T), else P0 - LP + 1 (decode, own rows = 1; LP = the rows the history was opened with).  The declared launch context
-        # (`observe_launch_context`, derive_step --launch-max-seqlen-q, from the workload's co-scheduled prompts) raises it; absent, own rows.
+        # the launch runs the tile of the longest one.  The request's step index: 0 on the prefill (the call that opens the layer's
+        # history, after any cached prefix; own rows = T), else P0 - LP + 1 (decode, own rows = 1; LP = the history's rows after the
+        # prefill).  The declared launch context (`observe_launch_context`, build --launch-context, from the workload's co-scheduled
+        # prompts) raises it; absent, own rows.
         lp_of = ctx.state.setdefault("launch_LP", {})
-        if P0 == 0:
-            lp_of[layer_name] = T
-        req_step = 0 if P0 == 0 else P0 - int(lp_of.get(layer_name, P0)) + 1
-        own_rows = T if P0 == 0 else 1
+        if prefill:
+            lp_of[layer_name] = P0 + T
+        req_step = 0 if prefill else P0 - int(lp_of.get(layer_name, P0)) + 1
+        own_rows = T if prefill else 1
         try:
             launch_sq, launch_src = TG.launch_seqlen_q(own_rows, req_step, active_launch_context())
         except TG.LaunchContextConflict as e:
@@ -232,8 +242,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
                 fn = ctx.kind(f"{role}_value" if scale else role, node, T=P, NH=NH, KVH=KVH, D=D, **statics)
             else:
                 fn = ctx.kind(dot_kind, node, T=P, NH=NH, KVH=KVH, D=D, BN=geom["BN"], DOT=geom["DOT"], INV=geom["INV"],
-                              **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if P0 == 0 else 0)} if check_inf else {}),
-                              **({"FA2_MASKED_FROM": TG.fa2_masked_from(tp, P, D, launch_sq, i if P0 == 0 else 0, own_rows)} if check_inf2 else {}),
+                              **({"MASKED_FROM": TG.fa3_masked_from(tp, P, NH, KVH, D, launch_sq, i if prefill else 0)} if check_inf else {}),
+                              **({"FA2_MASKED_FROM": TG.fa2_masked_from(tp, P, D, launch_sq, i if prefill else 0, own_rows)} if check_inf2 else {}),
                               **statics)
             kcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), klog.cut(P))
             vcat = Coll(Array(P, Array(KVH, Array(D, Value(16)))), vlog.cut(P))

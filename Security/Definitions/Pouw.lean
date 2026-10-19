@@ -92,6 +92,7 @@ import Definitions.Pouw.RelativeSecurity
 import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
+import Definitions.Pouw.Window
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
@@ -162,4 +163,20 @@ are `Models.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
 
 `Defs`: the model over `BLACKWELL_SM120_NVF4`'s tile gate, with per-slot pricing and the rewrite class (trusted
 definitions). `Proofs`: the block-support count and the cost bounds it gives.
+
+## `Window`: a window of calls
+
+One draw that depends on the registration (C1), then the calls' sessions in order, in the form of C-Flock's one-stage
+audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
+roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
+call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
+prover's state) and the window's collision term (`coll`, bounded at the sessions' counted queries by `CollCounted`),
+what the served pass committed (`ServedPass`) and the transcripts that are its (`Anchored`, `Served`), the tie to what's
+served (`ServedTie`, open on main), and the deployed draw, sampled proofs' service's uniform subset in rank-ordered
+sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
+(`UnitStmts.copies`, `WrongCopyClosed`).
+The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Models.Pouw.Guarantees.Window`, stated and
+not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
+collision term on average over the oracle, and the bridge from the window's game to C-Flock's, with C-Flock's knowledge
+bound at main's `--zk` sessions.
 -/

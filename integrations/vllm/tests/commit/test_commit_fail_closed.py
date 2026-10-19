@@ -57,6 +57,20 @@ def test_windowed_slot_wait_timeout_is_fail_named():
     assert not ok and "collector dead after a slot-wait timeout" in why
 
 
+def test_abandoned_step_fails_by_its_name_first():
+    # WS-D (r20261018-190716-bc01): the worker abandoned a learning step past the transient host budget.  The collector names the run's
+    # failure (extra.collector_failure, also errors[0]); the verdict leads with that name, ahead of the lost acquisitions it caused.
+    why0 = ("worker failed on windowed step 0: RuntimeError('bounded staging: learning step 0 exceeds the transient host budget 4096 MiB at "
+            "window 16 (4352 MiB): its plan was not pre-learned (warm-up learn-only pass) -- step not committed')")
+    r = _rec(expected=6816, committed=4100, errors=[f"collector failed: {why0}", "worker step 0: RuntimeError(...)"])
+    r["extra"]["collector_failure"] = why0
+    ok, why = commit_verdict(r, True)
+    assert not ok and why.startswith("collector failed: worker failed on windowed step 0") and "transient host budget" in why
+    r["extra"].update(expected_tensors=6816, committed_tensors=6816, errors=[], errors_n=0)
+    ok, why = commit_verdict(r, True)
+    assert not ok and why.startswith("collector failed:"), "the named failure alone fails the run, even with equal counts and no error"
+
+
 def test_opening_after_release_failure_is_fail_named():
     # [R15 capacity] lifetime: a committed buffer whose device staging was released before the opening was verified must still open against
     # the ORIGINAL bytes; a retained copy that holds a later occupant's bytes (release-before-keep ordering fault) fails the openings-after-
@@ -132,7 +146,7 @@ def test_x05_missing_declaration_fails_when_required():
 def test_e2e_tiny_arena_forces_commit_fail(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--arena-mb", "1", "--arena-unchecked",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "0", "--arena-mb", "1", "--arena-unchecked",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -152,7 +166,7 @@ def test_e2e_windowed_stall_forces_commit_fail(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -175,7 +189,7 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_FAULT="release_before_keep")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--open-after-release", "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]   # row_pod.sh's P0 defaults
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
@@ -200,7 +214,7 @@ def test_e2e_windowed_release_before_keep_fails_openings(tmp_path: Path):
 _WATCHDOG_PROG = r"""
 import os, sys, time, threading
 import torch
-from verity_vllm.acquire import native_collect as nc
+from verity_vllm.commit.committer import native_collect as nc
 c = nc.ext().Collector()
 marker = sys.argv[1]; grace = float(sys.argv[2]); mode = sys.argv[3]
 c.set_watchdog(marker, grace)
@@ -246,7 +260,7 @@ def test_e2e_collector_dead_hang_exits_rc3_within_grace(tmp_path: Path):
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
     env = dict(os.environ, VERITY_WIN_WAIT_TIMEOUT_S="2", VERITY_CONSUMER_DELAY_MS="5000", VERITY_FAULT="hang_after_dead", VERITY_COLLECT_DEAD_GRACE_S="20")
     cmd = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host",
+           "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "0", "--max-num-seqs", "1", "--window-mb", "16", "--window-slots", "3", "--retain", "host", "--no-bounded-staging",
            "--engine-arg", f"gpu_memory_utilization={_E2E_GPU_UTIL}", "--out", str(tmp_path / "out")]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         cmd += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]

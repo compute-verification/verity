@@ -8,7 +8,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
 
 * **Population.** `--members K:N,...`: N coordinates at each K. The default is one Llama-3.2-1B decoder layer for one token:
   qkv's 3072, o's 2048 and gate_up's 16384 coordinates at K = 2048, and down's 2048 at K = 8192. The program is
-  `TemplatePopulations` over the templates, and the partition `Q_template_instances` v0, one unit per coordinate.
+  `TemplatePopulations_v1` over the templates, and the partition `Q_template_instances` v0, one unit per coordinate.
 * **Stand-in values.** Each coordinate's rows are seeded N(0, 1) and N(0, 0.02) rows, each quantized to s8 as steps.py's
   `quant_rows` does (`benchmarks/served_units/stage.py`'s s8-coord draw), committed afresh. The circuit's output is held to
   that numpy twin's. The window says so; vllm's int8 Program and its served rows replace these values.

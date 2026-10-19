@@ -20,11 +20,6 @@ namespace Claims
 
 namespace OC
 
-/-- `OC`'s bind: run `x`, then `f` on its result, every query in order. -/
-def bind {α β : Type} : OC α → (α → OC β) → OC β
-  | .ret a, f => f a
-  | .query q k, f => .query q fun r => bind (k r) f
-
 instance instMonad : Monad OC where
   pure := .ret
   bind := bind

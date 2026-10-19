@@ -1,15 +1,16 @@
-"""The Python side of the remote audit's difftests: `audit.py`, `receipts.py` and `codec.py` (the references, unchanged)
-behind the Lean port's JSON formats (`RemoteAudit.Difftest`), and the sessions the tests record.
+"""The Python side of the remote audit's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
+(`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
+(`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
-`audit.register` checks one, and `bind` refused (the port covers receipts of blocks alone). Past decoding every reference
-is the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
+`audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone). Past decoding each side is
+the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
 event sets, with a `coins.Challenger` whose generator replays the case's coins (`Tape`).
 
 A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
-ones; each names the outcome the Python gives it, so a scenario that stops reaching its failure fails here, not silently
-in the difftest."""
+ones; each names the outcome the definition gives it, which `test_session.py` holds the Lean's answer to, so a scenario
+that stops reaching its failure fails there, not silently in the difftest."""
 
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ from verity.core.protocols.remote_bandwidth.receipts import Plan
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
-#: What the Python raises where the Lean refuses: a decoder's `Reject`, and the references' own refusals, `ValueError`
+#: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.
 REFUSALS = (D.Reject, ValueError, TypeError, IndexError)
 
@@ -118,7 +119,7 @@ def runs_of(v: Any, k: str) -> tuple[tuple[int, int], ...]:
 
 @contextlib.contextmanager
 def decoding():
-    """A reference's refusals while it decodes its input, as `Reject`: past decoding, a `ValueError` is a difference."""
+    """The Python's refusals while it decodes its input, as `Reject`: past decoding, a `ValueError` is a difference."""
     try:
         yield
     except (ValueError, TypeError) as e:
@@ -284,28 +285,129 @@ def _positive(p: Any, k: str) -> int:
     return n
 
 
+def session_of(v: Any) -> tuple[dict, list[bytes], list[bytes], int]:
+    """`sessionOf`: a session's parameters (`Params`' keywords less the registration's, refused as `Params` refuses
+    them), its 2W coins, its append coins and its `not_before_ns`."""
+    p = _get(v, "params")
+    kw = {k: _positive(p, k) for k in ("deadline_ns", "windows", "samples", "min_passes", "window_ns", "lifetime")}
+    kw["deferred"] = _bool(p, "deferred")
+    Params(1, **kw)
+    committed = hexes(v, "coins")
+    if len(committed) != 2 * kw["windows"] or any(len(c) != coins.COIN_BYTES for c in committed):
+        raise D.Reject("2W coins of 32 bytes")
+    appends = hexes(v, "append_coins")
+    if any(len(c) != coins.COIN_BYTES for c in appends):
+        raise D.Reject("append coins are 32 bytes")
+    return kw, committed, appends, nat(v, "not_before_ns")
+
+
+def params_of(reg: audit.Registration, kw: dict) -> Params:
+    return Params(reg.blocks, codec=reg.codec, receipt=reg.receipt, layout=reg.layout, rows=reg.rows, **kw)
+
+
 def session(v: Any) -> dict:
     """`sessionFn`: a case's events through `audit.Session`, every event's result, the outcome and the record."""
     with decoding():
         reg = registration_of(_get(v, "registration"))
-        p = _get(v, "params")
-        params = Params(reg.blocks, _positive(p, "deadline_ns"), _positive(p, "windows"), samples=_positive(p, "samples"),
-                        min_passes=_positive(p, "min_passes"), window_ns=_positive(p, "window_ns"), codec=reg.codec,
-                        receipt=reg.receipt, layout=reg.layout, rows=reg.rows, lifetime=_positive(p, "lifetime"),
-                        deferred=_bool(p, "deferred"))
-        committed = hexes(v, "coins")
-        if len(committed) != params.coins or any(len(c) != coins.COIN_BYTES for c in committed):
-            raise D.Reject("2W coins of 32 bytes")
-        appends = hexes(v, "append_coins")
-        if any(len(c) != coins.COIN_BYTES for c in appends):
-            raise D.Reject("append coins are 32 bytes")
+        kw, committed, appends, not_before = session_of(v)
         events = [event_of(e) for e in _list(v, "events")]
-        not_before = nat(v, "not_before_ns")
+        params = params_of(reg, kw)
     clock = Clock()
     s = Session(params, reg, None, coins.Challenger(reg.digest, 0, params.coins, Tape(committed, appends)),
                 not_before_ns=not_before, clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
+
+
+# --- the registry ---------------------------------------------------------------------------------------------------
+
+def _object(j: Any, k: str) -> dict:
+    v = _get(j, k)
+    if not isinstance(v, dict):
+        raise D.Reject(f"{k}: not an object")
+    return v
+
+
+def registry_of(v: Any) -> audit.Registry:
+    """`Registry.ofJson`: `audit.Registry.from_json` on a registry/v0 whose fields are there and whose byte strings are
+    lowercase hex, as the Lean reads them; `None`, an empty registry."""
+    if v is None:
+        return audit.Registry()
+    for n, x in _object(v, "live").items():
+        _unhex(n, "live")
+        _unhex(_get(x, "registration"), "registration")
+        _get(x, "sessions")
+    for c in _list(v, "closed"):
+        hex_(c, "node"), hex_(c, "registration"), _get(c, "sessions")
+    for n in _object(v, "refused"):
+        _unhex(n, "refused")
+    return audit.Registry.from_json(v)
+
+
+def registry_op(v: Any) -> tuple:
+    """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those drawn
+    in the case, or in full."""
+    op = _str(v, "op")
+    if op == "register":
+        if _bool(v, "bind"):
+            raise D.Reject("a registration that binds PoUW's tile outputs is not covered: the Lean refuses it")
+        kind = _str(v, "receipt")
+        receipts.receipt_kind(kind)
+        return (op, hex_(v, "node"), nat(v, "blocks"), hex_(v, "payload_root"), codec_of(_get(v, "codec")), kind,
+                _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
+    if op == "session":
+        which = _get(v, "registration")
+        which = nat(v, "registration") if isinstance(which, int) and not isinstance(which, bool) else registration_of(which)
+        index = _get(v, "index")
+        return op, which, *session_of(v), None if index is None else _int(index, "index")
+    if op == "event":
+        return op, hex_(v, "node"), nat(v, "session"), event_of(_get(v, "event"))
+    if op in ("close", "live", "drawn"):
+        return op, hex_(v, "node")
+    raise D.Reject(f"no registry op {op}")
+
+
+def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
+    if op == "register":
+        node, blocks, root, c, kind, layout, rows, nonce = a
+        reg = r.register(source, node, blocks, root, c, kind, layout=layout, rows=rows, nonce=nonce)
+        drawn.append(reg)
+        return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
+    if op == "session":
+        which, kw, committed, appends, not_before, index = a
+        reg = drawn[which] if isinstance(which, int) else which
+        s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(),
+                      entropy=Tape(committed, appends), index=index)
+        return {"session": s.commitment.session}
+    if op == "event":
+        node, k, e = a
+        x = r._live.get(audit._node(node))
+        s = x.sessions[k] if x is not None and k < len(x.sessions) else None
+        return apply(s, s.clock, e) if isinstance(s, Session) else {"refused": True}
+    if op == "close":
+        return r.close(a[0]).to_json()
+    if op == "live":
+        d = r.live(a[0])
+        return None if d is None else d.hex()
+    return r.drawn(a[0])
+
+
+def registry(v: Any) -> dict:
+    """`registryFn`: a case's calls on `audit.Registry` under its source, from the registry read back (`registry_of`),
+    each call's result (`refused` where it raises `RegistryError`) and the registry after them. A session's events
+    go through the `Session` the registry holds, on the clock it was started with."""
+    with decoding():
+        source = hex_(v, "source")
+        r = registry_of(_get(v, "registry"))
+        ops = [registry_op(o) for o in _list(v, "ops")]
+    drawn: list[audit.Registration] = []
+    results = []
+    for op, *a in ops:
+        try:
+            results.append(_registry_call(r, source, drawn, op, tuple(a)))
+        except audit.RegistryError:
+            results.append({"refused": True})
+    return {"registry": r.to_json(), "results": results}
 
 
 # --- recorded sessions ----------------------------------------------------------------------------------------------
@@ -957,7 +1059,7 @@ BLOCK = World(receipt=receipts.BLOCK_SHA512)
 ROWS64 = World(rows=64)
 WIDE = World(P512_K3, blocks=4)
 
-#: Each recorded scenario: its world, `Run`'s keywords, the builder, and the outcome the Python gives it.
+#: Each recorded scenario: its world, `Run`'s keywords, the builder, and the outcome the definition gives it.
 SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "honest": (World(), {}, honest, "accepted"),
     "honest-appends": (World(blocks=8), {}, honest_appends, "accepted"),
