@@ -3,10 +3,10 @@ store: Llama-3.1-8B's weights as vLLM holds them in bf16 (`inplace_gate.llama8b`
 the binder registers them. First the builds are checked against each other at that scale: every receipt, every kept
 level and the root under one seed, and the root against the tree hashed after the receipts by reader.cu's own kernels
 (`inplace_gate.unfused_pass`). Then `rounds` rounds, each build in turn (the order alternating a round), each timing
-`reps` runs of the bare read over a contiguous copy of the store (`rb_read`, γ's denominator), the read through the map
+`reps` runs of the bare read over a contiguous copy of the store (`rb_read`), the read through the map
 (`rs_mapped_read`), the fused kernels alone (`InPlace.fused`) and the whole pass (map, constants, signs, kernels,
-root). Writes OUT/ab_pass.json: every sample, and per build the medians, γ = pass / bare read, and the after/before
-ratio of each round's medians.
+root). Writes OUT/ab_pass.json: every sample, and per build the medians, `over_read` = pass / bare read (a slowdown, not
+the audit's γ, which is the uncredited share of R·Σ), and the after/before ratio of each round's medians.
 
     python ab_pass.py --before before.so --after after.so --out OUT [--rounds 12 --reps 5 --seed 0]
 """
@@ -125,7 +125,7 @@ def main() -> int:
         return statistics.median(v for x in rows if x["build"] == k for v in x[part])
 
     out["median_ms"] = {k: {p: med(k, p) for p in PARTS} for k in BUILDS}
-    out["gamma"] = {k: {"pass": med(k, "pass") / med(k, "read_contiguous"),
+    out["over_read"] = {k: {"pass": med(k, "pass") / med(k, "read_contiguous"),
                         "kernels": med(k, "kernels") / med(k, "read_contiguous")} for k in BUILDS}
     out["read_GBps"] = {k: nbytes / (med(k, "read_contiguous") / 1e3) / 1e9 for k in BUILDS}
     ratios = {}
@@ -138,7 +138,7 @@ def main() -> int:
         ratios[p] = {"median": statistics.median(per), "min": per[0], "max": per[-1]}
     out["after_over_before"] = ratios
     (a.out / "ab_pass.json").write_text(json.dumps(out, indent=1))
-    print(json.dumps({k: out[k] for k in ("median_ms", "gamma", "read_GBps", "after_over_before")}), flush=True)
+    print(json.dumps({k: out[k] for k in ("median_ms", "over_read", "read_GBps", "after_over_before")}), flush=True)
     return 0
 
 
