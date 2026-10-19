@@ -3,8 +3,8 @@ K = 64 and 128 (a partial row block left uncovered), and saturated operands at K
 position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
 pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
 bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
-unit's the reference's, a junk row in a slot the queue leaves unassigned is refused and credits nothing, and the tally's limbs
-are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
+unit's the reference's, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
+empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
 A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
 scheduler's record gives the request queue and its commitment."""
 from __future__ import annotations
@@ -95,9 +95,10 @@ def test_dead_units_skip_noise_and_receipt():
     scales = torch.zeros(64)
     scales[:5] = 0.5
     queue = CR.queue_of([[("r0", 3), ("r1", 2)]], 1, 64)
-    bits = CR.queue_admit(queue, 0)
-    assert list(bits) == [True] * 5 + [False] * 59
-    assert not CR.junk(CM.s8_rows(call.a.numpy(), scales.numpy()), bits)
+    rows = CM.s8_rows(call.a.numpy(), scales.numpy())
+    bits = CR.queue_admit(queue, 0, rows)
+    assert list(bits) == list(CR.queue_select(queue, 0)) == [True] * 5 + [False] * 59
+    assert not CR.junk(rows, bits) and not CR.hollow(rows, CR.queue_select(queue, 0))
     got, live = RC.gated_receipts(call, bits, SALT, 9, RA, RB)
     assert live == CR.live_units(bits, 64) == [0, 1]
     for u in range(len(call.units)):
@@ -166,33 +167,68 @@ def test_admit_words_and_tally():
 
 
 def test_junk_row_in_an_unassigned_slot_is_refused_and_credits_nothing():
-    """Admit is the queue's (`PouwQueueAdmit`'s word on the slot map and the requests' lifetimes), never the row's: a nonzero
-    junk row in a slot the queue leaves unassigned is not admitted, so the call's admitted count and the tally are unchanged,
+    """The selection is the queue's (the slot map and the requests' lifetimes), never the row's, and a row can only withhold
+    admission (`PouwQueueAdmit`'s word also reads its scale): a nonzero junk row in a slot the queue leaves unassigned is
+    not admitted, so the call's admitted count and the tally are unchanged,
     and the admit unit refuses it (`junk`); a request past its last step admits nothing either."""
     t, k = 64, 64
     spans = [[("a", 4), ("b", 3)], [("a", 1), ("b", 1), ("c", 2)], [("c", 1)]]
     queue = CR.queue_of(spans, 4, t)
     assert queue["ids"] == ["a", "b", "c"] and queue["requests"] == [(0, 0), (0, 2), (0, 2), (1, 3)]
-    assert [int(CR.queue_admit(queue, s).sum()) for s in range(4)] == [7, 4, 1, 0]
+    assert [int(CR.queue_select(queue, s).sum()) for s in range(4)] == [7, 4, 1, 0]
     honest = np.zeros((t, k + 4), dtype=np.uint8)
     honest[:4, :k] = np.arange(1, 5, dtype=np.uint8)[:, None]
     honest[:4, -1] = 0x3F
-    bits = CR.queue_admit(queue, 1)
-    assert not CR.junk(honest, bits)
+    bits = CR.queue_admit(queue, 1, honest)
+    assert list(bits) == list(CR.queue_select(queue, 1)) and not CR.junk(honest, bits)
     forged = honest.copy()
     forged[37, :k] = 0x55
     forged[37, -1] = 0x3F
     assert CR.nonempty(forged)[37] and not bits[37]
     assert CR.junk(forged, bits) == [37]
-    assert list(CR.queue_admit(queue, 1)) == list(bits) and int(bits.sum()) == 4
+    assert list(CR.queue_admit(queue, 1, forged)) == list(bits) and int(bits.sum()) == 4
     calls = [{"step": 1, "site": "x", "n": 32, "k": k}]
     assert CR.tally(calls, [int(bits.sum())], 4, ("x",))["rows"] == 4
     stale = {**queue, "slot_map": queue["slot_map"].copy()}
     stale["slot_map"][3, 0] = 1
-    assert not CR.queue_admit(stale, 3).any()
+    assert not CR.queue_select(stale, 3).any()
     slot_leaves, req_leaves = CR.queue_leaves(queue)
     assert len(slot_leaves) == 4 * t // 16 and all(len(x) == 32 for x in slot_leaves)
     assert req_leaves[3] == (1).to_bytes(2, "little") + (3).to_bytes(2, "little")
+
+
+def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing():
+    """RT-ALGO-4 (note:20261019T0618Z-draft-rt-algo-r2): a block whose 32 slots the queue selects but whose rows are all the
+    canonical empty row is dead to the tile, which zeroes its receipt.  The admit unit admits none of its slots, so the
+    block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A row
+    of zero bytes under a nonzero scale is refused (`scale_only`), and a selected row of nonzero bytes under scale 0 is
+    not admitted and so refused as junk: in a window none of these refuse, a selected slot is admitted iff its bytes are
+    nonzero."""
+    t, k = 64, 64
+    queue = CR.queue_of([[("a", 32)]], 1, t)
+    chosen = CR.queue_select(queue, 0)
+    assert list(chosen) == [True] * 32 + [False] * 32
+    empty = np.zeros((t, k + 4), dtype=np.uint8)
+    bits = CR.queue_admit(queue, 0, empty)
+    assert not bits.any() and CR.live_blocks(bits) == [] and CR.hollow(empty, chosen) == list(range(32))
+    assert not CR.junk(empty, bits) and not CR.scale_only(empty)
+    call = RC.Call(torch.zeros(t, k, dtype=torch.int8), _call(32, 32, k, 3).b)
+    got, live = RC.gated_receipts(call, bits, SALT, 9, RA, RB)
+    assert live == [] and not got.any()
+    calls = [{"step": 0, "site": "x", "n": 32, "k": k}]
+    assert CR.tally(calls, [int(bits.sum())], 1, ("x",))["rows"] == 0
+    scale_only = empty.copy()
+    scale_only[:32, -1] = 0x3F
+    assert CR.queue_admit(queue, 0, scale_only).sum() == 32 and CR.scale_only(scale_only) == list(range(32))
+    bytes_only = empty.copy()
+    bytes_only[:32, :k] = 1
+    bits = CR.queue_admit(queue, 0, bytes_only)
+    assert not bits.any() and CR.junk(bytes_only, bits) == list(range(32)) and not CR.hollow(bytes_only, chosen)
+    honest = bytes_only.copy()
+    honest[:32, -1] = 0x3F
+    bits = CR.queue_admit(queue, 0, honest)
+    assert list(bits) == list(chosen) and not CR.junk(honest, bits) and not CR.hollow(honest, chosen)
+    assert not CR.scale_only(honest) and CR.live_blocks(bits) == [0]
 
 
 class _Layer:
@@ -280,7 +316,7 @@ def test_schedule_tap_records_the_queue_and_commits_it():
         passes.append(CR.queue_of(spans, 4, 64))
     a, b = passes
     assert np.array_equal(a["slot_map"], b["slot_map"]) and a["requests"] == b["requests"] == [(0, 0), (0, 2), (0, 2), (1, 3)]
-    assert [int(CR.queue_admit(a, s).sum()) for s in range(4)] == [8, 6, 1, 0]
+    assert [int(CR.queue_select(a, s).sum()) for s in range(4)] == [8, 6, 1, 0]
     key = bytes(64)
     qc = SV.commit_queue("w", key, a)
     assert qc["slot_leaves"] == 4 * 64 // 16 and qc["request_leaves"] == 4 * 64 + 1

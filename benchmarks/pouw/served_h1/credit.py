@@ -1,13 +1,17 @@
 """served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes, coordinator 22:35Z and 22:39Z): credit
-only the selected slots, from selections that always-proved units compute from the committed request queue.
+only the admitted slots, from admissions that always-proved units compute from the committed request queue and the rows'
+scales.
 
     queue     the scheduler's request queue, committed before the window's first coin (`queue_of`, `queue_leaves`): per
               (step, slot) the index of the request in that slot (0 for none), per request the steps [start, stop) it is
               live in (`pouw.circuit.admit`)
-    admit     slot i of a call at step t is selected iff the queue assigns it a request live at t (`queue_admit`, the
-              word of `PouwQueueAdmit`), never a function of the slot's row; the admit unit refuses a slot that is not
-              selected unless its row is the canonical empty row (K zero bytes, scale 0: `junk`), and a row of zero bytes
-              under a nonzero scale (`scale_only`), so a tile, which reads only the bytes, sees a dead row as an all-zero row
+    admit     slot i of a call at step t is selected iff the queue assigns it a request live at t (`queue_select`), never
+              a function of the slot's row, and admitted iff it is selected and its row's scale is nonzero (`queue_admit`,
+              the word of `PouwQueueAdmit`): a row can withhold its slot's admission, never grant it; the admit unit
+              refuses a slot that is not admitted unless its row is the canonical empty row (K zero bytes, scale 0:
+              `junk`), a slot that is selected whose row is the canonical empty row (`hollow`, RT-ALGO-4), and a row of zero
+              bytes under a nonzero scale (`scale_only`), so a tile, which reads only the bytes, sees a dead row as an
+              all-zero row and an admitted slot's row as live
     words     a call's T admit bits as T / 16 words of 16 bits (bit b of word q is slot 16 q + b), one admit unit each: a
               proof unit's outputs are at most 16 bits; each word is its own hiding leaf, in the call's admit tree
     dead      a unit (32 slot rows by 32 weight rows) is dead iff its 32 slots' admit bits are all 0: its rows are the
@@ -62,13 +66,28 @@ def queue_of(spans: Sequence[Sequence[tuple[str, int]]], steps: int, t: int) -> 
     return {"slot_map": slot_map, "requests": [(0, 0)] + [tuple(x) for x in life], "ids": list(index)}
 
 
-def queue_admit(queue: dict, s: int) -> np.ndarray:
-    """(T,) bool: step s's admit bits, `PouwQueueAdmit`'s word on each 16 slots' queue entries."""
+def queue_select(queue: dict, s: int) -> np.ndarray:
+    """(T,) bool: step s's selection, the slots the queue assigns a request live at s (`admit.select_bit`)."""
+    from verity.core.protocols.pouw.circuit import admit as A
+    req = queue["requests"]
+    return np.array([bool(A.select_bit(s, int(x), *req[int(x)])) for x in queue["slot_map"][s]], dtype=bool)
+
+
+def scales(rows: np.ndarray) -> list[int]:
+    """Each committed row's scale, the f32 that ends it (`commit.s8_rows`), as the u32 `PouwQueueAdmit` reads."""
+    r = np.ascontiguousarray(np.asarray(rows, dtype=np.uint8).reshape(rows.shape[0], -1)[:, -4:])
+    return [int(v) for v in r.view("<u4").reshape(-1)]
+
+
+def queue_admit(queue: dict, s: int, rows: np.ndarray) -> np.ndarray:
+    """(T,) bool: step s's admit bits, `PouwQueueAdmit`'s word on each 16 slots' queue entries and committed rows' scales."""
     from verity.core.protocols.pouw.circuit import admit as A
     q = [int(x) for x in queue["slot_map"][s]]
-    req = queue["requests"]
-    ws = [A.admit_word(s, q[g:g + WORD], [req[x][0] for x in q[g:g + WORD]], [req[x][1] for x in q[g:g + WORD]])
-          for g in range(0, len(q), WORD)]
+    req, sc = queue["requests"], scales(rows)
+    if len(sc) != len(q):
+        raise ValueError(f"step {s} has {len(q)} slots and {len(sc)} rows")
+    ws = [A.admit_word(s, q[g:g + WORD], [req[x][0] for x in q[g:g + WORD]], [req[x][1] for x in q[g:g + WORD]],
+                       sc[g:g + WORD]) for g in range(0, len(q), WORD)]
     return bits_of(ws)
 
 
@@ -84,8 +103,14 @@ def queue_leaves(queue: dict) -> tuple[list[bytes], list[bytes]]:
 
 
 def junk(rows: np.ndarray, bits: np.ndarray) -> list[int]:
-    """The slots the admit unit refuses: not selected, yet not the canonical empty row."""
+    """The slots the admit unit refuses: not admitted, yet not the canonical empty row."""
     return [int(i) for i in np.flatnonzero(nonempty(rows) & ~np.asarray(bits, dtype=bool))]
+
+
+def hollow(rows: np.ndarray, selected: np.ndarray) -> list[int]:
+    """The slots the admit unit refuses: selected by the queue, yet holding the canonical empty row (RT-ALGO-4).  The unit
+    admits none of them, so they credit nothing even unrefused."""
+    return [int(i) for i in np.flatnonzero(~nonempty(rows) & np.asarray(selected, dtype=bool))]
 
 
 def scale_only(rows: np.ndarray) -> list[int]:
@@ -160,18 +185,21 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
             "draw": "uniform over every unit position of the window, live or dead, by the window's draw coin: public "
                     "structure, never weighted by an annotation",
             "always_proved": {"admit": admit_units, "tally": tally_units, "total": admit_units + tally_units},
-            "admit_unit": "PouwQueueAdmit on the step and 16 slots' queue entries (the slot map's leaf and each slot's "
-                          "request entry, opened from the queue committed before the first coin), outputs their 16 admit "
-                          "bits, the leaf of the call's admit tree it writes; it opens the 16 slots' A rows from the call's "
-                          "a-table and refuses a slot not admitted whose row is not the canonical empty row",
+            "admit_unit": "PouwQueueAdmit on the step, 16 slots' queue entries (the slot map's leaf and each slot's "
+                          "request entry, opened from the queue committed before the first coin) and their rows' scales, "
+                          "outputs their 16 admit bits, the leaf of the call's admit tree it writes; it opens the 16 slots' "
+                          "A rows from the call's a-table and refuses a slot not admitted whose row is not the canonical "
+                          "empty row, a slot selected whose row is, and a row of zero bytes under a nonzero scale",
             "tally_units": f"{steps * len(sites)} per (step, site) popcount sums (<= 2^11), {len(sites)} per-site sums over "
                            "the steps (< 2^16), and one level unit (window.level(floor_point(sum_site count N K)), <= 9 bits)",
-            "dead_unit": "a drawn dead unit proves, with the live tile's proof shape (one gated template), that its 32 "
-                         "admit bits are 0 and its receipt is the canonical empty receipt; no noise is computed when serving",
+            "dead_unit": "a drawn dead unit proves, with the live tile's proof shape (one gated template), that its 32 A "
+                         "rows' bytes are zero and its receipt is the canonical empty receipt; no noise is computed when "
+                         "serving. The template reads no admit bit: its 32 admit bits are 0 because the admit unit admits "
+                         "no slot whose row's scale is zero and refuses a row of zero bytes under a nonzero scale",
             "egress": "no dead slot's output reaches a served output: the receipts are beside the served y and feed no "
                       "egress, and vLLM samples each served token from the step's selected rows only (admit is the served "
                       "prefix [1] * m + [0] * (T - m) in every call)"}
 
 
-__all__ = ["bits_of", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published", "queue_admit", "queue_leaves",
-           "queue_of", "scale_only", "tally", "word_rows", "words"]
+__all__ = ["bits_of", "hollow", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published", "queue_admit",
+           "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally", "word_rows", "words"]

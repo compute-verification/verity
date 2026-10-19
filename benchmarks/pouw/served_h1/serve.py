@@ -25,10 +25,11 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   each engine step's requests and their rows in batch order) as the slot map (per step and slot, the request's index, 0
   for none) and each request's live steps [start, stop), committed (`commit_queue`) before the first coin.  The served
   pass's record must be the same queue.
-* **Selection** (`credit`): slot i of step t is admitted iff the queue assigns it a request live at t
-  (`pouw.circuit.admit.PouwQueueAdmit`), never a function of the row.  A call's T admit bits are T/16 16-bit words, each its
-  own hiding leaf of the call's admit tree, written by an always-proved admit unit that reads the 16 slots' queue entries
-  and refuses a slot it does not admit unless its row is the canonical empty row (`credit.junk`).
+* **Selection** (`credit`): slot i of step t is selected iff the queue assigns it a request live at t, never a function of
+  the row, and admitted iff it is selected and its row's scale is nonzero (`pouw.circuit.admit.PouwQueueAdmit`).  A call's
+  T admit bits are T/16 16-bit words, each its own hiding leaf of the call's admit tree, written by an always-proved admit
+  unit that reads the 16 slots' queue entries and scales, and refuses a slot it does not admit unless its row is the
+  canonical empty row (`credit.junk`) and a selected slot whose row is (`credit.hollow`).
 * **Receipts**: `h1tile`'s unit on the GPU (`receipts.gated_receipts`) on every live unit, one with an admitted slot among
   its 32 rows.  Seeds come from the salt, the position and the call's (root(A), root(B)), inside the unit.  A dead unit skips
   the noise and the receipt: its leaf is the canonical empty receipt (zero words), so every receipt tree keeps its shape.
@@ -67,7 +68,8 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             (the tile's B rows negated) refused there, its re-commitment moving both roots (CMP-38), root(B) rebuilt, the
             tile's 32 B rows opened against it and a tampered weight row refused, the admit root rebuilt from the queue, a
             dead unit's rows empty and its skipped noise real work, a junk row in a slot the queue leaves unassigned refused
-            and not admitted, a live unit not empty
+            and not admitted, the canonical empty row in a slot the queue selects refused and not admitted, a live unit not
+            empty
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at 2026-10-18T00:00:00Z --by compute-accounting
@@ -492,7 +494,7 @@ def run(a: argparse.Namespace) -> dict:
         q = slots.cpu().numpy()
         rows = CM.s8_rows(q, scales)
         root_a = CM.s8_table(dom, key, f"a/{s}/{w}", q, scales).root
-        bits = CR.queue_admit(queue, s)
+        bits = CR.queue_admit(queue, s, rows)
         ws = CR.words(bits)
         s_fields = {"window": window, "step": s, "linear": w, "module": name, "slots": t_max, "schema": CM.SCHEMA}
         s_dom = CM.domain(s_fields, len(ws), "admit")
@@ -501,7 +503,8 @@ def run(a: argparse.Namespace) -> dict:
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": root_a.hex(),
                       "root_b": weights["roots"][w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
                       "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
-                      "scale_only": len(CR.scale_only(rows)), "junk": len(CR.junk(rows, bits))})
+                      "scale_only": len(CR.scale_only(rows)), "junk": len(CR.junk(rows, bits)),
+                      "hollow": len(CR.hollow(rows, CR.queue_select(queue, s)))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
                      "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
         if not live:
@@ -600,7 +603,8 @@ def run(a: argparse.Namespace) -> dict:
                        "receipts_s": round(sum(c["receipts_s"] for c in calls), 1), "live_units": live_u,
                        "admit_is_served_prefix": all(d["prefix"] for d in data),
                        "scale_only_rows": sum(c["scale_only"] for c in calls),
-                       "queue": {**queue_check, "junk_rows": sum(c["junk"] for c in calls)},
+                       "queue": {**queue_check, "junk_rows": sum(c["junk"] for c in calls),
+                                 "hollow_rows": sum(c["hollow"] for c in calls)},
                        "real_rows_per_step": [max((d["m"] for c, d in zip(calls, data) if c["step"] == s), default=0)
                                               for s in range(s_max)]})
     equal = [s_["token_ids"] == r["token_ids"] for s_, r in zip(served, reference)]
@@ -707,7 +711,7 @@ def run(a: argparse.Namespace) -> dict:
                                 "zero bytes and scale 0",
                            "b": "weight row j: K s8 bytes then its f32 weight scale LE",
                            "s": "admit word q: slots 16 q .. 16 q + 15's admit bits (bit b slot 16 q + b), u16 LE, "
-                                "PouwQueueAdmit's word on the step and the slots' queue entries",
+                                "PouwQueueAdmit's word on the step, the slots' queue entries and their rows' scales",
                            "r": "unit u: its receipt's 2 (KS + m) u32 words LE (per set y then z); a dead unit's the "
                                 "canonical empty receipt, zero words",
                            "t": "tally limb i: u16 LE, the per (step, site) limbs in step-major order, the per-site limbs, "
@@ -722,9 +726,11 @@ def run(a: argparse.Namespace) -> dict:
                 "credit": {**{k: v for k, v in credit.items() if k != "tally"},
                            "rule": "PADCREDIT round 2 with RT10's fixes: only admitted slots are credited; slot i of step "
                                    "t is admitted iff the request queue (committed before the first coin) assigns it a "
-                                   "request live at t (pouw.circuit.admit.PouwQueueAdmit, never the row), written by an "
+                                   "request live at t and its row's scale is nonzero (pouw.circuit.admit.PouwQueueAdmit: "
+                                   "the row can withhold admission, never grant it; RT-ALGO-4), written by an "
                                    "always-proved admit unit into its own leaf, which refuses a slot not admitted whose row "
-                                   "is not the canonical empty row; the admit leaves are committed (live) in the round "
+                                   "is not the canonical empty row and a slot the queue selects whose row is; the admit "
+                                   "leaves are committed (live) in the round "
                                    "root before the round's coin; the tally is 16-bit limbs, every tally unit always "
                                    "proved; Pub = point(level(floor_point(Cr)))"},
                 "calls": calls, "tokens_equal": all(equal)}
@@ -739,6 +745,7 @@ def run(a: argparse.Namespace) -> dict:
                          and s["order_ok"] and s["last_step_complete"] and s["static"] and rec.doc["steps"]["gate"]["ok"]
                          and coins["ok"] and s["admit_is_served_prefix"] and not s["scale_only_rows"]
                          and s["queue"]["served_is_committed"] and not s["queue"]["junk_rows"]
+                         and not s["queue"]["hollow_rows"]
                          and credit["tally_tree"]["limbs_16_bit"]
                          and credit["credited"]["pub_macs"] <= credit["credited"]["macs"])
     rec.save()
@@ -783,7 +790,8 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
         salt = bytes.fromhex(c["salt"])
         ri, cj = call.units[u]
         a_rows = CM.s8_rows(slots.numpy(), scales)
-        bits = CR.queue_admit(queue, c["step"])
+        bits = CR.queue_admit(queue, c["step"], a_rows)
+        chosen = CR.queue_select(queue, c["step"])
         live = bool(bits[32 * ri:32 * ri + 32].any())
         z, template = RC.reference(call, salt, c["base"], root_a, root_b, u)
         ungated = template if live else RC.reference(call, salt, c["base"], root_a, root_b, u, gated=False)[1]
@@ -798,7 +806,8 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
         admit_root = CM.levels(s_dom, [CM.leaf(s_dom, key, s_label, q, x)[0]
                                        for q, x in enumerate(CR.word_rows(CR.words(bits)))])[-1][0]
         sel = {"live": live, "admit_root_rebuilt": admit_root == bytes.fromhex(c["root_admit"]),
-               "admit_words_committed": CR.words(bits) == d["words"], "no_junk_row": not CR.junk(a_rows, bits)}
+               "admit_words_committed": CR.words(bits) == d["words"], "no_junk_row": not CR.junk(a_rows, bits),
+               "no_hollow_row": not CR.hollow(a_rows, chosen)}
         free = [r_ for r_ in range(32 * ri, 32 * ri + 32) if not bits[r_]]
         if free:
             jr = rng.choice(free)
@@ -806,7 +815,16 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
             junk_rows[jr, :-4] = np.frombuffer(os.urandom(junk_rows.shape[1] - 4), dtype=np.uint8) | 1
             junk_rows[jr, -4:] = np.frombuffer(np.float32(0.5).tobytes(), dtype=np.uint8)
             sel.update(junk_row_refused=CR.junk(junk_rows, bits) == [jr],
-                       junk_row_not_admitted=not CR.queue_admit(queue, c["step"])[jr] and int(bits.sum()) == c["selected"])
+                       junk_row_not_admitted=not CR.queue_admit(queue, c["step"], junk_rows)[jr]
+                       and int(bits.sum()) == c["selected"])
+        taken = [r_ for r_ in range(32 * ri, 32 * ri + 32) if chosen[r_]]
+        if taken:
+            hr = rng.choice(taken)
+            hollow_rows = a_rows.copy()
+            hollow_rows[hr] = 0
+            sel.update(hollow_row_refused=CR.hollow(hollow_rows, chosen) == [hr],
+                       hollow_row_not_admitted=not CR.queue_admit(queue, c["step"], hollow_rows)[hr]
+                       and int(CR.queue_admit(queue, c["step"], hollow_rows).sum()) == c["selected"] - 1)
         if live:
             sel.update(next_position_differs=nxt != got, live_unit_not_empty=bool(a_rows[32 * ri:32 * ri + 32].any()))
         else:
