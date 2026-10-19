@@ -9,6 +9,9 @@
 # PIN_BUILD_NAME: the Build of record sent with the run ($RESEARCH_RUN_DIR/inputs/<name>): every engine compiles into one fresh
 # Inductor dir seeded with its autotune winners (`served-pin seed`, as served_commit's prof.sh), and the dir is checked against
 # them after (`served-pin check` -> out/pin_check.txt, rc 3 when a winner differs). Unset: a fresh Inductor dir in scratch.
+# XCHECK=1 (with ARMS=stock MAXTPUT_ARGS="--load fixed"): `vllm bench throughput`, vLLM's own entry point, at the driver's engine
+# settings on its random dataset at 1024/128 exactly, before and after the driver (out/vllm-bench-{before,after}.{json,log});
+# row.py puts its output tok/s beside the driver's whole-run stock figure.
 # On a dc VM the GPU is held with gpu-lease; a queued job (vy-nebius-2) already runs inside the queue's lease.
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -17,14 +20,16 @@ mkdir -p "$OUT"
 export VENV MODEL=${MODEL:-qwen3-8b} ARMS=${ARMS:-stock,sha512,sha512-layer}
 SCRATCH=$(mktemp -d)
 trap 'rm -rf "$SCRATCH"' EXIT
-"$VENV/bin/python" -c "
+SNAP=$("$VENV/bin/python" -c "
 import sys
 sys.path.insert(0, 'benchmarks')
 from hash.maxtput.maxtput import MODELS
 from huggingface_hub import snapshot_download
 name, rev = MODELS['$MODEL']
 print(snapshot_download(name, revision=rev, allow_patterns=['*.json', '*.safetensors', '*.txt', '*.model', '*.py'],
-                        cache_dir='$HF_HOME/hub'))" || exit 8
+                        cache_dir='$HF_HOME/hub'))") || exit 8
+echo "model snapshot $SNAP"
+export SNAP
 export CHECK_TESTS=${CHECK_TESTS-integrations/vllm/tests/commit/test_rows_cuda.py integrations/vllm/tests/commit/test_windowed_rows_sha512.py integrations/vllm/tests/commit/test_native_collect.py}
 pin() { "$VENV/bin/python" -m verity_vllm.pipeline.cli served-pin "$1" --build "$PIN_BUILD" --inductor-dir "$OUT/inductor"; }
 if [ -n "${PIN_BUILD_NAME:-}" ]; then
@@ -50,9 +55,18 @@ bench='
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=timestamp,utilization.gpu,clocks.sm,power.draw,memory.used \
     --format=csv,noheader,nounits -lms 200 > "$OUT/gpu.csv" 2>/dev/null &
   smi=$!
+  vbench() {
+    "$VENV/bin/vllm" bench throughput --model "$SNAP" --dataset-name random --random-input-len 1024 --random-output-len 128 \
+      --random-range-ratio 0 --num-prompts "${REQUESTS:-2048}" --max-num-seqs 1024 --max-model-len 4096 \
+      --gpu-memory-utilization 0.9 --no-enable-prefix-caching --disable-detokenize --output-json "$OUT/vllm-bench-$1.json" \
+      > "$OUT/vllm-bench-$1.log" 2>&1
+    echo "vllm bench throughput ($1) rc $?: $(grep -m1 "^Throughput:" "$OUT/vllm-bench-$1.log")"
+  }
+  [ -n "${XCHECK:-}" ] && vbench before
   "$VENV/bin/python" -m hash.maxtput.maxtput --model "$MODEL" --arms "$ARMS" --requests "${REQUESTS:-2048}" \
     --cycles "${CYCLES:-2}" --reps "${REPS:-1}" --gpu-log "$OUT/gpu.csv" --out "$OUT" ${MAXTPUT_ARGS:-} 2>&1 | tee "$OUT/maxtput.log"
   rc=${PIPESTATUS[0]}
+  [ -n "${XCHECK:-}" ] && vbench after
   kill $smi 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.after.csv"
   exit $rc'

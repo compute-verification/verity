@@ -24,6 +24,9 @@ cycle's arms run back to back on one card), averaged over cycles, each cycle's i
                            requests/s, TTFT p50
   output_tokens_per_s, requests_per_s, scheduled_tokens_per_s, whole_output_tokens_per_s, ttft_{p50,p99}_ms, tpot_{p50,p99,mean}_ms,
   gpu_util_mean_pct, gpu_util_min_pct, waiting_min, running_mean, kv_usage_mean, finalize_s   the absolutes (means over runs)
+  vllm_bench_output_tokens_per_s, vllm_bench_requests_per_s, driver_vs_vllm_bench_pct   with XCHECK (job.sh): `vllm bench
+                           throughput`'s whole-run figures (its two runs, before and after the driver) and 100 (the driver's
+                           stock whole_output_tokens_per_s / vLLM's - 1), in the run's result only
 
 Every request arrives at t=0, so TTFT counts from there: under the burst it is the queue wait plus the first token, and --table
 heads it so.
@@ -144,6 +147,32 @@ def results(doc: dict[str, Any], pin: dict[str, Any], bench_rc: int, run_id: str
     return whole, per
 
 
+def vllm_bench(log: Path) -> dict[str, float] | None:
+    """`vllm bench throughput`'s summary line (over its whole `llm.generate`): requests/s, total tokens/s, output tokens/s."""
+    got = re.search(r"^Throughput: ([\d.]+) requests/s, ([\d.]+) total tokens/s, ([\d.]+) output tokens/s",
+                    log.read_text(errors="replace"), re.M) if log.is_file() else None
+    return dict(zip(("requests_per_s", "total_tokens_per_s", "output_tokens_per_s"), map(float, got.groups()))) if got else None
+
+
+def xcheck(whole: dict[str, Any], out: Path) -> None:
+    """job.sh's XCHECK: vLLM's own entry point beside the driver's stock engine, both over the whole run on one fixed load."""
+    bench = [b for w in ("before", "after") if (b := vllm_bench(out / f"vllm-bench-{w}.log"))]
+    if len(bench) < 2:
+        whole["validation"]["status"] = "failed"
+        whole["validation"]["detail"] += f"; vllm bench throughput reported {len(bench)} of 2 runs (out/vllm-bench-*.log)"
+    if not bench:
+        return
+    ref = mean([b["output_tokens_per_s"] for b in bench])
+    ms = whole["measurements"]
+    ms.append({"name": "vllm_bench_output_tokens_per_s", "value": round(ref, 4), "unit": "tok/s", "arm": "vllm-bench",
+               "runs": [b["output_tokens_per_s"] for b in bench]})
+    ms.append({"name": "vllm_bench_requests_per_s", "value": round(mean([b["requests_per_s"] for b in bench]), 4), "unit": "req/s",
+               "arm": "vllm-bench", "runs": [b["requests_per_s"] for b in bench]})
+    driver = next((m["value"] for m in ms if m["arm"] == "stock" and m["name"] == "whole_output_tokens_per_s"), None)
+    if driver:
+        ms.append({"name": "driver_vs_vllm_bench_pct", "value": round(100 * (driver / ref - 1), 3), "unit": "%", "arm": "stock"})
+
+
 def build(a: argparse.Namespace) -> int:
     run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", a.out.parent))
     src = a.out / "maxtput.json"
@@ -157,6 +186,8 @@ def build(a: argparse.Namespace) -> int:
               for w in ("before", "after") if (a.out / f"clocks.{w}.csv").is_file()}
     whole, per = results(doc, pin, a.bench_rc, os.environ.get("RESEARCH_RUN_ID", "local"), clocks,
                          [str(src.relative_to(run_dir))] if src.is_file() else [])
+    if os.environ.get("XCHECK"):
+        xcheck(whole, a.out)
     every = whole["measurements"]
     (a.out / "arms").mkdir(parents=True, exist_ok=True)
     for arm, one in per.items():
@@ -165,8 +196,8 @@ def build(a: argparse.Namespace) -> int:
     tmp.write_text(json.dumps(whole, indent=1) + "\n")
     os.replace(tmp, a.to)
     for m in every:
-        if m["name"] in ("output_tokens_per_s", "requests_per_s", "tpot_p50_ms", "ttft_p50_ms", "gpu_util_mean_pct", "waiting_min")\
-                or m["name"].endswith("overhead_pct"):
+        if m["name"] in ("output_tokens_per_s", "requests_per_s", "tpot_p50_ms", "ttft_p50_ms", "gpu_util_mean_pct", "waiting_min",
+                         "whole_output_tokens_per_s") or m["name"].endswith("overhead_pct") or "vllm_bench" in m["name"]:
             print(f"{m['arm']:>14} {m['name']:<30} {m['value']} {m.get('runs', '')}")
     print(f"validation {whole['validation']['status']}: {whole['validation']['detail']}")
     return 0 if whole["validation"]["status"] == "passed" else 1
