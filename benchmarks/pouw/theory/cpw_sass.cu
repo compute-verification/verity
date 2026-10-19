@@ -11,7 +11,9 @@
 //   3 atoms64: the same into shared memory (ATOMS.XOR.64), flushed after the last set;
 //   4 shfl: a 5-step SHFL butterfly a part instead of REDUX;
 //   5 egress: STSM x4 of the lane's 16 state words, the cheapest way out of the registers (no reduction: a lower-bound
-//     probe, not a checkpoint).
+//     probe, not a checkpoint);
+//   6 pair2: 6 LOP3 take the lane's 16 words to two (y, z) pairs, and two 64-bit red.global.xor put both into the
+//     zeroed receipt word pair: 8 instructions a set-warp, the issue-merged bound (`cpw_floor.py`).
 // `main` runs on the device it finds: bitexact (one warp, 64 sets, every final state and every checkpoint against the
 // host), then tp at 1, 2, 4 warps a SMSP and at full occupancy: SMSP-cycles a warp-set (clock64 a block, max over
 // blocks), 8 units a warp-set.
@@ -56,6 +58,11 @@ __device__ __forceinline__ void absorb(uint32_t (&y)[NCH], uint32_t (&z)[NCH], c
   step<T, 1>(y, z, d[1]);
   step<T, 2>(y, z, d[2]);
   step<T, 3>(y, z, d[3]);
+}
+
+__device__ __forceinline__ void red_xor64(unsigned long long *p, uint32_t lo, uint32_t hi) {
+  asm volatile("red.relaxed.gpu.global.xor.b64 [%0], %1;" ::"l"(p), "l"(((unsigned long long)hi << 32) | lo)
+               : "memory");
 }
 
 __device__ __forceinline__ void stsm4(uint32_t addr, uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
@@ -121,6 +128,12 @@ __global__ void __launch_bounds__(NT) cpw(const uint32_t *st, const uint32_t *W,
         }
         if (ln == 0) *(uint2 *)&cp[2 * k] = make_uint2(xy, xz);
       }
+    } else if (MODE == 6) {
+      const uint32_t ya = y[0] ^ y[1] ^ y[2] ^ y[6] ^ y[7], yb = y[3] ^ y[4] ^ y[5];
+      const uint32_t za = z[0] ^ z[1] ^ z[2] ^ z[6] ^ z[7], zb = z[3] ^ z[4] ^ z[5];
+      unsigned long long *p = (unsigned long long *)&cp[2 * k];
+      red_xor64(p, ya, za);
+      red_xor64(p, yb, zb);
     } else if (MODE == 5) {
       stsm4(sb, y[0], y[1], y[2], y[3]);
       stsm4(sb + 512, y[4], y[5], y[6], y[7]);
@@ -149,6 +162,7 @@ CPW_INST(2)
 CPW_INST(3)
 CPW_INST(4)
 CPW_INST(5)
+CPW_INST(6)
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -207,6 +221,7 @@ int main() {
   struct { const char *name; Kern k; int mode; } ks[] = {
       {"cpw_none", cpw<0>, 0}, {"cpw_redux", cpw<1>, 1}, {"cpw_red64", cpw<2>, 2},
       {"cpw_atoms64", cpw<3>, 3}, {"cpw_shfl", cpw<4>, 4}, {"cpw_egress", cpw<5>, 5},
+      {"cpw_pair2", cpw<6>, 6},
   };
   const int maxblocks = sms * 32;
   const size_t nthr = (size_t)maxblocks * NT, ncp = (nthr / 32) * CPS * 2;
@@ -232,12 +247,13 @@ int main() {
     cudaMemcpy(cpo, d_cp, sizeof cpo, cudaMemcpyDeviceToHost);
     int bad_st = err != cudaSuccess, bad_cp = 0;
     for (int i = 0; i < 32 * 16; ++i) bad_st += out[i] != fin[i];
-    if (e.mode >= 1 && e.mode <= 4)
+    const bool checked = (e.mode >= 1 && e.mode <= 4) || e.mode == 6;
+    if (checked)
       for (int i = 0; i < 2 * CPS; ++i) bad_cp += cpo[i] != ck[i];
     int ok = bad_st == 0 && bad_cp == 0;
     all &= ok;
     printf("%s bitexact=%d bad_states=%d bad_checkpoints=%d checkpoint=%s err=%s\n", e.name, ok, bad_st, bad_cp,
-           (e.mode >= 1 && e.mode <= 4) ? "checked" : "none", cudaGetErrorString(err));
+           checked ? "checked" : "none", cudaGetErrorString(err));
     int occ = 0;
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, e.k, NT, 0);
     if (occ > 32) occ = 32;
