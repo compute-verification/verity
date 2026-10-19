@@ -14,6 +14,10 @@ both sides share), compared output for output: null, or the same reason.
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
 `pouw_pass_cases` generates (honest passes of each coin version and a recorded beacon's, and honest draws, then one
 mutation each aimed at every refusal), compared output for output: how the salt was had, or the same refusal.
+
+Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
+round coins, each opened after its recorded round root, then one mutation each aimed at every refusal), compared output
+for output: null, or the same refusal.
 """
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ from hypothesis import strategies as st
 import pouw_check_cases as cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
+import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import verifier as V
 
@@ -196,3 +201,35 @@ def test_pass_and_draw(pass_server):
         live = {**early, "recorded": False}
         assert (draw(early), draw(live)["refused"][0]) == (None, "coin")
         D.replay(DRAW, early, pass_server), D.replay(DRAW, live, pass_server)
+
+
+ROUNDED: Counter[str] = Counter()
+
+
+def rounds(case: dict) -> dict | None:
+    refused = CC.rounds(*rounds_cases.rounds_args(case))
+    ROUNDED[f"{refused[0]}: {_template(refused[1])}" if refused else "accept"] += 1
+    return None if refused is None else {"refused": list(refused)}
+
+
+ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+                inputs=st.builds(rounds_cases.rounds_instance, st.randoms(use_true_random=False),
+                                 st.sampled_from(["honest"] * (len(rounds_cases.ROUNDS_NAMES) // 4)
+                                                 + rounds_cases.ROUNDS_NAMES)))
+
+
+def test_rounds(pass_server):
+    """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
+    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
+    ROUNDED.clear()
+    stats = D.run(ROUNDS, examples=600, server=pass_server)
+    swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
+                    for name in ["honest", *rounds_cases.ROUNDS_NAMES] for seed in range(3))
+    print(f"pouw-check-difftest rounds: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
+          f"{dict(sorted(ROUNDED.items()))}")
+    assert "accept" in ROUNDED
+    for part in ("is opened twice", "was opened before its root was recorded", "was never opened", ": coin is epoch #",
+                 ": coin does not open", ": coin was not opened after", "the verifier's coins are malformed",
+                 "the round roots are not", "the round coins are not a list", ": a live coin opening is",
+                 "the coin commitment's "):
+        assert any(part in k for k in ROUNDED), part
