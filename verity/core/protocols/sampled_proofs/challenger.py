@@ -373,12 +373,13 @@ def trusted_commitment(path: str | os.PathLike, key: ChallengerKey, verify: Veri
 
 
 class LiveChallenger:
-    """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` (the
-    operating system's generator by default) and commits to them at construction, before the epoch; `open` releases coin
-    (`label`, `index`) once, after the verifier recorded `after`."""
+    """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
+    commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
+    recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
+    Lean verifier of record's read of it (`IO.getRandomBytes`, A3)."""
 
     def __init__(self, scheme: str, epoch: int, families: Sequence[tuple[str, int]],
-                 entropy: Callable[[int], bytes] = os.urandom) -> None:
+                 entropy: Callable[[int], bytes]) -> None:
         families = tuple(tuple(f) for f in families)
         why = layout_problem(scheme, epoch, families)
         if why is not None:

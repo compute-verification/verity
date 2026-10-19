@@ -187,8 +187,11 @@ def test_a_label_may_name_its_client():
     assert C.live_reason(ch.commitment, o, "vllm/positions", 0, b"r" * 64) is None
 
 
-def test_a_fresh_challenger_draws_from_the_operating_system():
-    a, b = (C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)]) for _ in range(2))
+def test_a_challenger_draws_only_from_the_entropy_it_is_given():
+    """No default source: a challenger built without one is refused, so none reads the operating system itself."""
+    with pytest.raises(TypeError, match="entropy"):
+        C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)])
+    a, b = (C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)], entropy(s)) for s in "ab")
     assert a.commitment.root != b.commitment.root and len(a.commitment.root) == 64
     with pytest.raises(ValueError, match="returned other than"):
         C.LiveChallenger("verity/test/coins/v1", 7, [(LABEL, 2)], lambda n: bytes(n - 1))
