@@ -805,8 +805,10 @@ class ProverSide:
         def flush(x: _Pass) -> dict | None:
             """x's appends not yet sent, sent together and each answered with its coin in turn, under which the backend
             encodes its blocks, so x waits one round trip however many steps it covers: None, or the session's `end`
-            if it came first."""
+            if it came first (an `end` already drained into `pending`, behind a coin, gets no `appended` either)."""
             nonlocal sent_appends
+            if (gone := next((m for m, _, _ in pending if m["type"] == "end"), None)) is not None:
+                return gone
             todo = trace.appends[sent_appends:x.upto[0]]
             for a in todo:
                 self.conn.send({"type": "append", "root": a.root.hex(), "count": a.count})
