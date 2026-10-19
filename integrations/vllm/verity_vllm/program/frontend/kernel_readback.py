@@ -6,7 +6,7 @@ one, '<mixed>' when the layers disagree (both are mismatches against a declarati
 """
 from __future__ import annotations
 
-#: the arm an exact-int8 linear method or attention impl reports (`int8_arm`): `benchmarks/ppl/steps.py`'s plain int8 step
+#: the arm an exact-int8 linear method or attention impl reports (`int8_arm`): steps.py's plain int8 linear, the LUT-softmax attention
 INT8_ARM = "plain"
 
 
@@ -34,6 +34,18 @@ def int8_exact_of(model) -> str | None:
         elif arms - {"<none>"}:
             return "<mixed>"
     return {("linears",): "linears", ("attention",): "attention", ("linears", "attention"): "all"}.get(tuple(parts))
+
+
+def int8_k_scales_of(model) -> dict[str, list[int]]:
+    """{layer_name: the K scales as float32 bit patterns, one per KV head} of every attention layer whose impl carries them
+    (`engine.int8_attention_vllm.Int8AttentionImpl.k_scale_bits`)."""
+    out = {}
+    for name, mod in model.named_modules():
+        impl = getattr(mod, "impl", None)
+        if is_attention_impl(impl) and callable(kb := getattr(impl, "k_scale_bits", None)):
+            ln = getattr(mod, "layer_name", name)
+            out[ln] = [b & 0xFFFFFFFF for b in kb(ln)]
+    return out
 
 
 def is_attention_impl(obj) -> bool:

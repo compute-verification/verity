@@ -6,9 +6,12 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
 
     gelu_tanh_bf16   2^16 entries, one word each (1,024 rows): `dense.gelu_tanh_bf16_bits(g)`, the activation word of a bf16 g
     tanh_rn          2^27 entries, two words each (2^22 rows): RN32(tanh) at |x|'s low 27 bits (`tanh_rn_entry`)
+    exp2_lut127      2^8 entries, two words each (8 rows): fattn's LUT[t] = rint(127 2^(-t/16)) as a 32-bit word
+                     (`int8_exact.exp2_lut127_words`)
 
     TableRead{IB}x{EW}_v1  (index: Value<16> if IB <= 16 else Value<32>, table: Array<2^IB EW / 64, Array<64, Value<16>>>)
-                           -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total
+                           -> Value<16 EW>: the entry at the index's low IB bits, its words joined low first; total;
+                           the signature the Lean evaluator decodes (`Evaluate.Prims.lazyFamily?`)
     TableRead{IB}x{EW}_v2  its Boolean form, made with it up to `BT.MAX_WORDS` table words (`verity.ml.circuits.boolean.table`):
                            the multiplexer tree over the 2^IB entries, (2^IB - 1) 16 EW ANDs, by which C-Flock lowers the
                            read; `gelu_tanh_bf16` and `tanh_rn` are past it, so a read of either stays a NoPiece
@@ -16,7 +19,9 @@ A table of 2^IB entries of EW u16 words (an entry's low word first) is the regis
 `GeluTanhMulBf16_v3` / `GeluTanhMul_v3{I}` are `GeluTanhMulBf16_v1` / `GeluTanhMul_v1{I}` with the activation read from the
 registered `gelu_tanh_bf16` rather than computed by the primitive's evaluator.  `TanhF32Rn_v2` is `TanhF32Rn_v1` with |x| in
 [LO, HI) read from the registered `tanh_rn`, as C-Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words
-are read lazily (`verity.ml.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.
+are read lazily (`verity.ml.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.  No rule binds either: the
+Boolean versions of `TanhF32Rn_v1` and `GeluTanhMul_v1` compute both tables' entries by arithmetic (`registry.boolean_tanh`:
+`TanhF32Rn_v3`, `GeluTanhMul_v4`), so a Program on bits reads neither.
 """
 from __future__ import annotations
 
@@ -34,7 +39,7 @@ from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.prims import BF16
 
 ROW_WORDS, WORD_BITS = 64, 16
-TABLES = {"gelu_tanh_bf16": (16, 1), "tanh_rn": (27, 2)}
+TABLES = {"gelu_tanh_bf16": (16, 1), "tanh_rn": (27, 2), "exp2_lut127": (8, 2)}
 #: `tanh_rn`'s region: identity below LO, ±1 from HI (`verity_flock.tail_pieces.TANH_BOUNDS["tanh_rn"]`)
 TANH_RN_LO, TANH_RN_HI = 0x39B89BA3, 0x41102CB4
 #: `tanh_rn`'s entries by where their words come from: the words 0x40000000 | i below HI's index, none (0) up to LO's, then the

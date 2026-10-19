@@ -20,4 +20,12 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
                                       DOT=boolean_attention.ATTENTION_FA3["DOT"], INV=boolean_attention.ATTENTION_FA2["INV"])),
         ("Attention_v9", lambda: bind(boolean_attention.AttentionV9, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
                                       **boolean_attention.ATTENTION_FA3)),
+        # v6 to v9's configurations with the scale an input: the rescale reads the scale word (T = BN + 1)
+        ("Attention_v14", lambda: bind(boolean_attention.AttentionV14, T=17, NH=1, KVH=1, D=16, BN=16)),
+        ("Attention_v15", lambda: bind(boolean_attention.AttentionV15, T=5, NH=1, KVH=1, D=16, BN=16,
+                                       **boolean_attention.ATTENTION_FA3)),
+        ("Attention_v16", lambda: bind(boolean_attention.AttentionV16, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                       **boolean_attention.ATTENTION_FA3)),
+        ("Attention_v17", lambda: bind(boolean_attention.AttentionV17, T=17, NH=1, KVH=1, D=16, BN=16, MASKED_FROM=1,
+                                       DOT=boolean_attention.ATTENTION_FA3["DOT"], INV=boolean_attention.ATTENTION_FA2["INV"])),
     ]
