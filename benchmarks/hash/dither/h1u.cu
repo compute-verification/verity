@@ -27,6 +27,11 @@
 // Both forms load the A and B words H1U_PD segments ahead while the current segment is multiplied and folded (WS always,
 // the fused form with H1U_PF), in a ring of H1U_PD register sets; H1U_L2PF also prefetches into L2 the A and B lines 16
 // segments ahead and (WS) the next chunk's workspace blocks. H1U_WARPS is the warps a CTA (one a unit).
+// H1U_SPLIT builds h1p in h1u's place: a pair of warps a unit, for calls whose units leave most of the GPU idle (decode).
+// Warp p of the pair multiplies n-tiles p and p + 2 (T and Y), so it holds exactly the entries chains 4 p .. 4 p + 3 absorb
+// (key t = 2 i + p), and folds those; it hashes (or loads) one of the chunk's two blocks a lane, p = 0 the rows', p = 1 the
+// columns', into the pair's shared buffers. A set's ring word is the XOR of the two warps' (every chain's XOR), and A_d
+// the OR of their halves (byte 2 (nt & 1) + (e & 1) of a register is n-tile nt's), exchanged in shared memory.
 //
 //   kh_seeds(data, base, U, seeds, stream)   data: SEED_TAG, RECEIPT_TAG (3 words each), salt, root_a, root_b (8 each)
 //   kh_unit(A, B, M, N, K, seeds, live, out, stream)   out: U x kh_words(K) u32 (live may be null: every unit live)
@@ -51,7 +56,11 @@ constexpr int WARPS = H1U_WARPS;
 #ifndef H1U_L2PF
 #define H1U_L2PF 0
 #endif
+#ifndef H1U_SPLIT
+#define H1U_SPLIT 0
+#endif
 static_assert(16 % H1U_PD == 0, "a chunk's 16 segments are whole rings of H1U_PD");
+static_assert(!H1U_SPLIT || (WARPS % 2 == 0 && WARPS <= 4), "a split unit is a pair of warps; 2 pairs fill 48 KiB");
 
 constexpr u32 mix32c(u32 x) {
   x ^= x >> 16;
@@ -455,6 +464,360 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1u(const int8_t* __rest
   if (lane < 2 * MD) o[2 * ks + lane] = ring_xor(S, lane);
 }
 
+// a pair's shared state: the chunk's blocks by chunk parity ([0 rows | 1 columns][i][half]), reused after the last chunk
+// for the warps' A_d halves; the coins and U bytes; warp 1's ring words by chunk parity; each warp's ring
+struct alignas(16) PairSmem {
+  NoiseMid nm[2];
+  union {
+    u32 bits[2][2][32][17];
+    u32 xad[2][3][2][4][32];  // [warp][d][mt][reg][lane]
+  };
+  u32 coin[32][2];
+  u32 utab[32][9];
+  u32 xr[2][32];
+  u32 ring[2][32][33];
+};
+
+__device__ __forceinline__ void pair_sync(u32 pair) { asm volatile("bar.sync %0, 64;" ::"r"(1 + pair) : "memory"); }
+
+// half P of a set: local tile l = 2 mt + (nt >> 1) of n-tile nt = P + 2 (l & 1) is key t = 2 l + P, chain 4 P + c's entry e = c
+template <int P>
+__device__ __forceinline__ void fold_half(const int (&acc)[4][4], u32 (&y)[4], u32 (&z)[4]) {
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+#pragma unroll
+    for (int c = 0; c < 4; ++c) {
+      const int t = 2 * i + P;
+      const u32 p = (u32)acc[i][c] * KEYS.fx1[8 * i + 4 * P + c];
+      const u32 uu = y[c] ^ p ^ KEYS.kk[t];
+      y[c] = uu * KEYS.ka[t] + z[c];
+      z[c] = __funnelshift_l(uu, uu, KEYS.rot[t]) + y[c];
+    }
+  }
+}
+
+__device__ __forceinline__ void ring_put_half(u32 (&ring)[32][33], int slot, u32 lane, const u32 (&y)[4], const u32 (&z)[4]) {
+  ring[2 * slot][lane] = y[0] ^ y[1] ^ y[2] ^ y[3];
+  ring[2 * slot + 1][lane] = z[0] ^ z[1] ^ z[2] ^ z[3];
+}
+
+__device__ __forceinline__ u32 ring_xor_half(const u32 (&ring)[32][33], u32 row) {
+  u32 x = 0;
+#pragma unroll
+  for (int l = 0; l < 32; ++l) x ^= ring[row][l];
+  return x;
+}
+
+template <int MD, bool WS, int P>
+__device__ __forceinline__ void h1p_half(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 N, u32 K,
+                                         const u64* __restrict__ seeds, u32* __restrict__ out,
+                                         const u32* __restrict__ ws, PairSmem& S, u32 pair, u32 u) {
+  constexpr bool PF = WS || H1U_PF;
+  constexpr int PD = H1U_PD;
+  const u32 lane = threadIdx.x & 31, g = lane >> 2, q = lane & 3;
+  const u32 ncb = N / 32, ri = u / ncb, cj = u % ncb;
+  const u32 ks = K / 32, chunks = ks / 16, rb = chunks + 1, cb = chunks + 1;
+  u32* o = out + (u64)u * (2 * (ks + MD));
+  const u64* sd = seeds + 16 * (u64)u;
+
+  u32 y[4], z[4];
+  {
+    u64 msg[16] = {TAG0, TAG1, TAG2};
+#pragma unroll
+    for (int j = 0; j < 8; ++j) msg[3 + j] = __ldg(sd + 8 + j);
+    msg[11] = lane;
+    msg[12] = 0x8000000000000000ULL;
+    msg[13] = 0;
+    msg[14] = 0;
+    msg[15] = 96 * 8;
+    u64 s[8];
+    sha512_words(msg, 1, s);
+#pragma unroll
+    for (int c = 0; c < 4; ++c) {
+      const int k = 4 * P + c;
+      y[c] = (k & 1) ? (u32)s[k >> 1] : (u32)(s[k >> 1] >> 32);
+      z[c] = (k & 1) ? (u32)s[4 + (k >> 1)] : (u32)(s[4 + (k >> 1)] >> 32);
+    }
+  }
+  if (!WS) {
+    u64 seed[8];
+#pragma unroll
+    for (int j = 0; j < 8; ++j) seed[j] = __ldg(sd + j);
+    NoiseMid nm;
+    noise_mid(seed, nm);
+    if (lane == 0) S.nm[P] = nm;
+  }
+  __syncwarp();
+  const u32* wsu = WS ? ws + 16ull * 32 * (rb + cb) * u : nullptr;
+
+  u32 idr[2][2];
+#pragma unroll
+  for (int l = 0; l < 2; ++l) {
+    const u32 nt = P + 2 * l;
+    idr[l][0] = (q == nt && g < 4) ? 1u << (8 * g) : 0u;
+    idr[l][1] = (q == nt && g >= 4) ? 1u << (8 * (g - 4)) : 0u;
+  }
+  int T[4][4], Y[4][4];
+#pragma unroll
+  for (int t = 0; t < 4; ++t)
+#pragma unroll
+    for (int e = 0; e < 4; ++e) T[t][e] = Y[t][e] = 0;
+  u32 ulo[2], uhi[2];
+
+  const int8_t* Ab = A + (u64)(32 * ri) * K;
+  const int8_t* Bb = B + (u64)(32 * cj) * K;
+  uint2 pa[PD][4], pb[PD][2];
+  const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[2]) {
+    const u32 kofs = 32 * sg + 8 * q;
+#pragma unroll
+    for (int r = 0; r < 4; ++r)
+      a[r] = __ldg(reinterpret_cast<const uint2*>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs));
+#pragma unroll
+    for (int l = 0; l < 2; ++l)
+      b[l] = __ldg(reinterpret_cast<const uint2*>(Bb + (u64)(8 * (P + 2 * l) + g) * K + kofs));
+  };
+  if (PF) {
+#pragma unroll
+    for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
+  }
+  u32 pend = 0;
+#pragma unroll 1
+  for (u32 it = 0; it <= chunks; ++it) {
+    const u32 blk = it == 0 ? chunks : it - 1, buf = it & 1;
+    {
+      const u64 t = P == 0 ? (u64)lane * rb + blk : 32ull * rb + (u64)lane * cb + blk;
+      u32* dst = S.bits[buf][P][lane];
+      if (WS) {
+        const uint4* src = reinterpret_cast<const uint4*>(wsu + 16 * t);
+#pragma unroll
+        for (int w = 0; w < 4; ++w) {
+          const uint4 v = __ldg(src + w);
+          dst[4 * w] = v.x;
+          dst[4 * w + 1] = v.y;
+          dst[4 * w + 2] = v.z;
+          dst[4 * w + 3] = v.w;
+        }
+        if (H1U_L2PF && it < chunks) prefetch_l2(wsu + 16 * (t - blk + it));
+      } else {
+        u64 s[8];
+        noise_block(S.nm[P], t, s);
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          dst[2 * j] = (u32)(s[j] >> 32);
+          dst[2 * j + 1] = (u32)s[j];
+        }
+      }
+    }
+    pair_sync(pair);
+    if (P == 0 && it >= 2) o[32 * (it - 2) + lane] = pend ^ S.xr[(it - 1) & 1][lane];
+    if (it == 0) {
+      if (P == 0) {
+#pragma unroll
+        for (int d = 0; d < MD - 1; ++d) S.coin[lane][d] = S.bits[0][0][lane][d];
+      } else {
+#pragma unroll
+        for (int h = 0; h < 8; ++h) {
+          const u32 hv = S.bits[0][1][lane][h];
+          u32 w = 0;
+#pragma unroll
+          for (int b = 0; b < 4; ++b) {
+            const u32 x = (hv >> (8 * b)) & 0xFFu;
+            w |= ((x >= 129 ? x - 129 : x) + 64) << (8 * b);
+          }
+          S.utab[lane][h] = w;
+        }
+      }
+      pair_sync(pair);
+#pragma unroll
+      for (int l = 0; l < 2; ++l) {
+        ulo[l] = S.utab[8 * (P + 2 * l) + g][2 * q];
+        uhi[l] = S.utab[8 * (P + 2 * l) + g][2 * q + 1];
+      }
+      continue;
+    }
+    const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.bits[buf][0][0][0]);
+    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&S.bits[buf][1][0][0]);
+#pragma unroll 1
+    for (u32 j0 = 0; j0 < 16; j0 += PD) {
+#pragma unroll
+      for (int jj = 0; jj < PD; ++jj) {
+        const u32 j = j0 + jj, sg = 16 * blk + j;
+        uint2 ca[4], cw[2];
+        if (H1U_L2PF && sg % 4 == 0 && sg + 16 < ks) {
+          prefetch_l2(Ab + (u64)lane * K + 32 * (sg + 16));
+          prefetch_l2(Bb + (u64)lane * K + 32 * (sg + 16));
+        }
+        if (PF) {
+#pragma unroll
+          for (int r = 0; r < 4; ++r) ca[r] = pa[jj][r];
+#pragma unroll
+          for (int l = 0; l < 2; ++l) cw[l] = pb[jj][l];
+          if (sg + PD < ks) load_seg(sg + PD, pa[jj], pb[jj]);
+        } else {
+          load_seg(sg, ca, cw);
+        }
+        u32 af[2][4], bf[2][2];
+#pragma unroll
+        for (int mt = 0; mt < 2; ++mt) {
+#pragma unroll
+          for (int h = 0; h < 2; ++h) {
+            const u32 row = 16 * mt + g + 8 * h;
+            const uint2 a8 = ca[2 * mt + h];
+            const u32 nb8 = rbits[row * 68 + 4 * j + q];
+            af[mt][h] = add01(a8.x, expand4(nb8 & 15u));
+            af[mt][2 + h] = add01(a8.y, expand4(nb8 >> 4));
+          }
+        }
+#pragma unroll
+        for (int l = 0; l < 2; ++l) {
+          const u32 col = 8 * (P + 2 * l) + g;
+          const uint2 b8 = cw[l];
+          const u32 cb8 = cbits[col * 68 + 4 * j + q];
+          bf[l][0] = addw(b8.x, ulo[l] + expand4(cb8 & 15u));
+          bf[l][1] = addw(b8.y, uhi[l] + expand4(cb8 >> 4));
+        }
+#pragma unroll
+        for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+          for (int l = 0; l < 2; ++l) {
+            mma_s8(T[2 * mt + l], af[mt], bf[l]);
+            mma_s8(Y[2 * mt + l], af[mt], idr[l]);
+          }
+        fold_half<P>(T, y, z);
+        ring_put_half(S.ring[P], j, lane, y, z);
+      }
+    }
+    __syncwarp();
+    const u32 part = ring_xor_half(S.ring[P], lane);
+    if (P == 1) S.xr[buf][lane] = part;
+    else pend = part;
+    __syncwarp();
+  }
+  pair_sync(pair);
+  if (P == 0) o[32 * (chunks - 1) + lane] = pend ^ S.xr[chunks & 1][lane];
+
+  u32 ad[MD][2][4];
+#pragma unroll
+  for (int d = 0; d < MD; ++d)
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int r = 0; r < 4; ++r) ad[d][mt][r] = 0;
+#pragma unroll
+  for (int l = 0; l < 4; ++l) {
+    const int mt = l >> 1, nt = P + 2 * (l & 1);
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      const u32 row = 16 * mt + g + 8 * (e >> 1), rho = 8 * nt + 2 * q + (e & 1);
+      int yv = Y[l][e];
+      const int reg = (e >> 1) + 2 * (nt >> 1), sh8 = 8 * (2 * (nt & 1) + (e & 1));
+#pragma unroll
+      for (int d = 0; d < MD - 1; ++d) {
+        const int qv = yv >> 7;
+        u32 zd = (S.coin[row][d] >> rho) & 1u;
+        if (d == MD - 2 && qv == 127) zd = 0;
+        ad[d][mt][reg] |= (((u32)yv & 127u) | (zd << 7)) << sh8;
+        yv = qv + (int)zd;
+      }
+      ad[MD - 1][mt][reg] |= ((u32)yv & 0xFFu) << sh8;
+    }
+  }
+#pragma unroll
+  for (int d = 0; d < MD; ++d)
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int r = 0; r < 4; ++r) S.xad[P][d][mt][r][lane] = ad[d][mt][r];
+  pair_sync(pair);
+#pragma unroll
+  for (int d = 0; d < MD; ++d)
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int r = 0; r < 4; ++r) ad[d][mt][r] |= S.xad[1 - P][d][mt][r][lane];
+  u32 uf[2][2], nf[2][2];
+  {
+    const uint8_t* ub = reinterpret_cast<const uint8_t*>(&S.utab[0][0]);
+#pragma unroll
+    for (int l = 0; l < 2; ++l) {
+      const uint8_t* r = ub + (8 * (P + 2 * l) + g) * 36;
+#pragma unroll
+      for (int hf = 0; hf < 2; ++hf) {
+        const u32 c0 = 16 * hf + 2 * q;
+        const u32 by[4] = {r[c0], r[c0 + 1], r[c0 + 8], r[c0 + 9]};
+        u32 pu = 0, pn = 0;
+#pragma unroll
+        for (int b = 0; b < 4; ++b) {
+          pu |= ((by[b] - 128u) & 0xFFu) << (8 * b);
+          pn |= ((128u - by[b]) & 0xFFu) << (8 * b);
+        }
+        uf[l][hf] = pu;
+        nf[l][hf] = pn;
+      }
+    }
+  }
+#pragma unroll
+  for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+    for (int l = 0; l < 2; ++l) mma_s8(T[2 * mt + l], ad[0][mt], nf[l]);
+  fold_half<P>(T, y, z);
+  ring_put_half(S.ring[P], 0, lane, y, z);
+#pragma unroll
+  for (int d = 1; d < MD; ++d) {
+#pragma unroll
+    for (int t = 0; t < 4; ++t)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) Y[t][e] = 0;
+#pragma unroll
+    for (int mt = 0; mt < 2; ++mt)
+#pragma unroll
+      for (int l = 0; l < 2; ++l) mma_s8(Y[2 * mt + l], ad[d][mt], uf[l]);
+    fold_half<P>(Y, y, z);
+    ring_put_half(S.ring[P], d, lane, y, z);
+  }
+  __syncwarp();
+  const u32 part = lane < 2 * MD ? ring_xor_half(S.ring[P], lane) : 0u;
+  if (P == 1) S.xr[0][lane] = part;
+  pair_sync(pair);
+  if (P == 0 && lane < 2 * MD) o[2 * ks + lane] = part ^ S.xr[0][lane];
+}
+
+template <int MD, bool WS>
+__global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1p(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N,
+                                                  u32 K, const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
+                                                  u32* __restrict__ out, const u32* __restrict__ ws) {
+  __shared__ PairSmem smem[WARPS / 2];
+  const u32 lane = threadIdx.x & 31, wp = threadIdx.x >> 5, pair = wp >> 1;
+  const u32 ncb = N / 32, units = (M / 32) * ncb;
+  const u32 u = blockIdx.x * (WARPS / 2) + pair;
+  if (u >= units) return;
+  if (live && !live[u / ncb]) {
+    if (wp & 1) return;
+    const u32 nwords = 2 * (K / 32 + MD);
+    u32* o = out + (u64)u * nwords;
+    for (u32 w = lane; w < nwords; w += 32) o[w] = 0;
+    return;
+  }
+  if (wp & 1) h1p_half<MD, WS, 1>(A, B, N, K, seeds, out, ws, smem[pair], pair, u);
+  else h1p_half<MD, WS, 0>(A, B, N, K, seeds, out, ws, smem[pair], pair, u);
+}
+
+template <int MD, bool WS>
+static void launch_unit(unsigned units, cudaStream_t s, const void* A, const void* B, unsigned M, unsigned N,
+                        unsigned K, const void* seeds, const void* live, void* out, const void* ws) {
+  const auto a = (const int8_t*)A;
+  const auto b = (const int8_t*)B;
+  const auto sd = (const u64*)seeds;
+  const auto lv = (const uint8_t*)live;
+  const auto w = (const u32*)ws;
+#if H1U_SPLIT
+  constexpr unsigned per = WARPS / 2;
+  h1p<MD, WS><<<(units + per - 1) / per, 32 * WARPS, 0, s>>>(a, b, M, N, K, sd, lv, (u32*)out, w);
+#else
+  h1u<MD, WS><<<(units + WARPS - 1) / WARPS, 32 * WARPS, 0, s>>>(a, b, M, N, K, sd, lv, (u32*)out, w);
+#endif
+}
+
 extern "C" int kh_digits(unsigned K) { return n_digits((int)(K / 32)); }
 extern "C" unsigned kh_words(unsigned K) { return 2 * (K / 32 + n_digits((int)(K / 32))); }
 
@@ -470,14 +833,11 @@ extern "C" int kh_unit(const void* A, const void* B, unsigned M, unsigned N, uns
   const int m = n_digits((int)(K / 32));
   const unsigned units = (M / 32) * (N / 32);
   if (!units) return 0;
-  const unsigned grid = (units + WARPS - 1) / WARPS;
   cudaStream_t s = (cudaStream_t)stream;
   if (m == 2)
-    h1u<2, false><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                               (const uint8_t*)live, (u32*)out, nullptr);
+    launch_unit<2, false>(units, s, A, B, M, N, K, seeds, live, out, nullptr);
   else if (m == 3)
-    h1u<3, false><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                               (const uint8_t*)live, (u32*)out, nullptr);
+    launch_unit<3, false>(units, s, A, B, M, N, K, seeds, live, out, nullptr);
   else
     return 2;
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
@@ -501,12 +861,9 @@ extern "C" int kh_unit_ws(const void* A, const void* B, unsigned M, unsigned N, 
   const unsigned long long items = (unsigned long long)units * ((nb + 32 * J - 1) / (32 * J));
   h1s_noise<<<(unsigned)((items * 32 + 255) / 256), 256, 0, s>>>((const u64*)seeds, units, N / 32, nb, J,
                                                                   (const uint8_t*)live, (u32*)ws);
-  const unsigned grid = (units + WARPS - 1) / WARPS;
   if (m == 2)
-    h1u<2, true><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                              (const uint8_t*)live, (u32*)out, (const u32*)ws);
+    launch_unit<2, true>(units, s, A, B, M, N, K, seeds, live, out, ws);
   else
-    h1u<3, true><<<grid, 32 * WARPS, 0, s>>>((const int8_t*)A, (const int8_t*)B, M, N, K, (const u64*)seeds,
-                                              (const uint8_t*)live, (u32*)out, (const u32*)ws);
+    launch_unit<3, true>(units, s, A, B, M, N, K, seeds, live, out, ws);
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }

@@ -63,11 +63,14 @@ if [ "$BENCH" = build ]; then
     builds=(kb h1noise h1u)
     [ "$arch" = sm_100a ] && builds+=(kb_pg)
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
-    # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS
+    # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS,
+    # H1U_SPLIT (h1p: a pair of warps a unit)
     for v in ${VARIANTS:-b3=-DH1U_MINB=3 pf=-DH1U_PF=1 pd2=-DH1U_PF=1,-DH1U_PD=2 pd4=-DH1U_PF=1,-DH1U_PD=4 \
              pd8=-DH1U_PF=1,-DH1U_PD=8 l2=-DH1U_PF=1,-DH1U_L2PF=1 pd2l2=-DH1U_PF=1,-DH1U_PD=2,-DH1U_L2PF=1 \
              pd4l2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_L2PF=1 pd2b3=-DH1U_PF=1,-DH1U_PD=2,-DH1U_MINB=3 \
-             pd4w2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_WARPS=2}; do
+             pd4w2=-DH1U_PF=1,-DH1U_PD=4,-DH1U_WARPS=2 sp2=-DH1U_SPLIT=1,-DH1U_PF=1,-DH1U_PD=2 \
+             sp4=-DH1U_SPLIT=1,-DH1U_PF=1,-DH1U_PD=4 sp4l2=-DH1U_SPLIT=1,-DH1U_PF=1,-DH1U_PD=4,-DH1U_L2PF=1 \
+             sp4w2=-DH1U_SPLIT=1,-DH1U_PF=1,-DH1U_PD=4,-DH1U_WARPS=2 sp4b3=-DH1U_SPLIT=1,-DH1U_PF=1,-DH1U_PD=4,-DH1U_MINB=3}; do
       builds+=("h1u_${v%%=*}:h1u:${v#*=}")
     done
     for b in "${builds[@]}"; do
