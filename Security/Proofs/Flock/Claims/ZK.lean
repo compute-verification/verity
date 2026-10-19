@@ -31,6 +31,7 @@ import Proofs.Flock.Claims.ZK.Round0
 import Proofs.Flock.Claims.ZK.ExeLayout
 import Proofs.Flock.Claims.ZK.Refusals
 import Proofs.Flock.Claims.ZK.FirstRefusal
+import Proofs.Flock.Claims.ZK.Stopped
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -183,6 +184,12 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`FlockComplete.ZkTables.sessionPZk_pass`), so `honestPR` sends `[]` (`Masked.honestPR_refused`,
   `Masked.honestPR_rank`). `Flock.zk_deployZk_masked_exe_reads_gap` is `Flock.zk_deployZk_masked_exe_stop_gap` without
   the first two premises, `Flock.zk_deployZk_masked_exe_refusals_gap` without all three.
+* `Stopped`: the rounds after a refusal the coins show (`Masked.Refused`: an answered outer coin `1`, or a throw whose
+  coins are all answered, `Masked.Thrown`), which reads the coins below its round only (`Masked.refused_congr`). A plan
+  whose encoding sends `[]` there (`Masked.encStop`) is causal where its encoding is (`Masked.causal_encStop`), and its
+  `HonestPreOnPos` is its encoding's at the rounds where no refusal is seen, given that a seen throw stops `honestPR`
+  (`Masked.honestPreOnPos_stop`; a seen outer coin `1` is `Masked.outerHit_of_lt`'s).
+  `Flock.zk_deployZk_masked_exe_stopped_gap` is `Flock.zk_deployZk_masked_exe_refusals_gap` at such a plan.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
