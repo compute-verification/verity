@@ -21,7 +21,8 @@ from pathlib import Path
 
 PLAIN = 122.41   # the plain GEMM's SMSP-cycles a MMA on DC-90 (dc90-licpw-redux-l32's source)
 MARGIN = 0.02
-FORMS = ("rs", "u8", "b1", "n128", "n64", "im", "n192", "n32", "n16", "n8", "im16", "bm")   # each form's loop is its SS loop's name with this suffix
+FORMS = ("rs", "u8", "b1", "n128", "n64", "im", "n192", "n32", "n16", "n8", "im16", "bm",
+         "f16", "bf", "tf", "e4")   # each form's loop is its SS loop's name with this suffix
 PAIRS = {"li": ("wgli_redux", *(f"wgli_redux_{f}" for f in FORMS)),
          "imad": ("wgmix_imad_r256", *(f"wgmix_imad_r256_{f}" for f in FORMS)),
          "lop3": ("wgmix_lop3_r256", *(f"wgmix_lop3_r256_{f}" for f in FORMS)),
@@ -30,19 +31,23 @@ PAIRS = {"li": ("wgli_redux", *(f"wgli_redux_{f}" for f in FORMS)),
 # sm_90's census, DC-90: IGMMA_S8_N256's line and the line every other warp instruction carries on each joint row
 JOINT = {"JI90_0": (62.7407638, 0.98054536), "JI90_1": (66.93849, 0.919487525), "JI90_2": (121.566, 0.0822829491)}
 LANE = ("LOP3", "IMAD", "REDUX")   # the lane instructions a facet check counts; control and fences count nothing
-GMMA = ("IGMMA", "BGMMA", "IMMA.16832", "IMMA.16816", "BMMA.168256")   # BGMMA.64x256x256 has IGMMA_S8_N256's tensor line
+GMMA = ("IGMMA", "BGMMA", "IMMA.16832", "IMMA.16816", "BMMA.168256", "HGMMA", "QGMMA")   # BGMMA.64x256x256 has IGMMA_S8_N256's tensor line
 ALONE = ("wg_s8_n256_a1", "wg_s8_n256_rs_a1", "wg_u8s8_n256_a1", "wg_b1_n256_a1", "wg_s8_n128_a1", "wg_s8_n64_a1",
-         "imma_s8_a1", "wg_s8_n192_a1", "wg_s8_n32_a1", "wg_s8_n16_a1", "wg_s8_n8_a1", "imma16816_a1", "bmma_a1")
+         "imma_s8_a1", "wg_s8_n192_a1", "wg_s8_n32_a1", "wg_s8_n16_a1", "wg_s8_n8_a1", "imma16816_a1", "bmma_a1",
+         "wg_f16_n256_a1", "wg_bf16_n256_a1", "wg_tf32_n256_a1", "wg_e4m3_n256_a1")
 
 
 def n256(op: str) -> float:
     """A tensor opcode's N256-equivalents: IGMMA.64x128x32 is half an IGMMA.64x256x32's MACs and words, a warp's
-    IMMA.16832 (m16n8k32) a 32nd of its share and IMMA.16816 a 64th, and BMMA.168256 a 32nd of a BGMMA.64x256x256's."""
+    IMMA.16832 (m16n8k32) a 32nd of its share and IMMA.16816 a 64th, and BMMA.168256 a 32nd of a BGMMA.64x256x256's.
+    The FP wgmma count their MACs too: HGMMA.64x256x16 (f16, bf16) is half, HGMMA.64x256x8 (tf32) a quarter and
+    QGMMA.64x256x32 (e4m3) one."""
     if op.startswith(("IMMA.16832", "BMMA.168256")):
         return 1 / 32
     if op.startswith("IMMA.16816"):
         return 1 / 64
-    return int(op.split(".")[1].split("x")[1]) / 256
+    _, n, k = op.split(".")[1].split("x")
+    return int(n) / 256 * (int(k) / 32 if op.startswith(("HGMMA", "QGMMA")) else 1)
 
 
 def facets(out: Path, rows: dict) -> dict:
