@@ -44,9 +44,13 @@ arm's measures, each measurement naming its `arm` (stock, sha512, blake3, sha512
 - `kernels.py`: from a run's `served.nsys-rep`, one arm's commit kernels in one phase: launches a step, mean time, grid, stream, and
   when each starts against the step's model kernels, with the GPU's idle time between them.
 - `label.py`: the labels, idempotent; rerun it on runs whose launching VM stopped waiting.
-- `plot.py`: iteration against each measure, one line per (GPU, workload:arm), from the evidence store only
-  (`research data select --label campaign=hash-loop --kind bench-result/v1`, after `research data refresh`, since each run
-  publishes its result from its node); `--table` prints the iteration table.
+- `glm_rows.py`: a GLM-5.3 TP8 row (workload `glm-5.3`, hardware `8x H200`) from one of circuits' served runs (WS-D's
+  `summary.json` and `runs.jsonl` at B32), as the loop's result doc, put as `bench-result/v1` and labeled with `label.py
+  --workload glm-5.3 --result-art`; iteration 0 is circuits' r20261018-194044-414f (rows-sha512) and -195722-b284 (rows-layer-4k).
+- `plot.py`: iteration against TPOT and throughput overhead (`--measures` for more), one row of panels per workload, one line per
+  (GPU, workload:arm), from the evidence store only (`research data select --label campaign=hash-loop --kind bench-result/v1`,
+  after `research data refresh`, since each run publishes its result from its node); a result labeled `kernel_outcome=voided` is
+  not plotted; `--table` prints the iteration table.
 
 ~~~sh
 OUT=/tmp/loop uv run --with matplotlib python3 benchmarks/hash/loop/plot.py --table

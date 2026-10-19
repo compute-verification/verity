@@ -1,10 +1,10 @@
 """Label hash-loop runs and their result artifacts in the evidence store, with the existing vocabulary only (`research data vocab`):
 campaign=hash-loop, sweep=iteration (or --sweep what-if: an arm that doesn't serve), row=N, arm=<workload> (qwen3-8b; plot.py
 draws workload:arm, the arm being each measurement's), label=<hypothesis>, source=<branch>@<commit>, hardware=<GPU>; the arms are in the
-result's measurements. `--outcome kept|dropped --reason TEXT` adds the iteration's verdict (kernel_outcome, kernel_reason) to each
+result's measurements. `--outcome kept|dropped|voided --reason TEXT` adds the iteration's verdict (kernel_outcome, kernel_reason) to each
 result. Re-running it is harmless: a label already asserted with the same value is skipped.
 
-    python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis TEXT [--sweep what-if] [--branch B] [--outcome kept|dropped --reason TEXT] [--by hash]
+    python3 benchmarks/hash/loop/label.py RUN... --row N --hypothesis TEXT [--sweep what-if] [--branch B] [--outcome kept|dropped|voided --reason TEXT] [--by hash]
 """
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ import json
 import subprocess
 import sys
 
-HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000", "vy-glm53-s1": "H200"}  # the last: circuits' iteration-0 H200 run
+HARDWARE = {"vy-dc-h200": "H200", "vy-dc-b200": "B200", "vy-nebius-2": "RTX PRO 6000", "vy-glm53-s1": "H200",  # circuits' iteration-0 H200 run
+            "vy-glm53-eu": "8x H200"}  # circuits' GLM-5.3 TP8 runs (glm_rows.py)
 BRANCH = "cursor/hash-commit-loop-15ad"
 
 
@@ -42,7 +43,7 @@ def main() -> int:
     ap.add_argument("--sweep", default="iteration")
     ap.add_argument("--workload", default="qwen3-8b", help="the `arm` label: the workload, e.g. llama8b-int8")
     ap.add_argument("--branch", default=BRANCH)
-    ap.add_argument("--outcome", choices=("kept", "dropped"))
+    ap.add_argument("--outcome", choices=("kept", "dropped", "voided"), help="voided: it didn't measure what it claims (not plotted)")
     ap.add_argument("--reason")
     ap.add_argument("--by", default="hash")
     ap.add_argument("--result-art", help="the result of a run that wrote none (one RUN): collect.py over its outputs, `research data "
