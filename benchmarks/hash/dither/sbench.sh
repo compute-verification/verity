@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Dither's served standard number on node 2 (sbench.py), on one leased GPU for at most 40 minutes: libh1c.so and libh1f.so
-# built for sm_120a first (the dither arm's).  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
+# Dither's served standard number on node 2 (sbench.py), on one leased GPU for at most 40 minutes: libh1c.so, libh1f.so
+# and libh1o.so built for sm_120a first (the dither arms').  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
 # --t 64).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
@@ -13,13 +13,14 @@ ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$CUDA/bin:$PATH
-for lib in h1c h1f; do
+for lib in h1c h1f h1o; do
   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
     -o "$S/lib$lib.so" "benchmarks/hash/dither/$lib.cu" > "$OUT/build-$lib.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL $lib"; grep -v "^ptxas info" "$OUT/build-$lib.log" | tail -30; exit 11; }
 done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
-export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so VLLM_DISABLE_COMPILE_CACHE=1
+grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -4
+export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PATH=$(dirname "$PY"):$PATH

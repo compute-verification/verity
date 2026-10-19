@@ -26,10 +26,16 @@ Arms:
                  coin and the seeds between steps)
     dither-side  dither with the receipts in one `h1r` launch a step on a second stream, after the step's coin, beside the
                  next step (`dither_fused.patch(rc="side")`); the `h1f` launches compute z and y only
+    dither-1s    exact with every linear's y from Dither's one stream (`dither_one`, `h1o.cu`, CA's H1V3): y = dequant(O' -
+                 sum_d 128^d D_d) from the noised mainloop the call's receipts fold, z that O; the call's A table, seeds
+                 (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
+                 tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
+                 its tokens are not exact's (reported, not gated)
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
-its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's, under a CUDA
+its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's (dither-1s:
+`dither_one.check` on its gate, control and fault steps, tokens reported), under a CUDA
 profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
 kernels inside the range only).  The decode gate compares each arm's
 tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4).
@@ -146,10 +152,23 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             llm.dither_stats = win.stats
             llm.dither_win = win
         return llm
+    if arm == "dither-1s":
+        sys.path.insert(0, str(HERE))
+        import dither_fused as DF
+        import dither_one as DO
+        from verity_vllm.engine import int8_vllm
+        int8_vllm.register()
+        a = engine_args(gpu_mem)
+        DO.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1o=os.environ["DITHER_H1O"], gate=True)
+        llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
+        win = DO.hook(llm)
+        llm.dither_stats, llm.dither_win, llm.dither_mod = win.stats, win, DO
+        return llm
     raise ValueError(arm)
 
 
-REF_OF = {"dither": "exact", "dither-side": "exact"}
+REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact"}
+TOKENS_GATED = {"dither-1s": False}   # an arm that serves another value: its tokens are compared, not required equal
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
 GATE_RANGE = "verity/dither/gate"   # GATE_RANGE/<arm>: kernels.py reads each dither worker's kernels inside its own
 
@@ -193,9 +212,13 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                        "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         elif cmd["op"] == "gate":
             win = getattr(llm, "dither_win", None)
+            mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
             if win is not None:
-                win.arm(B)
-                win.price_y = True
+                if mod is DF:
+                    win.arm(B)
+                    win.price_y = True
+                else:
+                    win.arm(B, mod.CAPTURES)
             prof = os.environ.get("DITHER_NSYS") == "1" and win is not None
             if prof:
                 torch.cuda.synchronize()
@@ -208,12 +231,18 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.profiler.stop()
             res = {"gate_s": round(t, 3), "tokens": [list(o.outputs[0].token_ids) for o in outs]}
             if win is not None:
-                win.price_y = False
                 t0 = time.perf_counter()
-                with torch.inference_mode():
-                    res["check"] = DF.check(win, os.environ["DITHER_H1F"], "gate")
-                    res["control"] = DF.check(win, os.environ["DITHER_H1F"], "control")
-                res["verdict"] = DF.gate_verdict(res["check"], res["control"])
+                if mod is DF:
+                    win.price_y = False
+                    with torch.inference_mode():
+                        res["check"] = DF.check(win, os.environ["DITHER_H1F"], "gate")
+                        res["control"] = DF.check(win, os.environ["DITHER_H1F"], "control")
+                    res["verdict"] = DF.gate_verdict(res["check"], res["control"])
+                else:
+                    lib = os.environ[mod.LIB_ENV]
+                    with torch.inference_mode():
+                        res["check"], res["control"], res["fault"] = (mod.check(win, lib, n) for n in mod.CAPTURES)
+                    res["verdict"] = mod.gate_verdict(res["check"], res["control"], res["fault"])
                 res["check_s"] = round(time.perf_counter() - t0, 1)
             conn.send(res)
         elif cmd["op"] == "sat":
@@ -276,7 +305,8 @@ def main() -> int:
             print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items() if k != "tokens"}}), flush=True)
         (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
-            gate_doc[arm]["verdict"]["ok"] and gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0])))]
+            gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
+                                                or not TOKENS_GATED.get(arm, True)))]
         if failed:
             print(json.dumps({"gate_failed": failed, "timed": False}), flush=True)
             for arm in arms:
