@@ -22,6 +22,13 @@ and the right operand `X̃`, whose entry `(k, l)` only column `l`'s words read, 
 Both are statements for red team (Daniel, 17 Oct: statement first). Neither is proved, and no guarantee reads them. One
 coin a side with even gaps is capped at ½ (`K₂(i)`), and two coins on the shared side `P̃` (design B) give only the
 flattening bound.
+
+Scope. Both count AffProd ring programs only. A shift run is outside them: with `N = (s₁ − s₂)(s₁ + s₂)`, the word
+`(N − affine) >> v` is two design-A entries' bilinear part, one product for two entries (`c = ½`; RT-ALGO-3, witness b6
+in art:87829468dd9aaf34ccd1aaa112c079fb4ec8026aad663e9eeaaff5352f526952, Proposition Q's class). The record's pricing,
+not these statements, rules that class out at `L = 32`, at about 2.5× the honest cost. And `c = 1` here is K's affine
+scope only: the composed floor also needs the non-affine scope's luck on even coefficients, a 2-adic parity lemma that
+is open (RT-FP-8), so no ε for design A rests on these alone.
 -/
 
 namespace Pouw.FpNative
