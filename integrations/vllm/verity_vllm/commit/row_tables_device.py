@@ -31,7 +31,7 @@ from typing import Any
 import numpy as np
 
 from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
 
@@ -108,15 +108,23 @@ def device_lib(arch: str) -> ctypes.CDLL:
 # --- the host's part: domains, rank order, layout ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=None)
-def _positions(n: int) -> bytes:
-    return RangeIndexedDomain(0, n).identity_sha512()
+def _domain_frame(n: int) -> tuple[bytes, bytes]:
+    """``domain_message`` of an ``n``-row table on either side of its 64-byte binding."""
+    positions = RangeIndexedDomain(0, n).identity_sha512()
+    a, b = (domain_message(bytes([v]) * 64, -1, positions, n, "sha512") for v in (0, 255))
+    i = next(k for k in range(len(a)) if a[k] != b[k])
+    if a[:i] != b[:i] or a[i + 64:] != b[i + 64:]:
+        raise AssertionError("domain_message's binding is not one contiguous 64-byte part")
+    return a[:i], a[i + 64:]
 
 
 def table_domain_id(context: bytes, step: int, index: int, leaves: int) -> bytes:
-    """``row_table.table_domain(context, step, index, leaves).domain_id``, with the positions' identity cached by count."""
-    binding = identity_digest_sha512(RT.TABLE_DOMAIN, {"context": context.hex(), "step": step, "table": index, "leaves": leaves,
-                                                       "schema": RT.SCHEMA})
-    return hashlib.sha512(domain_message(binding, -1, _positions(leaves), leaves, "sha512")).digest()
+    """``row_table.table_domain(context, step, index, leaves).domain_id``: the manifest's canonical JSON written out (keys
+    sorted, ASCII values) and the domain message's frame cached by row count."""
+    manifest = b'{"context":"%s","leaves":%d,"schema":"%s","step":%d,"table":%d}' % (
+        context.hex().encode(), leaves, RT.SCHEMA.encode(), step, index)
+    head, tail = _domain_frame(leaves)
+    return hashlib.sha512(head + tagged_sha512(RT.TABLE_DOMAIN, manifest) + tail).digest()
 
 
 def _width(n: int) -> int:
@@ -153,21 +161,26 @@ def plan(context: bytes, engine_step: int, shapes: Mapping[str, tuple[Sequence[t
     if len(context) != 64 or len(key) != 32 or not shapes:
         raise ValueError("a 64-byte context, a 32-byte row key and at least one table")
     order = tuple(sorted(shapes, key=CS.table_key))
-    tabs = np.zeros((len(order), TAB_WORDS), dtype=np.uint64)
+    layout: list[tuple[int, int, int, int, int, int]] = []
+    dids: list[bytes] = []
     perms: list[list[int]] = []
+    ranked: dict[int, list[int]] = {}  # a step's tables mostly share one rows list: rank it once
     row0 = seg0 = tree0 = 0
     for i, op in enumerate(order):
         ids, b, k = shapes[op]
         if b < 1 or k < 2 or k % 2 or len(ids) != b:
             raise ValueError(f"{op}: {b} rows of K = {k} with {len(ids)} row ids are not B >= 1 rows of an even K")
-        keys = [(str(r), int(t)) for r, t in ids]
-        if len(set(keys)) != len(keys):
-            raise ValueError(f"{op}: a (request, token row) twice in one step")
-        perms.append(sorted(range(b), key=keys.__getitem__))
+        if id(ids) not in ranked:
+            keys = [(str(r), int(t)) for r, t in ids]
+            if len(set(keys)) != len(keys):
+                raise ValueError(f"{op}: a (request, token row) twice in one step")
+            ranked[id(ids)] = sorted(range(b), key=keys.__getitem__)
+        perms.append(ranked[id(ids)])
         s, w = -(-(k + 4) // SEG_BYTES), _width(b)
-        tabs[i, 2:6] = (k | b << 32, row0 | s << 32, seg0, w | tree0 << 32)
-        tabs[i, 6:] = _words(table_domain_id(context, engine_step, i, b))
+        layout.append((0, 0, k | b << 32, row0 | s << 32, seg0, w | tree0 << 32))
+        dids.append(table_domain_id(context, engine_step, i, b))
         row0, seg0, tree0 = row0 + b, seg0 + b * s, tree0 + w
+    tabs = np.concatenate([np.asarray(layout, dtype=np.uint64), _words(b"".join(dids)).reshape(-1, 8)], axis=1)
     args = Args()
     args.key[:] = np.frombuffer(key, dtype="<u4").tolist()
     args.nonce[:] = np.frombuffer(engine_step.to_bytes(12, "little"), dtype="<u4").tolist()
@@ -247,9 +260,10 @@ def side_stream(device: Any = None) -> Any:
 
 @dataclass
 class Pending:
-    """A step launched on the side stream: ``ready()`` without blocking, ``result()`` the step's `row_tables.StepRoots`; it holds
-    the step's buffers (and its inputs' place in the allocator) until then.  ``marks``: timing events around the kernels, when
-    launched with ``timing``."""
+    """A step launched on the side stream: ``ready()`` without blocking, ``result()`` the step's `row_tables.StepRoots`.  It
+    holds the step's scratch and its input tensors, so drop it only once ready (`record_ready` does): the allocator then has
+    nothing back that the side stream still reads.  ``marks``: timing events around the kernels, when launched with
+    ``timing``."""
     plan: Plan
     done: Any
     host: Any
@@ -316,10 +330,8 @@ def step_roots(context: bytes, engine_step: int, outputs: Mapping[str, tuple[Seq
         host.copy_(out, non_blocking=True)
         done = torch.cuda.Event()
         done.record(side)
-    for _ids, c, s in outputs.values():
-        c.record_stream(side)
-        s.record_stream(side)
-    return Pending(p, done, host, (staged, meta, dig, leaves, tree, step, out), marks)
+    inputs = tuple(x for _ids, c, s in outputs.values() for x in (c, s))
+    return Pending(p, done, host, (staged, meta, dig, leaves, tree, step, out, *inputs), marks)
 
 
 def record_ready(pending: deque[Pending], record: Callable[[RTB.StepRoots], Any]) -> int:
