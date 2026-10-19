@@ -27,12 +27,14 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `two_stage_profile`, `check_probability`: the two-stage law's profile over a class's RUs and one proof unit's marginal
   probability of being checked (`TwoStage.profile`, `TwoStage.checkProbability`);
 * `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it),
-`two_stage_profile`, `check_probability`, `hello` and `stream` (each of `service.Stream`'s ops).
+`two_stage_profile`, `check_probability`, `hello`, `stream` (each of `service.Stream`'s ops) and `fleet` (each of
+`service.Fleet`'s).
 -/
 import SampledProofs.OneStage
 import SampledProofs.Slots
@@ -40,6 +42,7 @@ import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
 import SampledProofs.Stream
+import SampledProofs.Fleet
 import SampledProofs.Hello
 
 namespace SampledProofs.Pieces
@@ -244,6 +247,13 @@ def stream (j : Json) : V Json := do
   let (d, s) ← Stream.run p (← Stream.State.ofJson (getD j "state")) (getD j "op")
   return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
 
+/-- `{"state", "op"}` to `{"decision", "state"}`: the op's decision on the state the fleet's rules hold of it
+(`Fleet.run`), and the state after it as the text Python's `canonical_json` writes. -/
+def fleet (j : Json) : V Json := do
+  if keys? j != some #["op", "state"] then throw "exactly {state, op}"
+  let (d, s) ← Fleet.run (← Fleet.State.ofJson (getD j "state")) (getD j "op")
+  return Json.mkObj [("decision", d.toJson), ("state", Json.str (← PyJson.canonical s.toJson))]
+
 /-- `{"verdicts": {name: {...}}}` to `{"verdict"}`. -/
 def verdict (j : Json) : V Json := do
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
@@ -412,7 +422,7 @@ def table : List (String × (Json → V Json)) :=
    ("check_proved", checkProved),
    ("bound", bound), ("bernoulli_bound", bernoulliBound),
    ("two_stage_profile", twoStageProfile), ("check_probability", checkProbability), ("stream", stream),
-   ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
+   ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic), ("session_registered", sessionRegistered), ("record", record),
    ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("replay_units", replayUnits),
    ("proof_units", proofUnits), ("hello", Hello.check)]
 
@@ -420,6 +430,6 @@ def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
    ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("two_stage_profile", twoStageProfile),
-   ("check_probability", checkProbability), ("hello", Hello.check), ("stream", stream)]
+   ("check_probability", checkProbability), ("hello", Hello.check), ("stream", stream), ("fleet", fleet)]
 
 end SampledProofs.Pieces

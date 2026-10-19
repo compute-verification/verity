@@ -14,6 +14,7 @@ and an op that reads an entry the state doesn't hold is an error. As JSON:
 
 * `size`, the registrations received; `opened`, those without a final outcome, in the order received; `failures`;
 * `salted_at`, the salt's release or null; `ended`, null or the late registration's readings `{received_at, salted_at}`;
+* `halted`, null or the cause of the halt of the stream's operator (`Fleet`, R5-all);
 * `entries`, in order, each `{order, registration, draw, proved, drawn_at, interior, delivered, session, final}`: `draw`
   null until drawn, then with `proved` and `drawn_at`, and `session` null or the covered draws of the session over it.
 
@@ -25,7 +26,8 @@ An op is an object with `op` and the fields it reads:
 * `interiors` `{order, registration, draw, checks}`;
 * `session` `{draws}`, each draw `[order, registration, draw]`;
 * `deliver` `{order, registration, draw, sessions, now}`, and `deliver_session` `{stream, draws, sessions, now}`;
-* `outcome` `{order, registration, draw, now, verdicts, accepted}`.
+* `outcome` `{order, registration, draw, now, verdicts, accepted}`;
+* `halt` `{cause}`, the fleet's halt of the stream's operator (`Fleet.failures`).
 
 `registration` and `draw` are the challenger's tokens for them (the SHA-512 of a `Registration`'s fields and of a
 `Draw`'s), so two are the same exactly when Python's objects are equal; `order` is the registration's, or null where it
@@ -39,6 +41,10 @@ A decision is `{"refused": codes}`, `{"pending": true}`, `{"ok": value}`, or `{"
 the stream's rules up to a field it doesn't carry yet (a reading, the checks, the verdicts): the challenger reads its clock
 or runs the checks only then, and asks again. A refusal changes nothing but a late registration's, which ends the epoch.
 An error is an op or a state this port doesn't read.
+
+A halt is final. It ends every registration without a final outcome at once, as `halted`, with no failure of its own:
+nothing accepts it after that, and outcomes already final stay. A halted stream refuses every op (`halted`) and changes
+nothing, so it receives no registration again.
 -/
 import SampledProofs.Run
 
@@ -122,6 +128,8 @@ structure State where
   failures : Nat := 0
   saltedAt : Option Json := none
   ended : Option Json := none
+  /-- the cause of the operator's halt, once its fleet halted it -/
+  halted : Option Json := none
   /-- the entries the op reads, in order -/
   entries : Array Entry := #[]
 
@@ -161,8 +169,8 @@ def Entry.ofJson (j : Json) : V Entry := do
   return { order, registration, draw, proved, drawnAt, interior, delivered, session, final }
 
 def State.ofJson (j : Json) : V State := do
-  if keys? j != some #["ended", "entries", "failures", "opened", "salted_at", "size"] then
-    throw "a state is exactly {size, opened, failures, salted_at, ended, entries}"
+  if keys? j != some #["ended", "entries", "failures", "halted", "opened", "salted_at", "size"] then
+    throw "a state is exactly {size, opened, failures, salted_at, ended, halted, entries}"
   let some size := nat? (getD j "size") | throw "size is a count"
   let .arr os := getD j "opened" | throw "opened is a list of orders"
   let some opened := os.mapM nat? | throw "opened is a list of orders"
@@ -170,12 +178,14 @@ def State.ofJson (j : Json) : V State := do
   let saltedAt ← nullOr (getD j "salted_at") reading? "salted_at is null or a reading"
   let ended ← nullOr (getD j "ended") (fun | .obj kvs => some (Json.obj kvs) | _ => none)
     "ended is null or the late registration's readings"
+  let halted ← nullOr (getD j "halted") (fun | .obj kvs => some (Json.obj kvs) | _ => none)
+    "halted is null or the halt's cause"
   let .arr es := getD j "entries" | throw "entries is a list"
   let entries ← es.mapM Entry.ofJson
   if !opened.all (· < size) then throw "an opened order is a registration's"
   let orders := (entries.map (·.order)).toList
   if !(orders.all (· < size) && ascending orders) then throw "entries are registrations', in order, once each"
-  return { size, opened, failures, saltedAt, ended, entries }
+  return { size, opened, failures, saltedAt, ended, halted, entries }
 
 def Entry.toJson (e : Entry) : Json := Json.mkObj [
   ("order", Lean.toJson e.order), ("registration", .str e.registration), ("draw", (e.draw.map .str).getD .null),
@@ -185,7 +195,8 @@ def Entry.toJson (e : Entry) : Json := Json.mkObj [
 
 def State.toJson (s : State) : Json := Json.mkObj [
   ("size", Lean.toJson s.size), ("opened", natsJson s.opened), ("failures", Lean.toJson s.failures),
-  ("salted_at", s.saltedAt.getD .null), ("ended", s.ended.getD .null), ("entries", Json.arr (s.entries.map Entry.toJson))]
+  ("salted_at", s.saltedAt.getD .null), ("ended", s.ended.getD .null), ("halted", s.halted.getD .null),
+  ("entries", Json.arr (s.entries.map Entry.toJson))]
 
 inductive Decision where
   | refused (codes : Array String)
@@ -395,28 +406,57 @@ def unsalted : M Unit := do
   if s.saltedAt.isSome then no "salted"
   if s.ended.isSome then no "epoch-ended"
 
-def step (p : Params) (op : Json) : M Decision := do
-  match getD op "op" with
-  | .str "ready" => ready p; return .ok Json.null
-  | .str "salt" =>
+/-- An entry once a halt ended the registrations `opened`: final if it is one of them, else as it was. -/
+def haltEntry (opened : Array Nat) (e : Entry) : Entry := if opened.contains e.order then { e with final := true } else e
+
+/-- `Stream._halt`: the fleet halted the stream's operator, for `cause`. Every registration without a final outcome ends
+now, final, with no failure of its own; the decision is their orders. -/
+def halt (op : Json) : M Decision := do
+  let s ← get
+  let cause := getD op "cause"
+  if !(cause matches .obj _) then bad "a halt's cause is an object"
+  else if !s.opened.all (fun o => s.entries.any (·.order == o)) then bad "the state holds every open entry"
+  else do
+    set { s with halted := some cause, opened := #[], entries := s.entries.map (haltEntry s.opened) }
+    return .ok (natsJson s.opened)
+
+def OPS : Array String :=
+  #["ready", "salt", "salt_released", "register", "select", "interiors", "session", "deliver", "deliver_session",
+    "outcome", "halt"]
+
+def opsMsg : String :=
+  "an op is one of ready, salt, salt_released, register, select, interiors, session, deliver, deliver_session, outcome, halt"
+
+/-- The op `name`'s own rule. -/
+def act (p : Params) (op : Json) : String → M Decision
+  | "ready" => do ready p; return .ok Json.null
+  | "salt" => do
     unsalted
     let (at_, _) ← reading op "at"
     modify fun s => { s with saltedAt := some at_ }
     return .ok Json.null
-  | .str "salt_released" =>
+  | "salt_released" => do
     unsalted
     let (rj, r) ← reading op "released_at"
     if r > (← reading op "now").2 then no "released-later"
     modify fun s => { s with saltedAt := some rj }
     return .ok Json.null
-  | .str "register" => register p op
-  | .str "select" => select op
-  | .str "interiors" => interiors p op
-  | .str "session" => session p op
-  | .str "deliver" => deliver p op
-  | .str "deliver_session" => deliverSession p op
-  | .str "outcome" => outcome p op
-  | _ => bad "an op is one of ready, salt, salt_released, register, select, interiors, session, deliver, deliver_session, outcome"
+  | "register" => register p op
+  | "select" => select op
+  | "interiors" => interiors p op
+  | "session" => session p op
+  | "deliver" => deliver p op
+  | "deliver_session" => deliverSession p op
+  | "outcome" => outcome p op
+  | "halt" => halt op
+  | _ => bad opsMsg
+
+/-- The op's rule, unless the stream halted: then every op is refused, `halted`. -/
+def step (p : Params) (op : Json) : M Decision := do
+  let s ← get
+  match getD op "op" with
+  | .str name => if !OPS.contains name then bad opsMsg else if s.halted.isSome then no "halted" else act p op name
+  | _ => bad opsMsg
 
 /-- The op's decision on `s`, and what the rules hold after it: `s` itself where the op ends early. -/
 def run (p : Params) (s : State) (op : Json) : V (Decision × State) := do
