@@ -91,17 +91,22 @@ DC_DEV uint32_t emp_fold(const int (&d)[N]) {
   return x;
 }
 
-template <int S, int R, int K>
+// N4: 4 warpgroups (4 warps a SMSP, the occupancy p_ffma_lop3 needs to issue near 1 a cycle) on the n128 form, whose 64
+// accumulators fit 512 threads' 128 registers.
+template <int S, int R, int K, bool N4 = false>
 DC_DEV void emp_pack(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   const Tiles t = emp_tiles(sm, a.mode);
-  int d[128] = {};
+  int d[N4 ? 64 : 128] = {};
   Honest h(a.mode);  // 8 mma.sync + duo fold: forces ptxas to keep the uniform chain on the uniform datapath
   Lane lv((uint32_t)threadIdx.x);
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
   OP_BEGIN
   OP_LOOP(it) {
-    emp_group4(d, t);
+    if constexpr (N4)
+      emp_group4n128(d, t);
+    else
+      emp_group4(d, t);
     h.step<8, true>();
     lane_ops<L_FFMA, R>(lv);
     u.step();
@@ -127,6 +132,12 @@ PACK(S_I, i, 1024, 0)
 PACK(S_I, i, 1024, 64)
 PACK(S_I, i, 1024, 128)
 #undef PACK
+#define PACK4(S, SN, R, K) \
+  OP_KERNEL(emp_pack4_##SN##_r##R##_k##K, 512) { emp_pack<S, R, K, true>(a); }
+PACK4(S_I, i, 1024, 0)
+PACK4(S_I, i, 1024, 64)
+PACK4(S_I, i, 1024, 128)
+#undef PACK4
 
 // ---- sparse wgmma beside its dense twin ---------------------------------------------------------------------------
 constexpr int SKB = 64;  // B's K bytes a row: k64 s8/e4m3, k32 f16 (A compressed to 32 B a row, as the dense k32 tile)
@@ -316,6 +327,15 @@ static const OpProbe PROBES[] = {
     P(i, 1024, 0, HON ",FFMA=1024", "IGMMA.64x256x32.S8.S8"),
     P(i, 1024, 64, K64 ",FFMA=1024", "UIMAD"),
     P(i, 1024, 128, K128 ",FFMA=1024", "UIMAD"),
+#define P4(R, K, EX, CNT) \
+  {.name = "emp_pack4_i_r" #R "_k" #K, .kernel = (const void*)emp_pack4_i_r##R##_k##K, .tpb = 512, .expect = EX, \
+   .counted = CNT, .iters = AITERS}
+#define W4 "IGMMA.64x128x32.S8.S8=4,IMMA.16832.S8.S8=8,LEA.HI=32"
+    P4(1024, 0, W4 ",IMAD=32,LOP3.LUT=32,FFMA=1024", "IGMMA.64x128x32.S8.S8"),
+    P4(1024, 64, W4 ",IMAD=48,LOP3.LUT=48,UIMAD=16,ULOP3.LUT=16,FFMA=1024", "UIMAD"),
+    P4(1024, 128, W4 ",IMAD=64,LOP3.LUT=64,UIMAD=32,ULOP3.LUT=32,FFMA=1024", "UIMAD"),
+#undef P4
+#undef W4
 #define P_SP(NM) {.name = #NM, .kernel = (const void*)NM, .tpb = ATPB, .expect = "*GMMA*=4", .iters = AITERS}
     P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16), P_SP(wgsprs_s8),
     P_SP(wgdrs_s8),
