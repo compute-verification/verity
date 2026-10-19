@@ -101,10 +101,19 @@ def size_of(r: dict) -> str:
     return s
 
 
+def world(r: dict) -> int:
+    """The ranks whose values a kind's unit reads (its Definition's ``WORLD``), 1 for a rank-local kind."""
+    ids = [r.get("unit") or ""] + [c["id"] for c in r.get("fold_chain") or []]
+    m = next((m for m in (re.search(r"\bWORLD=(\d+)", i) for i in ids) if m), None)
+    return int(m[1]) if m else 1
+
+
 def gap(f: str, r: dict, s: dict | None) -> str | None:
     """Why kind f has no Lean-accepted unit, or None."""
     a = last(r)
     size = size_of(r)
+    if world(r) > 1:
+        size += f"; it reads {world(r)} ranks' values and A8's slice holds rank 0's only"
     share = f"{100 * r['share']:.3f}% of the step"
     o = outcome(f, r, s)
     if o == "no-piece":
