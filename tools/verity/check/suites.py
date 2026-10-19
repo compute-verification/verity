@@ -1385,20 +1385,105 @@ DIST = ["--dist", "worksteal"]
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
-#: each suite's pytest `--basetemp`, `<tmp>/<BASETEMP>-<suites.py's pid>-*`, removed when the suite ends: pytest's own keeps
-#: its last three runs, and a flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. The name is no
-#: longer than pytest's own `pytest-of-<user>/pytest-<n>`: a test's AF_UNIX socket under tmp_path has at most 107 bytes of path
+#: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-<suites.py's pid>m*`, which holds its `OWNER` marker beside it
+#: (pytest empties the `--basetemp` it is given) and is removed when the suite ends: pytest's own keeps its last three runs, and a
+#: flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. Keep the path short: a test's AF_UNIX
+#: socket under tmp_path has at most 107 bytes of path. The `m` after the pid: an older suites.py's sweep removes
+#: `<BASETEMP>-<pid>-*` whose pid it can't see, and skips these
 BASETEMP = "verity-suite"
+OWNER = "owner.json"
+#: a basetemp without a readable marker of this boot and pid namespace is removed once nothing in it changed for this long
+UNOWNED_AGE_S = 24 * 3600
 
 
-def sweep_basetemps(tmp: Path | None = None) -> list[Path]:
-    """Remove the `--basetemp`s whose suites.py is gone (killed before it could remove them); returns them."""
+def _stat(proc: Path, pid: int | str) -> list[str]:
+    """`/proc/<pid>/stat`'s fields from the third (state) on: [3] is the session, [19] the start time in clock ticks."""
+    return (proc / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()
+
+
+def _identity(proc: Path) -> tuple[str, str]:
+    """This boot and this process's pid namespace: a pid means the same process only under both."""
+    return (proc / "sys" / "kernel" / "random" / "boot_id").read_text().strip(), os.readlink(proc / "self" / "ns" / "pid")
+
+
+def mark_basetemp(d: Path, session: int | None = None, proc: Path = Path("/proc")) -> None:
+    """Write ``d``'s owner marker: this process and, once pytest is started, its session (`start_new_session`), each by pid and
+    start time, so neither a reused pid nor a sweep that can't see them (another pid namespace or boot) counts them gone."""
+    boot, ns = _identity(proc)
+    doc = {"boot": boot, "pidns": ns, "owners": [[os.getpid(), int(_stat(proc, "self")[19])]], "sessions": []}
+    if session is not None:
+        with contextlib.suppress(OSError, IndexError, ValueError):
+            doc["sessions"].append([session, int(_stat(proc, session)[19])])
+    tmp = d / f".{OWNER}.tmp"
+    tmp.write_text(json.dumps(doc))
+    tmp.replace(d / OWNER)
+
+
+def _newer(d: Path, cutoff: float) -> bool:
+    """Whether ``d`` or anything under it changed after ``cutoff``; stops at the first that did."""
+    stack = [d]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                for e in it:
+                    if e.stat(follow_symlinks=False).st_mtime > cutoff:
+                        return True
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(Path(e.path))
+        except OSError:
+            continue
+    return False
+
+
+def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: float | None = None) -> list[Path]:
+    """Remove the basetemps no suite uses any more (its suites.py killed before it could remove them); returns them.
+
+    One is in use while its marker shows this boot and pid namespace and an owner alive with its start time, or a process left
+    in pytest's session (pytest outlives a suites.py killed by SIGKILL: on vy-nebius-1, 18 Oct, the next suites.py's sweep took
+    two running flock suites' basetemps, INF-95). One without such a marker (an older suites.py's, the guard's
+    `verity-suite-host-*`, another namespace's or boot's) is removed only once nothing in it changed for `UNOWNED_AGE_S`."""
+    now = time.time() if now is None else now
+    try:
+        me = _identity(proc)
+    except OSError:
+        me = None
+    table: dict[int, tuple[int, int]] | None = None
+
+    def processes() -> dict[int, tuple[int, int]]:
+        nonlocal table
+        if table is None:
+            table = {}
+            for p in proc.iterdir():
+                with contextlib.suppress(OSError, IndexError, ValueError):
+                    if p.name.isdigit():
+                        f = _stat(proc, p.name)
+                        table[int(p.name)] = (int(f[19]), int(f[3]))
+        return table
+
+    def used(doc: dict) -> bool:
+        ps = processes()
+        return (any(ps.get(pid, (None,))[0] == start for pid, start in doc["owners"])
+                or any(sid == s and st >= start for st, s in ps.values() for sid, start in doc["sessions"]))
+
     gone = []
     for d in (tmp or Path(tempfile.gettempdir())).glob(f"{BASETEMP}-*"):
-        pid = d.name.removeprefix(f"{BASETEMP}-").split("-", 1)[0]
-        if pid.isdigit() and int(pid) != os.getpid() and not Path(f"/proc/{pid}").exists():
-            shutil.rmtree(d, ignore_errors=True)
-            gone.append(d)
+        try:
+            st = d.lstat()
+        except OSError:
+            continue
+        if not d.is_dir() or d.is_symlink() or st.st_uid != os.getuid():
+            continue
+        try:
+            doc = json.loads((d / OWNER).read_text())
+            owned = me is not None and (doc["boot"], doc["pidns"]) == me
+            if owned and used(doc):
+                continue
+        except (OSError, ValueError, KeyError, TypeError):
+            owned = False
+        if not owned and (st.st_mtime > now - UNOWNED_AGE_S or _newer(d, now - UNOWNED_AGE_S)):
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        gone.append(d)
     return gone
 
 
@@ -1428,12 +1513,18 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
     own = not any(a == "--basetemp" or a.startswith("--basetemp=") for a in args)
-    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}-")) if own else None
+    basetemp = Path(tempfile.mkdtemp(prefix=f"{BASETEMP}-{os.getpid()}m")) if own else None
+    if basetemp:
+        with contextlib.suppress(OSError, IndexError, ValueError):
+            mark_basetemp(basetemp)
     start, ooms = time.monotonic(), oom_kills()
     with log.open("w") as out:
         p = subprocess.Popen([sys.executable, "-P", "-c", _PYTEST, str(GUARD), "-p", "verity_suite_guard", "-p", "no:cacheprovider",
-                              *spread, *([f"--basetemp={basetemp}"] if basetemp else []), *args], cwd=ROOT / suite.path, env=env,
-                             stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+                              *spread, *([f"--basetemp={basetemp / 'b'}"] if basetemp else []), *args], cwd=ROOT / suite.path,
+                             env=env, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+        if basetemp:
+            with contextlib.suppress(OSError, IndexError, ValueError):
+                mark_basetemp(basetemp, session=p.pid)
         with _GROUPS_LOCK:
             _GROUPS.add(p.pid)
         expired = threading.Event()
