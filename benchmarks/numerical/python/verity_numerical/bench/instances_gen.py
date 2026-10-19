@@ -183,12 +183,6 @@ def bf16_pow2(e: int, sign: int = 0) -> int:
     return bf16(sign, e + 127, 0)
 
 
-def f32_pow2(e: int, sign: int = 0) -> int:
-    if not -126 <= e <= 127:
-        raise ValueError(f"2^{e} is not a normal FP32")
-    return (sign << 31) | ((e + 127) << 23)
-
-
 def is_finite_bf16(w: int) -> bool:
     return ((w >> 7) & 0xFF) != 0xFF
 

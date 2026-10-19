@@ -139,8 +139,8 @@ def _without_the_catalog(monkeypatch, fallback=None) -> None:
 
 def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch):
     """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
-    links) and a subset of them (`certified_boolean_calls`, the vocabulary and template bindings), and asks `call_families` for
-    the rest: on every family the suite checks, every registered one and every Call it answers as `call_families` does."""
+    links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and asks `call_families` for the rest: on every
+    family the suite checks, every registered one and every Call it answers as `call_families` does."""
     calls = TG.call_families()
     words = TG.word_call_families()
     assert calls - words <= TG.boolean_call_candidates(words)
@@ -188,8 +188,10 @@ def test_the_cli_resolves_each_targets_call_without_the_catalog(monkeypatch):
     from circuit_check import cli
 
     _without_the_catalog(monkeypatch)
-    cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
-    assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"] and "RoPEHead_v2" in TG._SHORT["certified"]
+    attention = "Attention_v8{T=40,NH=2,KVH=1,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=2}"
+    cli._calls(["TokenSelect_v1{V=16}", "RoPEHead_v2{D=8}", attention, "F32Add_v1", "rope-head", "RoPEHead_v1{Q=8}"])
+    assert {"TokenSelect_v1", "RoPEHead_v1"} <= TG._SHORT["words"]
+    assert {"RoPEHead_v2", "Attention_v8"} <= TG._SHORT["certified"], "a template's binding, and a root function's (CIR-42)"
 
 
 def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch):
