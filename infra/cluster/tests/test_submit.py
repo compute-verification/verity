@@ -93,6 +93,9 @@ def test_a_guest_cpu_job_on_node_2_claims_whole_cores_of_its_share_at_nice_0():
     assert home["node"] == "vy-nebius-1" and "cores" not in home
     owner = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
     assert "cores" not in owner
+    gate = submit.resolve(model.load(NEBIUS), _job(priority="gate", cpus=16, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    fill = submit.resolve(model.load(NEBIUS), _job(priority="fill", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert gate["cores"]["rank"] == 150 and fill["cores"]["rank"] == -490, "cpu-hold's line is by class (INF-147)"
 
 
 def test_quiet_and_pinned_gpus_reach_gpu_lease():

@@ -1423,7 +1423,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv = [*req[QUEUE_WRAP], *argv]
         if cores := (req.get("queue") or {}).get("cores"):   # held here until whole cores of the share are its own (research.cores)
             argv = [req.get("python") or sys.executable, "-m", "research", "cpu-hold", "--cpus", str(cores["n"]), "--from",
-                    cores["cpus"], "--wrap", str(len(req[QUEUE_WRAP])), "--who", run_id, "--ack",
+                    cores["cpus"], "--wrap", str(len(req[QUEUE_WRAP])), "--who", run_id,
+                    *(["--rank", str(cores["rank"])] if cores.get("rank") else []), "--ack",
                     str(request_path.parent / LAUNCH_ACK), "--", *argv]
     if (req.get("queue") or {}).get("disk_gb"):    # held here, ahead of the allocation, while the disk would pass 80% (research.disk)
         argv = [req.get("python") or sys.executable, "-m", "research", "disk-hold", "--gb", str(req["queue"]["disk_gb"]),
