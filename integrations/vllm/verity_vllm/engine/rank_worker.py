@@ -608,11 +608,14 @@ class TP2CaptureWorkerExtension:
                         request_ids: dict[str, str] | None = None, match_tokens: dict[str, list[int]] | None = None,
                         tp_swap_requests: dict | None = None, match_capture_dir: str | None = None, replay: dict | None = None,
                         weights_pin: dict | None = None, flip_weight: dict | None = None, tp_partials_flip_site: dict | None = None,
-                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None) -> dict[str, Any]:
+                        serve_shard_from: dict | None = None, tap_sources: Any = None, weights_as_loaded: Any = None,
+                        commit_scheme: str | None = None) -> dict[str, Any]:
         """Construct THIS rank's committer (`commit_delta.make_committer` on a per-rank engine shim: this worker's model runner + model,
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
-        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank."""
+        driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
+        (unset = vllm-v1) is the committer's (`NativeCollectCommitter`); tp-commit's root combination takes vllm-v1's 32-byte roots only,
+        so another scheme is for drivers that read each rank's root as it is (`benchmarks/served_commit/tp_decode.py`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
@@ -621,7 +624,8 @@ class TP2CaptureWorkerExtension:
         runner = self.model_runner
         model = runner.get_model()
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
-        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True)
+        args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, fast_copy=True, gpu_tree=True,
+                               commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
         res: dict[str, Any] = {"rank": rank, "committer": com.name}
         from verity_vllm.acquire.sources.hidden_source import HiddenM1Source, attention_hidden, make_hidden_source
@@ -905,7 +909,7 @@ class TP2CaptureWorkerExtension:
                           "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "spans_total_s": rc.spans["total_s"],
                           "expected_tensors": rc.extra.get("expected_tensors"), "committed_tensors": rc.extra.get("committed_tensors"),
                           "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
-                          "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
+                          "collector_failure": rc.extra.get("collector_failure"), "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
                           "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),

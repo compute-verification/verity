@@ -151,6 +151,7 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "manifest_verify.rebuilt_digest / manifest_verify.used_digest", "where": "commit/manifest_verify.json", "new": "required_value_coverage/manifest_of_record_verified (differences)"},
     {"old": "binding.error / binding.map_digest / binding.program_digest", "where": "runs.jsonl commit.binding", "new": "program_source_identity/binding_context (inputs / differences)"},
     {"old": "extra.errors", "where": "runs.jsonl commit.extra", "new": "runtime_match/collector_errors (differences.first)"},
+    {"old": "extra.collector_failure", "where": "runs.jsonl commit.extra", "new": "runtime_match/collector_errors (differences[collector_failure])"},
     {"old": "declaration_*.json", "where": "commit/ (commit_integ.api.declaration)", "new": "required_value_coverage/required_classes (inputs)"},
     {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
 ]
@@ -284,6 +285,8 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
         errs_n = len(ex.get("errors") or [])
     ops = commit.get("openings") or {}
     n_open, n_ok = int(ops.get("n") or 0), int(ops.get("verified") or 0)
+    if ex.get("collector_failure"):                        # a step the worker abandoned: the counts and the root below follow from it
+        return False, f"collector failed: {str(ex['collector_failure'])[:200]}"
     if n_exp is None or n_com is None:
         return False, "reference integrity counters missing (expected_tensors/committed_tensors): committer does not report them"
     if int(commit.get("fa2_zero_rows") or 0) > 0:

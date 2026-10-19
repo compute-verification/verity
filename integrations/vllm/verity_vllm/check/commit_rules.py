@@ -252,13 +252,16 @@ def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
         errs_n = len(ex.get("errors") or []) if "errors" in ex else commit.get("errors_n")
     if errs_n is None:
         errs_n = 0
-    if _int(errs_n) > 0:
+    failure = ex.get("collector_failure")
+    if failure:
+        out, diffs, reason = FAIL, [{"name": "collector_failure", "first": str(failure)[:200]}], f"collector failed: {str(failure)[:200]}"
+    elif _int(errs_n) > 0:
         first = _first(ex.get("errors")) or "?"
         out, diffs, reason = FAIL, [{"name": "collector_errors", "n": _int(errs_n), "first": str(first)[:160]}], f"{errs_n} collector error(s): {str(first)[:160]}"
     else:
         out, diffs, reason = PASS, [], None
     return _mk("runtime_match/collector_errors", "X-03 errors", "No collector, arena or hook error was recorded during the instrumented run.",
-               ["extra.errors_n", "extra.errors"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"errors_n": _int(errs_n)})
+               ["extra.errors_n", "extra.errors", "extra.collector_failure"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"errors_n": _int(errs_n)})
 
 
 def rule_bounded_staging(commit: dict, ctx: dict) -> CheckResult:
