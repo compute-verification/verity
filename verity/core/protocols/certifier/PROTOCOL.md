@@ -441,11 +441,21 @@ them.
     A placeholder in the commitment's slot was the smaller of the two changes compute accounting offered (18 Oct): the
     other, the commitment in the record published at t_d, changes the record's format, its digest and certificate,
     and N3's public input, and with the certifier trusted it binds nothing the reveal doesn't.
-  - **The sealed slot.** The certifier's record cells are its grids and one sealed slot per PoUW window, `_salts[p]`,
-    which holds the salt and which only `reveal` opens. So the record's open cells (`Accounting.Attribution.openCells`,
-    the record minus that slot, ATTRIB-R4) are the grids, and what the certifier sends into the block, the salt frame's
-    release included, is a function of its record, the sealed slot included, and its jitter, as
+  - **The sealed slots.** The certifier's record cells are its grids and two sealed slots per PoUW window:
+    `_salts[p]`, which holds the salt and which only `reveal` opens, and `_weights[p]` (next item). So the record's
+    open cells (`Accounting.Attribution.openCells`, the record minus those slots, ATTRIB-R4) are the grids, and what
+    the certifier sends into the block, the salt frame's release included, is a function of its record, the sealed
+    slots included, and its jitter, as
     `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `Security/Definitions/Accounting/Physical.lean`.
+  - **The weights before the salt.** PoUW's noise seed reads the weights' root, so a credited window needs the
+    weights fixed before its salt. A second sealed record cell per PoUW window, `_weights[p]`, holds that order: the
+    prover's registration path hands `Proxy.commit_weights(p, root)` the 64-byte frame-v3-sha512 root
+    (`WEIGHTS_ROOT_BYTES`) once, and the certifier refuses it (`RuntimeError`) once p's first ingress tick, the salt's
+    draw, has run or was missed (a proxy back from maintenance after it), and refuses a second root for p. Nothing the
+    certifier sends depends on it. `Proxy.committed(p, registration)` gives it to the verifier on `reveal`'s
+    conditions, and refuses a window whose weights weren't recorded. The order is the certifier's word, under
+    `trusted-nebius-host`, like the salt. The call isn't authenticated, so whoever reaches the certifier first fixes
+    p's root: a wrong one only makes p uncredited, and beyond the auditor's hosts it would need the prover's signature.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof service returned for p (`Registration`, from
     `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
