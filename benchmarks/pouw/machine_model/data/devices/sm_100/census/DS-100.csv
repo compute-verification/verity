@@ -1,6 +1,14 @@
 kind,row,rate,noise,cycles,u,since,until,runs
 ALU,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 ALU,DS_alu,,,2,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
+DMMA16816,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA16816,DS_tensor,,,128,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA1684,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA1684,DS_tensor,,,32,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA1688,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA1688,DS_tensor,,,64,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA884,DS_issue,,,1,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
+DMMA884,DS_tensor,,,16,,DS-100,DS-100,note:20261019T0511Z-draft-mm-sheets note:20261019T0520Z-draft-rt-isa
 FFMA,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 IMAD,DS_issue,,,1,,DS-100,DS-100,note:20261017T1818Z-draft-axioms
 IMAD,DS_imad,,,2,,DS-100,DS-100,note:20261017T1818Z-draft-axioms

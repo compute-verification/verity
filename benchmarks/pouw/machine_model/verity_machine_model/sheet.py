@@ -4,10 +4,11 @@ form or its pipe.
 
 `lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
 form's MACs a warp instruction over a quarter of its type's peak (A3), 128 over its pipe's width (A4; the uniform pipe's
-is the measured UP line, which no document states). `differences` holds them to the census file of the DS
-epoch, `figures` holds each per-clock peak to the figure the document prints at the clock it names, and `lean` prints the
-Lean module that states it all (`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line,
-and a lemma for each figure. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
+is the measured UP line, which no document states), and `omega` each tensor class's A6 ω, its accumulator's words a
+warp instruction. `differences` holds the lines to the census file of the DS epoch, `figures` holds each per-clock
+peak to the figure the document prints at the clock it names, and `lean` prints the Lean module that states it all
+(`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line, and a lemma for each figure
+and each clock. `reading` prices the headline design (headline.toml) on the sheet's lines, beside
 headline.py's ε and with A3 read per second at f_max, `moves` finds how much slower the tensor pipe can be before
 that ε moves, and `uni` prices it with a uniform instruction at a given share of an issue slot (A2u).
 """
@@ -45,6 +46,7 @@ class Peak:
     clock: str          # the clock (`[clocks.NAME]`) the figure is quoted at
     grade: str
     source: str
+    element_words: int = 1  # 32-bit registers an accumulator element takes: f64's 2, every other type's 1 (A6)
 
     @property
     def dense(self) -> tuple[Fraction, Fraction]:
@@ -88,6 +90,7 @@ class Sheet:
     peaks: dict[str, Peak]
     pipes: dict[str, Const]
     kinds: dict[str, Kind]
+    omega: tuple[str, str]  # A6's ω, a tensor class's accumulator words: its grade and source
 
 
 def _const(t: dict, key: str) -> Const:
@@ -111,11 +114,16 @@ def sheet(data: Path) -> Sheet:
               clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
               labels={c: v.get("label", f"`{c}` clock") for c, v in t["clocks"].items()},
               peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
-                              v["grade"], v["source"]) for ty, v in t["peaks"].items()},
-              pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds)
+                              v["grade"], v["source"], v.get("element_words", 1)) for ty, v in t["peaks"].items()},
+              pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds,
+              omega=(t["omega"]["grade"], t["omega"]["source"]))
     if s.issue.value != 1 or s.uniform_issue.value != 1:
         raise SystemExit(f"{p}: [issue] and [uniform_issue] take 1 slot, as Sheet.machine's issue row does; price A2u "
                          f"at another share with `sheet --eps --uni`")
+    for c, v in s.clocks.items():
+        if v.value > s.fmax.value:
+            raise SystemExit(f"{p}: [clocks.{c}] is {_dec(v.value)} MHz, above f_max's {_dec(s.fmax.value)}; A1 bounds "
+                             f"the run's clock by f_max, so a figure quoted above it reads a clock no run reaches")
     for k, v in kinds.items():
         if v.form and v.form.type not in s.peaks:
             raise SystemExit(f"{p}: {k}'s type {v.form.type} has no [peaks.{v.form.type}]")
@@ -130,6 +138,13 @@ def sheet(data: Path) -> Sheet:
 def row(name: str) -> str:
     """The census row of a sheet row: `DS_issue`, `DS_tensor`, `DS_<pipe>`."""
     return f"DS_{name}"
+
+
+def omega(s: Sheet) -> dict[str, Fraction]:
+    """A6's ω for each tensor class: the 32-bit words its accumulator fragment takes a warp instruction, m · n elements
+    at their type's registers each over the warps that issue one MMA (a 2:4 sparse form's m · n as its dense twin's)."""
+    return {k: Fraction(v.form.m * v.form.n * s.peaks[v.form.type].element_words, v.form.warps)
+            for k, v in s.kinds.items() if v.form}
 
 
 def lines(s: Sheet, peaks: dict[str, Fraction] | None = None) -> dict[str, dict[str, Fraction]]:
@@ -356,8 +371,10 @@ def lean(s: Sheet, data: Path) -> str:
     out += [*_doc(f"The SMs A3's per-SM peaks multiply: {_dec(s.sms.value)}. Grade: {s.sms.grade}. Source: "
                   f"{s.sms.source}."), f"def smCount : ℝ := {_num(s.sms.value)}", ""]
     for c, v in s.clocks.items():
-        out += [*_doc(f"The {s.labels[c]}, at which the tensor figures are quoted: {_dec(v.value)} MHz. Grade: "
-                      f"{v.grade}. Source: {v.source}."), f"def {clock[c]} : ℝ := {_num(v.value)}", ""]
+        at = [ty for ty, p in s.peaks.items() if p.clock == c]
+        out += [*_doc(f"The {s.labels[c]}, at which the {', '.join(at)} figure{'s are' if len(at) > 1 else ' is'} "
+                      f"quoted: {_dec(v.value)} MHz. Grade: {v.grade}. Source: {v.source}."),
+                f"def {clock[c]} : ℝ := {_num(v.value)}", ""]
     for ty, p in s.peaks.items():
         c = s.clocks[p.clock]
         out += [*_doc(f"A3, {ty}: {_dec(p.macs)} dense MACs an SM clock, the document's dense figure, "
@@ -386,6 +403,16 @@ def lean(s: Sheet, data: Path) -> str:
     for k in kinds:
         q = s.kinds[k].pipe
         out.append(f"  | .{k} => " + (f"some .{q}" if q else "none"))
+    out += ["", *_doc("A6's ω for each tensor class (`SheetWords`, `accounting-sheet-words`): the 32-bit words a warp "
+                      "instruction's accumulator fragment takes, m · n elements over the warps that issue one MMA, an "
+                      "element one register and an f64 element two (DMMA, `mma.sync .f64`), a 2:4 sparse form's as "
+                      "its dense twin's; `none` off the tensor pipe. Grade: "
+                      f"{s.omega[0]}. Source: {s.omega[1]}."), "def Kind.omega : Kind → Option ℝ"]
+    for k in kinds:
+        f = s.kinds[k].form
+        e = s.peaks[f.type].element_words if f else 1
+        out.append(f"  | .{k} => " + (f"some ({f.m} * {f.n}{f' * {e}' if e != 1 else ''} / {f.warps})" if f
+                                       else "none"))
     out += ["", *_doc(f"**The {s.name}'s data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the "
                       "tensor pipe), its pipe, each pipe's width, and no shared-memory class (no LDS kind in the "
                       "census, so A5 bounds nothing here)."),
@@ -446,10 +473,11 @@ def lean(s: Sheet, data: Path) -> str:
             *(f"  | .pipe .{q} => exact machine_{q} k" for q in pipes),
             "  | .smem => exact machine_smem k",
             ""]
-    for c in s.clocks:
-        out += [*_doc(f"The {s.labels[c]} is under f_max."),
-                f"theorem {clock[c]}_lt_fmaxMHz : {clock[c]} < fmaxMHz := by",
-                f"  norm_num [{clock[c]}, fmaxMHz]", ""]
+    for c, v in s.clocks.items():
+        under = v.value < s.fmax.value
+        out += [*_doc(f"The {s.labels[c]} is {'under' if under else 'at most'} f_max."),
+                f"theorem {clock[c]}_{'lt' if under else 'le'}_fmaxMHz : {clock[c]} {'<' if under else '≤'} fmaxMHz "
+                ":= by", f"  norm_num [{clock[c]}, fmaxMHz]", ""]
     for ty, p in s.peaks.items():
         dense, tol = p.dense
         figure = (f"{_dec(p.sheet)} with sparsity, dense {_dec(dense)} ± {_dec(tol)}" if p.sparse

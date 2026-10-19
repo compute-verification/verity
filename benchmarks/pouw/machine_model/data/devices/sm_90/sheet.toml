@@ -38,6 +38,12 @@ mhz = 1830
 grade = "whitepaper (H100 SXM5)"
 source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the clock the tensor peaks are quoted at, 150 MHz under f_max"
 
+[clocks.fp64]
+label = "FP64 tensor boost clock"
+mhz = 1980
+grade = "whitepaper (H100 SXM5)"
+source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz'; f_max itself"
+
 # Each operand type's dense MACs an SM clock (A3). `sheet` is the data sheet's figure as printed (TOPS or TFLOPS),
 # `sparse` whether it is with sparsity (the dense figure half of it), `tol` half its last printed digit, and `clock`
 # the clock at which the per-clock peak reproduces it: 2 · macs · SMs · clock is the figure to within tol.
@@ -95,6 +101,23 @@ clock = "tensor"
 grade = "data sheet and whitepaper; per clock derived"
 source = "H200 data sheet, H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.04 Table 3 'Peak TF32 Tensor TFLOPS 494.7/989.4'"
 
+# DMMA (`mma.sync .f64`): an int8 × int8 product is exact in f64, so it heads exact int8 words, and it has its row
+# here, not 0 (RT-ISA-1). `element_words`: an f64 accumulator element takes two registers (A6-WIDE).
+[peaks.f64]
+macs = 128
+sheet = 67
+sparse = false
+tol = 0.5
+clock = "fp64"
+element_words = 2
+grade = "data sheet; per clock measured"
+source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa)"
+
+# A6's ω for each tensor class (`omega` in sheet.py), read off the PTX accumulator fragments.
+[omega]
+grade = "PTX ISA"
+source = "PTX ISA 9.4, the accumulator (D) fragments: mma.sync m16n8k32 .s32 four registers a lane (128 a warp instruction), m16n8k16 .f32 the same, .f64 m8n8k4 two f64 a lane (four registers, 128) and m16n8k4, k8 and k16 four (eight, 256); wgmma m64nNk32 .s32 N/2 registers a thread of its warpgroup (4,096 a warp at N256)"
+
 # Each Nsight Compute pipe's results an SM clock (A4).
 [pipes.alu]
 width = 64
@@ -124,11 +147,17 @@ source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with
 # dense MACs half m · n · k: each `wgmma.mma_async.sp` N256 form is a class at its dense twin's demand (RT-H200-EMP-2,
 # note:20261019T0533Z-draft-rt-h200-emp: wgsprs_s8 runs at its dense twin's instruction rate with A from registers,
 # 4095.6 physical MACs a SM-clock, and the shared-memory forms at 0.889 of it; r20261019-063344-f650,
-# r20261019-062628-43df). The census has no measured line for them.
+# r20261019-062628-43df). The census has no measured line for them. Each `mma.sync .f64` shape is a DMMA class at the
+# f64 peak (RT-ISA-1): DMMA.16x8x16 runs at it, DMMA.8x8x4 at half (its line here is half the time it takes), and
+# m16n8k4 and m16n8k8 are untimed.
 [kinds]
 ALU = { pipe = "alu" }
 BGMMA_B1_N256 = {}
 BMMA168256_B1 = {}
+DMMA1684 = { type = "f64", m = 16, n = 8, k = 4, warps = 1 }
+DMMA1688 = { type = "f64", m = 16, n = 8, k = 8, warps = 1 }
+DMMA16816 = { type = "f64", m = 16, n = 8, k = 16, warps = 1 }
+DMMA884 = { type = "f64", m = 8, n = 8, k = 4, warps = 1 }
 FFMA = {}
 HGMMA_BF16_N128 = { type = "bf16", m = 64, n = 128, k = 16, warps = 4 }
 HGMMA_BF16_N256 = { type = "bf16", m = 64, n = 256, k = 16, warps = 4 }

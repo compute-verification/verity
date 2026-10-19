@@ -28,6 +28,10 @@ inductive Kind
   | ALU
   | BGMMA_B1_N256
   | BMMA168256_B1
+  | DMMA16816
+  | DMMA1684
+  | DMMA1688
+  | DMMA884
   | FFMA
   | HGMMA_BF16_N128
   | HGMMA_BF16_N256
@@ -62,11 +66,12 @@ inductive Kind
   deriving DecidableEq
 
 instance : Fintype Kind :=
-  Fintype.ofList [.ALU, .BGMMA_B1_N256, .BMMA168256_B1, .FFMA, .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_BF16_N256_SP,
-    .HGMMA_F16_N256, .HGMMA_F16_N256_SP, .HGMMA_TF32_N256, .HGMMA_TF32_N256_SP, .HMMA16816_BF16, .HMMA16816_F16,
-    .HMMA1688_TF32, .IGMMA_S8_N128, .IGMMA_S8_N16, .IGMMA_S8_N192, .IGMMA_S8_N256, .IGMMA_S8_N256_RS, .IGMMA_S8_N256_SP,
-    .IGMMA_S8_N32, .IGMMA_S8_N64, .IGMMA_S8_N8, .IGMMA_U8S8_N256, .IMAD, .IMMA16816_S8, .IMMA16832_S8, .QGMMA_E4M3_N128,
-    .QGMMA_E4M3_N256, .QGMMA_E4M3_N256_SP, .QGMMA_E5M2_N256, .QGMMA_E5M2_N256_SP, .SHFL, .UNI]
+  Fintype.ofList [.ALU, .BGMMA_B1_N256, .BMMA168256_B1, .DMMA16816, .DMMA1684, .DMMA1688, .DMMA884, .FFMA,
+    .HGMMA_BF16_N128, .HGMMA_BF16_N256, .HGMMA_BF16_N256_SP, .HGMMA_F16_N256, .HGMMA_F16_N256_SP, .HGMMA_TF32_N256,
+    .HGMMA_TF32_N256_SP, .HMMA16816_BF16, .HMMA16816_F16, .HMMA1688_TF32, .IGMMA_S8_N128, .IGMMA_S8_N16, .IGMMA_S8_N192,
+    .IGMMA_S8_N256, .IGMMA_S8_N256_RS, .IGMMA_S8_N256_SP, .IGMMA_S8_N32, .IGMMA_S8_N64, .IGMMA_S8_N8, .IGMMA_U8S8_N256,
+    .IMAD, .IMMA16816_S8, .IMMA16832_S8, .QGMMA_E4M3_N128, .QGMMA_E4M3_N256, .QGMMA_E4M3_N256_SP, .QGMMA_E5M2_N256,
+    .QGMMA_E5M2_N256_SP, .SHFL, .UNI]
     (by intro k; cases k <;> decide)
 
 /-- The Nsight Compute pipes the `DS-90` classes issue to. -/
@@ -88,6 +93,7 @@ inductive Ty
   | f16
   | bf16
   | tf32
+  | f64
   deriving DecidableEq
 
 /-- A1, f_max: 1980 MHz. Grade: whitepaper (H100 SXM5), and measured. Source: H100 Tensor Core GPU Architecture
@@ -100,10 +106,15 @@ def fmaxMHz : ℝ := 1980
 Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132. -/
 def smCount : ℝ := 132
 
-/-- The tensor boost clock, at which the tensor figures are quoted: 1830 MHz. Grade: whitepaper (H100 SXM5). Source:
-H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the
-clock the tensor peaks are quoted at, 150 MHz under f_max. -/
+/-- The tensor boost clock, at which the s8, e4m3, e5m2, f16, bf16, tf32 figures are quoted: 1830 MHz. Grade: whitepaper
+(H100 SXM5). Source: H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core
+Ops: 1830 MHz'; the clock the tensor peaks are quoted at, 150 MHz under f_max. -/
 def tensorMHz : ℝ := 1830
+
+/-- The FP64 tensor boost clock, at which the f64 figure is quoted: 1980 MHz. Grade: whitepaper (H100 SXM5). Source:
+H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops:
+1980 MHz'; f_max itself. -/
+def fp64MHz : ℝ := 1980
 
 /-- A3, s8: 4096 dense MACs an SM clock, the document's dense figure, 1979 × 10¹² a second, over 2 · 132 SMs at the
 tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived (figure over
@@ -143,6 +154,13 @@ data sheet, H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.0
 494.7/989.4'. -/
 def peakTf32 : ℝ := 1024
 
+/-- A3, f64: 128 dense MACs an SM clock, the document's dense figure, 67 × 10¹² a second, over 2 · 132 SMs at the FP64
+tensor boost clock, 1980 MHz (A1's f_max is 1980 MHz). Grade: data sheet; per clock measured. Source: H200 data sheet,
+H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and
+DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with
+the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa). -/
+def peakF64 : ℝ := 128
+
 /-- A3: each type's dense MACs an SM clock. -/
 def Ty.peak : Ty → ℝ
   | .s8 => peakS8
@@ -151,6 +169,7 @@ def Ty.peak : Ty → ℝ
   | .f16 => peakF16
   | .bf16 => peakBf16
   | .tf32 => peakTf32
+  | .f64 => peakF64
 
 /-- A4, the alu pipe: 64 results an SM clock, 2 SMSP-cycles a warp instruction. Grade: Programming Guide and Nsight
 Compute. Source: CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer add 64, compare/minimum/maximum
@@ -189,6 +208,10 @@ def Kind.form : Kind → Option (Ty × ℝ)
   | .ALU => none
   | .BGMMA_B1_N256 => none
   | .BMMA168256_B1 => none
+  | .DMMA16816 => some (.f64, 16 * 8 * 16 / 1)
+  | .DMMA1684 => some (.f64, 16 * 8 * 4 / 1)
+  | .DMMA1688 => some (.f64, 16 * 8 * 8 / 1)
+  | .DMMA884 => some (.f64, 8 * 8 * 4 / 1)
   | .FFMA => none
   | .HGMMA_BF16_N128 => some (.bf16, 64 * 128 * 16 / 4)
   | .HGMMA_BF16_N256 => some (.bf16, 64 * 256 * 16 / 4)
@@ -226,6 +249,10 @@ def Kind.pipe : Kind → Option Pipe
   | .ALU => some .alu
   | .BGMMA_B1_N256 => none
   | .BMMA168256_B1 => none
+  | .DMMA16816 => none
+  | .DMMA1684 => none
+  | .DMMA1688 => none
+  | .DMMA884 => none
   | .FFMA => none
   | .HGMMA_BF16_N128 => none
   | .HGMMA_BF16_N256 => none
@@ -258,6 +285,52 @@ def Kind.pipe : Kind → Option Pipe
   | .SHFL => some .shfl
   | .UNI => some .uniform
 
+/-- A6's ω for each tensor class (`SheetWords`, `accounting-sheet-words`): the 32-bit words a warp instruction's
+accumulator fragment takes, m · n elements over the warps that issue one MMA, an element one register and an f64 element
+two (DMMA, `mma.sync .f64`), a 2:4 sparse form's as its dense twin's; `none` off the tensor pipe. Grade: PTX ISA.
+Source: PTX ISA 9.4, the accumulator (D) fragments: mma.sync m16n8k32 .s32 four registers a lane (128 a warp
+instruction), m16n8k16 .f32 the same, .f64 m8n8k4 two f64 a lane (four registers, 128) and m16n8k4, k8 and k16 four
+(eight, 256); wgmma m64nNk32 .s32 N/2 registers a thread of its warpgroup (4,096 a warp at N256). -/
+def Kind.omega : Kind → Option ℝ
+  | .ALU => none
+  | .BGMMA_B1_N256 => none
+  | .BMMA168256_B1 => none
+  | .DMMA16816 => some (16 * 8 * 2 / 1)
+  | .DMMA1684 => some (16 * 8 * 2 / 1)
+  | .DMMA1688 => some (16 * 8 * 2 / 1)
+  | .DMMA884 => some (8 * 8 * 2 / 1)
+  | .FFMA => none
+  | .HGMMA_BF16_N128 => some (64 * 128 / 4)
+  | .HGMMA_BF16_N256 => some (64 * 256 / 4)
+  | .HGMMA_BF16_N256_SP => some (64 * 256 / 4)
+  | .HGMMA_F16_N256 => some (64 * 256 / 4)
+  | .HGMMA_F16_N256_SP => some (64 * 256 / 4)
+  | .HGMMA_TF32_N256 => some (64 * 256 / 4)
+  | .HGMMA_TF32_N256_SP => some (64 * 256 / 4)
+  | .HMMA16816_BF16 => some (16 * 8 / 1)
+  | .HMMA16816_F16 => some (16 * 8 / 1)
+  | .HMMA1688_TF32 => some (16 * 8 / 1)
+  | .IGMMA_S8_N128 => some (64 * 128 / 4)
+  | .IGMMA_S8_N16 => some (64 * 16 / 4)
+  | .IGMMA_S8_N192 => some (64 * 192 / 4)
+  | .IGMMA_S8_N256 => some (64 * 256 / 4)
+  | .IGMMA_S8_N256_RS => some (64 * 256 / 4)
+  | .IGMMA_S8_N256_SP => some (64 * 256 / 4)
+  | .IGMMA_S8_N32 => some (64 * 32 / 4)
+  | .IGMMA_S8_N64 => some (64 * 64 / 4)
+  | .IGMMA_S8_N8 => some (64 * 8 / 4)
+  | .IGMMA_U8S8_N256 => some (64 * 256 / 4)
+  | .IMAD => none
+  | .IMMA16816_S8 => some (16 * 8 / 1)
+  | .IMMA16832_S8 => some (16 * 8 / 1)
+  | .QGMMA_E4M3_N128 => some (64 * 128 / 4)
+  | .QGMMA_E4M3_N256 => some (64 * 256 / 4)
+  | .QGMMA_E4M3_N256_SP => some (64 * 256 / 4)
+  | .QGMMA_E5M2_N256 => some (64 * 256 / 4)
+  | .QGMMA_E5M2_N256_SP => some (64 * 256 / 4)
+  | .SHFL => none
+  | .UNI => none
+
 /-- **The H200's data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the tensor pipe), its pipe,
 each pipe's width, and no shared-memory class (no LDS kind in the census, so A5 bounds nothing here). -/
 def sheet : Sheet Kind Pipe where
@@ -277,6 +350,10 @@ def tensorLine : Kind → ℝ
   | .ALU => 0
   | .BGMMA_B1_N256 => 0
   | .BMMA168256_B1 => 0
+  | .DMMA16816 => 64
+  | .DMMA1684 => 16
+  | .DMMA1688 => 32
+  | .DMMA884 => 8
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 64
   | .HGMMA_BF16_N256 => 128
@@ -314,6 +391,10 @@ def aluLine : Kind → ℝ
   | .ALU => 2
   | .BGMMA_B1_N256 => 0
   | .BMMA168256_B1 => 0
+  | .DMMA16816 => 0
+  | .DMMA1684 => 0
+  | .DMMA1688 => 0
+  | .DMMA884 => 0
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
@@ -351,6 +432,10 @@ def imadLine : Kind → ℝ
   | .ALU => 0
   | .BGMMA_B1_N256 => 0
   | .BMMA168256_B1 => 0
+  | .DMMA16816 => 0
+  | .DMMA1684 => 0
+  | .DMMA1688 => 0
+  | .DMMA884 => 0
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
@@ -388,6 +473,10 @@ def shflLine : Kind → ℝ
   | .ALU => 0
   | .BGMMA_B1_N256 => 0
   | .BMMA168256_B1 => 0
+  | .DMMA16816 => 0
+  | .DMMA1684 => 0
+  | .DMMA1688 => 0
+  | .DMMA884 => 0
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
@@ -425,6 +514,10 @@ def uniformLine : Kind → ℝ
   | .ALU => 0
   | .BGMMA_B1_N256 => 0
   | .BMMA168256_B1 => 0
+  | .DMMA16816 => 0
+  | .DMMA1684 => 0
+  | .DMMA1688 => 0
+  | .DMMA884 => 0
   | .FFMA => 0
   | .HGMMA_BF16_N128 => 0
   | .HGMMA_BF16_N256 => 0
@@ -483,7 +576,7 @@ theorem machine_issue (k : Kind) : sheet.machine.a .issue k = census .issue k :=
 /-- The tensor row: each class's MACs over a quarter of its type's peak is its census line. -/
 theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by
   cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, Kind.form, Ty.peak, peakS8, peakE4m3, peakE5m2,
-      peakF16, peakBf16, peakTf32]
+      peakF16, peakBf16, peakTf32, peakF64]
 
 /-- The alu pipe's row: 128 over its width for each class on it, and 0 for the rest. -/
 theorem machine_alu (k : Kind) : sheet.machine.a (.pipe .alu) k = census (.pipe .alu) k := by
@@ -520,6 +613,10 @@ theorem machine_eq_census : sheet.machine.a = census := by
 /-- The tensor boost clock is under f_max. -/
 theorem tensorMHz_lt_fmaxMHz : tensorMHz < fmaxMHz := by
   norm_num [tensorMHz, fmaxMHz]
+
+/-- The FP64 tensor boost clock is at most f_max. -/
+theorem fp64MHz_le_fmaxMHz : fp64MHz ≤ fmaxMHz := by
+  norm_num [fp64MHz, fmaxMHz]
 
 /-- A3's s8 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
 3958 with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
@@ -562,6 +659,13 @@ theorem peakTf32_figure :
     (989 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakTf32 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakTf32 * smCount * (tensorMHz * 10 ^ 6) ≤ (989 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by
   norm_num [peakTf32, smCount, tensorMHz]
+
+/-- A3's f64 peak reproduces the document: 2 · 128 MACs · 132 SMs at the FP64 tensor boost clock, 1980 MHz, is its
+figure, dense 67 ± 0.5, in 10¹² a second. -/
+theorem peakF64_figure :
+    (67 - 1 / 2 : ℝ) * 10 ^ 12 ≤ 2 * peakF64 * smCount * (fp64MHz * 10 ^ 6) ∧
+      2 * peakF64 * smCount * (fp64MHz * 10 ^ 6) ≤ (67 + 1 / 2 : ℝ) * 10 ^ 12 := by
+  norm_num [peakF64, smCount, fp64MHz]
 
 end
 

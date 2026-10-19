@@ -38,6 +38,12 @@ mhz = 1854
 grade = "none (derived: no document states it)"
 source = "the clock at which every per-clock peak below reproduces the Technical Brief's dense figure to within half its last digit, which holds from 1835 to 1855 MHz, and the Lenovo guide's FP16 2.25 too from 1852 MHz; 111 MHz under f_max, as the H200's tensor clock is 150 MHz under its f_max (open premise B200-PEAK-PER-CLOCK: the per-clock peaks are measured, the clock they are quoted at is nowhere)"
 
+[clocks.fp64]
+label = "FP64 clock (no document states one)"
+mhz = 1965
+grade = "none (derived: no document states it)"
+source = "f_max, the driver's maximum: the brief's 'FP64 Tensor Core 37 teraFLOPS' at the measured 64 MACs an SM clock over 148 SMs holds from 1927 to 1980 MHz, which the implied clock (1854 MHz, 35.1 teraFLOPS) misses; the H200's FP64 tensor clock is its f_max too (H100 whitepaper V1.04 Table 3)"
+
 # Each operand type's dense MACs an SM clock (A3). `sheet` is the Technical Brief's dense figure in TOPS or TFLOPS,
 # `sparse` false (the brief states dense and sparse apart), `tol` half its last printed digit, and `clock` the clock at
 # which the per-clock peak reproduces it: 2 · macs · SMs · clock is the figure to within tol.
@@ -110,8 +116,8 @@ sheet = 9000
 sparse = false
 tol = 500
 clock = "implied"
-grade = "data sheet per second; per clock derived at the implied clock; its classes unmeasured"
-source = "Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and the census measures no FP4 class"
+grade = "data sheet per second; per clock measured"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and DC-100's census measures no FP4 class; RT-ISA's probe timed kind::mxf4 (UTCOMMA) and kind::mxf4nvf4 (UTCOMMA.4X) alone at 16390 MACs an SM clock, 2.000 times kind::i8's 8195 at the same instruction rate (RT-ISA-4, unpriced_fp4.cu, r20261019-090041-1ef5, note:20261019T0520Z-draft-rt-isa)"
 
 # FP4 (E2M1) operands in kind::f8f6f4, unscaled: the brief's FP4 figure is the block-scaled kinds', and the vendor's
 # per-kind table puts kind::f8f6f4 at the FP8 rate whatever its operand types.
@@ -121,8 +127,25 @@ sheet = 4500
 sparse = false
 tol = 50
 clock = "implied"
-grade = "vendor documentation per kind (CUTLASS), at the data sheet's FP8 figure; per clock derived at the implied clock; its class unmeasured"
-source = "NVIDIA CUTLASS, 'Blackwell SM100 GEMMs' (media/docs/cpp/blackwell_functionality.md at 1b5b7d3062): 'tcgen05.mma(.sp).cta_group::[1|2].kind::f8f6f4 | 2x Hopper Fp8 Tensor Core | Mixed precision MMA with A={f4,f6,f8} x B={f4,f6,f8}', against 'kind::mxf4.block_scale | 4x Hopper Fp8 Tensor Core'; so the kind's rate is the FP8 one, Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'. On sm_120, all five kind::f8f6f4 types run at one QMMA rate (r20261019-052144-b4a4, note:20261019T0456Z-draft-rt-machine)"
+grade = "vendor documentation per kind (CUTLASS), at the data sheet's FP8 figure; per clock measured"
+source = "NVIDIA CUTLASS, 'Blackwell SM100 GEMMs' (media/docs/cpp/blackwell_functionality.md at 1b5b7d3062): 'tcgen05.mma(.sp).cta_group::[1|2].kind::f8f6f4 | 2x Hopper Fp8 Tensor Core | Mixed precision MMA with A={f4,f6,f8} x B={f4,f6,f8}', against 'kind::mxf4.block_scale | 4x Hopper Fp8 Tensor Core'; so the kind's rate is the FP8 one, Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'; measured alone, kind::f8f6f4 with E2M1 operands at 8195 MACs an SM clock, E4M3's rate (RT-ISA-4, r20261019-090041-1ef5, note:20261019T0520Z-draft-rt-isa). On sm_120, all five kind::f8f6f4 types run at one QMMA rate (r20261019-052144-b4a4, note:20261019T0456Z-draft-rt-machine)"
+
+# DMMA (`mma.sync .f64`): an int8 × int8 product is exact in f64, so it heads exact int8 words, and it has its row
+# here, not 0 (RT-ISA-1). `element_words`: an f64 accumulator element takes two registers (A6-WIDE).
+[peaks.f64]
+macs = 64
+sheet = 37
+sparse = false
+tol = 0.5
+clock = "fp64"
+element_words = 2
+grade = "data sheet per second; per clock measured"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP64 Tensor Core 37 teraFLOPS'; the Programming Guide 12.9 §6.4.1 Table 7, CC 10.0: 64 64-bit floating-point results a clock a multiprocessor; measured alone, DMMA.8x8x4 at 64 MACs an SM clock, and beside a saturated tcgen05 kind::i8 form t + s = 0.939 to 0.952, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced.cu, r20261019-083352-2e24, note:20261019T0520Z-draft-rt-isa)"
+
+# A6's ω for each tensor class (`omega` in sheet.py), read off the PTX accumulator fragments.
+[omega]
+grade = "PTX ISA"
+source = "PTX ISA 9.4, the accumulator (D) fragments: mma.sync m16n8k32 .s32 four registers a lane (128 a warp instruction), m16n8k16 the same, .f64 m8n8k4 two f64 a lane (four registers, 128) and m16n8k4, k8 and k16 four (eight, 256); tcgen05.mma's accumulator is M × N 32-bit cells of tensor memory (32,768 at M128 N256), which its one issuing thread's instruction writes"
 
 # Each Nsight Compute pipe's results an SM clock (A4).
 [pipes.alu]
@@ -156,9 +179,15 @@ source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with
 # kind::f8f6f4 with E5M2, E2M3, E3M2 and E2M1 operands, kind::mxf8f6f4 E4M3, kind::mxf4 and kind::mxf4nvf4 at twice
 # f8f6f4's K (PTX ISA 9.4 §9.7.18.10.10.1), and kind::i8 2:4 sparse (`sparse`: k its logical k, its dense MACs half
 # m · n · k). Each is at its dense i8 twin's 512: FP4 in kind::f8f6f4 at the kind's own peak (`fp4_f8f6f4`), not the
-# block-scaled kinds' FP4 figure, which would put it at 256.
+# block-scaled kinds' FP4 figure, which would put it at 256. RT-ISA timed kind::mxf4, kind::mxf4nvf4 and kind::f8f6f4
+# E2M1 alone at those lines (r20261019-090041-1ef5). Each `mma.sync .f64` shape is a DMMA class at the f64 peak
+# (RT-ISA-1): DMMA.8x8x4 runs at it, and the m16n8 shapes are untimed.
 [kinds]
 ALU = { pipe = "alu" }
+DMMA1684 = { type = "f64", m = 16, n = 8, k = 4, warps = 1 }
+DMMA1688 = { type = "f64", m = 16, n = 8, k = 8, warps = 1 }
+DMMA16816 = { type = "f64", m = 16, n = 8, k = 16, warps = 1 }
+DMMA884 = { type = "f64", m = 8, n = 8, k = 4, warps = 1 }
 FFMA = {}
 IMAD = { pipe = "imad" }
 IMMA16816_S8 = { type = "s8", m = 16, n = 8, k = 16, warps = 1 }

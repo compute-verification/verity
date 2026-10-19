@@ -9,7 +9,7 @@ import pytest
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
 from verity_machine_model.model import DEVICES
-from verity_machine_model.sheet import ROOT, differences, figures, lean, moves, reading, sheet, uni
+from verity_machine_model.sheet import ROOT, differences, figures, lean, moves, omega, reading, sheet, uni
 
 SHEETS = ["sm_90", "sm_100"]
 
@@ -25,7 +25,26 @@ def test_peaks_reproduce_the_figures(name):
     s = sheet(DEVICES / name)
     failed = [(f.type, float(f.value), float(f.dense), float(f.tol)) for f in figures(s) if not f.holds]
     assert not failed, f"{name}: a per-clock peak at its clock misses the document's figure: {failed}"
-    assert all(c.value < s.fmax.value for c in s.clocks.values())
+
+
+def test_a_clock_above_fmax_is_refused(tmp_path):
+    d = tmp_path / "sm_90"
+    shutil.copytree(DEVICES / "sm_90", d)
+    p = d / "sheet.toml"
+    p.write_text(p.read_text().replace("mhz = 1830", "mhz = 1990"))
+    with pytest.raises(SystemExit, match=r"\[clocks.tensor\] is 1990 MHz, above f_max's 1980"):
+        sheet(d)
+
+
+@pytest.mark.parametrize("name", SHEETS)
+def test_omega_is_a6s(name):
+    """Each tensor class's ω is its accumulator fragment's words, as A6 (`SheetWords`) lists them: mma.sync m16n8k32
+    s32 128, wgmma m64n256k32 4096 a warp, tcgen05.mma 128 × 256 32768, and DMMA's two registers an f64 element, 128
+    at m8n8k4 and 256 at m16n8k16 (A6-WIDE)."""
+    w = omega(sheet(DEVICES / name))
+    a6 = {"IMMA16832_S8": 128, "DMMA884": 128, "DMMA16816": 256,
+          **({"IGMMA_S8_N256": 4096} if name == "sm_90" else {"UTCIMMA_M128_N256": 32768})}
+    assert {k: w[k] for k in a6} == a6
 
 
 @pytest.mark.parametrize("name", SHEETS)
