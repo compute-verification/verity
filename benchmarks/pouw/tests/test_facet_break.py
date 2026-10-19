@@ -71,7 +71,9 @@ def test_class_of():
             "REDG.E.MAX.STRONG.GPU": "REDG32", "REDG.E.XOR.64.STRONG.GPU": "REDG64",
             "ATOMG.E.ADD.STRONG.GPU": "ATOMG32", "ATOMG.E.CAS.64.STRONG.GPU": "ATOMG64", "ATOMS.ADD": "ATOMS32",
             "ATOMS.CAST.SPIN.64": "ATOMS64", "ATOM.E.ADD.STRONG.GPU": "ATOME32", "ATOM.E.EXCH.64.STRONG.GPU": "ATOME64",
-            "STS.128": "STS128", "STS": None, "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
+            "STS.128": "STS128", "STS": "STS32", "STS.U8": "STS32", "STG.E": "STG32", "STG.E.128": "STG128",
+            "STG.E.64": None, "REDUX.XOR": "REDUX", "ISETP.LE.AND": "ISETP", "VIADD": "VIADD", "VIADDMNMX": None,
+            "LDGSTS.E.BYPASS.128": "LDGSTS16", "LDSM.16.M88": "LDSM_X1",
             "LDSM.16.MT88.4": "LDSM_X4T", "LDSM.8.MT1616.2": "LDSM8T_X2", "STSM.16.M88.2": "STSM_X2",
             "STSM.8.MT1616.4": "STSM8T_X4"}
     assert {op: loads.class_of(op) for op in want} == want
@@ -255,8 +257,8 @@ def test_full_counts_every_instruction_of_the_gates_loop_and_unclassed_ones_on_i
     want = ["IMMA.16832.S8.S8"] * 2 + ["FMUL"] * 6 + ["MOV", "IADD3", "ISETP.NE.AND", "BRA"]
     assert loads.gate_loops(out)["jm_t"] == want
     full, other = loads.load_rows([p], full=True)
-    assert full["x"] == pytest.approx({"IMMA16832": 0.05, "FFMA": 0.15, "NOROW": 0.025, "ALU": 0.025})
-    assert full["x_issue"] == pytest.approx(0.05)
+    assert full["x"] == pytest.approx({"IMMA16832": 0.05, "FFMA": 0.15, "NOROW": 0.025, "ALU": 0.025, "ISETP": 0.025})
+    assert full["x_issue"] == pytest.approx(0.025) and "ISETP" not in c
     assert "x" not in other
     counted = loads.program(one, c, cu)["load"]["issue"]
     assert loads.program(full, c, cu)["load"]["issue"] == pytest.approx(counted + 0.1) and counted == pytest.approx(0.2)
