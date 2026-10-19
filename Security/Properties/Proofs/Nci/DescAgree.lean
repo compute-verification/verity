@@ -31,10 +31,11 @@ def rootBody (P : Prog) : Flock.Program.Body := (P.defs[P.root]!).body
 def nodeCount (P : Prog) : ℕ := (rootBody P).nodes.size
 def rootOffs (P : Prog) : Array ℕ := (rootBody P).offsets
 def inputs (P : Prog) : Array Bool := (rootBody P).nodes.map (Desc.isInputNode P)
+def registered (P : Prog) : Array Bool := (rootBody P).nodes.map fun n => isRegisteredId (P.defs[n.fn]!).key
 
 /-- `Desc.evaluate`'s fold over θ by root node. -/
 def nodeThetaFold (P : Prog) (theta : Array Json) : Except String (Array Bool) :=
-  (List.range theta.size).foldlM (fun m t => Desc.thetaStep (inputs P) m theta[t]!) (Array.replicate (nodeCount P) false)
+  (List.range theta.size).foldlM (fun m t => Desc.thetaStep (inputs P) (registered P) m theta[t]!) (Array.replicate (nodeCount P) false)
 
 /-- `Desc.evaluate`'s fold over the owners by root node. -/
 def nodeOwnerFold (P : Prog) (owner : Array Json) : Except String (Array (Option ℕ)) :=
@@ -66,7 +67,7 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   simp only [h4, Bool.false_eq_true, ite_false] at h
   rcases h5 : Desc.analyze P with e | reads <;> simp only [h5] at h
   · cases h
-  rcases h6 : nodeThetaFold P i.theta with e | mask <;> simp only [nodeThetaFold, inputs, rootBody, nodeCount] at h6 <;> simp only [h6] at h
+  rcases h6 : nodeThetaFold P i.theta with e | mask <;> simp only [nodeThetaFold, inputs, registered, rootBody, nodeCount] at h6 <;> simp only [h6] at h
   · cases h
   by_cases h7 : (i.owner.size != (P.defs[P.root]!).body.nodes.size) = true
   · simp only [h7, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
@@ -90,18 +91,21 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
     simp at h10
     exact h10 u hu
 
-theorem descThetaStep_ok (inp m m' : Array Bool) (t : Json) (h : Desc.thetaStep inp m t = .ok m') :
-    ∃ k, natOf? t = some k ∧ k < inp.size ∧ inp[k]! = true ∧ m[k]! = false ∧ m' = m.set! k true := by
+theorem descThetaStep_ok (inp reg m m' : Array Bool) (t : Json) (h : Desc.thetaStep inp reg m t = .ok m') :
+    ∃ k, natOf? t = some k ∧ k < inp.size ∧ inp[k]! = true ∧ reg[k]! = true ∧ m[k]! = false ∧
+      m' = m.set! k true := by
   unfold Desc.thetaStep at h
   rcases hk : natOf? t with _ | k <;> simp only [hk] at h
   · cases h
   by_cases h1 : k ≥ inp.size
   · simp [h1, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   by_cases h2 : inp[k]! = true
-  · by_cases h3 : m[k]! = true
-    · simp [h1, h2, h3, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-    · simp [h1, h2, h3, pure, Except.pure] at h
-      exact ⟨k, rfl, by omega, h2, by simpa using h3, h.symm⟩
+  · by_cases h2' : reg[k]! = true
+    · by_cases h3 : m[k]! = true
+      · simp [h1, h2, h2', h3, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      · simp [h1, h2, h2', h3, pure, Except.pure] at h
+        exact ⟨k, rfl, by omega, h2, h2', by simpa using h3, h.symm⟩
+    · simp [h1, h2, h2', throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   · simp [h1, h2, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
 theorem getElem!_set!' {α : Type} [Inhabited α] (xs : Array α) (k : ℕ) (x : α) (i : ℕ) (hk : k < xs.size) :
@@ -119,23 +123,23 @@ theorem getElem!_set!' {α : Type} [Inhabited α] (xs : Array α) (k : ℕ) (x :
 theorem nodeThetaFold_ok (P : Prog) (theta : Array Json) (mask : Array Bool) (h : nodeThetaFold P theta = .ok mask) :
     mask.size = nodeCount P ∧
       (∀ t < theta.size, ∃ k, natOf? theta[t]! = some k ∧ k < nodeCount P ∧ (inputs P)[k]! = true ∧
-        ∀ t' < t, natOf? theta[t']! ≠ some k) ∧
+        (registered P)[k]! = true ∧ ∀ t' < t, natOf? theta[t']! ≠ some k) ∧
       ∀ k < nodeCount P, (mask[k]! = true ↔ ∃ t < theta.size, natOf? theta[t]! = some k) := by
   have hinp : (inputs P).size = nodeCount P := by simp [inputs, nodeCount]
   have := foldlM_range_ok _ _ (fun n (m : Array Bool) => m.size = nodeCount P ∧
       (∀ t < n, ∃ k, natOf? theta[t]! = some k ∧ k < nodeCount P ∧ (inputs P)[k]! = true ∧
-        ∀ t' < t, natOf? theta[t']! ≠ some k) ∧
+        (registered P)[k]! = true ∧ ∀ t' < t, natOf? theta[t']! ≠ some k) ∧
       ∀ k < nodeCount P, (m[k]! = true ↔ ∃ t < n, natOf? theta[t]! = some k)) ?_ ?_ theta.size mask h
   · exact this
   · refine ⟨by simp, fun t ht => absurd ht (by omega), fun k hk => ?_⟩
     simp [getElem!_pos (Array.replicate (nodeCount P) false) k (by simpa using hk)]
   · rintro n m m' ⟨hs, ht, hm⟩ hstep
-    obtain ⟨k, hk, hkK, hin, hfresh, rfl⟩ := descThetaStep_ok _ _ _ _ hstep
+    obtain ⟨k, hk, hkK, hin, hreg, hfresh, rfl⟩ := descThetaStep_ok _ _ _ _ _ hstep
     rw [hinp] at hkK
     refine ⟨by simp [hs], fun t htn => ?_, fun k' hk' => ?_⟩
     · rcases Nat.lt_succ_iff_lt_or_eq.1 htn with htn | rfl
       · exact ht t htn
-      · refine ⟨k, hk, hkK, hin, fun t' ht' heq => ?_⟩
+      · refine ⟨k, hk, hkK, hin, hreg, fun t' ht' heq => ?_⟩
         have := (hm k hkK).2 ⟨t', ht', heq⟩
         rw [hfresh] at this
         cases this
@@ -354,6 +358,42 @@ theorem gate_input (P : Prog) (hl : Desc.rootLaidOut P = true) (hi : Desc.inputs
     · rw [hsc']
       exact (inputsAtRoot_nodes P hi P.root k0 hk0K).1
 
+/-- An input node's gates are its callee's: `Prog.gate` stops at a primitive callee. -/
+theorem gate_input_fn (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : ℕ}
+    {ops : Array ℕ} {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) {k : ℕ} (hk : k < nodeCount P)
+    (hg : (rootOffs P)[k]! ≤ g ∧ g < (rootOffs P)[k + 1]!) (hin : (inputs P)[k]! = true) :
+    p = ((rootBody P).nodes[k]!).fn := by
+  obtain ⟨-, -, -, hmono⟩ := rootLaidOut_spec P hl
+  rw [inputs_get P hk] at hin
+  unfold Flock.Program.Prog.gate at h
+  by_cases hge : g ≥ (P.defs[P.root]!).gates
+  · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  simp only [hge, ite_false, bind, Except.bind] at h
+  have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
+  rw [hF, Flock.Steps.run.eq_2] at h
+  generalize Flock.Steps.FUEL - 1 = fuel at h
+  rcases hs : Flock.Program.gateStep P g P.rootScope with e | x
+  · simp [hs, bind, Except.bind] at h
+  obtain ⟨k0, hf, hx⟩ := gateStep_eq P g P.rootScope x hs
+  obtain ⟨hk0, hp0⟩ := find?_range_some hf
+  have hd : P.rootScope.d = P.root := rfl
+  have ho : P.rootScope.off = 0 := rfl
+  simp only [hd, ho, Nat.sub_zero, Bool.and_eq_true, decide_eq_true_eq] at hk0 hp0
+  have hk0K : k0 < nodeCount P := hk0
+  have hkk : k0 = k := node_unique (rootOffs P) (nodeCount P) hmono hk0K hk hp0 hg
+  subst hkk
+  simp only [hd] at hx
+  rcases hx with ⟨hprim, ops', rfl⟩ | ⟨hprim, sc', rfl, hsc'⟩
+  · simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    exact h.1.symm
+  · simp [Desc.isInputNode, rootBody, hprim] at hin
+
+theorem registered_get (P : Prog) {k : ℕ} (hk : k < nodeCount P) :
+    (registered P)[k]! = isRegisteredId (P.defs[((rootBody P).nodes[k]!).fn]!).key := by
+  rw [getElem!_pos (registered P) k (by simp only [registered, Array.size_map]; exact hk),
+    getElem!_pos (rootBody P).nodes k (by exact hk)]
+  simp only [registered, Array.getElem_map]
+
 /-- θ's gates: each entry's node's, in order. -/
 def thetaGates (P : Prog) (theta : Array Json) : List ℕ :=
   theta.toList.flatMap fun t => ((natOf? t).map (nodeGates P)).getD []
@@ -566,7 +606,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
   -- the nodes θ names, and θ's gates without repeats
   have hθ' : ∀ t < i.theta.size, ∃ k, natOf? i.theta[t]! = some k ∧ k < nodeCount P ∧
       ∀ t' < t, natOf? i.theta[t']! ≠ some k := fun t ht => by
-    obtain ⟨k, h1, h2, -, h4⟩ := hθt t ht
+    obtain ⟨k, h1, h2, -, -, h4⟩ := hθt t ht
     exact ⟨k, h1, h2, h4⟩
   have hnd := thetaGates_nodup P i.theta hmono hθ'
   have hmemθ : ∀ k < nodeCount P, ∀ g ∈ nodeGates P k, (g ∈ thetaGates P i.theta ↔ mask[k]! = true) := by
@@ -574,7 +614,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
     rw [mem_thetaGates, hθm k hk]
     constructor
     · rintro ⟨t, ht, k', hk', hg'⟩
-      obtain ⟨k'', h1, h2, -, -⟩ := hθt t ht
+      obtain ⟨k'', h1, h2, -, -, -⟩ := hθt t ht
       rw [hk'] at h1
       obtain rfl := Option.some.inj h1
       obtain rfl := node_unique (rootOffs P) (nodeCount P) hmono h2 hk ((hng _ g).1 hg') ((hng k g).1 hg)
@@ -599,11 +639,17 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
       intro t ht
       have hm : (thetaGates P i.theta)[t]'(by omega) ∈ thetaGates P i.theta := List.getElem_mem _
       obtain ⟨t0, ht0, k, hk, hg⟩ := (mem_thetaGates P i.theta _).1 hm
-      obtain ⟨k', h1, h2, h3, -⟩ := hθt t0 ht0
+      obtain ⟨k', h1, h2, h3, hr, -⟩ := hθt t0 ht0
       rw [hk] at h1
       obtain rfl := Option.some.inj h1
       obtain ⟨hlt, hinp⟩ := hcls k h2 _ hg
-      refine ⟨_, hget t ht, hlt, hinp.2 h3, fun t' ht' heq => ?_⟩
+      have hreg : IsRegistered P ((thetaGates P i.theta)[t]'(by omega)) := by
+        obtain ⟨p, ops, w, ⟨⟨sc, hgate⟩, -, -⟩, -⟩ := hgl _ hlt
+        have hp := gate_input_fn P hlo hgate h2 ((hng _ _).1 hg) h3
+        refine ⟨p, ops, sc, hgate, (isRegisteredId_iff _).1 ?_⟩
+        rw [hp, ← registered_get P h2]
+        exact hr
+      refine ⟨_, hget t ht, hlt, hinp.2 h3, hreg, fun t' ht' heq => ?_⟩
       rw [hget t' (by omega), Option.some.injEq] at heq
       exact absurd ((List.Nodup.getElem_inj hnd).1 heq) (by omega)
     have hO : ∀ g < gates P, OwnerOk P owner' g := by
