@@ -484,7 +484,7 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
     suffix on the nan domain (each distinct suffix searched once); one that doesn't reduce is unknown. With `split`,
     each sequence is searched as its `splits`, each case streamed, and it is unsat when every case is, FOUND when
     one is; `cases` (labels "SEQUENCE /CASE") keeps only those, and a sequence's verdict is then over them alone.
-    `split_mods` searches each case as its `mod_splits`."""
+    `split_mods` searches each case as its `mod_splits`, and `cases` may then name single sub-cases too."""
     seqs = [s for s in sequences(k, fp)
             if part == "all" or (part == "fp") == any(op_name(op) in FP_OPS for op in s)][shard[0]::shard[1]]
     if cases is not None:
@@ -496,8 +496,12 @@ def search(k: int, fp: bool = True, tname: str = "xor", jobs: int = 1, timeout_m
     def parts(c):
         if not split:
             return [()]
-        fs = [f for f in splits(c) if cases is None or f"{label(c)} /{fix_label(f)}" in cases]
-        return [g for f in fs for g in (mod_splits(c, f) if split_mods and f else [f])]
+        out = []
+        for f in splits(c):
+            subs = mod_splits(c, f) if split_mods and f else [f]
+            whole = cases is None or f"{label(c)} /{fix_label(f)}" in cases
+            out += [g for g in subs if whole or f"{label(c)} /{fix_label(g)}" in cases]
+        return out
 
     def done(r):
         res.append(r)
