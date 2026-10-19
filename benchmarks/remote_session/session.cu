@@ -28,61 +28,64 @@
 //
 // rb_set takes the payload tree's constants as it takes a pass's: row_prefix = sha512_row_v2_prefix(32768), the
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
-//
-// The SHA-512 compressions, the row/v2 digests of the receipt tree's leaves, the hm96 leaf after its salt and the
-// frame-v3 leaf, pad and node of these kernels are libvc's device functions (`../hash/lib/vc_device.cuh`), from
-// constants beside kC: kVL (libvc's LeafK: the frame leaf's and pad's templates under the pass's domain, the salt and
-// leaf prefixes' midstates, the fixed padding blocks scheduled), kNodeTpl (a node's last two blocks) and gNib (M_key's
-// nibble table). rb_set, rb_chain_set and rb_chain here are reader.cu's (renamed *_reader) that also set them, rb_chain
-// completing a chained pass's kVL on the device from the domain id it made. reader.cu's own kernels (rb_leaves, rb_pads,
-// rb_tree and level_kernel) keep its code: the unfused tree they hash is the fused one's cross-check.
-#include "../hash/lib/vc_device.cuh"
-#define rb_set rb_set_reader
-#define rb_chain_set rb_chain_set_reader
-#define rb_chain rb_chain_reader
 #include "../codec_tensor/reader.cu"
-#undef rb_set
-#undef rb_chain_set
-#undef rb_chain
 
 namespace rb {
 
-__constant__ vc::LeafK kVL;
-__constant__ u64 kNodeTpl[vc::MAX_NB][32];
-__device__ __align__(16) uint8_t gNib[vc::TN_BYTES];
-__device__ vc::LeafK gVL;   // a chained pass's kVL, completed by vl_chain_kernel and copied into kVL
-
-// The hm96 leaf over x (a row's sha512/row/v2 digest) at position c, salted by salt_of(c), and its frame-v3 leaf:
-// reader.cu's leaves_kernel after its row hash, for a row of any length. Positions are below 2^32 (rb_set).
+// The hm96 leaf over x (a row's sha512/row/v2 digest) at position c, salted by salt_of(c): reader.cu's leaves_kernel
+// after its row hash, for a row of any length.
 __device__ __forceinline__ void hm96_leaf(u64 c, const u64 (&x)[8], u64 (&d)[8]) {
-  u64 Y[24], my[8], cd[8];
-  salt_of(c, Y);
+  u64 S[24], w[16];
+  salt_of(c, S);
+  u32 Ys[48];
 #pragma unroll
-  for (int i = 0; i < 24; ++i) Y[i] = bswap64(Y[i]);
-  u32 m[16];
-  vc::mask_nib(gNib, Y, m);
-  vc::mask_words(m, my);
-  vc::salt_digest(kVL, Y, cd);
-  vc::frame_first_rt(kVL, c, d);
-  vc::finish_leaf<0, true>(kVL, c, x, my, cd, d, nullptr, nullptr);
-}
-
-// node(h, i, L, R) under the pass's domain (reader.cu's node_digest)
-__device__ __forceinline__ void node_of(int h, u64 i, const u64 *L, const u64 *R, u64 (&d)[8]) {
-  vc::node_rt_from<false>(kNodeTpl, kC.node_mid[h], i, L, R, d);
-}
-
-// A chained pass's kVL from the domain id and schema chain_kernel left in g_stage: thread t < MAX_NB the frame leaf's
-// template for len(uint(pos)) = t + 1 (thread 0 then fl_m15 from its own), thread MAX_NB + t the pad's; gVL's other
-// fields are rb_chain_set's.
-__global__ void __launch_bounds__(2 * vc::MAX_NB) vl_chain_kernel() {
-  uint8_t did[64], schema[32];
-  const int at = g_stage.head_len[HEAD_LEAF] - 64, nb = threadIdx.x % vc::MAX_NB + 1;
-  for (int i = 0; i < 64; ++i) did[i] = (uint8_t)(g_stage.head[HEAD_LEAF][(at + i) >> 3] >> (56 - 8 * ((at + i) & 7)));
-  for (int i = 0; i < 32; ++i) schema[i] = (uint8_t)(g_stage.schema[i >> 3] >> (56 - 8 * (i & 7)));
-  if (threadIdx.x < vc::MAX_NB) vc::leaf_frame_nb(did, schema, g_stage.schema_len, nb, gVL);
-  else vc::pad_tpl_nb(did, nb, gVL);
-  if (!threadIdx.x) vc::leaf_m15(gVL);
+  for (int i = 0; i < 24; ++i) Ys[2 * i] = (u32)S[i], Ys[2 * i + 1] = (u32)(S[i] >> 32);
+  u32 M[16];
+#pragma unroll
+  for (int o = 0; o < 16; ++o) M[o] = 0;
+#pragma unroll 1
+  for (int b = 0; b < 32; ++b) {
+    u32 kb[63];
+#pragma unroll
+    for (int u = 0; u < 63; ++u) kb[u] = __funnelshift_r(kC.key[u], kC.key[u + 1], b);
+#pragma unroll
+    for (int o = 0; o < 16; ++o) {
+      u32 acc = 0;
+#pragma unroll
+      for (int v = 0; v < 48; ++v) acc ^= kb[o + v] & Ys[v];
+      M[o] |= (u32)(__popc(acc) & 1) << b;
+    }
+  }
+  u64 cd[8], val[8];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) cd[i] = kC.salt_mid[i];
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = bswap64(S[i]);
+  sha512_compress(cd, w);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = i < 8 ? bswap64(S[16 + i]) : 0;
+  w[8] = 0x80ULL << 56, w[15] = (u64)(128 + SALT) * 8;
+  sha512_compress(cd, w);
+#pragma unroll
+  for (int i = 0; i < 8; ++i) val[i] = kC.leaf_mid[i];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) w[i] = x[i] ^ bswap64(((u64)M[2 * i + 1] << 32) | M[2 * i]), w[8 + i] = cd[i];
+  sha512_compress(val, w);
+#pragma unroll
+  for (int i = 0; i < 16; ++i) w[i] = 0;
+  w[0] = 0x80ULL << 56, w[15] = 256 * 8;
+  sha512_compress(val, w);
+  Msg<32> msg;
+  int done = 0;
+#pragma unroll
+  for (int i = 0; i < 8; ++i) d[i] = kSha512Iv[i];
+  put_head(msg, HEAD_LEAF);
+  put_uint(msg, c);
+  put_uint(msg, c);
+  flush_block(msg, d, done);
+  put_schema(msg);
+  put_digest(msg, val);
+  sha512_finish(msg, d, done);
 }
 
 // Payload leaves [c0, c0 + n) from their blocks (data, leaf c0's first), into dig.
@@ -192,7 +195,7 @@ __device__ __forceinline__ void sk16_tile_of(Load load, Index index, u64 n, u64 
     w[9] = 0x80ULL << 56, w[15] = (u64)(128 + 8 + 4 * SK_ROWS) * 8;
 #pragma unroll
     for (int i = 0; i < 8; ++i) s[i] = kSketchMid[i];
-    sha::compress(s, w);
+    sha512_compress(s, w);
 #pragma unroll
     for (int i = 0; i < 8; ++i) ys[8 * q + i] = s[i];
   }
@@ -467,8 +470,19 @@ __global__ void wait_kernel(const unsigned *flag, unsigned want) {
 // Y is read through the non-coherent cache: the consumer reads a group's receipts only once the group is counted, and
 // a tile's receipts are whole cache lines, so no line of them is cached before it is written.
 __device__ __forceinline__ void pass_leaf(const u64 *__restrict__ Y, u64 c, u64 (&d)[8]) {
-  u64 x[8];
-  vc::hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kVL.kw_xpad);
+  u64 x[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
+#pragma unroll 1
+  for (int blk = 0; blk < 9; ++blk) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      w[i] = q < 8 * PER_LEAF ? __ldg(Y + q) : q == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
+    }
+    if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
+    sha512_compress(x, w);
+  }
   hm96_leaf(c, x, d);
 }
 
@@ -556,7 +570,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
       const u64 m = leaves >> (h + 1), i0 = (base_leaf + c0 + first) >> (h + 1);
       for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
         u64 d[8];
-        node_of(h, i0 + j, in + 16 * j, in + 16 * j + 8, d);
+        node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
 #pragma unroll
         for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
       }
@@ -581,7 +595,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
         u64 *level_out = kept + 8 * (pass_kept_at(nl, h0, h + 1) + (c0 >> (h + 1)));
         for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
           u64 d[8];
-          node_of(h, i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
+          node_digest(kC.node_mid[h], i0 + j, level_in + 16 * j, level_in + 16 * j + 8, d);
 #pragma unroll
           for (int x = 0; x < 8; ++x) level_out[8 * j + x] = d[x];
         }
@@ -640,13 +654,27 @@ __device__ __noinline__ void mapped_help_tile(const u64 *__restrict__ addrs, con
 __device__ __forceinline__ void mapped_leaf(const u64 *__restrict__ Y, u64 c, u64 n, u64 (&d)[8]) {
   const u64 leaves = (n + PER_LEAF - 1) / PER_LEAF;
   if (c >= leaves) {
-    vc::pad_rt(kVL, c, d);
+    Msg<32> msg;
+    put_head(msg, HEAD_PAD);
+    put_uint(msg, c);
+    sha512_msg(msg, d);
     return;
   }
   const int m = c + 1 < leaves ? PER_LEAF : (int)(n - PER_LEAF * c);
-  u64 x[8];
-  if (m == PER_LEAF) vc::hash_words(kC.row_mid, 128, Y, 8 * PER_LEAF, x, kVL.kw_xpad);
-  else vc::hash_words(kC.row_mid_last, 128, Y, 8 * m, x, nullptr);
+  const int words = 8 * m, nb = (64 * m + 17 + 127) / 128;
+  u64 x[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = m == PER_LEAF ? kC.row_mid[i] : kC.row_mid_last[i];
+#pragma unroll 1
+  for (int blk = 0; blk < nb; ++blk) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int q = 16 * blk + i;
+      w[i] = q < words ? __ldg(Y + q) : q == words ? 0x80ULL << 56 : 0;
+    }
+    if (blk == nb - 1) w[15] = (u64)(128 + 64 * m) * 8;
+    sha512_compress(x, w);
+  }
   hm96_leaf(c, x, d);
 }
 
@@ -708,7 +736,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const
       const u64 m = leaves >> (h + 1), i0 = first >> (h + 1);
       for (u64 j = threadIdx.x; j < m; j += blockDim.x) {
         u64 d[8];
-        node_of(h, i0 + j, in + 16 * j, in + 16 * j + 8, d);
+        node_digest(kC.node_mid[h], i0 + j, in + 16 * j, in + 16 * j + 8, d);
 #pragma unroll
         for (int x = 0; x < 8; ++x) out[8 * j + x] = d[x];
       }
@@ -738,7 +766,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const
           R[x] = at & 1 ? d[x] : o;
         }
         at >>= 1;
-        node_of(h, at, L, R, d);
+        node_digest(kC.node_mid[h], at, L, R, d);
       }
     }
     __syncthreads();   // before the next claim rewrites `claimed` and the staging
@@ -773,7 +801,7 @@ __global__ void __launch_bounds__(TOP_THREADS) top_kernel(const TopSegs s, u64 *
   for (int h = hc; h < H; ++h) {
     for (u64 j = threadIdx.x; j < m / 2; j += blockDim.x) {
       u64 d[8];
-      node_of(h, j, top + 8 * (in_at + 2 * j), top + 8 * (in_at + 2 * j + 1), d);
+      node_digest(kC.node_mid[h], j, top + 8 * (in_at + 2 * j), top + 8 * (in_at + 2 * j + 1), d);
 #pragma unroll
       for (int x = 0; x < 8; ++x) top[8 * (in_at + m + j) + x] = d[x];
     }
@@ -810,8 +838,22 @@ __global__ void __launch_bounds__(128) subtree_leaves_kernel(const u64 *__restri
                                                              int h0, u64 n, u64 *__restrict__ nodes) {
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
   const u64 q = t >> h0, l = t & ((1ULL << h0) - 1), per = (2ULL << h0) - 2;
+  const u64 *Y = ys + t * PER_LEAF * 8;
+  u64 x[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) x[i] = kC.row_mid[i];
+#pragma unroll 1
+  for (int blk = 0; blk < 9; ++blk) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      const int k = 16 * blk + i;
+      w[i] = k < 8 * PER_LEAF ? Y[k] : k == 8 * PER_LEAF ? 0x80ULL << 56 : 0;
+    }
+    if (blk == 8) w[15] = (u64)(128 + 64 * PER_LEAF) * 8;
+    sha512_compress(x, w);
+  }
   u64 d[8];
-  pass_leaf(ys + t * PER_LEAF * 8, c[q] + l, d);
+  hm96_leaf(c[q] + l, x, d);
   if (tid < n)
 #pragma unroll
     for (int i = 0; i < 8; ++i) nodes[(q * per + l) * 8 + i] = d[i];
@@ -828,7 +870,7 @@ __global__ void __launch_bounds__(128) subtree_level_kernel(u64 *__restrict__ no
   u64 *nd = nodes + q * per * 8;
   const u64 *in = nd + 8 * (at + 2 * i);
   u64 d[8];
-  node_of(h, (c[q] >> (h + 1)) + i, in, in + 8, d);
+  node_digest(kC.node_mid[h], (c[q] >> (h + 1)) + i, in, in + 8, d);
 #pragma unroll
   for (int k = 0; k < 8; ++k) nd[8 * (at + (1ULL << (h0 - h)) + i) + k] = d[k];
 }
@@ -844,72 +886,7 @@ __global__ void __launch_bounds__(128) gather64_kernel(const u64 *__restrict__ a
 
 }  // namespace rb
 
-// libvc's constants beside reader.cu's: kVL's fixed fields (and with domain_id its frame templates), M_key's nibble
-// table and the node template, on stream s. The frame needs an 18-byte schema (hm96-sha512/row/v2) and positions
-// below 2^36, so every leaf, pad and node index is below 2^32.
-static int vl_set(vc::LeafK &K, const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key,
-                  const uint8_t *domain_id, const uint8_t *schema, int schema_len, uint64_t positions, cudaStream_t s) {
-  static uint8_t tab[vc::TN_BYTES];
-  static u64 tpl[vc::MAX_NB][32];
-  if (!salt_prefix || !leaf_prefix || !key || !schema || schema_len != 18 || positions > (1ULL << 36)) return 1;
-  memset(&K, 0, sizeof K);
-  vc::midstate(salt_prefix, K.mid_salt);
-  vc::midstate(leaf_prefix, K.mid_leaf);
-  vc::pad_schedule(256, K.kw_leafpad);
-  vc::pad_schedule(128 + 64 * PER_LEAF, K.kw_xpad);
-  K.lb = 64 * PER_LEAF, K.xpad = 1;
-  if (domain_id) {
-    if (vc::leaf_frame(domain_id, schema, schema_len, K)) return 1;
-    vc::pad_tpls(domain_id, K);
-  }
-  for (u32 t = 0; t < 512; ++t) vc::nib_entry(key, t, tab);
-  if (vc::node_tpls(tpl)) return 1;
-  return cudaMemcpyToSymbolAsync(gNib, tab, sizeof tab, 0, cudaMemcpyHostToDevice, s) ||
-                 cudaMemcpyToSymbolAsync(kNodeTpl, tpl, sizeof tpl, 0, cudaMemcpyHostToDevice, s)
-             ? 4
-             : 0;
-}
-
 extern "C" {
-
-// reader.cu's rb_set, and kVL, gNib and kNodeTpl under the same constants.
-int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
-           const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
-           const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions,
-           cudaStream_t s) {
-  static vc::LeafK K;
-  if (!domain_id) return 1;
-  if (int e = vl_set(K, salt_prefix, leaf_prefix, key, domain_id, schema, schema_len, positions, s)) return e;
-  if (int e = rb_set_reader(receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, key, domain_id,
-                            schema, schema_len, salt_in, salt_in_len, positions, s))
-    return e;
-  return cudaMemcpyToSymbolAsync(kVL, &K, sizeof K, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
-}
-
-// reader.cu's rb_chain_set, and gVL's seed-free fields, gNib and kNodeTpl; rs_chain_prepare completes kVL from the
-// pass's seed.
-int rb_chain_set(const uint8_t *receipt_prefix, int receipt_at, const uint8_t *row_prefix,
-                 const uint8_t *row_prefix_last, const uint8_t *salt_prefix, const uint8_t *leaf_prefix,
-                 const uint8_t *key, const uint8_t *binding, int binding_len, int binding_at, const uint8_t *domain,
-                 int domain_len, int domain_at, const uint8_t *schema, int schema_len, const uint8_t *salt_in,
-                 int salt_in_len, int salt_at, uint64_t positions, cudaStream_t s) {
-  static vc::LeafK K;
-  if (int e = vl_set(K, salt_prefix, leaf_prefix, key, nullptr, schema, schema_len, positions, s)) return e;
-  if (int e = rb_chain_set_reader(receipt_prefix, receipt_at, row_prefix, row_prefix_last, salt_prefix, leaf_prefix,
-                                  key, binding, binding_len, binding_at, domain, domain_len, domain_at, schema,
-                                  schema_len, salt_in, salt_in_len, salt_at, positions, s))
-    return e;
-  return cudaMemcpyToSymbolAsync(gVL, &K, sizeof K, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
-}
-
-// reader.cu's rb_chain, then kVL completed from the domain id it made (`vl_chain_kernel`), on stream s.
-int rb_chain(const uint8_t *seed, cudaStream_t s) {
-  if (int e = rb_chain_reader(seed, s)) return e;
-  vl_chain_kernel<<<1, 2 * vc::MAX_NB, 0, s>>>();
-  void *vl = nullptr;
-  if (cudaGetLastError() || cudaGetSymbolAddress(&vl, gVL)) return 4;
-  return cudaMemcpyToSymbolAsync(kVL, vl, sizeof(vc::LeafK), 0, cudaMemcpyDeviceToDevice, s) ? 4 : 0;
-}
 
 int rs_payload_leaves(const void *data, uint64_t c0, uint64_t n, uint64_t *dig, cudaStream_t s) {
   if (!data || !dig || n < 1) return 1;
