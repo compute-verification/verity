@@ -140,14 +140,16 @@ def rs_fit() -> None:
                 print(line(f"{vector} q*={q} RS at {label}", eps(d, vector, q)))
 
 
-TRUE_LOOP = 290.36   # wgli_true_w2 in r20261019-055823-616f: the plain GEMM's 122.41 over its tensor fraction 0.42158
+# The loops that fold the wgmma's own accumulators, the plain GEMM's 122.41 over their tensor fraction: wgli_true_w2 in
+# r20261019-055823-616f (0.42158), and the fastest, wgli_db_w2 in r20261019-070001-df11 (0.45574)
+TRUE_LOOPS = (290.36, 268.60)
 
 
 def honest_true() -> None:
     """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators (RT-HOPPER-8)."""
     with tempfile.TemporaryDirectory() as t:
         d = scratch(Path(t), rs=False)
-        for cyc in (None, TRUE_LOOP):
+        for cyc in (None, *TRUE_LOOPS):
             if cyc:
                 p = d / "honest" / "dc90-licpw-redux-l32.toml"
                 p.write_text(re.sub(r"^cycles_per_mma = [0-9.]+", f"cycles_per_mma = {cyc}", p.read_text(), flags=re.M))
