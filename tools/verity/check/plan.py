@@ -28,8 +28,10 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
 cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
---no-gather), of each RUN given with --from, and in each PACK given (which no gate cites).  A pass found in a recorded check's
-pack names that attempt and the pack's sha256, which `research merge --verdicts` cites.
+--no-gather), in both packs of each recorded check of COMMIT (none with --no-gather) and of each RUN given with --from (the
+passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
+(which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
+--verdicts` cites, the run that earned it, and the files it is (`paths`).
 
 A part is `passed` (a pass is found), `must-run` (none under its key), `unkeyed` (its key can't be computed without running a
 step first: it must run), `skipped` or `no-verdict`.  lean-agreement is required when the job's `merge_requires` covers the change from
@@ -66,6 +68,9 @@ KEYLESS = {
     "lean-build": "`lake build` of the verifier keeps no pass",
     "lean-unit-cut": "the partition check runs the verifier lean-build builds, and keeps no pass",
 }
+#: a recorded check's packs (`check.PACK_FILES`): the passes its steps stored, and those it found here before they ran, which it
+#: reused (`check.Reused`)
+PACK, REUSED = "verdicts.tar.gz", "verdicts-reused.tar.xz"
 #: the parts of one step the text lists that didn't pass (`--json` lists every part)
 SHOWN = 25
 
@@ -86,7 +91,7 @@ for name, d in dirs:
     hit = CC.lookup(Path(d), listed, cli.REPO, moved=False)
     if hit is None:
         continue
-    out["list"] = {"source": name, "entry": hit[1]}
+    out["list"] = {"source": name, "entry": hit[1], "key": CC._dir(Path(), listed).as_posix()}
     for (kind, label), k in zip(hit[0]["targets"], hit[0]["keys"]):
         found = []
         for n2, d2 in dirs:
@@ -108,9 +113,17 @@ class Source:
     attempt: str | None = None
     sha256: str | None = None
 
-    def where(self, run: str | None = None) -> dict:
+    def where(self, run: str | None = None, paths: list[Path] = ()) -> dict:
+        """A pass found here: the source, the attempt and pack it came from, the run that earned it, and the files it is (as pack
+        paths, `check/...` and `tests/...`, which `verdicts.export_paths` packs)."""
         return {"source": self.name, **({"attempt": self.attempt, "pack_sha256": self.sha256} if self.attempt else {}),
-                **({"run": run} if run else {})}
+                **({"run": run} if run else {}), **({"paths": [self.pack_path(p) for p in paths]} if paths else {})}
+
+    def pack_path(self, p: Path) -> str:
+        if p.is_relative_to(self.check):
+            return f"check/{p.relative_to(self.check).as_posix()}"
+        root = next(r for r in self.tests if p.is_relative_to(r))
+        return f"tests/{p.relative_to(root).as_posix()}"
 
 
 @dataclass
@@ -177,10 +190,12 @@ def slot_caches(C) -> list[Path]:
     return [base / f"tests-slot-{n}" for n in sorted(names)]
 
 
-def local_source(C) -> Source:
+def local_source(C, own: bool = False) -> Source:
+    """This machine's caches: $CHECK_CACHE, $VERITY_TEST_CACHE and (unless ``own``, a check's own caches alone) every check
+    slot's test cache."""
     S = C.SUITES
-    tests = [Path(os.environ.get("VERITY_TEST_CACHE") or S.CACHE), *slot_caches(C)]
-    return Source("local", C.cache_dir(), list(dict.fromkeys(tests)))
+    tests = [Path(os.environ.get("VERITY_TEST_CACHE") or S.CACHE), *([] if own else slot_caches(C))]
+    return Source("own" if own else "local", C.cache_dir(), list(dict.fromkeys(tests)))
 
 
 def unpack(V, pack: Path, d: Path, attempt: str | None) -> Source:
@@ -229,12 +244,13 @@ def suite_parts(C, sources: list[Source], lean: bool) -> list[Part]:
                     S.CACHE = root
                     hit = S.cached(k)
                     if hit and S.holds(hit, tree, lock, provided):
-                        found.append(src.where(hit.get("run")))
+                        found.append(src.where(hit.get("run"), [root / f"{k}.json"]))
                         break
                     per = per or S.PerTest(s, ids, env[step], [[]], deps, tree)
                     per.dir = S.per_test_dir(s)
                     if w := per.whole(lock, provided):
-                        found.append({**src.where(w.get("run")), "traced": True})
+                        files = [per.dir / f"{S.WHOLE}--{w['key']}.json", per.dir / S.TRACED / f"{w['traced']}.json"]
+                        found.append({**src.where(w.get("run"), files), "traced": True})
                         break
             out.append(Part(f"suite:{s.name}", step, k, "passed" if found else "must-run", found))
     finally:
@@ -254,13 +270,14 @@ def lean_parts(C, sources: list[Source]) -> list[Part]:
         k = LA.key(p, files, LA.FLAGS)
         found = []
         for src in sources:
+            entry = src.check / "lean-audit" / f"{k}.json"
             try:
-                rep = json.loads((src.check / "lean-audit" / f"{k}.json").read_text())["report"]
+                rep = json.loads(entry.read_text())["report"]
             except (OSError, ValueError, KeyError, TypeError):
                 continue
             if (isinstance(rep, dict) and not rep.get("failures") and rep.get("kind") != fast
                     and isinstance(rep.get("seconds"), dict) and "replay" in rep["seconds"]):
-                found.append(src.where())
+                found.append(src.where(paths=[entry]))
         out.append(Part(f"lean-audit:{p}", "lean-audit", k, "passed" if found else "must-run", found))
     return out
 
@@ -277,7 +294,8 @@ def keyed_step_parts(C, sources: list[Source], names: list[str]) -> list[Part]:
                    "it)" if name == "flock-rust-tests" else "its key can't be computed here (the tree's files can't be listed)")
             out.append(Part(name, name, None, "unkeyed", why=why))
             continue
-        found = [{**src.where(), "key": k} for k in keys for src in sources if (src.check / name / f"{k}.json").is_file()]
+        found = [{**src.where(paths=[src.check / name / f"{k}.json"]), "key": k} for k in keys for src in sources
+                 if (src.check / name / f"{k}.json").is_file()]
         out.append(Part(name, name, found[0]["key"] if found else keys[0], "passed" if found else "must-run", found,
                         why=None if len(keys) == 1 else f"keyed under {len(keys)} slots' environments"))
     return out
@@ -303,8 +321,16 @@ def circuit_parts(C, sources: list[Source]) -> list[Part]:
         return [Part("circuit-check", "circuit-check", None, "unkeyed",
                      why="its task list's entry is in no source, so its targets' keys need the task list built (every Definition)")]
     by = {s.name: s for s in sources}
+    lister = by[got["list"]["source"]]
+    task_list = lister.pack_path(lister.check / "circuit-check" / got["list"]["key"] / f"{got['list']['entry']}.json")
+
+    def found(n: str, key: str, entry: str) -> dict:
+        # a target's key is known only from the task list's entry, so a pack that answers for the target holds both
+        f = by[n].where(paths=[by[n].check / "circuit-check" / key / f"{entry}.json"])
+        return {**f, "paths": [*f["paths"], task_list], "entry": entry}
+
     return [Part(f"circuit-check:{t['target']}", "circuit-check", t["key"], "passed" if t["found"] else "must-run",
-                 [{**by[n].where(), "entry": entry} for n, entry in t["found"]]) for t in got["targets"]]
+                 [found(n, t["key"], entry) for n, entry in t["found"]]) for t in got["targets"]]
 
 
 def required_agreement(commit: str, base: str | None, repo: Path = ROOT) -> bool:
@@ -321,12 +347,14 @@ def required_agreement(commit: str, base: str | None, repo: Path = ROOT) -> bool
     return bool(rule_touches(list(rule), [p for p in d.stdout.split("\0") if p]))
 
 
-def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = False, circuit=circuit_parts) -> list[Part]:
+def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = False, circuit=circuit_parts,
+              own: bool = False) -> list[Part]:
     """Every part of the check of ``tree`` (which this process's interpreter runs, as `check` would), by that tree's own key
-    code, and the passes ``sources`` hold under each key (with ``local``, this machine's caches first, added to them)."""
+    code, and the passes ``sources`` hold under each key (with ``local``, this machine's caches first, added to them: ``own``,
+    only the caches this process's check uses)."""
     C = _load("planned_check", tree / "tools" / "verity" / "check" / "check.py")
     if local:
-        sources.insert(0, local_source(C))
+        sources.insert(0, local_source(C, own))
     jobs = [j.name for j in C.JOBS]
     lean = (C.FLOCK_LEAN / "lakefile.toml").exists()
     suites = suite_parts(C, sources, lean)
@@ -402,9 +430,21 @@ def _git(*args: str, repo: Path = ROOT) -> str:
     return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
 
 
-def gather(C, d: Path, a, notes: list[str]) -> list[tuple[str | None, Path]]:
-    """The packs to look passes up in: what `gather_verdicts` would take (unless --no-gather), each --from RUN's, each
-    --verdicts-in PACK."""
+#: the states of a recorded check whose packs hold passes (`check.gathered_packs`'): a pack holds only passes
+ENDED = ("done", "failed", "cancelled")
+
+
+def own_checks(store, commit: str) -> list[str]:
+    """The recorded checks of ``commit`` that ended, newest first."""
+    return [rid for (rid,) in store.index.sql(
+        f"SELECT id FROM attempts WHERE tool = 'check' AND source_commit = ? AND state IN ({', '.join('?' * len(ENDED))}) "
+        "ORDER BY start_utc DESC", (commit, *ENDED))]
+
+
+def gather(C, d: Path, a, notes: list[str], commit: str | None = None) -> list[tuple[str | None, Path]]:
+    """The packs to look passes up in: what `gather_verdicts` would take (unless --no-gather); both packs of each recorded check
+    of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
+    big to take from every check); each --verdicts-in PACK."""
     from research.store.local import LocalStore
 
     packs: list[tuple[str | None, Path]] = []
@@ -414,11 +454,14 @@ def gather(C, d: Path, a, notes: list[str]) -> list[tuple[str | None, Path]]:
             store = LocalStore()
         if not a.no_gather:
             packs += C.gathered_packs(d, store)
-        for rid in a.from_:
-            if (p := C.attempt_pack(store, rid, d)) is None:
+        own = own_checks(store, commit) if commit and not a.no_gather else []
+        taken = {rid for rid, _ in packs}
+        for rid in dict.fromkeys([*a.from_, *own]):
+            got = [(rid, p) for name in (PACK, REUSED) if not (name == PACK and rid in taken)
+                   and (p := C.attempt_pack(store, rid, d, name)) is not None]
+            if not got and rid in a.from_ and rid not in taken:
                 notes.append(f"--from {rid}: that attempt published no verdict pack")
-            else:
-                packs.append((rid, p))
+            packs += got
     except Exception as e:  # noqa: BLE001  (no pack: say so, and plan on what is here)
         notes.append(f"no verdicts gathered from the store ({type(e).__name__}: {e})")
     packs += [(None, Path(p)) for p in a.verdicts_in]
@@ -449,6 +492,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--tree", type=Path, help=argparse.SUPPRESS)
     ap.add_argument("--pack", action="append", default=[], help=argparse.SUPPRESS)
     ap.add_argument("--agreement", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--own", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--out", type=Path, help=argparse.SUPPRESS)
     return ap
 
@@ -467,7 +511,7 @@ def inner(a) -> dict:
                 sources.append(unpack(V, Path(path), Path(d) / str(i), rid or None))
             except (V.BadPack, OSError, EOFError) as e:
                 notes.append(f"{rid or path}: its pack is refused ({type(e).__name__}: {e})")
-        parts = plan_tree(tree, sources, a.agreement, local=not a.packs_only)
+        parts = plan_tree(tree, sources, a.agreement, local=not a.packs_only, own=a.own)
         commit = _git("rev-parse", "HEAD", repo=tree)
         dirty = bool(_git("status", "--porcelain", "--untracked-files=no", repo=tree))
         if dirty:
@@ -495,7 +539,7 @@ def main(argv: list[str], host=None) -> int:
     host = host or _load("plan_host_check", HERE / "check.py")
     notes: list[str] = []
     with tempfile.TemporaryDirectory(prefix="check-plan-") as d:
-        packs = gather(host, Path(d), a, notes)
+        packs = gather(host, Path(d), a, notes, commit)
         args = [*(["--packs-only"] if a.packs_only else []), *(["--agreement"] if required_agreement(commit, base) else []),
                 *(f"--pack={rid or ''}={p}" for rid, p in packs), *(["--base", base] if base else [])]
         out = Path(d) / "plan.json"

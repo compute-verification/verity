@@ -168,6 +168,24 @@ def test_an_entry_that_goes_away_while_it_is_read_is_left_out(tmp_path, monkeypa
         assert sorted(tar.getnames()) == VERDICTS[:-1]
 
 
+def test_a_pack_of_the_entries_named_is_xz_and_import_and_combine_read_it(tmp_path, monkeypatch):
+    """`check.Reused`'s pack: the entries a plan found, each once, in path order; a name that is no verdict entry here (absent,
+    hidden, outside the caches, a part never packed) is left out, never read."""
+    r = _machine(tmp_path, monkeypatch, "a")
+    _fill(r)
+    names = ["tests/k1.json", "check/lean-audit/k2.json", "tests/k1.json", "tests/absent.json", "tests/../k1.json",
+             "check/circuit-check/v1/d/.e2.tmp", "check/lean-deps/m/manifest.json", "other/k1.json", "tests/durations.json"]
+    pack = tmp_path / "reused.tar.xz"
+    assert V.export_paths(pack, names, xz=True) == 2
+    assert pack.read_bytes()[:6] == b"\xfd7zXZ\x00" and V.refusal(pack) is None
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["check/lean-audit/k2.json", "tests/k1.json"]
+    V.export(gz := tmp_path / "new.tar.gz")
+    _machine(tmp_path, monkeypatch, "b")
+    assert V.combine([pack, gz], both := tmp_path / "both.tar.gz") == 4 and V.import_(pack) == (2, 0)
+    assert V.import_(both) == (2, 2)
+
+
 SKIPPED = ["check/lean-deps/m.json", "tests/logs/a.json", "check/lean-changed/links.json",
            "check/lean-records/build-0/p/lean-audit.json", "tests/durations.json", "check/lean-audit-scratch-x1/p/lake-manifest.json",
            "check/lean-changed/p/lean-audit.json", "check/lean-builds/k/ir/P/M.setup.json",

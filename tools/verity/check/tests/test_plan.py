@@ -127,6 +127,7 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     suites = sorted(n for n in by_a if n.startswith("suite:"))
     assert suites == ["suite:one", "suite:repository", "suite:two"]
     assert all(by_a[n]["state"] == "passed" and by_a[n]["found"][0]["attempt"] == "r-a" for n in suites)
+    assert by_a["suite:one"]["found"][0]["paths"] == [f"tests/{by_a['suite:one']['key']}.json"], "what `check.Reused` packs"
     assert by_a["preflight-lints"]["state"] == "passed" and by_a["preflight-lints"]["key"] == by_a["suite:repository"]["key"]
     unpassed = {n for n, p in by_a.items() if p.get("required", True) and p["state"] != "passed"}
     assert unpassed == {*P.KEYLESS, "flock-rust-tests", "lean"} - {"lean-build", "lean-unit-cut"}
@@ -150,6 +151,8 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
     assert (by_c["suite:two"]["state"], by_c["suite:two"]["key"]) == ("passed", by_a["suite:two"]["key"])
     ws = by_c["suite:repository"]
     assert ws["key"] != by_a["suite:repository"]["key"] and ws["state"] == "passed" and ws["found"][0]["traced"]
+    whole, reads = ws["found"][0]["paths"]
+    assert whole.startswith("tests/per-test/repository/(suite)--") and reads.startswith("tests/per-test/repository/traced/")
     _, why_c = _judged(_plan(P, root, tmp_path, packs), packs)
     assert "suite:one must-run" in why_c and "suite:two" not in why_c and "suite:repository" not in why_c
 
@@ -177,3 +180,45 @@ def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_th
     code = _commit(root, "code")
     assert P.required_agreement(code, base, root) and P.required_agreement(code, prose, root)
     assert not P.required_agreement(code, None, root)
+
+
+def test_the_plan_takes_both_packs_of_each_check_of_the_commit_and_of_each_run_given(P, tmp_path):
+    """The reused pack (`check.Reused`) runs to MBs and a GB unpacked, so it is taken only from a check of the commit planned
+    and each --from, beside the newest checks' own packs; a check gathered already isn't fetched again."""
+    import argparse
+
+    fetched = []
+    have = {("r-new", "verdicts.tar.gz"), ("r-mine", "verdicts.tar.gz"), ("r-mine", P.REUSED), ("r-from", P.REUSED),
+            ("r-new", P.REUSED)}
+
+    class Host:
+        def gathered_packs(self, d, store):
+            return [("r-new", d / "new.tar.gz")]
+
+        def attempt_pack(self, store, rid, d, name="verdicts.tar.gz"):
+            fetched.append((rid, name))
+            return d / rid / name if (rid, name) in have else None
+
+    class Store:
+        index = None
+
+        def __init__(self):
+            self.index = self
+
+        def sql(self, query, params):
+            assert params[0] == "c0ffee" and "source_commit" in query
+            return [("r-mine",)]
+
+    import research.store.local as local
+
+    old, local.LocalStore = local.LocalStore, Store
+    try:
+        notes = []
+        a = argparse.Namespace(no_gather=False, from_=["r-from", "r-none"], verdicts_in=[])
+        got = P.gather(Host(), tmp_path, a, notes, "c0ffee")
+    finally:
+        local.LocalStore = old
+    assert [(rid, p.name) for rid, p in got] == [("r-new", "new.tar.gz"), ("r-from", P.REUSED), ("r-mine", "verdicts.tar.gz"),
+                                                  ("r-mine", P.REUSED)]
+    assert ("r-new", P.REUSED) not in fetched and ("r-new", "verdicts.tar.gz") not in fetched
+    assert notes == ["--from r-none: that attempt published no verdict pack"]

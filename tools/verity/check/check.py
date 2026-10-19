@@ -962,8 +962,10 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     return d / "verdicts-gathered.tar.gz"
 
 
-#: the packs a recorded check writes in its run dir, which `record` declares outputs
-PACK_FILES = ("verdicts.tar.gz",)
+#: the packs a recorded check writes in its run dir, which `record` declares outputs: the passes its steps stored (`Packs`), and
+#: those it found before they ran (`Reused`)
+REUSED_PACK = "verdicts-reused.tar.xz"
+PACK_FILES = ("verdicts.tar.gz", REUSED_PACK)
 
 
 def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
@@ -972,7 +974,7 @@ def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Pat
     out = (store.get_attempt(rid) or {}).get("outputs") or {}
     for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
         if any(f["path"] == name for f in store.listing(art)):
-            return store.fetch(art, d / "verdicts" / rid, paths=[name]) / name
+            return store.fetch(art, d / name.split(".", 1)[0] / rid, paths=[name]) / name
     return None
 
 
@@ -1489,13 +1491,84 @@ class Packs:
         return self.write()
 
 
+#: the reused pack is left out above this, in bytes (custody's line for undeclared files; it is declared, but a pack this big would
+#: hold far more than one tree's passes)
+REUSED_CAP = 256 << 20
+
+
+class Reused:
+    """The passes a recorded check reuses, packed as `REUSED_PACK` beside `verdicts.tar.gz` (which holds only those its steps
+    stored), so one recent check's two packs answer for every part it passed, each entry still naming the run that earned it.
+    They are what its plan of its own tree (`plan.py --own`: this run's caches, the gathered pack imported) finds passed, of the
+    entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `PREBUILD`, which no other
+    process may import while it compiles them), beside the steps; it runs again once circuit-check ends when it found no task
+    list to read circuit-check's targets from.  xz with a dictionary spanning many entries (`verdicts.XZ_FILTERS`): one tree's
+    circuit-check entries run past a GB, and pack to a few MB.  `gather_verdicts` never takes it; `plan.py` does, for a check
+    of the commit it plans and each `--from`."""
+
+    def __init__(self, run_dir: Path, before: dict[str, str]):
+        self.out, self.before = run_dir / REUSED_PACK, before
+        self.lock = threading.Lock()
+        self.circuit_unkeyed = self.circuit_ended = False
+        self.entries: int | None = None
+        self.threads: list[threading.Thread] = []
+
+    def start(self) -> None:
+        t = threading.Thread(target=self.write, daemon=True, name="reused-pack")
+        self.threads.append(t)
+        t.start()
+
+    def ended(self, rec: dict) -> None:
+        if rec["step"] == "circuit-check":
+            self.circuit_ended = True
+            if self.circuit_unkeyed:
+                self.start()
+
+    def plan(self) -> dict:
+        """`plan.py --tree ROOT --own` in a process of its own (it sets its environment as each step's), under this one's."""
+        with tempfile.TemporaryDirectory(prefix="check-reused-") as d:
+            r = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "plan.py"), "--tree", str(ROOT), "--own",
+                                "--out", str(Path(d) / "plan.json")], cwd=ROOT, capture_output=True, text=True)
+            try:
+                return json.loads((Path(d) / "plan.json").read_text())
+            except (OSError, ValueError):
+                raise RuntimeError(f"plan.py --own exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}") from None
+
+    def write(self) -> None:
+        with self.lock:
+            try:
+                late = self.circuit_ended
+                doc = self.plan()
+                self.circuit_unkeyed = any(p["part"] == "circuit-check" and p["state"] == "unkeyed" for p in doc["parts"])
+                if self.circuit_unkeyed and self.circuit_ended and not late:
+                    self.start()                     # circuit-check ended while this plan ran: its targets are keyed now
+                paths = {x for p in doc["parts"] for f in p.get("found") or [] if f.get("source") == "own"
+                         for x in f.get("paths") or [] if x in self.before}
+                n = VERDICTS.export_paths(self.out, paths, xz=True)
+                size = self.out.stat().st_size
+                if size > REUSED_CAP:
+                    self.out.unlink()
+                    print(f"check: verdicts: {REUSED_PACK} left out: {n} entries packed to {size >> 20} MiB, past {REUSED_CAP >> 20} MiB",
+                          flush=True)
+                    return
+                self.entries = n
+                print(f"check: verdicts: {n} entries this check reused -> {REUSED_PACK} ({size >> 10} KiB)", flush=True)
+            except Exception as e:  # noqa: BLE001  (no reused pack: the passes it reused are cited by their own runs' packs alone)
+                print(f"check: verdicts: no {REUSED_PACK} ({type(e).__name__}: {e})", flush=True)
+
+    def close(self) -> int | None:
+        while alive := [t for t in self.threads if t.is_alive()]:
+            alive[0].join()
+        return self.entries
+
+
 class Steps:
     """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
     as it ends."""
 
-    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None):
-        self.log, self.keep_going, self.packs = out / STEPS_LOG, keep_going, packs
+    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None):
+        self.log, self.keep_going, self.packs, self.reused = out / STEPS_LOG, keep_going, packs, reused
         self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
@@ -1539,6 +1612,8 @@ class Steps:
             self.spans.step(rec)
             if self.packs is not None:
                 self.packs.request()
+            if self.reused is not None:
+                self.reused.ended(rec)
             if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
                 self.halted = rec["step"]
                 self.stop(f"{rec['step']} failed")
@@ -1598,10 +1673,10 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
-        only: list[str] | None = None, packs: Packs | None = None) -> tuple[bool, list[dict]]:
+        only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    steps = Steps(out, keep_going, packs)
+    steps = Steps(out, keep_going, packs, reused)
 
     ended: dict[str, threading.Event] = {}
     status: dict[str, str] = {}
@@ -1630,6 +1705,8 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in preflight()]
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
+            if reused is not None:
+                reused.start()
             gs = groups(out, n, cache, urls) if only is None else groups(out, n, cache, urls, only)
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
             with ThreadPoolExecutor(max_workers=max(1, len(gs))) as ex:
@@ -1729,7 +1806,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
            "measurements": [{"name": f"{s['step']}_wall", "value": s["seconds"], "unit": "s"} for s in done],
            "steps": done, "artifacts": [p for p in ("suites.json", "suites-lean.json", "suites/", "circuit-check.json", "lean-audit/",
-                                                    "verdicts.tar.gz", STEPS_LOG, SPANS.SPANS_LOG,
+                                                    *PACK_FILES, STEPS_LOG, SPANS.SPANS_LOG,
                                                     *(s.get("log") for s in done), *agreement_verdicts(run_dir))
                                         if p and (run_dir / p).exists()]}
     if shard:
@@ -1844,8 +1921,9 @@ def main(argv: list[str]) -> int:
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
     packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
+    reused = Reused(run_dir, before) if before is not None else None
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs)
+        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs, reused)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
@@ -1862,6 +1940,8 @@ def main(argv: list[str]) -> int:
     if run_dir is not None:
         if packs is not None:
             verdicts["out"] = {"file": "verdicts.tar.gz", "entries": packs.close()}
+            if (got := reused.close()) is not None:
+                verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     if stopped_by:

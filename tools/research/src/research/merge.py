@@ -527,6 +527,9 @@ PLAN_KIND = "check-plan/v1"
 PLAN = ("uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", "tools/verity/check/check.py", "--plan")
 #: the states an attempt whose pack holds passes may end in: a pack holds only passes, so a failed or cancelled check's count
 PACK_STATES = ("done", "failed", "cancelled")
+#: a check's packs among its run files (`check.PACK_FILES`): the passes its steps stored, and those it reused, each entry
+#: naming the run that earned it; a reused pass is cited as the attempt that reused it, as `gate` cites a passing check
+PACKS = ("verdicts.tar.gz", "verdicts-reused.tar.xz")
 
 
 def run_plan(repo: Path, commit: str, base: str, also: tuple[str, ...] = ()) -> dict:
@@ -560,14 +563,15 @@ def pack_refusal(store, rid: str, sha256: str, tool: str, command: tuple[str, ..
     mode, why = invocation(doc.get("argv"), command)
     if mode not in ("check", "shard"):
         return why if mode == "refused" else "it combines shards, and holds no pack of its own"
-    art = (doc.get("outputs") or {}).get("run_files") or (doc.get("outputs") or {}).get("run_record")
-    try:
-        rows = {f["path"]: f.get("sha256") for f in store.listing(art)} if art else {}
-    except Exception as e:  # noqa: BLE001  (no listing: nothing to cite)
-        return f"its run files can't be listed ({type(e).__name__}: {e})"
-    if rows.get("verdicts.tar.gz") != sha256:
-        return "its run files hold no verdicts.tar.gz of that sha256"
-    return None
+    out = doc.get("outputs") or {}
+    for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
+        try:
+            rows = {f["path"]: f.get("sha256") for f in store.listing(art)}
+        except Exception as e:  # noqa: BLE001  (no listing: nothing to cite)
+            return f"its run files can't be listed ({type(e).__name__}: {e})"
+        if any(rows.get(name) == sha256 for name in PACKS):
+            return None
+    return f"its run files hold no {' or '.join(PACKS)} of that sha256"
 
 
 def plan_refusal(doc: dict, store, commit: str, tree: str, tool: str, command: tuple[str, ...], need: dict) -> tuple[list[str], str | None]:

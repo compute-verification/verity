@@ -1092,7 +1092,7 @@ def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_pu
     assert "flock-circuit-build unkeyed (no key)" in judge([*ok, _part("flock-circuit-build", None, None, "unkeyed", why="no key")])[1]
     assert "lean-audit:q skipped" in judge([*ok, _part("lean-audit:q", None, None, "skipped", required=False)])[1]
     assert "suite:c (no pass found in a recorded check's pack)" in judge([*ok, _part("suite:c", None, None)])[1]
-    assert "no verdicts.tar.gz of that sha256" in judge([_part("suite:a", rid, "0" * 64)])[1]
+    assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge([_part("suite:a", rid, "0" * 64)])[1]
     assert "is a `check` attempt, not `other`" in judge(ok, tool="other")[1]
     assert "isn't the target's declared" in judge([_part("suite:a", other, other_sha)])[1]
     assert "not a check-plan/v1 of the clean" in judge(ok, commit=_git(main, "rev-parse", "HEAD"))[1]
@@ -1103,6 +1103,25 @@ def test_verdicts_cites_only_a_pass_under_its_key_in_an_ended_declared_checks_pu
     assert judge([*ok, agree]) == ([rid], None)                                   # not required, not wanted
     assert store.get_attempt(failed)["status"]["state"] == "failed"
     assert judge([_part("suite:a", failed, failed_sha)]) == ([failed], None)
+
+
+def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, monkeypatch):
+    """A check's `verdicts-reused.tar.xz` holds the passes it found and reused (`check.Reused`), which its `verdicts.tar.gz`
+    doesn't; a pass found there is cited as that check, as `gate` cites a check that reused a pass."""
+    import hashlib
+
+    import research.merge as M
+    from research.store.local import LocalStore
+
+    main, feat, tip = _repos(tmp_path)
+    program = ("import os; open(os.environ['RESEARCH_RUN_DIR'] + '/verdicts-reused.tar.xz', 'wb').write(b'reused'); " + _PACKING)
+    rid, sha = _packed(tmp_path, main, monkeypatch, program=program)
+    reused = hashlib.sha256(b"reused").hexdigest()
+    store, tree = LocalStore(), _git(feat, "rev-parse", f"{tip}^{{tree}}")
+    judge = [M.plan_refusal(_plan(tip, tree, [_part("suite:a", rid, s), _part("lean-audit:pkg", rid, sha)]), store, tip, tree,
+                            "check", M.declared_command(main, "check"), {}) for s in (reused, "0" * 64)]
+    assert judge[0] == ([rid], None)
+    assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge[1][1]
 
 
 def test_verdicts_takes_one_ref_and_no_push_and_a_plan_that_prints_nothing_refuses(tmp_path, monkeypatch, capsys):

@@ -846,6 +846,42 @@ def test_a_runs_pack_is_written_as_each_step_ends_and_on_sigterm_before_any_step
     assert not packs.thread.is_alive()
 
 
+def test_a_runs_reused_pack_holds_what_its_own_plan_found_here_before_its_steps_ran(tmp_path, monkeypatch):
+    """A check's `verdicts.tar.gz` holds only what its steps stored, so a check reusing a pass no recent pack holds answered for
+    nothing a later plan could cite (19 Oct: the newest packs held no circuit-check target and no keyed step).  `Reused` packs
+    the passes its plan of its own tree found in its own caches, of those here before its steps ran; with circuit-check's
+    targets unkeyed (no task list yet) it plans again once that step ends."""
+    import tarfile
+
+    cache = tmp_path / "check-cache"
+    monkeypatch.setenv("CHECK_CACHE", str(cache))
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "tests-cache"))
+    for rel in ("lean-audit/k1.json", "circuit-check/v1/aa/e1.json", "circuit-check/v1/bb/l1.json"):
+        (cache / rel).parent.mkdir(parents=True, exist_ok=True)
+        (cache / rel).write_text("{}")
+    before = CHECK.VERDICTS.snapshot()
+    (cache / "lean-audit" / "k9.json").write_text("{}")                  # stored by this run: verdicts.tar.gz's
+    plans = [
+        {"parts": [{"part": "lean-audit:p", "state": "passed", "found": [{"source": "own", "paths": ["check/lean-audit/k1.json"]},
+                                                                         {"source": "pack:r1", "paths": ["check/lean-audit/k1.json"]}]},
+                   {"part": "lean-audit:q", "state": "passed", "found": [{"source": "own", "paths": ["check/lean-audit/k9.json"]}]},
+                   {"part": "circuit-check", "state": "unkeyed"}]},
+        {"parts": [{"part": "circuit-check:t", "state": "passed", "found": [
+            {"source": "own", "paths": ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]}]}]}]
+    monkeypatch.setattr(CHECK.Reused, "plan", lambda self: plans.pop(0))
+    run_dir = tmp_path / "run"
+    reused = CHECK.Reused(run_dir, before)
+    reused.start()
+    reused.close()
+    assert reused.circuit_unkeyed
+    with tarfile.open(run_dir / CHECK.REUSED_PACK) as tar:
+        assert tar.getnames() == ["check/lean-audit/k1.json"]
+    reused.ended({"step": "circuit-check", "status": "passed"})
+    assert reused.close() == 2 and not plans
+    with tarfile.open(run_dir / CHECK.REUSED_PACK) as tar:
+        assert tar.getnames() == ["check/circuit-check/v1/aa/e1.json", "check/circuit-check/v1/bb/l1.json"]
+
+
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
     steps = CHECK.Steps(tmp_path, keep_going=True)
     steps.end({"step": "pytest", "status": "failed"})
