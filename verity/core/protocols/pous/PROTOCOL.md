@@ -428,7 +428,8 @@ auditor's own PRF outputs, so a label the server didn't keep is a label it can't
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
 `tests/test_pous_streamed_wipe.py`, its timing `benchmarks/pous/streamed_wipe/`, and its guarantees
 `Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Models/Pous/Guarantees/StreamedWipe.lean`, the
-game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`).
+game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
+`PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
 
 **Labels and coins.** The memory challenger, the auditor's device on a machine the prover doesn't control, derives every
 label itself, under a key fresh for each server and each wipe:
