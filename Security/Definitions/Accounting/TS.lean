@@ -9,6 +9,7 @@ import Definitions.Accounting.TS.Stages
 import Definitions.Accounting.TS.Steer
 import Definitions.Accounting.TS.Sheet
 import Definitions.Accounting.TS.Fold
+import Definitions.Accounting.TS.SharedNoise
 
 /-! The tensor–scalar model (EPS1, note:20261017T0324Z-draft-eps1-spec): the machine, its facets and bound, routes and
 labelled programs with the terms of the decomposition, the full-checking and sampled plays, the receipt rounds that
