@@ -1424,6 +1424,31 @@ end Honest
 
 end FlockSoundness.Discharge.Composed.Cx
 
+namespace FlockComplete.ZkTables
+
+open FlockDeploy FlockSoundness FlockSoundness.Discharge
+
+/-- **A masked session in scope links at two points.** -/
+theorem points_of_setup {x : Claims.Msg} {s : Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hscope : Claims.Flock.Scope (deployZk _root_.Flock.Readable.relation) x)
+    (hsetup : setupOf true x = some (s, spec, sts)) : spec.points = 2 := by
+  obtain ⟨p, hp, hsc⟩ := (_root_.Flock.Readable.scope_iff (deployZk _root_.Flock.Readable.relation)
+    _root_.Flock.Readable.relation (readOf true) rfl (fun _ _ h => readOf_zk h) x).1 hscope
+  have hi := (setupOf_some hsetup).1
+  unfold _root_.Flock.Readable.parseBytes readOf at hp
+  rw [hi] at hp
+  have ht := _root_.Flock.Readable.toRead_of_parse (r := s.read) hp
+  obtain ⟨hc, -⟩ := (_root_.Flock.Readable.scope_ok_iff p).1 hsc
+  have hR := ((_root_.Flock.Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hc).1
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hR.2.2.2.2.2])
+  have hset := Ins.setup_read (setupOf_some hsetup).2
+  rw [← ht] at hset
+  unfold _root_.Flock.Readable.Read.setup at hset
+  rw [hpi] at hset
+  exact setupTables_points hset
+
+end FlockComplete.ZkTables
+
 namespace Claims.ZKMal.Masked
 
 open Claims FlockSoundness.ZK FlockSoundness.Discharge CoinLayer
@@ -1704,5 +1729,154 @@ theorem masked_congr (k : ℕ)
   · rw [dite_eq_right hk, dite_eq_right hk]
 
 end Masked
+
+/-! ## Each coin at its round -/
+
+section Slots
+
+variable {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+  (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
+
+theorem stsOf_half : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
+  rw [show (2 * j.val + r.val) / 2 = j.val by omega]
+  exact getElem!_pos (stsOf x) j.val (lt_of_jOf j)
+
+include hsx in
+theorem repSlot_at (f : _root_.Flock.Schedule → ℕ) :
+    repSlot x (2 * j.val + r.val) f = FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+      FlockComplete.piopRoundsZk spec (stAt x j) + f (zkTab x j).sch := by
+  rw [repSlot_eq hsx (sch := (zkTab x j).sch) (tPad := (zkTab x j).tPad)
+    (by rw [stsOf_half]; exact (zkTab x j).hz) f, stsOf_half]
+
+include hsx in
+theorem outerSlot_at : outerSlot x j.val r.val = FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + 1 := by
+  rw [outerSlot_eq hsx, repBase_eq hsx]
+
+variable {c c' : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+
+include hcc
+
+theorem outerAt_agree {j r : ℕ} (h : outerSlot x j r < n) (i : ℕ) : outerAt c j r i = outerAt c' j r i := by
+  unfold outerAt
+  split_ifs with hK
+  · rw [hcc ⟨_, hK⟩ h]
+  · rfl
+
+theorem link_agree (h : 0 < n) : ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).link =
+    ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).link :=
+  funext fun _ => funext fun _ => slotAt_congr hcc h _
+
+theorem rOuter_agree (h : outerSlot x j.val r.val < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rOuter r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rOuter r :=
+  funext fun _ => outerAt_agree hcc h _
+
+theorem zc_agree (h : repBase x (2 * j.val + r.val) + 2 < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).zc r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).zc r :=
+  slotAt_congr hcc h _
+
+theorem rho_agree_lt {i : ℕ} (h : repBase x (2 * j.val + r.val) + 3 + i ≤ n) :
+    ∀ a : Fin ((stAt x j).m - 6), a.val < i →
+      ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rho r a =
+        ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rho r a :=
+  fun _ ha => slotAt_congr hcc (by omega) _
+
+theorem rho_agree (h : repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) ≤ n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rho r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rho r :=
+  funext fun a => rho_agree_lt j r hcc h a a.isLt
+
+theorem lcAlpha_agree (h : repBase x (2 * j.val + r.val) + 3 + ((stAt x j).m - 6) < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lcAlpha r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lcAlpha r :=
+  slotAt_congr hcc (by omega) _
+
+theorem lcBeta_agree (h : repBase x (2 * j.val + r.val) + 4 + ((stAt x j).m - 6) < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lcBeta r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lcBeta r :=
+  slotAt_congr hcc (by omega) _
+
+theorem ts_agree_lt {i : ℕ} (h : repBase x (2 * j.val + r.val) + 5 + ((stAt x j).m - 6) + i ≤ n) :
+    ∀ a : Fin ((stAt x j).c.kLog - 6), a.val < i →
+      ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).ts r a =
+        ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).ts r a :=
+  fun _ ha => slotAt_congr hcc (by omega) _
+
+theorem ts_agree (h : repBase x (2 * j.val + r.val) + 5 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6) ≤ n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).ts r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).ts r :=
+  funext fun a => ts_agree_lt j r hcc h a a.isLt
+
+theorem rPrime_agree (h : repBase x (2 * j.val + r.val) + 5 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6) < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rPrime r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rPrime r :=
+  slotAt_congr hcc (by omega) _
+
+theorem rpp_agree (h : repBase x (2 * j.val + r.val) + 6 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6) +
+    (2 + 2 * (stAt x j).regions.size) ≤ n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rpp r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rpp r :=
+  funext fun k => funext fun _ => slotAt_congr hcc (by have := k.isLt; omega) _
+
+theorem kAt_agree {k : ℕ} (h : k < n) : kAt c k = kAt c' k := by
+  unfold kAt
+  rw [slotAt_congr hcc h, slotAt_congr hcc h]
+
+include hsx
+
+theorem rsGamma_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) - 1 < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rsGamma r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).rsGamma r :=
+  funext fun _ => slotAt_congr hcc (by rw [repSlot_at hsx]; exact h) _
+
+theorem oodPt_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).oodPt r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).oodPt r :=
+  funext fun _ => funext fun _ => slotAt_congr hcc (by rw [repSlot_at hsx]; exact h) _
+
+theorem ood_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) + 1 < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).ood r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).ood r :=
+  funext fun _ => slotAt_congr hcc (by rw [repSlot_at hsx]; exact h) _
+
+theorem lane_agree_lt {i : ℕ} (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) + 2 + i ≤ n) :
+    ∀ a : Fin (zkTab x j).sch.k0, a.val < i →
+      ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r a =
+        ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r a :=
+  fun a ha => kAt_agree hcc (by rw [repSlot_at hsx]; omega)
+
+theorem rhoPair_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) + (zkTab x j).sch.k0 + 3 < n) :
+    (czExe PE x c j).rho r = (czExe PE x c' j).rho r := by
+  have h0 : rhoSlot x j.val r.val < n := by unfold rhoSlot; rw [repSlot_at hsx]; omega
+  show rhoAt c j.val r.val = rhoAt c' j.val r.val
+  unfold rhoAt
+  rw [slotAt_congr hcc h0, slotAt_congr hcc h0, slotAt_congr hcc (show rhoSlot x j.val r.val + 1 < n by
+    unfold rhoSlot; rw [repSlot_at hsx]; omega), slotAt_congr hcc (show rhoSlot x j.val r.val + 1 < n by
+    unfold rhoSlot; rw [repSlot_at hsx]; omega)]
+
+theorem zeta_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) + innerOff 0 (zkTab x j).sch < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).zeta r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).zeta r :=
+  slotAt_congr hcc (by rw [repSlot_at hsx]; exact h) _
+
+theorem gammas_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) + innerOff 1 (zkTab x j).sch < n) :
+    ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).gammas r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).gammas r :=
+  funext fun _ => slotAt_congr hcc (by rw [repSlot_at hsx]; exact h) _
+
+theorem beta_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+    FlockComplete.piopRoundsZk spec (stAt x j) + innerOff 2 (zkTab x j).sch < n) :
+    (czExe PE x c j).beta r = (czExe PE x c' j).beta r :=
+  slotAt_congr hcc (by unfold betaSlot; rw [repSlot_at hsx]; unfold innerOff at h; omega) _
+
+end Slots
 
 end Claims.ZKMal.Masked
