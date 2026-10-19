@@ -50,6 +50,9 @@ LIB_ENV = "DITHER_H1O"
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
+# a form per call: (wide, narrow), wide where the call's column blocks outnumber the SMs (a second block an SM pays only
+# past one wave: qkv and gate_up at decode), narrow elsewhere
+MIX_FORMS = {"mix": ("block2", "split")}
 # "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
@@ -118,16 +121,26 @@ class Window:
         self.rset = self.c.set(rt)
         self.o = C.CDLL(h1o_path)
         self.units_form = os.environ.get(UNITS_ENV, "block")
-        if self.units_form not in UNITS_FORMS:
-            raise RuntimeError(f"{UNITS_ENV}={self.units_form}: one of {sorted(UNITS_FORMS)}")
+        if self.units_form not in UNITS_FORMS and self.units_form not in MIX_FORMS:
+            raise RuntimeError(f"{UNITS_ENV}={self.units_form}: one of {sorted(UNITS_FORMS) + sorted(MIX_FORMS)}")
         self.peel = os.environ.get(PEEL_ENV) == "1"
         if self.peel and self.units_form == "warp":
             raise RuntimeError(f"{PEEL_ENV}=1: the warp form serves the dithered product only")
         self.captures = CAPTURES + (("fault_xa",) if self.peel else ())
-        fn = UNITS_FORMS[self.units_form]
-        self.units_fn = getattr(self.o, fn.replace("_launch", "p_launch") if self.peel else fn)
-        self.units_fn.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
-                                  C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
+        if self.units_form in MIX_FORMS:
+            wide, narrow = MIX_FORMS[self.units_form]
+            sms = torch.cuda.get_device_properties(dev).multi_processor_count
+            self.call_forms = [wide if n // 32 > sms else narrow for n, _ in self.nk]
+        else:
+            self.call_forms = [self.units_form] * L
+
+        def units_fn(form: str):
+            fn = UNITS_FORMS[form]
+            f = getattr(self.o, fn.replace("_launch", "p_launch") if self.peel else fn)
+            f.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_int, C.c_void_p, C.c_void_p, C.c_int,
+                          C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
+            return f
+        self.units_fns = [units_fn(f) for f in self.call_forms]
         if self.o.h1o_struct_bytes(0) != C.sizeof(_O) or self.o.h1o_struct_bytes(1) != 16:
             raise RuntimeError("h1o.cu's structs differ from dither_one's")
         if self.o.h1o_init():
@@ -243,9 +256,9 @@ class Window:
     def units_call(self, w: int, xq: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
                    z: torch.Tensor, st: int) -> int:
         n, k = self.nk[w]
-        return self.units_fn(self.F.data_ptr() + self.fsize * w, self.S.data_ptr(), self.units[w], n, k, xq.data_ptr(),
-                             s_a.data_ptr(), int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(),
-                             self.salt.data_ptr(), self.step_base.data_ptr(), st)
+        return self.units_fns[w](self.F.data_ptr() + self.fsize * w, self.S.data_ptr(), self.units[w], n, k, xq.data_ptr(),
+                                 s_a.data_ptr(), int(xq.shape[0]), s_w.data_ptr(), y.data_ptr(), z.data_ptr(),
+                                 self.salt.data_ptr(), self.step_base.data_ptr(), st)
 
     # -- the step hook ---------------------------------------------------------------------------------------------------
 
@@ -327,7 +340,8 @@ class Window:
                for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {"steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s, "epsilon": "seeded",
-                "units_form": self.units_form, "peel": self.peel, "percall": pc, "phases_by_m": med}
+                "units_form": self.units_form, "peel": self.peel, "percall": pc, "phases_by_m": med,
+                "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------

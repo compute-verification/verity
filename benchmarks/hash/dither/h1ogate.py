@@ -2,8 +2,9 @@
 a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
 `h1r_unit<2>`), the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
 stream's O, DITHER_PEEL=1), and those two again as the kernels `h1o_init` gives the maximum shared-memory carveout
-(`split2`, `block2`, `split2-cpeel`, `block2-cpeel`: two units' blocks an SM), each gated through `dither_one.check`,
-then timed against each other.
+(`split2`, `block2`, `split2-cpeel`, `block2-cpeel`: two units' blocks an SM, block2 with immediate barrier ids), and
+`mix-cpeel` (`dither_one.MIX_FORMS`: block2 where a call's column blocks outnumber the SMs, split elsewhere), each gated
+through `dither_one.check`, then timed against each other.
 
     gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range
           int8 weights and positive scales; a decode step of m = 32 random rows captured per `Window.captures` (gate,
@@ -41,7 +42,8 @@ import dither_one as DO  # noqa: E402
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
-FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel", "split2", "block2", "split2-cpeel", "block2-cpeel")
+FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel", "split2", "block2", "split2-cpeel", "block2-cpeel",
+         "mix-cpeel")
 OCCUPANCY = ("block", "block-cpeel", "split", "split-cpeel", "block2", "block2-cpeel", "split2", "split2-cpeel")  # h1o_occupancy's
 
 
