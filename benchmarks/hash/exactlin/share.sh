@@ -16,7 +16,8 @@ if [ "${1:-}" != --leased ]; then
   [ -x "$NSYS" ] || NSYS=$(command -v nsys || ls -d /opt/nvidia/nsight-systems/*/bin/nsys /usr/local/cuda*/bin/nsys 2>/dev/null | tail -1)
   [ -x "$NSYS" ] || { echo "share.sh: no nsys on $(hostname) (looked for NSYS, \$CUDA/bin, PATH, /opt/nvidia/nsight-systems)" >&2; exit 3; }
   echo "share: nsys $NSYS; asking for one GPU at $(date -u +%H:%M:%SZ)"
-  NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait --preemptible --max-min "${SHARE_MAX_MIN:-40}" -- bash "$ROOT/benchmarks/hash/exactlin/share.sh" --leased
+  pre=(); [ "${SHARE_PREEMPTIBLE:-0}" = 1 ] && pre=(--preemptible)   # a preempted trace is lost whole
+  NSYS=$NSYS SHARE_ROOT=$ROOT SHARE_S=$S gpu-lease 1 --wait "${pre[@]}" --max-min "${SHARE_MAX_MIN:-40}" -- bash "$ROOT/benchmarks/hash/exactlin/share.sh" --leased
   rc=$?
   echo "share: exited $rc at $(date -u +%H:%M:%SZ)"
   exit "$rc"
