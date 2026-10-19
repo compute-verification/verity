@@ -261,16 +261,16 @@ REGISTERED: dict[str, GemmTarget] = {
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}",
         batch_invariant_refusal="vLLM's tuned 'blackwell' table of matmul_kernel_persistent is not pinned and no batch-invariant launch "
                                 "on cc 10.0 has a correspondence run",
-        evidence=("tc_probe r20261018-234914-864e on the B200: tcgen05.mma kind::f16 (sm100.tcgen05.mma.bf16, SASS 1x UTCHMMA) "
-                  "42,418,176 swept + 5,688,320 chained elements and, with enable_input_d = 0, 17,842,176 + 3,703,808, every word "
-                  "HOPPER_BF16_WGMMA_K16's total step (trust dossier art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765, "
-                  "PINNED); tc_probe r20261019-001149-cc3d: mma.sync.m16n8k16 (sm100.mma.m16n8k16.bf16, HMMA.16816.F32.BF16) "
-                  "25,833,472 asserted elements HOPPER_BF16_M16N8K16's and its specials the total step's (dossier "
-                  "art:9f8188ab6585d976056623b31baa21dcfdbb3a9c7842aa28a5cd341bc0ba0626, PINNED)",
-                  "the compiled served Builds at vLLM's defaults with FLASH_ATTN FA2: Llama-3.2-1B r20261019-000009-d8e9, served Match "
-                  "PASS (all 702 Gemm_v2, 208 CublasSplitKGemm_v1 and 224 attention launches of 14 steps exact) and Commit PASS "
-                  "(2562/2562 values exact in both pairs); Qwen3-8B r20261019-000518-c3cc, Match PASS (764 Gemm_v2, 1266 "
-                  "CublasSplitKGemm_v1, 504 attention) and Commit PASS (5642/5642 in both pairs)")),
+        evidence=("core verity.ml.circuits.silicon.instructions: the cc 10.0 tcgen05.mma kind::f16 entry (SASS 1x UTCHMMA) is pinned to "
+                  "HOPPER_BF16_WGMMA_K16's total step (tc_probe r20261018-234914-864e: 42,418,176 swept + 5,688,320 chained elements and, "
+                  "with enable_input_d = 0, 17,842,176 + 3,703,808, every word; dossier "
+                  "art:8a14058ec2dc4f080af1523d55326e11484123feaf0726200473644de51f4765), and the cc 10.0 mma.sync.m16n8k16 entry "
+                  "(HMMA.16816.F32.BF16) to HOPPER_BF16_M16N8K16 (tc_probe r20261019-001149-cc3d: 25,833,472 asserted elements, its "
+                  "specials the total step's; dossier art:9f8188ab6585d976056623b31baa21dcfdbb3a9c7842aa28a5cd341bc0ba0626)",
+                  "the compiled served Builds at vLLM's defaults with FLASH_ATTN FA2 on cc 10.0 (148 SMs): r20261019-000009-d8e9 (the 1B "
+                  "dense row), served Match PASS (all 702 Gemm_v2, 208 CublasSplitKGemm_v1 and 224 attention launches of 14 steps exact) "
+                  "and Commit PASS (2562/2562 values exact in both pairs); r20261019-000518-c3cc (the 8B q/k-norm row), Match PASS (764 "
+                  "Gemm_v2, 1266 CublasSplitKGemm_v1, 504 attention) and Commit PASS (5642/5642 in both pairs)")),
 }
 
 
