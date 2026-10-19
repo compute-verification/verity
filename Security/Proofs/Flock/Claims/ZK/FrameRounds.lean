@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.ZK.SimZerocheck
 import Proofs.Flock.Claims.ZK.FrameMask
 import Proofs.Flock.Claims.ZK.Release
+import Proofs.Flock.Claims.ZK.Refine
 
 /-!
 # The cut's zerocheck and lincheck, round by round, and the frame's release of the device's
@@ -32,6 +33,11 @@ and matches them:
 * **At the release** (`LeanRelease.release_of_roundFree`, `release_zcBind`, `release_zcOuter`, `release_zcR1`,
   `release_zcMl`): where the frame takes the coins before a round (`answered`), the Lean frame's release of the device's
   zerocheck round is the frame's round above, so the cut's body by `zcBodies_frame`.
+* **A frame round is the session's without its domain** (`LeanRelease.release_of_roundFrames`, `dropDom_dom`,
+  `dropDom_noDom`): where the device's frames through the frame's masks are the session's, the release is the session's
+  message, tagged `0`, without a rep's leading domain frame, and so where the device sends the session's frames with
+  each pad added back (`RoundHonest`, `roundFrames_of_honest`). At the session with the frame's stops that is
+  `LiveRoundEq` and `FillRoundEq` (`liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
 -/
 
 namespace Claims.ZKServer
@@ -573,5 +579,251 @@ theorem release_on {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : Li
 
 end LeanRelease
 
+
+/-! ## A frame round is the session's round without its domain
+
+The session sends a frame round as `0 ::` its frames and squeeze, a rep's first round led by its stream's domain frame;
+the Lean frame releases the device's round, tagged `0`, with no domain frame (`dropDoms`). So the frame's release is the
+session's message without its leading domain frame (`dropDom`) wherever the device's frames, through the frame's masks,
+are the session's (`RoundFrames`, `release_of_roundFrames`), and so wherever the device sends the session's frames with
+each masked value's pad added back, the honest device's round (`RoundHonest`, `roundFrames_of_honest`). At the session
+with the frame's stops that is `LiveRoundEq` and `FillRoundEq` (`liveRoundEq_of_frames`, `fillRoundEq_of_frames`). -/
+
+open Claims.ZKMal (dropDom domLen RefSession refK allOk)
+open FlockSoundness.Refine (header_data)
+
+/-- A frame other than a domain frame. -/
+def noDom : Frame → Prop
+  | .dom _ => False
+  | _ => True
+
+theorem maskFrames_noDom (g : ℕ → F128 → F128) : ∀ (p : ℕ) (G : List Frame), ∀ f ∈ maskFrames g p G, noDom f
+  | _, [] => by simp [maskFrames]
+  | p, f :: G => by
+    cases f with
+    | dom b => exact maskFrames_noDom g p G
+    | label b =>
+      intro y hy
+      simp only [maskFrames, List.mem_cons] at hy
+      rcases hy with rfl | hy
+      · trivial
+      · exact maskFrames_noDom g p G y hy
+    | bytes b =>
+      intro y hy
+      simp only [maskFrames, List.mem_cons] at hy
+      rcases hy with rfl | hy
+      · trivial
+      · exact maskFrames_noDom g p G y hy
+    | one v =>
+      intro y hy
+      simp only [maskFrames, List.mem_cons] at hy
+      rcases hy with rfl | hy
+      · trivial
+      · exact maskFrames_noDom g (p + 1) G y hy
+    | vec vs =>
+      intro y hy
+      simp only [maskFrames, List.mem_cons] at hy
+      rcases hy with rfl | hy
+      · trivial
+      · exact maskFrames_noDom g (p + vs.length) G y hy
+    | sq k n =>
+      intro y hy
+      simp only [maskFrames, List.mem_cons] at hy
+      rcases hy with rfl | hy
+      · trivial
+      · exact maskFrames_noDom g p G y hy
+
+theorem dropDoms_noDom : ∀ (F : List Frame), (∀ f ∈ F, noDom f) → dropDoms F = F
+  | [], _ => rfl
+  | f :: F, h => by
+    have ih := dropDoms_noDom F fun g hg => h g (List.mem_cons_of_mem _ hg)
+    have hf := h f List.mem_cons_self
+    cases f with
+    | dom b => exact hf.elim
+    | label b | bytes b | one v | vec vs | sq k n => exact congrArg (List.cons _) ih
+
+theorem enc_head (f : Frame) (rest : List UInt8) : (f.enc ++ rest)[0]! = f.op := by
+  simp [Frame.enc, header_data]
+
+/-- **A round message whose frames start with no domain frame is as it is.** -/
+theorem dropDom_noDom (M : List Frame) (k : UInt8) (n : ℕ) (hM : ∀ f ∈ M, noDom f) :
+    dropDom (0 :: (encs M ++ (Frame.sq k n).enc)) = 0 :: (encs M ++ (Frame.sq k n).enc) := by
+  have hop : (encs M ++ (Frame.sq k n).enc)[0]! ≠ 1 := by
+    cases M with
+    | nil =>
+      rw [show encs [] ++ (Frame.sq k n).enc = (Frame.sq k n).enc ++ [] by simp [encs], enc_head]
+      show (4 : UInt8) ≠ 1
+      decide
+    | cons f M =>
+      rw [show encs (f :: M) ++ (Frame.sq k n).enc = f.enc ++ (encs M ++ (Frame.sq k n).enc) by
+        simp [encs, List.append_assoc], enc_head]
+      have hf := hM f List.mem_cons_self
+      cases f with
+      | dom b => exact hf.elim
+      | label b => show (2 : UInt8) ≠ 1; decide
+      | one v => show (3 : UInt8) ≠ 1; decide
+      | vec vs => show (3 : UInt8) ≠ 1; decide
+      | bytes b => show (5 : UInt8) ≠ 1; decide
+      | sq k' n' => show (4 : UInt8) ≠ 1; decide
+  show (if (0 : UInt8) = 0 ∧ _ then _ else _) = _
+  exact ite_eq_right fun h => hop h.2
+
+/-- **A round message whose frames start with a domain frame loses exactly that frame.** -/
+theorem dropDom_dom (d : ByteArray) (F : List Frame) (r : List UInt8) (hd : d.size < 2 ^ 64) :
+    dropDom (0 :: (encs (.dom d :: F) ++ r)) = 0 :: (encs F ++ r) := by
+  have he : encs (.dom d :: F) ++ r = (Frame.dom d).enc ++ (encs F ++ r) := by
+    simp [encs, List.append_assoc]
+  obtain ⟨h0, -, hl⟩ := header_at (encs (.dom d :: F) ++ r) 0 (.dom d) (encs F ++ r) (by rw [List.drop_zero, he]) hd
+  rw [get!_list] at h0
+  have hlen : domLen (encs (.dom d :: F) ++ r) = (Frame.dom d).enc.length := by
+    rw [show (0 : ℕ) + 8 = 8 from rfl] at hl
+    simp only [domLen]
+    rw [hl, Frame.enc_length]
+    simp only [Frame.len, Frame.payLen]
+    omega
+  show (if (0 : UInt8) = 0 ∧ (encs (.dom d :: F) ++ r)[0]! = 1 then
+      (0 : UInt8) :: (encs (.dom d :: F) ++ r).drop (domLen (encs (.dom d :: F) ++ r)) else
+      0 :: (encs (.dom d :: F) ++ r)) = _
+  rw [ite_eq_left ⟨rfl, h0⟩, hlen, he, List.drop_left]
+
+namespace LeanRelease
+
+/-- **A frame round in frames** after `h`, at the device round `u` of a stopped rep or not (`st`) and the session's
+message `msg`: the frame takes the round's coins at a state inside the masked phase, where it takes the device's frames
+`G` and squeeze (`roundFree_on`'s conditions); the device round is `encs G` and the squeeze; and the session's message
+is `0 ::` its frames `D ++ F` and the squeeze, with `D` at most a domain frame and `F` the device's frames through the
+frame's masks. -/
+def RoundFrames {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (st : Bool)
+    (u msg : Msg) : Prop :=
+  ∃ (m : Masker) (G D : List Frame) (k : UInt8),
+    L.answered x ρ h = .ok m ∧
+    (∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size) ∧
+    m.on = true ∧ m.inner = none ∧ (∀ f ∈ G, midFrame f) ∧ (∀ f ∈ G, plainFrame f) ∧
+    (k = 2 ∨ (k = 1 ∧ L.coins x h.length = 1)) ∧ ¬ (L.coins x h.length = 0 ∧ k = 2) ∧
+    L.coins x h.length < 2 ^ 64 ∧ m.pos + nAbs G ≤ (L.cfg x ρ h).order.size ∧
+    (D = [] ∨ ∃ d, D = [.dom d] ∧ d.size < 2 ^ 64) ∧
+    u = encs G ++ (Frame.sq k (L.coins x h.length)).enc ∧
+    msg = 0 :: (encs (D ++ maskFrames (maskVal (L.cfg x ρ h) st) m.pos G) ++ (Frame.sq k (L.coins x h.length)).enc)
+
+/-- **A frame round in frames releases as the session's message without its leading domain frame**: the Lean frame's
+`roundFree` releases the device's frames through its masks (`release_on`), and drops no frame but the domain's. -/
+theorem release_of_roundFrames {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (st : Bool) (u msg : Msg) (hR : L.RoundFrames x ρ h st u msg) : L.release x ρ h st u = dropDom msg := by
+  obtain ⟨m, G, D, k, hA, hc, hon, hi, hm, hp, hk, h0, hn, hb, hD, rfl, rfl⟩ := hR
+  rw [L.release_on x ρ h st G k hA hc hon hi hm hp hk h0 hn hb]
+  rcases hD with rfl | ⟨d, rfl, hd⟩
+  · rw [List.nil_append, dropDom_noDom _ _ _ (maskFrames_noDom _ _ _)]
+  · rw [List.singleton_append, dropDom_dom d _ _ hd]
+
+/-- **An honest device's frame round** after `h`, at the device round `u` and the session's message `msg`: the frame
+takes the round's coins at a state inside the masked phase where it takes the session's frames `D ++ F` and squeeze;
+the session's message is `0 ::` those frames and the squeeze, with `D` at most a domain frame and no domain frame in
+`F`; and the device round is those frames with each masked value's pad added back (`unmaskFrames`), the plain values
+the masked prover padded. -/
+def RoundHonest {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (u msg : Msg) : Prop :=
+  ∃ (m : Masker) (D F : List Frame) (k : UInt8),
+    L.answered x ρ h = .ok m ∧
+    (∀ p, p < (L.cfg x ρ h).order.size → (L.cfg x ρ h).order[p]! < (L.cfg x ρ h).h.size) ∧
+    m.on = true ∧ m.inner = none ∧ (∀ f ∈ F, midFrame f) ∧ (∀ f ∈ F, plainFrame f) ∧ (∀ f ∈ F, noDom f) ∧
+    (k = 2 ∨ (k = 1 ∧ L.coins x h.length = 1)) ∧ ¬ (L.coins x h.length = 0 ∧ k = 2) ∧
+    L.coins x h.length < 2 ^ 64 ∧ m.pos + nAbs F ≤ (L.cfg x ρ h).order.size ∧
+    (D = [] ∨ ∃ d, D = [.dom d] ∧ d.size < 2 ^ 64) ∧
+    u = encs (unmaskFrames (L.cfg x ρ h) m.pos (D ++ F)) ++ (Frame.sq k (L.coins x h.length)).enc ∧
+    msg = 0 :: (encs (D ++ F) ++ (Frame.sq k (L.coins x h.length)).enc)
+
+/-- **An honest device's frame round is a frame round in frames**, of a rep that has not stopped: its frames through
+the frame's masks are the session's but their domain (`maskFrames_unmask`). -/
+theorem roundFrames_of_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (u msg : Msg) (hR : L.RoundHonest x ρ h u msg) : L.RoundFrames x ρ h false u msg := by
+  obtain ⟨m, D, F, k, hA, hc, hon, hi, hm, hp, hnd, hk, h0, hn, hb, hD, rfl, rfl⟩ := hR
+  have hDm : ∀ f ∈ D ++ F, midFrame f := by
+    rcases hD with rfl | ⟨d, rfl, hd⟩
+    · simpa using hm
+    · intro f hf
+      simp only [List.singleton_append, List.mem_cons] at hf
+      rcases hf with rfl | hf
+      · exact hd
+      · exact hm f hf
+  have hDp : ∀ f ∈ D ++ F, plainFrame f := by
+    rcases hD with rfl | ⟨d, rfl, -⟩
+    · simpa using hp
+    · intro f hf
+      simp only [List.singleton_append, List.mem_cons] at hf
+      rcases hf with rfl | hf
+      · trivial
+      · exact hp f hf
+  have hDn : nAbs (D ++ F) = nAbs F := by
+    rcases hD with rfl | ⟨d, rfl, -⟩ <;> rfl
+  have hDd : dropDoms (D ++ F) = F := by
+    rcases hD with rfl | ⟨d, rfl, -⟩
+    · exact dropDoms_noDom F hnd
+    · exact dropDoms_noDom F hnd
+  refine ⟨m, unmaskFrames (L.cfg x ρ h) m.pos (D ++ F), D, k, hA, hc, hon, hi, unmask_mid _ _ _ hDm,
+    unmask_plain _ _ _ hDp, hk, h0, hn, by rw [nAbs_unmask, hDn]; exact hb, hD, rfl, ?_⟩
+  rw [maskFrames_unmask, hDd]
+
+end LeanRelease
+
+namespace LeanRelease
+
+/-- **The live frame rounds in frames**: at every live frame round `LiveRoundEq` reads, the worker's round and the
+session's switched message are a frame round in frames of a rep that has not stopped (`RoundFrames`). -/
+def LiveFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Claims.Msg) (ops : List (Claims.Msg × Claims.Msg))
+    (v : Claims.Msg),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.RoundFrames x (ν, t) ((m₀, ρ₀) :: ops) false v (S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- **`LiveRoundEq` from the live frame rounds in frames.** -/
+theorem liveRoundEq_of_frames (S : RefSession) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker)
+    (x : Claims.Msg) (w : Flock.Wit) (hF : LiveFrames S vs L H wk x w) : LiveRoundEq S vs L H wk x w :=
+  fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv =>
+    L.release_of_roundFrames x _ _ false v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv)
+
+/-- **The live frame rounds of an honest device**: at every live frame round `LiveRoundEq` reads, the worker's round is
+the honest device's round of the session's switched message (`RoundHonest`). -/
+def LiveHonest (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Claims.Msg) (ops : List (Claims.Msg × Claims.Msg))
+    (v : Claims.Msg),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    L.RoundHonest x (ν, t) ((m₀, ρ₀) :: ops) v (S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- **`LiveRoundEq` from an honest device's live frame rounds.** -/
+theorem liveRoundEq_of_honest (S : RefSession) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker)
+    (x : Claims.Msg) (w : Flock.Wit) (hF : LiveHonest S vs L H wk x w) : LiveRoundEq S vs L H wk x w :=
+  liveRoundEq_of_frames S vs L H wk x w fun ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv =>
+    L.roundFrames_of_honest x _ _ v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv)
+
+/-- **The stand-in frame rounds in frames**: at every stand-in frame round `FillRoundEq` reads, the firewall's scheduled
+round, at the values its transcript reports, and the session's switched message are a frame round in frames of a
+stopped rep (`RoundFrames`), whose masked values the frame releases as their pads alone. -/
+def FillFrames (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : Flock.Wit) : Prop :=
+  ∀ (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Claims.Msg) (ops : List (Claims.Msg × Claims.Msg)),
+    0 < ops.length → ops.length < refK x → L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = false →
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+    L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    L.RoundFrames x (ν, t) ((m₀, ρ₀) :: ops) true
+      (L.scheduled x w (ν, t) ((m₀, ρ₀) :: ops) (computedOf (L.computed x w (ν, t) ((m₀, ρ₀) :: ops))))
+      (S.swMsgAt x (S.wt x w) (vs x w ν) t (ops.map fun p => S.decOf p.2))
+
+/-- **`FillRoundEq` from the stand-in frame rounds in frames.** -/
+theorem fillRoundEq_of_frames (S : RefSession) (vs : S.SwVals)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Claims.Msg → Claims.Msg) (wk : L.toSrv.Worker)
+    (x : Claims.Msg) (w : Flock.Wit) (hF : FillFrames S vs L H wk x w) : FillRoundEq S vs L H wk x w :=
+  fun ν t κ m₀ ρ₀ ops h0 hlt hl hok hr =>
+    L.release_of_roundFrames x _ _ true _ _ (hF ν t κ m₀ ρ₀ ops h0 hlt hl hok hr)
+
+end LeanRelease
 
 end Claims.ZKServer
