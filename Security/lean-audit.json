@@ -26543,14 +26543,14 @@
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden", "FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.BadZ": {
-   "digest": "efe59bf31d5d726bc193729b25d5b76d7de5cee4173ed4e2b6e0db597ec3c00c",
+   "digest": "29c85b71657c8bec05235283661b3c4a61cdf142e17c50f790bf89a7f9810277",
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.ClashW": "d583b9d6192983efc60a11fffc9cfd117350183dfefe7fe2f6edb33c2a224284",
     "FlockSoundness.Discharge.ZkLink.PadsClashAtZ": "0de06c3ebe81a4bdded5d7bd677370ae78cc05f91fa7acbff1894b664a85b15c",
     "FlockSoundness.Discharge.ZkLink.SelfClashZ": "4465af305391f432830a3fa4af4d1ee1aafa1e6d3320009b0b7fa8c84ef37f9a",
     "FlockSoundness.Discharge.ZkLink.opPadsAtZ": "f92e2092bcd2390b212da03baa1a29b4900c391715d9855158e5b59db0072faf",
     "FlockSoundness.Discharge.ZkLink.opRZ": "a9ee16b0ae1e4a8f87cc33d073af29df7c7477bbb5ccff9671c7759d3aad661e",
-    "FlockSoundness.Discharge.ZkLink.opTauZ": "f6a56083c588f596a0359a707854d2065c14c2236bb9d619906aa7c5ccc892f9",
+    "FlockSoundness.Discharge.ZkLink.opTauZ": "57c44c80527457c622122f5ed5e37ee4d64d5dea1b637b126defb7b02cb2ae53",
     "FlockSoundness.Discharge.ZkLink.padsTab": "1ca0178cdef70e78fba01520d97d5e37564cb5e1c20be4a70ff7ca1ee171e30b",
     "FlockSoundness.Discharge.ZkLink.tauTab": "f557f4ed66bff223734efcab0d449c6213fb5998a7da9e000198289b16db6a9d"
    },

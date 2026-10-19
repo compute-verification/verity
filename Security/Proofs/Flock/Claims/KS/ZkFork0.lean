@@ -112,6 +112,44 @@ theorem forkC_simSessZV (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : L
 open Classical in
 /-- **A fork after `t` coins against the simulated masked strategy after `Commit` at table `j`** is at most the live
 fork after `t` coins of the decoded event, for an event `Ev` of two model outcomes whose each run is in an event `Q` no
+outputs at the empty openings have, on reps' outcomes of their games at some link points. -/
+theorem forkC_simAtJZ_le_out (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
+    (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
+    (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
+    (dec : Fin ts.length → ℕ → ByteArray → List Msg) (one : Fin ts.length → ℕ → Bool)
+    (fin : Fin ts.length → Fin 2 → Array ByteArray → List Msg) (capOf : Array ByteArray → Fin ts.length → Model.Cap D)
+    (N : ℕ) (hdec : ∀ j, DecodesTable (outJ Hs ts) ok pL opn dec one fin capOf (repJ A Hs ts) j)
+    (rootB₀ : Array ByteArray) (Pr : Strategy (liveSession dg ts.length mPts N)) (hP : Pr.1 = rootB₀)
+    (j : Fin ts.length) {T : TabZK 𝔽 mPts} (hT : ts.get j = T)
+    {Ev : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) → Prop} {Q : List (OutZC 𝔽 D Sl) → Prop}
+    (hQ : ∀ y, Ev y → Q y.1 ∧ Q y.2)
+    (hnul : ∀ (caps : Fin ts.length → Model.Cap D) (pts : Fin 2 → Fin mPts → 𝔽) outs, (∀ i : Fin ts.length,
+      ∃ pend : PendZ 𝔽 D Sl × PendZ 𝔽 D Sl, Out (repJ A Hs ts i pts 0) pend.1 ∧ Out (repJ A Hs ts i pts 1) pend.2 ∧
+        outs.getD i dfltOutZC = outJ Hs ts i (caps i) pend nulOpZ) → ¬ Q outs) (t : ℕ) :
+    forkC (fun a a' => ind Ev (a, a')) t _
+        (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT) ≤
+      forkC (fun b b' => ind (fun p : LiveOutJ ts.length mPts × LiveOutJ ts.length mPts =>
+          LiveEvZ (Claims.Bridge.RetOK (outJ Hs ts) pL opn dec one fin capOf (repJ A Hs ts)) Ev p.1 p.2) (b, b')) t
+        (liveSession dg ts.length mPts N) Pr := by
+  unfold simAtJZ
+  rw [forkC_afterJZ, forkC_simSessZV]
+  have hall := Claims.Bridge.Sim.all_mapDead (Claims.Bridge.answerWith (nulOpZ (D := D) (Sl := Sl)))
+    (D' := fun g σ => prob Q g σ = 0)
+    (fun _ σ ⟨caps, pts, _, hg, hres, e⟩ => by
+      subst e
+      exact Claims.Bridge.prob_posOf_answerWith_out _ _ caps hg dfltOutZC (fun outs h => hnul caps pts outs fun i =>
+        let ⟨pend, h0, h1, he⟩ := h i
+        ⟨pend, (hres i 0).out h0, (hres i 1).out h1, he⟩) σ)
+    _ (Claims.Bridge.all_simSession (outJ Hs ts) ok dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
+      (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec)
+  have hFQ : ∀ a a', ind Ev (a, a') ≤ ind Q a := fun a a' => ind_le_indZ fun h1 => (hQ _ h1).1
+  have hFQ' : ∀ a a', ind Ev (a, a') ≤ ind Q a' := fun a a' => ind_le_indZ fun h1 => (hQ _ h1).2
+  exact Claims.Bridge.Sim.forkC_le hFQ hFQ' (fun b b' => ind_nonneg _ _)
+    (fun b a b' a' hb hb' => ind_le_indZ fun h1 => ⟨a, a', hb, hb', h1⟩) _ hall t Pr
+
+open Classical in
+/-- **A fork after `t` coins against the simulated masked strategy after `Commit` at table `j`** is at most the live
+fork after `t` coins of the decoded event, for an event `Ev` of two model outcomes whose each run is in an event `Q` no
 outputs at the empty openings have. -/
 theorem forkC_simAtJZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
@@ -129,20 +167,9 @@ theorem forkC_simAtJZ_le (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : 
         (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT) ≤
       forkC (fun b b' => ind (fun p : LiveOutJ ts.length mPts × LiveOutJ ts.length mPts =>
           LiveEvZ (Claims.Bridge.RetOK (outJ Hs ts) pL opn dec one fin capOf (repJ A Hs ts)) Ev p.1 p.2) (b, b')) t
-        (liveSession dg ts.length mPts N) Pr := by
-  unfold simAtJZ
-  rw [forkC_afterJZ, forkC_simSessZV]
-  have hall := Claims.Bridge.Sim.all_mapDead (Claims.Bridge.answerWith (nulOpZ (D := D) (Sl := Sl)))
-    (D' := fun g σ => prob Q g σ = 0)
-    (fun _ σ ⟨caps, _, hg, e⟩ => by
-      subst e
-      exact Claims.Bridge.prob_posOf_answerWith _ _ caps hg dfltOutZC (hnul caps) σ)
-    _ (Claims.Bridge.all_simSession (outJ Hs ts) ok dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
-      (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec)
-  have hFQ : ∀ a a', ind Ev (a, a') ≤ ind Q a := fun a a' => ind_le_indZ fun h1 => (hQ _ h1).1
-  have hFQ' : ∀ a a', ind Ev (a, a') ≤ ind Q a' := fun a a' => ind_le_indZ fun h1 => (hQ _ h1).2
-  exact Claims.Bridge.Sim.forkC_le hFQ hFQ' (fun b b' => ind_nonneg _ _)
-    (fun b a b' a' hb hb' => ind_le_indZ fun h1 => ⟨a, a', hb, hb', h1⟩) _ hall t Pr
+        (liveSession dg ts.length mPts N) Pr :=
+  forkC_simAtJZ_le_out A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT hQ
+    (fun caps _ outs h => hnul caps outs fun i => let ⟨pend, _, _, he⟩ := h i; ⟨pend, he⟩) t
 
 open Classical in
 /-- **`Adv₀` against the simulated masked strategy** is at most the live fork after `0` coins, two independent live

@@ -12,7 +12,7 @@ something else. Each committed kind has its openings by position:
   cap (`opRZ`, `Exec.opOfL` on `slotOpensZ`);
 * rep `r`'s pads oracle at its root (`opPadsAtZ`): at each pads position, the pair of the first query that drew that
   position and whose opening verifies there;
-* rep `r`'s `τ` oracle at its commitment (`opTauZ`): `τ`, if it opens the commitment.
+* rep `r`'s `τ` oracle at its commitment (`opTauZ`): on an accepted output, `τ`, if it opens the commitment.
 
 Every clash, and every pair of runs opening one position of one cap, root or commitment two ways, is a collision of `H`
 (`SelfClashZ.collision`, `opOfW_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`).
@@ -288,9 +288,12 @@ theorem pads_badAtZ (Hs : Hashes F D Sl) (N q r : ℕ) (hr : r < 2) (j : IZ F D)
 /-! ## `τ`'s commitments -/
 
 open Classical in
-/-- **Rep `r`'s `τ` opening**: `τ`, if it opens the commitment `c 0` under its salt. -/
+/-- **Rep `r`'s `τ` opening**: on an accepted output, `τ`, if it opens the commitment `c 0` under its salt. A rejected
+output opens no `τ`: the dead branches answer `τ` with `(0, default)`, which opens every commitment whose `c 0` is its
+leaf, an opening no run checked. -/
 noncomputable def opTauZ (Hs : Hashes F D Sl) (r : ℕ) (c : Cap D) (out : OutZC F D Sl) (_ : Unit) : Option F :=
-  if Hs.Lτ.leaf (out.opens.inner r).tau.1 (out.opens.inner r).tau.2 = c 0 then some (out.opens.inner r).tau.1
+  if out.accepted = true ∧ Hs.Lτ.leaf (out.opens.inner r).tau.1 (out.opens.inner r).tau.2 = c 0 then
+    some (out.opens.inner r).tau.1
   else none
 
 /-- A `τ` oracle's value, at `(0, 0)`. -/
@@ -308,16 +311,18 @@ theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x 
     {p : Unit} (h : Rewinding.ConflictAt (opTauZ Hs r c) x p) : Merkle.Collision Hs.H := by
   classical
   obtain ⟨h1, h2, hne⟩ := h
-  by_cases ha : Hs.Lτ.leaf (x.1.opens.inner r).tau.1 (x.1.opens.inner r).tau.2 = c 0
-  · by_cases hb : Hs.Lτ.leaf (x.2.opens.inner r).tau.1 (x.2.opens.inner r).tau.2 = c 0
-    · simp only [opTauZ, ha, hb, ↓reduceIte, ne_eq, Option.some.injEq] at hne
-      exact Hs.Lτ.bind _ _ _ _ hne (ha.trans hb.symm)
-    · simp [opTauZ, hb] at h2
-  · simp [opTauZ, ha] at h1
+  by_cases ha : x.1.accepted = true ∧ Hs.Lτ.leaf (x.1.opens.inner r).tau.1 (x.1.opens.inner r).tau.2 = c 0
+  · by_cases hb : x.2.accepted = true ∧ Hs.Lτ.leaf (x.2.opens.inner r).tau.1 (x.2.opens.inner r).tau.2 = c 0
+    · rw [opTauZ, opTauZ, ite_eq_left ha, ite_eq_left hb, ne_eq, Option.some.injEq] at hne
+      exact Hs.Lτ.bind _ _ _ _ hne (ha.2.trans hb.2.symm)
+    · rw [opTauZ, ite_eq_right hb] at h2
+      simp at h2
+  · rw [opTauZ, ite_eq_right ha] at h1
+    simp at h1
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A rep's disagreeing `τ` opening**: the run opens the fixed `τ` oracle's commitment to another value. -/
-theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl)
+/-- **A rep's disagreeing `τ` opening**: an accepted run opens the fixed `τ` oracle's commitment to another value. -/
+theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl) (hacc : out.accepted = true)
     (hnot : ¬ TauAgree Hs j (out.opens.inner r)) :
     ∃ t d, j.tau = some (t, d) ∧ ∃ p, Rewinding.Off (opTauZ Hs r d) (rowTau t) out p := by
   classical
@@ -325,7 +330,7 @@ theorem tau_badZ (Hs : Hashes F D Sl) (r : ℕ) (j : IZ F D) (out : OutZC F D Sl
   push Not at hnot
   obtain ⟨Oτ, cτ, htau, hleaf, hne⟩ := hnot
   have hop : opTauZ Hs r cτ out () = some (out.opens.inner r).tau.1 := by
-    simp [opTauZ, hleaf]
+    rw [opTauZ, ite_eq_left ⟨hacc, hleaf⟩]
   have hoff : (opTauZ Hs r cτ out ()).isSome ∧ opTauZ Hs r cτ out () ≠ some (rowTau Oτ ()) :=
     ⟨by rw [hop]; rfl, by rw [hop]; exact fun e => hne (Option.some.inj e)⟩
   exact ⟨Oτ, cτ, htau, (), hoff⟩
@@ -539,7 +544,7 @@ theorem bad_splitZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (C₀ : Oracle F) (ca
   · rcases pads_badAtZ Hs T.N T.q r hr _ out hnot with hcl | ⟨t, d, hp, h⟩
     · exact Or.inl (Or.inr (Or.inr hcl))
     · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨r, Finset.mem_range.2 hr, t, d, by rw [getPairZ_pads r hr i, hp], h⟩)))
-  · obtain ⟨t, d, hp, h⟩ := tau_badZ Hs r _ out hnot
+  · obtain ⟨t, d, hp, h⟩ := tau_badZ Hs r _ out hacc hnot
     exact Or.inr (Or.inr (Or.inr (Or.inr ⟨r, Finset.mem_range.2 hr, t, d, by rw [getPairZ_tau r hr i, hp], h⟩)))
 
 end FlockSoundness.Discharge.ZkLink
