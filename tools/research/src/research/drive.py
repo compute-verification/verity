@@ -1082,7 +1082,9 @@ class Driver:
 
     def resend(self, drive: dict, m: Member, prs: str, v: Verdict) -> None:
         """Check ``m``'s train again on ``on``'s machines, once: its failure was a kill and names no file, so no PR is at fault.
-        Its failed attempts stop counting (`verdict` passes over `resent`), so the new run's verdict is the train's."""
+        Its failed attempts stop counting (`verdict` passes over `resent`), so the new run's verdict is the train's.  A failed
+        attempt still running under `--keep-going` is cancelled (18 Oct: one held a check slot 4 h after its resend, until the
+        OOM killer took it), and the train's touched-suites run carries over, so the resent check still waits on it."""
         main = _out(self.repo, "rev-parse", "origin/main")
         if self.q.shadow or self.dry_run:
             self.q.log(f"research queue drive: would resend {m.commit[:12]} ({prs}): {v.why}")
@@ -1091,8 +1093,14 @@ class Driver:
         if not ids:
             self.refuse(drive, f"launch:{m.commit}", f"train.sh {m.commit[:12]} {self.on} registered no run on a resend: {tail}")
             return
+        old = drive["launched"].get(m.commit, {})
+        ours = [rid for rid in v.attempt.split() if rid in old.get("ids", ())]
+        if live := [rid for rid, (st, *_) in self._states(ours).items() if st in ACTIVE and st != "unknown"] if ours else []:
+            self.cancel(self.repo, live, f"drive: {m.commit[:12]} was resent as {' '.join(ids)}; this attempt has already failed")
+        touched = old.get("touched")
         drive["resent"][m.commit] = v.attempt.split()
-        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": needs_agreement(self.repo, main, m.commit)}
+        drive["launched"][m.commit] = {"ids": ids, "at": self.now(), "agreement": needs_agreement(self.repo, main, m.commit),
+                                       **({"touched": touched} if touched else {})}
         self.q.log(f"research queue drive: resent {m.commit[:12]} ({prs}) as {' '.join(ids)}: {v.attempt} failed ({v.why}), and "
                    f"no PR's change touches what failed, so no PR is ejected")
 
