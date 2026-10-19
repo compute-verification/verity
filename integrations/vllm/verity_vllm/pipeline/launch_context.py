@@ -31,7 +31,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.engine.arrivals import admission_order
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
 
@@ -63,10 +62,11 @@ def request_launch_context(reqs: list[dict[str, Any]], r: dict[str, Any]) -> lis
 
 def request_launch_batch(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[list[list[int]]]:
     """Per request step s of r: every sequence engine step arrive_step(r) + s schedules, as [rows, start], in admission order
-    (`arrivals.admission_order`).  Without preemption the scheduler keeps its running requests in that order, and vLLM's model
-    runner keeps it for the decodes it puts first (`sort_batch_req_ids`), so a decode's index in the launch is its index here."""
+    (by `arrive_step`, stable, as `arrivals.run_requests_arrivals` admits them).  Without preemption the scheduler keeps its running
+    requests in that order, and vLLM's model runner keeps it for the decodes it puts first (`sort_batch_req_ids`), so a decode's
+    index in the launch is its index here."""
     a, c = int(r["arrive_step"]), int(r["max_tokens"])
-    reqs = admission_order(reqs)
+    reqs = sorted(reqs, key=lambda q: int(q.get("arrive_step") or 0))
     return [[[rows_at(q, e), start_at(q, e)] for q in reqs if rows_at(q, e)] for e in range(a, a + c)]
 
 
