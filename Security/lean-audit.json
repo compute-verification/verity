@@ -142,6 +142,10 @@
    "owner": "@lean",
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
   },
+  "Nci.Assumptions.TrainingIncompressible": {
+   "owner": "@compute-accounting",
+   "digest": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
+  },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
@@ -381,10 +385,6 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-  },
-  "Nci.Assumptions.TrainingIncompressible": {
-   "owner": "@compute-accounting",
-   "digest": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
   }
  },
  "meaning": [
