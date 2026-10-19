@@ -19,8 +19,7 @@ runs the same runner as its pytest step.
 ## Run tests
 
 Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --on auto` queues an `agent-test` job
-(4 CPUs, 16 GiB, 60 min) on whichever of node 2, node 1 and cpu-1's `research` pool has room beside the check slots
-(cpu-1's needs a lane, `$RESEARCH_LANE`). Give it `--cwd source`, so the job runs in the shipped tree rather than
+(4 CPUs, 16 GiB, 60 min) outside the check slots. Give it `--cwd source`, so the job runs in the shipped tree rather than
 its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment.
 
 ~~~sh
