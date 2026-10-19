@@ -4,7 +4,10 @@
 
 For each device it copies the machine model's data directory to OUT/data/<device>, writes the variants below as design
 files on their int8 bases (`base`, so the skip, luck, clock and baseline are the base's), and writes OUT/<device>.txt:
-`machine-model eps --table` at the floor credit with operands at the floor and free, on each vector. An FP route adds:
+`machine-model eps --table` at the record's convention (credit ♭, operands free) at each reading of data/headline.toml,
+the sheet's vector at q* = ½ and the measured one at q* = 1.22, and the measured vector at the proved ½ floor
+(`measured-half`). OUT/headline.txt is `machine-model headline`: the records' rows with the conditions every ε here is
+stated under (the 1.22 reading rests on Theorem C, unproved). An FP route adds:
 
 - `plain`: MMAs (FP8-slot equivalents) beside the folded one, unfolded, so they enter γ only: an FP16 GEMM's second
   slot (1), the FP4 g1 GEMM's other three block-scaled products (3), C1's extra limb products (k4 and k4t: 3; k3h: 2;
@@ -39,11 +42,7 @@ from pathlib import Path
 MM = Path(__file__).resolve().parents[1] / "machine_model"
 DATA = MM / "data"
 
-DEVICES = {
-    "sm_120": {"data": DATA, "vectors": ["", "DS-120"]},
-    "sm_90": {"data": DATA / "devices" / "sm_90", "vectors": ["DS-90", "DC-90-ri"]},
-    "sm_100": {"data": DATA / "devices" / "sm_100", "vectors": ["DS-100", "DC-100-ri"]},
-}
+DEVICES = {"sm_120": DATA, "sm_90": DATA / "devices" / "sm_90", "sm_100": DATA / "devices" / "sm_100"}
 
 TWO_SIDED = {"linears": "two-sided", "lm_head": "two-sided", "qk": "two-sided", "pv": "peel"}
 
@@ -69,17 +68,17 @@ VARIANTS = [
          title="FP4 g1 on FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale, fx1",
          summary="four block-scaled k64 FP4 products a word, u and b at unit scale"),
     # sm_90 (H200): wgmma E4M3 keeps a 14-bit adder window, so E4M3 integers past ±16 are exact only in FP16
-    dict(device="sm_90", name="fpx-c1-k3h", base="dither-2s-licpw-redux-imad-l32", plain=2.0,
+    dict(device="sm_90", name="fpx-c1-k3h", base="dither-2s-licpw-redux-l32", plain=2.0,
          fold_add={"IMAD": 3.0, "ALU": 1.0},
          title="C1 k3h on the H200 record: int8 Dither's transcript from three E4M3 Karatsuba limb products",
          summary="the H200 LI-CP-W record's transcript bit for bit, each k32 word from 3 wgmma E4M3 into 3 "
                  "accumulators from +0 and 3 FFMA + IADD3"),
-    dict(device="sm_90", name="fpx-2sp-int5-e4r", base="dither-2s-licpw-redux-imad-l32", plain=1.0,
+    dict(device="sm_90", name="fpx-2sp-int5-e4r", base="dither-2s-licpw-redux-l32", plain=1.0,
          fold_add={"IMAD": 1.0, "ALU": 2.0}, noise=TWO_SIDED,
          title="peel (2SP) on the ±16 integer grid (e4r), H200",
          summary="the only native grid exact under the 14-bit window: int5 served round-to-nearest, twin dithered, "
                  "restart from +0 each k32 word, FFMA + IADD, the served sum one add a word"),
-    dict(device="sm_90", name="fpx-g1s-i8", base="dither-2s-licpw-redux-imad-l32", plain=0.0, fold_add={},
+    dict(device="sm_90", name="fpx-g1s-i8", base="dither-2s-licpw-redux-l32", plain=0.0, fold_add={},
          title="g1 on int8 units (H200): the record on R + b", summary="as sm_120's fpx-g1s-fx1, on the record's fold"),
     # sm_100 (B200): the LI-CP-W redux record; TMEM accumulators, rebased by tcgen05.st
     dict(device="sm_100", name="fpx-g1s-i8", base="dither-2s-licpw-redux-heavy-l32", plain=0.0, fold_add={},
@@ -147,28 +146,29 @@ def write_variant(v: dict, data: Path) -> None:
 
 def main(out: Path) -> int:
     out.mkdir(parents=True, exist_ok=True)
-    rc = 0
-    for dev, spec in DEVICES.items():
+    head = tomllib.loads((DATA / "headline.toml").read_text())
+    with (out / "headline.txt").open("w") as f:
+        rc = subprocess.run(["machine-model", "headline"], stdout=f, stderr=subprocess.STDOUT).returncode
+    for dev, src in DEVICES.items():
         data = out / "data" / dev
-        shutil.copytree(spec["data"], data, ignore=shutil.ignore_patterns("devices") if dev == "sm_120" else None)
+        shutil.copytree(src, data, ignore=shutil.ignore_patterns("devices") if dev == "sm_120" else None)
         mine = [v for v in VARIANTS if v["device"] == dev]
         for v in mine:
             write_variant(v, data)
         names = sorted({v["base"] for v in mine}) + [v["name"] for v in mine]
+        fam, q = head["family"][dev], {r: x["q"] for r, x in head["reading"].items()}
+        readings = [(r, fam[r]["vector"], q[r]) for r in q] + [("measured-half", fam["measured"]["vector"], q["sheet"])]
         with (out / f"{dev}.txt").open("w") as f:
-            for vec in spec["vectors"]:
-                for ops in ("floor", "free"):
-                    cmd = ["machine-model", "--data", str(data), "eps", "--table", *names, "--credit", "floor",
-                           "--operands", ops] + (["--vector", vec] if vec else [])
-                    f.write(f"=== {dev} vector {vec or 'default'} operands {ops}: {' '.join(cmd[3:])}\n")
-                    f.flush()
-                    r = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT)
-                    rc = rc or r.returncode
-            for v in mine:
-                cmd = ["machine-model", "--data", str(data), "eps", v["name"], "--credit", "floor", "--operands",
-                       "floor", "--vector", spec["vectors"][-1], "--json"]
-                with (out / f"{dev}_{v['name']}.json").open("w") as g:
-                    rc = rc or subprocess.run(cmd, stdout=g, stderr=subprocess.DEVNULL).returncode
+            for reading, vec, qr in readings:
+                at = ["--credit", "floor", "--operands", "free", "--q", f"{qr:g}", "--vector", vec]
+                cmd = ["machine-model", "--data", str(data), "eps", "--table", *names, *at]
+                f.write(f"=== {dev} {reading}: {' '.join(cmd[3:])}\n")
+                f.flush()
+                rc = rc or subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT).returncode
+                for v in mine:
+                    cmd = ["machine-model", "--data", str(data), "eps", v["name"], *at, "--json"]
+                    with (out / f"{dev}_{reading}_{v['name']}.json").open("w") as g:
+                        rc = rc or subprocess.run(cmd, stdout=g, stderr=subprocess.DEVNULL).returncode
     return rc
 
 
