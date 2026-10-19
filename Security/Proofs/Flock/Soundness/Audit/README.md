@@ -120,6 +120,24 @@ the floor of the fill's value over output bits as `audit_exfiltration`'s $H$. `s
 duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`stratumRisk`, at least $k_s c / n_s$ by
 `le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.
 
+**Theorems, the cumulative harm budget** (`Audit/HarmBudget.lean`, `Audit/HarmBudgetLife.lean`), over a run of adaptive
+rounds (`Adaptive.Play`): each round's faulty units $B_t$ and sampling design are fixed by the history before that
+round's own coins, and the prover may stop after any round. A sampling design meets the **design condition**
+(`Law.Design L π`) when every $B$ fixed before the coins has acceptance probability at most $\exp(-\sum_{u \in B}
+\pi_u)$: `bernoulli_design` ($\pi_u = q$), `subset_design` ($k/n$), `stratified_design` ($k_s/n_s$, the closed form of
+`stratified_escape_le_exp`) and `work_design` ($K w_u / W$). `harm_budget`: for harms $h \ge 0$ and any $\lambda \ge 0$
+with $\lambda h_u \le \pi_u$, $\Pr[\text{accept} \wedge \sum_t h(B_t) \ge H] \le e^{-\lambda H} + \sum_t
+\mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s draw hits $B_t$ and the round still
+passes (`Play.Drawn`, indexed by the rounds left after it); `harm_budget_rate` takes $\lambda = \min_{h_u > 0} \pi_u /
+h_u$. `harm_count`: under Bernoulli($q$) draws, an accepted run with $K$ or more faulty units summed over its rounds has
+probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
+gives $1 - p + \sum_t \mathrm{err}_t$ at $k^*(p) = \ln(1/(1-p)) / (-\ln(1-q))$. `life_harm_budget` is the instance over
+a lifetime of $N$ one-stage audits (`life`): after each accepted audit the prover chooses whether to go on, and a
+rejection ends the lifetime with no redraw, so $\mathrm{err}_m = \varepsilon_{ks,m} + \delta_{link,m}$ by `audit_drawn`.
+It fixes each audit's sampling design in advance by its index, over one $n$; `harm_budget` itself lets the history
+choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
+the whole run.
+
 **Theorems, closure draws** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each drawn unit proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
