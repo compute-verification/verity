@@ -13,6 +13,10 @@ position `p` commits `row0 (col0At w b p)`. Here, at every coin vector of a `--z
   opened positions and the others at their indices, at every coin vector.
 * `coinedOf_col0At`: so level 0's column at tree position `p` is `colAt` at `ω_p`, the lanes and extra lanes encoded at
   `ω_p` plus their padding, the same at every coin vector.
+* `FlockComplete.row0_eq_encodeRowsZk`: a column whose lanes are the encoded words of `g`, `extra` and `lanePad` has
+  `encodeRowsZk`'s row at `q` as its `row0`.
+* `Claims.ZKMal.Masked.zkLevel0`: every `--zk` schedule's level 0 has `d = cols + rate`, `rate ≥ 1`, `lanes = k₀` and
+  `t_pad ≤ 2^cols`, and is the model schedule's level 0 (one `decide +kernel` per `m`, `round0Facts_all`).
 -/
 
 namespace FlockSoundness.Discharge.Composed
@@ -185,3 +189,104 @@ theorem coinedOf_col0At (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedO
       rfl
 
 end FlockSoundness.Discharge.Composed
+
+/-! ## A masked level-0 row from its column -/
+
+namespace FlockComplete
+
+open Flock FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge FlockSoundness.Discharge.Composed
+
+local notation "𝔽" => FlockLevel3.GF128
+
+theorem row0_size {nL : ℕ} (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽)) : (ZkView.row0 col).size = nL + 4 := by
+  show (Array.ofFn col.1 ++ #[col.2 0 0, col.2 0 1, col.2 1 0, col.2 1 1] : Array 𝔽).size = _
+  simp
+
+theorem row0_left {nL : ℕ} (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽)) {l : ℕ} (hl : l < nL) (h) :
+    (ZkView.row0 col)[l]'h = col.1 ⟨l, hl⟩ := by
+  show (Array.ofFn col.1 ++ #[col.2 0 0, col.2 0 1, col.2 1 0, col.2 1 1] : Array 𝔽)[l]'(by simp; omega) = _
+  rw [Array.getElem_append_left (by simpa using hl), Array.getElem_ofFn]
+
+theorem row0_right {nL : ℕ} (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽)) {e : ℕ} (he : e < 4) (h) :
+    (ZkView.row0 col)[nL + e]'h = #[col.2 0 0, col.2 0 1, col.2 1 0, col.2 1 1][e]'(by simpa using he) := by
+  show (Array.ofFn col.1 ++ #[col.2 0 0, col.2 0 1, col.2 1 0, col.2 1 1] : Array 𝔽)[nL + e]'(by simp; omega) = _
+  rw [Array.getElem_append_right (by simp)]
+  simp
+
+/-- **A masked level-0 row is the model's row of its column** (`ZkView.row0`), where the column's witness lanes are
+`g`'s words and its extra lanes `extra`'s, each encoded at `ω_q` and padded by `lanePad`'s coefficients. -/
+theorem row0_eq_encodeRowsZk {nL L tp : ℕ} (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ → ℕ → F128)
+    {q : ℕ} (hq : q < 2 ^ lv.d) (hnL : nL = 2 ^ lv.lanes) (hL : L = 2 ^ lv.cols) (htp : tp = tPad)
+    (ht : tPad ≤ 2 ^ lv.cols) (col : (Fin nL → 𝔽) × (Fin 2 → Fin 2 → 𝔽))
+    (h1 : ∀ l : Fin nL, col.1 l = ∑ c : Fin L, fOf g[c.val * 2 ^ lv.lanes + l.val]! * eAt lv.cols q c +
+      ∑ j : Fin tp, fOf (lanePad l.val j.val) * gAt lv.cols q j)
+    (h2 : ∀ r i : Fin 2, col.2 r i = ∑ c : Fin L, fOf (extra (2 * r.val + i.val) c.val) * eAt lv.cols q c +
+      ∑ j : Fin tp, fOf (lanePad (2 ^ lv.lanes + (2 * r.val + i.val)) j.val) * gAt lv.cols q j) :
+    ZkView.row0 col = (encodeRowsZk lv tPad g extra lanePad)[q]! := by
+  subst nL L tp
+  have hsz := encodeRowsZk_size lv tPad g extra lanePad hq
+  have hE : Zk.EXTRA_LANES = 4 := rfl
+  refine Array.ext (by rw [row0_size, hsz, hE]) fun l h1' h2' => ?_
+  have hl : l < 2 ^ lv.lanes + Zk.EXTRA_LANES := by rw [hE]; rwa [row0_size] at h1'
+  rw [← getElem!_pos (encodeRowsZk lv tPad g extra lanePad)[q]! l h2']
+  show fOf _ = fOf _
+  rw [encodeRowsZk_entry lv tPad g extra lanePad hq hl ht, Finset.sum_range]
+  by_cases hlt : l < 2 ^ lv.lanes
+  · simp only [hlt, ↓reduceIte]
+    rw [row0_left col hlt h1']
+    exact h1 ⟨l, hlt⟩
+  · simp only [hlt, ↓reduceIte]
+    obtain ⟨e, he, rfl⟩ : ∃ e, e < 4 ∧ l = 2 ^ lv.lanes + e := ⟨l - 2 ^ lv.lanes, by omega, by omega⟩
+    rw [row0_right col he h1']
+    simp only [Nat.add_sub_cancel_left]
+    interval_cases e
+    · exact h2 0 0
+    · exact h2 0 1
+    · exact h2 1 0
+    · exact h2 1 1
+
+end FlockComplete
+
+/-! ## The `--zk` schedule's level 0 -/
+
+namespace Claims.ZKMal.Masked
+
+open FlockSoundness FlockSoundness.Refine
+
+/-- The level-0 facts round `0` reads, as one check per `m`: level 0 exists, its codeword block is `cols + rate`
+with `rate ≥ 1`, its lanes are the schedule's `k₀`, and `t_pad ≤ 2^cols`. -/
+def round0Facts (m : ℕ) : Bool :=
+  match _root_.Flock.Zk.schedule m with
+  | .ok (s, t) =>
+    decide (0 < s.levels.size) &&
+      decide ((s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate) &&
+      decide (1 ≤ (s.levels.getD 0 default).rate) && decide ((s.levels.getD 0 default).lanes = s.k0) &&
+      decide (t ≤ 2 ^ (s.levels.getD 0 default).cols)
+  | .error _ => true
+
+set_option maxRecDepth 100000 in
+theorem round0Facts_all : ∀ m, 25 ≤ m → m ≤ 35 → round0Facts m = true := by
+  intro m h1 h2
+  interval_cases m <;> decide +kernel
+
+theorem schedOf_level₀ (s : _root_.Flock.Schedule) (h0 : 0 < s.levels.size) :
+    (schedOf s).level₀ = levelOf (s.levels.getD 0 default) := by
+  rcases s with ⟨m, n, k0, ⟨l⟩, ext⟩
+  cases l with
+  | nil => simp at h0
+  | cons a l => rfl
+
+/-- **A `--zk` schedule's level 0**: its codeword block is `cols + rate` with `rate ≥ 1`, its lanes are `k₀`, and
+`t_pad ≤ 2^cols`; and it is the model schedule's level 0. -/
+theorem zkLevel0 {m : ℕ} {s : _root_.Flock.Schedule} {t : ℕ} (h : _root_.Flock.Zk.schedule m = .ok (s, t)) :
+    (s.levels.getD 0 default).d = (s.levels.getD 0 default).cols + (s.levels.getD 0 default).rate ∧
+      1 ≤ (s.levels.getD 0 default).rate ∧ (s.levels.getD 0 default).lanes = s.k0 ∧
+      t ≤ 2 ^ (s.levels.getD 0 default).cols ∧ (schedOf s).level₀ = levelOf (s.levels.getD 0 default) := by
+  have hf := round0Facts_all m (FlockSoundness.Discharge.ZkHidden.schedule_range h).1 (FlockSoundness.Discharge.ZkHidden.schedule_range h).2
+  unfold round0Facts at hf
+  rw [h] at hf
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at hf
+  obtain ⟨⟨⟨⟨h0, hd⟩, hr⟩, hl⟩, ht⟩ := hf
+  exact ⟨hd, hr, hl, ht, schedOf_level₀ s h0⟩
+
+end Claims.ZKMal.Masked
