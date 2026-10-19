@@ -84,9 +84,9 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
 
 
 def test_the_residual_threshold_is_the_closed_form():
-    """At T1, D < X once r_gpu > 1/X - host_share - nu."""
-    p = T.DEFAULTS | {"lag_s": 0.0}
+    """At T1, D < X once r_gpu > 1/X - host_share - clock_share - nu."""
+    p = T.DEFAULTS | X.DESIGN | {"lag_s": 0.0}
     th = X.thresholds(p, "residual", "T1")
     for level in (10.0, 2.0):
         (a, _), = th[level]
-        assert a == pytest.approx(1 / level - p["host_share"] - X.nu(p), rel=1e-3)
+        assert a == pytest.approx(1 / level - p["host_share"] - p["clock_share"] - X.nu(p), rel=1e-3)

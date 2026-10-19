@@ -30,12 +30,12 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
 
 
 def test_unmonitored_compute_trains_at_full_efficiency():
-    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
+    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
     assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
 
 
 def test_the_residual_voids_the_partial_sum_law():
-    p = T.DEFAULTS | {"residual": 0.01, "host_share": 0.05}
+    p = T.DEFAULTS | {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["declared"] == pytest.approx(2 / p["kappa"] / r["rho_T"])
 
@@ -43,7 +43,7 @@ def test_the_residual_voids_the_partial_sum_law():
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "unmonitored": 0.0, "lag_s": 0.0}
+    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.0, "lag_s": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
@@ -158,7 +158,7 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05}
+    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
     assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)

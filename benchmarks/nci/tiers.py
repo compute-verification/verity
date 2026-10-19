@@ -63,7 +63,10 @@ BLOCK_NAME_BITS = 25
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max, 1 - (1 - eps)
 #: ((1 - phi)/q_sched + phi)/q_clock = 0.326: honest kernels run 1.72x the floor at the nodes' locked clock (run
 #: r20261017-123922-e558), diluted by the training window's filler (the C7 dossier; 0.217 with an attested clock; 1%
-#: needs eight conditions; today nothing in a training window is credited) and the host CPUs at their BF16 AMX datasheet peak (two Xeon 6776Ps, 3.8% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
+#: needs eight conditions; today nothing in a training window is credited); the GPU clock above what PoUW credits
+#: (NVIDIA's dense headline implies 2,597 MHz against the credited 2,430: 6.4%, C4 dossier); the host CPUs at their INT8
+#: AMX datasheet peak (two Xeon 6776Ps, 128 cores x 2,048 ops per cycle x 3.6 GHz: 11.8% of the GPUs' FP8 rate);
+#: 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
 #: MEM-51) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
@@ -71,11 +74,11 @@ BLOCK_NAME_BITS = 25
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.038,
+    "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
-    "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
+    "tau": 860.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
@@ -90,7 +93,8 @@ SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
     {"key": "g", "main": True, "label": "Compute amplifier g: the developer's algorithmic advantage over the reference recipe (1 against the best known recipe)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit at the locked clock 0.326, with an attested clock 0.217; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
-    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (BF16 AMX 3.8%, measured 0.4-0.9%; 0 once a CPU filler or a physical cap bounds them)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
+    {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (6.4%: 2,597 MHz against 2,430; 0 once credit uses the true maximum or auditor hardware reads the clock offset)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
+    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (Xeon 6776P INT8 AMX 11.8%; hosts without matrix units, two EPYC 9015s, 0.21%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
@@ -104,7 +108,7 @@ SPEC = [
     {"key": "wipe_s", "label": "Wipe period", "unit": "s", "min": 1, "max": 1e7, "log": True},
     {"key": "hbm_gb", "label": "HBM per server", "unit": "GB", "min": 80, "max": 4000, "log": True},
     {"key": "host_gb", "label": "Host memory per server (filled with proof of space)", "unit": "GB", "min": 1, "max": 10000, "log": True, "zero": True},
-    {"key": "tau", "label": "Certified timing channel per server", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
+    {"key": "tau", "label": "Certified timing channel per server (the network appendix's program format: about 860)", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
     {"key": "export", "label": "Export per server: committed values readable outside the declared computation (today 4.4e9; under the export rule about 2.5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
     {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
     {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
@@ -238,8 +242,9 @@ def ingress(p: dict, mech: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r: the GPUs' uncredited share plus the host CPUs, which count toward it until something credits or bounds them."""
-    return min(1.0, p["residual"] + p["host_share"])
+    """r: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward it
+    until something credits or bounds them."""
+    return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
 
 
 def state_threshold(p: dict, mech: dict) -> float:

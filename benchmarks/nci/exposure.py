@@ -26,7 +26,8 @@ import tiers as T  # noqa: E402
 RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
     "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.326 at the locked clock, 0.217 attested (C7 dossier); nothing credited today 1"),
-    "host_share": (0.0, 0.059, "0 once a CPU filler or a physical cap bounds them; two Xeon 6776P BF16 AMX 3.8%; 5.9% the top of the C7 dossier's range"),
+    "host_share": (0.0021, 0.131, "two EPYC 9015s without matrix units 0.21%; Xeon 6776P INT8 AMX 11.8%, 13.1% at fused maximum clocks"),
+    "clock_share": (0.0, 0.2, "0 with an attested clock; 6.4% from NVIDIA's dense headline; 0.2 the C4 dossier's adversarial phi = 1.25"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
     "sigma": (10.0, 1e6, "guess: a shielded rack, to a loud channel"),
@@ -40,7 +41,7 @@ RANGES = {
     "wipe_s": (60.0, 6.048e5, "guess: every minute to weekly"),
     "hbm_gb": (640.0, 2304.0, "8 x 80 GB (H100) to 8 x 288 GB (B300); 8 x 96 GB today"),
     "host_gb": (512.0, 4000.0, "guess, around vy-nebius-2's 1.9 TB"),
-    "tau": (10.0, 1e4, "guess, around 400"),
+    "tau": (10.0, 1e4, "about 860 from the network appendix's program format; the ends a guess"),
     "export": (2.5e6, 4.4e10, "under the export rule 2.5e6; today 4.4e9; high a guess (10x)"),
     "nic": (8e11, 6.4e12, "2 x 400 Gb/s to 8 x 800 Gb/s; 8 x 400 Gb/s today"),
     "share": (1e-3, 0.1, "guess, around the 1% budget"),
@@ -72,7 +73,7 @@ RANGES = {
 }
 
 #: compute-accounting's modelled design, where the residual sits below the memory cap
-DESIGN = {"residual": 0.01, "host_share": 0.05}
+DESIGN = {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
 SCENARIOS = {
     "defaults": {},
     "design": DESIGN,
@@ -112,7 +113,7 @@ CHECKS = [
     ("design", DESIGN, "T5", "chi", "pool above S_full / 28"),
     ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
-    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "lag_s": 0.0}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
+    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "lag_s": 0.0}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
