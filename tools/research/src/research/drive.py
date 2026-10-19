@@ -75,6 +75,9 @@ LEAN_ERROR_RE = re.compile(r"^\s*error: (\S+?\.lean):\d+", re.M)
 KILLED_RC = (129, 137, 143)
 #: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
 KILLED_SAYS = "not a kernel verdict"
+#: circuit-check's report of a failure: `FAIL <check> <target>`, and `circuit-check/killed` for a target whose process died
+CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
+CIRCUIT_KILLED = "circuit-check/killed"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
 #: what `Driver.culprit` says of a failure that names no file and was a kill
@@ -362,6 +365,13 @@ def killed(run_dir: Path, why: str = "") -> bool:
             with contextlib.suppress(OSError):
                 if KILLED_SAYS in (run_dir / Path(st["log"]).name).read_text(errors="replace"):
                     return True
+    # circuit-check alone failed, and only on targets whose process died (19 Oct: three PoUS SHA-512 targets OOM-killed at
+    # 149-164 GiB on cpu-1 in 399ea461's post-landing run, and drive tried to revert all 19 landings since 6c4f254d)
+    if len(steps) == 1 and steps[0].get("step") == "circuit-check" and steps[0].get("log"):
+        with contextlib.suppress(OSError):
+            fails = CIRCUIT_FAIL_RE.findall((run_dir / Path(steps[0]["log"]).name).read_text(errors="replace"))
+            if fails and all(f == CIRCUIT_KILLED for f in fails):
+                return True
     return any(f"rc={rc}" in why for rc in (*KILLED_RC, -9, -15))
 
 

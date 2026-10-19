@@ -72,7 +72,7 @@ Only the names a post starts with ring anyone. So `send`, `reply` and `ask` refu
 its start, or writes `handle:` after its leading names, at the start of a later line or of a sentence (`@top ci: rebuild`).
 Move the name to the start (or `--to`) to ring it, or drop the `@` to mention it without a doorbell.
 
-`registry.json` (beside this file) names every handle (remit, charter, user-group id, the paths it `owns`, and a fallback holder), the
+`registry.json` (beside this file) names every handle (remit, charter, user-group id, the paths it `owns`, a fallback holder, and up to 5 `examples`: questions a collaborator might ask it, which the chat router matches posts against), the
 channels and the named humans; `research msg handles` prints it, with each handle's holder from its route. `research msg owners PATH...` names who owns each path (the
 longest `owns` prefix wins), so a question about a file goes to its owner; a PR that moves files updates its owners' entries. The tool is `research msg` (`tools/research/src/research/slack.py`); every
 subcommand takes `--dry-run`, which sends nothing and prints each request it would make.

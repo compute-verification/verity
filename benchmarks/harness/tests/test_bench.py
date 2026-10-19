@@ -135,7 +135,7 @@ def test_cli_and_presets_use_the_benchmark_package_and_stable_gpu_ids(tmp_path):
     assert preset.gpu_id == "rtx-pro-6000"
     assert preset.engine_settings["resident_gpu_memory_utilization"] == 0.40
     assert preset.engine_settings["block_gpu_memory_utilization"] == 0.80
-    assert set(GPUS) == {"rtx-pro-6000", "h200"}
+    assert set(GPUS) == {"rtx-pro-6000", "h200", "b200"}
 
 
 def test_every_toml_spec_strictly_loads():
@@ -640,6 +640,9 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
                                               "cudagraph_capture_sizes": [1, 8, 32, 128]}
     assert engine_args(pinned, "fp8", resident=False, eager=False)["kv_cache_memory_bytes"] == 56 * 2**30
     assert "compilation_config" not in engine_args(pinned, "fp8", resident=False, eager=True)
+    assert not {"attention_backend", "attention_config", "moe_backend"} & set(args)
+    moe = engine_args(load_spec("qwen3-30b-a3b-bf16-b200-served").preset, "bfloat16", resident=False, eager=False)
+    assert (moe["attention_backend"], moe["attention_config"], moe["moe_backend"]) == ("FLASH_ATTN", {"flash_attn_version": 2}, "triton")
 
 
 def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):

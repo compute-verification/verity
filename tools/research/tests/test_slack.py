@@ -262,6 +262,17 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
         slack.load_registry(registry)
 
 
+def test_a_handles_examples_are_a_few_one_line_questions(registry):
+    reg = json.loads(registry.read_text())
+    reg["handles"][0]["examples"] = ["How does the verifier check a sampled proof?", "What does PoUW prove?"]
+    registry.write_text(json.dumps(reg))
+    assert slack.load_registry(registry)["handles"][0]["examples"][1] == "What does PoUW prove?"
+    for bad in (["q"] * 6, ["x" * 161], [""], "one string"):
+        reg["handles"][0]["examples"] = bad
+        registry.write_text(json.dumps(reg))
+        with pytest.raises(slack.SlackError, match="examples"):
+            slack.load_registry(registry)
+
 def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
     reg = json.loads(registry.read_text())
     reg["handles"][0]["remit"] = "x" * (slack.DESCRIPTION_MAX + 1)
@@ -1861,6 +1872,27 @@ def inbox(fake, routes_dirs, name, where="local", **kw):
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}{name}. pointers", username=name, bot_id=BOT)
     add_route(routes_dirs[0] if where == "local" else routes_dirs[1], name, root["ts"], **kw)
     return root["ts"]
+
+
+def test_a_token_that_may_post_but_not_read_still_rings_the_names_a_post_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
+    """19 Oct 15:40Z: the bot lost channels:history, so every inbox read answered missing_scope and no doorbell rang
+    (COMM-48).  Unread, an inbox is rung unchecked; any other failure still marks the name NOT RUNG."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    first, second = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "proofs")
+    real, error = slack.post, ["missing_scope"]
+
+    def unreadable(url, data, headers):
+        if url.endswith(("conversations.replies", "conversations.history")):
+            return {"ok": False, "error": error[0], "needed": "channels:history"}
+        return real(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", unreadable)
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "@proofs", "--text", "node 2 is free")
+    assert rc == 0 and "route @circuits: rang" in err and "route @proofs: rang" in err, err
+    assert (len(bells(fake, first)), len(bells(fake, second))) == (1, 1)
+    error[0] = "ratelimited"
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "again")
+    assert rc == 0 and "route @circuits: NOT RUNG" in err and len(bells(fake, first)) == 1
 
 
 def test_a_doorbell_that_fails_leaves_the_others_ringing_and_deliver_rings_it_later(fake, registry, routes_dirs, capsys, monkeypatch):

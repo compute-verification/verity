@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.acquire import served as SV
+from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.program.kernels import rows as R
@@ -47,7 +48,7 @@ def _build() -> dict:
     prog, plan = SM.expand(wired, RECORD)
     gemms = sorted({tuple(c["gemm"]) for c in prog["calls"] if c["op"] == "mm"})
     args = (SCHEDULE, STEPS, gemms, (H, V), (2, 1, 64))
-    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, sms=132, moe=plan)
+    kw = dict(capture_sizes=[1, 2, 4, 8], max_num_seqs=8, split_cap=SV.SPLIT_CAP, device=SD.device_of((9, 0), 132), moe=plan)
     _plans, missing = SV.step_plans(*args, {}, **kw)
     plans, missing = SV.step_plans(*args, {f"{M_},{K},{N}": {"kernel": "nosplit"} for M_, K, N in missing}, **kw)
     assert not missing
