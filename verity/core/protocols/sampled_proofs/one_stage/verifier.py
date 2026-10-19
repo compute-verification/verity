@@ -13,6 +13,8 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
   draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
+* `coins`: those bytes themselves, the challenger's coins, which only the Lean reads from the operating system
+  (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a Lean that can't answer leaves no coins;
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
@@ -162,6 +164,25 @@ def lean(fn: str, value: Any) -> dict[str, Any]:
     except LeanError as e:
         return {"refused": str(e)}
     return body if kind == "output" else {"refused": body}
+
+
+#: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
+COINS_MAX = 1 << 24
+
+
+def coins(n: int) -> bytes:
+    """`n` bytes of the operating system's randomness, read by the Lean verifier of record (`IO.getRandomBytes`, A3's
+    `uniform/io-getrandombytes`): the challenger's coins (`service.Stream`'s default), which the Python never reads from
+    the operating system itself. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes:
+    no coins, so no draw and no salt."""
+    if not (type(n) is int and 0 <= n <= COINS_MAX):
+        raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
+    kind, body = _server.call("coins", n)
+    if kind != "output":
+        raise LeanError(f"{EXE} refused {n} coin bytes: {body}")
+    if not (isinstance(body, str) and len(body) == 2 * n and all(c in "0123456789abcdef" for c in body)):
+        raise LeanError(f"{EXE} answered other than {n} coin bytes in hex")
+    return bytes.fromhex(body)
 
 
 def _canon(x: Any) -> str | None:
@@ -402,5 +423,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public", "run", "select"]
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "lean",
+           "matches_public", "run", "select"]
