@@ -14,6 +14,8 @@ import Proofs.Flock.Claims.ZK.SplitInner
 * **`TauRows`**: the open part, that `cons` is `rowsOf`'s first seven rows (the replay's five and the Ligerito check's
   two limbs), each of the layout's length.
 * **`innerTauVal_of`**: `TauRows → InnerTauVal`.
+* **`TauRep`**, **`TauLig`**, **`tauRows_of`**: `TauRows` as its first five rows (the replay's three and the two
+  ring-switch rows) and its last two (level 0's lane limbs); `innerTauVal_of_rows : TauRep → TauLig → InnerTauVal`.
 -/
 
 namespace Claims.ZKMal
@@ -264,6 +266,32 @@ theorem innerTauVal_of (h : TauRows) : InnerTauVal := by
       rw [Fin.val_natAdd, ZkExec.append_get!_right _ _ (j := q.val) (by omega)
         (by simp [_root_.Flock.Zk.triple])]
       exact tripleE x c w τ j r q i
+
+/-- **The replay's rows** (`TauRows`' first five): `cons` begins with the replay's three constraints and the two
+ring-switch rows, which are `rowsOf`'s first five by coefficient, each of the layout's length. -/
+def TauRep : Prop :=
+  ∀ x w τ c n j r cons L, InnerAt x w τ c n j r cons L → innerSlotE x j r + 1 < n →
+    5 ≤ cons.size ∧ ∀ (k : ℕ) (hk : k < 5), (cons[k]!).2.a.size = (innerLayE x j).len ∧
+      ∀ i : Fin ((tabC PE x j).z.nE + 4), fOf (cons[k]!).2.a[i.val]! = (rowsE x c w τ j r ⟨k, by omega⟩).coef i
+
+/-- **Level 0's lane rows** (`TauRows`' last two): `cons` has seven rows, and its last two (`ligeritoConstraints`' two
+limbs) are `rowsOf`'s `limbRows` of `laneRow` by coefficient, each of the layout's length. -/
+def TauLig : Prop :=
+  ∀ x w τ c n j r cons L, InnerAt x w τ c n j r cons L → innerSlotE x j r + 1 < n →
+    cons.size = 7 ∧ ∀ (k : ℕ) (hk : 5 ≤ k ∧ k < 7), (cons[k]!).2.a.size = (innerLayE x j).len ∧
+      ∀ i : Fin ((tabC PE x j).z.nE + 4), fOf (cons[k]!).2.a[i.val]! = (rowsE x c w τ j r ⟨k, by omega⟩).coef i
+
+theorem tauRows_of (hR : TauRep) (hL : TauLig) : TauRows := by
+  intro x w τ c n j r cons L hA hn
+  obtain ⟨-, hR⟩ := hR x w τ c n j r cons L hA hn
+  obtain ⟨hsz, hL⟩ := hL x w τ c n j r cons L hA hn
+  have hrow : ∀ k (hk : k < 7), (cons[k]!).2.a.size = (innerLayE x j).len ∧
+      ∀ i : Fin ((tabC PE x j).z.nE + 4), fOf (cons[k]!).2.a[i.val]! = (rowsE x c w τ j r ⟨k, by omega⟩).coef i :=
+    fun k hk => if h5 : k < 5 then hR k h5 else hL k ⟨by omega, hk⟩
+  exact ⟨hsz, fun k hk => (hrow k hk).1, fun k i => (hrow k.val k.isLt).2 i⟩
+
+/-- **`InnerTauVal` from the replay's rows and level 0's lane rows.** -/
+theorem innerTauVal_of_rows (hR : TauRep) (hL : TauLig) : InnerTauVal := innerTauVal_of (tauRows_of hR hL)
 
 end Masked
 end Claims.ZKMal
