@@ -16,7 +16,8 @@ same transcript and bodies, values related by `R`.
   `sampleP_cut_err`); a squeeze that returned was before round `n` (`squeezeP_cut_inv`, `sampleP_cut_inv`).
 * **The zerocheck** (`zerocheckCut_alike`): where the cut's masked values at the layout's indices are the plain
   prover's messages at the zerocheck's coins (`zcCoins`) plus their pads, the cut's zerocheck sends what the session's
-  sends and returns the session's proof and its `z`, `ρ` and `r` (its `v_A`, `v_B`, `v_C` are the cut's zeros).
+  sends and returns the session's proof, both at the `z`, `ρ` and `r` of those coins (`ZcAt`; the cut's `v_A`, `v_B`,
+  `v_C` are zeros).
 -/
 
 namespace FlockComplete
@@ -181,10 +182,14 @@ theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Cla
 def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Coins :=
   ⟨coin L, coin (L + 1), coin (L + 2), fun i => coin (L + 3 + i)⟩
 
+/-- **A zerocheck's `z`, `ρ` and `r` at the coins `cs`**, those `Zc.out` returns. -/
+abbrev ZcAt (m : ℕ) (cs : Zc.Coins) (o : ZcOut) : Prop :=
+  o.z = cs.z ∧ o.rho = pushes cs.ρ (m - 6) ∧ o.rRest = cs.r m
+
 /-- **The cut's zerocheck in lockstep with the session's**: answered by `asksCut` from `l`, where the masked values `mk`
 at `round1_ab`'s, `round1_c`'s, each residual round's and the finals' pad indices are the plain prover's values at the
-coins from `l.size` on (`zcCoins`) plus their pads `h`, the two send the same bodies, throw together, and return the
-same proof and the same `z`, `ρ` and `r`. -/
+coins from `l.size` on (`zcCoins`) plus their pads `h`, the two send the same `3 + (m − 6)` bodies, throw together, and
+return the same proof, both with the `z`, `ρ` and `r` of those coins. -/
 theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray)
     (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (mk : ℕ → F128) (t : Transcript) (l : Array Claims.Msg)
     (hab : ∀ i < 64, mk (lay.r1ab i) = (Zc.r1ab tr (m - 6) ((zcCoins coin l.size).r m))[i]! + h[lay.r1ab i]!)
@@ -202,8 +207,8 @@ theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
     (hfc : mk lay.fc =
       dot (lagrange nodesL den6Inv (zcCoins coin l.size).z) (Zc.r1c tr (m - 6) ((zcCoins coin l.size).r m)) +
         h[lay.fc]!) :
-    GoAlike (fun (p q : ZerocheckProof × ZcOut) _ =>
-        p.1 = q.1 ∧ p.2.z = q.2.z ∧ p.2.rho = q.2.rho ∧ p.2.rRest = q.2.rRest)
+    GoAlike (fun (p q : ZerocheckProof × ZcOut) L => p.1 = q.1 ∧ ZcAt m (zcCoins coin l.size) p.2 ∧
+        ZcAt m (zcCoins coin l.size) q.2 ∧ L.size = l.size + 3 + (m - 6))
       (((zerocheckCut (asksCut coin n) m digest cap root lay mk).run t).go l)
       (((zerocheckPZk (asksCut coin n) m digest cap root lay h tr).run t).go l) := by
   have hA : (Array.range 64).map (fun i => mk (lay.r1ab i)) =
@@ -241,17 +246,18 @@ theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
   refine alike_bind (forIn_alike _ _
     (fun i (s : Array (F128 × F128) × Array F128)
         (s' : Array F128 × Array F128 × Array (F128 × F128) × Array F128) =>
-      s = s'.2.2 ∧ s'.1 = Zc.tab (m - 6) (zcCoins coin l.size).z (zcCoins coin l.size).ρ tr.az i ∧
+      s = s'.2.2 ∧ s.2 = pushes (zcCoins coin l.size).ρ i ∧
+        s'.1 = Zc.tab (m - 6) (zcCoins coin l.size).z (zcCoins coin l.size).ρ tr.az i ∧
         s'.2.1 = Zc.tab (m - 6) (zcCoins coin l.size).z (zcCoins coin l.size).ρ tr.bz i)
     (l.size + 3) (m - 6) ?hb _ _ ?hl ?h0) ?tail
   case hl => simp only [Array.size_push] <;> omega
-  case h0 => exact ⟨rfl, rfl, rfl⟩
+  case h0 => exact ⟨rfl, rfl, rfl, rfl⟩
   case hb =>
     intro i hi s s' t' l' hl' hI
     obtain ⟨rounds, rho⟩ := s
     obtain ⟨a, b, rounds', rho'⟩ := s'
     dsimp only at hI
-    obtain ⟨hs, rfl, rfl⟩ := hI
+    obtain ⟨hs, rfl, rfl, rfl⟩ := hI
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hs
     try dsimp only
     rw [hm0 i hi, hm1 i hi]
@@ -262,20 +268,20 @@ theorem zerocheckCut_alike (coin : ℕ → ℕ → F128) (n : ℕ) {m : ℕ} (hm
     refine alike_bind_eq rfl fun rr t₃ l₃ e₃ => ?_
     obtain ⟨-, rfl, rfl, rfl⟩ := sampleP_cut_inv coin e₃
     rw [hl']
-    exact .inr ⟨_, _, _, _, rfl, rfl, _, _, rfl, rfl, ⟨rfl, rfl, rfl⟩, by simp only [Array.size_push, hl']⟩
+    exact .inr ⟨_, _, _, _, rfl, rfl, _, _, rfl, rfl, ⟨rfl, rfl, rfl, rfl⟩, by simp only [Array.size_push, hl']⟩
   case tail =>
     intro s s' t' l' _ _ hR
     obtain ⟨rounds, rho⟩ := s
     obtain ⟨a, b, rounds', rho'⟩ := s'
-    obtain ⟨hI, -⟩ := hR
+    obtain ⟨hI, hsz⟩ := hR
     dsimp only at hI
-    obtain ⟨hs, rfl, rfl⟩ := hI
+    obtain ⟨hs, rfl, rfl, rfl⟩ := hI
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj hs
     try dsimp only
     refine alike_bind_eq rfl fun _ t₁ l₁ e₁ => ?_
     obtain rfl := liftTM_inv e₁
     refine alike_bind_eq rfl fun _ t₂ l₂ e₂ => ?_
     obtain rfl := liftTM_inv e₂
-    exact .inr ⟨_, _, _, _, rfl, rfl, rfl, rfl, rfl, rfl⟩
+    exact .inr ⟨_, _, _, _, rfl, rfl, rfl, ⟨rfl, rfl, rfl⟩, ⟨rfl, rfl, rfl⟩, hsz⟩
 
 end FlockComplete
