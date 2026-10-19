@@ -83,6 +83,14 @@ def test_proof_of_space_rounds_set_the_slack():
     assert T.slack(T.DEFAULTS | {"pous_rounds": 12000}) * mem_gb < 1.02
 
 
+def test_unbounded_ingress_makes_wipes_cap_nothing():
+    """Until the count check is in the ZK flow, declared ingress is bounded only by line rate (network-accounting, 19 Oct),
+    and then even a small wipe residual caps nothing."""
+    tight = T.DEFAULTS | {"pous_rounds": 1e6, "on_chip_gb": 0.01}
+    assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_residual"]
+    assert not T.evaluate(tight | {"ingress_x": 6.5e5}, T.TIERS["T3"])["memory_caps_residual"]
+
+
 def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():
     quiet = T.evaluate(T.DEFAULTS | {"sigma": 1e3}, T.TIERS["T3"])["wipe_state_bits"]
     loud = T.evaluate(T.DEFAULTS | {"sigma": 1e6}, T.TIERS["T3"])["wipe_state_bits"]
@@ -96,4 +104,4 @@ def test_the_cheating_pool_does_not_grow_with_the_fleet():
     assert small["cheat_steps"] == large["cheat_steps"] > 0
     assert small["cheat"] == pytest.approx(100 * large["cheat"])
     q = T.DEFAULTS["share"] / (T.DEFAULTS["overhead"] + T.DEFAULTS["replay"])
-    assert large["cheat_steps"] == pytest.approx(math.log(1 / T.DEFAULTS["p_evade"]) / q)
+    assert large["cheat_steps"] == pytest.approx(T.DEFAULTS["luck"] * math.log(1 / T.DEFAULTS["p_evade"]) / q)

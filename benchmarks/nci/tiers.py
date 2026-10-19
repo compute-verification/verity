@@ -18,8 +18,10 @@ Efficiency is a sum of four terms, each an upper bound under the model; ``STATUS
   ``Lambda(K) = max(e, 2K / (4 d b_w))``, or at the tighter partial-sum law when no dark compute can sum the declared
   blocks' partial sums. The residual reads them on the server for free; unmonitored compute reads them over links (line
   rate, or side channels plus readable declared egress under network accounting). A relay op reads ``2 b_p`` bits.
-* With sampled proofs at a budget, the adversary's pool of undetected wrong steps is ``ln(1 / p_evade) / q`` per
-  identity, ``q = share / (overhead + replay)``, a lifetime constant. Each injects its 16 bits plus the choice of where,
+* With sampled proofs at a budget, the adversary's pool of undetected wrong steps is ``A ln(1 / delta) / q`` per
+  identity, ``q = share / (overhead + replay)``, a lifetime constant (the cumulative form, on paper; Lean proves per-round
+  bounds), where ``A = F / (1 - p)`` is the luck factor that turns wrong outputs into skipped work. Each wrong step skips
+  its work and injects its output bits plus the choice of where,
   worth at most the chord slope of the per-block thread bound per bit.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
@@ -45,14 +47,16 @@ BLOCK_NAME_BITS = 25
 #: defaults: the Kimi K2 calibration and forward chain; compute-accounting's residual (CircuitWork, 0.744% at r = 1);
 #: 100,000 eight-GPU servers for a year (only the cheating pool, a lifetime constant, depends on the fleet); today's proof
 #: of space certificate (rho = 18/19, which k = 86 rounds certify at delta = 1/100) and memory-accounting's measured
-#: on-chip storage (3.05 GB on vy-nebius-2); today's uncharged declared egress; the C-Flock CUDA prover's overhead at a
-#: 1% budget
+#: on-chip storage (3.05 GB on vy-nebius-2); today's uncharged declared egress; declared ingress held to alpha Phi (the
+#: design, once NET-35's count check is in the ZK flow; line rate until then); sampled proofs at a 1% sampling budget on top of
+#: serve-time commitments, at today's sparse-draw cost (about 35 GPU-s a draw), the planner's delta = 2^-40, and luck A = 8
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.0074,
     "pous_rounds": 86.0, "on_chip_gb": 3.05, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 640.0, "host_gb": 2000.0,
     "tau": 400.0, "egress_decl": 4.4e9, "nic": 3.2e12,
-    "share": 0.01, "overhead": 1.64e8, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 0.01, "identities": 1.0,
+    "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
+    "luck": 8.0, "step_bits": 16.0, "ingress_x": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.667,
     "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
@@ -79,10 +83,13 @@ SPEC = [
     {"key": "egress_decl", "label": "Declared egress dark compute can read (today 4.4e9; charged about 5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
     {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
     {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
-    {"key": "overhead", "label": "Sampled proofs: overhead per step (CUDA prover 1.64e8; ZK about 1e10)", "unit": "x", "min": 1, "max": 1e11, "log": True},
+    {"key": "overhead", "label": "Sampled proofs: proving cost per unit of step work (sparse draws today 4.8e12; 512 per statement 1.7e10; batched throughput 1.6e8)", "unit": "x", "min": 1, "max": 1e14, "log": True},
     {"key": "replay", "label": "Sampled proofs: replay cost per drawn step", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "step_flop", "label": "Sampled proofs: work per step", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
-    {"key": "p_evade", "label": "Sampled proofs: escape probability accepted", "unit": "", "min": 1e-4, "max": 0.99, "log": True},
+    {"key": "p_evade", "label": "Sampled proofs: certificate failure probability delta (planner 2^-40)", "unit": "", "min": 1e-15, "max": 0.99, "log": True},
+    {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
+    {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
+    {"key": "ingress_x", "label": "Declared ingress, as a multiple of alpha Phi (1 once the count check is in the ZK flow; line rate is about 6.5e5)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
@@ -187,7 +194,7 @@ def slack(p: dict) -> float:
 
 
 def ingress(p: dict, mech: dict) -> float:
-    return p["sigma"] + p["tau"] + p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
+    return p["sigma"] + p["tau"] + p["ingress_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
 
 def state_threshold(p: dict, mech: dict) -> float:
@@ -209,12 +216,12 @@ def evaluate(p: dict, mech: dict) -> dict:
     if mech["sampled"]:
         L = math.log(1 / p["p_evade"])
         q = p["share"] / (p["overhead"] + p["replay"])
-        k = p["identities"] * L / q
+        k = p["luck"] * p["identities"] * L / q
         skipped = k * p["step_flop"]
-        k_all = k + p["identities"] * L * p["floor_steps"]
+        k_all = k + p["luck"] * p["identities"] * L * p["floor_steps"]
         S_full = full_block_bits(p)
         per_block = max(1.0, min(k_all, S_full / 28))
-        b_bar = max(16.0, 16 + math.log2(math.e * (p["Gamma"] / p["step_flop"]) / per_block))
+        b_bar = max(p["step_bits"], p["step_bits"] + math.log2(math.e * (p["Gamma"] / p["step_flop"]) / per_block))
         bits = k_all * b_bar
         slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
         cheat = min(slope * bits, C / gpm)
