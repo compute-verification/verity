@@ -50,11 +50,13 @@ theorem work_le {d e : ℕ} (he : 0 < e) (R : Finset (Fin c.D.N)) (t : Fin T.m) 
 end Work
 
 /-- Theorem 1's counting, for any nonnegative count `ρ` of each thread's values that meets the threading inequality
-and, with the weights `R` uses, is paid for by a measure `Rn ≤ S` of what `R` reads. -/
-theorem threaded_count_of {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (ρ : Fin T.m → ℝ)
-    {S b_w b_a Rn : ℝ} {d e : ℕ} (hρ : ∀ t, 0 ≤ ρ t) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
+and, with a count `q` of weights that bounds each thread's counted multiplications at `reuse` apiece, is paid for by a
+measure `Rn ≤ S` of what `R` reads. -/
+theorem threaded_count_of {c : Declaration} (T : Threading c) (R : Finset (Fin c.D.N)) (ρ : Fin T.m → ℝ) (q : ℕ)
+    {S b_w b_a Rn : ℝ} {d e : ℕ} (hq : ∀ t, (T.threadMults R t).card ≤ T.reuse * q) (hρ : ∀ t, 0 ≤ ρ t)
+    (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d)
     (hT : ∀ t, ρ t < d → ((T.threadMults R t).card : ℝ) ≤ e * ρ t)
-    (hinc : b_w * (T.weightsUsed R).card + b_a * ∑ t, ρ t ≤ Rn) (hRS : Rn ≤ S) :
+    (hinc : b_w * q + b_a * ∑ t, ρ t ≤ Rn) (hRS : Rn ≤ S) :
     b_a * (T.mults R).card ≤ Rn * T.bound S b_w d e := by
   classical
   set L := univ.filter fun t => ρ t < d with hL_def
@@ -65,9 +67,9 @@ theorem threaded_count_of {c : Declaration} (T : Threading c) (R : Finset (Fin c
   have hL : ∑ t ∈ L, ((T.threadMults R t).card : ℝ) ≤ e * ∑ t ∈ L, ρ t := by
     rw [mul_sum]
     exact sum_le_sum fun t ht => hT t (mem_filter.1 ht).2
-  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * (T.weightsUsed R).card * H.card := by
-    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * (T.weightsUsed R).card)
-      fun t _ => by exact_mod_cast card_threadMults_le T R t
+  have hH : ∑ t ∈ H, ((T.threadMults R t).card : ℝ) ≤ T.reuse * q * H.card := by
+    have := sum_le_card_nsmul H (fun t => ((T.threadMults R t).card : ℝ)) (T.reuse * q)
+      fun t _ => by exact_mod_cast hq t
     rwa [nsmul_eq_mul, mul_comm] at this
   have hHc : (d : ℝ) * H.card ≤ ∑ t ∈ H, ρ t := by
     have := card_nsmul_le_sum H ρ (d : ℝ) fun t ht => not_lt.1 (mem_filter.1 ht).2
@@ -75,7 +77,7 @@ theorem threaded_count_of {c : Declaration} (T : Threading c) (R : Finset (Fin c
   rw [← sum_filter_add_sum_filter_not univ (fun t => ρ t < d)] at hinc
   have hdr : (0 : ℝ) < d := by exact_mod_cast hd
   refine threaded_ineq (Hb := b_a * H.card) (Y := b_a * ∑ t ∈ H, ρ t)
-    (X := b_a * ∑ t ∈ L, ρ t) (q := (T.weightsUsed R).card) hbw hdr
+    (X := b_a * ∑ t ∈ L, ρ t) (q := (q : ℝ)) hbw hdr
     (Nat.cast_nonneg _) (mul_nonneg hba.le (sum_nonneg fun t _ => hρ t))
     (mul_nonneg hba.le (sum_nonneg fun t _ => hρ t)) (Nat.cast_nonneg _) (by linarith)
     hRS ?_ ?_
@@ -109,8 +111,8 @@ theorem threaded_reads_info_fmt (c : Declaration) (θv : c.D.Transcript) (T : Th
     b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e := by
   have hinfo := (le_novelInfo_iff c θv R _).2 (hW R hR)
   have hsum : 0 ≤ ∑ t, T.work d e R t := sum_nonneg fun t _ => work_nonneg T d e R t
-  refine threaded_count_of T R (T.work d e R) (fun t => work_nonneg T d e R t) hbw hba hd
-    (fun t h => work_threaded T d e he R t h) ?_ hR.2.2
+  refine threaded_count_of T R (T.work d e R) _ (card_threadMults_le T R) (fun t => work_nonneg T d e R t) hbw hba
+    hd (fun t h => work_threaded T d e he R t h) ?_ hR.2.2
   nlinarith [mul_le_mul_of_nonneg_right hrate hsum]
 
 theorem ThreadedReadsInfoFmt : Guarantees.ThreadedReadsInfoFmt := threaded_reads_info_fmt

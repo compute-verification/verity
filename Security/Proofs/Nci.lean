@@ -11,6 +11,7 @@ import Proofs.Nci.Threads
 import Proofs.Nci.Contained
 import Proofs.Nci.Info
 import Proofs.Nci.Fmt
+import Proofs.Nci.Fmt2
 
 /-!
 # Proofs of NCI's guarantees
