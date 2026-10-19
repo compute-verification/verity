@@ -1,4 +1,5 @@
 import Definitions.Accounting.HeadlineDc
+import Models.Accounting.Assumptions.TS
 import Proofs.Accounting.Headline.Encoding
 
 /-!
