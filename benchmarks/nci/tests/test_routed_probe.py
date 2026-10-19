@@ -105,33 +105,55 @@ def test_the_verdict_follows_the_pages_rule(a, b1, call):
     assert R.verdict(a, b1)["call"] == call
 
 
-def _write(path: Path, bits_per_byte: list[float], prefix: list[float] | None = None):
+def _write(path: Path, bits_per_byte: list[float], prefix: list[float] | None = None, mixed: list[float] = ()):
     with open(path, "w") as f:
         for i, b in enumerate(bits_per_byte):
             f.write(json.dumps(_rec(f"w{i}", prefix[i] if prefix else 0.0, b * 1000, 1000)) + "\n")
+        for i, b in enumerate(mixed):
+            f.write(json.dumps({**_rec(f"x{i}", 0.0, b * 1000, 1000), "stratum": "mixed:a+b"}) + "\n")
 
 
-def test_analyze_reads_a_known_gain_back(tmp_path):
-    """A single configuration at 2B weights scoring what the law gives a dense 8B with unlimited data has g = 4, and an
-    oracle over two members, each good on half the windows, picks each on its half."""
-    n = 200
+def _known_gain(tmp_path: Path, n: int, mix_mixed: float | None = None) -> dict:
+    """The ladder, a 2B configuration `mix` at a dense 8B's unlimited-data bits per byte, and an oracle pair; with
+    `mix_mixed`, 20 mixed-domain windows where every ladder model scores its law and `mix` scores `mix_mixed`."""
     noise = [0.02 * math.sin(7.0 * i) for i in range(n)]
+    m = 20 if mix_mixed is not None else 0
     (tmp_path / "scores").mkdir()
     ladder = {}
     for N in (1e9, 2e9, 4e9, 1.6e10):
         for D in (1e12, 4e12):
             name = f"d{N:g}-{D:g}"
             ladder[name] = {"N": N, "D": D}
-            _write(tmp_path / "scores" / f"{name}.jsonl", [law_bpb(N, D) + e for e in noise])
-    _write(tmp_path / "scores" / "mix.jsonl", [law_bpb(8e9) + e for e in noise])
+            _write(tmp_path / "scores" / f"{name}.jsonl", [law_bpb(N, D) + e for e in noise],
+                   mixed=[law_bpb(N, D)] * m)
+    _write(tmp_path / "scores" / "mix.jsonl", [law_bpb(8e9) + e for e in noise], mixed=[mix_mixed or 0.0] * m)
     half = [i < n // 2 for i in range(n)]
-    _write(tmp_path / "scores" / "m1.jsonl", [law_bpb(8e9) + (0 if h else 0.1) + e for h, e in zip(half, noise)])
-    _write(tmp_path / "scores" / "m2.jsonl", [law_bpb(8e9) + (0.1 if h else 0) + e for h, e in zip(half, noise)])
+    _write(tmp_path / "scores" / "m1.jsonl", [law_bpb(8e9) + (0 if h else 0.1) + e for h, e in zip(half, noise)],
+           mixed=[law_bpb(8e9)] * m)
+    _write(tmp_path / "scores" / "m2.jsonl", [law_bpb(8e9) + (0.1 if h else 0) + e for h, e in zip(half, noise)],
+           mixed=[law_bpb(8e9)] * m)
     manifest = {"studies": {"s": {
         "scores": [*ladder, "mix", "m1", "m2"], "ladder": ladder,
         "compositions": {"pair": {"members": ["m1", "m2"], "routing": "oracle", "P": 2e9}},
         "singles": {"mix": {"P": 2e9, "D_train": 1e12, "decides": "A"}}}}}
-    out = R.analyze(manifest, tmp_path, resamples=50, seed=1)
+    return R.analyze(manifest, tmp_path, resamples=50, seed=1)
+
+
+def test_mixed_domain_windows_are_reported_by_stratum_and_left_out_of_g(tmp_path):
+    out = _known_gain(tmp_path, 200, mix_mixed=3.0)
+    s = out["studies"]["s"]
+    assert s["windows"] == 200 and s["mixed_windows"] == 20
+    mix = s["configs"]["mix"]
+    assert mix["gains"]["besiroglu"]["g"] == pytest.approx(4.0, rel=1e-6)
+    assert mix["by_stratum"]["mixed:a+b"] == pytest.approx(3.0)
+    assert mix["bpb"] == pytest.approx(mix["by_stratum"]["s"])
+
+
+def test_analyze_reads_a_known_gain_back(tmp_path):
+    """A single configuration at 2B weights scoring what the law gives a dense 8B with unlimited data has g = 4, and an
+    oracle over two members, each good on half the windows, picks each on its half."""
+    n = 200
+    out = _known_gain(tmp_path, n)
     s = out["studies"]["s"]
     assert s["windows"] == n and s["ladder_error"] is None
     mix = s["configs"]["mix"]

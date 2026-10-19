@@ -21,6 +21,9 @@ import tiers  # noqa: E402
 
 WINDOW_BYTES = 8192
 PREFIX_BYTES = 1024
+#: a stratum named ``mixed:A+B`` joins two strata in one window (the page's mixed-domain set): it is reported by
+#: stratum and kept out of the broad score, the fits and g
+MIXED = "mixed"
 
 #: (alpha, beta) the ladder is fitted with at fixed exponents; ``free`` searches EXPONENT_GRID instead
 EXPONENTS = {
@@ -247,7 +250,7 @@ def study(manifest: dict, base: Path, resamples: int, seed: int) -> dict:
     ``manifest`` names score files (``scores``: names, each read from ``base/scores/<name>.jsonl``), the dense ladder
     (``ladder``: name -> {N, D, unannealed}), optionally ``data_term`` (see ``fit_ladder``), compositions
     (``compositions``: name -> {members, routing, P, D_train}) and single configurations (``singles``: name -> {P,
-    D_train, code_bits, scores}). Only windows every file scores are used."""
+    D_train, code_bits, scores}). Only windows every file scores are used, and mixed-domain windows only by stratum."""
     scores = {n: load_scores(base / "scores" / f"{n}.jsonl") for n in manifest["scores"]}
     configs: dict[str, tuple[dict, dict]] = {}
     for name, c in manifest.get("compositions", {}).items():
@@ -256,7 +259,9 @@ def study(manifest: dict, base: Path, resamples: int, seed: int) -> dict:
         extra = c.get("code_bits", 0.0)
         recs = scores[c.get("scores", name)]
         configs[name] = ({w: {**r, "span_bits": r["span_bits"] + extra} for w, r in recs.items()}, c)
-    ids = sorted(set.intersection(*(set(s) for s in scores.values()), *(set(r) for r, _ in configs.values())))
+    scored = sorted(set.intersection(*(set(s) for s in scores.values()), *(set(r) for r, _ in configs.values())))
+    stratum = {w: scores[next(iter(scores))][w]["stratum"] for w in scored}
+    ids = [w for w in scored if not stratum[w].startswith(MIXED)]
     if not ids:
         raise ValueError("no window is scored by every model in the manifest")
     ladder = manifest["ladder"]
@@ -294,12 +299,13 @@ def study(manifest: dict, base: Path, resamples: int, seed: int) -> dict:
             for form, fitted in boot.items():
                 reps[n][form].append(dense_size(fitted, L) / c["P"])
 
-    out: dict = {"windows": len(ids), "resamples": resamples, "laws": laws, "free_error": free_error,
-                 "ladder_error": ladder_error, "ladder": {n: at(col[n], everything) for n in ladder}, "configs": {}}
-    strata = sorted({scores[next(iter(scores))][w]["stratum"] for w in ids})
+    out: dict = {"windows": len(ids), "mixed_windows": len(scored) - len(ids), "resamples": resamples, "laws": laws,
+                 "free_error": free_error, "ladder_error": ladder_error,
+                 "ladder": {n: at(col[n], everything) for n in ladder}, "configs": {}}
+    strata = sorted(set(stratum.values()))
     for name, (recs, c) in configs.items():
         L = bpb(recs, ids)
-        row = {"bpb": L, "P": c["P"], "by_stratum": {s: bpb(recs, [w for w in ids if recs[w]["stratum"] == s])
+        row = {"bpb": L, "P": c["P"], "by_stratum": {s: bpb(recs, [w for w in scored if stratum[w] == s])
                                                       for s in strata},
                "gains": {form: gains(fitted, L, c["P"], c.get("D_train")) for form, fitted in laws.items()}}
         if "choice" in next(iter(recs.values())):
