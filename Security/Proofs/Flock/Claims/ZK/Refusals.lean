@@ -9,7 +9,8 @@ executable refuses at each:
 
 * **an outer coin `1`** (`Masking::refuse_outer`): `honestPR` stops at a history one of whose zerocheck outer coins
   (`outerSlotsZk`) is `1` (`outerHit`, `honestPR_stop`). At a coin plan reading each rep's outer coins at their slots
-  (`OuterReads`, `outerAt`), a refused outer coin is such a hit (`outerHit_of`), so `honestPR` sends `[]`;
+  (`OuterReads`, `outerAt`; any plan with its `rOuter` so read is one, `withOuter`), a refused outer coin is such a hit
+  (`outerHit_of`), so `honestPR` sends `[]`;
 * **`β = 0`** (`innerP`), **a rank-deficient mask slot** (`rankCheckP`), **`ρ₀, ρ₁` dependent** (`ligeritoPZk`): throws
   that end `sessionPZk` with `.error`, which `ZkTables.prog` sends as `[]`.
 
@@ -43,6 +44,22 @@ def OuterReads {P : Composed.LigProver}
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) : Prop :=
   ∀ x c (j : Fin (jOf x)) (r : Fin 2), ∀ y ∈ (tabC P x j).rOuter (cz x c j) r,
     ∃ i < (stAt x j).m - 13, y = outerAt c j.val r.val i
+
+/-- **A coin plan with each rep's outer coins read at their slots**: `cz`'s, its `rOuter` the opened outer coins
+(`outerAt`). -/
+noncomputable def withOuter {P : Composed.LigProver}
+    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
+    (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest :=
+  fun x c j => { cz x c j with
+    rest := ({ ((cz x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) with
+      rOuter := fun r i => outerAt c j.val r.val i.val } : Composed.RestOf (zkTab x j).table (stAt x j)) }
+
+theorem outerReads_withOuter {P : Composed.LigProver}
+    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
+    OuterReads (withOuter cz) := by
+  intro x c j r y hy
+  obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hy
+  exact ⟨i.val, i.isLt, rfl⟩
 
 /-- **The coins `refK x` openings open**: opening `k`'s, read as its coin (`rd`); the session's `pad`. -/
 def padOps {x : Msg} (ops : List (Msg × Msg)) : Fin (refK x) → FlockDeploy.Coin :=

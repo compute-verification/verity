@@ -172,7 +172,8 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   `Flock.zk_deployZk_masked_layout_gap` at this layout with round `0` discharged.
 * `Refusals`: the last round where a table refuses, at a stopping round plan (`RoundPlan.stop`, `off = []`), refusal by
   refusal (`Masked.honestOffOn_stop_of`): an outer coin `1` is `honestPR_stop`'s at a plan reading each rep's outer
-  coins at their slots (`Masked.OuterReads`, `Masked.outerHit_of`); `β = 0`, a rank-deficient mask slot and `ρ₀, ρ₁`
+  coins at their slots (`Masked.OuterReads`, met by any plan with its outer coins so read, `Masked.withOuter`;
+  `Masked.outerHit_of`); `β = 0`, a rank-deficient mask slot and `ρ₀, ρ₁`
   dependent are one premise each. `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a
   stopping plan with them in place of `HonestOffOn`.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
