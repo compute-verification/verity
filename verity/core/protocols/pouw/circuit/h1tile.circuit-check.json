@@ -1,5 +1,11 @@
 {
  "definitions": {
+  "PouwOneStream2_v2": {
+   "and": 24
+  },
+  "PouwOneStream3_v2": {
+   "and": 41
+  },
   "PouwU129_v2": {
    "and": 14
   }

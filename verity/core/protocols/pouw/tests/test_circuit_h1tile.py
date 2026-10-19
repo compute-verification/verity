@@ -191,3 +191,137 @@ def test_h1_tile_is_its_reference():
     z, rc = H.reference(a, b, SALT, 0, ROOTS)
     assert _words(want) == z
     assert _words(got[S:]) == rc
+
+
+# -- v3, the one stream ------------------------------------------------------------------------------------------------------
+
+STREAM = tuple(H.ONE_STREAM.values())
+GRID48 = tuple((i, j) for i in range(4) for j in range(8))
+
+
+def _s32(v):
+    return v - (1 << 32) if v >> 31 & 1 else v
+
+
+def _sx8(v):
+    return v - 256 if v & 0x80 else v
+
+
+def _served(a, b, position=0):
+    """X Ŵᵀ, cgemm.cu's served product, straight from the unit's noise: X = A + b mod 2^8 and Ŵ = B + c, as integers."""
+    lay = H.Layout(len(a), len(b), len(a[0]))
+    rows, cols = H.noise(SD.seed(SALT, position, *ROOTS), lay)
+    X = [[_sx8((v + rows[i][0][t]) & 0xFF) for t, v in enumerate(a[i])] for i in range(lay.r)]
+    W = [[_sx8(v) + cols[j][0][t] for t, v in enumerate(b[j])] for j in range(lay.c)]
+    return [sum(x * w for x, w in zip(X[i], W[j])) for i in range(lay.r) for j in range(lay.c)]
+
+
+def test_v3_is_registered_beside_v1():
+    """v3 is a scheme and a Definition of its own; v1's scheme and Definition stay as they were."""
+    v1, v3 = C._scheme(H.SCHEME), C._scheme(H.SCHEME_V3)
+    assert v1.stream == () and v3.stream == STREAM and v3.tile == v1.tile == (32, 32) and set(v3.units) == set(H.KINDS)
+    assert (H.PouwH1Tile.id, H.PouwH1Tile3.id) == ("PouwH1Tile_v1", "PouwH1Tile_v3")
+    assert H.PouwH1Tile3.signature is H.PouwH1Tile.signature
+
+
+@pytest.mark.parametrize("r,c,k", [(32, 32, 64), (4, 8, 4096), (4, 8, 14336)])
+def test_one_stream_is_the_served_product(r, c, k):
+    """v3's z, O' - sum_d 128^d D_d of each cell's folded words, is X Ŵᵀ exactly (as s32) on random A and on random B in
+    [-64, 62] (m = 2 at K <= 4096, m = 3 at 14336), and its receipt is v1's: the same words, folded the same way."""
+    rng = random.Random(k)
+    a, b = _rows(rng, r, k, -128, 127), _rows(rng, c, k, -64, 62)
+    z3, rc3 = H.reference(a, b, SALT, 0, ROOTS, stream=True)
+    z1, rc1 = H.reference(a, b, SALT, 0, ROOTS)
+    assert H.Layout(r, c, k).m == (3 if k > 4096 else 2)
+    assert [_s32(v) for v in z3] == _served(a, b)
+    assert rc3 == rc1 and z3 != z1
+
+
+def test_one_stream_needs_weights_in_range():
+    """At the edges of [-64, 62] (B + c + U still int8 under U in ±64) z is X Ŵᵀ; past them W' wraps and some cell's z is not."""
+    k = 64
+    a = [[v & 0xFF for v in row] for row in ([[127] * k, [-128] * k, [126] * k, [-127] * k])]
+    edge = [[v & 0xFF for v in row] for row in ([[62] * k, [-64] * k] * 4)]
+    assert [_s32(v) for v in H.reference(a, edge, SALT, 0, ROOTS, stream=True)[0]] == _served(a, edge)
+    past = [[v & 0xFF for v in row] for row in ([[110] * k, [-110] * k] * 4)]
+    assert [_s32(v) for v in H.reference(a, past, SALT, 0, ROOTS, stream=True)[0]] != _served(a, past)
+
+
+def test_a_tampered_word_moves_z():
+    """z is a function of the words the receipt folds: changing a cell's O' by any δ, or its D_d by a δ inside D's range
+    (|D_d| <= 32 · 128 · 64 = 2^18), changes the cell's z; only a D_d change by a multiple of 2^(32 - 7 d), far outside that
+    range, leaves it."""
+    rng = random.Random(3)
+    k = 14336
+    a, b = _rows(rng, 4, k, -126, 126), _rows(rng, 8, k, -64, 62)
+    lay = H.Layout(4, 8, k)
+    rows, cols = H.noise(SD.seed(SALT, 0, *ROOTS), lay)
+    sets = H.lane_sets(a, b, rows, cols, lay, 0)
+    ks = lay.ks
+    for e in range(32):
+        op, ds = sets[ks][e], [d[e] for d in sets[ks + 1:]]
+        assert all(abs(_s32(d)) <= 1 << 18 for d in ds)
+        z = H.one_stream(op, ds)
+        for _ in range(4):
+            delta = rng.choice([-1, 1]) * rng.randrange(1, 1 << 19)
+            assert H.one_stream(op + delta, ds) != z
+            for t in range(len(ds)):
+                assert H.one_stream(op, [d + delta if u == t else d for u, d in enumerate(ds)]) != z
+        assert H.one_stream(op, [ds[0] + (1 << 25), *ds[1:]]) == z
+
+
+def test_one_stream_on_bits_is_the_word():
+    """`PouwOneStream2_v2` and `PouwOneStream3_v2` are their words on random and edge operands."""
+    rng = random.Random(5)
+    edge = [0, 1, H.M32, 1 << 31, (1 << 25) - 1]
+    for d, n in ((H.PouwOneStream2, 2), (H.PouwOneStream3, 3)):
+        for _ in range(64):
+            ws = [rng.choice(edge) if rng.random() < 0.3 else rng.getrandbits(32) for _ in range(n)]
+            got = evaluate(d, *[[(w >> i) & 1 for i in range(32)] for w in ws])
+            assert _words(list(got)) == [H.one_stream(ws[0], ws[1:])] == list(evaluate(d.word, *ws))
+
+
+def _bad_body(B, S, a, b, salt, position, roots):
+    receipt, words = H._sets(B, S, a, b, salt, position, roots)
+    z = [B.call(H.PouwOneStream2, B.call(S.EXACT, a[i], b[j]), words[(i, j)][1]).refs for i, j in S.PAIRS]
+    return Coll(H._signature(S)[1], concat(z + receipt))
+
+
+BAD = CompositeDefinition("H1TestStreamBeside", 1, ("EXACT", "R", "C", "PAIRS"), H._signature, _bad_body,
+                          conformance="protocol-defined", register=False)
+
+
+def test_the_stream_check():
+    """The unit check takes v3 under a one-stream scheme and refuses it under a plain one (its z reads the seed), refuses v1
+    under a one-stream scheme (its z is a product of its own), and refuses a unit recombining an exact product it doesn't fold."""
+    v3 = bind(H.PouwH1Tile3, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48)
+    C._check_unit(v3, True, STREAM)
+    for unit, stream, code, why in ((v3, (), "noise-in-z", "z is the exact product"),
+                                    (bind(H.PouwH1Tile, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48), STREAM, "stream",
+                                     "not a recombination"),
+                                    (bind(BAD, EXACT=_acc(64), R=4, C=8, PAIRS=GRID48), STREAM, "stream",
+                                     "which the receipt doesn't fold")):
+        with pytest.raises(C.CompileError) as e:
+            C._check_unit(unit, True, stream)
+        assert e.value.code == code and why in str(e.value), str(e.value)
+
+
+@compiles
+@pytest.mark.slow
+def test_h1_tile_v3_is_its_reference():
+    """A 4 × 16 grid at K = 64 compiles under `SCHEME_V3` to one `PouwH1Tile_v3`; on random rows its served outputs are
+    `reference(stream=True)`'s z (X Ŵᵀ, not the served Program's A Bᵀ) and its receipt v1's. Slow (about 150 s): the only
+    test of v3's gates, as `test_h1_tile_is_its_reference` is v1's."""
+    served = Program(bind(GRID, R=4, C=16, K=64))
+    c = C.compile(served, H.SCHEME_V3)
+    (u,) = c.units
+    assert u.defn.base_id == "PouwH1Tile_v3"
+    rng = random.Random(9)
+    a, b = _rows(rng, 4, 64, -127, 127), _rows(rng, 16, 64, -60, 60)
+    args = [[v for row in a for v in _bits(row)], [v for row in b for v in _bits(row)]]
+    got = list(evaluate(c.program.fn, *args, *c.inputs(SALT, [ROOTS])))
+    S = c.served_leaves
+    z, rc = H.reference(a, b, SALT, 0, ROOTS, stream=True)
+    assert _words(got[:S]) == z and [_s32(v) for v in z] == _served(a, b)
+    assert _words(got[S:]) == rc == H.reference(a, b, SALT, 0, ROOTS)[1]
+    assert _words(list(evaluate(served.fn, *args))) != z
