@@ -78,6 +78,9 @@ The data, each kind of thing a file or a line of its own:
   (RT-ISA's census of 88 binaries, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d), with
   RT-ISA's word flag, its count and its bucket; `theory/isa_table.py --write-corpus` derives it, and its checks place
   every base in the Lean instruction table (`IsaComplete`'s evidence).
+- `data/rt_machine_triage.json`: RT-MACHINE-2's hand triage of the 175 Blackwell opcodes A7's menu didn't name, each
+  classed by what it can do to a committed word (art:fac984dca8c0141d83e5f147ba04787c02b7d59bd49edcb1ffb64727eeeb7e0c);
+  `theory/isa_table.py --write-triage` derives it, and its checks hold the table's placements to it.
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:

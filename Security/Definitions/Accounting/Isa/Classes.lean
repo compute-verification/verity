@@ -20,8 +20,11 @@ copy, its box into up to 16 CTAs).
 **An opcode's class.** `class_of` places the census's forms. Every other opcode that writes a 32-bit word (the
 instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Blackwell, and the opcodes RT-ISA's SASS
 census found in 88 binaries, CUDA 13.0, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d, which
-`benchmarks/pouw/theory/isa_table.py` places one by one) is in the class of its unit at the next width up (a class's
-`words` bounds every form in it):
+`benchmarks/pouw/theory/isa_table.py` places one by one, failing on any it can't) is in the class of its unit at the
+next width up (a class's `words` bounds every form in it). On sm_120 the placements of the 175 Blackwell opcodes A7's
+menu didn't name agree with RT-MACHINE-2's triage by hand,
+art:fac984dca8c0141d83e5f147ba04787c02b7d59bd49edcb1ffb64727eeeb7e0c, which finds none that heads a word below the
+floor:
 
 * memory: LD and LDL in the LDG class of their width; ST, STL and USTGR in the STG class; STS.32 and STS.64 in
   STS128; STAS in DSMST4P; RED.E and UREDGR in RED32 or RED64; REDS in ATOMS32; LDGMC (a reducing load, four words a
@@ -41,12 +44,14 @@ census found in 88 binaries, CUDA 13.0, art:042de47057dc27a3ed3bf603c26d48d60fd2
 * lane: FFMA2, FADD2, FMUL2, FSWZADD and the FH forms in FFMA; FSET, HSET2, FMNMX3, VHMNMX, VIADDMNMX and VIMNMX3 in
   VIMNMX; VIADD, IADD32I, ISCADD, SHL and SHR in ALU; IDP, IDP4A and IMUL in IMAD; VISET in VSIMD; MOV64IUR in MOV64;
   and every other lane instruction that writes at most two words a lane and multiplies nothing (MOV, MOV32I, P2R, IABS,
-  SGXT, BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC) in NOROW.
+  SGXT, BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC, and Blackwell's DECOMPRESS and SPARSIFY,
+  which decompress a vector and compress one with its metadata, movers in RT-MACHINE-2's triage) in NOROW.
 
 A placement bounds an opcode's words only: its rate is the data sheet's, which the census measured on the forms it
 probed. An instruction that writes no 32-bit word (a SETP's or R2P's predicate, a branch, a barrier, a fence, a
-prefetch or cache control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no
-document gives, are in no class yet: a head of either falsifies `Accounting.Assumptions.Isa.IsaComplete`.
+prefetch or cache control) heads no word and is in no class. No document gives DECOMPRESS's or SPARSIFY's widths and
+no binary of the corpus holds either, so their two words a lane is a reading: a form that writes more falsifies
+`Accounting.Assumptions.Isa.IsaRowsLane`.
 
 A row's `words` is its class's widest form's destination: a lane class one or two words a lane (`Row.lane`, at
 most two), a wider load or a tcgen05.ld a side unit at its own words, an atomic that returns its

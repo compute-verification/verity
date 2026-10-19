@@ -13,11 +13,15 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
     their old value's words (F6);
   - isa_escape: every candidate `isa_escape.py` closes sits in classes on a priced route, none traced;
   - completeness evidence for `IsaComplete`: every opcode the CUDA Binary Utilities 13.4 list (§4.3 Hopper, §4.4
-    Blackwell and Rubin; last updated 12 Oct 2026) is placed in classes of its device's table (`PLACE`), read as
-    writing no 32-bit word (`NO_WORD`), or named unplaced (`UNPLACED`); sm_120's is Blackwell's list without its tensor
-    core memory instructions; and where `class_of` (`facet_break/loads.py`) places a bare mnemonic it agrees, but for
-    the disagreements `CLASS_OF_WRONG` names, and a dotted form it places in a class whose row may not bound it is
-    moved by the map to one that does (`FORMS_MOVED`);
+    Blackwell and Rubin; last updated 12 Oct 2026) is placed in classes of its device's table (`PLACE`) or read as
+    writing no 32-bit word (`NO_WORD`), and an opcode in neither fails, with no list of exceptions; sm_120's is
+    Blackwell's list without its tensor core memory instructions; and where `class_of` (`facet_break/loads.py`) places
+    a bare mnemonic it agrees, but for the disagreements `CLASS_OF_WRONG` names, and a dotted form it places in a class
+    whose row may not bound it is moved by the map to one that does (`FORMS_MOVED`);
+  - the same against RT-MACHINE-2's hand triage (`TRIAGE_ART`, derived to `machine_model/data/rt_machine_triage.json`)
+    of the 175 Blackwell opcodes A7's menu didn't name: each is placed on a priced route or writes no word, a traced
+    class only for a mover, an opcode it finds can multiply (`TRIAGE_PRICED`) placed, and its opcodes absent on sm_120
+    are the tensor core memory list, outside sm_120's table;
   - the same against what the libraries emit: RT-ISA's SASS census (`CORPUS_ART`, 88 binaries under CUDA 13.0,
     derived to `machine_model/data/rt_isa_corpus.json`), every base on each device placed, read as writing no word or
     named undocumented (`UNDOCUMENTED`: ARRIVES and F2FP), its word flag against the map's no-word reading
@@ -26,8 +30,9 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
 
 A placement is a words bound only: a class's rate is the data sheet's, measured for the forms its census probed.
 
-Run: `python isa_table.py [--mutations] [--verdict PATH]`, or `--write-corpus DIR` to rederive the fixture from the
-artifact fetched to DIR. Stdlib and exact_kit; reads the Lean table, floors.csv, the censuses and the corpus fixture.
+Run: `python isa_table.py [--mutations] [--verdict PATH]`, or `--write-corpus DIR` (`--write-triage DIR`) to rederive
+the corpus (triage) fixture from its artifact fetched to DIR. Stdlib and exact_kit; reads the Lean table, floors.csv,
+the censuses and the two fixtures.
 """
 from __future__ import annotations
 
@@ -152,7 +157,7 @@ DMMA -> DMMA
 OMMA -> OMMASF16864
 QMMA -> QMMA16832 QMMASF16832 QMMASP16864
 BMMA -> BMMA168256
-BMSK IABS SGXT MOV32I MOVM P2R BMOV ELECT RPCMOV B2R CS2R GETLMEMBASE LEPC S2R -> NOROW
+BMSK IABS SGXT MOV32I MOVM P2R BMOV ELECT RPCMOV B2R CS2R GETLMEMBASE LEPC S2R DECOMPRESS SPARSIFY -> NOROW
 IADD3 IADD32I ISCADD ISCADD32I LEA LOP LOP3 LOP32I SHF SHL SHR VIADD PRMT -> ALU
 IADD -> ALU ALU64
 IDP IDP4A -> IMAD
@@ -228,9 +233,6 @@ NO_WORD = {
     "cache, prefetch or TMA control": "CCTL CCTLL CCTLT UBLKPF UBLKL2CCTL UTMACCTL UTMACMDFLUSH UTMAL2CCTL UTMAPF",
     "launch or register state": "NOP PMTRIG SETCTAID SETLMEMBASE USETMAXREG",
 }
-#: documented word writers no class holds yet: Blackwell's vector decompress and sparsify, whose widths no document gives
-UNPLACED = {"DECOMPRESS", "SPARSIFY"}
-
 #: where `class_of` places a bare word-writing mnemonic in a class its forms aren't in, and why
 CLASS_OF_WRONG = {
     **{m: "the uniform rule (U-prefixed) takes a bulk, tensor or mbarrier opcode" for m in
@@ -263,6 +265,13 @@ WORD_DISAGREE = {
 #: (IMAD's is the rule: `class_of` puts every IMUL form in IMAD, a .WIDE one included)
 LANE_PAIR = {"FFMA": "FFMA2", "VIMNMX": "IMNMX.U64", "F2FS": "F2F.F64.F32", "SEL": "SEL.64", "NOROW": "CS2R",
              "IMAD": None}
+#: RT-MACHINE-2's triage (note:20261019T0456Z-draft-rt-machine): each Blackwell opcode no menu file named, classed by
+#: hand by what it can do to a committed word, its store artifact, and the fixture `--write-triage` derives from it
+TRIAGE_ART = "art:fac984dca8c0141d83e5f147ba04787c02b7d59bd49edcb1ffb64727eeeb7e0c"
+TRIAGE = DATA / "rt_machine_triage.json"
+#: its classes that can multiply or fold words, which the map must place on a priced route
+TRIAGE_PRICED = {"PRICED-LANE-MAC", "LOW-PRECISION", "PRICED-UNIFORM", "REDUCER"}
+TRIAGE_CLASSES = TRIAGE_PRICED | {"NO-MULTIPLY", "MOVER", "MEMORY", "CONTROL", "ABSENT-ON-SM120"}
 
 
 def opcode_list(text: str) -> dict[str, list[str]]:
@@ -343,8 +352,7 @@ def unplaced(lists: dict[str, dict[str, list[str]]], place: dict[str, set[str]],
     out = {}
     for dev, by_cat in lists.items():
         ops = [op for ops in by_cat.values() for op in ops]
-        out[dev] = sorted(op for op in ops if op not in no_word and op not in UNPLACED
-                          and not (place.get(op) and place[op] <= devices[dev]))
+        out[dev] = sorted(op for op in ops if op not in no_word and not (place.get(op) and place[op] <= devices[dev]))
     return out
 
 
@@ -386,12 +394,12 @@ def corpus_forms() -> tuple[dict, dict[str, dict[str, list]]]:
 
 def corpus_unplaced(forms: dict[str, list], place: dict[str, set[str]], device: set[str],
                     undocumented: dict[str, str]) -> list[str]:
-    """A device's corpus bases neither placed in its table's classes, read as writing no word, named unplaced, nor
-    placed as undocumented."""
+    """A device's corpus bases neither placed in its table's classes, read as writing no word, nor placed as
+    undocumented."""
     no_word = {op for ops in NO_WORD.values() for op in ops.split()}
     bases = {op.split(".")[0] for op in forms}
-    return sorted(b for b in bases if b not in no_word and b not in UNPLACED
-                  and not (place.get(b) and place[b] <= device) and not undocumented.get(b) in device)
+    return sorted(b for b in bases if b not in no_word and not (place.get(b) and place[b] <= device)
+                  and not undocumented.get(b) in device)
 
 
 def word_disagree(forms: dict[str, list]) -> set[str]:
@@ -418,9 +426,45 @@ def lane_widths_ok(rows: dict[str, tuple[str, int]], forms: dict[str, list], pai
                     for k, f in pair.items()))
 
 
+def write_triage(src: Path) -> None:
+    """Derive the fixture from RT-MACHINE-2's artifact, fetched to `src` (`research data fetch TRIAGE_ART --to src`)."""
+    import json
+    doc = json.loads((src / "triage.json").read_text(encoding="utf-8"))
+    head = {"source": TRIAGE_ART, "list": doc["source"], "unnamed_by_menu": doc["unnamed_by_menu"],
+            "unclassified": doc["unclassified"], "written_by": "benchmarks/pouw/theory/isa_table.py --write-triage"}
+    rows = sorted((r["opcode"], r["class"]) for r in doc["rows"])
+    lines = ["{"] + [f" {json.dumps(k)}: {json.dumps(v)}," for k, v in head.items()] + [' "opcodes": {']
+    lines += [f"  {json.dumps(op)}: {json.dumps(c)}" + ("," if i < len(rows) - 1 else "")
+              for i, (op, c) in enumerate(rows)]
+    TRIAGE.write_text("\n".join(lines + [" }", "}"]) + "\n", encoding="utf-8")
+
+
+def triage() -> tuple[dict, dict[str, str]]:
+    """The triage fixture's header and each opcode's class."""
+    import json
+    doc = json.loads(TRIAGE.read_text(encoding="utf-8"))
+    return doc, doc["opcodes"]
+
+
+def triage_disagree(tri: dict[str, str], place: dict[str, set[str]], rows: dict[str, tuple[str, int]],
+                    no_word: set[str]) -> set[str]:
+    """The triaged opcodes the map treats otherwise than their class allows: neither placed nor read as writing no
+    word, in a traced class but not a mover, or one that can multiply or fold read as writing no word."""
+    out = set()
+    for op, c in tri.items():
+        cs = place.get(op, set())
+        if ((not cs and op not in no_word) or (c != "MOVER" and any(rows[k][0] == "traced" for k in cs))
+                or (c in TRIAGE_PRICED and not cs)):
+            out.add(op)
+    return out
+
+
 def main() -> int:
     if "--write-corpus" in sys.argv:
         write_corpus(Path(sys.argv[sys.argv.index("--write-corpus") + 1]))
+        return 0
+    if "--write-triage" in sys.argv:
+        write_triage(Path(sys.argv[sys.argv.index("--write-triage") + 1]))
         return 0
     checks = Checks()
     sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(ISA.glob("*.lean"))}
@@ -472,16 +516,14 @@ def main() -> int:
     every = {op for by_cat in lists.values() for ops in by_cat.values() for op in ops}
     place = placements(PLACE_TEXT)
     no_word = [op for ops in NO_WORD.values() for op in ops.split()]
-    checks.check("placed, no-word and unplaced are disjoint and name only documented opcodes",
-                 len(no_word) == len(set(no_word)) and not (set(place) & set(no_word)) and not (set(place) & UNPLACED)
-                 and not (set(no_word) & UNPLACED) and set(place) | set(no_word) | UNPLACED == every,
-                 ", ".join(sorted((set(place) | set(no_word) | UNPLACED) ^ every)) or f"{len(every)} opcodes")
+    checks.check("placed and no-word are disjoint, name only documented opcodes, and leave none out",
+                 len(no_word) == len(set(no_word)) and not (set(place) & set(no_word))
+                 and set(place) | set(no_word) == every,
+                 ", ".join(sorted((set(place) | set(no_word)) ^ every)) or f"{len(every)} opcodes")
     gaps = unplaced(lists, place, devices)
     for dev in ("Sm120", "Sm90", "Sm100"):
         checks.check(f"every documented {dev} opcode that writes a word is placed in classes of its table",
                      not gaps[dev], ", ".join(gaps[dev]) or f"{counts[dev]} opcodes")
-    checks.check("the documented word writers no class holds are DECOMPRESS and SPARSIFY (IsaComplete's open part)",
-                 UNPLACED <= every and all(class_of(op) is None for op in UNPLACED), " ".join(sorted(UNPLACED)))
     wrong = class_of_disagrees(every, place)
     checks.check("class_of agrees with every placement of a bare mnemonic it places, but CLASS_OF_WRONG's",
                  wrong == set(CLASS_OF_WRONG), ", ".join(sorted(wrong ^ set(CLASS_OF_WRONG))) or f"{len(wrong)} named")
@@ -515,6 +557,21 @@ def main() -> int:
                  lane_widths_ok(rows, all_forms, LANE_PAIR, place),
                  " ".join(f"{k}:{w}" for k, (r, w) in sorted(rows.items()) if r == "lane"))
 
+    thead, tri = triage()
+    blackwell = {op for ops in lists["Sm100"].values() for op in ops}
+    checks.check(f"the triage fixture is RT-MACHINE-2's ({TRIAGE_ART[:16]}…): {thead['unnamed_by_menu']} Blackwell "
+                 "opcodes, none unclassed", thead["source"] == TRIAGE_ART and not thead["unclassified"]
+                 and len(tri) == thead["unnamed_by_menu"] == 175 and set(tri) <= blackwell
+                 and set(tri.values()) <= TRIAGE_CLASSES, ", ".join(sorted(set(tri) - blackwell)) or None)
+    tri_off = triage_disagree(tri, place, rows, set(no_word))
+    by_class = {c: sum(v == c for v in tri.values()) for c in sorted(set(tri.values()))}
+    checks.check("every triaged opcode is placed on a priced route or writes no word, as its class allows",
+                 not tri_off, ", ".join(sorted(tri_off)) or " ".join(f"{c} {n}" for c, n in by_class.items()))
+    absent = {op for op, c in tri.items() if c == "ABSENT-ON-SM120"}
+    checks.check("the opcodes the triage finds absent on sm_120 are Blackwell's tensor core memory list",
+                 absent == set(lists["Sm100"][NOT_SM120]), " ".join(sorted(absent ^ set(lists["Sm100"][NOT_SM120])))
+                 or f"{len(absent)} opcodes")
+
     if checks.mutations:
         without = {**sources, "Classes.lean": sources["Classes.lean"].replace("| BMMA168256 | IMMAS4 | DMMA",
                                                                               "| BMMA168256 | IMMAS4")}
@@ -546,6 +603,15 @@ def main() -> int:
                         bool(gap_off_writer(corpus["Sm90"], {**place, "DMMA": {"LDS32"}}, rows, devices["Sm90"])))
         checks.mutation("a vector class cut to one word a lane where a corpus form writes a pair (SEL) is caught",
                         not lane_widths_ok({**rows, "SEL": ("lane", 32)}, all_forms, LANE_PAIR, place))
+        drop = {k: v for k, v in place.items() if k != "DECOMPRESS"}
+        checks.mutation("a documented opcode dropped from the map (DECOMPRESS) fails, with no list to excuse it",
+                        all("DECOMPRESS" in unplaced(lists, drop, devices)[d] for d in ("Sm100", "Sm120"))
+                        and "DECOMPRESS" in triage_disagree(tri, drop, rows, set(no_word)))
+        checks.mutation("a triaged lane multiply placed in the traced class (FFMA2 in MOV64) is caught",
+                        triage_disagree(tri, {**place, "FFMA2": {"MOV64"}}, rows, set(no_word)) == {"FFMA2"})
+        checks.mutation("a triaged lane multiply read as writing no word (FMUL32I) is caught",
+                        triage_disagree(tri, {k: v for k, v in place.items() if k != "FMUL32I"}, rows,
+                                        set(no_word) | {"FMUL32I"}) == {"FMUL32I"})
 
     return checks.finish()
 
