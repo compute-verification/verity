@@ -110,7 +110,7 @@ sparse = false
 tol = 0.5
 clock = "fp64"
 element_words = 2
-grade = "data sheet; per clock measured"
+grade = "data sheet and whitepaper; per clock derived (figure over SMs and the FP64 clock) and measured"
 source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa)"
 
 # A6's ω for each tensor class (`omega` in sheet.py), read off the PTX accumulator fragments.

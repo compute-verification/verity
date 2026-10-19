@@ -155,10 +155,11 @@ data sheet, H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.0
 def peakTf32 : ℝ := 1024
 
 /-- A3, f64: 128 dense MACs an SM clock, the document's dense figure, 67 × 10¹² a second, over 2 · 132 SMs at the FP64
-tensor boost clock, 1980 MHz (A1's f_max is 1980 MHz). Grade: data sheet; per clock measured. Source: H200 data sheet,
-H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and
-DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with
-the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa). -/
+tensor boost clock, 1980 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived (figure over
+SMs and the FP64 clock) and measured. Source: H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity
+footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t +
+s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu,
+r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa). -/
 def peakF64 : ℝ := 128
 
 /-- A3: each type's dense MACs an SM clock. -/
