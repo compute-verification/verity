@@ -1,5 +1,8 @@
 {
  "definitions": {
+  "MarlinMoeSchedule_v2{KT=2,NT=2,GRID=5}": {
+   "and": 6709
+  },
   "MarlinMoeSchedule_v2{KT=4,NT=3,GRID=7}": {
    "and": 9519
   },
@@ -32,6 +35,9 @@
   },
   "MarlinMxfp4Step_v2{DOT=HopperBF16WgmmaDot16_v2}": {
    "and": 12701
+  },
+  "MoeExpertE2m1Row_v2{E=3,K=128}": {
+   "and": 16896
   },
   "MoeExpertE2m1Row_v2{E=3,K=64}": {
    "and": 8448

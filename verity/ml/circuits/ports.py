@@ -16,7 +16,11 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   return's interval follows from its operands' (an exact step's sum) declares `Ports(transfer=f)` instead: `f(*operands)`
   maps each operand's interval (None when it has none; `as_reading` reads it signed or unsigned) to its return's, or None,
   and the Build gives each instance's return that interval. So a composite over such steps declares, and is held to, the
-  interval its operands' bounds prove (the s8 chain's words, which a limb split's bound reads).
+  interval its operands' bounds prove (the s8 chain's words, which a limb split's bound reads). A bound is never taken on
+  trust: it holds by its operand's width, its producer's interval, or a range-check Definition's declared one, so a program
+  function's parameter (a run input, registered, a coin or a weight) declares no bound narrower than its width
+  (`E_PORT_BOUND`): an input narrower than its type is read through a range check whose `Out(interval)` is the bound. Only
+  a `harness` takes the bounds of the Definition it evaluates on its inputs, as preconditions of the run it evaluates.
 * **Sinks.** `Out(sink=True)` (a receipt fold's output) reaches only a receipt port (`In(receipt=True)`) or the program's
   outputs. A primitive reading a sink at any other port is refused (`E_PORT_SINK`). A sink passed to a composite is a sink in
   its body, and a composite that returns one declares it. A Definition with a receipt port returns only sinks.
@@ -24,18 +28,25 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   passed through untouched. `In(kind="static")` takes only a constant (the output of a primitive without operands). Anything
   else is refused (`E_PORT_KIND`), so a noise derivation whose parameters are coins reads coins and its statics only. A coin is
   never a registered input.
+* **Model weights.** A Program marks the parameters that are the model's weights (`program.Program(fn, theta=names)`), and
+  their input leaves have origin ``theta`` rather than ``input`` or ``registered``: the census and the stacking property tell
+  the weights from a request's inputs by it. The marking is `annotations["theta"]`, the root's input nodes, outside every
+  digest, so it changes no id or digest, and it changes one verdict: a coin is never a weight (`E_PORT_KIND`). It binds
+  nothing, so a consumer that treats a leaf differently for being a weight checks it against the weights' commitment.
 * **Words.** `Out(word="s32")` fixes the type of each word its producer writes; `In(word="s8x4")` reads each word as that type.
-  A word computed at run time is read only as the type its producer fixed, and only inputs, constants and registered
-  (pre-seed) words may be read as another (`E_PORT_WORD`). Splitting a runtime word into limbs is a Definition of its own,
-  which reads the word as its producer's type. A composite keeps the type of each word it returns (it declares it) and never
-  fixes one.
+  A word has one type: a word computed at run time is read only as the type its producer fixed, a typed input (one whose port
+  declares a word) only as its port's, and only an untyped input or constant takes the type its reader declares
+  (`E_PORT_WORD`). Splitting a runtime word into limbs is a registered `LimbSplit` Definition of its own, which reads the word
+  as its producer's type and computes the limbs and their carries. A composite keeps the type of each word it returns (it
+  declares it) and never fixes one. Below the word types, every leaf is read at the width it was committed with
+  (`defs.Builder.finish`, `E_REINTERPRET`).
 
 Facts flow down every call and up through declarations. A parameter's facts, in a Definition's body, are the join over all its
 instances of its operands' facts, so a bound sees its operand's producer through any number of calls. A Definition's output
 carries what its `Out` declares (a primitive's with a transfer, the interval it gives from that instance's operands; a scanned
 one's, none), and the check holds a composite's body to it. `facts(root)` gives every leaf's facts (its interval: the
-producer's, or an input's declared bound, read at the leaf's width by `reading`; its origin; whether it is a sink; its word
-type) to the census and the property.
+producer's, or an input's declared bound (its width's, but in a harness), read at the leaf's width by `reading`; its origin;
+whether it is a sink; its word type) to the census and the property.
 """
 
 from __future__ import annotations
@@ -46,15 +57,16 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from .refs import Affine, Coll, Concat, Explicit, Refs, runs as ref_runs
-from .types import Array, Record, Tuple as TupleT, Type, Value, remove_axis
+from .types import Record, Tuple as TupleT, Type, range_widths, remove_axis
 
 KINDS = ("value", "coin", "static")
 WORD = re.compile(r"[a-z][a-z0-9_]*")
 MAX_SAFE_INT = 2**53 - 1  # the descriptor's integers (`codec.MAX_SAFE_INT`)
 
 #: where a leaf's value comes from: a gate that computes it, a constant (a primitive without operands), a run input, a coin
-#: (a run input of kind coin) or a registered input (a pre-seed word)
-ORIGINS = ("gate", "static", "input", "coin", "registered")
+#: (a run input of kind coin), a registered input (a pre-seed word) or a model weight (an input of a parameter the Program
+#: marks theta, whatever its binding time)
+ORIGINS = ("gate", "static", "input", "coin", "registered", "theta")
 MIXED = "*"  # the word type of a leaf whose instances carry different ones
 
 
@@ -244,30 +256,6 @@ class PortTypes:
         return pt
 
 
-def _widths(t: Type, lo: int, hi: int) -> frozenset:
-    """The widths of leaves [lo, hi) of `t`, computed structurally."""
-    if hi <= lo:
-        return frozenset()
-    if lo == 0 and hi == t.leaves:
-        return t.width_set()
-    if isinstance(t, Array):
-        L = t.elem.leaves
-        first, last = lo // L, (hi - 1) // L
-        if first == last:
-            return _widths(t.elem, lo - first * L, hi - first * L)
-        out = _widths(t.elem, lo - first * L, L) | _widths(t.elem, 0, hi - last * L)
-        return out | t.elem.width_set() if last - first >= 2 else out
-    fields = [ft for _, ft in t.fields] if isinstance(t, Record) else list(t.fields)  # type: ignore[attr-defined]
-    out: frozenset = frozenset()
-    pos = 0
-    for ft in fields:
-        a, b = max(lo, pos), min(hi, pos + ft.leaves)
-        if a < b:
-            out |= _widths(ft, a - pos, b - pos)
-        pos += ft.leaves
-    return out
-
-
 def full(iv: tuple[int, int], w: int) -> bool:
     """Whether an interval of `Value<w>` holds every encoding (it assumes nothing)."""
     return iv in ((-(1 << (w - 1)), (1 << (w - 1)) - 1), (0, (1 << w) - 1))
@@ -350,7 +338,7 @@ def _merged(owner: str, where: str, t: Type, runs: list) -> tuple[Run, ...]:
             out.append([lo, hi, p])
     typed = []
     for lo, hi, p in out:
-        ws = _widths(t, lo, hi)
+        ws = range_widths(t, lo, hi)
         w = next(iter(ws)) if len(ws) == 1 else None
         if p.interval is not None:
             _check_interval(owner, where, p.interval, w)
@@ -459,7 +447,8 @@ def forward(fn: Any) -> Ports | None:
 def harness(defn: Any) -> Any:
     """Mark `defn` (a program function's `CompositeDefinition`) a harness: the wrapper of a one-Call Program that evaluates a
     Definition on arbitrary operands (`evaluation.standalone_call`, `cut.call_scope`). A harness's inputs may feed a kind=static
-    port, each taken as a constant of the run it evaluates; no other Program's (nor a decoded one's) may."""
+    port, each taken as a constant of the run it evaluates, and declare a bound narrower than their width, each a precondition
+    of that run; no other Program's (nor a decoded one's) may."""
     defn.harness = True
     return defn
 
@@ -471,14 +460,15 @@ def _is_harness(fn: Any) -> bool:
 def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool], nodes: Sequence[Type]) -> PortTypes | None:
     """A root's port types: its input nodes (of output types `nodes`, referenced by `input_colls` per parameter) take the
     program function's parameter ports, its return the function's return ports. A coin is drawn per run, so a coin parameter is
-    never registered; a parameter is an input, so never static (but in a `harness`)."""
+    never registered; a parameter is an input, so never static and never bounded narrower than its width (but in a
+    `harness`)."""
     pt = port_types(fn)
     if pt is None:
         return None
     params, ret = fn.signature()
     runs: dict[int, list] = {}
     for (name, _t), rs, coll, reg in zip(params, pt.params, input_colls, registered):
-        for lo, hi, p, _w in rs:
+        for lo, hi, p, w in rs:
             if p.kind == "static" and not _is_harness(fn):
                 raise PortError("E_PORT_KIND", f"program function {fn.id}: parameter {name!r} is kind=static, but a program "
                                 f"function's parameters are inputs and a static is a constant: make it a static of the "
@@ -486,6 +476,12 @@ def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool],
             if p.kind == "coin" and reg:
                 raise PortError("E_PORT_KIND", f"program function {fn.id}: parameter {name!r} is kind=coin, so it is drawn "
                                 f"per run and never registered")
+            if p.bound is not None and not full(p.bound, w) and not _is_harness(fn):
+                raise PortError("E_PORT_BOUND", f"program function {fn.id}: parameter {name!r} leaves [{lo}, {hi}) declare the "
+                                f"bound [{p.bound[0]}, {p.bound[1]}], narrower than Value<{w}>, but a run input's bound is "
+                                f"never taken on trust: read the input through a range-check Definition (a primitive whose "
+                                f"declared Out(interval) is the bound, which circuit-check tests) and declare the bound on "
+                                f"the readers of its output, or drop it")
             for _s, k, a, b in ref_runs(coll.refs.slice(lo, hi)):
                 runs.setdefault(k, []).append((a, b, p))
     root = f"Root[{fn.id}]"
@@ -736,7 +732,7 @@ def _producer(f: Fact, w: int | None) -> str:
 
 def _origin(f: Fact) -> str:
     names = {"gate": "a computed value", "static": "a constant", "input": "a run input", "coin": "a coin",
-             "registered": "a registered input"}
+             "registered": "a registered input", "theta": "a model weight"}
     return " or ".join(names[o] for o in ORIGINS if o in f.origin)
 
 
@@ -763,12 +759,13 @@ def _check_operand(at: Callable[[], str], pname: str, runs: Sequence[Run], F: Ru
             if p.kind == "static" and f.origin != _STATIC:
                 raise PortError("E_PORT_KIND", f"{at()} parameter {pname!r} leaf {a}: takes kind=static, a constant, but "
                                 f"reads {_origin(f)}")
-            if p.word is not None and f.word != p.word and "gate" in f.origin:
+            if p.word is not None and f.word != p.word and ("gate" in f.origin or f.word is not None):
                 got = "untyped" if f.word is None else "mixed-type" if f.word == MIXED else f"{f.word}"
                 raise PortError("E_PORT_WORD", f"{at()} parameter {pname!r} leaf {a}: reads a {p.word} word, but its value "
-                                f"is a runtime {got} word. A runtime word's type is fixed at its producer, and only inputs, "
-                                f"constants and registered (pre-seed) words are read as another; split a runtime word into "
-                                f"limbs with a registered Definition that reads it as its producer's type")
+                                f"is a {'runtime ' if 'gate' in f.origin else ''}{got} word. A word has one type: a runtime "
+                                f"word's is fixed at its producer and a typed input's at its port, and only an untyped input "
+                                f"or constant takes its reader's. Split a runtime word into limbs with a registered LimbSplit "
+                                f"Definition, which reads it as its producer's type and computes the limbs and their carries")
 
 
 def _check_ret(sp: Any, pt: PortTypes | None, R: Runs, root: bool) -> None:
@@ -933,20 +930,27 @@ def _receive(r: Runs, runs: Sequence[Run]) -> Runs:
     return B.done()
 
 
-def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool) -> Runs:
+def _input_facts(root: Any, k: int, node: Any, runs: list, harness: bool, theta: bool = False) -> Runs:
     from .program import is_registered
 
     reg = is_registered(node.fn)
-    base = fact(origin=("registered",) if reg else ("input",))
+    base = fact(origin=("theta",) if theta else ("registered",) if reg else ("input",))
     B, pos = _Build(), 0
-    for lo, hi, p, _w in runs:
+    for lo, hi, p, w in runs:
         if p.kind == "static" and not harness:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: an input is never kind=static (only a harness's)")
         if p.kind == "coin" and reg:
             raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is drawn per run, never registered "
                             f"({node.fn.id})")
+        if p.kind == "coin" and theta:
+            raise PortError("E_PORT_KIND", f"{root.id} input node {k}: a coin is the verifier's, never a model weight: "
+                            f"take it in a parameter the Program doesn't mark theta")
         if hi > node.out.leaves:
             raise _decl(f"{root.id} input node {k}: ports type leaves [{lo}, {hi}) of {node.out.leaves}")
+        if p.bound is not None and not full(p.bound, w) and not harness:
+            raise PortError("E_PORT_BOUND", f"{root.id} input node {k}: leaves [{lo}, {hi}) declare the bound [{p.bound[0]}, "
+                            f"{p.bound[1]}], narrower than Value<{w}>, but an input's bound is never taken on trust (only a "
+                            f"harness's): a range-check Definition narrows it")
         B.add(lo - pos, base)
         B.add(hi - lo, fact(p.bound, (p.kind,) if p.kind != "value" else base.origin, False, p.word))
         pos = hi
@@ -971,6 +975,12 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
     for k in inputs:
         if not (k < len(root.body.nodes) and is_input(root.body.nodes[k].fn)):
             raise _decl(f"{root.id}: ports type the inputs of node {k}, which is no input node")
+    theta = getattr(root, "theta", ())
+    if not (isinstance(theta, (tuple, frozenset)) and all(
+            isinstance(k, int) and not isinstance(k, bool) and 0 <= k < len(root.body.nodes) and is_input(root.body.nodes[k].fn)
+            for k in theta)):
+        raise _decl(f"{root.id}: annotations.theta lists input nodes of the root, not {list(theta) if isinstance(theta, tuple) else theta!r}")
+    theta = frozenset(theta)
     for sp in order:
         body = sp.body
         pt = port_types(sp)
@@ -987,7 +997,7 @@ def _analyse(root: Any, order: list, typed: bool) -> Facts:
             fn = node.fn
             prim = isinstance(fn, PrimitiveDefinition)
             if prim and is_input(fn):
-                env[("n", k)] = _input_facts(sp, k, node, inputs.get(k, []), harness_)
+                env[("n", k)] = _input_facts(sp, k, node, inputs.get(k, []), harness_, sp is root and k in theta)
                 continue
             fpt = port_types(fn)
             fparams, fret = fn.signature()

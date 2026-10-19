@@ -94,13 +94,13 @@ it is not needed there.
 `TRANSCRIPT_CHECKLIST.md`) applied to this prover: the first pass derived both challenges from the transcript alone
 (`H(root)`, `H(root, w, h, q)`); the public words entered only through the verifier's own `beta` / chain `rhs`, so a
 prover could pick the claimed words *after* seeing the challenges. Concretely (`redteam_binding.py`, run on `vy-g3`,
-`fixtures/redteam/ligero-binding/v1/binding.json`): with LLL (SymPy) on the 21-VU chain a `delta` with `A delta = 0 mod p` was found in
+`binding.json` of `art:c4973ee1e10e68469c6200d6bbca48e2021bdf86e1da3430584c0d55734f3a3e`): with LLL (SymPy) on the 21-VU chain a `delta` with `A delta = 0 mod p` was found in
 minutes -- an honest proof of 21 VUs verified against `y16 + delta` (every forged word in `[0, 2^16)`), i.e. any
 honest proof proved many false statements. Fix: `statement_digest` -- field, hash, a digest of the compiled
 constraint system, `l, n, D, t` (and now `zk, k`), the mode, the chain layout, and every public word (`a, b, c, y`
 or `a, b, y16`) -- computed by the **verifier from its configuration** and absorbed into both challenges; sizes
 (`l, n, m, t`, path lengths, `q`/`v` shapes) come from the verifier's `Config` / `System`, so a proof of another
-shape is `malformed` before any challenge is recomputed. The three fixtures (`fixtures/redteam/ligero-binding/v1/`):
+shape is `malformed` before any challenge is recomputed. The three fixtures (`art:c4973ee1e10e68469c6200d6bbca48e2021bdf86e1da3430584c0d55734f3a3e`, `research data fetch`):
 zero-witness proof claiming the real words -- rejected; 2-VU proof against a 4-VU verifier -- rejected (`malformed
 proof`); adaptive claim -- accepted by the pre-fix verifier, rejected by the fixed one (`column challenge
 mismatch`). The 83-case BabyBear battery (`redteam_battery.py`, `notes-asset:campaigns/r20-proof/assets/b-ligero/results/babybear_battery.json`): 71 applicable

@@ -471,7 +471,7 @@ class PearlC:
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
-        #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`pearl_c_work`)
+        #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`clear_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1

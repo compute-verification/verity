@@ -1,11 +1,12 @@
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
+import Proofs.Flock.Claims.ZK.Capacity
 
 /-!
 # Zero knowledge at the reference session, at any values pad-blind workers supply
 
 `Switched` has Lemmas A, B and C at the switched prover: the honest prover at the workers' values where their rows hold,
-else the honest prover on moved pads. Here that prover is defined at the reference session, it meets `Claims.Flock.ZK`
+else the honest prover on moved pads. Here that prover is defined at the reference session, it meets `Claims.Flock.ZKAt`
 with the honest prover's simulator, and the server that runs pad-blind workers is bounded by it:
 
 * `RefSession.SwVals`: the values the workers supply, each table's at each statement, witness, nonce and coin vector:
@@ -18,14 +19,20 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
 * `RefSession.swPS_shvzk`: its `SHVZK` against `refP`'s simulator, from `TCoinModel.shvzk_sw` at `refP`'s models
   typed at `swP` (`toSw`, `swCoinModel_eq`); Lemma C before the last coin is `swPreModel`'s. Both rest on `Complete`,
   `DummyReg`, `Causal`, `TapeOK`, `Tables` and `SwCausal vs`, the switched round encoding's causality.
-  **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZK` at `swP vs`'s prover with `Flock.zk_deployZk_ref`'s simulator, `ε_zk`
+  **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZKAt` at `swP vs`'s prover with `Flock.zkAt_deployZk_ref`'s simulator, `ε_zk`
   and `γ`: one simulator for every `vs`.
 * `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
-  gives `SwCausal` there), so `Flock.zk_deployZk_ref_of_sw` recovers `Flock.zk_deployZk_ref` from `zk_deployZk_sw`.
+  gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * **`Flock.zk_server_blind`**: for every pad-blind worker and any values `vs` whose round encoding is causal, the server
-  whose frame at the worker's values is `swP vs`'s message where the run is live (`RefLive` at `withHonest`, `srcOf`)
-  releases, on every event, at most `D.V.k x + 2` times the guessing simulator's probability plus `ε_zk + γ·Fork`, with
-  `Flock.zk_server_ref`'s simulator and no term for the masked checks.
+  that defers every stop to the last round (`ZkServer.nextD`), whose frame at the worker's values with its stand-ins in
+  after a failed round is `swP vs`'s message wherever it releases one (`ZkServer.RefD`), releases, on every event, at
+  most twice the probability at the simulator that guesses whether the session stops (`leaky1`) plus `ε_zk + γ·Fork`,
+  with `Flock.zk_server_ref`'s simulator and no term for the masked checks: one bit a session.
+* `Flock.zk_deployZk_sw_on`, `Flock.zk_server_blind_on`: the same at a statement of a class `A`, with `TapeOK` asked for
+  on `A` only (`RefSession.TapeOKOn`), at the record whose parser refuses the rest (`deployOn`); both and
+  `Flock.zk_deployZk_sw` are `Flock.zkAt_sw_of` at a record. `Flock.zk_server_blind_deployed`: `zk_server_blind_on` at
+  the deployed coin layer (`CoinLayer.session`) and the pinned key's hiding gap, under the tables' tape read with fibers
+  of one size on `A`.
 -/
 
 namespace FlockSoundness.ZK.Table
@@ -410,10 +417,10 @@ theorem swPre_msg (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (
   rw [hl, ite_eq_left (by omega),
     S.enc_swCutOf vs x w ν hc t _ (S.coinsOf a) (i.val - 1) fun k hk => S.pad_ansHist a i k hk]
 
-theorem swPreModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (hV : S.Complete R)
-    (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOK) (x : Msg) (w : Flock.Wit) (hR : R x w)
-    (ν : S.Nonce) : (S.swPreModel vs H x ν).SwLink H ν w := by
-  refine ⟨hV x w hR, fun a j => hD x (S.coinsOf a) j, ?_, fun p => (hT x).1 p _,
+theorem swPreModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
+    (hV : S.Complete R) (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOKOn A) (x : Msg)
+    (hx : A x) (w : Flock.Wit) (hR : R x w) (ν : S.Nonce) : (S.swPreModel vs H x ν).SwLink H ν w := by
+  refine ⟨hV x w hR, fun a j => hD x (S.coinsOf a) j, ?_, fun p => (hT x hx).1 p _,
     ⟨fun a => vs x w ν (S.coinsOf a), ?_, fun t a => funext fun i => S.swPre_msg vs H x w ν hsc t a i⟩,
     fun t a => funext fun i => S.pre_msg H x ν hc (S.wt₀ x) t a i⟩
   · intro wt ω p a a' i h
@@ -429,19 +436,20 @@ theorem swPreModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : 
     exact hsc x w ν ω p (S.coinsOf a) (S.coinsOf a') (i.val - 1) fun k hk =>
       congrArg (fun o => S.decOf (msgOf o)) (h k.succ (Fin.lt_def.mpr (by simp only [Fin.val_succ]; omega)))
 
-theorem swCoinModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (hV : S.Complete R)
-    (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOK) (x : Msg) (w : Flock.Wit) (hR : R x w)
-    (ν : S.Nonce) (c : Fin (refK x) → S.Coin) : (S.swCoinModel vs x c).SwLink H ν c w := by
+theorem swCoinModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
+    (hV : S.Complete R) (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOKOn A) (x : Msg)
+    (hx : A x) (w : Flock.Wit) (hR : R x w) (ν : S.Nonce) (c : Fin (refK x) → S.Coin) :
+    (S.swCoinModel vs x c).SwLink H ν c w := by
   unfold swCoinModel
   split_ifs with hA
-  · refine ⟨vs x w ν c, hV x w hR, fun p => (hT x).2 c p _, fun (t : S.Tape) => ?_⟩
+  · refine ⟨vs x w ν c, hV x w hR, fun p => (hT x hx).2 c p _, fun (t : S.Tape) => ?_⟩
     show (List.range (refK x + 1)).map (fun j => S.swMsgAt x (S.wt x w) (vs x w ν) t ((List.ofFn c).take j)) =
       (List.range (refK x + 1)).map fun j =>
         if j < refK x then S.enc x c j (S.cutV x c (S.swViewsAt x c (S.wt x w) (vs x w ν c) t))
         else S.fin x c (S.swViewsAt x c (S.wt x w) (vs x w ν c) t)
     refine List.map_congr_left fun j hj => ?_
     rw [S.swMsgAt_take vs x w ν hsc t c j (List.mem_range.1 hj), S.cutV_swViewsAt, ite_eq_left hA]
-  · refine ⟨hV x w hR, fun j => hD x c j, fun p => (hT x).1 p _, ⟨vs x w ν c, fun (t : S.Tape) => ?_⟩,
+  · refine ⟨hV x w hR, fun j => hD x c j, fun p => (hT x hx).1 p _, ⟨vs x w ν c, fun (t : S.Tape) => ?_⟩,
       fun (t : S.Tape) => ?_⟩
     · show (List.range (refK x + 1)).map (fun j => S.swMsgAt x (S.wt x w) (vs x w ν) t ((List.ofFn c).take j)) =
         (List.range (refK x + 1)).map fun j =>
@@ -546,15 +554,16 @@ theorem toSw_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) {δ₁ : E
   | .inr M, ev, kS, hev, hsim, hL, hOK, hn =>
       Proto.TCoinModel.shvzk_sw (G := S.swP vs) H hT1 hδ₁ ν c w E sim (S.toSw vs x (.inr M)) ev kS hev hsim hL hOK hn
 
-/-- **`SHVZK` of `swPS vs`**: the switched prover's messages against `refP`'s simulator, within `2·|L|·δ₁`. -/
-theorem swPS_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) {δ₁ : ENNReal}
-    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hV : S.Complete R) (hD : S.DummyReg)
-    (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOK) (hS : S.Tables) :
-    (S.swPS vs).SHVZK H R fun x => 2 * S.nLeaves x * δ₁.toReal := by
+/-- **`SHVZK` of `swPS vs`**: the switched prover's messages against `refP`'s simulator, within `2·|L|·δ₁`, on a
+relation whose statements are in `A`, where the tape is read with fibers of one size (`TapeOKOn A`). -/
+theorem swPS_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel Flock.Wit) (A : Msg → Prop)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hV : S.Complete R)
+    (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOKOn A) (hRA : ∀ x w, R x w → A x)
+    (hS : S.Tables) : (S.swPS vs).SHVZK H R fun x => 2 * S.nLeaves x * δ₁.toReal := by
   intro x w hR ν c E
   obtain ⟨p₀⟩ := Proto.TCoinModel.instNonemptySimAt (S.coinModel x c)
   have e := S.swCoinModel_eq vs x c
-  have hL := S.swCoinModel_link vs H R hV hD hc hsc hT x w hR ν c
+  have hL := S.swCoinModel_link vs H R A hV hD hc hsc hT x (hRA x w hR) w hR ν c
   have hOK : (S.swCoinModel vs x c).OK := (S.swTablesOK vs H hS).2 x ν c
   have hn := S.swCoinModel_size vs x c
   rw [e] at hL hOK hn
@@ -566,39 +575,69 @@ theorem swPS_shvzk (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R : Rel F
 
 end RefSession
 
-/-- **Flock's zero knowledge at the switched reference prover, with the honest prover's simulator**: `Claims.Flock.ZK`
+/-- **Flock's zero knowledge at the switched reference prover, at a masked record whose statements are in `A`**: the
+common proof of `Flock.zk_deployZk_sw` (at `deployZk`, every statement) and `Flock.zk_deployZk_sw_on` (at `deployOn`). -/
+theorem Flock.zkAt_sw_of {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (hzk : D.zk = true)
+    (S : RefSession) (vs : S.SwVals) (hk : ∀ x, D.V.k x + 1 = (S.swPS vs).k x) (A : Msg → Prop) (t : ℕ) (ht : 0 < t)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete (Flock.R D.parse)) (hD : S.DummyReg) (hc : S.Causal) (hsc : S.SwCausal vs)
+    (hT : S.TapeOKOn A) (hRA : ∀ x w, Flock.R D.parse x w → A x) :
+    Claims.Flock.ZKAt H D (S.swP vs).prover
+      ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t := by
+  have hA : ∀ x w, Flock.R D.parse x w → ∀ (ν : S.Nonce)
+      (V : FlockSoundness.ZK.Responder Msg Out (refK x + 1)) (E : (Fin (refK x + 1) → Msg) → Prop),
+      |Pr (fun r : S.Tape => E (FlockSoundness.ZK.run ((S.swPS vs).preStrat H x ν ((S.swPS vs).msg x w ν)) V r)) -
+        Pr (fun r : S.Tape => E (FlockSoundness.ZK.run ((S.swPS vs).preStrat H x ν ((S.swPS vs).dmsg x ν)) V r))| ≤
+        2 * S.nLeaves x * δ₁.toReal := fun x w hR ν V E =>
+    (S.swPreModel vs H x ν).runs_close_sw H hT1 hδ₁ ν w
+      (S.swPreModel_link vs H _ A hV hD hc hsc hT x (hRA x w hR) w hR ν) ((S.swTablesOK vs H hS).1 x ν) V E
+  rw [← S.swPS_prover vs, ← S.swPS_simulatorE vs]
+  exact Flock.zkR_gkE_hm96_bind H D (S.swPS vs) t ht hzk hk δ₁ S.nLeaves S.nLeaves hA
+    (S.swPS_shvzk vs H _ A hT1 hδ₁ hV hD hc hsc hT hRA hS) (S.binding H)
+
+/-- **Flock's zero knowledge at the switched reference prover, with the honest prover's simulator**: `Claims.Flock.ZKAt`
 at `P_zk = swP vs`'s prover, at any values `vs` the workers supply whose round encoding is causal, and the simulator of
-`Flock.zk_deployZk_ref` (`refP`'s), at its `ε_zk` and `γ`, under `Claims.Hm96Hiding` and the session's five Props. One
+`Flock.zkAt_deployZk_ref` (`refP`'s), at its `ε_zk` and `γ`, under `Claims.Hm96Hiding` and the session's five Props. One
 simulator serves every `vs`. -/
 theorem Flock.zk_deployZk_sw (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (vs : S.SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
     (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hsc : S.SwCausal vs) (hT : S.TapeOK) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) (S.swP vs).prover
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) (S.swP vs).prover
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
-      fun _ => 4 * t * 3 ^ t := by
-  obtain ⟨_, _, Tr, nb, root, parse, pos, idx, n, depth, dc, hchk, hdec⟩ := S.coinCheck
-  have hA : ∀ x w, Flock.R (FlockDeploy.deployZk rel).parse x w → ∀ (ν : S.Nonce)
-      (V : FlockSoundness.ZK.Responder Msg Out (refK x + 1)) (E : (Fin (refK x + 1) → Msg) → Prop),
-      |Pr (fun r : S.Tape => E (FlockSoundness.ZK.run ((S.swPS vs).preStrat H x ν ((S.swPS vs).msg x w ν)) V r)) -
-        Pr (fun r : S.Tape => E (FlockSoundness.ZK.run ((S.swPS vs).preStrat H x ν ((S.swPS vs).dmsg x ν)) V r))| ≤
-        2 * S.nLeaves x * δ₁.toReal := fun x w hR ν V E =>
-    (S.swPreModel vs H x ν).runs_close_sw H hT1 hδ₁ ν w (S.swPreModel_link vs H _ hV hD hc hsc hT x w hR ν)
-      ((S.swTablesOK vs H hS).1 x ν) V E
-  rw [← S.swPS_prover vs, ← S.swPS_simulatorE vs]
-  exact Flock.zkR_gkE_hm96_deployZk H rel (S.swPS vs) t ht (fun _ => rfl) δ₁ S.nLeaves S.nLeaves hA
-    (S.swPS_shvzk vs H _ hT1 hδ₁ hV hD hc hsc hT hS) Tr nb root parse pos idx n depth dc hchk hdec
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zkAt_sw_of H _ rfl S vs (fun x => (deployZk_proto_k rel (S.swPS vs) (fun _ => rfl) x).symm) (fun _ => True)
+    t ht hT1 hδ₁ hS hV hD hc hsc ((S.tapeOKOn_iff).2 hT) fun _ _ _ => trivial
 
-/-- **At the honest values `Flock.zk_deployZk_sw` is `Flock.zk_deployZk_ref`**: the switched prover is `refP`
+/-- **The same on a class of statements**: `Claims.Flock.ZKAt` at the record whose parser refuses every statement
+outside `A` (`deployOn`), with `TapeOK` asked for only on `A` (`RefSession.TapeOKOn`). -/
+theorem Flock.zk_deployZk_sw_on (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (vs : S.SwVals)
+    (A : Msg → Prop) [DecidablePred A] (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w) (hD : S.DummyReg)
+    (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOKOn A) :
+    Claims.Flock.ZKAt H (deployOn (FlockDeploy.deployZk rel) A) (S.swP vs).prover
+      ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zkAt_sw_of H (deployOn (FlockDeploy.deployZk rel) A) rfl S vs
+    (fun x => (deployZk_proto_k rel (S.swPS vs) (fun _ => rfl) x).symm) A t ht hT1 hδ₁
+    hS (fun x w hR => hV x w ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR)) hD hc hsc hT
+    fun x w hR => ((r_deployOn (FlockDeploy.deployZk rel) A x w).1 hR).1
+
+/-- **At the honest values `Flock.zk_deployZk_sw` is `Flock.zkAt_deployZk_ref`**: the switched prover is `refP`
 (`RefSession.swP_vals`) and `SwCausal` is `Causal` (`RefSession.swCausal_vals`). -/
-theorem Flock.zk_deployZk_ref_of_sw (H : Msg → Msg)
+theorem Flock.zkAt_deployZk_ref_of_sw (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (t : ℕ) (ht : 0 < t)
     {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
     (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hT : S.TapeOK) :
-    Claims.Flock.ZK H (FlockDeploy.deployZk rel) S.refP.prover
+    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) S.refP.prover
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t := by
@@ -615,33 +654,97 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The ZK server at pad-blind workers, at `flock-circuit --zk`'s reference session**: for every pad-blind worker
-`bw`, handed the nonce and the verifier's answers and never the server's tape, and any values `vs` whose round encoding
-is causal, the server whose frame at the worker's values is `swP vs`'s message where the run is live releases, on every
-event, at most `D.V.k x + 2` times the probability at the guessing simulator of `Flock.zk_server_ref`'s simulator
-(`refP`'s), plus `ε_zk + γ·Fork`, under `Claims.Hm96Hiding` and the session's five Props, with no term for the masked
-checks. -/
+/-- **The ZK server at pad-blind workers, at `flock-circuit --zk`'s reference session**: the server defers every
+stop to the session's last round (`ZkServer.nextD`, live PROTOCOL.md §10.1: a failed check stops the session at its
+`Finish`, never before), putting in its own stand-in `fill` for a masked value once a round failed. For every pad-blind
+worker `bw`, handed the nonce and the verifier's answers and never the server's tape, and any values `vs` whose round
+encoding is causal, if the deferred server's frame is `swP vs`'s message wherever it releases one (`ZkServer.RefD`), it
+releases, on every event, at most twice the probability at the simulator that guesses whether the session stops
+(`leaky1`, at `Flock.zk_server_ref`'s simulator, `refP`'s), plus `ε_zk + γ·Fork`, under `Claims.Hm96Hiding` and the
+session's five Props, with no term for the masked checks. The stop leaks one bit a session; over a stream of `m`
+sessions with at most `b` stops, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`). -/
 theorem Flock.zk_server_blind (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (S : RefSession) (vs : S.SwVals) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
     (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
     (hsc : S.SwCausal vs) (hT : S.TapeOK) (srv : ZkServer Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (fill : Msg → ℕ → ℕ → Flock.Wit → S.refP.Nonce × S.refP.Rand → List (Msg × Msg) → srv.Val)
     (bw : srv.BWorker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
-    (hRef : (srv.withHonest (srv.srcOf (srv.lift bw))).RefLive H (S.swP vs).prover (srv.lift bw) x w) {Θ : Type}
+    (hRef : srv.RefD H (S.swP vs).prover fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) x w) {Θ : Type}
     (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :
     Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × srv.Chk =>
-        Ev (srv.timed x (runStar H (srv.prover (srv.lift bw) w) Vs x ω θ).msgs)) ≤
-      ((FlockDeploy.deployZk rel).V.k x + 1 + 1) *
-        (Pr (fun c : (leaky ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+        Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).C x =>
-          Ev (srv.timed x ((leaky ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+          Ev (srv.timed x ((leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).out H Vs θ x c))) +
           (8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
           4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
-  have h := srv.zk_server_own H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
+  have h := srv.zk_deferred fill H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
     (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT).2 x w hR (srv.lift bw) hRef Vs θ hk Ev
-  push_cast at h ⊢
   exact h
+
+/-- **The ZK server at pad-blind workers on a class of statements**: `Flock.zk_server_blind` at a statement in `A`,
+with `TapeOK` and the lowering's completeness asked for only on `A` (`RefSession.TapeOKOn`), as a tape of bounded size
+can meet it where `A` bounds the tables. -/
+theorem Flock.zk_server_blind_on (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (vs : S.SwVals)
+    (A : Msg → Prop) [DecidablePred A] (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w) (hD : S.DummyReg)
+    (hc : S.Causal) (hsc : S.SwCausal vs) (hT : S.TapeOKOn A) (srv : ZkServer Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (fill : Msg → ℕ → ℕ → Flock.Wit → S.refP.Nonce × S.refP.Rand → List (Msg × Msg) → srv.Val)
+    (bw : srv.BWorker) (x : Msg) (hx : A x) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hRef : srv.RefD H (S.swP vs).prover fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) x w) {Θ : Type}
+    (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × srv.Chk =>
+        Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).C x =>
+          Ev (srv.timed x ((leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).out H Vs θ x c))) +
+          (8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
+  have h := srv.zk_deferred fill H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
+    (Flock.zk_deployZk_sw_on H rel S vs A t ht hT1 hδ₁ hS hV hD hc hsc hT).2 x w
+    ((r_deployOn (FlockDeploy.deployZk rel) A x w).2 ⟨hx, hR⟩) (srv.lift bw) hRef Vs θ hk Ev
+  exact h
+
+/-- **The ZK server at pad-blind workers at the deployed coin layer**: `Flock.zk_server_blind_on` at the reference
+session of `coin-tree/hm96-sha512/v2` (`CoinLayer.session`, `zkDeployed`'s), at the pinned key's hiding gap, with the
+tape asked for only as the tables' tape read with fibers of one size on `A` (`RefSession.tapeOKOn_of_tape`). -/
+theorem Flock.zk_server_blind_deployed (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
+    (vs : (CoinLayer.session nr T).SwVals) (A : Msg → Prop) [DecidablePred A] (t : ℕ) (ht : 0 < t)
+    (hS : (CoinLayer.session nr T).Tables)
+    (hV : (CoinLayer.session nr T).Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
+    (hsc : (CoinLayer.session nr T).SwCausal vs) (hT : ∀ x, A x → FibersEq (T.tape x))
+    (srv : ZkServer Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
+    (fill : Msg → ℕ → ℕ → Flock.Wit → (CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand →
+      List (Msg × Msg) → srv.Val)
+    (bw : srv.BWorker) (x : Msg) (hx : A x) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hRef : srv.RefD H ((CoinLayer.session nr T).swP vs).prover fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) x w) {Θ : Type} (Vs : VStar Θ)
+    (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand) × srv.Chk =>
+        Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 (((CoinLayer.session nr T).refP.withSim
+              fun x _ c => (CoinLayer.session nr T).coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).C x =>
+          Ev (srv.timed x ((leaky1 (((CoinLayer.session nr T).refP.withSim
+              fun x _ c => (CoinLayer.session nr T).coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).out H Vs θ x c))) +
+          (8 * (CoinLayer.session nr T).nLeaves x *
+              (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
+            8 * t * (CoinLayer.session nr T).nLeaves x *
+              (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
+            2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t * (Fork H (((CoinLayer.session nr T).swP vs).prover w) Vs θ x).Pr H) :=
+  Flock.zk_server_blind_on H rel (CoinLayer.session nr T) vs A t ht
+    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hS hV hD hc hsc
+    ((CoinLayer.session nr T).tapeOKOn_of_tape A hT) srv fill bw x hx w hR hRef Vs θ hk Ev
 
 end Claims.ZKServer

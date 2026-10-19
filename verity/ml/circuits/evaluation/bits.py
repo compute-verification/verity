@@ -12,8 +12,8 @@ one body's wires at a time, not the flattened circuit's.
                                       bit first
     peak_bytes(target, n)             a bound on the bytes `evaluate_bits` holds at once for n instances, its inputs aside
 
-`evaluate_batch` routes a Boolean composite here when no kernel is registered for it; the reference stays the oracle, and the
-tests compare the two.
+`evaluate_batch` routes a Boolean composite here when neither it nor its word Definition has a kernel, and the rows a kernel
+declines; the reference stays the oracle, and the tests compare the two.
 """
 from __future__ import annotations
 
@@ -316,6 +316,9 @@ def peak_bytes(target: Any, n: int = 1) -> int:
 
 def _to_bits(words: np.ndarray, widths: list[int]) -> np.ndarray:
     n = words.shape[0]
+    if len(set(widths)) == 1:
+        shifts = np.arange(widths[0], dtype=np.uint64)
+        return ((words.astype(np.uint64)[:, :, None] >> shifts) & np.uint64(1)).astype(np.uint8).reshape(n, -1)
     out = np.empty((n, sum(widths)), dtype=np.uint8)
     k = 0
     for e, w in enumerate(widths):
@@ -327,6 +330,9 @@ def _to_bits(words: np.ndarray, widths: list[int]) -> np.ndarray:
 
 
 def _to_words(bits: np.ndarray, widths: list[int]) -> np.ndarray:
+    if len(set(widths)) == 1:
+        rows = bits.astype(np.uint64).reshape(bits.shape[0], len(widths), widths[0])
+        return np.bitwise_or.reduce(rows << np.arange(widths[0], dtype=np.uint64), axis=2)
     out = np.zeros((bits.shape[0], len(widths)), dtype=np.uint64)
     k = 0
     for e, w in enumerate(widths):

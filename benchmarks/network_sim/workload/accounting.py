@@ -8,8 +8,9 @@ Program.
   `outside`, and any other leaf a `switch`, which only carries frames. A link's capacity is its β a tick over the
   cadence's tick.
 - `placement(model, hw, p, dc, registration)`: each Call on the device and at the step `placement.Placement` gives its
-  gates, the run inputs at the client, the registered ones where their first reader runs (both layers' rule), and the
-  outputs delivered to the client.
+  gates, the run inputs at the client, and the outputs delivered to the client. The simulator stores a registered value
+  once, at its first reader, and moves it to readers in other units (Serve_v1's tied embeddings), so a value read in
+  more than one unit is `held` there; every other registered value has its copy where it is read.
 
 Both layers derive the same crossings from one placement: the accounting layer's are census values (`crossing_pairs`
 expands each to its gates), and each counts a crossing's frames in the bucket of its read tick, but they frame them
@@ -27,7 +28,7 @@ import argparse
 from collections import Counter
 
 import datacenter as D
-from datacenter.logical import binding, gates
+from datacenter.logical import binding, gates, layout
 from verity.ml.circuits.program import REGISTRATION, RUN
 
 from . import model as M
@@ -39,9 +40,18 @@ PREMISES = {D.FLEET_CLOSED.name: D.FLEET_CLOSED}
 
 
 def parameters(model, seed: int) -> dict[str, list[int]]:
-    """Each parameter's words in leaf order."""
-    t = model.inputs(seed)
-    return {name: [t[g] for g in model.input_gates(pi)] for pi, name in enumerate(model.params)}
+    """Each parameter's words, one per element (`datacenter.logical.layout`: a Boolean element's bits, or a word leaf)."""
+    t, out = model.inputs(seed), {}
+    for pi, ((name, pt), _) in enumerate(zip(model.program.fn.signature()[0], model.params)):
+        leaves, words = iter(t[g] for g in model.input_gates(pi)), []
+        for widths in layout(pt):
+            word, at = 0, 0
+            for w in widths:
+                word |= next(leaves) << at
+                at += w
+            words.append(word)
+        out[name] = words
+    return out
 
 
 def split(model, seed: int) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
@@ -87,9 +97,14 @@ def placement(model, hw: Hardware, p: P.Placement, dc: D.Datacenter, registratio
             continue
         lo = body.offsets[k]
         device[k], step[k] = (client, 0) if when == RUN else (hw.leaves[p.leaf[lo]], p.step[lo])
+    held = {}
+    for v in D.values(program):
+        units = {hw.unit(p.leaf[body.offsets[r]]) for r in v.reads}
+        if binding(program, v.node) == REGISTRATION and len(units) > 1:
+            held[v.id] = device[min(v.reads)]
     used = {hw.leaves.index(d) for d in device.values()} | {p.leaf[g] for g in range(model.n)}
     return D.Placement(program, dc, device, step, {hw.leaves[x]: list(p.ticks[x]) for x in used}, deliver=client,
-                       registration=registration)
+                       registration=registration, held=held)
 
 
 def crossing_pairs(dp: D.Placement) -> set[tuple[int, str]]:
