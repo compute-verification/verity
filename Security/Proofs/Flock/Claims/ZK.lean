@@ -60,6 +60,7 @@ import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.FrameTape
 import Proofs.Flock.Claims.ZK.FrameParse
+import Proofs.Flock.Claims.ZK.PadsRoot
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 import Proofs.Flock.Claims.ZK.Compose
@@ -362,6 +363,9 @@ import Proofs.Flock.Claims.ZK.Stop
 * `FrameParse`: the frame's round (`roundFree`) at the bytes of a round's frames (`encs fs` then the squeeze) is the fold
   of the frame's step over them (`stepAt`: labels through `Masker.label`, bytes copied, each observed value absorbed and
   free while the algebraic phase masks), then the inner proof's own round and the squeeze (`roundFree_encs`).
+* `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
+  frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
+  `tapeOfDraws` (`padsRoot_tapeOfDraws`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at
