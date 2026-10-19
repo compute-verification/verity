@@ -34,7 +34,8 @@
 # gzip`; a --cwd source tree has no history), else the source's git.
 # Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
-# inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
+# inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's), HB_SBENCH
+# (the script beside hb_sbench.py that runs instead, as sbench.sh's SBENCH_SCRIPT: j10served.py adds J10's banded arms).
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
 # another source's.
 set -uo pipefail
@@ -175,7 +176,8 @@ if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
         --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/gate" --force-overwrite true)
 fi
 cd integrations/vllm
-printf '%s\n' "$PY $HB/hb_sbench.py --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
+SB=$HB/${HB_SBENCH:-hb_sbench.py}
+printf '%s\n' "$PY $SB --out $OUT --scratch $S $*" > "$OUT/env/cmd.txt"
 # an exact-fused or -xl arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*|*-xl[\ ,-]*) KGATE=1 ;; *) KGATE=0 ;; esac
 export KGATE=${HB_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
@@ -198,7 +200,7 @@ GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- b
   r=$?
   kill "$smi" 2>/dev/null
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.after.csv"
-  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$HB/hb_sbench.py" --out "$OUT" --scratch "$S" "$@"
+  exit $r' "$OUT" "${NSYS[@]}" "$PY" "$SB" --out "$OUT" --scratch "$S" "$@"
 rc=$?
 echo "hb_served: exited $rc at $(date -u +%H:%M:%SZ)"
 if [ -f "$S/gate.nsys-rep" ]; then

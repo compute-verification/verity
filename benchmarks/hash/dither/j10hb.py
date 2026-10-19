@@ -46,7 +46,17 @@ import h1zbench as Z
 import j10b_ref as JB
 from h1bench import auto_j, plain_arms
 from h1ubench import Call, shape_ref, workspace
-from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
+from hb_kbench import (
+    LINEARS,
+    MS,
+    POISON,
+    Clock,
+    capture,
+    inputs,
+    one_call_ms,
+    w_seed,
+    x_seed,
+)
 
 from verity.core.protocols.pouw.circuit import seeds as SD
 
@@ -156,6 +166,10 @@ def gate_band(oc: Z.OneCall, per_out: torch.Tensor, g: int, ref_ab: dict, shift:
     return doc
 
 
+def runner(oc: Z.OneCall):
+    return lambda i: oc.run()
+
+
 def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh: np.ndarray, clock: Clock, l2: int,
           rng: random.Random, shift: int, gs: list[int]) -> dict:
     X = torch.from_numpy(Xh[:m]).to("cuda")
@@ -219,7 +233,7 @@ def bench(builds: dict, ref: Z.Ref, args, name: str, n: int, k: int, m: int, Xh:
     if not timed:
         out["error"] = "every gate failed: nothing timed"
         return out
-    arms: dict = {arm: (lambda oc: lambda i: oc.run())(oc) for arm, oc in timed.items()}
+    arms: dict = {arm: runner(oc) for arm, oc in timed.items()}
     parms, info = plain_arms(name, n, k, m, Xh, l2)
     out.update(info)
     arms.update(parms)
