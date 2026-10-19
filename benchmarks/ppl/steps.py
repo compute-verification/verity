@@ -678,8 +678,10 @@ def _e4m3_integers() -> tuple:
 
 
 #: every grid a quantizer may put integers on: GRIDS, every integer E4M3 holds (0..16, then E4M3's spacing to 448),
-#: E2M1's integers, and twice every E2M1 value (the whole E2M1 grid as integers)
-LEVELS = {**GRIDS, "e4m3i": _e4m3_integers(), "e2m1i": (-6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6),
+#: those up to 352 (a k32 word of their products, 32 * 352^2 < 2^22, stays inside the 1.5 * 2^23 binade, so one
+#: integer add reads it), E2M1's integers, and twice every E2M1 value (the whole E2M1 grid as integers)
+LEVELS = {**GRIDS, "e4m3i": _e4m3_integers(), "e4m3i352": tuple(v for v in _e4m3_integers() if abs(v) <= 352),
+          "e2m1i": (-6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6),
           "e2m1x2": (-12, -8, -6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6, 8, 12)}
 
 
@@ -901,7 +903,7 @@ def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", 
 FORMATS = {"e4m3": (448.0, 8), "e2m1": (6.0, 2)}
 E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 #: block length along k of each block-scaled format: MX (E8M0 scales) and NVFP4 (UE4M3 scales)
-BLOCKS = {"mx": 32, "nv": 16}
+BLOCKS = {"mx": 32, "nv": 16, "nvi": 16}
 FP_SCALES = ("tensor", "channel", "mx", "nv")
 #: a weight's rows are quantized (and emulated) this many at a time, so lm_head's temporaries stay small
 ROW_CHUNK = 8192
@@ -977,15 +979,19 @@ def fp_attention(mm, nxt, *, fmt: str, scale: str):
 
 
 #: the format each native grid's integers are exact in
-NATIVE = {"e4m3i": "e4m3", "int5": "e4m3", "e2m1i": "e2m1", "e2m1x2": "e2m1"}
+NATIVE = {"e4m3i": "e4m3", "e4m3i352": "e4m3", "int5": "e4m3", "e2m1i": "e2m1", "e2m1x2": "e2m1"}
+#: a native grid's scales: the formats' (FP_SCALES) and `nvi`, NVFP4's blocks of 16 with any integer UE4M3 scale to 15
+NATIVE_SCALES = FP_SCALES + ("nvi",)
+#: the blocked scales whose block multiplier is an integer from SCALES (odd for nv, any for nvi)
+INT_BLOCKS = {"nv": "odd", "nvi": "int"}
 
 
 def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None):
     """v = x / (s m) within the grid's range, s one scale per tensor or row and m one per block of k: `tensor` and
     `channel` s = amax / top (m = 1); `nv` s = row amax / (top 15) and m the smallest odd UE4M3 integer that holds the
-    block (`on_blocks`'); `mx` s = 1 and m the smallest power of two with |v| <= top (E8M0). A coined operand's scale
-    is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or None). `amax`: the
-    whole tensor's, when x is a slice of it."""
+    block (`on_blocks`'), `nvi` the same with any integer to 15; `mx` s = 1 and m the smallest power of two with
+    |v| <= top (E8M0). A coined operand's scale is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and
+    m (rows x blocks, or None). `amax`: the whole tensor's, when x is a slice of it."""
     top = LEVELS[grid][-1]
     pad = 1 + 2 ** -20 if coined else 1.0
     if scale in ("tensor", "channel"):
@@ -995,8 +1001,8 @@ def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: tor
     *lead, k = x.shape
     xb = x.reshape(*lead, k // BLOCKS[scale], BLOCKS[scale])
     a = xb.abs().amax(-1)
-    if scale == "nv":
-        table = torch.tensor(SCALES["odd"], dtype=x.dtype, device=x.device)
+    if scale in INT_BLOCKS:
+        table = torch.tensor(SCALES[INT_BLOCKS[scale]], dtype=x.dtype, device=x.device)
         s = x.abs().amax(-1, keepdim=True).clamp(min=1e-30) * pad / (top * table[-1])
         m = table[torch.searchsorted(table, (a / (s * top)).contiguous()).clamp(max=len(table) - 1)]
         return (xb / (s[..., None] * m[..., None])).reshape(x.shape), s, m
@@ -1015,9 +1021,9 @@ def with_blocks(q: torch.Tensor, m: torch.Tensor | None) -> torch.Tensor:
 def _check_native(p):
     if p["grid"] not in NATIVE:
         raise ValueError(f"native.grid is one of {sorted(NATIVE)}")
-    if p["scale"] not in FP_SCALES:
-        raise ValueError(f"native.scale is one of {FP_SCALES}")
-    if p["scale"] == "nv" and NATIVE[p["grid"]] != "e2m1":
+    if p["scale"] not in NATIVE_SCALES:
+        raise ValueError(f"native.scale is one of {NATIVE_SCALES}")
+    if p["scale"] in INT_BLOCKS and NATIVE[p["grid"]] != "e2m1":
         raise ValueError("native: nv blocks hold E2M1")
     for o in ("act", "weight"):
         if p[o] not in GRID_MODES:
@@ -1032,12 +1038,13 @@ def _check_native(p):
              source="PPL-COMPILE")
 def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
                   act_grid: str = ""):
-    """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, int5 on E4M3; e2m1i, e2m1x2 on E2M1), both
-    operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level below or above by a fresh
-    bit), the activations' coins first, then the weights', fresh every call (Dither-2S's order). `act_grid = int8`: the
-    activations Dither's own (`act_quant` at top 127, the int8 design's draws), the weights native: the hybrid that
-    serves int8 activations as limbs. tensor, channel and nv scales give integers, so the product is the gated exact
-    one; mx's power-of-two blocks give dyadic operands, multiplied dequantized in FP32 (the MX MMA)."""
+    """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, e4m3i352, int5 on E4M3; e2m1i, e2m1x2 on
+    E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level below or
+    above by a fresh bit), the activations' coins first, then the weights', fresh every call (Dither-2S's order).
+    `act_grid = int8`: the activations Dither's own (`act_quant` at top 127, the int8 design's draws), the weights
+    native: the hybrid that serves int8 activations as limbs. tensor, channel, nv and nvi scales give integers, so the
+    product is the gated exact one; mx's power-of-two blocks give dyadic operands, multiplied dequantized in FP32 (the
+    MX MMA)."""
     k = mm.x.shape[1]
     if scale in BLOCKS and k % BLOCKS[scale]:
         raise ValueError(f"{mm.where}: k = {k} is not a multiple of {BLOCKS[scale]}")
@@ -1062,13 +1069,13 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     else:
         v, sa, ma = native_parts(mm.x, grid, scale, act != "round")
         xq = to_grid(v, grid, act, mm.coins(mm.x.shape) if act == "dither" else None)
-        xtop = LEVELS[grid][-1] * (SCALES["odd"][-1] if scale == "nv" else 1)
+        xtop = LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
     wq = wl.float() if wg is None else wl.float() + mm.coins(wl.shape) * wg.float()
     xq, wq = with_blocks(xq, ma), with_blocks(wq, mw)
     if scale == "mx":
         return nxt(mm.replace(x=xq, w=wq))
     sw = sw if sw.dim() == 0 else sw[:, 0]
-    top = max(xtop, LEVELS[grid][-1] * (SCALES["odd"][-1] if scale == "nv" else 1))
+    top = max(xtop, LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1))
     wide = {"top": top} if top > 127 else {}
     return nxt(mm.integer(xq, wq.to(torch.int8) if top <= 127 else wq, **wide)).float() * sa * sw
 
