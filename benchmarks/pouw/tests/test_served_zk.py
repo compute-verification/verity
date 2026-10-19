@@ -600,8 +600,11 @@ def test_the_outcome_publishes_exactly_the_public_items(served):
         o, pub, body = ch.outcome(name, bad)
         assert not o.accepted and o.verdict.codes == ("reject",) and pub["verdict"] is False and o.profile is None
         with pytest.raises(S.Refused) as e:
-            _held(ch, f"{name}-retry", rec, stream=name)
+            ch.register(f"{name}-retry", rec, stream=name, replay="honest")
         assert _codes(e) == {"stopped"}
+        with pytest.raises(S.Refused) as e:
+            _held(ch, f"{name}-window", rec, stream=name)
+        assert _codes(e) == {"late-registration"}
     assert body["audit"]["verdicts"]["opening"]["units"] == [False] * 4
 
 
