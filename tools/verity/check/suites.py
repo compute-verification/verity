@@ -121,6 +121,7 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures
+import contextlib
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -168,9 +169,11 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity-core-sampled-proofs",
+              "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "memory-challenger-lean", "benchmarks/pous",
-              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks")
+              "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
+              "verity/core/primitives/requirement")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -1563,6 +1566,37 @@ class Slots:
                 self.cond.notify_all()
 
 
+#: the memory a check slot gives the run it holds (`tools/verity/check/slot.py`'s SLOT_MEM_ENV)
+SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: after a stop's SIGINT, how long a suite's process group has to end before it is killed
+STOP_GRACE_S = 30.0
+
+
+def slot_mem_gb() -> float | None:
+    """The check slot's memory, when this runs in one (17 Oct: a quick tier in proofs' 480 GB pool slot ran circuit_check's suite
+    on 94 workers, 784 GB, since only `check` passed `--mem-gb`)."""
+    v = os.environ.get(SLOT_MEM_ENV, "")
+    return float(v) if v.replace(".", "", 1).isdigit() else cgroup_mem_gb()
+
+
+def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
+    """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
+    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
+    try:
+        rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
+    except (OSError, StopIteration):
+        return None
+    top, limits = root / "sys/fs/cgroup", []
+    d = top / rel.strip("/")
+    for c in (d, *d.parents):
+        if not c.is_relative_to(top):
+            break
+        with contextlib.suppress(OSError):
+            if (m := (c / "memory.max").read_text().strip()).isdigit():
+                limits.append(int(m))
+    return min(limits) / 2**30 if limits else None
+
+
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
     at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
@@ -1658,8 +1692,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", "-j", type=int, default=default_jobs(),
                     help="test processes at once, a parallel suite's xdist workers included (default: the CPUs this process may use, "
                          f"at most one per {TEST_PROCESS_GB} GB of available memory)")
-    ap.add_argument("--mem-gb", type=float, default=None, metavar="GB",
-                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB undeclared)")
+    ap.add_argument("--mem-gb", type=float, default=slot_mem_gb(), metavar="GB",
+                    help=f"the memory the tests may use: a parallel suite runs at most GB / worker_gb workers ({TEST_PROCESS_GB} GB "
+                         f"undeclared; default: the check slot's ${SLOT_MEM_ENV}, so a quick tier in a slot stays inside it)")
     ap.add_argument("--logs", type=Path, help="write each suite's log and report here (default: under the cache)")
     ap.add_argument("--json", type=Path, help="write the outcome of every selected suite here")
     ap.add_argument("--run", metavar="RUN", help="the recorded run this is (check passes its own): kept with each pass, so a reuse of it "
@@ -1876,6 +1911,15 @@ def main(argv: list[str] | None = None) -> int:
             with _GROUPS_LOCK:
                 for g in list(_GROUPS):
                     kill_group(g, signal.SIGINT)
+
+            def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
+                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
+                    for g in list(_GROUPS):
+                        kill_group(g, signal.SIGKILL)
+
+            stop = threading.Timer(STOP_GRACE_S, kill_rest)
+            stop.daemon = True
+            stop.start()
             for fut in futures:
                 if fut not in handled:
                     finish(fut)

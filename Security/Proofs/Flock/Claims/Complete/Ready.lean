@@ -100,6 +100,21 @@ theorem ready_sha512 (x : Claims.Msg) :
 /-- **Flock's `δc` at the plain verifier** against `H`: `ε` where the verifier can accept, else `1`. -/
 noncomputable def δc (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) : ℝ := if ready H x then ε x else 1
 
+/-- **A drawn session's `δc` at SHA-512 is below 1**: where the statement sets up a session that draws, is under `2^64`
+bytes, has regions and an honest record that fit, and has fewer than `2^128` outer coins, `ready` holds
+(`ready_sha512`), so `δc` is `ε`. -/
+theorem δc_sha512_lt_one {x : Claims.Msg} {s spec sts} (hs : setupOf false x = some (s, spec, sts))
+    (hd : s.read.draw.isSome = true) (hl : x.length < 2 ^ 64) (hreg : ∀ st ∈ sts, RegionsFit st)
+    (hrec : RecordFitsAt sha512 x spec sts) (hε : (outerSlots x).length < 2 ^ 128) :
+    δc sha512 x < 1 := by
+  have hr : ready sha512 x = true := by
+    rw [ready_sha512, hs]
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    exact ⟨⟨⟨hd, hl⟩, hreg⟩, hrec⟩
+  have h2 : ((outerSlots x).length : ℝ) < 2 ^ 128 := by exact_mod_cast hε
+  rw [δc, if_pos hr, ε]
+  exact (div_lt_one (by positivity)).2 h2
+
 /-! ## The masked verifier -/
 
 /-- **Rep `q`'s first coin's index** at the masked verifier (table `q / 2`'s rep `q % 2`): the link's coin, then every

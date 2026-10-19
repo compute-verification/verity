@@ -279,6 +279,18 @@ def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under
         CS.stage(units, "q-word", s, cl, lanes, tmp_path / "wired", key, wiring=SimpleNamespace(), share_rows=False)
 
 
+def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):
+    """FLOCK_OWN_ROWS stages another public file from the same circuit, so a shape staged with shared rows is never served from
+    the cache to a run that asked for every instance's own rows, or the other way round."""
+    a = SimpleNamespace(batch="fixed", n=16, seed=0, partition="q-word", max_ands=1 << 24, select=None, real=None)
+    monkeypatch.setenv("FLOCK_STAGE_CACHE", str(tmp_path))
+    for k, v in {"source_digest": "s", "program_digest": "p", "a": a, "row_units": {}}.items():
+        monkeypatch.setitem(CS._CTX, k, v)
+    shared = CS._stage_cache("shape")
+    monkeypatch.setattr(CS, "OWN_ROWS", True)
+    assert CS._stage_cache("shape") != shared and CS._stage_cache("shape").parent == shared.parent
+
+
 def test_core_rows_stage_and_each_row_recomputes_from_the_prover_file_with_core_alone(tmp_path: Path):
     """E4M3 K=128, the smallest whole-block FP row, staged under FLOCK_CORE_ROWS: META names each row's schema and length in bits
     (the output row's, §16.13, its 64 words') and no single ``row_schema``, its row constants are core's prefixes, and its circuit
@@ -600,6 +612,44 @@ def test_each_selftest_case_keeps_its_stderr_beside_the_class_records(monkeypatc
     CS.prove("flock-circuit", tmp_path, 16, 0, selftest=True)
     assert (tmp_path / "selftest-gpu_proofs_match_cpu.err").read_text() == "thread 'main' panicked: gpu_proofs_match_cpu: out of memory\n"
     assert (tmp_path / "selftest-all.err").read_text() == "thread 'main' panicked: None: out of memory\n"
+
+
+@pytest.mark.slow
+def test_the_selftest_swaps_the_tail_that_circuit_stage_forged(monkeypatch, tmp_path: Path):
+    """`prove`'s selftest names the forged circuit and the tables `circuit.stage` wrote beside the circuit, so `tail_swapped`
+    runs from any working directory: flock-circuit reads both from its own otherwise, and skipped the case without saying so
+    when the forged file wasn't there. Its record lists the cases flock-circuit skipped. The statement is rmsnorm-fused-cuda
+    at N = 64, whose tail's eps forges to another circuit (about 30 s to stage). When ``FLOCK_CIRCUIT`` names a selftest
+    build (sha512, glue), its `tail_swapped` runs on that statement and passes."""
+    pytest.importorskip("verity_numerical")
+    from verity_numerical.bench import templates as TM
+    from verity_numerical.bench.generate import generate
+    from verity_numerical.bench.input_sets import InputSet
+
+    s = InputSet.open(generate(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
+    low = FC.lowering_for_set(s)
+    d = tmp_path / "st"
+    FC.stage(low, s, 0, 2, d)
+    assert low.units.cut and (d / "circuit-forged.txt").read_text() != (d / "circuit.txt").read_text() and (d / "tables").is_dir()
+    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    seen, real = [], CS.subprocess.run
+
+    def run(cmd, **_kw):
+        seen.append(cmd)
+        return CS.subprocess.CompletedProcess(cmd, 0, stderr="", stdout='SKIP\t{"case": "chaining_value_forged"}\n'
+                                              'NEG\t{"case": "tail_swapped", "pass": true}\nSELFTEST\t{"all_pass": true}\n')
+
+    monkeypatch.setattr(CS.subprocess, "run", run)
+    rec = CS.prove("flock-circuit", d, 2, 0, selftest=True)
+    cmd = seen[0]
+    assert cmd[cmd.index("--forged") + 1] == str(d / "circuit-forged.txt") and cmd[cmd.index("--tables") + 1] == str(d / "tables")
+    assert rec["all_pass"] is True and rec["skipped"] == ["chaining_value_forged"] and rec["failed"] == []
+    binary = os.environ.get("FLOCK_CIRCUIT")
+    if binary and Path(binary).exists():
+        monkeypatch.setattr(CS.subprocess, "run", real)
+        live = CS.prove(binary, d, 2, 0, selftest="tail_swapped")
+        assert (live["all_pass"], live["cases"], live["failed"]) == (True, 1, []), live
 
 
 def test_a_verifier_pod_serves_every_point_of_a_gpu_session_on_the_same_processes(monkeypatch, tmp_path: Path):

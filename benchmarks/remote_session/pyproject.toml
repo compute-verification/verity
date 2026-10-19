@@ -1,11 +1,18 @@
 # The remote bandwidth audit's sessions end to end: the verifier's process (`verifier.py`), the prover's (`prover.py`,
-# its GPU backend `device.py` and `session.cu`), and their wire (`wire.py`). Not a package: `run.sh` runs both on a GPU
-# node, and the suite runs both over a loopback socket with the driver's reference as the prover's backend
-# (`uv run tools/verity/check/suites.py benchmarks/remote_session`).
+# its GPU backend `device.py` and `session.cu`, and `inplace.py`, its pass over vLLM's tensors where they are), and their
+# wire (`wire.py`). Not a package: `run.sh` runs both on a GPU node (`inplace.sh` gates the in-place pass), and the suite
+# runs both over a loopback socket with the driver's reference as the prover's backend
+# (`uv run tools/verity/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
+# `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
-          "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness"]
+          "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
+          # test_vllm_serve.py, where vLLM and a GPU are: the integration's store and what it imports
+          "verity/core/protocols/bandwidth",
+          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
+          "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/store"]

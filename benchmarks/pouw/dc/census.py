@@ -5,7 +5,8 @@
 RUN_OUT is a DC run's `out/` (`research fetch RUN --all` puts it at ~/.research/runs/RUN/out; the run id is the name of
 a directory on its path). analyze.py reads each run; a kind's line takes its fastest run (as machine_model's adopt.py
 merges two lines) and names every run that measured it, and the joint rows are the upper hull of every run's points.
---write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`); else they print.
+--write puts `census.csv` and `rows.csv` in DIR (machine_model's `data/devices/sm_90/` or `sm_100/`), keeping the
+uniform datapath's lines (UNI, and the row UP) that uniform.py wrote there; else they print.
 
 The rows (warp instructions/SM/clk, derated by the 2% noise; facets in SMSP-cycles at 1 - 2%, eps1.py's convention):
 - issue: every kind holds 1 SMSP-cycle.
@@ -420,11 +421,11 @@ def tables(dev: Device) -> str:
     out += ["", f"q*: c_M {c_m:.3f} SMSP-cycles over {lane_words:.0f} words a lane = {q:.4f}"]
     if fam == "sm100":
         c_x = fs[0]["X"] if fs else 1.0
-        # 32 lanes x 32 words a tcgen05.ld 32x32b.x32; DC's loaders wait once every 2 loads
+        # 32 lanes x 32 words a tcgen05.ld 32x32b.x32; tcgen05.wait::ld is a scoreboard wait in SASS, no instruction
         n_ld = h["slots_per"] / (32 * 32)
-        q_ld = (c_m + n_ld * 1.5 * c_x) / lane_words
-        out[-1] += (f"; with the {n_ld:.0f} tcgen05.ld.x32 (and a wait every 2) that bring them to registers: "
-                    f"{q_ld:.4f} (x128 loads: {(c_m + n_ld / 4 * 1.5 * c_x) / lane_words:.4f})")
+        q_ld = (c_m + n_ld * c_x) / lane_words
+        out[-1] += (f"; with the {n_ld:.0f} tcgen05.ld.x32 that bring them to registers: "
+                    f"{q_ld:.4f} (x128 loads: {(c_m + n_ld / 4 * c_x) / lane_words:.4f})")
     duo = max((a["duo_words"] or 0) for a in dev.analyses)
     beside = max(((j["lane_rate"] * 32, n) for _, n, j in dev.joints if analyze.lane_of(n) == "duo"
                   and (j.get("tensor_fraction") or 0) >= 1 - MARGIN), default=None)
@@ -433,6 +434,14 @@ def tables(dev: Device) -> str:
                    + (f"; beside the saturated tensor the best measured duo is {beside[0]:.2f} ({beside[1]}), so "
                       f"L_bal <= {32 * rho / beside[0]:.1f}" if beside else ""))
     return "\n".join(out) + "\n"
+
+
+def uniform_kept(d: Path, name: str, key: str) -> list[dict[str, str]]:
+    """The lines uniform.py owns in DIR/NAME (UNI's census lines, the UP row), which --write keeps."""
+    if not (d / name).is_file():
+        return []
+    with open(d / name, newline="") as f:
+        return [r for r in csv.DictReader(f) if r[key] in ("UNI", "UP")]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -446,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     print(tables(dev))
     if a.write:
         a.write.mkdir(parents=True, exist_ok=True)
+        lines, rows = lines + uniform_kept(a.write, "census.csv", "kind"), rows + uniform_kept(a.write, "rows.csv", "row")
         (a.write / "census.csv").write_text(rowsmod.census_csv(lines))
         (a.write / "rows.csv").write_text(rows_csv(rows))
         print(f"wrote {a.write / 'census.csv'} ({len(lines)} lines) and {a.write / 'rows.csv'} ({len(rows)} rows)")

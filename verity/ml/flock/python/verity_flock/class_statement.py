@@ -90,6 +90,10 @@ CORE_ROWS = os.environ.get("FLOCK_CORE_ROWS") == "1"
 #: inner statement, ZK off); another statement from the default's
 PLAIN_LEAVES = os.environ.get("FLOCK_PLAIN_LEAVES") == "1"
 LEAF_SCHEME = FC.LEAF_SCHEME_PLAIN if PLAIN_LEAVES else None
+#: FLOCK_OWN_ROWS=1: an unwired class is staged with every instance's own rows (`stage`'s ``share_rows=False``), the public
+#: file the verifier covers outside a registered ZK session (``ProvedScope.sharedRowsOk``); rows a Call shares are committed
+#: once per instance rather than once
+OWN_ROWS = os.environ.get("FLOCK_OWN_ROWS") == "1"
 #: Per FP GEMM coordinate family: the parameters each row holds, in order (x, then its scales; the W column, then its scales)
 ELEMENT_ROWS = {"GemmCoordinateE4m3_v1": (("x",), ("wrow",)),
                 "GemmCoordinateNvf4_v1": (("x", "sx"), ("wrow", "sw")),
@@ -786,8 +790,8 @@ def stage_tiled(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple,
     ``real``: the statement padded to ``n`` instances (a public cap, `rec_shape`), its first ``real`` tiles the class's and the
     rest fillers: every row zero and the output the class lowering's own on them, checked as every tile's is. A filler's rows
     are equal, so the fillers open one committed row per port; the real tiles' rows and outputs are the unpadded statement's."""
-    if PACK_WORDS or CORE_ROWS:
-        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS: a tile is staged in the default layout only")
+    if PACK_WORDS or CORE_ROWS or OWN_ROWS:
+        raise ValueError("FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_OWN_ROWS: a tile is staged in the default layout only")
     if real is not None and not 1 <= real <= n:
         raise ValueError(f"--real {real}: between 1 and the statement's {n} instances")
     lanes_n = n if real is None else real
@@ -941,11 +945,18 @@ class UnitStager:
     `unit_lowering`'s ``public``. ``circuit``: where circuit.txt is written, once; else `stage` writes it beside each round's
     files. ``pin`` and ``class_sha512`` (`circuit.digest`, `circuit.class_digest`) are computed on first read: `stage` reads
     them after writing circuit.txt, so a streamed circuit (``benchmarks/pouw/hidden_zk/fast_stage.py``) is hashed in the pass
-    that writes it."""
+    that writes it. ``bind`` (``{"partition", "program"}``, `circuit.compose`'s): the statement bound to a partition of another
+    Program, a template query's that lists ``definition``, which META ``program_digests`` then names as the circuit's template
+    (as `_shims`' does with a ``definition``); `stage` then takes each instance's global unit index (``indices``). The class
+    (`circuit.class_digest`) is the unbound stager's."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
-                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None):
+                 out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
+                 bind: dict | None = None):
         from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG
+
+        if bind is not None and set(bind) != {"partition", "program"}:
+            raise ValueError(f"{name}: bind is exactly partition and program")
 
         public_inputs = dict(public_inputs or {})
         self.definition, self.name, self.in_rows, self.public_inputs = definition, name, list(in_rows), public_inputs
@@ -960,13 +971,16 @@ class UnitStager:
         content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
                              + ([public_inputs] if public_inputs else [])).encode()
         self.row_ports = [*public_inputs, *(r for r, *_ in in_rows)]
+        programs = {definition.id: program_digest(Program(definition))} if bind else {name: hashlib.sha256(content).hexdigest()}
         self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
                                    outputs=[port(f"o{j}") for j in range(len(self.out_words))],
-                                   program_digests=lambda statics: {name: hashlib.sha256(content).hexdigest()})
+                                   program_digests=lambda statics: programs, **({"definition": lambda **_: definition} if bind else {}))
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"), content_digest=hashlib.sha256(content).hexdigest())
         self.text = FC.compose(self.low, self.sub, port_bits=[None] * len(public_inputs) + [b for _r, _s, b, _ps in in_rows],
                                seg_ports=frozenset(r for r, s, _b, _ps in in_rows if s == SCHEMA_HM96_SHA512_ROW_SEG),
-                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None)
+                               seg_out_rows=seg_out, v2_out_rows=v2_out, public_inputs=public_inputs or None,
+                               partition=bind and bind["partition"], program=bind and bind["program"])
+        self.bound = bind is not None
         self._meta = self.text.split("\n", 2)[1][5:]
         self.meta = json.loads(self._meta)
         self.ports = FC._meta_ports(self.meta)
@@ -1010,12 +1024,19 @@ class UnitStager:
         if bad.size:
             raise AssertionError(f"{self.name}: instance {bad[0]}'s outputs are not the IR reference's")
 
-    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None) -> dict:
+    def stage(self, rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
+              indices: Sequence[int] | None = None, set_name: str | None = None) -> dict:
         """A round's statement: ``rows`` each input row's words per instance ``(n, words)`` u16, and each public input's
         (``rows[param]``). The outputs are the lowering's, checked against the IR reference (`reference_check`); the salts are
         ``salts``' where given, else `circuit.stage_salts`'. Writes ``inst.bin`` and ``pub.bin`` (and ``circuit.txt`` without the
         stager's ``circuit``) under ``out_dir``; returns META, the outputs per port, every row's salts, and the unit's ANDs and
-        matrix entries."""
+        matrix entries. ``indices``: each instance's global unit index, which a bound stager needs and an unbound one refuses
+        (its units are ``0 .. n``). ``set_name``: the round's input set (the header's ``set``), else the stager's, which its
+        frame domains and salts bind; a template's units split across statements (a statement's shape caps its instances) are
+        one set per statement on the one circuit."""
+        if (indices is None) == self.bound:
+            raise ValueError(f"{self.name}: a bound stager's round names its units' global indices, and only a bound one's")
+        iset = self.iset if set_name is None else SimpleNamespace(**{**vars(self.iset), "name": set_name})
         n = len(rows[self.in_rows[0][0]])
         flat = np.concatenate([np.asarray(rows[r], dtype=np.uint16) for r in self.row_ports], axis=1)
         got, _cut, ok = self.low.evaluate(flat.astype(np.uint64))
@@ -1025,14 +1046,14 @@ class UnitStager:
         at = np.cumsum([0] + self.out_words)
         outs = {f"o{j}": got[:, at[j]:at[j + 1]] for j in range(len(self.out_words))}
         self.reference_check(rows, outs)
-        salts = {**FC.stage_salts(self.iset, 0, n, self.ports, salt_key), **(salts or {})}
+        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key), **(salts or {})}
         out_dir.mkdir(parents=True, exist_ok=True)
         if self.circuit is None:
             (out_dir / "circuit.txt").write_text(self.text)
-        FC.write(self.text, self.iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
+        FC.write(self.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
                  rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in self.in_rows}, outs=outs, salts=salts,
                  public_words={p: np.asarray(rows[p], dtype=np.uint16) for p in self.public_inputs},
-                 digests=(self.pin, self.class_sha512))
+                 digests=(self.pin, self.class_sha512), indices=None if indices is None else [int(u) for u in indices])
         counts = self.low.layout.counts
         return {"meta": json.loads(self._meta), "outs": outs, "salts": salts, "ands": counts["ands"],
                 "unit_nnz": counts["nnz_a"] + counts["nnz_b"], "circuit_sha512": self.pin}
@@ -1040,10 +1061,10 @@ class UnitStager:
 
 def stage_unit(definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]], out_rows: Sequence[tuple[str, Sequence[int]]],
                rows: dict[str, np.ndarray], out_dir: Path, salt_key: bytes, salts: dict | None = None,
-               public_inputs: dict | None = None) -> dict:
+               public_inputs: dict | None = None, bind: dict | None = None, indices: Sequence[int] | None = None) -> dict:
     """One round of a `UnitStager` (its arguments as there and in its `stage`): writes ``circuit.txt``, ``inst.bin`` and
     ``pub.bin``; returns META, the outputs per port, every row's salts, and the unit's ANDs and matrix entries."""
-    return UnitStager(definition, name, in_rows, out_rows, public_inputs).stage(rows, out_dir, salt_key, salts)
+    return UnitStager(definition, name, in_rows, out_rows, public_inputs, bind=bind).stage(rows, out_dir, salt_key, salts, indices)
 
 
 def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
@@ -1058,10 +1079,12 @@ def statement(binary: str, d: Path, n: int, timeout: int = 3600) -> dict:
 def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False, timeout: int = 3600, gpu: bool = False,
           warm: int = 0, runs: int = 1) -> dict:
     """A live session (``serve`` on 127.0.0.1, or a verifier pod's at FC_VERIFIERS, and ``prove``), or ``selftest``: the LIVE or
-    SELFTEST record."""
+    SELFTEST record. The selftest reads the forged circuit and the tables `circuit.stage` writes beside the circuit, wherever
+    it runs from; ``skipped`` lists the cases it skipped on this statement."""
     circ, inst, pub = d / "circuit.txt", d / f"inst-{n}.bin", d / f"pub-{n}.bin"
     if selftest:
-        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ)] + (["--gpu"] if gpu else [])
+        cmd = [binary, "selftest", "--instances", str(inst), "--circuit", str(circ), "--forged", str(d / "circuit-forged.txt"),
+               "--tables", str(d / "tables")] + (["--gpu"] if gpu else [])
         t0 = time.monotonic()
         try:
             r = subprocess.run(cmd + (["--only", selftest] if isinstance(selftest, str) else []), capture_output=True, text=True,
@@ -1080,7 +1103,8 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         all_pass = head.get("all_pass") if head is not None else (bool(neg) and not failed)     # --only prints its one case, no summary
         # a process that ends without its verdict (killed, out of memory) is no verdict: its exit code and stderr say why
         finished = r.returncode == 0 and bool(lines)
-        return {"all_pass": all_pass, "cases": len(neg), "failed": failed, "finished": finished, "timed_out": False,
+        skipped = [json.loads(ln.split("\t", 1)[1])["case"] for ln in r.stdout.splitlines() if ln.startswith("SKIP\t")]
+        return {"all_pass": all_pass, "cases": len(neg), "failed": failed, "skipped": skipped, "finished": finished, "timed_out": False,
                 "exit_code": r.returncode, "wall_s": round(time.monotonic() - t0, 3)} | \
             ({} if finished else {"stderr_tail": r.stderr[-600:]}) | \
             ({"gpu_cases": gc} if (gc := [c for c in neg if c.get("case") in GPU_CASES]) else {})
@@ -1098,12 +1122,15 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         srvs, addrs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
     try:
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
-            timer = ["/usr/bin/time", "-f", "%M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
+            # user and system CPU seconds, then the peak RSS in KB, last
+            timer = ["/usr/bin/time", "-f", "%U %S %M", "-o", str(d / "prove.maxrss")] if os.path.exists("/usr/bin/time") else []
             pr = subprocess.Popen(timer + [binary, "prove", "--verifier", ",".join(addrs) or f"127.0.0.1:{port}", "--instances", str(inst),
-                                           "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else []),
-                                  stdout=fo, stderr=fe)
+                                           "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else [])
+                                  + _zk(), stdout=fo, stderr=fe)
             pr.wait()
-        prover_gb = int((d / "prove.maxrss").read_text().split()[-1]) / 2**20 if timer else None   # the prover's own peak, KB
+        rusage = (d / "prove.maxrss").read_text().split() if timer else []
+        prover_gb = int(rusage[-1]) / 2**20 if rusage else None   # the prover's own peak, KB
+        prover_cpu_s = round(float(rusage[-3]) + float(rusage[-2]), 2) if len(rusage) >= 3 else None
         hwm = [_vm_hwm(s.pid) for s in srvs]
         verifier_gb = round(sum(hwm), 2) if srvs and None not in hwm else None    # the verifier processes' peaks, summed
     finally:
@@ -1125,7 +1152,8 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         {k: v.get(k) for k in ("prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
                                "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
-        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
+        {"prover_peak_gb": round(prover_gb, 2) if prover_gb else None, "prover_cpu_s": prover_cpu_s, "zk": bool(_zk()),
+         "verifier_peak_gb": verifier_gb, "verify_servers": len(addrs),
          "verifier": f"pod {remote.get('host')}" if remote else "loopback", "coins": FC.coins(live),
          "verify_s": (v.get("verdict") or {}).get("verify_s"), "timed_runs": len(timed),
          "prove_total_s_runs": [x.get("prove_total_s") for x in timed],
@@ -1134,19 +1162,27 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
          "buckets": _buckets(v), "buckets_runs": [_buckets(x) for x in timed]}
 
 
+def _zk() -> list[str]:
+    return ["--zk"] if os.environ.get("FLOCK_ZK") == "1" else []
+
+
 def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
            bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str]]:
     """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, and their addresses. The prover's
     FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by FC_VERIFY_SERVERS (default 1,
     at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
     system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
-    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits."""
+    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
+    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
+    Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
+    law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
-                              "--concurrency", str(concurrency)] + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
+                              "--concurrency", str(concurrency)] + law + _zk()
+                             + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)
             for i, log in enumerate(logs)]
     addrs = []
@@ -1295,7 +1331,8 @@ def _stage_cache(s: str) -> Path | None:
     a = c["a"]
     ident = [c["source_digest"], c["program_digest"], s, a.batch, a.n, c.get("batch_ands"), c.get("max_statement_bits"), c["row_units"].get(s),
              a.seed, a.partition, a.max_ands, a.select, GEMM_TILE] + (["pack-words"] if PACK_WORDS else []) + (["core-rows"] if CORE_ROWS else []) \
-        + (["plain-leaves"] if PLAIN_LEAVES else []) + ([f"real-{a.real}"] if a.real is not None else [])
+        + (["plain-leaves"] if PLAIN_LEAVES else []) + (["own-rows"] if OWN_ROWS else []) \
+        + ([f"real-{a.real}"] if a.real is not None else [])
     return Path(root) / hashlib.sha256(json.dumps(ident, default=str).encode()).hexdigest()[:32]
 
 
@@ -1371,7 +1408,7 @@ def _stage_job_fresh(s: str) -> dict:
                 n = auto_batch(cc.counts["ands"], c["row_units"].get(s) or cl.units) if a.batch == "auto" else a.n
                 lanes_ = class_lanes(units, cl, c["key"], a.real or n, c["shared"])
                 rec["stage"] = stage(units, a.partition, s, cl, lanes_, c["out"] / s[:16], c["salt_key"],
-                                     pad=n if a.real is not None else None)
+                                     pad=n if a.real is not None else None, share_rows=not OWN_ROWS)
             rec["stage_py_maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 2)
         except Exception as e:  # noqa: BLE001  (a class that breaks is a result, recorded with where it broke)
             rec.pop("stage", None)

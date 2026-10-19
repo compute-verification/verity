@@ -109,6 +109,28 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
+  for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
+  commands: `.agents/skills/asking-daniel/SKILL.md`.
+- 2026-10-17 (8:20 PM PDT, in proofs' chat; compute accounting's card ba874f45): PoUW's per-matmul noise seeds may be
+  derived by Fiat–Shamir, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)) from the epoch's
+  live salt: "I'm happy to do Fiat-Shamir for this for now because it's going to happen at such a high-frequency that
+  grinding etc. is not a huge problem." This narrows "live coins only" for PoUW's per-call randomness, for now. The
+  roots, positions and shapes are private, so a drawn unit derives the seed and its own noise inside its proof, and
+  the guarantee carries a grinding term (T·μ^m). With it went:
+  noise is generated after each A·B pair is committed, and a sampled unit proves itself and its own noise's
+  generation (18 Oct 02:36–03:06 UTC; compute accounting's decisions 101 and 102).
+- 2026-10-17 (6:18 PM PDT, to memory accounting): no private or trapdoor encoding for KV, such as a trusted device
+  computing Rabin–Williams roots of each appended block, because it costs too much. The weights alone keep that
+  exception. Credited dynamic memory rests on the public codec, and the stacking bound on the named conjecture
+  `EncodeChainHardness`, which he approved as a premise at 6:08 PM PDT, with claims resting on it listed as conditional.
+- 2026-10-17 (12:32–12:43 AM PDT, in memory accounting's stacking campaign): the prover controls the audited circuit's
+  inputs as well as the circuit (precommitted, its architecture secret) and knows every coin as soon as it is issued, so
+  no defense may assume the circuit can't learn a coin: the prover passes it in, disguised as a prompt. Verifier coins
+  stay public even where secrecy would stop an attack; hiding codec keys from the circuit was withdrawn on this. The
+  one exception is the weights: they may take a private encoding from a trusted third party, salted after the
+  commitment with secrets the prover never sees. That is one deployment variant, not the default
+  (note:20261017T1038Z-report-stacking-campaign).
 - 2026-10-16 (11:51 AM PDT): no PR waits on Daniel: "If you think they're ready, they're ready. Merge them. Or maybe
   ask CI what it thinks." A PR's owner lane marks it ready once it's final and its checks pass, with
   `research queue ready N --on auto --by LANE` (CI's quick tier first) or `--mark`, and drive lands it. Nobody else
@@ -269,7 +291,7 @@ Newest first. Each is Daniel's unless it names the coordinator.
   statement and each open piece's statement go on the branch before a worker starts, workers prove against them, and
   integration runs continuously; what the deadline leaves open is a gap list of exact lemma names
   (`.agents/skills/lean-proofs/SKILL.md`). The same night: say "private circuit" or "the circuit's description", never
-  "netlist" (the README's Glossary).
+  "netlist" (DESIGN.md's Glossary).
 - 2026-10-08 (7:13 PM PDT, relayed by top): a protocol's verifier of record switches from Python to Lean only on
   evidence. Its gap list shows nothing the Python checks that the Lean doesn't, for the record versions in use, and every
   recorded run in the store, replayed through the Lean, gets the verdict the Python gave, negative controls included. The
@@ -346,7 +368,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
 - 2026-10-06 (8:53 AM PDT), the coordinator: a PR in a tip that is being checked keeps its head until the tip lands or ci
   asks for a change. A conflict is fixed at the tip (ci restacks it), not by pushing to the PR: a new head refuses every
   tip that pins the old one at landing, and their checks are spent for nothing. Since 12 Oct, drive leaves a conflicting
-  PR out of `next` for the lander (11 Oct), and a new head still cancels the checks of the trains above it.
+  PR out of `next` for the lander (11 Oct). Since 17 Oct (top), a new head no longer cancels a running train: it rejoins above
+  once that train ends, at once only if its own train failed.
 - 2026-10-06 (8:07 AM PDT): one hash covers derivations and PRFs: `derive` is SHA-512, P2's key expansion counter-mode
   SHA-512, and SHA-512 truncated to 256 bits counts as SHA-512; Pearl's FP8 scheme keeps BLAKE3 as Pearl's own
   definition.

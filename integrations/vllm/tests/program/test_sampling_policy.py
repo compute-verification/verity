@@ -21,14 +21,14 @@ from verity_vllm.pipeline.build import SAMPLERS_BOUND, applicability_conditions,
 
 def _sweep_manifest(tmp_path, sampling: str, params: dict, seeds: list[int]):
     p = tmp_path / "wl_sweep.json"
-    p.write_text(json.dumps({"schema": "verity-vllm/workload/v1", "model": "unsloth/Llama-3.2-1B", "requests": [],
+    p.write_text(json.dumps({"schema": "verity-vllm/workload/v2", "model": "unsloth/Llama-3.2-1B", "requests": [],
                              "sweep": {"row_id": "r", "sampling": sampling, "sampling_params": params, "sampling_seeds": seeds}}))
     return str(p)
 
 
 def _legacy_manifest(tmp_path, requests: list[dict], top_variant: str | None = "greedy"):
     p = tmp_path / "wl_legacy.json"
-    doc = {"schema": "verity-vllm/workload/v1", "model": "Qwen/Qwen2.5-1.5B",
+    doc = {"schema": "verity-vllm/workload/v2", "model": "Qwen/Qwen2.5-1.5B",
            "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}, "temp1": {"temperature": 1.0, "top_p": 1.0, "top_k": 0},
                         "combo": {"temperature": 0.7, "top_p": 0.9, "top_k": 50}},
            "sampling": {"variant": top_variant, "seed": 0, "n": 1}, "requests": requests}
@@ -133,7 +133,7 @@ def _requests_manifest(tmp_path, n: int, arrive=None, caps=None, seeds=True):
     p = tmp_path / f"wl_{n}.json"
     reqs = [{"request_id": f"r{i}", "index": i, "prompt_len": 8, "max_tokens": int((caps or [16] * n)[i]),
              "arrive_step": int((arrive or [0] * n)[i]), **({"seed": 1000 + i} if seeds else {})} for i in range(n)]
-    p.write_text(json.dumps({"schema": "verity-vllm/workload/v1", "model": "unsloth/Llama-3.2-1B", "requests": reqs,
+    p.write_text(json.dumps({"schema": "verity-vllm/workload/v2", "model": "unsloth/Llama-3.2-1B", "requests": reqs,
                              "sweep": {"row_id": "r", "sampling": "stoch-t0.8-p0.95", "sampling_params": SAMPLING["stoch-t0.8-p0.95"],
                                        "sampling_seeds": [1000 + i for i in range(n)] if seeds else []}}))
     return str(p)

@@ -121,15 +121,21 @@ setup() {
 free_port() { "$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 
 session() {   # session D O: one loopback --zk session with the proving build, the verifier serving its own public file and
-  local D=$1 O=$2 port pin srv rc   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
-  pin=$(cat "$D/pin.txt"); port=$(free_port)
-  $TIME "$O/serve.time" bash -c "$(vlimit $SERVE_GB) exec $BIN serve --zk --listen 127.0.0.1:$port --out $D/sessions \
-    --instances $D/pub.bin --circuit $D/circuit.txt --pin $pin --operator loopback --draw subset:$N" > "$O/serve.log" 2>&1 &
-  srv=$!
-  until grep -q '^SERVING ' "$O/serve.log" 2>/dev/null; do
-    kill -0 $srv 2>/dev/null || { log "  serve exited before SERVING: $(tail -2 "$O/serve.log")"; return 1; }
-    sleep 1
+  local D=$1 O=$2 port pin srv rc try up=   # drawing all N instances (subset:N), as every soundness claim is about a drawn session
+  pin=$(cat "$D/pin.txt")
+  for try in 1 2 3 4 5; do   # the ephemeral port free_port picked can be taken by another worker before serve binds it: retake one
+    port=$(free_port)
+    $TIME "$O/serve.time" bash -c "$(vlimit $SERVE_GB) exec $BIN serve --zk --listen 127.0.0.1:$port --out $D/sessions \
+      --instances $D/pub.bin --circuit $D/circuit.txt --pin $pin --operator loopback --draw subset:$N" > "$O/serve.log" 2>&1 &
+    srv=$!
+    until grep -q '^SERVING ' "$O/serve.log" 2>/dev/null; do
+      kill -0 $srv 2>/dev/null || break
+      sleep 1
+    done
+    grep -q '^SERVING ' "$O/serve.log" 2>/dev/null && { up=1; break; }
+    log "  serve exited before SERVING (try $try): $(tail -1 "$O/serve.log")"; wait $srv 2>/dev/null
   done
+  [ -n "$up" ] || { log "  serve never came up after $try tries"; return 1; }
   $TIME "$O/prove.time" bash -c "$(vlimit $PROVE_GB) exec $BIN prove --zk --verifier 127.0.0.1:$port --instances $D/inst.bin \
     --circuit $D/circuit.txt --runs $RUNS --warm $WARM" > "$O/prove.out" 2> "$O/prove.err"
   rc=$?

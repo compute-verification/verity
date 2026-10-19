@@ -28,7 +28,7 @@ TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "memory-accounting", "network-accounting", "console",
-           "ci", "lean", "comms", "top", "vllm", "benchmarks", "old-accounting", "old-circuits-and-proofs"]
+           "ci", "lean", "comms", "top", "vllm", "benchmarks", "hash"]
 
 
 class FakeSlack:
@@ -188,7 +188,7 @@ def test_the_repository_registry_loads_and_seeds_every_handle_and_channel():
     reg = slack.load_registry(REAL_REGISTRY)
     assert [h["handle"] for h in reg["handles"]] == HANDLES
     assert set(reg["channels"]) == {"agent-coordination", "agent-alerts", "ask-daniel"}
-    assert slack.subscribers(reg, "agent-coordination") == ["old-accounting", "old-circuits-and-proofs"]
+    assert slack.subscribers(reg, "agent-coordination") == []
     assert slack.subscribers(reg, "agent-alerts") == slack.subscribers(reg, "ask-daniel") == ["infra"]
     assert reg["channels"]["ask-daniel"]["id"] == "C0C5UCA0S0Z" and slack.resolve_key(reg, "approvals") == "ask-daniel"
 
@@ -218,8 +218,6 @@ def test_handles_and_subscriptions(registry, capsys):
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
     assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
     assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
-    rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
-    assert rc == 0 and f'channelId="{COORD}", topLevelOnly=true' in out and ALERTS not in out
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
@@ -244,9 +242,9 @@ def test_registry_refuses_a_path_two_handles_own(registry, capsys):
 
 def test_subscriptions_fail_visibly_without_channel_ids(registry, capsys):
     reg = json.loads(registry.read_text())
-    reg["channels"]["agent-coordination"]["id"] = None
+    reg["channels"]["agent-alerts"]["id"] = None
     registry.write_text(json.dumps(reg))
-    rc, out, _ = run(capsys, "subscriptions", "--as", "old-accounting")
+    rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 2 and "id not recorded" in out
 
 
@@ -443,6 +441,24 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     assert rc == 2 and says in err and err.startswith("research msg: reactions.add: ")
     assert OIDC not in out + err
     assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
+
+
+def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
+    """Slack's cursor for conversations.replies skipped the message at each page boundary: a doorbell in a 204-reply inbox
+    read was lost (18 Oct)."""
+    replies = [{"ts": f"1700000000.{i:06d}"} for i in range(1, 6)]
+    asked = []
+
+    def transport(url, data, headers):
+        params = dict(urllib.parse.parse_qsl(data.decode()))
+        asked.append(params.get("oldest"))
+        newer = [m for m in replies if float(m["ts"]) > float(params.get("oldest") or 0)]
+        return {"ok": True, "messages": [{"ts": "1700000000.000000"}] + newer[:2], "has_more": len(newer) > 2,
+                "response_metadata": {"next_cursor": "skips-one" if len(newer) > 2 else ""}}
+
+    got = slack.Slack("xoxb-dummy", transport=transport).paged("conversations.replies", "messages", channel=COORD, ts="1700000000.000000")
+    assert [m["ts"] for m in got] == ["1700000000.000000"] + [m["ts"] for m in replies]
+    assert asked == [None, "1700000000.000002", "1700000000.000004"]
 
 
 def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
@@ -874,10 +890,13 @@ def route(identity_socket, monkeypatch):
     srv.server_close()
 
 
-def card_argv(*extra: str, kind: str = "default", deadline: str = "3:00 PM") -> list[str]:
+PAGE_URL = "https://app.notion.com/p/0123456789abcdef0123456789abcdef"
+
+
+def card_argv(*extra: str, kind: str = "default", deadline: str = "3:00 PM", link: str | None = PAGE_URL) -> list[str]:
     return ["ask-daniel", "--as", "infra", "--kind", kind, "--question", "Test: does the #ask-daniel card render correctly?",
             "--why", "First live card; checks the format.", "--option", "yes=Looks right", "--option", "no=Needs changes",
-            "--recommend", "yes", "--default", "yes", "--deadline", deadline, "--link", "https://github.com/x/note.md", *extra]
+            "--recommend", "yes", "--default", "yes", "--deadline", deadline, *(("--link", link) if link else ()), *extra]
 
 
 def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, registry, capsys):
@@ -887,7 +906,7 @@ def test_ask_daniel_posts_the_cards_fields_with_the_routes_identity(route, regis
     assert (method, path) == ("POST", "/api/agent-approvals")
     assert body == {"kind": "default", "question": "Test: does the #ask-daniel card render correctly?", "why": "First live card; checks the format.",
                     "options": [{"value": "yes", "label": "Looks right", "recommended": True}, {"value": "no", "label": "Needs changes"}],
-                    "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": "https://github.com/x/note.md", "requested_by": "infra",
+                    "default": "yes", "deadline": "2026-09-30T22:00:00Z", "link": PAGE_URL, "requested_by": "infra",
                     "agent_url": "https://cursor.com/agents/bc-test"}
     assert route.identity["seen"][0] == ("/v1/tokens/oidc", {"aud": slack.ASK_DANIEL})
     assert "the card's fields" in err and f"threadTs=1790800000.000100" in err and OIDC not in out + err
@@ -899,6 +918,7 @@ def test_ask_daniel_mentions_him_on_the_card_so_slack_notifies_him(route, fake, 
     (ping,) = [m for m in fake.messages.get(ASK, []) if m.get("thread_ts") == "1790800000.000100"]
     assert rc == 0 and ping["username"] == "infra" and ping["text"].startswith(f"<@{human}> a decision for you: Test: does the")
     assert "I recommend: Looks right. `yes` applies at 3:00 PM PDT" in ping["text"] and ping["text"].endswith("(card `42`)")
+    assert f"decide on its page: {PAGE_URL}" in ping["text"]
 
 
 def test_send_to_daniel_mentions_him_and_nobody_posts_as_him(fake, registry, capsys):
@@ -950,7 +970,9 @@ def test_only_a_400_falls_back(route, registry, capsys):
     ({"--deadline": "tomorrow"}, "give `3:00 PM`"),
     ({"--deadline": "13:00 PM"}, "not a clock time"),
     ({"--link": "http://x"}, "an https URL"),
-    ({"--link": None}, "needs --link"),
+    ({"--link": "https://github.com/x/note.md"}, "the ask's page in the Asks for Daniel database"),
+    ({"--link": "https://notion.so.example.com/p/1"}, "the ask's page in the Asks for Daniel database"),
+    ({"--link": None}, "needs --link or --page"),
     ({"--as": "pous-worker-3"}, "unknown handle"),
 ])
 def test_ask_daniel_checks_the_card_before_sending_anything(route, registry, capsys, change, says):
@@ -1014,6 +1036,25 @@ def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry
     assert run(capsys, "ask-daniel", "status")[0] == 2
 
 
+def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_asker(route, fake, registry, routes_dirs, capsys, monkeypatch):
+    """Leads filed TOP issues only to get Daniel's decisions logged (eight on 17 Oct; COMM-34)."""
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
+    top = inbox(fake, routes_dirs, "top")
+    card = fake.add(ASK, text="No objection by the deadline, so the default applies.", username="Verity", bot_id=BOT, blocks=[
+        {"type": "section", "text": {"type": "mrkdwn", "text": "`DEFAULT` *Move the nightly check to 02:00 PT?*"}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": "asked by <https://cursor.com/agents/bc-x|infra> (agent `bc-x`)"}]}])
+    route.statuses = [{"status": "decided", "choice": "yes", "source": "default", "decided_at": "2026-09-30T22:00:05Z",
+                       "ts": card["ts"], "channel": ASK}]
+    rc, _, err = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and "route @top: rang with the decision" in err
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` decided: `yes` (default, 2026-09-30T22:00:05Z)")
+    assert "on: Move the nightly check to 02:00 PT?; asked by infra" in bell["text"]
+    assert run(capsys, "ask-daniel", "status", "42")[0] == 0 and len(bells(fake, top)) == 1          # once per card
+    route.statuses = [{"status": "pending"}]
+    assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
+
+
 def test_status_404_says_no_card_has_that_id(route, registry, capsys):
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
@@ -1040,6 +1081,162 @@ def test_ask_daniels_dry_run_prints_both_shapes_and_sends_nothing(route, registr
     assert rc == 0 and not out and not route.requests and not route.identity["seen"]
     new, old = [json.loads(line[line.index("{"):]) for line in err.splitlines()]
     assert new["kind"] == "default" and old["title"] == new["question"]
+
+
+class FakeNotion:
+    """Notion's API for the Asks for Daniel database: page creation, a property patch, a data source query and comments."""
+
+    def __init__(self):
+        self.requests, self.results, self.comments, self.answer = [], [], {}, None
+
+    def handle(self, method: str, path: str, body: dict | None, headers) -> tuple[int, dict]:
+        self.requests.append((method, path, body, headers.get("Authorization"), headers.get("Notion-Version")))
+        if self.answer:
+            return self.answer
+        if (method, path) == ("POST", "/v1/pages"):
+            return 200, {"object": "page", "id": "p-1", "url": "https://app.notion.com/p/p1"}
+        if method == "PATCH" and path == "/v1/pages/p-1":
+            return 200, {"object": "page", "id": "p-1"}
+        if method == "POST" and path.endswith("/query"):
+            return 200, {"results": self.results}
+        if method == "GET" and path.startswith("/v1/comments?block_id="):
+            return 200, {"results": self.comments.get(path.split("=")[1].split("&")[0], [])}
+        return 404, {"code": "object_not_found", "message": "no such object"}
+
+
+@pytest.fixture
+def notion(monkeypatch):
+    state = FakeNotion()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def _answer(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n)) if n else None
+            status, out = state.handle(self.command, self.path, body, self.headers)
+            raw = json.dumps(out).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        do_GET = do_POST = do_PATCH = _answer
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True).start()
+    monkeypatch.setenv("RESEARCH_NOTION_URL", f"http://127.0.0.1:{srv.server_address[1]}/v1")
+    monkeypatch.setenv("NOTION_API_KEY", "ntn-dummy-not-a-secret")
+    yield state
+    srv.shutdown()
+    srv.server_close()
+
+
+PAGE_MD = """<callout icon="❓" color="gray_bg">
+\t**Question.** Does the card render?
+</callout>
+## The problem
+The format is new.
+## Background
+$$
+\\gamma \\le 0.01
+$$
+## Options
+### A. Yes (recommended)
+## Why the lane recommends A
+It does.
+## What happens next
+- **If you approve A:** nothing.
+## Updates since the card
+None.
+## Sources
+- none
+"""
+
+
+def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on_the_page(route, notion, fake, registry, tmp_path, capsys):
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, out, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 0 and out.split()[0] == "42" and "page https://app.notion.com/p/p1" in err
+    (m1, p1, made, auth, version), (m2, p2, patch, *_) = notion.requests
+    assert (m1, p1, auth, version) == ("POST", "/v1/pages", "Bearer ntn-dummy-not-a-secret", slack.NOTION_VERSION)
+    db = json.loads(registry.read_text())["channels"]["ask-daniel"]["pages"]
+    assert made["parent"] == {"type": "data_source_id", "data_source_id": db["data_source"]}
+    assert made["markdown"] == PAGE_MD and made["markdown_version"] == "v2"
+    props = made["properties"]
+    assert props["Ask"]["title"][0]["text"]["content"] == "Test: does the #ask-daniel card render correctly?"
+    assert props["Status"] == {"status": {"name": "Waiting on Daniel"}} and props["Lane"] == {"select": {"name": "infra"}}
+    assert props["Kind"] == {"select": {"name": "Default"}} and props["Area"] == {"select": {"name": "Process"}}
+    assert props["Deadline"] == {"date": {"start": "2026-09-30T22:00:00Z"}} and props["Lane checked"] == {"checkbox": True}
+    assert props["If no answer"]["rich_text"][0]["text"]["content"] == "Looks right applies at 3:00 PM PDT, Wed 30 Sep"
+    assert route.requests[0][2]["link"] == "https://app.notion.com/p/p1"
+    assert (m2, p2) == ("PATCH", "/v1/pages/p-1") and patch["properties"]["Card ID"]["rich_text"][0]["text"]["content"] == "42"
+    assert patch["properties"]["Slack card"] == {"url": f"https://computeverification.slack.com/archives/{ASK}/p1790800000000100"}
+    assert "ntn-dummy-not-a-secret" not in out + err
+
+
+def test_page_checks_the_template_and_the_area_before_anything_is_sent(route, notion, registry, tmp_path, capsys):
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD.replace("## Options\n", ""))
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "lacks ## Options" in err and "asking-daniel/SKILL.md" in err
+    page.write_text(PAGE_MD.replace("## Sources\n- none\n", "").replace("## The problem\n", "## Sources\n- none\n## The problem\n"))
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "the template's order" in err
+    page.write_text(PAGE_MD)
+    rc, _, err = run(capsys, *card_argv("--page", str(page), link=None))
+    assert rc == 2 and "--page needs --area" in err
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process"))
+    assert rc == 2 and "not both" in err
+    assert not notion.requests and not route.requests
+
+
+def test_page_without_a_token_says_to_use_the_mcp_and_link_the_page(route, notion, registry, tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("NOTION_API_KEY")
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "no $NOTION_API_KEY" in err and "Notion MCP" in err and not notion.requests and not route.requests
+
+
+def test_a_card_that_fails_after_its_page_is_made_says_where_the_page_is(route, notion, registry, tmp_path, capsys):
+    route.answer = (500, {"error": "boom"})
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "the page is up at https://app.notion.com/p/p1: rerun with --link https://app.notion.com/p/p1" in err
+
+
+def test_notion_404_says_to_share_the_database_with_the_connection(route, notion, registry, tmp_path, capsys):
+    notion.answer = (404, {"code": "object_not_found", "message": "Could not find data_source"})
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD)
+    rc, _, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    assert rc == 2 and "share the Asks for Daniel database with the token's connection" in err and not route.requests
+
+
+def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comment(notion, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: NOW)
+    rt = lambda s: {"type": "rich_text", "rich_text": [{"plain_text": s}]}
+    notion.results = [{"id": "p-9", "url": "https://app.notion.com/p/p9", "last_edited_time": "2026-09-30T20:00:00Z",
+                       "properties": {"Ask": {"type": "title", "title": [{"plain_text": "Adopt KeyBinding?"}]},
+                                      "Lane": {"type": "select", "select": {"name": "infra"}},
+                                      "Status": {"type": "status", "status": {"name": "Decided otherwise"}},
+                                      "Decision": rt("Option B, and restate gamma"), "Card ID": rt("42")}}]
+    notion.comments["p-9"] = [{"created_time": "2026-09-30T19:00:00Z", "rich_text": [{"plain_text": "first"}]},
+                              {"created_time": "2026-09-30T19:30:00Z", "rich_text": [{"plain_text": "Why is $`\\gamma`$ 2.4?"}]}]
+    rc, out, _ = run(capsys, "ask-daniel", "pages", "--as", "infra", "--hours", "6")
+    assert rc == 0 and out.splitlines()[0].startswith("Decided otherwise  @infra") and "Adopt KeyBinding?  https://app.notion.com/p/p9" in out
+    assert "decision: Option B, and restate gamma" in out and "2 comment(s); newest 2026-09-30T19:30:00Z: Why is" in out
+    method, path, query, *_ = notion.requests[0]
+    assert (method, path) == ("POST", f"/v1/data_sources/{json.loads(registry.read_text())['channels']['ask-daniel']['pages']['data_source']}/query")
+    assert query["filter"]["and"] == [{"timestamp": "last_edited_time", "last_edited_time": {"on_or_after": "2026-09-30T14:45:00Z"}},
+                                      {"property": "Lane", "select": {"equals": "infra"}}]
+    rc, out, _ = run(capsys, "ask-daniel", "pages", "--json")
+    assert rc == 0 and json.loads(out)[0]["decision"] == "Option B, and restate gamma"
 
 
 # ---- routing: `@name` at the start of a post rings that name's doorbell ---------------------------------------------------------------
@@ -1231,7 +1428,7 @@ def test_as_takes_only_a_name_this_agent_holds(fake, registry, routes_dirs, caps
     assert rc == 2 and f"@ci is held by {', '.join(held['ci'])}, and this agent is {held['infra'][0]}" in err
     rc, _, err = run(capsys, "close", "--as", "ci", "--thread", fake.messages[COORD][0]["ts"])
     assert rc == 2 and "post as your own handle" in err and len(fake.messages[COORD]) == before
-    lander = next(a for a in held["old-circuits-and-proofs"] if len(a) > 11)
+    lander = "bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628"                                # the research coordinator, under a short id
     monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lander}")
     assert "bc-8ece7cde" in held["proofs"] and run(capsys, "send", "--as", "proofs", "--text", "the train is up")[0] == 0
     add_route(routes_dirs[0], "circuits", "1700000900.000200", holder="bc-11111111-2222-3333-4444-555555555555")
@@ -1272,12 +1469,12 @@ def argparse_ns(**kw):
 def test_a_handle_without_an_inbox_is_reached_through_linear_or_top_level_and_an_unknown_name_is_refused(fake, registry, routes_dirs, capsys):
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@proofs", "--text", "x")
     assert rc == 0 and "route @proofs: no Slack inbox; reach it through its Linear team PRF" in err
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "x")             # no team, no inbox yet
+    assert rc == 0 and "route @console: no inbox; its holder opens one with `research msg names open --as console`" in err
     box = inbox(fake, routes_dirs, "console")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", "the whole brief")
     assert rc == 0 and "route @console: rang" in err and "Linear" not in err
     assert bells(fake, box)[0]["text"].endswith("@console the whole brief")
-    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-accounting", "--text", "x")
-    assert rc == 0 and "route @old-accounting: no inbox (top-level forwards it)" in err
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@nobody-here", "--text", "x")
     assert rc == 2 and "neither a registry handle nor a name with an inbox" in err and "names open --as nobody-here" in err
 
@@ -1511,6 +1708,15 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 
 
+def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, registry, routes_dirs, capsys):
+    """console's inbox reopened at 21:38Z on 16 Oct; senders whose clone still held it closed rang no one (17 Oct review)."""
+    root = fake.add(COORD, text=f"{slack.INBOX_HEAD}console. pointers", username="console", bot_id=BOT)
+    add_route(routes_dirs[0], "console", root["ts"], closed="2026-10-14T22:45Z")                   # this clone: closed
+    add_route(routes_dirs[1], "console", root["ts"], holder="f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc")  # published: reopened
+    rc, _, err = run(capsys, "send", "--as", "ci", "--to", "@console", "--text", "the broker canary fails")
+    assert rc == 0 and "route @console: rang" in err and len(bells(fake, root["ts"])) == 1
+
+
 def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "old-circuits", box, closed="2026-10-01T18:00Z", forward_to="circuits")   # renamed: one inbox
@@ -1531,6 +1737,21 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out
     stale = [s["ts"] for s in rep["unanswered"]]
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+
+
+def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_targets(fake, registry, routes_dirs, capsys):
+    box = inbox(fake, routes_dirs, "circuits")
+    rung = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "rang as it should")[1])
+    typed = fake.add(COORD, text="@circuits sent by a client that never delivered", username="proofs", bot_id=BOT)
+    stray = fake.add(COORD, text="for no one in particular", username="lean", bot_id=BOT)
+    fake.add(COORD, text=slack.doorbell("lean", stray["ts"], stray["ts"], stray["text"]), username="router", bot_id=BOT, thread_ts=box)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and rung["ts"] not in rep
+    assert (rep[typed["ts"]]["missed"], rep[typed["ts"]]["extra"]) == (["circuits"], [])
+    assert (rep[stray["ts"]]["missed"], rep[stray["ts"]]["extra"]) == ([], ["circuits"])
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
+    assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
 
 
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
@@ -1619,6 +1840,8 @@ def test_send_starts_a_thread_or_replies_and_its_footer_carries_the_kind(fake, r
                        (["--kind", "announce", "--thread", root["ts"]], "starts its own thread")):
         rc, _, err = run(capsys, "send", "--as", "infra", *argv, "--text", "x")
         assert rc == 2 and says in err, argv
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--channel", "agent-alerts", "--kind", "alert", "--text", "OOM kill on agent VM x")
+    assert rc == 0 and fake.messages[ALERTS][-1]["text"].startswith("OOM kill on agent VM x"), "--channel puts a top-level post there"
 
 
 def test_close_posts_a_status_line_and_reacts(fake, registry, routes_dirs, capsys, monkeypatch):

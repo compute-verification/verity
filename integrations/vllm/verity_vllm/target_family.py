@@ -29,7 +29,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import TARGET_NUM_SMS, TARGETS, option
+from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
@@ -71,9 +71,9 @@ def _cc(v: Any) -> tuple[int, int] | None:
 
 
 def declared_profile(row_id: str | None, workload: dict) -> dict:
-    """The Build's declared TargetProfile block: the workload's `target`, laid over the row's device-class profile (capability +
+    """The Build's declared TargetProfile block: the workload's `engine.target`, laid over the row's device-class profile (capability +
     `config.TARGET_NUM_SMS`) when the workload names no capability and the class's SM count is fixed; {} when neither declares one."""
-    t = dict(workload.get("target") or {})
+    t = dict(RowEngine.of(workload).target or {})
     tok, fam = row_family(row_id) if row_id else (None, None)
     if _cc(t.get("compute_capability")) is None and fam and tok in TARGET_NUM_SMS:
         t.pop("compute_capability", None)

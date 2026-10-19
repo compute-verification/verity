@@ -56,12 +56,24 @@ def test_a_control_must_stop_where_the_firewall_did_and_for_its_reason():
     assert not OA.judge("root", t, {"accepted": False, "released": 9, "why": why})[0]
 
 
-def test_the_prover_stopping_is_judged_at_the_first_failing_check():
+def test_a_stop_at_finish_for_rows_that_fail_on_the_pads_is_judged_at_the_first_failing_check():
     t = transcript([{"masked": {}}, check(True, 0, []), check(False, 1, []), check(False, 1, [])],
-                   stopped="PROVER-STOPPED: the batched constraint fails (⟨c, h⟩ ≠ t)")
+                   stopped="FIREWALL-REFUSED: circuit: the constraints zerocheck final a·b fail on a rep's pads")
     assert OA.judge("algebra", t, {"accepted": False, "released": 2, "why": "the relation r fails"}) == (True, "")
     assert not OA.judge("algebra", t, {"accepted": False, "released": 3, "why": "the relation r fails"})[0]
     assert not OA.judge("honest", t, {"accepted": True, "released": 4, "why": None})[0]
+
+
+def test_a_worker_that_fails_is_judged_at_the_stand_in_for_the_firewalls_refusal():
+    fw = "FIREWALL-REFUSED: the device failed: panicked: the worker panics at its round 2"
+    why = f"the firewall's refusal: {fw}: not a value the public input lets the firewall fix by its own computation"
+    t = transcript([{"fixed": {}}] * 19 + [{"fixed": {"what": f"the firewall's refusal: {fw}", "stand_in": True}}],
+                   refused=fw, at=19, start=19)
+    for mode in ("rc", "rc240", "panic", "silent", "decode"):
+        assert OA.judge(f"cut-{mode}", t, {"accepted": False, "released": 19, "why": why}) == (True, "")
+    assert not OA.judge("cut-panic", t, {"accepted": False, "released": 18, "why": why})[0]
+    assert not OA.judge("cut-tree", t, {"accepted": False, "released": 19, "why": why})[0]
+    assert not OA.judge("honest", t, {"accepted": True, "released": 20, "why": None})[0]
 
 
 def test_an_honest_session_is_accepted_with_nothing_stopped():
