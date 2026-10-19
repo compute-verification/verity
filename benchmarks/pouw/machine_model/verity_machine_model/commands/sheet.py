@@ -32,8 +32,8 @@ def run(args) -> int:
         same = "the same" if r.sheet == r.headline else "DIFFERS"
         print(f"{s.gpu}, {s.vector}: {r.design} at q* = {r.q:g}, operands free, credit ♭")
         print(f"  on the sheet's lines: ε {100 * r.sheet:.4f}% (headline {100 * r.headline:.4f}%: {same})")
-        print(f"  A3 read per second at f_max ({', '.join(f'{t} {float(v):.0f}' for t, v in at_fmax(s).items())} "
-              f"MACs/SM-clk): ε {100 * r.fmax:.4f}%")
+        print(f"  A3 as a bound a second at f_max, each figure over 2 · SMs · f_max (not a line a clock: "
+              f"{', '.join(f'{t} {float(v):.0f}' for t, v in at_fmax(s).items())} MACs/SM-clk): ε {100 * r.fmax:.4f}%")
         print(f"  ε first moves with every tensor line {m:.3f}× the sheet's" if m is not None
               else "  ε doesn't move with every tensor line up to 4× the sheet's")
         for cost in args.uni or ():

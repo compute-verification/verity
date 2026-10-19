@@ -31,6 +31,7 @@ grade = "measured only (no vendor document states it)"
 source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.4 lists the uniform opcodes CC 10.0 to 12.0 share; measured at saturation beside 4 tcgen05.mma in flight: with the uniform chain in, issue stays at 0.998 to 0.9996 warp instructions a SMSP-cycle and each uniform instruction displaces 0.95 to 1.10 lane instructions, with no dual issue (RT-B200-EMP, dc/probes/sm100_a2u.cu, r20261019-055605-6cc2, note:20261019T0520Z-draft-rt-b200-emp), and 0.924 of a slot beside a saturated lane stream (the census's UNI issue line, DC-100)"
 
 [clocks.implied]
+label = "implied clock (no document states one)"
 mhz = 1854
 grade = "none (derived: no document states it)"
 source = "the clock at which every per-clock peak below reproduces the Technical Brief's dense figure to within half its last digit, which holds from 1835 to 1855 MHz, and the Lenovo guide's FP16 2.25 too from 1852 MHz; 111 MHz under f_max, as the H200's tensor clock is 150 MHz under its f_max (open premise B200-PEAK-PER-CLOCK: the per-clock peaks are measured, the clock they are quoted at is nowhere)"

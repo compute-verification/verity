@@ -89,39 +89,47 @@ def fmaxMHz : ℝ := 1980
 Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132. -/
 def smCount : ℝ := 132
 
-/-- The `tensor` clock, at which the tensor figures are quoted: 1830 MHz. Grade: whitepaper (H100 SXM5). Source: H100
-whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the clock
-the tensor peaks are quoted at, 150 MHz under f_max. -/
+/-- The tensor boost clock, at which the tensor figures are quoted: 1830 MHz. Grade: whitepaper (H100 SXM5). Source:
+H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the
+clock the tensor peaks are quoted at, 150 MHz under f_max. -/
 def tensorMHz : ℝ := 1830
 
-/-- A3, s8: 4096 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived (figure over SMs and the
-tensor clock). Source: H200 data sheet (nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8
-Tensor Core 3,958', footnote 2 'With sparsity', footnote 1 'Preliminary specifications'; H100 whitepaper V1.04 Table 3
-'Peak INT8 Tensor TOPS 1978.9/3957.8'; 'H100 SM Architecture': twice A100's MMA rate a SM on equivalent data types. -/
+/-- A3, s8: 4096 dense MACs an SM clock, the document's dense figure, 1979 × 10¹² a second, over 2 · 132 SMs at the
+tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived (figure over
+SMs and the tensor clock). Source: H200 data sheet (nvidia.com/en-us/data-center/h200, Technical Specifications, H200
+SXM): 'INT8 Tensor Core 3,958', footnote 2 'With sparsity', footnote 1 'Preliminary specifications'; H100 whitepaper
+V1.04 Table 3 'Peak INT8 Tensor TOPS 1978.9/3957.8'; 'H100 SM Architecture': twice A100's MMA rate a SM on equivalent
+data types. -/
 def peakS8 : ℝ := 4096
 
-/-- A3, e4m3: 4096 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
-H200 SXM: 'FP8 Tensor Core 3,958' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP8 Tensor TFLOPS with FP32
-Accumulate 1978.9/3957.8'. -/
+/-- A3, e4m3: 4096 dense MACs an SM clock, the document's dense figure, 1979 × 10¹² a second, over 2 · 132 SMs at the
+tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived. Source: H200
+data sheet, H200 SXM: 'FP8 Tensor Core 3,958' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP8 Tensor TFLOPS with
+FP32 Accumulate 1978.9/3957.8'. -/
 def peakE4m3 : ℝ := 4096
 
-/-- A3, e5m2: 4096 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
-H200 SXM: 'FP8 Tensor Core 3,958' with sparsity, for both FP8 formats (CUDA C++ Programming Guide 12.9 §18.8.1: FP8 'in
-either E4M3 or E5M2'). -/
+/-- A3, e5m2: 4096 dense MACs an SM clock, the document's dense figure, 1979 × 10¹² a second, over 2 · 132 SMs at the
+tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived. Source: H200
+data sheet, H200 SXM: 'FP8 Tensor Core 3,958' with sparsity, for both FP8 formats (CUDA C++ Programming Guide 12.9
+§18.8.1: FP8 'in either E4M3 or E5M2'). -/
 def peakE5m2 : ℝ := 4096
 
-/-- A3, f16: 2048 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
-H200 SXM: 'FP16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP16 Tensor TFLOPS with FP32
-Accumulate 989.4/1978.9'. -/
+/-- A3, f16: 2048 dense MACs an SM clock, the document's dense figure, 989.5 × 10¹² a second, over 2 · 132 SMs at the
+tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived. Source: H200
+data sheet, H200 SXM: 'FP16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP16 Tensor TFLOPS
+with FP32 Accumulate 989.4/1978.9'. -/
 def peakF16 : ℝ := 2048
 
-/-- A3, bf16: 2048 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
-H200 SXM: 'BFLOAT16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak BF16 Tensor TFLOPS with FP32
-Accumulate 989.4/1978.9'. -/
+/-- A3, bf16: 2048 dense MACs an SM clock, the document's dense figure, 989.5 × 10¹² a second, over 2 · 132 SMs at the
+tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived. Source: H200
+data sheet, H200 SXM: 'BFLOAT16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak BF16 Tensor TFLOPS
+with FP32 Accumulate 989.4/1978.9'. -/
 def peakBf16 : ℝ := 2048
 
-/-- A3, tf32: 1024 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
-H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.04 Table 3 'Peak TF32 Tensor TFLOPS 494.7/989.4'. -/
+/-- A3, tf32: 1024 dense MACs an SM clock, the document's dense figure, 494.5 × 10¹² a second, over 2 · 132 SMs at the
+tensor boost clock, 1830 MHz (A1's f_max is 1980 MHz). Grade: data sheet and whitepaper; per clock derived. Source: H200
+data sheet, H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.04 Table 3 'Peak TF32 Tensor TFLOPS
+494.7/989.4'. -/
 def peakTf32 : ℝ := 1024
 
 /-- A3: each type's dense MACs an SM clock. -/
@@ -456,47 +464,47 @@ theorem machine_eq_census : sheet.machine.a = census := by
   | .pipe .uniform => exact machine_uniform k
   | .smem => exact machine_smem k
 
-/-- The `tensor` clock is under f_max. -/
+/-- The tensor boost clock is under f_max. -/
 theorem tensorMHz_lt_fmaxMHz : tensorMHz < fmaxMHz := by
   norm_num [tensorMHz, fmaxMHz]
 
-/-- A3's s8 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 3958
-with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
+/-- A3's s8 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
+3958 with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
 theorem peakS8_figure :
     (1979 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakS8 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakS8 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 + 1 / 4 : ℝ) * 10 ^ 12 := by
   norm_num [peakS8, smCount, tensorMHz]
 
-/-- A3's e4m3 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 3958
-with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
+/-- A3's e4m3 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
+3958 with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
 theorem peakE4m3_figure :
     (1979 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakE4m3 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakE4m3 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 + 1 / 4 : ℝ) * 10 ^ 12 := by
   norm_num [peakE4m3, smCount, tensorMHz]
 
-/-- A3's e5m2 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 3958
-with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
+/-- A3's e5m2 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
+3958 with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
 theorem peakE5m2_figure :
     (1979 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakE5m2 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakE5m2 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 + 1 / 4 : ℝ) * 10 ^ 12 := by
   norm_num [peakE5m2, smCount, tensorMHz]
 
-/-- A3's f16 peak reproduces the document: 2 · 2048 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 1979
-with sparsity, dense 989.5 ± 0.25, in 10¹² a second. -/
+/-- A3's f16 peak reproduces the document: 2 · 2048 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
+1979 with sparsity, dense 989.5 ± 0.25, in 10¹² a second. -/
 theorem peakF16_figure :
     (1979 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakF16 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakF16 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by
   norm_num [peakF16, smCount, tensorMHz]
 
-/-- A3's bf16 peak reproduces the document: 2 · 2048 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 1979
-with sparsity, dense 989.5 ± 0.25, in 10¹² a second. -/
+/-- A3's bf16 peak reproduces the document: 2 · 2048 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
+1979 with sparsity, dense 989.5 ± 0.25, in 10¹² a second. -/
 theorem peakBf16_figure :
     (1979 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakBf16 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakBf16 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by
   norm_num [peakBf16, smCount, tensorMHz]
 
-/-- A3's tf32 peak reproduces the document: 2 · 1024 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 989
-with sparsity, dense 494.5 ± 0.25, in 10¹² a second. -/
+/-- A3's tf32 peak reproduces the document: 2 · 1024 MACs · 132 SMs at the tensor boost clock, 1830 MHz, is its figure,
+989 with sparsity, dense 494.5 ± 0.25, in 10¹² a second. -/
 theorem peakTf32_figure :
     (989 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakTf32 * smCount * (tensorMHz * 10 ^ 6) ∧
       2 * peakTf32 * smCount * (tensorMHz * 10 ^ 6) ≤ (989 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by

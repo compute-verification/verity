@@ -31,6 +31,7 @@ grade = "measured only (no vendor document states it)"
 source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP, dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
 
 [clocks.tensor]
+label = "tensor boost clock"
 mhz = 1830
 grade = "whitepaper (H100 SXM5)"
 source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the clock the tensor peaks are quoted at, 150 MHz under f_max"

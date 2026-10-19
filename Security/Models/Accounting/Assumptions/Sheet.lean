@@ -38,7 +38,8 @@ document states it (decision 84's issue ceiling). -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's
-dense MACs an SM clock for each operand type (dense TOPS over 2 · SMs · boost clock), a quarter of them an SMSP, the
+dense MACs an SM clock for each operand type (dense TOPS over 2 · SMs · the clock the figure is quoted at, which need
+not be `fmax`: the H200's tensor boost clock, 1830 MHz, against its f_max of 1980 MHz), a quarter of them an SMSP, the
 types sharing the pipe's time: the run's tensor MACs over a quarter of their type's peak are at most its cycles. -/
 def SheetTensor (S : Sheet K P) (Q : Run K) : Prop := ∑ k, S.macs k / (S.peak k / 4) * Q.n k ≤ Q.cycles
 

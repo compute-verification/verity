@@ -92,51 +92,62 @@ count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs'); th
 (sm_100/table.toml). -/
 def smCount : ℝ := 148
 
-/-- The `implied` clock, at which the tensor figures are quoted: 1854 MHz. Grade: none (derived: no document states it).
-Source: the clock at which every per-clock peak below reproduces the Technical Brief's dense figure to within half its
-last digit, which holds from 1835 to 1855 MHz, and the Lenovo guide's FP16 2.25 too from 1852 MHz; 111 MHz under f_max,
-as the H200's tensor clock is 150 MHz under its f_max (open premise B200-PEAK-PER-CLOCK: the per-clock peaks are
-measured, the clock they are quoted at is nowhere). -/
+/-- The implied clock (no document states one), at which the tensor figures are quoted: 1854 MHz. Grade: none (derived:
+no document states it). Source: the clock at which every per-clock peak below reproduces the Technical Brief's dense
+figure to within half its last digit, which holds from 1835 to 1855 MHz, and the Lenovo guide's FP16 2.25 too from 1852
+MHz; 111 MHz under f_max, as the H200's tensor clock is 150 MHz under its f_max (open premise B200-PEAK-PER-CLOCK: the
+per-clock peaks are measured, the clock they are quoted at is nowhere). -/
 def impliedMHz : ℝ := 1854
 
-/-- A3, s8: 8192 dense MACs an SM clock. Grade: data sheet per second; per clock measured only. Source: NVIDIA Blackwell
-Architecture Technical Brief V2.1, Table 3 'System Specifications for HGX B300 and HGX B200', Per GPU Specs, HGX B200:
-'INT8 Tensor Core 4.5 | 9 petaOPS' (Dense | Sparse); Lenovo ThinkSystem NVIDIA HGX B200 180GB 1000W GPU Product Guide
-Table 2: '4.5 / 9 petaOPS'; measured UTCIMMA_M128_N256 512 SMSP-cycles (DC-100). -/
+/-- A3, s8: 8192 dense MACs an SM clock, the document's dense figure, 4500 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+measured only. Source: NVIDIA Blackwell Architecture Technical Brief V2.1, Table 3 'System Specifications for HGX B300
+and HGX B200', Per GPU Specs, HGX B200: 'INT8 Tensor Core 4.5 | 9 petaOPS' (Dense | Sparse); Lenovo ThinkSystem NVIDIA
+HGX B200 180GB 1000W GPU Product Guide Table 2: '4.5 / 9 petaOPS'; measured UTCIMMA_M128_N256 512 SMSP-cycles (DC-100).
+-/
 def peakS8 : ℝ := 8192
 
-/-- A3, e4m3: 8192 dense MACs an SM clock. Grade: data sheet per second; per clock measured only. Source: Technical
-Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'; measured UTCQMMA_E4M3 lines (DC-100). -/
+/-- A3, e4m3: 8192 dense MACs an SM clock, the document's dense figure, 4500 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+measured only. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'; measured
+UTCQMMA_E4M3 lines (DC-100). -/
 def peakE4m3 : ℝ := 8192
 
-/-- A3, e5m2: 8192 dense MACs an SM clock. Grade: data sheet per second; per clock derived at the implied clock. Source:
-Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS', for both FP8 formats (PTX ISA 9.4
-tcgen05.mma .kind::f8f6f4: e4m3, e5m2). -/
+/-- A3, e5m2: 8192 dense MACs an SM clock, the document's dense figure, 4500 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+derived at the implied clock. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS',
+for both FP8 formats (PTX ISA 9.4 tcgen05.mma .kind::f8f6f4: e4m3, e5m2). -/
 def peakE5m2 : ℝ := 8192
 
-/-- A3, fp6: 8192 dense MACs an SM clock. Grade: data sheet per second; per clock derived at the implied clock; no
-class. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS' (PTX ISA 9.4
-.kind::f8f6f4: e2m3, e3m2); the CUDA C++ Programming Guide 12.9 §18.9.1 lists no FP6. -/
+/-- A3, fp6: 8192 dense MACs an SM clock, the document's dense figure, 4500 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+derived at the implied clock; no class. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9
+petaFLOPS' (PTX ISA 9.4 .kind::f8f6f4: e2m3, e3m2); the CUDA C++ Programming Guide 12.9 §18.9.1 lists no FP6. -/
 def peakFp6 : ℝ := 8192
 
-/-- A3, f16: 4096 dense MACs an SM clock. Grade: data sheet per second; per clock derived at the implied clock. Source:
-Technical Brief V2.1 Table 3, HGX B200: 'FP16/BF16 Tensor Core 2.2 | 4.5 petaFLOPS'; Lenovo Product Guide Table 2: '2.25
-/ 4.5'; measured UTCHMMA_F16_M128_N256 (DC-100). -/
+/-- A3, f16: 4096 dense MACs an SM clock, the document's dense figure, 2200 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+derived at the implied clock. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP16/BF16 Tensor Core 2.2 | 4.5
+petaFLOPS'; Lenovo Product Guide Table 2: '2.25 / 4.5'; measured UTCHMMA_F16_M128_N256 (DC-100). -/
 def peakF16 : ℝ := 4096
 
-/-- A3, bf16: 4096 dense MACs an SM clock. Grade: data sheet per second; per clock derived at the implied clock. Source:
-Technical Brief V2.1 Table 3, HGX B200: 'FP16/BF16 Tensor Core 2.2 | 4.5 petaFLOPS'. -/
+/-- A3, bf16: 4096 dense MACs an SM clock, the document's dense figure, 2200 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+derived at the implied clock. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP16/BF16 Tensor Core 2.2 | 4.5
+petaFLOPS'. -/
 def peakBf16 : ℝ := 4096
 
-/-- A3, tf32: 2048 dense MACs an SM clock. Grade: data sheet per second; per clock derived at the implied clock. Source:
-Technical Brief V2.1 Table 3, HGX B200: 'TF32 Tensor Core 1.1 | 2.2 petaFLOPS'; Lenovo Product Guide Table 2: '1.1 /
-2.2'. -/
+/-- A3, tf32: 2048 dense MACs an SM clock, the document's dense figure, 1100 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+derived at the implied clock. Source: Technical Brief V2.1 Table 3, HGX B200: 'TF32 Tensor Core 1.1 | 2.2 petaFLOPS';
+Lenovo Product Guide Table 2: '1.1 / 2.2'. -/
 def peakTf32 : ℝ := 2048
 
-/-- A3, fp4: 16384 dense MACs an SM clock. Grade: data sheet per second; per clock derived at the implied clock; no
-class. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma
-.kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and the
-census no FP4 class. -/
+/-- A3, fp4: 16384 dense MACs an SM clock, the document's dense figure, 9000 × 10¹² a second, over 2 · 148 SMs at the
+implied clock (no document states one), 1854 MHz (A1's f_max is 1965 MHz). Grade: data sheet per second; per clock
+derived at the implied clock; no class. Source: Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18
+petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide
+12.9 §18.9.1 lists no FP4, and the census no FP4 class. -/
 def peakFp4 : ℝ := 16384
 
 /-- A3: each type's dense MACs an SM clock. -/
@@ -460,77 +471,77 @@ theorem machine_eq_census : sheet.machine.a = census := by
   | .pipe .uniform => exact machine_uniform k
   | .smem => exact machine_smem k
 
-/-- The `implied` clock is under f_max. -/
+/-- The implied clock (no document states one) is under f_max. -/
 theorem impliedMHz_lt_fmaxMHz : impliedMHz < fmaxMHz := by
   norm_num [impliedMHz, fmaxMHz]
 
-/-- A3's s8 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the `implied`
-clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or the SM
-count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not each to
-a document. -/
+/-- A3's s8 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakS8_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakS8 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakS8 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakS8, smCount, impliedMHz]
 
-/-- A3's e4m3 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's e4m3 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakE4m3_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakE4m3 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakE4m3 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakE4m3, smCount, impliedMHz]
 
-/-- A3's e5m2 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's e5m2 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakE5m2_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakE5m2 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakE5m2 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakE5m2, smCount, impliedMHz]
 
-/-- A3's fp6 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's fp6 peak is consistent with the document's figure, not confirmed by it: 2 · 8192 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 4500 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakFp6_figure :
     (4500 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakFp6 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakFp6 * smCount * (impliedMHz * 10 ^ 6) ≤ (4500 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakFp6, smCount, impliedMHz]
 
-/-- A3's f16 peak is consistent with the document's figure, not confirmed by it: 2 · 4096 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 2200 ± 50, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's f16 peak is consistent with the document's figure, not confirmed by it: 2 · 4096 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 2200 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakF16_figure :
     (2200 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakF16 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakF16 * smCount * (impliedMHz * 10 ^ 6) ≤ (2200 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakF16, smCount, impliedMHz]
 
-/-- A3's bf16 peak is consistent with the document's figure, not confirmed by it: 2 · 4096 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 2200 ± 50, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's bf16 peak is consistent with the document's figure, not confirmed by it: 2 · 4096 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 2200 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakBf16_figure :
     (2200 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakBf16 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakBf16 * smCount * (impliedMHz * 10 ^ 6) ≤ (2200 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakBf16, smCount, impliedMHz]
 
-/-- A3's tf32 peak is consistent with the document's figure, not confirmed by it: 2 · 2048 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 1100 ± 50, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's tf32 peak is consistent with the document's figure, not confirmed by it: 2 · 2048 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 1100 ± 50, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakTf32_figure :
     (1100 - 50 : ℝ) * 10 ^ 12 ≤ 2 * peakTf32 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakTf32 * smCount * (impliedMHz * 10 ^ 6) ≤ (1100 + 50 : ℝ) * 10 ^ 12 := by
   norm_num [peakTf32, smCount, impliedMHz]
 
-/-- A3's fp4 peak is consistent with the document's figure, not confirmed by it: 2 · 16384 MACs · 148 SMs at the
-`implied` clock, 1854 MHz, is its figure, dense 9000 ± 500, in 10¹² a second. No document states the `implied` clock or
-the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the figure together, not
-each to a document. -/
+/-- A3's fp4 peak is consistent with the document's figure, not confirmed by it: 2 · 16384 MACs · 148 SMs at the implied
+clock (no document states one), 1854 MHz, is its figure, dense 9000 ± 500, in 10¹² a second. No document states the
+`implied` clock or the SM count (their grades above), so this holds the per-clock peak, the SMs and the clock to the
+figure together, not each to a document. -/
 theorem peakFp4_figure :
     (9000 - 500 : ℝ) * 10 ^ 12 ≤ 2 * peakFp4 * smCount * (impliedMHz * 10 ^ 6) ∧
       2 * peakFp4 * smCount * (impliedMHz * 10 ^ 6) ≤ (9000 + 500 : ℝ) * 10 ^ 12 := by

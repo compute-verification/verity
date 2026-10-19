@@ -83,6 +83,7 @@ class Sheet:
     issue: Const        # A2: the slots a warp instruction takes, 1
     uniform_issue: Const  # A2u: the slots a uniform instruction takes, 1
     clocks: dict[str, Const]
+    labels: dict[str, str]  # each clock's name in prose
     peaks: dict[str, Peak]
     pipes: dict[str, Const]
     kinds: dict[str, Kind]
@@ -107,6 +108,7 @@ def sheet(data: Path) -> Sheet:
               sms=_const(t["sms"], "value"), issue=_const(t["issue"], "slots"),
               uniform_issue=_const(t["uniform_issue"], "slots"),
               clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
+              labels={c: v.get("label", f"`{c}` clock") for c, v in t["clocks"].items()},
               peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
                               v["grade"], v["source"]) for ty, v in t["peaks"].items()},
               pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds)
@@ -349,10 +351,14 @@ def lean(s: Sheet, data: Path) -> str:
     out += [*_doc(f"The SMs A3's per-SM peaks multiply: {_dec(s.sms.value)}. Grade: {s.sms.grade}. Source: "
                   f"{s.sms.source}."), f"def smCount : ℝ := {_num(s.sms.value)}", ""]
     for c, v in s.clocks.items():
-        out += [*_doc(f"The `{c}` clock, at which the tensor figures are quoted: {_dec(v.value)} MHz. Grade: "
+        out += [*_doc(f"The {s.labels[c]}, at which the tensor figures are quoted: {_dec(v.value)} MHz. Grade: "
                       f"{v.grade}. Source: {v.source}."), f"def {clock[c]} : ℝ := {_num(v.value)}", ""]
     for ty, p in s.peaks.items():
-        out += [*_doc(f"A3, {ty}: {_dec(p.macs)} dense MACs an SM clock. Grade: {p.grade}. Source: {p.source}."),
+        c = s.clocks[p.clock]
+        out += [*_doc(f"A3, {ty}: {_dec(p.macs)} dense MACs an SM clock, the document's dense figure, "
+                      f"{_dec(p.dense[0])} × 10¹² a second, over 2 · {_dec(s.sms.value)} SMs at the "
+                      f"{s.labels[p.clock]}, {_dec(c.value)} MHz (A1's f_max is "
+                      f"{_dec(s.fmax.value)} MHz). Grade: {p.grade}. Source: {p.source}."),
                 f"def {peak[ty]} : ℝ := {_num(p.macs)}", ""]
     out += [*_doc("A3: each type's dense MACs an SM clock."), "def Ty.peak : Ty → ℝ",
             *(f"  | .{ty} => {peak[ty]}" for ty in types), ""]
@@ -434,7 +440,8 @@ def lean(s: Sheet, data: Path) -> str:
             "  | .smem => exact machine_smem k",
             ""]
     for c in s.clocks:
-        out += [*_doc(f"The `{c}` clock is under f_max."), f"theorem {clock[c]}_lt_fmaxMHz : {clock[c]} < fmaxMHz := by",
+        out += [*_doc(f"The {s.labels[c]} is under f_max."),
+                f"theorem {clock[c]}_lt_fmaxMHz : {clock[c]} < fmaxMHz := by",
                 f"  norm_num [{clock[c]}, fmaxMHz]", ""]
     for ty, p in s.peaks.items():
         dense, tol = p.dense
@@ -448,7 +455,7 @@ def lean(s: Sheet, data: Path) -> str:
         tail = ("" if not unstated else
                 f" No document states {' or '.join(unstated)} (their grades above), so this holds the per-clock peak, "
                 "the SMs and the clock to the figure together, not each to a document.")
-        out += [*_doc(f"{head}: 2 · {_dec(p.macs)} MACs · {_dec(s.sms.value)} SMs at the `{p.clock}` clock, "
+        out += [*_doc(f"{head}: 2 · {_dec(p.macs)} MACs · {_dec(s.sms.value)} SMs at the {s.labels[p.clock]}, "
                       f"{_dec(c.value)} MHz, is its figure, {figure}, in 10¹² a second.{tail}"),
                 f"theorem {peak[ty]}_figure :",
                 f"    ({_num(dense)} - {_num(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
