@@ -1,0 +1,17 @@
+# dither-2s-licpw-redux-heavy-l32 with the floor program crediting no tcgen05.ld: the same honest kernel, its 8
+# LDTM.32x32b.x128 a MMA still run, but ♭ (credit floor) no longer counts them. The operands-free cheater (decision 89)
+# never pays them, so on DC-100-ri they were all of ε_machine (8 of ♭'s 1857 issue cycles a UTCIMMA, 0.431%); credited
+# at 0 they leave ε_machine at 0 and move to γ (8/1849, +0.43%). A lower credit is sound for any program.
+base = "dither-2s-licpw-redux-heavy-l32"
+name = "dither-2s-licpw-redux-heavy-ldtm0-l32"
+title = "Dither-2S, LI-CP-W redux heavy fold, ♭ without LDTM, L = 32"
+summary = "dither-2s-licpw-redux-heavy-l32 with the floor program crediting no tcgen05.ld: honest's 8 LDTM a MMA move from ε_machine to γ"
+
+[operands]
+floor = { LDTM_32X32B_X128 = 0.0 }
+source = "the floor program's operand-delivery floor φ_del is credited at 0: tcgen05.mma reads both operands from shared memory by descriptor, so delivery costs no warp instruction, and the accumulator's 8 tcgen05.ld.32x32b.x128 a MMA that honest runs to fold its words on lanes (dither-2s-licpw-redux-heavy-l32's φ_del) are not credited, since the operands-free cheater skips them. Honest still runs them; they are γ's"
+
+[skip.served]
+eps = 0.004707
+at = { "DC-100-ri" = 0.004707, "DS-100" = 0.004081 }
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip as dither-2s-licpw-redux-heavy-l32's, at this design's own ♭ (decision 90), the LI-CP fold with its extra rounds and no LDTM, so ♭ is 1849/1857 of the base's and ε_skip a little larger; the most is at Llama-3.1-8B 2K prefill, all P·V's peel. On DC-100-ri (`at`) ♭ is DC-100's; on DS-100 the tail is at DS-100's price"
