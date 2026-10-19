@@ -26,6 +26,7 @@ import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
+import Proofs.Flock.Claims.ZK.Refine
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.NonVacuous
 import Proofs.Flock.Claims.ZK.SamplingNonVacuous
@@ -165,6 +166,11 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   firewall's transcript reports, where the frame takes the coins, and `StopRefine`, the stop where it refuses them;
   `LeanRelease.refD`), so
   **`Flock.zk_server_lean`** is `ZkServer.zk_deferred` at it, at any worker: one bit a session.
+* `Refine`: toward `ItemsRefine` at the reference session's prover (`strat`). Its `StopRefine` holds wherever the
+  session sends the stop where the frame refuses the coins (`LeanRelease.stopRefine_of_sessionStops`), and so wherever
+  the session's message is the frame's release (`SessionFrames`, `stopRefine_of_sessionFrames`) and its abort is the
+  stop. The frame checks no opening, so `LiveRefine` makes the release the abort after any opening the session refuses
+  (`LeanRelease.release_eq_abort_of_liveRefine`).
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under
