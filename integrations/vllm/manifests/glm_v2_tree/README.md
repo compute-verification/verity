@@ -78,7 +78,10 @@ worktree at it (`git worktree add /tmp/glm-v2-SHA SHA`); a PR head merged after 
    REPLAY_DEFERRED=1 RETAIN=host PAIRS=1, PENDING by design), its bundles and row records preserved in the store. Stop eu.
 5. CPU, vy-nebius-cpu-3 (the verified checkpoint): the Build of record copied in, then `replay_publish.sh` per row (`--send
    bundles.json`): `tp-commit-replay` of every rank, then `records publish --tier heavy` with the nine captures of record cited
-   by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`).
+   by id (#2838's eight served-default captures, which this tree's `check_capture` accepts, and `BF16_ART`). A rank's replay is
+   about 70 min at about 265 GB (B8 greedy, r20261019-123645-e69d: 8 ranks in 9 h in one job), so a row runs two `RANKS=` jobs
+   side by side and then one without `RANKS` that publishes. `rejudge` of the decided Commit passed on that replay; on a
+   PENDING Commit it reports `ranks` and `verdict` as FAIL, so it runs only after the replay.
 
 GPU time (wall of the GPU job, which holds all 8 GPUs but for the capture):
 
