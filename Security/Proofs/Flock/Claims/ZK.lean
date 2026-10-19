@@ -37,6 +37,7 @@ import Proofs.Flock.Claims.ZK.Round1
 import Proofs.Flock.Claims.ZK.Round1Pads
 import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.Claims.ZK.Round1Enc
+import Proofs.Flock.Claims.ZK.Round2
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
@@ -225,6 +226,11 @@ import Proofs.Flock.Claims.ZK.Stop
   the link points of round `0`'s coin, and `[]` where the extra claims there throw. It reads round `0`'s coin only
   (`Masked.enc1_causal`), and at the executable's layout it is round `1`'s `hstep` (`Masked.honest_round1_exe`), so
   `Flock.zk_deployZk_masked_exe_round1_gap` asks `hstep` after the second round only.
+* `Round2`: round `2` of that run (`Masked.liveRun_round2`): where table `0`'s extra claims return, its third body is
+  table `0` rep `0`'s outer zerocheck point squeeze, the header of `m − 13` coins of kind `2` alone, which reads no
+  value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
+  round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
+  `hstep` after the third round only.
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
