@@ -1,12 +1,15 @@
 """The row-table layout of the serving rows (`pipeline.serving_rows.with_row_tables`, `commit.serving_rows.RowTable`) and PoUW's
-interface to it (`commit.row_tables`): one hm96-sha512/row-seg/v1 table per (engine step, linear) whose root is
-`verity.ml.commitments.row_table`'s, chunks whose x rows are its rows (the same strings) read by offset, a ScaledMmS8Coordinate
-replay from the table that reproduces every output, the verifier's registration and cross-check, openings that verify and
-tampered rows that don't, and the bytes the layout commits (the files it writes; Llama-3.1-8B's B32 decode step)."""
+interface to it (`commit.row_tables`): one hm96-sha512/row-seg/v1 table per (engine step, linear) in the canonical order, whose
+root is `verity.ml.commitments.row_table`'s under its serve-time domain, chunks whose x rows are its rows (the same strings) read by
+offset, a ScaledMmS8Coordinate replay from the table that reproduces every output, the step roots serving computes at its step
+boundary equal to the window's (each the step's subtree of the window's table, which is the tree over them), the verifier's
+registration and cross-check through the step roots, step openings that verify and tampered rows that don't, and the bytes the
+layout commits (the files it writes; Llama-3.1-8B's B32 decode step)."""
 
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +25,8 @@ from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'
 K, CAP, RUN = 64, 7, "ab" * 32
+#: the serve-time context (the live coin commitment's root) and the run's row key
+CTX, ROW_KEY = bytes(range(64)), bytes(range(32, 64))
 COORD = f"ScaledMmS8Coordinate_v1{{K={K},DOT={DOT}}}"
 DEFN = bind(OG.ScaledMmS8Coordinate, K=K, **OG.GEMM_SM120_S8)
 QKV, UP = "model.layers.0.self_attn.qkv_proj", "model.layers.0.mlp.gate_up_proj"
@@ -73,6 +78,20 @@ class Served:
         args = self.rows[u][2]["args"]
         return self.ops[(rid, json.dumps(args[0]))].tobytes(), int(self.ops[(rid, json.dumps(args[1]))][0])
 
+    def outputs(self, engine_step: int) -> dict[str, tuple[list[tuple[str, int]], np.ndarray, np.ndarray]]:
+        """What the serving loop holds at ``engine_step``'s boundary: each linear's int8 quantize output, its batch rows in the order
+        the requests were scheduled (r1 first: not the canonical order)."""
+        out: dict[str, tuple[list, list, list]] = {}
+        for u in sorted(range(len(ROWS)), key=lambda u: (ROWS[u][0] != "r1", u)):
+            rid, step, tok, _i, op = ROWS[u]
+            if ARRIVALS[rid] + step == engine_step:
+                codes, bits = self.x_of(u)
+                ids, xs, ss = out.setdefault(op, ([], [], []))
+                ids.append((rid, tok))
+                xs.append(np.frombuffer(codes, dtype=np.int8))
+                ss.append(np.uint32(bits).view(np.float32))
+        return {op: (ids, np.stack(xs), np.array(ss, dtype=np.float32)) for op, (ids, xs, ss) in out.items()}
+
 
 def window(row_tables: bool = True) -> tuple[CS.Window, Served, list]:
     s = Served()
@@ -80,47 +99,99 @@ def window(row_tables: bool = True) -> tuple[CS.Window, Served, list]:
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Window(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables)
+    w = CS.Window(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables,
+                  CTX.hex() if row_tables else "")
     return w, s, ms
 
 
-def committed(monkeypatch, row_tables: bool = True) -> tuple[CS.Committed, Served, list]:
+def committed(monkeypatch, row_tables: bool = True, **kw) -> tuple[CS.Committed, Served, list]:
     w, s, ms = window(row_tables)
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
-    return CS.commit(w, [g[0] for g in got], salt_key=bytes(32)), s, got
+    return CS.commit(w, [g[0] for g in got], salt_key=bytes(32), row_salt_key=ROW_KEY, **kw), s, got
 
 
-def test_one_table_per_engine_step_and_linear_and_each_chunk_links_the_token_rows_it_reads():
+def test_one_table_per_engine_step_and_linear_in_the_canonical_order_and_each_chunk_links_the_token_rows_it_reads():
     w, _s, ms = window()
     assert [(t.port, t.rows) for t in w.row_tables] == [
-        (f"row-table/0/{QKV}", (("r0", 0, 10), ("r0", 1, 11))), (f"row-table/0/{UP}", (("r0", 0, 12), ("r0", 1, 13))),
-        (f"row-table/1/{QKV}", (("r0", 0, 20), ("r1", 0, 10))), (f"row-table/1/{UP}", (("r0", 0, 21), ("r1", 0, 11)))]
+        (f"row-table/0/{UP}", (("r0", 0, 12), ("r0", 1, 13))), (f"row-table/0/{QKV}", (("r0", 0, 10), ("r0", 1, 11))),
+        (f"row-table/1/{UP}", (("r0", 0, 21), ("r1", 0, 11))), (f"row-table/1/{QKV}", (("r0", 0, 20), ("r1", 0, 10)))]
     assert all(t.words == SRW.s8_words(K) and t.layer == 0 for t in w.row_tables)
+    assert (w.steps, w.places) == (((0, (0, 1)), (1, (2, 3))), (0, 1, 0, 1))
     # units: r0 qkv t0 [0, 6), t1 [6, 12), up t0 [12, 16), t1 [16, 20), r0 decode qkv [20, 26), up [26, 30), r1 qkv [30, 36), up [36, 40)
     assert [(m.base, m.n, m.links) for m in ms] == [
-        (0, 7, ((0, 0), (0, 1))), (7, 7, ((0, 1), (1, 0))), (14, 7, ((1, 0), (1, 1), (2, 0))), (21, 7, ((2, 0), (3, 0))),
-        (28, 7, ((3, 0), (2, 1))), (35, 5, ((2, 1), (3, 1)))]
+        (0, 7, ((1, 0), (1, 1))), (7, 7, ((1, 1), (0, 0))), (14, 7, ((0, 0), (0, 1), (3, 0))), (21, 7, ((3, 0), (2, 0))),
+        (28, 7, ((2, 0), (3, 1))), (35, 5, ((3, 1), (2, 1)))]
     assert all(dict(m.tables) == {"x": len(m.links), "w": m.n} for m in ms)
     assert w.row_tables[2].rank("r1", 0) == 1 and w.row_tables[2].rank("r0", 0) == 0
     with pytest.raises(KeyError):
         w.row_tables[2].rank("r1", 1)
 
 
-def test_each_tables_root_is_the_cpu_references_and_its_chunks_carry_its_strings(monkeypatch):
+def test_the_tables_do_not_depend_on_the_programs_row_order():
+    """r1's rows listed first: the same tables, and every link still names its unit's own token row."""
+    s = Served()
+    perm = [6, 7, 0, 1, 2, 3, 4, 5]
+    rows = [s.rows[u] for u in perm]
+    ms, tables = SRW.with_row_tables(SRW.members([COORD], [rows], [UNITS], {COORD: CAP}), [COORD], [rows], ARRIVALS)
+    assert tables == window()[0].row_tables
+    units = [u for u in perm for _ in range(N[ROWS[u][4]])]
+    for m in ms:
+        mine = list(dict.fromkeys(units[m.base:m.base + m.n]))
+        assert [(tables[t].rows[r][:2], tables[t].engine_step, tables[t].op_path) for t, r in m.links] == \
+            [((ROWS[u][0], ROWS[u][2]), ARRIVALS[ROWS[u][0]] + ROWS[u][1], ROWS[u][4]) for u in mine]
+
+
+def test_each_tables_root_is_the_cpu_references_under_its_serve_time_domain_and_its_chunks_carry_its_strings(monkeypatch):
     c, s, got = committed(monkeypatch)
     w = c.window
     for t, tab in enumerate(w.row_tables):
         units = [row_of(rid, tab.engine_step, tab.op_path, tok) for rid, tok, _i in tab.rows]
         salts = c.salts[tab.port]
-        ref = RT.commit(w.domain(tab.port, RT.SCHEMA, tab.n), [RT.s8_row(*s.x_of(u)) for u in units],
+        assert salts == CS.table_salts(ROW_KEY, tab.engine_step, w.places[t], tab.n)
+        ref = RT.commit(RT.table_domain(CTX, tab.engine_step, w.places[t], tab.n), [RT.s8_row(*s.x_of(u)) for u in units],
                         [salts[i * 192:(i + 1) * 192] for i in range(tab.n)])
-        assert c.roots[tab.port] == ref.root and c.bc[tab.port] == b"".join(ref.strings) and c.table_public(t) == c.bc[tab.port]
+        assert c.table_roots[tab.port] == ref.root and c.bc[tab.port] == b"".join(ref.strings) and c.table_public(t) == c.bc[tab.port]
+        assert c.domains[tab.port].domain_id == ref.domain.domain_id and tab.port not in c.roots
     for k, m in enumerate(w.members):
         x = c.bc[m.port("x")]
         assert [x[j * 128:(j + 1) * 128] for j in range(len(m.links))] == \
             [c.bc[w.row_tables[t].port][r * 128:(r + 1) * 128] for t, r in m.links]
         assert c.public_body(k)[:128 * len(m.links)] == x
+
+
+def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_and_the_windows_table_is_the_tree_over_them(monkeypatch):
+    c, s, _got = committed(monkeypatch)
+    w = c.window
+    served = {step: RTB.step_roots(CTX, step, s.outputs(step), ROW_KEY) for step, _ in w.steps}
+    for step, ks in w.steps:
+        tabs = [w.row_tables[k] for k in ks]
+        assert served[step].tables == tuple((t.op_path, c.table_roots[t.port]) for t in tabs)
+        assert served[step].root == c.step_roots[step] == RT.step_tree(CTX, step, [c.table_roots[t.port] for t in tabs]).root
+        ref = RT.commit_step(CTX, step, [([RT.s8_row(*s.x_of(row_of(rid, step, t.op_path, tok))) for rid, tok, _i in t.rows],
+                                          [c.salts[t.port][i * 192:(i + 1) * 192] for i in range(t.n)]) for t in tabs])
+        assert ref.root == served[step].root and len(served[step].root) == 64
+    assert RTB.step_roots(CTX, 1, s.outputs(1), ROW_KEY, workers=2) == served[1]
+    assert RTB.step_roots(bytes(64), 1, s.outputs(1), ROW_KEY).root != served[1].root
+    assert RTB.step_roots(CTX, 1, s.outputs(1), bytes(32)).root != served[1].root
+    # the window's table: the tree over the step roots, each the step's subtree, nothing committed again
+    win = RT.RootTree(w.tables_domain, [served[st].root for st, _ in w.steps])
+    assert c.roots[CS.TABLE_PORT] == win.root and c.domains[CS.TABLE_PORT] == w.tables_domain
+    for i, (step, _ks) in enumerate(w.steps):
+        o = win.open([i])
+        assert o.roots == (served[step].root,) and RT.verify_roots(c.roots[CS.TABLE_PORT], w.tables_domain.domain_id, len(w.steps), o)
+    # the window's commit holds its steps to the roots serving recorded before their coins
+    recorded = {step: sr.root for step, sr in served.items()}
+    assert committed(monkeypatch, step_roots=recorded)[0].roots == c.roots
+    with pytest.raises(ValueError, match=r"engine steps \[1\]: the window's step roots are not the ones serving recorded"):
+        committed(monkeypatch, step_roots={**recorded, 1: bytes(64)})
+    w2, _, _ = window()
+    with pytest.raises(ValueError, match="give row_salt_key"):
+        CS.commit(w2, [g[0] for g in _got], salt_key=bytes(32), step_roots=recorded)
+    with pytest.raises(ValueError, match="twice in one step"):
+        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0), ("r0", 0)], np.zeros((2, K), np.int8), np.zeros(2, np.float32))}, ROW_KEY)
+    with pytest.raises(ValueError, match="even K"):
+        RTB.step_roots(CTX, 1, {QKV: ([("r0", 0)], np.zeros((1, K + 1), np.int8), np.zeros(1, np.float32))}, ROW_KEY)
 
 
 def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypatch):
@@ -138,58 +209,78 @@ def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypa
             assert xb[i].tobytes() == RT.s8_row(*s.x_of(row_of(rid, step, op, tok)))[0]
 
 
-def test_the_registration_holds_the_tables_and_the_verifier_ties_them_to_the_chunks(monkeypatch, tmp_path):
+def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ties_it_to_the_chunks(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
     win = CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     ports = CS.expected_ports(mine)
-    assert {t.port for t in mine.row_tables} <= set(ports) and {r["port"] for r in rec["roots"]} == set(ports)
+    assert ports[CS.TABLE_PORT]["leaves"] == 2 and not {t.port for t in mine.row_tables} & set(ports)
+    assert {r["port"] for r in rec["roots"]} == set(ports)
+    assert next(r for r in rec["roots"] if r["port"] == CS.TABLE_PORT)["root"] == c.roots[CS.TABLE_PORT].hex()
     publics = {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, ports, leaf_layer=CS.leaf_layer(publics))
     assert v.ok, v.detail
-    roots = {r["port"]: r["root"] for r in rec["roots"]}
-    assert CS.check_row_tables(mine, publics, roots) == {}
+    roots, live = {r["port"]: r["root"] for r in rec["roots"]}, dict(c.step_roots)
+    assert RTB.check_row_tables(mine, publics, roots) == {} and RTB.check_row_tables(mine, publics, roots, live) == {}
     assert [e["port"] for e in win["row_tables"]] == [t.port for t in mine.row_tables]
-    assert win["members"][2]["row_links"] == [[1, 0], [1, 1], [2, 0]] and win["members"][2]["shared_rows"] == {"x": 3, "w": 7, "o0": 7}
-    # a chunk whose x string is not its table's row, a registered root that is another table's, a table no chunk reads
-    k0 = mine.members[0].key
-    flipped = dict(publics, **{k0: publics[k0][:200] + bytes([publics[k0][200] ^ 1]) + publics[k0][201:]})
-    assert set(CS.check_row_tables(mine, flipped, roots)) == {mine.row_tables[0].port}
-    t0, t1 = mine.row_tables[0].port, mine.row_tables[1].port
-    assert set(CS.check_row_tables(mine, publics, dict(roots, **{t0: roots[t1]}))) == {t0}
-    assert CS.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots) == {
-        k0: "its public body is 0 bytes, short of its 2 x strings", t0: "a row no member's"}
+    assert [e["step_index"] for e in win["row_tables"]] == [0, 1, 0, 1]
+    assert win["row_table_steps"]["steps"] == [{"engine_step": 0, "tables": [0, 1], "root": c.step_roots[0].hex()},
+                                               {"engine_step": 1, "tables": [2, 3], "root": c.step_roots[1].hex()}]
+    assert win["members"][2]["row_links"] == [[0, 0], [0, 1], [3, 0]] and win["members"][2]["shared_rows"] == {"x": 3, "w": 7, "o0": 7}
+    # a chunk whose x string is the only copy of a table row and is not that row: step 0's root, against the recorded one
+    k0, t0, t1 = mine.members[0].key, mine.row_tables[0].port, mine.row_tables[1].port
+    flip = lambda body, at: body[:at] + bytes([body[at] ^ 1]) + body[at + 1:]  # noqa: E731
+    once = dict(publics, **{k0: flip(publics[k0], 5)})                 # m0's x row 0, table 1's row 0, read by m0 alone
+    assert RTB.check_row_tables(mine, once, roots) == {CS.TABLE_PORT: "the members' strings are not its root's rows"}
+    assert RTB.check_row_tables(mine, once, roots, live) == {f"{CS.TABLE_PORT}/0": "the members' strings are not the step root serving recorded"}
+    twice = dict(publics, **{k0: flip(publics[k0], 200)})              # m0's x row 1, table 1's row 1, which m1 reads too
+    assert set(RTB.check_row_tables(mine, twice, roots)) == {t1, CS.TABLE_PORT} and set(RTB.check_row_tables(mine, twice, roots, live)) == {t1}
+    # a registered root that is not the tree over the step roots, a recorded step root the window's are not, a chunk missing
+    other = dict(roots, **{CS.TABLE_PORT: "00" * 64})
+    assert RTB.check_row_tables(mine, publics, other, live) == {CS.TABLE_PORT: "its root is not the tree over the step roots serving recorded"}
+    assert set(RTB.check_row_tables(mine, publics, roots, {**live, 1: bytes(64)})) == {f"{CS.TABLE_PORT}/1", CS.TABLE_PORT}
+    assert RTB.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots) == {
+        k0: "its public body is 0 bytes, short of its 2 x strings", t1: "a row no member's", CS.TABLE_PORT: "a step whose tables do not hold"}
+    assert t0 not in RTB.check_row_tables(mine, {k: v for k, v in publics.items() if k != k0}, roots)
     copies, _, _ = window(row_tables=False)
     assert "R3-ports" in R.check(rec, copies.program, copies.query, copies.law, CS.SCHEME, CS.expected_ports(copies),
                                  leaf_layer=CS.leaf_layer(publics)).codes
 
 
-def test_pouws_interface_finds_a_table_and_its_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
+def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
     CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
-    prover, verifier = RTB.of_dir(tmp_path), RTB.of_registration(mine, rec)
-    assert [(t.spec, t.root, t.domain_id, t.k) for t in prover] == [(t.spec, t.root, t.domain_id, t.k) for t in verifier]
+    live = dict(c.step_roots)
+    prover, verifier = RTB.of_dir(tmp_path), RTB.of_registration(mine, rec, live)
+    key = lambda t: (t.spec, t.domain_id, t.k, t.index, t.tables, t.context, t.step_root)  # noqa: E731
+    assert [key(t) for t in prover] == [key(t) for t in verifier]
     t = RTB.find(verifier, 1, 0, "qkv_proj")
-    assert t is RTB.find(verifier, 1, 0, QKV) and t.port == f"row-table/1/{QKV}" and t.root == c.roots[t.port]
-    assert (t.leaves, t.rank("r1", 0), t.rank("r0", 0)) == (2, 1, 0)
+    assert t is RTB.find(verifier, 1, 0, QKV) and t.port == f"row-table/1/{QKV}" and t.step_root == live[1]
+    assert (t.leaves, t.rank("r1", 0), t.rank("r0", 0), t.index, t.tables) == (2, 1, 0, 1, 2)
     for ranks in ([1], [0, 1]):
         o = RTB.opening(tmp_path, t, ranks)
         rows = RTB.witness(tmp_path, t, ranks)
-        assert RTB.verify(t, o) and RTB.verify(t, o, rows)
+        assert RTB.verify(t, o) and RTB.verify(t, o, rows) and o.root == c.table_roots[t.port]
+    assert RT.StepOpening.of_json(json.loads(json.dumps(o.to_json()))) == o
     assert rows[1][0] == RT.s8_row(*s.x_of(6))[0] and rows[1][1] == 8 * K + 32
     row, bits, salt = rows[1]
     assert not RTB.verify(t, o, {**rows, 1: (bytes([row[0] ^ 1]) + row[1:], bits, salt)})
     assert not RTB.verify(t, o, {**rows, 1: (row, bits, rows[0][2])})
     assert not RTB.verify(RTB.find(verifier, 0, 0, "qkv_proj"), o)
+    assert not RTB.verify(RTB.find(verifier, 1, 0, "gate_up_proj"), o)
+    up = RTB.opening(tmp_path, RTB.find(prover, 1, 0, "gate_up_proj"), [0, 1])
+    assert not RTB.verify(t, RT.StepOpening(o.table, up.rows)) and not RTB.verify(t, RT.StepOpening(up.table, o.rows))
     with pytest.raises(LookupError, match="0 row tables"):
         RTB.find(verifier, 2, 0, "qkv_proj")
     with pytest.raises(LookupError, match="2 row tables"):
         RTB.find(verifier + [t], 1, 0, "qkv_proj")
     with pytest.raises(ValueError, match="does not hold"):
-        RTB.of_registration(mine, dict(rec, roots=[r for r in rec["roots"] if r["port"] != t.port]))
+        RTB.of_registration(mine, dict(rec, roots=[r for r in rec["roots"] if r["port"] != CS.TABLE_PORT]), live)
+    with pytest.raises(ValueError, match="not the tree over the step roots serving recorded"):
+        RTB.of_registration(mine, rec, {**live, 0: live[1]})
     (tmp_path / f"t{t.k}-public.bin").write_bytes(RTB._strings(tmp_path, RTB.find(prover, 0, 0, "qkv_proj"))[0] * 2)
     with pytest.raises(ValueError, match="not row-table/1"):
         RTB.opening(tmp_path, t, [0])
@@ -197,21 +288,29 @@ def test_pouws_interface_finds_a_table_and_its_openings_verify_and_tampered_rows
 
 def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
     w, s, ms = window()
-    prog, query = w.program, w.query
+    prog, query, ctx = w.program, w.query, CTX.hex()
     with pytest.raises(ValueError, match="every row some member's"):
-        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables + (CS.RowTable(9, QKV, COORD, SRW.s8_words(K), (("r9", 0, 1),)),))
+        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables + (CS.RowTable(9, QKV, COORD, SRW.s8_words(K), (("r9", 0, 1),)),), ctx)
     with pytest.raises(ValueError, match="no row of"):
-        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables[:3])
+        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables[:3], ctx)
     bad = CS.RowTable(0, QKV, COORD, 3, w.row_tables[0].rows)
     with pytest.raises(ValueError, match="34 words"):
-        CS.Window(prog, query, w.law, RUN, w.members, (bad,) + w.row_tables[1:])
+        CS.Window(prog, query, w.law, RUN, w.members, (bad,) + w.row_tables[1:], ctx)
+    t = w.row_tables
+    with pytest.raises(ValueError, match=r"RowTable.key"):
+        CS.Window(prog, query, w.law, RUN, w.members, (t[1], t[0]) + t[2:], ctx)
+    with pytest.raises(ValueError, match=r"RowTable.key"):
+        CS.Window(prog, query, w.law, RUN, w.members, t[:2] + (replace(t[2], rows=t[2].rows[::-1]),) + t[3:], ctx)
+    for no in ("", "ab" * 32, "AB" * 64):
+        with pytest.raises(ValueError, match="serve-time context"):
+            CS.Window(prog, query, w.law, RUN, w.members, t, no)
     with pytest.raises(ValueError, match="one per row"):
         CS.Member(COORD, (("x", 34), ("w", 34)), (("o0", 1),), 2, tables=(("x", 2), ("w", 2)), links=((0, 0),))
     monkeypatch.setattr(SRW, "_operand", s.operand)
     got = SRW._read_s8(ms, s.rows, s, None, ARRIVALS)
     data = [g[0] for g in got]
     data[1]["rows"]["x"] = data[1]["rows"]["x"].copy()
-    data[1]["rows"]["x"][0, 0] ^= 1                                  # chunk 1 reads table 0's row 1 otherwise than chunk 0
+    data[1]["rows"]["x"][0, 0] ^= 1                                  # chunk 1 reads table 1's row 1 otherwise than chunk 0
     with pytest.raises(ValueError, match="as another member reads it"):
         CS.commit(w, data, salt_key=bytes(32))
 
