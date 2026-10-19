@@ -248,19 +248,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Models/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
-          "Measured facets are ceilings for the stated device (sm_120 RTX PRO 6000, VF3p-16 on VF3o-16): every program "
-          "path, on every data value, launch configuration and SM clock up to f_max, loads each SM-clocked facet by at "
-          "most its cycles and each fixed-clock facet by at most f_max times its time", "TS facet ceilings", "measured"),
+          "Measured facets are ceilings for the stated device on the measured vector its statement names (sm_120 RTX "
+          "PRO 6000: VF3s-16, the measured headline's (I1)): on every run the counts and cycles are nonnegative and the "
+          "SM clock is in (0, f_max], each SM-clocked facet's load is at most the run's cycles, and each fixed-clock "
+          "facet's load is at most f_max times its time", "TS facet ceilings", "measured"),
     Entry("accounting-ts-words-written", "assumption",
-          "An instruction of an MMA kind or a uniform class writes at most ω words (128 for m16n8, 64 for m8n8k16, 1 for "
-          "a uniform instruction), so the owned right words it heads are at most ω per instruction",
-          "TS words per instruction", "measured"),
+          "The owned right fixed words a writer kind heads are at most its ω times the instructions of its class the "
+          "labelling gives them, ω the model's: an MMA form's m·n on a data sheet (128 for m16n8, 64 for m8n8k16), and "
+          "on a measured vector the committed words an instruction of the form writes, m·n·k_dense/(32·split) rounded "
+          "up (sm_120's VF3s-16: 128 for IMMA.16832, 32 for IMMA.8816); 1 for a uniform instruction (UNI) and 2 for a "
+          "64-bit one (UNI64, on DS-120's model only)", "TS words per instruction", "measured"),
     Entry("accounting-ts-scalar-route", "assumption",
           "SCALAR-ROUTE at a per-instruction cap κ (every ALU instruction creates at most κ incidences): every right "
           "fresh gather-free vector-headed committed word costs at least 2.03 lane-instructions net of the fold and of "
           "operand delivery (for κ < 27.2 a slot), and one whose production reads a data-dependent load at least 1.22 "
           "lane-instructions (for κ ≤ 128) and 32(28 − 1.03κ)/(c_L − κ) bytes read from its memory level, 3.0 at κ = 8 "
-          "(QSTAR's joint statement, from class P and the cap κ; no cap is proved, and ISA-CAP's 32/7 is false)",
+          "(QSTAR's joint statement, from class P and the cap κ; no cap is proved, and ISA-CAP's 32/7 is false). "
+          "sm_120's measured headline takes it at q = q_T = 9/8, ClassPSlots' slots once writers create at most 15 "
+          "incidences, a cap nothing proves: its 0.591% rests on that. At A6's ½ floor, which Lean proves from A6 "
+          "(SheetScalarRouteHalf), the same bound is 7.791% (10.24% on VF3r-16; r20261019-172339-a93b)",
           "SCALAR-ROUTE", "conjectured"),
     Entry("accounting-ts-side-units", "assumption",
           "A side unit's committed words cost at least its measured per-word vector", "TS side units", "measured"),
@@ -270,11 +276,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # The data-sheet axioms A1–A7 (Security/Models/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
-          "A1 CLOCK: the SM clock never exceeds the data sheet's maximum boost clock", "A1 clock (data sheet)",
-          "measured"),
+          "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
+          "2430 MHz, like the B200's f_max, is the maximum SM clock its driver reports (nvidia-smi), not a data "
+          "sheet's, and nothing checks a clock offset at run time; our nodes' driver allows none (NVML's offset range "
+          "[0, 0], r20261019-121222-faa3)", "A1 clock (assumed)", "measured"),
     Entry("accounting-sheet-dispatch", "assumption",
           "A2 DISPATCH: each SMSP issues at most one warp instruction a cycle, whatever its pipe, uniform-datapath "
-          "instructions included (A2u, which no vendor document states)", "A2 dispatch (whitepapers)", "measured"),
+          "instructions included (A2u, which no vendor document states), and every warp instruction takes at least one "
+          "issue slot whether or not its class is listed: one no other class names counts in the device's catch-all "
+          "class at its issue slot alone (sm_120's NOROW); a device whose classes have none leaves it free",
+          "A2 dispatch (whitepapers)", "measured"),
     Entry("accounting-sheet-tensor", "assumption",
           "A3 TENSOR: the tensor cores do at most the data sheet's dense MACs per SM clock for each operand type",
           "A3 tensor (data sheet)", "measured"),
@@ -293,8 +304,11 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
           "A7 semantics (PTX ISA)", "measured"),
     Entry("accounting-ts-fold-opt", "assumption",
-          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
-          "certificate π", "FOLD-OPT", "conjectured"),
+          "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π). The TS "
+          "statements ask it at every certificate π (FoldOpt), where a bit-exact fold falsifies it on DS-120 "
+          "(RT2-LOGIC-1's IMAD rotate); the sm_120 headlines ask it only at their own certificate π*, N the words the "
+          "run folds (FoldOptFoldedAt), an open conjecture that test_lean_headline.py tests on bit-exact folds",
+          "FOLD-OPT", "conjectured"),
     Entry("accounting-ts-fill-opt", "assumption",
           "FILL-OPT: no program runs the verified filler at a certificate's price below (1 − μ_x)·χ*(π), for every "
           "certificate π", "FILL-OPT", "conjectured"),
@@ -324,9 +338,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "probability at most μ given a view of the cheater that decides the round's share (¾ in the headlines)",
           "TS operand H-μ at μ", "conjectured"),
     Entry("accounting-ts-proofs-sound", "assumption",
-          "Outside binding and proof-soundness failures (S·(δ_bind + n_π·δ_ZK)), an accepted window's committed values "
-          "are right for their derivations from what was committed before σ, and every word that isn't fixed is in its "
-          "round's share", "TS proofs sound", "standard"),
+          "Binding at δ_bind and proof soundness at δ_ZK, over a window of S rounds of n_π proofs. The TS statements "
+          "take them in one premise with the protocol's order, pinning (accounting-ts-proofs-pin) and E1(c) "
+          "(accounting-ts-right-fixed), ProofsSound: outside an event of probability at most S·(δ_bind + n_π·δ_ZK), an "
+          "accepted window is accepted by the ideal game and its owned right fixed words per unit are at least "
+          "(1 − Σ_w d_w/S)·N_w. The sm_120 headlines take the two alone as named premises: binding in its fork form at "
+          "δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, which share "
+          "w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, with "
+          "probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's soundness at "
+          "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
+          "δ_ZK), which C-Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
+          "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
+          "is not stated there", "TS proofs sound", "standard"),
+    Entry("accounting-ts-proofs-pin", "assumption",
+          "Pinning: the relations a window's proofs pass pin every committed value, so values that satisfy every "
+          "proof's relation are right for their derivations (ProofsPin, ProofLayer.Pins). It is a property of our "
+          "circuit Definitions, and no Lean checks it of the served relations: PouwSegCheck_v2 lacks it (it ties only "
+          "the drawn segment's set to the one before, so its window's other absorbed prefix-word sets are free "
+          "witness), PIN's checks (PouwSegCheck_v3, PouwCallCheck_v1, PouwWarpCheck_v1 and _v2, #2417) recompute every "
+          "word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
           "fraction φ of a row's noise-active coordinates saves at most φ of the consumer's work",
@@ -334,6 +364,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-right-fixed", "assumption",
           "Lemma E1(c) with the rounds' equal shares: on an accepted window whose committed values are right for their "
           "derivations, every word that isn't fixed is in its round's share", "TS right fixed", "proven"),
+    Entry("accounting-ts-unit-fixed", "assumption",
+          "Lemma E1(c) per unit with its fold clause, which doesn't read the draw: on an accepted window the fixed "
+          "words per round are at least the good units' words over the rounds, a good unit being one the run computed "
+          "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
+          "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
+          "units not skipped whole over the rounds", "TS unit fixed", "proven"),
 )}
 
 

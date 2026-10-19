@@ -94,3 +94,10 @@ def test_a_p1_sibling_is_its_design_with_every_filler_at_p_1():
     assert [f.p for f in p1.filler] == [1.0] and p1.skip["served"].eps > d.skip["served"].eps   # ♭ drops the filler
     with pytest.raises(SystemExit, match="every filler at p = 1"):
         H._sibling(d, design("dither-2s-li-l32", sm90))
+
+
+def test_sm120s_measured_row_names_how_it_differs_from_its_lean_statement():
+    """The row reads VF3r-16 at the reading's 1.22 while `Sm120MeasuredHeadline` reads VF3s-16 at 9/8 (RT3-LOGIC-4)."""
+    x = next(x for x in H.rows("measured") if x.family == "sm_120")
+    assert x.vector == "VF3r-16" and x.q == 1.22
+    assert any("Sm120MeasuredHeadline reads VF3s-16 at q = q_T = 9/8" in c for c in x.conditions)

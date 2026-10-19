@@ -886,3 +886,25 @@ def test_an_audit_sweeps_before_it_makes_its_scratch_tree_named_by_its_pid(tmp_p
     LA._audit([], [], {}, {}, tmp_path / "out", tmp_path / "cache" / "lean-audit", deps, True, lambda m: None)
     assert seen == [deps.parent]
     assert made == [f"{LA.SCRATCH}{os.getpid()}-"]
+
+
+def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path):
+    """LEAN-29: vy-nebius-2 held 24 kept dependency trees (806k inodes) and 180k replay entries, with nothing evicting
+    either. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
+    deps = tmp_path / "lean-deps"
+    for i, k in enumerate(("a", "b", "c")):
+        (deps / k / "pkg").mkdir(parents=True)
+        os.utime(deps / k, (1000 + i, 1000 + i))
+    held = open(deps / "a.lock", "w")
+    import fcntl
+    fcntl.flock(held, fcntl.LOCK_EX)
+    assert LA.WarmDeps(deps, kept=1).evict() == 1 and sorted(p.name for p in deps.iterdir() if p.is_dir()) == ["a", "c"]
+    held.close()
+    assert LA.WarmDeps(deps, kept=1).evict() == 1 and [p.name for p in deps.iterdir() if p.is_dir()] == ["c"]
+    replay = tmp_path / "lean-replay"
+    replay.mkdir()
+    for i in range(5):
+        (replay / f"{i}.json").write_text("{}")
+        os.utime(replay / f"{i}.json", (2000 + i, 2000 + i))
+    assert LA.prune_replays(replay, kept=2) == 3 and sorted(p.name for p in replay.iterdir()) == ["3.json", "4.json"]
+    assert LA.prune_replays(tmp_path / "absent", kept=2) == 0

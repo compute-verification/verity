@@ -2,7 +2,9 @@
 # `bash benchmarks/harness/run_point.sh ARGS...`: one sweep point (`python -m verity_bench _vllm-point ARGS...`) as the
 # queued research run `verity-bench run SPEC` dispatches, from the source tree (--cwd source). The node's Python is the
 # pinned-vLLM GPU environment integrations/vllm/verity_vllm/ops/pod_bootstrap.sh makes ($WORK/venv312), or
-# VERITY_BENCH_VENV, which the dispatcher forwards when it is set; this tree's packages go on PYTHONPATH.
+# VERITY_BENCH_VENV, which the dispatcher forwards when it is set; this tree's packages go on PYTHONPATH. The dispatcher
+# also forwards the spec's env, and its setup script as VERITY_BENCH_SETUP, which is sourced here (cwd the source tree,
+# VENV, CUDA_HOME, PATH and PYTHONPATH set) so what it exports reaches the point.
 set -euo pipefail
 WORK=${WORK:-/workspace}
 VENV=${VERITY_BENCH_VENV:-$WORK/venv312}
@@ -18,4 +20,8 @@ fi
 export PATH=${CUDA_HOME:+$CUDA_HOME/bin:}$VENV/bin:$PATH
 ROOT=$PWD
 export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/integrations/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT${PYTHONPATH:+:$PYTHONPATH}
+if [ -n "${VERITY_BENCH_SETUP:-}" ]; then
+  # shellcheck source=/dev/null
+  . "$ROOT/$VERITY_BENCH_SETUP"
+fi
 exec "$VENV/bin/python" -m verity_bench _vllm-point "$@"
