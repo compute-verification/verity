@@ -126,13 +126,15 @@ TOTAL = {"work": "work", "control": "egress", "integrity": "outputs"}
 
 
 def plan_row(v: dict, model_name: str, which: str, eps: float, *, luck: float, step: int | None = None, grid: int = 31,
-             cut_grid: int = 21) -> dict:
+             cut_grid: int = 21, rounds: float = WINDOWS["week"]) -> dict:
+    """The least plan holding policies `which` at `eps` over `rounds` rounds of one GPU's serving (a pooled
+    certificate over G GPUs for T seconds is G T / round rounds: every cost is per GPU-second)."""
     vv = dict(v)
     if step is not None:
         vv["step_tokens"] = step
         vv["replay_layer_step"] = v["weights_s"] + step * (v["replay_layer_step"] - v["weights_s"]) / 256
     fit_ = fitted(vv)
-    w = workload(vv, WINDOWS["week"], MODELS[model_name])
+    w = workload(vv, rounds, MODELS[model_name])
     costs = model(vv, fit_, w["replay_units"])
     t = totals(vv, model_name, w)
     objective = Objective(DELTA, policies=policies(vv, t, eps, which, luck))

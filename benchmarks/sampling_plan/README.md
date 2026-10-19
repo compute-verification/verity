@@ -35,8 +35,12 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   reading down's and o_proj's A from the Commit's BF16 rows, hash's tap format), each priced. Per model it writes each
   plan with the policy that binds, every policy's level at it, the optimum per PoUW scheme, and TS1's two-stage table
   with every value committed (`opt5-MODEL.json`, `.md`).
+- `opt5_eps.py`: the work policy's ε at a budget, and the total B for ε = 1e-5 and 1e-8, over a horizon (one GPU-week,
+  and 1 hour, 1 day and 30 days of G GPUs, one certificate pooling the horizon's draws), with each scheme's serve-time
+  commitments and what one draw's statement costs (`opt5-eps.json`, `.md`).
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 uv run python benchmarks/sampling_plan/opt5.py --out DIR --label main
+uv run python benchmarks/sampling_plan/opt5_eps.py --out DIR [--gpus 100000] [--budget 0.01] [--luck 0]
 ```
