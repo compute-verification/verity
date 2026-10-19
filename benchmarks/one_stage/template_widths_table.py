@@ -7,11 +7,14 @@ One line per (Definition family, route) over 16 bits, its specs folded (the stat
 shown as ranges, e.g. an attention head's T): the committed bits (the held rule's count), the rows that offer it, its
 units per rank (the instances in the rank's request Programs, every request of the row and every spec of the line summed;
 the step Program is one decode step of a request and the workload Program wraps the requests, so neither is added, and a
-line no request reaches shows its step Program's count, marked), the 16-bit re-cut per
-instance (``units16``: measured where `template_widths.recut` ran, else the lower bound from its returned widths, marked
-``≥``) and the AND cost of the cheaper re-cut against today's, the class it needs under ASK-61's option A (16, 1,024, or the
-next power of two), and its owner. The route is how a row offers the template: ``row`` (the serving-rows window's "any
-row's own Definition"), ``cut`` (a ``CUT`` family's batched member) or ``a11`` (the one-stage audit's unit chain).
+line no request reaches shows its step Program's count, marked), today's pinned ANDs per instance, the two 16-bit re-cuts
+of `template_widths.recut` per instance (naive: each 16-bit piece of the returns its own unit, recomputing its cone;
+2-level: the shared values the private cones read committed as pieces of their own too), each as its units and its ANDs
+against today's (where the re-cut didn't run, the lower bound on units from the returned widths, marked ``≥``), the class
+it needs under ASK-61's option A (16, 1,024, or the next power of two), and its owner. Both re-cuts are shallow: a cut that
+commits intermediates level by level costs fewer ANDs and more units, and is not estimated. The route is how a row offers
+the template: ``row`` (the serving-rows window's "any row's own Definition"), ``cut`` (a ``CUT`` family's batched member)
+or ``a11`` (the one-stage audit's unit chain).
 """
 from __future__ import annotations
 
@@ -107,19 +110,26 @@ def klass(bits: int) -> str:
     return f"{2 ** math.ceil(math.log2(bits)):,} (over 1,024)"
 
 
-def ands(rec: dict) -> str:
+CUTS = "ANDs per instance today | re-cut at 16, naive: units, ANDs | re-cut at 16, 2-level: units, ANDs"
+
+
+def cuts(rec: dict) -> tuple[str, str, str]:
+    """Today's ANDs, the naive re-cut and the 2-level re-cut, as the table prints them."""
     r = rec.get("recut") or {}
-    if "ands_naive" in r and r.get("ands_today_pinned"):
-        best = min(r["ands_naive"], r["ands_2level"])
-        cov = "" if r.get("ands_coverage") == 1.0 else f"; pins cover {r['ands_coverage']:.0%} of gates"
-        return f"{r['ands_today_pinned']:,} → {best:,} ({best / r['ands_today_pinned']:.2f}×{cov})"
-    if "ands_naive" in r:
-        return f"no pinned ANDs (pins cover {r.get('ands_coverage', 0):.0%} of gates)"
-    if rec.get("pinned_ands"):
-        return f"{rec['pinned_ands']:,} today; re-cut not run"
-    if r.get("error"):
-        return f"re-cut not finished ({r['error'][:40]})"
-    return "re-cut not run"
+    today = r.get("ands_today_pinned") or rec.get("pinned_ands")
+    if "units16" not in r:
+        u, _ = units16(rec)
+        why = f"not finished ({r['error'][:40]})" if r.get("error") else "not run"
+        return (f"{today:,}" if today else "no pins"), f"≥{u:,} units; {why}", "not run"
+    cov = r.get("ands_coverage") or 0
+    t = (f"{today:,}" + ("" if cov == 1.0 else f" (pins cover {cov:.0%} of gates)")) if today else \
+        f"no pinned ANDs (pins cover {cov:.0%} of gates)"
+
+    def one(units: int, ands: int) -> str:
+        return f"{units:,} units, {ands / today:.2f}×" if today else f"{units:,} units"
+    naive = one(r["units16"], r["ands_naive"])
+    two = "same (no shared value)" if not r.get("frontier_values") else one(r["units16_2level"], r["ands_2level"])
+    return t, naive, two
 
 
 def overlap(progs: list[dict]) -> str:
@@ -171,8 +181,8 @@ def main() -> int:
         if (r.get("bits") or 0) > 16 and not NOT_ROWS.match(r["family"]):
             route = "+".join(ROUTE[h] for h in r["hows"])
             lines_by[(r["family"], route)].append(tid)
-    head = ["| Definition | committed bits | route | rows | units per rank | re-cut: 16-bit units per instance | "
-            "ANDs per instance, today → re-cut | class under A | owner |", "|---|---|---|---|---|---|---|---|---|"]
+    head = [f"| Definition | committed bits | route | rows | units per rank | {CUTS} | class under A | owner |",
+            "|---|---|---|---|---|---|---|---|---|---|"]
     top = {k: max(recs[t]["bits"] for t in v) for k, v in lines_by.items()}
     order = sorted(lines_by, key=lambda k: ({"cut": 0, "a11": 1}.get(k[1].split("+")[0], 2), -top[k], k[0]))
     lines, jl = [], []
@@ -199,8 +209,9 @@ def main() -> int:
         lo_b, hi_b = min(r["bits"] for r in rs), max(r["bits"] for r in rs)
         bits = f"{hi_b:,}" if lo_b == hi_b else f"{lo_b:,}–{hi_b:,}"
         at = "" if len(ids) == 1 else f" (at `{rep['id'][len(key[0]):]}`, {rep['bits']:,} bits)"
+        today, naive, two = cuts(rep)
         lines.append(f"| `{fold(sorted(ids))}` | {bits}{rule} | {key[1]} | {', '.join(rws)} | {'; '.join(ranks)} | "
-                     f"{'' if measured else '≥'}{u:,}{at} | {ands(rep)} | {klass(hi_b)} | @circuits |")
+                     f"{today}{at} | {naive} | {two} | {klass(hi_b)} | @circuits |")
         jl.append({"definition": fold(sorted(ids)), "specs": sorted(ids), "bits": [lo_b, hi_b], "route": key[1], "rows": rws,
                    "units_per_rank": upr,
                    "units16_per_instance": u, "units16_measured": measured, "recut": rep.get("recut"),
@@ -226,16 +237,16 @@ def main() -> int:
            "gates overall; not split per Definition).", ""]
     kj = []
     if a.known:
-        kl = ["| Definition | committed bits | rule | offered by | measured at | re-cut: 16-bit units per instance | "
-              "ANDs per instance, today → re-cut | class under A | owner |", "|---|---|---|---|---|---|---|---|---|"]
+        kl = [f"| Definition | committed bits | rule | offered by | measured at | {CUTS} | class under A | owner |",
+              "|---|---|---|---|---|---|---|---|---|---|"]
         for p in a.known:
             d = json.loads(p.read_text())
             for r in sorted(d["templates"].values(), key=lambda r: (-(r.get("bits") or 0), r["id"])):
                 verdict = (r.get("verdict") or "descriptor count only").split(":")[0]
-                u, measured = units16(r) if (r.get("bits") or 0) > 16 else (1, True)
+                u, _ = units16(r) if (r.get("bits") or 0) > 16 else (1, True)
+                today, naive, two = cuts(r) if (r.get("bits") or 0) > 16 else ("—", "—", "—")
                 kl.append(f"| `{r['id']}` | {r.get('bits') or 0:,} | {verdict} | {offered(r['family'])} | {d['where']} | "
-                          f"{'' if measured else '≥'}{u:,} | {ands(r) if (r.get('bits') or 0) > 16 else '—'} | "
-                          f"{klass(r.get('bits') or 0)} | @circuits |")
+                          f"{today} | {naive} | {two} | {klass(r.get('bits') or 0)} | @circuits |")
                 kj.append({"definition": r["id"], "bits": r.get("bits"), "verdict": r.get("verdict"), "offered_by": offered(r["family"]),
                            "where": d["where"], "tree": d["tree"], "units16_per_instance": u, "recut": r.get("recut"),
                            "class_A": klass(r.get("bits") or 0), "owner": "@circuits"})
@@ -243,18 +254,19 @@ def main() -> int:
     pj = []
     if a.pouw:
         d = json.loads(a.pouw.read_text())
-        pl = ["| Definition | committed bits | role | used by | re-cut: 16-bit units per instance | ANDs per instance, today → re-cut | "
-              "class under A | owner |", "|---|---|---|---|---|---|---|---|"]
+        pl = [f"| Definition | committed bits | role | used by | {CUTS} | class under A | owner |",
+              "|---|---|---|---|---|---|---|---|---|"]
         prs = sorted((r for r in d["templates"].values() if (r.get("bits") or 0) > 16 or r.get("unbound")),
                      key=lambda r: (-(r.get("bits") or 0), r["id"]))
         for r in prs:
             if r.get("unbound"):
-                pl.append(f"| `{r['id']}` | not measured: {r['unbound']} | {'; '.join(r['roles'])} | | | | | @compute-accounting |")
+                pl.append(f"| `{r['id']}` | not measured: {r['unbound']} | {'; '.join(r['roles'])} | | | | | | @compute-accounting |")
                 continue
             u, measured = units16(r)
+            today, naive, two = cuts(r)
             used = ", ".join(f"{k.split('{')[0]} ×{n:,}" for k, n in list(r["used_by"].items())[:2]) + (" …" if len(r["used_by"]) > 2 else "")
-            pl.append(f"| `{r['id']}` | {r['bits']:,} | {'; '.join(r['roles'])} | {used} | {'' if measured else '≥'}{u:,} | "
-                      f"{ands(r)} | {klass(r['bits'])} | @compute-accounting |")
+            pl.append(f"| `{r['id']}` | {r['bits']:,} | {'; '.join(r['roles'])} | {used} | {today} | {naive} | {two} | "
+                      f"{klass(r['bits'])} | @compute-accounting |")
             pj.append({"definition": r["id"], "bits": r["bits"], "roles": r["roles"], "used_by": r["used_by"],
                        "units16_per_instance": u, "units16_measured": measured, "recut": r.get("recut"),
                        "verdict": r.get("verdict"), "class_A": klass(r["bits"]), "owner": "@compute-accounting"})
