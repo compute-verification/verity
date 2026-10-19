@@ -3451,7 +3451,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A probably about 1 at Chinchilla budgets, with SGD's state. Traits as published (from the scaling corpus): state at its stored precision, 32 bits per updated parameter. fp32 weights only.",
+  "notes": "No multiplier: the claimed 2x is tokens to equal perplexity below 1x Chinchilla (wen-2025-fantastic-optimizers/8), where matrix optimizers gain most, and tuned matrix optimizers fall to 1.1x by 1.2B (wen-2025-fantastic-optimizers/1), so m_A is probably about 1 at Chinchilla budgets, with SGD's state. Traits as published (from the scaling corpus): state at its stored precision, 32 bits per updated parameter. fp32 weights only.",
   "scaling": [
    {
     "evidence": [
@@ -3476,14 +3476,7 @@
     "note": "Below 1x Chinchilla, where matrix optimizers gain most."
    }
   ],
-  "multiplier": {
-   "value": 2,
-   "trend": "unknown",
-   "evidence": [
-    "ma-2024-swan/1"
-   ],
-   "metric": "tokens to equal perplexity, 350M-1.3B"
-  },
+  "multiplier": null,
   "confidence": "low",
   "convention": "as-published"
  },
