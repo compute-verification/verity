@@ -103,12 +103,61 @@ def _split(body: str) -> dict[str, str]:
     return out
 
 
+def _items(body: str) -> list[str]:
+    """A tuple's elements as an id prints them, split at its top-level commas."""
+    out, depth, cur = [], 0, ""
+    for ch in body:
+        depth += (ch in "{[(") - (ch in "}])")
+        if ch == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    return [*out, cur.strip()] if cur.strip() or out else out
+
+
 def _value(s: str) -> Any:
     try:
         v = ast.literal_eval(s)
     except (ValueError, SyntaxError):
         return s
     return (v,) if s.startswith("(") and not isinstance(v, tuple) else v    # an id prints a tuple of one as `(7)`
+
+
+#: a Definition-valued static with statics of its own, as an id prints it (`verity.ml.circuits.defs._fmt_static`): its own id
+_DEFINITION = re.compile(r"[A-Za-z_][^{}()\[\],=\s]*(?:\[[^{}()=\s]*\][^{}()\[\],=\s]*)?\{.*\}", re.S)
+#: a bare Definition id (no statics), as it stands in a tuple
+_BARE = re.compile(r"[A-Za-z_][\w.]*(?:\[[^{}()=\s]*\][\w.]*)?")
+
+
+def _static(text: str) -> Any:
+    """A static as a Definition's id writes it: a record by its digest (`_record`), a literal, a Definition by its own id with
+    its statics (`definition`, so a Definition among those parses the same way), a tuple element by element.  A bare function
+    id stays its text at the top level, which `call_scope.specialization` resolves; in a tuple it is resolved here, as there."""
+    if _RECORD.fullmatch(text):
+        return _record(text)
+    v = _value(text)
+    if v is not text:
+        return v
+    if _DEFINITION.fullmatch(text):
+        return definition(text)
+    if text.startswith("(") and text.endswith(")"):
+        return tuple(_element(x) for x in _items(text[1:-1]))
+    return text
+
+
+def _element(text: str) -> Any:
+    """A tuple element (`_static`), a bare id among them the registered Definition it names, as `call_scope.specialization`
+    resolves a function-valued static, else its text."""
+    from verity_vllm.query import word as W
+
+    v = _static(text)
+    if v is not text or not _BARE.fullmatch(text):
+        return v
+    try:
+        return W.specialization(text, {})
+    except KeyError:
+        return text
 
 
 #: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.ml.circuits.defs`): the record itself is
@@ -131,9 +180,10 @@ def _record(text: str) -> Any:
 
 
 def definition(spec: str) -> Any:
-    """The registered Definition ``spec`` names, bound to the statics its id writes, or else the suite's target of that id: a
-    Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one
-    whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
+    """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
+    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else the suite's target of
+    that id: a Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers,
+    or one whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
     from verity_vllm.query import word as W
 
     load_registries()
@@ -141,7 +191,7 @@ def definition(spec: str) -> Any:
     if m is None:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
-    statics = {k: _record(v) if _RECORD.fullmatch(v) else _value(v) for k, v in _split(body).items()} if body else {}
+    statics = {k: _static(v) for k, v in _split(body).items()} if body else {}
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
