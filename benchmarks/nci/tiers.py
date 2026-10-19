@@ -11,8 +11,9 @@ proved.
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
   peak. It trains at full efficiency unless the memory cap binds. A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
-  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; ``ThreadedOfState`` per
-  window counts them by information, which a wipe bounds), declared or not. The state is all memory,
+  K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
+  information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport and
+  ``ThreadedOfStateFmt`` on its restatement, not yet signed off), declared or not. The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
@@ -62,6 +63,9 @@ T_AUDIT = 0.3635
 #: the proof-of-space band block, and the bits that name one, for the outsourcing attack on a wipe
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
+#: ReferenceThreaded's (d, e) for Kimi K2 at S = 2e7 under the open conjecture ReferenceLayered, at Dot16 granularity in
+#: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
+REFERENCE_THREADED = (10.0, 37248.0)
 
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max, 1 - (1 - eps)
 #: ((1 - phi)/q_sched + phi)/q_clock = 0.326: honest kernels run 1.72x the floor at the nodes' locked clock (run
@@ -75,13 +79,10 @@ BLOCK_NAME_BITS = 25
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; (d, e) ReferenceThreaded's for a reference circuit written in
-#: Dot16 steps, as the declarations are, in products; injected bits valued with (d, e)-threading no further than
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
+#: its embedding, with ReferenceThreaded's e for a reference circuit written in Dot16 steps, as the declarations are, in
+#: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
-#: ReferenceThreaded's (d, e) for Kimi K2 at S = 2e7 under the open conjecture ReferenceLayered, at Dot16 granularity in
-#: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
-REFERENCE_THREADED = (10.0, 37248.0)
-
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064, "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
