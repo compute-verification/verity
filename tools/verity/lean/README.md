@@ -123,13 +123,19 @@ an own module replays it and what imports it, as without `--closure`. The cache 
 `Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
 that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
 constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
-The audit prints `closure: N modules checked, M reused` under each package's line.
+The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
+`--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
+kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
+toolchain, Mathlib or ArkLib, or a change to `Replay.lean`, the first audit on each node checks the closure once; warm, the
+closure adds nothing to the kernel's work. `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
+its scratch tree, so `Security` reuses what `Security/Proofs` checked in the same run.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
 again on every run, so it is not part of every run: the steward runs `check.py --all --build --fresh` nightly on `main`,
 and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in
-`tools/research/README.md`). `--closure` with a kept cache checks the same closure once per change of its `.olean` files.
+`tools/research/README.md`). `--closure` with a kept cache, which `check` runs, checks the same closure once per change of its
+`.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
 when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
