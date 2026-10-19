@@ -576,17 +576,17 @@ def test_sm90_ffma_filler_has_no_uniform_form():
 
 
 def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
-    """RT2-HOPPER-1: sm_90a does LI-CP-W's checkpoint XOR in memory (red.global.xor, REDG), and the check reads the
-    checkpoint word, not its program, so the cheater folds by any mix of the design's fold and its `[fold_routes]`. On
-    DS-90 its 3 LOP3 + 2 REDG a segment (134 issue slots a unit, REDUX's 136) beats ♭ at REDUX by 1.47%, and 1.97% on
-    DC-90-ri at q* 1.22; ♭ on the same menu folds as the cheater does and ε_machine is 0 on DS-90. Honest's kernel
-    folds by REDUX, so γ doesn't move."""
+    """RT2-HOPPER-9 and -11: LI-CP-W with four segments' checkpoint words in one STG.128 (cp-seg4, 134.25 issue slots
+    a unit) and with one of its XORs on the uniform datapath (cp-seg4u), and the check reads the checkpoint word, not
+    its program, so the cheater folds by any mix of the design's fold and its `[fold_routes]`. With ♭ at REDUX they beat
+    it by 0.28% on DS-90 and 1.11% on DC-90-ri at q* 1.22; ♭ on the same menu folds at their balance on DS-90, 13 cp-seg4
+    to 3 cp-seg4u, and ε_machine is 0 there. Honest's kernel folds by REDUX, so γ doesn't move."""
     d = DEVICES / "sm_90"
     ds = E.design("dither-2s-licpw-redux-p1-l32", d)
-    assert list(ds.fold_routes) == ["cp-red", "cp-red2", "cp-red4", "cp-red6", "cp-red8"] and ds.fold_routes_source
-    assert ds.with_fold_cost(0.5).fold_routes["cp-red2"]["REDG"] == pytest.approx(0.015625 * 0.5 / ds.fold_cost())
+    assert list(ds.fold_routes) == ["cp-seg4", "cp-seg4u"] and ds.fold_routes_source
+    assert ds.with_fold_cost(0.5).fold_routes["cp-seg4u"]["UNI"] == pytest.approx(0.0078125 * 0.5 / ds.fold_cost())
     plain = replace(ds, fold_routes={})
-    for vec, q, attack, eps in (("DS-90", 0.5, 0.014706, 0.0), ("DC-90-ri", 1.22, 0.019724, 0.000473)):
+    for vec, q, attack, eps in (("DS-90", 0.5, 0.002757, 0.0), ("DC-90-ri", 1.22, 0.011125, 0.001792)):
         pi = E.machine(vec, d)
         s, s0 = E.setup(ds, pi, d, "free", "floor"), E.setup(plain, pi, d, "free", "floor")
         assert not s0.baseline.folds and s.baseline.T < s0.baseline.T
@@ -597,9 +597,31 @@ def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
         e, e0 = (E.eps(x, pi, q, d, operands="free", credit="floor") for x in (ds, plain))
         assert e.gamma == e0.gamma and e.T_honest == e0.T_honest
     s = E.setup(ds, E.machine("DS-90", d), d, "free", "floor")
-    assert s.baseline.folds == s.cheat(0.5).folds == pytest.approx({"cp-red2": 1.0})
-    assert s.baseline.T * 128 == pytest.approx(4.1875)
+    assert s.baseline.folds == s.cheat(0.5).folds == pytest.approx({"cp-seg4": 13 / 16, "cp-seg4u": 3 / 16})
+    assert s.baseline.T * 128 == pytest.approx(4.23828125)
     assert E.setup(plain, s.machine, d, "free", "floor").baseline.T * 128 == pytest.approx(4.25)
+
+
+def test_the_atomic_checkpoints_are_off_the_menu():
+    """RT2-HOPPER-1: the checkpoint's lane XOR in memory, a LOP3 and b red.global.xor (REDG) a segment, 2a + b ≥ 8, is
+    bit-exact but bound by the L2's atomic unit (AT90). On every word each such route is slower than REDUX on DC-90 and
+    DC-90-ri. On a share of the words AT90 alone would leave the atomic unit spare capacity, which lirmix refutes (one
+    unit in eight already slows the lane loop), so FOLD-OPT excludes them; were the spare capacity real, DC-90-ri's
+    ε_machine would rise by 0.04%."""
+    d = DEVICES / "sm_90"
+    ds = E.design("dither-2s-licpw-redux-p1-l32", d)
+    red = {f"cp-red{b if b > 1 else ''}": {"ALU": (64 + a) / 128, "IMAD": 0.5, "REDG": b / 128}
+           for a, b in ((4, 1), (3, 2), (2, 4), (1, 6), (0, 8))}
+    assert {"AT90"} == set(E.machine("DC-90-ri", d).c["REDG"]) and not set(ds.fold_routes) & set(red)
+    for vec in ("DC-90", "DC-90-ri"):
+        pi = E.machine(vec, d)
+        T0 = E.setup(replace(ds, fold_routes={}), pi, d, "free", "floor").baseline.T
+        for r in red.values():
+            s = E.setup(replace(ds, fold=r, fold_routes={}), pi, d, "free", "floor")
+            assert s.baseline.T > 1.4 * T0 and s.baseline.binding == ("AT90",), vec
+    pi = E.machine("DC-90-ri", d)
+    s, r = (E.setup(x, pi, d, "free", "floor") for x in (ds, replace(ds, fold_routes={**ds.fold_routes, **red})))
+    assert r.machine_eps(1.22) - s.machine_eps(1.22) == pytest.approx(0.000380, abs=1e-6)
 
 
 HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10, #2325)

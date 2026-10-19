@@ -32,17 +32,22 @@ Per device:
   joint rows price every tensor form but honest's IGMMA s8 m64n256k32 at the scalar coefficient (IGMMA_S8_N256 at 62.7
   on JI90_0, the bf16, binary and fp8 forms at about 1), a lower bound on their issue cost that no certificate prices
   above it, so the measured menu is honest's form and the uniform `UNI`, and `NoSum` carries every other form. Over
-  the census's full menu the same certificate search gives `31.8%`. Without ffill in ♭, `setup`'s floor program on
-  DC-90-ri heads 0.3% of its words on honest's lane baseline beside the IGMMA, so `Sm90Measured.flat` is honest's
-  program, the IGMMA heading every word: its `B_♭` is larger (199.31 a unit against the floor's 199.11), so the bound
-  is at least the machine model's (2.260% at `q = ½`). It is over 1%; crediting ffill would need a check that reads
-  its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own instruction counts (`eps_budget`'s `SASS`:
-  RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu): 0.846% on DS-90, 0.581% on DC-90-ri.
+  the census's full menu the same certificate search gives `31.5%`. ♭ and the cheater fold by the cheapest mix of
+  LI-CP-W redux and its checkpoint routes CP_SEG4 (four segments' checkpoint words in one STG.128) and CP_SEG4U (one
+  XOR a checkpoint on the uniform datapath): 13 to 3 on DS-90, CP_SEG4U alone on DC-90-ri (RT2-HOPPER-9, -11). Honest's
+  kernel keeps REDUX, so γ is unchanged. The checkpoint's XOR in memory (REDG) is off the menu: it is atomic-bound on
+  the H200 (`AT90`, 290 SMSP-cycles a warp REDG; RT2-HOPPER's G5). Without ffill in ♭, `setup`'s floor program on
+  DC-90-ri heads 0.079% of its words on honest's lane baseline (dp4a) beside the IGMMA, and `Sm90Measured.flat` is that
+  floor, its shares exact (`B_♭` 197.26 a unit; the machine model's reading is 1.712% at `q = ½`). It is over 1%;
+  crediting ffill would need a check that reads its chains (RT-HB-HEAD-1). ε_skip prices the P·V peel at sm_90a's own
+  instruction counts (`eps_budget`'s `SASS`: RT-ISA-7's static nvdisasm counts with ncu's rule applied, not ncu):
+  0.848% on DS-90, 0.587% on DC-90-ri.
 * The B200 (sm_100) runs `dither-2s-licpw-redux-ldtm0-l32` (Dither-2S, LI-CP-W redux, no filler): its fold is the
   one `PouwWarpCheck` recomputes (`PouwLiAbsorb_v2`, no extra keyed round), and its ♭ credits none of honest's 8
   `tcgen05.ld` a MMA: the operands-free cheater never pays them, so crediting them was all of DC-100-ri's
-  `ε_machine`. Honest still runs them; a lower credit is sound for any program. DS-100's `f_max` (1965 MHz) is the
-  driver's reported maximum: the data sheet gives no clock.
+  `ε_machine`. Honest still runs them; a lower credit is sound for any program. Its fold menu is the H200's (untimed
+  on the B200, REDG off it, the B200's atomic rate untimed): ♭ folds 19 CP_SEG4 to 13 CP_SEG4U on DS-100. DS-100's
+  `f_max` (1965 MHz) is the driver's reported maximum: the data sheet gives no clock.
 
 Outside every statement: `S8MmaExact`, that IGMMA s8 (sm_90a) and tcgen05 `kind::i8` (sm_100a) write `C + Σ a_k b_k`
 exactly in s32 on the design's operands. The bounds read classes and words (A6), not values, so they don't read it;
@@ -54,37 +59,38 @@ the commitments. The sampled path's `ε_sample` and the Fiat–Shamir premium ar
 **The window these numbers are for.** Each statement is typed at `SmX.checks = 48,000` rounds, every round live and
 fully checked (no service draw, so no `K_d`), and `RightFixed` charges each round an equal `1/S` share of the window's
 words (`r = 1`). It says nothing about a window of any other shape, and no served window has this one. The same bound
-at `S` rounds in place of 48,000 needs at least 26,367 (H200 sheet), 13,801 (B200 sheet) and 20,594 (B200 measured)
-equal live rounds for `ε < 1%`; the H200's measured reading is over 1% at any `S` (`1 − Y` alone is 2.27%). Each is
+at `S` rounds in place of 48,000 needs at least 26,769 (H200 sheet), 13,092 (B200 sheet) and 47,014 (B200 measured)
+equal live rounds for `ε < 1%`; the H200's measured reading is over 1% at any `S` (`1 − Y` alone is 1.63%). Each is
 above 100% at 18 rounds. Unequal rounds pay their max-over-mean share (RT-INT-2's `r`, an estimate, not a statement):
-at `r = 2.87` and 48,000 rounds the B200's measured reading would be 1.05%.
+at `r = 2.87` and 48,000 rounds the B200's measured reading would be 1.16%.
 
 **The premises the sheet numbers lean on hardest.** A2 (`SheetDispatch`) includes A2u, that a uniform-datapath
 instruction takes an issue slot, which no vendor document states. It is measured on both devices: the H200 beside a
 saturated wgmma, the B200 beside four `tcgen05.mma` in flight. Without it, the uniform route takes the sheet readings
-to about 94% (H200, RT-HOPPER-3) and 100% (B200). FOLD-OPT (`FoldOptFolded`, conjectured) has 5.9% of slack on DS-90:
-the H200's sheet reading holds while LI-CP-W redux's fold costs at least 0.992 lane instructions a word against its
-1.055 (with ffill out of ♭, ♭ on DS_issue is the MMA and the fold alone). On DS-100 it has 53% on count: the cliff is
-0.496 a word (RT-HB-HEAD-2). This statement's π* on DS-100 also prices the pipes apart, a LOP3 at 1.969 and an IMAD or
-FFMA at 0.031, so there FOLD-OPT also says li's XOR of two words has no IMAD- or FP-pipe program of fewer than 63
-instructions. That is open: the cheapest known is 78 instructions, all on the IMAD pipe (33 IMAD, 45 IMAD.HI; FOLD-XOR,
-#2769), and with it the machine model's reading stays 0.7052% (its binding cheater breaks even at 62.54), passing 1%
-only at 3 instructions or fewer. It is false for a keyed round's XOR with a constant, which takes
-1 + 2|B| IMAD-pipe instructions (FOLD-MIN, #2751), but plain li has no such round: every half step absorbs a word. With
-the fold priced at its instruction count alone, which needs no pipe premise, the B200's sheet reading is 1.408% here
-(1.328% in the machine model). With only the proved fan-in floor in its place each reading is tens of percent
-(decision 115).
+to about 94% (H200, RT-HOPPER-3) and 100% (B200). FOLD-OPT (`FoldOptFolded`, conjectured) has little slack. With ♭
+held at its fold, a cheater whose every fold route is cheaper by 0.068% takes the H200's sheet reading to 1% (CP_SEG4 at
+1.0481 lane instructions a word against its 1.0488), 0.23% does the B200's, and 0.002% the B200's measured reading,
+which is 0.998% (RT2-HOPPER-10: the 5.9% and 53% once quoted here scaled ♭'s fold with the cheater's). Both sheet
+statements' π* also price the pipes apart, DS_issue and DS_alu at ½ each, a LOP3 at 1.5 and an IMAD or FFMA at 0.5, so
+there FOLD-OPT also says li's XOR of two words has no IMAD- or FP-pipe program of fewer than 3 instructions. That is
+open, and the cheapest known is 78 instructions, all on the IMAD pipe (33 IMAD, 45 IMAD.HI; FOLD-XOR, #2769): with it
+the machine model's readings stay 0.849% (DS-90) and 0.689% (DS-100), its cheater breaking even at 3 too, and of 2 it
+reads 0.941% and 0.890%. It is false for a keyed round's XOR with a constant, which takes 1 + 2|B| IMAD-pipe
+instructions (FOLD-MIN, #2751), but plain li has no such round: every half step absorbs a word. With the fold priced
+at its instruction count alone, which needs no pipe premise, the sheet readings are 1.207% (H200) and 1.370% (B200)
+here (1.126% and 1.290% in the machine model). With only the proved fan-in floor in its place each reading is tens
+of percent (decision 115).
 
 The statements:
 
-* `Sm90SheetHeadline`: the H200 at its data sheet (DS-90), at π* = DS_issue: outside an event of probability at most
-  `2^-40`, every accepted window of 48,000 equal live rounds runs at least `1 − 0.931%` of its credit (the unfolded
-  branch binds).
-* `Sm90MeasuredHeadline`: the H200 on DC-90-ri, at a mixed π* (issue, JI90_0, JI90_1): at least `1 − 2.419%` (the
-  folded branch binds), over 1%, and an upper reading: ♭ is honest's program, not the floor.
-* `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue, DS_alu): at least `1 − 0.790%`
+* `Sm90SheetHeadline`: the H200 at its data sheet (DS-90), at a mixed π* (DS_issue, DS_alu): outside an event of
+  probability at most `2^-40`, every accepted window of 48,000 equal live rounds runs at least `1 − 0.933%` of its
+  credit (the unfolded branch binds).
+* `Sm90MeasuredHeadline`: the H200 on DC-90-ri, at a mixed π* (issue, JI90_0, JI90_1): at least `1 − 1.781%` (the
+  folded branch binds), over 1%.
+* `Sm100SheetHeadline`: the B200 at its data sheet (DS-100), at a mixed π* (DS_issue, DS_alu): at least `1 − 0.774%`
   (unfolded).
-* `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.888%` (unfolded).
+* `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.999%` (unfolded).
 
 Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.HeadlineDc`: with `χ* = 0` it is an instance
 of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
@@ -105,12 +111,12 @@ deficient words have point mass at most `¾` given the cheater's view (`OperandH
 (`ReceiptLuckAt`, HMU's B′) and whose whole-unit luck is at most `½` (`WholeLuckAt`, B′ at a unit whose fold is
 skipped), the play is the proofs' (`Of`), binding fails with probability at most `δ_bind` a round, every proof is sound
 up to `δ_ZK` (`SoundAt`), the relations pin every committed value (`Pins`) and E1(c) holds (`RightFixed`), then outside
-an event of probability at most `2^-40` every accepted window's time is at least `1 − 931/100000` (`1 − 0.931%`) of the
+an event of probability at most `2^-40` every accepted window's time is at least `1 − 933/100000` (`1 − 0.933%`) of the
 credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: ♭ credits no filler. A3 (`SheetTensor`) is per SM clock at
 the clock each tensor figure is stated at, the 1830 MHz tensor boost clock, not f_max's 1980 MHz: read per second at
-f_max, the machine model puts this reading at 1.942%, since its ε first moves at tensor lines 1.063× the sheet's. -/
+f_max, the machine model puts this reading at 2.253%, since its ε first moves at tensor lines 1.060× the sheet's. -/
 def Sm90SheetHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 29) (Fin 24) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δbind δzk : ℝ),
     (Sm90.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sm90.sheet (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
@@ -121,26 +127,26 @@ def Sm90SheetHeadline : Prop :=
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm90.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm90.model.credit Sm90.flat < 1 - 931 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm90.model.credit Sm90.flat < 1 - 933 / 100000) ≤
       (1 / 2) ^ 40
 
 /-- **The H200's headline on its measured vector**, under full checking with live coins. On DC-90-ri's machine
 (`Sm90Measured.machine`), `dither-2s-licpw-redux-p1-l32`'s TS model on it (`Sm90Measured.model`: honest's IGMMA s8
-m64n256k32 and `UNI` at 2 the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_w = 4096`) and honest's program as its ♭
-(`Sm90Measured.flat`: `setup`'s floor heads 0.3% of its words on honest's lane baseline, so this ♭ is larger and the
-bound at least the machine model's), over `Sm90.checks = 48,000` rounds on any finite coins `Ω`: for any window's play
+m64n256k32 and `UNI` at 2 the writer kinds, `q = q_T = ½`, `b_T = 0`, `N_w = 4096`) and its floor program
+(`Sm90Measured.flat`: `setup`'s floor, 0.079% of its words on honest's lane baseline and its fold by CP_SEG4U), over
+`Sm90.checks = 48,000` rounds on any finite coins `Ω`: for any window's play
 `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the labelling splits,
 (I1) `FacetCeilings` holds on DC-90-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run, FOLD-OPT per word
 folded prices every run's fold at the words it folds (its unfolded share `Uf`), and the luck and proof premises hold
 as in `Sm90SheetHeadline`, then outside an event of probability at most `2^-40` every accepted window's time is at
-least `1 − 2419/100000` (`1 − 2.419%`, over 1%: no check reads ffill's chains) of the credit `T_cred = B_♭/f_max`.
+least `1 − 1781/100000` (`1 − 1.781%`, over 1%: no check reads ffill's chains) of the credit `T_cred = B_♭/f_max`.
 `NoSum` carries the tensor forms off the menu: DC-90-ri prices them at the scalar coefficient on its joint rows. Two of
 them would move the reading if they were on it: the register-sourced IGMMA form, whose coefficient fitted from the
 H200's probes gives about 1.64% in the machine model at #2699's earlier design, and DMMA, which at the scalar
 coefficient heads a word for about 0.0077 against honest's 0.0153 (at its tensor-pipe coefficient, about 0.031, it
 moves nothing). -/
 def Sm90MeasuredHeadline : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 28) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
+  ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm90.checks (Fin 29) (Fin 2) Unit Empty) (G : ReceiptGame Ω Sm90.checks)
     (Uf : Unfolded Ω Sm90.checks) {V : Type} {nπ : ℕ} (pf : ProofLayer Ω Sm90.checks nπ V) (δbind δzk : ℝ),
     (Sm90.checks : ℝ) * (δbind + nπ * δzk) ≤ (1 / 2) ^ 41 → (∀ x, (Pl.run x).Split) →
     (∀ x, FacetCeilings Sm90Measured.machine (Pl.run x).run) →
@@ -151,7 +157,7 @@ def Sm90MeasuredHeadline : Prop :=
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm90Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
-      (Pl.run x).run.time / Sm90Measured.model.credit Sm90Measured.flat < 1 - 2419 / 100000) ≤ (1 / 2) ^ 40
+      (Pl.run x).run.time / Sm90Measured.model.credit Sm90Measured.flat < 1 - 1781 / 100000) ≤ (1 / 2) ^ 40
 
 /-- **The B200's headline at the data sheet**, under full checking with live coins. On DS-100's machine
 (`Sm100.sheet`), `dither-2s-licpw-redux-ldtm0-l32`'s TS model (`Sm100.model`: every census MMA class a writer
@@ -160,7 +166,7 @@ kind at its committed words an instruction and `UNI` at 2, `q = q_T = ½`, `N_w 
 window's play `Pl` and proof layer `pf` whose binding and soundness cost at most `2^-41` over the window, if the
 labelling splits, A1–A7 hold on every run and FOLD-OPT per word folded prices every run's fold at the words it folds
 (its unfolded share `Uf`), and the luck and proof premises hold as in `Sm90SheetHeadline`, then outside an event of
-probability at most `2^-40` every accepted window's time is at least `1 − 790/100000` (`1 − 0.790%`) of the credit
+probability at most `2^-40` every accepted window's time is at least `1 − 774/100000` (`1 − 0.774%`) of the credit
 `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no filler, so it holds at any run. -/
 def Sm100SheetHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
@@ -174,7 +180,7 @@ def Sm100SheetHeadline : Prop :=
     Pl.game = G.game → G.Pinned → OperandHMu (3 / 4) G → ReceiptLuckAt (1 / 2) G → WholeLuckAt (1 / 2) G Uf →
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm100.model.Nw →
-    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm100.model.credit Sm100.flat < 1 - 790 / 100000) ≤
+    prob (fun x => Pl.accepts x ∧ (Pl.run x).run.time / Sm100.model.credit Sm100.flat < 1 - 774 / 100000) ≤
       (1 / 2) ^ 40
 
 /-- **The B200's headline on its measured vector**, under full checking with live coins. On DC-100-ri's machine
@@ -185,7 +191,7 @@ proof layer `pf` whose binding and soundness cost at most `2^-41` over the windo
 `FacetCeilings` holds on DC-100-ri's rows, A6 (`SheetWords`) and (I5) `NoSum` hold on every run and FOLD-OPT per word
 folded prices every run's fold at the words it folds (its unfolded share `Uf`), and the luck and proof premises hold as
 in `Sm90SheetHeadline`, then outside an event of probability at most `2^-40` every accepted window's time is at least
-`1 − 888/100000` (`1 − 0.888%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no
+`1 − 999/100000` (`1 − 0.999%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a hypothesis: the design has no
 filler. -/
 def Sm100MeasuredHeadline : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (Pl : Play Ω Sm100.checks (Fin 26) (Fin 13) Unit Empty) (G : ReceiptGame Ω Sm100.checks)
@@ -199,6 +205,6 @@ def Sm100MeasuredHeadline : Prop :=
     pf.Of Pl → (∀ w, prob (fun x => pf.Moved x w) ≤ δbind) → pf.SoundAt δzk →
     pf.Pins → RightFixed Pl pf Sm100Measured.model.Nw →
     prob (fun x => Pl.accepts x ∧
-      (Pl.run x).run.time / Sm100Measured.model.credit Sm100Measured.flat < 1 - 888 / 100000) ≤ (1 / 2) ^ 40
+      (Pl.run x).run.time / Sm100Measured.model.credit Sm100Measured.flat < 1 - 999 / 100000) ≤ (1 / 2) ^ 40
 
 end Accounting.Guarantees.TS

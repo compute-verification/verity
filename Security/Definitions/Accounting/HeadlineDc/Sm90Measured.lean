@@ -7,16 +7,16 @@ Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (
 and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
 this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 
-* `rowNames`, `dc90ri`, `machine`: the measured vector DC-90-ri, 15 rows of SMSP-cycles a warp instruction at its
+* `rowNames`, `dc90ri`, `machine`: the measured vector DC-90-ri, 16 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm90.classes`; every facet SM-clocked, f_max 1980 MHz.
 * `d2s`, `model`: `dither-2s-licpw-redux-p1-l32` on that machine, its writer kinds honest's form and the uniform `UNI`
   (2, a UR pair: RT-HOPPER-7): the census prices every other tensor form on the joint rows at the scalar coefficient, a
   lower bound on its issue cost, so they are off the menu and `NoSum` carries them; `Sm90.d2s`'s vector classes, fold
   routes, floors and `N_w`.
-* `flatSkip`, `flat`: ♭ is `Sm90.flat`'s word production, fold and filler, with ε_skip's skippable work at DC-90-ri's
-  0.581381% (`eps_budget.design_skip` on DC-90-ri), at ALU's price; it is honest's program, not `setup`'s floor, which
-  heads some words on honest's lane baseline beside the MMA, so B_♭ is larger and the bound at least the machine
-  model's.
+* `flatWords`, `flatFold`, `flatSkip`, `flat`: ♭ is `Sm90.flat`'s filler, its word production DC-90-ri's (the MMA and
+  the operand floor on 0.999207 of the words, the design's baseline program (dp4a) on 0.000793), its fold DC-90-ri's
+  (the fold routes' cheapest, cp-seg4u on every word), with ε_skip's skippable work at DC-90-ri's 0.586836%
+  (`eps_budget.design_skip` on DC-90-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 0.003598 + JI90_0 0.966699 + JI90_1
   0.029703).
 -/
@@ -28,15 +28,15 @@ open Accounting.TS
 /-- DC-90-ri's rows, in index order. -/
 def rowNames : List String := [
   "issue", "M", "A", "I", "SHFL", "JI90_0", "JI90_1", "JI90_2", "JPI90_0", "JPI90_1", "JPA90_0", "JPA90_1",
-  "JPSHFL90_0", "UP", "TMAB"]
+  "JPSHFL90_0", "UP", "TMAB", "AT90"]
 
 /-- DC-90-ri's coefficients, row by row: `(class index, numerator, denominator)`. -/
 def dc90ri : List Sparse := [
   -- 0: issue
   [(0, 1, 1), (1, 1, 1), (2, 1, 1), (3, 1, 1), (4, 1, 1), (5, 1, 1), (6, 1, 1), (7, 1, 1), (8, 1, 1), (9, 1, 1),
    (10, 1, 1), (11, 1, 1), (12, 1, 1), (13, 1, 1), (14, 1, 1), (15, 1, 1), (16, 1, 1), (17, 1, 1), (18, 1, 1),
-   (19, 1, 1), (20, 1, 1), (21, 1, 1), (22, 1, 1), (23, 1, 1), (24, 1, 1), (25, 1, 1), (26, 1, 1),
-   (27, 9837515209999999, 10000000000000000)],
+   (19, 1, 1), (20, 1, 1), (21, 1, 1), (22, 1, 1), (23, 1, 1), (24, 1, 1), (25, 1, 1), (27, 1, 1),
+   (28, 9837515209999999, 10000000000000000)],
   -- 1: M
   [(1, 12550304759050461, 100000000000000), (2, 11952959010285431, 2000000000000000),
    (4, 6275453632147843, 100000000000000), (5, 6275172462133571, 50000000000000),
@@ -55,7 +55,7 @@ def dc90ri : List Sparse := [
   -- 3: I
   [(20, 19610000237281, 10000000000000)],
   -- 4: SHFL
-  [(26, 9805206050620081, 2500000000000000)],
+  [(27, 9805206050620081, 2500000000000000)],
   -- 5: JI90_0
   [(0, 9805453599999999, 10000000000000000), (1, 9805453599999999, 10000000000000000),
    (2, 9805453599999999, 10000000000000000), (3, 9805453599999999, 10000000000000000),
@@ -69,7 +69,7 @@ def dc90ri : List Sparse := [
    (19, 9805453599999999, 10000000000000000), (20, 9805453599999999, 10000000000000000),
    (21, 9805453599999999, 10000000000000000), (22, 9805453599999999, 10000000000000000),
    (23, 9805453599999999, 10000000000000000), (24, 9805453599999999, 10000000000000000),
-   (25, 9805453599999999, 10000000000000000), (26, 9805453599999999, 10000000000000000), (27, 931, 5000000)],
+   (25, 9805453599999999, 10000000000000000), (27, 9805453599999999, 10000000000000000), (28, 931, 5000000)],
   -- 6: JI90_1
   [(0, 9194875250000001, 10000000000000000), (1, 9194875250000001, 10000000000000000),
    (2, 9194875250000001, 10000000000000000), (3, 9194875250000001, 10000000000000000),
@@ -83,8 +83,8 @@ def dc90ri : List Sparse := [
    (19, 9194875250000001, 10000000000000000), (20, 9194875250000001, 10000000000000000),
    (21, 9194875250000001, 10000000000000000), (22, 9194875250000001, 10000000000000000),
    (23, 9194875250000001, 10000000000000000), (24, 9194875250000001, 10000000000000000),
-   (25, 9194875250000001, 10000000000000000), (26, 9194875250000001, 10000000000000000),
-   (27, 9045472519999999, 10000000000000000)],
+   (25, 9194875250000001, 10000000000000000), (27, 9194875250000001, 10000000000000000),
+   (28, 9045472519999999, 10000000000000000)],
   -- 7: JI90_2
   [(0, 822829491, 10000000000), (1, 822829491, 10000000000), (2, 822829491, 10000000000),
    (3, 822829491, 10000000000), (4, 822829491, 10000000000), (5, 822829491, 10000000000),
@@ -94,8 +94,8 @@ def dc90ri : List Sparse := [
    (15, 822829491, 10000000000), (16, 822829491, 10000000000), (17, 822829491, 10000000000),
    (18, 822829491, 10000000000), (19, 822829491, 10000000000), (20, 822829491, 10000000000),
    (21, 822829491, 10000000000), (22, 822829491, 10000000000), (23, 822829491, 10000000000),
-   (24, 822829491, 10000000000), (25, 822829491, 10000000000), (26, 822829491, 10000000000),
-   (27, 202364941, 2500000000)],
+   (24, 822829491, 10000000000), (25, 822829491, 10000000000), (27, 822829491, 10000000000),
+   (28, 202364941, 2500000000)],
   -- 8: JPI90_0
   [(14, 637846561, 10000000), (20, 19602167099999999, 10000000000000000)],
   -- 9: JPI90_1
@@ -105,21 +105,23 @@ def dc90ri : List Sparse := [
   -- 11: JPA90_1
   [(0, 158473963, 1000000000), (14, 30351809, 250000)],
   -- 12: JPSHFL90_0
-  [(14, 7351354, 78125), (26, 19602569000000003, 5000000000000000)],
+  [(14, 7351354, 78125), (27, 19602569000000003, 5000000000000000)],
   -- 13: UP
-  [(27, 19611071600000003, 10000000000000000)],
+  [(28, 19611071600000003, 10000000000000000)],
   -- 14: TMAB
-  []]
+  [],
+  -- 15: AT90
+  [(26, 145027, 500)]]
 
 /-- The measured machine: DC-90-ri's rows over `Sm90.classes`. -/
-noncomputable def machine : Machine (Fin 28) (Fin 15) :=
-  rowsMachine 28 15 dc90ri 1980
+noncomputable def machine : Machine (Fin 29) (Fin 16) :=
+  rowsMachine 29 16 dc90ri 1980
 
 /-- `dither-2s-licpw-redux-p1-l32`'s design data on DC-90-ri: writer kinds as (class, ω), and `Sm90.d2s`'s routes. -/
 def d2s : DesignData where
   writers := [
     (14, 4096),  -- IGMMA_S8_N256
-    (27, 2)  -- UNI
+    (28, 2)  -- UNI
   ]
   vec := Sm90.d2s.vec
   folds := Sm90.d2s.folds
@@ -129,18 +131,25 @@ def d2s : DesignData where
   Nw := Sm90.d2s.Nw
 
 /-- `dither-2s-licpw-redux-p1-l32`'s TS model on the measured machine. -/
-noncomputable def model : Model (Fin 28) (Fin 15) (Fin 2) Unit Empty (Fin 2) Unit :=
-  d2s.model 28 2 2 machine
+noncomputable def model : Model (Fin 29) (Fin 16) (Fin 2) Unit Empty (Fin 4) Unit :=
+  d2s.model 29 2 4 machine
 
-/-- ♭'s skippable work a unit on DC-90-ri, at its ALU price. -/
-def flatSkip : Sparse := [(0, 115198450441247098043807339, 197920136565986970635000000)]
+/-- ♭'s word production a unit on DC-90-ri: the MMA and the operand floor on 0.999207 of the words, the design's
+baseline program (dp4a) on 0.000793. -/
+def flatWords : Sparse := [(14, 632879, 633381), (20, 514048, 633381)]
+
+/-- ♭'s fold a unit on DC-90-ri: the lane fold for 4096 words, the fold routes' cheapest, cp-seg4u on every word. -/
+def flatFold : Sparse := [(0, 67, 1), (20, 64, 1), (27, 17, 4), (28, 1, 1)]
+
+/-- ♭'s skippable work a unit on DC-90-ri, at its FFMA price. -/
+def flatSkip : Sparse := [(3, 7289071239448423939257953369530931, 6174142040064110861415584558095812)]
 
 /-- The floor program ♭ on DC-90-ri, labelled. -/
-noncomputable def flat : Labelled (Fin 28) :=
-  labelled 28 Sm90.flatWords Sm90.flatFold Sm90.flatFill flatSkip
+noncomputable def flat : Labelled (Fin 29) :=
+  labelled 29 flatWords flatFold Sm90.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
-noncomputable def lamStar : Fin 15 → ℝ :=
-  cert 15 [(0, 224871, 62500000), (5, 483349359, 500000000), (6, 14851673, 500000000)]
+noncomputable def lamStar : Fin 16 → ℝ :=
+  cert 16 [(0, 224871, 62500000), (5, 483349359, 500000000), (6, 14851673, 500000000)]
 
 end Accounting.TS.Headline.Sm90Measured

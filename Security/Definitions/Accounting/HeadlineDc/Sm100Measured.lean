@@ -11,8 +11,9 @@ this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
   epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` on that machine, its writer kinds every census MMA class (ω = m·n);
   `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
-* `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production, fold and filler, with ε_skip's skippable work at DC-100-ri's
-  0.802503% (`eps_budget.design_skip` on DC-100-ri), at FFMA's price.
+* `flatFold`, `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production and filler, its fold DC-100-ri's (the fold routes'
+  cheapest mix, by share of the words: cp-seg4 0.9242, cp-seg4u 0.0758), with ε_skip's skippable work at DC-100-ri's
+  0.806079% (`eps_budget.design_skip` on DC-100-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 1.000000).
 -/
 
@@ -98,15 +99,19 @@ def d2s : DesignData where
   Nw := Sm100.d2s.Nw
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s TS model on the measured machine. -/
-noncomputable def model : Model (Fin 26) (Fin 12) (Fin 13) Unit Empty (Fin 2) Unit :=
-  d2s.model 26 13 2 machine
+noncomputable def model : Model (Fin 26) (Fin 12) (Fin 13) Unit Empty (Fin 4) Unit :=
+  d2s.model 26 13 4 machine
+
+/-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest mix, by share of the words:
+cp-seg4 0.9242, cp-seg4u 0.0758. -/
+def flatFold : Sparse := [(0, 1047120, 1927), (2, 512, 1), (14, 37022, 1927), (15, 1168, 1927)]
 
 /-- ♭'s skippable work a unit on DC-100-ri, at its FFMA price. -/
-def flatSkip : Sparse := [(1, 8675061491317, 991974966243)]
+def flatSkip : Sparse := [(1, 5223825302150538997404942486147, 597333394309954062500000000000)]
 
 /-- The floor program ♭ on DC-100-ri, labelled. -/
 noncomputable def flat : Labelled (Fin 26) :=
-  labelled 26 Sm100.flatWords Sm100.flatFold Sm100.flatFill flatSkip
+  labelled 26 Sm100.flatWords flatFold Sm100.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : Fin 12 → ℝ :=

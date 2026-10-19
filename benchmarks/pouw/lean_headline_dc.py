@@ -31,8 +31,11 @@ kinds are every census MMA class, except on DC-90-ri: its joint rows price every
 coefficient, a lower bound on its issue cost, and no certificate prices them above it, so its menu is honest's form
 and the uniform class, the machine model's, and NoSum carries the rest; the full menu's bound is printed for the
 record. The checks are `lean_headline.instance()`'s: the sheet reproduces every DS coefficient, ♭ is `setup`'s floor
-program (on a `flat_honest` vector, DC-90-ri, honest's program, a larger ♭ and so a larger bound), and the bound is at
-most the family's target. A uniform writer heads 2 words (`UIMAD.WIDE.U32` writes a UR pair, RT-HOPPER-7).
+program, and the bound is at most the family's target. A uniform writer heads 2 words (`UIMAD.WIDE.U32` writes a UR
+pair, RT-HOPPER-7). The fold menu is the design's fold and its `fold_routes` (CP_SEG4 and CP_SEG4U, RT2-HOPPER-9, -11) on
+lanes, and alone on the uniform datapath at the least of their counts. ♭ folds by `setup`'s mix of them on each vector
+and writes by its split of the words between the tensor route and the design's baseline program (`_flat_shares`), so
+a measured file states its own `flatFold` or `flatWords` where that mix or split is not the sheet's.
 """
 from __future__ import annotations
 
@@ -86,7 +89,6 @@ class Family:
     eps: Fraction                        # the sheet's headline target
     eps_m: Fraction                      # the measured reading's
     honest_menu: bool = False            # the measured reading's writer kinds: honest's form and the uniform ones only
-    flat_honest: tuple[str, ...] = ()    # vectors whose ♭ is honest's program, where `setup`'s floor mixes word routes
     bytes: str = "ALU"                   # the table level's byte class, priced 0 at b_T = 0 (neither census has a load)
 
     @property
@@ -97,15 +99,14 @@ class Family:
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
-# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). Without ffill
-# in ♭, `setup`'s floor on DC-90-ri heads 0.3% of its words on honest's lane baseline (IMAD) beside the IGMMA, so ♭
-# there is honest's program, the IGMMA heading every word: a larger B_♭ (199.31 a unit against the floor's 199.11), so
-# the bound is at least the machine model's. It is over 1%.
+# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With ♭'s
+# checkpoint by CP_SEG4U, `setup`'s floor on DC-90-ri heads 0.079% of its words on the design's lane baseline (dp4a)
+# beside the IGMMA, and `_flat_shares` makes that share exact.
 # A uniform instruction heads up to 2 words (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
 SM90 = Family("Sm90", "H200", "sm_90", "dither-2s-licpw-redux-p1-l32", "DS-90", "DC-90-ri",
               {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
               (1024, 2048, 4096, 16384), 1980, "the data sheet's boost clock", {"UNI": 2},
-              Fraction(1, 100), Fraction(3, 100), honest_menu=True, flat_honest=("DC-90-ri",))
+              Fraction(1, 100), Fraction(3, 100), honest_menu=True)
 SM100 = Family("Sm100", "B200", "sm_100", "dither-2s-licpw-redux-ldtm0-l32", "DS-100", "DC-100-ri",
                {"DS_alu": ("alu", 64), "DS_imad": ("imad", 64), "DS_shfl": ("shfl", 32)},
                (2048, 4096, 8192, 32768), 1965, "the driver's reported maximum (the data sheet gives no clock)",
@@ -151,6 +152,9 @@ class _Exact:
     checks: int
     L: int
     form: str                            # honest's MMA form
+    fold_names: list[str]                # the design's `fold_routes`, `folds`' entries after its fold
+    fold_mix: str                        # ♭'s fold in words (`_fold_mix`)
+    words_mix: str                       # ♭'s word production in words (`_words_mix`)
 
 
 @dataclass
@@ -191,6 +195,62 @@ def _coefs(pi: E.Machine, classes: list[str]) -> dict[str, dict[str, Fraction]]:
     return {k: {r: exact(v) for r, v in pi.c[k].items() if v} for k in classes}
 
 
+def _fold_at(d: E.Design, z: dict[str, Fraction]) -> dict[str, Fraction]:
+    """The fold a word with each of the design's `fold_routes` folding its share z_j of the words."""
+    n = {k: exact(v) for k, v in d.fold.items()}
+    for j, x in z.items():
+        r = d.fold_routes[j]
+        for k in {*r, *d.fold}:
+            n[k] = n.get(k, Fraction(0)) + x * (exact(r.get(k, 0.0)) - exact(d.fold.get(k, 0.0)))
+    return {k: v for k, v in n.items() if v}
+
+
+#: the key of ♭'s share of the words on the design's baseline program among its fold routes' shares (`_flat_shares`)
+BASELINE = "baseline"
+
+
+def _flat_shares(d: E.Design, shares: dict[str, float], bound) -> dict[str, Fraction]:
+    """♭'s shares (`setup`'s floor): of the words on each of the design's `fold_routes` (`Mix.folds`), the rest on its
+    fold, and of the words written by its baseline program (`Mix.words`, at `BASELINE`), the rest on the tensor route.
+    The LP's shares are floats, so each is read as the simplest fraction at which ♭'s bound (`bound` of the shares) is
+    the float shares' to 1e-9: denominators to 1000 on a sheet's small coefficients, larger where a measured vector's
+    facets tie at an irrational-looking share. Any shares fold and write every word, so they only keep ♭ at `setup`'s."""
+    if BASELINE in d.fold_routes:
+        raise SystemExit(f"{d.name}: a fold route is named {BASELINE!r}, the key of ♭'s words on its baseline program")
+    want = bound({j: Fraction(x) for j, x in shares.items()})
+    for den in (*range(1, 1001), *(10 ** k for k in range(4, 16))):
+        z = {j: Fraction(x).limit_denominator(den) for j, x in shares.items()}
+        if sum(x for j, x in z.items() if j != BASELINE) <= 1 and z.get(BASELINE, 0) <= 1 and bound(z) <= want * (
+                1 + Fraction(1, 10 ** 9)):
+            return {j: x for j, x in z.items() if x}
+    raise SystemExit(f"{d.name}: no shares with denominator at most 10^15 keep ♭'s bound at {shares}")
+
+
+def _words_mix(d: E.Design, wb: Fraction) -> str:
+    """♭'s word production in words: the tensor route, and the design's baseline program on its share of the words."""
+    if not wb:
+        return "the MMA and the operand floor"
+    share = lambda x: f"{x.numerator}/{x.denominator}" if x.denominator <= 100 else f"{float(x):.6f}"
+    return (f"the MMA and the operand floor on {share(1 - wb)} of the words, the design's baseline program "
+            f"({d.baseline_name}) on {share(wb)}")
+
+
+def _and(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _fold_mix(d: E.Design, z: dict[str, Fraction]) -> str:
+    """♭'s fold in words: each route on its share of the words."""
+    if not z:
+        return "the design's fold"
+    if list(z.values()) == [1]:
+        return f"the fold routes' cheapest, {next(iter(z))} on every word"
+    share = lambda x: f"{x.numerator}/{x.denominator}" if x.denominator <= 100 else f"{float(x):.4f}"
+    rest = 1 - sum(z.values())
+    parts = [f"{j} {share(x)}" for j, x in z.items()] + ([f"the design's {d.fold_name} {share(rest)}"] if rest else [])
+    return "the fold routes' cheapest mix, by share of the words: " + ", ".join(parts)
+
+
 def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> dict[str, list]:
     """The data sheet by class (`macs`, `peak`, `pipe`, `smem`), checked to reproduce every DS coefficient on
     `Accounting.TS.Sheet.machine`'s rows: issue 1, tensor `macs/(peak/4)`, a pipe `128/width`, shared memory
@@ -220,10 +280,8 @@ def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> dict[str, 
     return out
 
 
-def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = True) -> Reading:
-    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits.
-    `floor_check=False` reads ♭ as honest's program even where `setup`'s floor program mixes word routes (a larger
-    credit than the machine model's, so a bound at least the machine model's), for witnesses only."""
+def reading(fam: Family, vector: str, full: bool = False) -> Reading:
+    """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits."""
     B_ = LH._eps_budget()
     sheet = vector == fam.sheet
     pi = E.machine(vector, fam.data)
@@ -242,19 +300,46 @@ def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = Tr
         raise SystemExit(f"{fam.design}: {per_mma} committed words an MMA is not whole")
     Nw = int(per_mma)
     nw = {k: exact(v) for k, v in h.tensor("floor", d.floor).items()}
-    nf = {k: exact(v) * Nw / E.LANES for k, v in d.fold.items()}
     nx: dict[str, Fraction] = {}
     for f in (f for f in d.filler if f.p == 0):
         tot = sum(exact(v) for v in f.mix.values())
         for k, v in f.mix.items():
             nx[k] = nx.get(k, Fraction(0)) + exact(f.per_word) * Nw * exact(v) / tot / E.LANES
-    n0: dict[str, Fraction] = {}
-    for part in (nw, nf, nx):
-        for k, v in part.items():
-            n0[k] = n0.get(k, Fraction(0)) + v
+
+    nb = {k: exact(v) * Nw / E.LANES for k, v in d.baseline.items()}
+
+    def words(wb: Fraction) -> dict[str, Fraction]:
+        n = {k: (1 - wb) * v for k, v in nw.items()}
+        for k, v in nb.items():
+            n[k] = n.get(k, Fraction(0)) + wb * v
+        return {k: v for k, v in n.items() if v}
+
+    def program(z: dict[str, Fraction]) -> dict[str, Fraction]:
+        fold = _fold_at(d, {j: x for j, x in z.items() if j != BASELINE})
+        n: dict[str, Fraction] = {}
+        for part in (words(z.get(BASELINE, Fraction(0))), {k: v * Nw / E.LANES for k, v in fold.items()}, nx):
+            for k, v in part.items():
+                n[k] = n.get(k, Fraction(0)) + v
+        return n
+
     s = E.setup(d, pi, fam.data, operands="free", credit="floor")
-    if floor_check and (abs(s.baseline.T * Nw - float(max(load(r, n0) for r in pi.rows))) > 1e-6 or any(
-            abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0})):
+    others = {r: x for r, x in s.baseline.words.items() if r not in ("tensor", BASELINE) and x > 1e-12}
+    if others or s.baseline.short["words"] > 1e-12:
+        raise SystemExit(f"{fam.design} on {vector}: ♭ writes words on {others} or leaves {s.baseline.short['words']} "
+                         "undone, where the statement's ♭ writes them by the tensor route and the baseline program")
+    wb0 = s.baseline.words.get(BASELINE, 0.0)
+    shares = {**s.baseline.folds, **({BASELINE: wb0} if wb0 > 1e-12 else {})}
+    zs = _flat_shares(d, shares, lambda z: max(load(r, program(z)) for r in pi.rows))
+    z = {j: x for j, x in zs.items() if j != BASELINE}
+    wb = zs.get(BASELINE, Fraction(0))
+    fold = _fold_at(d, z)
+    nf = {k: v * Nw / E.LANES for k, v in fold.items()}
+    nwb = words(wb)
+    n0 = program(zs)
+    # The routes leave the fold's other classes alone; where ♭'s bound ties two shares, the LP's pick is one of them.
+    mixed = {k for r in d.fold_routes.values() for k in {*r, *d.fold} if r.get(k, 0.0) != d.fold.get(k, 0.0)}
+    if abs(s.baseline.T * Nw - float(max(load(r, n0) for r in pi.rows))) > 1e-6 or any(
+            abs(s.baseline.n.get(k, 0.0) * Nw - float(n0.get(k, 0))) > 1e-6 for k in {*s.baseline.n, *n0} - mixed):
         raise SystemExit(f"{fam.design} on {vector}: ♭ is not setup's floor program ({s.baseline.n}, T "
                          f"{s.baseline.T})")
     e = E.eps(d, pi, float(Q), fam.data, operands="free", credit="floor")
@@ -273,9 +358,9 @@ def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = Tr
     menu = "honest" if fam.honest_menu and not sheet and not full else "all"
     writers = [(k, shape(k, h)[1]) for k in classes if shape(k, h) and (menu == "all" or k == h.form)]
     writers += [(k, om) for k, om in fam.uniform.items() if k in pi.c]
-    folds = [{k: exact(v) / E.LANES for k, v in d.fold.items()}]
+    folds = [{k: exact(v) / E.LANES for k, v in f.items()} for f in (d.fold, *d.fold_routes.values())]
     if d.uniform and E.UNI in pi.c:
-        folds.append({E.UNI: exact(d.fold_cost())})
+        folds.append({E.UNI: min(exact(sum(f.values())) for f in (d.fold, *d.fold_routes.values()))})
     # Each route's demand on every facet, as `Accounting.TS.Model.demand` reads it: a writer kind 1/ω of its class, the
     # vector route (and the table route, at q_T = q, b_T = 0) q/32 of the cheapest vector class on that facet.
     routes = {k: {r: c[k].get(r, Fraction(0)) / om for r in pi.rows} for k, om in writers}
@@ -304,8 +389,9 @@ def reading(fam: Family, vector: str, full: bool = False, floor_check: bool = Tr
                    float(1 - nprice / B), float(w), float(phi), float(chi), float(Nw * w / B), float(1 - Y), lp,
                    float(folded), float(unfolded), float(bound), float(target), e.core(), e.machine_eps, e.luck,
                    {"B": fr(B), "w": fr(w), "phi": fr(phi), "chi": fr(chi), "bound": fr(bound)},
-                   _Exact(classes, c, list(pi.rows), list(pi.cuda), lists, writers, folds, nw, nf, nx, ns, skip, lam,
-                          flat, B, bound, Nw, int(d.checks), d.L, h.form))
+                   _Exact(classes, c, list(pi.rows), list(pi.cuda), lists, writers, folds, nwb, nf, nx, ns, skip, lam,
+                          flat, B, bound, Nw, int(d.checks), d.L, h.form, list(d.fold_routes), _fold_mix(d, z),
+                          _words_mix(d, wb)))
 
 
 def _best(rows: list[str], Nw: int, B: Fraction, checks: int, words: dict, folds: list, fills: list) -> dict[str, float]:
@@ -425,12 +511,15 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"coefficient.",
         f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every census MMA class "
         f"(ω = m·n, its destination's 32-bit words a warp)" + _uniform_words(fam)
-        + f"; the vector classes CUDA's lane classes; the design's fold on lanes and alone on the uniform datapath; "
-        f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
+        + "; the vector classes CUDA's lane classes; the fold routes the design's fold"
+        + (f" and its {len(x.fold_names)} other bit-exact programs ({', '.join(x.fold_names)}: the checkpoint's "
+           "routes, RT2-HOPPER-9 and -11) on lanes, and alone on the uniform datapath at the least of their counts; "
+           if x.fold_names else " on lanes and alone on the uniform datapath; ")
+        + f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
         + ("; its filler menu the one route ffill runs on (sm_90's uniform datapath has no FFMA)." if filler else "."),
-        f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, "
-        f"{fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
+        f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold "
+        f"({x.fold_mix}), {fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
         f"(`eps_budget.design_skip` on {fam.sheet}).",
         f"`lamStar`: π*, the certificate minimising the bound over this menu ({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
         "`checks`: the checks a window, one a round (Theorem S's S).",
@@ -495,10 +584,10 @@ def flatFill : Sparse := {_sparse(x, x.nx)}
 /-- `{fam.design}`'s TS model on the data sheet's machine. -/
 {_model_line(fam, x, "d2s", "sheet.machine", "flatFill", "(SheetRow Pipe)")}
 
-/-- ♭'s word production a unit: the MMA and the operand floor. -/
+{LH._words(f"♭'s word production a unit: {x.words_mix}. -/", "/-- ", "")}
 def flatWords : Sparse := {_sparse(x, x.nw)}
 
-/-- ♭'s fold a unit: the lane fold for {x.Nw} words. -/
+{LH._words(f"♭'s fold a unit: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")}
 def flatFold : Sparse := {_sparse(x, x.nf)}
 
 /-- ♭'s skippable work a unit, at {x.skip}'s price. -/
@@ -520,9 +609,18 @@ end Accounting.TS.Headline.{fam.ns}
 
 def render_measured(fam: Family, r: Reading, s: Reading) -> str:
     x, xs = r.data, s.data
-    if x.classes != xs.classes or x.vec != xs.vec or x.folds != xs.folds or (x.nw, x.nf, x.nx) != (xs.nw, xs.nf, xs.nx):
-        raise SystemExit(f"{fam.measured}: its classes, vector classes or ♭'s parts are not {fam.sheet}'s, which the "
-                         f"measured file reads")
+    if x.classes != xs.classes or x.vec != xs.vec or x.folds != xs.folds or x.nx != xs.nx:
+        raise SystemExit(f"{fam.measured}: its classes, vector classes, fold routes or ♭'s filler are not "
+                         f"{fam.sheet}'s, which the measured file reads")
+    own, own_w = x.nf != xs.nf, x.nw != xs.nw
+    fold = "flatFold" if own else f"{fam.ns}.flatFold"
+    words = "flatWords" if own_w else f"{fam.ns}.flatWords"
+    own_fold = ((LH._words(f"♭'s word production a unit on {fam.measured}: {x.words_mix}. -/", "/-- ", "")
+                 + f"\ndef flatWords : Sparse := {_sparse(x, x.nw)}\n\n") if own_w else "") + (
+        (LH._words(f"♭'s fold a unit on {fam.measured}: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")
+         + f"\ndef flatFold : Sparse := {_sparse(x, x.nf)}\n\n") if own else "")
+    mine = [p for p, o in (("word production", own_w), ("fold", own)) if o]
+    theirs = [p for p, o in (("word production", own_w), ("fold", own)) if not o] + ["filler"]
     ix = x.classes.index
     nk, m = len(x.classes), len(x.rows)
     sv = fam.measured.replace("-", "").lower()
@@ -541,11 +639,12 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
         f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz.",
         f"`d2s`, `model`: `{fam.design}` on that machine, its writer kinds {menu}; `{fam.ns}.d2s`'s vector classes, "
         f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
-        f"`flatSkip`, `flat`: ♭ is `{fam.ns}.flat`'s word production, fold and filler, with ε_skip's skippable work at "
-        f"{fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on {fam.measured}), at {x.skip}'s price"
-        + (f"; it is honest's program, not `setup`'s floor, which heads some words on honest's lane baseline beside "
-           f"the MMA, so B_♭ is larger and the bound at least the machine model's." if fam.measured in fam.flat_honest
-           else "."),
+        "".join(f"`{n}`, " for n, o in (("flatWords", own_w), ("flatFold", own)) if o)
+        + f"`flatSkip`, `flat`: ♭ is `{fam.ns}.flat`'s {_and(theirs)}"
+        + "".join(f", its {p} {fam.measured}'s ({x.words_mix if p == 'word production' else x.fold_mix})"
+                  for p in mine)
+        + f", with ε_skip's skippable work at {fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on "
+        f"{fam.measured}), at {x.skip}'s price.",
         f"`lamStar`: π*, the certificate minimising the bound over this menu "
         f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
     ]
@@ -588,12 +687,12 @@ def d2s : DesignData where
 noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin {nfo}) Unit :=
   {body}
 
-/-- ♭'s skippable work a unit on {fam.measured}, at its {x.skip} price. -/
+{own_fold}/-- ♭'s skippable work a unit on {fam.measured}, at its {x.skip} price. -/
 def flatSkip : Sparse := {_sparse(x, x.ns)}
 
 /-- The floor program ♭ on {fam.measured}, labelled. -/
 noncomputable def flat : Labelled (Fin {nk}) :=
-  labelled {nk} {fam.ns}.flatWords {fam.ns}.flatFold {fam.ns}.flatFill flatSkip
+  labelled {nk} {words} {fold} {fam.ns}.flatFill flatSkip
 
 /-- π*: the certificate, its weights exact and summing to 1. -/
 noncomputable def lamStar : Fin {m} → ℝ :=
@@ -612,7 +711,7 @@ def main(argv: list[str] | None = None) -> int:
     out, record, files = [], [], {}
     for fam in FAMILIES:
         for v, full in ((fam.sheet, False), (fam.measured, False), *(((fam.measured, True),) if fam.honest_menu else ())):
-            r = reading(fam, v, full, floor_check=v not in fam.flat_honest)
+            r = reading(fam, v, full)
             (record if full else out).append(r)
             if not full:
                 files[OUT / (fam.ns + ("" if r.sheet else "Measured") + ".lean")] = (
