@@ -4,8 +4,11 @@
 // (class ALU). Kernels:
 //   - pairs: z[i] = xor78(x[i], y[i]) over random words and the edge words crossed, checked on the host;
 //   - chain<N>: a, b = b, xor78(a, b) N times, fully unrolled, no load or address arithmetic a step, so the SASS of
-//     chain<16> less chain<8>, over 8, is one XOR's instruction mix (`fold_xor.py --sass` counts it by census class).
-// `main` checks pairs and both chains against the host's a ^ b ^ K, for K = 0 and one key, and exits 3 on a mismatch.
+//     chain<16> less chain<8>, over 8, is one XOR's instruction mix (`fold_xor.py --sass` counts it by census class);
+//   - loop: the same step over a runtime count, not unrolled, so ptxas can hoist what doesn't vary (IMAD.HI's 64-bit
+//     addend pairs, whose low halves are 0) and the loop body is one XOR in steady state.
+// `main` checks pairs, both chains and the loop against the host's a ^ b ^ K, for K = 0 and one key, and exits 3 on a
+// mismatch.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +63,20 @@ __global__ void chain(const uint32_t* x, const uint32_t* y, uint32_t* z, int n) 
 
 template __global__ void chain<8>(const uint32_t*, const uint32_t*, uint32_t*, int);
 template __global__ void chain<16>(const uint32_t*, const uint32_t*, uint32_t*, int);
+
+// The served form: one XOR an iteration of a loop over a runtime count, so ptxas can hoist the constants out of it.
+__global__ void loop(const uint32_t* x, const uint32_t* y, uint32_t* z, int n, int reps) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  uint32_t a = x[i], b = y[i];
+#pragma unroll 1
+  for (int r = 0; r < reps; ++r) {
+    uint32_t t = xor78(a, b);
+    a = b;
+    b = t;
+  }
+  z[i] = b;
+}
 
 static const int AFF[4][2] = {{1, 0}, {-1, 1}, {1, 2}, {-1, 3}};  // u ^ k on 2 bits = s*u + c (mod 4)
 
@@ -117,11 +134,12 @@ int main() {
   long bad_total = 0;
   for (uint32_t K : keys) {
     keyed_constants(K);
-    for (int kind = 0; kind < 3; ++kind) {
-      int blocks = (n + 255) / 256;
+    for (int kind = 0; kind < 4; ++kind) {
+      int blocks = (n + 255) / 256, reps = kind == 1 ? 8 : kind == 2 ? 16 : 5;
       if (kind == 0) pairs<<<blocks, 256>>>(dx, dy, dz, n);
       if (kind == 1) chain<8><<<blocks, 256>>>(dx, dy, dz, n);
       if (kind == 2) chain<16><<<blocks, 256>>>(dx, dy, dz, n);
+      if (kind == 3) loop<<<blocks, 256>>>(dx, dy, dz, n, reps);
       cudaError_t e = cudaDeviceSynchronize();
       if (e != cudaSuccess) {
         printf("cuda error %s\n", cudaGetErrorString(e));
@@ -135,7 +153,7 @@ int main() {
           want = hx[i] ^ hy[i] ^ K;
         } else {
           uint32_t a = hx[i], b = hy[i];
-          for (int j = 0; j < (kind == 1 ? 8 : 16); ++j) {
+          for (int j = 0; j < reps; ++j) {
             uint32_t t = a ^ b ^ K;
             a = b;
             b = t;
@@ -144,8 +162,8 @@ int main() {
         }
         bad += hz[i] != want;
       }
-      printf("bitexact key 0x%08x %s %d points %ld mismatches\n", K, kind == 0 ? "pairs" : kind == 1 ? "chain8" : "chain16",
-             n, bad);
+      const char* name = kind == 0 ? "pairs" : kind == 1 ? "chain8" : kind == 2 ? "chain16" : "loop5";
+      printf("bitexact key 0x%08x %s %d points %ld mismatches\n", K, name, n, bad);
       bad_total += bad;
     }
   }
