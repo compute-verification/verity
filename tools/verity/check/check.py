@@ -1508,6 +1508,8 @@ class Packs:
 #: the reused pack is left out above this, in bytes (custody's line for undeclared files; it is declared, but a pack this big would
 #: hold far more than one tree's passes)
 REUSED_CAP = 256 << 20
+#: the longest its plan may take, in seconds: the check's end waits for it (`Reused.close`), so a plan that hangs packs nothing
+REUSED_PLAN_S = 1200
 
 
 class Reused:
@@ -1542,7 +1544,8 @@ class Reused:
         """`plan.py --tree ROOT --own` in a process of its own (it sets its environment as each step's), under this one's."""
         with tempfile.TemporaryDirectory(prefix="check-reused-") as d:
             r = subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "plan.py"), "--tree", str(ROOT), "--own",
-                                "--out", str(Path(d) / "plan.json")], cwd=ROOT, capture_output=True, text=True)
+                                "--out", str(Path(d) / "plan.json")], cwd=ROOT, capture_output=True, text=True,
+                               timeout=REUSED_PLAN_S)
             try:
                 return json.loads((Path(d) / "plan.json").read_text())
             except (OSError, ValueError):
