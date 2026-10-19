@@ -164,13 +164,14 @@ def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
 
 /-- `accounting-ts-right-fixed` (Lemma E1(c), proved on paper; the rounds' equal shares). **With every committed value
 right, what isn't fixed is in the shares**: on every accepted path whose committed values (each round's, read before its
-σ, `ProofLayer.committed`) are right for their derivations, the run's owned right fixed words per unit are at least
-`(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation (E1(c)), so with none
-wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the window's words.
+σ, `ProofLayer.committed`) are right for their derivations on that path's coins, the run's owned right fixed words per
+unit are at least `(1 − Σ_w d_w / S)·N_w`. An adaptive word lies below a committed value wrong for its own derivation
+(E1(c)), so with none wrong every word that isn't fixed is in its round's share, and the rounds carry equal shares of the
+window's words.
 `ProofsSound` held this inside it; it stays an assumption until the adaptive model is in Lean. -/
 def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S K T L U) (pf : ProofLayer Ω S nπ V)
     (Nw : ℝ) : Prop :=
-  ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
+  ∀ x, P.accepts x → pf.right x (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 open Classical in
 /-- `accounting-ts-unit-fixed` (Lemma E1(c) per unit with its fold clause, proved on paper; the rounds' equal shares).

@@ -19,7 +19,7 @@ open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 /-- Off binding failures and unsound proofs, an accepted path's committed values satisfy every proof's relation. -/
 theorem rel_committed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (x : Paths Ω S)
     (hp : ∀ w, pf.Proved x w) (hM : ∀ w, ¬ pf.Moved x w) (hU : ∀ w i, ¬ pf.Unsound x w i) (w : Fin S)
-    (i : Fin nπ) : pf.rel w i (pf.committed x w i) := by
+    (i : Fin nπ) : pf.rel x w i (pf.committed x w i) := by
   have heq : pf.opened x w i = pf.committed x w i := by
     by_contra hne
     exact hM w ⟨hp w, i, hne⟩
