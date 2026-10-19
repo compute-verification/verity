@@ -519,6 +519,138 @@ theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockC
   rw [map_pure]
   simp only [eraseZ, eraseL_eraseL]
 
+/-! ## A rep from the cut against the session's -/
+
+/-- **Table `j`'s rep `r` from the cut sends what the session's rep sends**, to the same transcript: from its first
+round, at the erased commitments, through the hybrids. -/
+theorem repCut_nf (h0 : HybridStep 0) (h1 : HybridStep 1) (h2 : HybridStep 2) {x : Msg} (hx : Live x)
+    {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ)
+    (hn : ¬ Refused x c n) {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2) (dom : ByteArray)
+    (cm0 : Commit) (ic : InnerCommit) (extras : Array _root_.Flock.Claim)
+    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras) (l : Array Msg)
+    (hl : l.size = repBase x (2 * j.val + r.val)) :
+    nf (((repCut (ioE c n) hsE (FlockDeploy.tabsOf (stsOf x))[j.val]! (zkTab x j).sch r.val dom (eraseC cm0) extras
+        (eraseIC ic) ((srcE x c w τ j.val).rep r.val) (priorE c j.val r.val)
+        (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!).run (_root_.Flock.Transcript.init #[] dom)).go l) =
+      nf (((repPZk (ioE c n) hsE (FlockDeploy.tabsOf (stsOf x))[j.val]! (zkTab x j).sch (zkTab x j).tPad r.val dom
+        (trsE x w (UE.tapeZk τ))[j.val]!
+        (FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (FlockDeploy.tabsOf (stsOf x))[j.val]!.m) cm0 extras
+        (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+          (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+            (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)) ic
+        ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)
+        ((UE.tapeZk τ).nonce j.val r.val) (priorE c j.val r.val)
+        (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!).run (_root_.Flock.Transcript.init #[] dom)).go l) := by
+  rw [← nf_map eraseZ, ← repCut_mix0 (tPad := (zkTab x j).tPad) (tr := (trsE x w (UE.tapeZk τ))[j.val]!)
+    (t := FlockComplete.packed (trsE x w (UE.tapeZk τ))[j.val]! (FlockDeploy.tabsOf (stsOf x))[j.val]!.m)
+    (pads := FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
+      (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+        (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0))
+    (extra := (UE.tapeZk τ).extra j.val) (lanePad := (UE.tapeZk τ).lanePad j.val)
+    (salt := (UE.tapeZk τ).salt j.val r.val) (nonce := (UE.tapeZk τ).nonce j.val r.val)]
+  change nf (((mixE 0 x w τ c n j r dom cm0 extras ic).run _).go l) = _
+  rw [h0 x hx w hw τ c n hn s spec hsx j r dom cm0 ic extras he l hl,
+    h1 x hx w hw τ c n hn s spec hsx j r dom cm0 ic extras he l hl,
+    h2 x hx w hw τ c n hn s spec hsx j r dom cm0 ic extras he l hl]
+  unfold mixE
+  rw [repMix3_eq, nf_map]
+
+/-! ## The session -/
+
+/-- **The record sends nothing.** -/
+theorem recordJson_still (spec : _root_.Flock.SessionSpec) (rootB : Array ByteArray)
+    (points : Array (Array _root_.Flock.F128)) (streams : Array (Array _root_.Flock.Round))
+    (proofs : Array ByteArray) : JsonRT.Still (recordJson hsE spec rootB points streams proofs) := by
+  have hq : quietS.R (recordJson (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) spec rootB points streams
+      proofs : _root_.Flock.V _) (recordJson hsE spec rootB points streams proofs) := by
+    have hh := quietS_hashes _root_.Flock.Sha512.hash
+    unfold recordJson _root_.Flock.SessionSpec.dgWith
+    sim_walk [roundJ_quiet _, Sim.mapM_list]
+  intro l
+  rw [hq l]
+
+theorem getElem!_range_map {α : Type} [Inhabited α] (f : ℕ → α) {N i : ℕ} (hi : i < N) :
+    ((Array.range N).map f)[i]! = f i := by
+  rw [getElem!_pos _ i (by simpa using hi)]
+  simp
+
+open JsonRT in
+theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (h2 : HybridStep 2) :
+    SimSession := by
+  intro x hx w hw τ c n hn s spec hsx
+  obtain ⟨-, -, hspec, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hJ : jOf x = (stsOf x).size := by
+    unfold jOf
+    simp only [hx, ↓reduceIte]
+  have htabs : (FlockDeploy.tabsOf (stsOf x)).size = (stsOf x).size := FlockComplete.ZkTables.tabsOf_size _
+  unfold runCut runExe sessionCut sessionPZk
+  refine both_sends_bind (both_rfl _ _) ?_
+  rintro schs _ l1 ⟨rfl, hA⟩
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => _root_.Flock.Zk.schedule st'.m = .ok v) _
+    fun a _ => Ret.monadLift (_root_.Flock.Zk.schedule a.m)) hA
+  have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
+  subst hl1
+  have hsch : ∀ i (hi : i < jOf x), schs[i]! = ((zkTab x ⟨i, hi⟩).sch, (zkTab x ⟨i, hi⟩).tPad) := fun i hi => by
+    have h1 := hsf i (by omega) (by omega)
+    have h2 := (zkTab x ⟨i, hi⟩).hz
+    have e : (FlockDeploy.tabsOf (stsOf x))[i].m = (stAt x ⟨i, hi⟩).m := by
+      unfold stAt
+      simp [FlockDeploy.tabsOf]
+      rfl
+    rw [e, h2] at h1
+    rw [getElem!_pos schs i (by omega)]
+    exact (Except.ok.inj h1).symm
+  dsimp only
+  refine both_sends_bind (both_right (both_mapM_array _ _ eraseC _ ?_ _)) ?_
+  · intro i hi l
+    rw [Array.mem_range] at hi
+    have hij : i < jOf x := by omega
+    have := (hc x hx w hw τ c ⟨i, hij⟩ l).1
+    rw [hsch i hij, getElem!_range_map _ hi]
+    exact this
+  rintro _ cms l2 ⟨rfl, hB⟩
+  have hl2 := Still.go (Still.mapM_array (fun i => Still.of_pureS (commitPZk_pureS _ _ _ _ _ _ _ _)) _) hB
+  subst hl2
+  obtain ⟨hcsz, -⟩ := Ret.go (Ret.mapM_array _ (fun _ _ => True) _ fun _ _ _ _ _ _ => trivial) hB
+  have hroot : (cms.map eraseC).map (fun c => flat c.cap) = cms.map fun c => flat c.cap := by
+    rw [Array.map_map]
+    rfl
+  simp only [hroot]
+  refine both_sends_bind (both_rfl _ _) ?_
+  rintro c1 _ l3 ⟨rfl, hL⟩
+  rw [asksCut_link_go] at hL
+  have hn0 : ¬ n ≤ (#[] : Array Msg).size := by
+    intro h
+    simp only [h, ↓reduceIte] at hL
+    cases (Prod.mk.inj hL).1
+  simp only [hn0, ↓reduceIte] at hL
+  obtain ⟨hc1, rfl⟩ := Prod.mk.inj hL
+  cases hc1
+  refine both_sends_bind (forIn_both _ _ _ (fun k bC bP l => bC.1 = bP.1 ∧ l.size = repBase x k ∧
+      (k % 2 = 1 → MaskRank.roundPoints (stsOf x)[k / 2]!.m (stsOf x)[k / 2]!.c.kLog bP.1.back! =
+        ptsOpen c (stsOf x)[k / 2]! (k - 1))) ?_ ?_) ?_
+  · rintro k a ⟨sC, pC⟩ ⟨sP, pP⟩ l ha ⟨hs, hl, hback⟩
+    dsimp only at hs
+    subst hs
+    obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
+    have hk' : k < 2 * (stsOf x).size := by rw [FlockDeploy.repStreams_size, hspec] at hk; exact hk
+    have hi : k / 2 < jOf x := by omega
+    have hr2 : k % 2 < 2 := Nat.mod_lt _ (by omega)
+    rw [FlockDeploy.repStreams_getElem _ hk]
+    dsimp only
+    rw [hsch (k / 2) hi]
+    dsimp only
+    trace_state
+    sorry
+  · refine ⟨rfl, ?_, fun h => absurd h (by decide)⟩
+    rw [repBase_eq hsx]
+    simp [FlockComplete.repStartZk]
+  · rintro ⟨sC, pC⟩ ⟨sP, pP⟩ l4 -
+    dsimp only
+    exact (Still.bind (recordJson_still _ _ _ _ _) (fun _ => Still.pure _) l4).trans
+      (Still.bind (recordJson_still _ _ _ _ _) (fun _ => Still.pure _) l4).symm
+
 end Masked
 
 end Claims.ZKMal
