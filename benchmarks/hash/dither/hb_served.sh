@@ -21,6 +21,8 @@
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
 # on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
 # default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
+# hb_sbench.py adds two arms: stock-cutlass (sm_90a) and dither-hb, dither-side's receipts on this lane's kh_unit_ws
+# (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so).
 # Env: DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's).
@@ -41,7 +43,8 @@ SHA=${RESEARCH_SOURCE_SHA:-$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo u
 DITHER=benchmarks/hash/dither
 mkdir -p "$OUT/env"
 srchash() { (cd "$ROOT" && cat "$@" | sha256sum | cut -c1-16); }
-sha256sum "$0" "$INPUTS"/hb_sbench.py 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
+[ -n "${HB_H1U:-}" ] && HB_H1U=$INPUTS/$(basename "$HB_H1U")
+sha256sum "$0" "$INPUTS"/hb_sbench.py "$INPUTS"/hb_side.py ${HB_H1U:+"$HB_H1U"} 2>/dev/null | sed "s#$INPUTS/##" > "$OUT/env/wrapper.txt"
 echo "source $SHA" >> "$OUT/env/wrapper.txt"
 
 if [ "$MODE" = build ]; then
@@ -77,6 +80,12 @@ fi
 [ "$MODE" = run ] || { echo "hb_served.sh: no mode $MODE" >&2; exit 2; }
 [ -f "$INPUTS/BUILD.txt" ] || { echo "hb_served.sh: no inputs/BUILD.txt: --send the build's lib/$ARCH/BUILD.txt" >&2; exit 2; }
 [ -f "$INPUTS/hb_sbench.py" ] || { echo "hb_served.sh: --send benchmarks/hash/dither/hb_sbench.py" >&2; exit 2; }
+case " $* " in *dither-hb*)
+  [ -f "$INPUTS/hb_side.py" ] && [ -f "${HB_H1U:-/nonexistent}" ] || {
+    echo "hb_served.sh: dither-hb needs --send benchmarks/hash/dither/hb_side.py, a job.sh build's h1u .so and --env HB_H1U=ITS_NAME" >&2
+    exit 2; }
+  export HB_H1U ;;
+esac
 cp "$INPUTS/BUILD.txt" "$OUT/env/BUILD.txt"
 read -r bsha barch < "$INPUTS/BUILD.txt"
 [ "$barch" = "$ARCH" ] || { echo "hb_served.sh: the libraries are $barch's, not $ARCH's" >&2; exit 2; }
