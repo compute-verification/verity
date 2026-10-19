@@ -762,7 +762,7 @@ _row("MoeSum_v1", moe_sum, ("sum",))
 
 from verity_vllm.program.kernels import dense_rows  # noqa: E402  -- the dense chain's kernels (registers them) and the float64 GEMM chain
 from verity_vllm.program.kernels import (  # noqa: E402
-    act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, glm53_rows, moe_align_rows, softcap_rows,
+    act_rows, batched_gemm_rows, cublas_gemm_rows, deepgemm_rows, dsa_norm_rows, glm53_rows, int8_rows, moe_align_rows, softcap_rows,
 )
 
 
@@ -779,6 +779,7 @@ for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_ex
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
 from verity_vllm.program.kernels import marlin_moe_rows  # noqa: E402
 marlin_moe_rows.register_rows(EVALUATORS, _row)
+int8_rows.register_rows(EVALUATORS, _row)
 deepgemm_rows.register_rows(EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
 glm53_rows.register_rows(EVALUATORS, _row, _sample)

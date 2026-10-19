@@ -102,6 +102,10 @@ def test_a_partition_or_binding_map_that_is_not_the_records_is_refused(tmp_path)
     c["partition"].write_text(json.dumps(dict(pf, templates=["RoPEHead_v1{D=128}"])))
     with pytest.raises(LookupError, match=r"no rows of RoPEHead_v1\{D=128\}"):
         DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "w1")
+    # a scope no row is under names a row it missed, so a wrong prefix shows the op_path spelling
+    c["partition"].write_text(json.dumps(dict(pf, scope={"op_path_prefix": "nowhere."})))
+    with pytest.raises(LookupError, match=r"under nowhere\.; its rows exist outside the scope, e\.g\. op_path \S+ at step \d+"):
+        DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "w1")
     c["partition"].write_text(json.dumps(pf))
     bm = c["out"] / "binding_map_p1.json"
     bm.write_text(bm.read_text().replace('"rank": 0', '"rank": 1', 1))
