@@ -100,3 +100,9 @@ def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
     assert e.name == ("An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware "
                       "on a machine its host provider runs and the prover doesn't control; it runs its stated code on its "
                       "Nebius host, and its host never restores an earlier copy of the state the device keeps there")
+
+
+def test_the_latency_ceiling_is_a_measured_device_claim() -> None:
+    e = get("latency-ceiling")
+    assert (e.kind, e.standing, e.label) == ("assumption", "measured", "Latency ceiling")
+    assert "network certifier on its egress" in e.name and "within the stated ceiling" in e.name

@@ -13,29 +13,37 @@ of one wipe is covered (`Accounting.Guarantees.Actual.AnsweredOfQuiet`).
 
 The setting: a strategy `S` on coins `r = (ω₀, c)`, `n` reads over the strategy's life with indices `c : Fin n → B`,
 labels `lab ω₀ j`, read `j`'s index reaching the server `X` at `arrive r j`, and the memory challenger's verdict
-`acc r j` on read `j`. The challenger is the auditor's trusted device: it reads one answer from `X` for read `j` and
-accepts when that answer left `X` within the deadline `D` of the arrival and is the label, and when the network
-certifier on `X`'s boundary saw nothing cross into `X` during the deadline but the index.
+`acc r j` on read `j`. The challenger is the auditor's trusted device: it reads `X`'s answers for read `j` as the
+network certifier on `X`'s egress (the leaves `Y`) saw them leave `X`, and accepts when those it saw at least `ℓ⁺`
+after the arrival and within the deadline `D` are the label, and when the certifier on `X`'s boundary saw nothing
+cross into `X` during the deadline but the index.
+
+The re-clocking requirement: the certifier re-clocks read `j`'s index into `X` at a fixed offset from the challenger's
+send, so `arrive r j` is a tick both devices know, and holds every other ingress of `X` until the window closes. Both
+windows below are keyed by that tick: `QuietReads` needs the re-clocking to hold of jittery hardware, and
+`LateAnswers` needs the challenger to know `arrive r j + ℓ⁺`.
 
 Each premise is to hold of every strategy, given where the auditor's devices sit and what their code does: a premise a
 cheating server can break by cheating keeps that cheat out of the theorem instead of catching it.
 
 * `LiveReads`: read `j`'s index is a live coin, released at its read. With `arrive r j` at or before the earliest tick
-  the index can reach `X` (the challenger's send tick plus the least latency of any path to `X`, less the slack
-  `VerdictBinds` needs), this follows from causality.
+  the index can reach `X` (the certifier's re-clocked delivery), this follows from causality.
 * `LiveVerdicts`: read `j`'s verdict is fixed by the coins up to read `j` (the challenger draws read `j + 1`'s index
   after read `j`'s verdict).
 * `QuietReads`: on every read the challenger accepts, what crossed into `X` during the deadline is what the
   challenger's code allows for that read, arrival tick and index, and the auditor's devices' own coins `ζ` (`quiet`).
-* `VerdictBinds`: the challenger accepts each answer from `X` for at most one label.
+* `LateAnswers` (the acceptance rule): the challenger accepts read `j` only when the answers it saw leave `X` during
+  `[arrive r j + ℓ⁺, arrive r j + D)` are at least one and each the label. Under a latency ceiling of `ℓ⁺` from `X`
+  to `Y` (`Accounting.Placed.LatencyAtMost`, the listed claim `latency-ceiling`) each such answer left `X` during the
+  deadline, so one label sent before the arrival, or relayed from outside `X`, binds no verdict.
 * `UniformLabels`: the labels of a read's wipe are uniform `b`-bit values, independent across blocks, given the
   devices' coins `ζ`. A model: the deployed labels are a PRF of a 32-byte key (PR #2726), for which it is false, and
   the step to them is the PRF's advantage, outside this.
 
-`QuietReads`, `VerdictBinds` and `LiveVerdicts` are what the challenger's code checks or does, stated on a verdict
+`QuietReads`, `LateAnswers` and `LiveVerdicts` are what the challenger's code checks or does, stated on a verdict
 `acc` read off the coins; once the challenger has a Lean function they are its refusals, proved of it, and the world
-facts left are the certifier's coverage and records (`Accounting.Covered`, `Accounting.TrustedUnits`) and a bound on
-the latency of `X`'s certified links (note:20261019T2210Z-report-timed-round-redteam-3).
+facts left are the certifier's coverage and records (`Accounting.Covered`, `Accounting.TrustedUnits`) and the latency
+ceiling of `X`'s certified egress (note:20261019T2210Z-report-timed-round-redteam-3).
 -/
 
 namespace Accounting.Assumptions
@@ -79,26 +87,24 @@ def QuietReads {Ω₀ B L Z : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → A
   ∀ (j : Fin n) (r : Ω₀ × (Fin n → B)), acc r j →
     (S r).crossing (↑X)ᶜ ↑X (Set.Ico (arrive r j) (arrive r j + D)) = quiet j (arrive r j) (r.2 j) (ζ r.1)
 
-/-- **The verdict binds one label** (the challenger's code and placement): two runs in which the challenger accepts
-read `j`, with the same index and arrival tick and the same sends of `X` from the gates it placed during the deadline
-(`Actual.Run.sent`), have the same label for the challenged block. It holds of every strategy when the challenger
-compares the exact label and reads its answer only from what `X` sent from the window's start: its input links all end
-in `X`, or it reads the network certifier's record of `X`'s egress. A challenger that reads whatever reaches it is
-broken by a relay, a machine outside `X` that holds the labels and answers for it.
+/-- **Late answers** (the challenger's acceptance rule and placement): the challenger reads `X`'s answers at leaves `Y`
+apart from `X`, the network certifier on `X`'s egress, and accepts read `j` only when what crossed from `X` into `Y`
+during `[arrive r j + ℓ⁺, arrive r j + D)` (`Actual.Run.crossing`, at the readers' ticks) is not empty and each of it
+carries the label of the challenged block.
 
-It is also broken by a pre-send: `X` sends a label before the window and the challenger reads it inside, so two
-accepted runs whose index is that block, with nothing sent during the window, differ in its label. One such send voids
-every statement that takes this premise for that server. `sent` is keyed by the sender's tick, which no device sees,
-and `Placed.Causal` bounds latency only from below, so this holds of every strategy only when `X`'s certified links have
-a latency of at most `ℓ⁺`, the challenger accepts only answers the certifier saw leave `X` at least `ℓ⁺` after
-`arrive r j`, and `arrive r j` is taken early enough that an answer sent before it can't be seen then. The deployed
-challenger (`streamed_wipe.Challenger.receive`) compares whatever 64 bytes reach it. -/
-def VerdictBinds {Ω₀ B L : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X : Finset L)
-    (lab : Ω₀ → Fin n → B → ℕ) (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (D : ℕ)
+With a latency ceiling of `ℓ⁺` from `X` to `Y` (`Placed.LatencyAtMost`), every such answer left `X` during
+`[arrive r j, arrive r j + D)`, so it is among what `X` did in the window (`Actual.Run.sent`) and the verdict binds one
+label to what `X` sent then. Answers that land before `arrive r j + ℓ⁺` are ignored, and the deadline loses `ℓ⁺`: a
+label `X` sent before the arrival lands there, and red team 3's pre-send (note:20261019T2210Z-report-timed-round-redteam-3,
+H2) is refused. A relay, a machine outside `X` that holds the labels, answers on wires that don't come from `X`. A
+challenger that accepts when some answer is the label is broken by `X` sending several guesses, and the deployed one
+(`streamed_wipe.Challenger.receive`) compares whatever 64 bytes reach it. -/
+def LateAnswers {Ω₀ B L : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X Y : Finset L)
+    (lab : Ω₀ → Fin n → B → ℕ) (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (ℓmax D : ℕ)
     (acc : Ω₀ × (Fin n → B) → Fin n → Prop) : Prop :=
-  ∀ (j : Fin n) (r r' : Ω₀ × (Fin n → B)), acc r j → acc r' j → r.2 j = r'.2 j → arrive r j = arrive r' j →
-    (S r).sent ↑X (Set.Ico (arrive r j) (arrive r j + D)) = (S r').sent ↑X (Set.Ico (arrive r' j) (arrive r' j + D)) →
-    lab r.1 j (r.2 j) = lab r'.1 j (r'.2 j)
+  Disjoint X Y ∧ ∀ (j : Fin n) (r : Ω₀ × (Fin n → B)), acc r j →
+    ((S r).crossing ↑X ↑Y (Set.Ico (arrive r j + ℓmax) (arrive r j + D))).Nonempty ∧
+    ∀ p ∈ (S r).crossing ↑X ↑Y (Set.Ico (arrive r j + ℓmax) (arrive r j + D)), p.2.2.2.2.2.2 = lab r.1 j (r.2 j)
 
 open Classical in
 /-- **Uniform labels** (a model of the labels): for each read `j`, any set `A` of blocks, any values `v` and any value
