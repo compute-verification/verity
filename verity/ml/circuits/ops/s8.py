@@ -51,6 +51,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from verity.ml.circuits.census import FAMILY_COUNTS
 from verity.ml.circuits.defs import CompositeDefinition, bind, composite, primitive
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.silicon.integer import S32_MAX, S32_MIN, s32_value, s32_word
@@ -350,6 +351,7 @@ def carries(bindings: dict) -> int:
 S8Dot.counts = counts  # type: ignore[attr-defined]
 S8Matmul.counts = counts  # type: ignore[attr-defined]
 LimbSplit.carries = carries  # type: ignore[attr-defined]
+FAMILY_COUNTS["S8Dot_v1"] = FAMILY_COUNTS["S8Matmul_v1"] = counts
 
 #: the plain serving arm at K = 64 (vLLM's int8 linear: rint quantizer, b = c = U = 0, ±127 operands)
 SMOKE_PLAIN: dict = {"K": 64, "L": 64, "T0": "zero", "C": None, "DOT": P.BlackwellS8ImmaDot32, "A": (-127, 127),

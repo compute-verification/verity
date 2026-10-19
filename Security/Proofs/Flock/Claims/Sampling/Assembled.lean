@@ -42,7 +42,7 @@ import Proofs.Flock.SamplingBoundary
 * `DrawFixed`, `SessionRuns`, `InnerNumbers` (`Sampling.Session`): the checked units' sessions are in the second stage
   and the draw doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
-  sampled-proofs verifier, held to the Python by difftest.
+  sampled-proofs verifier, the verifier of record, with the Python held to it by difftest.
 * `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
   design are the verifier's own: the partition has the shape of its layout, and the design is the one `Slots.select`
   draws, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's

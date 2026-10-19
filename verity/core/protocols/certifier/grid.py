@@ -137,6 +137,10 @@ class Certifier:
         self._rows: list[Row] = []
         self._fault: Reason | None = None
 
+    @property
+    def queued(self) -> int:
+        return len(self._queue)
+
     def enqueue(self, frame: bytes) -> None:
         if self._fault is not None:
             return

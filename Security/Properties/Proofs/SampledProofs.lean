@@ -1000,10 +1000,9 @@ theorem digestIsRecord's : DigestIsRecord's := by
       subst this
       exact hg
 
-theorem bernoulliBoundsNothing : BernoulliBoundsNothing := by
-  intro p c e pub prof h r hl
+theorem bernoulliBounds : BernoulliBounds := by
+  intro p c e pub prof h r l hl hd
   obtain ⟨law, d, n, -, -, -, -, -, -, rfl, rfl⟩ := acceptMeans p c e pub prof h
-  obtain ⟨l, hl, hd⟩ := hl
   simp only [profileOf, List.mem_toArray, List.mem_singleton] at hl
   subst hl
   simp only [Option.some.injEq] at hd

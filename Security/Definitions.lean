@@ -10,5 +10,6 @@ import Definitions.Claims
 import Definitions.Claims.IndexedTapes
 import Definitions.Claims.Recursion
 import Definitions.Claims.Sampling
+import Definitions.Hash
 
 /-! The trusted vocabulary: each component's definitions. -/

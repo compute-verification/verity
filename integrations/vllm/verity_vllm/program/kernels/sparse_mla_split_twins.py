@@ -7,6 +7,8 @@ q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s st
 (`attn_block`'s ``nonfinite``)."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR
@@ -54,12 +56,13 @@ def gtz(x) -> np.ndarray:
     return nez(x) & ((np.asarray(x, dtype=U32) >> 31) == 0)
 
 
-def split_end_rows(m, l, o, *, scale: float, inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
-    """`SparseMlaSplitEnd_v1{DV, INV, SCALE}`: m (R,), l (R, 4), o (R, DV) f32 words -> (o_partial (R, DV), lse (R,))."""
+def split_end_rows(m, l, o, *, scale: float, inv=DR.fa3_inv_sum, scale_bits: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """`SparseMlaSplitEnd_v1{DV, INV, SCALE}`: m (R,), l (R, 4), o (R, DV) f32 words -> (o_partial (R, DV), lse (R,)); the running
+    max's multiplier ``scale_bits`` (`sparse_mla_split.split_end`'s, default `lse_scale_bits(scale)`)."""
     m, l, o = (np.asarray(a, dtype=U32) for a in (m, l, o))
     tot = DR.add_ftz(DR.add_ftz(l[:, 0], l[:, 2]), DR.add_ftz(l[:, 1], l[:, 3]))
     part = DR.mul_ftz(o, inv(tot)[:, None])
-    c = np.full(tot.shape, W.lse_scale_bits(scale), dtype=U32)
+    c = np.full(tot.shape, W.lse_scale_bits(scale) if scale_bits is None else scale_bits, dtype=U32)
     lse = DR.fma_ftz(m, c, DR.mul_ftz(mufu_lg2_words(tot), np.full(tot.shape, W.LN2, dtype=U32)))
     return part, np.where(nez(tot), lse, U32(W.NEG_INF)).astype(U32)
 

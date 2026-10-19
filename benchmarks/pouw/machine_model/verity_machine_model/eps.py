@@ -477,8 +477,9 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
 
 
 def uniform_issue_charged(pi: Machine) -> bool:
-    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73)."""
-    return any(v > 0 and (r == "issue" or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
+    """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; a DS vector's
+    `DS_issue`, A2u)."""
+    return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
 
 def uniform_on_issue(pi: Machine, cycles: float) -> Machine:

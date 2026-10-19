@@ -6,7 +6,8 @@
 // the *_smem probes, which write $FAKE_SMEM (default 197728).  Functions are the names in $FAKE_KERNELS (comma-separated).
 // Launches and asynchronous copies log their stream.
 // The device is an H100 unless $FAKE_NAME, $FAKE_SMS, $FAKE_MAXDYN (the opt-in dynamic shared memory limit), $FAKE_CC
-// ("major.minor") and $FAKE_UUID (32 hex digits) say otherwise.
+// ("major.minor") and $FAKE_UUID (32 hex digits) say otherwise.  A function's static shared memory is 0, so it may opt in to
+// all of $FAKE_MAXDYN.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,7 +22,8 @@ enum { CUDA_SUCCESS = 0, CUDA_ERROR_INVALID_VALUE = 1, CUDA_ERROR_OUT_OF_MEMORY 
        CUDA_ERROR_INVALID_IMAGE = 200, CUDA_ERROR_INVALID_CONTEXT = 201, CUDA_ERROR_INVALID_HANDLE = 400, CUDA_ERROR_NOT_FOUND = 500,
        CUDA_ERROR_ILLEGAL_ADDRESS = 700 };
 enum { CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75,
-       CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8 };
+       CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN = 97,
+       CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES = 1, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8 };
 
 enum { MAX_ALLOC = 4096, MAX_FN = 128 };
 struct Alloc { uintptr_t base; size_t size; };
@@ -69,7 +71,8 @@ CUresult CUDAAPI cuDeviceGetAttribute(int* v, CUdevice_attribute a, CUdevice d) 
   (void)d; const char* cc = getenv("FAKE_CC"); int major = 9, minor = 0;
   if (cc) sscanf(cc, "%d.%d", &major, &minor);
   *v = a == CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT ? env_int("FAKE_SMS", 132)
-     : a == CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR ? major : a == CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR ? minor : 0;
+     : a == CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR ? major : a == CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR ? minor
+     : a == CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN ? max_dyn() : 0;
   return CUDA_SUCCESS;
 }
 CUresult CUDAAPI cuDevicePrimaryCtxRetain(CUcontext* c, CUdevice d) { (void)d; *c = (CUcontext)&g_ctx; return CUDA_SUCCESS; }
@@ -91,6 +94,14 @@ CUresult CUDAAPI cuFuncSetAttribute(CUfunction f, CUfunction_attribute a, int v)
   const int i = (int)(uintptr_t)f - 1;
   if (i < 0 || i >= g_nfn || a != CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES || v < 0 || v > max_dyn()) return CUDA_ERROR_INVALID_VALUE;
   g_maxdyn[i] = v;
+  return CUDA_SUCCESS;
+}
+CUresult CUDAAPI cuFuncGetAttribute(int* v, CUfunction_attribute a, CUfunction f) {
+  const int i = (int)(uintptr_t)f - 1;
+  if (i < 0 || i >= g_nfn) return CUDA_ERROR_INVALID_HANDLE;
+  if (a == CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES) *v = 0;
+  else if (a == CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES) *v = g_maxdyn[i];
+  else return CUDA_ERROR_INVALID_VALUE;
   return CUDA_SUCCESS;
 }
 CUresult CUDAAPI cuMemAlloc_v2(CUdeviceptr* p, size_t n) {
