@@ -6,10 +6,14 @@
 # main; a PR's head is pull/N/head), fetched with the read-only deploy key on every call. Credentials go only into the environment:
 # SLACK_BOT_TOKEN from /data/state/secrets/router.env; the app's token pair is /data/state/secrets/slack-app-token.json
 # ($RESEARCH_SLACK_APP_STATE), which `slack-app` rotates in place and seeds once from slack-app.env's SLACK_APP_CONFIG_REFRESH_TOKEN
-# (root, 0600) while the pair file is absent. A command that writes the registry (`chat open`) leaves it in the checkout until the
-# next call; this prints its diff, to commit in a registry PR. Deployed as /data/infra/msg.sh.
+# (root, 0600) while the pair file is absent. The notes (inbox routes; people.d, which `chat open` pushes) are its own clone,
+# /data/infra/msg-notes, made once from the steward's with its origin and credential helper and pulled on every call, so it never
+# writes the clone the budgets guard reads. A command that writes the registry leaves it in the checkout until the next call;
+# this prints its diff, to commit in a registry PR. Deployed as /data/infra/msg.sh.
 S=/data/state/secrets
 R=/data/infra/msg-repo
+N=/data/infra/msg-notes
+ST=/data/steward/research-notes
 REG=.agents/skills/using-slack/registry.json
 REF=${REF:-main}
 export GIT_SSH_COMMAND="ssh -i $S/verity-deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$S/known_hosts"
@@ -22,8 +26,13 @@ if [ ! -d "$R/.git" ]; then
 fi
 git -C "$R" fetch -q origin "$REF" && git -C "$R" checkout -q -f --detach FETCH_HEAD || { echo "msg.sh: could not fetch $REF" >&2; exit 1; }
 echo "msg.sh: research msg at $(git -C "$R" rev-parse --short HEAD) ($REF)" >&2
+if [ ! -d "$N/.git" ]; then
+  git clone -q "$ST" "$N" || exit 1
+  for k in remote.origin.url credential.helper user.name user.email; do git -C "$N" config "$k" "$(git -C "$ST" config --get "$k")"; done
+fi
+git -C "$N" pull -q --ff-only || echo "msg.sh: could not pull $N; it may be stale" >&2
 (set -a; . $S/router.env; [ -f $S/slack-app-token.json ] || [ ! -f $S/slack-app.env ] || . $S/slack-app.env; set +a
- export RESEARCH_SLACK_APP_STATE=$S/slack-app-token.json RESEARCH_NOTES=/data/steward/research-notes PYTHONPATH=tools/research/src
+ export RESEARCH_SLACK_APP_STATE=$S/slack-app-token.json RESEARCH_NOTES=$N PYTHONPATH=tools/research/src
  cd "$R" && exec python3.12 -m research msg "$@")
 rc=$?
 git -C "$R" diff --quiet -- "$REG" || { echo "msg.sh: the command changed $REG; commit this in a registry PR:" >&2; git -C "$R" --no-pager diff -- "$REG"; }

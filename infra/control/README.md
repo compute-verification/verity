@@ -66,7 +66,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/console` | `/workspace/console` | the console's loop, its code and its outbox |
 | `/data/chats` | `/workspace/chats` | the chats archive |
 | `/data/research`, `/data/research-control` | `/workspace/research`, `/workspace/research-control` | `research run` state and control worktrees |
-| `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs |
+| `/data/infra` | `/workspace/infra` | infra's pod scripts and their logs; `msg-repo` and `msg-notes`, `msg.sh`'s checkout and notes clone |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
 Secrets stay on the volume and never in git: this README names the files, never their contents.
@@ -106,14 +106,17 @@ by its exact PID (`ps -eo pid,args | grep 'msg rout[e]r'`), and `router.sh` star
 ## Running `research msg` as root
 
 `msg.sh` runs `research msg ARGS` on the pod for a handle holder who needs a credential that lives only here: the Slack app's
-configuration token pair (`slack-app export|diff|apply`), or the bot token for `chat open|close|list`. It fetches origin's
+configuration token pair (`slack-app export|diff|apply`), or the bot token for `chat open|close|list` (#2794 and #2803; until they land, `REF=pull/2803/head`
+runs both). It fetches origin's
 `$REF` (default `main`; `REF=pull/N/head` runs a PR's head) into its own sparse checkout, `/data/infra/msg-repo`, on every call,
-and passes the credentials only through the environment. A command that writes the registry (`chat open`) prints the
-registry's diff for the caller to commit in a registry PR.
+and passes the credentials only through the environment. Its notes are its own clone, `/data/infra/msg-notes` (made once from
+the steward's, with the same origin and credential helper, and pulled on every call), so `chat open`'s push of
+`people.d/NAME.json` never writes the clone the budgets guard reads. A command that writes the registry prints the registry's
+diff for the caller to commit in a registry PR.
 
 ~~~sh
 research pods ssh vy-control-verity -- env RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id> \
-  /data/infra/msg.sh chat open luke --email luke@example.com --host top --dry-run
+  /data/infra/msg.sh chat open luke --user U0CA897T7MK --start-here https://app.notion.com/p/... --dry-run
 research pods ssh vy-control-verity -- /data/infra/msg.sh slack-app diff
 ~~~
 
