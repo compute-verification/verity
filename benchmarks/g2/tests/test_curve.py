@@ -1,0 +1,203 @@
+"""curve.py's selection: which arm is which scheme, which measures count toward G2's curve and why not, and which counting
+measure is the best per model, GPU, mode, batch, phase and metric. The documents are small stand-ins in the three formats the
+store holds (a verity-bench result doc, a tp_decode summary, a hash-loop result's meta)."""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import curve as C  # noqa: E402
+
+
+def harness_doc(*, passed: bool = True, gpu_id: str = "h200", eager: bool = False) -> dict:
+    """Qwen3-8B at B32: stock, the full rows-sha512 arm, the per-layer 4 KiB arm and vllm-v1's nativedrain arm."""
+    def arm(ttft: float, p50: float, tput: float, ci: tuple[float, float] | None = None) -> dict:
+        r = lambda x: {"mean": x, "ratio_to_stock": {"mean": x, "n": 3, **({"ci95": list(ci)} if ci else {})}}  # noqa: E731
+        return {"metrics": {"time_to_first_token_s": r(ttft), "inter_token_latency_p50_s": r(p50), "tokens_per_s": r(tput)},
+                "extras": {"committed_bytes": {"mean": 5.8e9}}}
+
+    stock = {"metrics": {"time_to_first_token_s": {"mean": 0.0987, "ratio_to_stock": {"mean": 1.0}},
+                         "inter_token_latency_p50_s": {"mean": 0.00564, "ratio_to_stock": {"mean": 1.0}},
+                         "tokens_per_s": {"mean": 2800.0, "ratio_to_stock": {"mean": 1.0}}}}
+    arms = [{"id": "stock"}, {"id": "served-commit-rows", "module_spec": "served_commit.prof_arm:SERVED_COMMIT_ROWS"},
+            {"id": "served-commit-rows-layer-4k", "module_spec": "served_commit.prof_arm:SERVED_COMMIT_ROWS_LAYER_4K"},
+            {"id": "served-commit-nativedrain", "module_spec": "served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN"}]
+    return {"schema": "verity-bench/vllm-overhead/v1", "baseline": "stock",
+            "identity": {"arms": arms, "preset": {"model": "Qwen/Qwen3-8B", "gpu_id": gpu_id,
+                                                  "engine_settings": {"enforce_eager": eager, "serving_defaults": True}}},
+            "gates": [{"kind": "tokens", "arm": "served-commit-rows", "passed": passed}],
+            "points": [{"point": {"batch": 32}, "arms": {"stock": stock, "served-commit-rows": arm(2.06, 1.35, 0.6, (2.0, 2.1)),
+                                                         "served-commit-rows-layer-4k": arm(1.08, 1.14, 0.88),
+                                                         "served-commit-nativedrain": arm(1.90, 1.38, 0.62)}}]}
+
+
+def tp_summary(*, arm: str = "rows", tokens_equal: bool = True) -> dict:
+    return {"arm": arm, "committer": "native_collect_v2_auto_nw+rows-sha512+moe", "row_bytes": 4096 if "4k" in arm else 256,
+            "world": 8, "gates_passed": True,
+            "batches": {"1": {"control": {"tpot_s": 0.1945, "ttft_mean_s": 0.2095}, "gates_passed": True,
+                              "control_tokens_equal": tokens_equal,
+                              "tpot_ratio": {"median": 1.398, "min": 1.389, "max": 1.404, "pairs": 3},
+                              "ttft_mean_ratio": {"median": 1.441, "min": 1.412, "max": 1.447, "pairs": 3}}}}
+
+
+def loop_meta(*, status: str = "passed", pin: str = "pinned") -> dict:
+    ms = [{"arm": "sha512", "name": "tpot_overhead_pct", "value": 47.603, "ci95": [46.314, 48.893]},
+          {"arm": "sha512", "name": "throughput_overhead_pct", "value": 32.25},
+          {"arm": "sha512", "name": "prefill_step_ms", "value": 113.4617}, {"arm": "sha512", "name": "decode_step_ms", "value": 8.021},
+          {"arm": "sha512-layer", "name": "decode_step_ms", "value": 7.263},
+          {"arm": "blake3", "name": "tpot_overhead_pct", "value": 33.839},
+          {"arm": "stock", "name": "prefill_step_ms", "value": 49.915}, {"arm": "stock", "name": "decode_step_ms", "value": 6.363},
+          {"arm": "stock", "name": "tpot_ms", "value": 0.35518}]
+    return {"run_id": "r-loop", "validation": {"status": status}, "measurements": ms,
+            "workload_fingerprint": {"pin": {"state": pin}, "retain": {"served-commit-rows": "none"}}}
+
+
+LOOP_LABELS = {"arm": "qwen3-8b", "row": "11", "hardware": "H200"}
+
+
+def one(ms: list[C.Measure], **kw) -> C.Measure:
+    hits = [m for m in ms if all(getattr(m, k) == v for k, v in kw.items())]
+    assert len(hits) == 1, (kw, hits)
+    return hits[0]
+
+
+@pytest.mark.parametrize("arm, committer, want", [
+    ("served-commit-rows", "", ("rows-sha512", "full", 256)),
+    ("served-commit-rows-4k", "", ("rows-sha512", "full", 4096)),
+    ("served-commit-rows-layer-4k", "", ("rows-sha512", "per-layer", 4096)),
+    ("served-commit-rows-ring8-cap", "", ("rows-sha512", "full", 256)),
+    ("served-commit-nativedrain", "", ("vllm-v1", "full", None)),
+    ("served-commit-noretain", "", ("vllm-v1", "full", None)),
+    ("served-commit", "", ("vllm-v1", "full", None)),
+    ("served-commit-rows-blake3", "", ("rows-blake3", "full", None)),
+    ("blake3", "", ("rows-blake3", "full", None)),
+    ("sha512-layer", "", ("rows-sha512", "per-layer", 256)),
+    ("layer-only", "native_collect_v2+rows-sha512", ("rows-sha512", "per-layer", 256)),
+])
+def test_classify_names_each_arm_by_its_scheme(arm, committer, want):
+    assert C.classify(arm, committer) == want
+
+
+def test_pin_state_reads_the_served_pin_check():
+    assert C.pin_state(None) == "unpinned"
+    assert C.pin_state("[served-pin] /x/inductor: winners equal to artifact f23f3e483d51b467's") == "pinned"
+    assert C.pin_state("[served-pin] /x/inductor: 2 winners differ from artifact f23f3e483d51b467's") == "pin-failed"
+
+
+def test_harness_measures_read_each_phase_against_the_runs_own_stock():
+    ms = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned")
+    ttft = one(ms, arm="served-commit-rows", metric="ttft")
+    assert (ttft.phase, ttft.ratio, ttft.lo, ttft.hi, ttft.model, ttft.gpu, ttft.mode) == \
+        ("prefill", 2.06, 2.0, 2.1, "Qwen3-8B", "H200", "compiled")
+    assert ttft.stock_ms == pytest.approx(98.7)
+    assert ttft.retain == "none" and ttft.committed_gb == pytest.approx(5.8)
+    assert one(ms, arm="served-commit-rows", metric="itl_p50").phase == "decode"
+    tput = one(ms, arm="served-commit-rows", metric="tput")
+    assert tput.ratio == pytest.approx(1 / 0.6) and tput.stock_ms is None
+    assert all(m.counts() == (True, "") for m in ms if m.scheme == "rows-sha512")
+
+
+def test_a_failed_gate_takes_every_arm_of_its_doc_off_the_curve():
+    ms = C.harness_measures(harness_doc(passed=False), run="r1", source="art:1", pin="pinned")
+    assert ms and all(m.counts() == (False, "gates failed") for m in ms)
+
+
+def test_sha256_is_marked_and_never_counted():
+    m = one(C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned"), arm="served-commit-nativedrain", metric="ttft")
+    assert m.sha256
+    assert m.counts() == (False, "SHA-256 (vllm-v1): not the one hash")
+
+
+def test_a_compiled_measure_counts_only_pinned_and_an_eager_one_needs_no_pin():
+    unpinned = C.harness_measures(harness_doc(gpu_id="b200"), run="r1", source="art:1", pin="unpinned")
+    assert one(unpinned, arm="served-commit-rows", metric="ttft").counts() == \
+        (False, "unpinned: not the Build of record's kernels")
+    failed = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pin-failed")
+    assert not one(failed, arm="served-commit-rows", metric="ttft").counts()[0]
+    eager = C.harness_measures(harness_doc(eager=True), run="r1", source="art:1", pin="unpinned")
+    assert one(eager, arm="served-commit-rows", metric="ttft").counts() == (True, "")
+
+
+def test_tp_measures_gate_on_the_controls_tokens():
+    ms = C.tp_measures(tp_summary(), run="r2", source="art:2", gpu="8x H200")
+    decode = one(ms, metric="step")
+    assert (decode.model, decode.phase, decode.ratio, decode.lo, decode.hi, decode.pin) == \
+        ("GLM-5.3", "decode", 1.398, 1.389, 1.404, "eager")
+    assert decode.stock_ms == pytest.approx(194.5) and decode.counts() == (True, "")
+    assert one(ms, metric="ttft").phase == "prefill"
+    bad = C.tp_measures(tp_summary(tokens_equal=False), run="r2", source="art:2", gpu="8x H200")
+    assert all(m.counts() == (False, "gates failed") for m in bad)
+    layer = one(C.tp_measures(tp_summary(arm="rows-layer-4k"), run="r3", source="art:3", gpu="8x H200"), metric="step")
+    assert (layer.scheme, layer.acquisition, layer.row_bytes) == ("rows-sha512", "per-layer", 4096)
+
+
+def test_loop_measures_read_phase_steps_over_stock_prof_and_skip_what_isnt_g2():
+    ms = C.loop_measures(loop_meta(), LOOP_LABELS, source="art:4")
+    full = [m for m in ms if m.arm == "served-commit-rows"]
+    assert one(full, metric="tpot").ratio == pytest.approx(1.47603)
+    assert (one(full, metric="tpot").lo, one(full, metric="tpot").hi) == (pytest.approx(1.46314), pytest.approx(1.48893))
+    assert one(full, metric="tput").ratio == pytest.approx(1 / 0.6775)
+    assert one(full, phase="prefill").ratio == pytest.approx(113.4617 / 49.915)
+    assert one(full, phase="decode").ratio == pytest.approx(8.021 / 6.363)
+    assert {m.row_bytes for m in full} == {4096} and {m.retain for m in full} == {"none"}
+    assert one(ms, arm="served-commit-rows-layer-4k").acquisition == "per-layer"
+    assert one(ms, arm="served-commit-rows-blake3").counts() == (False, "rows-blake3: not the one hash")
+    first = C.loop_measures(loop_meta(), {**LOOP_LABELS, "row": "0"}, source="art:4")
+    assert {m.row_bytes for m in first if m.arm == "served-commit-rows"} == {256}
+    assert C.loop_measures(loop_meta(), {**LOOP_LABELS, "row": "what-if-a"}, source="art:4") == []
+    assert C.loop_measures(loop_meta(), {**LOOP_LABELS, "arm": "glm-5.3"}, source="art:4") == []
+
+
+@pytest.mark.parametrize("labels, meta", [
+    ({**LOOP_LABELS, "kernel_outcome": "voided"}, loop_meta()),
+    ({**LOOP_LABELS, "superseded_by": "r-new"}, loop_meta()),
+    (LOOP_LABELS, loop_meta(status="failed")),
+])
+def test_a_voided_superseded_or_failed_loop_result_doesnt_count(labels, meta):
+    ms = C.loop_measures(meta, labels, source="art:4")
+    assert ms and all(m.counts() == (False, "gates failed") for m in ms)
+
+
+def test_an_unpinned_loop_result_doesnt_count():
+    ms = C.loop_measures(loop_meta(pin="unpinned"), {**LOOP_LABELS, "hardware": "B200"}, source="art:4")
+    assert ms and not any(m.counts()[0] for m in ms)
+
+
+def test_best_is_the_lowest_counting_measure_per_column():
+    good = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned")
+    lower = [C.Measure(**{**m.__dict__, "ratio": m.ratio - 0.5, "run": "r-low"})
+             for m in C.harness_measures(harness_doc(passed=False), run="r-low", source="art:5", pin="pinned")]
+    b = C.best(good + lower)
+    cols = b[("Qwen3-8B", "H200", "compiled", 32, "prefill", "ttft")]
+    assert (cols["full"].arm, cols["full"].run) == ("served-commit-rows", "r1")
+    assert cols["per-layer"].arm == "served-commit-rows-layer-4k"
+    assert (cols["vllm-v1"].arm, cols["vllm-v1"].run) == ("served-commit-nativedrain", "r1")
+    better = C.Measure(**{**cols["full"].__dict__, "ratio": 1.5, "run": "r9"})
+    assert C.best(good + [better])[("Qwen3-8B", "H200", "compiled", 32, "prefill", "ttft")]["full"].run == "r9"
+
+
+def test_a_key_with_only_sha256_or_failed_measures_is_no_curve_row():
+    v1 = [m for m in C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned") if m.sha256]
+    failed = C.harness_measures(harness_doc(passed=False), run="r2", source="art:2", pin="pinned")
+    table = C.curve_table(v1 + failed)
+    assert len(table.splitlines()) == 2
+    assert "| Qwen3-8B | H200 | compiled | 32 | prefill | ttft |" in C.curve_table(
+        C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned"))
+
+
+def test_dedupe_reads_a_run_once():
+    ms = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned")
+    again = C.harness_measures(harness_doc(), run="r1", source="art:9", pin="pinned")
+    assert len(C.dedupe(ms + again)) == len(ms)
+
+
+def test_the_report_names_why_each_measure_is_off_the_curve():
+    ms = C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned") \
+        + C.tp_measures(tp_summary(tokens_equal=False), run="r2", source="art:2", gpu="8x H200")
+    md = C.report(ms)
+    assert "no: SHA-256 (vllm-v1): not the one hash" in md and "no: gates failed" in md
+    assert "Runs on the curve: r1." in md
