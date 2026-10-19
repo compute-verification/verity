@@ -34,7 +34,7 @@ member by member; the norm itself is not, so a served Program calls the parts at
 whole norm, whose flat circuit is millions of gates at a served width.
 
 No value is computed twice. The output word `bf16_rn((a * b) * f32(w))` (`_out_cuda`, `_out_triton`) is traced once and its gates
-split by what they read (`_split`): those reading only the shared scale (s, inv) are `RMSNormScaleCuda_v1` / `RMSNormInvTriton_v1`,
+split by what they read (`traced_parts.split`): those reading only the shared scale (s, inv) are `RMSNormScaleCuda_v1` / `RMSNormInvTriton_v1`,
 one Call per row; those reading only the element (r_j, x_j) are its decode, which the square that already reads that element
 returns beside its sum (`RMSNormSquare_v1`, `RMSNormSquareFma_v1`, `RMSNormThreadTriton_v1`: the decode's ANDs are the square's
 own, shared through `forms`' CSE); the rest are the output piece, which reads both decodes. So the row's members share no gate,
@@ -75,6 +75,7 @@ from verity_vllm.program.registry import b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry import value_inputs as VI
 from verity_vllm.program.registry.sampling import bit_at
+from verity_vllm.program.registry.traced_parts import replay, split
 
 __all__ = ["CUDA_WORD", "MUFU_WORD", "PackF32", "RMSNormCudaVector8", "RMSNormFusedCuda", "RMSNormFusedCudaIn",
            "RMSNormFusedCudaVector8", "RMSNormTriton", "RMSNormTritonIn", "TRITON_WORD", "UnpackF32", "rmsnorm_cuda_calls",
@@ -115,57 +116,7 @@ class _Consts:
         return Coll(Array(width, BIT), Explicit(tuple(refs)))
 
 
-# --- gate circuits: traced once, split by what they read, laid out as `trace.definition` lays out its own -----------------------
-
-def _sub(T: TR.Traced, keep: list[int], inputs: list[int], outputs: list[int]) -> TR.Traced:
-    """The gates ``keep`` of ``T`` (indices, ascending) as a circuit of their own: its inputs the wires ``inputs`` of ``T`` in order,
-    its outputs the wires ``outputs``. Every operand of a kept gate is a constant, one of ``inputs`` or a kept gate."""
-    new = {0: 0, 1: 1, **{w: 2 + k for k, w in enumerate(inputs)}}
-    gates: list[tuple[str, tuple[int, ...]]] = []
-    for i in keep:
-        kind, ops = T.gates[i]
-        gates.append((kind, tuple(new[o] for o in ops)))
-        new[T.first_gate + i] = 2 + len(inputs) + len(gates) - 1
-    counts = {k: sum(1 for g, _ in gates if g == k) for k in ("and", "xor", "not")}
-    return TR.Traced(len(inputs), gates, [new[o] for o in outputs], counts)
-
-
-def _split(T: TR.Traced, widths: list[int], shared: int, own: int | None) -> tuple[TR.Traced, TR.Traced, TR.Traced]:
-    """``T``'s gates by the parameters they read (``widths``: bits per parameter): those reading only parameter ``shared``, those
-    reading only parameter ``own`` (none when ``own`` is None), the rest. Returns the first two as circuits from their
-    parameter's bits to their frontier (their gates the rest read), and the rest as a circuit from the parameters, each of the
-    two followed by its frontier, to ``T``'s outputs."""
-    starts = [2 + sum(widths[:p]) for p in range(len(widths))]
-    wires = [list(range(s, s + n)) for s, n in zip(starts, widths)]
-    sup = [0, 0] + [1 << p for p, n in enumerate(widths) for _ in range(n)]
-    for _, ops in T.gates:
-        m = 0
-        for o in ops:
-            m |= sup[o]
-        sup.append(m)
-    first, n = T.first_gate, len(T.gates)
-
-    def part(p: int) -> tuple[list[int], list[int]]:
-        keep = [i for i in range(n) if sup[first + i] == 1 << p]
-        mine = {first + i for i in keep}
-        read = {o for i, (_, ops) in enumerate(T.gates) if sup[first + i] != 1 << p for o in ops if o in mine}
-        return keep, sorted(read | (mine & set(T.outputs)))
-
-    (ks, fs), (ko, fo) = part(shared), part(own) if own is not None else ([], [])
-    inputs = [w for p in range(len(widths)) for w in wires[p] + (fs if p == shared else fo if p == own else [])]
-    drop = set(ks) | set(ko)
-    rest = _sub(T, [i for i in range(n) if i not in drop], inputs, T.outputs)
-    return _sub(T, ks, wires[shared], fs), _sub(T, ko, wires[own] if own is not None else [], fo), rest
-
-
-def _replay(T: TR.Traced, C, bits: list) -> list:
-    """``T``'s outputs over the forms ``bits`` (its inputs, in order), its ANDs made by ``C`` (so CSE shares those ``C`` has)."""
-    w = [ZERO, ONE] + list(bits)
-    for kind, ops in T.gates:
-        a = w[ops[0]]
-        w.append(C.AND(a, w[ops[1]]) if kind == "and" else a ^ w[ops[1]] if kind == "xor" else NOT(a))
-    return [w[o] for o in T.outputs]
-
+# --- gate circuits: traced once, split by what they read (`traced_parts`) ----------------------------------------------------
 
 def _traced(name: str, version: int, statics: tuple[str, ...], sig: Callable, make: Callable[..., TR.Traced], doc: str,
             word=None) -> CompositeDefinition:
@@ -317,8 +268,8 @@ def _out_triton(C, inv, x, w):
 def _out_parts(kind: str) -> tuple[TR.Traced, TR.Traced, TR.Traced]:
     """(scale part, element decode, rest) of the output word: CUDA's over (z, s, w), Triton's over (inv, x, w)."""
     if kind == "cuda":
-        return _split(TR.trace(_out_cuda, [BF16, F32, BF16], BF16), [16, 32, 16], shared=1, own=0)
-    return _split(TR.trace(_out_triton, [F32, BF16, BF16], BF16), [32, 16, 16], shared=0, own=1)
+        return split(TR.trace(_out_cuda, [BF16, F32, BF16], BF16), [16, 32, 16], shared=1, own=0)
+    return split(TR.trace(_out_triton, [F32, BF16, BF16], BF16), [32, 16, 16], shared=0, own=1)
 
 
 def _scale_bits(kind: str) -> int:
@@ -334,9 +285,9 @@ def _scale_sig(kind: str, name: str, t):
 
 
 RMSNormScaleCuda = _traced("RMSNormScaleCuda", 1, (), _scale_sig("cuda", "s", F32), lambda S: _out_parts("cuda")[0],
-                           "the gates of bf16_rn((f32(z) * s) * f32(w)) that read only s (`_out_cuda`, `_split`): once per row")
+                           "the gates of bf16_rn((f32(z) * s) * f32(w)) that read only s (`_out_cuda`, `traced_parts.split`): once per row")
 RMSNormInvTriton = _traced("RMSNormInvTriton", 1, (), _scale_sig("triton", "inv", F32), lambda S: _out_parts("triton")[0],
-                           "the gates of bf16_rn((inv * f32(x)) * f32(w)) that read only inv (`_out_triton`, `_split`): once per row")
+                           "the gates of bf16_rn((inv * f32(x)) * f32(w)) that read only inv (`_out_triton`, `traced_parts.split`): once per row")
 RMSNormOutCuda = _traced(
     "RMSNormOutCuda", 1, (),
     lambda S: ((("z", BF16), ("zd", _bits(_dec_bits("cuda"))), ("s", F32), ("sd", _bits(_scale_bits("cuda"))), ("w", BF16)), BF16),
@@ -356,12 +307,12 @@ RMSNormOutTriton = _traced(
 
 def _square(C, z):
     zf = fp.bf16_to_f32(z)
-    return [fp.f32_mul(C, zf, zf, ir_nan=True), _replay(_out_parts("cuda")[1], C, z)]
+    return [fp.f32_mul(C, zf, zf, ir_nan=True), replay(_out_parts("cuda")[1], C, z)]
 
 
 def _square_fma(C, z, acc):
     zf = fp.bf16_to_f32(z)
-    return [fp.f32_fma(C, zf, zf, acc), _replay(_out_parts("cuda")[1], C, z)]
+    return [fp.f32_fma(C, zf, zf, acc), replay(_out_parts("cuda")[1], C, z)]
 
 
 def _thread(C, *x):
@@ -370,7 +321,7 @@ def _thread(C, *x):
     acc = fp.f32_fma(C, xf[0], xf[0], acc)
     for j in range(2, TRITON_COLS):
         acc = fp.f32_fma(C, xf[j], xf[j], acc)
-    return [acc] + [_replay(_out_parts("triton")[1], C, v) for v in x]
+    return [acc] + [replay(_out_parts("triton")[1], C, v) for v in x]
 
 
 def _sq_sig(*params):
