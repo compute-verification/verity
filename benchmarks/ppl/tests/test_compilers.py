@@ -16,6 +16,7 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "pc-c2-nvfp4x2-2s", "pc-c2-nvfp4x2-1s", "pc-c2-mxfp4x2-2s", "pc-c3-fp4x2", "fpx-2sp-e4m3i",
           "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", "fpx-g1-e4m3i120", "fpx-g1-nvfp4x2-nv9",
           "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq", "fpx-g1-nvfp4x2-nvi-gptq",
+          "fpx-g1s-e4m3i120", "fpx-g1s-nvfp4x2-nvi10", "fpx-g1s-nvfp4x2-nvi10-gptq",
           *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
@@ -111,6 +112,29 @@ def test_native_gptq_stays_on_the_grid_and_beats_rounding(grid, scale):
     assert torch.equal(steps.native_gptq(w, torch.diag(torch.rand(64, generator=g) + 1), grid, scale)[0], rounded)
 
 
+@pytest.mark.parametrize("grid,scale", [("e4m3i120", "channel"), ("e2m1x2", "nvi10")])
+@pytest.mark.parametrize("coin", [0.0, 1.0])
+def test_g1_serves_the_centred_product_of_the_nearest_levels(grid, scale, coin, monkeypatch):
+    import types
+    import gates as G
+    g = torch.Generator().manual_seed(5)
+    x, w = torch.randn(3, 64, generator=g), torch.randn(5, 64, generator=g)
+    step = spec.parse({"linear": [{"step": "native", "grid": grid, "scale": scale, "act": "g1", "weight": "g1"}]},
+                      "x").linear[0]
+    gates = G.Gates()
+    run = matmul.Run(types.SimpleNamespace(name="t"), 0, 0, types.SimpleNamespace(li=0), gates, {}, {}, None)
+    mm = matmul.MM("linear", "mlp.up_proj", run, x, w).enter(step)
+    monkeypatch.setattr(matmul.MM, "coins", lambda self, shape, levels=2: torch.full(tuple(shape), coin))
+    y = step.defn.fn(mm, matmul.terminal, **step.kw)
+
+    def served(a):
+        v, s, m = steps.native_parts(a, grid, scale, coined=False)
+        return (steps.with_blocks(steps.to_grid(v, grid, "round", None), m) + coin - 0.5) * s
+
+    assert torch.allclose(y.double(), served(x).double() @ served(w).double().T, rtol=1e-6, atol=1e-5)
+    assert gates.passed
+
+
 def test_c1_emulation_is_dither_2s_bit_for_bit(llama, ids, calib):
     r = evaluate(llama, ids[:4], ["adopted-bd-lm", *C1], seeds=(0, 1), calib=calib)
     assert passed(r), r["gates"]
@@ -159,6 +183,8 @@ def test_native_checks():
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i352", "scale": "nvi"}]}, "x")
     with pytest.raises(ValueError, match="gptq"):
         spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "nv", "gptq": True}]}, "x")
+    with pytest.raises(ValueError, match="g1"):
+        spec.parse({"linear": [{"step": "native", "grid": "e2m1x2", "scale": "mx", "act": "g1"}]}, "x")
     with pytest.raises(ValueError, match="int8 activations"):
         spec.parse({"linear": [{"step": "native", "grid": "e4m3i", "scale": "mx", "act_grid": "int8"}]}, "x")
     with pytest.raises(ValueError, match="route"):

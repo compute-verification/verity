@@ -1050,6 +1050,10 @@ def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: t
     return gptq(w.float(), h, column), s, m
 
 
+#: a native operand's modes: GRID_MODES and `g1`, the nearest level moved by a fair coin of 1 in its row's unit, centred
+NATIVE_MODES = GRID_MODES + ("g1",)
+
+
 def _check_native(p):
     if p["grid"] not in NATIVE:
         raise ValueError(f"native.grid is one of {sorted(NATIVE)}")
@@ -1058,14 +1062,16 @@ def _check_native(p):
     if p["scale"] in INT_BLOCKS and NATIVE[p["grid"]] != "e2m1":
         raise ValueError("native: nv blocks hold E2M1")
     for o in ("act", "weight"):
-        if p[o] not in GRID_MODES:
-            raise ValueError(f"native.{o} is one of {GRID_MODES}")
+        if p[o] not in NATIVE_MODES:
+            raise ValueError(f"native.{o} is one of {NATIVE_MODES}")
+    if "g1" in (p["act"], p["weight"]) and p["scale"] == "mx":
+        raise ValueError("native: g1's coin is one in the row's unit, which mx's power-of-two blocks don't have")
     if p["act_grid"] not in ("", "int8"):
         raise ValueError("native.act_grid is '' (the weights' grid and scale) or int8 (Dither's activations)")
     if p["act_grid"] == "int8" and (p["act"] != "dither" or p["scale"] == "mx"):
         raise ValueError("native: int8 activations are Dither's, dithered, beside integer weights (not mx)")
-    if p["gptq"] and p["weight"] != "round":
-        raise ValueError("native: gptq rounds the weights (weight = round)")
+    if p["gptq"] and p["weight"] == "dither":
+        raise ValueError("native: gptq rounds the weights (weight = round or g1)")
 
 
 @linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native,
@@ -1079,7 +1085,9 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     weights native: the hybrid that serves int8 activations as limbs. tensor, channel and the integer blocks give
     integers, so the product is the gated exact one; mx's power-of-two blocks give dyadic operands, multiplied
     dequantized in FP32 (the MX MMA). `gptq`: rounded weights by GPTQ (blocks of 128, on the calibration windows'
-    inputs) on the grid, each row's scale and block multipliers fixed by `native_parts` first."""
+    inputs) on the grid, each row's scale and block multipliers fixed by `native_parts` first. `g1`: the nearest level
+    in row units, m q, plus a fair coin b, served centred as m q + b - 1/2: the product is the exact one of the
+    integers m q + b (in int8 for e4m3i120 and nvi10), less its rank-one terms."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:
@@ -1090,9 +1098,9 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         raise ValueError(f"{mm.where}: k = {k} is not a multiple of {BLOCKS[scale]}")
 
     def rows(w, amax):
-        v, s, m = native_parts(w, grid, scale, weight != "round", amax)
+        v, s, m = native_parts(w, grid, scale, weight == "dither", amax)
         lo, hi = bracket(v, grid)
-        if weight == "round":
+        if weight != "dither":
             return torch.where(v - lo <= hi - v, lo, hi).to(torch.int16), None, s, m
         return lo.to(torch.int16), (hi - lo).to(torch.int8), s, m
 
@@ -1110,17 +1118,23 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
         xq, sa = act_quant(mm.x, "dither", mm.coins(mm.x.shape), 127)
         sa, ma, xtop = sa[:, None], None, 127
     else:
-        v, sa, ma = native_parts(mm.x, grid, scale, act != "round")
-        xq = to_grid(v, grid, act, mm.coins(mm.x.shape) if act == "dither" else None)
+        v, sa, ma = native_parts(mm.x, grid, scale, act == "dither")
+        xq = to_grid(v, grid, "round" if act == "g1" else act, mm.coins(mm.x.shape) if act == "dither" else None)
         xtop = LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)
+    bx = mm.coins(mm.x.shape) if act == "g1" else 0
     wq = wl.float() if wg is None else wl.float() + mm.coins(wl.shape) * wg.float()
-    xq, wq = with_blocks(xq, ma), with_blocks(wq, mw)
+    xq, wq = with_blocks(xq, ma) + bx, with_blocks(wq, mw) + (mm.coins(wl.shape) if weight == "g1" else 0)
     if scale == "mx":
         return nxt(mm.replace(x=xq, w=wq))
     sw = sw if sw.dim() == 0 else sw[:, 0]
-    top = max(xtop, LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1))
+    cx, cw = (0.5 if act == "g1" else 0.0), (0.5 if weight == "g1" else 0.0)
+    top = max(xtop, LEVELS[grid][-1] * (SCALES[INT_BLOCKS[scale]][-1] if scale in INT_BLOCKS else 1)) + int(cx or cw)
     wide = {"top": top} if top > 127 else {}
-    return nxt(mm.integer(xq, wq.to(torch.int8) if top <= 127 else wq, **wide)).float() * sa * sw
+    acc = nxt(mm.integer(xq, wq.to(torch.int8) if top <= 127 else wq, **wide))
+    if cx or cw:
+        acc = (acc.double() - cw * xq.double().sum(-1, keepdim=True) - cx * wq.double().sum(-1)[None, :]
+               + cx * cw * k)
+    return acc.float() * sa * sw
 
 
 #: the emulation routes: int8 operands as limbs a format multiplies exactly, the limb products recombined
