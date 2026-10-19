@@ -1375,6 +1375,7 @@ def main (args : List String) : IO UInt32 := do
   | "qword-program" :: rest => qwordProgramCmd rest
   | "qcall-program" :: rest => Qcall.cmd rest
   | "input-ids" :: ids => Qcall.inputIdsCmd ids
+  | "sigma-check" :: rest => Flock.Sigma.cmd rest
   | "archive-put" :: dir :: paths => archivePutCmd dir paths
   | "template-query" :: paths => templateQueryCmd paths
   | "net-check" :: paths => netCheckCmd paths
