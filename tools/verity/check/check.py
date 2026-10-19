@@ -942,22 +942,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
         raise SystemExit(f"check: --verdicts-in {given}: refused ({why})")
     packs = [given] if given is not None else []
     try:
-        store = store or LocalStore()
-        if store.remote is not None:
-            store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
-                               (4 * limit,))
-        for (rid,) in rows:
-            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-            if art and any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
-                pack = store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
-                if why := VERDICTS.refusal(pack):
-                    print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed",
-                          flush=True)
-                    continue
-                packs.append(pack)
-                if len(packs) == limit + (given is not None):
-                    break
+        packs += [p for _, p in gathered_packs(d, store or LocalStore(), limit)]
     except Exception as e:  # noqa: BLE001  (no pack: the check reuses only this machine's passes and the one given)
         print(f"check: no verdicts gathered from the store ({type(e).__name__}: {e})", flush=True)
         del packs[given is not None:]
@@ -968,6 +953,34 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     print(f"check: verdicts: {n} entries gathered from {len(packs) - (given is not None)} recorded checks"
           f"{' and the pack given' if given is not None else ''} ({', '.join(names)})", flush=True)
     return d / "verdicts-gathered.tar.gz"
+
+
+def attempt_pack(store, rid: str, d: Path) -> Path | None:
+    """The verdict pack the attempt ``rid`` published (`verdicts.tar.gz` among its run files), fetched under ``d``, or None."""
+    art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
+    if not art or not any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
+        return None
+    return store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
+
+
+def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
+    """(attempt, pack) of the ``limit`` recorded checks that ended last and published a pack `combine` takes, newest first
+    (`gather_verdicts`); one it refuses is passed over by name.  The store's attempts are refreshed first when it has a remote."""
+    if store.remote is not None:
+        store.refresh(attempts_only=True)
+    rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
+                           (4 * limit,))
+    packs = []
+    for (rid,) in rows:
+        if (pack := attempt_pack(store, rid, d)) is None:
+            continue
+        if why := VERDICTS.refusal(pack):
+            print(f"check: verdicts: skipping {rid}'s pack, which import refuses ({why}); its verdicts are recomputed", flush=True)
+            continue
+        packs.append((rid, pack))
+        if len(packs) == limit:
+            break
+    return packs
 
 
 def verdicts_in(pack: Path, run_dir: Path | None) -> dict:
@@ -1681,6 +1694,8 @@ def main(argv: list[str]) -> int:
         return fixtures_only()
     if argv[:1] == ["--slots"]:
         return slots_view(argv[1:])
+    if argv[:1] == ["--plan"]:
+        return _load("plan").main(argv[1:], sys.modules[__name__])
     if "--record" in argv:
         if os.environ.get("RESEARCH_RUN_ID"):
             print("check: --record inside a recorded run", file=sys.stderr)
