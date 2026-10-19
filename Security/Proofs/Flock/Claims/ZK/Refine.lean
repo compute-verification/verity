@@ -778,11 +778,11 @@ theorem checkIs_coinLayer (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (hP : HelloParses nr T L x) (hF : ReqsFollow nr T L x) : CheckIs (CoinLayer.session nr T) L CoinOpen.shaH x := by
   intro ν t m₀ ρ₀ ops hl
   cases ops with
-  | nil => first | rfl | simp [opens, allOk, OC.eval]
+  | nil => rfl
   | cons o ops =>
     obtain ⟨hlo, hp, hν⟩ := hP ν t
     have hlen : ((o :: ops).map Prod.snd).length ≤ refK x := by
-      first | (rw [List.length_map]; exact hl) | simpa using hl
+      rw [List.length_map]; exact hl
     have hv := CoinOpen.coinLayer_verdict nr T x ν hlo ρ₀ (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd)) hν
       (hF ν t hlo hp ((o :: ops).map Prod.snd) hlen) (List.cons_ne_nil _ _)
     exact (L.opens_of_hello x (ν, t) m₀ ρ₀ o ops hp).trans (hv.trans (congrArg
