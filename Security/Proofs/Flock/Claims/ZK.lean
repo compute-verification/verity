@@ -176,7 +176,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
   (`LeanRelease.stopRefine_withStops`), and its `LiveRefine` and `FillRefine` follow from the transport's refusal of a
   failed opening and the per-round byte equality at the worker's and the stand-in rounds
   (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of
-  `ItemsRefine`.
+  `ItemsRefine`; `Flock.zk_server_lean_coinLayer` is it at the deployed coin layer (`CoinLayer.session`).
 * `Os`: the server's tape as the operating system's bytes (`OsTape`: a stream of exactly `drawBytes` bytes for each rep's
   frame and the tap's streams, one for one), the frame's read proved to be the release's draws (`frame_draws`, with a read
   of any other length refused, `drawsWith_refuses`), and the step to a uniform tape beside independent randomness under

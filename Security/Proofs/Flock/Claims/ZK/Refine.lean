@@ -35,6 +35,10 @@ opening that fails (`strat_eval_cons`).
   (`LiveRoundEq`), and of each scheduled round in a failed worker's place below the last (`FillRoundEq`), is the
   session's message, `Hello` first: the per-round byte equality. So `Flock.zk_server_lean` holds at that session from
   those alone (`Flock.zk_server_lean_stops`), with no part of `ItemsRefine` assumed.
+* **At the deployed coin layer** (`Flock.zk_server_lean_coinLayer`): `S` is `CoinLayer.session nr T`, whose `Hello`,
+  opening check and coin reading are `coin-tree/hm96-sha512/v2`'s and whose tables are `T`'s. There `OpeningsRefused`
+  reads the keyed coin-tree walk itself, and what is left of `ItemsRefine` is the stop link and that `T`'s round
+  encoding gives the frame's bytes.
 -/
 
 namespace Claims.ZKMal.RefSession
@@ -377,7 +381,8 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
     (Ev : List ((Msg × Out) × ℕ) → Prop) :
     Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk =>
-        Ev (L.toSrv.timed x (runStar H (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
+        Ev (L.toSrv.timed x
+          (runStar H (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
       2 * (Pr (fun c : (leaky1 (((S.withStops Rf L.stop).refP.withSim fun x _ c =>
               (S.withStops Rf L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).C x =>
@@ -392,5 +397,43 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (S.withStops_swCausal Rf L.stop vs hRf hsc) (S.withStops_tapeOK Rf L.stop hT) L wk x w hR
     ⟨L.liveRefine_withStops S Rf vs H wk x w hst hO hE, L.fillRefine_withStops S Rf vs H _ wk x w hst hO hEf,
       L.stopRefine_withStops S Rf vs H _ wk x w hst⟩ Vs θ hk Ev
+
+/-- **`Flock.zk_server_lean_stops` at the deployed coin layer** (`CoinLayer.session nr T`): `Hello`, the opening
+check (the keyed coin-tree walk at the round's place under `Hello`'s answer, `CoinLayer.treeD`, `CoinLayer.parseD`) and
+the coin reading are the deployed ones, and the tables, with their round encoding `enc`, `fin` and `off`, are `T`'s.
+There `LeanRelease.OpeningsRefused` says the frame refuses the coins wherever that walk refuses an opening, and
+`LiveRoundEq`, `FillRoundEq` that `T`'s messages are the frame's bytes. -/
+theorem Flock.zk_server_lean_coinLayer (H : Msg → Msg)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
+    (Rf : (x : Msg) → (Fin (refK x) → (CoinLayer.session nr T).Coin) → ℕ → Bool)
+    (hRf : (CoinLayer.session nr T).StopsCausal Rf) (vs : (CoinLayer.session nr T).SwVals) (t : ℕ) (ht : 0 < t)
+    {δ₁ : ENNReal} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤)
+    (hS : (CoinLayer.session nr T).Tables)
+    (hV : (CoinLayer.session nr T).Complete (Flock.R (FlockDeploy.deployZk rel).parse))
+    (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
+    (hsc : (CoinLayer.session nr T).SwCausal vs) (hT : (CoinLayer.session nr T).TapeOK)
+    (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
+    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hst : LeanRelease.StopsAt (CoinLayer.session nr T) Rf L H x)
+    (hO : LeanRelease.OpeningsRefused (CoinLayer.session nr T) L H x)
+    (hE : LeanRelease.LiveRoundEq (CoinLayer.session nr T) vs L H wk x w)
+    (hEf : LeanRelease.FillRoundEq (CoinLayer.session nr T) vs L H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x
+      w)
+    {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand) × L.toSrv.Chk =>
+        Ev (L.toSrv.timed x
+          (runStar H (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 ((((CoinLayer.session nr T).withStops Rf L.stop).refP.withSim fun x _ c =>
+              ((CoinLayer.session nr T).withStops Rf L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).C x =>
+          Ev (L.toSrv.timed x ((leaky1 ((((CoinLayer.session nr T).withStops Rf L.stop).refP.withSim fun x _ c =>
+              ((CoinLayer.session nr T).withStops Rf L.stop).coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out H Vs θ x c))) +
+          (8 * ((CoinLayer.session nr T).withStops Rf L.stop).nLeaves x * δ₁.toReal +
+            8 * t * ((CoinLayer.session nr T).withStops Rf L.stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t * (Fork H ((((CoinLayer.session nr T).withStops Rf L.stop).swP vs).prover w) Vs θ x).Pr H) :=
+  Flock.zk_server_lean_stops H rel (CoinLayer.session nr T) Rf hRf vs t ht hT1 hδ₁ hS hV hD hc hsc hT L wk x w hR hst hO
+    hE hEf Vs θ hk Ev
 
 end Claims.ZKServer
