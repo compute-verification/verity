@@ -657,15 +657,18 @@ def capture(args, lib=None) -> int:
     lib = lib or Lib(args.lib)
     ident = lib.identity()
     gate = layout_gate(lib, np.random.default_rng(7))
-    ok = all(v["mismatches"] == 0 and v["unwritten"] == 0 for v in gate.values())
-    doc = {"identity": ident, "host": platform.node(), "layout_gate": gate, "layout_ok": ok, "captured": []}
-    print(json.dumps({"identity": ident, "layout_ok": ok}), flush=True)
+    kind_ok = {kind: all(v["mismatches"] == 0 and v["unwritten"] == 0 for k, v in gate.items() if k.startswith(kind + "/"))
+               for kind in KINDS}
+    ok = all(kind_ok.values())
+    doc = {"identity": ident, "host": platform.node(), "layout_gate": gate, "layout_ok": ok, "kind_layout_ok": kind_ok,
+           "captured": []}
+    print(json.dumps({"identity": ident, "layout_ok": ok, "kind_layout_ok": kind_ok}), flush=True)
     if not ok:
-        (out / "capture.json").write_text(json.dumps(doc, indent=1))
         print(json.dumps(gate, indent=1), flush=True)
-        return 3
     plan = json.loads((scratch / "plan.json").read_text())
     for p in plan["families"]:
+        if not kind_ok[p["kind"]]:
+            continue
         z = load_set(scratch, p["kind"], p["family"])
         D = lib.run(p["kind"], z)
         np.save(_path(scratch, p["kind"], p["family"]) / "D.npy", D)
@@ -673,7 +676,7 @@ def capture(args, lib=None) -> int:
                                 "sha256_D": hashlib.sha256(D.tobytes()).hexdigest()})
         print(f"captured {p['kind']}/{p['family']}: {D.size:,}", flush=True)
     (out / "capture.json").write_text(json.dumps(doc, indent=1))
-    return 0
+    return 0 if ok else 3
 
 
 # --- eval ---------------------------------------------------------------------------------------------------------------
@@ -753,6 +756,7 @@ def fixture_records(scratch: Path, kind: str, fam: str, rng, per: int) -> list[d
 def evaluate(args) -> int:
     scratch, out = Path(args.scratch), Path(args.out)
     plan = json.loads((scratch / "plan.json").read_text())
+    plan["families"] = [p for p in plan["families"] if (_path(scratch, p["kind"], p["family"]) / "D.npy").exists()]
     jobs = []
     for p in plan["families"]:
         kk, fa, fb = KINDS[p["kind"]]

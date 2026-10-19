@@ -7,7 +7,8 @@
 #
 #   research run --on vy-dc-b200 --project verity --campaign eps1 --source <tree> --cwd source --env GPU_LEASE_WHO=b200-fp8 \
 #     -- bash benchmarks/tc_probe_fp4/f8_sm100.sh [--tiles N] [--bulk-scale F] [--seed S]
-# Exit: 0 captured and scored, 3 the layout gate failed, 1 build or SASS gate failed, 2 no device or no nvcc.
+# Exit: 0 captured and scored, 3 a kind failed the layout gate (the others captured and scored), 1 build or SASS gate failed,
+# 2 no device or no nvcc.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -55,5 +56,7 @@ command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 15 --)
   -i "${GPU_LEASE_UUID:-0}" >"$OUT/gpu.csv" 2>&1; "$1" "$2/f8_sm100.py" capture --scratch "$3" --lib "$4" --out "$OUT"' \
   _ "$PY" "$HERE" "$SCR" "$BUILD/libtcgen05_f8.so"
 rc=$?
-[ $rc = 0 ] || { cat "$OUT/capture.json" 2>/dev/null | head -60; exit $rc; }
-"$PY" "$HERE/f8_sm100.py" eval --scratch "$SCR" --out "$OUT"
+[ $rc = 0 ] || [ $rc = 3 ] || exit $rc
+[ $rc = 0 ] || echo "f8_sm100.sh: a kind failed its layout gate (capture.json kind_layout_ok); scoring the others" >&2
+"$PY" "$HERE/f8_sm100.py" eval --scratch "$SCR" --out "$OUT" --procs 14 || exit 1
+exit $rc

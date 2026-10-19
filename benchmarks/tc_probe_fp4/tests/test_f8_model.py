@@ -66,8 +66,8 @@ def test_step_matches_scalar_reference(kind):
 class FakeLib:
     """A device that computes ``truth`` (a candidate name; sm_120's step where a kind has no such candidate) on every kind."""
 
-    def __init__(self, truth: str):
-        self.truth = truth
+    def __init__(self, truth: str, misrouted: frozenset[str] = frozenset()):
+        self.truth, self.misrouted = truth, misrouted
 
     def identity(self) -> dict:
         return {"rc": 0, "cc": "10.0", "name": "fake"}
@@ -79,7 +79,8 @@ class FakeLib:
         cands = FM.candidates(fa, fb, kk == 1)
         cand = cands.get(self.truth, cands["sm120_gs32_w26_f133"])
         w, _ = FM.chain(cand, c, a, b, sa if kk else None, sb if kk else None, int(t["steps"]))
-        return w.reshape(n, S.M_T, S.N_T)
+        D = w.reshape(n, S.M_T, S.N_T)
+        return D[:, ::-1] if kind in self.misrouted else D
 
 
 def test_dry_run_names_the_floor(tmp_path):
@@ -105,3 +106,19 @@ def test_dry_run_names_the_floor(tmp_path):
     assert totals["mx_e5m2"]["sm120_gs32_w26_f133"]["mismatches"] == 0
     assert totals["f8_e4m3_e5m2"]["sm120_gs32_w26_f133"]["mismatches"] == 0
     assert totals["f8_e4m3_e5m2"]["gs32_w26_f149"]["mismatches"] == 0
+
+
+def test_a_misrouted_kind_fails_its_gate_and_the_others_are_still_captured(tmp_path):
+    scratch, out = tmp_path / "scratch", tmp_path / "out"
+    S.gen(Namespace(scratch=str(scratch), seed=6, tiles=1, bulk_scale=0.0))
+    plan = json.loads((scratch / "plan.json").read_text())
+    plan["families"] = [p for p in plan["families"] if p["family"] == "acc_walk" and p["kind"] in ("f8_e4m3", "mx_e4m3")]
+    (scratch / "plan.json").write_text(json.dumps(plan))
+    assert S.capture(Namespace(scratch=str(scratch), out=str(out)), lib=FakeLib("sm120_gs32_w26_f133", frozenset({"mx_e4m3"}))) == 3
+    doc = json.loads((out / "capture.json").read_text())
+    assert doc["kind_layout_ok"]["mx_e4m3"] is False and doc["kind_layout_ok"]["f8_e4m3"] is True
+    assert [p["kind"] for p in doc["captured"]] == ["f8_e4m3"]
+    assert S.evaluate(Namespace(scratch=str(scratch), out=str(out), procs=1, chunk_outputs=1 << 13, bulk_models="",
+                                bulk_all_models=False)) == 0
+    totals = json.loads((out / "summary.json").read_text())["totals"]
+    assert set(totals) == {"f8_e4m3"} and totals["f8_e4m3"]["sm120_gs32_w26_f133"]["mismatches"] == 0
