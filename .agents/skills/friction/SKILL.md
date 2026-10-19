@@ -109,16 +109,14 @@ Only a repeat whose fix needs keys or a claim becomes a question for Daniel.
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
-- 2026-10-19 (18:00Z, card 7d82eba8, its default applied): his "analysis simplification, known false" (9 Oct, 02:46Z)
-  about `ActivationsIncompressible` and `PartialSumsIncompressible` covers declared circuits only, whose wiring the
-  prover controls. On a reference training circuit they stand, and so does `TrainingIncompressible`.
-- 2026-10-19 (18:00Z, card 90f5557c, its default applied): `Nci.Assumptions.TrainingIncompressible` is NCI's single
-  incompressibility premise, a named assumption like `WeightsIncompressible`; the older assumptions stay beside it until
-  the guarantees that read them move to it.
-- 2026-10-19 (18:00Z, card 14452149, its default applied): the routed probe's spend is budget line `vy-routed-`: USD 150,
-  one node, 24 hours.
-- 2026-10-19 (10:47 AM PDT, in chat): that the reference circuit runs ordinary matrix multiplications, one gate per
-  product and no Strassen-like algorithm, is a stated assumption; in Lean it is the `Chain` the reference circuit runs.
+- 2026-10-19 (18:00Z, card 7d82eba8, default): "analysis simplification, known false" (9 Oct, 02:46Z) about
+  `ActivationsIncompressible` and `PartialSumsIncompressible` covers declared circuits only; on a reference circuit
+  they stand, as does `TrainingIncompressible`.
+- 2026-10-19 (18:00Z, card 90f5557c, default): `TrainingIncompressible` is NCI's one incompressibility premise; the
+  older assumptions stay until the guarantees that read them move to it.
+- 2026-10-19 (18:00Z, card 14452149, default): the routed probe's budget line is `vy-routed-`: USD 150, 1 node, 24 h.
+- 2026-10-19 (10:47 AM PDT, in chat): the reference circuit runs ordinary matmuls, one gate per product, nothing
+  Strassen-like; a stated assumption, in Lean the reference circuit's `Chain`.
 - 2026-10-18 (9:59 PM PDT, to compute-accounting): using cloud workers is totally fine, and nobody asks him again;
   he had been asked for 24 hours. Every lead, its cloud workers and its subagents work from one text, AGENTS.md "Use
   cloud workers freely", which is also the explicit request Cursor's Task tool wants before `environment: "cloud"`.
@@ -326,9 +324,6 @@ Newest first. Each is Daniel's unless it names the coordinator.
   VBridge until it's proved. The Lean check refuses any other hypothesis in `Properties/`, and adding a premise is a
   `Definitions/` change, so it messages Daniel. The same day, `RecursiveSound` took the fork form of the hash break
   (`.agents/skills/lean-proofs/SKILL.md`).
-- 2026-10-08 (22:55Z, the coordinator's, under the 7:16 AM PDT ruling): the two-PR cap counts the PRs a lane is working
-  on. A ready PR whose head is in a queued or running check, or in a train the lander holds, doesn't count, and counts
-  again if that check fails, so a slow check never holds a lane's next PR.
 - 2026-10-08 (14:16Z, relayed by top): no change waits on a per-head grant, whether red-team's, the vLLM coordinator's
   or a statement reviewer's: `research merge` and `research queue` read none. It retired the grant-carry rulings of 6 and
   7 Oct.
