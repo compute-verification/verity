@@ -6,9 +6,10 @@
 #     bash "$RESEARCH_RUN_DIR"/inputs/served_profile.sh
 # The GPU part runs in a one-GPU preemptible lease (window.sh's identity, ship and device checks first); the SQLite export and
 # the analysis run after it, off the GPU.  NSYS=0 runs the same without the profiler (the diagnostic timing alone); OUT names
-# the output directory (default the run's); GRAPHS=1 passes --graphs, WHOLE_STEP=1 --whole-step, ROWS_FORM=s --rows-form s; NSYS_ARGS adds to nsys profile (--cuda-graph-trace=node).
-# WHOLE_DEFER=1 passes --whole-defer; BATCH and PROMPT the decode batch and its prompts' length (--batch, --prompt), MEM_BASE
-# and MEM_ARM the engines' memory fractions (--mem-base, --mem-arm).  The ship is unpacked outside OUT, and removed with it.
+# the output directory (default the run's); GRAPHS=1 passes --graphs, WHOLE_STEP=1 --whole-step; NSYS_ARGS adds to nsys profile (--cuda-graph-trace=node).
+# WHOLE_DEFER=1 passes --whole-defer; BATCH and PROMPT the decode batch and its prompts' length (--batch, --prompt), PREFILL the
+# prefill prompt's tokens (--prefill), MEM_BASE and MEM_ARM the engines' memory fractions (--mem-base, --mem-arm).  The ship is
+# unpacked outside OUT, and removed with it.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}}; mkdir -p "$OUT"; export OUT
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -37,7 +38,7 @@ SHIP=$(dirname "$(find "$UNPACK" -name MANIFEST.sha256 | head -1)")
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl"
 ARGS=(--model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/e2e.json"
       --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs} ${WHOLE_STEP:+--whole-step}
-      ${WHOLE_DEFER:+--whole-defer} ${ROWS_FORM:+--rows-form "$ROWS_FORM"} ${BATCH:+--batch "$BATCH"} ${PROMPT:+--prompt "$PROMPT"}
+      ${WHOLE_DEFER:+--whole-defer} ${BATCH:+--batch "$BATCH"} ${PROMPT:+--prompt "$PROMPT"} ${PREFILL:+--prefill "$PREFILL"}
       ${MEM_BASE:+--mem-base "$MEM_BASE"} ${MEM_ARM:+--mem-arm "$MEM_ARM"})
 if [ "${NSYS:-1}" = 1 ]; then
   nsys profile -o "$OUT/served" -f true -t cuda,nvtx -s none --cpuctxsw=none ${NSYS_ARGS:-} \

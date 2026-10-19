@@ -1,15 +1,27 @@
 {
  "roots": ["NciCheck"],
  "exempt": {
+  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and prints NciCheck.Desc.check (or, with --unrolled, NciCheck.check) on it; IO around the audited check, not a proof",
+  "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
-  "NciCheck.DifftestMain": {
-   "why": "4,000 random declarations and divisions on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
-   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4000"],
+  "NciCheck.DescDifftestMain": {
+   "why": "3,650 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, and the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "args": ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}", "{desc_difftest/python.jsonl}", "3650"],
    "data": {
-    "difftest/instances.jsonl": "1534ec02c129a19d6b9086d905499ed9a1604009b68bb05ca906cb3ab7525fa3",
-    "difftest/python.jsonl": "8e64d14792f4a82e0f43801f625d781637dfdb37cf4a27f022a33ed63242e369"
+    "desc_difftest/expanded.jsonl": "2b14c1dfcdc954d05e8e513d341147d2d1bb763b31c56ed198d0a56cd82b4259",
+    "desc_difftest/instances.jsonl": "7147547d92db4215bc8ec236eaa530835e8592d8b4c1d18e53a1c86ce0043366",
+    "desc_difftest/python.jsonl": "7f8066be724a59ddde6f7991f55d81373f52b209f394a0f0cfc833f821c07fed"
+   },
+   "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NciCheck.DifftestMain": {
+   "why": "4,000 random declarations and divisions, and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
+   "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4002"],
+   "data": {
+    "difftest/instances.jsonl": "e730205a6b5e7e48666c132a81ae2746b3f09b6864cd54f9bbd215816b22877a",
+    "difftest/python.jsonl": "61ecdd5542bdeabd85836ed8e2fd7dca22767f016a77b941d5563e74d9f60666"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
@@ -19,6 +31,11 @@
    "imports": ["Std", "Flock.Program"],
    "except": [],
    "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security (the coordinator's ruling for this port)"
+  },
+  "NciCheck.Desc": {
+   "imports": ["Std", "Flock.Program", "NciCheck.Check"],
+   "except": [],
+   "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   }
  },
  "guarantees": {},

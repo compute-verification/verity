@@ -23,7 +23,7 @@ the masked verifier's union bound at every number of tables.
 * `complete_of`: if the honest masked prover (`honestP`) is accepted at every coin outside `BadZk`, on every statement
   in scope, ready, with a witness in the relation, and the relation keeps a witness whatever its mask slots hold
   (`MaskFree`), then `honestPR` is complete with error `δc H`: `Claims.Flock.Complete H (deployZk rel)`, given the mask
-  slots' rank bound (`MaskRank.MaskRankBound`, open).
+  slots' rank bound (`MaskRank.MaskRankBound`, proved: `MaskRank.maskRankBound`).
 * **Against `readyZk`**: a setup with several tables is never `readyZk` (`readyZk_tables`), so `δcZk H` is `1` there;
   where `readyZk` holds, `ready` holds (`ready_of_readyZk`, `Complete.Ready`: at one table the honest record is
   `honestPZk`'s), and there `δc H` is `δcZk H` (`δc_eq_δcZk`).

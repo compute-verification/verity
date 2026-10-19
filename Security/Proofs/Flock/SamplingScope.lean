@@ -28,16 +28,16 @@ def toyProg : Prog := ⟨[.input, .input], [0, 1]⟩
 /-- A query; the deployments here evaluate it to `toyPart`. -/
 def toyQuery : Query := ⟨"", 0, []⟩
 
-/-- One class of one stratum of two replay units, the proof units `[0, 1)` and `[1, 2)`. -/
-def toyPart : Partition := ⟨[[[[(0, 1)], [(1, 2)]]]]⟩
+/-- One class of one stratum of two replay units, the proof units `{0}` and `{1}`. -/
+def toyPart : Partition := ⟨[[[[[0]], [[1]]]]]⟩
 
 /-- The program, drawn `subset 1`: in scope. -/
-def toyStmt : Stmt := ⟨toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
+def toyStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 1, none⟩]⟩, []⟩
 
 /-- The program, drawn `subset 3` from two units: out of scope. -/
-def holeStmt : Stmt := ⟨toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
+def holeStmt : Stmt := ⟨[], toyProg, toyQuery, ⟨[⟨.subset 3, none⟩]⟩, []⟩
 
-theorem toyPart_rus : toyPart.rus = [[(0, 1)], [(1, 2)]] := rfl
+theorem toyPart_rus : toyPart.rus = [[[0]], [[1]]] := rfl
 
 /-- A `K`-subset of fewer than `K` members misses every set with probability `0`. -/
 theorem Pa_subset_gt {ns : List ℕ} {K : ℕ} (h : ns.sum < K) (B : Finset ℕ) : OneStage.Pa ns (.subset K) B = 0 := by
@@ -61,14 +61,14 @@ theorem not_relS_hole (H : Msg → Msg) (Cm : Commitment Bool) {δ : ℝ} (hδ :
 /-- **The hole is out of scope**: its rule draws more units than its class has. -/
 theorem not_inScope_hole : ¬ InScope toyPart holeStmt := by
   rintro ⟨_, _, _, hw⟩
-  have := hw (⟨.subset 3, none⟩, [[[(0, 1)], [(1, 2)]]]) (by simp [holeStmt, toyPart])
+  have := hw (⟨.subset 3, none⟩, [[[[0]], [[1]]]]) (by simp [holeStmt, toyPart])
   simp [Rule.WellFormed, OneStage.WellFormed, strataSizes] at this
 
 /-! ## The in-scope design: `subset 1` of two units -/
 
 /-- **The toy is in the sampling scope.** -/
 theorem inScope_toy : InScope toyPart toyStmt := by
-  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩, ⟨?_, ?_, ?_⟩, ?_⟩
+  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩, ?_, ?_⟩
   · rcases g with _ | _ | g
     · simp [toyStmt, toyProg] at hx
       subst hx
@@ -77,14 +77,9 @@ theorem inScope_toy : InScope toyPart toyStmt := by
       subst hx
       simp [BGate.reads] at hi
     · simp [toyStmt, toyProg] at hx
-  · rw [toyPart_rus]
-    decide
-  · rw [toyPart_rus]
-    intro r hr
-    rcases List.mem_pair.1 hr with rfl | rfl <;>
-      exact ⟨List.cons_ne_nil _ _, by simp, fun i h => absurd h (by simp)⟩
-  · rw [toyPart_rus]
-    decide
+  · refine ⟨by decide, by decide, fun g hg _ => ?_, by decide, by decide, by decide⟩
+    have hg2 : g < 2 := hg
+    interval_cases g <;> decide
   · refine ⟨rfl, ?_⟩
     simp [toyStmt, toyPart, Rule.WellFormed, OneStage.WellFormed, strataSizes]
 
@@ -115,7 +110,7 @@ variable {Coin Col T : Type}
 `m′ = 20` waits, `N₀ = 3000`, `K′ = 10^9` and `ε_table = 0`. -/
 structure ToyNumbers (D : Deploy Coin Col T) (x : Msg) : Prop where
   parse : D.parse x = some toyStmt
-  partition : D.partition toyProg toyQuery = some toyPart
+  partition : D.partition toyStmt = some toyPart
   εtable : D.εtable x = 0
   innerWaits : D.innerWaits x = 20
   innerN₀ : D.innerN₀ x = 3000
@@ -127,7 +122,7 @@ theorem scope_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D 
 theorem k_of_toyNumbers {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : D.k x = 2 ^ 40 * 5 := by
   have hp : D.part toyStmt = toyPart := by
     simp only [Deploy.part]
-    rw [show toyStmt.prog = toyProg from rfl, show toyStmt.query = toyQuery from rfl, h.partition]
+    rw [h.partition]
     rfl
   simp only [Deploy.k, nRU, nPU, h.parse, hp]
   rfl
@@ -268,7 +263,7 @@ def toyD : Deploy Bool ℕ Unit where
   V := toyV
   parse _ := some toyStmt
   scopeCheck _ := true
-  partition _ _ := some toyPart
+  partition _ := some toyPart
   commit := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
   universal _ := toyProg
   flock := toyFlock

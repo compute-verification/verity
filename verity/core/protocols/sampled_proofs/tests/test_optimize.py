@@ -1,10 +1,12 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
 bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
-between a partition and a covering, serving's commitment, and the sensitivity queries."""
+between a partition and a covering, serving's commitment (per unit, and the fixed serve-time total with its overlaps), the
+block kinds' weights, and the sensitivity queries."""
 
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from itertools import combinations, product
 from math import ceil, exp, fsum, log, log1p, ulp
 
@@ -12,10 +14,11 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, ReplayDomain, TemplateCost,
-                                                           _hit, _miss, certify, density_bound, for_budget, for_target, frontier,
-                                                           needs_benchmark, perturb, replay_cost, row_ands,
-                                                           sensitivity, template_cost, touched, work_law)
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
+                                                           TemplateCost, _hit, _miss, certify, density_bound, for_budget,
+                                                           for_target, frontier, needs_benchmark, overlaps, perturb,
+                                                           replay_cost, row_ands, sensitivity, template_cost, touched,
+                                                           weigh, work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -284,6 +287,79 @@ def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
     rec, form = _crossing(plans)
     assert rec <= 8 * R <= form
     assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
+
+
+SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
+         Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
+         Commitment("commit", "y", 500.0),
+         Commitment("commit", "kv", 400.0, chain=4.0),
+         Commitment("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
+         Commitment("remote", "receipts", 0.0, cost=7.0))
+
+
+def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(batched):
+    """Every plan pays the fixed serve-time commitments, each tensor once per scale that commits it, so the frontier only
+    moves up by them: a total budget buys what the budget less them bought without them, and less than them buys
+    nothing."""
+    cands, costs, objective, plans = batched
+    served = replace(costs, commit_per_bit=1e-3, serve=SERVE)
+    fixed = 8e-3 * (1000 + 2000 + 500 + 400) + 1.0 + 7.0
+    assert served.serve_cost() == pytest.approx(fixed)
+    moved = frontier(cands, served, objective, grid=41)
+    assert [dict(p.sizes) for p in moved] == [dict(p.sizes) for p in plans]
+    for p, q in zip(moved, plans):
+        assert p.cost["serve"] == pytest.approx(fixed) and p.cost["total"] == pytest.approx(q.cost["total"] + fixed)
+    budget = (plans[3].cost["total"] + plans[4].cost["total"]) / 2
+    got = for_budget(moved, budget + fixed, candidates=cands, costs=served, objective=objective)
+    ref = for_budget(plans, budget, candidates=cands, costs=costs, objective=objective)
+    assert dict(got.sizes) == dict(ref.sizes) and got.cost["total"] <= budget + fixed
+    assert for_budget(moved, fixed * 0.999, candidates=cands, costs=served, objective=objective) is None
+    assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
+    with pytest.raises(ValueError, match="non-negative"):
+        Commitment("commit", "x", -1.0)
+
+
+def test_overlaps_count_each_scale_and_price_committing_once():
+    """x is committed by the Commit and by PoUW's A rows, whose roots gate the step; kv by the Commit and the KV append
+    (measured); y once.  The total counts every copy; committed once, the cheapest copy stays, saving the others' bytes and
+    prefill cost and, at decode, the gating chain less the kept copy's, which now gates in its place."""
+    costs = CostModel(commit_per_bit=1e-3, serve=SERVE)
+    assert costs.serve_cost() == pytest.approx(8e-3 * 3900 + 8.0)
+    x, kv = overlaps(costs, latency=0.5)
+    assert x["tensor"] == "x" and x["kept"] == "commit" and [c["scale"] for c in x["copies"]] == ["commit", "pouw-a"]
+    assert [c["prefill"] for c in x["copies"]] == pytest.approx([8.0, 16.0])
+    assert [c["decode"] for c in x["copies"]] == [0.0, 15.0]
+    assert x["saving"] == pytest.approx({"bytes": 2000.0, "prefill": 16.0, "decode_bytes": 200.0, "decode": 10.0})
+    assert kv["tensor"] == "kv" and kv["kept"] == "kv-append"
+    assert kv["saving"] == pytest.approx({"bytes": 400.0, "prefill": 3.2, "decode_bytes": 0.0, "decode": 0.0})
+
+
+def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
+    """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a unit's.  At equal weights the
+    density draws every tile, but core's bound (a draw without replacement) certifies the target with 15: the tiles'
+    weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
+    cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
+    costs = CostModel({"S": TemplateCost(1.0, 0.0, 0.0), "P": TemplateCost(3.0, 0.0, 0.0)})
+    objective, target = Objective(2.0 ** -20), 192.0
+    flat = for_target(cands, costs, objective, target, grid=21)
+    plan = weigh(cands, costs, objective, target, grid=21, factors=(0.5, 2.0), rounds=2)
+    assert dict(flat.sizes) == {"S": 29, "P": 16} and not flat.weights
+    assert dict(plan.weights) == {"pouw-tile": 0.5} and dict(plan.sizes) == {"S": 29, "P": 15}
+    assert plan.cost["total"] < flat.cost["total"] and plan.certificate.harm <= target
+    assert plan.certificate == certify(plan.sizes, cands, objective)
+    assert _registered(plan, cands) == dict(plan.sizes)
+
+
+def test_under_the_density_bound_kinds_keep_equal_weights(batched):
+    """The density bound charges the strata's largest harm per unit of risk, so a draw in proportion to harm is already
+    the cheapest: no weight moves."""
+    cands, costs, objective, _ = batched
+    for target in (1e6, 5e4):
+        flat = for_target(cands, costs, objective, target, grid=21, exact=False)
+        plan = weigh(cands, costs, objective, target, grid=21, exact=False)
+        assert not plan.weights and plan.cost["total"] == flat.cost["total"]
+    with pytest.raises(ValueError, match="weight is positive"):
+        frontier(cands, costs, objective, weights={"G": 0.0})
 
 
 def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():

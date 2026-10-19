@@ -1,8 +1,8 @@
 #!/bin/bash
 # sudo vy-device-cores: keep everything but vy-device's scopes off vy-nebius-2's device cores 120-127 (see device.sh), as far as a
-# running kernel allows. Idempotent; settings are runtime only, so run it again after a boot. What stays on those cores is the
-# per-CPU kernel work only a boot with nohz_full=120-127 isolcpus=managed_irq,domain,120-127 rcu_nocbs=120-127 irqaffinity=0-119
-# moves: bound kworkers, timers, vmstat_update (here run every 10 s instead of every second).
+# running kernel allows. Idempotent; settings are runtime only, so vy-device-cores.service runs it at boot. What stays on those
+# cores is the per-CPU kernel work only a boot with nohz_full=120-127 isolcpus=managed_irq,domain,120-127 rcu_nocbs=120-127
+# irqaffinity=0-119 moves: bound kworkers, timers, vmstat_update (here run every 10 s instead of every second).
 # /etc/sysctl.d/90-vy-device-cores.conf keeps this script's sysctls from boot.
 set -euo pipefail
 systemctl set-property --runtime user.slice AllowedCPUs=0-119
