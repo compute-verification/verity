@@ -73,4 +73,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.SampledProofs", "Properties.Proofs.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.Evaluate", "Properties.Proofs.Evaluate",
   "Properties.NetworkRecords", "Properties.Proofs.NetworkRecords", "Properties.Accounting.Requirement",
-  "Properties.Proofs.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.Accounting.Served"]
+  "Properties.Proofs.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.Accounting.Served",
+  "Properties.Proofs.Accounting.Served"]

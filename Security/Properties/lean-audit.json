@@ -36,7 +36,8 @@
   "Properties.Accounting.Requirement",
   "Properties.Proofs.Accounting.Requirement",
   "Properties.Accounting.Compose",
-  "Properties.Accounting.Served"
+  "Properties.Accounting.Served",
+  "Properties.Proofs.Accounting.Served"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
