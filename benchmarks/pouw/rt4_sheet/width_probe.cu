@@ -2,7 +2,7 @@
 // claim that a 256-bit global store/load halves the memory count of the bulk reduce-XOR fold. Build and read the SASS; no
 // device run. Each kernel's body is one timed loop so cuobjdump shows the store/load opcode and its width.
 //
-//   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v width_probe.cu -o /tmp/wp && cuobjdump -sass /tmp/wp
+//   nvcc -O3 -std=c++17 -cubin -arch=sm_120a -Xptxas -v [-DRT4_V8] width_probe.cu -o wp.cubin && cuobjdump -sass wp.cubin
 #include <stdint.h>
 
 __device__ __forceinline__ void st_v4(uint32_t *p, const uint32_t *v) {

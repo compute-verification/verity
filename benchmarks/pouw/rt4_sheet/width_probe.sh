@@ -14,13 +14,15 @@ NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 CUOBJ="$(dirname "$NVCC")/cuobjdump"
 for v in default v8; do
   flag=""; [ "$v" = v8 ] && flag="-DRT4_V8"
-  bin="$OUT/wp_$v"
-  if "$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v $flag "$HERE/width_probe.cu" \
+  bin="$OUT/wp_$v.cubin"
+  # device code only: the probe has no main, so build a cubin and read its SASS
+  if "$NVCC" -O3 -std=c++17 -cubin -arch=sm_120a -Xptxas -v $flag "$HERE/width_probe.cu" \
       -o "$bin" >"$OUT/build_$v.log" 2>&1; then
     echo "build_$v=ok"
     "$CUOBJ" -sass "$bin" >"$OUT/sass_$v.txt" 2>&1
-    # the global stores/loads each probe issues, by opcode
-    grep -oE "\b(STG|LDG|ST|LD)\.[A-Z0-9_.]+" "$OUT/sass_$v.txt" | sort | uniq -c >"$OUT/mem_ops_$v.txt"
+    # each probe kernel's global stores and loads, by opcode
+    awk '/Function :/{f=$3} /(STG|LDG)/{match($0,/(STG|LDG)[A-Z0-9_.]*/); print f": "substr($0,RSTART,RLENGTH)}' \
+      "$OUT/sass_$v.txt" | sort | uniq -c >"$OUT/mem_ops_$v.txt"
     echo "--- $v mem ops"; cat "$OUT/mem_ops_$v.txt"
   else
     echo "build_$v=FAILED"; tail -8 "$OUT/build_$v.log"
