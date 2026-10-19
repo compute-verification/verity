@@ -9,13 +9,16 @@ The gate reads three kinds of evidence, each catching what the others miss:
          The next linear's A rows are computed from (s, w)'s served y, and they are committed in a round root.  If that
          root was recorded before the coin was released, the served y existed before its own noise, and no noised GEMM
          produced it.  It needs a round per call (`ROUND_FORM_CALL`): with a round per step, it refuses every call but the
-         step's last.  It misses a beside path that keeps the order: a round per call, with y from a second GEMM.
+         step's last.  Seeded coins refuse the window: their salt is fixed before the pass, so no coin follows any y.
+         It misses a beside path that keeps the order: a round per call, with y from a second GEMM.
   trace  the hook's launch ledger (`Recorder`, in process, `trace_refusals`).  The profiler records every op and kernel
-         in each call's range.  The call must have exactly one GEMM, its declared fused launch.  That launch wrote the
-         returned y (same storage, version and rows), and the committed receipts and z are its buffers.  Only views may
-         run after it.  A GEMM of a linear's (K, N) outside every call refuses the window (`window_refusals`).  It misses
-         a GEMM inside the fused kernel's own launch (that is the kernel's SASS gate) and a GEMM in another process.  The
-         prover writes the ledger, so it stops a silent beside path, not a forged ledger.
+         in each call's range.  The call must have exactly one GEMM, its declared fused launch, a raw launch in whose range
+         only its declared kernels, views and allocations run.  That launch wrote the returned y (same storage, version
+         and rows), and the committed receipts and z are its buffers.  Only views may run after it.  A GEMM of a linear's
+         (K, N) outside every call refuses the window (`window_refusals`).  It misses what the fused kernel itself
+         computes (a GEMM inside it, or a y copied from an input it was handed: the kernel's SASS gate), a GEMM written
+         as elementwise ops and a reduction, which reaches y only through such a kernel, and a GEMM in another process.
+         The prover writes the ledger, so it stops a silent beside path, not a forged ledger.
   tie    drawn units (`tie_refusal`).  The unit's 32 z rows open against the call's committed z table, its cells are the
          unit's reference z, and each served y row is dequant(z) bit for bit (`dequant`, `engine.int8_exact.dequantize`'s
          order).  It ties the committed z to the served value, but an s8 GEMM is exact, so it can't tell which GEMM made y.
@@ -44,6 +47,8 @@ LEDGER = "verity/pouw-served-h1/launch-ledger/v1"
 VERDICT = "verity/pouw-served-h1/same-gemm/v1"
 CALL_RANGE = "verity/served-h1/call/"
 FUSED_RANGE = "verity/served-h1/fused/"
+#: the recorder's own reads of the buffers it digests (a device-to-host copy on CUDA); a GEMM in one still counts
+READ_RANGE = "verity/served-h1/ledger-read"
 ROUND_FORM_STEP = "step"
 ROUND_FORM_CALL = "call"
 
@@ -54,12 +59,14 @@ GEMM_OPS = re.compile(r"^aten::(_int_mm|mm|matmul|bmm|addmm|addmv|mv|dot|vdot|ba
 #: device kernels that are GEMMs (cuBLAS, cuBLASLt, CUTLASS and their tensor-core tilings), wherever they were launched from
 GEMM_KERNELS = re.compile(r"(?i)(gemm|gemv|imma|hmma|wgmma|cutlass|cublas|xmma|nvjet|splitk|tensorop)")
 #: ops that make views or fresh allocations, so write no existing buffer: the only ops that may run in a call after its
-#: fused launch
+#: fused launch.  A write is a childless dispatcher op (``ns::name``; `aten::to` with no `_to_copy` under it returned its
+#: input) not in this set, or an op with one under it; the runtime's own events (``cudaLaunchKernel``, autograd's
+#: ``detach``) show as their kernels.
 VIEW_OPS = frozenset(f"aten::{n}" for n in (
     "view", "reshape", "_reshape_alias", "_unsafe_view", "as_strided", "slice", "select", "narrow", "t", "transpose",
     "permute", "alias", "detach", "unsqueeze", "squeeze", "expand", "expand_as", "view_as", "flatten", "unflatten",
     "split", "chunk", "unbind", "lift_fresh", "contiguous", "_local_scalar_dense", "item", "empty", "empty_strided",
-    "empty_like", "new_empty"))
+    "empty_like", "new_empty", "to", "resolve_conj", "resolve_neg"))
 
 
 def _hex(b: bytes) -> str:
@@ -70,11 +77,13 @@ def _hex(b: bytes) -> str:
 
 def tensor_facts(t: Any, rows: int | None = None) -> dict[str, Any]:
     """What the ledger keeps of a tensor: its storage and data pointers, bytes, version counter and, with `rows`, the SHA-512
-    of each of its first `rows` rows' bytes (bf16 y rows as their u16 words)."""
+    of each of its first `rows` rows' bytes (bf16 y rows as their u16 words), read inside `READ_RANGE`."""
+    import torch
     out = {"storage": int(t.untyped_storage().data_ptr()), "ptr": int(t.data_ptr()), "nbytes": int(t.numel() * t.element_size()),
            "version": int(t._version), "shape": list(t.shape), "dtype": str(t.dtype).removeprefix("torch.")}
     if rows is not None:
-        out["rows"] = row_digests(t.detach()[:rows].reshape(rows, -1).cpu())
+        with torch.profiler.record_function(READ_RANGE):
+            out["rows"] = row_digests(t.detach()[:rows].reshape(rows, -1).cpu())
     return out
 
 
@@ -174,7 +183,8 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
 
     A GEMM launch is a GEMM-class op none of whose descendants is one, or a GEMM-class kernel no such op launched.  They are
     numbered #0, #1, .. in the pass's order.  Each call's events are those in its range, in order, each flagged ``fused``
-    (inside its fused launch's range) or ``after_fused`` (after that range closed)."""
+    (inside its fused launch's range) or ``after_fused`` (after that range closed); of the recorder's reads (`READ_RANGE`)
+    only GEMM launches."""
     evs = sorted(events, key=lambda e: (e.time_range.start, -e.time_range.end))
 
     def gemm_op(e) -> bool:
@@ -198,6 +208,11 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
     def kernels_of(e) -> list[str]:
         return [k.name for k in (getattr(e, "kernels", ()) or ()) if not k.name.startswith("verity/")]
 
+    def writes(e) -> bool:
+        if e.cpu_children:
+            return any(writes(c) for c in e.cpu_children)
+        return "::" in e.name and e.name not in VIEW_OPS
+
     def entry(e, fr, members: set[int], kind: str = "op", kname: str | None = None) -> dict[str, Any]:
         inside = fr is not None and (e is fr or id(e) in members)
         after = fr is not None and not inside and e.time_range.start >= fr.time_range.end
@@ -208,10 +223,11 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
         if kind == "op" and g is not None:
             d["kn"] = _kn(e.name, e.input_shapes or [])
             d["kernels"] = sorted({k for x in [e, *_descendants(e)] for k in kernels_of(x)})
-        if kind == "op" and e.name not in VIEW_OPS and not e.cpu_children and not e.name.startswith("verity/"):
+        if kind == "op" and "::" in e.name and writes(e):
             d["writes"] = True
         return d
 
+    reads = {id(x) for e in evs if e.name == READ_RANGE for x in (e, *_descendants(e))}
     ranges = {int(e.name[len(CALL_RANGE):]): e for e in evs if e.name.startswith(CALL_RANGE)}
     fused_of = {int(e.name[len(FUSED_RANGE):]): e for e in evs if e.name.startswith(FUSED_RANGE)}
     inside_any: set[int] = set()
@@ -223,9 +239,10 @@ def ledger_of(events: Sequence[Any], meta: Mapping[int, Mapping[str, Any]], devi
         inside_any.update(id(d) for d in body)
         rows = []
         for e in body:
-            if e is not r and e is not fr:
+            read = id(e) in reads
+            if e is not r and e is not fr and (not read or (id(e), "op", None) in seq):
                 rows.append(entry(e, fr, members))
-            rows += [entry(e, fr, members, "kernel", k) for k in kernels_of(e)]
+            rows += [entry(e, fr, members, "kernel", k) for k in kernels_of(e) if not read or (id(e), "kernel", k) in seq]
         m = meta.get(i, {})
         calls.append({"call": i, "key": m.get("key"), "events": rows, "fused": m.get("fused"), "served": m.get("served"),
                       "committed": m.get("committed", {})})
@@ -281,6 +298,10 @@ def call_refusal(c: Mapping[str, Any], e: Mapping[str, Any] | None) -> str | Non
     alien = [k for k in seen if k not in f["kernels"]]
     if alien:
         return _why(c, f"kernel {alien[0]} inside the fused launch is not one it declares ({', '.join(f['kernels']) or 'none'})")
+    busy = [x for x in evs if x["fused"] and x["kind"] == "op" and x.get("writes")]
+    if busy:
+        return _why(c, f"{busy[0]['name']} ran inside the fused launch: it is one raw launch, in which only its declared "
+                       "kernels, views and allocations run")
     if gemms:
         g = gemms[0]
         return _why(c, f"a second GEMM in the call: {g['name']} call #{g['seq']} beside the fused launch")
@@ -380,9 +401,14 @@ def order_refusals(window: str, calls: Sequence[Mapping[str, Any]], coins: Mappi
     rows, and its own z table when it has one, are in a round after rs."""
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.sampled_proofs import challenger as Ch
-    if not coins or coins.get("mode") != "live" or not coins.get("rounds"):
-        return {}, [f"{TAG}: window: no live round log (coins {(coins or {}).get('mode')}): the challenger's log can't "
-                    "order the receipts' noise against the served y; credit needs live rounds"]
+    mode = (coins or {}).get("mode")
+    if mode != "live":
+        return {}, [f"{TAG}: window: coins are {mode or 'missing'}, not live: a seeded salt is fixed before the served "
+                    "pass, so no coin follows the served y and the receipts certify nothing about it; credit needs live "
+                    "rounds"]
+    if not coins.get("rounds"):
+        return {}, [f"{TAG}: window: live coins with no round log: the challenger's log can't order the receipts' noise "
+                    "against the served y"]
     rounds = list(coins["rounds"])
     form = coins.get("round_form") or (ROUND_FORM_STEP if str(coins.get("rule", "")).startswith("round s = step s")
                                        else None)
@@ -529,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if v["ok"] else 1
 
 
-__all__ = ["CALL_RANGE", "FUSED_RANGE", "GEMM_KERNELS", "GEMM_OPS", "LEDGER", "ROUND_FORM_CALL", "ROUND_FORM_STEP", "Recorder",
+__all__ = ["CALL_RANGE", "FUSED_RANGE", "GEMM_KERNELS", "GEMM_OPS", "LEDGER", "READ_RANGE", "ROUND_FORM_CALL", "ROUND_FORM_STEP", "Recorder",
            "TAG", "VERDICT", "call_refusal", "dequant", "ledger_of", "order_refusals", "row_digests", "step_trees",
            "successors", "tensor_facts", "tie_refusal", "trace_refusals", "tree_leaves", "tree_root", "verdict",
            "window_refusals", "z_rows", "z_table"]
