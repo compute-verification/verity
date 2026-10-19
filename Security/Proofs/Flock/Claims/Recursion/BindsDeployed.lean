@@ -24,10 +24,11 @@ message" does. That last message is `Final.encode` of the statement, the record'
 verifier reads the record's text only through `Json.parse` (`Record.decodeWith`, `liveOf`, `recordDraw`). The text
 with one trailing space parses alike (`JsonTrailingSpace`, Lean's parser ends every value with `ws` before `eof`), so it
 is another last message that `final` reads differently and `IVStar` decides alike, with the same calls
-(`ivstar_congr_snoc`). (P4) then asks a collision among the calls of one accepted decision (`lastBinds_forces_collision`,
-`lastBinds_deployed_forces_collision`): at an oracle with no collision among those calls, (P4) at the deployed record
-leaves `IVStar` accepting nothing whose last message fits its length words (`lastBinds_deployed_rejects`), where an honest
-run is accepted. `LastBinds`' statement modulo `final` covers bytes `final` ignores, not bytes `DE`'s verifier ignores.
+(`ivstar_congr_snoc`). (P4) then asks a collision among the calls of one accepted decision
+(`lastBinds_forces_collision`, `lastBinds_deployed_forces_collision`): at an oracle with no collision among those calls,
+(P4) at the deployed record leaves `IVStar` accepting nothing whose last message fits its length words
+(`lastBinds_deployed_rejects`), where an honest run is accepted. `LastBinds`' statement modulo `final` covers bytes
+`final` ignores, not bytes `DE`'s verifier ignores.
 
 `JsonTrailingSpace` is a hypothesis, not a lemma: `Json.parse`'s `anyCore` is `partial`, so the kernel doesn't see its
 body. The rest is proved. -/
@@ -118,7 +119,7 @@ theorem allOC_true (H : Msg → Msg) : ∀ ps : List (OC Bool), ((allOC ps).eval
       · obtain ⟨h1, h2⟩ := allOC_true H qs h p hp
         exact ⟨h1, fun e he => List.mem_append_right _ (h2 e he)⟩
 
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+variable {Coin Col T : Type} [Inhabited Coin]
 
 /-- **An accepted decision at the last round** reads the last message (`final`), opens one round per earlier message,
 and the element-level verifier accepts the opened messages. -/
@@ -191,7 +192,7 @@ theorem ivstar_congr_snoc (Bd : Bound Coin Col T) {x : Msg} {as as' : List Msg} 
 /-- **(P4) asks a collision of one decision** wherever `final` is free in the last element-level message
 (`hfree`) and the element-level verifier, at each last message it accepts, takes another one alike (`hnext`): the
 second last message gives a second accepted decision that `final` reads differently, with the same calls. -/
-theorem lastBinds_self (Bd : Bound Coin Col T) (H : Msg → Msg)
+theorem lastBinds_self [Fintype Coin] [Nonempty Coin] [DecidableEq Col] (Bd : Bound Coin Col T) (H : Msg → Msg)
     (hfree : ∀ a os last, Bd.final a = some (os, last) → ∀ last', ∃ a', Bd.final a' = some (os, last'))
     (hP4 : Bd.LastBinds H) {x : Msg} {as : List Msg} {cs : List Coin}
     (hk : as.length = Bd.DE.V.k x) (hcs : cs.length = as.length)
@@ -271,9 +272,7 @@ theorem checks_congr_record {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flo
     FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r', ps⟩ =
       FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r, ps⟩ := by
   unfold FlockDeploy.checks
-  first
-  | (simp only [recordDraw_congr h, liveOf_congr spec h]; done)
-  | (dsimp only; rw [recordDraw_congr h, liveOf_congr spec h])
+  simp only [recordDraw_congr h, liveOf_congr spec h]
 
 theorem decisionAt_congr_record {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} {x : Msg} {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin}
@@ -282,11 +281,8 @@ theorem decisionAt_congr_record {s : FlockDeploy.Ins} {spec : _root_.Flock.Sessi
     FlockDeploy.decisionAt false s spec sts x link c₁ mids ⟨st, r', ps⟩ =
       FlockDeploy.decisionAt false s spec sts x link c₁ mids ⟨st, r, ps⟩ := by
   unfold FlockDeploy.decisionAt FlockDeploy.verdictM
-  first
-  | (simp only [Bool.false_eq_true, ↓reduceIte,
-      verifyWithM_congr Claims.Hashes.oc spec (FlockDeploy.tabsOf sts) ps h, checks_congr_record h]; done)
-  | (dsimp only; simp only [Bool.false_eq_true, ↓reduceIte];
-      rw [verifyWithM_congr Claims.Hashes.oc spec (FlockDeploy.tabsOf sts) ps h, checks_congr_record h])
+  simp only [Bool.false_eq_true, ↓reduceIte, verifyWithM_congr Claims.Hashes.oc spec (FlockDeploy.tabsOf sts) ps h,
+    checks_congr_record h]
 
 theorem decision_congr_record {s : FlockDeploy.Ins} {x : Msg} {link : List ByteArray × List ByteArray}
     {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)} {st : Msg} {ps : Array ByteArray}
@@ -294,15 +290,13 @@ theorem decision_congr_record {s : FlockDeploy.Ins} {x : Msg} {link : List ByteA
     FlockDeploy.decision false s x link c₁ mids ⟨st, r', ps⟩ =
       FlockDeploy.decision false s x link c₁ mids ⟨st, r, ps⟩ := by
   unfold FlockDeploy.decision
-  first
-  | (simp only [decisionAt_congr_record h]; done)
-  | (congr 1; funext p; obtain ⟨spec, sts⟩ := p; exact decisionAt_congr_record h)
+  simp only [decisionAt_congr_record h]
 
 theorem append_space_ne (r : String) : r ++ " " ≠ r := by
   intro h
   have hl := congrArg String.length h
   rw [String.length_append] at hl
-  have h1 : (" " : String).length = 1 := by first | decide | rfl
+  have h1 : (" " : String).length = 1 := by decide
   omega
 
 /-- **The deployed plain verifier's last step takes another last message alike**: where it accepts the last message
@@ -315,10 +309,10 @@ theorem next_snoc_space (H : Msg → Msg) (hws : JsonTrailingSpace) {x : Msg} {m
   cases hact : FlockDeploy.act false x (ms₀ ++ [l]) cs with
   | rej =>
     rw [FlockDeploy.next_rej H hact] at h
-    first | cases h | simp at h
+    cases h
   | coin c =>
     rw [FlockDeploy.next_coin H hact] at h
-    first | cases h | simp at h
+    cases h
   | decide s spec sts link c₁ mids f =>
     obtain ⟨spec', sts', -, -, hc⟩ := (FlockDeploy.next_decide H hact).1 h
     obtain ⟨lv, hlv, -⟩ := FlockDeploy.checks_custody hc
@@ -348,7 +342,7 @@ theorem next_snoc_space (H : Msg → Msg) (hws : JsonTrailingSpace) {x : Msg} {m
         exfalso
         have h0 : l.head? = some 0 := FlockDeploy.linkOf_head hlink
         rw [FlockDeploy.finalOf_head hf] at h0
-        first | exact absurd h0 (by decide) | simp at h0
+        exact absurd h0 (by decide)
       | cons m ms₁ =>
         have hlink' : FlockDeploy.linkOf m = some link := hlink
         have e1 := FlockComplete.act_final_any (a₁ := m) (rest := ms₁ ++ [l]) (c₁ := c₁) (crest := crest) hs
@@ -359,9 +353,7 @@ theorem next_snoc_space (H : Msg → Msg) (hws : JsonTrailingSpace) {x : Msg} {m
         rw [List.dropLast_concat] at e2
         show FlockDeploy.next false x (m :: (ms₁ ++ [FlockDeploy.Final.encode ⟨st, r ++ " ", ps⟩])) (c₁ :: crest) =
           FlockDeploy.next false x (m :: (ms₁ ++ [l])) (c₁ :: crest)
-        first
-        | (simp only [FlockDeploy.next, e1, e2, decision_congr_record hp]; done)
-        | (simp only [FlockDeploy.next, e1, e2]; rw [decision_congr_record hp])
+        simp only [FlockDeploy.next, e1, e2, decision_congr_record hp]
 
 end RecDeploy.LastGap
 
