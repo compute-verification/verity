@@ -55,7 +55,7 @@ eight items:
    `q ≤ 2^128 · t`. `ZK`'s errors are Flock's proved
    `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per commit string of the inner session and the
    staging messages. `ZKStop` restates `ZK` for Daniel's card, statement only, and reads `Hm96Hiding` as `ZK` does: of
-   the record's own reference prover on the finite tape each statement's nonce and rest draw (`StopDeploy.prover`,
+   the masked record's own reference prover on the finite tape each statement's nonce and rest draw (`ZkDeploy.prover`,
    `ZKmalRx`), which stops where the statement and the public transcript before the sessions say the honest proof can
    be refused (`StopDeploy.stops`), at the simulator that stops there too and commits to the zero digest as many
    strings at each inner round as the reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁`
@@ -459,11 +459,11 @@ tape `x`'s nonce and rest draw. -/
 def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) : Prover (D.Nonce x × D.Rest x) :=
   ⟨fun x' hist ω => (D.P w).next x' hist (D.tapeOf x ω)⟩
 
-/-- **A record with its reference prover's public stop, finite tapes and inner commit strings.**
+/-- **A record with its reference prover's public stop, finite tapes and inner commit strings**: the masked record
+(`ZkDeploy`) and the following.
 
-* The reference prover's tape at each statement `x` is drawn from a finite nonce and rest of `x`'s (`tapeOf x`), since
-  each V* session runs on a tape of its own; zero knowledge is of `P` on that tape (`StopDeploy.prover`), at the outer
-  `--zk` Flock's simulators at each attempt budget, at the recursion's statement and each V* session's index (`SO`).
+* Zero knowledge is of the masked record's reference prover (`ZkDeploy.prover`: `P` on the tape `x`'s nonce and rest
+  draw), at its outer simulators (`ZkDeploy.SO`).
 * The reference prover's inner round `i` at `x` carries `nAt x i` hm96 commit strings under fresh salts of its tape,
   and its message is `innerMsg x ms cs` at the run so far `ms` and those strings `cs` (the public rest of the round, as
   `stage` is the staging round's).
@@ -475,25 +475,10 @@ def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) 
   of scope or whose inner statement the inner verifier can't accept (read off the statement alone), an inner coin in
   the inner completeness error (Flock's: a zerocheck outer coin at `1`), or staged V* statements that the masked
   verifier can't accept or whose numbers are not the statement's (where the compiled verifier refuses). -/
-structure StopDeploy (Coin : Type) extends Deploy Coin where
-  Nonce : Msg → Type
-  Rest : Msg → Type
-  [nonceFin : ∀ x, Fintype (Nonce x)]
-  [nonceNe : ∀ x, Nonempty (Nonce x)]
-  [restFin : ∀ x, Fintype (Rest x)]
-  [restNe : ∀ x, Nonempty (Rest x)]
-  tapeOf : (x : Msg) → Nonce x × Rest x → Tape
-  SO : ℕ → Msg → ℕ → OSim
+structure StopDeploy (Coin : Type) extends ZkDeploy Coin where
   nAt : Msg → ℕ → ℕ
   innerMsg : Msg → List (Msg × Out) → List Msg → OC Msg
   stops : (Msg → Msg) → Msg → List (Msg × Out) → Bool
-
-attribute [instance] StopDeploy.nonceFin StopDeploy.nonceNe StopDeploy.restFin StopDeploy.restNe
-
-/-- **The record's reference prover at the statement `x`**: `Deploy.P`, the prover `Complete` reads, on the tape `x`'s
-nonce and rest draw. -/
-def StopDeploy.prover {Coin : Type} (D : StopDeploy Coin) (w : Flock.Wit) (x : Msg) : Prover (D.Nonce x × D.Rest x) :=
-  ⟨fun x' hist ω => (D.P w).next x' hist (D.tapeOf x ω)⟩
 
 /-- **The prover has stopped** after the transcript `ms`, its stop read at the first `n` rounds' starts and after the
 `n`-th: `stops` holds at the transcript before some round `i ≤ n` that `ms` has reached. -/
@@ -815,7 +800,7 @@ noncomputable def εzkStop (D : StopDeploy Coin) (I : Inner Coin W) (t : ℕ) (�
     2 * (∑ i : Fin (I.V.k (xI D.toDeploy x)), D.nAt x i + D.kS x * D.nC x) * δ₁
 
 /-- **The recursion: zero knowledge with the prover's public stop**, `ZK` restated: of the record's own reference
-prover on the tape each statement's nonce and rest draw (`StopDeploy.prover`: `Deploy.P`, which `Complete` reads),
+prover on the tape each statement's nonce and rest draw (`ZkDeploy.prover`: `Deploy.P`, which `Complete` reads),
 which stops where `stops` says, against every malicious verifier of the compiled verifier's rounds (`ZKmalRx` at
 `D.V.k`), at `SimStop` over the record's outer `--zk` Flock simulators at each attempt budget `t ≥ 1` (`D.SO t`), which
 stops there too: wherever hm96 leaves hide up to `δ₁` at the deployed key, within `εzkStop` plus `γzk` times the

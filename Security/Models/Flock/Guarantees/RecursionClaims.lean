@@ -14,7 +14,7 @@ namespace Flock.Guarantees
 
 /-- **The recursion's claims are stated**: the tuple of the compiled verifier's claims (`KS`, `Bits`, `Efficient`,
 `Complete`, `ScopeMatches`, `ZK`, `Nontrivial`), the private variant's (`KSPriv`, `ZKPriv`), zero knowledge with the
-reference prover's public stop and the pieces it reads (`ZKStop`, `StopDeploy`, `StopDeploy.prover`,
+reference prover's public stop and the pieces it reads (`ZKStop`, `StopDeploy`, `ZkDeploy.prover`,
 `StopDeploy.halted`, `SimStop`, `εzkStop`), the claims at Flock as the inner protocol (`KSFlock`, `BitsFlock`), the
 inner protocol's KS and its KS against provers that may abort (`Inner.KS`, `Inner.KSAbort`), which the proof reads,
 the readable scope (`Scope`, `InScope`) and the decoders the claims quantify over (`decOK`); option (d)'s KS at the
@@ -27,7 +27,7 @@ def RecursionClaimsStated : Prop :=
   let claims := (@Claims.Recursion.KS, @Claims.Recursion.Bits, @Claims.Recursion.Efficient,
     @Claims.Recursion.Complete, @Claims.Recursion.ScopeMatches, @Claims.Recursion.ZK, @Claims.Recursion.Nontrivial,
     @Claims.Recursion.KSPriv, @Claims.Recursion.ZKPriv, @Claims.Recursion.ZKStop, @Claims.Recursion.StopDeploy,
-    @Claims.Recursion.StopDeploy.prover, @Claims.Recursion.StopDeploy.halted, @Claims.Recursion.SimStop,
+    @Claims.Recursion.ZkDeploy.prover, @Claims.Recursion.StopDeploy.halted, @Claims.Recursion.SimStop,
     @Claims.Recursion.εzkStop,
     @Claims.Recursion.KSFlock, @Claims.Recursion.BitsFlock,
     @Claims.Recursion.Inner.KS, @Claims.Recursion.Inner.KSAbort,

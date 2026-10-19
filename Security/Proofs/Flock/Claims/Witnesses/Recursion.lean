@@ -124,13 +124,6 @@ def zkR (Coin : Type) : Recursion.Deploy Coin := { ksR Coin with parse := fun _ 
 def zkPR (Coin : Type) : Recursion.Deploy Coin :=
   { ksR Coin with parse := fun _ => some { recStmt with circ := some [] } }
 
-/-- `zkR` with a stop that never fires: one nonce, one rest, the tape `()`, the outer simulators `SO`, and no commit
-string at an inner round. -/
-def zkSR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
-  { zkR Coin with
-    Nonce := fun _ => Unit, Rest := fun _ => Unit, tapeOf := fun _ _ => (), SO := SO
-    nAt := fun _ _ => 0, innerMsg := fun _ _ _ => .ret [], stops := fun _ _ _ => false }
-
 /-- A masked outer Flock. -/
 noncomputable def zkO (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit := { Flock.ksD Coin with zk := true }
 
@@ -177,6 +170,10 @@ def zkZR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy 
 /-- `zkPR` masked as `zkZR` is. -/
 def zkZPR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.ZkDeploy Coin :=
   { zkPR Coin with Nonce := fun _ => Unit, Rest := fun _ => Unit, tapeOf := fun _ _ => (), SO := SO }
+
+/-- `zkZR` with a stop that never fires and no commit string at an inner round. -/
+def zkSR (Coin : Type) (SO : ℕ → Msg → ℕ → OSim) : Recursion.StopDeploy Coin :=
+  { zkZR Coin SO with nAt := fun _ _ => 0, innerMsg := fun _ _ _ => .ret [], stops := fun _ _ _ => false }
 
 /-- `zvR` at the circuit commitment `circ`, whose reference prover is `zeroP`, masked with the nonce `zeroP` reads, one
 rest and the outer simulators `SO`. -/
