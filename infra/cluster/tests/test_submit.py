@@ -80,6 +80,21 @@ def test_a_guest_gpu_job_goes_to_node_2_its_runner_on_its_shares_cpus_and_its_wo
     assert out["job"]["node"] == "vy-nebius-2" and out["job"]["max_s"] == 600
 
 
+def test_a_guest_cpu_job_on_node_2_claims_whole_cores_of_its_share_at_nice_0():
+    """Every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice orders nothing between their
+    scopes: the placement names the share and the CPUs to claim of it (`research cpu-hold` on the machine), and the wrapper,
+    named on the share, gets the claimed cores in its place."""
+    out = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert out["cores"] == {"cpus": "48-95", "n": 4}
+    assert "AllowedCPUs=48-95" in out["wrap"] and out["wrap"][-3:] == ["taskset", "-c", "48-95"] and "nice" not in out["wrap"]
+    gpu = submit.resolve(model.load(NEBIUS), _job(gpus=1, cpus=4, memory_gib=64), "r1", T)
+    assert "cores" not in gpu, "a GPU job's runner keeps the share at nice 19"
+    home = submit.resolve(model.load(NEBIUS), _job(cpus=4, memory_gib=16), "r1", T)
+    assert home["node"] == "vy-nebius-1" and "cores" not in home
+    owner = submit.resolve(model.load(NEBIUS), _job(project="pous", cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T)
+    assert "cores" not in owner
+
+
 def test_quiet_and_pinned_gpus_reach_gpu_lease():
     out = submit.resolve(model.load(NEBIUS), _job(project="pous", gpus=2, quiet=True, preempt="never", gpu_ids=(3, 4)), "r1", T)
     lease = out["workload_wrap"]
@@ -249,7 +264,8 @@ def test_agent_test_is_placed_on_the_first_of_its_nodes_with_room_beside_the_che
 
     assert put() == {"read": ["vy-nebius-2", "vy-nebius-1", "vy-nebius-cpu-1"], "kind": "agent-test"}
     out = put(_room())
-    assert out["node"] == "vy-nebius-2" and "500 GB free beside its check slots" in out["why"] and "nice" in out["wrap"]
+    assert out["node"] == "vy-nebius-2" and "500 GB free beside its check slots" in out["why"]
+    assert out["cores"] == {"cpus": "48-95", "n": 4} and "nice" not in out["wrap"], "whole cores of its own there (research cpu-hold)"
     out = put(_room(n2=10.0))
     assert out["node"] == "vy-nebius-1" and "CPUWeight=idle" in out["wrap"] and "AllowedCPUs=96-127" in out["wrap"]
     assert "not vy-nebius-2: 10 GB free beside its check slots, under the job's 17 GB" in out["why"]
