@@ -460,9 +460,8 @@ class TP2CaptureWorkerExtension:
         belongs to — the logits all-gather runs after the forward, before the next), `k` (index within the step), kind, the calling
         module (path + class), the partial's shape/dtype and sha256, the received output's sha256; the partial and the output
         tensors of steps < `store_steps` are saved (`coll.rank<r>.step<S>.pt`) for the offline cross-rank provenance check
-        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact); each Marlin MoE align call's
-        schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl` (`moe_align_source.CaptureWitness`).
-        Same wrapping seam as `tp2_sem_install` (module-global collective names); the run's computation is unchanged."""
+        (`pipeline/tp/match.py`: received == AllReduce2(part_rank0, part_rank1) / AllGather2, bit-exact).  The collectives are
+        seen by wrapping their module-global names; the run's computation is unchanged."""
         import hashlib
 
         import torch
@@ -544,7 +543,8 @@ class TP2CaptureWorkerExtension:
                 st["hooks"].wrap(mod, attr, lambda orig, kind=kind: coll_wrap(orig, kind))
         for mod, attr in FN.targets(model):      # [VLLM-12] DeepSeek-V3.2's layers reduce in the norm after them (collectives.fused_norm)
             st["hooks"].wrap(mod, attr, lambda orig: FN.recording(orig, model, st, coll_wrap, lambda: FN.silenced(observer_rec())))
-        # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`)
+        # each MoE layer's align members, which the match oracle pairs with the committed ones (`moe_align_source.CaptureWitness`): each
+        # Marlin MoE align call's schedule witness, at its position among the step's collectives, goes to `align.rank<r>.jsonl`
         from verity_vllm.acquire.sources.moe_align_source import capture_witness
         st["witness"] = capture_witness(model, rank, lambda: st["k"], lambda: FN.silenced(observer_rec()))
 
