@@ -1179,6 +1179,22 @@ def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes
     assert E2E.decode_key() == "decode_b1" and E2E.CAPTURE_SIZES == [1]
 
 
+def test_a_prefill_point_off_8192_tokens_names_its_key():
+    """``--prefill`` off the panel's 8,192 tokens keys the prefill row by its length, so `panel_rows.py` (``prefill_8192``)
+    never reads it as the panel's prefill row."""
+    E2E = load("pearl_c_vllm_e2e_prefill", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64, prefill=2560))
+    assert (E2E.prefill_key(), E2E.PREFILL) == ("prefill_2560", 2560)
+    assert E2E.SHAPES == {"prefill_2560": "e2e-llama31-8b-vllm-m2560", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+    assert len(E2E.prompts(1)["prefill"][0]) == 2560
+    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
+    assert set(t["pearlc"]["timing"]) == {"prefill_2560_s", "prefill_2560_gemm_s", "decode_b32_step_s", "decode_b32_step_gemm_s"}
+    assert set(t["pearlc"]["reps"]) == {"prefill_2560", "decode_b32"} and list(E2E.split(t)) == ["prefill_2560", "decode_b32_step"]
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+
+
 def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tmp_path):
     NS = load("pearl_c_vllm_noise_sweep", KERNEL.parent / "pearl_c_vllm" / "noise_sweep.py")
     fp8 = [10.0, 12.0, 14.0, 20.0, 22.0, 24.0]                       # two cycles of three fp8 reps
@@ -1314,6 +1330,61 @@ def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypat
     assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "s512_tile_leaves", "flash_fwd_splitkv_kernel",
                                      "some_device_kernel_x")] == [
         "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
+
+
+def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segment_launchs_step(monkeypatch):
+    """hash_fast.cuh's segment kernels are their step's, and a ``s512_folds`` launch, which A's row digests and the tile leaves
+    both run, is the step of the segment launch before it on its stream.  A Triton ``kernel``, which stock FP8 launches too, isn't
+    the records' screen (``screen``, ``scatter``)."""
+    monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    assert [SP.category(k) for k in ("s512_row_segs", "s512_tile_segs", "s512_heads", "s512_folds", "lines", "s512_seeds", "scatter",
+                                     "kernel")] == [
+        "pearlc:row_digests", "pearlc:tile_hash", "pearlc:setup", "pearlc:folds", "pearlc:lines_a", "pearlc:seeds", "pearlc:screen",
+        "other"]
+    rows = [(0, 1, "s512_row_segs", 7), (1, 2, "s512_tile_segs", 9), (2, 3, "s512_folds", 7), (3, 4, "s512_folds", 9),
+            (4, 5, "s512_folds", 11), (5, 6, "s512_tile_segs", 7), (6, 7, "s512_folds", 7)]
+    assert [r[4] for r in SP._folds(rows)] == ["pearlc:row_digests", "pearlc:tile_hash", "pearlc:row_digests", "pearlc:tile_hash",
+                                               "pearlc:folds", "pearlc:tile_hash", "pearlc:tile_hash"]
+
+
+def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monkeypatch, tmp_path):
+    """A pass's end (its transcript tree, after the generate) is timed apart from the generate, its tree kernels counted as the
+    transcript tree's; the decode step's split is (dn − d1) / 64 of both."""
+    import sqlite3
+    monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    ms, g = 1_000_000, 5 << 24
+    names = ["s512_row_segs", "s512_folds", "s512_tile_segs", "gemm_pearlc", "form_s5", "flash_fwd", "s512_pads", "s512_nodes",
+             "lines", "screen"]
+    db = tmp_path / "p.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
+    con.executemany("INSERT INTO StringIds VALUES (?, ?)", list(enumerate(names)))
+    con.execute("CREATE TABLE NVTX_EVENTS (start INTEGER, end INTEGER, text TEXT, globalTid INTEGER, textId INTEGER)")
+    nvtx = [(90, 260, "pass"), (100, 200, "gen|pearlc|prefill|1"), (300, 315, "pass"), (300, 310, "gen|pearlc|d1|1"),
+            (400, 530, "pass"), (400, 500, "gen|pearlc|dn|1"), (600, 700, "gen|pearlc|prefill|0")]
+    con.executemany("INSERT INTO NVTX_EVENTS VALUES (?, ?, ?, ?, NULL)", [(s * ms, e * ms, t, g) for s, e, t in nvtx])
+    con.execute("CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER, end INTEGER, shortName INTEGER, globalPid INTEGER, "
+                "streamId INTEGER)")
+    k = [(110, 111, 0, 7), (111, 111.5, 1, 7), (120, 122, 2, 9), (122, 122.5, 1, 9), (130, 134, 3, 7), (135, 136, 4, 7),
+         (140, 141, 5, 7), (150, 150.5, 8, 7), (151, 151.25, 9, 7),
+         (210, 210.5, 6, 7), (211, 212, 7, 7),                       # the prefill pass's end
+         (305, 306, 3, 7), (311, 312, 7, 7),                         # d1, and its pass's end
+         (405, 469, 3, 7), (510, 575, 7, 7)]                         # dn, and its pass's end
+    con.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, ?, ?)", [(int(s * ms), int(e * ms), n, g, st) for s, e, n, st in k])
+    con.commit()
+    doc = SP.analyze(db)
+    pre = doc["phases"]["pearlc"]["prefill"]
+    assert pre["n"] == 1 and pre["pass_end_ms"] == pytest.approx(60.0)
+    assert pre["by_category_ms"] == pytest.approx({"pearlc:row_digests": 1.5, "pearlc:tile_hash": 2.5, "pearlc:gemm": 4.0, "pearlc:forming": 1.0,
+                                                   "attention": 1.0, "pearlc:lines_a": 0.5, "pearlc:screen": 0.25})
+    assert pre["pass_end_by_category_ms"] == pytest.approx({"pearlc:a_tree": 1.5})
+    assert pre["hash_split_ms"] == pytest.approx({"tile_leaves": 2.5, "a_rows": 2.0, "transcript_tree": 1.5, "screen": 0.25,
+                                                  "forming_gemm": 5.0, "hashing": 6.25})
+    step = doc["phases"]["pearlc"]["step"]
+    assert step["pass_end_ms"] == pytest.approx((30 - 5) / 64) and step["by_category_ms"]["pearlc:gemm"] == pytest.approx(63 / 64)
+    assert step["hash_split_ms"]["transcript_tree"] == pytest.approx(1.0) and step["hash_split_ms"]["hashing"] == pytest.approx(1.0)
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
