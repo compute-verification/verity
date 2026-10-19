@@ -2,7 +2,8 @@
 or a PoUW workload), one line per (GPU, workload:arm), read from the evidence store
 (`research data select --label campaign=hash-loop --kind bench-result/v1`: each run's result, its measures per arm in its
 measurements, its iteration (`row`), GPU (`hardware`) and workload (`arm`, e.g. qwen3-8b, or llama8b-int8:commit+mem for a result
-that is one arm) in its labels; a result with no `arm` label is qwen3-8b's). Results whose gates passed and that are not labeled
+that is one arm) in its labels; a result with no `arm` label is qwen3-8b's; a PoUW result, `arm` pearl-c-*, is drawn as workload
+pouw, its decode step with the hashing against without, `pouw_headline`). Results whose gates passed and that are not labeled
 kernel_outcome=voided are plotted (a failed or voided run stays in the JSON); several at one (iteration, GPU) are averaged, each also drawn as a dot. A what-if row (not an integer, e.g.
 what-if-a) is in the table only. The table marks each row pinned or unpinned (the result's served-pin state).
 
@@ -35,6 +36,25 @@ def research(*args: str) -> str:
     return subprocess.run(["research", *args], check=True, capture_output=True, text=True).stdout
 
 
+def pouw_headline(ms: list[dict]) -> dict[tuple[str, str], float]:
+    """A PoUW result's headline (workload pearl-c-*): its decode B32 step with the hashing over the same step without it
+    (pearlc vs pearlc-nohash; the whole-step window where the result has several), as pouw:sha512's tpot and throughput overhead."""
+    step: dict[str, float] = {}
+    for m in ms:
+        name, arm, v = m.get("name", ""), str(m.get("arm") or ""), m.get("value")
+        if v is None:
+            continue
+        if name.endswith(".decode_b32_step_s"):
+            step.setdefault(name.split(".")[0], float(v))
+        elif name == "decode_step_ms" and arm.startswith("whole:"):
+            step[arm.split(":", 1)[1]] = float(v) / 1e3
+    on, off = step.get("pearlc"), step.get("pearlc-nohash")
+    if not (on and off):
+        return {}
+    return {("pouw:sha512", "tpot_overhead_pct"): round(100 * (on / off - 1), 3),
+            ("pouw:sha512", "throughput_overhead_pct"): round(100 * (1 - off / on), 3)}
+
+
 def load(refresh: bool = True) -> list[dict]:
     """Every hash-loop result: {id, row, hardware, label, outcome, source, run, pin, measures: {(workload:arm, name): value}}."""
     if refresh:     # a run's result is published from its node; this store indexes it only once refreshed
@@ -50,8 +70,11 @@ def load(refresh: bool = True) -> list[dict]:
             labels[lab["key"]] = str(lab["value"])
         meta = (man.get("manifest") or man).get("meta") or {}
         workload = labels.get("arm", WORKLOAD)
-        meas = {(f"{workload}:{m['arm']}" if m.get("arm") else workload, m["name"]): m["value"]
-                for m in meta.get("measurements") or [] if m.get("value") is not None}
+        if workload.startswith("pearl-c-"):
+            meas = pouw_headline(meta.get("measurements") or [])
+        else:
+            meas = {(f"{workload}:{m['arm']}" if m.get("arm") else workload, m["name"]): m["value"]
+                    for m in meta.get("measurements") or [] if m.get("value") is not None}
         row: int | str = labels.get("row", "")
         try:
             row = int(row)
