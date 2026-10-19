@@ -48,7 +48,7 @@ DC_DEV void tc_cp(const OpArgs& a) {
   tc_words(r0, r1);
   if (lane < 8) sh[w][lane] = 0;
   __syncwarp();
-  const uint32_t t0 = smem_u32(&sh[w][0]), a0 = t0 + 4u * (lane & zm);
+  const uint32_t a0 = smem_u32(&sh[w][0]) + 4u * (lane & zm);
   uint32_t* wi = cp_words(a, 16, (int)w, lane);
   auto fold = [&] {
 #pragma unroll
@@ -63,8 +63,8 @@ DC_DEV void tc_cp(const OpArgs& a) {
     OP_DONE
   } else if (w >= 4) {
     OP_UNTIL(n) {
-      cp_trip<CP>(l, fold, a0, t0, wi, lane);
-      cp_trip<CP>(l, fold, a0 + 16u, t0 + 16u, wi + 4, lane);
+      cp_trip<CP>(l, fold, a0, wi);
+      cp_trip<CP>(l, fold, a0 + 16u, wi + 4);
       wi += 8;
     }
     OP_TRIPS(n)

@@ -80,8 +80,8 @@ __device__ __forceinline__ uint32_t xor8x(const uint32_t (&y)[8]) {
 
 enum { CP_SEG4, CP_ATS, CP_ATS2, CP_ATS8, CP_RED, CP_RED2, CP_RED8, CP_N };
 static const char* const CP_NAMES[CP_N] = {"seg4", "ats", "ats2", "ats8", "red", "red2", "red8"};
-constexpr bool cp_shared(int cp) { return cp == CP_ATS || cp == CP_ATS2 || cp == CP_ATS8; }
-constexpr bool cp_global(int cp) { return cp == CP_RED || cp == CP_RED2 || cp == CP_RED8; }
+__host__ __device__ constexpr bool cp_shared(int cp) { return cp == CP_ATS || cp == CP_ATS2 || cp == CP_ATS8; }
+__host__ __device__ constexpr bool cp_global(int cp) { return cp == CP_RED || cp == CP_RED2 || cp == CP_RED8; }
 constexpr int CK_NONE = CP_N;  // the timed loops' no-checkpoint form: the chains alone
 
 // One segment's checkpoint into slot j (0..3) of the trip: the shared form into the word at sbase + 4 j, the global
@@ -113,20 +113,22 @@ __device__ __forceinline__ uint32_t cp_seg(const uint32_t (&y)[8], uint32_t sbas
   }
   return 0;
 }
-// The trip's tail after its four segments: CP_SEG4 lane 0's STG.128 of the four words; the shared forms read the
-// buffer's four words (one LDS.128, after a __syncwarp that orders every lane's atomics before it), lane 0 stores
-// them, and the buffer is zeroed for the trip after next. dst: the trip's 16 bytes of checkpoints. Returns the words'
-// XOR (the exact kernel's; the timed loops drop it, their stores are their sink).
+// The trip's tail after its four segments: CP_SEG4's STG.128 of the four words; the shared forms read the buffer's
+// four words (one LDS.128, after a __syncwarp that orders every lane's atomics before it), store them, and zero the
+// buffer for the trip after next. Every lane stores the same 16 bytes to dst (the words are warp-uniform), so no lane
+// predicate stays live beside the tensor's accumulator, and sbuf is the atomics' own address (lane & zm, 0 at run
+// time), so the buffer's base needs no register of its own. dst: the trip's 16 bytes of checkpoints. Returns the
+// words' XOR (the exact kernel's; the timed loops drop it, their stores are their sink).
 template <int CP>
-__device__ __forceinline__ uint32_t cp_tail(const uint32_t (&keep)[4], uint32_t sbuf, void* dst, int lane) {
+__device__ __forceinline__ uint32_t cp_tail(const uint32_t (&keep)[4], uint32_t sbuf, void* dst) {
   if constexpr (CP == CP_SEG4) {
-    if (lane == 0) stg128(dst, make_uint4(keep[0], keep[1], keep[2], keep[3]));
+    stg128(dst, make_uint4(keep[0], keep[1], keep[2], keep[3]));
     return 0;
   }
   if constexpr (cp_shared(CP)) {
     __syncwarp();
     const uint4 v = lds128(sbuf);
-    if (lane == 0) stg128(dst, v);
+    stg128(dst, v);
     sts128_zero(sbuf);
     return v.x ^ v.y ^ v.z ^ v.w;
   }
@@ -168,7 +170,7 @@ __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ word
       }
       keep[j] = cp_seg<CP>(y, sbuf, gw0 + 4 * u4, j);
     }
-    cp_tail<CP>(keep, sbuf - 4u * (lane & zm), reinterpret_cast<uint4*>(out) + u4, lane);
+    cp_tail<CP>(keep, sbuf, reinterpret_cast<uint4*>(out) + u4);
   }
 #pragma unroll
   for (int c = 0; c < 8; c++) out[U + 8 * lane + c] = y[c];
@@ -251,17 +253,17 @@ static int run_exact(int U) {
 // wi[0..3], the second into buffer B and wi[4..7], then wi += 8: the buffers' parity is static and the global words are a
 // run of fresh ones, so the loop holds no address arithmetic but the pointer's add (no LOP3 or IMAD of its own; the gate's
 // LOP3 and IMAD counts are the fold's and the checkpoint's). A trip is 4 segments, each `fold()` (one segment's 64 LOP3 and
-// 64 IMAD a lane: 4096 words a warp, a unit) and its checkpoint, then the trip's tail. a: the buffer's atomic address (with
-// lane & zm), t: its lane-free base (the tail's LDS and STS).
+// 64 IMAD a lane: 4096 words a warp, a unit) and its checkpoint, then the trip's tail. a: the buffer's address (with
+// lane & zm).
 template <int CP, class Fold>
-__device__ __forceinline__ void cp_trip(Lane& l, Fold&& fold, uint32_t a, uint32_t t, uint32_t* wi, int lane) {
+__device__ __forceinline__ void cp_trip(Lane& l, Fold&& fold, uint32_t a, uint32_t* wi) {
   uint32_t keep[4] = {0, 0, 0, 0};
 #pragma unroll
   for (int j = 0; j < 4; j++) {
     fold();
     if constexpr (CP != CK_NONE) keep[j] = cp_seg<CP>(l.r, a, wi, j);
   }
-  if constexpr (CP != CK_NONE) cp_tail<CP>(keep, t, wi, lane);
+  if constexpr (CP != CK_NONE) cp_tail<CP>(keep, a, wi);
 }
 // A warp's run of global words: 16 a loop iteration of `iters` (twice what a fixed loop writes, so an until loop that
 // runs up to 2 iters trips stays in its own), every warp of every block its own.
@@ -282,7 +284,7 @@ DC_DEV void lr_body(const OpArgs& a) {
   const uint32_t zm = (uint32_t)a.mode;
   if (lane < 8) sh[wp][lane] = 0;
   __syncwarp();
-  const uint32_t t0 = smem_u32(&sh[wp][0]), a0 = t0 + 4u * (lane & zm);
+  const uint32_t a0 = smem_u32(&sh[wp][0]) + 4u * (lane & zm);
   uint32_t* wi = cp_words(a, W, wp, lane);
   auto fold = [&] {
 #pragma unroll
@@ -293,8 +295,8 @@ DC_DEV void lr_body(const OpArgs& a) {
   };
   OP_BEGIN
   OP_LOOP(it) {
-    cp_trip<CP>(l, fold, a0, t0, wi, lane);
-    cp_trip<CP>(l, fold, a0 + 16u, t0 + 16u, wi + 4, lane);
+    cp_trip<CP>(l, fold, a0, wi);
+    cp_trip<CP>(l, fold, a0 + 16u, wi + 4);
     wi += 8;
   }
   OP_END

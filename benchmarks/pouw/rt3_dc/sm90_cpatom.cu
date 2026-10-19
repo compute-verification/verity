@@ -13,6 +13,18 @@
 
 #include "cpatom.cuh"
 
+// group4 with every wgmma accumulating: the iteration's second group, so the first group's D is read (with group4's
+// overwrite there, ptxas drops the first group as dead).
+template <class F>
+DC_DEV void group4_acc(typename F::Acc (&d)[F::NA], const Tiles& t) {
+  wgmma_fence();
+  F::mma(d, t, 1);
+  F::mma(d, t, 1);
+  F::mma(d, t, 1);
+  F::mma(d, t, 1);
+  wgmma_commit();
+}
+
 template <int CP>
 DC_DEV void wg_cp(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
@@ -24,7 +36,7 @@ DC_DEV void wg_cp(const OpArgs& a) {
   const uint32_t zm = (uint32_t)a.mode;
   if (lane < 8) sh[wp][lane] = 0;
   __syncwarp();
-  const uint32_t t0 = smem_u32(&sh[wp][0]), a0 = t0 + 4u * (lane & zm);
+  const uint32_t a0 = smem_u32(&sh[wp][0]) + 4u * (lane & zm);
   uint32_t* wi = cp_words(a, 8, wp, lane);
   auto fold = [&] {
 #pragma unroll
@@ -36,10 +48,10 @@ DC_DEV void wg_cp(const OpArgs& a) {
   OP_BEGIN
   OP_LOOP(it) {
     group4<F_s8_n256>(d, t);
-    cp_trip<CP>(l, fold, a0, t0, wi, lane);
+    cp_trip<CP>(l, fold, a0, wi);
     wgmma_wait<0>();
-    group4<F_s8_n256>(d, t);
-    cp_trip<CP>(l, fold, a0 + 16u, t0 + 16u, wi + 4, lane);
+    group4_acc<F_s8_n256>(d, t);
+    cp_trip<CP>(l, fold, a0 + 16u, wi + 4);
     wgmma_wait<0>();
     wi += 8;
   }
