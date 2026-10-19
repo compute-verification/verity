@@ -31,9 +31,16 @@ CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
 # CA's H1V3 (cursor/h1-v3-1172, with the wrap correction and the peel, z = A B^T) at its pinned head: dither_one's gate
-# runs its h1tile.reference
+# runs its h1tile.reference.  From this repository, else (the node's lacks the commit) the archive sent with the run:
+# `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`, `research run --send` it
 H1V3_SHA=${H1V3_SHA:-ec5df3ec49}
-mkdir -p "$S/h1v3" && git archive "$H1V3_SHA" verity 2>/dev/null | tar -x -C "$S/h1v3" && [ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
+mkdir -p "$S/h1v3"
+if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then
+  git archive "$H1V3_SHA" verity | tar -x -C "$S/h1v3"
+elif [ -f "$D/inputs/h1v3-$H1V3_SHA.tar.gz" ]; then
+  tar -xzf "$D/inputs/h1v3-$H1V3_SHA.tar.gz" -C "$S/h1v3"
+fi
+[ -f "$S/h1v3/verity/core/protocols/pouw/circuit/h1tile.py" ] \
   && export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA || echo "sbench: no H1V3 tree at $H1V3_SHA"
 # ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
