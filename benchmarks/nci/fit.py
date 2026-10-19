@@ -1,31 +1,37 @@
-"""The fit bound: when no server can hold a model that reaches the target loss, training must cross servers, and every
-crossing is a server's intake.
+"""The fit bound: when no server window can hold a model that reaches the target loss, a token's work spans windows, and
+every window it enters reads its state.
 
 The memory cap's closed form in ``tiers.py``, mu = 4 R_wipe lambda_in / (kappa d b_w b_a F), needs (d, e)-threading at the
 scale of a wipe window. The proved layered threading (``ThreadedOfLayered``) gives it only while a region holds less than
 one embedding column's worth of state: a window holding the embedding and the first layers computes a token's work from
 its 17-bit id. The fit bound needs threading only at server scale, where the loss premise makes it hold. Its premises, per
-server window from one wipe to the next:
+server window of whole wipe periods (``tiers.windows_bound``'s windows):
 
-* F1, capacity (C1 per weight, not per region): a window that multiplies p distinct updated weights reads at least b_w
-  bits for each of them, the weight half of ``WeightsIncompressible`` at window scale. Master weights, optimizer state and
-  stored activations only add to it; ``B_TRAIN`` is the training-storage premise that charges them.
-* F2, state: a window reads at most S = R_wipe + lambda_in T_wipe bits.
+* F1, capacity (C1 per weight, not per region): a window that multiplies p distinct updated weights and works on e tokens
+  it didn't start reads at least b_w p + w_e e bits: the weight half of ``WeightsIncompressible`` at window scale, with
+  F4's w_e as its thread half. Master weights, optimizer state and stored activations only add to it; ``B_TRAIN`` is the
+  training-storage premise that charges them.
+* F2, state: a window of L seconds reads at most S = R_wipe + lambda_in L bits, lambda_in = sigma + tau + alpha F
+  (``tiers.ingress``): the residual at the wipe that opens it and its intake. What crosses a later wipe inside it isn't
+  novel; what crosses the one that opens it is, so a token carried across a wipe in the residual pays like one carried in.
 * F3, loss (empirical): every sequence's computation in a model that reaches the target loss L* depends on at least N*
   updated weights beyond the registered models; ``n_star`` reads N* off a loss law, at no data limit unless given one.
-* F4, boundary (empirical): a window that does work on a token it didn't start reads at least w_e bits of that token's
-  values: its hidden state crossing in and its gradient crossing back, or its context's keys and values, which cost more.
-* F5, intake: a server reads at most lambda_in = sigma + tau + alpha F bits per second (``tiers.ingress``).
+* F4, boundary (empirical): one window starts each token, from its id; any other window that does work on it reads at
+  least w_e bits of its values: its hidden state crossing in and its gradient crossing back, or its context's keys and
+  values, which cost more. An ensemble, whose members each start the token, is outside it.
 
-A token then visits k >= k0 = ceil(N* b_w / S) windows, gets at most 2 S / b_w counted multiplications in each, and pays
-w_e in all but the one that starts it, so when k0 >= 2 the fleet's counted multiplications per server-second are at most
+A token's start window gives it at most S / b_w of its N* weights, so the windows it enters give it at least the rest,
+and its work is at most k' / (k' - 1) times its work there, k' = N* b_w / S. A window that enters e tokens with p weights
+does at most 2 p e of their work, and b_w p + w_e e <= S caps p e at S^2 / (4 b_w w_e). A window therefore does at most
 
-    2 lambda_in S k0 / ((k0 - 1) b_w w_e),
+    2 N* S^2 / (4 w_e (N* b_w - S))
 
-a share 4 lambda_in S k0 / (kappa (k0 - 1) b_w w_e F) of server FLOP. Against the closed form the ratio is
-(S / R_wipe) (d b_a / w_e) k0 / (k0 - 1): the window bound with the thread's entry fee d b_a measured at server scale.
-When S >= N* b_w the bound is void, and what remains is the replica attack (``replica``): a server-sized model synced
-through intake, which reaches L* only if it holds N* weights at its training precision.
+counted multiplications: ``tiers.region_cap``'s 2 K^2 / (4 d b_w b_a) with the thread's entry fee d b_a replaced by
+w_e (k' - 1) / k', paid at window scale. Over its length, at the least over window lengths, it bounds counted
+multiplications per server-second, as the closed form does at d b_a (which reaches its least at L = R_wipe / lambda_in).
+When a one-period window holds N* weights (S >= N* b_w) the bound is void, and what remains is the replica attack
+(``replica``): a server-sized model synced through intake, which reaches L* only if it holds N* weights at its training
+precision.
 
     python benchmarks/nci/fit.py            # the table at r = 0.255 and mfu 0.4
     python benchmarks/nci/fit.py --json     # the same rows, for other renderers
@@ -127,21 +133,33 @@ def intake(p: dict) -> float:
     return T.ingress(p, T.TIERS["T3"])
 
 
-def state(p: dict, wipe_bits: float) -> float:
-    """F2's S: what a server window from one wipe to the next reads."""
-    return wipe_bits + intake(p) * p["wipe_s"]
+def state(p: dict, wipe_bits: float, periods: int = 1) -> float:
+    """F2's S: what a server window of ``periods`` whole wipe periods reads."""
+    return wipe_bits + intake(p) * periods * p["wipe_s"]
 
 
-def servers(S: float, N: float, b: float) -> int:
-    """k0: the fewest windows a token visits when each holds at most ``S / b`` of its ``N`` weights."""
-    return math.ceil(N * b / S)
+def visits(S: float, N: float, b: float) -> float:
+    """k': the windows' worth of weights a token's ``N`` needs when each window holds at most ``S / b``."""
+    return N * b / S
 
 
-def fit_rate(p: dict, S: float, N: float, w_e: float, b: float | None = None) -> float:
-    """Counted multiplications per server-second under F1-F5, or ``inf`` when one window holds ``N`` weights."""
+def window_mults(S: float, N: float, w_e: float, b: float) -> float:
+    """The most counted multiplications a window reading ``S`` bits does under F1-F4, or ``inf`` once it holds ``N``
+    weights."""
+    return 2 * N * S ** 2 / (4 * w_e * (N * b - S)) if S < N * b else math.inf
+
+
+def fit_rate(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> tuple[float, int]:
+    """Counted multiplications per server-second under F1-F4, the least over windows of whole wipe periods, and the
+    periods of the window that gives it; ``(inf, 0)`` when a one-period window holds ``N`` weights."""
     b = p["b_w"] if b is None else b
-    k = servers(S, N, b)
-    return 2 * intake(p) * S * k / ((k - 1) * b * w_e) if k >= 2 else math.inf
+    best, periods, m = math.inf, 0, 1
+    while (S := state(p, wipe_bits, m)) < N * b:
+        rate = window_mults(S, N, w_e, b) / (m * p["wipe_s"])
+        if rate < best:
+            best, periods = rate, m
+        m += 1
+    return best, periods
 
 
 def share(p: dict, rate: float) -> float:
@@ -195,17 +213,19 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     R = closed["wipe_state_bits"]
     S = state(p, R)
     declared = closed["declared"]
-    mu = {k: share(p, fit_rate(p, S, N, w)) for k, w in BOUNDARY.items()}
-    mu_train = share(p, fit_rate(p, S, N, BOUNDARY["central"], B_TRAIN["central"]))
+    fits = {k: fit_rate(p, R, N, w) for k, w in BOUNDARY.items()}
+    mu = {k: share(p, rate) for k, (rate, _) in fits.items()}
+    rate_train, periods_train = fit_rate(p, R, N, BOUNDARY["central"], B_TRAIN["central"])
+    mu_train = share(p, rate_train)
     rep = replica(p, S, L, B_TRAIN["central"], fit)
     path = replica(p, S, L, B_TRAIN["central"], fit, PATH_GAIN["smalltalk"], PATH_MULTIPLIER["smalltalk"], 0.0)
     return {
-        "wipe_gb": wipe_gb, "state_gb": S / T.GB, "k0": servers(S, N, p["b_w"]),
+        "wipe_gb": wipe_gb, "state_gb": S / T.GB, "visits": visits(S, N, p["b_w"]), "periods": fits["central"][1],
         "mu_closed": closed_form(p, R), "D_closed": closed["dampener"],
         "mu_fit": mu["central"], "D_fit": dampener(p, mu["central"], declared),
         "D_fit_low": dampener(p, mu["low"], declared), "D_fit_high": dampener(p, mu["high"], declared),
         "fit_over_closed": mu["central"] / closed_form(p, R),
-        "k0_train": servers(S, N, B_TRAIN["central"]), "mu_fit_train": mu_train,
+        "visits_train": visits(S, N, B_TRAIN["central"]), "periods_train": periods_train, "mu_fit_train": mu_train,
         "D_fit_train": dampener(p, mu_train, declared),
         "replica": rep, "D_replica": attack_dampener(p, rep["efficiency"]),
         "path": path, "D_path": attack_dampener(p, path["efficiency"]),
@@ -251,22 +271,25 @@ def main(argv: list[str] | None = None) -> int:
     print(f"r = {R_SHARE}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
           f"{T.DEFAULTS['wipe_s']:.0f} s, b_w = {T.DEFAULTS['b_w']}, w_e = "
           + " / ".join(f"{w:.0f}" for w in BOUNDARY.values()) + " bits (low / central / high)\n")
-    print(f"{'R_wipe':>7} {'S':>8} {'k0':>3} {'mu_closed':>10} {'D_closed':>8} {'mu_fit':>9} {'D_fit':>6} "
+    print("S and k' = N* b_w / S at one wipe period; L, the window in wipe periods at which the fit bound is least\n")
+    print(f"{'R_wipe':>7} {'S':>8} {'k':>5} {'mu_closed':>10} {'D_closed':>8} {'L':>3} {'mu_fit':>9} {'D_fit':>6} "
           f"{'D_fit, w_e low-high':>19} {'fit/closed':>10}")
     for r in s["rows"]:
-        void = r["k0"] < 2
-        fit_cols = (f"{'void':>9} {_d(r['D_none']):>6}" if void else
-                    f"{r['mu_fit']:9.3g} {_d(r['D_fit']):>6} {_d(r['D_fit_low']) + ' - ' + _d(r['D_fit_high']):>19} "
-                    f"{r['fit_over_closed']:10.2f}")
-        print(f"{r['wipe_gb']:5.0f}GB {r['state_gb']:6.1f}GB {r['k0'] if not void else '-':>3} {r['mu_closed']:10.3g} "
+        void = r["periods"] == 0
+        fit_cols = (f"{'-':>3} {'void':>9} {_d(r['D_none']):>6}" if void else
+                    f"{r['periods']:3d} {r['mu_fit']:9.3g} {_d(r['D_fit']):>6} "
+                    f"{_d(r['D_fit_low']) + ' - ' + _d(r['D_fit_high']):>19} {r['fit_over_closed']:10.2f}")
+        print(f"{r['wipe_gb']:5.0f}GB {r['state_gb']:6.1f}GB {r['visits']:5.2f} {r['mu_closed']:10.3g} "
               f"{_d(r['D_closed']):>8} {fit_cols}")
     print(f"\nAt {B_TRAIN['central']:.0f} bits per trained weight (the training-storage premise): the fit bound, the "
           f"replica attack, and a x{PATH_GAIN['smalltalk']:.1f} path composition at m {PATH_MULTIPLIER['smalltalk']}")
-    print(f"{'R_wipe':>7} {'k0':>3} {'D_fit':>6} {'replica':>8} {'tokens to L*':>12} {'m':>7} {'D':>6} "
+    print(f"{'R_wipe':>7} {'k':>5} {'L':>3} {'D_fit':>6} {'replica':>8} {'tokens to L*':>12} {'m':>7} {'D':>6} "
           f"{'path, dense':>11} {'m':>7} {'D':>6}")
     for r in s["rows"] + s["replica_rows"]:
         rep, path = r["replica"], r["path"]
-        print(f"{r['wipe_gb']:5.0f}GB {r['k0_train']:>3} {_d(r['D_fit_train']) if r['k0_train'] >= 2 else 'void':>6} "
+        void = r["periods_train"] == 0
+        print(f"{r['wipe_gb']:5.0f}GB {r['visits_train']:5.2f} {'-' if void else r['periods_train']:>3} "
+              f"{'void' if void else _d(r['D_fit_train']):>6} "
               f"{rep['params'] / 1e9:7.0f}B {rep['tokens']:12.3g} {rep['m']:7.2g} {_d(r['D_replica']):>6} "
               f"{path['dense_params'] / 1e9:10.0f}B {path['m']:7.2g} {_d(r['D_path']):>6}")
     rep = s["replica_rows"][0]["replica"]
