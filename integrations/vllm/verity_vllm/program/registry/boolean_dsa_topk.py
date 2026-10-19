@@ -4,7 +4,11 @@ tests/program/test_dsa_topk.py holds equal to them.
     DsaTopKOneHot_v1{N}           (idx: 32 bits) -> N bits: bit j is idx == j (unsigned); traced, no word Definition
     DsaTopKVerdict_v1{N,TOPK}     (members: N bits, scores: N x 32 bits) -> bit; traced, no word Definition
     DsaTopKOrder_v2{N,TOPK}       (scores: N x 32 bits, order: TOPK x 32 bits) -> bit; word view DsaTopKOrder_v1
-    DsaGatherRows_v2{N,TOPK,W}    (order: TOPK x 32 bits, rows: N x W x 16 bits) -> TOPK x W x 16 bits; word view DsaGatherRows_v1
+    Xor3x16_v2, Xor3x32_v2        (a, b, c: 16 or 32 bits) -> 16 or 32 bits; word views their _v1
+    DsaWaksmanSwap_v2{W,E}        (s: bit, a, b: W x E bits) -> 2 x W x E bits; word view DsaWaksmanSwap_v1
+    DsaWaksmanPick_v2{W,E}        (s: bit, a, b: W x E bits) -> W x E bits; word view DsaWaksmanPick_v1
+    DsaWaksmanRows_v2{N,K,W,E}    (sw: bits, rows: N x W x E bits) -> K x W x E bits; word view DsaWaksmanRows_v1
+    DsaWaksmanOrder_v2{N,TOPK}    (sw: bits) -> TOPK x 32 bits; word view DsaWaksmanOrder_v1
 
 `DsaTopKOrder_v2` is the selection relation in gates.  Each slot's index is decoded to N bits (`DsaTopKOneHot`, one AND per
 output past a shared decoder of about sqrt(N) gates, the index's 32 - b high bits required zero, b = ceil(log2 N)), and the slots'
@@ -16,22 +20,25 @@ Why that is the relation: sum_j m_j <= sum_j #{s : order[s] = j} = #{s : order[s
 when every slot is in range and no two are equal.  The members are then the TOPK slots' indices, and they are the top-TOPK set
 exactly when each precedes every non-member.  A slot past N, a negative one or a repeated one fails the count.
 
-`DsaGatherRows_v2` is `boolean_gather.Embedding_v2{V=N, H=W}` per slot: W gathers of 16 bits by the slot's 32-bit index.
+`DsaWaksmanRows_v2` is `dsa_topk`'s network with each switch a word-wise `SelectBf16_v2` (one AND a bit) and `Xor3x16_v2` (none):
+one AND a payload bit a switch.  `DsaWaksmanOrder_v2` is the same network over the indices' constant bits.
 
 Cost at GLM-5.3's statics (TOPK 2048, rows of kv_lora 512 + rope 64 = 576 bf16; two-input ANDs counted over the bodies, run
-r20261018-232448-2766): `DsaTopKOrder_v2{N=2049}` is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and 2,150 more a key;
-`DsaGatherRows_v2` is about N + 30 an output bit, 39,239,811,072 at N = 2049.  A decode step past an I2048 prompt checks the
-order on the 21 indexer layers (100.3M) and gathers on all 78 (3.06T).
+r20261018-232448-2766 for the relation): `DsaTopKOrder_v2{N=2049}` is 4,777,016 (2,211 a slot's decode, 248,888 the verdict) and
+2,150 more a key; `DsaWaksmanRows_v2{N=2049,K=2048,W=576,E=16}` is 20,493 switches x 9,216 bits = 188,863,488 and
+`DsaWaksmanOrder_v2{N=2049}` 655,776.  A decode step past an I2048 prompt routes and checks the order on the 21 indexer layers and
+reads its rows on all 78 (the mux it replaces, `Embedding_v2` per slot, was about N + 30 an output bit: 3.06T a step).
 """
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.refs import Coll
+from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.ops.boolean import elementwise as EW
-from verity_vllm.program.registry import boolean_gather as BGa
+from verity.ml.circuits.ops.boolean import scalar as SC
 from verity_vllm.program.registry import dsa_topk as T
 
 BIT = BL.BIT
@@ -153,15 +160,69 @@ def _order(B, S, scores, order):
 DsaTopKOrderV2 = EW.on_bits("DsaTopKOrder", 2, ["N", "TOPK"], _sig_order, _order, T.DsaTopKOrder)
 
 
-def _sig_rows(S):
-    return (("order", Array(S.TOPK, I32)), ("rows", Array(S.N, Array(S.W, BF16)))), Array(S.TOPK, Array(S.W, BF16))
+def _xor3(C, a, b, c):
+    return [x ^ y ^ z for x, y, z in zip(a, b, c)]
 
 
-def _rows(B, S, order, rows):
-    """`DsaGatherRows_v1` on bits: slot s is `Embedding_v2{V=N, H=W}`(order[s], rows)."""
-    return B.batch(bind(BGa.Embedding, V=S.N, H=S.W), order, rows, axes=(0, None))
+Xor3x16 = definition("Xor3x16", 2, _xor3, (("a", BF16), ("b", BF16), ("c", BF16)), BF16, word=T.Xor3x16,
+                     doc="a ^ b ^ c on 16 bits: Xor3x16_v1")
+Xor3x32 = definition("Xor3x32", 2, _xor3, (("a", I32), ("b", I32), ("c", I32)), I32, word=T.Xor3x32,
+                     doc="a ^ b ^ c on 32 bits: Xor3x32_v1")
+_SELECT, _XOR3 = {16: SC.SelectBf16, 32: SC.SelectI32}, {16: Xor3x16, 32: Xor3x32}
 
 
-DsaGatherRowsV2 = EW.on_bits("DsaGatherRows", 2, ["N", "TOPK", "W"], _sig_rows, _rows, T.DsaGatherRows)
+def _row(S):
+    return Array(S.W, Array(S.E, BIT))
 
-BOOLEAN_DSA_TOPK = [DsaTopKOneHot, DsaTopKVerdict, DsaTopKOrderV2, DsaGatherRowsV2]
+
+def _sig_switch(S, two: bool):
+    R = _row(S)
+    return (("s", BIT), ("a", R), ("b", R)), Array(2, R) if two else R
+
+
+def _swap(B, S, s, a, b):
+    """`DsaWaksmanSwap_v1` on bits: `SelectBf16_v2` or `SelectI32_v2`(s, b, a) a word (one AND a bit), and `Xor3x<E>_v2`(a, b,
+    that) (no AND)."""
+    lo = B.batch(_SELECT[S.E], s, b, a, axes=(None, 0, 0))
+    return Coll(Array(2, _row(S)), concat([lo.refs, B.batch(_XOR3[S.E], a, b, lo, axes=(0, 0, 0)).refs]))
+
+
+def _pick(B, S, s, a, b):
+    """`DsaWaksmanPick_v1` on bits: `SelectBf16_v2` or `SelectI32_v2`(s, b, a) a word."""
+    return B.batch(_SELECT[S.E], s, b, a, axes=(None, 0, 0))
+
+
+DsaWaksmanSwapV2 = EW.on_bits("DsaWaksmanSwap", 2, ["W", "E"], lambda S: _sig_switch(S, True), _swap, T.DsaWaksmanSwap)
+DsaWaksmanPickV2 = EW.on_bits("DsaWaksmanPick", 2, ["W", "E"], lambda S: _sig_switch(S, False), _pick, T.DsaWaksmanPick)
+
+
+def _sig_net(S):
+    return (("sw", Array(T.waksman_switches(S.N, S.K), BIT)), ("rows", Array(S.N, _row(S)))), Array(S.K, _row(S))
+
+
+def _net(B, S, sw, rows):
+    """`DsaWaksmanRows_v1` on bits: `dsa_topk.network` of `DsaWaksmanSwap_v2` and `DsaWaksmanPick_v2`, one AND a payload bit a
+    switch."""
+    return T.network(B, S.N, S.K, _row(S), sw, rows, bind(DsaWaksmanSwapV2, W=S.W, E=S.E), bind(DsaWaksmanPickV2, W=S.W, E=S.E),
+                     lambda n, k: bind(DsaWaksmanRowsV2, N=n, K=k, W=S.W, E=S.E))
+
+
+DsaWaksmanRowsV2 = EW.on_bits("DsaWaksmanRows", 2, ["N", "K", "W", "E"], _sig_net, _net, T.DsaWaksmanRows)
+
+
+def _sig_net_order(S):
+    return (("sw", Array(T.waksman_switches(S.N, S.TOPK), BIT)),), Array(S.TOPK, I32)
+
+
+def _net_order(B, S, sw):
+    """`DsaWaksmanOrder_v1` on bits: `DsaWaksmanRows_v2{N,TOPK,1,32}` over the indices' constant bits."""
+    zero, one = B.call(BL.constant(0)), B.call(BL.constant(1))
+    tags = concat([(one if j >> i & 1 else zero).refs for j in range(S.N) for i in range(32)])
+    return Coll(Array(S.TOPK, I32), B.call(bind(DsaWaksmanRowsV2, N=S.N, K=S.TOPK, W=1, E=32), sw,
+                                           Coll(Array(S.N, Array(1, I32)), tags)).refs)
+
+
+DsaWaksmanOrderV2 = EW.on_bits("DsaWaksmanOrder", 2, ["N", "TOPK"], _sig_net_order, _net_order, T.DsaWaksmanOrder)
+
+BOOLEAN_DSA_TOPK = [DsaTopKOneHot, DsaTopKVerdict, DsaTopKOrderV2, Xor3x16, Xor3x32, DsaWaksmanSwapV2, DsaWaksmanPickV2,
+                    DsaWaksmanRowsV2, DsaWaksmanOrderV2]
