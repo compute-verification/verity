@@ -18,13 +18,12 @@ from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
-from verity_vllm.program.frontend.rules.vllm_dsa import (BF16, E4M3, F32, _append_rows, _args, _decode_threshold, _f32, _missing,
-                                                         _observed_sparse_mla, _open_history, _positions, _rows, _static_float,
-                                                         _value)
+from verity_vllm.program.frontend.rules.vllm_dsa import (_DENSE, BF16, E4M3, F32, _append_rows, _args, _decode_threshold, _f32,
+                                                         _missing, _observed_sparse_mla, _open_history, _positions, _rows,
+                                                         _static_float, _value)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.registry import fa3_split
 
-_DENSE = ("positions", "q_nope", "q_pe", "k_nope", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
 PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
 
 

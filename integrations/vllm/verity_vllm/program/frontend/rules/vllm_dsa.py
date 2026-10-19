@@ -353,6 +353,7 @@ class DsaQRule(OpRule):
 
 
 _ATTN = ("positions", "ql_nope", "q_pe", "kv_c", "k_pe", "index_q", "index_weights", "index_k", "index_k_scale", "layer_name", "topk", "scale")
+_DENSE = ("positions", "q_nope", "q_pe", "k_nope", "v", "kv_c", "k_pe", "index_k", "index_k_scale", "layer_name", "topk", "scale")
 
 
 def _observed_sparse_mla(layer_name: str) -> str | None:
@@ -432,7 +433,6 @@ def _append_rows(ctx, hist: dict, a: dict, has: bool) -> None:
 def _history_rows(ep, layer_kinds) -> dict[str, list[tuple[int, int, bool]]]:
     """Per layer, each DSA leaf call's (rows before it, its rows, whether it is an indexer `dsa_indexer_attn`) in graph order: what
     `_open_history` will find, read from the export's fake-tensor shapes before the translation."""
-    from verity_vllm.program.frontend.rules.vllm_dsa_dense import _DENSE
     out: dict[str, list[tuple[int, int, bool]]] = {}
     for node in ep.graph.nodes:
         names = layer_kinds.get(node.target) if node.op == "call_function" else None
