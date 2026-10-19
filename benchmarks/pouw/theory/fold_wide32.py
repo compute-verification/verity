@@ -30,6 +30,7 @@ OMP_NUM_THREADS.
 """
 from __future__ import annotations
 
+import itertools
 import subprocess
 import sys
 import tempfile
@@ -96,9 +97,27 @@ def sel_pair(cols):
     raise AssertionError("no SEL.64 control over these words")
 
 
+def mnmx_first(cols):
+    """`wide3_controls`' ctl_mnmx_first (IMNMX.64 first, a LEA of its low word, IADD.64 last), over two pairs of inputs
+    the IMNMX.64 picks differently at the two points: at two points the original's can pick one pair at both, and then
+    its words are inputs and no IMNMX.64 is needed."""
+    have = {tuple(v) for v in cols.values()}
+    for al, ah, bl, bh in itertools.product(("y", "z", "w", "kx"), repeat=4):
+        for v in range(4):
+            x1 = [fx.mnmx64(cols[al][i], cols[ah][i], cols[bl][i], cols[bh][i], v, W) for i in range(NPT)]
+            lo, hi = tuple(x[0] for x in x1), tuple(x[1] for x in x1)
+            if lo in have or hi in have:
+                continue
+            v2 = [((lo[i] << 2) + cols["a"][i]) & MASK for i in range(NPT)]
+            t = [fx.add64(v2[i], hi[i], cols["m1"][i], cols["y"][i], 0, W) for i in range(NPT)]
+            return [x[0] for x in t], [x[1] for x in t]
+    raise AssertionError("no IMNMX.64 over these inputs picks differently at the two points")
+
+
 def controls(cols):
     jobs = {k: v for k, v in fx.wide3_controls(W, cols).items() if k != "sel_free"}
     jobs["sel_pair"] = sel_pair(cols)
+    jobs["ctl_mnmx_first"] = mnmx_first(cols)
     return jobs
 
 
@@ -124,9 +143,9 @@ def main() -> int:
         six = {k: ins[k] for k in ("y", "z", "w", "kx", "a", "m1")}
         jobs = controls(six)
         res = fx.width_wide3(exe, W, six, jobs)
-        for lab, r in res.items():
-            wit = [x for x in r["witnesses"] if x[0] == {"found": "F", "sel": "S", "le2": "L"}[kind(lab)]]
-            ck.check(f"width 32: fold_wide3.c finds its control {lab} ({kind(lab)})", r[kind(lab)] > 0, wit[:1])
+        for lab, hit in res.items():
+            wit = [x for x in hit["witnesses"] if x[0] == {"found": "F", "sel": "S", "le2": "L"}[kind(lab)]]
+            ck.check(f"width 32: fold_wide3.c finds its control {lab} ({kind(lab)})", hit[kind(lab)] > 0, wit[:1])
 
         if quick:
             ins = six
