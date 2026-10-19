@@ -93,12 +93,6 @@ def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
 abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
   ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src
 
-/-- **A3 per test** at every one of V*'s laws: `Assumptions.UniformRandomBytesTest` at each law's lengths and source,
-at its full draw's escape test (`Law.escapeTest`) for every set of units `B`, up to `η`. -/
-abbrev UniformRandomBytesTest {S : ℕ} (Vs : Fin S → VStmt) (η : ENNReal) : Prop :=
-  ∀ j (B : Finset (Fin (Vs j).nv)), FlockSoundness.Assumptions.UniformRandomBytesTest (Vs j).law.Lb (Vs j).law.src
-    (FlockSoundness.Audit.Law.escapeTest (.subset (Vs j).nv) (Vs j).nv B) η
-
 /-- **hash-derived-key**: `Assumptions.Zk.HashDerivedKeyHm96`. -/
 abbrev HashDerivedKeyHm96 : Prop := FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96
 
