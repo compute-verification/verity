@@ -30,7 +30,7 @@ digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2), the leaf N3 op
 its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and the grid's parameters digest. (3) When
 COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). Two fields are free: the deadline byte, which the
 certificate's host-side check reads (`LinkWindows.verify`), and the frames root, which N3 holds the window's frames to
-on the windows it draws.
+on every port-window that recorded frames.
 
 **Cost.** Beyond the opening, the fields are an equality of 736 + 8L bits and the counts one of 32·T bits, so
 32·T − 1 ANDs (19,199 at T = 600), and two ANDs join the three. The opening is SHA-512 of the head's 157 + L + 4T bytes

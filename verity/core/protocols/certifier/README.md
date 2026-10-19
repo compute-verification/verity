@@ -9,8 +9,8 @@ A spec-level reference for network accounting's timing channel:
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
-  check yet) that also compares each egress record's grid with the Program's in the clear, on every link-window, until
-  N3 runs on every window (NET-38);
+  check yet) that compares no grid in the clear: the head check holds the counts on every link-window, and N3 the
+  frames on every port-window;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`

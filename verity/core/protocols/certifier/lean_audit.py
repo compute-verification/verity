@@ -272,8 +272,8 @@ class Audit:
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
                    key: PublicKey | None = None, session: bytes | None = None, grid: bool = True) -> list[Verdict]:
-        """`audit.Audit.check_link`. With `grid` False the Lean check still compares the grid, after every other check
-        of a link-window, so its `mismatch` there is an accept."""
+        """`audit.Audit.check_link`. With `grid` False the Lean check still compares the grid, over whatever `frames`
+        are given (N2 gives none), after every other check of a link-window, so its `mismatch` there is an accept."""
         _need_key(records, key, session)
         frames, syncs = list(frames), list(syncs)
         mine = _mine(link, records, Direction.EGRESS)

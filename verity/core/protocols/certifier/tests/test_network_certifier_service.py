@@ -1,7 +1,8 @@
 """One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way a link-window fails closed, on injected coins and an injected clock. Every round's verdict is
-held to the stand-in (`LinkWindows.stand_in`), the in-the-clear verdict from before the head check."""
+held to the in-the-clear oracle (`LinkWindows.stand_in`), which compares the Program's egress grid: the same verdict,
+except where only the frames differ from the Program's, which N2 leaves to N3."""
 
 import json
 from dataclasses import replace
@@ -55,13 +56,15 @@ def honest_occupancy():
 
 
 class Run:
-    """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's stream."""
+    """A link with its network certifier (an LMS signer on a small tree), the protocol's parameters, and the challenger's
+    stream. The link's occupancy profile is the honest run's on egress and none on ingress unless `occupancy` says."""
 
-    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=(None, None)) -> None:
+    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=None) -> None:
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
         self.lw = LinkWindows(LINK, PARAMS, SYNC_SET, self.signer.public_key(), "r-network-test", signers.SESSION,
-                              proof_deadline=proof_deadline, occupancy=occupancy)
+                              proof_deadline=proof_deadline,
+                              occupancy=occupancy or (honest_occupancy()[0], None))
         self.clock = Clock()
         self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
                                      clock=self.clock)
@@ -81,12 +84,14 @@ class Run:
         self.previous = reg.digest
         return reg
 
-    def round(self, opening, delivered=None) -> S.Outcome:
-        """One registration through its outcome, held to the stand-in."""
+    def round(self, opening, delivered=None, *, frames_differ=False) -> S.Outcome:
+        """One registration through its outcome, held to the oracle: the same verdict, or with `frames_differ` (the
+        frames other than the Program's at the profile's counts) an accept where the oracle rejects."""
         draw = self.stream.select(self.register(opening))
         assert self.stream.deliver(draw, [self.lw.session(delivered or opening, draw)]) is None
-        out = self.lw.outcome(self.stream, draw, delivered or opening, FRAMES, SYNCS)
-        assert self.lw.stand_in(delivered or opening, draw, FRAMES, SYNCS) == out.accepted
+        out = self.lw.outcome(self.stream, draw, delivered or opening, SYNCS)
+        stood = self.lw.stand_in(delivered or opening, draw, FRAMES, SYNCS)
+        assert (out.accepted and not stood) if frames_differ else stood == out.accepted
         return out
 
 
@@ -104,7 +109,7 @@ def test_one_link_window_round_trip_is_the_exhaustive_fact(tmp_path):
     draw = run.stream.select(reg)
     assert draw.units == [0] and draw.draw["law"] == "subset" and draw.draw["k"] == 1
     assert run.stream.deliver(draw, [run.lw.session(opening, draw)]) is None
-    out = run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS)
+    out = run.lw.outcome(run.stream, draw, opening, SYNCS)
     assert out.accepted and out.verdict.ok and out.exhaustive == S.Exhaustive(1) and out.profile is None
     assert out.terms == S.Terms(None) and out.public == {"verdict": 1, "deadline": 1}
     body = run.stream.records[0]
@@ -137,7 +142,7 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
 def test_each_heads_counts_are_the_declared_occupancy(tmp_path):
     """Under the honest run's profile every window is accepted. An ingress window holding a frame fewer than the profile
     (a port that stopped short) or a frame more is rejected, though its certificate verifies and the audit compares no
-    ingress grid; with no profile the same records are accepted."""
+    ingress grid; with no ingress profile the same records are accepted."""
     (tmp_path / "declared").mkdir()
     (tmp_path / "bare").mkdir()
     declared, bare = Run(tmp_path / "declared", occupancy=honest_occupancy()), Run(tmp_path / "bare")
@@ -164,24 +169,29 @@ def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
     assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
 
 
-def test_under_an_egress_profile_the_egress_grid_is_still_compared(tmp_path):
-    """With an egress profile the head check holds the head's status, grid and counts, and the audit still compares the
-    egress grid in the clear, until N3 runs on every window (NET-38): a window whose frames differ from the Program's
-    grid in content alone, at the profile's counts, is rejected, as the stand-in rejects it. An egress head under
-    another parameters digest is rejected though its certificate verifies."""
+def test_n2_compares_no_grid_and_leaves_the_frames_to_n3(tmp_path):
+    """The head check holds the head's status, grid and counts, and N2 compares no grid in the clear: a window whose
+    frames differ from the Program's grid in content alone, or in order within a bucket, at the profile's counts, is
+    accepted where the in-the-clear oracle rejects it, since its frames are N3's to hold. An egress head under another
+    parameters digest is rejected though its certificate verifies."""
     run = Run(tmp_path, occupancy=honest_occupancy())
-    honest = egress_records()[0]
-    slots = [list(row) for row in honest.grid]
-    b, k = next((b, k) for b, row in enumerate(slots) for k, s in enumerate(row) if s is not None)
-    slots[b][k] = bytes(x ^ 0xFF for x in slots[b][k])
-    content = replace(honest, grid=tuple(tuple(row) for row in slots))
-    assert occupancy(content.grid) == occupancy(honest.grid) and content.grid != honest.grid
-    opening = run.lw.commit(0, run.egress(content), run.ingress(ingress_records()[0]), SALTS[0])
-    assert all(i is not None and HC.reference(i) for i in run.lw.head_checks(opening, bytes.fromhex(run.lw.root(opening))))
-    assert reject(run.round(opening))
+
+    def edited(w, edit):
+        honest = egress_records()[w]
+        slots = [list(row) for row in honest.grid]
+        b = next(b for b, row in enumerate(slots) if sum(s is not None for s in row) == 2)
+        slots[b] = edit(slots[b])
+        other = replace(honest, grid=tuple(tuple(row) for row in slots))
+        assert occupancy(other.grid) == occupancy(honest.grid) and other.grid != honest.grid
+        opening = run.lw.commit(w, run.egress(other), run.ingress(ingress_records()[w]), SALTS[w])
+        assert all(HC.reference(i) for i in run.lw.head_checks(opening, bytes.fromhex(run.lw.root(opening))))
+        return opening
+
+    assert run.round(edited(0, lambda row: [bytes(x ^ 0xFF for x in row[0]), row[1]]), frames_differ=True).accepted
     unswept = run.issuer.certify(egress_records()[1], EGRESS, PARAMS, parameters_digest(PARAMS))
     assert reject(run.round(run.lw.commit(1, unswept, run.ingress(ingress_records()[1]), SALTS[1])))
-    assert run.round(run.honest(2)).accepted and run.stream.symbols == ("reject", "reject", "accept")
+    assert run.round(edited(2, lambda row: row[::-1]), frames_differ=True).accepted
+    assert run.stream.symbols == ("accept", "reject", "accept")
 
 
 def test_a_head_of_another_size_class_is_a_reject(tmp_path):
@@ -212,7 +222,7 @@ def test_the_unit_is_each_ends_head_check_beside_the_certificates(tmp_path):
     """N2's unit holds the certificates' check and each end's head check, at the link's size class: L the name's bytes,
     T the end's buckets and COUNTS whether the end has a profile, each head check one gate that names its Definition. A
     profile changes the unit, and so the spec's Program."""
-    lw = Run(tmp_path).lw
+    lw = replace(Run(tmp_path).lw, occupancy=(None, None))
     declared = replace(lw, occupancy=(honest_occupancy()[0], None))
     assert lw.unit.id == "NetworkLinkWindow_v2{EGRESS=(9,4,0),INGRESS=(9,4,0)}"
     assert declared.unit.id == "NetworkLinkWindow_v2{EGRESS=(9,4,1),INGRESS=(9,4,0)}"
@@ -327,8 +337,8 @@ def test_a_certificate_from_another_session_is_a_reject(tmp_path):
 
 
 def test_a_digest_mismatch_is_a_reject(tmp_path):
-    """A head edited under its certificate (the certified status or counts), and a grid other than the Program's that
-    the certifier honestly signed."""
+    """A head edited under its certificate (the certified status or counts), and a grid with a frame in a bucket where
+    the Program has none, which the certifier honestly signed: its counts are off the profile."""
     run = Run(tmp_path)
     eg, ig = run.honest(0).records
     counts = RecordHead(**{f: getattr(eg.head, f) for f in RecordHead.__slots__} | {"counts": (0,) * PARAMS.buckets})
@@ -359,9 +369,9 @@ def test_an_unset_deadline_bit_is_a_reject(tmp_path):
         reg = run.register(opening)
         draw = run.stream.select(reg)
         run.stream.deliver(draw, [run.lw.session(opening, draw)])
-        verdict = run.lw.verify(opening, draw, FRAMES, SYNCS)
+        verdict = run.lw.verify(opening, draw, SYNCS)
         assert verdict["public"] == {"verdict": 0, "deadline": 0} and verdict["accepted"] is False
-        assert reject(run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS))
+        assert reject(run.lw.outcome(run.stream, draw, opening, SYNCS))
 
 
 def test_a_late_proof_is_a_reject(tmp_path):
@@ -372,11 +382,11 @@ def test_a_late_proof_is_a_reject(tmp_path):
     out = run.stream.deliver(draw, [run.lw.session(opening, draw)])
     assert out is not None and not out.accepted and out.verdict.codes == ("late",) and out.public == {}
     with pytest.raises(S.Refused):
-        run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS)
+        run.lw.outcome(run.stream, draw, opening, SYNCS)
     opening = run.honest(1)
     draw = run.stream.select(run.register(opening))
     run.clock.now = 125.0
-    assert run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS).verdict.codes == ("late",)
+    assert run.lw.outcome(run.stream, draw, opening, SYNCS).verdict.codes == ("late",)
     assert run.stream.symbols == ("late", "late")
 
 
@@ -417,10 +427,23 @@ def test_the_opening_must_be_the_registered_link_windows(tmp_path):
     opening = run.honest(0)
     draw = run.stream.select(run.register(opening))
     with pytest.raises(ValueError, match="link-window"):
-        run.lw.verify(run.honest(1), draw, FRAMES, SYNCS)
+        run.lw.verify(run.honest(1), draw, SYNCS)
     for salts in ((SALTS[0][0],) * 4, SALTS[0][:2]):
         with pytest.raises(ValueError, match="salts"):
             run.lw.commit(0, *opening.records, salts=salts)
+
+
+def test_a_link_without_an_egress_profile_has_no_verdict(tmp_path):
+    """N2 compares no egress grid, so without an egress profile nothing would hold the egress counts: `verify` refuses
+    the link, an ingress profile or none, while the oracle, which compares the grid, still accepts."""
+    for k, occupancy in enumerate(((None, None), (None, honest_occupancy()[1]))):
+        (tmp_path / str(k)).mkdir()
+        run = Run(tmp_path / str(k), occupancy=occupancy)
+        opening = run.honest(0)
+        draw = run.stream.select(run.register(opening))
+        with pytest.raises(ValueError, match="egress end has no occupancy profile"):
+            run.lw.verify(opening, draw, SYNCS)
+        assert run.lw.stand_in(opening, draw, FRAMES, SYNCS)
 
 
 def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
@@ -455,4 +478,4 @@ def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
     reg = run.lw.register(run.stream, rec)
     draw = run.stream.select(reg)
     assert run.stream.deliver(draw, [run.lw.session(opening, draw)]) is None
-    assert reject(run.lw.outcome(run.stream, draw, opening, FRAMES, SYNCS))
+    assert reject(run.lw.outcome(run.stream, draw, opening, SYNCS))
