@@ -76,6 +76,45 @@ def _pid(_: int) -> int:
     return os.getpid()
 
 
+def _ready(fifo: str) -> None:
+    with open(fifo, "wb") as f:
+        f.write(b"x")
+
+
+def test_a_zygote_made_ahead_runs_its_initializer_before_any_item(tmp_path):
+    """`run` makes the zygote before it builds its own task list, so the zygote's build goes on beside it: the initializer has
+    run (the FIFO opened and written) before `parallel` is handed a single item, and the items then run in that zygote."""
+    fifo = tmp_path / "ready"
+    os.mkfifo(fifo)
+    zygote = cli.Zygote(_pid, _ready, (str(fifo),))
+    with open(fifo, "rb") as f:
+        assert f.read() == b"x"
+    got = list(cli.parallel(_pid, [1, 2], jobs=2, zygote=zygote))
+    assert sorted(x for x, *_ in got) == [1, 2] and zygote.process.exitcode == 0
+
+
+def test_a_zygote_no_item_reaches_is_dropped_without_waiting_for_its_initializer():
+    """Every target reused after the task list was built: the zygote, still in its initializer (here one that never returns),
+    is ended at once."""
+    zygote = cli.Zygote(abs, signal.pause)
+    zygote.drop()
+    assert zygote.process.exitcode == -signal.SIGTERM
+
+
+def test_making_a_zygote_under_the_tracer_leaves_this_process_cacheable():
+    """The zygote now starts before the task list's entry is stored, which a process with an untraced event never stores."""
+    import subprocess
+    import sys
+
+    code = ("from circuit_check import cache as CC, cli\n"
+            "CC.trace(cli.REPO)\n"
+            "z = cli.Zygote(abs)\n"
+            "z.close()\n"
+            "print(CC.untraced())\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=cli.REPO, check=True)
+    assert r.stdout.strip().splitlines()[-1] == "[]"
+
+
 def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path):
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc/meminfo").write_text("MemTotal: 2000000000 kB\nMemAvailable: 1600000000 kB\n")
