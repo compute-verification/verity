@@ -78,8 +78,10 @@ ESCAPE = {
     "LDGMC": "a reducing / multicast global load (NVLS); an add of existing words with no multiply (NoSum); RT-SCOPE owns "
              "the NVLS switch-side reduction",
     "UTCOMMA": "tcgen05 block-scaled fp4 (e2m1, kind::mxf4/mxf4nvf4) on the B200 heads FP4 committed words; the sm_100 "
-               "DS_tensor row lists no e2m1 and the census has no UTCOMMA row, so A3 has no rate for its MACs. fp4 is the "
-               "B200's fastest tensor format, so this is the widest-rate gap; sm_120 lists e2m1 and prices its OMMA fp4",
+               "DS_tensor row lists no e2m1 and the census has no UTCOMMA row, so A3 has no rate for its MACs. Measured, "
+               "kind::mxf4 and kind::mxf4nvf4 run 16390 MACs a SM-clock, 2x kind::i8 (the data sheet's e2m1 16384), while "
+               "e2m1 through kind::f8f6f4 runs at e4m3's rate (unpriced_fp4.cu). fp4 is the B200's fastest tensor format, "
+               "so this is the widest-rate gap; sm_120 lists e2m1 and prices its OMMA fp4",
     "SPARSIFY": "compresses an operand to 2:4; a data reshape with no product (MOVER)",
     "DECOMPRESS": "expands a 2:4 operand; a data reshape with no product (MOVER)",
 }
