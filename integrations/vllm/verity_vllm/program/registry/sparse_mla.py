@@ -28,6 +28,8 @@ T is the row's valid count (at most `index_topk`), kv its selected rows in order
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import numpy as np
 
 from verity.ml.circuits.defs import bind, composite

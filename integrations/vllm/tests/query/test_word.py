@@ -211,9 +211,22 @@ def test_the_manifest_records_the_check_it_passed_in_the_header_and_its_rows_are
     assert "word_check" not in plain["query"] and "no word check recorded" in word_check_refusal(plain["query"])
     assert checked["manifest_digest"] == plain["manifest_digest"] and checked["identities"] == plain["identities"]
     assert {k: v for k, v in checked["query"].items() if k != "word_check"} == plain["query"]
+
+
+def test_a_dead_output_passes_the_check_only_as_unreturned_and_listed(tmp_path):
+    """The attention Program's o_proj output feeds nothing and no policy requires it: UNRETURNED, so the check skips it and the
+    manifest lists it by identity, outside the identities.  A Call with a required output gets no such pass: without the return-slot
+    policy the final fused norm's residual is read by nothing while its normed row feeds the logits, and the check fails it."""
+    from verity_vllm.pipeline import manifest as M
     (tmp_path / "attn").mkdir()
-    with pytest.raises(W.QueryRuleViolation, match="o_proj"):
-        M.build(_program_dir(tmp_path / "attn", attn=True), request_id="r0", word="16/32")
+    attn = M.build(_program_dir(tmp_path / "attn", attn=True), request_id="r0", word="16/32")
+    dead = [r for r in attn["unreturned"] if "o_proj" in r["op_path"]]
+    assert attn["query"]["word_check"]["ok"] and dead and {r["spec"] for r in dead} == {"Gemm_v1"}
+    assert {r["step"] for r in dead} == set(attn["steps"])
+    assert not [r for r in attn["identities"] if "o_proj" in r["op_path"] and r["family"] != "weights"]
+    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 64
+    with pytest.raises(W.QueryRuleViolation, match="RMSNormFusedCuda_v2.*output-not-committed"):
+        M.build(_program_dir(tmp_path, attn=True), request_id="r0", word="16/32", return_slots=False)
 
 
 def test_a_dead_gate_joins_the_unit_it_reads():

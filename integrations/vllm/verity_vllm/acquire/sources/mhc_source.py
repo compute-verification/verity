@@ -21,6 +21,8 @@ binds.
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import inspect
 import sys
 from typing import Any, Mapping

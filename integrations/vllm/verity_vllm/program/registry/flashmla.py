@@ -69,6 +69,8 @@ D = DN + DR; a row is a staged row (D bf16, valid bit); N = SPLITS[-1] * BN (the
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import struct
 
 import numpy as np

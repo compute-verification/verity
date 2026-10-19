@@ -15,6 +15,8 @@
   defaults) derives in one Program whose words are the twins'."""
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import json
 
 import numpy as np

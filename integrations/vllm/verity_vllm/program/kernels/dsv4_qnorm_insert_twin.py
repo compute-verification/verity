@@ -12,6 +12,8 @@ stores: per cache block, token p's 448 E4M3 bytes and 64 bf16 at p * 576, its 8 
 """
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DW

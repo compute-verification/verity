@@ -7,7 +7,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,10 +16,13 @@ from verity_config import dumps, sha256, value
 
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
 
+# Validation comes from result.json alone, so a run killed after writing it would read as passed; rc 0 rules that out,
+# and a run from a dirty tree ran code its commit doesn't name.
 PASS_QUERY = """
 SELECT id
 FROM attempts
-WHERE validation = 'passed' AND source_commit = '{commit}'
+WHERE tool = 'vllm_bench_point' AND validation = 'passed' AND rc = 0 AND source_dirty IS NOT 1
+  AND source_commit = '{commit}'
   AND EXISTS (
     SELECT 1 FROM attempt_params
     WHERE attempt = attempts.id AND key = 'identity' AND value = '{identity}'
@@ -149,6 +152,9 @@ def _relative_spec(source: str | Path, root: Path) -> str:
 
 
 QUEUE_KINDS = {1: "vllm-bench-1gpu", 8: "vllm-bench-8gpu"}
+# A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
+# queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
+POINT_DISK_GB = 5
 
 
 def queue_kind(gpu_count: int) -> str:
@@ -161,6 +167,23 @@ def queue_kind(gpu_count: int) -> str:
             f"no queue kind for a {gpu_count}-GPU spec: register one in infra/cluster/kinds/benchmarks.toml "
             "and name it in verity_bench.jobs.QUEUE_KINDS"
         ) from None
+
+
+def point_environment(spec: ResolvedSpec) -> dict[str, str]:
+    """What a point's job must run under: the spec's `env`, and its `setup` script (`run_point.sh` sources it before the
+    point's Python starts) as VERITY_BENCH_SETUP."""
+
+    return {**spec.env, **({"VERITY_BENCH_SETUP": spec.setup} if spec.setup else {})}
+
+
+def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> None:
+    expected = point_environment(spec)
+    wrong = sorted(name for name, want in expected.items() if environ.get(name) != want)
+    if "VERITY_BENCH_SETUP" not in expected and environ.get("VERITY_BENCH_SETUP"):
+        wrong.append("VERITY_BENCH_SETUP")
+    if wrong:
+        raise ValueError(f"the point's environment differs from spec {spec.id!r}'s env and setup in {wrong}: "
+                         "launch points with `verity-bench run SPEC`, which forwards them")
 
 
 def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Path) -> list[str]:
@@ -176,6 +199,7 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
         "--campaign", "vllm-bench",
         "--gpus", str(spec.preset.gpu_count),
         "--gpu-model", spec.preset.gpu_id,
+        "--disk-gb", str(POINT_DISK_GB),
         "--cwd", "source",
         "--require-result",
         "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
@@ -184,6 +208,8 @@ def research_command(plan: Plan, source: str | Path, item: PlannedPoint, root: P
         command += ["--max-min", str(spec.admission.max_minutes)]
     if os.environ.get("VERITY_BENCH_VENV"):
         command += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
+    for name, setting in point_environment(spec).items():
+        command += ["--env", f"{name}={setting}"]
     command += [
         "--",
         "bash", "benchmarks/harness/run_point.sh",

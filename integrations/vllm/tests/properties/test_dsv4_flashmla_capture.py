@@ -3,6 +3,8 @@ against FlashMLA's quant.py, its operands, the prefill's workspace restated in t
 its comparison jobs on twin-made kernel words, its verdicts and its main loop with the GPU stood in for."""
 from __future__ import annotations
 
+__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
+
 import contextlib
 import copy
 import json
