@@ -12,8 +12,9 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
     python forms_gap.py --b1-fit   RT-HOPPER-1: b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
     python forms_gap.py --menu     RT-HOPPER-1: each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it,
                                    then every form FIT has fitted from the H200, at once
-    python forms_gap.py --menu-fp  RT-HOPPER-1: each FP kind (f16, bf16, tf32, e4m3, e5m2), untimed beside the LI fold,
-                                   at the lane default, by MACs and by tensor time; then all with the 12 fitted forms
+    python forms_gap.py --menu-fp  RT-HOPPER-1: each FP kind (f16, bf16, tf32, e4m3, e5m2) at the lane default, by MACs,
+                                   by tensor time and at its H200 fit; then all 22 fitted forms at once, and each kind's
+                                   break-even
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -336,7 +337,7 @@ def main() -> int:
     ap.add_argument("--fan-in", action="store_true", help="ε at the fold costs FoldFanIn proves, without FoldOpt")
     ap.add_argument("--b1-fit", action="store_true", help="ε with b1 offered at its joint lines fitted from the H200")
     ap.add_argument("--menu", action="store_true", help="ε with each of the honest's s8-exact siblings offered")
-    ap.add_argument("--menu-fp", action="store_true", help="ε with each FP tensor kind, untimed beside LI, offered")
+    ap.add_argument("--menu-fp", action="store_true", help="ε with each FP tensor kind offered, and its break-even")
     a = ap.parse_args()
     (sheet() if a.sheet else b1_gap() if a.b1 else rs_fit() if a.rs_fit else honest_true() if a.honest_true
      else fan_in() if a.fan_in else b1_fit() if a.b1_fit else menu() if a.menu else menu_fp() if a.menu_fp
