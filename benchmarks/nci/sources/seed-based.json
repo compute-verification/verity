@@ -919,6 +919,40 @@
     "grade": "measured-at-scale",
     "bears_on": "The working ES implementation already is a seed decoder, so a block could run it directly.",
     "from_review": "seed-based"
+   },
+   {
+    "id": "qiu-2025-es-at-scale/5",
+    "claim": "In ES at Scale's math reasoning runs, RL and ES sampled at most 3,000 tokens per response.",
+    "quote": "Both RL and ES sampled a maximum of 3,000 tokens per response",
+    "location": "Section 4.3 (ES applied to Math reasoning tasks)",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 3000,
+      "unit": "tokens per response, maximum",
+      "condition": "MATH levels 3-5, N = 30"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The ES row is priced at the RL row's 32,768-token rollouts (kappa 0.58); at 3,000 tokens kappa.py gives 0.91.",
+    "from_review": "seed-based"
+   },
+   {
+    "id": "qiu-2025-es-at-scale/6",
+    "claim": "On Countdown, each ES member's fitness is measured on a training set of 200 samples.",
+    "quote": "To evaluate accuracy, a set of 200 samples were used during training, and a different set of 2000 samples during testing.",
+    "location": "Appendix A.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 200,
+      "unit": "samples",
+      "condition": "Countdown training set"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The rollouts an ES iteration's seeded perturbations are spread over in kappa.py: 30 x 200, so regenerating them is 5e6 gates per token.",
+    "from_review": "seed-based"
    }
   ]
  },

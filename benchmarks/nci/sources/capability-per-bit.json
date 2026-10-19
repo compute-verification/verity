@@ -229,6 +229,40 @@
     "grade": "extrapolated",
     "bears_on": "Re-deriving an R1-Zero-class update from its few Mbit of reward record needs ~1e21+ FLOPs, far beyond one block's Gamma; decode compute, not K, throttles it.",
     "from_review": "capability-per-bit"
+   },
+   {
+    "id": "deepseek-2025-r1/3",
+    "claim": "R1-Zero sampled 16 outputs per question, each up to 32,768 tokens before step 8.2k and 65,536 after.",
+    "quote": "For each question, we sample 16 outputs with a maximum length of 32,768 tokens before the 8.2k step and 65,536 tokens afterward.",
+    "location": "Section 2.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 32768,
+      "unit": "tokens per output, maximum",
+      "condition": "R1-Zero before step 8.2k of 10,400; 65,536 after"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "The rollout length the RL row is priced at: the policy-gradient circuit at 32k puts attention's products at 39% of the gates and kappa at 0.39.",
+    "from_review": "capability-per-bit"
+   },
+   {
+    "id": "deepseek-2025-r1/4",
+    "claim": "Each R1-Zero rollout of 8,192 outputs is trained as 16 minibatches of one 512-output step each, a single pass, and the KL term's reference model is replaced by the latest policy every 400 steps.",
+    "quote": "Every 400 steps, we replace the reference model with the latest policy model. To accelerate training, each rollout generates 8,192 outputs, which are randomly split into 16 mini-batches and trained for only a single inner epoch.",
+    "location": "Section 2.1",
+    "quantities": [
+     {
+      "param": "other",
+      "value": 2.9375,
+      "unit": "forwards per sampled token",
+      "condition": "derived: the rollout's, the reference model's, and a fresh one for the 15 minibatches trained after the weights moved"
+     }
+    ],
+    "grade": "measured-at-scale",
+    "bears_on": "Off-policy minibatches and the reference model add forwards: kappa.py gives 0.47 at 32k against the on-policy circuit's 0.39, which the RL row takes.",
+    "from_review": "capability-per-bit"
    }
   ]
  },
