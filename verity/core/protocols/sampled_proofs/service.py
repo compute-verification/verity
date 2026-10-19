@@ -24,15 +24,14 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
 declares them; the joint note's §6 step 0 allows that on test prompts, and hiding them is the hidden layout (step 8).
-The `Stream` runs `check_public` by the verifier of record before one-stage's R1 to R7, reading an entry's fields in key
-order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
-
 **The draw.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
-The challenger then draws once (`select`) from its own bytes as the Lean verifier's `Flock.Draw.drawWith` does
+The challenger then draws once (`select`) from its coins as the Lean verifier's `Flock.Draw.drawWith` does
 (`two_stage.draw_first` over `two_stage.OwnRandomness`), with no hash and no derivation, or by the stream's `sampler`;
-either draw is held to `draw.check_draw`. A work draw carries the challenger's closure map's closure
-(`select(closure=)`, a map over `[0, N)`, refused under another law or out of range before any coin is read;
-`two_stage.closure_of`), which the proof proves with the drawn units.
+either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier of record
+reads them (`verifier.coins`: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`); the Python never reads
+them from the OS itself. A work draw carries the challenger's closure map's closure (`select(closure=)`, a map over
+`[0, N)`, refused under another law or out of range before any coin is read; `two_stage.closure_of`), which the proof
+proves with the drawn units.
 From the selection rule to the draw object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
@@ -116,7 +115,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import math
-import os
 import re
 import time
 from dataclasses import dataclass
@@ -960,12 +958,14 @@ class Stream:
     challenger builds each registration's population program from it and the registration's N (under `TwoStage`, each
     RU is one instance of it). `budget` (b), `delta` (the profile's) and `rounds` (R, the most registrations open at
     once, and so the most one `Session` covers; 1 under `TwoStage`) are public parameters of the stream. `coins` is
-    the challenger's own randomness (n bytes a call, read in order by `OwnRandomness`), and `clock` its clock in seconds;
-    tests inject both. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own,
-    say): it takes the challenger's law and N, and its draw is held to them like any other. `prover`, when given, is the
-    identity the challenger registered the stream's prover under (lowercase hex): the stream's digest names it, and every
-    registration is bound to the stream and the prover (`binding`, `registration.check`'s): its window names both, and a
-    window salt is bound to them, so a tile seeded for one prover's stream is refused in any other.
+    the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
+    bytes as the Lean verifier of record reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
+    read of the OS. `clock` is its clock in seconds; tests inject both. `sampler`, when given, draws instead of the
+    coins (`flock-verify draw` in a process of its own, say): it takes the challenger's law and N, and its draw is held
+    to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
+    (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
+    (`binding`, `registration.check`'s): its window names both, and a window salt is bound to them, so a tile seeded for
+    one prover's stream is refused in any other.
 
     A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
     elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
@@ -985,7 +985,7 @@ class Stream:
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition, *, budget: int, delta: float, challenger: str,
-                 coins: Callable[[int], bytes] = os.urandom, clock: Callable[[], float] = time.monotonic,
+                 coins: Callable[[int], bytes] = V.coins, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")

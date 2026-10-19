@@ -33,7 +33,6 @@ its re-baseline.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
@@ -255,13 +254,14 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 
 class OwnRandomness:
-    """The verifier's own randomness, read directly: exact samplers over raw bytes from `source` (default the operating
-    system's generator), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
+    """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
+    proof service's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
+    system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
     M0's `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""
 
-    def __init__(self, source: Callable[[int], bytes] = os.urandom) -> None:
+    def __init__(self, source: Callable[[int], bytes]) -> None:
         self._source = source
 
     def read(self, n: int) -> bytes:
@@ -311,9 +311,10 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     """Stage 1 under a one-stage law: the one-stage draw object over the RU positions [0, population) (`one_stage.draw`;
     `check_draw` holds it to the registration and the law), as the Lean verifier's `Flock.Draw.drawWith` draws it from
     the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the law's NUM/DEN as written), `stratified`
-    and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's units.  With the
-    verifier's closure map (a work law only, as `flock-verify draw --closure`), the draw carries its `closure`
-    (`closure_of`) when that is not empty."""
+    and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's units.  Each
+    stream is `2 k · width(n) + 64` bytes (`2 n · width(den) + 64` for `bernoulli`), extended by as many again and rerun
+    whenever it runs out (`OwnRandomness.stream`).  With the verifier's closure map (a work law only, as
+    `flock-verify draw --closure`), the draw carries its `closure` (`closure_of`) when that is not empty."""
     problem = _law_problem(law)
     if problem:
         raise ValueError(problem)
@@ -365,7 +366,8 @@ def _distinct(units: Iterable[ReplayUnit]) -> list[ReplayUnit]:
 def select_replay_units(randomness: OwnRandomness, law: TwoStageLaw, units: Iterable[ReplayUnit]) -> list[ReplayUnit]:
     """The first stage, in the given order: an RU of a class with a probability is drawn with it, independently; the RUs
     of a class with a one-stage law are drawn together by `draw_first` over their positions in index order, when the
-    class's first RU comes up.  A work law's closure is `draw_first`'s, with the class's closure map."""
+    class's first RU comes up.  A work law's closure is `draw_first`'s, with the class's closure map.  The sampled
+    verifier's `TwoStage.selectReplayUnits` reads the same bytes in the same order (the difftest's `replay_units`)."""
     units = _distinct(units)
     drawn: dict[str, set[int]] = {}
     out = []
@@ -385,7 +387,9 @@ def select_replay_units(randomness: OwnRandomness, law: TwoStageLaw, units: Iter
 
 def select_proof_units(randomness: OwnRandomness, law: TwoStageLaw, selected: Iterable[ReplayUnit]) -> dict[int, tuple[int, ...]]:
     """The second stage, after the interiors are registered: RU index -> the sorted proof-unit positions (0 .. n_v - 1)
-    checked in it, a uniform `k`-subset when the RU holds more than `k`, and otherwise every position, drawing nothing."""
+    checked in it, a uniform `k`-subset when the RU holds more than `k`, and otherwise every position, drawing nothing.
+    The sampled verifier's `TwoStage.selectProofUnits` reads the same bytes in the same order (the difftest's
+    `proof_units`)."""
     out = {}
     for u in _distinct(selected):
         k = law.stage(u.cls).checked(u.n_v)

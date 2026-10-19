@@ -85,7 +85,8 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the salts of the prover's, the firewall's and a registrant's commitments.
+the verifier's unit draw, the proof service's epoch salt (`Stream.salt`), and the salts of the prover's, the firewall's
+and a registrant's commitments.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
 stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque

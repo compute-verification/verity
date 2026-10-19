@@ -427,13 +427,13 @@ unchecked. Pinned by `tests/test_two_stage.py`.
 
 ### The verifier's randomness
 
-The draw of record is `two_stage.OwnRandomness`: the operating system's generator read directly with the Lean verifier's
-samplers (`Flock.Draw`), with no hash, no derivation and no beacon, the RU draw after the boundary is registered and the
-proof-unit draw after the interiors are. Stage 1 (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does, and
-`select_replay_units` and `select_proof_units` are the sampled verifier's `TwoStage.selectReplayUnits` and
-`TwoStage.selectProofUnits`, held to the Python by the difftest. Nothing derives a draw, the proof service's included,
-except vLLM's legacy replay challenge until its re-baseline; `two_stage`'s docstring has the byte layout. Pinned by
-`tests/test_two_stage.py`.
+The draw of record is `two_stage.OwnRandomness` read with the Lean verifier's samplers (`Flock.Draw`), with no hash, no
+derivation and no beacon, the RU draw after the boundary is registered and the proof-unit draw after the interiors are.
+Its bytes are the Lean verifier of record's (`one_stage.verifier.coins`: `IO.getRandomBytes`, A3), `service.Stream`'s
+default coins. Stage 1 (`draw_first`) reads them as `Flock.Draw.drawWith` does, and `select_replay_units` and
+`select_proof_units` are the sampled verifier's `TwoStage.selectReplayUnits` and `TwoStage.selectProofUnits`, held to
+the Python by the difftest. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
+until its re-baseline; `two_stage`'s docstring has the byte layout. Pinned by `tests/test_two_stage.py`.
 
 ### Verification plans
 
