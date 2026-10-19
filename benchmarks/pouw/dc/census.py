@@ -463,7 +463,7 @@ def with_notes(d: Path, rows: list[dict[str, str]]) -> list[dict[str, str]]:
         if o.startswith(r["description"]):
             r = {**r, "description": o}
         elif o and not r["description"].startswith(o):
-            print(f"census.py: {r['row']}'s old description isn't the generated one; its note, if any, is dropped",
+            print(f"census.py: {r['row']}'s description is regenerated; a note after its old text, if any, is not kept",
                   file=sys.stderr)
         out.append(r)
     return out

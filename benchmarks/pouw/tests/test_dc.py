@@ -470,4 +470,4 @@ def test_census_write_keeps_what_it_does_not_write(tmp_path, capsys):
     assert {r["row"] for r in rows_before if not census.OWN_ROW.fullmatch(r["row"])} <= set(rows_after)
     assert {"DS_issue", "TMAB", "UP"} <= set(rows_after)
     assert rows_after["M"]["description"] == gen_m + ". A note added by hand"
-    assert "M's old description" not in capsys.readouterr().err
+    assert "M's description is regenerated" not in capsys.readouterr().err
