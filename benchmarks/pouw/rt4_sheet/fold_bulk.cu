@@ -39,10 +39,17 @@ __device__ __forceinline__ void imma(uint32_t (&d)[4], uint32_t a, uint32_t b) {
 __device__ __forceinline__ void st128(uint32_t *p, uint32_t a, uint32_t b, uint32_t c, uint32_t d) {
   asm volatile("st.global.v4.b32 [%0], {%1,%2,%3,%4};" ::"l"(p), "r"(a), "r"(b), "r"(c), "r"(d) : "memory");
 }
+// 256-bit global memory is sm_100's and sm_120's; on sm_90 the WIDE forms are two 128-bit ones
 __device__ __forceinline__ void st256(uint32_t *p, const uint32_t (&v)[NCH]) {
+#if __CUDA_ARCH__ >= 1000
   asm volatile("st.global.v8.b32 [%0], {%1,%2,%3,%4,%5,%6,%7,%8};" ::"l"(p), "r"(v[0]), "r"(v[1]), "r"(v[2]),
                "r"(v[3]), "r"(v[4]), "r"(v[5]), "r"(v[6]), "r"(v[7])
                : "memory");
+#else
+  asm volatile("st.global.v4.b32 [%0], {%1,%2,%3,%4};\n\tst.global.v4.b32 [%0+16], {%5,%6,%7,%8};" ::"l"(p), "r"(v[0]),
+               "r"(v[1]), "r"(v[2]), "r"(v[3]), "r"(v[4]), "r"(v[5]), "r"(v[6]), "r"(v[7])
+               : "memory");
+#endif
 }
 __device__ __forceinline__ void sts64(uint32_t addr, uint32_t a, uint32_t b) {
   asm volatile("st.shared.v2.b32 [%0], {%1,%2};" ::"r"(addr), "r"(a), "r"(b) : "memory");
@@ -54,10 +61,17 @@ __device__ __forceinline__ void ldcg128(const uint32_t *p, uint32_t &a, uint32_t
   asm volatile("ld.global.cg.v4.b32 {%0,%1,%2,%3}, [%4];" : "=r"(a), "=r"(b), "=r"(c), "=r"(d) : "l"(p) : "memory");
 }
 __device__ __forceinline__ void ldcg256(const uint32_t *p, uint32_t (&v)[NCH]) {
+#if __CUDA_ARCH__ >= 1000
   asm volatile("ld.global.cg.v8.b32 {%0,%1,%2,%3,%4,%5,%6,%7}, [%8];"
                : "=r"(v[0]), "=r"(v[1]), "=r"(v[2]), "=r"(v[3]), "=r"(v[4]), "=r"(v[5]), "=r"(v[6]), "=r"(v[7])
                : "l"(p)
                : "memory");
+#else
+  asm volatile("ld.global.cg.v4.b32 {%0,%1,%2,%3}, [%8];\n\tld.global.cg.v4.b32 {%4,%5,%6,%7}, [%8+16];"
+               : "=r"(v[0]), "=r"(v[1]), "=r"(v[2]), "=r"(v[3]), "=r"(v[4]), "=r"(v[5]), "=r"(v[6]), "=r"(v[7])
+               : "l"(p)
+               : "memory");
+#endif
 }
 __device__ __forceinline__ void bulk_xor_n(uint32_t *g, uint32_t s, uint32_t bytes) {
   asm volatile("cp.reduce.async.bulk.global.shared::cta.bulk_group.xor.b32 [%0], [%1], %2;\n\t"
