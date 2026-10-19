@@ -355,6 +355,31 @@ def test_the_simulators_windows_are_ok_exactly_where_n3_in_the_clear_holds(sim):
         assert bad and bad == {v.where for v in report.violations}, t
 
 
+def test_n2_and_n3_run_on_every_link_window_and_only_n3_holds_the_content(sim):
+    """Every link-window of the run is committed under each port's declared occupancy profile, and each of its
+    port-windows has N3's ok bit. N2 compares no grid in the clear, so frames edited in content alone (flip-bit, fill)
+    pass N2 on every link-window and N3 refuses exactly the ports N3 in the clear refuses; an extra frame is off the
+    profile, so N2 refuses its link-windows too."""
+    for t in (None, *TAMPERS):
+        (setup, windows), report = sim[t]
+        links = U.link_checks(setup, windows)
+        (W,) = {len(p) for p in setup.occupancy.values()}
+        assert setup.occupancy.keys() == setup.links.keys()
+        assert [(r["link"], r["window"]) for r in links] == sorted(
+            (link, w) for link in {link for link, _ in setup.links.values()} for w in range(W))
+        assert all(len(r["n3"]) == 2 for r in links)
+        n2 = {(r["link"], r["window"]) for r in links if not r["n2"]}
+        n3 = {(p, r["window"]) for r in links for p, ok in r["n3"].items() if not ok}
+        assert {(r["link"], r["window"]) for r in links if not r["ok"]} == n2 | {(setup.links[p][0], w) for p, w in n3}
+        assert {p for p, _ in n3} == {v.where for v in report.violations}, t
+        if t is None:
+            assert not n2 and not n3
+        elif t == "b1:extra-frame":
+            assert n2 == {(setup.links[p][0], w) for p, w in n3}
+        else:
+            assert not n2 and n3
+
+
 def test_a_tampered_window_runs_the_unit_and_the_position_of_its_honest_one(sim):
     """The unit and its public position depend on the size class and the occupancy alone, not on what was recorded
     (each run's commitments have their own salts, so the roots differ)."""
