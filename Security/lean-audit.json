@@ -226,6 +226,10 @@
    "owner": "@lean",
    "digest": "39aeeeb2cb2d00dd802a7c1d91b8d93ed6b46429748d8ef583b6e2f1af51b59a"
   },
+  "Nci.Assumptions.ActivationsIncompressibleAll": {
+   "owner": "@lean",
+   "digest": "e5fd0924b14bcf99150ad737dc0c6e573d95f1ad3576eba7077361d77205c742"
+  },
   "Nci.Assumptions.ActivationsSupport": {
    "owner": "@lean",
    "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
@@ -5440,6 +5444,30 @@
    "assumptions": [],
    "type_hash": "f2427bb0d064a77600f917fdfb62cfe489cbcb68556322ce1d0ecea2380f62c5"
   },
+  "Nci.SecurityProofs.ActivationsBoundOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
+   "assumptions": [],
+   "type_hash": "7edf84dc2a0076401bda2f30d3c23d99ccd96e334f84aed639205270127497b1"
+  },
+  "Nci.SecurityProofs.ActivationsChain": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ActivationsChain : Nci.Guarantees.ActivationsChain"],
+   "assumptions": [],
+   "type_hash": "714e334345569e58449896333930509e1d7d4844154c1eabc8b38becd0f99498"
+  },
+  "Nci.SecurityProofs.ActivationsReads": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ActivationsReads : Nci.Guarantees.ActivationsReads"],
+   "assumptions": [],
+   "type_hash": "b6654137b8f0a7371afc4bf0d99f4065db7f54641684a3c268a42173846a363a"
+  },
+  "Nci.SecurityProofs.ActivationsTrainingOn": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn : Nci.Guarantees.ActivationsTrainingOn"],
+   "assumptions": [],
+   "type_hash": "c4eb9f6f3eb171da49c3706a625d10ba7bc90ac1ca1672a9aa0ed2131ae404ed"
+  },
   "Nci.SecurityProofs.ContainedFanOutOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ContainedFanOutOn : Nci.Guarantees.ContainedFanOutOn"],
@@ -8166,7 +8194,11 @@
    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named TrainingIncompressible (Security/Models/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions.lean), the activations' half of TrainingIncompressible, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
+   "Nci.SecurityProofs.ContainedFanOutOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressible on the reference circuit (Security/Models/Nci/Assumptions.lean), the activations' half of TrainingIncompressible, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ActivationsReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ActivationsBoundOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ActivationsTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (Security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, Security/Definitions/Nci/Dark.lean), under the named ActivationsIncompressibleAll (Security/Models/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ActivationsChain": "lemma: ActivationsIncompressibleAll gives ActivationsIncompressible for a chain that is part of the threading (ChainIn, Security/Definitions/Nci/Links.lean); it relates two named premises and is about no function."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsSupport": {
@@ -11425,6 +11457,10 @@
     "Bandwidth.SecurityProofs.B3RO",
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity",
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -11498,6 +11534,10 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -11623,6 +11663,8 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -11841,6 +11883,10 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -11910,6 +11956,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMulOn",
     "Nci.SecurityProofs.ContainedTrainingOn",
@@ -11983,6 +12031,23 @@
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
+   ]
+  },
+  "Definitions.Nci.Links": {
+   "digest": "f4786f4ded9ef0390ca16b80ff814dcf2981e98294be0e95fad201f5622aaeb9",
+   "definitions": {
+    "Nci.ChainIn": "11549ccb1acd113371ba94d44da7422b19ca84a9b21ae31cd1e78fc3722b6145",
+    "Nci.Threading.Links": "c2fa5a3be874e203d4f6ae57334420196d8b804256de646d9dc7b69908275372",
+    "Nci.Threading.Links.Whole": "713fe4cbe9afd934c3f3c8b9cd0b06c8ccb1eeb002eae32547743a1550506d38",
+    "Nci.Threading.Links.src": "034e77b91b3e154922dd80805fc5f61e860f7e7d31413ae903a94983623afbcf",
+    "Nci.Threading.actsUsed": "77388cf523f89f1644372b5f8ca2549e13179381d525840c93976555fb52ebc4",
+    "Nci.Threading.instDecidablePredFinNDWhole": "d8f5d24965a03efb14ae32a770afbf5e2744d614bec4263209cf53ac8d942500"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn"
    ]
   },
   "Definitions.Nci.Reads": {
@@ -12067,6 +12132,10 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
@@ -22601,6 +22670,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Actual.Runtime",
+    "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ContainedFanOutOn",
     "Nci.SecurityProofs.ContainedMatMul",
     "Nci.SecurityProofs.ContainedMatMulOn",
@@ -22610,6 +22680,18 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads"
+   ]
+  },
+  "Models.Nci.Assumptions.Activations": {
+   "digest": "7f5852e48dc36f26fa5618dc3380484cfe0fd57970bfee7685c3c8a4c53f325d",
+   "definitions": {
+    "Nci.Assumptions.ActivationsIncompressibleAll": "e5fd0924b14bcf99150ad737dc0c6e573d95f1ad3576eba7077361d77205c742"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn"
    ]
   },
   "Models.Nci.Assumptions.Fit": {
@@ -22727,6 +22809,21 @@
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul"
+   ]
+  },
+  "Models.Nci.Guarantees.Activations": {
+   "digest": "40330724b8622bf9332bb73cf72b36259eb49d4b6990c35559e446fac45aec66",
+   "definitions": {
+    "Nci.Guarantees.ActivationsBoundOn": "0fc9e7fc5eeff0565c5b4fbf64609d9d27789e1b991fc4051ffa83d27cfd10ea",
+    "Nci.Guarantees.ActivationsChain": "54558562e469af68b6546e6c8764740a3152dfbb3f71a363503d464c4498f467",
+    "Nci.Guarantees.ActivationsReads": "57694e16f5f1e1b72dfa7975c20f9a4bcb275d76610157e9dccccc72f7f2cee4",
+    "Nci.Guarantees.ActivationsTrainingOn": "3cf70f814c14b699daca8e6412b8ea69ac269800c7ef73ddddc58b9f29219f27"
+   },
+   "guarantees": [
+    "Nci.SecurityProofs.ActivationsBoundOn",
+    "Nci.SecurityProofs.ActivationsChain",
+    "Nci.SecurityProofs.ActivationsReads",
+    "Nci.SecurityProofs.ActivationsTrainingOn"
    ]
   },
   "Models.Nci.Guarantees.Contained": {
