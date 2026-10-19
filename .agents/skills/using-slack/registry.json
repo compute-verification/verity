@@ -50,6 +50,17 @@
       "subscribers": [
         "top"
       ]
+    },
+    "resource-accounting": {
+      "id": "C0CABUKBT2S",
+      "purpose": "Collaborators' questions on compute, memory and network accounting and the GPU model they rest on.",
+      "subscribers": [
+        "compute-accounting",
+        "memory-accounting",
+        "network-accounting",
+        "proofs",
+        "kernels"
+      ]
     }
   },
   "handles": [
