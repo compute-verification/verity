@@ -285,6 +285,109 @@ __global__ void __launch_bounds__(BT) fbu(const uint32_t *st, const uint32_t *W,
   if (tid == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
+__device__ __forceinline__ void bulk_xor_issue(uint32_t *g, uint32_t s, uint32_t bytes) {
+  asm volatile("cp.reduce.async.bulk.global.shared::cta.bulk_group.xor.b32 [%0], [%1], %2;" ::"l"(g), "r"(s), "r"(bytes)
+               : "memory");
+}
+
+// fbu's every-warp trip with a smaller KK slab: KK's slot is periodic in NCH words, so one slab of KS words a trip
+// XORs the block's SLOT-word y slot by SLOT / KS bulk reductions at successive offsets, all in one bulk group with the
+// p fk reduction (each bulk reduction is relaxed.gpu element by element, so their order doesn't matter); this lets
+// K BT grow past 512 inside the shared memory, and the body be shared by more warps
+template <int K, int BT, int KS, int H>
+__device__ __forceinline__ void tripw(uint32_t (&y)[K][NCH], uint32_t (&z)[K][NCH], const uint32_t (&d)[K][8][4],
+                                      uint32_t *gt, uint32_t st, uint32_t *gb, uint32_t sd, uint32_t sk, int wid,
+                                      int ln) {
+  constexpr int SLOT = K * BT * NCH;
+#pragma unroll
+  for (int k = 0; k < K; ++k) {
+    uint32_t m[NCH];
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) m[j] = d[k][2 * H + j / 4][j % 4] * FK(4 * (2 * H + j / 4) + j % 4);
+    st256(gt + NCH * BT * k, y[k]);
+    sts128(st + 4u * NCH * BT * k, m[0], m[1], m[2], m[3]);
+    sts128(st + 4u * NCH * BT * k + 16, m[4], m[5], m[6], m[7]);
+  }
+  asm volatile("fence.proxy.async;" ::: "memory");
+  __syncthreads();
+  if (wid == 0) {
+    if (ln == 0) {
+      bulk_xor_issue(gb, sd, SLOT * 4u);
+#pragma unroll
+      for (int c = 0; c < SLOT / KS; ++c) bulk_xor_issue(gb + c * KS, sk, KS * 4u);
+      asm volatile("cp.async.bulk.commit_group;\n\tcp.async.bulk.wait_group 0;\n\tfence.proxy.async;" ::: "memory");
+    }
+  }
+  __syncthreads();
+#pragma unroll
+  for (int k = 0; k < K; ++k) {
+    uint32_t u[NCH];
+    ldcg256(gt + NCH * BT * k, u);
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) {
+      y[k][j] = u[j] * KA(2 * H + j / 4) + z[k][j];
+      z[k][j] = __funnelshift_l(u[j], u[j], ROT(2 * H + j / 4)) + y[k][j];
+    }
+  }
+}
+
+// fbu with tripw; the launch brings SLOT + 4 KS words of dynamic shared memory (the p fk slot, then each trip's KK slab)
+template <int K, int BT, int KS>
+__global__ void __launch_bounds__(BT) fbw(const uint32_t *st, const uint32_t *W, uint32_t *out, uint32_t *cp,
+                                          long long *cyc, int sets, uint32_t one) {
+  constexpr int SLOT = K * BT * NCH;
+  static_assert(SLOT % KS == 0 && KS % NCH == 0, "the KK slab tiles the slot");
+  extern __shared__ __align__(128) uint32_t smem[];
+  const int tid = threadIdx.x, base = (blockIdx.x * BT + tid) * K;
+  const int wid = __shfl_sync(0xffffffffu, tid >> 5, 0), ln = tid & 31;
+  uint32_t *sd = smem, *sk = smem + SLOT;
+  uint32_t y[K][NCH], z[K][NCH], d[K][8][4];
+#pragma unroll
+  for (int k = 0; k < K; ++k) {
+    const int src = (base + k) & 1023;
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) {
+      y[k][j] = st[src * 16 + j];
+      z[k][j] = st[src * 16 + NCH + j];
+    }
+#pragma unroll
+    for (int i = 0; i < 8; ++i)
+#pragma unroll
+      for (int e = 0; e < 4; ++e) d[k][i][e] = W[src * 32 + 4 * i + e];
+  }
+  for (int i = tid; i < 4 * KS; i += BT) sk[i] = KK(2 * (i / KS) + (i % NCH) / 4);
+  asm volatile("fence.proxy.async;" ::: "memory");
+  uint32_t *gb = cp + (size_t)blockIdx.x * SLOT, *gt = gb + NCH * tid;
+  const uint32_t sdb = (uint32_t)__cvta_generic_to_shared(sd);
+  const uint32_t skb = (uint32_t)__cvta_generic_to_shared(sk);
+  uint32_t stt = sdb + 4u * NCH * tid;
+  uint32_t a0 = one, a1 = one, a2 = one, a3 = one, b0 = one, b1 = one;
+  asm volatile("" : "+l"(gt), "+r"(stt), "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(b0), "+r"(b1));
+  __syncthreads();
+  long long t0 = clock64();
+#pragma unroll 1
+  for (int s = 0; s < sets; ++s) {
+#pragma unroll
+    for (int k = 0; k < K; ++k)
+#pragma unroll
+      for (int i = 0; i < 8; ++i) imma6(d[k][i], a0, a1, a2, a3, b0, b1);
+    tripw<K, BT, KS, 0>(y, z, d, gt, stt, gb, sdb, skb, wid, ln);
+    tripw<K, BT, KS, 1>(y, z, d, gt, stt, gb, sdb, skb + 4u * KS, wid, ln);
+    tripw<K, BT, KS, 2>(y, z, d, gt, stt, gb, sdb, skb + 8u * KS, wid, ln);
+    tripw<K, BT, KS, 3>(y, z, d, gt, stt, gb, sdb, skb + 12u * KS, wid, ln);
+  }
+  __syncthreads();
+  long long t1 = clock64();
+#pragma unroll
+  for (int k = 0; k < K; ++k)
+#pragma unroll
+    for (int j = 0; j < NCH; ++j) {
+      out[(size_t)(base + k) * 16 + j] = y[k][j];
+      out[(size_t)(base + k) * 16 + NCH + j] = z[k][j];
+    }
+  if (tid == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
 // the device pass sees no host code, so each variant is instantiated here
 #define FBK_INST(K, BT, WIDE)                                                                                         \
   template __global__ void fbk<K, BT, WIDE>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *,  \
@@ -301,6 +404,12 @@ FBU_INST(2, 256, 0)
 FBU_INST(4, 128, 0)
 FBU_INST(2, 256, 1)
 FBU_INST(4, 128, 1)
+#define FBW_INST(K, BT, KS)                                                                                           \
+  template __global__ void fbw<K, BT, KS>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *,    \
+                                          int, uint32_t);
+FBW_INST(4, 128, 4096)
+FBW_INST(4, 256, 4096)
+FBW_INST(4, 256, 2048)
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -343,18 +452,23 @@ int main() {
   srand(0xC0B1);
   for (int i = 0; i < 1024 * 16; ++i) st[i] = (uint32_t)rand() * 668265263u ^ (uint32_t)rand();
   for (int i = 0; i < 1024 * 32; ++i) W[i] = (uint32_t)rand() * 2654435761u ^ (uint32_t)rand();
-  const int BSETS = CPS, TSETS = 2048, LANES = 512;
+  const int BSETS = CPS, TSETS = 2048, LANES = 1024;
   static uint32_t fin[LANES * 16];
   ref(BSETS, LANES, fin);
 
-  struct { const char *name; Kern k; int K, bt, wide; } ks[] = {
-      {"fbk_k1_128", fbk<1, 512, 0>, 1, 512, 0}, {"fbk_k1_256", fbk<1, 512, 1>, 1, 512, 1},
-      {"fbk_k2_128", fbk<2, 256, 0>, 2, 256, 0}, {"fbk_k2_256", fbk<2, 256, 1>, 2, 256, 1},
-      {"fbk_k4_256", fbk<4, 128, 1>, 4, 128, 1}, {"fbu_k2_256", fbu<2, 256, 0>, 2, 256, 1},
-      {"fbu_k4_256", fbu<4, 128, 0>, 4, 128, 1}, {"fbv_k2_256", fbu<2, 256, 1>, 2, 256, 1},
-      {"fbv_k4_256", fbu<4, 128, 1>, 4, 128, 1},
+  // each variant's dynamic shared memory: fbk and fbu 5 K BT NCH words, fbw K BT NCH + 4 KS
+  const int s512 = 5 * 512 * NCH * 4;
+  struct { const char *name; Kern k; int K, bt, wide, smem; } ks[] = {
+      {"fbk_k1_128", fbk<1, 512, 0>, 1, 512, 0, s512}, {"fbk_k1_256", fbk<1, 512, 1>, 1, 512, 1, s512},
+      {"fbk_k2_128", fbk<2, 256, 0>, 2, 256, 0, s512}, {"fbk_k2_256", fbk<2, 256, 1>, 2, 256, 1, s512},
+      {"fbk_k4_256", fbk<4, 128, 1>, 4, 128, 1, s512}, {"fbu_k2_256", fbu<2, 256, 0>, 2, 256, 1, s512},
+      {"fbu_k4_256", fbu<4, 128, 0>, 4, 128, 1, s512}, {"fbv_k2_256", fbu<2, 256, 1>, 2, 256, 1, s512},
+      {"fbv_k4_256", fbu<4, 128, 1>, 4, 128, 1, s512},
+      {"fbw_k4_bt128_ks4096", fbw<4, 128, 4096>, 4, 128, 1, (4096 + 4 * 4096) * 4},
+      {"fbw_k4_bt256_ks4096", fbw<4, 256, 4096>, 4, 256, 1, (8192 + 4 * 4096) * 4},
+      {"fbw_k4_bt256_ks2048", fbw<4, 256, 2048>, 4, 256, 1, (8192 + 4 * 2048) * 4},
   };
-  const int smem = 5 * LANES * NCH * 4, maxblocks = sms * 32;
+  const int maxblocks = sms * 32;
   uint32_t *d_st, *d_W, *d_out, *d_cp;
   long long *d_cyc;
   cudaMalloc(&d_st, sizeof st);
@@ -369,18 +483,19 @@ int main() {
   int all = 1;
   for (auto &e : ks) {
     static uint32_t out[LANES * 16];
+    const int smem = e.smem, lanes = e.K * e.bt;
     cudaFuncSetAttribute((const void *)e.k, cudaFuncAttributeMaxDynamicSharedMemorySize, smem);
     cudaMemset(d_cp, 0, LANES * NCH * sizeof(uint32_t));
     e.k<<<1, e.bt, smem>>>(d_st, d_W, d_out, d_cp, d_cyc, BSETS, one);
     cudaError_t err = cudaGetLastError();
     if (err == cudaSuccess) err = cudaDeviceSynchronize();
-    cudaMemcpy(out, d_out, sizeof out, cudaMemcpyDeviceToHost);
+    cudaMemcpy(out, d_out, (size_t)lanes * 16 * sizeof(uint32_t), cudaMemcpyDeviceToHost);
     int bad = err != cudaSuccess;
-    for (int i = 0; i < LANES * 16; ++i) bad += out[i] != fin[i];
+    for (int i = 0; i < lanes * 16; ++i) bad += out[i] != fin[i];
     const int ok = bad == 0;
     all &= ok;
-    printf("%s K=%d bt=%d wide=%d bitexact=%d logical_lanes=%d sets=%d bad_words=%d err=%s\n", e.name, e.K, e.bt,
-           e.wide, ok, LANES, BSETS, bad, cudaGetErrorString(err));
+    printf("%s K=%d bt=%d wide=%d smem=%d bitexact=%d logical_lanes=%d sets=%d bad_words=%d err=%s\n", e.name, e.K,
+           e.bt, e.wide, smem, ok, lanes, BSETS, bad, cudaGetErrorString(err));
     int occ = 0;
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, e.k, e.bt, smem);
     for (int b = 1; b <= occ; b = b < occ ? occ : occ + 1) {

@@ -32,13 +32,15 @@ def targets(rest):
 parts = re.split(r"\n\s*Function : (\S+)\n", "\n" + open(sys.argv[1]).read())
 out = {}
 for name, body in zip(parts[1::2], parts[2::2]):
-    m = re.search(r"(fb[ku])ILi(\d+)ELi(\d+)E(?:Li(\d+)E)?", name)
+    m = re.search(r"(fb[kuw])ILi(\d+)ELi(\d+)E(?:Li(\d+)E)?", name)
     if not m:
         continue
     kern, K, BT = m[1], int(m[2]), int(m[3])
     WIDE = int(m[4]) if kern == "fbk" else 1
     if kern == "fbu" and m[4] == "1":
         kern = "fbv"                  # fbu<K, BT, 1>: the bulk body under lane 0 of warp 0
+    if kern == "fbw":
+        kern = f"fbw{m[4]}"           # fbw<K, BT, KS>: KS words of KK slab a trip
     ins = [(int(a, 16), p.strip(), op, rest) for a, p, op, rest in INS.findall(body)]
     loops = [(t, a) for a, p, op, rest in ins if op.startswith("BRA") for t in targets(rest) if t < a]
     head, tail = max(loops, key=lambda lp: lp[1] - lp[0])
