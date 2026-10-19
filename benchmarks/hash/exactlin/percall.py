@@ -1,8 +1,12 @@
 """sbench's stock-percall arm: stock vLLM int8 (TritonInt8ScaledMMLinearKernel) with its `triton_scaled_mm` call behind a
 custom op, `exactlin_stock::scaled_mm`, opaque to Dynamo as the exact arms' ops are.  Traced, `triton_scaled_mm`'s tile
 heuristic runs once at the traced M (max_num_batched_tokens) and every M then runs that tile; behind the op it runs on each
-call's own M, at each CUDA graph's capture and on every call outside a graph.  The values are stock's: the int32 sums don't
-depend on the tile, and the epilogue is the same per element, so the arm's tokens must equal stock's (sbench gates them).
+call's own M, at each CUDA graph's capture and on every call outside a graph.  The GEMM's values are stock's: the int32
+sums don't depend on the tile, and the epilogue is the same per element.  The rest of the step is stock's arithmetic, but
+its reduction configs are this process's own: the op changes Inductor's metadata around it (tiling scores, byte estimates,
+a buffer made in place), which keys Inductor's autotune cache, so the arm times its reductions afresh, and the fused add +
+RMSNorm + int8 quant kernel's two configs (R0_BLOCK 4096 and 1024, a near tie) sum in another order.  Its tokens equal
+stock's where both processes pick alike (sbench gates them; `percall_diag.py` pins the picks).
 `CALLS` counts the op's calls by (M, N), so a run shows which M the heuristic saw."""
 from __future__ import annotations
 
