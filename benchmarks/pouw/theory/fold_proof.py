@@ -25,20 +25,24 @@ runs in fewer than W/8 warp instructions a unit -- equivalently, in fewer than 4
 ISA. §1 checks this chain of equalities against `Sm120.lean`'s own data.
 
 **The bound, and how the search extends it (the restriction lemma).** Fix every word's inputs but word i's. The
-restriction of any straight-line fold program to word i computes `(y'_i, z'_i)` from `(y_i, z_i, w_i)` with every other
-operand a constant (the prover's keys and the other words are free), so by FOLD-MIN-4 (#2751, r20261019-094858-36d3: fx1
-needs ≥ 4 two-word instructions at 32 bits) its word-i-dependent arithmetic is ≥ 4 lane-instruction slots. Moves (SHFL,
-LDG/LDS, STG/STS, PRMT, MOV, SEL) relocate word-values, not arithmetic. If
+restriction of a straight-line fold program to word i computes `(y'_i, z'_i)` from `(y_i, z_i, w_i)`, every instruction
+that doesn't read word i becoming a constant. If
 
 - **(WIDTH-32)** every fold warp instruction's output depends on ≤ 32 folded words (one word a lane), and
-- **(NO-MIX)** no single lane-instruction's output completes a fold-word for two distinct chains at once (so a 64-bit
-  lane-instruction cannot advance two chains),
+- **(NO-MIX)** no fold lane-instruction depends on the words of two chains (so a 64-bit lane-instruction cannot advance
+  two chains, and the restriction's constants are the keys alone, never another word's values),
 
-then the ≥ 4 slots a word don't overlap across words, giving ≥ 4W lane-slots a unit = ≥ 4W/32 = W/8 warp instructions.
-§2 checks NO-MIX mechanically: no single two-word (64-bit) instruction, and no ≤3-instruction program ending in one,
-writes two fold-completing outputs of two distinct chains (the cross pairs of {y'_1,z'_1,y'_2,z'_2}), over the modelled
-ISA. WIDTH-32 is the one residual the search leaves open; §3 states what rests on it, and models the form that breaks
-it.
+then the restriction is a one-word program over word i's inputs and the keys, FOLD-MIN-4 (#2751,
+r20261019-094858-36d3: fx1 needs ≥ 4 instructions at 32 bits, over fold_wide3.c's modelled ISA with the ten inputs as
+its only operands) gives it ≥ 4 lane-instruction slots, and those slots don't overlap across words: ≥ 4W lane-slots a
+unit = ≥ 4W/32 = W/8 warp instructions. Moves (SHFL, LDG/LDS, STG/STS, PRMT, MOV, SEL) relocate word-values and only
+add slots. The class inherits FOLD-MIN-4's operands: an immediate other than its ten (a key product, say) is outside it.
+
+§2 checks NO-MIX's cheapest counterexamples mechanically: no single two-word instruction of any form (IMAD.WIDE,
+IADD.64, IMNMX.64; in-test, width 4), and no program of at most 3 instructions over both chains' inputs and the keys
+ending in one (`--wide3`, width 4 and 32 bits), writes outputs of two chains (the cross pairs of
+{y'_1,z'_1,y'_2,z'_2}). NO-MIX past three instructions is a premise; WIDTH-32 is the other, and §3 states what rests on
+it and models the form that breaks it.
 
 **What §3 argues (no search).**
 - **Lane-shared** (SHFL, REDUX): SHFL is a move (it carries a lane's word to another lane, computing nothing). REDUX's
@@ -226,9 +230,9 @@ CROSS = (("y1", "y2"), ("y1", "z2"), ("z1", "y2"), ("z1", "z2"))
 def no_mix_pure(ck: Checks, width: int = 4, npts: int = 8) -> None:
     """§2 in-test: NO-MIX at `width` bits, pure Python. For each cross pair of outputs from distinct chains, neither
     output is a single instruction of the two-chain pool, and no single two-word instruction of any form (IMAD.WIDE and
-    .U32, IADD.64 and IMNMX.64 in every sign/variant) writes the pair as its two words, either way round. The width-4
-    search covers 32 bits for the forms that commute with mod 2^w (LOP3, IADD3, IMAD, LEA); a program reaching the last
-    two-word instruction through up to two more, and 32 bits, go to `--wide3` (fold_wide3.c, a CPU node)."""
+    .U32, IADD.64 and IMNMX.64 in every sign/variant) writes the pair as its two words, either way round. Width 4 is the
+    small model (fx1 there rotates by 1); a program reaching the last two-word instruction through up to two more, and
+    32 bits, go to `--wide3` (fold_wide3.c, a CPU node)."""
     cols, out, r = two_chain_case(width, npts)
     pool = {k: v for k, v in cols.items()}
     labels = {"y1": out["y1"], "z1": out["z1"], "y2": out["y2"], "z2": out["z2"]}
@@ -303,8 +307,9 @@ def no_mix_wide3(ck: Checks, width: int) -> None:
         got = fx.width_wide3(exe, width, six, ctl)
         for lab in ctl:
             k = kind[lab.split("_")[0]]
+            wit = [x for x in got[lab]["witnesses"] if x[0] == {"found": "F", "sel": "S", "le2": "L"}[k]]
             ck.check(f"width {width}: fold_wide3.c finds its control {lab} ({k}) over chain 1's six inputs",
-                     got[lab][k] > 0, got[lab]["witnesses"][:1])
+                     got[lab][k] > 0, wit[:1])
 
         # the nine-input pass finds a pair a program mixing the two chains writes (LOP3 0x96(y1, w2, kx), IMAD with z2,
         # a last IMAD.WIDE), so the cross pairs' zeros below are the search's, not a blind spot for two chains.
@@ -385,7 +390,8 @@ def merge_records(ck: Checks, paths: list[str]) -> None:
 
 def per_unit_bound(ck: Checks, phi: Fraction) -> None:
     """§3: the counting from FOLD-MIN-4's ≥ 4 a word to ≥ W/8 warp instructions a unit, and what mixing would cost. The
-    numbers are checked; WIDTH-32 and NO-MIX are the premises the argument rests on (NO-MIX now checked in §2)."""
+    numbers are checked; WIDTH-32 and NO-MIX are the premises the argument rests on (NO-MIX checked in §2 up to three
+    instructions)."""
     W, per_word = 128, 4                                    # FOLD-MIN-4: ≥ 4 lane-instruction slots a word at 32 bits
     slots = W * per_word                                    # lane-slots a unit, no overlap across words
     warp_instrs = Fraction(slots, LANES)
@@ -395,7 +401,7 @@ def per_unit_bound(ck: Checks, phi: Fraction) -> None:
     # break NO-MIX rules out); a bulk op folding a whole block breaks WIDTH-32 (§3's model).
     mixed = Fraction(slots, LANES * 2)
     ck.check("if NO-MIX failed (a 64-bit lane-instruction advanced two chains), the count would halve to 8 a unit, below "
-             "the floor -- so NO-MIX is load-bearing and is checked in §2", mixed == Fraction(8), mixed)
+             "the floor -- so NO-MIX is load-bearing; §2 checks it up to three instructions", mixed == Fraction(8), mixed)
     # the margin: the sheet's bound breaks only below 16.99993 issue slots a unit (RT2-120, cpw_floor.py), and an
     # accepted unit is IMMA 1 + the fold + CP-W's checkpoint, whose egress floor is 0.25 a unit.
     unit = 1 + W * phi + Fraction(1, 4)
