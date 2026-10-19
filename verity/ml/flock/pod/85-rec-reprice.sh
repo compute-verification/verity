@@ -678,7 +678,7 @@ lean)
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
   # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
-  # out, and R's levels' tops; without the algebra, the level's acc as acc0)
+  # out, R's levels' tops, and level 0's cap rec-top-L0 as L0 and cap read it; without the algebra, the level's acc as acc0)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -692,7 +692,8 @@ o, v, vs = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
 try:
-    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")))["ports"]
+    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
+                            [d for d in (v / "L0", v / "cap") if (d / "registered.json").is_file()])["ports"]
 except ValueError as e:
     sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):
