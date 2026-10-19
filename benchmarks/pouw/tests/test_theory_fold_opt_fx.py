@@ -18,7 +18,7 @@ def test_fold_opt_fx(tmp_path):
     searches over the modelled sm_120 ISA), so only running the script checks them. About 2 minutes, nearly all in the
     width-4 searches that neither output is a word of a two-instruction program, IMAD.WIDE's two words included, and
     that no two-instruction program writes both: the count argument needs them, and no cheaper check covers them. The
-    3-instruction search (`--wide3`, fold_wide3.c) is CPU minutes and runs outside the suite."""
+    search over every two-word form (`--wide3`, fold_wide3.c) is CPU minutes and runs outside the suite."""
     verdict = tmp_path / "verdict.json"
     proc = subprocess.run([sys.executable, "-B", str(SCRIPT), "--mutations", "--verdict", str(verdict)],
                           capture_output=True, text=True, cwd=tmp_path)
