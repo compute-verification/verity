@@ -7,7 +7,7 @@ one integrity profile.
 
 * **Population.** The captured instances of layer `--layer` in each set under `--sets` (one directory per template, in the
   layer's order), staged by M0 as one stand-in population per template (`stage_subset.py`: the frame domains bind the
-  selection). The program is `TemplatePopulations` over the templates' Definitions, and the partition is
+  selection). The program is `TemplatePopulations_v1` over the templates' Definitions, and the partition is
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.

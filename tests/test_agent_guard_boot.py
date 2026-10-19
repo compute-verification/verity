@@ -13,7 +13,8 @@ GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AU
 
 
 def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_one(tmp_path):
-    env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1"}
+    env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1",
+           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc")}
 
     def git(*a, cwd=tmp_path / "ws"):
         return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True, text=True, env=env).stdout
@@ -55,10 +56,13 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
     p = boot()
     assert p.returncode == 0 and "tracks .cursor/hooks.json" in p.stdout, (p.stdout, p.stderr)
     assert git("status", "--porcelain") == ""
+    path_lines = [ln for ln in (tmp_path / "bashrc").read_text().splitlines() if "/workspace/.venv/bin" in ln]
+    assert path_lines == ["export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH"], "research on PATH, once (INF-71)"
 
 
 def test_boot_refuses_without_origin_or_an_earlier_copy(tmp_path):
-    env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1"}
+    env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_SKIP_INSTALL": "1",
+           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc")}
     subprocess.run(["git", "init", "-q", str(tmp_path / "ws")], check=True, env=env)
     p = subprocess.run(["bash", str(BOOT), str(tmp_path / "ws")], capture_output=True, text=True, env=env)
     assert p.returncode == 1 and "no guard on this VM" in p.stderr, p.stderr

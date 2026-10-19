@@ -97,11 +97,16 @@ def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Clai
 
 /-- **A V* session's draw passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a draw
 (`ProvedScope.drawLaw` refuses a session without one), and `RecSetup.fullDraw` takes it, as `verify` calls it in a
-recursive session. -/
+recursive session (under an inner shape its `rec` flag changes nothing, `fullDraw_some`). -/
 def fullDrawOk (i : RecVStar.Inner) (record : String) : Bool :=
   match Witness.recordDraw record with
   | some d => (RecSetup.fullDraw (some i) true (some d) record).isOk
   | none => false
+
+/-- Under an inner shape, `RecSetup.fullDraw`'s `noInner` refusal never fires, so its `rec` flag changes nothing. -/
+theorem fullDraw_some (i : RecVStar.Inner) (rec rec' : Bool) (draw : Option Lean.Json) (record : String) :
+    RecSetup.fullDraw (some i) rec draw record = RecSetup.fullDraw (some i) rec' draw record := by
+  simp [RecSetup.fullDraw]
 
 /-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, and
 every V* session's draw passes. -/
