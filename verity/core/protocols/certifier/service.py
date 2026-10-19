@@ -41,10 +41,11 @@ Program's digest names the check, so the spec, the stream and each registration 
 
 The count check is the part of the egress grid check that needs no frame's bytes, and the only grid check on ingress.
 It runs on every link-window, as a structural check must, and so does N3, on every port-window that recorded frames
-(`benchmarks/network_sim`, "N3 in zero knowledge"). N3 recomputes the head's frames root over its N frames, which holds
-N to the head's Σ n_t up to a SHA-512 collision (`certificate`: leaf k is frame k for k < Σ n_t and E_0 after), so
-together they hold N to the profile's window total. In a proof it is an equality of each head's 32·T count bits with
-the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
+(`benchmarks/network_sim`, "N3 in zero knowledge": a prototype unit, evaluated in the clear and not yet proved). N3
+recomputes the head's frames root over its N frames, which holds N to the head's Σ n_t up to a SHA-512 collision
+(`certificate`: leaf k is frame k for k < Σ n_t and E_0 after), so together they hold N to the profile's window total.
+In a proof it is an equality of each head's 32·T count bits with the profile's row, 32·T − 1 ANDs a head (19,199 at
+T = 600), beside the head's opening (`head_check.size`).
 
 Its verifier of record is `LinkWindows.verify`, which runs on the host and reads the opening: the certified records and
 their four salts. It accepts when
@@ -58,7 +59,9 @@ N2 compares no grid in the clear. The egress grid is the head's counts filled wi
 (`grid.fill`), and the head's digest binds both: the head check holds the counts to the profile on every link-window,
 and N3 holds the frames, the leaves of the head's frames root, to the committed layout's on every port-window. So
 `verify` takes no frames, and a link whose egress end has no profile has no verdict (`ValueError`): nothing would hold
-its egress timing.
+its egress timing. That is every link whose egress counts aren't fixed before the run, since they follow its run-time
+clock syncs or its requests' arrivals (the lab's and served traffic's), until a shaper fixes them (a constant row) or a
+unit holds them to the Program's under the declared syncs.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:

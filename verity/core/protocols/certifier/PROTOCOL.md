@@ -176,7 +176,8 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   parameters. The egress grid is the head's counts filled with its frames in order, and the head's digest binds both:
   the head check holds the counts to the profile, and N3 the frames to the committed layout's. So `verify` reads no
   frames, and a link whose egress end has no profile has no verdict (`ValueError`), since nothing would hold its egress
-  timing. The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one.
+  timing: every link whose egress counts aren't fixed before the run (the lab's, served traffic's), until a shaper
+  fixes them or a unit holds them to the Program's under the declared syncs. The outcome passes the opening's root as the session's, which one-stage's audit holds to the registered one.
   An unset deadline bit is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
 - **The oracle** is `LinkWindows.stand_in`, the in-the-clear verdict: the audit with the Program's egress grid
   compared, and each head's counts the profile's (`LinkWindows.declares`). `verify` accepts every link-window it
