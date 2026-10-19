@@ -251,9 +251,10 @@ def RightFixed {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (P : Play Ω S 
   ∀ x, P.accepts x → pf.right (pf.committed x) → (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
 
 /-- `accounting-ts-proofs-sound` (binding in its fork form, the 8 Oct ruling's; `cr/sha-512` bounds it at a finder that
-runs the window twice from round `w`). **Binding's fork form at `δ_fork`**: at every round `w`, two runs off one
-commitment, the second continuing from round `w` on fresh coins, are both accepted and open round `w`'s leaves
-differently with probability at most `δ_fork` over the pair (`ProofLayer.Forked`). Different openings of hm96 rows of
+runs the window twice from round `w`). **Binding's fork form at `δ_fork`**: at every round `w`, on a run and on its
+continuation from round `w` on fresh coins, which share round `w`'s commitment, every proof of round `w` is accepted
+and some proof opens round `w`'s leaves differently, with probability at most `δ_fork` over the pair
+(`ProofLayer.Forked`; the rest of the window need not be accepted). Different openings of hm96 rows of
 one frame-v3-sha512 tree are two inputs hashed to one SHA-512 digest along their paths. `BindingOfFork` gives binding
 at `√δ_fork` from it. -/
 def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ) : Prop :=
@@ -263,13 +264,21 @@ def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofL
 **Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation with
 probability at most `δ_ZK` over the window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover
 making `t` hash calls, so it gives `δ_ZK` only for a cheater whose hash calls over the window are capped
-(RT2-LOGIC-2). -/
+(RT2-LOGIC-2). Its "wrong" is against the committed transcript fixed at registration, and its statement leaves out the
+rows link: that the committed inputs and the program's outputs on them are the rows the public file commits "is not
+stated here" (`Proofs/Flock/EndToEndHidden/Statement.lean`). `ProofLayer.rel` reads exactly that link (the
+Definition with the leaves' rows among its outputs), so C-Flock's bound doesn't discharge this premise until it states
+the link (RT3-LOGIC-3). -/
 def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δzk : ℝ) : Prop :=
   pf.SoundAt δzk
 
-/-- `accounting-ts-proofs-sound` (the Definitions' pinning; main's circuit Definitions meet it since PIN, #2417).
+/-- `accounting-ts-proofs-pin` (the Definitions' pinning; conjectured, and no Lean checks it of the served relations).
 **The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation are right
-for their derivations. -/
+for their derivations. It is a property of the Definitions the window's proofs pass, which no Lean here models. As
+`ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the drawn segment's prefix-word set to the one
+before, so its window's other sets are free witness. PIN (#2417) added checks that recompute every word they absorb
+(`PouwSegCheck_v3`, `PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2`), and nothing states that the served relations are
+those (RT3-LOGIC-3). -/
 def ProofsPin {Ω : Type} {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) : Prop := pf.Pins
 
 open Classical in

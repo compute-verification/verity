@@ -81,11 +81,27 @@ def test_the_sm120_headlines_claims_name_what_their_statements_assume() -> None:
     fold = get("accounting-ts-fold-opt").name
     assert "FoldOptFoldedAt" in fold and "only at their own certificate π*" in fold
     proofs = get("accounting-ts-proofs-sound").name
-    assert all(s in proofs for s in ("BindingForkAt", "√δ_fork", "BindingOfFork", "ProofSoundAt", "ProofsPin"))
+    assert all(s in proofs for s in ("BindingForkAt", "√δ_fork", "BindingOfFork", "ProofSoundAt", "accounting-ts-proofs-pin"))
+    assert "every proof of round w is accepted" in proofs and "both accepted" not in proofs and "ProofsPin" not in proofs
+    assert "is not stated there" in proofs
     assert "catch-all" in get("accounting-sheet-dispatch").name and "NOROW" in get("accounting-sheet-dispatch").name
     clock = get("accounting-sheet-clock")
     assert "nvidia-smi" in clock.name and "data sheet's maximum" not in clock.name
     assert clock.label == "A1 clock (assumed)"
+
+
+def test_the_sm120_headlines_claims_match_their_lean_after_round_3() -> None:
+    """RT3's claim-text findings: (I1)'s vector, the writers' ω, the ½-floor reading of 0.591%, and pinning graded on
+    its own."""
+    facet = get("accounting-ts-facet-ceilings").name
+    assert "VF3s-16" in facet and "VF3p-16" not in facet and "(0, f_max]" in facet
+    words = get("accounting-ts-words-written").name
+    assert "UNI64" in words and "32 for IMMA.8816" in words
+    scalar = get("accounting-ts-scalar-route").name
+    assert all(s in scalar for s in ("9/8", "0.591%", "7.791%", "10.24% on VF3r-16", "SheetScalarRouteHalf"))
+    pin = get("accounting-ts-proofs-pin")
+    assert (pin.kind, pin.standing) == ("assumption", "conjectured") and get("accounting-ts-proofs-sound").standing == "standard"
+    assert all(s in pin.name for s in ("ProofsPin", "PouwSegCheck_v2 lacks it", "PouwSegCheck_v3", "#2417"))
 
 
 def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
