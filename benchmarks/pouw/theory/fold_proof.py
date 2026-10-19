@@ -271,8 +271,10 @@ def no_mix_pure(ck: Checks, width: int = 4, npts: int = 8) -> None:
 
 def no_mix_wide3(ck: Checks, width: int) -> None:
     """§2 full menu via `fold_wide3.c` (IMAD.WIDE, IADD.64, IMNMX.64, SEL.64 writing a pair): for each cross pair, no
-    program of at most 3 instructions writes it as a last two-word instruction (`found`), nor a last SEL.64 (`sel`),
-    over `fold_opt_fx`'s controls. At `width = 32` this is the 32-bit NO-MIX; it is CPU-hours (a CPU node)."""
+    program of at most 3 instructions over the nine inputs (both chains' words and the shared keys) writes it as a last
+    two-word instruction (`found`), nor a last SEL.64 (`sel`), and neither word is a word of a program of at most 2
+    (`le2`), with `fold_opt_fx`'s controls found. At `width = 32` this is the 32-bit NO-MIX; it is CPU-hours (a CPU
+    node)."""
     cols, out, r = two_chain_case(width, 2 if width >= 16 else 12)
     pool = {k: cols[k] for k in ("y1", "z1", "w1", "y2", "z2", "w2", "kx", "a", "m1")}
     src = repo_root() / "benchmarks/pouw/theory/fold_wide3.c"
@@ -286,21 +288,30 @@ def no_mix_wide3(ck: Checks, width: int) -> None:
         ck.check(f"width {width}: fold_wide3.c's distinct first instructions over three inputs are fold_opt_fx.py's",
                  got["firsts"] == fx._new_word_sets(width, three), (got["firsts"], fx._new_word_sets(width, three)))
 
-        # every two-word form and every way to a last one, over chain 1's words in this same pool, is found: the
-        # cross pairs' zeros below are the search's, not a blind spot (fold_wide32's controls at 32 bits).
+        # every two-word form and every way to a last one, over chain 1's six words, is found (fold_wide32's controls
+        # at 32 bits, over six inputs as there: fold_wide3.c takes at most 16 jobs a pass).
         six = {"y": pool["y1"], "z": pool["z1"], "w": pool["w1"], "kx": pool["kx"], "a": pool["a"], "m1": pool["m1"]}
         if width == 32:
             import fold_wide32 as w32
             ctl = w32.controls(six)
         else:
-            ctl = {k: v for k, v in fx.wide3_controls(width, six).items()}
+            ctl = dict(fx.wide3_controls(width, six))
         kind = {"ctl": "found", "sel": "sel", "le2": "le2"}
-        jobs = {**{f"x_{t1n}_{t2n}": (out[t1n], out[t2n]) for t1n, t2n in CROSS}, **ctl}
-        res = fx.width_wide3(exe, width, pool, jobs)
+        got = fx.width_wide3(exe, width, six, ctl)
         for lab in ctl:
             k = kind[lab.split("_")[0]]
-            ck.check(f"width {width}, two-chain pool: fold_wide3.c finds its control {lab} ({k})", res[lab][k] > 0,
-                     res[lab]["witnesses"][:1])
+            ck.check(f"width {width}: fold_wide3.c finds its control {lab} ({k}) over chain 1's six inputs",
+                     got[lab][k] > 0, got[lab]["witnesses"][:1])
+
+        # the nine-input pass finds a pair a program mixing the two chains writes (LOP3 0x96(y1, w2, kx), IMAD with z2,
+        # a last IMAD.WIDE), so the cross pairs' zeros below are the search's, not a blind spot for two chains.
+        mixed = {"y": pool["y1"], "z": pool["z2"], "w": pool["w2"], "kx": pool["kx"], "a": pool["a"], "m1": pool["m1"]}
+        mix = {"ctl_mix_lop3_imad": fx.wide3_controls(width, mixed)["ctl_lop3_imad"]}
+        jobs = {**{f"x_{t1n}_{t2n}": (out[t1n], out[t2n]) for t1n, t2n in CROSS}, **mix}
+        res = fx.width_wide3(exe, width, pool, jobs)
+        ck.check(f"width {width}, two-chain pool (nine inputs): fold_wide3.c finds a two-chain program's last IMAD.WIDE "
+                 "pair (LOP3 over y1, w2; IMAD with z2)", res["ctl_mix_lop3_imad"]["found"] > 0,
+                 res["ctl_mix_lop3_imad"]["witnesses"][:1])
         for t1n, t2n in CROSS:
             hit = res[f"x_{t1n}_{t2n}"]
             seen = {k: hit[k] for k in ("found", "sel", "le2", "firsts", "prefixes")}
