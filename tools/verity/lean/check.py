@@ -1067,6 +1067,14 @@ def dropped(pkg: Path, files: dict[str, str], facts: dict, where: str = "") -> l
             f"a local notation over section variables can make Lean drop every declaration after it; so does `#exit`)"]
 
 
+def own_modules(facts: dict) -> set[str]:
+    """The modules of ``facts``' import graph that a package of this repository builds (an `.olean` in its own
+    `.lake/build`), not the toolchain's or a fetched dependency's (under `.lake/packages`): a premise headed by one of
+    their constants is one the lock lists, whatever its module (`assumption_records`)."""
+    return {m for m, g in (facts.get("graph") or {}).items()
+            if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None
           ) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1074,6 +1082,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     record for a guarantee that has none."""
     fails = []
     allowed = set(policy.get("axioms", STANDARD))
+    own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     by_axiom: dict[str, list[str]] = {}
     for o in facts["offenders"]:
         for a in o["axioms"]:
@@ -1149,7 +1158,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         if not set(f["axioms"]) <= allowed:
             fails.append(f"guarantees: {name} uses {', '.join(sorted(set(f['axioms']) - allowed))}")
         for pr in f.get("premises") or []:
-            if "Assumptions" in (pr.get("module") or "").split("."):
+            if "Assumptions" in (m := pr.get("module") or "").split(".") or m in own:
                 premised.setdefault(pr["head"], set()).add(name)
         named = []
         for h in f["hypotheses"]:
@@ -1315,7 +1324,9 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
     definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
-    a statement takes in an assumptions module, its `Guarantees` definitions unfolded and a `Premises` abbrev seen through:
+    a statement takes, headed by a constant of an assumptions module or of any module this repository builds
+    (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
+    definitions unfolded and a `Premises` abbrev seen through:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -1330,6 +1341,10 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 assumed[d] = {"owner": who.pop()} if len(who) == 1 else {}
     for a, rec in sorted(assumed.items()):
         who = (rec or {}).get("owner") or owner
+        if a not in read and a in (premised or {}):
+            # a premise only unfolding reaches (a reducible definition the statement reads stands for it): no read record
+            out[a] = {"owner": who} if who else {}
+            continue
         if a not in read:
             if not update:
                 fails.append(f"assumptions: {a} is listed, but no guarantee reads it; remove the entry")
@@ -1790,7 +1805,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         sources.append((entry, qf, files))
         conflicts += qf.get("moved_conflicts", [])
     pins, more, by = assign(policy.get("guarantees", {}), sources)
-    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts}, by
+    own = sorted(set().union(*(own_modules(f) for _, f, _ in sources)))
+    return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"

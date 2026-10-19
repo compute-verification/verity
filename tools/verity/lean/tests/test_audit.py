@@ -1083,8 +1083,8 @@ def test_a_premise_the_lock_does_not_list_fails():
     """A statement that takes an assumption applied to its own variables (`h : Premises.Hyp n`, an open hypothesis the
     hypotheses rule never names; `Facts.lean`'s `premises` sees through the abbrev and the `Guarantees` definitions to
     `P.Hyp`) fails while the lock doesn't list it, and an update adds it with the guarantee's owner; on 14 Oct a merge
-    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. A premise outside an assumptions
-    module is not an assumption."""
+    dropped `Flock.Assumptions.RegistrantCovers`' entry this way and the check passed. Without an import graph to say
+    which modules the repository builds, a premise outside an assumptions module is not counted (the next test has one)."""
     applied = [{"binder": "h", "type": "P.Premises.Hyp n", "closed": False, "named": None, "module": None}]
     pin = fact(signature="P.t (n : Nat) (h : P.Premises.Hyp n) : P.f n = n", hyps=applied)
     pin["premises"] = [{"binder": "h", "head": "P.Hyp", "module": "P.Assumptions"},
@@ -1096,6 +1096,29 @@ def test_a_premise_the_lock_does_not_list_fails():
     assert A.judge(pol, f, FILES)[0] == []
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
+        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
+
+
+def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_dependencys_is_not():
+    """LEAN-37 (RT2-LOGIC-2): `ProofLayer.SoundAt`, a premise defined in `Definitions/Accounting/TS`, passed unlisted, since
+    only a head in an assumptions module counted. A head in any module whose `.olean` a package of the repository builds
+    is listed now, in a lifted guarantee too (its premises are read through the `Guarantees` definition); one from the
+    toolchain or a fetched dependency (`Nat.le`, Mathlib's) is not."""
+    pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Sound", "module": "P.Defs"},
+                       {"binder": "hn", "head": "Nat.le", "module": "Init.Prelude"},
+                       {"binder": "hd", "head": "Disjoint", "module": "Mathlib.Order.Disjoint"}]
+    graph = {"P.Defs": {"imports": ["Init"], "olean": "/r/Security/.lake/build/lib/lean/P/Defs.olean"},
+             "Init.Prelude": {"imports": [], "olean": "/elan/toolchains/v4/lib/lean/Init/Prelude.olean"},
+             "Mathlib.Order.Disjoint": {"imports": [], "olean": "/r/Security/.lake/packages/mathlib/.lake/build/lib/lean/"
+                                                                 "Mathlib/Order/Disjoint.olean"}}
+    f = facts(pins={"P.t": pin}, graph=graph)
+    assert A.own_modules(f) == {"P.Defs"}
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and list(pol["assumptions"]) == ["P.Sound"] and pol["assumptions"]["P.Sound"]["owner"] == "@lean"
+    assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
+        "assumptions: P.Sound is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
