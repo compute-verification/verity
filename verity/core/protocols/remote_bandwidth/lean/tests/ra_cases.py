@@ -1,15 +1,16 @@
-"""The Python side of the remote audit's difftests: `audit.py`, `receipts.py` and `codec.py` (the references, unchanged)
-behind the Lean port's JSON formats (`RemoteAudit.Difftest`), and the sessions the tests record.
+"""The Python side of the remote audit's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
+(`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
+(`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
-`audit.register` checks one, and `bind` refused (the port covers receipts of blocks alone). Past decoding every reference
-is the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
+`audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone). Past decoding each side is
+the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
 event sets, with a `coins.Challenger` whose generator replays the case's coins (`Tape`).
 
 A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
-ones; each names the outcome the Python gives it, so a scenario that stops reaching its failure fails here, not silently
-in the difftest."""
+ones; each names the outcome the definition gives it, which `test_session.py` holds the Lean's answer to, so a scenario
+that stops reaching its failure fails there, not silently in the difftest."""
 
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ from verity.core.protocols.remote_bandwidth.receipts import Plan
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
-#: What the Python raises where the Lean refuses: a decoder's `Reject`, and the references' own refusals, `ValueError`
+#: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.
 REFUSALS = (D.Reject, ValueError, TypeError, IndexError)
 
@@ -118,7 +119,7 @@ def runs_of(v: Any, k: str) -> tuple[tuple[int, int], ...]:
 
 @contextlib.contextmanager
 def decoding():
-    """A reference's refusals while it decodes its input, as `Reject`: past decoding, a `ValueError` is a difference."""
+    """The Python's refusals while it decodes its input, as `Reject`: past decoding, a `ValueError` is a difference."""
     try:
         yield
     except (ValueError, TypeError) as e:
@@ -957,7 +958,7 @@ BLOCK = World(receipt=receipts.BLOCK_SHA512)
 ROWS64 = World(rows=64)
 WIDE = World(P512_K3, blocks=4)
 
-#: Each recorded scenario: its world, `Run`'s keywords, the builder, and the outcome the Python gives it.
+#: Each recorded scenario: its world, `Run`'s keywords, the builder, and the outcome the definition gives it.
 SCENARIOS: dict[str, tuple[World, dict, Callable[[Run], None], str | None]] = {
     "honest": (World(), {}, honest, "accepted"),
     "honest-appends": (World(blocks=8), {}, honest_appends, "accepted"),
