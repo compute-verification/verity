@@ -22,6 +22,8 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           `STEP_KEYS`, under the step environment of each check slot here (the key reads VERITY_TEST_CACHE,
                           which a slot sets to its own test cache), so a pass counts in the slot that earned it
     preflight-lints       the repository's own suite (tests/), which holds `LINTS`
+    lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
+                          skips its Lean group there): a skip passes nothing
     the rest              `KEYLESS`: no key, so each must run; lean-changed is no verdict, never required
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
@@ -30,7 +32,7 @@ cache; not with --packs-only), in the verdict pack of each recorded check `gathe
 pack names that attempt and the pack's sha256, which `research merge --verdicts` cites.
 
 A part is `passed` (a pass is found), `must-run` (none under its key), `unkeyed` (its key can't be computed without running a
-step first: it must run) or `no-verdict`.  lean-agreement is required when the job's `merge_requires` covers the change from
+step first: it must run), `skipped` or `no-verdict`.  lean-agreement is required when the job's `merge_requires` covers the change from
 --base (default: COMMIT's first parent).  The plan is fully passed when every required part is passed.  `--json` prints the
 plan as `KIND`.  Exit 0 fully passed, 1 not, 2 usage.
 """
@@ -343,7 +345,9 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
         elif j == "flock-rust-tests":
             parts += keyed_step_parts(C, sources, [j])
         elif not lean and j.startswith("lean"):
-            continue
+            if not any(p.part == "lean" for p in parts):
+                parts.append(Part("lean", "lean", None, "skipped", why=f"check skips its Lean steps: there is no "
+                                  f"{C.FLOCK_LEAN.relative_to(C.ROOT)}/lakefile.toml"))
         elif j == "lean-audit":
             parts += lean_parts(C, sources)
         elif j == "lean-agreement":
@@ -363,7 +367,7 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
 
 def document(parts: list[Part], commit: str, tree: str | None, base: str | None, sources: list[Source], notes: list[str]) -> dict:
     req = [p for p in parts if p.required]
-    count = {s: sum(p.state == s for p in req) for s in ("passed", "must-run", "unkeyed")}
+    count = {s: sum(p.state == s for p in req) for s in ("passed", "must-run", "unkeyed", "skipped")}
     return {"kind": KIND, "commit": commit, "tree": tree, "base": base,
             "sources": [{"source": s.name, **({"attempt": s.attempt, "pack_sha256": s.sha256} if s.attempt else {})} for s in sources],
             "notes": notes, "summary": {"parts": len(parts), "required": len(req), **count},
@@ -390,7 +394,7 @@ def text(doc: dict) -> list[str]:
             lines.append(f"plan:   ... and {len(shown) - SHOWN} more not passed (--json lists every part)")
     s = doc["summary"]
     lines.append(f"plan: {'FULLY PASSED' if doc['fully_passed'] else 'not fully passed'}: {s['passed']} of {s['required']} required "
-                 f"parts passed, {s['must-run']} must run, {s['unkeyed']} unkeyed")
+                 f"parts passed, {s['must-run']} must run, {s['unkeyed']} unkeyed" + (f", {s['skipped']} skipped" if s.get("skipped") else ""))
     return lines
 
 
