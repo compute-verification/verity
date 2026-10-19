@@ -74,6 +74,10 @@ The data, each kind of thing a file or a line of its own:
   bandwidth it is bound by (the most L2 read in any measured pattern, + 2%).
 - `data/headline.toml`: the per-family headline's spec: each GPU family's design of record, the vector each reading
   prices it on, and the conditions no computation shows.
+- `data/rt_isa_corpus.json`: every dotted SASS opcode the CUDA 13.0 libraries emit on sm_90, sm_100 and sm_120
+  (RT-ISA's census of 88 binaries, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d), with
+  RT-ISA's word flag, its count and its bucket; `theory/isa_table.py --write-corpus` derives it, and its checks place
+  every base in the Lean instruction table (`IsaComplete`'s evidence).
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:

@@ -17,12 +17,17 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
     writing no 32-bit word (`NO_WORD`), or named unplaced (`UNPLACED`); sm_120's is Blackwell's list without its tensor
     core memory instructions; and where `class_of` (`facet_break/loads.py`) places a bare mnemonic it agrees, but for
     the disagreements `CLASS_OF_WRONG` names, and a dotted form it places in a class whose row may not bound it is
-    moved by the map to one that does (`FORMS_MOVED`).
+    moved by the map to one that does (`FORMS_MOVED`);
+  - the same against what the libraries emit: RT-ISA's SASS census (`CORPUS_ART`, 88 binaries under CUDA 13.0,
+    derived to `machine_model/data/rt_isa_corpus.json`), every base on each device placed, read as writing no word or
+    named undocumented (`UNDOCUMENTED`: ARRIVES and F2FP), its word flag against the map's no-word reading
+    (`WORD_DISAGREE`), its unpriced MMA forms (GAP-TENSOR: DMMA, UTCOMMA) in writer rows, and each vector class at two
+    words a lane exactly where a corpus form writes a pair (`LANE_PAIR`).
 
 A placement is a words bound only: a class's rate is the data sheet's, measured for the forms its census probed.
 
-Run: `python isa_table.py [--mutations] [--verdict PATH]`. Stdlib and exact_kit; reads the Lean table, floors.csv and
-the censuses.
+Run: `python isa_table.py [--mutations] [--verdict PATH]`, or `--write-corpus DIR` to rederive the fixture from the
+artifact fetched to DIR. Stdlib and exact_kit; reads the Lean table, floors.csv, the censuses and the corpus fixture.
 """
 from __future__ import annotations
 
@@ -119,11 +124,15 @@ _LDSM = ("LDSM_X1 LDSM_X2 LDSM_X4 LDSM_X1T LDSM_X2T LDSM_X4T LDSM4_X1 LDSM4_X2 L
 _STSM = "STSM_X1 STSM_X2 STSM_X4 STSM_X1T STSM_X2T STSM_X4T STSM8T_X1 STSM8T_X2 STSM8T_X4"
 _UTMA = "UTMA UTMA8 UTMA512 UTMA1K UTMA2K UTMA4K UTMA8K UTMA16K UTMA32K UTMA48K UTMA64K UTMABIG BULKMAX"
 _IGMMA = ("IGMMA_S8_N8 IGMMA_S8_N16 IGMMA_S8_N32 IGMMA_S8_N64 IGMMA_S8_N128 IGMMA_S8_N192 IGMMA_S8_N256 IGMMA_S8_N256_RS "
-          "IGMMA_U8S8_N256 GMMASP")
+          "IGMMA_U8S8_N256 IGMMA_SP_S8")
 _LDTM = ("LDTM_32X32B_X1 LDTM_32X32B_X4 LDTM_32X32B_X16 LDTM_32X32B_X32 LDTM_32X32B_X64 LDTM_32X32B_X128 LDTM_16X64B_X16 "
          "LDTM_16X128B_X8 LDTM_16X256B_X4 LDTM")
 _UTCIMMA = ("UTCIMMA_M64_N64 UTCIMMA_M64_N128 UTCIMMA_M64_N256 UTCIMMA_M128_N32 UTCIMMA_M128_N64 UTCIMMA_M128_N128 "
             "UTCIMMA_M128_N256")
+_HGMMA = ("HGMMA_BF16_N128 HGMMA_BF16_N256 HGMMA_F16_N256 HGMMA_TF32_N256 HGMMA_F16ACC HGMMA_SP_F16 HGMMA_SP_BF16 "
+          "HGMMA_SP_TF32")
+_UTCQMMA = ("UTCQMMA_E4M3_M128_N128 UTCQMMA_E4M3_M128_N256 UTCQMMA_E5M2 UTCQMMA_E3M2 UTCQMMA_E2M3 UTCQMMA_E2M1 "
+            "UTCQMMA_SF UTCQMMA_SF_E5M2 UTCQMMA_SF_E3M2 UTCQMMA_SF_E2M3 UTCQMMA_SF_E2M1 UTCMMA_SP UTCMMA_2CTA")
 _UNIFORM = ("R2UR S2UR CS2UR VOTEU UBMSK UBREV UCLEA UF2FP UFLO UIADD3 UIADD3.64 UIMAD ULDC ULEA ULEPC ULOP ULOP3 ULOP32I "
             "UMOV UMOV.64 UP2UR UPOPC UPRMT USEL USGXT USHF USHL USHR UFADD UF2F UF2I UF2IP UFFMA UFMNMX UFMUL UFRND UFSEL "
             "UFSET UI2F UI2FP UI2I UI2IP UIABS UIMNMX UGETNEXTWORKID UVIADD UVIMNMX UVIRTCOUNT UTCATOMSWS")
@@ -182,9 +191,9 @@ UMEMSETS -> BULKMAX
 UREDGR -> RED32 RED64
 USTGR -> STG32 STG64
 BGMMA -> BGMMA_B1_N256
-HGMMA -> HGMMA_BF16_N128 HGMMA_BF16_N256 HGMMA_F16_N256 HGMMA_TF32_N256 HGMMA_F16ACC GMMASP
+HGMMA -> {_HGMMA}
 IGMMA -> {_IGMMA}
-QGMMA -> QGMMA_E4M3_N128 QGMMA_E4M3_N256 QGMMA_E5M2_N256 GMMASP
+QGMMA -> QGMMA_E4M3_N128 QGMMA_E4M3_N256 QGMMA_E5M2_N256 QGMMA_SP_E4M3 QGMMA_SP_E5M2
 UBLKCP -> UBLKCP4K BULKMAX UTMAMC
 UBLKRED UTMAREDG -> TMAred512 BULKRED
 UTMALDG -> TMA512 {_UTMA} UTMAMC G4_16 G4_32 G4_256 G4_1K
@@ -193,10 +202,10 @@ LDT LDTM -> {_LDTM}
 STT STTM -> STTM
 UTCCP -> UTCCP
 UTCSHIFT -> UTCSHIFT
-UTCHMMA -> UTCHMMA_F16_M128_N256 UTCHMMA_TF32 UTCMMA_SP UTCMMA_2CTA
+UTCHMMA -> UTCHMMA_F16_M128_N256 UTCHMMA_BF16 UTCHMMA_TF32 UTCMMA_SP UTCMMA_2CTA
 UTCIMMA -> {_UTCIMMA} UTCMMA_SP UTCMMA_2CTA
-UTCOMMA -> UTCOMMA_SF UTCMMA_SP UTCMMA_2CTA
-UTCQMMA -> UTCQMMA_E4M3_M128_N128 UTCQMMA_E4M3_M128_N256 UTCQMMA_SF UTCMMA_SP UTCMMA_2CTA
+UTCOMMA -> UTCOMMA_SF UTCMMA_SP UTCOMMA_2CTA
+UTCQMMA -> {_UTCQMMA}
 TEX -> TEX1 TEX2 TEX4 TEXBIL
 TLD -> TLD1 TLD2 TLD2D1 TLD2D4 TLD4w
 TLD4 -> TLD4G
@@ -234,6 +243,27 @@ CLASS_OF_WRONG = {
 #: it may write (IMMA.1688's shape no document gives; an m16n8 one writes 128)
 FORMS_MOVED = {"IMMA.1688": ("IMMA8816", "IMMA16816", 128)}
 
+#: RT-ISA's SASS census: every opcode the CUDA 13.0 libraries emit on sm_90, sm_100 and sm_120 (88 binaries), its
+#: store artifact, and the fixture `--write-corpus` derives from it (each dotted form: RT-ISA's word flag, its count,
+#: its bucket)
+CORPUS_ART = "art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d"
+CORPUS = DATA / "rt_isa_corpus.json"
+CORPUS_DEVICES = {"Sm90": "sm_90", "Sm100": "sm_100", "Sm120": "sm_120"}
+#: the corpus's bases no documented list names, and the class the map puts them in
+UNDOCUMENTED = {"ARRIVES": "ATOMS64", "F2FP": "F2FS"}
+#: the bases the corpus reads as writing a word and the map as writing none, and why none
+WORD_DISAGREE = {
+    "R2P": "it writes predicates from a register's bits",
+    "UPLOP3": "it writes uniform predicates",
+    "LDGDEPBAR": "a dependency barrier on LDGSTS; it writes no register",
+    "USETMAXREG": "it changes the warp's register allocation (setmaxnreg)",
+    "UTMAPF": "a TMA prefetch into L2",
+}
+#: each vector class at two words a lane, and a corpus form the map or `class_of` puts in it that writes a pair
+#: (IMAD's is the rule: `class_of` puts every IMUL form in IMAD, a .WIDE one included)
+LANE_PAIR = {"FFMA": "FFMA2", "VIMNMX": "IMNMX.U64", "F2FS": "F2F.F64.F32", "SEL": "SEL.64", "NOROW": "CS2R",
+             "IMAD": None}
+
 
 def opcode_list(text: str) -> dict[str, list[str]]:
     """A documented list, category to mnemonics."""
@@ -267,8 +297,8 @@ def lean_rows(src: str, ty: str) -> dict[str, tuple[str, int]]:
     body = re.search(rf"^def {ty}\.row : {ty} → Row\n(.*?)(?=^\S|\Z)", src, re.M | re.S).group(1)
     out = {}
     for k, arm in re.findall(r"^\s*\| \.(\w+) =>(.*?)(?=^\s*\| \.|\Z)", body, re.M | re.S):
-        if "Row.lane" in arm:
-            out[k] = ("lane", 64)
+        if m := re.search(r"Row\.lane \.\w+ \.\w+ (?:true|false) \.\w+ (\d+)", arm):
+            out[k] = ("lane", int(m.group(1)))
         elif m := re.search(r"Row\.mma \.\w+ \.\w+ \.\w+ \.\w+ (\d+)", arm):
             out[k] = ("writer", int(m.group(1)))
         elif m := re.search(r"Row\.side \.\w+ \.\w+ \.\w+ (?:true|false) (\d+)", arm):
@@ -329,18 +359,80 @@ def forms_moved_ok(moved: dict[str, tuple[str, str, int]], rows: dict[str, tuple
                and f"{f}, which `class_of` puts in {old}, in {new}" in doc for f, (old, new, w) in moved.items())
 
 
+def write_corpus(src: Path) -> None:
+    """Derive the fixture from RT-ISA's artifact, fetched to `src` (`research data fetch CORPUS_ART --to src`)."""
+    import json
+    man = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    head = {"source": CORPUS_ART, **{k: man[k] for k in ("schema", "corpus_run", "toolkit", "binaries", "code")},
+            "written_by": "benchmarks/pouw/theory/isa_table.py --write-corpus"}
+    lines = ["{"] + [f" {json.dumps(k)}: {json.dumps(v)}," for k, v in head.items()] + [' "devices": {']
+    fams = list(CORPUS_DEVICES.values())
+    for i, fam in enumerate(fams):
+        rows = sorted(json.loads((src / f"opcodes_{fam}.json").read_text(encoding="utf-8"))["rows"],
+                      key=lambda r: r["op"])
+        lines.append(f"  {json.dumps(fam)}: {{")
+        lines += [f"   {json.dumps(r['op'])}: {json.dumps([int(bool(r['word'])), r['count'] or 0, r['bucket']])}"
+                  + ("," if j < len(rows) - 1 else "") for j, r in enumerate(rows)]
+        lines.append("  }" + ("," if i < len(fams) - 1 else ""))
+    CORPUS.write_text("\n".join(lines + [" }", "}"]) + "\n", encoding="utf-8")
+
+
+def corpus_forms() -> tuple[dict, dict[str, dict[str, list]]]:
+    """The fixture's header and each device's dotted forms."""
+    import json
+    doc = json.loads(CORPUS.read_text(encoding="utf-8"))
+    return doc, {dev: doc["devices"][fam] for dev, fam in CORPUS_DEVICES.items()}
+
+
+def corpus_unplaced(forms: dict[str, list], place: dict[str, set[str]], device: set[str],
+                    undocumented: dict[str, str]) -> list[str]:
+    """A device's corpus bases neither placed in its table's classes, read as writing no word, named unplaced, nor
+    placed as undocumented."""
+    no_word = {op for ops in NO_WORD.values() for op in ops.split()}
+    bases = {op.split(".")[0] for op in forms}
+    return sorted(b for b in bases if b not in no_word and b not in UNPLACED
+                  and not (place.get(b) and place[b] <= device) and not undocumented.get(b) in device)
+
+
+def word_disagree(forms: dict[str, list]) -> set[str]:
+    """The bases a corpus form of which RT-ISA reads as writing a word, which the map reads as writing none."""
+    no_word = {op for ops in NO_WORD.values() for op in ops.split()}
+    return {op.split(".")[0] for op, (word, _, _) in forms.items() if word and op.split(".")[0] in no_word}
+
+
+def gap_off_writer(forms: dict[str, list], place: dict[str, set[str]], rows: dict[str, tuple[str, int]],
+                   device: set[str]) -> set[str]:
+    """The corpus's GAP-TENSOR forms (an MMA form no sheet peak or census row prices) whose classes aren't all writer
+    rows of the device."""
+    return {op for op, (_, _, bucket) in forms.items() if bucket == "GAP-TENSOR"
+            and not ((cs := place.get(op.split(".")[0])) and cs <= device and all(rows[c][0] == "writer" for c in cs))}
+
+
+def lane_widths_ok(rows: dict[str, tuple[str, int]], forms: dict[str, list], pair: dict[str, str | None],
+                   place: dict[str, set[str]]) -> bool:
+    """A vector class is at two words a lane exactly when `pair` names it, and each named form is in the corpus, in
+    that class by the map or `class_of`."""
+    lanes = {k: w for k, (route, w) in rows.items() if route == "lane"}
+    return (all(w in (32, 64) for w in lanes.values()) and {k for k, w in lanes.items() if w == 64} == set(pair)
+            and all(f is None or (f in forms and (class_of(f) == k or k in place.get(f.split(".")[0], set())))
+                    for k, f in pair.items()))
+
+
 def main() -> int:
+    if "--write-corpus" in sys.argv:
+        write_corpus(Path(sys.argv[sys.argv.index("--write-corpus") + 1]))
+        return 0
     checks = Checks()
     sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(ISA.glob("*.lean"))}
     rows, devices, types = table(sources)
     sizes = {ty: len(types[ty]) for ty in ("Sync", "Base", "Gmma", "Tc05", "Tmem")}
-    checks.check("the Lean class types parse: Sync 18, Base 120, Gmma 19, Tc05 15, Tmem 13",
-                 sizes == {"Sync": 18, "Base": 120, "Gmma": 19, "Tc05": 15, "Tmem": 13}, str(sizes))
+    checks.check("the Lean class types parse: Sync 18, Base 120, Gmma 24, Tc05 25, Tmem 13",
+                 sizes == {"Sync": 18, "Base": 120, "Gmma": 24, "Tc05": 25, "Tmem": 13}, str(sizes))
     missing = [k for ty in sizes for k in types[ty] if k not in rows]
     checks.check("every class has a row with a route and words", not missing and len(rows) == sum(sizes.values()),
                  ", ".join(missing) or f"{len(rows)} rows")
-    checks.check("sm_120's table is 138 classes, sm_90a's 157, sm_100a's 166",
-                 [len(devices[d]) for d in ("Sm120", "Sm90", "Sm100")] == [138, 157, 166],
+    checks.check("sm_120's table is 138 classes, sm_90a's 162, sm_100a's 176",
+                 [len(devices[d]) for d in ("Sm120", "Sm90", "Sm100")] == [138, 162, 176],
                  str({d: len(v) for d, v in devices.items()}))
     traced = sorted(k for k, (route, _) in rows.items() if route == "traced")
     checks.check("the one class off every route is MOV.64's (NoSum's decided part: a copy heads nothing)",
@@ -397,6 +489,32 @@ def main() -> int:
     checks.check("a form the map moves (IMMA.1688) is class_of's in a row below its words, and the map's row bounds it",
                  forms_moved_ok(FORMS_MOVED, rows, doc), str(FORMS_MOVED))
 
+    header, corpus = corpus_forms()
+    checks.check(f"the corpus fixture is RT-ISA's ({CORPUS_ART[:16]}…, {header['binaries']} binaries, "
+                 f"{header['toolkit']})", header["source"] == CORPUS_ART and all(corpus.values()),
+                 header["corpus_run"])
+    for dev in ("Sm120", "Sm90", "Sm100"):
+        gaps = corpus_unplaced(corpus[dev], place, devices[dev], UNDOCUMENTED)
+        bases = {op.split(".")[0] for op in corpus[dev]}
+        checks.check(f"every {dev} corpus base is placed in classes of its table, read as writing no word, or named",
+                     not gaps, ", ".join(gaps) or f"{len(bases)} bases, {len(corpus[dev])} forms")
+    undoc = {d: {op.split(".")[0] for op in corpus[d]} - every for d in corpus}
+    checks.check("the corpus bases no documented list names are ARRIVES and F2FP on every device (UNDOCUMENTED)",
+                 all(u == set(UNDOCUMENTED) for u in undoc.values()), str({d: sorted(u) for d, u in undoc.items()}))
+    disagree = set().union(*(word_disagree(corpus[d]) for d in corpus))
+    checks.check("where the corpus reads a word and the map none, it is WORD_DISAGREE's, each with its reason",
+                 disagree == set(WORD_DISAGREE), ", ".join(sorted(disagree ^ set(WORD_DISAGREE))) or
+                 ", ".join(sorted(disagree)))
+    off = {d: gap_off_writer(corpus[d], place, rows, devices[d]) for d in corpus}
+    gap_forms = sorted({op for d in corpus for op, (_, _, b) in corpus[d].items() if b == "GAP-TENSOR"})
+    checks.check("the corpus's unpriced MMA forms (RT-ISA-1's DMMA, RT-ISA-4's UTCOMMA) sit in writer rows only",
+                 gap_forms and not any(off.values()), str({d: sorted(o) for d, o in off.items() if o}) if any(
+                     off.values()) else " ".join(gap_forms))
+    all_forms = {op: v for d in corpus for op, v in corpus[d].items()}
+    checks.check("a vector class writes two words a lane exactly where a corpus form needs it (LANE_PAIR)",
+                 lane_widths_ok(rows, all_forms, LANE_PAIR, place),
+                 " ".join(f"{k}:{w}" for k, (r, w) in sorted(rows.items()) if r == "lane"))
+
     if checks.mutations:
         without = {**sources, "Classes.lean": sources["Classes.lean"].replace("| BMMA168256 | IMMAS4 | DMMA",
                                                                               "| BMMA168256 | IMMAS4")}
@@ -417,6 +535,17 @@ def main() -> int:
                         class_of_disagrees(every, place) != set(CLASS_OF_WRONG) - {"UBLKCP"})
         checks.mutation("a moved form left in class_of's class (IMMA.1688 in IMMA8816) is caught",
                         not forms_moved_ok({"IMMA.1688": ("IMMA8816", "IMMA8816", 128)}, rows, doc))
+        checks.mutation("a corpus base dropped from UNDOCUMENTED (ARRIVES) is unplaced",
+                        "ARRIVES" in corpus_unplaced(corpus["Sm90"], place, devices["Sm90"], {"F2FP": "F2FS"}))
+        checks.mutation("a new corpus opcode on no list and in no class is unplaced",
+                        corpus_unplaced({**corpus["Sm100"], "FOO.32": [1, 1, "UNKNOWN"]}, place, devices["Sm100"],
+                                        UNDOCUMENTED) == ["FOO"])
+        checks.mutation("a word the map reads as none, left unnamed (R2P), is caught",
+                        word_disagree(corpus["Sm90"]) - (set(WORD_DISAGREE) - {"R2P"}) == {"R2P"})
+        checks.mutation("an unpriced MMA form placed in a side class (DMMA in LDS32) is caught",
+                        bool(gap_off_writer(corpus["Sm90"], {**place, "DMMA": {"LDS32"}}, rows, devices["Sm90"])))
+        checks.mutation("a vector class cut to one word a lane where a corpus form writes a pair (SEL) is caught",
+                        not lane_widths_ok({**rows, "SEL": ("lane", 32)}, all_forms, LANE_PAIR, place))
 
     return checks.finish()
 
