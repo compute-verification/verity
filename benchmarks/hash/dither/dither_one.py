@@ -177,6 +177,9 @@ class Window:
         self.salt = torch.zeros(8, dtype=torch.int64, device=dev)
         self.step_base = torch.zeros(1, dtype=torch.int64, device=dev)
         self.stepv = torch.zeros(2, dtype=torch.int32, device=dev)
+        # the engine's own forwards (its profile run, its graph captures) come before any step's `before`, and
+        # h1c_a_call3_k traps on node and leaf prefixes h1c_a_step hasn't written
+        self._a_step()
         self.s, self.flags, self.m = 0, 0, 0
         self.calls = self.steps = 0
         self.arms: list[str] = []
@@ -280,6 +283,13 @@ class Window:
         if name is not None:
             torch.cuda.nvtx.range_push(PHASE_RANGE + name)
 
+    def _a_step(self) -> None:
+        a = self.pre["a"]
+        rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
+                                   self.c.btab.data_ptr(), self.S.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_a_step returned {rc}")
+
     def before(self, m: int) -> None:
         if m > self.t:
             raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
@@ -299,11 +309,7 @@ class Window:
         self.stepv.copy_(torch.tensor([s, s], dtype=torch.int32))
         self.step_base.fill_(s * self.u_step)
         self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
-        a = self.pre["a"]
-        rc = self.c.lib.h1c_a_step(a.dev.data_ptr(), self.L, self.apre.data_ptr(), self.awords, self.stepv.data_ptr(),
-                                   self.c.btab.data_ptr(), self.S.data_ptr(), torch.cuda.current_stream().cuda_stream)
-        if rc:
-            raise RuntimeError(f"h1c_a_step returned {rc}")
+        self._a_step()
         if self.cap:
             torch.cuda.synchronize()
         self.phase(None)
