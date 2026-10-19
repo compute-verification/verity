@@ -9,7 +9,8 @@ whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLa
 (`Finset.sum_fiberwise_of_maps_to`): under `TerminalDetection` one identity's faulty blocks all lie within `Δ` of its
 first, so they skip at most `Φ Δ`. `DampenerRemote` reads the residual's hypothesis outside `CertificateSlack`'s event
 as `DampenerThreaded`'s at `W_cert − ε' C − (JΔ/H) C`, and sums the sources with no memory cap (`sources_le_at`,
-unmonitored compute at efficiency `MFU₀`) into both the efficiency and the hardware-multiple forms (`remote_core`).
+unmonitored compute at efficiency `MFU₀`) into both the efficiency and the hardware-multiple forms (`remote_core`); the
+event's complement has probability at least `1 − p/ε'` (`prob_ge_of_not`), `μ` summing to 1 (`prob_add_not`).
 -/
 
 namespace Nci.SecurityProofs
@@ -24,6 +25,28 @@ theorem prob_mono {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E F : Ω → Prop} (h 
   by_cases hE : E ω
   · simp [hE, h ω hE]
   · by_cases hF : F ω <;> simp [hE, hF]
+
+/-- An event's probability and its complement's sum to 1. -/
+theorem prob_add_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) (E : Ω → Prop) :
+    prob μ E + prob μ (fun ω => ¬ E ω) = 1 := by
+  have h0 : ∑ ω, μ ω = 1 := by
+    first
+      | exact (tsum_fintype (L := SummationFilter.unconditional Ω) (fun ω => μ ω)).symm.trans μ.tsum_coe
+      | simpa using μ.tsum_coe
+  have h1 : ∑ ω, (μ ω).toReal = 1 := by
+    have h := congrArg ENNReal.toReal h0
+    rwa [ENNReal.toReal_sum fun ω _ => μ.apply_ne_top ω, ENNReal.toReal_one] at h
+  unfold prob
+  rw [← Finset.sum_add_distrib, ← h1]
+  refine Finset.sum_congr rfl fun ω _ => ?_
+  by_cases h : E ω <;> simp [h]
+
+/-- An event whose complement lies inside an event of probability at most `δ` has probability at least `1 − δ`. -/
+theorem prob_ge_of_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) {G F : Ω → Prop} {δ : ℝ} (hGF : ∀ ω, ¬ G ω → F ω)
+    (hF : prob μ F ≤ δ) : 1 - δ ≤ prob μ G := by
+  have h1 := prob_add_not μ G
+  have h2 := prob_mono μ hGF
+  linarith
 
 /-- **Markov's inequality** on a finite outcome space: for `Z ≥ 0`, `a · P(a < Z) ≤ E[Z]`. -/
 theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀ ω, 0 ≤ Z ω) (a : ℝ) :
@@ -190,7 +213,7 @@ theorem DampenerRemote : Guarantees.DampenerRemote := by
   intro Ω _ μ N c wrong p ε β ι _ bad I ident τ w Φ Δ H κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T dd e
     hp hε hc hcC hsound hH hΔ hΦ hI hT hcap hκ hC hU hmfu hmfu1 hα hbw hba hdd hcd hcomp hthr hW hsize hM0 hM hu hres
     hx
-  refine (prob_mono μ ?_).trans (CertificateSlack Ω μ N c wrong p ε C hp hε hC hc hcC hsound)
+  refine prob_ge_of_not μ ?_ (CertificateSlack Ω μ N c wrong p ε C hp hε hC hc hcC hsound)
   intro ω hbad
   by_contra hgood
   apply hbad
