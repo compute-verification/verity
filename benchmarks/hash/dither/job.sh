@@ -11,6 +11,8 @@
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
 #            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
 #            noise floor gated as h1bench.py does, then all timed against the plain int8 GEMMs)
+#   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
+#            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   research run --on vy-nebius-2 --preemptible --project verity --campaign dither-loop --source . --cwd source \
@@ -21,10 +23,10 @@
 #
 # Env: VARIANTS (default below), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
-# /workspace/cp/venv312), NVCC (default CUDA 13.0's).
+# /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a kbench|h1|h1u[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a kbench|h1|h1u|prof[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -107,6 +109,16 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); vars+=" --noise-variant ${v#h1noise_}=$f"
       done
       CMDS+=("$PY $HERE/h1ubench.py --lib $LIBS/h1u.so --noise-lib $LIBS/h1noise.so$vars --out $OUT ${BENCH_ARGS:-}") ;;
+    prof)
+      plibs=""
+      for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
+        [ -f "$f" ] || continue
+        v=$(basename "$f" .so); NEED+=("$v"); plibs+=" --lib $v=$f"
+      done
+      [ -n "$plibs" ] || { echo "job.sh: prof needs an h1u*.so in $LIBS" >&2; exit 2; }
+      NCU=${NCU:-$(dirname "$NVCC")/ncu}
+      CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1s_noise -f -o $OUT/prof $PY $HERE/hb_prof.py$plibs --out $OUT ${BENCH_ARGS:-}")
+      CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT") ;;
     *) echo "job.sh: no bench $b" >&2; exit 2 ;;
   esac
 done
