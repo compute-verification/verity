@@ -553,15 +553,42 @@ def gen_cost(M: int, N: int, K: int) -> dict:
             "joint_pouw_ratio": round(16 * (1 / M + 1 / N), 4)}
 
 
+#: int8 Llama-3.1-8B's linears a layer as (K, N), at 32 layers and 20k tokens/s: JOINT-POUW's window model
+#: (benchmarks/sampling_plan/joint_pouw.py at 8e436d9a89, `LINEARS`, `CALLS`, `tokens_per_s`)
+LLAMA_CALLS = ((4096, 6144), (4096, 4096), (4096, 28672), (14336, 4096))
+LLAMA_LAYERS, TOKENS_PER_S = 32, 20_000
+#: SERVE-H1's per-unit kernel: a K = 4096 unit's 612 compressions in 89.6 ns
+#: (note:compute-accounting/20261018T2005Z-draft-serve-h1)
+COMPRESSION_S = 89.6e-9 / 612
+
+
+def serve_b(T: int) -> dict:
+    """Hashing time a token over plain time at T tokens a step: per unit, J10-R, and J10-R without σ_R's 32 key blocks a
+    unit, the terms JOINT-POUW's shared model counts (it reports 2.92 per unit, 0.188 shared at T = 256, 0.736 at 64)."""
+    tot = {"per_unit": 0.0, "j10": 0.0, "j10_noise": 0.0}
+    for K, N in LLAMA_CALLS:
+        g = gen_cost(T, N, K)
+        for key in tot:
+            tot[key] += N / 1024 * g[key]
+    scale = LLAMA_LAYERS * COMPRESSION_S * TOKENS_PER_S
+    return {"T": T, **{k: round(v * scale, 4) for k, v in tot.items()}}
+
+
 def check_generation_cost():
     """J10-R a unit at K = 4096: 9216 (1/M + 1/N) noise blocks + 32 keys, against 612; at decode (M = 32) half (kernels'
-    'halves it'); JOINT-POUW's 16 (1/t + 1/N) leaves the 32 key blocks out."""
+    'halves it'). A token's hashing at T = 256: JOINT-POUW's per-unit and shared figures reproduce within 8% from the
+    stream counts alone, and the 32 key blocks a unit it leaves out add about 0.126."""
     g256 = gen_cost(256, 4096, 4096)
     g32 = gen_cost(32, 4096, 4096)
+    b256, b64 = serve_b(256), serve_b(64)
+    near = lambda x, y: abs(x / y - 1) < 0.08  # noqa: E731
     ok = (g256["per_unit"] == 612 and abs(g256["j10_noise"] - 38.25) < 1e-6 and 0.45 < g32["ratio"] < 0.56
-          and g256["ratio"] > 1.7 * g256["joint_pouw_ratio"])
+          and g256["ratio"] > 1.7 * g256["joint_pouw_ratio"] and near(b256["per_unit"], 2.92)
+          and near(b256["j10_noise"], 0.188) and near(b64["j10_noise"], 0.736) and 0.28 < b256["j10"] < 0.33)
     return ok, (f"T=256: J10-R {g256['j10']} a unit ({g256['ratio']:.3f} of 612; noise-only model {g256['joint_pouw_ratio']}); "
-                f"T=32: {g32['j10']} ({g32['ratio']:.3f})")
+                f"T=32: {g32['j10']} ({g32['ratio']:.3f}); a token's hashing over plain: per unit {b256['per_unit']}, "
+                f"J10-R {b256['j10']} at T=256 ({b256['j10_noise']} without keys), {b64['j10']} at T=64 "
+                f"({b64['j10_noise']})")
 
 
 CHECKS = [check_injected_reference_is_h1tile, check_routes_bit_exact, check_forms_verdicts, check_wrap_does_not_rescue,
@@ -596,7 +623,8 @@ def report(seed: int = 20261019) -> dict:
                                        _shares(form_costs(_shape(f), Ms, Ns, Ks, ms, dX, dW)).items()}
         rows.append({"form": f.name, "what": f.what, "structure": st, "at_shape": per})
     gens = [gen_cost(Ms, Ns, Ks) for (Ms, Ns, Ks) in shapes + [(64, 4096, 4096), (32, 14336, 4096)]]
-    return {"wrap": {"B_over_63": big, "dW": dW, "dX": dX}, "forms": rows, "generation": gens}
+    return {"wrap": {"B_over_63": big, "dW": dW, "dX": dX}, "forms": rows, "generation": gens,
+            "serve_b": [serve_b(T) for T in (32, 64, 256)]}
 
 
 def main():
