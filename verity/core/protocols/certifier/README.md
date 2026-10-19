@@ -21,7 +21,11 @@ A spec-level reference for network accounting's timing channel:
   end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
   reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
   signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
-  (`Proxy.committed(p, registration)`). A proxy back
+  (`Proxy.committed(p, registration)`). With `Proxy(challenger_key=…, signer=…)`, both or neither, the two calls take
+  only a request the auditor's challenger signed under LMS and answer an `active.Revealed` the certifier signed;
+  `active.serve_reveals` serves them over the network, one JSON line each way, to the challenger's
+  `active.RemoteCertifier`, which returns the value once it verifies. Without the keys they are the in-process calls,
+  for the auditor's side only. A proxy back
   from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame the
   Program's at position p, and carries nothing from before: a window it was down for has no record.
 

@@ -50,6 +50,21 @@ window by default), for a window whose salt was never drawn, and for one it has 
 one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
+**The reveal over the network** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the certifier runs on
+the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
+`committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the certifier registered
+for it, over `reveal_request_message(ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`. They refuse one
+that doesn't verify before reading anything else, so no one else spends p's one reveal, and a registration counts only
+if the challenger signed its digest, which binds its record. They answer a `Revealed`: the value and the certifier's
+own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the value too. The
+salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
+`pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
+`run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which returns the
+value it verified, as a keyless proxy does in process. A refusal is unsigned: forged on the path, it costs the window
+as dropping the answer would. What the keys leave on `trusted-nebius-host` is the certifier's own: its signing key and
+leaf state on its host, and its word on what it signs. Without the keys, `reveal(p, registration)` and `committed(p,
+registration)` are the in-process calls the tests and replays make, and hold only on the auditor's side.
+
 **Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
 of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
 the first egress frame it takes is the Program's at position p, the frames before it being those of the windows before.
@@ -165,6 +180,8 @@ def _reveal_fields(link: str, window: int, digest: str, what: bytes) -> bytes:
     if not isinstance(digest, str):
         raise ValueError(f"a registration's digest is a string, not {type(digest).__name__}")
     name, d = link.encode(), digest.encode()
+    if len(name) >= 1 << 16:
+        raise ValueError("a link's name is under 64 KiB")
     return struct.pack(">H", len(name)) + name + struct.pack(">Q", window) + struct.pack(">I", len(d)) + d + \
         struct.pack(">B", len(what)) + what
 
