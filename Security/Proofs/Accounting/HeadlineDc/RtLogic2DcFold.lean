@@ -8,9 +8,10 @@ import Proofs.Accounting.Headline.Encoding
 Builds on #2699's head (`cursor/int-hb-ea24` @ fd6a05c0fc), not on main.
 
 All four statements take FOLD-OPT per word folded (`FoldOptFolded`), which quantifies over every certificate; the
-proofs read it at π* only. li's IMAD computes the low word of `u·a + d` for a 32-bit key `a`, and so do 32 shift-adds
-`@P_i LEA acc, u, acc, i` (bit `i` of `a` in `P_i`, set once a window), all ALU. The program with that fold, `lea*`,
-is ♭'s word production and skippable work with ALU in place of every IMAD of ♭'s fold, 32 to one.
+proofs read it at π* only. li's IMAD computes the low word of `u·a + d` for a constant odd `a` (`segment.py`'s `LA`,
+12 to 20 set bits, the same in every lane), and so does static shift-add code: from `acc = d`, `acc ← LEA(u, acc, i)`
+for each set bit `i` of `a`, all ALU. The program with that fold, `lea*`, is ♭'s word production and skippable work
+with ALU in place of every IMAD of ♭'s fold, 32 to one (an upper bound: pad with no-op LEAs).
 
 * DS-90 and DS-100, at `λ = 1/20·issue + 19/20·IMAD`: both fold routes cost at least `2567/81920` a word, so
   `N_w·φ*(λ)` is about 128.35 (H200) and 1026.8 (B200), while the whole program with the LEA fold costs about 106.06
