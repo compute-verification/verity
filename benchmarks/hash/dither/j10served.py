@@ -14,7 +14,7 @@ banded arm's gate holds it to CA's banded reference itself (#2866, `banded.bande
                          rows staged, p: the units as the band-rows pass's programmatic dependents), gated by
                          j10rtx.band_check and, on the gate step, j10rtx.noise_check of the band workspace.
 
-    hb_served.sh run sm_90a --arms dither-1s-hbk,dither-1s-hbk-b64 --gate ...   (with HB_SBENCH=j10served.py)
+    hb_served.sh run sm_90a --arms dither-1s-hbk,dither-1s-hbk-b64 --gate ...   (with HB_SCRIPT=j10served.py)
     sbench.sh --arms dither-1s-mix-cpeel,dither-1s-mix-cpeel-b64p --gate ...     (with SBENCH_SCRIPT=j10served.py)
 
 sbench's workers import this file as their main module before unpickling `sbench.worker`, so the arms exist there too.
