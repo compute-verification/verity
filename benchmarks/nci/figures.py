@@ -489,9 +489,10 @@ def cheating(out: Path) -> dict:
     title(fig, r"The cheating share $\chi$ falls with the proving overhead")
     caption = (
         "The cheating share chi at T5 (sampled proofs at share = 1% of compute) against the proving cost per unit of "
-        "step work, log-log, from tiers.evaluate with host CPUs bounded (chi doesn't depend on r). The faulty blocks "
-        "the sampling accepts number luck x ln(1/delta) / q with q = share / (overhead + replay), luck 8, "
-        "delta = 2^-40, replay 1.1e5, step work 1.43e4 FLOP, 16 output bits per step. Marked: "
+        "step work, log-log, from tiers.evaluate with host CPUs bounded (chi doesn't depend on r). The blocks that "
+        "inject a chosen output and pass number ln(1/delta) / q with q = share / (overhead + replay), delta = 2^-40, "
+        "replay 1.1e5, 16 output bits each; a bit is worth the chord of one inference block's thread bound, with "
+        "(1, 0)-threading above 2.1e8 reads. Marked: "
         + "; ".join(f"{k}, {v['overhead']:.2g}: chi = {v['chi']:.2g}" for k, v in quote.items())
         + f". Reference lines: the design residual r = 0.01 and NCI's term nu = {nu:.2g}. Below the replay cost the "
         "overhead stops mattering. " + BASE)

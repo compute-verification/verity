@@ -25,7 +25,7 @@ def test_the_defaults_give_the_statements_numbers():
     assert t["R_wipe_gb"] == pytest.approx(166, rel=0.01)
     assert t["mu"] == pytest.approx(0.1355, rel=0.01)
     assert t["nu"] == pytest.approx(1.04e-5, rel=0.01)
-    assert t["chi"] == pytest.approx(2.85e-4, rel=0.01)
+    assert t["chi"] == pytest.approx(1.62e-3, rel=0.01)
     assert t["eta_T4"] == pytest.approx(0.136, rel=0.01)
 
 

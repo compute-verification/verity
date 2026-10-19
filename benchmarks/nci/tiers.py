@@ -28,9 +28,11 @@ proved.
   all declared work, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
-  A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay) (``Population.Exfil.tail_cum``),
-  where A, the luck factor, turns faulty outputs into skipped work. Each faulty proof block skips its work and injects its output
-  bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
+  A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
+  (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns faulty outputs into skipped work. A block that
+  injects a chosen output fails its proof whenever it is drawn, so luck doesn't multiply those: ln(1/delta) / q of them
+  inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
+  worth at most ``chord``, the steepest secant from K of one inference block's thread bound.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
@@ -72,7 +74,8 @@ BLOCK_NAME_BITS = 25
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
+#: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; injected bits valued with (d, e)-threading only as far as
+#: ThreadedOfLayered certifies it for any reference circuit C1 allows, and every gate of a block countable
 DEFAULTS = {
     "unmonitored": 0.0, "residual": 0.326, "host_share": 0.118, "clock_share": 0.064,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -82,7 +85,7 @@ DEFAULTS = {
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
-    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.6,
+    "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.6, "thread_bits": 2.1e8, "block_mults": 1.0,
     "kappa_chain": 0.0695, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
     "nodes": 1e5, "node_flops": 8e15, "years": 1.0,
 }
@@ -129,6 +132,8 @@ SPEC = [
     {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e)", "unit": "", "min": 1, "max": 65536, "log": True},
     {"key": "e", "label": "Model: multiplications per activation value", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
+    {"key": "thread_bits", "label": "Model: reads up to which one inference block's (d, e)-threading is certified, only (1, 0) above (ThreadedOfLayered: 512 legs x 163,840 x 2.5 bits = 2.1e8 for any reference circuit C1 allows, 1.34e9 at bf16 embeddings; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem)", "unit": "bit", "min": 1e8, "max": 1e11, "log": True},
+    {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695)", "unit": "", "min": 0.01, "max": 1, "log": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
@@ -169,8 +174,10 @@ STATUS = [
      "reserve 18.4 GB, host 29.5 GB). No theorem bounds help during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
-    ("Cheating share", "The cumulative bound is proved (Population.Exfil.tail_cum, landing); the deployed draw's pressure "
-     "lemma, the per-block-cap thread theorem and a draw rate fixed against a public N are not. At a 1% total budget "
+    ("Cheating share", "The count of injecting blocks is proved (Population.Exfil.tail_cumPrev and the deployed draw's "
+     "drawPressure, on branches); a draw rate fixed against a public N is not. Each injected bit is valued at the chord "
+     "of one inference block's thread bound, with (1, 0)-threading above thread_bits (threaded_one_zero, proved); that "
+     "rests on T1' and WeightsIncompressible out to the block's full reads, about 1.1e9 bits. At a 1% total budget "
      "today's serve-time commitments alone exceed it, so share is sampling on top of them. The served planner draws "
      "zero-work templates at a floor of one per window (floor_steps)."),
     ("Unmonitored compute", "No bound: it trains at full efficiency."),
@@ -208,12 +215,33 @@ def chain_products(rates: list[tuple[float, float]], R: float, Z: float) -> floa
 
 
 def full_block_bits(p: dict) -> float:
-    """The reads at which one inference block's thread bound reaches all its work, ``kappa Gamma / 2`` counted multiplications."""
-    target = p["kappa"] * p["Gamma"] / 2
+    """The reads at which one inference block's (d, e) thread bound reaches all its work, ``block_mults Gamma`` counted
+    multiplications."""
+    target = p["block_mults"] * p["Gamma"]
     linear = target * p["b_a"] / p["e"]
     if 2 * linear / (4 * p["d"] * p["b_w"]) <= p["e"]:
         return linear
     return math.sqrt(target * 4 * p["d"] * p["b_w"] * p["b_a"] / 2)
+
+
+def block_cap(p: dict, S: float, threaded: bool) -> float:
+    """The most counted multiplications one inference block reading ``S`` bits holds: ``S^2 / (2 b_w b_a)`` from
+    (1, 0)-threading at every S (``threaded_one_zero``), the (d, e) bound where ``threaded``, at most ``block_mults Gamma``."""
+    one_zero = S * S / (2 * p["b_w"] * p["b_a"])
+    return min(p["block_mults"] * p["Gamma"], one_zero, region_cap(p, S) if threaded else math.inf)
+
+
+def chord(p: dict, bits: float = math.inf) -> float:
+    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` novel bits
+    each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
+    ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
+    on few blocks is the adversary's best."""
+    K, tb, reach = p["K"], p["thread_bits"], p["K"] + bits
+    base = block_cap(p, K, K <= tb)
+    s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * p["block_mults"] * p["Gamma"])
+    ends = [(S, True) for S in (2 * p["b_w"] * p["e"], full_block_bits(p), tb, reach) if K < S <= min(tb, reach)]
+    ends += [(S, False) for S in (tb, s_1, reach) if tb < reach and K < S <= reach and S >= tb]
+    return max(((block_cap(p, S, th) - base) / (S - K) for S, th in ends if S < math.inf), default=0.0)
 
 
 def windows_bound(p: dict, H: float, state: float, ingress: float, period: float | None) -> float:
@@ -269,13 +297,8 @@ def evaluate(p: dict, mech: dict) -> dict:
         q = p["share"] / (p["overhead"] + p["replay"])
         k = p["luck"] * p["identities"] * L / q
         skipped += k * p["step_flop"]
-        k_all = k + p["luck"] * p["identities"] * L * p["floor_steps"]
-        S_full = full_block_bits(p)
-        per_block = max(1.0, min(k_all, S_full / 28))
-        b_bar = max(p["step_bits"], p["step_bits"] + math.log2(math.e * (p["Gamma"] / p["step_flop"]) / per_block))
-        bits = k_all * b_bar
-        slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
-        cheat = min(p["m"] * slope * bits, C / gpm)
+        bits = p["identities"] * L * (1 / q + p["floor_steps"]) * p["step_bits"]
+        cheat = min(p["m"] * chord(p, bits) * bits, C / gpm)
 
     res_ops = residual_share(p) * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
