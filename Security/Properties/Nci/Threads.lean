@@ -43,8 +43,10 @@ def Throttled (j out : Json) : Prop :=
       Nci.Assumptions.WeightsIncompressible c T i.gamma (α * i.gamma) b_w b_a →
         b_a * T.M.card ≤ α * T.bound (α * i.gamma) b_w dd e * d.D.size d.D.computed
 
-/-- **A verdict of compliance throttles every reference circuit the declaration contains.** On every instance with a
-verdict, the verdict is `Throttled`. -/
+/-- **A verdict of compliance throttles every threaded reference circuit the declaration contains, if its weights are
+incompressible** (the named assumption `WeightsIncompressible`). On every instance with a verdict, the verdict is
+`Throttled`: the bound holds for each reference circuit `c` the declaration contains that is `(dd, e)`-threaded at read
+cap `αΓ` and has incompressible weights, and says nothing of any other. -/
 def Throttles : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Throttled j out
 
@@ -62,8 +64,11 @@ def ThrottledDark (j out : Json) : Prop :=
       Nci.Assumptions.WeightsIncompressible c T i.gamma (α * i.gamma) b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * i.gamma) b_w dd e * d.D.size d.D.computed / b_a
 
-/-- **A verdict of compliance puts counted multiplications off the books in dark gates.** On every instance with a
-verdict, the verdict is `ThrottledDark`. -/
+/-- **A verdict of compliance puts counted multiplications off the books in dark gates**, for every threaded reference
+circuit the declaration contains partly, if its weights are incompressible (the named assumption
+`WeightsIncompressible`). On every instance with a verdict, the verdict is `ThrottledDark`: the bound holds for each
+reference circuit `c` the declaration contains partly that is `(dd, e)`-threaded at read cap `αΓ` and has incompressible
+weights, and says nothing of any other. -/
 def ThrottlesDark : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDark j out
 
@@ -79,7 +84,9 @@ def ThrottledSlots (j out : Json) : Prop :=
       Nci.Assumptions.WeightsIncompressibleSlots c T σ i.gamma (α * i.gamma) b_w b_a →
         b_a * T.M.card ≤ α * T.bound (α * i.gamma) b_w dd e * d.D.size d.D.computed
 
-/-- **`Throttles` per parameter slot.** On every instance with a verdict, the verdict is `ThrottledSlots`. -/
+/-- **`Throttles` per parameter slot**: a verdict of compliance throttles every threaded reference circuit the
+declaration contains, if its weights are incompressible per parameter slot of a slot map `σ` (the named assumption
+`WeightsIncompressibleSlots`). On every instance with a verdict, the verdict is `ThrottledSlots`. -/
 def ThrottlesSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledSlots j out
 
@@ -96,7 +103,9 @@ def ThrottledDarkSlots (j out : Json) : Prop :=
       Nci.Assumptions.WeightsIncompressibleSlots c T σ i.gamma (α * i.gamma) b_w b_a →
         (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * i.gamma) b_w dd e * d.D.size d.D.computed / b_a
 
-/-- **`ThrottlesDark` per parameter slot.** On every instance with a verdict, the verdict is `ThrottledDarkSlots`. -/
+/-- **`ThrottlesDark` per parameter slot**: for every threaded reference circuit the declaration contains partly, if its
+weights are incompressible per parameter slot of a slot map `σ` (the named assumption `WeightsIncompressibleSlots`). On
+every instance with a verdict, the verdict is `ThrottledDarkSlots`. -/
 def ThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDarkSlots j out
 
