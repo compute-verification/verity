@@ -103,8 +103,11 @@ publishes), and prints what changed: each changed guarantee's signature before a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
 those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (`RECORD_DIFFERENCE`: two records each right on its side of a merge
-whose definitions changed) writes the same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names
-the file, so a failed check of a train's merge carries its record.  A guarantee whose
+whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the same
+`lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
+merge carries its record.  With `--regenerate` (a train's lean-audit step) such a package passes instead, and `audit.json`'s
+`regenerated` maps each to its record for the train to commit before it lands; the package's own lock is never written,
+and every other failure fails as before.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
@@ -145,6 +148,7 @@ import tempfile
 import textwrap
 import threading
 import time
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -236,8 +240,125 @@ def cores() -> int:
     return n
 
 
+#: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
+#: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
+MEM_FLOOR_GIB = 24
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its facts of that package held 30–50 GiB between
+#: replays in r20261018-175656-1c85, so with replay threads bounded (`replay_threads`) about this fits
+SPEC_FLOOR_GIB = 64
+#: where a machine below the floor runs it instead
+ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
+           "python3 tools/verity/lean/lean_changed.py --records {pkg}")
+
+
+def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
+    """The memory this process may use, swap included: the machine's, bounded by the limits of its cgroup and every cgroup
+    above it (`/proc/self/cgroup`: a queued run's limit is on its own scope, below the hierarchy's root)."""
+    info = {}
+    for line in (proc / "meminfo").read_text().splitlines():
+        k, _, v = line.partition(":")
+        info[k] = int(v.split()[0]) * 1024 if v.split() else 0
+    try:
+        own = next((ln.split("::", 1)[1].strip() for ln in (proc / "self" / "cgroup").read_text().splitlines()
+                    if ln.startswith("0::")), "/")
+    except OSError:
+        own = "/"
+    parts = [q for q in own.split("/") if q]
+    dirs = [cgroup.joinpath(*parts[:i]) for i in range(len(parts), -1, -1)]
+
+    def limit(name: str) -> int | None:
+        got = []
+        for d in dirs:
+            try:
+                v = (d / name).read_text().strip()
+                if v != "max":
+                    got.append(int(v))
+            except (OSError, ValueError):
+                continue
+        return min(got) if got else None
+    ram, swap = info.get("MemTotal", 0), info.get("SwapTotal", 0)
+    ram = ram if (m := limit("memory.max")) is None else min(ram, m)
+    swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
+    return (ram + swap) / 2**30
+
+
+#: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
+#: of such a package runs no more than its memory holds (two queued Security builds were OOM-killed at 64 and 16 GB, 18 Oct)
+BUILD_GIB_PER_JOB = 8
+
+
+def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins Mathlib or ArkLib and
+    `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
+    m = pkg / "lake-manifest.json"
+    try:
+        names = {d.get("name") for d in json.loads(m.read_text()).get("packages", [])} if m.is_file() else set()
+    except (OSError, ValueError):
+        names = set()
+    if "LEAN_NUM_THREADS" in env or not names & {"mathlib", "Arklib"}:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
+
+
+#: about what one replay thread of a Mathlib or ArkLib package peaks at: the whole-Security `--build --update` of 18 Oct
+#: (r20261018-175656-1c85, 48 threads) peaked at 145 GiB in one replay, about 3 GiB a thread, and was OOM-killed at 64 and
+#: 96 GiB; a heavy replay runs alone (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
+REPLAY_GIB_PER_THREAD = 4
+_HEAVY_REPLAY = threading.Semaphore(1)
+
+
+def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
+    `REPLAY_GIB_PER_THREAD`); else None."""
+    if build_threads(pkg, env, have_gib=1) is None:
+        return None
+    gib = memory_gib() if have_gib is None else have_gib
+    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+
+
+def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
+    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
+    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves)."""
+    heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
+             and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
+    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
+    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+    try:
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+    except ValueError:
+        floor = need
+    if not heavy or have_gib >= floor:
+        return None
+    rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
+    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
+            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
+    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
+            f"GiB floor: run it on a node, `{ON_NODE.format(pkg=rel(pkgs[0]))}` (add --update for the record), or set "
+            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
+
+
 #: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
+
+
+def plugin_targets(pkg: Path) -> list[str]:
+    """The compiler plugins the package's fetched dependencies load (`plugins` of a `[[lean_lib]]` in their `lakefile.toml`),
+    as targets `@dep/Lib:facet`.  Lake links one twice when two of a package's libraries load it, one under the module system
+    and one not (ArkLib's `ArkLib` and `ArkLibTest` with `ArkLibLintPlugin:shared`), and the two links race on one file, so the
+    build links each alone first, after which both find it up to date (INF-62)."""
+    out: list[str] = []
+    for f in sorted((pkg / ".lake" / "packages").glob("*/lakefile.toml")):
+        try:
+            doc = tomllib.loads(f.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        name = str(doc.get("name", f.parent.name)).strip("«»")
+        for lib in doc.get("lean_lib", []) if isinstance(doc.get("lean_lib"), list) else []:
+            for t in lib.get("plugins", []) if isinstance(lib, dict) else []:
+                if isinstance(t, str) and (target := t if t.startswith("@") else f"@{name}/{t}") not in out:
+                    out.append(target)
+    return out
 
 
 def lake_env() -> dict[str, str]:
@@ -1095,7 +1216,8 @@ def verifier_failures(rule: dict | None, found: dict | None) -> list[str]:
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
     no proof sees, so one fails unless `allow` names it (a name, or a name prefix; `module:M` for every constant of a module
     under `M`), and the entries reach the `hash` namespace only through `stop`, so the verifier hashes through its
-    parameter (Daniel's checks (a) and (b), LEAN-18)."""
+    parameter (Daniel's checks (a) and (b), LEAN-18). The walk follows `@[csimp]` replacements, so the code compiled in
+    place of a constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
@@ -1241,12 +1363,14 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
 
 
 #: the failures `--update` settles from the build alone: a guarantee, a `reads` group or an assumption whose record differs
-#: from the build (two records, each right on its own side of a merge).  A missing record or name, an owner, and every other
-#: failure take a person
+#: from the build (two records, each right on its own side of a merge), an owned guarantee or assumption with no record yet,
+#: and a premise the lock doesn't list (the premise rule adds it with its guarantees' owner).  A missing name, an owner, and
+#: every other failure take a person
 RECORD_DIFFERENCE = re.compile(
     r"guarantees: (\S+'s (signature|assumptions|type hash) changed:|they now read definitions in |they no longer read |"
-    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for )|"
-    r"assumptions: \S+'s definition in \S+ changed;")
+    r"definitions in \S+ that .+? read changed \(|those that read \S+ are |the digest recorded for |\S+ has no record;)|"
+    r"assumptions: (\S+'s definition in \S+ changed;|\S+ has no record;|\S+ is a premise of .+, an assumption the lock "
+    r"doesn't list;)")
 
 
 def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[str]) -> dict | None:
@@ -1961,8 +2085,11 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     keys = replay_keys(facts, toolchain) if replay_cache else {}
     reused = [m for m in facts["modules"] if m in keys and (replay_cache / f"{keys[m]}.json").is_file()]
     checked = [m for m in facts["modules"] if m not in reused]
-    rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Replay.lean"), str(found), *checked,
-                    *(["--reused", *reused] if reused else [])], pkg, work / "replay.log")
+    n = replay_threads(pkg)
+    with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
+                        str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else [])],
+                       pkg, work / "replay.log")
     fails = []
     if killed(rc):
         fails.append(f"replay: killed (exit {rc}; out of memory?), which is not a kernel verdict: rerun it alone\n{text[-1000:]}")
@@ -2135,9 +2262,16 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t, _peak.bytes = time.monotonic(), 0
     if build:
         rep["sandbox"] = sandboxed()
+        jobs = [] if (n := build_threads(pkg)) is None else ["env", f"LEAN_NUM_THREADS={n}"]
+        if n is not None:
+            rep["build_threads"] = n
         for step, argv in (("setup", None),
-                           ("build", in_sandbox(pkg, ["lake", "build"])),
-                           ("build-roots", in_sandbox(pkg, ["lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                           ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts]) if (ts := plugin_targets(pkg))
+                                                      else [])),
+                           ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
+                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+            if callable(argv) and not (argv := argv()):
+                continue
             with contextlib.nullcontext() if argv is None else writing(pkg, log):
                 s = time.monotonic()
                 rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
@@ -2400,6 +2534,9 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
+    ap.add_argument("--regenerate", action="store_true", help="a train's audit: a package whose every failure is a record "
+                    "difference (`RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
+                    "for it under --out, which the train commits; the package's own lock is never written")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
@@ -2419,6 +2556,8 @@ def main(argv: list[str]) -> int:
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
         ap.error("name package directories, or --all (which neither updates records nor names instances)")
+    if a.regenerate and (a.update or a.name_instances or a.lift):
+        ap.error("--regenerate writes no lock: not with --update, --name-instances or --lift")
     moved = None
     if a.moved:
         if not a.update:
@@ -2448,6 +2587,9 @@ def main(argv: list[str]) -> int:
         except ValueError:
             more = []                                   # its audit reports the policy
         pkgs += [q for _, q in more if q not in pkgs and (q / POLICY).is_file()]
+    if why := memory_refusal(pkgs, memory_gib()):
+        print(f"check.py: {why}", file=sys.stderr, flush=True)
+        return 2
     try:
         if a.build:
             lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits
@@ -2507,6 +2649,8 @@ def main(argv: list[str]) -> int:
                 rep["failures"] += tamper
                 if regen := rep.pop("regenerated", None):
                     Path(regen).unlink(missing_ok=True)
+            if a.regenerate and rep.get("regenerated") and rep["failures"]:
+                rep["settled"], rep["failures"] = rep["failures"], []
             reports[pkg] = rep
             n = sum(rep.get("declarations", {}).values())
             head = f"AUDIT {pkg}: {'PASS' if not rep['failures'] else 'FAIL'}"
@@ -2544,8 +2688,12 @@ def main(argv: list[str]) -> int:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
               f"{', '.join(changed)}: say so in the PR; Daniel gets a DM with the changes above when they land (review.txt in "
               f"each package's reports)", flush=True)
-    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports}, indent=1,
-                                               ensure_ascii=False) + "\n")
+    regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
+    for p, f in regen.items():
+        print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
+              f"{p}/{POLICY}", flush=True)
+    (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reports,
+                                                "regenerated": regen}, indent=1, ensure_ascii=False) + "\n")
     print(f"AUDIT: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}; reports in {out}", flush=True)
     return 1 if failed else 0
 

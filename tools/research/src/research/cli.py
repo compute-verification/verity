@@ -6,8 +6,11 @@
                                                  # what preserves its records instead (default $RESEARCH_LOCAL_ONLY; job.json records it)
   research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N] [--cpus N] [--class P] [--phase cpu|gpu] [--gpu-host] [--preemptible] [--quiet] [--on NODE] -- CMD...
                                                  # the one queue (infra/cluster) places the job and runs it under its node's executor
+  research run --on auto [--cpus N] [--mem-gb G] [--max-min M | --timeout T] [--wait] -- CMD...   # an agent's suite or build: queued
+                                                 # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
-               [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+               [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
+                                                 # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
@@ -70,10 +73,17 @@
   research notes bind LANE --branch B --worktree DIR --pod NAME   # where the lane works (successors naming a predecessor's)
   research notes status [--pods] [--stale-min 30] [--json]  # per lane: freshest of report/checkpoint/commit/uncommitted edit/pod; STALE (exit 1)
   research notes watch [--every 10] [--pods]     # a line each time a lane goes STALE or comes back
+  research agents quiet [--hours 2] [--repo DIR] [--branch NAME ...] [--json]   # a coordinator's workers: each worktree (or branch)
+                                                 # with no commit, change or live process for --hours is QUIET (exit 1)
   research launch-request <request.json>         # machine side: claim the run dir, start the detached runner (idempotent per id)
   research mem [--ramlock DIR] [--json]           # machine side: cgroup limit, in use, live reservations, available (research.mem)
   research msg send|close|read|names|traffic|ask-daniel|... [--dry-run]
                                                  # messages between agents, on Slack (research/slack.py; skill using-slack)
+  research digest --as LANE [--roster FILE] [--watch N TODO | --unwatch N | --thread NAME TS [--channel KEY] | --show]
+                                                 # a coordinator's sync on one screen: doorbells, watched threads, landings, the
+                                                 # lane's queue changes, its notes with their results so far, TRIGGERs for watched
+                                                 # PRs, and Health: the VM, /workspace, the roster's workers and inboxes, PRs off the
+                                                 # queue, finished worktrees' .lake, live runs (research/digest.py)
 
 `run` allocates a run id, writes the v0.2 job record, gives the workload RESEARCH_RUN_ID / RESEARCH_RUN_DIR, and hands execution
 to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd logs).  The workload's cwd is its run dir, locally and
@@ -98,6 +108,7 @@ import argparse
 import json
 import math
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,7 +183,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     ap = argparse.ArgumentParser(prog="research run", add_help=True, allow_abbrev=False, description=__doc__.split("\n\n")[1])
     ap.add_argument("--runs-dir", default=None, help="registry root (default $RESEARCH_RUNS or ~/.research/runs)")
-    ap.add_argument("--on", default=None, metavar="MACHINE", help="run on an existing authorized machine listed in the machines file")
+    ap.add_argument("--on", default=None, metavar="MACHINE",
+                    help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
+                         "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -205,7 +218,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                                    "--on then pins its node, and --mem-gb is its memory")
     q.add_argument("--queue", action="store_true", help="hand the job to the queue instead of running it on a named machine (needs --source)")
     q.add_argument("--class", dest="queue_class", default="work", metavar="P", help="its priority class (the description's [priorities]; default work)")
-    q.add_argument("--gpus", type=int, default=None, metavar="N", help="default: its kind's (else 0)")
+    q.add_argument("--gpus", type=int, default=None, metavar="N",
+                   help="with --queue: default its kind's (else 0). With --on MACHINE alone: on a machine whose GPUs gpu-lease hands out, "
+                        "the workload waits first come first served for N of them (`gpu-lease N --wait`; the wait counts against "
+                        "--timeout); a run without --gpus sees no GPU there")
     q.add_argument("--gpu-model", default=None, metavar="M", help="e.g. rtx-pro-6000; a node with other GPUs is never chosen")
     q.add_argument("--cpus", type=int, default=None, metavar="N", help="default: its kind's (else 1); also the workload's OMP, OpenBLAS, MKL and NumExpr threads unless --env sets them")
     q.add_argument("--max-min", type=int, default=None, metavar="M",
@@ -232,6 +248,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--exclusive-lock", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--custody-dir", default=None, help=argparse.SUPPRESS)   # machine side: the minted key + store.toml (store.custody)
+    ap.add_argument("--store-read-dir", default=None, help=argparse.SUPPRESS)   # machine side: --store-read's key, deleted when the workload ends
+    ap.add_argument("--store-read", action="store_true",
+                    help="with --on: the workload gets a read-only key to the store's remote (RESEARCH_STORE_CONFIG and AWS_* in its "
+                         "environment, minted here like custody's and deleted when it ends), so its `research data fetch` works on a "
+                         "machine whose local store lacks the artifact; needs run custody (the default)")
     ap.add_argument("--custody-r2", dest="custody_r2", action="store_true", default=None,
                     help="with --on (the default there): the machine publishes the attempt and every run file (logs included) to the "
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
@@ -258,6 +279,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
+    if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
+        print(f"research run --on auto: {why}", file=sys.stderr)
+        return 2
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -285,6 +309,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
+        if ns.mem_gb is not None:
+            # the slot's mem= admits and reserves the run; a launch-time reservation too was held through the wait for a slot,
+            # beside the slot's once it ran (INF-61, cpu-3 18 Oct: two waiting runs held 128 GB, admission sat at -89 GB)
+            print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} is dropped; the slot's own mem= admits and reserves the run",
+                  file=sys.stderr)
+            ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
     if ns.queue:
@@ -294,7 +324,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --timeout: {e}", file=sys.stderr)
             return 2
         return _run_queued(ns, harness_opts, command)
-    queue_only = [flag for flag, given in (("--gpus", ns.gpus is not None), ("--cpus", ns.cpus is not None),
+    queue_only = [flag for flag, given in (("--gpus", ns.gpus is not None and not ns.on), ("--cpus", ns.cpus is not None),
                                            ("--gpu-model", ns.gpu_model), ("--max-min", ns.max_min is not None),
                                            ("--kind", ns.queue_kind != "adhoc"), ("--question", ns.question),
                                            ("--phase", ns.queue_phase), ("--class", ns.queue_class != "work"),
@@ -311,6 +341,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.preflight and not (ns.on and ns.source):
         print("research run: --preflight runs a tool's preflight on the machine, from the tree --source ships (--on MACHINE --source GITDIR)",
               file=sys.stderr)
+        return 2
+    if ns.store_read and not ns.on:
+        print("research run: --store-read hands a machine's workload a read-only store key (--on MACHINE); here the store's own "
+              "config already applies", file=sys.stderr)
         return 2
     if (ns.custody_r2 or ns.custody_ttl) and not ns.on:
         print("research run: --custody-r2 / --custody-ttl are for --on MACHINE (a local run's records are already on this disk: "
@@ -426,6 +460,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
     apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    if ns.claimed and (remote_info or {}).get("gpus"):
+        apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
     apply_env = {**clone_env, **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
@@ -463,6 +499,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
               f"belong to {ns.job_user} ({', '.join(unsafe[:10])}), so nothing here reads the run dir; its records "
               f"stay on this machine", file=sys.stderr)
         return rc or 3
+    if ns.store_read_dir:               # the workload is done with its read-only key
+        from .store.custody import CRED_FILE
+
+        (Path(ns.store_read_dir) / CRED_FILE).unlink(missing_ok=True)
     if not ns.custody_dir:
         _publish_attempt(run_dir, prep, run_record=ns.run_record)
     s = R.summarize(run_dir)
@@ -686,6 +726,8 @@ def _refuse(ns: argparse.Namespace, run_dir: Path, run_id: str, reason: str, fau
     write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
     if ns.custody_dir:
         (Path(ns.custody_dir) / CRED_FILE).unlink(missing_ok=True)
+    if ns.store_read_dir:
+        (Path(ns.store_read_dir) / CRED_FILE).unlink(missing_ok=True)
     if ns.exclusive_lock:
         remote.release_exclusive(Path(ns.exclusive_lock).parent, run_id)
     if mem_reservation:
@@ -905,6 +947,35 @@ GPU_WAIT_MIN = 120
 THREAD_POOL_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 
+#: `--on auto`: an agent's suite, build or probe belongs on a node, not its VM (every handle, at Daniel's request, 18 Oct). It is
+#: queued onto vy-nebius-2's Verity share (infra/cluster/descriptions/nebius.toml: nice 19 inside its check slots, so never a slot a
+#: train waits for) as kind AUTO_KIND (infra/cluster/kinds/infra.toml). Not node 1, whose CPUs trains and lanes' direct runs already
+#: oversubscribe (top, 02:53Z), nor cpu-1, whose memory a train and proofs' Lean slots have reserved (03:01Z).
+AUTO_NODE, AUTO_KIND, AUTO_PROJECT = "vy-nebius-2", "agent-test", "verity"
+
+
+def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | None:
+    """`--on auto` is `--queue --on AUTO_NODE --kind AUTO_KIND --cwd source` from this checkout (its --source) as project
+    AUTO_PROJECT: the kind gives what the run doesn't declare (4 CPUs, 16 GiB, 60 min), and the workload runs in the shipped tree
+    unless --cwd says otherwise (its environment is the workload's to sync, as suites.py does). Fills `ns` and `harness_opts` in
+    place; a reason when it can't."""
+    if ns.queue or ns.pool:
+        return "it takes no --queue or --pool: it is the queue itself"
+    if not ns.source:
+        top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+        if top.returncode != 0:
+            return "--source GITDIR: no git checkout here to ship"
+        ns.source = top.stdout.strip()
+    ns.queue, ns.on, ns.preemptible = True, AUTO_NODE, True      # a guest on node 2 is preemptible; a test reruns from the start
+    ns.project = ns.project or AUTO_PROJECT
+    if remote.flag_value(harness_opts, "--cwd") is None:
+        harness_opts += ["--cwd", "source"]                      # a suite or build runs in the tree it tests (INF-65), not its run dir
+    if ns.queue_kind == "adhoc":
+        ns.queue_kind = AUTO_KIND
+    print(f"research run --on auto: queued onto {AUTO_NODE} as {ns.queue_kind}, from {ns.source}", file=sys.stderr)
+    return None
+
+
 def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> int:
     """`research run --queue`: the queue places the job (`cluster submit`), then it launches as `--on` the placed machine does, with
     the runner inside the job's CPU allocation and a gpu phase's workload alone inside its GPU lease. Its records, status and logs
@@ -1013,7 +1084,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user)
+                            job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
@@ -1615,6 +1686,10 @@ def main(argv: list[str] | None = None) -> int:
         from .notes import main as notes_main
 
         return notes_main(rest)
+    if cmd == "digest":
+        from .digest import main as digest_main
+
+        return digest_main(rest)
     if cmd == "merge":
         from .merge import main as merge_main
 
@@ -1643,6 +1718,10 @@ def main(argv: list[str] | None = None) -> int:
         return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
+    if cmd == "agents":
+        from .agents import main as agents_main
+
+        return agents_main(rest)
     age = checkout_age()
     print(f"research: unknown command {cmd!r}" + (f". {age} If {cmd!r} is newer than that, update the checkout "
                                                   "(`git pull`) and retry." if age else "") + f"\n\n{__doc__.strip()}",

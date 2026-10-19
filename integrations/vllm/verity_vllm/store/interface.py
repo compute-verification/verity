@@ -173,7 +173,7 @@ class PassCommitment:
     """Pass ``index`` of its window: its seed, its plan (the segments in read order, and ``plan_digest`` over the
     plan's runs of store indices, `StoreView.plan`), each segment's node's root (the least node of the pass's tree
     over its leaves; ``()`` when the reader built the tree) and the pass's root, which seeds the next pass, in this
-    window or the next."""
+    window or the next; and the engine step whose reads it covers (None if its caller named none)."""
 
     index: int
     seed: bytes
@@ -181,6 +181,7 @@ class PassCommitment:
     plan_digest: bytes
     segment_roots: tuple[bytes, ...]
     root: bytes
+    step: int | None = None
 
     @property
     def blocks(self) -> int:

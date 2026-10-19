@@ -192,3 +192,14 @@ def test_a_runs_own_reservation_and_its_check_slots_count_once():
            {"file": "research-r2.json", "live": True, "run_id": "r2", "outstanding": 50 * G},
            {"file": "check-t.json", "live": False, "run_id": "r0", "outstanding": 0}]
     assert M.reserved_bytes(res) == (279 + 50) * G
+
+
+def test_active_file_cache_is_reclaimable_and_not_in_use(machine):
+    """17 Oct, vy-glm53-eu (INF-54): 930 GB current of which 454 GB active_file (weights already read) and 93 GB inactive_file;
+    counting the active cache as used refused a run with all 8 GPUs idle."""
+    G = int(M.GB)
+    (machine["cg"] / "memory.max").write_text(f"{1500 * G}\n")
+    (machine["cg"] / "memory.current").write_text(f"{930 * G}\n")
+    (machine["cg"] / "memory.stat").write_text(f"anon {366 * G}\nfile {557 * G}\nshmem {11 * G}\nactive_file {454 * G}\ninactive_file {93 * G}\n")
+    r = M.reading()
+    assert r["in_use"] == (930 - 454 - 93) * G

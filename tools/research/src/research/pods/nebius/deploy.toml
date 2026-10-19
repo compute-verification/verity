@@ -36,6 +36,19 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*",
            "/etc/systemd/system.control/*/*"]
 
+# circuits' H200 VMs (INF-54/55/58): only the GPU-lease files are infra's to manage there
+[nodes.vy-glm53-eu]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+
+[nodes.vy-glm53-eu2]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+
+[nodes.vy-glm53-s1]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/workspace/verity-guest/bin/gpu_adopt.py", "/etc/systemd/system/vy-gpu-adopt.service", "/etc/vy/gpu-lease-host"]
+
 # ---- every node: the VM itself (pods/nebius/launch.sh installs these at first boot)
 
 [[file]]
@@ -113,11 +126,31 @@ src = "tools/research/src/research/pods/nebius/peers"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1"]
 owner = "infra"
 
-[[file]]
+[[file]]  # a oneshot each minute (vy-slot-only.timer on cpu-1, vy-direct-nice.timer on node 1) reads it fresh: nothing to restart
 path = "/usr/local/lib/vy-monitoring/slot_only.py"
 src = "tools/research/src/research/pods/nebius/slot_only.py"
-nodes = ["vy-nebius-cpu-1"]
-run = ["systemd:vy-slot-only.timer"]
+nodes = ["vy-nebius-cpu-1", "vy-nebius-1"]
+owner = "infra"
+
+# ---- node 1: a research run that did not come through a check slot runs at nice 19, so the train checks win the cores (top,
+# 18 Oct); after installing, `sudo systemctl enable --now vy-direct-nice.timer`
+
+[[file]]
+path = "/etc/vy/direct-runs-nice"
+src = "tools/research/src/research/pods/nebius/direct-runs-nice"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-direct-nice.service"
+src = "tools/research/src/research/pods/nebius/vy-direct-nice.service"
+nodes = ["vy-nebius-1"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-direct-nice.timer"
+src = "tools/research/src/research/pods/nebius/vy-direct-nice.timer"
+nodes = ["vy-nebius-1"]
 owner = "infra"
 
 [[file]]
@@ -755,6 +788,12 @@ src = "tools/research/src/research/pods/nebius/device_cores.sh"
 nodes = ["vy-nebius-2"]
 owner = "infra"
 
+[[file]]  # `sudo systemctl enable vy-device-cores` once; no `run`: it applies at boot, and a changed script is run by hand
+path = "/etc/systemd/system/vy-device-cores.service"
+src = "tools/research/src/research/pods/nebius/vy-device-cores.service"
+nodes = ["vy-nebius-2"]
+owner = "infra"
+
 [[file]]  # after installing it, `sudo sysctl --system` (or the next boot) applies it
 path = "/etc/sysctl.d/90-vy-device-cores.conf"
 src = "tools/research/src/research/pods/nebius/device-cores-sysctl.conf"
@@ -1103,4 +1142,27 @@ owner = "infra"
 path = "/usr/local/lib/vy-lockout/research-view.yaml"
 src = "tools/research/src/research/pods/nebius/lockout/research-view.yaml"
 nodes = ["vy-nebius-1"]
+owner = "infra"
+
+# ---- GPU VMs whose GPUs gpu-lease hands out (INF-55): a direct run sees none unless it asks with --gpus N, and a process on a GPU
+# no lease gave it has that GPU's lease taken in its run's name (gpu_adopt.py); vm_setup.sh installs both on a new GPU VM
+
+[[file]]
+path = "/workspace/verity-guest/bin/gpu_adopt.py"
+src = "tools/research/src/research/pods/nebius/gpu_adopt.py"
+nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+run = ["systemd:vy-gpu-adopt"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-gpu-adopt.service"
+src = "tools/research/src/research/pods/nebius/units/vy-gpu-adopt.service"
+nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
+run = ["systemd:vy-gpu-adopt"]
+owner = "infra"
+
+[[file]]
+path = "/etc/vy/gpu-lease-host"
+src = "tools/research/src/research/pods/nebius/gpu-lease-host"
+nodes = ["vy-glm53-eu", "vy-glm53-eu2", "vy-glm53-s1"]
 owner = "infra"

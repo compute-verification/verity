@@ -28,8 +28,8 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs (the inner
 #                shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1: also the inner's,
-#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify refuses (exit 2) until a soundness
-#                headline covers plain leaves; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
+#                --coins os, on verity/flock-circuit+plain-leaves, which Lean's verify checks without --zk
+#                (ProvedScope.leafOk); ZK_LEAN=1: also today's --zk session; LEVELS=none: neither of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
 #                a forgery's refused, and the inner statement's units were derived from the program (lean_verdicts.py; the
@@ -627,7 +627,7 @@ oprove)
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   # CONTROLS=DIR (a statement's directory under data/$TAG/v, e.g. L6): on that statement, one firewalled session per
   # FC_FIREWALL_TAMPER control (the device's side dishonest in one named way), each of which the firewall must refuse by name
-  # before the tampered message leaves
+  # without the tampered message leaving, the session stopping at its Finish (live PROTOCOL.md §10.1)
   if [ -n "${CONTROLS:-}" ]; then
     C=$V/$CONTROLS
     for w in root witness label opening algebra algebra-proof shape; do
@@ -652,23 +652,25 @@ lean)
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
   # V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
-  # session STEP=vstage staged every statement from, a forgery's too
+  # session STEP=vstage staged every statement from, a forgery's too, with the coin server's transcript of it, whose
+  # root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
+  # RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
   INNER=${INNER:-$DD/inner/s$((NS - 1))}
-  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session"
+  REC_INNER="--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-session $INNER/session --rec-inner-transcript $INNER/public.json"
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
-  # partition object and program), the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and out,
-  # and R's levels' tops; without the algebra, the level's acc as acc0), and the inner transcript for a statement that reads a rec-c<k> (RecVStar.checkPubRows)
+  # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
+  # out, and R's levels' tops; without the algebra, the level's acc as acc0)
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
     $LEAN_BIN rec-statements --rec-inner $O/lean/rec-inner.json > $O/lean/rec-statements.txt 2>&1 || { tail -5 $O/lean/rec-statements.txt; exit 1; }
-    python3 - $O/lean $DD/v $DD/v-sess $INNER/public.json <<'EOF' || exit 1
-import json, re, sys
+    python3 - $O/lean $DD/v $DD/v-sess <<'EOF' || exit 1
+import json, sys
 from pathlib import Path
 from verity_flock import rec_bindings as RB
 from verity_flock import rec_vstage as VS
-o, v, vs, transcript = map(Path, sys.argv[1:])
+o, v, vs = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
 try:
@@ -692,8 +694,6 @@ for s in sorted(p for p in vs.iterdir() if p.is_dir()):
         flags += ["--rec-bindings", str(o / f"bindings-{s.name}.json")]
     except ValueError as e:
         print(f"{s.name}: no bindings ({e}); Lean refuses it at setup")
-    if any(re.fullmatch(r"rec-c[0-9]+", str(e.get("value", ""))) for e in ports.values()):
-        flags += ["--rec-inner-transcript", str(transcript)]
     (o / f"own-{s.name}.txt").write_text(" ".join(flags))
     print(s.name, unit, " ".join(flags))
 EOF

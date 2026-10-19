@@ -65,7 +65,7 @@ def registered() -> audit.Store:
 def store() -> audit.Store:
     """A store of N registered blocks under p512/k2 with no appends yet, its own to append to."""
     out = copy.copy(registered())
-    out.blocks, out.appends = list(out.blocks), []
+    out.blocks, out.appends, out.pending = list(out.blocks), [], {}
     return out
 
 
@@ -75,39 +75,60 @@ def pages(first: int, count: int) -> list[bytes]:
 
 class Run:
     """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
-    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends."""
+    prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
+    under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
+    before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6) -> None:
+                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None,
+                 deferred: bool = False) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
-                        window_ns=10, codec=reg.codec)
+                        window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred)
         self.clock = Clock()
-        self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
-                         not_before_ns=0, clock=self.clock)
+        if registry is None:
+            self.s = Session(self.p, reg, None, coins.Challenger(reg.digest, 0, self.p.coins, entropy=Entropy(b"coins")),
+                             not_before_ns=0, clock=self.clock)
+        else:
+            self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
         self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
-        self.t, self.i, self.previous, self.plan = 0, 0, reg.digest, Plan.whole(reg.blocks)
+        self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
+        self.head: bytes | None = None
         self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.coins: dict[int, bytes] = {}
+
+    def commit(self, root: bytes, count: int) -> int:
+        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept and, if the store
+        awaits that append's coin, its blocks encoded under it."""
+        first, coin = self.s.append(root, count)
+        self.coins[first] = coin
+        self.head = audit.append_head(self.head, first, count, root)
+        if first in self.store.pending:
+            self.store.encode(first, coin)
+        return first
 
     def append(self, count: int) -> audit.Append:
         a = self.store.append(pages(self.store.extent, count), salts(b"page salts %d" % self.store.extent, count))
-        assert self.s.append(a.root, a.count) == a.first
+        assert self.commit(a.root, a.count) == a.first
         return a
 
-    def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None) -> audit.Verdict | None:
-        """One pass, its plan sent whole (None: the registered store) or as its `change` (added, removed)."""
+    def run(self, plan: Plan | None = None, change: tuple | None = None, sent=None, step: int | None = None
+            ) -> audit.Verdict | None:
+        """One pass, its plan sent whole (None: the registered store) or as its `change` (added, removed), covering
+        `step` (None: the step after the last pass's)."""
         if change is not None:
             plan = self.plan.changed(*change, self.store.extent)
-        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan)
+        ps = self.prover.run(self.challenges[self.t], self.i, self.previous, plan, head=self.head)
         self.passes[self.t, self.i], self.previous, self.plan = ps, ps.root, ps.plan
         self.i += 1
+        self.step = self.step + 1 if step is None else step
         if sent is not None:
-            return self.s.receive(self.t, self.i - 1, ps.root, sent)
+            return self.s.receive(self.t, self.i - 1, ps.root, sent, step=self.step)
         if change is not None:
-            return self.s.receive(self.t, self.i - 1, ps.root, change=change)
-        return self.s.receive(self.t, self.i - 1, ps.root, None if plan is None else plan.runs)
+            return self.s.receive(self.t, self.i - 1, ps.root, change=change, step=self.step)
+        return self.s.receive(self.t, self.i - 1, ps.root, None if plan is None else plan.runs, step=self.step)
 
     def boundary(self) -> None:
         self.clock.now += self.p.window_ns
@@ -170,7 +191,9 @@ def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) 
     assert ps.plan.block(9) == 9 and o.digest == codec.digest(pages(9, 1)[0]) and len(o.digest) == 64
     assert registered.digest == b""
     assert o.size == registered.size + 64 + 64 * (len(o.payload_path) - len(registered.payload_path))
-    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, r.store.registration.key, bound=True)
+    k = r.store.registration.key
+    assert r.store.blocks[9] == codec.encode(pages(9, 1)[0], 9, k, bound=True, coin=r.coins[8])
+    assert r.store.blocks[9] != codec.encode(pages(9, 1)[0], 9, k, bound=True)
 
 
 def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(honest) -> None:
@@ -207,10 +230,321 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
         audit.ledger(rec, **common, credit_post_seed=Verdict(True, float("inf")))
 
 
-def synthetic(lengths: tuple[int, ...], post: tuple[int, ...]) -> audit.Record:
+@dataclasses.dataclass(frozen=True)
+class Link:
+    """A requirement link that holds or not, at `density_bits`, reading `reads[step]` bits at a step (plenty
+    otherwise), its memory-map unit's verdict `maps` on the records it is asked about, each kept in `asked`, and its
+    units' draw leaving `epsilon` of its credit unproved except with `delta` (every unit proved by default)."""
+    holds: bool
+    density_bits: int
+    reads: dict
+    maps: object = True
+    epsilon: object = 0.0
+    delta: object = 0.0
+    asked: list = dataclasses.field(default_factory=list)
+
+    def read_bits(self, step: int):
+        return self.reads.get(step, 10**9)
+
+    def mapped(self, record: audit.Record):
+        self.asked.append(record)
+        return self.maps
+
+
+def units_mapped(record: audit.Record, appends, rekeys=()) -> bool:
+    """The memory-map unit's verdict as the record fixes it, for a map whose appends are `appends`, (step, first,
+    count, root) in the map's order, and whose re-keys are `rekeys`, (step, old index): the chain over all of them is
+    the record's, each pass's head is the chain through those of the steps below its own, and each re-key's old index
+    is below the stale bound of the first pass after its step."""
+
+    def chain(below: int) -> bytes | None:
+        head = None
+        for s, first, count, root in appends:
+            if s < below:
+                head = audit.append_head(head, first, count, root)
+        return head
+
+    passes = [(s, h, b) for w in record.windows for s, h, b in zip(w.steps, w.heads, w.stale, strict=True)]
+    if record.appends != chain(audit.STEP_LIMIT) or any(h != chain(s) for s, h, _ in passes):
+        return False
+    return all(next((b for s, _, b in passes if s > r), -1) > old for r, old in rekeys)
+
+
+def stale_from_public(pub: dict, extents) -> list[list[int]]:
+    """Each pass's stale bound from the public record and the appends' extents as the verifier receives them, (first,
+    count, root) in order: an append joined the window of the first pass whose head chains it, and a pass of window t
+    is bounded at `blocks` plus the counts of the appends that joined window t − `lifetime` or before."""
+    chain, through = None, {None: 0}
+    for n, (first, count, root) in enumerate(extents, 1):
+        chain = audit.append_head(chain, first, count, root)
+        through[chain.hex()] = n
+    joined: dict[int, int] = {}
+    for t, hs in enumerate(pub["heads"]):
+        for h in hs:
+            for a in range(through[h]):
+                joined.setdefault(a, t)
+    return [[pub["blocks"] + sum(c for a, (_, c, _) in enumerate(extents) if joined[a] <= t - pub["lifetime"])
+             for _ in hs] for t, hs in enumerate(pub["heads"])]
+
+
+def extents(r: Run) -> list[tuple[int, int, bytes]]:
+    return [(a.first, a.count, a.root) for a in r.store.appends]
+
+
+@dataclasses.dataclass(frozen=True)
+class Units(Link):
+    """A link whose memory-map unit makes `appends` and `rekeys` (`units_mapped`'s), its verdict on a record whether
+    the record is that map's."""
+    appends: tuple = ()
+    rekeys: tuple = ()
+
+    def mapped(self, record: audit.Record):
+        self.asked.append(record)
+        return units_mapped(record, self.appends, self.rekeys)
+
+
+def test_on_a_requirement_link_a_pass_is_credited_at_most_the_circuit_s_reads_at_its_step(honest) -> None:
+    """The honest session's passes are steps 0 … 4, with (8, 8, 7) and (7, 7) registered receipts credited.  A link
+    at whole blocks (D = 32,768 bits) and ample reads changes nothing but `linked`.  At D = 8,192 bits each credited
+    receipt counts a quarter block, and step 1's reads, 20,000 bits, cap its pass below its 8 receipts' 65,536.  A link
+    that doesn't hold, a density outside 1 … 32,768 bits, reads that aren't a count, or a record whose passes name no
+    step are refused."""
+    rec = honest[0].s.record()
+    assert [w.steps for w in rec.windows] == [(0, 1, 2), (3, 4)]
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole = capacity * rec.span_ns / 1e9
+    store_ = audit.ledger(rec, **common)
+    full = audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}))
+    assert full.timing == store_.timing and full.linked and not store_.linked
+    assert full.to_json()["linked"] is True and store_.to_json()["linked"] is False
+    quarter = audit.ledger(rec, **common, requirement=Link(True, 8192, {1: 20_000}))
+    w0 = 8 * 8192 + 20_000 + 7 * 8192
+    assert quarter.timing == pytest.approx(1 - (w0 + 14 * 8192) / 8 / whole)
+    assert quarter.windows[0].timing == pytest.approx(1 - w0 / 8 / (capacity * rec.windows[0].span_ns / 1e9))
+    assert quarter.sample == store_.sample and quarter.counting == store_.counting
+    for link, match in ((Link(False, 8192, {}), "don't hold"), (Link(True, 0, {}), "density"),
+                        (Link(True, 8 * 4096 + 1, {}), "density"), (Link(True, True, {}), "density"),
+                        (Link(True, 8192, {2: -1}), "nonnegative integer"),
+                        (Link(True, 8192, {2: 1.5}), "nonnegative integer")):
+        with pytest.raises(ValueError, match=match):
+            audit.ledger(rec, **common, requirement=link)
+    bare = synthetic((10, 12), ())
+    with pytest.raises(ValueError, match="name none"):
+        audit.ledger(bare, **dict(common, rebuild=audit.Rebuild(bare.codec, 0.0)), requirement=Link(True, 8192, {}))
+
+
+def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
+    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
+    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
+    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
+    about the record, and a link whose unit doesn't make those appends is refused."""
+    r, _ = honest
+    rec = r.s.record()
+    assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    link = Link(True, 8 * 4096, {})
+    assert audit.ledger(rec, **common, requirement=link).linked and link.asked == [rec]
+    for maps in (False, None, 1):
+        with pytest.raises(ValueError, match="memory-map unit"):
+            audit.ledger(rec, **common, requirement=Link(True, 8 * 4096, {}, maps))
+    none = Link(True, 8 * 4096, {})
+    audit.ledger(dataclasses.replace(rec, appends=None), **common, requirement=none)
+    assert [x.appends for x in none.asked] == [None]
+    other = [(0, a.first, a.count, a.root) for a in r.store.appends]
+    with pytest.raises(ValueError, match="memory-map unit"):
+        audit.ledger(rec, **common, requirement=Units(True, 8 * 4096, {}, appends=tuple(other)))
+
+
+def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
+    """Each pass's head is the chain over the appends received before its root, which its seed binds: none before
+    pages 8 … 11, then theirs through window 0, then theirs and 12 … 13's through window 1.  Its stale bound is N
+    throughout, since no block reaches L = 60.  The public record lists both per window (the heads hiding
+    commitments, the bounds protocol structure), and the honest session's map, step 0 appending 8 … 11 and step 2
+    12 … 13, is the units' at every pass."""
+    r, _ = honest
+    rec = r.s.record()
+    first, second = r.store.appends
+    h1 = audit.append_head(None, first.first, first.count, first.root)
+    h2 = audit.append_head(h1, second.first, second.count, second.root)
+    assert [w.heads for w in rec.windows] == [(None, h1, h1), (h2, h2)] and h2 == rec.appends
+    assert [w.stale for w in rec.windows] == [(N, N, N), (N, N)]
+    pub = rec.public()
+    assert pub["heads"] == [[None, h1.hex(), h1.hex()], [h2.hex(), h2.hex()]]
+    assert pub["stale"] == [[N, N, N], [N, N]] == stale_from_public(pub, extents(r))
+    assert rec.profile()["windows"][1]["heads"] == [h2.hex(), h2.hex()]
+    assert rec.profile()["windows"][1]["stale"] == [N, N]
+    assert units_mapped(rec, [(0, first.first, first.count, first.root), (2, second.first, second.count, second.root)])
+    assert not units_mapped(rec, [(1, first.first, first.count, first.root),
+                                  (2, second.first, second.count, second.root)])
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    for shorn in (dict(heads=()), dict(stale=())):
+        bare = dataclasses.replace(rec, windows=(dataclasses.replace(rec.windows[0], **shorn), rec.windows[1]))
+        with pytest.raises(ValueError, match="name none"):
+            audit.ledger(bare, **common, requirement=Link(True, 8 * 4096, {}))
+
+
+def test_a_stale_bound_is_the_appends_extents_and_windows_and_l_as_the_public_record_gives_them() -> None:
+    """L = 1, two passes a window.  Pages 8 and 9 join window 0; 10 and then 11, 12 join window 1, between its passes;
+    13 joins window 2 between its passes.  Window 1 is bounded past 8 and 9 (N + 2), window 2 past 8 … 12 (N + 5),
+    whether its pass's root comes before 13's append (where the session takes the store's extent) or after (13's first
+    index).  Recomputed from the public record's `blocks`, `lifetime` and `heads` and the appends' extents as the
+    verifier receives them, the same lists: the record lists the extents only as their chain, so they are the one
+    input beyond it."""
+    r = Run(store(), windows=3, lifetime=1)
+    assert r.run() is None
+    r.append(2)
+    assert r.run(change=(((N, 2),), ())) is None
+    r.boundary()
+    r.append(1)
+    assert r.s.release(((N, 2),)) is None
+    assert r.run(change=(((N + 2, 1),), ((N, 2),))) is None
+    r.append(2)
+    assert r.run(change=(((N + 3, 2),), ())) is None
+    r.boundary()
+    assert r.s.release(((N + 2, 3),)) is None
+    assert r.run(change=((), ((N + 2, 3),))) is None
+    r.append(1)
+    assert r.run(change=(((N + 5, 1),), ())) is None
+    r.boundary()
+    assert [v.accepted for v in r.finish()] == [True] * 3
+    pub = r.s.record().public()
+    assert pub["stale"] == [[N, N], [N + 2, N + 2], [N + 5, N + 5]] == stale_from_public(pub, extents(r))
+
+
+def appended_at_step_one(early: bool) -> Run:
+    """Passes at steps 0, 1 and 2 over one window, step 1 appending pages 8 and 9, which step 2's pass reads: sent
+    after step 1's root, or `early`, before it."""
+    r = Run(store(), windows=1)
+    assert r.run(step=0) is None
+    if early:
+        r.append(2)
+    assert r.run(step=1) is None
+    if not early:
+        r.append(2)
+    assert r.run(change=(((N, 2),), ()), step=2) is None
+    r.boundary()
+    assert r.finish() == [audit.Verdict(0, True)]
+    return r
+
+
+def test_mapped_refuses_an_append_sent_before_its_step_s_pass() -> None:
+    """The red team's early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
+    session accepts either order and the chain over the appends is the same, so the chain alone can't tell them
+    apart; step 1's head can, and a units link whose map appends at step 1 refuses the early session.  An append the
+    map dates at step 0 isn't the honest session's either: the heads pin each append between two passes."""
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    honest, early = appended_at_step_one(False), appended_at_step_one(True)
+    a = honest.store.appends[0]
+    h = audit.append_head(None, a.first, a.count, a.root)
+    assert early.store.appends[0].root == a.root and honest.s.record().appends == early.s.record().appends == h
+    assert [w.heads for w in honest.s.record().windows] == [(None, None, h)]
+    assert [w.heads for w in early.s.record().windows] == [(None, h, h)]
+    units = ((1, a.first, a.count, a.root),)
+    assert audit.ledger(honest.s.record(), **common, requirement=Units(True, 8 * 4096, {}, appends=units)).linked
+    with pytest.raises(ValueError, match="memory-map unit"):
+        audit.ledger(early.s.record(), **common, requirement=Units(True, 8 * 4096, {}, appends=units))
+    assert not units_mapped(honest.s.record(), ((0, a.first, a.count, a.root),))
+    assert units_mapped(early.s.record(), ((0, a.first, a.count, a.root),))
+
+
+@pytest.mark.parametrize("deferred", [False, True], ids=["resident", "deferred"])
+def test_a_re_key_s_old_index_is_below_the_stale_bound_of_the_pass_after_its_step(deferred) -> None:
+    """L = 2, a pass a window at steps 1 … 4.  Step 0 appends pages 8 and 9, which join window 0, and step 1 page 10,
+    which joins window 1; step 2 re-keys 8 and 9 (released, their payloads appended again at 11 and 12, read from
+    window 2, or, deferred, from window 3) and step 3 frees 10.  The stale bounds are N, N, N + 2 and N + 3: step 2's
+    re-key is at the cap, its old indices below the bound of step 3's pass, and so is one of 10 at step 3, but one of
+    10 at step 2 is a window early (10 is not below N + 2), which the units refuse though the session accepts it."""
+    r = Run(store(), windows=4, lifetime=2, deferred=deferred)
+    r.append(2)
+    assert r.run(change=(((N, 2),), ()), step=1) is None
+    r.boundary()
+    r.append(1)
+    assert r.run(change=(((N + 2, 1),), ()), step=2) is None
+    r.boundary()
+    a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    landed, late = (((N + 3, 2),), ()) if not deferred else ((), ((N + 3, 2),))
+    assert r.run(change=(landed, ((N, 2),)), step=3) is None
+    r.boundary()
+    assert r.s.release(((N + 2, 1),)) is None
+    assert r.run(change=(late, ((N + 2, 1),)), step=4) is None
+    r.boundary()
+    assert [v.accepted for v in r.finish()] == [True] * 4
+    rec = r.s.record()
+    assert [w.stale for w in rec.windows] == [(N,), (N,), (N + 2,), (N + 3,)]
+    assert rec.public()["stale"] == [[N], [N], [N + 2], [N + 3]] == stale_from_public(rec.public(), extents(r))
+    appends = [(s, x.first, x.count, x.root) for s, x in zip((0, 1, 2), r.store.appends)]
+    assert units_mapped(rec, appends) and units_mapped(rec, appends, ((2, N), (2, N + 1)))
+    assert units_mapped(rec, appends, ((2, N), (2, N + 1), (3, N + 2)))
+    assert not units_mapped(rec, appends, ((2, N), (2, N + 1), (2, N + 2)))
+    common = dict(capacity_bytes_per_s=4096 * 10**9 / 10, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    at_cap = Units(True, 8 * 4096, {}, appends=tuple(appends), rekeys=((2, N), (2, N + 1)))
+    assert audit.ledger(rec, **common, requirement=at_cap).linked
+    with pytest.raises(ValueError, match="memory-map unit"):
+        audit.ledger(rec, **common, requirement=dataclasses.replace(at_cap, rekeys=((2, N), (2, N + 1), (2, N + 2))))
+
+
+def test_a_link_credits_what_its_units_draw_proved_and_adds_its_delta_to_the_error(honest) -> None:
+    """The plan and memory-map units are sampled: a link whose draw leaves ε of its credit unproved, except with δ,
+    credits 1 − ε of the session's 37 linked receipts, and each window its own (23 and 14) less ε of the session's,
+    since all of the unproved share may be one window's.  Its δ adds to both readings' error, which is otherwise every
+    window's δ (or the horizon's one) and 2^-slack_log2 a pass.  ε = 1 credits nothing; an ε outside 0 … 1 or a δ
+    outside [0, 1) is refused."""
+    rec = honest[0].s.record()
+    capacity = 4096 * 10**9 / 10
+    common = dict(capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=audit.Rebuild(P512, 0.0))
+    whole, b = capacity * rec.span_ns / 1e9, 4096
+    proved = audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}))
+    sampled = audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=0.25, delta=2.0 ** -30))
+    assert 1 - proved.timing == pytest.approx(37 * b / whole)
+    assert 1 - sampled.timing == pytest.approx(0.75 * 37 * b / whole)
+    for w, own in zip(sampled.windows, (23, 14)):
+        assert 1 - w.timing == pytest.approx((own - 0.25 * 37) * b / (capacity * w.span_ns / 1e9))
+    assert sampled.sample == proved.sample and sampled.counting == proved.counting
+    beside = rec.passes * 2.0 ** -audit.SLACK_LOG2
+    assert proved.error == pytest.approx(sum(w.profile.delta for w in rec.windows) + beside, rel=1e-12)
+    assert proved.error_horizon == pytest.approx(rec.windows[0].profile.delta + beside, rel=1e-12)
+    assert audit.ledger(rec, **common).error == proved.error
+    assert sampled.error - proved.error == pytest.approx(2.0 ** -30, rel=1e-9)
+    assert sampled.error_horizon - proved.error_horizon == pytest.approx(2.0 ** -30, rel=1e-9)
+    assert sampled.to_json()["error"] == {"windows": sampled.error, "horizon": sampled.error_horizon}
+    nothing = audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=1))
+    assert nothing.timing == pytest.approx(1) and all(w.timing == pytest.approx(1) for w in nothing.windows)
+    for epsilon, delta, match in ((-0.01, 0.0, "epsilon"), (1.5, 0.0, "epsilon"), (float("nan"), 0.0, "epsilon"),
+                                  (True, 0.0, "epsilon"), ("0.1", 0.0, "epsilon"), (0.0, 1.0, "delta"),
+                                  (0.0, -1e-9, "delta"), (0.0, float("nan"), "delta"), (0.0, None, "delta")):
+        with pytest.raises(ValueError, match=match):
+            audit.ledger(rec, **common, requirement=Link(True, 8 * b, {}, epsilon=epsilon, delta=delta))
+
+
+def synthetic(lengths: tuple[int, ...], post: tuple[int, ...], steps: tuple[int, ...] = (), heads: tuple = (),
+              stale: tuple = ()) -> audit.Record:
     w = audit.WindowRecord(0, lengths, 0, 10**9, 10**9, IntegrityProfile(
-        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post)
+        ("receipt",), (sum(lengths),), {"receipt": Subset(1)}, 1e-6, drawn={"receipt": 1}), post, steps, heads, stale)
     return audit.Record(bytes(64), bytes(64), 10, 4096, (w,))
+
+
+def test_a_window_record_s_heads_and_stale_bounds_are_each_pass_s() -> None:
+    h = hashlib.sha512(b"a chain").digest()
+    rec = synthetic((10, 12), (), (3, 8), (None, h), (10, 12))
+    assert rec.windows[0].to_json()["heads"] == [None, h.hex()] and rec.windows[0].to_json()["stale"] == [10, 12]
+    assert rec.public()["heads"] == [[None, h.hex()]] and rec.public()["stale"] == [[10, 12]]
+    assert synthetic((10, 12), ()).windows[0].heads == () and synthetic((10, 12), ()).public()["stale"] == [[]]
+    for bad in ((h,), (h, h, h), (None, h[:63]), (None, h.hex()), (None, bytearray(h))):
+        with pytest.raises(ValueError, match="heads"):
+            synthetic((10, 12), (), heads=bad)
+    for bad in ((10,), (10, -1), (10, True), (10, 10.0)):
+        with pytest.raises(ValueError, match="stale"):
+            synthetic((10, 12), (), stale=bad)
+
+
+def test_a_window_record_s_steps_are_each_pass_s_strictly_increasing() -> None:
+    assert synthetic((10, 12), (), (3, 8)).windows[0].to_json()["steps"] == [3, 8]
+    assert synthetic((10, 12), ()).windows[0].steps == ()
+    for bad in ((3,), (3, 3), (8, 3), (-1, 3), (3, True), (3, audit.STEP_LIMIT)):
+        with pytest.raises(ValueError, match="steps"):
+            synthetic((10, 12), (), bad)
 
 
 def test_a_window_record_s_post_seed_reads_are_each_pass_s_at_most_its_length() -> None:
@@ -277,7 +611,7 @@ def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     ys = salts(b"page salts", 2)
     a = st.append(pages(N, 2), ys)
     shifted = audit.append_tree(st.registration.digest, N + 1, a.digests, ys)
-    assert r.s.append(shifted.commitment.root, 2) == N
+    assert r.commit(shifted.commitment.root, 2) == N
     assert len(shifted.open(N + 1).path) == len(a.tree.open(N).path)
     assert r.run(change=(((N, 2),), ())) is None
     r.boundary()
@@ -293,7 +627,7 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
     """A plan is over the store's blocks so far: one holding a block before the append that commits it, or after its
     release, is refused (`plan`), whole or as a change."""
     r = Run(store())
-    assert r.s.receive(0, 0, bytes(64), ((0, N + 1),)).failure == "plan"
+    assert r.s.receive(0, 0, bytes(64), ((0, N + 1),), step=0).failure == "plan"
 
     r = Run(store())
     r.append(2)
@@ -304,10 +638,118 @@ def test_a_plan_holding_a_block_not_appended_or_released_is_refused() -> None:
     r.append(2)
     assert r.run(change=(((N, 2),), ())) is None
     assert r.s.release(((N + 1, 1),)) is None
-    assert r.s.receive(0, 1, bytes(64), change=((), ())).failure == "plan"
+    assert r.s.receive(0, 1, bytes(64), change=((), ()), step=1).failure == "plan"
 
     r = Run(store())
-    assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ())).failure == "plan"
+    assert r.s.receive(0, 0, bytes(64), ((0, N),), change=((), ()), step=0).failure == "plan"
+
+
+def two_windows_under_a_lifetime_of_two() -> Run:
+    """L = 2.  Pages 8 and 9 appended before window 0's first root, which they join, and read; page 10 appended after
+    window 0's roots but before window 1's first, which it joins, and read."""
+    r = Run(store(), windows=4, lifetime=2)
+    r.append(2)
+    assert r.run(change=(((N, 2),), ())) is None
+    r.boundary()
+    r.append(1)
+    assert r.run(change=(((N + 2, 1),), ())) is None
+    r.boundary()
+    return r
+
+
+def test_an_appended_block_leaves_every_plan_within_the_lifetime_unless_re_keyed() -> None:
+    """Window 2's plan may not hold pages 8 and 9, which joined window 0 (`lifetime`).  Re-keyed instead (released,
+    and their payloads appended again at 11 and 12, under fresh bound keys) they are read in windows 2 and 3, and page
+    10, which joined window 1, in window 2 but not 3: every receipt opens and the session is accepted, its record
+    naming L."""
+    r = two_windows_under_a_lifetime_of_two()
+    v = r.run(change=((), ()))
+    assert v is not None and v.failure == "lifetime" and v.window == 2
+
+    r = two_windows_under_a_lifetime_of_two()
+    a = r.store.append(pages(N, 2), salts(b"re-keyed", 2))
+    assert r.commit(a.root, a.count) == N + 3 and r.s.release(((N, 2),)) is None
+    assert r.run(change=(((N + 3, 2),), ((N, 2),))) is None
+    r.boundary()
+    v = copy.deepcopy(r).run(change=((), ()))
+    assert v is not None and v.failure == "lifetime" and v.window == 3
+    assert r.s.release(((N + 2, 1),)) is None
+    assert r.run(change=((), ((N + 2, 1),))) is None
+    r.boundary()
+    assert r.store.blocks[N + 3] != r.store.blocks[N] and r.store.committed(N + 3)[2] == codec.digest(pages(N, 1)[0])
+    assert [v.accepted for v in r.finish()] == [True] * 4
+    rec = r.s.record()
+    assert [w.post_seed for w in rec.windows] == [(2,), (3,), (3,), (2,)]
+    assert rec.lifetime == 2 and rec.public()["lifetime"] == 2
+    for bad in (0, -1, True, 1.0):
+        with pytest.raises(ValueError, match="lifetime"):
+            Params(blocks=N, deadline_ns=1, windows=1, lifetime=bad)
+
+
+def test_a_session_that_defers_residency_has_a_lifetime_of_at_least_two() -> None:
+    """Deferred, a block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1: at L = 1,
+    before it may be resident.  The verifier refuses the session's parameters, not only its passes."""
+    assert Params(blocks=N, deadline_ns=1, windows=1).deferred is False
+    assert Params(blocks=N, deadline_ns=1, windows=1, lifetime=1).lifetime == 1
+    assert Params(blocks=N, deadline_ns=1, windows=1, lifetime=2, deferred=True).deferred is True
+    with pytest.raises(ValueError, match="defers residency has a lifetime of at least 2 windows, not 1"):
+        Params(blocks=N, deadline_ns=1, windows=1, lifetime=1, deferred=True)
+    for bad in (1, "yes", None):
+        with pytest.raises(ValueError, match="deferred is a bool"):
+            Params(blocks=N, deadline_ns=1, windows=1, deferred=bad)
+
+
+def withdrawing() -> Run:
+    """Pages 8, 9 and 10 appended; a pass holds 8 and 10, whose encodes landed, and not 9."""
+    r = Run(store())
+    r.append(3)
+    assert r.run(change=(((N, 1), (N + 2, 1)), ())) is None
+    return r
+
+
+def test_a_withdrawn_block_is_released_and_was_in_no_plan() -> None:
+    """A release names the appended blocks among its runs that were freed before their encode landed (memory-map/v1's
+    `withdrawn`): they leave the store like any released block, and the session is accepted, counting them released."""
+    r = withdrawing()
+    assert r.s.release(((N + 1, 1),), ((N + 1, 1),)) is None
+    assert r.run(change=((), ())) is None
+    r.boundary()
+    assert r.run() is None
+    r.boundary()
+    assert [v.accepted for v in r.finish()] == [True, True]
+    assert (r.s.record().appended, r.s.record().released) == (3, 1)
+
+    r = Run(store())
+    r.append(3)
+    assert r.s.release(((N + 1, 2), (N, 1)), ((N, 3),)) is None
+
+
+@pytest.mark.parametrize("runs, withdrawn", [
+    (((N, 1),), ((N, 1),)),
+    (((2, 1),), ((2, 1),)),
+    (((2, 1),), ((N + 1, 1),)),
+    (((N + 1, 1),), ((N + 1, 0),)),
+    (((N + 1, 1),), "x"),
+], ids=["planned", "registered", "outside-the-release", "zero-count", "malformed"])
+def test_a_withdrawal_of_a_block_a_plan_held_or_outside_its_release_rejects_the_session(runs, withdrawn) -> None:
+    """The verifier checks a withdrawn block was never written: appended (at N or above), among the release's own
+    runs, and in no plan received before, however the plan came."""
+    r = withdrawing()
+    assert r.s.release(runs, withdrawn).failure == "release"
+
+
+def test_a_block_any_earlier_plan_held_cannot_be_withdrawn() -> None:
+    """Page 9 was in the first pass's plan (sent whole) and left it at the next (a change): it was written, and its
+    withdrawal is refused."""
+    r = Run(store())
+    r.append(3)
+    assert r.run(Plan(((0, N + 2),), r.store.extent)) is None
+    assert r.run(change=((), ((N, 2),))) is None
+    assert r.s.release(((N + 1, 1),), ((N + 1, 1),)).failure == "release"
+    r = Run(store())
+    r.append(3)
+    assert r.run(Plan(((0, N + 2),), r.store.extent)) is None
+    assert r.s.release(((N + 2, 1),), ((N + 2, 1),)) is None
 
 
 def test_a_malformed_append_or_release_rejects_the_session() -> None:
@@ -325,14 +767,28 @@ def test_a_malformed_append_or_release_rejects_the_session() -> None:
 
 
 def test_a_store_appends_at_fresh_indices_under_bound_keys() -> None:
+    """An append commits its blocks' digests and leaves them unencoded until its coin arrives (`Store.encode`), which
+    encodes them once: a second coin for it, or a coin for no pending append, is refused, and a malformed coin
+    leaves it pending."""
     st = store()
     a = st.append(pages(N, 2), salts(b"a", 2))
     b = st.append(pages(N + 2, 1), salts(b"b", 1))
     assert (a.first, a.count, b.first, b.count, st.extent) == (N, 2, N + 2, 1, N + 3)
+    assert st.blocks[N:] == [None] * 3 and set(st.pending) == {N, N + 2}
+    ca, cb = (hashlib.sha512(label).digest()[:codec.COIN_BYTES] for label in (b"coin a", b"coin b"))
+    with pytest.raises(ValueError, match="32 bytes"):
+        st.encode(N, ca[:31])
+    assert set(st.pending) == {N, N + 2}
+    st.encode(N, ca)
+    st.encode(N + 2, cb)
+    for first in (N, N + 1, N + 2):
+        with pytest.raises(ValueError, match="awaits its coin"):
+            st.encode(first, ca)
     k = st.registration.key
-    for j in range(N, N + 3):
+    for j, coin in ((N, ca), (N + 1, ca), (N + 2, cb)):
         salt, path, d = st.committed(j)
-        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d) == pages(j, 1)[0]
+        assert d == codec.digest(pages(j, 1)[0]) and codec.decode(st.blocks[j], j, k, d, coin) == pages(j, 1)[0]
+        assert codec.decode(st.blocks[j], j, k, d) is None
     assert st.committed(N + 2)[1] == () and st.committed(0)[2] == b""
     assert a.tree.open(N + 1).value == receipts.hidden(pages(N + 1, 1)[0], a.salts[1])
     with pytest.raises(ValueError, match="salt per payload"):
