@@ -20,11 +20,11 @@ section PlurLin
 
 variable {U : Type} [Fintype U]
 
-theorem Pr_one {α : Type} [Fintype α] [Nonempty α] : Pr (fun _ : α => True) = 1 := by
+theorem Pr_top_eq_one {α : Type} [Fintype α] [Nonempty α] : Pr (fun _ : α => True) = 1 := by
   rw [← Ex_ind (fun _ : α => True)]
   simpa using Ex_const (α := α) (1 : ℝ)
 
-theorem Pr_compl {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (fun a => ¬ p a) = 1 - Pr p := by
+theorem Pr_neg_eq {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (fun a => ¬ p a) = 1 - Pr p := by
   classical
   have h : (fun a => (if ¬ p a then (1 : ℝ) else 0) + (if p a then 1 else 0)) = fun _ => 1 :=
     funext fun a => by by_cases h : p a <;> simp [h]
@@ -32,7 +32,7 @@ theorem Pr_compl {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (
   rw [h, Ex_const, Ex_ind, Ex_ind] at h2
   linarith
 
-theorem Ex_ite {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] (c : ℝ) :
+theorem Ex_if_zero {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] (c : ℝ) :
     Ex (fun a => if p a then c else 0) = c * Pr p := by
   rw [← Ex_ind p, ← Ex_mul_left]
   congr 1
@@ -43,6 +43,21 @@ theorem Ex_ite {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] (c :
 def firstDiffers (g : U → Prop) (f : U → Msg) (a : Msg) : (M : ℕ) → (Fin M → U) → Prop
   | 0, _ => False
   | M + 1, us => (g (us 0) ∧ f (us 0) ≠ a) ∨ (¬ g (us 0) ∧ firstDiffers g f a M (Fin.tail us))
+
+open Classical in
+/-- The first of `M` draws where `g` holds. -/
+noncomputable def firstPick (g : U → Prop) : (M : ℕ) → (Fin M → U) → Option U
+  | 0, _ => none
+  | M + 1, us => if g (us 0) then some (us 0) else firstPick g M (Fin.tail us)
+
+theorem firstPick_of_firstDiffers {g : U → Prop} {f : U → Msg} {a : Msg} :
+    ∀ M (us : Fin M → U), firstDiffers g f a M us → ∃ v, firstPick g M us = some v ∧ g v ∧ f v ≠ a
+  | 0, _, h => h.elim
+  | M + 1, us, h => by
+    rcases h with ⟨hg, hf⟩ | ⟨hg, h⟩
+    · exact ⟨us 0, by simp [firstPick, hg], hg, hf⟩
+    · obtain ⟨v, hv, hgv, hfv⟩ := firstPick_of_firstDiffers M (Fin.tail us) h
+      exact ⟨v, by simp [firstPick, hg, hv], hgv, hfv⟩
 
 /-- `G_M = Σ_{i<M} r^i`. -/
 noncomputable def geomS (r : ℝ) : ℕ → ℝ
@@ -110,7 +125,7 @@ theorem Pr_firstDiffers [Nonempty U] (g : U → Prop) (f : U → Msg) (a : Msg) 
       · by_cases hf : f u = a
         · rw [Pr_congr (q := fun _ => False) fun vs => by simp [hg, hf], Pr_false]
           simp [hg, hf]
-        · rw [Pr_congr (q := fun _ => True) fun vs => by simp [hg, hf], Pr_one]
+        · rw [Pr_congr (q := fun _ => True) fun vs => by simp [hg, hf], Pr_top_eq_one]
           simp [hg, hf]
       · rw [Pr_congr (q := firstDiffers g f a M) fun vs => by simp [hg], ih]
         simp [hg]
@@ -118,7 +133,7 @@ theorem Pr_firstDiffers [Nonempty U] (g : U → Prop) (f : U → Msg) (a : Msg) 
         = Ex fun u => Pr fun vs => (g u ∧ f u ≠ a) ∨ (¬ g u ∧ firstDiffers g f a M vs) :=
           Pr_splitFirst (fun u vs => (g u ∧ f u ≠ a) ∨ (¬ g u ∧ firstDiffers g f a M vs))
       _ = _ := by
-          rw [congrArg Ex (funext hpt), Ex_add, Ex_mul_right, Ex_ind, Ex_ind, Pr_compl]
+          rw [congrArg Ex (funext hpt), Ex_add, Ex_mul_right, Ex_ind, Ex_ind, Pr_neg_eq]
           show _ = _ * (1 + (1 - Pr g) * geomS (1 - Pr g) M)
           ring
 
@@ -158,7 +173,7 @@ theorem Pr_plur_link (g : U → Prop) (f : U → Msg) (M : ℕ) :
       · simp [hu]
     have hlow : Pr (fun u => g u ∧ f u ≠ f u₀) * geomS (1 - Pr g) M * Pr g ≤
         Pr (fun p : U × (Fin M → U) => g p.1 ∧ firstDiffers g f (f p.1) M p.2) := by
-      rw [hL, ← Ex_ite]
+      rw [hL, ← Ex_if_zero]
       exact Ex_mono hpt
     have hgm := geomS_mul (Pr g) M
     have hdq : Pr (fun u => g u ∧ f u ≠ f u₀) ≤ Pr g := Pr_mono fun u h => h.1
@@ -206,7 +221,7 @@ theorem Ex_loopCost [Nonempty U] (g : U → Prop) (c : U → ℕ) :
       · simp only [hu, ↓reduceIte, not_false_eq_true]
         rw [Ex_add, Ex_const]
     rw [hfun, Ex_splitFirst (fun u vs => (c u : ℝ) + if g u then 0 else (loopCost g c M vs : ℝ)),
-      congrArg Ex (funext hpt), Ex_add, Ex_ite, Pr_compl, ih]
+      congrArg Ex (funext hpt), Ex_add, Ex_if_zero, Pr_neg_eq, ih]
     show _ = _ * (1 + (1 - Pr g) * geomS (1 - Pr g) M)
     ring
 
@@ -222,7 +237,7 @@ theorem Ex_linkCost_le [Nonempty U] (g : U → Prop) (c : U → ℕ) (M : ℕ) :
     · simp only [linkCost, hu, ↓reduceIte, Nat.cast_add]
       rw [Ex_add, Ex_const]
     · simp [linkCost, hu, Ex_const]
-  rw [Ex_prod, congrArg Ex (funext hpt), Ex_add, Ex_ite, Ex_loopCost]
+  rw [Ex_prod, congrArg Ex (funext hpt), Ex_add, Ex_if_zero, Ex_loopCost]
   have hc : 0 ≤ Ex (fun u => (c u : ℝ)) := Ex_nonneg fun u => Nat.cast_nonneg _
   have hq0 : 0 ≤ Pr g := Pr_nonneg _
   have hq1 : Pr g ≤ 1 := Pr_le_one _
