@@ -8,8 +8,9 @@ widths alone (`Nci.Guarantees.ThreadedOfLayered`).
 
 Each computed value of a thread has a *key*, one of its reads in the same thread, except at the *stops*:
 
-* *roots*, each reading at least `d` values of its thread (its *legs*) whose key paths never meet: the complete entries
-  of a matrix product, as one wide sum whose legs are the products over its inner dimension;
+* *roots*, each reading at least `d` values of its thread (its *legs*) whose key paths never meet: the steps of a
+  matrix-product entry's `Dot16` chain after its first, whose legs are the previous step's accumulator and its 16
+  activations;
 * *lookups*, each reading an input of its thread and a *column* of novel input gates at least `b` bits wide, the
   columns of one thread's lookups disjoint: an embedding row, selected by the thread's token.
 
