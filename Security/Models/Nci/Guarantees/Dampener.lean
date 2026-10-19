@@ -18,8 +18,9 @@ guarantee or of the model's accounting:
   establishes (the cumulative bound, `Population.Exfil.tail_cum`, at a budget);
 * the memory cap bounds the residual and the declared computation on the monitored servers together,
   `M_r + M_d ≤ μ κ C/2`: `DampenerWindows` derives it, with `μ` the memory cap and one window of rounding, from the
-  servers' windows, each holding at most `K Λ(K)/b_a` counted multiplications, the summed form of the memory cap over
-  threads (`Accounting.Guarantees.Actual.ThreadedRuntime`, in flight on `cursor/threaded-runtime-windows-770c`).
+  servers' windows, each holding at most `K Λ(K)/b_a` counted multiplications: the memory cap over threads
+  (`Accounting.Guarantees.Actual.ThreadedRuntime`) at a whole-tick window `ω = L`, when one threading of the servers'
+  computation counts the residual and the declared computation together.
 
 `Dampener` takes all five as hypotheses; `DampenerWindows` derives the memory cap's from the windows; `DampenerThreaded`
 also discharges the declared computation's with `ThreadedThrottled`.
