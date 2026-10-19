@@ -15658,7 +15658,7 @@
    ]
   },
   "Flock.Bytes": {
-   "digest": "8e04fe28e91700b663c57c193898a541ccee4342877a140765a29c1ae6997ff5",
+   "digest": "f7bb04ac1c8cd3e677732acb3d8915b2991225e88ce6cb27bc35ca66ea3676df",
    "definitions": {
     "Flock.Reader": "142f35b54fe69b55679f16638948d896389ff3941c3138e9919737ee271632b6",
     "Flock.Reader.M": "886955667f2c71471a290310539e053a122285f1ba3d9be4bdad51afb1c83376",
@@ -15669,6 +15669,7 @@
     "Flock.Reader.need": "92d6848268a151c0f67ec7450885024f237a1f5a71113135cf82254450136e0f",
     "Flock.Reader.pos": "ed6a4a8ae0b16caf7dedcc9ceb0e827c8dfc63e83c1f4dadeedd2b5c5088e5aa",
     "Flock.Reader.runAll": "8064923639197f55f5003d06437831dcd4da417a7f2d6cfdd9cb5131d46d6262",
+    "Flock.Reader.runPlain": "4a3d7d7c6be7190c32cfb28e056e9ee9de298c3b4600b104d8883ebe3f85ccf6",
     "Flock.Reader.u32": "cdb2b8a0ea9eeb8f4375744e042ea2788be36cfac924942108b0d116b8a2c70c",
     "Flock.Reader.u64": "c6e4ed755ed28b473ae7772666b15bdb4964078e0dc400dc8a820200f8670895",
     "Flock.Reader.u8": "5efdc0cb5709468577e171baae9b9f57b1299ee43b023f728642bc41b727fdc5",
@@ -18326,7 +18327,7 @@
    ]
   },
   "Flock.Proof": {
-   "digest": "6d0e98359eeefcf11561f1476d9f1ce5e7f7a19ec819a05aa11ad8b88acd9c0b",
+   "digest": "1f03554a32e2b6d8caab5d89901ccb03f98b0b64b6ada7f8f48e24b14ad8aa39",
    "definitions": {
     "Flock.FinalProof": "5ec92b6c5d11500fc360636c7eca4148335c1cb2ff438ee228b01c8002e45887",
     "Flock.FinalProof.rows": "5a813b7afdefc006e6cc02012240ad1943e7a1961c6413ae633a70bc44439ff9",
@@ -18376,7 +18377,7 @@
     "Flock.ZerocheckProof.round1ab": "3bc907a6931c1f81227b651d9b9d35be0884496bcea2b3f940ba87b104f56ecf",
     "Flock.ZerocheckProof.round1c": "21e24d7f56418e843b5480c705b6c13f31c9de7a4b1358e4123f9f13b5a0545c",
     "Flock.ZerocheckProof.rounds": "724a7a6e379fc10600c37d990df3b6f203b874e89dbf8739a8f881f7e7888a9b",
-    "Flock.decodeProof": "04315bc0298c1f7ea4d079ebb02001ae3ac56e3ca6f9dee5ce100ac4765d18cc",
+    "Flock.decodeProof": "0b5893b18022969cda13602d9c87a06f0b7f3337096fe041729a8064042219fb",
     "Flock.instBEqPcsParams": "edd323eafea996e51feea90b1ea225ddba5cb7c9c377d8f085973ea609396021",
     "Flock.instBEqPcsParams.beq": "e3e6044f304c55c3edf5670d5861a5bbd3f2b30bb84c57b0bbe873116ae6b5c4",
     "Flock.instInhabitedFinalProof": "d6b6302840a7346a75736cf651090bacb434f982c57e80cd54ec85e401ebcf69",
