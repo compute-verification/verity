@@ -48,6 +48,14 @@ theorem opRAccZ_of_acc {outs : List (OutZC F D Sl)} (h : AccUpTo n outs) :
   simp only [h, ↓reduceIte]
 
 omit [Fintype F] [DecidableEq F] in
+theorem off_opRAccZ_iff {outs : List (OutZC F D Sl)} (h : AccUpTo n outs)
+    (row : Fin (2 ^ (lvOf sch ℓ).logLen) → Fin (2 ^ (lvOf sch ℓ).lanes) → F) (p : Fin (2 ^ (lvOf sch ℓ).logLen)) :
+    Rewinding.Off (opRAccZ H E Lf sch n r ℓ cap) row outs p ↔
+      Rewinding.Off (opRZ H E Lf sch r ℓ cap) row (outs.getD n dfltOutZC) p := by
+  simp only [Rewinding.Off]
+  rw [opRAccZ_of_acc H E Lf sch n r ℓ cap h]
+
+omit [Fintype F] [DecidableEq F] in
 theorem acc_of_opRAccZ {outs : List (OutZC F D Sl)} {p : Fin (2 ^ (lvOf sch ℓ).logLen)}
     (h : (opRAccZ H E Lf sch n r ℓ cap outs p).isSome) : AccUpTo n outs := by
   by_contra hn
@@ -69,6 +77,17 @@ theorem ind_conflictAcc_le (b b' : List (OutZC F D Sl)) :
   rw [e₁] at h₁ hne
   rw [e₂] at h₂ hne
   exact ⟨p, h₁, h₂, hne⟩
+
+omit [Fintype F] [DecidableEq F] in
+open Classical in
+/-- A run opens at most `queries` positions of a cap on accepting runs. -/
+theorem opRAccZ_count (outs : List (OutZC F D Sl)) :
+    (Finset.univ.filter fun p => (opRAccZ H E Lf sch n r ℓ cap outs p).isSome).card ≤ (lvOf sch ℓ).queries := by
+  by_cases h : AccUpTo n outs
+  · rw [opRAccZ_of_acc H E Lf sch n r ℓ cap h]
+    exact (Exec.opOfL_count _ _ _ _ _ _ _ _).trans (slotOpensZ_length _ _ _ _)
+  · unfold opRAccZ
+    simp [h]
 
 end Opens
 
