@@ -81,9 +81,10 @@ read. ``first`` is at least N, and ``first - N + count`` at most M.
 
 **Cost.** PlanMatch: one 16-bit comparison of each plan entry with each block t may read, P (NR + G + V) of them, about
 P (NR + G + V) 16 ANDs. PlanShard: each entry's order, range and tail checks and its count comparison, and each named
-block's search over GAPS + 1 entries, about S (66 + 17 (GAPS + 1)) ANDs. MemoryMapStep: each present value against each
-slot of each written block, K C SLOTS VW ANDs, and the empty slots' C SLOTS VW, then `lam` and `phi` read by one-hot
-selection, and a 16-bit comparison a registered block, 16 N. A statement adds each row's hm96 commitment.
+block's search over GAPS + 1 entries, about S (55 + 17 (GAPS + 1)) ANDs, 2,367,485 at S = 32,768 and GAPS = 0, its plan row
+2^19 bits. MemoryMapStep: each present value against each slot of each written block, K C SLOTS VW ANDs, and the empty
+slots' C SLOTS VW, then `lam` and `phi` read by one-hot selection, and a 16-bit comparison a registered block, 16 N. A
+statement adds each row's hm96 commitment.
 
 `plan_match`, `plan_shard` and `memory_map` are the references, over plain ints; `plan_rows`, `plan_shard_rows` and
 `memory_map_rows` name each instance's rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
