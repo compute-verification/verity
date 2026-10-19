@@ -127,7 +127,7 @@ theorem sheetWords_of_table [DecidableEq K] [Fintype T] [Fintype L] [Fintype U] 
     have hout : ∀ k ∈ (univ : Finset K), k ∉ Z.vec → H.on k h = 0 := by
       intro k _ hk
       by_contra hne
-      exact hk (hread.2.2 k (hlane k (fits_of_ne hok hlab hrows hne)))
+      exact hk (hread.2.2.1 k (hlane k (fits_of_ne hok hlab hrows hne)))
     have hle : ∀ k ∈ Z.vec, H.on k h ≤ 64 * A.nword h k := by
       intro k _
       by_cases hz : H.on k h = 0

@@ -30,13 +30,16 @@ variable {K R T L U F X : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U]
 /-- `accounting-isa-complete` (PTX ISA 9.4's instruction index; the SASS opcode census, `opcode_probe`). **The class
 list is complete**: every owned right fixed committed word has a head (§1.3, Definition 2), and that head is an instance
 of a class of the table, which the labelling puts on a route (`on`) or on none (`stray`): the run's fixed words are at
-most its heads, class by class. A head outside every class (an opcode `class_of` returns `None` for) falsifies it. -/
+most its heads, class by class. A head that is an instance of no class of the table falsifies it: an opcode the census
+finds that neither `class_of` nor the classes `Isa/Classes.lean` adds to it place. -/
 def IsaComplete (A : Anatomy K T L U) (H : Heads K T L U) : Prop :=
   A.fixed ≤ ∑ k, (H.stray k + ∑ h, H.on k h)
 
 /-- `accounting-isa-labelled` (§1.3's labelling). **The labelling reads the table**: the words on route `h` are the
 heads it puts on `h`, it puts every head of a class the table doesn't trace on a route, and only on one the class's
-row allows (`Fits`: its writer kind, `S_V` or a table route, or its side unit). -/
+row allows (`Fits`: its writer kind, `S_V` or a table route, or its side unit). A model that reads the table
+(`ReadsTable`) has such a route for every class, so the labelling exists for every run; this premise is that the
+anatomy's route words are counted by it. -/
 def IsaLabelled (Tb : K → Row) (σ : U → K) (Z : Model K R T L U F X) (A : Anatomy K T L U) (H : Heads K T L U) :
     Prop :=
   (∀ h, A.words h = ∑ k, H.on k h) ∧ (∀ k, (Tb k).route ≠ .traced → H.stray k = 0) ∧
@@ -64,7 +67,7 @@ def IsaRowsLane (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Pro
 
 /-- `accounting-isa-rows-uniform` (CUDA Binary Utilities, the instruction set's "Uniform Datapath Instructions"; no
 PTX instruction names the uniform datapath). **The uniform rows hold**: a uniform instruction writes one uniform
-register, or a pair. -/
+register, or a pair, and LDCU.128 four. -/
 def IsaRowsUniform (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Prop := RowsOf .uniform Tb A H
 
 /-- `accounting-isa-rows-memory` (PTX ISA 9.4 §9.7.10.8 ld, §9.7.10.11 st, §9.7.10.28 cp.async, §9.7.16.5.15

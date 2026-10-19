@@ -208,10 +208,12 @@ def Fits (Tb : K → Row) (σ : U → K) (Z : Model K R T L U F X) (k : K) : Hea
 
 /-- **Model `Z` reads table `Tb`**, its side unit `u` being class `σ u`'s: a side unit's per-word vector is at most
 `1/words` of an instruction of its class and nothing on another class, a writer kind's `ω` is at least its class's
-words, and every vector class is in `V`. -/
+words, every vector class is in `V`, and every writer or side class has a writer kind or a side unit, so a labelling
+(`Accounting.Assumptions.Isa.IsaLabelled`) has a route for each class's heads. -/
 def ReadsTable [DecidableEq K] (Tb : K → Row) (σ : U → K) (Z : Model K R T L U F X) : Prop :=
   (∀ u k, Z.side u k ≤ if k = σ u then 1 / ((Tb (σ u)).words : ℝ) else 0) ∧
-    (∀ t, ((Tb (Z.cls t)).words : ℝ) ≤ Z.omega t) ∧ ∀ k, (Tb k).route = .lane → k ∈ Z.vec
+    (∀ t, ((Tb (Z.cls t)).words : ℝ) ≤ Z.omega t) ∧ (∀ k, (Tb k).route = .lane → k ∈ Z.vec) ∧
+    (∀ k, (Tb k).route = .writer → ∃ t, Z.cls t = k) ∧ ∀ k, (Tb k).route = .side → ∃ u, σ u = k
 
 /-- **Class `k`'s row holds for the labelled run**: an instance writes at most `words` words, so the words class `k`
 heads on route `h` are at most `words` times the class-`k` instructions the labelling gives `h`; and a mover's
