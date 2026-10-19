@@ -1,27 +1,72 @@
 """CIR-57 (measurement only, scratch): the table of `template_widths.py`'s and `pouw_template_widths.py`'s outputs.
 
-    python benchmarks/one_stage/template_widths_table.py OUT.md ROW.json... [--pouw POUW.json]
+    python benchmarks/one_stage/template_widths_table.py OUT.md ROW.json... [--pouw POUW.json] [--json OUT.json]
 
-One line per over-16 template: its committed bits (the held rule's count), the rows that offer it, its units per rank
-(every part of a rank summed: request, step, workload), the 16-bit re-cut per instance (``units16``: measured where
-`template_widths.recut` ran, else the lower bound from its returned widths, marked ``≥``) and the AND cost of the cheaper
-re-cut against today's, the class it needs under ASK-61's option A (16, 1,024, or the next power of two), and its owner.
+One line per (Definition family, committed bits, route) over 16 bits, its specs folded (the statics that vary across them
+shown as ranges, e.g. an attention head's T): the committed bits (the held rule's count), the rows that offer it, its
+units per rank (every part of a rank summed: request, step, workload; every spec of the line summed), the 16-bit re-cut per
+instance (``units16``: measured where `template_widths.recut` ran, else the lower bound from its returned widths, marked
+``≥``) and the AND cost of the cheaper re-cut against today's, the class it needs under ASK-61's option A (16, 1,024, or the
+next power of two), and its owner. The route is how a row offers the template: ``row`` (the serving-rows window's "any
+row's own Definition"), ``cut`` (a ``CUT`` family's batched member) or ``a11`` (the one-stage audit's unit chain).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import re
 from collections import defaultdict
 from pathlib import Path
 
 SHORT = {"glm53__fp8__h200__tp8__b1__": "GLM B1", "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy": "GLM B8",
          "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch": "GLM B8-stoch", "glm53__fp8__h200__tp8__b32": "GLM B32",
          "dsv4-pro": "DSV4-Pro B1", "llama32-1b": "Llama-3.2-1B", "qwen3-06b": "Qwen3-0.6B", "qwen3-14b": "Qwen3-14B"}
+ROUTE = {"row": "row", "cut": "cut", "a11-chain": "a11"}
+#: a workload Program's root: the whole request, not a serving row
+NOT_ROWS = re.compile(r"^Workload")
 
 
 def short(row: str) -> str:
     return next((v for k, v in SHORT.items() if row.startswith(k)), row)
+
+
+def statics(tid: str) -> dict[str, str]:
+    i = tid.find("{")
+    if i < 0:
+        return {}
+    body, out, depth, cur = tid[i + 1:-1], {}, 0, ""
+    for ch in body + ",":
+        if ch in "{([":
+            depth += 1
+        elif ch in "})]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            k, _, v = cur.partition("=")
+            out[k] = v
+            cur = ""
+        else:
+            cur += ch
+    return out
+
+
+def fold(ids: list[str]) -> str:
+    fam = ids[0].split("{")[0]
+    if len(ids) == 1:
+        return ids[0]
+    ss = [statics(t) for t in ids]
+    keys = list(dict.fromkeys(k for s in ss for k in s))
+    parts = []
+    for k in keys:
+        vs = sorted({s.get(k, "∅") for s in ss}, key=lambda v: (len(v), v))
+        if len(vs) == 1:
+            parts.append(f"{k}={vs[0]}")
+        elif all(v.lstrip("-").isdigit() for v in vs):
+            n = sorted(int(v) for v in vs)
+            parts.append(f"{k}={n[0]}–{n[-1]}" if len(n) == n[-1] - n[0] + 1 else f"{k}∈{{{','.join(map(str, n[:6]))}{',…' if len(n) > 6 else ''}}}")
+        else:
+            parts.append(f"{k}∈{{{','.join(vs[:4])}{',…' if len(vs) > 4 else ''}}}")
+    return f"{fam}{{{','.join(parts)}}} ({len(ids)} specs)"
 
 
 def units16(rec: dict) -> tuple[int, bool]:
@@ -45,11 +90,25 @@ def ands(rec: dict) -> str:
     r = rec.get("recut") or {}
     if "ands_naive" in r and r.get("ands_today_pinned"):
         best = min(r["ands_naive"], r["ands_2level"])
-        cov = "" if r.get("ands_coverage") == 1.0 else f", pins cover {r['ands_coverage']:.0%} of gates"
+        cov = "" if r.get("ands_coverage") == 1.0 else f"; pins cover {r['ands_coverage']:.0%} of gates"
         return f"{r['ands_today_pinned']:,} → {best:,} ({best / r['ands_today_pinned']:.2f}×{cov})"
+    if "ands_naive" in r:
+        return f"no pinned ANDs (pins cover {r.get('ands_coverage', 0):.0%} of gates)"
     if rec.get("pinned_ands"):
         return f"{rec['pinned_ands']:,} today; re-cut not run"
-    return "not run" if not r.get("error") else f"re-cut failed: {r['error']}"
+    if r.get("error"):
+        return f"re-cut not finished ({r['error'][:40]})"
+    return "re-cut not run"
+
+
+def pick(recs: list[dict]) -> dict:
+    """The line's representative: a spec whose re-cut has ANDs, else one with a re-cut, else the largest."""
+    for test in (lambda r: (r.get("recut") or {}).get("ands_today_pinned"), lambda r: "units16" in (r.get("recut") or {}),
+                 lambda r: True):
+        c = [r for r in recs if test(r)]
+        if c:
+            return max(c, key=lambda r: r.get("gates") or 0)
+    return recs[0]
 
 
 def main() -> int:
@@ -57,6 +116,7 @@ def main() -> int:
     ap.add_argument("out", type=Path)
     ap.add_argument("rows", nargs="*", type=Path)
     ap.add_argument("--pouw", type=Path)
+    ap.add_argument("--json", type=Path)
     a = ap.parse_args()
     recs: dict[str, dict] = {}
     rows_of: dict[str, set] = defaultdict(set)
@@ -69,34 +129,60 @@ def main() -> int:
         for tid, rec in d["templates"].items():
             old = recs.get(tid, {})
             recs[tid] = rec if len(json.dumps(rec)) >= len(json.dumps(old)) else old
+            recs[tid]["hows"] = sorted(set(old.get("hows", [])) | set(rec.get("hows", [])))
         for tid, by in d["units"].items():
             for key, n in by.items():
-                rank = int(key.split("/")[0][1:])
-                per_rank[tid][row][rank] += n
+                per_rank[tid][row][int(key.split("/")[0][1:])] += n
                 rows_of[tid].add(row)
-    over = sorted((r for r in recs.values() if (r["bits"] or 0) > 16), key=lambda r: (-r["bits"], r["id"]))
-    unmeasured = sorted(r["id"] for r in recs.values() if r["bits"] is None)
-    lines = ["| Definition | committed bits | rows | units per rank | re-cut at 16 bits: units per instance | ANDs per instance, today → re-cut | class under A | owner |",
-             "|---|---|---|---|---|---|---|---|"]
-    for r in over:
-        u, measured = units16(r)
+    lines_by: dict[tuple, list[str]] = defaultdict(list)
+    for tid, r in recs.items():
+        if (r.get("bits") or 0) > 16 and not NOT_ROWS.match(r["family"]):
+            route = "+".join(ROUTE[h] for h in r["hows"])
+            lines_by[(r["family"], r["bits"], route)].append(tid)
+    head = ["| Definition | committed bits | route | rows | units per rank | re-cut: 16-bit units per instance | "
+            "ANDs per instance, today → re-cut | class under A | owner |", "|---|---|---|---|---|---|---|---|---|"]
+    order = sorted(lines_by, key=lambda k: ({"cut": 0, "a11": 1}.get(k[2].split("+")[0], 2), -k[1], k[0]))
+    lines, jl = [], []
+    for key in order:
+        ids = lines_by[key]
+        rs = [recs[t] for t in ids]
+        rep = pick(rs)
+        rws = sorted(set().union(*(rows_of[t] for t in ids)))
         ranks = []
-        for row in sorted(rows_of[r["id"]]):
-            v = per_rank[r["id"]][row]
-            lo, hi = min(v.values()), max(v.values())
-            ranks.append(f"{row}: {lo:,}" if lo == hi else f"{row}: {lo:,}–{hi:,} ({len(v)} ranks)")
-        verdict = "" if "verdict" not in r else (" (rule run)" if r["verdict"].startswith("refused") else " (rule ACCEPTED?)")
-        lines.append(f"| `{r['id']}` | {r['bits']:,}{verdict} | {', '.join(sorted(rows_of[r['id']]))} | {'; '.join(ranks)} | "
-                     f"{'' if measured else '≥'}{u:,} | {ands(r)} | {klass(r['bits'])} | @circuits |")
-    under = sorted(r["id"] for r in recs.values() if r["bits"] is not None and r["bits"] <= 16)
-    out = ["## vLLM rows", "", *lines, "", f"{len(over)} templates over 16 bits; {len(under)} at or under 16; "
-           f"{len(unmeasured)} not measured{': ' + ', '.join(unmeasured) if unmeasured else ''}.", ""]
-    out += ["Programs read: " + "; ".join(f"{row} {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match records.json)"
-                                       for row, ps in sorted(progs.items())), ""]
+        for row in rws:
+            tot: dict[int, int] = defaultdict(int)
+            for t in ids:
+                for rk, n in per_rank[t][row].items():
+                    tot[rk] += n
+            lo, hi = min(tot.values()), max(tot.values())
+            ranks.append(f"{row} {lo:,}" if lo == hi else f"{row} {lo:,}–{hi:,} over {len(tot)} ranks")
+        u, measured = units16(rep)
+        ruled = [r for r in rs if "verdict" in r]
+        ref = sum(r["verdict"].startswith("refused") for r in ruled)
+        rule = f" (rule refused {ref}/{len(ruled)} run)" if ruled else ""
+        lines.append(f"| `{fold(sorted(ids))}` | {key[1]:,}{rule} | {key[2]} | {', '.join(rws)} | {'; '.join(ranks)} | "
+                     f"{'' if measured else '≥'}{u:,} | {ands(rep)} | {klass(key[1])} | @circuits |")
+        jl.append({"definition": fold(sorted(ids)), "specs": sorted(ids), "bits": key[1], "route": key[2], "rows": rws,
+                   "units_per_rank": {row: dict(sorted({rk: sum(per_rank[t][row].get(rk, 0) for t in ids)
+                                                        for rk in set().union(*(per_rank[t][row] for t in ids))}.items()))
+                                      for row in rws},
+                   "units16_per_instance": u, "units16_measured": measured, "recut": rep.get("recut"),
+                   "representative": rep["id"], "rule_runs": len(ruled), "rule_refused": ref, "class_A": klass(key[1]),
+                   "owner": "@circuits"})
+    under = sorted(r["id"] for r in recs.values() if r.get("bits") is not None and r["bits"] <= 16)
+    unmeasured = sorted(r["id"] for r in recs.values() if r.get("bits") is None)
+    dis = sorted(r["id"] for r in recs.values() if r.get("disagree"))
+    out = ["## vLLM rows", "", *head, *lines, "",
+           f"{sum(len(v) for v in lines_by.values())} template specs over 16 bits in {len(lines)} lines; {len(under)} at or "
+           f"under 16 ({', '.join(sorted({recs[t]['family'] for t in under}))}); {len(unmeasured)} not measured; "
+           f"{len(dis)} disagreements between the rule's walk and the descriptor count.", "",
+           "Programs read: " + "; ".join(f"{row}: {len(ps)} ({sum(1 for p in ps if p['digest_ok'])} digests match records.json)"
+                                         for row, ps in sorted(progs.items())), ""]
+    pj = []
     if a.pouw:
         d = json.loads(a.pouw.read_text())
-        pl = ["| Definition | committed bits | role | used by | re-cut at 16 bits: units per instance | ANDs per instance, today → re-cut | class under A | owner |",
-              "|---|---|---|---|---|---|---|---|"]
+        pl = ["| Definition | committed bits | role | used by | re-cut: 16-bit units per instance | ANDs per instance, today → re-cut | "
+              "class under A | owner |", "|---|---|---|---|---|---|---|---|"]
         prs = sorted((r for r in d["templates"].values() if (r.get("bits") or 0) > 16 or r.get("unbound")),
                      key=lambda r: (-(r.get("bits") or 0), r["id"]))
         for r in prs:
@@ -104,11 +190,17 @@ def main() -> int:
                 pl.append(f"| `{r['id']}` | not measured: {r['unbound']} | {'; '.join(r['roles'])} | | | | | @compute-accounting |")
                 continue
             u, measured = units16(r)
-            used = ", ".join(f"{k} ×{n:,}" for k, n in list(r["used_by"].items())[:3]) + (" …" if len(r["used_by"]) > 3 else "")
+            used = ", ".join(f"{k.split('{')[0]} ×{n:,}" for k, n in list(r["used_by"].items())[:2]) + (" …" if len(r["used_by"]) > 2 else "")
             pl.append(f"| `{r['id']}` | {r['bits']:,} | {'; '.join(r['roles'])} | {used} | {'' if measured else '≥'}{u:,} | "
                       f"{ands(r)} | {klass(r['bits'])} | @compute-accounting |")
-        out += ["## PoUW (main's units; owner @compute-accounting)", "", *pl, ""]
+            pj.append({"definition": r["id"], "bits": r["bits"], "roles": r["roles"], "used_by": r["used_by"],
+                       "units16_per_instance": u, "units16_measured": measured, "recut": r.get("recut"),
+                       "verdict": r.get("verdict"), "class_A": klass(r["bits"]), "owner": "@compute-accounting"})
+        out += ["## PoUW (main's units at circuit-check's statics, and the verifier-pinned tiles; owner @compute-accounting)", "",
+                *pl, ""]
     a.out.write_text("\n".join(out))
+    if a.json:
+        a.json.write_text(json.dumps({"vllm": jl, "pouw": pj}, indent=1))
     print("\n".join(out))
     return 0
 
