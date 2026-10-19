@@ -7,8 +7,8 @@
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "3,648 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, and 24 on each distinct descriptor of the circuits fixtures) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
-   "args": ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}", "{desc_difftest/python.jsonl}", "3648"],
+   "why": "3,654 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, and 6 on a composite keyed with an input id, which is no input node) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "args": ["{desc_difftest/instances.jsonl}", "{desc_difftest/expanded.jsonl}", "{desc_difftest/python.jsonl}", "3654"],
    "data": {
     "desc_difftest/expanded.jsonl": "f0e6e107db1f62d872c072876639968333d708cb2a559503b01102fdb85fb8e4",
     "desc_difftest/instances.jsonl": "52b9ba4f1559315c079551306951ce82a53503c26578f17fd7766cccca7f30f6",

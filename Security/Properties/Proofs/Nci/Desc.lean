@@ -19,7 +19,7 @@ proved here is the summaries' arithmetic, each step stated against the function 
 Not proved: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns, through
 §7's resolution), and that `novelWidth` and `ivsOf` give the width of the union of what they are given (their sorting
 sweeps: Lean core states nothing about `Array.qsort`). The difftest holds both (`runs` `NciCheck.DescDifftestMain` in
-the package's `lean-audit.json`: 3,648 declarations, the description-sized check against the unrolled one).
+the package's `lean-audit.json`: 3,654 declarations, the description-sized check against the unrolled one).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Desc

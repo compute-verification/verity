@@ -164,10 +164,46 @@ def _probe_type(params, body) -> "Type":
     return body(B, None, *colls).type
 
 
+def decoy(batch: bool) -> str:
+    """A declaration whose root Calls (or batches, `batch`) a composite keyed with an input id, `Input16_v1`: its gates
+    are computed, so its root node is no input node, though its callee's key reads as one."""
+    w = 8
+    op = vectors.prim((w, w), w)
+    Decoy = bind(CompositeDefinition("Input16", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
+                                     lambda B, S, x: B.call(op, x, x), register=False))
+    xt = Array(2, Value(w)) if batch else Value(w)
+
+    def body(B, S, x):
+        d = B.batch(Decoy, x, axes=(0,)) if batch else B.call(Decoy, x)
+        return B.call(op, d[0], d[1]) if batch else B.call(op, d, x)
+    fn = bind(CompositeDefinition(f"NciDecoy{int(batch)}", 1, (), lambda S: ((("x", xt),), Value(w)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+def decoys() -> list[dict]:
+    """Instances on `decoy`'s declarations: the decoy node in θ and in no IU, in no IU, and in an IU."""
+    out = []
+    for batch in (False, True):
+        text = decoy(batch)
+        inp, spans = reference.root_nodes(text)
+        inputs = [k for k in range(len(inp)) if inp[k]]
+        dk = next(k for k in range(len(inp)) if not inp[k])
+        for theta, at in ((inputs + [dk], "input"), ([], "input"), (inputs, 0)):
+            owner = ["input" if inp[k] else 0 for k in range(len(inp))]
+            owner[dk] = at
+            out.append({"program": text, "theta": theta, "owner": owner, "gamma": spans[-1][1], "alpha": [16, 1]})
+    return out
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`."""
     rng = random.Random(seed)
+    first_decoy = COUNT + PER_FIXTURE * len(fixtures())
+    if seed >= first_decoy:
+        return {"instance": decoys()[seed - first_decoy], "shape": "decoy", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed < COUNT and rng.random() < TRANSPOSED:
         text, kind = transposed(rng, seed), "transposed"
     elif seed < COUNT:
@@ -251,8 +287,8 @@ NAMES = ("instances", "expanded", "python")
 
 
 def total() -> int:
-    """How many instances the audit's data has: the random ones and every fixture's."""
-    return COUNT + PER_FIXTURE * len(fixtures())
+    """How many instances the audit's data has: the random ones, every fixture's and the decoys."""
+    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys())
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

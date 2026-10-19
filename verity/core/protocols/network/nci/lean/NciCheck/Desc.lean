@@ -642,7 +642,9 @@ def novelWidth (segs : Array Seg) : Nat := Id.run do
   if !comp.isEmpty then total := total + width comp
   return total
 
-def isInputNode (P : Prog) (n : Node) : Bool := isInputId (P.defs[n.fn]!).key
+/-- An input node: its callee is an input primitive (§5.2). A composite's key may read as an input id (`Input16_v1` is a
+well-formed static-free composite key), and its gates are computed. -/
+def isInputNode (P : Prog) (n : Node) : Bool := let f := P.defs[n.fn]!; f.prim && isInputId f.key
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
