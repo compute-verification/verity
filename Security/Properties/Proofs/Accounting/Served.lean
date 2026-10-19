@@ -50,7 +50,9 @@ theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
   unfold Declared.firstRead
   cases h : List.find? (fun j => (Cd.dag[j]?).any fun g => g.args.contains i) (List.range Cd.dag.length) with
   | none => exact Or.inl rfl
-  | some j => exact Or.inr ⟨j, List.mem_range.1 (List.mem_of_find?_eq_some h), List.find?_some h, rfl⟩
+  | some j =>
+    have hp := List.find?_some h
+    exact Or.inr ⟨j, List.mem_range.1 (List.mem_of_find?_eq_some h), hp, rfl⟩
 
 /-- A value some gate reads has a first reader, a gate that reads it. -/
 theorem firstRead_of_reads {ι : Type} (Cd : Declared ι) {i j : ℕ} (hj : j < Cd.dag.length) (hR : Cd.Reads j i) :
@@ -58,7 +60,9 @@ theorem firstRead_of_reads {ι : Type} (Cd : Declared ι) {i j : ℕ} (hj : j < 
   unfold Declared.firstRead
   cases h : List.find? (fun j => (Cd.dag[j]?).any fun g => g.args.contains i) (List.range Cd.dag.length) with
   | none => exact absurd hR (List.find?_eq_none.1 h j (List.mem_range.2 hj))
-  | some j' => exact ⟨j', List.mem_range.1 (List.mem_of_find?_eq_some h), List.find?_some h, rfl⟩
+  | some j' =>
+    have hp := List.find?_some h
+    exact ⟨j', List.mem_range.1 (List.mem_of_find?_eq_some h), hp, rfl⟩
 
 /-- A run input only its own call reads is cut no earlier than its call's round. -/
 theorem round_le_cut_of_run {ι : Type} {L : Layout} {F : Form} {Cd : Declared ι} {cls : ℕ → Cls}
