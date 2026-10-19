@@ -44,8 +44,13 @@ extraction a MAC. H200 can't run it (the 14-bit window).
 
 An FP4 word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
 carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; on int8 units an FP4 design's
-γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). The skip term is the base's, at the base's ♭: a
-larger fold raises ♭, so this overstates ε_skip.
+γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). That price is MM-SHEETS' sm_100 `sheet.toml`
+row `UTCOMMA_MXF4NVF4_M128_N256` (512 SMSP-cycles at K 64, `UTCIMMA_M128_N256`'s at K 32; measured at 2.000x kind::i8,
+r20261019-090041-1ef5). Main's DS-100 has no e2m1 peak and no `UTCOMMA` class, so there a cheater's FP4 words are
+unpriced, and the B200 FP4-unit rows' ε (`fpx-g1s-fp4-fp`) stands only once that row lands (RT-ISA-4,
+note:20261019T0520Z-draft-rt-isa). Int8 words through `UTCOMMA` take 9 E2M1 products (LOWBIT-DC), so at that row they
+cost more than the int8 MMA's. The skip term is the base's, at the base's ♭: a larger fold raises ♭, so this
+overstates ε_skip.
 """
 import json
 import shutil
