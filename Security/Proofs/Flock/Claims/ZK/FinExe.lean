@@ -15,6 +15,20 @@ throws (`finMsg`):
 `LiveEnd` (the session answered by the openings returns what the session answered by the opened coins and stopped
 after the last round returns) and `SimFin` (the session read from the views returns the session's verdict) close the
 gap: `finExe_of`.
+
+* **`SimFin` rep by rep** (`simFin_of`, `finExe_of_reps`): the commitments from the views' leaves (`SimCommit`), and
+  each rep read from the views runs as the session's (`RepFin`), sends its rounds (`RepExact`) and, at rep `0`, holds its
+  claim points at the opened coins (`RepPoints`).
+* **A rep read from the views** (`repFin_of`): where every table admits, no coin plan refuses (`not_refused_of_admits`),
+  so the hybrids `SimPiop`, `SimLig`, `SimInner` make the rep from the cut the session's up to `eraseZ`
+  (`repCut_erased`), and the views' commitments and source change only what `eraseZ` forgets (`FinRep.repCut_eraseC`,
+  `FinRep.repCut_eraseIS`); the rest is the final-only data (`RepFinal`). `τ`'s salt is the tape's in both
+  (`srcV_tauSalt`, `repFinal_of`), leaving level 0's opened rows and salts, `τ`, and the pads' opened columns and salts
+  (`RepOpenFinal`).
+* **The rep count and claim points** (`repExact`, `repPoints`): the run answered by `asksCut` is the run answered by
+  `asksS` at the coins' bytes (`FinRep.repPZk_cut`), whose rounds `repPZk_exact` and `repPZk_points` count.
+
+`finExe_of_final` is `FinExe` from `LiveEnd`, `SimCommit`, the hybrids and `RepOpenFinal`.
 -/
 
 namespace FlockComplete.ZkTables
