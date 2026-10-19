@@ -7,9 +7,10 @@
 #   2. stage.py builds the unit's circuit (the long step at K = 4096) while layer.py records the window's int8 codes from the
 #      checkpoint (layer L's q/k/v/gate/up at H1's quantizers; a second window from other tokens) and run.py prepare commits,
 #      serves, draws, opens, checks the openings and has the drawn units staged
-#   3. one loopback --zk session per statement (the drawn units; the other window's unit), every instance drawn
+#   3. one loopback --zk session per statement (the drawn units; the other window's unit; the in-proof negatives, each also
+#      as <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn
 #   4. the Lean checks of run.py's plan (honest ACCEPT; flipped-z, wrong-receipt, other-window REJECT; other-window-own
-#      ACCEPT), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
+#      ACCEPT; in-receipt, in-z and their -skip runs REFUSED by some layer), as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
@@ -76,7 +77,9 @@ while IFS=$'\t' read -r kind tag D n; do
   mkdir -p "$OUT/$tag"
   N=$n
   log "prove $tag: $n instances, subset:$n"
+  if [[ $tag == *-skip ]]; then export FC_ZK_SELF_CHECK=skip; else unset FC_ZK_SELF_CHECK; fi   # run.py's SKIP
   session "$D" "$OUT/$tag" || log "prove $tag FAILED: $(tail -2 "$OUT/$tag/prove.err")"
+  unset FC_ZK_SELF_CHECK
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
 
