@@ -1,23 +1,26 @@
 import Proofs.Flock.Claims.ZK.Hypotheses
 import Proofs.Flock.Claims.Sampling.Deployed
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Sampling's zero knowledge from a committed-coin protocol
 
-`Claims.Sampling.ZK` is `ZKmalR` at the sampled verifier's rounds, of the masked record's reference prover and at its
-simulator, on the honest pairs whose published leaf layer is `l x`, with the simulator given `l x`. Its binding term is
-`γ` times `Fork` of the sampled prover's own two runs on one
-nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it draws (the selection's
-and each checked unit's session's) committed at its `Hello`. Flock's zero knowledge at each session does not compose to
-it: a hybrid over the sessions charges each session's `Fork` against a verifier that has already simulated the earlier
-sessions, and no term of the sampled claim bounds those.
+`Claims.Sampling.ZK` is `ZKmalRx` at the sampled verifier's rounds, `ZKmalR` at a record masked at one tape
+(`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published
+leaf layer is `l x`, with the simulator given `l x`. Its binding term is `γ` times `Fork` of the sampled prover's own two
+runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it draws (the
+selection's and each checked unit's session's) committed at its `Hello`.
+The route of record is the other: Flock's zero knowledge at each session composes to it in turn
+(`SamplingDeploy.zk_seq`, `Sampling/Seq.lean`), since the composed tape guesses which session's `Fork` to charge
+(`Seq.fork_ge`), so `M` sessions cost `Σ_j eB j` and `M·g`. This file's route, one committed-coin protocol for the
+whole sampled run, reads models of that protocol (`Proto.TMsgLink` and the rest) that no session proof gives.
 
 * `Leaky`: a committed-coin protocol (`Claims.ZKMal.Proto`) whose dummy-witness messages and SHVZK simulator also read
   the leakage; `Leaky.proto lx` is the protocol at the leakage `lx`. Its honest prover, coins and opening check read
   none, so the claim's prover is one prover.
 * `Leaky.simLeak N`, `Leaky.simLeakE t M`: `S_Flock` and `S_GK` given the leakage, as `SimLeak`s.
 * `ZKAt`: the same form at a given prover and simulator, which the proofs prove; `zk_mask_of_zkAt` carries it to
-  `Claims.Sampling.ZK` at the record masked at a tape map and that simulator (`Deploy.mask`), where the record's
+  `Claims.Sampling.ZK` at the record masked at a tape layout and that simulator (`Deploy.mask`), where the record's
   reference prover on the masked tape sends the given prover's messages and makes its calls (`zkmalR_congr_eq`).
 * `zk_of_leaky`, `zk_of_leakyE`: `ZKAt` from `PrefixHides` and `SHVZK` of the protocol at each leakage
   `lx`, on the honest pairs whose leaf layer is `lx` (`RAt`), and `Binding`. `ZKmalR` runs one simulator per statement,
@@ -87,7 +90,8 @@ theorem zk_mask_of_zkAt {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Non
     (hP : ∀ w x (hist : List (Msg × Msg)) ω, hist.length < D.V.k x →
       ((D.P w).next x hist (tapeOf ω)).eval H = ((P w).next x hist ω).eval H)
     (h : ZKAt H D P S εzk γ) : ZK H (D.mask N Ω tapeOf S) εzk γ :=
-  ⟨h.1, fun l => zkmalR_congr_eq (fun w x hist ω hh => (hP w x hist ω hh).symm) (h.2 l)⟩
+  ⟨h.1, fun l => (zkmalRx_const_of H D.V.k (D.mask N Ω tapeOf S).prover [] (fun _ _ => rfl) _ _ εzk γ).2
+    (zkmalR_congr_eq (fun w x hist ω hh => (hP w x hist ω hh).symm) (h.2 l))⟩
 
 /-- **Sampling's zero knowledge from a committed-coin protocol with leakage**, through `S_Flock` with `N` rewinds:
 `ZKAt` at `P = L.G.prover`, at `ε_zk = 1/(N+1) + δ_A + N·δ_B` and `γ = N`, when the sampled verifier's rounds are the
@@ -186,11 +190,13 @@ theorem zk_deploy_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht 
   zk_deploy_of_models rel c H L t ht hK My cs (FlockSoundness.CROnly.hm96Hiding_gap My cs) ENNReal.ofReal_ne_top Mp
     Mc nL nB hnL hnB hL hS hN hI hC
 
-/-- **The code's reference prover is the protocol's**: on the masked tape `tapeOf ω`, the code's reference prover at `w`
-sends `G.prover w`'s message and makes its calls at every history within the sampled verifier's rounds. -/
-def Honest (H : Msg → Msg) (G : Proto Wit) (tapeOf : G.Nonce × G.Rand → c.Tape) : Prop :=
+/-- **The code's reference prover is the protocol's**: on the masked tape `tapeOf ω`, the record's reference prover
+(`Reference.refP` at the code's framing) at `w` sends `G.prover w`'s message and makes its calls at every history within
+the sampled verifier's rounds. -/
+def Honest (H : Msg → Msg) (G : Proto Wit) (tapeOf : G.Nonce × G.Rand → Reference.Tape) : Prop :=
   ∀ w x (hist : List (Msg × Msg)) ω, hist.length < c.V.k x →
-    ((c.P w).next x hist (tapeOf ω)).eval H = ((G.prover w).next x hist ω).eval H
+    ((Reference.refP c.step c.parse c.reads (commit c) c.wit w).next x hist (tapeOf ω)).eval H =
+      ((G.prover w).next x hist ω).eval H
 
 /-- **Sampling's zero knowledge at the deployed record masked at the protocol's tapes**: `Claims.Sampling.ZK` at
 `deploy rel c` masked at `tapeOf` and `S_GK` given the leaf layer, from `zk_deploy_of_models_gap` where the code's
@@ -198,7 +204,7 @@ reference prover is the protocol's (`Honest`). -/
 theorem zk_deploy_mask_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
-    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → c.Tape) (hP : Honest c H L.G tapeOf)
+    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → Reference.Tape) (hP : Honest c H L.G tapeOf)
     (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)
@@ -223,7 +229,7 @@ theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
-    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → c.Tape) (hP : Honest c H L.G tapeOf)
+    (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → Reference.Tape) (hP : Honest c H L.G tapeOf)
     (Mp : ∀ lx x, L.G.Nonce → (L.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, L.G.Nonce → (Fin (L.G.K x) → L.G.Coin) → (L.proto lx).CoinModel x Salt B Cc) (nL nB : Msg → ℕ)
     (hnL : ∀ lx x ν, Fintype.card (Mp lx x ν).L ≤ nL x) (hnB : ∀ lx x ν c, (Mc lx x ν c).size ≤ nB x)

@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 # Refutation witnesses: the sampling compiler's claims
 
 Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at a toy deployment. The statement is
-`toyStmt`: one input gate, returned, drawn `all`, its partition `toyPart` one proof unit `[0, 1)`, in scope
+`toyStmt`: one input gate, returned, drawn `all`, its partition `toyPart` one proof unit `{0}`, in scope
 (`inScope_toy`), so the witnesses hold whether or not `KS`, `KSCount` and `Bits` are read on the scope only.
 
 * `sksD`: the verifier accepts after one round, and no opening passes (`rejCm`), so every unit is faulty and no
@@ -82,38 +82,41 @@ def rejCm : Commitment Bool := ⟨fun _ _ => .ret false, fun _ _ _ => []⟩
 def toyProg : Prog := ⟨[.input], [0]⟩
 
 /-- The program, drawn `all`. -/
-def toyStmt : Stmt := ⟨toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def toyStmt : Stmt := ⟨[], toyProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
-/-- One class of one stratum of one replay unit, the proof unit `[0, 1)`. -/
-def toyPart : Partition := ⟨[[[[(0, 1)]]]]⟩
+/-- One class of one stratum of one replay unit, the proof unit `{0}`. -/
+def toyPart : Partition := ⟨[[[[[0]]]]]⟩
 
 /-- The opening of the input's value. -/
 def toyWit : Wit := ⟨[⟨0, true, []⟩]⟩
 
-theorem toyPart_rus : toyPart.rus = [[(0, 1)]] := rfl
+theorem toyPart_rus : toyPart.rus = [[[0]]] := rfl
 
-theorem toy_boundary : toyProg.Boundary 0 1 0 = true := by decide
+theorem toy_boundary : toyProg.Boundary [0] 0 = true := by decide
 
 theorem toy_ref (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) (ι : ℕ → Bool) :
-    RU.ref toyProg [(0, 1)] (w.val H Cm toyStmt) ι 0 = w.val H Cm toyStmt 0 := by
-  simp [RU.ref, toy_boundary, RU.lo, RU.hi]
+    RU.ref toyProg [[0]] (w.val H Cm toyStmt) ι 0 = w.val H Cm toyStmt 0 := by
+  simp [RU.ref, RU.gates, toy_boundary]
 
-theorem toy_runAt (ref : ℕ → Option Bool) : toyProg.runAt ref 0 0 = ref 0 := by
-  rw [Prog.runAt]
+theorem toy_runIn (ref : ℕ → Option Bool) : toyProg.runIn ref [0] 0 = ref 0 := by
+  rw [Prog.runIn]
   rfl
 
 /-- The unit is correct exactly when the input's value is opened. -/
 theorem toy_correct_iff (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) (ι : ℕ → Bool) :
-    toyProg.Correct (RU.ref toyProg [(0, 1)] (w.val H Cm toyStmt) ι) 0 1 ↔ ∃ b, w.val H Cm toyStmt 0 = some b := by
+    toyProg.Correct (RU.ref toyProg [[0]] (w.val H Cm toyStmt) ι) [0] ↔ ∃ b, w.val H Cm toyStmt 0 = some b := by
   constructor
   · intro h
-    obtain ⟨b, hb, _⟩ := (h 0 le_rfl Nat.one_pos).2 toy_boundary
+    obtain ⟨b, hb, _⟩ := (h 0 (List.mem_singleton.2 rfl)).2 toy_boundary
     exact ⟨b, (toy_ref H Cm w ι).symm.trans hb⟩
-  · rintro ⟨b, hb⟩ g _ hg
-    obtain rfl : g = 0 := by omega
-    refine ⟨fun _ _ i _ hi => absurd hi (Nat.not_lt_zero i), fun _ => ⟨b, ?_, ?_⟩⟩
+  · rintro ⟨b, hb⟩ g hg
+    obtain rfl := List.mem_singleton.1 hg
+    refine ⟨fun x hx i hi _ => ?_, fun _ => ⟨b, ?_, ?_⟩⟩
+    · simp only [toyProg, List.getElem?_cons_zero, Option.some.injEq] at hx
+      subst hx
+      simp [BGate.reads] at hi
     · rw [toy_ref, hb]
-    · rw [toy_runAt, toy_ref, hb]
+    · rw [toy_runIn, toy_ref, hb]
 
 theorem toy_faulty_iff (H : Msg → Msg) (Cm : Commitment Bool) (w : Wit) :
     Faulty H Cm toyStmt toyPart w 0 ↔ w.val H Cm toyStmt 0 = none := by
@@ -153,20 +156,13 @@ theorem rejCm_faulty (H : Msg → Msg) (w : Wit) : faulty H rejCm toyStmt toyPar
 
 /-- The toy is in the sampling scope. -/
 theorem inScope_toy : InScope toyPart toyStmt := by
-  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩, ⟨?_, ?_, ?_⟩, ?_⟩
+  refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
+    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, ?_⟩
   · rcases g with _ | g
     · simp [toyStmt, toyProg] at hx
       subst hx
       simp [BGate.reads] at hi
     · simp [toyStmt, toyProg] at hx
-  · rw [toyPart_rus]
-    decide
-  · rw [toyPart_rus]
-    intro r hr
-    obtain rfl := List.mem_singleton.1 hr
-    exact ⟨List.cons_ne_nil _ _, by simp, fun i h => absurd h (by simp)⟩
-  · rw [toyPart_rus]
-    decide
   · refine ⟨rfl, ?_⟩
     simp [toyStmt, toyPart, Rule.WellFormed, OneStage.WellFormed]
 
@@ -178,7 +174,7 @@ noncomputable def sksD (Coin : Type) : Deploy Coin Unit Unit where
   V := accV Coin
   parse _ := some toyStmt
   scopeCheck _ := true
-  partition _ _ := some toyPart
+  partition _ := some toyPart
   commit := rejCm
   universal _ := ⟨[], []⟩
   flock := Flock.ksD Coin
@@ -203,7 +199,7 @@ noncomputable def compSD (Coin : Type) : Deploy Coin Unit Unit where
   V := rejV Coin
   parse _ := some toyStmt
   scopeCheck _ := true
-  partition _ _ := some toyPart
+  partition _ := some toyPart
   commit := accCm
   universal _ := ⟨[], []⟩
   flock := Flock.ksD Coin
@@ -231,7 +227,7 @@ def effSD (Coin : Type) : Deploy Coin (List Bool) Unit where
   V := accV Coin
   parse _ := none
   scopeCheck _ := true
-  partition _ _ := none
+  partition _ := none
   commit := accCm
   universal _ := ⟨[], []⟩
   flock := Flock.effD Coin
@@ -559,7 +555,7 @@ theorem Nontrivial_fails (H : Msg → Msg) :
 reference prover is quiet, at every `ε_zk < 1` and every `γ`. -/
 theorem ZK_fails (H : Msg → Msg) (u v : Msg) (εzk γ : Msg → ℝ) (x : Msg) (hε : εzk x < 1) :
     ¬ Claims.Sampling.ZK H (ZKMal.quietZD (compSD Coin) u v) εzk γ :=
-  ZKMal.not_samplingZK_collSim H _ u v εzk γ x toyWit rfl rfl
+  ZKMal.not_samplingZK_collSim H _ u v εzk γ x toyWit (fun _ => rfl) rfl
     ⟨toyStmt, toyPart, rfl, rfl, by show faulty constH accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩ Nat.one_pos hε
 
 /-- `compSD` with a masked inner Flock (`ZKMal.toyD`, so one coin). -/

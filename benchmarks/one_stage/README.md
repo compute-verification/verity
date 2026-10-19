@@ -14,16 +14,24 @@ negatives.
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
-- `a7.sh`: run A7's entry point, on the same builds. A7 is the requirement's plan and memory-map units
+- `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each drawn receipt are
+  proved, not opened, by the opening unit (`a7_check3.py`, `verity.ml.commitments.gates.block_check`) in a second
+  statement. A7 is the requirement's plan and memory-map units
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
   unproved can carry and its δ the draw's.
+- `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
+  on the same builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
+  with one honest drawn `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
+  skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `zk_cost.sh`: C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job on vy-nebius-1, or a `--preemptible` one on vy-nebius-2). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
-  per-statement and per-unit costs with their standard errors, writing `costfit` observations.
+  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
+  staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
+  takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
