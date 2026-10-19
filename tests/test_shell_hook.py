@@ -193,6 +193,30 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
     assert verdict("uv run pytest -q tests/test_x.py", **gate) == "deny"
 
 
+@pytest.mark.parametrize("command", [
+    "sleep 1201", "sleep 30m", "sleep 2h", "sleep 1d", "sleep 1h 30m", "sleep 1500s", "sleep infinity",
+    "cd /w && sleep 3600 && research status r1", "while true; do sleep 1800; research status r1; done",
+    "timeout 3h sleep 2h", "bash -c 'sleep 3000; ls'", 'echo "$(sleep 3000)"', "ssh n1 sleep 3000",
+    "research run --on auto --wait --wait-max 3000 -- true", "research run --on auto --wait --wait-max=1201 -- true",
+])
+def test_a_command_that_plainly_blocks_past_twenty_minutes_is_refused(command):
+    """No tool call may block more than 20 minutes (Daniel, 19 Oct): agents that blocked in one long call looked silent and missed
+    their wake-ups."""
+    out = answer(command)
+    assert out["permission"] == "deny", command
+    assert ("no tool call may block more than 20 minutes (Daniel, 19 Oct); end your turn and let the run's completion or a timer "
+            "subscription wake you") in out["agent_message"]
+
+
+@pytest.mark.parametrize("command", [
+    "sleep 30", "sleep 20m", "sleep 1200", "sleep $DELAY", "timeout 60 sleep 5000", "sleep 5000 &", "nohup sleep 9000 &",
+    "tail --pid=4242 -f /dev/null", "while kill -0 4242; do sleep 30; done", "research run --on auto --wait -- sleep 5000",
+    "research run --on auto --wait --wait-max 600 -- true", "tmux send-keys -t s:0.0 'sleep 3000' C-m", "rg 'sleep 3000' tools/",
+])
+def test_a_wait_within_the_cap_or_off_this_shell_passes(command):
+    assert verdict(command) == "allow", command
+
+
 INBOX_TOOL = ROOT / "tools/agent-guard/inbox.py"
 
 
