@@ -271,7 +271,9 @@ These are Daniel's rulings, newest first.
   signing log; for Merkle binding, a collision among the inputs hashed along the two openings' paths. Every `∃` in the
   break is bounded by something the run carries. "Some collision exists", or an extractor free to ignore the run, is
   vacuous: collisions exist by pigeonhole, and `Classical.choice` is an allowed axiom, so the axiom check can't catch it.
-  No advantage bounds, which would need a probability model. An input condition becomes a refusal in the verifier, not a
+  No advantage bounds, which would need a probability model, except PoUW's named random-oracle premises for SHA-512
+  (`StraightLineExtraction`, `SeedExtraction`, `SeedExtractedAt`; ASK-16, 18 Oct 6:00 PM PDT, in the friction skill's
+  rulings), each a named `Prop` the lock lists. An input condition becomes a refusal in the verifier, not a
   hypothesis (the Lean check refuses NaN-coded noise, as Python's verifier does); that the honest draw never produces
   such an input is a completeness fact, measured rather than proved.
 - 2026-10-03 (6:46 PM PDT): a change to what a guarantee says needs no reviewer and no approval: when it lands on `main`,
