@@ -41,7 +41,8 @@ plt.rcParams.update({
     "xtick.minor.size": 4, "ytick.minor.size": 4, "mathtext.fontset": "dejavusans", "svg.hashsalt": "verity-figures",
 })
 
-#: one colour per leak of 1/D <= s + (min(r̂ + nu, mu) + chi) / MFU_0 (Okabe-Ito), the residual's two plugs in two blues
+#: one colour per leak of 1/D <= s + (min(r̂ + eps' + nu, mu) + chi) / MFU_0 (Okabe-Ito); the residual's two plugs in
+#: two blues
 TERM = {"unmonitored": "#CC79A7", "residual": "#0072B2", "memory": "#56B4E9", "declared": "#009E73",
         "cheat": "#D55E00"}
 #: how far each rung is from real, as the statement page's ladder says
@@ -88,7 +89,8 @@ SHA, DIRTY = S.commit()
 COMMIT = f"{SHA[:10]}{' with uncommitted changes' if DIRTY else ''}"
 num = S.num
 BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (tiers.evaluate's dampener), at m = {num(P['m'])}, "
-        f"kappa = {num(P['kappa'])}, d = {num(P['d'])}, e = {num(P['e'])} and a one-hour verdict lag; the memory "
+        f"kappa = {num(P['kappa'])}, d = {num(P['d'])}, e = {num(P['e'])}, a one-hour verdict lag and r = r̂ + eps' "
+        f"with the aggregation slack eps' = {num(P['eps_agg'])} (r̂ is tiers.audited_residual); the memory "
         f"rungs by the fit bound at central w_e = {num(W_E)} bits for a {TARGET.upper()}-class target "
         f"(N* = {num(N_STAR)}), as statement.py gives them. Rendered by benchmarks/nci/figures.py at commit {COMMIT}.")
 
@@ -125,8 +127,8 @@ def fit_mu(p: dict, N: float = N_STAR, w_e: float = W_E, b: float | None = None)
 
 
 def parts(p: dict, tier: str, mu: float = math.inf) -> tuple[float, dict[str, float]]:
-    """D at ``tier`` with ``mu`` as the memory cap, as ``statement.capped`` with the recipe multiplier on the cap (as
-    ``tiers.evaluate`` puts it on its own), and the terms of 1/D: the monitored one as r̂ and nu, or as the cap."""
+    """D at ``tier`` with ``mu`` as the memory cap, as ``statement.capped``, and the terms of 1/D: the monitored one as
+    r = r̂ + eps' and nu, or as the cap."""
     r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
     free = r["residual"] + r["declared"]
     cap = p["m"] * p["g"] * (1 - min(p["unmonitored"], 0.999)) * mu
@@ -199,7 +201,7 @@ def ladder(out: Path) -> dict:
             ax.text(x + 0.4, q3, "×2: void" if r["routed"]["void"] else f"×2: {num(q3)}", ha="left", va="center",
                     fontsize=16, color=c)
     ax.set_yscale("log")
-    ax.set_ylim(0.7, 1.5e5)
+    ax.set_ylim(0.7, 10 ** math.ceil(math.log10(max(r["D_fit"]["T3"] for r in rows)) + 0.3))
     ax.yaxis.set_major_formatter(FuncFormatter(plain))
     ax.set_xlim(-0.65, len(rows) - 0.35)
     ax.set_xticks(range(len(rows)), [r["label"] for r in rows], fontsize=17)
@@ -322,8 +324,9 @@ def phase(out: Path) -> dict:
         f"{EDGE_GB:.1f} GB the memory cap is the fit bound at central w_e ({TARGET.upper()}-class target), where it "
         "holds; above it the closed form, which needs (d, e)-threading at window scale (false today), so read the top "
         "band as the closed form's claim. Just under the edge a one-period window nearly holds N* weights and the fit "
-        "bound weakens, so D dips there. The dashed white line is where the memory cap equals r̂ plus the verdict lag "
-        f"and nu ({num(offset)}): left of it D is set by r̂ (vertical contours), right of it by memory (horizontal). "
+        "bound weakens, so D dips there. The dashed white line is where the memory cap equals r̂ plus eps', the "
+        f"verdict lag and nu ({num(offset)} together): left of it D is set by r̂ (vertical contours), right of it by "
+        "memory (horizontal). "
         "Markers are the ladder's rungs: "
         + "; ".join(f"{name} (r̂ = {num(x)}, R_wipe = {num(y)} GB): D = {num(d)}" for name, (x, y, d, _, _) in
                     pts.items())
@@ -337,6 +340,7 @@ def phase(out: Path) -> dict:
 LABELS = {
     "residual": (r"$\hat r$, the GPUs' residual", ""), "clock_share": ("GPU clock above the credited", ""),
     "host_share": ("host CPUs at peak", ""), "identities": ("identities a detection doesn't end", ""),
+    "eps_agg": (r"$\varepsilon'$, aggregation slack", ""),
     "unmonitored": ("$s$, unmonitored share", ""), "mfu": (r"MFU$_0$", ""), "lag_s": ("verdict lag", " s"),
     "years": ("horizon", " yr"), "unfilled_gb": ("memory the fill doesn't reach", " GB"),
     "wipe_s": ("wipe period", " s"), "pous_rounds": ("proof-of-space rounds", ""),
@@ -581,7 +585,7 @@ def cheating(out: Path) -> dict:
         c = STATUS[r["status"]]
         ls = (0, (5, 2)) if name.startswith(("Floor,", "Streamed")) else "-"
         bx.plot(xs, ys, color=c, ls=ls, zorder=3)
-        below = name == "Power removal, 1 GB"
+        below = name == "Floor (r̂ = 0, 4 GB)"
         bx.annotate(one_line(r["label"]), (xs[0], ys[0]), xytext=(6, -8 if below else 8), textcoords="offset points",
                     va="top" if below else "bottom", color=c, fontsize=15)
         D5[name] = {label: fit_parts(r["p"] | {"overhead": x}, "T5")[0] for label, x in COSTS}
@@ -594,7 +598,7 @@ def cheating(out: Path) -> dict:
     bx.set_xscale("log")
     bx.set_yscale("log")
     bx.set_xlim(xs[0], xs[-1])
-    bx.set_ylim(10, 1e5)
+    bx.set_ylim(10, 10 ** math.ceil(math.log10(max(v["T3"] for v in D5.values())) + 0.3))
     bx.xaxis.set_major_locator(LogLocator(numticks=10))
     bx.xaxis.set_major_formatter(every_two)
     bx.yaxis.set_major_formatter(FuncFormatter(plain))
@@ -643,12 +647,13 @@ def years(out: Path) -> dict:
     ax.set_yticks(range(len(rows)), [one_line(r["label"]) for r in reversed(rows)], fontsize=18)
     ax.tick_params(axis="y", length=0)
     ax.spines["left"].set_visible(False)
-    ax.set_xlim(0, 8.8)
+    right = max(r["years_fit"]["T3"] for r in rows) + 1.9
+    ax.set_xlim(0, right)
     ax.set_ylim(-0.6, len(rows) - 0.4)
     ax.set_xlabel(rf"years of frontier-compute growth, $\ln\mathcal{{D}}/\ln {S.GROWTH:g}$ (T3)")
     ax.grid(axis="x", color="#e4e4e4", lw=1.2, zorder=0)
     top = ax.secondary_xaxis("top", functions=(lambda t: np.exp(t * g), lambda d: np.log(np.maximum(d, 1e-9)) / g))
-    top.set_xticks([1, 10, 100, 1000, 1e4, 1e5])
+    top.set_xticks([10.0 ** k for k in range(int(right * g / math.log(10)) + 1)])
     top.xaxis.set_major_formatter(FuncFormatter(plain))
     top.set_xlabel(r"$\mathcal{D}$", labelpad=8)
     status = [plt.Rectangle((0, 0), 1, 1, color=c) for c in STATUS.values()]
@@ -669,7 +674,8 @@ def schematic(out: Path) -> dict:
     six = rows["Streamed-label wipes, 6 GB"]["p"]
     mu6 = fit_mu(six)
     chi = {label: S.cheat(P | {"overhead": x}) for label, x in COSTS}
-    r_floor, r_best = T.residual_share(P), T.residual_share(P | S.BEST)
+    r_floor, r_best = T.audited_residual(P), T.audited_residual(P | S.BEST)
+    eps = P["eps_agg"]
     s_lo, s_hi = min(min(v) for v in S.REGIMES.values()), max(max(v) for v in S.REGIMES.values())
     fig = plt.figure()
     ax = fig.add_axes((0, 0, 1, 1))
@@ -678,7 +684,8 @@ def schematic(out: Path) -> dict:
     ax.axis("off")
     title(fig, "The leaks and their plugs")
     pieces = [(r"$1/\mathcal{D}\ \leq\ $", "k"), ("$s$", TERM["unmonitored"]), (r"$\ +\ [\,\min($", "k"),
-              (r"$\hat r$", TERM["residual"]), (r"$\ +\ $", "k"), (r"$\nu$", TERM["declared"]), ("$,\\ $", "k"),
+              (r"$\hat r$", TERM["residual"]), (r"$\ +\ $", "k"), (r"$\varepsilon'$", TERM["residual"]),
+              (r"$\ +\ $", "k"), (r"$\nu$", TERM["declared"]), ("$,\\ $", "k"),
               (r"$\mu$", TERM["memory"]), (r"$)\ +\ $", "k"), (r"$\chi$", TERM["cheat"]),
               (r"$\,]\,/\,\mathrm{MFU}_0$", "k")]
     eq = HPacker(children=[TextArea(t, textprops={"color": c, "fontsize": 30}) for t, c in pieces], pad=0, sep=0,
@@ -691,8 +698,9 @@ def schematic(out: Path) -> dict:
     leaks = [
         ("s", 5.95, 1.1, "$s$", "unmonitored compute",
          [rf"{num(s_lo)}–{num(s_hi)} by regime; $\mathcal{{D}} \leq 1/s$"], TERM["unmonitored"]),
-        ("r", 4.2, 1.6, r"$\hat r$", "monitored residual",
+        ("r", 4.2, 1.95, r"$\hat r$", "monitored residual",
          [f"PoUW: 1 today → {num(r_floor)} floor credit → {num(r_best)} best design",
+          rf"+ $\varepsilon'$ = {sci(eps)}: certificates that may be wrong",
           rf"memory: $\mu$ = {sci(mu6)} at 6 GB; $\mathcal{{D}}$ = {num(D6)} for any $\hat r > \mu$"],
          TERM["residual"]),
         ("nu", 2.45, 1.1, r"$\nu$", "declared computation", [f"{sci(X.nu(P))} at Kimi K2's K"], TERM["declared"]),
@@ -731,11 +739,13 @@ def schematic(out: Path) -> dict:
                                          color=color, shrinkA=0, shrinkB=0))
     ax.text(px1 - 0.2, 6.85, "from", fontsize=16, color=GRAY, ha="right")
     caption = (
-        "The bound 1/D <= s + (min(r̂ + nu, mu) + chi) / MFU_0 as four leaks and what plugs each. s, unmonitored "
-        f"compute ({num(s_lo)} to {num(s_hi)} across the s dossier's regimes), has no plug: it trains at full "
-        "efficiency, so D <= 1/s always. The monitored residual r̂ has two plugs, which substitute: PoUW credits "
-        f"certified work (r̂ = 1 today, {num(r_floor)} under the floor credit, {num(r_best)} at the best plausible "
-        f"design), and memory caps whatever PoUW leaves (mu = {num(mu6)} at 6 GB streamed-label wipes by the fit "
+        "The bound 1/D <= s + (min(r̂ + eps' + nu, mu) + chi) / MFU_0 as four leaks and what plugs each. s, "
+        f"unmonitored compute ({num(s_lo)} to {num(s_hi)} across the s dossier's regimes), has no plug: it trains at "
+        "full efficiency, so D <= 1/s always. The monitored residual r = r̂ + eps' has two plugs, which substitute: "
+        f"PoUW credits certified work (the audited residual r̂ = 1 today, {num(r_floor)} under the floor credit, "
+        f"{num(r_best)} at the best plausible design, plus the aggregation slack eps' = {num(eps)}, the share whose "
+        "certificates may be wrong, which the theorem's delta needs), and memory caps whatever PoUW leaves "
+        f"(mu = {num(mu6)} at 6 GB streamed-label wipes by the fit "
         f"bound, so D = {num(D6)} at T3 for any r̂ above it). NCI plugs the declared "
         f"computation (nu = {num(X.nu(P))}). Faulty proof blocks at T5 are plugged by terminal detection, which ends "
         "the identity, and by the cost of proving a draw, which sets how many pass: chi = "
@@ -745,6 +755,7 @@ def schematic(out: Path) -> dict:
         + BASE)
     return {"files": save(fig, out, "7_schematic"), "title": "Leaks and plugs", "caption": caption,
             "quote": {"s_range": [s_lo, s_hi], "r_hat": {"floor credit": r_floor, "best design": r_best},
+                      "eps_agg": eps,
                       "mu_6gb": mu6, "nu": X.nu(P), "chi": chi}}
 
 
