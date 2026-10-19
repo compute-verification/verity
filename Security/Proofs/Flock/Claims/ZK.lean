@@ -46,6 +46,8 @@ import Proofs.Flock.Claims.ZK.InnerSlotTriple
 import Proofs.Flock.Claims.ZK.InnerLeaf
 import Proofs.Flock.Claims.ZK.InnerY
 import Proofs.Flock.Claims.ZK.InnerBatched
+import Proofs.Flock.Claims.ZK.InnerTauVal
+import Proofs.Flock.Claims.ZK.InnerTauRep
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -322,6 +324,10 @@ import Proofs.Flock.Claims.ZK.Stop
 * `InnerY`: `Masked.innerY`, the cut's `Y` is the session's at the honest pads once `β`'s round is answered.
 * `InnerBatched`: `Masked.innerBatched`, the batched constraint over the shared phases' constraints holds at the honest
   pads.
+* `InnerTauVal`: `Masked.innerTauVal_of`, `InnerTauVal` from the inner proof's seven rows before the triple
+  (`Masked.TauRows`), split as the replay's five (`Masked.TauRep`) and level 0's two (`Masked.TauLig`).
+* `InnerTauRep`: `Masked.tauRep`, the replay's three rows and the two ring-switch rows are `rowsOf`'s on the view and
+  `czExe`'s coins; `Masked.innerTauVal_of_tauLig : TauLig → InnerTauVal`.
 * `SimLig`: `Masked.simLig`, hybrid 1 against hybrid 2: Ligerito from the cut's source is the session's.
 * `FinExe`: `FinExe` from `LiveEnd`, `SimCommit`, the three hybrids and the per-rep statements `RepOpenFinal`,
   `RepExact` and `RepPoints` (`Masked.finExe_of_open`).
