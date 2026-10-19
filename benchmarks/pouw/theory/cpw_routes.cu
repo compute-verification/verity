@@ -20,7 +20,10 @@
 //     trip is t = 2h and 2h + 1, one step of each of the 8 chains: every lane stores its 8 y to the warp's global slot
 //     and its 8 p fk to the warp's shared slot, lane 0 bulk-reduces (cp.reduce.async.bulk .xor, elementwise) that
 //     shared slot and then the static KK slot into the global one, and every lane reads u = y ^ p fk ^ KK back past
-//     L1. The lane keeps the two IMADs and the rotate-add.
+//     L1. The lane keeps the two IMADs and the rotate-add;
+//   9 foldmem at a block (`cpwb`): mode 8 with the block's slot (uniform addresses), thread 0 issuing both bulk XORs
+//     for every warp of the block and the block's barrier in place of the warp's, so the bulk ops' uniform glue is
+//     paid once a block.
 // `main` runs on the device it finds: bitexact (one warp, 64 sets, every final state and every checkpoint against the
 // host), then tp at 1, 2, 4 warps a SMSP and at full occupancy: SMSP-cycles a warp-set (clock64 a block, max over
 // blocks), 8 units a warp-set.
@@ -260,6 +263,91 @@ __global__ void __launch_bounds__(NT) cpwm(const uint32_t *st, const uint32_t *W
   if (threadIdx.x == 0) cyc[blockIdx.x] = t1 - t0;
 }
 
+__device__ __forceinline__ void bulk_xor_n(uint32_t *g, uint32_t s, uint32_t bytes) {
+  asm volatile("cp.reduce.async.bulk.global.shared::cta.bulk_group.xor.b32 [%0], [%1], %2;\n\t"
+               "cp.async.bulk.commit_group;\n\tcp.async.bulk.wait_group 0;" ::"l"(g), "r"(s), "r"(bytes)
+               : "memory");
+}
+
+template <int H>
+__device__ __forceinline__ void tripb(uint32_t (&y)[NCH], uint32_t (&z)[NCH], const uint32_t (&d)[8][4], uint32_t *gb,
+                                      uint32_t sd, uint32_t sk, uint32_t bytes, int tid) {
+  uint32_t m[NCH];
+#pragma unroll
+  for (int j = 0; j < NCH; ++j) m[j] = d[2 * H + j / 4][j % 4] * FK(4 * (2 * H + j / 4) + j % 4);
+  uint32_t *g = gb + NCH * tid;
+  st128(g, y[0], y[1], y[2], y[3]);
+  st128(g + 4, y[4], y[5], y[6], y[7]);
+  const uint32_t s = sd + 4u * NCH * tid;
+  sts64(s, m[0], m[1]);
+  sts64(s + 8, m[2], m[3]);
+  sts64(s + 16, m[4], m[5]);
+  sts64(s + 24, m[6], m[7]);
+  asm volatile("fence.proxy.async;" ::: "memory");
+  __syncthreads();
+  if (tid == 0) {
+    bulk_xor_n(gb, sd, bytes);
+    bulk_xor_n(gb, sk, bytes);
+    asm volatile("fence.proxy.async;" ::: "memory");
+  }
+  __syncthreads();
+  uint32_t u[NCH];
+  ldcg128(g, u[0], u[1], u[2], u[3]);
+  ldcg128(g + 4, u[4], u[5], u[6], u[7]);
+#pragma unroll
+  for (int j = 0; j < NCH; ++j) {
+    y[j] = u[j] * KA(2 * H + j / 4) + z[j];
+    z[j] = __funnelshift_l(u[j], u[j], ROT(2 * H + j / 4)) + y[j];
+  }
+}
+
+// mode 9; `cp` holds each block's NT NCH-word y slot
+template <int MODE>
+__global__ void __launch_bounds__(NT) cpwb(const uint32_t *st, const uint32_t *W, uint32_t *out, uint32_t *cp,
+                                           long long *cyc, int sets, uint32_t one) {
+  static_assert(MODE == 9, "cpwb is mode 9");
+  const int tid = threadIdx.x, idx = blockIdx.x * blockDim.x + tid;
+  const int src = idx & 1023;
+  __shared__ __align__(128) uint32_t sd[NT * NCH];
+  __shared__ __align__(128) uint32_t sk[4][NT * NCH];
+  uint32_t y[NCH], z[NCH], d[8][4];
+#pragma unroll
+  for (int j = 0; j < NCH; ++j) {
+    y[j] = st[src * 16 + j];
+    z[j] = st[src * 16 + NCH + j];
+  }
+#pragma unroll
+  for (int i = 0; i < 8; ++i)
+#pragma unroll
+    for (int e = 0; e < 4; ++e) d[i][e] = W[src * 32 + 4 * i + e];
+  for (int i = tid; i < 4 * NT * NCH; i += blockDim.x)
+    sk[i / (NT * NCH)][i % (NT * NCH)] = KK(2 * (i / (NT * NCH)) + (i % NCH) / 4);
+  asm volatile("fence.proxy.async;" ::: "memory");
+  uint32_t *gb = cp + (size_t)blockIdx.x * NT * NCH;
+  const uint32_t bytes = blockDim.x * NCH * 4u;
+  const uint32_t sdb = (uint32_t)__cvta_generic_to_shared(&sd[0]);
+  const uint32_t skb = (uint32_t)__cvta_generic_to_shared(&sk[0][0]);
+  __syncthreads();
+  long long t0 = clock64();
+#pragma unroll 1
+  for (int s = 0; s < sets; ++s) {
+#pragma unroll
+    for (int i = 0; i < 8; ++i) imma(d[i], one, one);
+    tripb<0>(y, z, d, gb, sdb, skb, bytes, tid);
+    tripb<1>(y, z, d, gb, sdb, skb + 4u * NT * NCH, bytes, tid);
+    tripb<2>(y, z, d, gb, sdb, skb + 8u * NT * NCH, bytes, tid);
+    tripb<3>(y, z, d, gb, sdb, skb + 12u * NT * NCH, bytes, tid);
+  }
+  __syncthreads();
+  long long t1 = clock64();
+#pragma unroll
+  for (int j = 0; j < NCH; ++j) {
+    out[idx * 16 + j] = y[j];
+    out[idx * 16 + NCH + j] = z[j];
+  }
+  if (tid == 0) cyc[blockIdx.x] = t1 - t0;
+}
+
 // the device pass sees no host code, so each mode is instantiated here
 #define CPW_INST(M) \
   template __global__ void cpw<M>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
@@ -272,6 +360,7 @@ CPW_INST(5)
 CPW_INST(6)
 CPW_INST(7)
 template __global__ void cpwm<8>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
+template __global__ void cpwb<9>(const uint32_t *, const uint32_t *, uint32_t *, uint32_t *, long long *, int, uint32_t);
 
 #ifndef __CUDA_ARCH__
 #include <cstdlib>
@@ -330,7 +419,7 @@ int main() {
   struct { const char *name; Kern k; int mode; } ks[] = {
       {"cpw_none", cpw<0>, 0},    {"cpw_st128", cpw<1>, 1},   {"cpw_redux16", cpw<2>, 2}, {"cpw_redg32", cpw<3>, 3},
       {"cpw_atoms32", cpw<4>, 4}, {"cpw_redg16", cpw<5>, 5}, {"cpw_atoms16", cpw<6>, 6}, {"cpw_redux2", cpw<7>, 7},
-      {"cpw_foldmem", cpwm<8>, 8},
+      {"cpw_foldmem", cpwm<8>, 8},  {"cpw_foldmem_blk", cpwb<9>, 9},
   };
   const int maxblocks = sms * 32;
   // a warp's 2 CPS checkpoint words, or mode 8's 32 NCH-word y slot

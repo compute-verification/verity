@@ -28,7 +28,7 @@ parts = re.split(r"\n\s*Function : (\S+)\n", "\n" + open(sys.argv[1]).read())
 ins_re = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)([^;]*);")
 out = {}
 for name, body in zip(parts[1::2], parts[2::2]):
-    m = re.search(r"cpwm?ILi(\d+)E", name)
+    m = re.search(r"cpw[mb]?ILi(\d+)E", name)
     if not m:
         continue
     ins = [(int(a, 16), op, rest) for a, op, rest in ins_re.findall(body)]
