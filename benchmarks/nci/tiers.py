@@ -8,10 +8,11 @@ proved.
 
 * s, the unmonitored compute share, trains at full efficiency.
 * r, the monitored compute residual, is the share of monitored capacity outside the compute certificate (1 - W_cert/C):
-  idle and uncredited time, and engines PoUW doesn't credit. It trains at full efficiency unless the memory cap binds. A
+  idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
+  peak. It trains at full efficiency unless the memory cap binds. A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedReads`` per window), declared or not. The state is all memory,
-  disks included unless they're unplugged; after a wipe, the wipe residual R: memory the fill doesn't reach, the proof of
+  disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
   delta = 1/100) plus the certificate's floor, the share of the store rebuildable from public data within the deadline.
@@ -48,15 +49,16 @@ T_AUDIT = 0.3635
 BLOCK_BITS = 524288
 BLOCK_NAME_BITS = 25
 
-#: defaults: the Kimi K2 calibration and forward chain; the residual at PoUW's deficit (0.744%), the design target, which
-#: holds only if credited work fills every engine; 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
+#: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual at compute-accounting's modelled design (floor
+#: credit with verified filler, about 1% of device time; served windows today credit 10.3% of padded MACs) and the host
+#: CPUs at their AMX datasheet peak (two Xeon 6776Ps, about 5% of the GPUs' FP8 rate); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) for a year;
 #: today's proof-of-space certificate (rho_PoS = 18/19, which k = 86 rounds certify at delta = 1/100, plus the floor at the
 #: deployed D = 2) and the memory the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.0074,
+    "unmonitored": 0.0, "residual": 0.01, "host_share": 0.05,
     "pous_rounds": 86.0, "unfilled_gb": 51.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0047, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
@@ -73,7 +75,8 @@ DEFAULTS = {
 #: it is one of the few shown up front
 SPEC = [
     {"key": "unmonitored", "main": True, "label": "Unmonitored compute share", "unit": "", "min": 1e-12, "max": 0.5, "log": True, "zero": True},
-    {"key": "residual", "main": True, "label": "Monitored compute residual r (PoUW deficit 0.74% if credited work fills every engine; filled GEMM windows about 0.4; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "residual", "main": True, "label": "Monitored compute residual r on the GPUs (floor credit with filler: about 1%, modelled; served windows today: about 0.9)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
+    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute (about 5%; 0 once a CPU filler or a physical cap bounds them)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (today's 1/19 certificate: 86; under 1 GB: about 12,000)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
@@ -131,8 +134,10 @@ STATUS = [
     ("Declared computation, partial-sum law", "ContainedTraining is proved in Lean with no dark compute; the absorption "
      "budget (PS') is being proved. Needs a reference circuit with bounded-fan-in additions. Covers one forward chain."),
     ("Monitored compute residual", "PoUW's deficit epsilon_W = 0.74% is proved (CircuitWork and CircuitCredit, draft "
-     "#2638) under named premises, for live coins; it is r only if credited work fills every engine. Uncredited capacity "
-     "is 23-42% of a filled GEMM window and up to 99.98% of decode's tensor pipe, and today's seeded code credits nothing."),
+     "#2638) under named premises, for live coins, but it is a share of credited work. r is about 1% of device time only "
+     "under the floor credit with verified filler (Decisions 89/90, Corollary D3; modelled, not served): today's served "
+     "windows credit 10.3% of padded MACs. Host CPUs are neither credited nor bounded and count at their datasheet peak "
+     "until a CPU filler or a physical cap exists (CMP-49)."),
     ("Memory cap", "Actual.Windows and ThreadedReads are proved; the composition and reads counted by information are "
      "being proved. Needs the declared computation's novel intake held to alpha F, which holds only once the per-window "
      "count check is a gated unit in the ZK flow (NET-35); until then intake is line rate (intake_x about 1.3e6) and memory "
@@ -215,9 +220,14 @@ def ingress(p: dict, mech: dict) -> float:
     return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"] if mech["net"] else p["nic"]
 
 
+def residual_share(p: dict) -> float:
+    """r: the GPUs' uncredited share plus the host CPUs, which count toward it until something credits or bounds them."""
+    return min(1.0, p["residual"] + p["host_share"])
+
+
 def state_threshold(p: dict, mech: dict) -> float:
     """The server state, in bits, below which memory caps the residual (the window bound's quadratic regime)."""
-    return p["residual"] * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
+    return residual_share(p) * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
 
 
 def evaluate(p: dict, mech: dict) -> dict:
@@ -244,7 +254,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         slope = (p["kappa"] * p["Gamma"] / 2 - region_cap(p, p["K"])) / (S_full - p["K"]) if S_full > p["K"] else 0.0
         cheat = min(slope * bits, C / gpm)
 
-    res_ops = p["residual"] * C + skipped
+    res_ops = residual_share(p) * C + skipped
     sigma_eff = p["sigma"] if mech["net"] else p["nic"]
     link = p["sigma"] + p["tau"] + p["export"] if mech["net"] else p["nic"]
     B_max = 2 * p["b_p"] * res_ops + min(2 * p["b_p"] * U, p["nodes"] * H * link)

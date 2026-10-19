@@ -25,11 +25,11 @@ def test_every_parameter_has_a_slider_and_its_default_is_in_range():
 def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
     r = T.evaluate(T.DEFAULTS, T.TIERS["T1"])
     assert r["largest"] == "residual" and not r["memory_caps_residual"]
-    assert r["residual"] == pytest.approx(T.DEFAULTS["residual"], rel=1e-3)
+    assert r["residual"] == pytest.approx(T.residual_share(T.DEFAULTS), rel=1e-3)
 
 
 def test_unmonitored_compute_trains_at_full_efficiency():
-    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
+    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
     assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
 
 
@@ -42,7 +42,7 @@ def test_the_residual_voids_the_partial_sum_law():
 def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
-    p = T.DEFAULTS | {"residual": 0.0, "unmonitored": 0.0}
+    p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "unmonitored": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
@@ -57,8 +57,8 @@ def test_the_adversary_relays_partial_sums_only_when_it_pays():
     p = T.DEFAULTS | {"d": 1.0, "e": 1e6}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["largest"] == "residual" and 0 < r["declared"] < r["residual"]
-    assert r["residual"] == pytest.approx(p["residual"], rel=1e-6)
-    assert r["crossing_bits"] / (2 * p["b_p"]) < 1e-6 * p["residual"] * p["nodes"] * p["node_flops"] * T.YEAR
+    assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-6)
+    assert r["crossing_bits"] / (2 * p["b_p"]) < 1e-6 * T.residual_share(p) * p["nodes"] * p["node_flops"] * T.YEAR
 
 
 def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
