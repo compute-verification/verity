@@ -114,13 +114,12 @@ CHANNELS = {
 # 24 Xeon 6776P cores of node 2 (r20261012-211331-ae6a, ncp_resident.jsonl and ncp_stream.jsonl, Y stored). Resident is
 # operands blocked in L2, as a large-m (prefill) tile allows; streamed reads Y from DRAM.
 AMX_PER_CORE = {"resident": 1.3879e13 / 24, "streamed": 5.2886e12 / 24}
-# Sapphire Rapids, resident, the same bench on vy-dc-h200's 8 Xeon 8468 cores (r20261019-093714-2359, gated bit-exact,
-# best m): 4.3% under node 2's a core. The Sapphire and Emerald Rapids hosts share its AMX unit, so they take it; Emerald
-# Rapids itself is unmeasured. Streamed keeps node 2's rate: the slot's 8 cores stream faster (2.8486e12), which a
-# socket's 56 cores would not.
-AMX_RESIDENT_SPR = 4.4278e12 / 8
-SPR_HOSTS = {"vy-dc-h200 slot, Xeon 8468", "DGX H200, 2 x Xeon 8480C", "vy-dc-b200 slot, Xeon 8580",
-             "DGX B200, 2 x Xeon 8570"}
+# Sapphire and Emerald Rapids, resident, the same bench one thread a core, gated bit-exact, best m: vy-dc-h200's 8 Xeon
+# 8468 cores (r20261019-093714-2359), 4.3% under node 2's a core, for the H200's hosts; vy-dc-b200's 10 Xeon 8580 cores
+# (r20261019-101102-af5e), 46% over, for the B200's. Streamed keeps node 2's rate: the slots' cores stream faster
+# (2.8486e12 on 8, 4.4766e12 on 10), which a socket's 56 cores would not.
+AMX_RESIDENT_BY_HOST = {"vy-dc-h200 slot, Xeon 8468": 4.4278e12 / 8, "DGX H200, 2 x Xeon 8480C": 4.4278e12 / 8,
+                        "vy-dc-b200 slot, Xeon 8580": 8.4242e12 / 10, "DGX B200, 2 x Xeon 8570": 8.4242e12 / 10}
 # The fold's and fillers' lane work, per core: LOP3+IMAD chains on AVX-512, best of 10 cores (r20261019-064611-062c,
 # Xeon 8580), priced at the design's own lane instructions a word.
 LANE_PER_CORE = 5.1349e11 / 10
@@ -145,7 +144,7 @@ def mac_rate(device: str) -> float:
 
 def amx_rate(host: str, mode: str) -> float:
     """The host's AMX words a second a core, MACs, for `mode` ("resident" or "streamed")."""
-    return AMX_RESIDENT_SPR if mode == "resident" and host in SPR_HOSTS else AMX_PER_CORE[mode]
+    return AMX_RESIDENT_BY_HOST[host] if mode == "resident" and host in AMX_RESIDENT_BY_HOST else AMX_PER_CORE[mode]
 
 
 def offload_fraction(bw: float, rate: float) -> float:
@@ -312,7 +311,7 @@ def main() -> int:
     for device in (h200, b200):
         dgx = lent(device, 1, "resident")
         checks.check(f"{device}: a DGX's host, resident operands, words and fold, takes counted eps over 1%",
-                     min(counted(device, dgx)) > TARGET, shown_lent(device, dgx) + " (SPR's measured AMX rate a core)")
+                     min(counted(device, dgx)) > TARGET, shown_lent(device, dgx) + " (its host family's measured AMX rate a core)")
     slot = lent(h200, 0, "resident")
     checks.check("H200 sm_90: vy-dc-h200's host, resident operands, words and fold, is over 1% at the measured reading",
                  counted(h200, slot)[1] > TARGET, shown_lent(h200, slot))
