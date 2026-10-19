@@ -143,7 +143,7 @@
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
   },
   "Nci.Assumptions.TrainingIncompressible": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "digest": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
   },
   "Nci.Assumptions.WeightsIncompressible": {
@@ -151,7 +151,7 @@
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
   "Nci.Assumptions.WeightsSupport": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "digest": "8d999550f4e64e7c8e339dc7bd9c4dc714395133afc90c62cee82aca2a19204b"
   },
   "NetTiming.Allocated": {
@@ -3517,13 +3517,13 @@
    "type_hash": "55856778f974cf265b7c2df6fc78adbf826e9d78ff0e128bc585a20f62d9ff39"
   },
   "Nci.SecurityProofs.IncompressibleContainedTraining": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.IncompressibleContainedTraining : Nci.Guarantees.IncompressibleContainedTraining"],
    "assumptions": [],
    "type_hash": "4227f6d22e9148a31c0837137544b6cf10c3e13aa7c68a4d5d1cfd8f6641c67b"
   },
   "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.IncompressibleThreadedThrottled : Nci.Guarantees.IncompressibleThreadedThrottled"],
    "assumptions": [],
    "type_hash": "3f0744ed7643bc3edea9b8bcf41a99c0a872164d55e92857ae748cac9d1ba7f6"
@@ -3535,7 +3535,7 @@
    "type_hash": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600"
   },
   "Nci.SecurityProofs.InfoOfState": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.InfoOfState : Nci.Guarantees.InfoOfState"],
    "assumptions": [],
    "type_hash": "9f1583451f17bdeb540e073a017a0ecc297b129c7158de888554305423a979f5"
@@ -3565,13 +3565,13 @@
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
   "Nci.SecurityProofs.ThreadedContainedInfo": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedContainedInfo : Nci.Guarantees.ThreadedContainedInfo"],
    "assumptions": [],
    "type_hash": "8381b224ed7e6895c5a477180f9e5b38f1557563376852e67628d1e84beb1006"
   },
   "Nci.SecurityProofs.ThreadedOfState": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedOfState : Nci.Guarantees.ThreadedOfState"],
    "assumptions": [],
    "type_hash": "ba69e692dec99e4727f2e6376fffefd4a580e1a6d289e09b83aaf9a00047c2b7"
@@ -3583,7 +3583,7 @@
    "type_hash": "795b67c8f7715b8007f162c603941e1adeed26249c63bc4292dca5a8520b2de5"
   },
   "Nci.SecurityProofs.ThreadedReadsInfo": {
-   "owner": "@compute-accounting",
+   "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedReadsInfo : Nci.Guarantees.ThreadedReadsInfo"],
    "assumptions": [],
    "type_hash": "4d90082db7cce0fe88a068deb85c0d77bf55ac4572b744ea7bf03e84487b53b7"
