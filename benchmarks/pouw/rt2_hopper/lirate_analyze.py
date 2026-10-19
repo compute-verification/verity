@@ -6,8 +6,9 @@ instruction for LOP3, IADD3, ISETP, SEL, LEA, SHF and PRMT). A loop bound by iss
 of the two, so `measured / max(issue, alu)` near 1 says each instruction costs what the sheet charges it and nothing
 else; a REDG with a hidden cost (the L2's atomic unit) shows as CK_RED8 above it. The variants' differences are the
 chip's price of moving the checkpoint's lane XOR to memory: CK_RED2 against CK_SEG is RT2-HOPPER-1's (134, 134) route
-against LI-CP-W's (136, 136), and CK_SEG4 against CK_SEG is LI-CP-W's checkpoints four to a STG.128 (issue 135.25,
-ALU 136). Each REDG kernel's atomic lane-ops a SM-cycle (128 x REDG a unit over its cycles) is the
+against LI-CP-W's (136, 136), CK_SEG4 against CK_SEG is LI-CP-W's checkpoints four to a STG.128 (issue 135.25,
+ALU 136), and CK_SEG4U and CK_SEG4M move one LOP3 a checkpoint to two REDUX and a ULOP3 (136.25, 134) in all units and
+in one of four (135.5, 135.5). Each REDG kernel's atomic lane-ops a SM-cycle (128 x REDG a unit over its cycles) is the
 rate the memory side sustained. With `lirmix.jsonl`, each mix of NR in 8 units checkpointed by CK_RED2 against NR = 0
 in the same loop: the cheater's saving within the atomic unit's spare capacity.
 
@@ -19,7 +20,7 @@ import argparse
 import json
 from pathlib import Path
 
-NAMES = ["ck_none", "ck_seg", "ck_red", "ck_red2", "ck_red8", "ck_seg4"]
+NAMES = ["ck_none", "ck_seg", "ck_red", "ck_red2", "ck_red8", "ck_seg4", "ck_seg4u", "ck_seg4m"]
 ALU = ("LOP3", "IADD3", "ISETP", "SEL", "LEA", "SHF", "PRMT")
 
 
@@ -45,11 +46,12 @@ def main() -> int:
         s = sass[f"lirate<{NAMES.index(name)},{w}>"]
         issue = s["loop"] / 4
         alu = 2 * sum(n for op, n in s["loop_base"].items() if op in ALU) / 4
+        uni = sum(n for op, n in s["loop_base"].items() if op.startswith("U")) / 4
         bound = max(issue, alu)
         red = {"ck_red": 1, "ck_red2": 2, "ck_red8": 8}.get(name, 0)
         atom = f"; {128 * red / cyc:.3f} atomic lane-ops a SM-cycle" if red else ""
         print(f"{name:8s} W={w:2d} ({w // 4} a SMSP): {cyc:8.3f} SMSP-cycles a unit a warp-slot; SASS a unit: issue "
-              f"{issue:6.2f}, ALU {alu:6.2f}; measured / max {cyc / bound:.4f}{atom}")
+              f"{issue:6.2f}, ALU {alu:6.2f}, uniform {uni:5.2f}; measured / max {cyc / bound:.4f}{atom}")
     mix = args.out / "lirmix.jsonl"
     if mix.exists():
         runs: dict[int, list[float]] = {}

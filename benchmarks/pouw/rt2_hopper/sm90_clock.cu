@@ -64,8 +64,9 @@ __host__ __device__ inline uint32_t xor8(const uint32_t (&y)[8]) {
 // store. ptxas turns a red to an address it can prove warp-uniform into REDUX and one lane's REDG, so the word's
 // address is out + (lane & zmask), zmask 0 at run time. CP_RED2 and CP_RED8 move more of the lane's XOR to memory: 3
 // LOP3 and 2 REDG (y0..y6's XOR, then y7), and 8 REDG with no LOP3 (each chain's state), so a checkpoint's lane XOR
-// trades ALU for issue: 4 LOP3 + 1 REDG, 3 + 2, 0 + 8.
-enum { CP_SEG, CP_SEG4, CP_SET, CP_RED, CP_RED2, CP_RED8 };
+// trades ALU for issue: 4 LOP3 + 1 REDG, 3 + 2, 0 + 8. CP_SEG4U is CP_SEG4 with the same trade and no atomics: 3 LOP3,
+// a REDUX of y0..y6's XOR and one of y7, their XOR on the uniform datapath (ULOP3), so 2 ALU cycles fewer for 1 issue.
+enum { CP_SEG, CP_SEG4, CP_SET, CP_RED, CP_RED2, CP_RED8, CP_SEG4U };
 __device__ __forceinline__ void red_xor(uint32_t* p, uint32_t v) {
   asm volatile("red.relaxed.gpu.global.xor.b32 [%0], %1;" ::"l"(p), "r"(v) : "memory");
 }
@@ -107,6 +108,9 @@ __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ word
         if (lane == 0) out[u] = r;
       }
       if constexpr (CP == CP_SEG4) keep[j] = __reduce_xor_sync(0xffffffffu, xor8(y));
+      if constexpr (CP == CP_SEG4U)
+        keep[j] = __reduce_xor_sync(0xffffffffu, y[0] ^ y[1] ^ y[2] ^ y[3] ^ y[4] ^ y[5] ^ y[6]) ^
+                  __reduce_xor_sync(0xffffffffu, y[7]);
       if constexpr (CP == CP_RED) red_xor(cpw + u, xor8(y));
       if constexpr (CP == CP_RED2) {
         red_xor(cpw + u, y[0] ^ y[1] ^ y[2] ^ y[3] ^ y[4] ^ y[5] ^ y[6]);
@@ -116,7 +120,7 @@ __global__ void __launch_bounds__(32, 1) li_exact(const uint4* __restrict__ word
 #pragma unroll
         for (int c = 0; c < 8; c++) red_xor(cpw + u, y[c]);
     }
-    if constexpr (CP == CP_SEG4)
+    if constexpr (CP == CP_SEG4 || CP == CP_SEG4U)
       if (lane == 0) reinterpret_cast<uint4*>(out)[u4] = make_uint4(keep[0], keep[1], keep[2], keep[3]);
   }
   const int ncp = CP == CP_SET ? 4 * U : U;
@@ -168,9 +172,9 @@ static int run_exact(int U) {
   printf("{\"probe\": \"ref\", \"units\": %d, \"seed\": %llu, \"cp_seg\": %s, \"cp_set\": %s, \"final\": %s}\n", U,
          0x5EED2026ull, list(cp_seg).c_str(), list(cp_set).c_str(), list(y).c_str());
   int bad = 0;
-  const char* names[6] = {"li_exact<CP_SEG>", "li_exact<CP_SEG4>", "li_exact<CP_SET>",
-                          "li_exact<CP_RED>", "li_exact<CP_RED2>", "li_exact<CP_RED8>"};
-  for (int cp = 0; cp < 6; cp++) {
+  const char* names[7] = {"li_exact<CP_SEG>",  "li_exact<CP_SEG4>", "li_exact<CP_SET>",  "li_exact<CP_RED>",
+                          "li_exact<CP_RED2>", "li_exact<CP_RED8>", "li_exact<CP_SEG4U>"};
+  for (int cp = 0; cp < 7; cp++) {
     cudaMemset(dout, 0, (4 * U + 256) * 4);
     if (cp == 0) li_exact<CP_SEG><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     if (cp == 1) li_exact<CP_SEG4><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
@@ -178,6 +182,7 @@ static int run_exact(int U) {
     if (cp == 3) li_exact<CP_RED><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     if (cp == 4) li_exact<CP_RED2><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     if (cp == 5) li_exact<CP_RED8><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
+    if (cp == 6) li_exact<CP_SEG4U><<<1, 32>>>((const uint4*)dw, dst, dout, U, 0u);
     cudaError_t e = cudaDeviceSynchronize();
     const int ncp = cp == 2 ? 4 * U : U;
     std::vector<uint32_t> got(ncp + 256);
@@ -384,19 +389,28 @@ static int run_all_roles(int iters, int reps) {
 // checkpoint each unit into a ring of 1024 words a warp. CK_NONE has none (the chains' floor); CK_SEG is LI-CP-W's (4
 // LOP3, REDUX, the uniform-to-vector move, lane 0's STG); CK_RED, CK_RED2 and CK_RED8 are li_exact's CP_RED, CP_RED2 and
 // CP_RED8 (4 LOP3 + 1 REDG, 3 + 2, 0 + 8), all 32 lanes into the warp's one word (zm 0 at run time); CK_SEG4 is
-// li_exact's CP_SEG4, CK_SEG with the trip's four words kept and lane 0 storing them in one STG.128. A unit a warp-slot
+// li_exact's CP_SEG4, CK_SEG with the trip's four words kept and lane 0 storing them in one STG.128; CK_SEG4U is
+// CP_SEG4U (3 LOP3, two REDUX, their XOR on the uniform datapath), and CK_SEG4M three CK_SEG4 units and one CK_SEG4U a
+// trip, the mix at which issue and the ALU pipe balance (134.5 and 135.5 a unit against CK_SEG4's 134.25 and 136,
+// with every REDUX and ULOP3 an issue slot off the ALU pipe). A unit a warp-slot
 // is the block's cycles over iters x 4 units x W/4 warps a SMSP: on a loop bound by issue or the ALU pipe (LOP3 at half
 // rate), max(issue, 2 x LOP3) a unit. A REDG that costs more than its issue slot (the L2's atomic unit taking a warp's 32
 // lanes into one word) shows as CK_RED8 above that.
-enum { CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8, CK_SEG4 };
+enum { CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8, CK_SEG4, CK_SEG4U, CK_SEG4M };
 __device__ __forceinline__ uint32_t lop3x(uint32_t a, uint32_t b, uint32_t c) {
   uint32_t r;
   asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(r) : "r"(a), "r"(b), "r"(c));
   return r;
 }
-// CK_SEG4's word, which its caller stores; 0 for the others
+// CK_SEG4's and CK_SEG4U's word, which its caller stores; 0 for the others
 template <int K>
 DC_DEV uint32_t li_ck(const uint32_t (&r)[8], uint32_t* w, int lane) {
+  if constexpr (K == CK_SEG4U) {
+    uint32_t x = lop3x(lop3x(lop3x(r[0], r[1], r[2]), r[3], r[4]), r[5], r[6]), y = r[7];
+    asm volatile("redux.sync.xor.b32 %0,%0,0xffffffff;" : "+r"(x));
+    asm volatile("redux.sync.xor.b32 %0,%0,0xffffffff;" : "+r"(y));
+    return x ^ y;
+  }
   if constexpr (K == CK_SEG || K == CK_RED || K == CK_SEG4) {
     uint32_t x = lop3x(lop3x(lop3x(r[0], r[1], r[2]), r[3], r[4]), r[5], r[6]);
     asm volatile("xor.b32 %0,%0,%1;" : "+r"(x) : "r"(r[7]));
@@ -433,9 +447,12 @@ __global__ void __launch_bounds__(W * 32, 1) lirate(OpArgs a, uint32_t* cp, uint
         l.op<L_LOP3>(c);
         l.op<L_IMAD>(c);
       }
-      keep[u] = li_ck<K>(l.r, wi + u, lane);
+      if constexpr (K == CK_SEG4M)
+        keep[u] = u == 3 ? li_ck<CK_SEG4U>(l.r, wi + u, lane) : li_ck<CK_SEG4>(l.r, wi + u, lane);
+      else
+        keep[u] = li_ck<K>(l.r, wi + u, lane);
     }
-    if constexpr (K == CK_SEG4)
+    if constexpr (K == CK_SEG4 || K == CK_SEG4U || K == CK_SEG4M)
       if (lane == 0)
         asm volatile("st.global.v4.b32 [%0], {%1,%2,%3,%4};" ::"l"(wi), "r"(keep[0]), "r"(keep[1]), "r"(keep[2]),
                      "r"(keep[3])
@@ -544,6 +561,8 @@ static int run_lirate_w(int iters, int reps) {
   bad += run_lirate<CK_RED2, W>("ck_red2", iters, reps);
   bad += run_lirate<CK_RED8, W>("ck_red8", iters, reps);
   bad += run_lirate<CK_SEG4, W>("ck_seg4", iters, reps);
+  bad += run_lirate<CK_SEG4U, W>("ck_seg4u", iters, reps);
+  bad += run_lirate<CK_SEG4M, W>("ck_seg4m", iters, reps);
   return bad;
 }
 

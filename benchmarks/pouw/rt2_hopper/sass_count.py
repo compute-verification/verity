@@ -6,12 +6,13 @@ has one (ALU, IMAD, SHFL and so on), else the opcode's first word.
 
 The gate (`--gate`): no local-memory access (LDL, STL) in any kernel; each `clk<...>` kernel's loop holds the IGMMA its
 load issues (4 a trip for the three wgmma loads, none for li_alone); each `li_exact<...>` loop holds li's 64 LOP3 and 64
-IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set; for CP_RED,
+IMAD a unit (256 and 256 a trip of four units), the checkpoint's REDUX (4 a trip a segment, 16 a set, 8 for CP_SEG4U's
+two a segment, with its 3 LOP3; for CP_RED,
 CP_RED2 and CP_RED8, 1, 2 and 8 RED a checkpoint and no REDUX) and its per-lane XOR (4 LOP3 a checkpoint; 3 for CP_RED2,
 none for CP_RED8); each `roles<X,R>` kernel's MMA loop holds its 4 IGMMA and the
 poll's LDS, and its lane loop exactly R of the lane's op (IMAD for X = 1, LOP3 for X = 2); each `lirate<K,W>` loop holds
 at least 256 IMAD a trip and 256 LOP3 plus its checkpoint's lane XOR, and exactly its checkpoint's REDUX, RED and STG (4
-checkpoints a trip; CK_SEG4's 4 in one STG.E.128); each `lirate_mix<NR,W>` loop (8 units a trip) holds 8 − NR REDUX and STG, 2·NR RED, at least 512
+checkpoints a trip; CK_SEG4's, CK_SEG4U's and CK_SEG4M's 4 in one STG.E.128); each `lirate_mix<NR,W>` loop (8 units a trip) holds 8 − NR REDUX and STG, 2·NR RED, at least 512
 IMAD and 512 + 4(8 − NR) + 3·NR LOP3. Exit 1 when a check fails.
 
 Run: `python sass_count.py SASS [--json OUT] [--gate]`.
@@ -109,8 +110,8 @@ def main() -> int:
             cp = int(tag[len("li_exact<"):-1])
             ncp = 16 if cp == 2 else 4
             # a checkpoint's REDUX, RED and lane-XOR LOP3: CP_SEG, CP_SEG4, CP_SET 1, 0, 4; CP_RED 0, 1, 4;
-            # CP_RED2 0, 2, 3; CP_RED8 0, 8, 0
-            redux, red, xl = {3: (0, 1, 4), 4: (0, 2, 3), 5: (0, 8, 0)}.get(cp, (1, 0, 4))
+            # CP_RED2 0, 2, 3; CP_RED8 0, 8, 0; CP_SEG4U 2, 0, 3
+            redux, red, xl = {3: (0, 1, 4), 4: (0, 2, 3), 5: (0, 8, 0), 6: (2, 0, 3)}.get(cp, (1, 0, 4))
             redux, red = redux * ncp, red * ncp
             got_red = base["RED"] + base["REDG"]
             if base["REDUX"] != redux or got_red != red:
@@ -122,14 +123,15 @@ def main() -> int:
                 fails.append(f"{tag}: {imad} IMAD a trip, want at least 256")
         if tag.startswith("lirate<"):
             k = int(tag[len("lirate<"):-1].split(",")[0])
-            # CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8, CK_SEG4: a trip's lane-XOR LOP3, REDUX, RED and STG
+            # CK_NONE, CK_SEG, CK_RED, CK_RED2, CK_RED8, CK_SEG4, CK_SEG4U, CK_SEG4M: a trip's lane-XOR LOP3, REDUX,
+            # RED and STG
             xl, redux, red, stg = [(0, 0, 0, 0), (16, 4, 0, 4), (16, 0, 4, 0), (12, 0, 8, 0), (0, 0, 32, 0),
-                                   (16, 4, 0, 1)][k]
+                                   (16, 4, 0, 1), (12, 8, 0, 1), (15, 5, 0, 1)][k]
             got = (base["REDUX"], base["RED"] + base["REDG"], base["STG"])
             if got != (redux, red, stg):
                 fails.append(f"{tag}: {got} REDUX, RED, STG a trip, want {(redux, red, stg)}")
             wide = sum(n for op, n in ops.items() if op.startswith("STG.E.128"))
-            if k == 5 and wide != 1:
+            if k >= 5 and wide != 1:
                 fails.append(f"{tag}: {wide} STG.E.128 a trip, want 1")
             if base["LOP3"] < 256 + xl:
                 fails.append(f"{tag}: {base['LOP3']} LOP3 a trip, want at least {256 + xl}")
