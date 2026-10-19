@@ -292,6 +292,44 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A7 SEMANTICS: each instruction computes the function its ISA defines and writes nothing else, so no unit "
           "outside the route menu heads a fresh committed word and a side unit's words cost its per-word vector",
           "A7 semantics (PTX ISA)", "measured"),
+    # A6 and A7 over a device's instruction table (Security/Models/Accounting/Assumptions/Isa.lean,
+    # note:20261019T0520Z-draft-mm-isa): the class list, the labelling, and one premise per row family
+    Entry("accounting-isa-complete", "assumption",
+          "Every owned right fixed committed word's head is an instance of a class of the device's instruction table "
+          "(the class list is complete)", "ISA class list complete", "measured"),
+    Entry("accounting-isa-labelled", "assumption",
+          "The labelling puts every head of a class the table doesn't trace on a route its row allows, and a route's "
+          "words are the heads it puts there", "ISA labelling reads the table", "measured"),
+    Entry("accounting-isa-rows-mma", "assumption",
+          "The mma.sync rows match PTX ISA §9.7.16: an MMA instruction writes its accumulator fragment's words",
+          "ISA rows: mma.sync", "measured"),
+    Entry("accounting-isa-rows-wgmma", "assumption",
+          "The wgmma rows match PTX ISA §9.7.17: a warp's wgmma writes its quarter of the warpgroup's accumulator",
+          "ISA rows: wgmma", "measured"),
+    Entry("accounting-isa-rows-tcgen05", "assumption",
+          "The tcgen05.mma rows match PTX ISA §9.7.18.10: a tcgen05.mma writes its tensor-memory accumulator's words",
+          "ISA rows: tcgen05.mma", "measured"),
+    Entry("accounting-isa-rows-tmem", "assumption",
+          "The tensor-memory rows match PTX ISA §9.7.18.8–9: tcgen05.ld, .st, .cp and .shift write their shape's words "
+          "and compute nothing", "ISA rows: tensor memory", "measured"),
+    Entry("accounting-isa-rows-lane", "assumption",
+          "The lane rows match PTX ISA §9.7.1–§9.7.9 and §9.7.20: a lane instruction writes at most two words a lane, "
+          "and a register move copies", "ISA rows: lane", "measured"),
+    Entry("accounting-isa-rows-uniform", "assumption",
+          "The uniform rows match the CUDA Binary Utilities' uniform datapath: a uniform instruction writes one "
+          "uniform register or a pair", "ISA rows: uniform", "measured"),
+    Entry("accounting-isa-rows-memory", "assumption",
+          "The memory rows match PTX ISA's ld, st, cp.async, ldmatrix, stmatrix, atom and red: each writes its "
+          "operand's bytes every lane, an atomic its old value's too", "ISA rows: memory", "measured"),
+    Entry("accounting-isa-rows-bulk", "assumption",
+          "The bulk rows match PTX ISA §9.7.10.28.4–5: a bulk or tensor copy or reduction writes its box's bytes",
+          "ISA rows: bulk", "measured"),
+    Entry("accounting-isa-rows-texture", "assumption",
+          "The texture rows match PTX ISA §9.7.12–§9.7.13: a texture or surface instruction writes its texels' or "
+          "elements' words", "ISA rows: texture", "measured"),
+    Entry("accounting-isa-rows-warp", "assumption",
+          "The warp rows match PTX ISA's shfl.sync, vote, match and redux.sync: a shuffle writes one word a lane, a "
+          "warp reduction one word", "ISA rows: warp", "measured"),
     Entry("accounting-ts-fold-opt", "assumption",
           "FOLD-OPT: no program folds N committed words at a certificate's price below (1 − μ_f)·N·φ*(π), for every "
           "certificate π", "FOLD-OPT", "conjectured"),
