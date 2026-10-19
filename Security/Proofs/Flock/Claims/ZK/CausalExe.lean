@@ -1329,4 +1329,67 @@ theorem commits_agree (c c' : Fin (refK x) → FlockDeploy.Coin) :
 
 end Agree
 
+/-! ## The reps' bookkeeping -/
+
+/-- **Each rep's sources agree where read**, at coins agreeing below `n`: table `j`'s rep `r`, from its first body
+`repStartZk (2j + r)`, with its region claims. -/
+def RepOk : Prop :=
+  ∀ x, Live x → ∀ wt ω p (c c' : Fin (refK x) → FlockDeploy.Coin) (n : ℕ),
+    (∀ j : Fin (refK x), j.val < n → c j = c' j) → ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
+      ∀ (j : Fin (jOf x)) (r : Fin 2) (e : Array _root_.Flock.Claim), e.size = (stAt x j).regions.size * spec.points →
+        RepAgree n (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val)) (_root_.Flock.Setup.ofCircuit (stAt x j))
+          (zkTab x j).sch e (repSrcCut PE x (czExe PE x c) (cutC x wt ω p c) j r)
+          (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r)
+
+theorem schOk_of {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : SchOk (_root_.Flock.Setup.ofCircuit st) y.sch := by
+  obtain ⟨h1, -, h3, h4, -, ⟨hn, hL, -⟩, hlv, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ y.hz
+  exact ⟨show 14 ≤ st.m by omega, by omega, h4, hL, fun j hj => (hlv j hj).q_ne_zero⟩
+
+theorem srcAgree_of (h : RepOk) : SrcAgree := by
+  intro x hx wt ω p c c' n hcc hn s spec hsx
+  obtain ⟨hcm, hic⟩ := commits_agree x wt ω p c c'
+  refine ⟨hcm, hic, FlockComplete.repStartZk spec (stsOf x), by simp [FlockComplete.repStartZk], ?_⟩
+  intro schs hschs k hk i r w hkw extras hext
+  obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  rw [FlockDeploy.repStreams_getElem spec hk] at hkw
+  simp only [Prod.mk.injEq] at hkw
+  obtain ⟨rfl, rfl, -⟩ := hkw
+  rw [FlockDeploy.repStreams_size] at hk
+  have hj : k / 2 < jOf x := by unfold jOf; rw [if_pos hx]; omega
+  have hr : k % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  have hst : (stsOf x)[k / 2]! = stAt x ⟨k / 2, hj⟩ := getElem!_pos (stsOf x) (k / 2) (lt_of_jOf ⟨k / 2, hj⟩)
+  have htab : (FlockDeploy.tabsOf (stsOf x))[k / 2]! = _root_.Flock.Setup.ofCircuit (stAt x ⟨k / 2, hj⟩) := by
+    rw [← hst]
+    unfold FlockDeploy.tabsOf
+    rw [getElem!_pos _ (k / 2) (by rw [Array.size_map]; exact lt_of_jOf ⟨k / 2, hj⟩),
+      getElem!_pos _ (k / 2) (lt_of_jOf ⟨k / 2, hj⟩), Array.getElem_map]
+  have hsch : schs[k / 2]!.1 = (zkTab x ⟨k / 2, hj⟩).sch := by
+    obtain ⟨hsz, hget⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hschs
+    have hlt : k / 2 < (FlockDeploy.tabsOf (stsOf x)).size := by
+      rw [FlockDeploy.tabsOf, Array.size_map]; exact lt_of_jOf ⟨k / 2, hj⟩
+    have h1 := hget (k / 2) hlt (hsz ▸ hlt)
+    rw [← getElem!_pos (FlockDeploy.tabsOf (stsOf x)) (k / 2) hlt, htab] at h1
+    have h2 : (_root_.Flock.Zk.schedule (stAt x ⟨k / 2, hj⟩).m : _root_.Flock.V _) = .ok schs[k / 2] := h1
+    rw [(zkTab x ⟨k / 2, hj⟩).hz] at h2
+    rw [getElem!_pos schs (k / 2) (hsz ▸ hlt), ← Except.ok.inj h2]
+  rw [htab] at hext
+  have hes : extras.size = (stAt x ⟨k / 2, hj⟩).regions.size * spec.points := by
+    rw [FlockDeploy.extraClaims_size (st := stAt x ⟨k / 2, hj⟩) hext]
+    simp
+  rw [htab, hsch, srcC, srcC, tabSrcCut_rep _ _ hj hr, tabSrcCut_rep _ _ hj hr]
+  refine ⟨schOk_of _, ?_, ?_⟩
+  · have hk6 := (zkTab x ⟨k / 2, hj⟩).wf.1.hk6
+    have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
+    rw [FlockComplete.ZkTables.repStart_succ, hst]
+    unfold FlockDeploy.repRounds
+    simp only [↓reduceIte, (zkTab x ⟨k / 2, hj⟩).hz]
+    simp only [repSends, innerAt]
+    show _ = _ + (3 + ((stAt x ⟨k / 2, hj⟩).m - 6) + (3 + ((stAt x ⟨k / 2, hj⟩).c.kLog - 6)) + _ + 1 + _ + 4)
+    rw [hes.trans (Nat.mul_comm _ _)]
+    omega
+  · have := h x hx wt ω p c c' n hcc s spec hsx ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ extras hes
+    rwa [show 2 * (⟨k / 2, hj⟩ : Fin (jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val = k by simp only; omega] at this
+
+theorem causalExe_of_rep (h : RepOk) : CausalExe := causalExe_of (srcAgree_of h)
+
 end Claims.ZKMal.Masked
