@@ -92,7 +92,8 @@ def test_spec_key_of_the_glm53_fused_norm_as_its_program_spells_it() -> None:
 
 # --- check_picks over eight ranks' dumps -----------------------------------------------------------------------------------------
 
-def _dumps(family, statics, *, fused: bool = False, flip: int | None = None, spec_of=None, binds=lambda r: True, drop=None, route_why=None):
+def _dumps(family, statics, *, fused: bool = False, flip: int | None = None, spec_of=None, binds=lambda r: True, drop=None, route_why=None,
+           calls=None):
     if fused:
         parts, res, w, statics = _fused(1, True)
         defn, N = TA.AllReduceRmsNormMnnvl, 256
@@ -114,6 +115,8 @@ def _dumps(family, statics, *, fused: bool = False, flip: int | None = None, spe
              "part": _t(part), "recv": _t(out[0]), "why": None}
         if fused:
             p.update(recv1=_t(out[1]), res=_t(res[ROWS]), w=_t(w))
+        if calls is not None:
+            p["calls"] = calls(r) if callable(calls) else calls
         if drop and drop[0] == r:
             p[drop[1]] = None
         if route_why is not None:
@@ -154,6 +157,42 @@ def test_a_spec_the_ranks_disagree_on_or_the_programs_do_not_bind_is_not_evaluab
     assert r["result"] is False and "routed specs were not read" in r["missing"][0]["why"]
 
 
+CALLS = [(0, 2), (2, 4)]                  # two requests' runs of the launch's M rows; ROWS picks from both
+OFFSET_FREE = [("AllReduceMultimem_v1", TA.AllReduceMultimem, lambda n: {"WORLD": W, "SIZE": n * NC, "TREES": (TREES[0],) * W, "FTZ": False}),
+               ("AllReduceMnnvl_v1", TA.AllReduceMnnvl, lambda n: {"WORLD": W, "N": n * NC, "SHOT": 2})]
+
+
+def _calls(defn, statics_of):
+    return [{"lo": lo, "rows": n, "spec": bind(defn, **statics_of(n)).id, "statics": statics_of(n)} for lo, n in CALLS]
+
+
+@pytest.mark.parametrize("family,defn,statics_of", OFFSET_FREE, ids=lambda x: x if isinstance(x, str) else "")
+def test_a_launch_over_several_requests_is_each_requests_call_of_the_definition(family, defn, statics_of) -> None:
+    parts = _bf16(np.random.default_rng(11), (W, M, NC))
+    calls = _calls(defn, statics_of)
+    want = np.concatenate([_definition(defn, c["statics"], parts[:, c["lo"]:c["lo"] + c["rows"]].reshape(W, -1)).reshape(c["rows"], NC)
+                           for c in calls])
+    (got,) = XC.calls_expected(family, statics_of(M), calls, parts[:, ROWS], ROWS)
+    assert (got == want[ROWS]).all()
+    with pytest.raises(ValueError, match="in no request's call"):
+        XC.calls_expected(family, statics_of(M), calls[:1], parts[:, ROWS], ROWS)
+
+
+def test_a_pick_over_several_requests_is_checked_per_call_and_every_call_must_be_bound() -> None:
+    fam, defn, statics_of = OFFSET_FREE[0]
+    calls = _calls(defn, statics_of)
+    r = XC.check_picks(_dumps(fam, statics_of(M), calls=calls), world=W)
+    assert r["result"] is True and r["equal"] == 1
+    bad = XC.check_picks(_dumps(fam, statics_of(M), calls=calls, flip=2), world=W)
+    assert bad["result"] is False and bad["mismatches"][0]["request_calls"] == CALLS
+    split = XC.check_picks(_dumps(fam, statics_of(M), calls=lambda k: calls[:1] if k == 5 else calls), world=W)
+    assert split["result"] is False and "different Definitions" in split["missing"][0]["why"]
+    d = _dumps(fam, statics_of(M), calls=calls, binds=lambda k: k != 3)
+    d[3]["picks"][0]["unbound_spec"] = calls[1]["spec"]
+    r = XC.check_picks(d, world=W)
+    assert r["result"] is False and f"rank 3: the rank Program binds no {calls[1]['spec'][:120]}" in r["missing"][0]["why"]
+
+
 def test_an_uncovered_call_is_not_evaluated_by_the_two_rank_chain() -> None:
     fam, _d, st = FLAT[0]
     r = XC.check_picks(_dumps(fam, st, route_why="tp_allreduce.covered() has no entry"), world=W)
@@ -178,6 +217,93 @@ def test_route_of_names_the_definition_the_switches_take_at_glm53() -> None:
     assert XD.route_of(s, 4, N, 2) is None
     assert "no entry" in XD.route_of(TA.settings_of(False, {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"}), 4096, N, W)["why"]
     assert "no captured setting" in XD.route_of(TA.settings_of(True, {"VLLM_ALLREDUCE_USE_FLASHINFER": "0"}), 4, N, W)["why"]
+
+
+def test_route_of_over_several_requests_lists_the_builds_one_call_per_request() -> None:
+    """The Build binds a launch over several requests as one call per request on the launch's route (`route_binding(.., rows)`); the
+    fused norm is per token, one spec whatever the requests."""
+    s, N = TA.settings_of(False, {}), 6144
+    pre = XD.route_of(s, 256, N, W, spans=[(0, 200), (200, 56)])
+    assert pre["family"] == "AllReduceMultimem_v1" and pre["statics"]["SIZE"] == 256 * N
+    assert [(c["lo"], c["rows"], c["statics"]["SIZE"]) for c in pre["calls"]] == [(0, 200, 200 * N), (200, 56, 56 * N)]
+    assert XC.spec_key(pre["calls"][1]["spec"]) == XC.spec_key(bind(TA.AllReduceMultimem, WORLD=8, SIZE=56 * N, TREES=(TA.GLM53_H200_TREE,) * 8,
+                                                                    FTZ=False).id)
+    dec = XD.route_of(s, 3, N, W, spans=[(0, 1), (1, 2)])
+    assert [c["statics"] for c in dec["calls"]] == [{"WORLD": 8, "N": N, "SHOT": 1}, {"WORLD": 8, "N": 2 * N, "SHOT": 1}]
+    assert "calls" not in XD.route_of(s, 256, N, W, spans=[(0, 256)])
+    assert "calls" not in XD.route_of(s, 4, N, W, types.SimpleNamespace(variance_epsilon=1e-5), spans=[(0, 1), (1, 3)])
+
+
+def test_a_route_that_reduces_by_offset_over_several_requests_is_named(monkeypatch) -> None:
+    custom = next(c for c in TA.CAPTURED if c.definition == "AllReduceCustom_v1" and c.statics["STAGE"] == 2)
+    monkeypatch.setattr(TA, "covered", lambda *a: custom)
+    s = TA.settings_of(False, {})
+    assert "calls" not in XD.route_of(s, 64, 6144, W, spans=[(0, 64)])
+    assert "reduces an element by its offset" in XD.route_of(s, 64, 6144, W, spans=[(0, 60), (60, 4)])["why"]
+
+
+def test_call_spans_are_the_collectors_request_rows_in_launch_order() -> None:
+    rows = {7: [("req-b", 0, 3), ("req-a", 3, 4)], 8: [("a", 0, 2), ("b", 3, 4)]}
+    assert XD.call_spans(rows, 7, 4, 2) == ([(0, 3), (3, 1)], None)
+    assert XD.call_spans(rows, 9, 1, 1) == (None, None)
+    assert "no request rows recorded at step 9" in XD.call_spans(rows, 9, 2, 2)[1]
+    assert "do not tile its 4 rows" in XD.call_spans(rows, 8, 4, 2)[1]
+    assert "do not tile its 5 rows" in XD.call_spans(rows, 7, 5, 2)[1]
+
+
+def test_the_programs_must_bind_every_request_call() -> None:
+    r = XD.route_of(TA.settings_of(False, {}), 3, 6144, W, spans=[(0, 1), (1, 2)])
+    known = {XC.spec_key(c["spec"]) for c in r["calls"]}
+    assert XC.spec_key(r["spec"]) not in known                         # the launch-wide call is not what the Programs bind
+    f = XD._routed({"site": "model.embed_tokens"}, r, None, None, None, known)
+    assert f["program_binds"] is True and f["calls"] == r["calls"] and "unbound_spec" not in f
+    g = XD._routed({"site": "model.embed_tokens"}, r, None, None, None, known - {XC.spec_key(r["calls"][1]["spec"])})
+    assert g["program_binds"] is False and g["unbound_spec"] == r["calls"][1]["spec"]
+
+
+def test_a_routed_family_no_phase_stratum_drew_gets_its_own_stratum() -> None:
+    """Mixed arrivals leave prefill-sized launches among the decode-phase steps; a family a site takes that its phase strata missed
+    (the fused norm at a few layers of the GLM-5.3 B8 Commit) is drawn on its own, and the phase strata draw what they drew."""
+    site, sizes = "model.layers.38.input_layernorm", {0: 256, 1: 120, 2: 100, 3: 90, 4: 3, 5: 80}
+    layouts = {s: [(f"{site}/part_rank0", (m, NC))] for s, m in sizes.items()}
+
+    def fam(_site, kind, sz):
+        return "F" if sz[0] <= 42 else "U"
+
+    extra = 0
+    for k in range(32):
+        plain = XC.pick_strata(layouts, 0, bytes([k]), world=W)
+        routed = XC.pick_strata(layouts, 0, bytes([k]), world=W, call_family=fam)
+        assert routed["picks"][:len(plain["picks"])] == plain["picks"]
+        assert {fam(site, "all_reduce", (sizes[p["step"]], NC)) for p in routed["picks"]} == {"F", "U"}
+        new = [key for key in routed["strata"] if key not in plain["strata"]]
+        assert new in ([], [f"{site}|all_reduce|route=F"])
+        extra += bool(new)
+    assert extra
+
+
+def test_the_rank_dump_binds_each_request_call_and_draws_every_routed_family(tmp_path) -> None:
+    N, site = 6144, "model.layers.0.input_layernorm"
+    s = TA.settings_of(False, {})
+    sizes = {0: 256, 1: 100, 2: 90, 3: 80, 4: 3}
+    step_rows = {k: [("a", 0, 200 if k == 0 else 1), ("b", 200 if k == 0 else 1, m)] for k, m in sizes.items()}
+    norm = types.SimpleNamespace(variance_epsilon=1e-5)
+    specs = {c["spec"] for k, m in sizes.items() if m > 42 for c in XD.route_of(s, m, N, W, spans=XD.call_spans(step_rows, k, m, 2)[0])["calls"]}
+    specs.add(XD.route_of(s, 3, N, W, norm)["spec"])
+    com = types.SimpleNamespace(_layouts={k: [types.SimpleNamespace(name=f"{site}/part_rank0", shape=(m, N), dtype="torch.bfloat16")]
+                                          for k, m in sizes.items()}, step_rows=step_rows)
+    st = {"com": com, "rank": 0, "world": W, "rc": None, "n_requests": 2, "xrank_program_specs": sorted(specs),
+          "eng": types.SimpleNamespace(model=types.SimpleNamespace(named_modules=lambda: [(site, norm)])),
+          "tps": types.SimpleNamespace(far=types.SimpleNamespace(order=[site], paths=()))}
+    for k in range(8):
+        out = XD.dump(st, settings=s, out_dir=str(tmp_path), seed_hex=f"{k:016x}", pair=0)
+        picks = torch.load(out["file"], weights_only=False)["picks"]
+        assert all(p["program_binds"] is True for p in picks) and set(out["routed_specs"]) <= specs
+        assert {p["family"] for p in picks} == {"AllReduceMultimem_v1", XC.FUSED_FAMILY}
+        assert all(len(p.get("calls") or ()) == (2 if p["family"] == "AllReduceMultimem_v1" else 0) for p in picks)
+    del step_rows[0]
+    picks = torch.load(XD.dump(st, settings=s, out_dir=str(tmp_path), seed_hex="00" * 8, pair=0)["file"], weights_only=False)["picks"]
+    assert "no request rows recorded at step 0" in next(p for p in picks if p["step"] == 0)["route_why"]
 
 
 def test_the_residual_is_the_previous_calls_new_residual_and_the_embedding_first() -> None:

@@ -10,15 +10,16 @@ under the run roots):
     all_gather : committed <site>/0 (rank r)          ==  concat(committed shard_rank0, committed shard_rank1) along the last dim
     embedding  : the VocabParallelEmbedding all-reduce of the masked partials -- the all_reduce rule on the `embed_tokens` site (EmbeddingShard_v1)
 
-Picks are STRATIFIED per (site, kind, phase) and drawn from a seed fixed AFTER commitment (the pair's combined root), identically on every
+Picks are STRATIFIED per (site, kind, phase), plus one stratum per routed family a site's calls take that its phase strata missed, and
+drawn from a seed fixed AFTER commitment (the pair's combined root), identically on every
 rank (the rank suffix is stripped from the stratum key), with a row subset per pick so a prefill tensor costs a few rows, not 32 MB.  Each
 rank dumps its picks (partial rows + received rows, from the committed bytes) to `xrank_rank<r>.pt`; the driver pairs them.  Any pick whose
 received member is not committed on a rank, or whose partial is not committed, is a named FAIL (the population of record requires both).
 Negative: `--flip-partial <rank>:<site suffix>` makes that rank commit a partial that is not the collective's input -> this pass fails by name.
 
 A world-8 all-reduce is evaluated with the routed Definition the rank Program binds at the call (`registry.tp_allreduce`): the rank
-names it per pick (`spec`, `statics`, `pipeline.tp.xrank_dump.route_of`) and the driver evaluates it with `tp_allreduce_check`'s models,
-which tests/program/test_tp_allreduce.py holds to the Definitions:
+names it per pick (`spec`, `statics`, `pipeline.tp.xrank_dump.route_of`; over several requests the one call per request the Build binds on
+it, `calls`) and the driver evaluates it with `tp_allreduce_check`'s models, which tests/program/test_tp_allreduce.py holds to the Definitions:
 
     AllReduceMultimem_v1 / AllReduceCustom_v1 : the received rows == each flat element's owner sum (row * N + col of the M * N words)
     AllReduceMnnvl_v1                         : the received rows == the elementwise FTZ sum, ranks ascending
@@ -160,15 +161,34 @@ def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, row
     raise ValueError(f"{family}: not a routed all-reduce")
 
 
+def calls_expected(family: str, statics: dict[str, Any], calls: list[dict[str, Any]] | None, parts: np.ndarray,
+                   rows: list[int]) -> tuple[np.ndarray, ...]:
+    """`routed_expected` over a launch the Build binds as one call per request (`calls` [{lo, rows, statics}], each over its own rows
+    from its first); None = one call over the launch."""
+    if not calls:
+        return routed_expected(family, statics, parts, rows)
+    rs, out = np.asarray(rows, np.int64), np.empty(np.shape(parts)[1:], np.uint16)
+    done = np.zeros(len(rs), bool)
+    for c in calls:
+        sel = np.flatnonzero((rs >= c["lo"]) & (rs < c["lo"] + c["rows"]))
+        if sel.size:
+            out[sel] = routed_expected(family, c["statics"], np.asarray(parts)[:, sel], (rs[sel] - c["lo"]).tolist())[0]
+            done[sel] = True
+    if not done.all():
+        raise ValueError(f"rows {rs[~done][:4].tolist()} are in no request's call {[(c['lo'], c['rows']) for c in calls]}")
+    return (out,)
+
+
 def _check_routed(ps: list[dict[str, Any]], ranks: list[int]) -> tuple[bool | None, dict[str, Any]]:
     """One routed pick over every rank's dump: (True | False | None = not evaluable, detail)."""
-    specs = {str(p.get("spec")) for p in ps}
+    specs = {(str(p.get("spec")), tuple(str(c["spec"]) for c in p.get("calls") or ())) for p in ps}
     if len(specs) != 1:
-        return None, {"why": f"the ranks bind different Definitions at the call: {sorted(s[:80] for s in specs)}"}
-    unbound = {r: p.get("program_binds") for p, r in zip(ps, ranks) if p.get("program_binds") is not True}
+        return None, {"why": f"the ranks bind different Definitions at the call: {sorted((s[:80], len(c)) for s, c in specs)}"}
+    unbound = {r: p for p, r in zip(ps, ranks) if p.get("program_binds") is not True}
     if unbound:
-        return None, {"why": "; ".join(f"rank {r}: " + ("the rank Program binds no " + next(iter(specs))[:120] if b is False else
-                                                         "the rank Programs' routed specs were not read") for r, b in unbound.items())}
+        return None, {"why": "; ".join(f"rank {r}: " + ("the rank Program binds no " + str(p.get("unbound_spec") or p["spec"])[:120]
+                                                         if p.get("program_binds") is False else "the rank Programs' routed specs were not read")
+                                       for r, p in unbound.items())}
     p0 = ps[0]
     fam, st, fused = spec_key(p0["spec"])[0], dict(p0["statics"]), p0["spec"].startswith(FUSED_FAMILY)
     need = ("part", "recv", "recv1", "res", "w") if fused else ("part", "recv")
@@ -182,7 +202,7 @@ def _check_routed(ps: list[dict[str, Any]], ranks: list[int]) -> tuple[bool | No
         if fused:
             exps = [routed_expected(fam, st, parts, p0["rows"], words(p["res"]), words(p["w"]).reshape(-1)) for p in ps]
         else:
-            exps = [routed_expected(fam, st, parts, p0["rows"])] * len(ps)
+            exps = [calls_expected(fam, st, p0.get("calls"), parts, p0["rows"])] * len(ps)
     except ValueError as e:
         return None, {"why": f"{fam}: {e}"}
     got = [(words(p["recv"]),) + ((words(p["recv1"]),) if fused else ()) for p in ps]
@@ -190,7 +210,8 @@ def _check_routed(ps: list[dict[str, Any]], ranks: list[int]) -> tuple[bool | No
     same = all(all(np.array_equal(a, b) for a, b in zip(got[0], g)) for g in got[1:])
     diffs = [sum(int((g != e).sum()) if g.shape == e.shape else -1 for g, e in zip(gs, es)) for gs, es in zip(got, exps)]
     return bool(all(eq) and same), {"received_equals_definition_per_rank": dict(zip([str(r) for r in ranks], eq)), "received_equal_across_ranks": same,
-                                     "n_diff_per_rank": dict(zip([str(r) for r in ranks], diffs)), "elements": int(exps[0][0].size), "spec": p0["spec"][:160]}
+                                     "n_diff_per_rank": dict(zip([str(r) for r in ranks], diffs)), "elements": int(exps[0][0].size), "spec": p0["spec"][:160],
+                                     **({"request_calls": [(c["lo"], c["rows"]) for c in p0["calls"]]} if p0.get("calls") else {})}
 
 
 def _h(*parts: str | bytes) -> int:
@@ -202,9 +223,12 @@ def _h(*parts: str | bytes) -> int:
 
 
 def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int, seed: bytes, per_stratum: int = 2, max_rows: int = MAX_ROWS,
-                world: int = 2) -> dict[str, Any]:
+                world: int = 2, call_family: Any = None) -> dict[str, Any]:
     """Deterministic, rank-agnostic picks.  `layouts`: step -> [(member name, sizes)] of THIS rank's committed layout (only the rank's own
-    partial members matter here).  Returns {"strata": {key: {...}}, "picks": [{step, site, kind, member, recv_candidates, rows, family, stratum}]}."""
+    partial members matter here).  `call_family(site, kind, sizes)`: the routed family a call takes (`xrank_dump.call_family`); a family
+    a site's calls take that none of its phase strata drew gets a stratum of its own (`<site>|<kind>|route=<family>`), so every routed
+    Definition a site binds is evaluated there.  Returns {"strata": {key: {...}}, "picks": [{step, site, kind, member, recv_candidates,
+    rows, family, stratum}]}."""
     suf = (f"/part_rank{rank}", f"/shard_rank{rank}")
     by_site: dict[tuple[str, str], list[tuple[int, tuple[int, ...]]]] = {}
     for step, metas in layouts.items():
@@ -218,28 +242,37 @@ def pick_strata(layouts: dict[int, list[tuple[str, tuple[int, ...]]]], rank: int
     for (site, kind), lst in sorted(by_site.items()):
         rows_of = {s: (sz[0] if sz else 1) for s, sz in lst}
         mx, mn = max(rows_of.values()), min(rows_of.values())
+        fam = family_of(site, kind, world)
         groups: dict[str, list[int]] = {}
         for s, _sz in sorted(lst):
             phase = "prefill" if (mx > mn and rows_of[s] == mx) else ("decode" if mx > mn else "all")
             groups.setdefault(phase, []).append(s)
-        for phase, steps in groups.items():
-            key = f"{site}|{kind}|{phase}"
-            steps = sorted(set(steps))
-            n = min(per_stratum, len(steps))
-            # seeded choice without replacement: rank the steps by a hash of (seed, key, step)
-            order = sorted(steps, key=lambda s: _h(seed, key, str(s)))
-            chosen = sorted(order[:n])
-            strata[key] = {"site": site, "kind": kind, "phase": phase, "family": family_of(site, kind, world), "steps_n": len(steps), "picked": chosen}
-            for s in chosen:
-                rows = rows_of[s]
-                if rows > max_rows:
-                    ridx = sorted({_h(seed, key, str(s), str(i)) % rows for i in range(max_rows * 2)})[:max_rows]
-                    ridx = sorted(set(ridx))
-                else:
-                    ridx = list(range(rows))
+        draws = {f"{site}|{kind}|{phase}": (phase, fam, steps, _draw(seed, f"{site}|{kind}|{phase}", steps, rows_of, per_stratum, max_rows))
+                 for phase, steps in groups.items()}
+        if call_family is not None:
+            route_at = {s: call_family(site, kind, sz) for s, sz in sorted(lst)}
+            taken = {route_at[s] for d in draws.values() for s, _r in d[3]}
+            for f in sorted({f for f in route_at.values() if f} - taken):
+                key, steps = f"{site}|{kind}|route={f}", [s for s, f_ in route_at.items() if f_ == f]
+                draws[key] = (f"route={f}", f, steps, _draw(seed, key, steps, rows_of, per_stratum, max_rows))
+        for key, (phase, family, steps, chosen) in draws.items():
+            strata[key] = {"site": site, "kind": kind, "phase": phase, "family": family, "steps_n": len(set(steps)), "picked": [s for s, _r in chosen]}
+            for s, ridx in chosen:
                 picks.append({"step": s, "site": site, "kind": kind, "member": f"{site}/{'part' if kind == 'all_reduce' else 'shard'}_rank{rank}",
-                              "recv_candidates": [f"{site}/{m}" if m else site for m in RECV_MEMBERS], "rows": ridx, "rows_total": rows, "family": family_of(site, kind, world), "stratum": key})
+                              "recv_candidates": [f"{site}/{m}" if m else site for m in RECV_MEMBERS], "rows": ridx, "rows_total": rows_of[s], "family": fam, "stratum": key})
     return {"strata": strata, "picks": picks, "per_stratum": per_stratum, "max_rows": max_rows, "seed": seed.hex() if isinstance(seed, (bytes, bytearray)) else str(seed)}
+
+
+def _draw(seed: bytes, key: str, steps: list[int], rows_of: dict[int, int], per_stratum: int, max_rows: int) -> list[tuple[int, list[int]]]:
+    """A stratum's picks: up to `per_stratum` of its steps, each with at most `max_rows` of its rows, by the seed's hash of (key, step)."""
+    steps = sorted(set(steps))
+    # seeded choice without replacement: rank the steps by a hash of (seed, key, step)
+    order = sorted(steps, key=lambda s: _h(seed, key, str(s)))
+    out = []
+    for s in sorted(order[:min(per_stratum, len(steps))]):
+        rows = rows_of[s]
+        out.append((s, sorted({_h(seed, key, str(s), str(i)) % rows for i in range(max_rows * 2)})[:max_rows] if rows > max_rows else list(range(rows))))
+    return out
 
 
 def check_picks(dumps: dict[int, dict[str, Any]], world: int = 2) -> dict[str, Any]:
