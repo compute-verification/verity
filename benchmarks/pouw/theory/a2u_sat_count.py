@@ -41,9 +41,9 @@ def device(path: str) -> tuple[str | None, dict[str, list[float]]]:
         m = re.match(r"device cc=(\S+)", line)
         if m:
             arch = CC_ARCH.get(m.group(1))
-        m = re.match(r"a2u (\S+) rep=\d+ smsp_cyc_per_warp_loop=([0-9.]+)", line)
+        m = re.match(r"a2u (\S+) (?:w=(\d+) )?rep=\d+ smsp_cyc_per_warp_loop=([0-9.]+)", line)
         if m:
-            rows[m.group(1)].append(float(m.group(2)))
+            rows[(m.group(1), int(m.group(2) or 8))].append(float(m.group(3)))
     return arch, dict(rows)
 
 
@@ -56,12 +56,13 @@ if __name__ == "__main__":
     if a.device:
         arch, rows = device(a.device)
         doc["device"] = {"arch": arch, "rates": {}}
-        for k, cyc in rows.items():
+        for (k, w), cyc in rows.items():
             c = doc["sass"].get(arch, {}).get(k)
             if not c or not cyc:
                 continue
             best = min(cyc)
-            doc["device"]["rates"][k] = {"smsp_cyc_per_warp_loop": cyc, "total_ipc": round(c["body"] / best, 4),
-                                         "vector_ipc": round(c["vector"] / best, 4),
-                                         "a2u_holds": c["body"] / best <= 1.0}
+            doc["device"]["rates"][f"{k}@w{w}"] = {"warps_a_smsp": w, "smsp_cyc_per_warp_loop": cyc,
+                                                   "total_ipc": round(c["body"] / best, 4),
+                                                   "vector_ipc": round(c["vector"] / best, 4),
+                                                   "a2u_holds": c["body"] / best <= 1.0}
     print(json.dumps(doc, indent=1))

@@ -1,4 +1,4 @@
 order = 346
 path = "`theory/a2u_sat.sh`"
 runs_on = "RTX PRO 6000"
-what = "A2u beside a saturating issue stream on sm_120 (`a2u_sat.cu`): 64 FFMA a loop at 8 warps a SMSP, alone and beside integer chains on the uniform datapath (seeded from a parameter) or on the lanes (seeded from a load); each loop counted (`a2u_sat_count.py`: uniform, vector, FFMA, spills) and its issue rate a SMSP-cycle set beside A2u's limit of 1"
+what = "A2u beside a saturating issue stream on sm_120 (`a2u_sat.cu`): 64 FFMA a loop at 8, 2 and 1 warps a SMSP, alone and beside integer chains on the uniform datapath (seeded from a parameter) or on the lanes (seeded from a load); each loop counted (`a2u_sat_count.py`: uniform, vector, FFMA, spills) and its issue rate a SMSP-cycle set beside A2u's limit of 1"

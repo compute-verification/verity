@@ -1,9 +1,9 @@
 // A2u beside a saturating issue stream (RT2-120): does a uniform-datapath instruction take an SMSP issue slot when the
 // lanes alone issue at nearly one warp instruction a cycle? opcode_probe's a2u.cu (r20261019-054518-8cd2) put its
 // uniform chains beside streams that issue at 0.79-0.88 alone, so a fifth of the slots were idle. Here the stream is
-// 64 FFMA a loop over NF independent accumulators (the FMA pipe takes one a cycle; nothing else binds), at 1024 threads
-// a block (8 warps a SMSP, 64 registers a thread), beside NP pairs of integer chains (UIMAD + ULOP3 where ptxas puts a
-// pair on the uniform datapath), K chain instructions a loop:
+// 64 FFMA a loop over NF independent accumulators (the FMA pipe takes one a cycle; nothing else binds), one block an SM
+// of 1024, 256 or 128 threads (8, 2 or 1 warps a SMSP; at most 64 registers a thread), beside NP pairs of integer chains
+// (UIMAD + ULOP3 where ptxas puts a pair on the uniform datapath), K chain instructions a loop:
 //   s_<NF>_0          the stream alone;
 //   u_<NF>_<K>_<NP>   chains seeded from a kernel parameter (uniform: ptxas may place them on the uniform datapath);
 //   l_<NF>_<K>_<NP>   the same chains seeded from a per-lane load (on lanes: the control).
@@ -111,20 +111,22 @@ int main() {
   cudaMalloc(&d_cyc, blocks * sizeof(long long));
   long long *cyc = (long long *)malloc(blocks * sizeof(long long));
   int bad = 0;
-  for (auto &e : ks) {
-    for (int rep = 0; rep < 3; ++rep) {
-      e.k<<<blocks, NT>>>(0x5e5e5e5eu, d_ls, 1.0000001f, d_out, d_cyc, ITERS);
-      cudaError_t err = cudaGetLastError();
-      if (err == cudaSuccess) err = cudaDeviceSynchronize();
-      bad |= err != cudaSuccess;
-      cudaMemcpy(cyc, d_cyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost);
-      long long mx = 0;
-      for (int b = 0; b < blocks; ++b) mx = cyc[b] > mx ? cyc[b] : mx;
-      // 8 warps a SMSP: SMSP-cycles a warp-loop is the block's cycles over 8 warps' loops
-      printf("a2u %s rep=%d smsp_cyc_per_warp_loop=%.4f err=%s\n", e.name, rep, (double)mx / (8.0 * ITERS),
-             cudaGetErrorString(err));
+  // one block an SM of 128 w threads: w warps a SMSP; SMSP-cycles a warp-loop is the block's cycles over w warps' loops
+  const int warps[] = {8, 2, 1};
+  for (int w : warps)
+    for (auto &e : ks) {
+      for (int rep = 0; rep < 3; ++rep) {
+        e.k<<<blocks, 128 * w>>>(0x5e5e5e5eu, d_ls, 1.0000001f, d_out, d_cyc, ITERS);
+        cudaError_t err = cudaGetLastError();
+        if (err == cudaSuccess) err = cudaDeviceSynchronize();
+        bad |= err != cudaSuccess;
+        cudaMemcpy(cyc, d_cyc, blocks * sizeof(long long), cudaMemcpyDeviceToHost);
+        long long mx = 0;
+        for (int b = 0; b < blocks; ++b) mx = cyc[b] > mx ? cyc[b] : mx;
+        printf("a2u %s w=%d rep=%d smsp_cyc_per_warp_loop=%.4f err=%s\n", e.name, w, rep,
+               (double)mx / ((double)w * ITERS), cudaGetErrorString(err));
+      }
     }
-  }
   return bad ? 3 : 0;
 }
 #endif
