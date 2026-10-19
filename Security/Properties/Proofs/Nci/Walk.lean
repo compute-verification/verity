@@ -793,10 +793,10 @@ theorem gateStep_holds (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d
         exact absurd he (hops k hkK _ hm1 e)
       · simp only [pure, Except.pure] at h
         subst h
-        exact ⟨fun e he => by cases he, fun sc' he => by cases he⟩
+        exact ⟨fun e he => (by cases he), fun sc' he => (by cases he)⟩
     · simp only [hpc, Bool.false_eq_true, ite_false, pure, Except.pure] at h
       subst h
-      refine ⟨fun e he => by cases he, fun sc' he => ?_⟩
+      refine ⟨fun e he => (by cases he), fun sc' he => ?_⟩
       simp only [Except.ok.injEq, Sum.inr.injEq] at he
       subst he
       have hmem : (P.defs[sc.d]!).body.nodes[k]! ∈ (P.defs[sc.d]!).body.nodes := by
@@ -834,7 +834,7 @@ theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P
     Flock.Steps.FUEL P.rootScope ⟨hr, hrp, Nat.zero_le _, by show g - 0 < (P.defs[P.root]!).gates; omega⟩ hfuel
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   refine ⟨b, ?_⟩
-  simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind, pure, Except.pure]
+  simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind]
   exact hb
 
 /-- **`Desc.walkable` leaves the descent its fuel.** -/
@@ -844,9 +844,7 @@ theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[
   have h2 := h.2
   have : (Desc.depths P)[P.root]! + 2 ≤
       ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := by
-    first
-    | exact Nat.le_mul_of_pos_left _ (by omega)
-    | nlinarith
+    exact Nat.le_mul_of_pos_left _ (by omega)
   omega
 
 end NciCheck.Properties.SecurityProofs.Walk
