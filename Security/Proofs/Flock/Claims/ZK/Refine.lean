@@ -32,9 +32,10 @@ opening that fails (`strat_eval_cons`).
   most the protocol's coins whose openings pass, `Rf` at the coins they open is `refusesCoins`), `StopRefine` holds at
   its switched prover (`LeanRelease.stopRefine_withStops`). `LiveRefine` and `FillRefine` hold there from more
   (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`): the transport makes the frame refuse after any opening
-  that fails (`OpeningsRefused`, today Rust's), the frame takes no round past the last coin (`EndsAt`), and the frame's
-  release of each worker round that passed (`LiveRoundEq`), and of each scheduled round in a failed worker's place below
-  the last (`FillRoundEq`), is the session's message, `Hello` first: the per-round byte equality. So
+  that fails (`OpeningsRefused`, today Rust's), the frame takes no round past the last coin (`EndsAt`, which holds where
+  the transport's rep has its inner proof done by then, `endsAt_of_done`, as the frame refuses any later round), and the
+  frame's release of each worker round that passed (`LiveRoundEq`), and of each scheduled round in a failed worker's
+  place below the last (`FillRoundEq`), is the session's message, `Hello` first: the per-round byte equality. So
   `Flock.zk_server_lean` holds at that session from those alone (`Flock.zk_server_lean_stops`), with no part of
   `ItemsRefine` assumed.
 * **The stops of a transport that reads only the coins** (`LeanRelease.stopsAt_of_readsCoins`): where the round's rep's
@@ -304,12 +305,50 @@ def StopsAt (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → �
 
 /-- **The frame takes no round past the protocol's last coin** at `x`: after every history past `Hello` of more than
 `refK x` openings, all passing the coin-tree check, the frame takes no device round. The deployed frame refuses any
-round after a rep's inner proof's last (`Frame.roundFree`), so this holds where the transport's rep is there by then. -/
+round after a rep's inner proof's last (`Frame.roundFree`), so this holds where the transport's rep is there by then
+(`endsAt_of_done`). -/
 def EndsAt (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (x : Msg) :
     Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (v : Msg), refK x < ops.length →
     ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
     L.takes x (ν, t) ((m₀, ρ₀) :: ops) v = false
+
+/-- **The frame takes no round once the rep's inner proof is done** (`Frame.roundFree`): a rep that released all
+`INNER_ROUNDS` of its inner proof's rounds refuses any further round. -/
+theorem round_of_done (c : Cfg) (s : Masker) (content : ByteArray) (n : ℕ)
+    (h : s.inner = some _root_.Flock.Firewall.Frame.INNER_ROUNDS) :
+    ∃ e, _root_.Flock.Firewall.Frame.round c s content n = .error e := by
+  unfold _root_.Flock.Firewall.Frame.round _root_.Flock.Firewall.Frame.roundFree
+  simp only [h, beq_self_eq_true, ite_true]
+  exact ⟨_, rfl⟩
+
+/-- Where the frame's state after taking the stream's last coins has its inner proof done, or the frame refuses those
+coins, the frame takes no device round. -/
+theorem takes_eq_false_of_done {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (v : Msg)
+    (hd : ∀ m, L.answered x ρ h = .ok m → m.inner = some _root_.Flock.Firewall.Frame.INNER_ROUNDS) :
+    L.takes x ρ h v = false := by
+  have hs : ∃ e, L.step x ρ h false v = .error e := by
+    unfold step
+    cases ha : L.answered x ρ h with
+    | error e => exact ⟨e, rfl⟩
+    | ok m =>
+      show ∃ e, _root_.Flock.Firewall.Frame.round (L.cfg x ρ h) { m with stopped := false } ⟨v.toArray⟩
+        (L.coins x h.length) = .error e
+      exact round_of_done _ _ _ _ (hd m ha)
+  obtain ⟨e, hs⟩ := hs
+  unfold takes
+  rw [hs]
+
+/-- **`EndsAt` from the transport's rep being done by the last coin**: where, after every history past `Hello` of more
+than `refK x` openings, all passing the coin-tree check, the frame's state after taking the last coins has its inner
+proof done, the frame takes no round past the protocol's last coin. -/
+theorem endsAt_of_done (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg)
+    (x : Msg)
+    (hd : ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (m : Masker), refK x < ops.length →
+      ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true →
+      L.answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m → m.inner = some _root_.Flock.Firewall.Frame.INNER_ROUNDS) :
+    EndsAt S L H x :=
+  fun ν t m₀ ρ₀ ops v hl hok => L.takes_eq_false_of_done x (ν, t) _ v fun m hm => hd ν t m₀ ρ₀ ops m hl hok hm
 
 /-- **`StopRefine` at the session with the frame's stops**, at any worker and values and a last round `n x` past the
 protocol's coins: its switched prover's message is the stop wherever the frame refuses the coins. A live run's coins
