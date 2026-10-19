@@ -217,8 +217,9 @@ refuses, and the lander handles what it refuses.
 Daniel moved one class of part out (11 Oct, 8:53 PM PDT): a part whose cold run takes more than about 10 minutes may run
 right after its train lands, on every landing that changed its inputs, and a failure there reverts the landing at once.
 A reused verdict stays in the gate, and the Lean check always runs before landing. Citations and tables read only commits
-whose trailing parts passed. ci and infra build this post-landing tier; until it exists, the whole `check` stays before
-landing.
+whose trailing parts passed. Deferred steps run in one post-landing run on `main`'s tip at a time. A failure there reverts
+the one PR it implicates, else every landing since the last verified tip; one that no landing since touches reverts nothing
+and goes to ci.
 
 PRs land through ci's `research queue drive` (#1826), live since 12 Oct 06:00Z:
 
@@ -356,7 +357,7 @@ Never print a secret's value.
 
 If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md` is your rulebook.
 
-Each coordinator (a handle's holder in `.agents/skills/using-slack/registry.json`) is a plain Cursor cloud agent on the
+Each coordinator (a handle's holder, which its inbox route records: `research msg handles`) is a plain Cursor cloud agent on the
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
 quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
@@ -369,6 +370,11 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Keep chatter low** (contract §3a). Every message, and every background shell you start, reaches the coordinator and
   the human. So run long jobs detached on the pod, write one-line checkpoints, and message someone only to unblock them
   or to change their plan.
+- **An agent's turn waits on nothing long.** Spawn workers as cloud agents (`Task` with `environment: cloud`) where your
+  Task tool offers it, else with `run_in_background: true`, never in the foreground. Local workers share the agent's one
+  VM, and an out-of-memory kill there stops all of them and the coordinator silently, so heavy work goes through
+  `research run`. No step blocks longer than about 20 minutes: launch detached and check back with
+  `research status RUN`. A worker resumed twice is relaunched fresh from its last checkpoint note.
 - **Reach a running subagent through its next shell command:** `python3 tools/agent-guard/inbox.py send AGENT_ID --text
   '…'`, where AGENT_ID is the `bc-…` id its Task call returned. A subagent never rereads a file mid-run, so don't put
   ownership changes or new requirements in a shared file and hope. The shell hook refuses the agent's next command once,
