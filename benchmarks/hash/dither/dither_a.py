@@ -1,5 +1,5 @@
-"""The `dither-a` arm: ASK-71's option A (CA's card, the coordinator's 22:15Z ask), measured only and labelled
-`form=optionA-ASK71, not the current claim` on every run.  Under it the noised work is credited on the operands A, B of a
+"""The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct),
+labelled `form=ASK-71 A (provisional)` on every run.  Under it the noised work is credited on the operands A, B of a
 served product that is value-checked (on every drawn unit z_u = A_u B_u^T, proved and committed before the draw, y from
 the committed z), so the served product may come from a plain GEMM beside the receipted one.
 
@@ -53,7 +53,7 @@ from hb_side import auto_j
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
 
-FORM = "optionA-ASK71, not the current claim"
+FORM = "ASK-71 A (provisional)"
 CAPTURES = ("gate", "control", "fault")
 LIB_ENV = DO.LIB_ENV
 LIB = "dithera"
