@@ -1,13 +1,18 @@
+import json
 import math
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
 
+import kappa  # noqa: E402
 import slowdown as S  # noqa: E402
 import tiers as T  # noqa: E402
+
+ROOT = HERE.parents[2]
 
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
@@ -213,3 +218,35 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 29.83}
     assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["residual"] == pytest.approx(
         3 * T.evaluate(capped, T.TIERS["T3"])["residual"], rel=0.02)
+
+
+def test_reference_layered_at_kimi_k2():
+    """The falsification test of the conjecture `Nci.Assumptions.ReferenceLayered`: the parameters it states are Kimi
+    K2's shapes', and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded` derives from them at S = K. A
+    keyed reference circuit's roots are its matrix products' entries, whose legs are their inner dimension, and its
+    values' gradients, whose legs are the value's forward reach; the most counted multiplications a value reaches are an
+    MoE input value's (the reach table of note:training-20261019T0446Z-threading-layered); a lookup's column is a bf16
+    embedding column, vocab x 16 bits; and at S = K the theorem takes the fewest E with S below E + 1 columns, giving
+    (d0 - E, e + E e_lk) with e_lk = 0, layer 0's attention-input projections uncounted. It can't find a reference
+    circuit that isn't keyed: the class is checked against a transformer block on paper."""
+    m = kappa.MODELS["kimi-k2"]
+    a, d, slots, ffn = m["attention"], m["d"], m["active"] + m["shared"], m["expert_ffn"]
+    forward = {"attention-side xn": a["q_rank"] + a["kv_rank"] + a["rope"], "c_q": a["heads"] * (a["nope"] + a["rope"]),
+               "c_kv": a["heads"] * (a["nope"] + a["v"]), "attention out": d, "moe xn'": m["experts"] + slots * 2 * ffn,
+               "expert hidden": d, "dense xn'": 2 * m["ffn"], "dense hidden": d}
+    backward = {"d gate, d up": 2 * d, "d mlp out": max(slots * ffn, m["ffn"]), "d attention mid": a["heads"] * a["v"],
+                "d v, d k": a["kv_rank"], "d q": a["q_rank"], "d c_q, d c_kv": d, "d logit": d}
+    d0 = min([inner for _, inner, _, _ in kappa.matrices(m)] + list(forward.values()))
+    e = max((forward | backward).values())
+    b, e_lk = m["vocab"] * 16, 0
+    E = int(T.DEFAULTS["K"] // b)
+    assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (512, 37248, 2621440, 7)
+    assert (T.DEFAULTS["d"], T.DEFAULTS["e"]) == (d0 - E, e + E * e_lk)
+    nci = ROOT / "Security" / "Models" / "Nci"
+    assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()
+    stated = (nci / "Guarantees/Layered.lean").read_text()
+    assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
+    assert f"T.bound (α * Γ) b_w {d0 - E} {e + E * e_lk} *" in stated
+    entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
+    test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
+    assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

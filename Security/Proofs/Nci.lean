@@ -8,6 +8,7 @@ import Proofs.Nci.Support
 import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Threads
+import Proofs.Nci.Layered
 import Proofs.Nci.Contained
 import Proofs.Nci.Fit
 import Proofs.Nci.Dampener

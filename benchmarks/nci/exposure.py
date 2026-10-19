@@ -62,7 +62,8 @@ RANGES = {
     "floor_steps": (1.0, 1e12, "guess"),
     "K": (2.2e6, 9.1e7, "calibrations kimi-k2-1m-coded, kimi-k2-1m-raw, kimi-k2-11mb-raw"),
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
-    "d": (256.0, 8355.0, "low a guess; ThreadedOfLayered certifies 505 for Kimi K2 at S = 2e7; dense-70b"),
+    "d": (256.0, 8355.0, "low a guess; ReferenceThreaded gives 505 for Kimi K2 at S = 2e7 under the open "
+                         "conjecture ReferenceLayered; dense-70b"),
     "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
