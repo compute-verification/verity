@@ -25,7 +25,9 @@ device's primary context:
   - ``hashing``: the tile leaves (``sha512/row-seg/v1`` over C̃ and U), into the pass's leaf buffer at the call's offset.
     No per-call tile tree is built, since the pass has one.
   The row digests and the tile leaves run as hash_fast.cuh's segment and fold launches, over each shape's segment scratch
-  (``segdig_a``, ``segdig_t``) and, for B's tree at install, a scratch dropped after it (``segdig_b``).
+  (``segdig_a``, ``segdig_t``) and, for B's tree at install, a scratch dropped after it (``segdig_b``).  At decode (the
+  shapes `run.pd_variant` takes) hash_decode.cuh's launches write the same bytes: ``commit_a`` (pd_commit) does
+  ``commit`` with E_A's lines in one launch, over each shape's counter (`_Shape.count`), and ``hash_leaf`` is pd_tiles.
 * **The records** (`pearl_c_work.UnitRecord`): each call's real rows and width, and the rows that fail the per-row rules
   (`clear_work.row_passes`).  The noise floor comes from the kernel's own ρ and α, whose product is exact as a double.
   The liveness is screened in FP32 with a 2⁻¹⁰ band (`screen`), and a row inside the band is decided exactly by
@@ -137,13 +139,14 @@ EPOCH_STEPS = ("pad_b", "rowdig_b", "hash_rows_b", "tree_b")
 JOB_STEPS = ("lines_eb", "lines_fa", "lines_fb", "stats_b", "eprime_b", "form_b", "bf", "g", "pb")
 CALL_STEPS = ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "stats_a", "eprime_a", "form_a",
               "af", "pa", "gemm_pearlc", "hash_leaf")
-HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf"})
+HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea", "hash_leaf", "commit_a"})
 #: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
-#: unit seed are ``a_tree``, movable under h3 once filler rows' lines stop reading `line_a` from the root (card 448a9d2d)
+#: unit seed are ``a_tree``, movable under h3 once filler rows' lines stop reading `line_a` from the root (card 448a9d2d);
+#: ``commit_a`` (`run.Pipeline.FUSED`), which ends with A's tree and the lines it keys, is ``a_tree``
 STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
                "seeds_a": "row_seeds", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
-               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash"}
+               "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "a_tree"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  Only the tile hashing moves, the tile leaves over C~ and U; A's tree stays on the main lane, and the screen
@@ -222,6 +225,7 @@ class _Shape:
     done: list = field(default_factory=list)   # each set's last side-lane use (a CUDA event)
     turn: int = 0
     size: dict = field(default_factory=dict)   # the pipeline's buffer sizes at this shape
+    count: Any = None              # pd_commit's counter (`run.Pipeline`'s pd_count): 16 zero bytes, never poisoned
 
 
 @dataclass
@@ -341,6 +345,8 @@ class PearlCDeviceRun(GraphCalls):
         self._launching: Any = None          # the torch stream the current step group launches on (the GEMM's timing events)
         self.const = _constants(scheme, self.device, salt_key)
         self.const_keys = _constant_keys(self.const)
+        if hasattr(kernel.run, "pd_setup"):   # it syncs, so here rather than at a call's first pipeline, which may be captured
+            kernel.run.pd_setup(kernel.dev)
         self.leaves = _zeros(self.nb * capacity, self.device)
         self.roots_buf = _zeros(self.nb * CALL_CAPACITY, self.device)
         self.flag_buf = _zeros(2 * flag_rows, self.device).view(flag_rows, 2)
@@ -433,7 +439,7 @@ class PearlCDeviceRun(GraphCalls):
             sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in CALL_BUFFERS},
                         torch.zeros((mp, k), dtype=torch.float32, device=self.device), _zeros(self.nb + 104, self.device))
             sh.sets = [dict(sh.b)]
-            sh.size = size
+            sh.size, sh.count = size, _zeros(16, self.device)
             if self.cur is not None and self.cur.poison is not None:
                 for t in self._buffers(sh):
                     t.fill_(self.cur.poison)
@@ -460,19 +466,28 @@ class PearlCDeviceRun(GraphCalls):
         """Every buffer a call of `sh` writes: its own, and the ring's other sets."""
         return [*sh.b.values(), *(t for st in sh.sets[1:] for t in st.values())]
 
-    def _call_names(self) -> tuple[str, ...]:
-        """The call's step names: every call step but the hashing ones when hashing is off, and but the omitted ones."""
-        return tuple(x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit)
+    def _call_names(self, pipe: Any) -> tuple[str, ...]:
+        """`pipe`'s call step names: every call step but the hashing ones when hashing is off, and but the omitted ones, with
+        each of the pipeline's fused steps (`run.Pipeline.FUSED`) in place of its parts, and dropped if any part is omitted."""
+        names = [x for x in CALL_STEPS if (self.hashing or x not in HASH_STEPS) and x not in self.omit]
+        have = {name for name, _, _ in pipe.steps()}
+        for fused, parts in getattr(pipe, "FUSED", {}).items():
+            if fused in have:
+                at = next((i for i, x in enumerate(names) if x in parts), None)
+                names = [x for x in names if x not in parts]
+                if at is not None and not self.omit & set(parts):
+                    names.insert(at, fused)
+        return tuple(names)
 
     def _call_steps(self, pipe: Any) -> list[Any]:
         """The call's steps in order (`_call_names`)."""
-        return _steps(pipe, self._call_names())
+        return _steps(pipe, self._call_names(pipe))
 
     def _call_cuts(self, pipe: Any) -> tuple[int, int]:
         """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
         tile hashing runs, and before the call's own tile hashing, which it forks."""
         have = {name for name, _, _ in pipe.steps()}
-        groups = [STEP_GROUPS[x] for x in self._call_names() if x in have]
+        groups = [STEP_GROUPS[x] for x in self._call_names(pipe) if x in have]
         commit = ("row_seeds", "a_tree")
         a = next((i for i, g in enumerate(groups) if g not in commit), len(groups))
         b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
@@ -486,12 +501,12 @@ class PearlCDeviceRun(GraphCalls):
         if key not in self.pipes:
             wt, K = self.weights[w], self.kernel
             bufs = {**{x: t.data_ptr() for x, t in wt.b.items()}, **{x: t.data_ptr() for x, t in sh.b.items()}, "y": 0,
-                    "leaves": 0}
+                    "leaves": 0, "pd_count": sh.count.data_ptr()}
             kp = self.key_slots[self.order[w]].data_ptr() if self._graphed(sh.m16) else sh.keys.data_ptr()
             keys = {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64, "dom_a": kp, "unit": kp + self.nb,
                     **self.const_keys}
             pipe = _pipeline(K, sh.mp, sh.n, sh.k, bufs, 0, keys, sh.xa.data_ptr(), sh.m16, variant=self.variant)
-            names = self._call_names()
+            names = self._call_names(pipe)
             present = [x for x in names if x in {n for n, _, _ in pipe.steps()}]
             steps = _steps(pipe, names)
             if self.time_gemm and self.device.type == "cuda":
