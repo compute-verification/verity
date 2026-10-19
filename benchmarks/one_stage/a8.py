@@ -41,6 +41,7 @@ import argparse
 import hashlib
 import json
 import re
+import socket
 import sys
 import time
 import traceback
@@ -586,6 +587,16 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     return {"meta": json.loads(st._meta), "tampered": "o0", "word": 0, "bit": 0}
 
 
+def session_port(base: int, j: int) -> int:
+    """Session ``j``'s port: ``base + j``, else (``base`` 0) a port free now, so that audits sharing a node never cross one
+    audit's prover with another's verifier."""
+    if base:
+        return base + j
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> None:
     """Each staged kind's rows and outputs (``<kind>.npz``), its unit Definitions as one encoded Program, and the staging notes."""
     d.mkdir(parents=True, exist_ok=True)
@@ -663,7 +674,7 @@ def main() -> int:
     ap.add_argument("--full-gates", type=int, default=4_000_000, help="a Call up to this many gates is evaluated whole")
     ap.add_argument("--tamper", default=None, help="the kind whose member is tampered (default: the first staged; none: no tampered member)")
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
-    ap.add_argument("--port", type=int, default=7581)
+    ap.add_argument("--port", type=int, default=0, help="the sessions' base port (default: a free port each)")
     ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
     a = ap.parse_args()
     out = Path(a.out)
@@ -816,7 +827,7 @@ def main() -> int:
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", a.port + j, sdir, draw_file=sdir / "draw.json", zk=True)
+        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir, draw_file=sdir / "draw.json", zk=True)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
@@ -911,7 +922,7 @@ def main() -> int:
                                                    "first output word flipped before commitment"},
                         leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
         tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
-        trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", a.port + len(members) + 1, tdir / "session", zk=True)
+        trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
         tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
         neg[f"wrong-output-word ({tm['kind']})"] = {
