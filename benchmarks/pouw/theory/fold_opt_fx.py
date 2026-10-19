@@ -23,17 +23,19 @@ The result (checks below):
   (multiply-then-XOR does not fuse), where plain duo's u = y ^ d ^ k IS one LOP3. So fx1's u costs 2 instructions, not 1
   -- the extra op is genuine. This is exactly why the chain ends on an IMAD: an XOR-ending chain (d' = w ^ c) collapses,
   since u = y ^ (w ^ c) ^ kx = y ^ w ^ (c ^ kx) folds back to one LOP3 (demonstrated as a mutation).
-- **Neither output is a single instruction, and neither is a two-instruction value** (one instruction: exhaustive over
-  the modelled ISA at 32 bits with keys as constants, and at width 4 over all 256 LOP3 LUTs, IMAD.WIDE's high word with a
-  two-word addend included; two instructions: exhaustive at width 4 over one-word instructions). A 3-instruction program
-  of one-word instructions has values {single, <=2-instruction, <=3-instruction}; the two live outputs would have to be
-  two of them, and both the single and the 2-instruction slot are ruled out, so **fx1's (y', z') needs >= 4
-  instructions** = honest's count. fx2 adds one more irreducible op (the leading XOR before the multiply), so **fx2
-  needs >= 5**.
+- **Neither output is a word of a program of at most two instructions** (one instruction: exhaustive over the modelled
+  ISA at 32 bits with keys as constants, and at width 4 over all 256 LOP3 LUTs, IMAD.WIDE's high word with a two-word
+  addend included; two instructions: exhaustive at width 4, the first any one-word value or both words of an IMAD.WIDE,
+  the second any form, IMAD.WIDE's high word included). A 3-instruction program of one-word instructions has values
+  {single, <=2-instruction, <=3-instruction}; the two live outputs would have to be two of them, and both the single and
+  the 2-instruction slot are ruled out, so **fx1's (y', z') needs >= 4 instructions** = honest's count. fx2 adds one
+  more irreducible op (the leading XOR before the multiply), so **fx2 needs >= 5**.
 - **Two-word instructions.** IMAD.WIDE writes two words, so the count above holds only once no instruction writes both
-  outputs. At width 4 no program of at most 2 instructions ending on an IMAD.WIDE writes them (its first instruction
-  any one-word value or another IMAD.WIDE), which also completes #2240's >= 3 for duo. Not searched: 3 instructions
-  whose last is an IMAD.WIDE writing both outputs, or whose middle one's high word is an output (CPU-hours at width 4).
+  outputs. At width 4 no program of at most 2 instructions ending on an IMAD.WIDE writes them, which also completes
+  #2240's >= 3 for duo. Since neither output is a word of the first two instructions, a 3-instruction program would
+  write both as its last instruction's two words, an IMAD.WIDE's: `--wide3` searches that case exhaustively at width 4
+  (fold_wide3.c, CPU minutes, outside the test suite). The width-4 ISA is LOP3, IADD3, IMAD, IMAD.HI, LEA, LEA.HI and
+  IMAD.WIDE; it has no IDP, IMNMX, POPC, FLO, BREV, BMSK or wrapping-SHF form.
 - **The three collapse routes the brief names all fail:** (i) the two multiplies do not compose -- y'(w) is not affine in
   w, so (y ^ (w*m1) ^ kx)*a is not w*(m1*a) + c; (ii) the fx IMAD's add slot cannot pre-absorb duo's + z (it feeds the
   XOR, not the + z); (iii) no IMAD.WIDE / IDP.4A / LOP3-of-three produces two words' intermediates in one instruction;
@@ -50,15 +52,18 @@ Verdict: FOLD-OPT(fx1) and FOLD-OPT(fx2) are validated and turned into mechanica
 slots a word) and the price form (mu_f = 0 on the binding joint-issue row). No counterexample: fx1 is the cheapest keyed
 chain reaching f = 4 that provably does not collapse, because it ends on a multiply. Residual (as #2240): a fully general
 multi-op superoptimiser over the complete ISA explodes; the no-collapse + no-merge + op-type argument and the width-4
-exhaustive searches cover it, and a heavy exhaustive search would go on a pod. The 3-instruction two-word cases above
-are part of that residual.
+exhaustive searches cover it, and a heavy exhaustive search would go on a pod.
 
-Run: `python fold_opt_fx.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit only.
+Run: `python fold_opt_fx.py [--mutations] [--wide3] [--verdict PATH]`. Stdlib + exact_kit only; `--wide3` builds
+fold_wide3.c with gcc.
 """
 from __future__ import annotations
 
 import itertools
+import subprocess
 import sys
+import tempfile
+from pathlib import Path
 
 from exact_kit.checks import Checks
 
@@ -298,16 +303,7 @@ def width_wide_writes_both(width: int, t1, t2, inputs):
     its high word c_hi. Returns a witness label or None."""
     mask = (1 << width) - 1
     nv = len(t1)
-    names = list(inputs)
-    firsts = [({}, "")] + [({"v1": list(v)}, lab) for v, lab in _single_values(width, inputs).items()]
-    pairs = {}
-    for p, q, cl, ch in itertools.product(names, repeat=4):
-        for signed in (True, False):
-            lh = [wide(inputs[p][i], inputs[q][i], inputs[cl][i], inputs[ch][i], signed, width) for i in range(nv)]
-            pairs.setdefault((tuple(x[0] for x in lh), tuple(x[1] for x in lh)),
-                             f"IMAD.WIDE{'' if signed else '.U32'}({p},{q},{ch}:{cl})")
-    firsts += [({"v1": list(lo), "v1h": list(hi)}, lab) for (lo, hi), lab in pairs.items()]
-    for extra, lab in firsts:
+    for extra, lab in [({}, "")] + _firsts(width, inputs):
         cols = dict(inputs)
         cols.update(extra)
         by_vec = {tuple(v): nm for nm, v in cols.items()}
@@ -327,9 +323,30 @@ def width_wide_writes_both(width: int, t1, t2, inputs):
     return None
 
 
+def _wide_pairs(width: int, inputs):
+    """Every distinct (lo, hi) word pair one IMAD.WIDE or IMAD.WIDE.U32 over `inputs` writes, as {pair: label}."""
+    names = list(inputs)
+    nv = len(next(iter(inputs.values())))
+    out = {}
+    for p, q, cl, ch in itertools.product(names, repeat=4):
+        for signed in (True, False):
+            lh = [wide(inputs[p][i], inputs[q][i], inputs[cl][i], inputs[ch][i], signed, width) for i in range(nv)]
+            out.setdefault((tuple(x[0] for x in lh), tuple(x[1] for x in lh)),
+                           f"IMAD.WIDE{'' if signed else '.U32'}({p},{q},{ch}:{cl})")
+    return out
+
+
+def _firsts(width: int, inputs):
+    """A program's first instruction, as the words it adds to `inputs`: every distinct one-word value (`v1`), and every
+    IMAD.WIDE's two words (`v1`, `v1h`). Pairs of ({name: vector}, label)."""
+    return ([({"v1": list(v)}, lab) for v, lab in _single_values(width, inputs).items()]
+            + [({"v1": list(lo), "v1h": list(hi)}, lab) for (lo, hi), lab in _wide_pairs(width, inputs).items()])
+
+
 def _single_values(width: int, inputs):
     """Every distinct single-instruction value vector over `inputs` at `width` bits (all 256 LOP3 LUTs, IADD3 +/-, IMAD,
-    LEA and the rotate form of LEA.HI), as {value_tuple: label}. Used to enumerate the first op of a length-2 program."""
+    IMAD.HI, LEA and the rotate form of LEA.HI), as {value_tuple: label}: every one-word form `_width_ops` matches.
+    IMAD.WIDE's pairs are `_wide_pairs`."""
     mask = (1 << width) - 1
     names = list(inputs)
     cols = {nm: inputs[nm] for nm in inputs}
@@ -351,6 +368,7 @@ def _single_values(width: int, inputs):
         for s in itertools.product((1, -1), repeat=3):
             add([(s[0] * av[i] + s[1] * bv[i] + s[2] * cv[i]) & mask for i in range(nv)], f"IADD3{s}")
         add([(av[i] * bv[i] + cv[i]) & mask for i in range(nv)], f"IMAD({a},{b},{c})")
+        add([(((av[i] * bv[i]) >> width) + cv[i]) & mask for i in range(nv)], f"IMAD.HI({a},{b},{c})")
     for a, b in itertools.product(names, repeat=2):
         av, bv = cols[a], cols[b]
         for n in range(width):
@@ -360,20 +378,121 @@ def _single_values(width: int, inputs):
 
 
 def width_le2_value(width: int, target, inputs):
-    """Is `target` a length-<=2 straight-line program over the width-`width` ISA from `inputs`? Exhaustive: it is either a
-    single instruction, or one instruction over `inputs` plus some single-instruction intermediate v1. Returns a witness
-    label or None. The first op ranges over EVERY distinct single-instruction value (all 256 LOP3 LUTs included)."""
+    """Is `target` a word of a length-<=2 straight-line program over the width-`width` ISA from `inputs`? Exhaustive: it
+    is a single instruction's word, or a word of one instruction over `inputs` plus the first instruction's words. The
+    first ranges over every `_firsts` (every distinct one-word value, all 256 LOP3 LUTs included, and both words of every
+    IMAD.WIDE), the second over every form `_width_ops` matches and the high word of IMAD.WIDE, its c_hi solved for.
+    Returns a witness label or None."""
     direct = width_single_instruction(width, target, inputs)
     if direct is not None:
         return direct
+    mask = (1 << width) - 1
     nv = len(target)
-    for v1, label in _single_values(width, inputs).items():
+    prods = {}
+
+    def prod(cols, p, q, signed):
+        key = (p, q, signed)
+        if key not in prods or p.startswith("v1") or q.startswith("v1"):
+            prods[key] = [wide(cols[p][i], cols[q][i], 0, 0, signed, width) for i in range(nv)]
+        return prods[key]
+
+    names = list(inputs)
+    # c_hi a first instruction's word, p, q and c_lo inputs: the c_hi each such IMAD.WIDE.hi needs, once
+    base = {}
+    for p, q, cl in itertools.product(names, repeat=3):
+        for signed in (True, False):
+            pr = prod(inputs, p, q, signed)
+            need = tuple((target[i] - pr[i][1] - ((pr[i][0] + inputs[cl][i]) >> width)) & mask for i in range(nv))
+            base.setdefault(need, f"IMAD.WIDE{'' if signed else '.U32'}.hi({p},{q},*:{cl})")
+    for extra, label in _firsts(width, inputs):
+        for nm, v in extra.items():
+            if tuple(v) in base:
+                return f"{label} -> {base[tuple(v)].replace('*', nm)}"
         ext = dict(inputs)
-        ext["v1"] = list(v1)
-        got = _width_ops(width, list(ext), {nm: ext[nm] for nm in ext}, nv, target)
+        ext.update(extra)
+        got = _width_ops(width, list(ext), ext, nv, target)
         if got is not None and "v1" in got:
             return f"{label} -> {got}"
+        by2 = {(v[0], v[1]) for v in ext.values()}
+        by_vec = {tuple(v): nm for nm, v in ext.items()}
+        for p, q, cl in itertools.product(ext, repeat=3):
+            if p not in extra and q not in extra and cl not in extra:
+                continue
+            for signed in (True, False):
+                pr = prod(ext, p, q, signed)
+                c = ext[cl]
+                if (((target[0] - pr[0][1] - ((pr[0][0] + c[0]) >> width)) & mask),
+                        ((target[1] - pr[1][1] - ((pr[1][0] + c[1]) >> width)) & mask)) not in by2:
+                    continue
+                need = tuple((target[i] - pr[i][1] - ((pr[i][0] + c[i]) >> width)) & mask for i in range(nv))
+                ch = by_vec.get(need)
+                if ch is not None:
+                    return f"{label} -> IMAD.WIDE{'' if signed else '.U32'}.hi({p},{q},{ch}:{cl})"
     return None
+
+
+def width_wide3(exe, width: int, inputs, jobs):
+    """Does a 3-instruction program ending on an IMAD.WIDE write a target pair as its two words? `fold_wide3.c` (built
+    at `exe`) over `inputs` at `width` bits, for each of `jobs` ({label: (t1, t2)}), either way round: {label: (found,
+    witness lines, first instructions, prefixes)}."""
+    nv = len(next(iter(inputs.values())))
+    lines = [f"{width} {nv} {len(inputs)}", *(f"{nm} " + " ".join(map(str, v)) for nm, v in inputs.items()),
+             str(len(jobs)), *(f"{lab} " + " ".join(map(str, [*a, *b])) for lab, (a, b) in jobs.items())]
+    out = subprocess.run([str(exe)], input="\n".join(lines) + "\n", capture_output=True, text=True, check=True).stdout
+    res = {lab: [None, [], 0, 0] for lab in jobs}
+    for f in (line.split() for line in out.splitlines()):
+        if f[0] == "J":
+            res[f[1]][0], res[f[1]][2], res[f[1]][3] = int(f[3]), int(f[5]), int(f[7])
+        elif f[0] == "F":
+            res[f[1]][1].append(" ".join(f[2:]))
+    return {lab: tuple(r) for lab, r in res.items()}
+
+
+def wide3_controls(width: int, cols):
+    """Target pairs a 3-instruction program ending on an IMAD.WIDE does write, over `cols` (y, z, w, kx, a, m1), between
+    them reading every form fold_wide3.c enumerates: {label: (t1, t2)}."""
+    mask = (1 << width) - 1
+    y, z, w, kx, a, m1 = (cols[k] for k in ("y", "z", "w", "kx", "a", "m1"))
+    nv = len(y)
+
+    def rot(x, n):
+        return ((x << n) | (x >> (width - n))) & mask if n else x
+
+    out = {}
+    v1 = [y[i] ^ w[i] ^ kx[i] for i in range(nv)]                          # LOP3 0x96
+    v2 = [(v1[i] * m1[i] + z[i]) & mask for i in range(nv)]                # IMAD
+    lh = [wide(v2[i], a[i], v1[i], z[i], True, width) for i in range(nv)]
+    out["ctl_lop3_imad"] = ([x[0] for x in lh], [x[1] for x in lh])
+    w1 = [wide(y[i], a[i], z[i], kx[i], False, width) for i in range(nv)]  # IMAD.WIDE.U32, two words
+    v2 = [(rot(w1[i][1], 1) + w[i]) & mask for i in range(nv)]             # LEA.HI of its high word
+    lh = [wide(v2[i], m1[i], y[i], w1[i][0], False, width) for i in range(nv)]
+    out["ctl_wide_leahi"] = ([x[1] for x in lh], [x[0] for x in lh])
+    v1 = [(y[i] - w[i] + kx[i]) & mask for i in range(nv)]                 # IADD3
+    v2 = [(((v1[i] * a[i]) >> width) + z[i]) & mask for i in range(nv)]   # IMAD.HI
+    lh = [wide(v1[i], v2[i], y[i], w[i], True, width) for i in range(nv)]
+    out["ctl_iadd3_imadhi"] = ([x[0] for x in lh], [x[1] for x in lh])
+    v1 = [((y[i] << 2) + z[i]) & mask for i in range(nv)]                  # LEA
+    v2 = [(v1[i] & w[i]) | (v1[i] & kx[i]) | (w[i] & kx[i]) for i in range(nv)]  # LOP3 0xE8
+    lh = [wide(v2[i], v2[i], v1[i], a[i], False, width) for i in range(nv)]
+    out["ctl_lea_maj"] = ([x[1] for x in lh], [x[0] for x in lh])
+    # p and q both before the second instruction, whose word is c_hi, then c_lo
+    v1 = [y[i] ^ w[i] ^ kx[i] for i in range(nv)]
+    v2 = [(v1[i] * m1[i] + z[i]) & mask for i in range(nv)]
+    lh = [wide(v1[i], a[i], z[i], v2[i], True, width) for i in range(nv)]
+    out["ctl_pre_chi"] = ([x[0] for x in lh], [x[1] for x in lh])
+    v1 = [(rot(y[i], 1) + z[i]) & mask for i in range(nv)]
+    v2 = [(v1[i] + w[i] + kx[i]) & mask for i in range(nv)]
+    lh = [wide(y[i], v1[i], v2[i], w[i], False, width) for i in range(nv)]
+    out["ctl_pre_clo"] = ([x[1] for x in lh], [x[0] for x in lh])
+    return out
+
+
+def _new_word_sets(width: int, inputs) -> int:
+    """How many distinct sets of new words one instruction over `inputs` adds (fold_wide3.c's first instructions)."""
+    have = {tuple(v) for v in inputs.values()}
+    sets = {frozenset([v]) for v in _single_values(width, inputs) if v not in have}
+    sets |= {s for lo, hi in _wide_pairs(width, inputs) if (s := frozenset(x for x in (lo, hi) if x not in have))}
+    return len(sets)
 
 
 # ---- helpers -------------------------------------------------------------------------------------------------------------
@@ -501,9 +620,9 @@ def main() -> int:
                  width_single_instruction(w4, y1w, wins) is None)
     checks.check("width-4 exhaustive: fx1 z' is not a single instruction",
                  width_single_instruction(w4, z1w, wins) is None)
-    checks.check("width-4 exhaustive: fx1 y' is not a two-instruction value (one-word instructions)",
+    checks.check("width-4 exhaustive: fx1 y' is no word of a two-instruction program (two-word instructions included)",
                  width_le2_value(w4, y1w, wins) is None)
-    checks.check("width-4 exhaustive: fx1 z' is not a two-instruction value (one-word instructions)",
+    checks.check("width-4 exhaustive: fx1 z' is no word of a two-instruction program (two-word instructions included)",
                  width_le2_value(w4, z1w, wins) is None)
     checks.check("width-4 exhaustive: no program of <= 2 instructions ending on an IMAD.WIDE writes fx1's (y', z') as "
                  "its two words", width_wide_writes_both(w4, y1w, z1w, wins) is None)
@@ -520,6 +639,28 @@ def main() -> int:
                  "#2240's >= 3 holds with two-word instructions",
                  width_single_instruction(w4, duo_y4, dins) is None and width_single_instruction(w4, duo_z4, dins) is None
                  and width_wide_writes_both(w4, duo_y4, duo_z4, dins) is None)
+
+    if "--wide3" in checks.args:
+        # The last two-word case: 3 instructions whose last, an IMAD.WIDE, writes both outputs (fold_wide3.c, CPU
+        # minutes, so only with --wide3). Its enumeration is held to this file's by the count of distinct first
+        # instructions, and its search by controls whose pair such a program does write.
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "fold_wide3"
+            src = Path(__file__).resolve().parent / "fold_wide3.c"
+            subprocess.run(["gcc", "-O2", "-fopenmp", "-o", str(exe), str(src)], check=True)
+            small = {k: wins[k] for k in ("y", "z", "w", "kx", "a", "m1")}
+            ctl = width_wide3(exe, w4, small, {**wide3_controls(w4, small), "fx1": (y1w, z1w)})
+            for lab, (n, wit, _, _) in ctl.items():
+                if lab != "fx1":
+                    checks.check(f"fold_wide3.c finds a program for its control {lab}", n > 0, wit[:1])
+            checks.check("fold_wide3.c's first instructions are this file's (6 inputs)",
+                         ctl["fx1"][2] == _new_word_sets(w4, small), (ctl["fx1"][2], _new_word_sets(w4, small)))
+            r = width_wide3(exe, w4, wins, {"fx1": (y1w, z1w)})["fx1"]
+            checks.check("fold_wide3.c's first instructions are this file's (10 inputs)",
+                         r[2] == _new_word_sets(w4, wins), (r[2], _new_word_sets(w4, wins)))
+            checks.check("width-4 exhaustive: no 3-instruction program ending on an IMAD.WIDE writes fx1's (y', z') as "
+                         "its two words", r[0] == 0 and ctl["fx1"][0] == 0,
+                         {"prefixes": r[3], "first_instructions": r[2], "witnesses": r[1]})
 
     # --- the lower bound. The two outputs are live and neither is a single instruction (above), so, as #2240, a length-2
     # program (whose two values would be the two outputs) is impossible: fx1 needs >= 3. The 4th instruction is the
@@ -641,6 +782,14 @@ def main() -> int:
         found = width_wide_writes_both(w4, [x[1] for x in lh4], [x[0] for x in lh4], wins)
         checks.mutation("an IMAD.WIDE's two words after a LOP3 are found by the two-word search", found is not None,
                         found)
+        # 5., 6. The two-instruction search reads two-word instructions both ways: an IMAD.WIDE's high word over a
+        #    LOP3, and a LOP3 of an IMAD.WIDE's high word, are found as two-instruction values.
+        hi5 = [x[1] for x in lh4]
+        found5 = width_le2_value(w4, hi5, wins)
+        checks.mutation("an IMAD.WIDE's high word over a LOP3 is a two-instruction value", found5 is not None, found5)
+        v6 = [wide(y0[i], aw, z0[i], kxw, False, w4)[1] ^ wd[i] ^ kxw for i in range(npts)]
+        found6 = width_le2_value(w4, v6, wins)
+        checks.mutation("a LOP3 of an IMAD.WIDE's high word is a two-instruction value", found6 is not None, found6)
 
     return checks.finish()
 
