@@ -412,5 +412,5 @@ def commit(program: Program, transcript: dict[int, int], salts: Sequence[bytes] 
 
 
 __all__ = ["PRECISION", "REGISTRATION", "RUN", "Registration", "Value", "bind_inputs", "binding", "calls", "census_of",
-           "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision",
-           "profile_digest", "reach", "read", "register", "rows", "values", "work"]
+           "commit", "committed", "evaluate", "gate_work", "gates", "layout", "names", "nodes", "parameters", "precision", "reach",
+           "read", "register", "rows", "values", "work"]
