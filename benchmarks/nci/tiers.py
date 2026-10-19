@@ -12,8 +12,9 @@ proved.
   peak. It trains at full efficiency unless the memory cap binds. A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
-  information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport and
-  ``ThreadedOfStateFmt`` on its restatement, not yet signed off), declared or not. The state is all memory,
+  information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
+  ``ThreadedOfStateFmt`` on the falsified WeightsSupportFmt and ``ThreadedOfStateFmt2`` on its restatement
+  WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
