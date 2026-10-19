@@ -4,7 +4,8 @@ verifier holds it (`commits`, from the files `--rec-inner-transcript` and `--rec
 circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks before the session's own setup
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
 about them is one about what either accepts. `verify` also refuses, last in each verdict, a recursive session without
-the verifier's inner shape, and a V* session whose draw is not every unit of its population (`fullDraw`).
+the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
+an inner session whose record holds no draw (`innerDrawn`).
 -/
 import Flock.RecCoins
 import Flock.Witness
@@ -109,6 +110,19 @@ def fullDraw (inner : Option RecVStar.Inner) (rec : Bool) (draw : Option Json) (
   let (some _, some d) := (inner, draw) | return
   (Witness.fullDraw (← Draw.UnitDraw.ofJson d).population record).mapError
     (s!"refused: {·}: a V* session draws every unit of its population, the only draw the recursion's proof covers")
+
+/-- The refusal of a session over an inner session whose record holds no draw. -/
+def noInnerDraw : String :=
+  "refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner session " ++
+    "is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's proof covers"
+
+/-- **The recursion's inner session is drawn**: where the verifier holds the inner session's record (`src`, check 5's
+source: `--rec-inner-session` with the inner statement's files or with `--rec-inner-coins`), the record holds a draw
+(`RecCoins.recordDraw`: a `unit_draw` neither absent nor null), which check 5 decodes the record at
+(`RecCoins.drawnSpec`); a session over a record without one is refused (`noInnerDraw`). Without the record it passes. -/
+def innerDrawn (src : Option RecCoins.Source) : V Unit := do
+  let some s := src | return
+  if (RecCoins.recordDraw s.record).isNone then throw noInnerDraw
 
 end RecSetup
 end Flock

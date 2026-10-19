@@ -565,7 +565,8 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     share one exact KV pool, ``resident_kv_cache_memory_bytes`` or ``block_kv_cache_memory_bytes``: vLLM schedules by
     free KV blocks, and an arm whose install leaves a different amount of free memory would otherwise get a different
     pool, a different schedule, and (through batch-composition-dependent kernels) different tokens than its control.
-    Without a pin the kv-pool gate catches unequal pools."""
+    Without a pin the kv-pool gate catches unequal pools. ``attention_backend``, ``attention_config`` and
+    ``moe_backend`` pass to vLLM as set, for a preset whose Build's row declares them (its ``engine.args``)."""
 
     settings = preset.engine_settings
     engine: dict[str, Any] = {
@@ -594,6 +595,9 @@ def engine_args(preset: Preset, precision: str, *, resident: bool, eager: bool) 
     kv_pin = settings.get("resident_kv_cache_memory_bytes" if resident else "block_kv_cache_memory_bytes")
     if kv_pin is not None:
         engine["kv_cache_memory_bytes"] = int(kv_pin)
+    for key in ("attention_backend", "attention_config", "moe_backend"):
+        if settings.get(key) is not None:
+            engine[key] = dict(settings[key]) if key == "attention_config" else str(settings[key])
     return engine
 
 

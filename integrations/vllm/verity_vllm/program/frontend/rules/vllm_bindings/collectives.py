@@ -10,7 +10,8 @@ from verity_vllm.program.frontend.derive import StaticIndex
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_allreduce_settings, launch_tokens_of
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
+                                                                           launch_tokens_of)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
 from verity_vllm.program.registry import tp_allreduce
 
@@ -139,34 +140,35 @@ def _tp_parts(node) -> list:
 
 
 def _coverage(parts, node, ctx, *, fused: bool = False):
-    """The covered route of the call's launch: M is the launch's tokens (`launch_tokens_of`), of which the call reduces its own
-    `rows_n`."""
+    """The covered route of the call's launch, the `CAPTURED` entry at its world, the declared target's device and the workload's
+    NCCL transport: M is the launch's tokens (`launch_tokens_of`), of which the call reduces its own `rows_n`."""
     settings = active_allreduce_settings()
     if settings is None:
         return None, "all-reduce settings were not observed from the workload"
-    if len(parts) != 8:
-        return None, f"world {len(parts)}: tp_allreduce.CAPTURED covers world 8 only"
     rows = [rows_of(ctx.coll(a))[0] for a in parts]
-    n, N = len(rows[0]), rows[0][0].type.n
+    n, N, W = len(rows[0]), rows[0][0].type.n, len(parts)
     M = launch_tokens_of(node, n)
     setting, route = tp_allreduce.served_route(settings, M, N)
     if fused:
-        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, len(parts)) else "unfused"
+        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, W) else "unfused"
     if setting is None:
         return None, f"tp_allreduce.covered(): switches {settings!r} do not name a captured setting"
-    captured = tp_allreduce.covered(setting, N, route, M)
+    target = active_target_profile()
+    device, transport = tp_allreduce.device_of(target.compute_capability, target.num_sms), settings.get("nccl_transport")
+    captured = tp_allreduce.covered(setting, N, route, M, world=W, device=device, transport=transport)
     if captured is None:
-        return None, (f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}; "
-                      "the route is refused until a capture records it")
+        return None, (f"tp_allreduce.covered() has no entry for setting={setting!r}, N={N}, route={route!r}, M={M}, world={W}, "
+                      f"device={device!r}, transport={transport!r}; the route is refused until a capture records it")
     if not fused:
         try:
-            tp_allreduce.route_binding(captured, len(parts), M, N, n)
+            tp_allreduce.route_binding(captured, W, M, N, n)
         except ValueError as e:
             return None, str(e)
     return {"captured": captured, "rows": rows, "M": M, "rows_n": n, "N": N, "setting": setting, "route": route}, None
 
 
-_ROUTE_KINDS = {"AllReduceMnnvl_v1": "all_reduce_mnnvl", "AllReduceMultimem_v1": "all_reduce_multimem", "AllReduceCustom_v1": "all_reduce_custom"}
+_ROUTE_KINDS = {"AllReduceMnnvl_v1": "all_reduce_mnnvl", "AllReduceMultimem_v1": "all_reduce_multimem", "AllReduceCustom_v1": "all_reduce_custom",
+                "AllReduceNcclTree_v1": "all_reduce_nccl_tree"}
 
 
 def _allreduce_kind(ctx, node, plan, world: int):
@@ -175,13 +177,14 @@ def _allreduce_kind(ctx, node, plan, world: int):
 
 
 class AllReduceRule(OpRule):
-    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> `all_reduce{WORLD=W, N}` (`AllReduce_v2{WORLD,N}`:
-    the captured world-8 route selected by the call's M and the workload's custom-all-reduce, symmetric-memory and FlashInfer settings.
-    A route absent from `tp_allreduce.covered()` refuses by name."""
+    """[lane vllm-tp-n] `verity_tp::all_reduce([part_rank0, .., part_rank{W-1}] each [.., N] bf16)` -> the captured route
+    (`tp_allreduce.CAPTURED`) selected by the call's M, the workload's custom-all-reduce, symmetric-memory, FlashInfer and
+    batch-invariance settings, its world, the declared target's device and NCCL's transport: the H200 routes at world 8, NCCL's tree
+    (`AllReduceNcclTree_v1`) at world 4 on the RTX PRO 6000 over SHM. A route absent from `tp_allreduce.covered()` refuses by name."""
     modes = frozenset({"profile"})
     info = RuleInfo("AllReduce[tp]", 1, "op-binding", applies_to="verity_tp::all_reduce([a_0 .. a_{W-1}] each [.., N] bf16) (rank order), W > 2",
-                    preconditions=("every operand is a bf16 value collection of identical shape", "world size 8",
-                                   "tp_allreduce.covered(setting,N,route,M) returns a captured entry"),
+                    preconditions=("every operand is a bf16 value collection of identical shape",
+                                   "tp_allreduce.covered(setting,N,route,M,world,device,transport) returns a captured entry"),
                     evidence_domain="structural; numerics: registry.tp_allreduce.CAPTURED")
 
     def targets(self):

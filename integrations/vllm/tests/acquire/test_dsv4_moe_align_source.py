@@ -22,6 +22,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
+from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
 from verity_vllm.program.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
@@ -246,3 +247,48 @@ def test_the_blocks_call_boundaries_are_claimed_and_attached_on_a_rank() -> None
     assert "moe_align" in taps.attached(man) and CB.unattached(man, taps.attached(man)) == []
     assert "moe_align" not in taps.attached({"ranks": 1, "identities": rows})
     assert not CB.manifest_sites(man)
+
+
+def test_the_match_capture_records_the_witness_the_commit_commits(monkeypatch, tmp_path) -> None:
+    """The capture's witness rows are the digests of the very bytes the Commit's source commits for the same calls, at each call's
+    position among the step's collectives, with the source's work inside the observer's quiet block; a dense model records none."""
+    import contextlib
+    import json
+
+    fake_marlin(monkeypatch)
+    ids = [ids_of(1), ids_of(2)]
+    model, c = model_of(ids), Committer()
+    src = MA.MoeAlignSource(c, model)
+    src.install()
+    try:
+        run_step(src, c, model)
+    finally:
+        src.uninstall()
+    pos, quiet, real = [0], [], MA.align_values
+
+    @contextlib.contextmanager
+    def hide():
+        quiet.append(True)
+        yield
+        quiet.pop()
+
+    def align_values(*a):
+        assert quiet, "the recompute ran where the observer sees it"
+        return real(*a)
+
+    monkeypatch.setattr(MA, "align_values", align_values)
+    w = MA.capture_witness(model, 5, lambda: pos[0], hide)
+    for step in (0, 1):
+        w.step(step)
+        for k in (0, 1):
+            pos[0] = 3 * k + 2                   # the collectives the rank issued before this layer's align call
+            model.model.layers[k].ffn.experts(torch.zeros(1))
+    got = w.close(tmp_path)
+    rows = [json.loads(ln) for ln in (tmp_path / OW.witness_file(5)).read_text().splitlines()]
+    assert got == {"calls": 4, "rows": 16, "errors_n": 0, "errors": []} and len(rows) == 16
+    want = {f"model.layers.{k}.ffn.experts/{m}": OW.digest(c.acquired[f"model.layers.{k}.ffn.experts/{m}"].numpy().tobytes())
+            for k in (0, 1) for m in MA.MEMBERS}
+    assert [(r["step"], r["k"], f"{r['module']}/{r['member']}") for r in rows] == [
+        (s, 3 * k + 2, f"model.layers.{k}.ffn.experts/{m}") for s in (0, 1) for k in (0, 1) for m in MA.MEMBERS]
+    assert all(r["rank"] == 5 and r["sha256"] == want[f"{r['module']}/{r['member']}"] for r in rows)
+    assert MA.capture_witness(torch.nn.Linear(2, 2), 0, lambda: 0, hide) is None

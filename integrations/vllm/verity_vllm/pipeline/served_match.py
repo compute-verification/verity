@@ -1,6 +1,8 @@
 """The Match of a served-compiled row on live data.
 
-vLLM serves the workload at its defaults (execution label ``compiled``) with every value of every engine step committed
+vLLM serves the workload at its defaults (execution label ``compiled``), with the row's ``engine.args`` laid over them and its
+switches judged as a Commit judges them (`engine.served`: each one away from vLLM's default declared with its ``engine.reasons``),
+with every value of every engine step committed
 (`ServedCompiledSource`: graph-safe acquisition, the native collector retaining the values on the host); the served Build is
 derived from that process's own compile artifact (`acquire.served`: its Inductor wrappers, vLLM's split graph, the kernels'
 launch configs, and each GEMM's cuBLAS route probed on this GPU); and the Build's Program is checked word for word against the
@@ -11,7 +13,7 @@ committed values (`check.replay.served_check`), with the weights the engine serv
 DIR gets match.json (the verdict), build.json (the Build, its compile artifact pinned: `acquire.served_artifact`),
 launch_configs.json, routes.json and facts.json.  With --build-of-record, the process's fresh Inductor dir is seeded with that
 Build's autotune winners and the Build derived here must carry its program digest.  Exit 0 when the Match passes, 1 when it fails,
-3 when the Build refuses the artifact.
+3 when the Build refuses the artifact, the device or the served switches.
 
 The process's own compile dirs are under DIR (`engine.env.own_compile_dirs`); the committer retains on the host
 (``VERITY_RETAIN=host``, which the run exports).
@@ -70,17 +72,28 @@ def schedule_of(wl: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
 
 
 def facts_of(eng: Any) -> dict[str, Any]:
-    """The serving engine's dispatch facts the Build reads (capture sizes, max_num_seqs, the GPU's multiprocessor count, the fused-MoE
-    layers)."""
+    """The serving engine's dispatch facts the Build reads (capture sizes, max_num_seqs, max_model_len, the GPU's compute capability
+    and multiprocessor count, the attention kernels its layers selected, the fused-MoE layers)."""
     import torch
+    from vllm.model_executor.layers.attention.attention import Attention
 
     vc = eng.llm.llm_engine.vllm_config
     cc = vc.compilation_config
+    attention = sorted({(m.get_attn_backend().get_name(), getattr(m.impl, "vllm_flash_attn_version", None))
+                        for m in eng.model.modules() if isinstance(m, Attention)}, key=str)
     return {"case": eng.case, "effective": eng.effective, "cudagraph_capture_sizes": list(cc.cudagraph_capture_sizes or []),
             "max_num_seqs": vc.scheduler_config.max_num_seqs, "max_num_batched_tokens": vc.scheduler_config.max_num_batched_tokens,
             "max_model_len": vc.model_config.max_model_len, "cache_dir": cc.cache_dir, "device": torch.cuda.get_device_name(),
-            "sms": torch.cuda.get_device_properties(0).multi_processor_count,
+            "cc": list(torch.cuda.get_device_capability()), "sms": torch.cuda.get_device_properties(0).multi_processor_count,
+            "attention": [{"backend": b, "fa_version": v} for b, v in attention],
             "versions": {"torch": torch.__version__, "cuda": torch.version.cuda}, "moe": moe_facts(eng.model)}
+
+
+def device_of(facts: dict[str, Any]) -> Any:
+    """The served Build's device (`served_device.device_of`) from the engine's facts; `Unmodelled` names every binding it lacks."""
+    from verity_vllm.acquire import served_device as SD
+
+    return SD.device_of(facts["cc"], facts["sms"], attention=facts["attention"], max_model_len=facts["max_model_len"])
 
 
 def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
@@ -145,12 +158,9 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
     if dirs is None:
         raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
     kw = dict(split_graph=graphs[0], launch_configs=configs, schedule=schedule, steps=steps, capture_sizes=facts["cudagraph_capture_sizes"],
-              max_num_seqs=facts["max_num_seqs"], sms=facts["sms"])
+              max_num_seqs=facts["max_num_seqs"], device=device_of(facts))
     if facts.get("moe"):
-        import torch
-
-        kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs,
-                     "cc": list(torch.cuda.get_device_capability())}
+        kw["moe"] = {"layers": facts["moe"], "pieces": dict(src.moe_pieces), "configs": src.moe_configs, "cc": facts["cc"]}
         json.dump(kw["moe"], open(f"{out}/moe.json", "w"), indent=1)
     build = SV.build(dirs["inductor"], routes={}, **kw)
     routes = SV.probe_routes(build["routes_missing"])
@@ -333,6 +343,7 @@ def main(a: Options) -> int:
     from verity_vllm.acquire.inductor_templates import Unmodelled
     from verity_vllm.acquire.sources import served_compiled_source as S
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+    from verity_vllm.engine import served as SW
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.engine.arrivals import run_requests_arrivals
 
@@ -347,10 +358,20 @@ def main(a: Options) -> int:
     src = S.ServedCompiledSource()
     src.install_hooks()
     eng = va.build_engine(config.CHECKPOINTS, max_num_seqs=a.max_num_seqs, case=a.case, execution="compiled",
-                          engine_args={"gpu_memory_utilization": a.gpu_memory_utilization, "kv_cache_memory_bytes": a.kv_cache_gib << 30})
+                          engine_args={**config.RowEngine.of(wl).args, "gpu_memory_utilization": a.gpu_memory_utilization,
+                                       "kv_cache_memory_bytes": a.kv_cache_gib << 30})
     src.note_engine(eng.model)
     facts = facts_of(eng)
+    facts["served"] = SW.record(list(eng.llm.collective_rpc(SW.read_rank)), SW.declared({**wl, "execution": "compiled"}))
     log(f"engine {a.case}: {json.dumps(eng.effective, default=str)[:400]}")
+    try:
+        if not facts["served"]["ok"]:
+            raise Unmodelled("served switches: " + "; ".join(facts["served"]["problems"]))
+        device_of(facts)
+    except Unmodelled as e:
+        log(f"Build refused: {e}")
+        json.dump({"ok": False, "build_refused": str(e), "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+        return 3
 
     com = NativeCollectCommitter(eng, run_id="served-match", arena_bytes=None, wrap=True, gather=True, native_hooks=True,
                                  auto_blocks=True, native_worker=True)

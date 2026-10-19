@@ -84,6 +84,16 @@ def test_a_conjecture_added_or_marked_falsified_is_shown_with_its_reason():
     assert spec._tally(["frozen", "conjecture"]) == "shape: 1 frozen, 1 conjectures marked"
 
 
+def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
+    """`verifier.allow` (LEAN-33) lists the `@[extern]` and `@[implemented_by]` constants the verifier may reach, which no
+    proof sees: an entry added is shown; one dropped, or the list unchanged, is not."""
+    base = _doc({"P.t": _g("P.t : A", H1)}) | {"verifier": {"entries": ["P.verify"], "allow": ["Nat.add"]}}
+    more = base | {"verifier": {"entries": ["P.verify"], "allow": ["ByteArray.push", "Nat.add"]}}
+    assert spec.changes(base, more) == ["• compiled code allowed on the verifier's path, which no proof sees: `ByteArray.push`"]
+    assert spec.changes(more, base) == [] and spec.changes(more, more) == []
+    assert spec._tally(["compiled", "compiled", "new"]) == "guarantees: 1 new; verifier: 2 allowed"
+
+
 def test_a_record_from_before_the_rename_compares_by_what_it_says():
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1}, ("P.t",))
     old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
