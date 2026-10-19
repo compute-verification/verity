@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.Split
+import Proofs.Flock.Claims.Complete.Zk.Exact
 
 /-!
 # Hybrid 2 against hybrid 3: a rep's inner proof from the cut (`SimInner`)
@@ -17,6 +18,8 @@ round's coin.
   - `Y` once `β` is, where `β ≠ 0`.
 * **`simInner_of`**: `SimInner` from `InnerSrcE`, the deployed instance of `InnerSrc` at the cut's source, wherever the
   shared phases reach the inner proof.
+* **`innerSlotE`**: where they do, the inner proof begins at `repSlot … (innerOff 0)`, the round the cut reads `ε` at:
+  `innerPre_size` counts the shared phases' sends at `asksCut` through the exact counts at `asksS` (`okS`).
 -/
 
 namespace FlockComplete.SimInner
@@ -213,6 +216,218 @@ theorem repMix_eq (k : ℕ) (hk : 2 ≤ k) (io : Asks PS) (hs : Hashes PS) (st :
   refine bind_congr fun lgc => ?_
   by_cases hk2 : k ≤ 2 <;> simp only [hk2, ↓reduceIte]
 
+/-! ## How many bodies the shared phases send
+
+`asksCut` answers what `asksS` would where it answers at all, so an ok run at `asksCut` is the same run at `asksS` on
+responses that carry the cut's coins (`okS`), and the exact counts of `Exact` carry over. -/
+
+section Slots
+
+open With
+
+/-- **Where the left run returns, the right returns the same**, with the same log. -/
+def okS : With.Sim PS PS where
+  R x y := ∀ l a l', x.go l = (.ok a, l') → y.go l = (.ok a, l')
+  pure _ _ _ _ h := h
+  bind {α β x y f g} hxy hfg l b l'' h := by
+    obtain ⟨a, l', h1, h2⟩ := JsonRT.go_bind_ok h
+    rw [go_bind, hxy _ _ _ h1]
+    exact hfg a _ _ _ h2
+  throw _ _ _ _ h := by cases h
+  lift _ _ _ _ h := h
+
+theorem okS_refl {α : Type} (x : PS α) : okS.R x x := fun _ _ _ h => h
+
+theorem okS_refl_st {α σ : Type} (x : StateT σ PS α) : (okS.st σ).R x x := fun _ => okS_refl _
+
+theorem okS_refl_st2 {α σ τ : Type} (x : StateT τ (StateT σ PS) α) : ((okS.st σ).st τ).R x x :=
+  fun _ => okS_refl_st _
+
+theorem liftT_ok {α : Type} {x y : TMW PS α} (h : (okS.st Transcript).R x y) :
+    ((okS.st Transcript).st LigState).R (liftT x) (liftT y) :=
+  Sim.lift_st _ h
+
+variable (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims.Msg) (hc : ∀ k, coinOf (resp k) = coin k)
+include hc
+
+/-- A round `asksCut` answers, `asksS` answers alike. -/
+theorem okS_round (c : ByteArray) : okS.R ((asksCut coin n).round c) ((asksS resp).round c) := by
+  intro l a l' h
+  have e0 : ((asksCut coin n).round c).go l =
+      (if n ≤ l.size then (throw "past the openings" : PS (ℕ → F128)) else pure (coin l.size)).go
+        (l.push (Claims.toMsg c)) := rfl
+  rw [e0] at h
+  by_cases hn : n ≤ l.size
+  · rw [ite_eq_left hn] at h
+    cases h
+  · rw [ite_eq_right hn] at h
+    change (Except.ok (coin l.size), l.push (Claims.toMsg c)) = _ at h
+    obtain ⟨⟨⟩, rfl⟩ := Prod.mk.inj h
+    show (Except.ok (coinOf (resp l.size)), l.push (Claims.toMsg c)) = _
+    rw [hc]
+
+theorem squeezeP_ok (kind : UInt8) (m : ℕ) :
+    (okS.st Transcript).R (squeezeP (asksCut coin n) kind m) (squeezeP (asksS resp) kind m) := by
+  intro t
+  unfold squeezeP
+  sim_walk [okS_round coin n resp hc]
+
+theorem sampleP_ok : (okS.st Transcript).R (sampleP (asksCut coin n)) (sampleP (asksS resp)) := by
+  unfold sampleP
+  sim_walk [squeezeP_ok coin n resp hc]
+
+theorem sampleKP_ok : (okS.st Transcript).R (sampleKP (asksCut coin n)) (sampleKP (asksS resp)) := by
+  unfold sampleKP
+  sim_walk [squeezeP_ok coin n resp hc]
+
+theorem zerocheckPZk_ok (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) :
+    (okS.st Transcript).R (zerocheckPZk (asksCut coin n) m digest cap root lay h tr)
+      (zerocheckPZk (asksS resp) m digest cap root lay h tr) := by
+  unfold zerocheckPZk sampleVecP
+  sim_walk [squeezeP_ok coin n resp hc, sampleP_ok coin n resp hc, okS_refl_st]
+
+theorem lincheckPZk_ok (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (zc : ZcOut) :
+    (okS.st Transcript).R (lincheckPZk (asksCut coin n) c m lay h tr zc)
+      (lincheckPZk (asksS resp) c m lay h tr zc) := by
+  unfold lincheckPZk
+  sim_walk [sampleP_ok coin n resp hc, okS_refl_st]
+
+theorem ringSwitchP_ok (tr : Trace) (claims : Array Claim) :
+    (okS.st Transcript).R (ringSwitchP (asksCut coin n) tr claims) (ringSwitchP (asksS resp) tr claims) := by
+  unfold ringSwitchP sampleVecP
+  sim_walk [squeezeP_ok coin n resp hc, okS_refl_st]
+
+theorem piopPZk_ok (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
+    (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) :
+    (okS.st Transcript).R (piopPZk (asksCut coin n) st lay h tr cap root extras prior words)
+      (piopPZk (asksS resp) st lay h tr cap root extras prior words) := by
+  unfold piopPZk
+  sim_walk [zerocheckPZk_ok coin n resp hc, lincheckPZk_ok coin n resp hc, ringSwitchP_ok coin n resp hc, okS_refl_st]
+
+theorem challengeP_ok (split : Bool) :
+    ((okS.st Transcript).st LigState).R (challengeP (asksCut coin n) split) (challengeP (asksS resp) split) := by
+  unfold challengeP
+  sim_walk [liftT_ok, sampleKP_ok coin n resp hc, okS_refl_st2]
+
+theorem oodIntroP_ok (nonce : ℕ → ℕ → UInt64) (g : Array F128) (dim : ℕ) :
+    ((okS.st Transcript).st LigState).R (oodIntroP (asksCut coin n) nonce g dim)
+      (oodIntroP (asksS resp) nonce g dim) := by
+  unfold oodIntroP sampleVecP
+  sim_walk [liftT_ok, squeezeP_ok coin n resp hc, sampleP_ok coin n resp hc, okS_refl_st2]
+
+theorem queryP_ok (nonce : ℕ → ℕ → UInt64) (ms : MerkleScheme) (lv : Level) (cm : Commit) :
+    ((okS.st Transcript).st LigState).R (queryP (asksCut coin n) nonce ms lv cm)
+      (queryP (asksS resp) nonce ms lv cm) := by
+  unfold queryP sampleVecP
+  sim_walk [liftT_ok, squeezeP_ok coin n resp hc, okS_refl_st2]
+
+theorem ligeritoPZk_ok (hs : Hashes PS) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit)
+    (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128)
+    (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) :
+    (okS.st Transcript).R (ligeritoPZk (asksCut coin n) hs ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce)
+      (ligeritoPZk (asksS resp) hs ms sch T cm0 t b lay h rep tPad extra lanePad salt nonce) := by
+  unfold ligeritoPZk sampleVecP
+  sim_walk [liftT_ok, squeezeP_ok coin n resp hc, sampleP_ok coin n resp hc, sampleKP_ok coin n resp hc,
+    challengeP_ok coin n resp hc, oodIntroP_ok coin n resp hc, queryP_ok coin n resp hc, okS_refl, okS_refl_st,
+    okS_refl_st2]
+
+theorem innerPre_ok (hs : Hashes PS) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
+    (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List F128)) (words : List ℕ) :
+    (okS.st Transcript).R
+      (innerPre (asksCut coin n) hs st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt nonce prior words)
+      (innerPre (asksS resp) hs st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt nonce prior words) := by
+  unfold innerPre
+  sim_walk [piopPZk_ok coin n resp hc, ligeritoPZk_ok coin n resp hc, okS_refl, okS_refl_st]
+
+omit hc in
+/-- **The PIOP's exact send count at `asksS`**: `piopZk`. -/
+theorem piopPZk_exact (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
+    (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
+    {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
+    (hrun : ((piopPZk (asksS resp) st lay h tr cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
+    l'.size = l.size + piopZk st extras := by
+  obtain ⟨l₁, hl₁, hz⟩ := zerocheckPZk_go resp hm st.digest cap root lay h tr t l
+  unfold piopPZk at hrun
+  rw [bind_go hz] at hrun
+  dsimp only at hrun
+  have h' := hrun
+  rw [StateT.run_bind] at h'
+  obtain ⟨_, _, h₁, -⟩ := JsonRT.go_bind_ok h'
+  obtain ⟨full, hfold⟩ := lincheckPZk_fold resp _ _ _ _ _ _ _ _ h₁
+  obtain ⟨l₂, hl₂, hl⟩ := lincheckPZk_go resp st.fold st.m lay h tr _ full _ l₁ hfold
+  rw [bind_go hl] at hrun
+  dsimp only at hrun
+  rw [StateT.run_bind] at hrun
+  obtain ⟨⟨u, t₃⟩, l₃', hk, hrun⟩ := JsonRT.go_bind_ok hrun
+  obtain ⟨ht₃, hl₃⟩ := rankCheckP_go hk
+  subst t₃ l₃'
+  obtain ⟨l₃, hl₃, hrs⟩ := ringSwitchP_go resp tr (abcClaims st.m st.kLog _ _ ++ extras) (by simp [abcClaims]) _ l₂
+  rw [bind_go hrs] at hrun
+  obtain ⟨-, rfl⟩ := Prod.mk.inj hrun
+  have hsz : (abcClaims st.m st.kLog (Zc.out st.m (Zc.coinsAt resp l.size) tr)
+    (Lc.out st.fold st.m tr (Zc.out st.m (Zc.coinsAt resp l.size) tr) (Lc.coinsAt resp l₁.size (st.fold.kLog - 6))) ++
+      extras).size = 2 + extras.size := by simp [abcClaims, Nat.add_comm]
+  unfold piopZk
+  omega
+
+omit hc in
+/-- **The shared phases' exact send count at `asksS`**: the PIOP's `piopZk`, then Ligerito's `k₀ + 7 + 11 R`; the
+replay and the constraints send nothing. -/
+theorem innerPre_exact (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
+    (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
+    (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript}
+    {l l' : Array Claims.Msg} {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)}
+    (h : ((innerPre (asksS resp) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt
+      nonce prior words).run t).go l = (.ok (o, t'), l')) :
+    l'.size = l.size + piopZk st extras + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) := by
+  unfold innerPre at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨⟨zp, lp, ss, T, sws⟩, t₁⟩, l₁, h1, h⟩ := JsonRT.go_bind_ok h
+  have e1 := piopPZk_exact resp st _ _ tr _ _ extras prior words hm h1
+  dsimp only at h
+  rw [StateT.run_bind] at h
+  obtain ⟨⟨⟨lg, zl, rec⟩, t₂⟩, l₂, h2, h⟩ := JsonRT.go_bind_ok h
+  have e2 := (ligeritoPZk_exact resp hsh st.merkle sch _ cm0 _ _ _ _ rep tPad extra lanePad salt nonce hn hk0 hL hq
+    h2).1
+  dsimp only at h
+  rw [bind_go (pure_go _ t₂ l₂)] at h
+  dsimp only at h
+  rw [bind_go (show ((get : TMW PS Transcript).run t₂).go l₂ = (.ok (t₂, t₂), l₂) from rfl)] at h
+  obtain ⟨⟨rp, x⟩, -, h⟩ := liftV_bind_ok h
+  dsimp only at h
+  obtain ⟨lgc, -, h⟩ := liftV_bind_ok h
+  obtain ⟨-, rfl⟩ := Prod.mk.inj h
+  omega
+
+/-- **The PIOP's send count at `asksCut`**, where it returns: `piopZk`. -/
+theorem piopPZk_size (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (tr : Trace) (cap root : ByteArray)
+    (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) {t t' : Transcript}
+    {l l' : Array Claims.Msg} {o : ZerocheckProof × LincheckProof × Array (Array F128) × F128 × Array Switched}
+    (hrun : ((piopPZk (asksCut coin n) st lay h tr cap root extras prior words).run t).go l = (.ok (o, t'), l')) :
+    l'.size = l.size + piopZk st extras :=
+  piopPZk_exact resp st lay h tr cap root extras prior words hm
+    (piopPZk_ok coin n resp hc st lay h tr cap root extras prior words t l _ _ hrun)
+
+/-- **The shared phases' send count at `asksCut`**, where they return: `piopZk`, then Ligerito's `k₀ + 7 + 11 R`. -/
+theorem innerPre_size (hsh : ByteArray → ByteArray) (st : Setup) (sch : Schedule) (tPad rep : ℕ) (dom : ByteArray)
+    (tr : Trace) (tb : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
+    (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
+    (prior : Array (List F128)) (words : List ℕ) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0)
+    (hL : 2 ≤ sch.levels.size) (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : Transcript}
+    {l l' : Array Claims.Msg} {o : F128 × Proof × Zk.Level0Msgs × Array (String × Zk.Lin)}
+    (h : ((innerPre (asksCut coin n) (Hashes.ofSha512 hsh) st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad
+      salt nonce prior words).run t).go l = (.ok (o, t'), l')) :
+    l'.size = l.size + piopZk st extras + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) :=
+  innerPre_exact resp hsh st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt nonce prior words hm hn hk0
+    hL hq (innerPre_ok coin n resp hc _ st sch tPad rep dom tr tb cm0 extras pads ic extra lanePad salt nonce prior
+      words t l _ _ h)
+
+end Slots
+
 end FlockComplete.SimInner
 
 namespace Claims.ZKMal
@@ -243,6 +458,61 @@ noncomputable def innerPreE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (c :
     (innerPadsE x τ j r) ic
     ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) ((UE.tapeZk τ).salt j.val r.val)
     ((UE.tapeZk τ).nonce j.val r.val) (priorE c j.val r.val) (FlockComplete.MaskRank.masksOf (stsOf x))[j.val]!
+
+/-- The opened coins as the session's responses: round `k`'s coin's bytes, and a zero coin's past the opened rounds. -/
+noncomputable def respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) : Msg :=
+  if h : k < refK x then (c ⟨k, h⟩).bytes else (default : FlockDeploy.Coin).bytes
+
+theorem coinOf_respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ) :
+    FlockComplete.coinOf (respE c k) = fun i => slotAt c k i := by
+  funext i
+  by_cases h : k < refK x
+  · simp only [respE, slotAt, h, ↓reduceDIte, FlockComplete.JsonRT.coinOf_bytes]
+  · simp only [respE, slotAt, h, ↓reduceDIte]
+    rw [FlockComplete.JsonRT.coinOf_bytes]
+    unfold FlockDeploy.Coin.at
+    split <;> rfl
+
+/-- **Where the shared phases leave table `j`'s rep `r`**: begun at the rep's base, a run of `innerPreE` that returns
+has sent the rep's PIOP and Ligerito, so its inner proof begins at `repSlot … (innerOff 0)`, the round of `ε` the cut
+reads. -/
+theorem innerSlotE {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (j : Fin (jOf x)) (r : Fin 2)
+    (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
+    (extras : Array _root_.Flock.Claim)
+    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
+    {l : Array Msg} (hl : l.size = repBase x (2 * j.val + r.val)) {o t' l'}
+    (ho : ((innerPreE x w τ c n j r dom cm0 extras ic).run (_root_.Flock.Transcript.init #[] dom)).go l =
+      (.ok (o, t'), l')) :
+    l'.size = repSlot x (2 * j.val + r.val) (innerOff 0) := by
+  have hj := lt_of_jOf j
+  have hr := r.isLt
+  have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
+  have htab : (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) j.val (by simpa [FlockDeploy.tabsOf] using hj)]
+    simp [FlockDeploy.tabsOf]
+    rfl
+  have hz := (zkTab x j).hz
+  obtain ⟨h25, -, hsm, hk0, -, ⟨hn7, h2, -⟩, hlv, -, -⟩ := ZkExec.zk_schedule_seams _ _ _ hz
+  have hk6 := (zkTab x j).wf.1.hk6
+  have hx : extras.size = spec.points * (stAt x j).regions.size := by
+    rw [htab] at he
+    rw [FlockDeploy.extraClaims_size (st := stAt x j) he, Nat.mul_comm]
+    simp [ptsE]
+  unfold innerPreE ioE at ho
+  have hsz := FlockComplete.SimInner.innerPre_size (fun k i => slotAt c k i) n (respE c) (coinOf_respE c)
+    _root_.Flock.Sha512.hash _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ (by rw [htab]; show 14 ≤ (stAt x j).m; omega)
+    (by omega) hk0 h2 (fun i hi => (hlv i hi).q_ne_zero) ho
+  rw [htab] at hsz
+  unfold repSlot
+  rw [hs]
+  simp only [show (2 * j.val + r.val) / 2 = j.val by omega, hst, hz]
+  rw [hsz, hl, repBase_eq hs]
+  unfold FlockComplete.piopZk FlockComplete.piopRoundsZk innerOff
+  have hm' : (_root_.Flock.Setup.ofCircuit (stAt x j)).m = (stAt x j).m := rfl
+  have hk' : (_root_.Flock.Setup.ofCircuit (stAt x j)).fold.kLog = (stAt x j).c.kLog := rfl
+  rw [hm', hk', hx]
+  omega
 
 /-- **What hybrid 2's inner proof reads from the cut** (`SimInner`'s open content): at a live statement and a witness in
 the deployed relation, at any opened coins `c` and stop `n` at which no refusal is seen, wherever the phases hybrids 2
