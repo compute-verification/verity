@@ -18,7 +18,9 @@
      IMNMX.64   each pair of words is reduced to the points where it equals the target; two pairs whose points cover
                 them all are a choice (sel), and an IMNMX.64 when one of its four forms picks it (found).
 
-   A value is the vector of a word at NP points, W bits a point, packed W*NP <= 64 bits. stdin:
+   A value is the vector of a word at NP points, W bits a point, packed W*NP <= 64 bits, so W = 32 is the full word at two
+   points (fold_wide32.py): a program that writes the pair everywhere writes it at the points, so none found is none at
+   any NP. stdin:
      W NP NI
      name v_1 .. v_NP              (NI lines: the inputs)
      NJ
@@ -34,7 +36,7 @@
 
 #define MAXN 24
 #define MAXJ 16
-#define MAXW 4
+#define MAXW 32
 /* -DDROP=k (fold_opt_fx.py's mutations) removes one part of the search: 1 a last IADD.64; 2 a last IMNMX.64 or SEL.64
    over a second-instruction word; 3 a last IMAD.WIDE with p or q a second-instruction word; 4 a last IMAD.WIDE with p
    and q before it; 5 a second instruction's words in le2; 6 IADD.64 and IMNMX.64 as a first or second instruction. */
@@ -94,7 +96,7 @@ static inline void wide1(uint64_t p, uint64_t q, uint64_t cl, uint64_t ch, int s
         if (p >> (W - 1)) ps -= (int64_t)1 << W;
         if (q >> (W - 1)) qs -= (int64_t)1 << W;
     }
-    uint64_t v = ((uint64_t)(ps * qs) + (ch << W) + cl) & M2;
+    uint64_t v = ((uint64_t)ps * (uint64_t)qs + (ch << W) + cl) & M2;
     *lo = v & MASK;
     *hi = v >> W;
 }
@@ -222,12 +224,16 @@ static int find(const uint64_t *pool, int n, uint64_t v) {
     return -1;
 }
 
-/* A pool's words by their values at points 0 and 1 (2W <= 8 bits), to reject a needed word before scanning for it. */
+/* A pool's words by their values at points 0 and 1 (2W <= 8 bits, else hashed to 8), to reject a needed word before
+   scanning for it. */
 typedef struct {
     uint64_t b[4];
 } Sig;
 
-static inline unsigned sig_of(uint64_t v) { return (unsigned)(at(v, 0) | (NP > 1 ? at(v, 1) << W : 0)); }
+static inline unsigned sig_of(uint64_t v) {
+    uint64_t s = at(v, 0) | (NP > 1 ? at(v, 1) << W : 0);
+    return W <= 4 ? (unsigned)s : (unsigned)((s * 0x9E3779B97F4A7C15ULL) >> 56);
+}
 static inline void sig_add(Sig *s, uint64_t v) { s->b[sig_of(v) >> 6] |= 1ULL << (sig_of(v) & 63); }
 static inline int sig_has(const Sig *s, unsigned g) { return (s->b[g >> 6] >> (g & 63)) & 1; }
 
@@ -258,6 +264,10 @@ static void collect(const Ins *x, void *ctx) {
     uint64_t k0, k1;
     int nw = new_words(x, L->pool, L->np, &k0, &k1);
     if (!nw || !set_add(&L->set, k0, k1)) return;
+    if (L->n >= L->set.cap / 2) {
+        fprintf(stderr, "set over half full (%zu of %u): raise set_new's capacity\n", L->n, L->set.cap);
+        exit(4);
+    }
     if (L->n == L->cap) {
         L->cap = L->cap ? 2 * L->cap : 4096;
         L->v = realloc(L->v, L->cap * sizeof(Ins));
@@ -402,7 +412,7 @@ int main(void) {
         return 2;
     }
     MASK = (1ULL << W) - 1;
-    M2 = (1ULL << (2 * W)) - 1;
+    M2 = 2 * W == 64 ? ~0ULL : (1ULL << (2 * W)) - 1;
     ALL = W * NP == 64 ? ~0ULL : (1ULL << (W * NP)) - 1;
     FULLP = (1u << NP) - 1;
     for (int k = 0; k < NI; k++) {
