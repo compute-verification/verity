@@ -73,7 +73,7 @@ theorem bad_pointwise_ofZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T :
             ∃ p, Rewinding.Off (opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d) (rowT _ _ t) b p) (b.getD n dfltOutZC) +
         ∑ r ∈ Finset.range 2,
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-            ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (b.getD n dfltOutZC) +
+            ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (b.getD n dfltOutZC) +
         ∑ r ∈ Finset.range 2,
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i (2 + r) = some (t, d) ∧
             ∃ p, Rewinding.Off (opTauZ Hs r d) (rowTau t) b p) (b.getD n dfltOutZC) := by
@@ -105,7 +105,7 @@ noncomputable def plurSZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : 
     Lock.Chooser (Oracle F) (Cap D) (List (OutZC F D Sl)) :=
   fun s d g σ =>
     if s < 2 then padsTab T.N (Classical.choose (Rewinding.exists_pluralityE
-      (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q s d (outs.getD n dfltOutZC)) g σ))
+      (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q s d (outs.getD n dfltOutZC)) g σ))
     else if s < 4 then tauTab (Classical.choose (Rewinding.exists_pluralityE
       (fun outs : List (OutZC F D Sl) => opTauZ Hs (s - 2) d (outs.getD n dfltOutZC)) g σ))
     else tabOf (lvOf T.sch ((s - 4) / 2)).lanes (lvOf T.sch ((s - 4) / 2)).logLen
@@ -115,7 +115,7 @@ noncomputable def plurSZ [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : 
 
 theorem plurSZ_pads [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (T : TabZK F mPts) (n r : ℕ) (hr : r < 2)
     (d : Cap D) (g : Game (List (OutZC F D Sl))) (σ : Strategy g) :
-    Rewinding.IsPluralityE (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q r d (outs.getD n dfltOutZC)) g σ
+    Rewinding.IsPluralityE (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD n dfltOutZC)) g σ
       (rowPads T.N (plurSZ Hs T n r d g σ)) := by
   unfold plurSZ
   simp only [hr, ↓reduceIte, rowPads_padsTab]
@@ -171,7 +171,7 @@ noncomputable def advRSZ (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfte
 noncomputable def advPadsSZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : ℝ :=
   Lock.forkE (plurSZ Hs T pre.length) r
     (fun d b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p, Rewinding.ConflictAt
-      (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
+      (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
 /-- **`Adv^τ_r` in the session**: the collision finder at the table's rep `r`'s `τ` commitment. -/
@@ -278,7 +278,7 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
         ∑ r ∈ Finset.range 2,
           Lock.leafE (plurSZ Hs T pre.length) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
             ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-              ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
+              ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
             (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) +
         ∑ r ∈ Finset.range 2,
           Lock.leafE (plurSZ Hs T pre.length) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
@@ -325,12 +325,12 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
   have hpads : ∀ r ∈ Finset.range 2,
       Lock.leafE (plurSZ Hs T pre.length) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-            ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
+            ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
           (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) ≤
         Real.sqrt (T.N * T.N * advPadsSZ A Hs T pre post cap₀ r σ) := by
     intro r hr
     have h := Lock.leafE_off_le
-      (fun d (outs : List (OutZC F D Sl)) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+      (fun d (outs : List (OutZC F D Sl)) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
       (rowPads T.N) r T.N (fun d b => (Finset.card_filter_le _ _).trans (Finset.card_fin T.N).le)
       (plurSZ Hs T pre.length)
       (fun d g σ'' => plurSZ_pads Hs T pre.length r (Finset.mem_range.1 hr) d g σ'')
@@ -339,7 +339,7 @@ theorem session_sound_of_table_accZ [Inhabited D] [Inhabited Sl] (A : Arith F K)
     have heq : advPadsSZ A Hs T pre post cap₀ r σ =
         Lock.forkE (plurSZ Hs T pre.length) r
           (fun d b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p, Rewinding.ConflictAt
-            (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
+            (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
           (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) :=
       Lock.forkE_congr _ _ _ (aligned_lockSessZ A Hs T pre post default C cap₀) _
     rw [heq]

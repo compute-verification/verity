@@ -89,6 +89,8 @@ import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
+import Proofs.Flock.Claims.KS.ZkPadsLog
+import Proofs.Flock.Claims.KS.ZkClashPads
 import Proofs.Flock.Claims.KS.TrimBridge
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`

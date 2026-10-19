@@ -33,7 +33,7 @@ theorem bad_pointwise_ofZ_sc [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (
             ∃ p, Rewinding.Off (opRZ Hs.H Hs.E Hs.Lf T.sch r ℓ d) (rowT _ _ t) b p) (b.getD n dfltOutZC) +
         ∑ r ∈ Finset.range 2,
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-            ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (b.getD n dfltOutZC) +
+            ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (b.getD n dfltOutZC) +
         ∑ r ∈ Finset.range 2,
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i (2 + r) = some (t, d) ∧
             ∃ p, Rewinding.Off (opTauZ Hs r d) (rowTau t) b p) (b.getD n dfltOutZC) := by
@@ -51,7 +51,7 @@ theorem bad_pointwise_ofZ_sc [Inhabited D] [Inhabited Sl] (Hs : Hashes F D Sl) (
       Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => ind_nonneg _ _
     have h4 : 0 ≤ ∑ r ∈ Finset.range 2,
         ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-          ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (b.getD n dfltOutZC) :=
+          ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (b.getD n dfltOutZC) :=
       Finset.sum_nonneg fun _ _ => ind_nonneg _ _
     have h5 : 0 ≤ ∑ r ∈ Finset.range 2,
         ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i (2 + r) = some (t, d) ∧
@@ -137,7 +137,7 @@ theorem session_sound_of_table_accZ_sc [Inhabited D] [Inhabited Sl] (A : Arith F
         ∑ r ∈ Finset.range 2,
           Lock.leafE (plurSZ Hs T pre.length) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
             ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-              ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
+              ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
             (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) +
         ∑ r ∈ Finset.range 2,
           Lock.leafE (plurSZ Hs T pre.length) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
@@ -182,12 +182,12 @@ theorem session_sound_of_table_accZ_sc [Inhabited D] [Inhabited Sl] (A : Arith F
   have hpads : ∀ r ∈ Finset.range 2,
       Lock.leafE (plurSZ Hs T pre.length) (fun (i : IZ F D × IZ F D) (outs : List (OutZC F D Sl)) =>
           ind (fun b => ∃ t d, Lock.getPair (getZ 0) (getZ 1) i r = some (t, d) ∧
-            ∃ p, Rewinding.Off (opPadsZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
+            ∃ p, Rewinding.Off (opPadsAtZ Hs T.N T.q r d) (rowPads T.N t) b p) (outs.getD pre.length dfltOutZC))
           (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) ≤
         Real.sqrt (T.N * T.N * advPadsSZ A Hs T pre post cap₀ r σ) := by
     intro r hr
     have h := Lock.leafE_off_le
-      (fun d (outs : List (OutZC F D Sl)) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+      (fun d (outs : List (OutZC F D Sl)) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
       (rowPads T.N) r T.N (fun d b => (Finset.card_filter_le _ _).trans (Finset.card_fin T.N).le)
       (plurSZ Hs T pre.length)
       (fun d g σ'' => plurSZ_pads Hs T pre.length r (Finset.mem_range.1 hr) d g σ'')
@@ -196,7 +196,7 @@ theorem session_sound_of_table_accZ_sc [Inhabited D] [Inhabited Sl] (A : Arith F
     have heq : advPadsSZ A Hs T pre post cap₀ r σ =
         Lock.forkE (plurSZ Hs T pre.length) r
           (fun d b b' => ind (fun x : List (OutZC F D Sl) × List (OutZC F D Sl) => ∃ p, Rewinding.ConflictAt
-            (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
+            (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC)) x p) (b, b'))
           (lockSessZ A Hs T pre post C cap₀) (pushStrat A Hs T cap₀ pre post σ) :=
       Lock.forkE_congr _ _ _ (aligned_lockSessZ A Hs T pre post default C cap₀) _
     rw [heq]
