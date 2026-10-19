@@ -6,7 +6,9 @@ Build refuses it.  A Triton launch binds through `acquire.inductor_templates` (i
 config the one config the process ran, an autotune's winner included); an `extern_kernels.mm` is a cuBLAS GEMM of an activation
 against a served weight; vLLM's opaque `moe_forward` op is the fused-MoE block, expanded into the Calls it runs (`served_moe`, its
 values committed from inside the op); the buffer each writes is a committed value, `run_intermediate_hooks('verity|<op>|<buf>')`
-(`ServedCompiledSource`), named `c<piece>.<op>/<buf>`, and a write no hook names is refused.  vLLM's split graph
+(`ServedCompiledSource`), named `c<piece>.<op>/<buf>`, and a write no hook names is refused.  A flush,
+`run_intermediate_hooks(FLUSH, None)` (`inductor_hooks`, under `batch_copies`), issues the copies its hooks recorded and is no
+call.  vLLM's split graph
 (`computation_graph.py`) wires the pieces: a piece argument is another piece's return, an attention op's output, a served weight
 (its placeholder's module path under the backbone), the token ids or the positions (`c00.input/ids`, `c00.input/positions`).
 After the piece whose RoPE (or q/k norm-RoPE) wrote its query, each attention
@@ -59,6 +61,7 @@ from verity_vllm.acquire import served_artifact as SA
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
+from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.registry import b1, cublas_bf16, cublas_gemv
 from verity_vllm.program.registry import inductor as IR
@@ -78,7 +81,8 @@ ROPES = (IR.InductorRoPE.id, IR.InductorQKNormRoPE.id)
 # ------------------------------------------------------------------------------------------------------------- one wrapper
 _SKIP = [re.compile(p) for p in (r"^#", r"^del \w+(?:, \w+)*$", r"^args\.clear\(\)$", r"^with torch\.cuda\._DeviceGuard\(\d+\):$",
                                  r"^torch\.cuda\.set_device\(\d+\)$", r"^raw_stream\d+ = get_raw_stream\(\d+\)$",
-                                 r"^(\w+) = copy_if_misaligned\(\1\)$", r"^assert_alignment\(\w+, \d+, '[^']*'\)$")]
+                                 r"^(\w+) = copy_if_misaligned\(\1\)$", r"^assert_alignment\(\w+, \d+, '[^']*'\)$",
+                                 rf"^run_intermediate_hooks\({re.escape(repr(FLUSH))}, None\)$")]
 _ARGS = re.compile(r"^(\w+(?:, \w+)*),? = args$")
 _SYM = re.compile(r"^(s\d+) = (\w+)$")
 _ASSERT = re.compile(r"^assert_size_stride\((\w+), \(([^()]*)\), \(([^()]*)\), 'input'\)$")

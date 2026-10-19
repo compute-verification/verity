@@ -2,8 +2,8 @@
 H200 (`fixtures/served_llama.tar.gz`: the three Inductor wrappers its 17 pieces run, vLLM's split graph, the kernels' launch configs,
 the cuBLAS routes probed on that GPU, and the four-request mixed workload).  The Build reads every wrapper line, binds every launch
 to a Definition, and reproduces the CUDA-graph mode, padding and FA3 split count of each of the 14 steps the process served; an
-autotuned kernel binds the one config its autotuners ran; a line, a kernel source, a hook or a launch config it does not model is
-refused by name, and a GEMM route it lacks leaves it incomplete."""
+autotuned kernel binds the one config its autotuners ran; a batched-copy flush line is no call; a line, a kernel source, a hook or a
+launch config it does not model is refused by name, and a GEMM route it lacks leaves it incomplete."""
 from __future__ import annotations
 
 __models__ = ("unsloth/Llama-3.2-1B",)
@@ -22,6 +22,7 @@ from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 
 FIXTURE = Path(__file__).parent / "fixtures" / "served_llama.tar.gz"
 #: the fixture's GPU, an H200
@@ -109,6 +110,16 @@ def test_an_unhooked_buffer_is_refused(art: Path, tmp_path: Path) -> None:
     _edit(ind, "        run_intermediate_hooks('verity|mul|buf4', buf4)\n", "", count=-1)
     with pytest.raises(Unmodelled, match="no run_intermediate_hooks names them"):
         _build(art, inductor=ind)
+
+
+def test_batched_copy_flushes_are_no_calls(art: Path, tmp_path: Path) -> None:
+    ind = _copy(art, tmp_path)
+    flush = f"run_intermediate_hooks({FLUSH!r}, None)"
+    for p in sorted(ind.rglob("*.py")):
+        src = re.sub(r"^( *)(run_intermediate_hooks\('verity\|mul\|buf4', buf4\))$", rf"\1\2\n\1{flush}", p.read_text(), flags=re.M)
+        p.write_text(src.replace("        return (", f"        {flush}\n        return ("))
+    assert sum(p.read_text().count(flush) for p in ind.rglob("*.py")) > 3
+    assert _build(art, inductor=ind)["program_digest"] == _build(art)["program_digest"]
 
 
 def _autotuned(art: Path, executed) -> dict:
