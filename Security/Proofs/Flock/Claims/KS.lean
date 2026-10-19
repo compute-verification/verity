@@ -135,6 +135,8 @@ import Proofs.Flock.Claims.KS.ZkBatchSim
 import Proofs.Flock.Claims.KS.ZkForkClash
 import Proofs.Flock.Claims.KS.ZkPadsSlot
 import Proofs.Flock.Claims.KS.ZkKSAlign
+import Proofs.Flock.Claims.KS.SlotDistOn
+import Proofs.Flock.Claims.KS.ZkTauSlot
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -604,4 +606,12 @@ hold at every message (`ZkPadsPair`: `FlockDeploy.KS.PadsForkEvZ`, `FlockDeploy.
 table node, so the pads' fork round is the caps' schedule at distance `0`, and their alignment holds at every message
 (`ZkPadsSlot`: `FlockDeploy.KS.slotPadsZ_of_batch`, `FlockDeploy.KS.zkPadsAlign`,
 `FlockDeploy.KS.zkSimForkLePads`). So masked KS rests on `τ`'s alignment alone (`ZkKSAlign`:
-`FlockDeploy.KS.zk_KS_of_tauAlign`). -/
+`FlockDeploy.KS.zk_KS_of_tauAlign`). `τ`'s commitment is two coins into the inner proof, past the masked phase, whose
+coins are fixed only on the runs whose opening can end well; on the others the rep's Ligerito part is `PendL.reject`
+and the table's output is not accepted, so it opens no `τ`. A distance on those paths (`SlotDistOn`:
+`FlockSoundness.Game.Lock.DistOn`, `FlockSoundness.Game.Lock.SlotAtD.lead_fst_on`,
+`FlockSoundness.Game.Lock.SlotAtD.lead_snd_on`) and the schedule short of the runs whose table opens nothing or is not
+accepted (`FlockDeploy.KS.schedC_simAtJZ_dead`) give `τ`'s alignment at every message, its count `zkPre + zkLig + 2`
+coins into a rep (`ZkTauSlot`: `FlockDeploy.KS.zkTau_dist`, `FlockDeploy.KS.slotTauZ_of_batch`,
+`FlockDeploy.KS.zkTauAlign`, `FlockDeploy.KS.zkSimForkLeTau`). So masked KS holds with no premise
+(`FlockDeploy.KS.zk_KS`). -/
