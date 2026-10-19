@@ -15,7 +15,8 @@
 //   imma_s8_k32 / _k16    mma.sync alone on sm_100 (M4c)
 //   syncmma_k32 / _k16    thread 0 tcgen05.mma beside 8 warps of mma.sync (M4c: does mma.sync share the tcgen05 pipe?)
 //   tclane_<lane>_r<R>    thread 0 tcgen05.mma beside 12 warps of lane ops (the scalar pipes beside a saturated MMA)
-//   tclaneU_<lane>        the same, exact (the lanes run only while the MMA does)
+//   tclaneU_<lane>        the same roles, exact on both sides (the lanes OP_UNTIL): a tclane_ point's tensor rate is
+//                         the MMA's fixed work over the lanes' longer block time, a lower bound, not a joint's edge
 //   tcliU_x<C>, _p<C>[f]  the LI fold beside the MMA, exact: lane warps load C columns of TMEM and fold each word
 //                         (p: two buffers, a load in flight while the other folds; f: one FFMA filler op in 8 words)
 //   tc_mxf4_m128_n256     kind::mxf4 128x256x64 alone; tcfU_<lane>: lanes beside it, exact (a deep form's coupling)
