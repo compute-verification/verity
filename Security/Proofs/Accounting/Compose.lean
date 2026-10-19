@@ -227,7 +227,7 @@ theorem ServiceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
   sorry
 
 theorem BindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
-  sorry
+  exact Binding.bindingOfECR
 
 theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy := by
   sorry
