@@ -230,7 +230,8 @@ def sass_kernels(text: str) -> dict[str, dict]:
             name = m.group(1)
             kernels[name] = {"tensor": []}
             continue
-        if name and (m := re.search(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Z0-9_.]*)\s", line)):
+        # opcodes carry lowercase shape fields (IGMMA.64x8x32.S8.S8)
+        if name and (m := re.search(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][A-Za-z0-9_.]*)\s", line)):
             if TENSOR_OP.match(m.group(1)):
                 kernels[name]["tensor"].append(line.split("/*", 2)[1].split("*/", 1)[1].strip().rstrip(";").strip())
     for k in kernels.values():
