@@ -33,7 +33,8 @@ grid check compares the certified record digest with the digest of the Program's
 of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier every certificate verifies,
 and the verdicts are those of the raw records. N2 (`service.LinkWindows`) makes no grid comparison:
 `check_link(grid=False)` leaves the grid to its unit's head check (`head_check`), which holds the head's status, grid
-parameters and counts on every link-window, and the frames to N3, which runs on every port-window that recorded frames.
+parameters and counts on every link-window, so N2's claim is counts only. The frames are left to N3, a design and the
+simulator's behaviour (a prototype in the clear), not yet a proof-service unit.
 
 An ingress link's rows are the Program's input, which it reads rather than predicts, so `check_ingress_link` checks only
 its statuses: a link-window is accepted if it has exactly one record and its status is complete (Lean `StatusComplete`).
@@ -94,8 +95,8 @@ class Audit:
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
         `advice` violation. Certified records are checked against the certifier's `key` in its `session`. With `grid`
         False no grid is compared: each certified head's check in N2's unit (`head_check`) holds its status, grid and
-        counts instead, and N3 its frames, so a raw or committed record, which has neither, raises `ValueError`. N2
-        checks with `grid` False."""
+        counts instead, and its frames are left to N3, so a raw or committed record, which has neither, raises
+        `ValueError`. N2 checks with `grid` False."""
         by_window = _by_window(link, records, Direction.EGRESS, key, session)
         if not grid and any(not isinstance(r, CertifiedRecord) for rs in by_window.values() for r in rs):
             raise ValueError("only a certified record's grid is held by its head check: compare the others' (grid=True)")

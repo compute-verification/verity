@@ -9,8 +9,13 @@ A spec-level reference for network accounting's timing channel:
 - one link-window's certificates through the proof service (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields and its counts against the public occupancy profile), with a host-side verifier of record (no proof of the
-  check yet) that compares no grid in the clear: the head check holds the counts on every link-window, and N3 the
-  frames on every port-window;
+  check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
+  the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
+  is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
+  behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
+  stays counts only until N3 is a proof-service unit with Selection `All`. It covers no lab or served link yet: an
+  egress end without an occupancy profile gets no verdict (`ValueError`, failing closed). A run's network verdict is
+  the AND over its link-windows, with no ε or share credit;
 - the capacity counts;
 - the calibration of honest runs;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`

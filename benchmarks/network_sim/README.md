@@ -278,11 +278,12 @@ the fleet was `r20261018-102319-bb80`.
 ## N3 in zero knowledge
 
 `workload/n3_unit.py` prototypes N3's proof unit for one port-window: a Boolean Definition, `N3Window_v3{FMT, N, G,
-SALTED, REC}`, evaluated in the clear; nothing proves it yet. Its witness is the frames a certifier recorded on one link
-direction in one window, the descriptors of the committed layout that frame them, the rows of the units' outboxes that
-the descriptors read, and the opening of the window's certified head in N2's commitment. It outputs one bit: 1 if and
-only if every descriptor and every outbox row opens in its commitment, every frame is what its descriptor puts on its
-rows, and N2's commitment holds a complete head over the frames' Merkle root. The module's docstring states each check.
+SALTED, REC}`, evaluated in the clear; nothing proves it yet. N3 is a design and the simulator's behaviour, not a
+protocol: no proof-service Spec runs it. Its witness is the frames a certifier recorded on one link direction in one
+window, the descriptors of the committed layout that frame them, the rows of the units' outboxes that the descriptors
+read, and the opening of the window's certified head in N2's commitment. It outputs one bit: 1 if and only if every
+descriptor and every outbox row opens in its commitment, every frame is what its descriptor puts on its rows, and N2's
+commitment holds a complete head over the frames' Merkle root. The module's docstring states each check.
 
 What is public, each with its reason:
 
@@ -294,7 +295,10 @@ What is public, each with its reason:
   run, so they are properties of the layout and the outboxes, not their contents.
 - The occupancy (protocol structure): the record's frames per bucket, and `at`, where the window's first descriptor sits
   in the layout. `at` is the port's index times the port's capacity, plus the frames the port recorded in earlier
-  windows, less their salt frames.
+  windows, less their salt frames. The frames per bucket are protocol structure only on a port whose link end declares
+  an occupancy profile (`LinkWindows.occupancy`). The Program and the placement fix the profile before the run, the
+  spec's context binds it, nothing declared at run time sets it, and N2's head check holds the record's counts to it.
+  On a port without one, such as the lab's, they are the record's own.
 - The port's end of its link, 0 for egress and 1 for ingress (protocol structure). It names the leaf of N2's commitment
   the unit opens.
 - Hiding commitments: the layout's root, N2's record root and the units' outbox roots, each with its domain id. A salted
@@ -345,21 +349,30 @@ The layout is per frame, in each port's send order, not per window. The buckets 
 fall in which window, at run time, so a layout committed before the run can't be cut by window. A window reads the
 descriptors at at, at + 1, and so on, and `at` is public occupancy.
 
-What the proof service does per window:
+What the proof service would do per window, in N3's design (the simulator does it):
 
-1. It decides from public data what needs no unit. A window with nothing recorded passes. A window is refused if its
-   record's status isn't complete, frames or none, or if its frames run past the port's capacity (`Window.why`).
-2. For every other window it runs the `N3Window_v3` of the window's size class and records the ok bit. N3's selection
-   is All, as N2's is: every port-window of every link-window N2 checks has its ok bit, so N3 is a structural check,
-   and N2 compares no grid in the clear (`LinkWindows.verify`). A frame past the port's declared frames meets an
-   invalid descriptor, so it gives not-ok. So does a frame that carries values of a unit that committed none, since
-   that unit's outbox holds zeros where they would be.
+1. It decides from public data what needs no unit. A window with nothing recorded passes from public occupancy. On a
+   port with a profile that holds because the Program and the placement fix the profile before the run, the spec's
+   context binds it and nothing declared at run time sets it, and a head with frames where the profile says 0 fails
+   N2's count check. On a port without one the occupancy is the record's own, and nothing backs the pass. A window is
+   refused if its record's status isn't complete, frames or none, or if its frames run past the port's capacity
+   (`Window.why`).
+2. For every other window it runs the `N3Window_v3` of the window's size class and records the ok bit. N3's design
+   gives it Selection All, as N2 has: every port-window of every link-window N2 checks gets its ok bit, so N3 would be
+   a structural check. N2 compares no grid in the clear (`LinkWindows.verify`). A frame past the port's declared
+   frames meets an invalid descriptor, so it gives not-ok. So does a frame that carries values of a unit that
+   committed none, since that unit's outbox holds zeros where they would be.
 
-A link-window is ok when N2 accepts it and N3 is ok on both its port-windows. N2's head check holds each head's counts
-to the link's occupancy profile and N3 holds the frames, the leaves of the head's frames root, to the committed
-layout's, and the egress grid is those frames filled in by those counts (`grid.fill`), so together they hold the grid
-N2 used to compare in the clear. That needs the egress end's profile: without one nothing holds the egress timing, and
-`LinkWindows.verify` has no verdict (`ValueError`). `link_checks` records both bits on every link-window of the
+In the simulator a link-window is ok when N2's head checks accept it and N3 is ok on both its port-windows. N2's head
+check holds each head's counts to the link's occupancy profile. The egress grid is the head's frames, the leaves of its
+frames root, filled in by those counts (`grid.fill`), and N3's design holds those frames to the committed layout's. So
+once N3 is a proof-service unit with Selection All, the two would hold the grid N2 used to compare in the clear. Until
+then the claim is counts only: timing at the profile. N2 needs the egress end's profile: without one nothing holds the
+egress timing, and `LinkWindows.verify` has no verdict (`ValueError`, failing closed), so N2 covers no lab or served
+link yet. A run's network verdict is the AND over its link-windows, with no ε or share credit for N2. The datacenter
+model's account (a Python model, not a verifier of record) reads it so: `Account.sound`
+(`benchmarks/datacenter/datacenter/account.py`) is false on any refused port-window, and a refused window is charged at
+its link's line rate (`refused_bits`). `link_checks` records both bits on every link-window of the
 simulator, whose ports each declare φ's counts as their profile.
 
 Sizes in ANDs, v2 against v3 on the same windows. Row reads are the outbox rows' openings (v2: the pool of value rows).
@@ -446,8 +459,10 @@ Open items:
   compute proof that commits a unit's values also writes its outbox, or one unit per producing unit opens its outbox
   and the value rows it encodes. The second pays v2's private-position reads, but once per unit per run rather than in
   every window.
-- **N2's head leaf in two units (asked of circuits).** N3's unit and N2's unit read leaves of one registered
-  commitment. The service must open it in both and hold both to the same root.
+- **N2's head leaf in two units (asked of circuits).** N3's unit and N2's head check both read the head leaf of one
+  registered commitment. The service must hold both to the same leaf index (2 + direction) under the same registered
+  root, or the two units could be answered with different heads: one whose counts meet the profile, and one whose
+  frames root covers other frames.
 - **The layout's binding to the placement (an engineering item).** The binding names the program and the placement
   root, so the prover can't swap layouts after the run. But nothing checks that the descriptors are φ's over the
   committed placement: a prover could register a layout that frames other bytes, and the unit would hold the frames to
@@ -464,7 +479,7 @@ Open items:
   the link declares its occupancy profile (`LinkWindows.occupancy`, public, as the occupancy above is): N2 checks every
   link-window, and its head check (`head_check.NetworkHeadCheck_v1`, a Boolean Definition over the head's hiding read
   of the leaf N3 opens) holds each head's counts to the profile's, so a window with a frame fewer or more than the profile is
-  rejected, and N3's frames root holds the unit's N to those counts' sum. The simulator runs those head checks on
+  rejected, and N3's frames root would hold the unit's N to those counts' sum. The simulator runs those head checks on
   every link-window, its ports' profiles φ's counts (`link_checks`), but not N2's whole outcome: `Certifier` is an
   honest stand-in, so the certificates' host check would only accept. The lab declares no profile, since its timing
   is the wall clock's, so N2 has no verdict there. Without a profile the closing check needs a unit: one per port
