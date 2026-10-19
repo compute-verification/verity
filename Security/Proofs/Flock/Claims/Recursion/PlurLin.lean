@@ -256,6 +256,57 @@ theorem Pr_plur_ecr [Nonempty U] (H : Msg → Msg) (g : U → Prop) (f : U → M
     hcr.trans (div_le_div_of_nonneg_right hc (by positivity))
   linarith [Pr_plur_link g f M]
 
+/-- **Off the plurality at each coin prefix, linearly**: over a tape and a draw, the draw's `f` misses the plurality
+over the draws with its first `j` coins at most as often as the link at the fork at `j` succeeds (a tape, a prefix
+`r`, then `M + 1` draws with `r`'s first `j` coins), plus `1/(M+1)`: `Pr_plur_link` at each prefix, averaged. Linear,
+where `Pr_plur_fork` is a root. -/
+theorem Pr_plur_fork_lin {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω] [Nonempty Ω]
+    [Fintype C] [Nonempty C] {N : ℕ} (j : ℕ) (g : Ω → (Fin N → Coin) × C → Prop) (f : Ω → (Fin N → Coin) × C → Msg)
+    (M : ℕ) :
+    Pr (fun s : Ω × (Fin N → Coin) × C => g s.1 s.2 ∧
+      f s.1 s.2 ≠ plur (fun u : (Fin N → Coin) × C => g s.1 (fork j s.2.1 u.1, u.2))
+        (fun u => f s.1 (fork j s.2.1 u.1, u.2))) ≤
+      Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
+        g t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
+          firstDiffers (fun u : (Fin N → Coin) × C => g t.1 (fork j t.2.1 u.1, u.2))
+            (fun u => f t.1 (fork j t.2.1 u.1, u.2)) (f t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2)) M t.2.2.2) +
+        1 / ((M : ℝ) + 1) := by
+  have hoff : PrefixDet (k := N) (Coin := Coin) fun _ => j := fun _ _ _ => rfl
+  let Gr : Ω → (Fin N → Coin) → (Fin N → Coin) × C → Prop := fun ω r u => g ω (fork j r u.1, u.2)
+  let Fr : Ω → (Fin N → Coin) → (Fin N → Coin) × C → Msg := fun ω r u => f ω (fork j r u.1, u.2)
+  let a : Ω → (Fin N → Coin) → ℝ := fun ω r => Pr fun u => Gr ω r u ∧ Fr ω r u ≠ plur (Gr ω r) (Fr ω r)
+  let b : Ω → (Fin N → Coin) → ℝ := fun ω r =>
+    Pr fun p : ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
+      Gr ω r p.1 ∧ firstDiffers (Gr ω r) (Fr ω r) (Fr ω r p.1) M p.2
+  have hGr : ∀ ω r u, Gr ω (fork j r u) = Gr ω r := fun ω r u => funext fun v => by simp only [Gr, fork_fork]
+  have hFr : ∀ ω r u, Fr ω (fork j r u) = Fr ω r := fun ω r u => funext fun v => by simp only [Fr, fork_fork]
+  have hL : Pr (fun s : Ω × (Fin N → Coin) × C => g s.1 s.2 ∧
+      f s.1 s.2 ≠ plur (fun u : (Fin N → Coin) × C => g s.1 (fork j s.2.1 u.1, u.2))
+        (fun u => f s.1 (fork j s.2.1 u.1, u.2))) = Ex fun ω => Ex fun r => a ω r := by
+    rw [Pr_prod]
+    refine congrArg Ex (funext fun ω => ?_)
+    rw [Pr_prod]
+    rw [← Ex_fork hoff (fun r => Pr fun c : C => g ω (r, c) ∧ f ω (r, c) ≠ plur (Gr ω r) (Fr ω r)), Ex_prod]
+    refine congrArg Ex (funext fun r => ?_)
+    simp only [hGr, hFr]
+    show _ = Pr (fun u : (Fin N → Coin) × C => g ω (fork j r u.1, u.2) ∧ f ω (fork j r u.1, u.2) ≠ plur (Gr ω r) (Fr ω r))
+    rw [Pr_prod (fun u : (Fin N → Coin) × C => g ω (fork j r u.1, u.2) ∧ f ω (fork j r u.1, u.2) ≠ plur (Gr ω r) (Fr ω r))]
+  have hR : Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
+      g t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
+        firstDiffers (fun u : (Fin N → Coin) × C => g t.1 (fork j t.2.1 u.1, u.2))
+          (fun u => f t.1 (fork j t.2.1 u.1, u.2)) (f t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2)) M t.2.2.2) =
+      Ex fun ω => Ex fun r => b ω r := by
+    rw [Pr_prod]
+    refine congrArg Ex (funext fun ω => ?_)
+    rw [Pr_prod]
+    rfl
+  have hab : ∀ ω r, a ω r ≤ b ω r + 1 / ((M : ℝ) + 1) := fun ω r => Pr_plur_link (Gr ω r) (Fr ω r) M
+  rw [hL, hR]
+  calc (Ex fun ω => Ex fun r => a ω r) ≤ Ex fun ω => Ex fun r => b ω r + 1 / ((M : ℝ) + 1) :=
+        Ex_mono fun ω => Ex_mono fun r => hab ω r
+    _ = (Ex fun ω => Ex fun r => b ω r) + 1 / ((M : ℝ) + 1) := by
+        simp only [Ex_add, Ex_const]
+
 end PlurLin
 
 end Claims.Recursion
