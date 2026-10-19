@@ -41,7 +41,7 @@ open Pouw.RelativeSecurity
 /-- A slot's role in its unit's derivation: `mul`, an operand its work reads (a product's operand, a glue's input:
 anything the noise meets, or that meets another operand); `add`, an operand only added to its work (a K-chunk's
 running sum from the chunk before it); `other`, no operand (an output, a receipt, a seed's input). -/
-inductive Role
+inductive SlotRole
   | mul
   | add
   | other
@@ -60,7 +60,7 @@ inductive Role
   `u` is charged that weight, `F` in `skipped ≤ F·wt(B)/(1 − p) + slack`. Protocol structure, which the share's charge
   carries in this model (`DrawnLayer.Covers`, `DrawnLayer.coneWt`). -/
 structure WordLayer (C B : Type) (S m s : ℕ) (J Q Pos V N W : Type) extends DrawnLayer C B S m s J Q Pos V where
-  role : Fin S × J → Q → Role
+  role : Fin S × J → Q → SlotRole
   noise : Paths (Paths C m × B) S → Fin S × J → N
   words : Paths (Paths C m × B) S → Fin S × J → W
   prod : (u : Fin S × J) → ({k : Q // role u k = .mul} → V) → N → W
