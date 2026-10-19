@@ -3322,8 +3322,19 @@ struct Proved {
 fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, plan: &Plan, seed: ProverSeed) -> Result<Proved, (Value, Vec<Vec<u8>>)> {
     let log = Arc::new(Mutex::new(Vec::new()));
     let names = table_names(plan.tables);
-    // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it
-    let t: SharedTransport = if is_zk(st) { shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names))) } else { t };
+    // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it; under the
+    // firewall the Lean check's verdict decides (`flock-firewall coins`)
+    let t: SharedTransport = if is_zk(st) {
+        let c = flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names));
+        if firewall_on(st) {
+            let lean = flock_live::firewall::LeanCoins::start(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+            shared(c.with_lean(Box::new(lean)))
+        } else {
+            shared(c)
+        }
+    } else {
+        t
+    };
     // FC_FIREWALL_TRANSCRIPT: what the firewall lets out, after the coin tree's checks (the CPU prover's gated sessions)
     let t: SharedTransport = if firewall_on(st) && !plan.gpu && flock_live::firewall_transcript::start() {
         shared(flock_live::firewall_transcript::Recording(SharedCall(t)))
