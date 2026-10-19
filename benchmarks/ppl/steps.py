@@ -675,8 +675,9 @@ GRID_MODES = ("round", "dither")
 LINEAR_GRID_MODES = GRID_MODES + ("sr",)
 #: block scales a linear's `grid` may choose from, per block of k: the UE4M3 odd integers (an odd scale keeps every
 #: coin's bilinear coefficient odd) or every integer UE4M3 holds up to 15; `odd9` the odd ones to 9, so an E2M1x2
-#: operand moved by one (9 * 13) stays in int8
-SCALES = {"odd": tuple(range(1, 16, 2)), "int": tuple(range(1, 16)), "odd9": (1, 3, 5, 7, 9)}
+#: operand moved by one (9 * 13) stays in int8, and `int10` every integer to 10 (10 * 12 + 1)
+SCALES = {"odd": tuple(range(1, 16, 2)), "int": tuple(range(1, 16)), "odd9": (1, 3, 5, 7, 9),
+          "int10": tuple(range(1, 11))}
 #: a committed word's length in k (one FP4 m16n8k64 firing); `density` picks its coined positions per word
 WORD_K = 64
 
@@ -917,7 +918,7 @@ def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", 
 FORMATS = {"e4m3": (448.0, 8), "e2m1": (6.0, 2)}
 E2M1 = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
 #: block length along k of each block-scaled format: MX (E8M0 scales) and NVFP4 (UE4M3 scales)
-BLOCKS = {"mx": 32, "nv": 16, "nvi": 16, "nv9": 16}
+BLOCKS = {"mx": 32, "nv": 16, "nvi": 16, "nv9": 16, "nvi10": 16}
 FP_SCALES = ("tensor", "channel", "mx", "nv")
 #: a weight's rows are quantized (and emulated) this many at a time, so lm_head's temporaries stay small
 ROW_CHUNK = 8192
@@ -995,19 +996,20 @@ def fp_attention(mm, nxt, *, fmt: str, scale: str):
 #: the format each native grid's integers are exact in
 NATIVE = {"e4m3i": "e4m3", "e4m3i352": "e4m3", "e4m3i120": "e4m3", "int5": "e4m3", "e2m1i": "e2m1", "e2m1x2": "e2m1"}
 #: a native grid's scales: the formats' (FP_SCALES), `nvi`, NVFP4's blocks of 16 with any integer UE4M3 scale to 15,
-#: and `nv9`, with the odd ones to 9
-NATIVE_SCALES = FP_SCALES + ("nvi", "nv9")
-#: the blocked scales whose block multiplier is an integer from SCALES (odd for nv, any for nvi, odd to 9 for nv9)
-INT_BLOCKS = {"nv": "odd", "nvi": "int", "nv9": "odd9"}
+#: `nv9`, with the odd ones to 9, and `nvi10`, with any integer to 10
+NATIVE_SCALES = FP_SCALES + ("nvi", "nv9", "nvi10")
+#: the blocked scales whose block multiplier is an integer from SCALES (odd for nv, any for nvi, odd to 9 for nv9, any
+#: to 10 for nvi10)
+INT_BLOCKS = {"nv": "odd", "nvi": "int", "nv9": "odd9", "nvi10": "int10"}
 
 
 def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None):
     """v = x / (s m) within the grid's range, s one scale per tensor or row and m one per block of k: `tensor` and
     `channel` s = amax / top (m = 1); `nv` s = row amax / (top 15) and m the smallest odd UE4M3 integer that holds the
-    block (`on_blocks`'), `nvi` the same with any integer to 15, `nv9` with the odd ones to 9 (s = row amax / (top 9));
-    `mx` s = 1 and m the smallest power of two with |v| <= top (E8M0). A coined operand's scale is wider by 2^-20, so
-    |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or None). `amax`: the whole tensor's, when x is
-    a slice of it."""
+    block (`on_blocks`'), `nvi` the same with any integer to 15, `nv9` with the odd ones to 9 (s = row amax / (top 9)),
+    `nvi10` with any integer to 10; `mx` s = 1 and m the smallest power of two with |v| <= top (E8M0). A coined
+    operand's scale is wider by 2^-20, so |v| < top. Returns v, s (broadcast over rows) and m (rows x blocks, or None).
+    `amax`: the whole tensor's, when x is a slice of it."""
     top = LEVELS[grid][-1]
     pad = 1 + 2 ** -20 if coined else 1.0
     if scale in ("tensor", "channel"):
@@ -1074,7 +1076,7 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     e2m1x2 on E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or `dither`ed (the level
     below or above by a fresh bit), the activations' coins first, then the weights', fresh every call (Dither-2S's
     order). `act_grid = int8`: the activations Dither's own (`act_quant` at top 127, the int8 design's draws), the
-    weights native: the hybrid that serves int8 activations as limbs. tensor, channel, nv, nvi and nv9 scales give
+    weights native: the hybrid that serves int8 activations as limbs. tensor, channel and the integer blocks give
     integers, so the product is the gated exact one; mx's power-of-two blocks give dyadic operands, multiplied
     dequantized in FP32 (the MX MMA). `gptq`: rounded weights by GPTQ (blocks of 128, on the calibration windows'
     inputs) on the grid, each row's scale and block multipliers fixed by `native_parts` first."""

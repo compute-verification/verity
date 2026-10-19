@@ -15,7 +15,8 @@ OTHERS = ["pc-int8", "pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", 
           "pc-c2-nvfp4-2s", "pc-c2-nvfp4-1s", "pc-c2-mxfp4-2s", "pc-c2-mxfp4-1s", "pc-c3-fp8", "pc-c3-fp4",
           "pc-c2-nvfp4x2-2s", "pc-c2-nvfp4x2-1s", "pc-c2-mxfp4x2-2s", "pc-c3-fp4x2", "fpx-2sp-e4m3i",
           "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", "fpx-g1-e4m3i120", "fpx-g1-nvfp4x2-nv9",
-          "fpx-g1-nvfp4x2-nv9-gptq", *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
+          "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq", "fpx-g1-nvfp4x2-nvi-gptq",
+          *(f"{f}-lin" for f in ("pc-fp8-tensor", "pc-fp8-channel", "pc-mxfp8", "pc-nvfp4", "pc-mxfp4"))]
 
 
 def test_e4m3_integers_are_every_integer_e4m3_holds():
@@ -33,6 +34,7 @@ def test_the_int8_subgrids_moved_by_one_stay_in_int8():
     assert steps.LEVELS["e4m3i120"] == tuple(v for v in steps.LEVELS["e4m3i"] if abs(v) <= 120)
     assert steps.LEVELS["e4m3i120"][-1] + 1 <= 127
     assert steps.SCALES["odd9"][-1] * (steps.LEVELS["e2m1x2"][-1] + 1) <= 127
+    assert steps.SCALES["int10"][-1] * steps.LEVELS["e2m1x2"][-1] + 1 <= 127
 
 
 def test_e2m1_grids_are_its_integers_and_twice_its_values():
@@ -79,7 +81,8 @@ def test_fake_quant_is_close_and_blockwise(fmt, scale):
 
 @pytest.mark.parametrize("grid,scale", [("e4m3i", "channel"), ("e4m3i", "mx"), ("e2m1i", "nv"), ("e2m1i", "mx"),
                                         ("e2m1x2", "nv"), ("e2m1x2", "mx"), ("e4m3i352", "channel"),
-                                        ("e2m1x2", "nvi"), ("e4m3i120", "channel"), ("e2m1x2", "nv9")])
+                                        ("e2m1x2", "nvi"), ("e4m3i120", "channel"), ("e2m1x2", "nv9"),
+                                        ("e2m1x2", "nvi10")])
 def test_native_parts_stay_on_the_grid(grid, scale):
     g = torch.Generator().manual_seed(1)
     x = torch.randn(8, 64, generator=g) * torch.logspace(-2, 2, 64)

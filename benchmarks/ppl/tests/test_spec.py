@@ -54,7 +54,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  *(f"pc-c2-{g}-{s}" for g in ("int5", "e4m3i", "mx8", "nvfp4", "mxfp4") for s in ("2s", "1s")),
                  "pc-c2-e4m3i-t-2s", "pc-c2-nvfp4x2-2s", "pc-c2-nvfp4x2-1s", "pc-c2-mxfp4x2-2s", "pc-c3-fp4x2",
                  "fpx-2sp-e4m3i", "fpx-2sp-nvfp4x2", "fpx-2sp-nvfp4x2i", "fpx-2sp-nvfp4x2-gptq", "fpx-g1-e4m3i120",
-                 "fpx-g1-nvfp4x2-nv9", "fpx-g1-nvfp4x2-nv9-gptq"):
+                 "fpx-g1-nvfp4x2-nv9", "fpx-g1-nvfp4x2-nv9-gptq", "fpx-g1-nvfp4x2-nvi10", "fpx-g1-nvfp4x2-nvi10-gptq",
+                 "fpx-g1-nvfp4x2-nvi-gptq"):
         want[name] = ("all", "int8-all", True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
