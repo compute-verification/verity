@@ -444,7 +444,8 @@ Open items:
   its descriptors, and the windows after it record nothing, which passes from public data. In the late run, b2's
   responses are refused only because their record's status says coverage was never established. N2 closes it where
   the link declares its occupancy profile (`LinkWindows.occupancy`, public, as the occupancy above is): N2 checks every
-  link-window, and holds each head's counts to the profile's, so a window with a frame fewer or more than the profile is
+  link-window, and its head check (`head_check.NetworkHeadCheck_v1`, a Boolean Definition over the head's hiding read
+  of the leaf N3 opens) holds each head's counts to the profile's, so a window with a frame fewer or more than the profile is
   rejected, and N3's frames root holds the unit's N to those counts' sum. These windows don't build N2's outcome yet
   (`Certifier` only commits). Without a profile the closing check needs a unit: one per port that opens the layout at
   the position after the port's last recorded frame and shows that the descriptor there is the invalid one.

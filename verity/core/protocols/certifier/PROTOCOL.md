@@ -151,25 +151,43 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   the certifier's key id and its session id (`certifier_session`), and the check's outputs `verdict` and `deadline`. A rejected link-window shows only the
   service's `reject`; the violation's kind stays in the verifier. A registration with any other field, a second root,
   a root entry with another key, or anything more in `window` is refused.
-- **The check** is `service.UNIT`, `NetworkLinkWindow` v1: one opaque primitive from the four leaves' committed digests to
-  the verdict bit. It has no gates. Its Program's digest is the check's, so the spec, the stream and each registration
-  bind to it, but nothing proves it in a circuit. Its verifier of record is a host-side stand-in, `LinkWindows.verify`,
-  that reads the opening: it accepts when the opening reproduces the registered root (so each head leaf holds its
-  record's head) and the audit accepts both
-  records under the certifier's key in its session (`LinkWindows.certifier_session`; `check_link` against the Program's grid under the declared syncs,
-  `check_ingress_link` on the status and parameters), and each head's counts are the profile's for its end and window
-  (`LinkWindows.declares`; a window past the profile is a reject). The count check needs no frame's bytes, so it is the
-  part of the grid check a proof of the unit can make without the content, and the only grid check on ingress: an
-  equality of 32·T bits a head, 32·T − 1 ANDs (19,199 at T = 600). It runs on every link-window, and N3, which holds its
-  N frames to the head's root, so to Σ n_t, runs on drawn ones. The outcome passes the opening's root as the session's, which
-  one-stage's audit holds to the registered one. An unset deadline bit is a `no-verdict` there, so a reject; a proof
-  after `proof_deadline` is the service's `late`.
+- **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v2{EGRESS, INGRESS}: the AND of the certificates' check and
+  each end's head check. The certificates' check is one opaque primitive over the two record leaves' committed digests,
+  with no gates: each certificate verifies under the certifier's key in its session (`LinkWindows.certifier_session`),
+  names the link-window and signs its head, whose deadline bit is set. The head check is a Boolean Definition,
+  `head_check.NetworkHeadCheck_v1{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
+  bit. It opens the head at leaf 2 + direction under the registered root, the hiding read N3 makes of the same leaf
+  (`NetworkHidingRead`), and accepts when the head's link, direction and window are the link-window's, its status is
+  complete, its T, r, B, τ_b and parameters digest are the end's declared grid's (`NetworkHeadFields`), and, on an end
+  with an occupancy profile, its T counts are the profile's row for the window (`NetworkHeadCounts`; a window past the
+  profile has no row and is a reject). In the unit's Program each head check is one gate that names the Definition
+  (`head_check.gate`): the commitment gadgets' Boolean bodies encode to about 140 MB, and the service encodes the Program
+  on every registration. The Program's digest is the check's, so the spec, the stream and each registration bind to it.
+- **Its sizes** (`head_check.size`, L = 9): the count check is an equality of 32·T bits, 32·T − 1 ANDs (19,199 at
+  T = 600); the fields are 736 + 8·L − 1 (807); the opening is 775,077 at T = 4 and 1,876,070 at T = 600, nearly all
+  of it the head row's hm96 digest. The count check needs no frame's bytes, so it is the part of the egress grid check
+  a proof can make without the content, and the only grid check on ingress. It runs on every link-window, and N3, which
+  holds its N frames to the head's root, so to Σ n_t, runs on drawn ones.
+- **Its verifier of record** is `LinkWindows.verify`, on the host, which reads the opening. It accepts when the opening
+  reproduces the registered root, each end's head check accepts (`head_check.reference`, which the tests hold to the
+  circuit), and the audit accepts both records under the certifier's key in its session: `check_link` under the
+  declared syncs, `check_ingress_link` on the status and parameters. On an egress end with a profile, `check_link`
+  compares no grid (`grid=False`): the head check holds the head's status, grid and counts, and the frames' content is
+  N3's. Without an egress profile it compares the certified digest with the Program's grid in the clear. The outcome
+  passes the opening's root as the session's, which one-stage's audit holds to the registered one. An unset deadline bit
+  is a `no-verdict` there, so a reject; a proof after `proof_deadline` is the service's `late`.
+- **The reference** is `LinkWindows.stand_in`, the verdict before the head check: the in-the-clear audit with the egress
+  grid compared, and each head's counts the profile's (`LinkWindows.declares`). The tests hold `verify` to it. The two
+  differ only on an egress window whose frames differ from the Program's grid while its counts are the profile's: the
+  stand-in rejects, and N2 accepts, leaving the content to N3.
 
-What this establishes: the outcome is accept exactly when the audit accepts the registered link-window's records, and
-the outcome record binds the root, the draw and the session. What it doesn't: the stand-in reads the witness, so it is
-not zero-knowledge, and the verifier of record must run where the certificates may go until the check is a Program with a
-proof. One clock per spatial unit across links is not checked (each registration is one link-window, alone), and the
-frames' consistency with the served computation is N3.
+What this establishes: the outcome is accept exactly when the opening seals, both head checks accept and the audit
+accepts the registered link-window's records, and the outcome record binds the root, the draw and the session. What it
+doesn't: the verifier of record reads the witness, so it is not zero-knowledge, and it must run where the certificates
+may go until the unit is proved. Under an egress profile the frames' content is checked only on the windows N3 draws.
+The head check leaves the head's deadline byte and frames root free: the certificates' check reads the deadline, and N3
+the frames root. One clock per spatial unit across links is not checked (each registration is one link-window, alone),
+and the frames' consistency with the served computation is N3.
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
@@ -551,7 +569,14 @@ and seven lemmas, and three more proved lemmas:
   accept, nothing of a certificate or a violation's kind in what the challenger keeps, each refused registration (an
   extra field, a certificate in the clear, a window other than the order), and each reject (a bad signature, a digest
   mismatch, another window or link, a certificate from another session, an unset deadline bit, a late proof, an opening of
-  another root);
+  another root), each held to the stand-in; the unit's id and its gates by size class; under an egress profile, a
+  window whose content differs at the profile's counts is accepted and left to N3, and an egress head under another
+  parameters digest is rejected; a head of another size class is a reject;
+- **`test_network_certifier_head_check.py`:** N2's head check: the count check is 32·T − 1 ANDs and the fields
+  736 + 8·L − 1; each part equals its reference on honest heads and refuses each tampered input where it belongs (link,
+  direction, window, parameters digest or status: the fields; another profile row or edited counts: the counts; another
+  root, salt or path: the opening), and the deadline byte and frames root are left free; the whole Definition equals its
+  reference (slow);
 - **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
   brute force, on one link and on several under one clock;
 - **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
