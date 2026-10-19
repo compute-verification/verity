@@ -571,6 +571,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES, kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
+    supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
     desc = {**rep.descriptor, "annotations": dict(program.annotations)} if rep.descriptor is not None else encode_program(program)  # annotations re-read: the derive adds provenance after its digest
     digest = hashlib.sha512(canon := canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()  # program_digest's text
     # runtime correspondence: carried in the descriptor's annotations (excluded from program_digest), digested apart
