@@ -50,6 +50,8 @@ Drive moved here from ci's VM (INF-129). `post_start.sh` starts its loop, and th
 is absent, so a reset brings drive back in whichever state ci left it. Two drives must never tick against one `next`: ci
 stops its own loop before `drive.sh start` here. Its checkout was cloned over https with `--filter=blob:none`, with
 `notes_sync.CREDENTIAL_HELPER`'s helper for `GH_TOKEN` as its local `credential.helper`; the read-only deploy key can't push.
+`drive.sh start` refuses until a dry-run push of `next` with that token goes through: the token needs Contents and Pull
+requests read and write on this repository (the API's `permissions.push` is its owner's role, not the token's).
 
 The steward holds a lease, so a second copy stands by instead of running. Its `--reap` reads `lane/*` tips from origin with the
 read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until the fetch works again.

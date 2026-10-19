@@ -11,7 +11,8 @@
 # machines.d (RESEARCH_NOTES, the steward's clone) and ~/.runpod/ssh/runpodctl-ssh-key. The store is a cache of the bucket on the
 # container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull.
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
-# progress to end, `drive.sh start` removes it, `drive.sh status` says which and shows the log's tail, and
+# progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
+# which and shows the log's tail, and
 # `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress, with FLAGS added (`--dry-run`).
 # Log: /data/drive/drive.log
 DIR=/data/drive
@@ -30,7 +31,12 @@ tick() {
     --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"
 }
 case ${1:-} in
-  start) rm -f "$STOP"; echo "drive: started; the loop's next pass (within 30 s) ticks"; exit 0 ;;
+  start) (set -a; . $CONF/relay.env; set +a; git -C "$REPO" fetch -q origin +refs/heads/next:refs/remotes/origin/next \
+            && git -C "$REPO" push -q --dry-run origin refs/remotes/origin/next:refs/heads/next) > /dev/null 2>&1 \
+          || { echo "drive: not started: a dry-run push of next with relay.env's GH_TOKEN was refused; drive pushes next and main" \
+                    "and edits and closes PRs, so the token needs Contents and Pull requests read and write on" \
+                    "compute-verification/verity" >&2; exit 1; }
+         rm -f "$STOP"; echo "drive: started; the loop's next pass (within 30 s) ticks"; exit 0 ;;
   stop) : > "$STOP"; echo "drive: stopped; waiting for a tick in progress to end"; flock "$TICK" true
         echo "drive: no tick running"; exit 0 ;;
   status) [ -f "$STOP" ] && echo "drive: stopped ($STOP)" || echo "drive: started"
@@ -48,10 +54,10 @@ while :; do
   if [ -f "$STOP" ]; then
     # every 10 min, so the cloud watch reads a stopped loop as alive
     [ $((n % 20)) -ne 0 ] || echo "$(date -u +%FT%TZ) stopped: $STOP exists (drive.sh start)" >> "$LOG"
-    n=$((n + 1)); sleep 30; continue
+    n=$((n + 1)); sleep 30 9>&-; continue
   fi
   n=0
   (tick) >> "$LOG" 2>&1 9>&-
   echo "$(date -u +%FT%TZ) tick rc=$? $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)" >> "$LOG"
-  sleep 120
+  sleep 120 9>&-
 done
