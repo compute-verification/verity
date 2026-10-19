@@ -1,7 +1,9 @@
 """`lean_headline_dc`: the H200's and B200's headline instances in `lean_headline.py`'s Lean form, exact.
 
-    python benchmarks/pouw/lean_headline_dc.py            print each instance's bound, its branches and their terms
-    python benchmarks/pouw/lean_headline_dc.py --json F   the same as JSON
+    python benchmarks/pouw/lean_headline_dc.py            write Security/Definitions/Accounting/HeadlineDc/Sm*.lean
+    python benchmarks/pouw/lean_headline_dc.py --check    exit 1 when a committed file is not what it would write
+    python benchmarks/pouw/lean_headline_dc.py --numbers  print each instance's bound, its branches and their terms
+    python benchmarks/pouw/lean_headline_dc.py --json F   also write the readings as JSON
 
 `lean_headline.py`'s bound (`Whole.headline_of_branches`) for the data-centre families, whose instances its
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
@@ -81,6 +83,7 @@ class Family:
     eps: Fraction                        # the sheet's headline target
     eps_m: Fraction                      # the measured reading's
     honest_menu: bool = False            # the measured reading's writer kinds: honest's form and the uniform ones only
+    bytes: str = "ALU"                   # the table level's byte class, priced 0 at b_T = 0 (neither census has a load)
 
     @property
     def data(self) -> Path:
@@ -121,16 +124,24 @@ class _Exact:
     """What the Lean data file of a reading reads: classes, coefficients, routes, ♭'s parts and the certificate."""
     classes: list[str]
     c: dict[str, dict[str, Fraction]]
+    rows: list[str]
+    vec: list[str]
+    sheet: dict[str, list]               # the data sheet by class (`_sheet_check`); empty on a measured vector
     writers: list[tuple[str, int]]
     folds: list[dict[str, Fraction]]
     nw: dict[str, Fraction]
     nf: dict[str, Fraction]
     nx: dict[str, Fraction]
     ns: dict[str, Fraction]
+    skip: str
     lam: dict[str, Fraction]
     flat: str
     B: Fraction
     bound: Fraction
+    Nw: int
+    checks: int
+    L: int
+    form: str                            # honest's MMA form
 
 
 @dataclass
@@ -171,19 +182,33 @@ def _coefs(pi: E.Machine, classes: list[str]) -> dict[str, dict[str, Fraction]]:
     return {k: {r: exact(v) for r, v in pi.c[k].items() if v} for k in classes}
 
 
-def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> None:
-    """The data-sheet machine (`Accounting.TS.Sheet.machine`) reproduces every DS coefficient."""
+def _sheet_check(fam: Family, pi: E.Machine, c: dict, h: E.Honest) -> dict[str, list]:
+    """The data sheet by class (`macs`, `peak`, `pipe`, `smem`), checked to reproduce every DS coefficient on
+    `Accounting.TS.Sheet.machine`'s rows: issue 1, tensor `macs/(peak/4)`, a pipe `128/width`, shared memory
+    `smem/32`."""
+    out: dict[str, list] = {"macs": [], "peak": [], "pipe": [], "smem": []}
     for k, row in c.items():
-        if row.get("DS_issue") != 1 or set(row) - set(pi.rows):
+        if row.get("DS_issue") != 1 or set(row) - set(pi.rows) or set(row) - {"DS_issue", "DS_tensor", "DS_smem",
+                                                                                 *fam.pipes}:
             raise SystemExit(f"{fam.sheet}: {k} is not 1 on DS_issue, or has a row outside {pi.rows}")
+        macs = peak = 0
         if "DS_tensor" in row:
             s = shape(k, h)
             pk = 4 * Fraction(s[0]) / row["DS_tensor"] if s else None
             if pk is None or pk.denominator != 1 or pk not in fam.peaks:
                 raise SystemExit(f"{fam.sheet}: {k}'s {s} MACs at {row['DS_tensor']} SMSP-cycles is no sheet peak")
+            macs, peak = s[0], int(pk)
         on = [r for r in fam.pipes if r in row]
         if len(on) > 1 or (on and row[on[0]] != Fraction(128, fam.pipes[on[0]][1])):
             raise SystemExit(f"{fam.sheet}: {k} is on pipes {on} at {row}, not one pipe at 128/width")
+        smem = row.get("DS_smem", Fraction(0)) * 32
+        if smem.denominator != 1:
+            raise SystemExit(f"{fam.sheet}: {k}'s DS_smem {row['DS_smem']} is no whole number of bytes over 32")
+        out["macs"].append(macs)
+        out["peak"].append(peak)
+        out["pipe"].append(fam.pipes[on[0]][0] if on else None)
+        out["smem"].append(int(smem))
+    return out
 
 
 def reading(fam: Family, vector: str, full: bool = False) -> Reading:
@@ -199,13 +224,12 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         raise SystemExit(f"{fam.design}: a filler enters Y whole only at p = 0 (pinned receipts)")
     classes = sorted(pi.c)
     c = _coefs(pi, classes)
-    if sheet:
-        _sheet_check(fam, pi, c, h)
+    lists = _sheet_check(fam, pi, c, h) if sheet else {}
     load = lambda r, n: sum((c[k].get(r, Fraction(0)) * v for k, v in n.items()), Fraction(0))
-    words = Fraction(h.words * h.depth, d.L)
-    if words.denominator != 1:
-        raise SystemExit(f"{fam.design}: {words} committed words an MMA is not whole")
-    Nw = int(words)
+    per_mma = Fraction(h.words * h.depth, d.L)
+    if per_mma.denominator != 1:
+        raise SystemExit(f"{fam.design}: {per_mma} committed words an MMA is not whole")
+    Nw = int(per_mma)
     nw = {k: exact(v) for k, v in h.tensor("floor", d.floor).items()}
     nf = {k: exact(v) * Nw / E.LANES for k, v in d.fold.items()}
     nx: dict[str, Fraction] = {}
@@ -241,19 +265,19 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
         folds.append({E.UNI: exact(d.fold_cost())})
     # Each route's demand on every facet, as `Accounting.TS.Model.demand` reads it: a writer kind 1/ω of its class, the
     # vector route (and the table route, at q_T = q, b_T = 0) q/32 of the cheapest vector class on that facet.
-    words = {k: {r: c[k].get(r, Fraction(0)) / om for r in pi.rows} for k, om in writers}
-    words["vector"] = {r: Q / E.LANES * min(c[k].get(r, Fraction(0)) for k in pi.cuda) for r in pi.rows}
+    routes = {k: {r: c[k].get(r, Fraction(0)) / om for r in pi.rows} for k, om in writers}
+    routes["vector"] = {r: Q / E.LANES * min(c[k].get(r, Fraction(0)) for k in pi.cuda) for r in pi.rows}
     fold_d = [{r: load(r, f) for r in pi.rows} for f in folds]
     fill_d = [{r: load(r, nx) for r in pi.rows}] if nx else []
-    lam = certificate(_best(pi.rows, Nw, B, int(d.checks), words, fold_d, fill_d))
+    lam = certificate(_best(pi.rows, Nw, B, int(d.checks), routes, fold_d, fill_d))
     price = lambda dem: sum((x * dem[r] for r, x in lam.items()), Fraction(0))
-    wk = min(words, key=lambda k: price(words[k]))
-    w = price(words[wk])
+    wk = min(routes, key=lambda k: price(routes[k]))
+    w = price(routes[wk])
     phi = min(price(f) for f in fold_d)
     chi = min((price(f) for f in fill_d), default=Fraction(0))
     Y = (Nw * w + Nw * phi + chi) / B
     lp = e.machine_eps * (1 - float(eps_skip)) + float(eps_skip)
-    if float(1 - Y) < lp - 1e-6 and menu == "all":
+    if float(1 - Y) < lp - 1e-6:
         raise SystemExit(f"{fam.design} on {vector}: 1 − Y {float(1 - Y):.6%} at {lam} is below ε_machine and ε_skip "
                          f"over ♭ ({lp:.6%}): the menu here misses a route the machine model prices")
     folded = 1 - Y + Nw * w / B * 41 * LH.LN2 / (LH.LN_P * d.checks)
@@ -267,7 +291,8 @@ def reading(fam: Family, vector: str, full: bool = False) -> Reading:
                    float(1 - nprice / B), float(w), float(phi), float(chi), float(Nw * w / B), float(1 - Y), lp,
                    float(folded), float(unfolded), float(bound), float(target), e.core(), e.machine_eps, e.luck,
                    {"B": fr(B), "w": fr(w), "phi": fr(phi), "chi": fr(chi), "bound": fr(bound)},
-                   _Exact(classes, c, writers, folds, nw, nf, nx, ns, lam, flat, B, bound))
+                   _Exact(classes, c, list(pi.rows), list(pi.cuda), lists, writers, folds, nw, nf, nx, ns, skip, lam,
+                          flat, B, bound, Nw, int(d.checks), d.L, h.form))
 
 
 def _best(rows: list[str], Nw: int, B: Fraction, checks: int, words: dict, folds: list, fills: list) -> dict[str, float]:
@@ -317,15 +342,258 @@ def certificate(cert: dict[str, float], digits: int = 9) -> dict[str, Fraction]:
     return {r: x for r, x in lam.items() if x > 0}
 
 
+OUT = LH.ROOT / "Security" / "Definitions" / "Accounting" / "HeadlineDc"
+SHEET_ROW = {"DS_issue": ".issue", "DS_tensor": ".tensor", "DS_smem": ".smem"}
+SHAPES = {"Sm90": "sm_90's wgmma as one warp's m16 slice of its m64 warpgroup instruction (`16·n·k`), its mma.sync as "
+                  "m16n8",
+          "Sm100": "sm_100's tcgen05 MMA whole (`m·n·k`), its mma.sync as m16n8"}
+
+
+def _sparse(x: _Exact, n: dict[str, Fraction]) -> str:
+    return "[" + ", ".join(f"({x.classes.index(k)}, {v.numerator}, {v.denominator})"
+                           for k, v in sorted(n.items(), key=lambda kv: x.classes.index(kv[0]))) + "]"
+
+
+def _q(v: Fraction) -> str:
+    return f"{v.numerator} / {v.denominator}"
+
+
+def _writer_lines(x: _Exact) -> str:
+    return "\n".join(f"    ({x.classes.index(k)}, {om}){',' if j + 1 < len(x.writers) else ''}  -- {k}"
+                     for j, (k, om) in enumerate(x.writers))
+
+
+def _bullets(items: list[str]) -> str:
+    return "\n".join(LH._words(b, "* ", "  ") for b in items)
+
+
+def _header(fam: Family, what: str, imports: str, reads: str) -> str:
+    return f'''import {imports}
+
+/-!
+# {fam.gpu} ({fam.key})'s {what} (trusted; generated)
+
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
+this file. `Accounting.Guarantees.TS.{reads}` reads it.
+'''
+
+
+def _model_line(fam: Family, x: _Exact, dvar: str, machine: str, fill: str, rtype: str) -> str:
+    nk, nt, nfo = len(x.classes), len(x.writers), len(x.folds)
+    body = (f"{dvar}.modelFill {nk} {nt} {nfo} {machine} {fill}" if x.nx else f"{dvar}.model {nk} {nt} {nfo} {machine}")
+    return (f"noncomputable def model : Model (Fin {nk}) {rtype} (Fin {nt}) Unit Empty (Fin {nfo}) Unit :=\n"
+            f"  {body}")
+
+
+def render_sheet(fam: Family, r: Reading) -> str:
+    x = r.data
+    ix = x.classes.index
+    lane = [p for p, _ in fam.pipes.values()]
+    sv = fam.sheet.replace("-", "").lower()
+    nk = len(x.classes)
+    filler = bool(x.nx)
+    star = {SHEET_ROW.get(row) or f".pipe .{fam.pipes[row][0]}": v for row, v in x.lam.items()}
+    lam_cases = "\n".join(f"  | {k} => {_q(v)}" for k, v in star.items())
+    if len(star) < 3 + len(lane):
+        lam_cases += "\n  | _ => 0"
+    honest = f"an {x.form} at L = {x.L}"
+    fill_doc = "the filler (ffill on lanes, `flatFill`), " if filler else "no filler, "
+    bullets = [
+        f"`classes`: the {nk} instruction classes of the {fam.sheet} census, in the order `Fin {nk}` indexes them.",
+        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}): f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor "
+        f"class's dense MACs a warp instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the "
+        f"Nsight Compute pipes {', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming "
+        f"Guide widths; no shared-memory row ({fam.sheet} prices none). Its machine reproduces every {fam.sheet} "
+        f"coefficient.",
+        f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every census MMA class "
+        f"(ω = m·n, its destination's 32-bit words a warp)" + (f" and the uniform `UNI` (1)" if fam.uniform else "")
+        + f"; the vector classes CUDA's lane classes; the design's fold on lanes and alone on the uniform datapath; "
+        f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
+        f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
+        + ("; its filler menu the one route ffill runs on (sm_90's uniform datapath has no FFMA)." if filler else "."),
+        f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, "
+        f"{fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
+        f"(`eps_budget.design_skip` on {fam.sheet}).",
+        f"`lamStar`: π*, the certificate minimising the bound over this menu ({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
+        "`checks`: the checks a window, one a round (Theorem S's S).",
+    ]
+    pipes = [f"some .{p}" if p else "none" for p in x.sheet["pipe"]]
+    fold_lines = ",\n".join(f"    {_sparse(x, f)}" for f in x.folds)
+    pipe_ctors = "\n".join(f"  | {p}" for p in lane)
+    width_lines = "\n".join(f"  | .{p} => {w}" for p, w in fam.pipes.values())
+    return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Accounting.HeadlineDc.Encoding",
+                   f"{fam.ns}SheetHeadline") + f'''
+{_bullets(bullets)}
+-/
+
+namespace Accounting.TS.Headline.{fam.ns}
+
+open Accounting.TS
+
+/-- The {fam.sheet} census's instruction classes, in index order. -/
+def classes : List String := {LH._list([f'"{k}"' for k in x.classes], "  ")}
+
+/-- The Nsight Compute pipes the sheet rates (A4). -/
+inductive Pipe
+{pipe_ctors}
+  deriving DecidableEq
+
+instance instFintypePipe : Fintype Pipe where
+  elems := {{{", ".join(f"Pipe.{p}" for p in lane)}}}
+  complete x := by cases x <;> simp
+
+/-- Each pipe's Programming Guide results an SM clock. -/
+def Pipe.width : Pipe → ℕ
+{width_lines}
+
+/-- The {fam.gpu}'s data sheet, by class index. -/
+def {sv} : SheetData Pipe where
+  fmax := {fam.fmax}
+  macs := {LH._list([str(m) for m in x.sheet["macs"]], "    ")}
+  peak := {LH._list([str(p) for p in x.sheet["peak"]], "    ")}
+  pipe := {LH._list(pipes, "    ")}
+  width := Pipe.width
+  smem := {LH._list([str(s) for s in x.sheet["smem"]], "    ")}
+
+/-- The data sheet over the census's classes. -/
+noncomputable def sheet : Sheet (Fin {nk}) Pipe := {sv}.sheet {nk}
+
+/-- `{fam.design}`'s design data: writer kinds as (class, ω), vector classes, fold routes. -/
+def d2s : DesignData where
+  writers := [
+{_writer_lines(x)}
+  ]
+  vec := [{", ".join(str(ix(k)) for k in x.vec)}]  -- {", ".join(x.vec)}
+  folds := [
+{fold_lines}]
+  bytes := {ix(fam.bytes)}  -- {fam.bytes}
+  q := {_q(Q)}
+  qT := {_q(Q)}
+  Nw := {x.Nw}
+
+/-- ♭'s filler a unit{": ffill on lanes" if filler else ": none"}. -/
+def flatFill : Sparse := {_sparse(x, x.nx)}
+
+/-- `{fam.design}`'s TS model on the data sheet's machine. -/
+{_model_line(fam, x, "d2s", "sheet.machine", "flatFill", "(SheetRow Pipe)")}
+
+/-- ♭'s word production a unit: the MMA and the operand floor. -/
+def flatWords : Sparse := {_sparse(x, x.nw)}
+
+/-- ♭'s fold a unit: the lane fold for {x.Nw} words. -/
+def flatFold : Sparse := {_sparse(x, x.nf)}
+
+/-- ♭'s skippable work a unit, at {x.skip}'s price. -/
+def flatSkip : Sparse := {_sparse(x, x.ns)}
+
+/-- The floor program ♭, labelled. -/
+noncomputable def flat : Labelled (Fin {nk}) := labelled {nk} flatWords flatFold flatFill flatSkip
+
+/-- π*: the certificate, its weights exact and summing to 1. -/
+noncomputable def lamStar : SheetRow Pipe → ℝ
+{lam_cases}
+
+/-- The checks a window. -/
+def checks : ℕ := {x.checks}
+
+end Accounting.TS.Headline.{fam.ns}
+'''
+
+
+def render_measured(fam: Family, r: Reading, s: Reading) -> str:
+    x, xs = r.data, s.data
+    if x.classes != xs.classes or x.vec != xs.vec or x.folds != xs.folds or (x.nw, x.nf, x.nx) != (xs.nw, xs.nf, xs.nx):
+        raise SystemExit(f"{fam.measured}: its classes, vector classes or ♭'s parts are not {fam.sheet}'s, which the "
+                         f"measured file reads")
+    ix = x.classes.index
+    nk, m = len(x.classes), len(x.rows)
+    sv = fam.measured.replace("-", "").lower()
+    rows = []
+    for j, row in enumerate(x.rows):
+        entries = [f"({ix(k)}, {x.c[k][row].numerator}, {x.c[k][row].denominator})" for k in x.classes if row in x.c[k]]
+        body = LH._wrap(entries, "   ", 116)[3:] if entries else ""
+        rows.append(f"  -- {j}: {row}\n  [{body}]{',' if j + 1 < m else ''}")
+    menu = ("honest's form and the uniform `UNI` (1): the census prices every other tensor form on the joint rows at "
+            "the scalar coefficient, a lower bound on its issue cost, so they are off the menu and `NoSum` carries "
+            "them" if r.menu == "honest" else "every census MMA class (ω = m·n)")
+    lam = ", ".join(f"({x.rows.index(k)}, {v.numerator}, {v.denominator})" for k, v in x.lam.items())
+    bullets = [
+        f"`rowNames`, `{sv}`, `machine`: the measured vector {fam.measured}, {m} rows of SMSP-cycles a warp instruction "
+        f"at its epoch's census, each sparse over `{fam.ns}.classes`; every facet SM-clocked, f_max {fam.fmax} MHz.",
+        f"`d2s`, `model`: `{fam.design}` on that machine, its writer kinds {menu}; `{fam.ns}.d2s`'s vector classes, "
+        f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
+        f"`flatSkip`, `flat`: ♭ is `{fam.ns}.flat`'s word production, fold and filler, with ε_skip's skippable work at "
+        f"{fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on {fam.measured}), at {x.skip}'s price.",
+        f"`lamStar`: π*, the certificate minimising the bound over this menu "
+        f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
+    ]
+    nt, nfo = len(x.writers), len(x.folds)
+    body = (f"d2s.modelFill {nk} {nt} {nfo} machine {fam.ns}.flatFill" if x.nx else f"d2s.model {nk} {nt} {nfo} machine")
+    return _header(fam, f"measured headline instance: {fam.measured} and `{fam.design}`",
+                   f"Definitions.Accounting.HeadlineDc.{fam.ns}", f"{fam.ns}MeasuredHeadline") + f'''
+{_bullets(bullets)}
+-/
+
+namespace Accounting.TS.Headline.{fam.ns}Measured
+
+open Accounting.TS
+
+/-- {fam.measured}'s rows, in index order. -/
+def rowNames : List String := {LH._list([f'"{row}"' for row in x.rows], "  ")}
+
+/-- {fam.measured}'s coefficients, row by row: `(class index, numerator, denominator)`. -/
+def {sv} : List Sparse := [
+{chr(10).join(rows)}]
+
+/-- The measured machine: {fam.measured}'s rows over `{fam.ns}.classes`. -/
+noncomputable def machine : Machine (Fin {nk}) (Fin {m}) :=
+  rowsMachine {nk} {m} {sv} {fam.fmax}
+
+/-- `{fam.design}`'s design data on {fam.measured}: writer kinds as (class, ω), and `{fam.ns}.d2s`'s routes. -/
+def d2s : DesignData where
+  writers := [
+{_writer_lines(x)}
+  ]
+  vec := {fam.ns}.d2s.vec
+  folds := {fam.ns}.d2s.folds
+  bytes := {fam.ns}.d2s.bytes
+  q := {fam.ns}.d2s.q
+  qT := {fam.ns}.d2s.qT
+  Nw := {fam.ns}.d2s.Nw
+
+/-- `{fam.design}`'s TS model on the measured machine. -/
+noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin {nfo}) Unit :=
+  {body}
+
+/-- ♭'s skippable work a unit on {fam.measured}, at its {x.skip} price. -/
+def flatSkip : Sparse := {_sparse(x, x.ns)}
+
+/-- The floor program ♭ on {fam.measured}, labelled. -/
+noncomputable def flat : Labelled (Fin {nk}) :=
+  labelled {nk} {fam.ns}.flatWords {fam.ns}.flatFold {fam.ns}.flatFill flatSkip
+
+/-- π*: the certificate, its weights exact and summing to 1. -/
+noncomputable def lamStar : Fin {m} → ℝ := cert {m} [{lam}]
+
+end Accounting.TS.Headline.{fam.ns}Measured
+'''
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", help="write every reading here as JSON")
+    ap.add_argument("--check", action="store_true", help="exit 1 when a committed Lean file is not what it would write")
+    ap.add_argument("--numbers", action="store_true", help="print the readings only; write no Lean file")
     a = ap.parse_args(argv)
-    out, record = [], []
+    out, record, files = [], [], {}
     for fam in FAMILIES:
         for v, full in ((fam.sheet, False), (fam.measured, False), *(((fam.measured, True),) if fam.honest_menu else ())):
             r = reading(fam, v, full)
             (record if full else out).append(r)
+            if not full:
+                files[OUT / (fam.ns + ("" if r.sheet else "Measured") + ".lean")] = (
+                    render_sheet(fam, r) if r.sheet else render_measured(fam, r, out[-2]))
             cert = " + ".join(f"{k} {x:.4f}" for k, x in r.certificate.items())
             print(f"{r.design} on {v} ({r.menu} menu{', for the record' if full else ''}): π* {cert}, ♭ on "
                   f"{r.flat_facet} at {r.B:.4f} a unit (ε_cert {r.eps_cert:.4%}), w* {r.wstar}, ε_skip "
@@ -336,7 +604,21 @@ def main(argv: list[str] | None = None) -> int:
     if a.json:
         rows = [{k: v for k, v in asdict(r).items() if k != "data"} for r in out + record]
         Path(a.json).write_text(json.dumps(rows, indent=1) + "\n")
-    return 1 if any(r.bound > r.target for r in out) else 0
+    above = any(r.bound > r.target for r in out)
+    if a.numbers:
+        return 1 if above else 0
+    if a.check:
+        stale = [p for p, text in files.items() if not p.is_file() or p.read_text() != text]
+        for p in stale:
+            print(f"{p.relative_to(LH.ROOT)} is not what lean_headline_dc.py writes: rerun it", file=sys.stderr)
+        return 1 if stale or above else 0
+    if above:
+        return 1
+    for p, text in files.items():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+        print(f"wrote {p.relative_to(LH.ROOT)}")
+    return 0
 
 
 if __name__ == "__main__":
