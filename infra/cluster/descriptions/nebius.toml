@@ -153,14 +153,19 @@ gpu = { nominal = 0 }
 cpu = { nominal = 0 }
 memory = { nominal = 0 }
 
-# Node 2 as read at 19:40Z on 3 Oct, outside a timed window. No /etc/vy/direct-* here: gpu-lease's direct runs aren't capped.
+# Node 2 as read on 18 Oct 20:05Z with its fill runner down since the 16 Oct 21:37Z boot (`policy diff` reads it as quiet from
+# gpu-lease's state), every key as declared. No /etc/vy/direct-* here: gpu-lease's direct runs aren't capped.
 [policy.vy-nebius-2]
 owner = "infra"
+# vy-device-cores owns node 2's cpusets (#1361): user.slice 0-119, its device cores 120-127, so `cluster policy apply` only
+# plans this drop-in here (policy_apply.PLAN_ONLY) and never `systemctl revert`s it
 user-cpuset = { delegate = "cpu cpuset memory pids" }
-# two full-check slots that stop taking checks 90 min before every booked window, so a check started before it ends in time
-# (infra, 12 Oct); 120-127 are isolcpus (kernel cmdline)
+# two full-check slots (Daniel 8 Oct 05:29Z via top: node 2 restarted for check capacity) that stop taking checks 90 min before
+# every booked window, so a check started before it ends in time (infra, 12 Oct); b ends at 119 because 120-127 are
+# vy-device-cores' device cores (#1361: isolcpus on the kernel cmdline, user.slice 0-119)
 check-slots = { a = "0-63 windows=/workspace/pouw/fill/windows lead=90 mem=560", b = "64-119 windows=/workspace/pouw/fill/windows lead=90 mem=560" }
-# /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on slot d's cores
+# /workspace/pouw/fill/cpu-sets: compute accounting's verifies, 4 at a time in 40 GB each, on 0-47, inside check slot a since
+# slot d left node 2 (Daniel 8 Oct 05:29Z via top)
 fill.cpu-sets = { bc-e6a46970-b6ef-5738-af64-182b143075d4 = "0-47 4 40" }
 # /workspace/pouw/fill/windows: the booked timed windows, as `fill.window."START" = MINUTES` (START in UTC, to the minute).
 # None is booked ahead; one that has ended is no longer compared.
