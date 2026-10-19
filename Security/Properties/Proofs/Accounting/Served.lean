@@ -24,8 +24,11 @@ coin, as `h1tile`'s `z` doesn't. `witCreditTie`: an honest `zTree` window meets 
 served `z`, an s8 dot over `K = 32` of the committed A row and the registered B column (each word declared s8),
 beside the noised product its receipt folds (`witZ_beside`: `z` reads no coin, the receipt does), and
 `y = dq(z, s_a, s_w)`; `z`'s value is the dot on every typed input (`witZ_productOf`, its 32 products of s8 words
-within s32, so the clamp is the identity) and `y`'s is `dq` of it (`witZ_dequantOf`). `wit_notValueChecked`: the
-`beside` witness, whose unit has no `out` word, fails `ValueChecked` at every `dq`.
+within s32, so the clamp is the identity) and `y`'s is `dq` of it (`witZ_dequantOf`). `witCallCredit`: an honest
+`perCall` window in CMP-65's order meets `CreditTie`. Its `z` is peeled from the noised product,
+`m − coin·ΣB_k` with `m = Σ (A_k + coin)·B_k`, so its cone holds the coin (`witP_peeled`), and its value is the dot
+all the same (`witP_productOf`: `m` is `Σ A_k·B_k + coin·ΣB_k` within s32, `sum_zipWith_add`). `wit_notValueChecked`:
+the `beside` witness, whose unit has no `out` word, fails `ValueChecked` at every `dq`.
 -/
 
 namespace Properties.Served
@@ -402,72 +405,130 @@ theorem val_of_getElem? {ι : Type} (C : Dag ι) (x : ι → ℤ) (i : ℕ) {g :
 
 end Values
 
-/-- A sum of products of words in `[−128, 127]` is at most `16384` a product in size. -/
-theorem sum_zipWith_bound : ∀ (l1 l2 : List ℤ), (∀ a ∈ l1, -128 ≤ a ∧ a ≤ 127) → (∀ b ∈ l2, -128 ≤ b ∧ b ≤ 127) →
-    -(16384 * l1.length : ℤ) ≤ (List.zipWith (· * ·) l1 l2).sum ∧
-      (List.zipWith (· * ·) l1 l2).sum ≤ 16384 * l1.length
+/-- A sum of products of words in `[−P, P]` and `[−Q, Q]` is at most `P·Q` a product in size. -/
+theorem sum_zipWith_bound {P Q : ℤ} (hP : 0 ≤ P) (hQ : 0 ≤ Q) : ∀ (l1 l2 : List ℤ),
+    (∀ a ∈ l1, -P ≤ a ∧ a ≤ P) → (∀ b ∈ l2, -Q ≤ b ∧ b ≤ Q) →
+      -(P * Q * l1.length) ≤ (List.zipWith (· * ·) l1 l2).sum ∧ (List.zipWith (· * ·) l1 l2).sum ≤ P * Q * l1.length
   | [], _, _, _ => by simp
-  | _ :: _, [], _, _ => by
+  | _ :: l, [], _, _ => by
     simp only [List.zipWith_nil_right, List.sum_nil, List.length_cons]
-    constructor <;> omega
+    have h0 : 0 ≤ P * Q * ((l.length + 1 : ℕ) : ℤ) := mul_nonneg (mul_nonneg hP hQ) (by positivity)
+    constructor <;> linarith
   | a :: l1, b :: l2, h1, h2 => by
     obtain ⟨ha1, ha2⟩ := h1 a (by simp)
     obtain ⟨hb1, hb2⟩ := h2 b (by simp)
     obtain ⟨ih1, ih2⟩ :=
-      sum_zipWith_bound l1 l2 (fun c hc => h1 c (by simp [hc])) (fun c hc => h2 c (by simp [hc]))
-    have hab1 : a * b ≤ 16384 := by
-      nlinarith [mul_nonneg (by linarith : (0 : ℤ) ≤ a + 128) (by linarith : (0 : ℤ) ≤ 127 - b),
-        mul_nonneg (by linarith : (0 : ℤ) ≤ 127 - a) (by linarith : (0 : ℤ) ≤ b + 128)]
-    have hab2 : -16384 ≤ a * b := by
-      nlinarith [mul_nonneg (by linarith : (0 : ℤ) ≤ a + 128) (by linarith : (0 : ℤ) ≤ b + 128),
-        mul_nonneg (by linarith : (0 : ℤ) ≤ 127 - a) (by linarith : (0 : ℤ) ≤ 127 - b)]
+      sum_zipWith_bound hP hQ l1 l2 (fun c hc => h1 c (by simp [hc])) (fun c hc => h2 c (by simp [hc]))
+    have hab1 : a * b ≤ P * Q := by
+      nlinarith [mul_nonneg (by linarith : (0 : ℤ) ≤ P - a) (by linarith : (0 : ℤ) ≤ Q + b),
+        mul_nonneg (by linarith : (0 : ℤ) ≤ P + a) (by linarith : (0 : ℤ) ≤ Q - b)]
+    have hab2 : -(P * Q) ≤ a * b := by
+      nlinarith [mul_nonneg (by linarith : (0 : ℤ) ≤ P - a) (by linarith : (0 : ℤ) ≤ Q - b),
+        mul_nonneg (by linarith : (0 : ℤ) ≤ P + a) (by linarith : (0 : ℤ) ≤ Q + b)]
     simp only [List.zipWith_cons_cons, List.sum_cons, List.length_cons]
     push_cast
     constructor <;> linarith
 
-/-- The s32 clamp is the identity on a value within `2^19`. -/
-theorem clampS32_of_bound {s : ℤ} (h1 : -524288 ≤ s) (h2 : s ≤ 524288) : Accounting.Gates.clampS32 s = s := by
+/-- The s32 clamp is the identity on an s32 value. -/
+theorem clampS32_of_bound {s : ℤ} (h1 : -2147483648 ≤ s) (h2 : s ≤ 2147483647) : Accounting.Gates.clampS32 s = s := by
   have hmin : Accounting.Gates.s32Min ≤ s := le_trans (by norm_num [Accounting.Gates.s32Min]) h1
   have hmax : s ≤ Accounting.Gates.s32Max := le_trans h2 (by norm_num [Accounting.Gates.s32Max])
   unfold Accounting.Gates.clampS32
   rw [min_eq_right hmax, max_eq_right hmin]
 
-/-! ## An honest `zTree` window meets `CreditTie` -/
+/-- A row of ones' products with `l` sum to `l`'s sum. -/
+theorem sum_zipWith_one : ∀ (n : ℕ) (l : List ℤ), l.length = n →
+    (List.zipWith (· * ·) (List.replicate n 1) l).sum = l.sum
+  | 0, [], _ => rfl
+  | n + 1, b :: l, h => by
+    simp only [List.replicate_succ, List.zipWith_cons_cons, List.sum_cons, one_mul]
+    rw [sum_zipWith_one n l (by simpa using h)]
+  | 0, _ :: _, h => by simp at h
+  | _ + 1, [], h => by simp at h
+
+/-- Noising every word of `l1` by `c` adds `c` times `l2`'s sum to the products' sum. -/
+theorem sum_zipWith_add (c : ℤ) : ∀ (l1 l2 : List ℤ), l1.length = l2.length →
+    (List.zipWith (· * ·) (l1.map (· + c)) l2).sum = (List.zipWith (· * ·) l1 l2).sum + c * l2.sum
+  | [], [], _ => by simp
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+  | a :: l1, b :: l2, h => by
+    simp only [List.map_cons, List.zipWith_cons_cons, List.sum_cons]
+    rw [sum_zipWith_add c l1 l2 (by simpa using h)]
+    ring
+
+theorem affine_two (c₁ c₂ a b : ℤ) : (0 : ℤ) + (List.zipWith (· * ·) [c₁, c₂] [a, b]).sum = c₁ * a + c₂ * b := by
+  simp only [List.zipWith_cons_cons, List.zipWith_nil_left, List.sum_cons, List.sum_nil]
+  ring
+
+/-! ## Honest windows meet `CreditTie`: `zTree` with `z` beside the noised product, `perCall` with `z` peeled from it -/
 
 /-- A gate of `op` on `args` declared `[lo, hi]`, committed or not, at no site. -/
 def witGateR (op : Accounting.Gates.Op ℕ) (args : List ℕ) (lo hi : ℤ) (commit : Bool) : Accounting.Gates.Gate ℕ :=
   { op := op, args := args, lo := lo, hi := hi, step := 0, prim := "", site := .other, commit := commit }
 
-/-- The witness's dequant: `z·s_a·s_w`. -/
+/-- The witnesses' dequant: `z·s_a·s_w`. -/
 def witDq (v : List ℤ) : ℤ := v.headD 0 * v.getD 1 0 * v.getD 2 0
 
-/-- The served product `z`: the constant `0` (gate 67), then `K = 32` products of the A row (gates 1–32) with the B
-column (gates 33–64), clamped to s32. -/
-def witZGate : Accounting.Gates.Gate ℕ :=
-  witGateR (.mma .s8 .s8 32 true) (67 :: (List.range' 1 32 ++ List.range' 33 32)) Accounting.Gates.s32Min
-    Accounting.Gates.s32Max true
-
-/-- The served `y = dq(z, s_a, s_w)` (gates 68, 65, 66). -/
-def witYGate : Accounting.Gates.Gate ℕ :=
-  witGateR (.budgeted .rounding witDq) [68, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) true
-
-/-- `witLayout`'s one call in `zTree`: the coin (gate 0); the A row (1–32, s8 run inputs); the B column (33–64, s8
-registered); the scales `s_a` (65, a run input) and `s_w` (66, registered); the constant `0` (67); the served `z`
-(68) and `y` (69), committed under the round's root before its coin; the noised operands `X_k = A_k + coin` (70–101);
-the noised product `m = Σ X_k·B_k` (102); and the receipt (103), committed the round after. -/
-def witZDag : Accounting.Gates.Dag ℕ :=
+/-- The two witnesses' first gates, `witLayout`'s one call's inputs: the coin (gate 0); the A row (1–32, s8 run
+inputs); the B column (33–64, s8 registered); the scales `s_a` (65, a run input) and `s_w` (66, registered); and the
+constant `0` (67). -/
+def witPre : Accounting.Gates.Dag ℕ :=
   [witGateR (.input .coin 0) [] 0 255 false] ++
     (List.range' 1 32).map (fun j => witGateR (.input .run j) [] (-128) 127 false) ++
     (List.range' 33 32).map (fun j => witGateR (.input .registered j) [] (-128) 127 false) ++
     [witGateR (.input .run 65) [] 0 65535 false, witGateR (.input .registered 66) [] 0 65535 false,
-      witGateR (.const 0) [] 0 0 false, witZGate, witYGate] ++
+      witGateR (.const 0) [] 0 0 false]
+
+theorem witPre_get (rest : Accounting.Gates.Dag ℕ) {j : ℕ} (h : j < 68) : (witPre ++ rest)[j]? = witPre[j]? :=
+  List.getElem?_append_left (lt_of_lt_of_eq h (by decide +kernel))
+
+/-- An input gate's value is its slot's, in its declared range on a typed input. -/
+theorem witPre_input (rest : Accounting.Gates.Dag ℕ) (x : ℕ → ℤ) {j : ℕ} {b : Accounting.Gates.Binding} {lo hi : ℤ}
+    (hg : (witPre ++ rest)[j]? = some (witGateR (.input b j) [] lo hi false))
+    (hx : Accounting.Gates.Typed (witPre ++ rest) x) :
+    Accounting.Gates.val (witPre ++ rest) x j = x j ∧ lo ≤ x j ∧ x j ≤ hi := by
+  refine ⟨?_, hx _ (List.mem_of_getElem? hg) b j rfl⟩
+  rw [val_of_getElem? _ x j hg (by simp [witGateR])]
+  rfl
+
+theorem witPre_valA (rest : Accounting.Gates.Dag ℕ) (x : ℕ → ℤ) (hx : Accounting.Gates.Typed (witPre ++ rest) x)
+    {j : ℕ} (h1 : 1 ≤ j) (h2 : j < 33) :
+    Accounting.Gates.val (witPre ++ rest) x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
+  witPre_input (b := .run) rest x (by rw [witPre_get rest (by omega)]; interval_cases j <;> rfl) hx
+
+theorem witPre_valB (rest : Accounting.Gates.Dag ℕ) (x : ℕ → ℤ) (hx : Accounting.Gates.Typed (witPre ++ rest) x)
+    {j : ℕ} (h1 : 33 ≤ j) (h2 : j < 65) :
+    Accounting.Gates.val (witPre ++ rest) x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
+  witPre_input (b := .registered) rest x (by rw [witPre_get rest (by omega)]; interval_cases j <;> rfl) hx
+
+theorem witPre_val67 (rest : Accounting.Gates.Dag ℕ) (x : ℕ → ℤ) : Accounting.Gates.val (witPre ++ rest) x 67 = 0 := by
+  rw [val_of_getElem? _ x 67 (g := witGateR (.const 0) [] 0 0 false) (by rw [witPre_get rest (by omega)]; rfl)
+    (by simp [witGateR])]
+  rfl
+
+/-- The served product `z` of the `zTree` witness: the constant `0` (gate 67), then `K = 32` products of the A row
+(gates 1–32) with the B column (gates 33–64), clamped to s32. -/
+def witZGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.mma .s8 .s8 32 true) (67 :: (List.range' 1 32 ++ List.range' 33 32)) Accounting.Gates.s32Min
+    Accounting.Gates.s32Max true
+
+/-- The `zTree` witness's served `y = dq(z, s_a, s_w)` (gates 68, 65, 66). -/
+def witYGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.budgeted .rounding witDq) [68, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) true
+
+/-- `witLayout`'s one call in `zTree`, after `witPre`: the served `z` (68) and `y` (69), committed under the round's
+root before its coin; the noised operands `X_k = A_k + coin` (70–101); the noised product `m = Σ X_k·B_k` (102); and
+the receipt (103), committed the round after. -/
+def witZRest : Accounting.Gates.Dag ℕ :=
+  [witZGate, witYGate] ++
     (List.range' 1 32).map (fun j => witGateR (.affine 0 [1, 1]) [j, 0] (-128) 382 false) ++
     [witGateR (.mma .s8 .s8 32 false) (67 :: (List.range' 70 32 ++ List.range' 33 32)) Accounting.Gates.s32Min
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
 def witZ : Declared ℕ where
-  dag := witZDag
+  dag := witPre ++ witZRest
   calls := 1
   call := fun _ => 0
   rounds := 1
@@ -518,53 +579,35 @@ theorem witZ_layerCommitted : LayerCommitted witZ :=
 theorem witZ_beside : (coinMark witZ).getD 68 0 = 0 ∧ (coinMark witZ).getD 103 0 = 1 := by
   decide +kernel
 
-theorem witZ_getA {j : ℕ} (h1 : 1 ≤ j) (h2 : j < 33) :
-    witZ.dag[j]? = some (witGateR (.input .run j) [] (-128) 127 false) := by
-  interval_cases j <;> rfl
-
-theorem witZ_getB {j : ℕ} (h1 : 33 ≤ j) (h2 : j < 65) :
-    witZ.dag[j]? = some (witGateR (.input .registered j) [] (-128) 127 false) := by
-  interval_cases j <;> rfl
-
-/-- An A word's value is its input's, an s8 word on a typed input. -/
 theorem witZ_valA (x : ℕ → ℤ) (hx : Accounting.Gates.Typed witZ.dag x) {j : ℕ} (h1 : 1 ≤ j) (h2 : j < 33) :
-    Accounting.Gates.val witZ.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 := by
-  have hg := witZ_getA h1 h2
-  refine ⟨?_, hx _ (List.mem_of_getElem? hg) .run j rfl⟩
-  rw [val_of_getElem? witZ.dag x j hg (by simp [witGateR])]
-  rfl
+    Accounting.Gates.val witZ.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
+  witPre_valA witZRest x hx h1 h2
 
-/-- A B word's value is its input's, an s8 word on a typed input. -/
 theorem witZ_valB (x : ℕ → ℤ) (hx : Accounting.Gates.Typed witZ.dag x) {j : ℕ} (h1 : 33 ≤ j) (h2 : j < 65) :
-    Accounting.Gates.val witZ.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 := by
-  have hg := witZ_getB h1 h2
-  refine ⟨?_, hx _ (List.mem_of_getElem? hg) .registered j rfl⟩
-  rw [val_of_getElem? witZ.dag x j hg (by simp [witGateR])]
-  rfl
+    Accounting.Gates.val witZ.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
+  witPre_valB witZRest x hx h1 h2
 
 /-- **The served `z` is the product of the A row and the B column** on every typed input: its 32 products of s8 words
 stay within s32, so its clamp is the identity. -/
 theorem witZ_productOf : ProductOf witLayout witZ witZCls 68 (List.range' 1 32) (List.range' 33 32) := by
   refine ⟨by decide +kernel, by decide +kernel, by unfold S8; decide +kernel, by unfold S8; decide +kernel,
     fun x hx => ?_⟩
-  have h67 : Accounting.Gates.val witZ.dag x 67 = 0 := by
-    rw [val_of_getElem? witZ.dag x 67 (g := witGateR (.const 0) [] 0 0 false) rfl (by simp [witGateR])]
-    rfl
-  have hA : ∀ a ∈ (List.range' 1 32).map (Accounting.Gates.val witZ.dag x), -128 ≤ a ∧ a ≤ 127 := by
+  have h67 : Accounting.Gates.val witZ.dag x 67 = 0 := witPre_val67 witZRest x
+  have hA : ∀ a ∈ (List.range' 1 32).map (Accounting.Gates.val witZ.dag x), -128 ≤ a ∧ a ≤ 128 := by
     intro a ha
     obtain ⟨j, hj, rfl⟩ := List.mem_map.1 ha
     obtain ⟨hj1, hj2⟩ := List.mem_range'_1.1 hj
     obtain ⟨he, hlo, hhi⟩ := witZ_valA x hx hj1 (by omega)
     rw [he]
-    exact ⟨hlo, hhi⟩
-  have hB : ∀ b ∈ (List.range' 33 32).map (Accounting.Gates.val witZ.dag x), -128 ≤ b ∧ b ≤ 127 := by
+    constructor <;> omega
+  have hB : ∀ b ∈ (List.range' 33 32).map (Accounting.Gates.val witZ.dag x), -128 ≤ b ∧ b ≤ 128 := by
     intro b hb
     obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hb
     obtain ⟨hj1, hj2⟩ := List.mem_range'_1.1 hj
     obtain ⟨he, hlo, hhi⟩ := witZ_valB x hx hj1 (by omega)
     rw [he]
-    exact ⟨hlo, hhi⟩
-  obtain ⟨hb1, hb2⟩ := sum_zipWith_bound _ _ hA hB
+    constructor <;> omega
+  obtain ⟨hb1, hb2⟩ := sum_zipWith_bound (P := 128) (Q := 128) (by norm_num) (by norm_num) _ _ hA hB
   simp only [List.length_map, List.length_range'] at hb1 hb2
   rw [val_of_getElem? witZ.dag x 68 (g := witZGate) rfl (by decide +kernel)]
   simp only [witZGate, witGateR, Accounting.Gates.Op.out, Accounting.Gates.Op.raw, List.map_cons, List.headD_cons,
@@ -614,5 +657,204 @@ theorem witZ_valueChecked : ValueChecked witLayout witDq witZ witZCls := by
 (`witZ_beside`), is value-checked, at one round a step. -/
 theorem witCreditTie : CreditTie witLayout .zTree witDq witZ witZCls :=
   ⟨witTieZ, witZ_valueChecked⟩
+
+/-- The `perCall` witness's noised product, `m = Σ X_k·B_k` over the noised operands (gates 68–99) and the B column
+(33–64), clamped to s32. -/
+def witMGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.mma .s8 .s8 32 true) (67 :: (List.range' 68 32 ++ List.range' 33 32)) Accounting.Gates.s32Min
+    Accounting.Gates.s32Max false
+
+/-- `Σ B_k` (gates 33–64). -/
+def witSGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.affine 0 (List.replicate 32 1)) (List.range' 33 32) (-4096) 4064 false
+
+/-- The noise's correction, `coin·ΣB_k` (gates 0, 101). -/
+def witCGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.budgeted .rounding fun v => v.headD 0 * v.getD 1 0) [0, 101] (-1044480) 1036320 false
+
+/-- The served `z`, peeled from the noised product: `m − coin·ΣB_k` (gates 100, 102). -/
+def witPZGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.affine 0 [1, -1]) [100, 102] Accounting.Gates.s32Min Accounting.Gates.s32Max true
+
+/-- The `perCall` witness's served `y = dq(z, s_a, s_w)` (gates 103, 65, 66). -/
+def witPYGate : Accounting.Gates.Gate ℕ :=
+  witGateR (.budgeted .rounding witDq) [103, 65, 66] (-2 ^ 63) (2 ^ 63 - 1) true
+
+/-- `witLayout`'s one call in `perCall`, after `witPre`: the noised operands `X_k = A_k + coin` (68–99); the noised
+product `m` (100); `ΣB_k` (101) and the correction `coin·ΣB_k` (102); the served `z = m − coin·ΣB_k` (103), whose cone
+holds the coin, and `y` (104); and the receipt over `m` (105). `z`, `y` and the receipt are committed the round after
+the call's. -/
+def witPRest : Accounting.Gates.Dag ℕ :=
+  (List.range' 1 32).map (fun j => witGateR (.affine 0 [1, 1]) [j, 0] (-128) 382 false) ++
+    [witMGate, witSGate, witCGate, witPZGate, witPYGate,
+      witGateR (.affine 0 [1]) [100] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
+
+def witP : Declared ℕ where
+  dag := witPre ++ witPRest
+  calls := 1
+  call := fun _ => 0
+  rounds := 1
+  round := fun _ => 0
+  coinMode := fun _ => .live
+  commitRound := fun i => if 68 ≤ i ∧ i ≠ 101 then 1 else 0
+  seedNames := fun _ _ => false
+  units := 1
+  unit := fun _ => 0
+
+/-- `witP`'s classes: the coin, the A row and `s_a`, the B column and `s_w`, the served `z` and `y`, the receipt, and
+the rest inner. -/
+def witPCls (i : ℕ) : Cls :=
+  if i = 0 then .coin
+  else if i < 33 ∨ i = 65 then .act
+  else if i < 65 ∨ i = 66 then .registered
+  else if i = 103 ∨ i = 104 then .out
+  else if i = 105 then .receipt
+  else .inner
+
+theorem witTieP : Tie witLayout .perCall witP witPCls where
+  calls := by decide +kernel
+  rounds := by decide +kernel
+  round := fun c hc => by
+    obtain rfl : c = 0 := by
+      have h1 : c < 1 := hc
+      omega
+    decide +kernel
+  inRange := fun _ _ => Nat.zero_lt_one
+  live := fun _ _ => rfl
+  coin := by decide +kernel
+  registered := by decide +kernel
+  act := fun i hi h =>
+    ⟨(by decide +kernel : ∀ i, i < witP.dag.length → (witPCls i = .act ∨ witPCls i = .served) →
+        witP.binding i = some .run) i hi h, fun _ _ _ => rfl⟩
+  computed := by decide +kernel
+  committed := by decide +kernel
+  noised := by decide +kernel
+  forms := by decide +kernel
+  linked := fun _ _ _ => ⟨103, by decide +kernel, by decide +kernel, rfl⟩
+  commit := by decide +kernel
+  inner := by decide +kernel
+
+theorem witP_layerCommitted : LayerCommitted witP :=
+  tieCommits ℕ witLayout .perCall witP witPCls witTieP
+
+/-- The served `z` reads the coin, through the noised product it is peeled from. -/
+theorem witP_peeled : (coinMark witP).getD 103 0 = 1 := by
+  decide +kernel
+
+theorem witP_valA (x : ℕ → ℤ) (hx : Accounting.Gates.Typed witP.dag x) {j : ℕ} (h1 : 1 ≤ j) (h2 : j < 33) :
+    Accounting.Gates.val witP.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
+  witPre_valA witPRest x hx h1 h2
+
+theorem witP_valB (x : ℕ → ℤ) (hx : Accounting.Gates.Typed witP.dag x) {j : ℕ} (h1 : 33 ≤ j) (h2 : j < 65) :
+    Accounting.Gates.val witP.dag x j = x j ∧ -128 ≤ x j ∧ x j ≤ 127 :=
+  witPre_valB witPRest x hx h1 h2
+
+theorem witP_valCoin (x : ℕ → ℤ) (hx : Accounting.Gates.Typed witP.dag x) :
+    Accounting.Gates.val witP.dag x 0 = x 0 ∧ 0 ≤ x 0 ∧ x 0 ≤ 255 :=
+  witPre_input (b := .coin) witPRest x (by rw [witPre_get witPRest (by omega)]; rfl) hx
+
+/-- A noised operand's value is its A word's plus the coin's. -/
+theorem witP_valX (x : ℕ → ℤ) {k : ℕ} (h1 : 1 ≤ k) (h2 : k < 33) :
+    Accounting.Gates.val witP.dag x (67 + k) =
+      Accounting.Gates.val witP.dag x k + Accounting.Gates.val witP.dag x 0 := by
+  have hg : witP.dag[67 + k]? = some (witGateR (.affine 0 [1, 1]) [k, 0] (-128) 382 false) := by
+    interval_cases k <;> rfl
+  rw [val_of_getElem? witP.dag x (67 + k) hg (by intro j hj; simp [witGateR] at hj; omega)]
+  exact (affine_two 1 1 _ _).trans (by ring)
+
+/-- **The peeled `z` is the product of the A row and the B column** on every typed input: the noised product is
+`Σ A_k·B_k + coin·ΣB_k`, within s32, and the correction takes the noise back out. -/
+theorem witP_productOf : ProductOf witLayout witP witPCls 103 (List.range' 1 32) (List.range' 33 32) := by
+  refine ⟨by decide +kernel, by decide +kernel, by unfold S8; decide +kernel, by unfold S8; decide +kernel,
+    fun x hx => ?_⟩
+  obtain ⟨hc, hc1, hc2⟩ := witP_valCoin x hx
+  have h67 : Accounting.Gates.val witP.dag x 67 = 0 := witPre_val67 witPRest x
+  have hX : (List.range' 68 32).map (Accounting.Gates.val witP.dag x) =
+      ((List.range' 1 32).map (Accounting.Gates.val witP.dag x)).map (· + x 0) := by
+    rw [show List.range' 68 32 = (List.range' 1 32).map (67 + ·) from (List.map_add_range' 1 32 1).symm,
+      List.map_map, List.map_map]
+    refine List.map_congr_left fun k hk => ?_
+    obtain ⟨hk1, hk2⟩ := List.mem_range'_1.1 hk
+    simp only [Function.comp_apply]
+    rw [witP_valX x hk1 (by omega), hc]
+  have hXb : ∀ a ∈ ((List.range' 1 32).map (Accounting.Gates.val witP.dag x)).map (· + x 0),
+      -382 ≤ a ∧ a ≤ 382 := by
+    intro a ha
+    obtain ⟨v, hv, rfl⟩ := List.mem_map.1 ha
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hv
+    obtain ⟨hj1, hj2⟩ := List.mem_range'_1.1 hj
+    obtain ⟨he, hlo, hhi⟩ := witP_valA x hx hj1 (by omega)
+    show -382 ≤ Accounting.Gates.val witP.dag x j + x 0 ∧ Accounting.Gates.val witP.dag x j + x 0 ≤ 382
+    rw [he]
+    constructor <;> omega
+  have hBb : ∀ b ∈ (List.range' 33 32).map (Accounting.Gates.val witP.dag x), -128 ≤ b ∧ b ≤ 128 := by
+    intro b hb
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hb
+    obtain ⟨hj1, hj2⟩ := List.mem_range'_1.1 hj
+    obtain ⟨he, hlo, hhi⟩ := witP_valB x hx hj1 (by omega)
+    rw [he]
+    constructor <;> omega
+  obtain ⟨hb1, hb2⟩ := sum_zipWith_bound (P := 382) (Q := 128) (by norm_num) (by norm_num) _ _ hXb hBb
+  simp only [List.length_map, List.length_range'] at hb1 hb2
+  have hm : Accounting.Gates.val witP.dag x 100 = (List.zipWith (· * ·)
+      (((List.range' 1 32).map (Accounting.Gates.val witP.dag x)).map (· + x 0))
+      ((List.range' 33 32).map (Accounting.Gates.val witP.dag x))).sum := by
+    rw [val_of_getElem? witP.dag x 100 (g := witMGate) rfl (by decide +kernel)]
+    simp only [witMGate, witGateR, Accounting.Gates.Op.out, Accounting.Gates.Op.raw, List.map_cons,
+      List.headD_cons, List.tail_cons, h67, zero_add, List.map_append, hX]
+    unfold Accounting.Gates.dot
+    rw [List.take_left' (by simp), List.drop_left' (by simp)]
+    exact clampS32_of_bound (by omega) (by omega)
+  have hS : Accounting.Gates.val witP.dag x 101 =
+      ((List.range' 33 32).map (Accounting.Gates.val witP.dag x)).sum := by
+    rw [val_of_getElem? witP.dag x 101 (g := witSGate) rfl (by decide +kernel)]
+    show (0 : ℤ) + (List.zipWith (· * ·) (List.replicate 32 1)
+      ((List.range' 33 32).map (Accounting.Gates.val witP.dag x))).sum = _
+    rw [zero_add, sum_zipWith_one 32 _ (by simp)]
+  have hC : Accounting.Gates.val witP.dag x 102 =
+      x 0 * ((List.range' 33 32).map (Accounting.Gates.val witP.dag x)).sum := by
+    rw [val_of_getElem? witP.dag x 102 (g := witCGate) rfl (by decide +kernel), ← hc, ← hS]
+    rfl
+  rw [val_of_getElem? witP.dag x 103 (g := witPZGate) rfl (by decide +kernel)]
+  refine (affine_two 1 (-1) _ _).trans ?_
+  rw [hm, hC, sum_zipWith_add (x 0) _ _ (by simp)]
+  ring
+
+/-- **The served `y` is `dq` of the peeled `z`** and the two scales, on every typed input. -/
+theorem witP_dequantOf : DequantOf witDq witP witPCls 104 103 [65, 66] := by
+  refine ⟨by decide +kernel, fun x _ => ?_⟩
+  rw [val_of_getElem? witP.dag x 104 (g := witPYGate) rfl (by decide +kernel)]
+  rfl
+
+/-- The receipt reads every A word (through its noised `X_k` and `m`) and every B word (through `m`). -/
+theorem witP_feeds : ∀ t ∈ List.range' 1 32 ++ List.range' 33 32, Feeds witP t 105 := by
+  have h3 : witP.Reads 105 100 := by unfold Declared.Reads; decide +kernel
+  have hA : ∀ t ∈ List.range' 1 32, witP.Reads (67 + t) t ∧ witP.Reads 100 (67 + t) := by
+    unfold Declared.Reads; decide +kernel
+  have hB : ∀ t ∈ List.range' 33 32, witP.Reads 100 t := by
+    unfold Declared.Reads; decide +kernel
+  intro t ht
+  rcases List.mem_append.1 ht with ht | ht
+  · exact feeds_tail (feeds_tail (feeds_read (hA t ht).1) (hA t ht).2) h3
+  · exact feeds_tail (feeds_read (hB t ht)) h3
+
+theorem witP_valueChecked : ValueChecked witLayout witDq witP witPCls := by
+  refine ⟨fun r hr hrc => ?_, fun i hi hio => ?_⟩
+  · obtain rfl : r = 105 :=
+      (by decide +kernel : ∀ r, r < witP.dag.length → witPCls r = .receipt → r = 105) r hr hrc
+    exact ⟨103, 104, List.range' 1 32, List.range' 33 32, [65, 66], by decide +kernel, by decide +kernel, rfl, rfl,
+      by decide +kernel, by decide +kernel, by decide +kernel, by decide +kernel, witP_productOf, witP_dequantOf,
+      witP_feeds⟩
+  · rcases (by decide +kernel : ∀ i, i < witP.dag.length → witPCls i = .out → i = 103 ∨ i = 104) i hi hio
+      with rfl | rfl
+    · exact Or.inl ⟨_, _, witP_productOf⟩
+    · exact Or.inr ⟨103, _, _, _, rfl, by decide +kernel, witP_productOf, witP_dequantOf⟩
+
+/-- **An honest `perCall` window meets `CreditTie`**, in the order CMP-65 gives kernels: the call's A table before its
+coin, then the coin, the noise and the receipt, with the unit's `z` and `y` committed beside the receipt. Its `z` is
+peeled from the noised product (`witP_peeled`: its cone holds the coin, as `Tie.noised` asks of a `perCall` `out`
+word), and is value-checked all the same. -/
+theorem witCallCredit : CreditTie witLayout .perCall witDq witP witPCls :=
+  ⟨witTieP, witP_valueChecked⟩
 
 end Properties.Served
