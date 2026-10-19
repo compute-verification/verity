@@ -44,12 +44,12 @@ Everything else is the protocol's (`audit`), the same for every scheme.
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
    Its root must reach the challenger within the deadline of the salt coin's release: the verifier's rule at the
    deadline in `Security/Definitions/Pouw/Game/Deadline.lean`, which `WorkBetweenSaltAndDeadline` reads. The served
-   window states it as `Check.registration_deadline`, seconds on the
+   window states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
+   parameters without it, and refuses as `late-registration` a window received after the epoch's draw coin was released
+   (each root's receipt comes before the coin's release). The deadline is in seconds on the
    challenger's clock, and the proof service refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
-   `registration_deadline` in its parameters, which `served_commit.py params` writes). The challenger refuses
-   parameters without it, and it refuses as `late-registration` a window received after the epoch's draw coin was
-   released: each root's receipt comes before the coin's release.
+   `registration_deadline` in its parameters).
 5. **Selection.** Served accounting uses only the sampled audit.
    - `Sampled(t)`: `derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`, the source
      being the epoch's draw coin, opened after the verifier recorded the transcript's root (`draw_coin`); draw j is
