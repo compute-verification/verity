@@ -92,7 +92,7 @@ theorem activationsIncompressible_of_training (hba : 0 ≤ b_a)
     (h : Assumptions.TrainingIncompressible c ch T Γ K b_w b_a) :
     Assumptions.ActivationsIncompressible c ch Γ K b_w b_a := by
   intro R hR hΓ hK
-  obtain ⟨_, hA, -⟩ := training_piece h ⟨hR, hΓ, hK⟩
+  obtain ⟨_, hA, -⟩ := training_piece h (R := R) ⟨hR, hΓ, hK⟩
   exact le_of_max_charge_left hba hA
 
 /-- **Training's incompressibility gives the partial sums'**. -/
