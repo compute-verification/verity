@@ -12,6 +12,9 @@ inside it. A negative `q` leaves nothing to prove: the first checkpoint's bound 
 `CheckpointGuessOfFresh` splits set `s`'s coins off the rest (`splitAt`) and bounds each slice: with the view and the
 other sets' coins fixed, the earlier checkpoints and the mode are fixed too, and set `s`'s coins alone move checkpoint
 `s`.
+
+`crossRead` is why a round's tiles compound only in an order: two tiles that each meet `CheckpointGuessOfFresh`'s
+hypotheses, the other tile's coin as the view, are lucky together as often as each is alone.
 -/
 
 namespace Accounting.SecurityProofs.Checkpoint
@@ -118,5 +121,25 @@ theorem CheckpointGuessOfFresh : Accounting.Guarantees.Checkpoint.CheckpointGues
     · rw [prob_eq_zero fun ξ h => hP ((hpre ξ).1 h.2.1),
         prob_eq_zero fun ξ h => hP ((hpre ξ).1 h.1), mul_zero]
   · rw [prob_eq_zero fun ξ h => hW h.2.2, prob_eq_zero fun ξ h => hW h.2, mul_zero]
+
+/-- **Per-tile luck is not joint luck: the cross-read.** Two tiles skipped whole, with independent uniform one-bit set
+coins `c.1` and `c.2`, each tile's honest checkpoint its own coin. Tile 1 commits tile 2's coin and tile 2 commits
+tile 1's. Each commitment reads only the other tile's coin, so each tile on its own meets `CheckpointGuessOfFresh`'s
+hypotheses with that coin as its view, at its set's point mass `½` (the first conjunct), and keeps its checkpoint
+with probability `½`. The two events are one, so both tiles keep theirs with probability `½`, not `¼`. A bound over a
+round's tiles jointly needs an order in which no tile's commitments read a later tile's coins. -/
+theorem crossRead :
+    (∀ v : Bool, prob (fun ξ : Bool => v = ξ) = 1 / 2) ∧
+      prob (fun c : Bool × Bool => c.2 = c.1) = 1 / 2 ∧ prob (fun c : Bool × Bool => c.1 = c.2) = 1 / 2 ∧
+      prob (fun c : Bool × Bool => c.2 = c.1 ∧ c.1 = c.2) = 1 / 2 := by
+  refine ⟨fun v => ?_, ?_, ?_, ?_⟩
+  · rw [prob_eq_card, show (Finset.univ.filter fun ξ : Bool => v = ξ).card = 1 by cases v <;> decide]
+    norm_num
+  · rw [prob_eq_card, show (Finset.univ.filter fun c : Bool × Bool => c.2 = c.1).card = 2 by decide]
+    norm_num
+  · rw [prob_eq_card, show (Finset.univ.filter fun c : Bool × Bool => c.1 = c.2).card = 2 by decide]
+    norm_num
+  · rw [prob_eq_card, show (Finset.univ.filter fun c : Bool × Bool => c.2 = c.1 ∧ c.1 = c.2).card = 2 by decide]
+    norm_num
 
 end Accounting.SecurityProofs.Checkpoint
