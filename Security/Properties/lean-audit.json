@@ -9,6 +9,7 @@
   "Properties.Nci",
   "Properties.Proofs.Nci",
   "Properties.Proofs.Nci.DescAgree",
+  "Properties.Proofs.Nci.Walk",
   "Properties.CertifierDevice",
   "Properties.Proofs.CertifierDevice",
   "Properties.Pous",
