@@ -134,6 +134,10 @@
    "owner": "@lean",
    "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
   },
+  "Nci.Assumptions.Fits": {
+   "owner": "@lean",
+   "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
+  },
   "Nci.Assumptions.PartialSumsIncompressible": {
    "owner": "@lean",
    "digest": "3e12dadef8d8457e3aa1179212599e1eabeef158cb25d3d51bab61e7668f6374"
@@ -141,6 +145,10 @@
   "Nci.Assumptions.PartialSumsSupport": {
    "owner": "@lean",
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
+  },
+  "Nci.Assumptions.Reach": {
+   "owner": "@lean",
+   "digest": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
   },
   "Nci.Assumptions.TrainingIncompressible": {
    "owner": "@lean",
@@ -3534,6 +3542,12 @@
    "assumptions": [],
    "type_hash": "c714b31cf1728e65cfbbe0a9d2beaf55916ed0f231856ba07ec443f505fde314"
   },
+  "Nci.SecurityProofs.FitBound": {
+   "owner": "@lean",
+   "signature": ["Nci.SecurityProofs.FitBound : Nci.Guarantees.FitBound"],
+   "assumptions": [],
+   "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0"
+  },
   "Nci.SecurityProofs.FullPositions": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
@@ -4988,7 +5002,8 @@
    "Definitions.Accounting.Actual",
    "Definitions.Accounting.Physical",
    "Models.Accounting.Assumptions.PouwWork",
-   "Proofs.Flock.Recursive.Premises"
+   "Proofs.Flock.Recursive.Premises",
+   "Models.Nci.Assumptions.Fit"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
@@ -5600,7 +5615,8 @@
    "Nci.SecurityProofs.Dampener": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound, taken as a hypothesis (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerWindows": "frozen (no-function): It composes the compute dampener over real numbers from each source's bound and the memory challenger's per-window cap, taken as hypotheses (Security/Models/Nci/Guarantees/Dampener.lean says which guarantee each one reads), not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerThreaded": "frozen (no-function): It composes the compute dampener with ThreadedThrottled discharging the declared source, about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Models/Nci/Assumptions/Threads.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining it to NciCheck.Properties.Witnesses and the other sources to their verifiers is what would give it one.",
-   "Accounting.SecurityProofs.Actual.WindowsAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance."
+   "Accounting.SecurityProofs.Actual.WindowsAt": "frozen (no-function,world-unlisted): It is stated over an arbitrary actual circuit (Accounting.Placed) and arbitrary cuts of its run, and takes the physical constraints Causal, ComputeRate and Links about it, per-run hypotheses that are not on the premises list, rather than a function's acceptance.",
+   "Nci.SecurityProofs.FitBound": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and its division into windows, under the named empirical premises Reach (F3) and Fits (F1 and F4) (Security/Models/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -7610,6 +7626,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -7655,6 +7672,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
@@ -7757,6 +7775,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.Inference",
@@ -7867,6 +7886,7 @@
     "Nci.SecurityProofs.ContainedTraining",
     "Nci.SecurityProofs.ContainedTrainingOn",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.FullPositions",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
@@ -7917,6 +7937,15 @@
     "Nci.SecurityProofs.ThreadedThrottledOn",
     "Nci.SecurityProofs.ThreadedTrainingOn"
    ]
+  },
+  "Definitions.Nci.Fit": {
+   "digest": "8ffbf58c1c7939a8457980abca63aee69243a3d821d109419b7fb0ba1820aff9",
+   "definitions": {
+    "Nci.Threading.entered": "43d16564a07afa5f83564464b9eef70f25fe27fd6ac0b415efbb83d0bd533301",
+    "Nci.Threading.threadWeights": "54c0d1f8eac0ec96f58180c349bf11a5453623c6f55a0ebcfd596336e4f238b0",
+    "Nci.Threading.visits": "ed525037dccc0f61881cb547cf45d9e86c54c7caa257882af522168199aebb13"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitBound"]
   },
   "Definitions.Nci.Info": {
    "digest": "8fb3a35e7925ba55540307fa339b42bb6815b9a48b751456a64f404a260a9898",
@@ -7987,6 +8016,7 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntime",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDark",
     "Nci.SecurityProofs.DampenerThreaded",
+    "Nci.SecurityProofs.FitBound",
     "Nci.SecurityProofs.IncompressibleContainedTraining",
     "Nci.SecurityProofs.IncompressibleThreadedThrottled",
     "Nci.SecurityProofs.ThreadedContainedInfo",
@@ -17591,6 +17621,14 @@
     "Nci.SecurityProofs.UpdatedMatMulReads"
    ]
   },
+  "Models.Nci.Assumptions.Fit": {
+   "digest": "2295c39543e2983aa540f65bf6927e7c85d6f59a7513eb4831b1aaff7d9f3b47",
+   "definitions": {
+    "Nci.Assumptions.Fits": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864",
+    "Nci.Assumptions.Reach": "b3c25b0f62c270144816c888bbb3fce4fecde3554892478b3d83a6aa22baf7a5"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitBound"]
+  },
   "Models.Nci.Assumptions.Info": {
    "digest": "00bdbe965111c5d8b58cba8d227486e05eb84da8d908fcde9586ce5ff5e4b421",
    "definitions": {
@@ -17680,6 +17718,13 @@
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerWindows"
    ]
+  },
+  "Models.Nci.Guarantees.Fit": {
+   "digest": "3d92b64776e296c500c51f41702c1c64a88e05c0b951aab58c8607f6f7e04304",
+   "definitions": {
+    "Nci.Guarantees.FitBound": "ec54acc63f9765c03cf44dfcd919608d77f980b4210b08e04ef29edc38547f69"
+   },
+   "guarantees": ["Nci.SecurityProofs.FitBound"]
   },
   "Models.Nci.Guarantees.Info": {
    "digest": "88194ec7e2fce7b6006af38386697feeaa1485ed6b2da82b548bbd01386e9f5a",
