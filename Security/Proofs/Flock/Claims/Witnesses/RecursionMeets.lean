@@ -33,11 +33,12 @@ read:
   (`RecDeploy.prover_deployRecStop`), which sends the empty message wherever its stop has fired
   (`RecDeploy.refPStop_halted`), and whose stop fires at the first round on every statement out of scope or whose
   inner statement the inner verifier can't accept (`RecDeploy.halted_of_statement`), and nowhere before the staging
-  round at an inner-ready statement in scope off a bad inner coin (`RecDeploy.halted_live`);
+  round at an inner-ready statement in scope where every answer is a coin's bytes and none a bad inner coin
+  (`RecDeploy.halted_live`);
 * `ZKStop_meets_ready`: where that leaves the stop live. In scope, the inner readiness the stop reads is the inner
   statement's size, its regions and its honest record (`RecDeploy.ready_inScope_iff`), and wherever those hold, the
-  reference prover runs every round before the staging round that no bad inner coin precedes; the inner statement
-  `RecDeploy.PlainLeavesAdmitted` names (#2468's) has them (`RecDeploy.ready_of_admitted`);
+  reference prover runs every round before the staging round where every answer is a coin's bytes and none a bad inner
+  coin; the inner statement `RecDeploy.PlainLeavesAdmitted` names (#2468's) has them (`RecDeploy.ready_of_admitted`);
 * `ScopeMatches_meets`: the deployed inner Flock's readable scope is its scope check (`FlockDeploy.scopeMatches_plain`),
   which `Flock.RecScope.scopeMatches_deployed` reads;
 * `Complete_meets`, `Nontrivial_meets`: the readable scope holds a statement of each kind the compiled verifier accepts,
@@ -194,7 +195,7 @@ theorem ZKPriv_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readab
 at the compiled verifier's record with its stop is `refPStop` on the tape `tapeOf x` draws, and `refPStop` sends the
 empty message wherever the stop has fired; the stop fires at the first round on every statement out of scope or whose
 inner statement the inner verifier can't accept, and, at an inner-ready statement in scope, nowhere before the staging
-round where no prefix of the transcript holds a bad inner coin. -/
+round where every answer is a coin's bytes and no prefix of the transcript holds a bad inner coin. -/
 theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (IV : Claims.Verifier FlockDeploy.Coin) (ivScope : Msg → Bool) (b : RecDeploy.Brings)
@@ -213,7 +214,7 @@ theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonemp
           (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H n x ms = true) ∧
       ∀ (H : Msg → Msg) (x : Msg) (ms : List (Msg × Out)), RecDeploy.scopeCheck ivScope x = true →
         FlockComplete.ready FlockDeploy.sha512 (RecDeploy.xIOf x) = true → ms.length < RecDeploy.stopRounds IV x →
-          (∀ i ≤ ms.length, ¬ RecDeploy.badAt x (ms.take i)) →
+          RecDeploy.Coined ms → (∀ i ≤ ms.length, ¬ RecDeploy.badAt x (ms.take i)) →
             (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x ms =
               false :=
   ⟨rfl, RecDeploy.prover_deployRecStop IV ivScope b tapeOf SO nAt innerMsg,
@@ -229,7 +230,7 @@ theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonemp
 * the inner statement that `RecDeploy.PlainLeavesAdmitted` names, true and in Flock's scope, is one it holds at (and
   where Flock's honest prover is complete, the inner verifier accepts there, `RecDeploy.admitted_acc`);
 * at a statement in scope whose inner session has those three facts, the reference prover hasn't stopped before the
-  staging round where no prefix of the transcript holds a bad inner coin.
+  staging round where every answer is a coin's bytes and no prefix of the transcript holds a bad inner coin.
 
 No statement in scope is exhibited: the scope check and Flock's setup read the statement's JSON with `Lean.Json.parse`,
 a `partial` function the kernel can't unfold (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
@@ -253,13 +254,15 @@ theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, 
         (∀ s spec sts, FlockDeploy.setupOf false (RecDeploy.xIOf x) = some (s, spec, sts) →
           (∀ st ∈ sts, FlockComplete.RegionsFit st) ∧
             FlockComplete.RecordFitsAt FlockDeploy.sha512 (RecDeploy.xIOf x) spec sts) →
-        ms.length < RecDeploy.stopRounds IV x → (∀ i ≤ ms.length, ¬ RecDeploy.badAt x (ms.take i)) →
+        ms.length < RecDeploy.stopRounds IV x → RecDeploy.Coined ms →
+          (∀ i ≤ ms.length, ¬ RecDeploy.badAt x (ms.take i)) →
           (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x ms =
             false := by
   refine ⟨fun _ hs => RecDeploy.ready_inScope_iff hs, fun hA => RecDeploy.ready_of_admitted hA,
-    fun H x ms hs hl hfit hlen hb => ?_⟩
+    fun H x ms hs hl hfit hlen hc hb => ?_⟩
   obtain ⟨s, spec, sts, hset, -, hiff⟩ := RecDeploy.ready_inScope_iff hs
-  exact RecDeploy.halted_live IV ivScope b tapeOf SO nAt innerMsg H x ms hs (hiff.2 ⟨hl, hfit s spec sts hset⟩) hlen hb
+  exact RecDeploy.halted_live IV ivScope b tapeOf SO nAt innerMsg H x ms hs (hiff.2 ⟨hl, hfit s spec sts hset⟩) hlen hc
+    hb
 
 /-- `ScopeMatches`' antecedent at the deployment: the deployed inner Flock's readable scope is its scope check, which
 the compiled verifier's scope check reads (`Flock.RecScope.scopeMatches_deployed`). -/

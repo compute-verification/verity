@@ -472,9 +472,10 @@ def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) 
   each inner and staging round and after the last of them (`halted`); from there the prover sends the empty message
   every round. It reads the hash, the statement and what the verifier has seen, never the witness or a tape, so a
   simulator reads it off its own run. At the deployment it is where the honest proof can be refused: a statement out
-  of scope or whose inner statement the inner verifier can't accept (read off the statement alone), an inner coin in
-  the inner completeness error (Flock's: a zerocheck outer coin at `1`), or staged V* statements that the masked
-  verifier can't accept or whose numbers are not the statement's (where the compiled verifier refuses). -/
+  of scope or whose inner statement the inner verifier can't accept (read off the statement alone), an answer before
+  the sessions that is not a coin's bytes (which the honest prover would read as some coin), an inner coin in the
+  inner completeness error (Flock's: a zerocheck outer coin at `1`), or staged V* statements that the masked verifier
+  can't accept or whose numbers are not the statement's (where the compiled verifier refuses). -/
 structure StopDeploy (Coin : Type) extends ZkDeploy Coin where
   nAt : Msg → ℕ → ℕ
   innerMsg : Msg → List (Msg × Out) → List Msg → OC Msg
@@ -806,10 +807,11 @@ which stops where `stops` says, against every malicious verifier of the compiled
 stops there too: wherever hm96 leaves hide up to `δ₁` at the deployed key, within `εzkStop` plus `γzk` times the
 probability that `Fork` finds a collision among the prover's SHA-512 calls in two real runs against `V*`.
 
-A malicious verifier may send inner coins in the inner completeness error, where whether the honest inner proof is
-refused reads the inner messages, and the V* statements staged after a refused one have no witness; a stop on the
-statement and the transcript the verifier has seen leaves that refusal unreachable and reveals nothing the verifier
-didn't see. `Complete` reads the same prover, which stops there too, so the stop costs completeness at most `δc`. -/
+A malicious verifier may send inner coins in the inner completeness error, or replies that are no coin's bytes, where
+whether the honest inner proof is refused reads the inner messages, and the V* statements staged after a refused one
+have no witness; a stop on the statement and the transcript the verifier has seen leaves that refusal unreachable and
+reveals nothing the verifier didn't see. `Complete` reads the same prover, which stops there too, so the stop costs
+completeness at most `δc`. -/
 def ZKStop (H : Msg → Msg) (D : StopDeploy Coin) (I : Inner Coin Flock.Wit) (DO : Flock.Deploy Coin Col T) : Prop :=
   DO.zk = true ∧ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, Hm96Hiding D.mask (D.toDeploy.saltHash H) δ₁ →
     ZKmalRx D.Nonce D.Rest H D.V.k D.prover (R D.toDeploy I) (SimStop D I (D.SO t) H) (εzkStop D I t δ₁)
