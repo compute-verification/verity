@@ -689,11 +689,13 @@ Before the session's `Commit` the firewall recomputes the level-0 commitment its
 host witness (`FC_HOST_WITNESS=1`: the firewall assembles the witness on the host and uploads it whole, so the witness the
 recheck commits is its own; the assembly is counted in the session's prove time, as the device's witness kernel is
 without it), under `hm96::begin` with the session's level-0 salts (`LeafSalts::level0`), with the `Level0Zk` the host
-drew. When the device's root differs, the recheck's root leaves in the `Commit` and the session stops at its `Finish`
-(`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps the tree, so
-the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per statement as `FIREWALL` lines
-(`t.firewall_recheck` wall seconds, `cpu.firewall_recheck` the process's CPU seconds over it), beside the device's
-`t.encoding_commitment`.
+drew. The root of record is the Lean verifier's: `flock-firewall link` (`Flock.Firewall.Link`) commits the same level 0
+from the same witness words, extra lanes, paddings and salts, beside `commit_zk`, and a table whose two roots differ is
+refused before anything of it leaves (`FIREWALL-REFUSED: level-0 recheck`). When the device's root differs, the recheck's
+root leaves in the `Commit` and the session stops at its `Finish` (`FIREWALL-REFUSED: level-0 root`, §10.1). It keeps
+`commit_zk`'s tree, so the proof's level-0 rows and paths are checked against it at the end. Its cost is reported per
+statement as `FIREWALL` lines (`t.firewall_recheck` wall seconds and `cpu.firewall_recheck` the process's CPU seconds of
+`commit_zk`, `t.lean_link` the Lean link's wall seconds, `rust_root_agrees`), beside the device's `t.encoding_commitment`.
 
 ### 10.3 The rule, inner phase (`rec_live`)
 

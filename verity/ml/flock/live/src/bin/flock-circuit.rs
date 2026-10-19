@@ -1239,11 +1239,14 @@ fn flip_first(content: &mut [u8], op: u8) -> bool {
 
 impl Firewall {
     /// Installs the table's salt context (level 0's salts, then the draws [`FirewallDraws`] routes) and recomputes the level-0
-    /// commitment from the host witness `z` and the table's level-0 hiding `l0`, timed.
+    /// commitment from the host witness `z` and the table's level-0 hiding `l0`, timed. The root of record is the Lean link's
+    /// (`flock-firewall link`, [`flock_live::firewall::lean_link`]), computed beside Rust's `commit_zk`, whose root must be the
+    /// same: a table whose two roots differ is refused.
     fn new(st: &Arc<Stmt>, z: Vec<F128>, lig: LigeritoProfile, l0: &flock_core::pcs::ligerito::zk::Level0Zk,
-           salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool) -> Firewall {
+           salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>, two: bool) -> Result<Firewall, String> {
         let pcs = params(st.m, lig);
         let level0 = salts.lock().unwrap_or_else(PoisonError::into_inner).level0(pcs.n_leaves());
+        let link_salts = level0.clone();
         let tamper = std::env::var("FC_FIREWALL_TAMPER").unwrap_or_default();
         let (seen, cut_fired) = (Arc::new(std::sync::atomic::AtomicUsize::new(0)), Arc::new(std::sync::atomic::AtomicBool::new(false)));
         let tree_cut = (tamper == "cut-tree").then(|| (cut_at(), seen.clone(), cut_fired.clone()));
@@ -1275,13 +1278,26 @@ impl Firewall {
             .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()));
         let pool = Arc::new(rayon::ThreadPoolBuilder::new().num_threads(threads).thread_name(|i| format!("firewall-{i}"))
             .start_handler(|_| IN_FIREWALL.with(|g| g.set(true))).build().expect("the firewall's thread pool"));
-        let (t0, c0) = (Instant::now(), flock_live::firewall::cpu_seconds());
-        let (cm, pd) = pool.install(|| flock_core::pcs::commit::commit_zk(&z, &pcs, l0));
-        let (t_recheck, cpu_recheck) = (t0.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - c0);
-        let root = merkle_digest_bytes(&cm.cap).to_vec();
-        eprintln!("FIREWALL\t{}", json!({"recheck_root": hex(&root), "m": st.m, "t.firewall_recheck": t_recheck, "cpu.firewall_recheck": cpu_recheck, "threads": threads}));
-        Firewall { st: st.clone(), lig, z: Arc::new(z), cm, pd: Arc::new(pd), root, draws, pool, tamper, why: None, rep: None, lean_ok: 0, seen,
-                   cut_fired, t_recheck, cpu_recheck }
+        let (exe, m) = (flock_live::firewall::lean_frame_exe(), st.m);
+        let ((cm, pd, t_recheck, cpu_recheck), (lean, t_lean)) = std::thread::scope(|s| {
+            let lean = s.spawn(|| {
+                let t = Instant::now();
+                (flock_live::firewall::lean_link(&exe, m, &z, &l0.extra, &l0.pads, &link_salts), t.elapsed().as_secs_f64())
+            });
+            let (t0, c0) = (Instant::now(), flock_live::firewall::cpu_seconds());
+            let (cm, pd) = pool.install(|| flock_core::pcs::commit::commit_zk(&z, &pcs, l0));
+            ((cm, pd, t0.elapsed().as_secs_f64(), flock_live::firewall::cpu_seconds() - c0), lean.join().expect("the Lean link's thread"))
+        });
+        let rust_root = merkle_digest_bytes(&cm.cap).to_vec();
+        let root = lean?;
+        let short = |r: &[u8]| hex(&r[..r.len().min(8)]);
+        eprintln!("FIREWALL\t{}", json!({"recheck_root": hex(&root), "rust_root_agrees": root == rust_root, "m": st.m, "t.firewall_recheck": t_recheck,
+                                         "cpu.firewall_recheck": cpu_recheck, "t.lean_link": t_lean, "threads": threads}));
+        if root != rust_root {
+            return Err(flock_live::firewall::refused(format!("level-0 recheck: the Lean link's root {} is not commit_zk's {}", short(&root), short(&rust_root))));
+        }
+        Ok(Firewall { st: st.clone(), lig, z: Arc::new(z), cm, pd: Arc::new(pd), root, draws, pool, tamper, why: None, rep: None, lean_ok: 0, seen,
+                      cut_fired, t_recheck, cpu_recheck })
     }
 
     /// The rep's `cut-` control (the worker's failure), if its round is this rep's or later and it has not fired yet.
@@ -3499,7 +3515,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
                         None => Arc::new(zk_level0.clone().expect("level 0's hiding")),
                     };
-                    let mut g = Firewall::new(st, z.clone(), lig, &l0, salts, !plan.gpu);
+                    let mut g = Firewall::new(st, z.clone(), lig, &l0, salts, !plan.gpu)?;
                     if let Some(t) = g.tamper.strip_prefix("later-") {
                         g.tamper = if j == 0 { String::new() } else { t.to_string() };
                     }

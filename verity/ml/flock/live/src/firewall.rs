@@ -759,6 +759,41 @@ impl Drop for LeanCoins {
     }
 }
 
+/// The level-0 recheck of record on a firewalled table: `flock-firewall link` (`Flock.Firewall.Link` in the Lean verifier)
+/// commits level 0 again at `m` from the host's packed witness `z`, the table's level-0 hiding (its four extra lanes and every
+/// lane's padding) and the level-0 salts (192 bytes a leaf), and answers the root: the cap, concatenated. `commit_zk` is its
+/// speed reference.
+#[cfg(feature = "sha512")]
+pub fn lean_link(exe: &std::path::Path, m: usize, z: &[F128], extra: &[Vec<F128>], pads: &[Vec<F128>], salts: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::{BufRead, Read, Write};
+    use std::process::{Command, Stdio};
+    let mut body = f128_wire(z);
+    for v in extra.iter().chain(pads) {
+        body.extend(f128_wire(v));
+    }
+    body.extend_from_slice(salts);
+    let mut child = Command::new(exe).arg("link").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+        .map_err(|e| refused(format!("the Lean link {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+    let (mut stdin, mut stdout) = (child.stdin.take().expect("piped stdin"), std::io::BufReader::new(child.stdout.take().expect("piped stdout")));
+    let sent = write!(stdin, "table {m} {}\n", body.len()).and_then(|_| stdin.write_all(&body)).and_then(|_| stdin.flush());
+    drop(stdin);
+    let mut line = String::new();
+    let read = stdout.read_line(&mut line);
+    let l = line.trim_end();
+    let root = match (l.strip_prefix("ok ").map(str::parse::<usize>), l.strip_prefix("err "), sent, read) {
+        (Some(Ok(n)), _, Ok(()), Ok(_)) => {
+            let mut root = vec![0u8; n];
+            stdout.read_exact(&mut root).map(|_| root).map_err(|e| refused(format!("the Lean link's root: {e}")))
+        }
+        (_, Some(why), ..) => Err(refused(format!("the Lean link: {why}"))),
+        (_, _, Err(e), _) | (_, _, _, Err(e)) => Err(refused(format!("the Lean link: {e}"))),
+        _ => Err(refused(format!("the Lean link's answer {l:?}"))),
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+    root
+}
+
 /// The masking challenger's inner challenger under the firewall. While a round's `release` is set (the Lean frame's round for
 /// the device round the firewall passed), it frames what the masking challenger hands it, as the device's challenger frames,
 /// and at the round's squeeze holds that (the speed reference) to the release byte for byte, then hands the release, and
@@ -1139,5 +1174,41 @@ mod tests {
             };
             assert_eq!(got, c["pass"].as_bool().unwrap(), "{}", c["case"]);
         }
+    }
+
+    /// The Lean link's root is `commit_zk`'s on a pseudo-random table at `FC_LINK_M` (default 25): witness, extra lanes,
+    /// paddings and level-0 salts. It needs the Lean verifier's `flock-firewall` and installs the process's one salt context,
+    /// so it runs alone: `cargo test --release -p flock-live --lib --features sha512 -- --ignored lean_link_agrees`.
+    #[cfg(feature = "sha512")]
+    #[test]
+    #[ignore = "needs flock-firewall (FC_FIREWALL_LEAN, or `lake build flock-firewall`) and the process's salt context"]
+    fn lean_link_agrees_with_commit_zk() {
+        use flock_core::{merkle::HashKind, pcs::{PcsParams, ligerito::{LigeritoProfile, embedded_initial_k_or_default, zk::{EXTRA_LANES, Level0Zk}}}};
+        let m: usize = std::env::var("FC_LINK_M").ok().and_then(|v| v.parse().ok()).unwrap_or(25);
+        let lig = LigeritoProfile::Fast100;
+        let pcs = PcsParams { m, log_inv_rate: 1, log_batch_size: embedded_initial_k_or_default(m, lig), profile: lig, num_lanes: None,
+                              merkle_hash: HashKind::Hm96Sha512 };
+        let lc = pcs.ligerito_prover_config().unwrap();
+        let (lanes, l) = ((1usize << lc.initial_k) + EXTRA_LANES, 1usize << lc.initial_log_msg_cols);
+        let q0 = match m { 25 => 277, 26 => 242, 27 => 229, _ => panic!("FC_LINK_M={m}: 25, 26 or 27") };
+        let t = crate::zk_veil::level0_t_pad(q0);
+        let mut s = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let mut word = || F128::new(next(), next());
+        let z: Vec<F128> = (0..1usize << (m - 7)).map(|_| word()).collect();
+        let extra: [Vec<F128>; EXTRA_LANES] = std::array::from_fn(|_| (0..l).map(|_| word()).collect());
+        let pads: Vec<Vec<F128>> = (0..lanes).map(|_| (0..t).map(|_| word()).collect()).collect();
+        let salts: Vec<u8> = (0..pcs.n_leaves() * crate::zk_hooks::SALT_BYTES / 16).flat_map(|_| f128_wire(&[word()])).collect();
+        let l0 = Level0Zk { queries0: q0, t_pad: t, rep: 0, extra, pads, tamper: 0 };
+        flock_merkle::hm96::begin(std::sync::Arc::new(salts.clone()), Box::new(|_| panic!("the recheck commits one tree")));
+        let t0 = std::time::Instant::now();
+        let (cm, _) = flock_core::pcs::commit::commit_zk(&z, &pcs, &l0);
+        let t_rust = t0.elapsed().as_secs_f64();
+        flock_merkle::hm96::end();
+        let t1 = std::time::Instant::now();
+        let lean = lean_link(&lean_frame_exe(), m, &z, &l0.extra, &l0.pads, &salts).unwrap();
+        eprintln!("LINK\t{}", serde_json::json!({"m": m, "root": lean.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+                                                 "t.commit_zk": t_rust, "t.lean_link": t1.elapsed().as_secs_f64()}));
+        assert_eq!(lean, crate::merkle_digest_bytes(&cm.cap));
     }
 }
