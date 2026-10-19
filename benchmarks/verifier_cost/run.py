@@ -74,10 +74,10 @@ def program(name: str, ir: str) -> str:
 def instance(ref, text: str) -> tuple[dict, dict]:
     """`NciCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
     description's sizes."""
-    inp, spans = ref.root_nodes(text)
+    inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)
     nodes = desc["definitions"][desc["root"]]["body"]["nodes"]
-    theta = [k for k, n in enumerate(nodes) if desc["callees"][n["fn"]].startswith("RegisteredInput")]
+    theta = [k for k in range(len(nodes)) if reg[k]]
     owner, u = [], 0
     for k, (lo, hi) in enumerate(spans):
         if inp[k] or hi == lo:
