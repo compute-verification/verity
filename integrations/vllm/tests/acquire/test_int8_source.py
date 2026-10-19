@@ -1,6 +1,6 @@
 """`acquire.sources.int8_source`: the exact-int8 quantizers' results committed under the manifest's names -- a linear's (x_q, s_a) as
-its Int8RowQuant_v1 call boundaries (claimed from the call-boundary source), an attention module's KV quantization as `<attention>/0..3`
--- bit for bit what the served ops computed; nothing outside a committed step or the manifest's sites."""
+its Int8RowQuant_v1 call boundaries (claimed from the call-boundary source), an attention module's KV quantization under the members
+the manifest spells for Int8KvQuant_v1's ports 0..3 -- bit for bit what the served ops computed; nothing outside a committed step or the manifest's sites."""
 from __future__ import annotations
 
 import types
@@ -15,9 +15,12 @@ from verity_vllm.acquire.sources import taps
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
+from verity_vllm.query.manifest import bind
 
 LIN, ATTN = "model.layers.0.mlp.down_proj", "model.layers.0.self_attn.attn"
 S, G, D, BS = 5, 2, 32, 4
+#: `query.required.member_name` of a hinted multi-port Call: `<hint>.<port>`
+KV = tuple(f"kv_quant.{p}" for p in I8.KV_PORTS)
 
 
 def _manifest(steps=(0, 1)):
@@ -25,8 +28,8 @@ def _manifest(steps=(0, 1)):
     for e in steps:
         ids += [{"family": "call_boundaries", "op_path": f"{LIN}/row_quant_{e}", "output_member": m, "step": e, "engine_step": e,
                  "spec": "Int8RowQuant_v1", "request_id": "r0"} for m in ("0", "1")]
-        ids += [{"family": "instance_outputs", "op_path": ATTN, "output_member": m, "step": e, "engine_step": e, "spec": "Int8KvQuant_v1",
-                 "request_id": "r0"} for m in I8.KV_MEMBERS]
+        ids += [{"family": "instance_outputs", "op_path": ATTN, "output_member": m, "port": p, "step": e, "engine_step": e,
+                 "spec": "Int8KvQuant_v1", "request_id": "r0"} for p, m in zip(I8.KV_PORTS, KV)]
         ids.append({"family": "instance_outputs", "op_path": LIN, "output_member": "0", "step": e, "engine_step": e, "spec": "ScaledMmS8_v1"})
     return {"ranks": 1, "identities": ids}
 
@@ -106,13 +109,28 @@ def test_the_quantizers_results_are_committed_under_the_manifests_names_as_the_o
         src.uninstall()
     xq, s_a = E.quantize_rows(x)
     assert torch.equal(com.got[f"{LIN}/row_quant_1/0"], xq) and torch.equal(com.got[f"{LIN}/row_quant_1/1"], s_a)
-    for m, t in zip(I8.KV_MEMBERS, A.kv_quant(k, v, ks)):
+    for m, t in zip(KV, A.kv_quant(k, v, ks)):
         assert torch.equal(com.got[f"{ATTN}/{m}"], t.reshape(-1)), m
-    assert sorted(com.got) == sorted([f"{LIN}/row_quant_1/0", f"{LIN}/row_quant_1/1", *(f"{ATTN}/{m}" for m in I8.KV_MEMBERS)])
+    assert sorted(com.got) == sorted([f"{LIN}/row_quant_1/0", f"{LIN}/row_quant_1/1", *(f"{ATTN}/{m}" for m in KV)])
     assert not com.errors and src.stats["quant_tensors"] == 2 and src.stats["kv_tensors"] == 4
     assert int8_ops.row_quant is not None and not isinstance(int8_ops.row_quant, types.FunctionType)      # the op is back
     decl = {c["class"]: c for c in src.declaration_classes()}
     assert decl["call_boundaries"]["tensors"] == 2 and decl[I8.KV_CLASS]["tensors"] == 4
+
+
+def test_every_committed_name_is_a_row_of_the_manifest_as_the_binder_splits_it():
+    """The binder's pass 3 binds `<module>/<label>` to the member the label equals: the KV members come from the manifest, not from
+    the ports (a Commit left every attention's Int8KvQuant_v1 and its output unbound when they did, r20261019-230752-511b)."""
+    com, model, man = _Committer(), _Model(), _manifest()
+    assert I8.kv_modules(man) == {ATTN: KV}
+    _classes, src = I8.attach(com, True, man, (), explicit_classes=True, model=model)
+    src.install()
+    try:
+        _run(src, com, model, 1)
+    finally:
+        src.uninstall()
+    rows = {(r["op_path"], r["output_member"]) for r in man["identities"]}
+    assert all(bind.split_name(n) in rows for n in com.got), sorted(com.got)
 
 
 def test_nothing_is_committed_outside_a_committed_step_or_a_site():
@@ -124,7 +142,7 @@ def test_nothing_is_committed_outside_a_committed_step_or_a_site():
         _run(src, com, model, 3)                                                                # a step without a row_quant site
     finally:
         src.uninstall()
-    assert sorted(com.got) == sorted(f"{ATTN}/{m}" for m in I8.KV_MEMBERS)
+    assert sorted(com.got) == sorted(f"{ATTN}/{m}" for m in KV)
 
 
 def test_the_call_boundary_source_leaves_int8_quantizer_boundaries_to_this_source():
@@ -157,7 +175,7 @@ def test_a_credited_reads_window_quantization_is_committed_as_the_pages_is():
         model.model.layers[0].self_attn.attn()
     finally:
         src.uninstall()
-    for j, m in enumerate(I8.KV_MEMBERS):
+    for j, m in enumerate(KV):
         want = torch.cat([A.kv_quant(k[:n], v[:n], ks)[j].reshape(-1) for n in (S, 2)])
         assert torch.equal(com.got[f"{ATTN}/{m}"], want), m
     assert not com.errors and src.stats["kv_tensors"] == 4
