@@ -14,8 +14,9 @@
 //               receipt word 2 s is the XOR over lanes and chains of y, 2 s + 1 of z (CP-W).
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
-// base + u, the call's roots and its row blocks' live bits (a unit is live iff its row block holds an admitted row,
-// `receipts.gated_receipts`); a dead unit's receipt is zero words and nothing of it is hashed.  K % 512 == 0 (each stream's
+// base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (a unit is live iff its
+// row block holds an admitted row, `receipts.gated_receipts`); a dead unit's receipt is zero words and nothing of it is
+// hashed.  K % 512 == 0 (each stream's
 // tail, the digit coins or U, is then one block of its own); the host wrapper refuses any other K.
 #include <cstdint>
 #include <cuda_runtime.h>
@@ -31,7 +32,8 @@ struct H1Call {
   const int8_t* a;      // A [T, K]
   const int8_t* b;      // B [N, K]
   long long lda, ldb;   // row strides in bytes
-  const u64* roots;     // root_a then root_b: 16 big-endian u64 words
+  const u64* roots;     // root_a: 8 big-endian u64 words
+  const u64* root_b;    // root_b: 8 big-endian u64 words
   const uint8_t* live;  // T / 32 row-block live bits
   u64 base;             // unit u's position is base + u
   int k, ncb, units;    // K, N / 32, (T / 32)(N / 32)
@@ -117,8 +119,9 @@ __device__ __forceinline__ void absorb(u32 st[16], const int p[2][4][4], u32* o,
 }
 
 // the seeds of every live unit: seeds[(seed0 + u) * 2 + kind] (8 words), kind 0 seed_j, 1 σ_R
-extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncalls, const u64* __restrict__ salt, u64 st0,
-                                     u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2, u64* __restrict__ seeds) {
+extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncalls, const u64* __restrict__ salt,
+                                     const u64* __restrict__ step_base, u64 st0, u64 st1, u64 st2, u64 rt0, u64 rt1, u64 rt2,
+                                     u64* __restrict__ seeds) {
   const int c = blockIdx.y;
   if (c >= ncalls) return;
   const H1Call C = calls[c];
@@ -126,7 +129,7 @@ extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncall
   if (i >= 2 * C.units) return;
   const int u = i >> 1, kind = i & 1;
   if (!C.live[u / C.ncb]) return;
-  const u64 p = C.base + u;
+  const u64 p = C.base + (step_base ? *step_base : 0ULL) + u;
   u64 w[16], s[8];
   w[0] = p;
   w[1] = (kind ? rt0 : st0) ^ p;
@@ -142,7 +145,7 @@ extern "C" __global__ void h1r_seeds(const H1Call* __restrict__ calls, int ncall
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[j] = C.roots[4 + j] ^ p;
 #pragma unroll
-  for (int j = 0; j < 8; ++j) w[4 + j] = C.roots[8 + j] ^ p;
+  for (int j = 0; j < 8; ++j) w[4 + j] = C.root_b[j] ^ p;
   w[12] = 0x8000000000000000ULL;
   w[13] = 0;
   w[14] = 0;
@@ -498,16 +501,17 @@ static void tag3(const char* name, u64 out[3]) {
 
 constexpr int NW = 4;
 
+// step_base (device, may be null) is added to every call's base, so one call table serves every step of a window
 extern "C" int h1r_launch(const H1Call* calls_dev, int ncalls, int max_units, const int* ks, const u64* salt_dev,
-                          u64* seeds_dev, u32* out_dev, int nowrite, int version, cudaStream_t stream) {
+                          const u64* step_base, u64* seeds_dev, u32* out_dev, int nowrite, int version, cudaStream_t stream) {
   for (int i = 0; i < ncalls; ++i)
     if (ks[i] % 512 || ks[i] < 512) return 1;
   u64 st[3], rt[3], nt[3];
   tag3("verity/pouw/seed/v2", st);
   tag3("verity/pouw/receipt/v1", rt);
   tag3("verity/pouw/noise/v1", nt);
-  h1r_seeds<<<dim3((2 * max_units + 127) / 128, ncalls), 128, 0, stream>>>(calls_dev, ncalls, salt_dev, st[0], st[1], st[2],
-                                                                          rt[0], rt[1], rt[2], seeds_dev);
+  h1r_seeds<<<dim3((2 * max_units + 127) / 128, ncalls), 128, 0, stream>>>(calls_dev, ncalls, salt_dev, step_base, st[0],
+                                                                          st[1], st[2], rt[0], rt[1], rt[2], seeds_dev);
   const dim3 grid((max_units + NW - 1) / NW, ncalls);
   if (version == 1)
     h1r_units_k<NW, 1><<<grid, 32 * NW, 0, stream>>>(calls_dev, ncalls, seeds_dev, nt[0], nt[1], nt[2], out_dev, nowrite);
