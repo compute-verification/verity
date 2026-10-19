@@ -48,7 +48,8 @@ F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16
 CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
 LIB_ENV = "DITHER_H1O"
 UNITS_ENV = "DITHER_UNITS"
-UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch"}   # h1o.cu's forms of the same units
+UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
+               "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
 # "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
 # ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
@@ -129,6 +130,8 @@ class Window:
                                   C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p, C.c_void_p]
         if self.o.h1o_struct_bytes(0) != C.sizeof(_O) or self.o.h1o_struct_bytes(1) != 16:
             raise RuntimeError("h1o.cu's structs differ from dither_one's")
+        if self.o.h1o_init():
+            raise RuntimeError("h1o_init refused")
         self.percall = None
         pc = os.environ.get(PERCALL_ENV)
         if pc:
@@ -622,7 +625,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     o = C.CDLL(lib_h1o)
     o.h1o_ref_launch.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p]
     shift = o.h1o_fault_shift()
-    wbc = torch.zeros(L, 2, dtype=torch.int64, device=win.dev)
+    wbc = torch.zeros(L, 3, dtype=torch.int64, device=win.dev)
     live = torch.from_numpy((np.arange(t // 32) * 32 < m).astype(np.uint8)).to(win.dev)
     roots = [torch.from_numpy(np.concatenate([np.frombuffer(a_cpu[w], ">u8"), np.frombuffer(g["b_roots"][w], ">u8")])
                               .astype("<u8").view("<i8").copy()).to(win.dev) for w in range(L)]
@@ -708,6 +711,13 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     doc["wb"] = {"plus": int(cnt[:, 0].sum()), "minus": int(cnt[:, 1].sum()), "entries": int(ent.sum()),
                  "density": float(cnt.sum() / ent.sum()),
                  "by_site": {site: float(cnt[i::4].sum() / ent[i::4].sum()) for i, site in enumerate(DF.SITES)}}
+    # the activation wrap's entries (A = 127 and b = 1) each call's live units hold, by h1o_ref's own noise, and the
+    # A = 127 entries of the call's live rows (each such entry meets every unit of its row block)
+    a127 = [int((g["a"][w][:m] == 127).sum()) for w in range(L)]
+    doc["xa"] = {"entries": int(cnt[:, 2].sum()), "by_call": cnt[:, 2].tolist(), "calls_without": int((cnt[:, 2] == 0).sum()),
+                 "min": int(cnt[:, 2].min()), "max": int(cnt[:, 2].max()),
+                 "by_site": {site: int(cnt[i::4, 2].sum()) for i, site in enumerate(DF.SITES)},
+                 "a_eq_127_rows": {"total": sum(a127), "min": min(a127), "max": max(a127)}}
     if which in ("fault", "fault_wb", "fault_xa"):
         doc["fault_shift"] = shift
         doc["fault_bad"] = fault_bad

@@ -18,11 +18,14 @@
 //                and 12:16Z; H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
 //                product from the same O, so y = dequant(A Bᵀ) serves the registered model; the receipts are the same
 //                words, and the peel adds binary-by-int8 MMAs beside the wrap MMA (no product of A itself)
+//   h1o_units{s,b}2[p]  the same kernels' code as separate functions whose shared-memory carveout `h1o_init` sets to
+//                the maximum (102.4 KB on sm_120), so two units' blocks fit an SM: the driver's default for the others
+//                is 64 KB, one block an SM, though their registers allow two
 // `h1o_ref` is the gate's reference for z, another computation of the same definition: one warp a unit, its noise from
 // full compressions (`nblock`, not the served kernel's midstate), T_last and the residue sums Y by scalar dp4a (no MMA),
 // and z = T_last - U Y (the digits' recombination is exact: sum_d 128^d A_d = Y) + 256 sum over the entries whose integer
 // B + c + U leaves [-128, 127] of ±X (a scalar scatter, not the served kernel's byte masks and MMA); it counts them, wb's
-// density.
+// density, and the entries with A = 127 and b = 1 (xa, the activation wrap the peel corrects).
 #include "h1r.cu"
 #include <cuda_bf16.h>
 #include <time.h>
@@ -164,8 +167,9 @@ __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict_
                       (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
-// the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's (PL: peeled, z = A Bᵀ from O)
-template <bool PL>
+// the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's (PL: peeled, z = A Bᵀ from O;
+// OCC: 2 for the instantiation `h1o_init` gives the maximum carveout, else 1, the same code)
+template <bool PL, int OCC>
 __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                        const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
@@ -185,7 +189,7 @@ __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F
 }
 
 // the split form: a unit a block of six warps (`h1s_unit<OutEpi>`), the same values again
-template <bool PL>
+template <bool PL, int OCC>
 __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                        const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
@@ -205,7 +209,7 @@ __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F
 }
 
 // the reference: unit u = ri * ncb + cj of call C (A rows from C.a, rows >= the slot's m already zero), z_ref [T, N]
-// wbc (or null): [wb⁺ count, wb⁻ count] added over the call's live units
+// wbc (or null): [wb⁺ count, wb⁻ count, xa count] added over the call's live units
 __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call, const u64* __restrict__ seeds, u64 nt0,
                                                 u64 nt1, u64 nt2, int* __restrict__ zref, int n,
                                                 unsigned long long* __restrict__ wbc) {
@@ -223,7 +227,7 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
     return;
   }
   for (int j = 0; j < 32; ++j) Cs[lane][j] = 0;
-  unsigned long long np = 0, nn = 0;
+  unsigned long long np = 0, nn = 0, nx = 0;
   const u64* sj = seeds + (long long)(C.seed0 + u) * 16;
   const int KS = C.k >> 5, nb = KS / 16, RB = nb + 1;
   const u64 rowb = (u64)lane * RB, colb = (u64)32 * RB + (u64)lane * RB;
@@ -247,7 +251,9 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
     for (int kk = 0; kk < 512; ++kk) {
       const int s16 = kk / 32, t = kk % 32;
       const int a = arow[512 * ch + kk], b = brow[512 * ch + kk];
-      Xs[lane][kk] = (uint8_t)(a + (int)((hr[s16] >> t) & 1u));
+      const int bit = (int)((hr[s16] >> t) & 1u);
+      nx += (a == 127) & bit;
+      Xs[lane][kk] = (uint8_t)(a + bit);
       Ws[lane][kk] = (uint8_t)(b + (int)((hc[s16] >> t) & 1u) + Us[lane][t]);
     }
     __syncwarp();
@@ -280,6 +286,7 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
   if (wbc) {
     atomicAdd(wbc, np);
     atomicAdd(wbc + 1, nn);
+    atomicAdd(wbc + 2, nx);
   }
 }
 
@@ -302,7 +309,7 @@ extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n
   return (int)cudaGetLastError();
 }
 
-template <bool PL>
+template <bool PL, int OCC>
 static int unitsb(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa, int M,
                   const float* sw, void* y, int* zo, const u64* salt, const u64* step_base, cudaStream_t stream) {
   if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base) return 1;
@@ -310,12 +317,12 @@ static int unitsb(const H1O* F, const H1OStep* S, int units, int n, int k, const
   tag3("verity/pouw/noise/v1", nt);
   tag3("verity/pouw/seed/v2", st);
   tag3("verity/pouw/receipt/v1", rt);
-  h1o_unitsb_k<PL><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base,
-                                                        nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
+  h1o_unitsb_k<PL, OCC><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base,
+                                                             nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
   return (int)cudaGetLastError();
 }
 
-template <bool PL>
+template <bool PL, int OCC>
 static int unitss(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa, int M,
                   const float* sw, void* y, int* zo, const u64* salt, const u64* step_base, cudaStream_t stream) {
   if (M <= 0 || n % 32 || k % 512 || k < 512 || k > 16384 || units <= 0 || !salt || !step_base) return 1;
@@ -323,32 +330,49 @@ static int unitss(const H1O* F, const H1OStep* S, int units, int n, int k, const
   tag3("verity/pouw/noise/v1", nt);
   tag3("verity/pouw/seed/v2", st);
   tag3("verity/pouw/receipt/v1", rt);
-  h1o_unitss_k<PL><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base,
-                                                        nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
+  h1o_unitss_k<PL, OCC><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt, step_base,
+                                                             nt[0], nt[1], nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2]);
   return (int)cudaGetLastError();
 }
 
-// h1o_units_launch's call in the block form, and peeled (z = A Bᵀ from O)
-extern "C" int h1o_unitsb_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
-                                 int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
-                                 cudaStream_t stream) {
-  return unitsb<false>(F, S, units, n, k, xq, sa, M, sw, y, zo, salt, step_base, stream);
+#define H1O_UNITS_EXPORT(NAME, FORM, PL, OCC)                                                                              \
+  extern "C" int NAME(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa, int M, \
+                      const float* sw, void* y, int* zo, const u64* salt, const u64* step_base, cudaStream_t stream) {   \
+    return FORM<PL, OCC>(F, S, units, n, k, xq, sa, M, sw, y, zo, salt, step_base, stream);                               \
+  }
+// h1o_units_launch's call in the block form, and peeled (z = A Bᵀ from O); in the split form (K <= 16384), and peeled;
+// and each again with the maximum carveout (after `h1o_init`)
+H1O_UNITS_EXPORT(h1o_unitsb_launch, unitsb, false, 1)
+H1O_UNITS_EXPORT(h1o_unitsbp_launch, unitsb, true, 1)
+H1O_UNITS_EXPORT(h1o_unitss_launch, unitss, false, 1)
+H1O_UNITS_EXPORT(h1o_unitssp_launch, unitss, true, 1)
+H1O_UNITS_EXPORT(h1o_unitsb2_launch, unitsb, false, 2)
+H1O_UNITS_EXPORT(h1o_unitsb2p_launch, unitsb, true, 2)
+H1O_UNITS_EXPORT(h1o_unitss2_launch, unitss, false, 2)
+H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
+
+// once a process, before any capture: the OCC = 2 kernels' preferred carveout to the maximum shared memory
+extern "C" int h1o_init() {
+  const void* fs[] = {(const void*)h1o_unitsb_k<false, 2>, (const void*)h1o_unitsb_k<true, 2>,
+                      (const void*)h1o_unitss_k<false, 2>, (const void*)h1o_unitss_k<true, 2>};
+  for (const void* f : fs) {
+    const cudaError_t e = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                               (int)cudaSharedmemCarveoutMaxShared);
+    if (e != cudaSuccess) return (int)e;
+  }
+  return 0;
 }
-extern "C" int h1o_unitsbp_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
-                                  int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
-                                  cudaStream_t stream) {
-  return unitsb<true>(F, S, units, n, k, xq, sa, M, sw, y, zo, salt, step_base, stream);
-}
-// h1o_units_launch's call in the split form (K <= 16384), and peeled
-extern "C" int h1o_unitss_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
-                                 int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
-                                 cudaStream_t stream) {
-  return unitss<false>(F, S, units, n, k, xq, sa, M, sw, y, zo, salt, step_base, stream);
-}
-extern "C" int h1o_unitssp_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
-                                  int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
-                                  cudaStream_t stream) {
-  return unitss<true>(F, S, units, n, k, xq, sa, M, sw, y, zo, salt, step_base, stream);
+
+// blocks an SM the occupancy calculator gives a units form: which 0..3 = b, bp, s, sp; + 4 for the OCC = 2 kernels
+extern "C" int h1o_occupancy(int which) {
+  const void* fs[] = {(const void*)h1o_unitsb_k<false, 1>, (const void*)h1o_unitsb_k<true, 1>,
+                      (const void*)h1o_unitss_k<false, 1>, (const void*)h1o_unitss_k<true, 1>,
+                      (const void*)h1o_unitsb_k<false, 2>, (const void*)h1o_unitsb_k<true, 2>,
+                      (const void*)h1o_unitss_k<false, 2>, (const void*)h1o_unitss_k<true, 2>};
+  if (which < 0 || which > 7) return -1;
+  int nb = 0;
+  if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&nb, fs[which], (which & 2) ? STH : BTH, 0) != cudaSuccess) return -1;
+  return nb;
 }
 
 extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seeds, int* zref, int n,

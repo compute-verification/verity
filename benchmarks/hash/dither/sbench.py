@@ -39,6 +39,9 @@ Arms:
                  PouwPeelSeg): z = O + 256 X wbᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ from the receipted stream's own O, so y is
                  today's served y and its tokens must equal exact's; the receipts are dither-1s's
     dither-1s-split-cpeel  dither-1s-cpeel in the split form (`h1o_unitssp`)
+    dither-1s-block2-cpeel, dither-1s-split2-cpeel  those two on the kernels `h1o_init` gives the maximum shared-memory
+                 carveout (DITHER_UNITS=block2 / split2, `h1o_unitsb2p` / `h1o_unitss2p`: two units' blocks an SM, not
+                 the driver's default one), the same code and values
     dither-1s-percall0  dither-1s with ASK-64's per-call round between each call's A table and its units (`h1o_percall`:
                  root(A) to the host, a host function, a coin back, all captured in the graphs) and no wait: its plumbing
     dither-1s-percall-rtt  the same with the host function holding each call one measured challenger round trip
@@ -169,13 +172,15 @@ def build(arm: str, scratch: Path, gpu_mem: float):
             llm.dither_win = win
         return llm
     if arm in ("dither-1s", "dither-1s-credit", "dither-1s-warp", "dither-1s-split", "dither-1s-percall0",
-               "dither-1s-percall-rtt", "dither-1s-cpeel", "dither-1s-split-cpeel"):
+               "dither-1s-percall-rtt", "dither-1s-cpeel", "dither-1s-split-cpeel", "dither-1s-block2-cpeel",
+               "dither-1s-split2-cpeel"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         import dither_one as DO
-        if arm in ("dither-1s-warp", "dither-1s-split", "dither-1s-split-cpeel"):
+        if arm in ("dither-1s-warp", "dither-1s-split", "dither-1s-split-cpeel", "dither-1s-block2-cpeel",
+                   "dither-1s-split2-cpeel"):
             os.environ[DO.UNITS_ENV] = arm.split("-")[2]
-        if arm in ("dither-1s-cpeel", "dither-1s-split-cpeel"):
+        if arm.endswith("-cpeel"):
             os.environ[DO.PEEL_ENV] = "1"
         if arm == "dither-1s-percall0":
             os.environ[DO.PERCALL_ENV] = "0"
@@ -198,7 +203,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
-          "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact"}
+          "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
+          "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact"}
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}

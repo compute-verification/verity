@@ -1,7 +1,9 @@
 """`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitss` (a unit
 a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
-`h1r_unit<2>`), and the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
-stream's O, DITHER_PEEL=1), each gated through `dither_one.check`, then timed against each other.
+`h1r_unit<2>`), the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
+stream's O, DITHER_PEEL=1), and those two again as the kernels `h1o_init` gives the maximum shared-memory carveout
+(`split2`, `block2`, `split2-cpeel`, `block2-cpeel`: two units' blocks an SM), each gated through `dither_one.check`,
+then timed against each other.
 
     gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range
           int8 weights and positive scales; a decode step of m = 32 random rows captured per `Window.captures` (gate,
@@ -9,7 +11,8 @@ stream's O, DITHER_PEEL=1), each gated through `dither_one.check`, then timed ag
           admit and z roots and the round = commit.py's, every receipt = h1r v1's, every z = h1o_ref's (peeled: = A B^T,
           and y = today's scaled_mm on every call), y = dequant(z), 3 units = CA's H1V3 on the CPU (and H1V3's own code
           where DITHER_H1V3_TREE names its tree); the control refused and every fault conforming (`gate_verdict`; the
-          perturbed noised word must move z and y in its cell, peeled too); wb's density as the run reads it
+          perturbed noised word must move z and y in its cell, peeled too); wb's density and the xa entries (A = 127
+          and b = 1) as the run reads them; the occupancy calculator's blocks an SM for each units kernel
     time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
           launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved;
           each over block's (else the first form's) as time_over_base
@@ -38,7 +41,8 @@ import dither_one as DO  # noqa: E402
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
-FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel")
+FORMS = ("split", "block", "warp", "split-cpeel", "block-cpeel", "split2", "block2", "split2-cpeel", "block2-cpeel")
+OCCUPANCY = ("block", "block-cpeel", "split", "split-cpeel", "block2", "block2-cpeel", "split2", "split2-cpeel")  # h1o_occupancy's
 
 
 def model(nl: int, dev) -> None:
@@ -151,10 +155,13 @@ def main() -> int:
     for form in forms:
         win, outs, caps, verdict = gate(form, dev)
         wins[form] = (win, outs)
-        doc["forms"][form] = {"verdict": verdict, "wb": caps["gate"].get("wb"), "checks": caps}
-        print(json.dumps({"form": form, "verdict": verdict, "wb": caps["gate"].get("wb"),
+        doc["forms"][form] = {"verdict": verdict, "wb": caps["gate"].get("wb"), "xa": caps["gate"].get("xa"), "checks": caps}
+        print(json.dumps({"form": form, "verdict": verdict, "wb": caps["gate"].get("wb"), "xa": caps["gate"].get("xa"),
                           "vs_h1v3_cpu": caps["gate"].get("vs_h1v3_cpu"), "h1v3": caps["gate"].get("h1v3")},
                          default=str), flush=True)
+    o = wins[forms[0]][0].o
+    doc["occupancy_blocks_per_sm"] = {f: o.h1o_occupancy(i) for i, f in enumerate(OCCUPANCY)}
+    print(json.dumps({"occupancy_blocks_per_sm": doc["occupancy_blocks_per_sm"]}), flush=True)
     ok = all(doc["forms"][f]["verdict"]["ok"] for f in forms)
     doc["gate_ok"] = ok
     if ok:
