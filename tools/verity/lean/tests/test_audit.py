@@ -686,9 +686,9 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
 
 
 def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
-    """A whole-Security audit holds the proving package's facts beside the replay (30–50 GiB in r20261018-175656-1c85), so
-    auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and the package alone the build's
-    floor."""
+    """A whole-Security replay holds about 120 GiB whatever its threads (killed at 128 GiB with 16 in r20261019-084601-01a0),
+    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
+    it; the package alone needs the build's floor."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
     for p in (proofs, spec):
         p.mkdir()
@@ -697,6 +697,7 @@ def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(t
     assert A.memory_refusal([proofs], 32) is None
     why = A.memory_refusal([spec, proofs], 32)
     assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
+    assert "--kind lean-audit" in (A.memory_refusal([spec, proofs], 128) or "")
     assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
 
 
