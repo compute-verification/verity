@@ -54,6 +54,16 @@ def test_after_60_min_with_no_lane_reply_it_rings_top_and_says_so_in_the_thread_
     assert [m["text"] for m in world.slack.thread(CHAT, post["ts"]) if m.get("username") == "router"] == [ESCALATED]
 
 
+def test_an_escalation_that_did_not_ring_posts_no_line_and_the_next_run_tries_again(world):
+    post = routed(world, "@circuits is the TP8 sweep done?")
+    world.clock.t += ESCALATE_S + 1
+    world.slack.fail = {"chat.postMessage"}
+    assert crons.watchdog(world.deps)["escalated"] == 0
+    world.slack.fail = set()
+    world.clock.t += 300
+    assert crons.watchdog(world.deps)["escalated"] == 1 and world.rung("top") == [private(post["ts"], ESCALATION)]
+
+
 def test_an_unaddressed_post_already_at_top_is_reminded_to_top(world):
     post = routed(world, "how do I read a PoUW receipt?")
     world.clock.t += REMIND_S + 1

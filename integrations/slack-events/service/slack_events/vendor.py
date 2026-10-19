@@ -11,7 +11,7 @@ from types import ModuleType
 
 HERE = Path(__file__).resolve().parents[1]
 VENDOR = HERE / "_vendor"
-REPO = HERE.parents[2]
+REPO = HERE.parents[2] if len(HERE.parents) > 2 else HERE      # a deployed bundle (/var/task) has no repository around it
 NAME = "research_slack"
 
 

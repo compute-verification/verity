@@ -80,7 +80,10 @@ def watchdog(deps: Deps) -> dict:
                 if age >= ESCALATE_S:
                     if not any(rs.ours(m, reg) and m.get("username") == "router" and (m.get("text") or "").startswith(ESCALATED)
                                for m in later):
-                        rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=["top"], reminder=ESCALATION)
+                        lines = rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=["top"],
+                                           reminder=ESCALATION)
+                        if any("NOT RUNG" in s for s in lines):
+                            continue                                       # the line would stop the next run's try
                         api.call("chat.postMessage", channel=ch, thread_ts=root, username="router", text=ESCALATED,
                                  unfurl_links="false")
                         counts["escalated"] += 1
