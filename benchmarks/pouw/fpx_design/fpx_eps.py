@@ -25,7 +25,8 @@ note:20261019T0546Z-draft-rt-fp). Each V with an extraction is therefore also wr
 `keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its credit, the floor the words cost with no
 extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's own ε beside the bound
 1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a cheater that doesn't
-extract, at V's L. RT-FP's overcredit.py prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
+extract, at V's L, marked (`CAVEATS`) where V's operands are past s8 and the bound is no witness. RT-FP's
+overcredit.py prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
 
 g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fair live coin b of 1 and centred:
 R + b - 1/2. The one GEMM of the integers R + b is int8 Dither-2S's on fair coins, folded and served (its rank-one
@@ -67,11 +68,11 @@ VARIANTS = [
          title="C1 k4 on H1: int8 Dither's transcript from four E4M3 limb products a word, the extraction split",
          summary="H1 + fx1's transcript bit for bit, each k32 word from 4 QMMA limb products and one add"),
     dict(device="sm_120", name="fpx-2sp-e4m3i352-fp", base="dither-c-peel-fx1", plain=1.0,
-         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED,
+         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED, caveat="I352",
          title="FP8 peel (2SP) on e4m3i to 352: the twin dithered on the grid's gaps, in FP8",
          summary="served RN e4m3i352; the twin's word one add, the served sum one add a word"),
     dict(device="sm_120", name="fpx-a1-e4m3i-fp", base="dither-c-peel-fx1", plain=0.0,
-         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED,
+         fold_add={"ALU": 1.0, "IMAD": 1.0}, noise=TWO_SIDED, caveat="A1",
          title="FP-NATIVE's FP8-A1 on e4m3i: one dithered FP8 GEMM, served and credited",
          summary="each k32 word from +0, converted (one instruction), the served sum one add a word: 2SP's extraction, "
                  "with no second GEMM"),
@@ -83,7 +84,7 @@ VARIANTS = [
          keep={"IMAD": 1.0}, title="FP8 g1 on FP units: one FP16 GEMM of R + b (e4m3i120), fx1",
          summary="the word one add at a magic base, the served sum read every 8 words"),
     dict(device="sm_120", name="fpx-g1s-fp4-fp", base="dither-2s", plain=3.0, fold_add={"IMAD": 1.75, "ALU": 0.75},
-         keep={"IMAD": 1.0}, title="FP4 g1 on FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale, fx1",
+         keep={"IMAD": 1.0}, caveat="NVI", title="FP4 g1 on FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale, fx1",
          summary="four block-scaled k64 FP4 products a word, u and b at unit scale"),
     # sm_90 (H200): wgmma E4M3 keeps a 14-bit adder window, so E4M3 integers past ±16 are exact only in FP16
     dict(device="sm_90", name="fpx-c1-k3h", base="dither-2s-licpw-redux-l32", plain=2.0,
@@ -106,7 +107,7 @@ VARIANTS = [
          title="FP8 g1 on B200's FP units: one FP16 GEMM of R + b (e4m3i120)",
          summary="the word one add, the running sum rebased every 8 words"),
     dict(device="sm_100", name="fpx-g1s-fp4-fp", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
-         fold_add={"ALU": 0.75, "IMAD": 0.75},
+         fold_add={"ALU": 0.75, "IMAD": 0.75}, caveat="NVI",
          title="FP4 g1 on B200's FP4 units: R·R + R·u + b·R + b·u in one accumulator, any integer block scale",
          summary="four block-scaled k64 FP4 products a word, u and b at unit scale, the sum rebased every other word"),
     dict(device="sm_100", name="fpx-c1-k4t-split", base="dither-2s-licpw-redux-heavy-l32", plain=3.0,
@@ -119,11 +120,11 @@ VARIANTS = [
          title="C1 k9: int8 Dither's transcript from nine E2M1 digit products (kind::mxf4)",
          summary="the B200 record's transcript bit for bit, 9 unit-scale E2M1 products a k32 word at FP4's 2x rate"),
     dict(device="sm_100", name="fpx-2sp-e4m3i352-fp", base="dither-2s-licpw-redux-heavy-l32", plain=1.0,
-         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED,
+         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED, caveat="I352",
          title="FP8 peel (2SP) on e4m3i to 352: the twin dithered on the grid's gaps, in FP8",
          summary="served RN e4m3i352; the twin's word one add, the served sum an add and a rebase a word"),
     dict(device="sm_100", name="fpx-a1-e4m3i-fp", base="dither-2s-licpw-redux-heavy-l32", plain=0.0,
-         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED,
+         fold_add={"ALU": 1.5, "IMAD": 1.5}, noise=TWO_SIDED, caveat="A1",
          title="FP-NATIVE's FP8-A1 on e4m3i: one dithered FP8 GEMM, served and credited",
          summary="each k32 word from +0, 2SP's extraction a word on B200 (the word one add, the served sum an add and a "
                  "rebase a word), with no second GEMM"),
@@ -176,6 +177,17 @@ def x0(v: dict) -> dict | None:
                 "summary": f"{v['name']}'s words at the cost of a route that doesn't extract (lanes or the int8 MMA)"}
 
 
+#: where V-x0's cheater, which the model lets write any word on the int8 MMA, is no route to V's own words; V-x0's
+#: credited ε stands (a real cheater costs no less), but the bound on V's own floor is no witness
+CAVEATS = {
+    "A1": "operands to 448 are past s8, so no int8 route at V's L writes V's words: the bound is no witness; a limb "
+          "route (m = 4, 16 int8 MMAs a word) is unpriced",
+    "I352": "operands to 352 are past s8, so the bound at V's L is no witness; RT-FP's overcredit.py prices the limb "
+            "route (m = 3, L 576)",
+    "NVI": "a witness at block scales to 10 (|R + b| <= 121, s8); at scales to 15 RT-FP's overcredit.py prices the "
+           "two-limb route (L 256)",
+}
+
 CREDIT_HEAD = ("| device | reading | design | γ (V) | credited ε (V-x0) | V-x0's ♭ | V's ♭ | V's own ε | "
                "ε_machine at V's ♭ ≥ |\n|---|---|---|---|---|---|---|---|---|")
 
@@ -186,8 +198,10 @@ def credit_row(dev: str, reading: str, v: dict, j: dict, c: dict | None) -> str:
     if c is None:
         return f"| {dev} | {reading} | {v['name']} | {j['gamma']:.2f} | {100 * own:.3f}% | {flo:.2f} | {flo:.2f} | — | — |"
     t = min(c["cheat"]["cycles_per_mma"], c["baseline"]["cycles_per_mma"]) * c["L"] / j["L"]
+    mark = f" ({v['caveat']})" if "caveat" in v else ""
     return (f"| {dev} | {reading} | {v['name']} | {j['gamma']:.2f} | {100 * c['core']:.3f}% | "
-            f"{c['baseline']['cycles_per_mma']:.2f} | {flo:.2f} | {100 * own:.3f}% | **{100 * (1 - t / flo):.1f}%** |")
+            f"{c['baseline']['cycles_per_mma']:.2f} | {flo:.2f} | {100 * own:.3f}% | "
+            f"**{100 * (1 - t / flo):.1f}%**{mark} |")
 
 
 def main(out: Path) -> int:
@@ -227,6 +241,7 @@ def main(out: Path) -> int:
     credit += ["", ("γ is V's (the honest FP route, extraction paid); the credited ε is V-x0's, at V-x0's floor ♭ "
                     "(cycles an MMA). V's own ε credits V's ♭, which the last column bounds from below with V-x0's "
                     "cheapest route at V's L; — where V extracts nothing. Each ε is core (skip, machine, luck).")]
+    credit += [""] + [f"- ({k}) {why}" for k, why in CAVEATS.items()]
     (out / "credit.md").write_text("\n".join(credit) + "\n")
     return rc
 
