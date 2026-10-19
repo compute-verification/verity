@@ -74,8 +74,8 @@ local notation "𝔽" => FlockLevel3.GF128
 open Classical in
 /-- **The live sessions' bound at the masked tables, off the table on a witness lane, with escapes on accepted
 runs**: `ZkLiveAccAtJ` with level 0's fork event at each table (`Claims.Flock.IZW`) bounding the simulated strategies'
-`Adv₀` after `Commit` at table `j`, and table `j`'s decoder verdict implying acceptance with no level-0 opening off `C`
-on a witness lane unless it self-clashes (`OffW₀Z`). Each fork bound is its event's probability and the slack of the
+`Adv₀` after `Commit` at table `j`, every table's decoder verdict implying acceptance, and table `j`'s also no level-0
+opening off `C` on a witness lane unless it self-clashes (`OffW₀Z`). Each fork bound is its event's probability and the slack of the
 fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
 def ZkLiveAccAtWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
@@ -107,6 +107,7 @@ def ZkLiveAccAtWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabit
           (rootB₀ : Array ByteArray)
           (_hok : ∀ o, ok (finJ T hj) o → o.accepted = true ∧
             ¬ (OffW₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o ∧ ¬ SelfClashZ Hs (T j) o))
+          (_hacc : ∀ i o, ok i o → o.accepted = true)
           (hdec : ∀ i, DecodesTable (outJ Hs (tabsJ (tables true x).length T)) ok pL opn dec one fin capOf
             (repJ A Hs (tabsJ (tables true x).length T)) i)
           (τ : Type) (_ : Fintype τ) (_ : Nonempty τ)
@@ -154,8 +155,8 @@ theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
   intro Ω _ _ P
   obtain ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, hω⟩ := hl Ω P
   refine ⟨rd, hrd, hr0, δ, hδ, hfit, ev, ev₁, tied, tied₁, hacc, hacc₁, fun ω j hj C hok => ?_⟩
-  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau, h₀,
-    hsc⟩ := hω ω j hj C hok
+  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hacc', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau,
+    h₀, hsc⟩ := hω ω j hj C hok
   have hlen := take_gamesZC_length A Hs (tabsJ (tables true x).length T) (capOf rootB₀) (finJ T hj)
   refine ⟨τ, inferInstance, inferInstance, _, _, capOf rootB₀ (finJ T hj),
     fun u => simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
@@ -164,7 +165,8 @@ theorem zkSessWJ_of_liveW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] 
       (finJ T hj) (tabsJ_get _ T _)) ?_)
     rw [hlen]
     exact div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ =>
-      expect_mono (ind_mono fun outs h => hok' _ h) _ _) (Nat.cast_nonneg _)
+      expect_mono (ind_mono fun outs h =>
+        ⟨accUpTo_of_okAll ok hacc' (finJ T hj).isLt h, (hok' _ (h _)).2⟩) _ _) (Nat.cast_nonneg _)
   · rw [hlen]
     exact le_trans (mean_selfClash_le_liveJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ σL hσ
       (finJ T hj) (tabsJ_get _ T _)) hsc

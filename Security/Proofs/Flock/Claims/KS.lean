@@ -119,6 +119,13 @@ import Proofs.Flock.Claims.KS.ZkFork0
 import Proofs.Flock.Claims.KS.TrimBridge
 import Proofs.Flock.Claims.KS.ZkPadsLog
 import Proofs.Flock.Claims.KS.ZkClashPads
+import Proofs.Flock.Claims.KS.ZkFork
+import Proofs.Flock.Claims.KS.ZkAlign
+import Proofs.Flock.Claims.KS.RepDistZ
+import Proofs.Flock.Claims.KS.ZkSched
+import Proofs.Flock.Claims.KS.SlotBatch
+import Proofs.Flock.Claims.KS.PushSched
+import Proofs.Flock.Claims.KS.ZkBatch
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -517,10 +524,8 @@ record the claims read meets `Inner.KSAbort`, and the recursion's KS over it hol
 self-clash clause follows from a live self-clash giving an accepting run whose reps open two different columns at one
 position of some table, or a collision: each such column is a level-0 opening in the run's own log (`ZkClashRaw`:
 `FlockDeploy.KS.zkRawColsJ`, `FlockDeploy.KS.zk_openingJ_raw`, `FlockDeploy.KS.zk_selfClash_tiedJ`,
-`FlockDeploy.KS.ZkRawClashRun`, `FlockDeploy.KS.zkClashRun_of_raw`). A simulator reading uniform functions of the
-live coins' history through a prefix key has the fork's coin coupling, so its slack, at `δ_t = |X|^{-min (n t) M}`
-(`ForkCoupling`: `Claims.Flock.forkCoinCoupling_fnAt`, `Claims.Flock.slack_fnAt`,
-`FlockDeploy.KS.forkCoinCoupling_plain`). At chances at most `ε ≤ 1/2` before the last round and at most `1` there, a
+`FlockDeploy.KS.ZkRawClashRun`, `FlockDeploy.KS.zkClashRun_of_raw`). At chances at most `ε ≤ 1/2` before the last round
+and at most `1` there, a
 fork's slack weights before the last round fall geometrically past its round (`PlainSlackFit`:
 `Claims.Flock.sum_slackW_le`, `Claims.Flock.δN_le_inv`, `Claims.Flock.δN_le_one`). So each table's slack weights total
 at most its weight times `|IZW|·8ε` (Cauchy–Schwarz), and at C-Flock ZK's schedules, with at most `7` levels, level 1
@@ -562,7 +567,19 @@ decoding to a level-0 clash (`FlockDeploy.KS.adv₀SZ_simAtJZ_le`, through the s
 which are two accepting runs of `P` whose rows at one position differ and collide in their logs
 (`FlockDeploy.KS.zkPair₀`). So masked KS and the recursion's premise rest on the cap/`τ` and pads fork bounds and the
 pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_kinds`,
-`FlockDeploy.KS.zk_KSFlock_of_kinds`). KS at an untrimmed instance gives it at its trimmed record
+`FlockDeploy.KS.zk_KSFlock_of_kinds`). At the caps the fork bound splits as plain's does (`ZkFork`): against the
+simulated strategy after `Commit`, the fork at a cap's table node is at most the fork after `zkRd j i` coins of two
+runs recording one cap and opening a position of it to different rows (`FlockDeploy.KS.ZkForkAlign`), and two
+accepting runs whose live outcomes decode to that collide in their logs (`FlockDeploy.KS.ZkForkClash`;
+`FlockDeploy.KS.zkSimForkLeCap_of`, `FlockDeploy.KS.zk_KS_of_align`). The first is the fork after the slot's coins
+(`ZkAlign`: `FlockDeploy.KS.ZkSlotAlign`, `FlockDeploy.KS.zkForkAlign_of_slot`, `FlockDeploy.KS.zk_KS_of_slot`), since
+pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). A masked rep
+meets each cap's slot after a count fixed by the statement and the schedule (`RepDistZ`:
+`FlockSoundness.Discharge.ZkLink.dist_lockRepZ`), plain's past level 0's lane rounds and extra draws. The reps after
+it in the session are not: a rep whose opening rejects skips Ligerito (`restZC`, `PendL.reject`), so rep 1 and the
+later tables start after fewer coins on that run, where `advRSZ`'s event, which does not read acceptance, can still
+hold. `τ` has no such split either: the dead branches' `τ` opening `(0, default)` opens under some commitments, and a
+rep's own rejected opening brings its `τ` early. KS at an untrimmed instance gives it at its trimmed record
 (`Flock.TrimBridge.KS_mapCols_of_KS`), but not conversely: an unopened position reads `[]`, the trim of every zero
 column and equal to no full-width one (`Flock.TrimBridge.hole_agree`). Both follow from the one full-width table bound,
 the untrimmed with `ExtendJ` (`Flock.TrimBridge.KS_both_of_tableBoundJR`), so from `zk_KS_of_kinds`'s premises

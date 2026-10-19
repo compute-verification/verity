@@ -112,7 +112,7 @@ theorem forkC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [No
   rw [forkC_afterAt, forkC_simSessG]
   have hall := Claims.Bridge.Sim.all_mapDead (Claims.Bridge.answerWith (nulOp (D := D) (Sl := Sl)))
     (D' := fun g σ => prob Q g σ = 0)
-    (fun _ σ ⟨caps, _, hg, e⟩ => by
+    (fun _ σ ⟨caps, _, _, hg, _, e⟩ => by
       subst e
       exact Claims.Bridge.prob_posOf_answerWith _ _ caps hg dfltOutL
         (fun outs h => by
