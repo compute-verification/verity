@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Recursion.DeployComplete
 import Proofs.Flock.Claims.Recursion.DeployStop
 import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 
 /-!
 # Antecedent witnesses: the ZK-recursion compiler's claims at the deployed record
@@ -19,7 +19,8 @@ read:
   the deployed `--zk` record (`decOK`, `FlockDeploy.listWithin_zk`), the spec those claims quantify the outer decoder
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
-* `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdDeployed`, whose element-level
+* `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdCover`, `RecDeploy.bdDeployed` at
+  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight (ASK-72); its element-level
   Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
   replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
@@ -142,9 +143,8 @@ record. -/
 theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
-    (w : Msg → ℝ) :
-    decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD ∧
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) :
+    decOK (RecDeploy.bdCover rel nextE colsE wE join rowIn final).DE Claims.GS.plainDecodeRD ∧
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
   ⟨FlockDeploy.listWithin_plainTrim rel, FlockDeploy.listWithin_zk rel⟩
 
@@ -152,11 +152,10 @@ theorem KSBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
 theorem KSPrivBound_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List FlockDeploy.Coin → Claims.OC Claims.Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
-    (w : Msg → ℝ) :
-    decOK (RecDeploy.bdDeployed rel nextE colsE wE join rowIn final w).DE Claims.GS.plainDecodeRD ∧
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) :
+    decOK (RecDeploy.bdCover rel nextE colsE wE join rowIn final).DE Claims.GS.plainDecodeRD ∧
       decOK (FlockDeploy.deployZk rel) Claims.GS.zkDecodeRD :=
-  KSBound_meets rel nextE colsE wE join rowIn final w
+  KSBound_meets rel nextE colsE wE join rowIn final
 
 /-- `Inner.KS`'s antecedent at the deployment: the inner radius decoder meets the spec at the deployed plain record. -/
 theorem Inner.KS_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
