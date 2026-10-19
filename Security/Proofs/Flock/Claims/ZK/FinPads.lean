@@ -285,4 +285,58 @@ theorem colPAt_exe (P : Composed.LigProver) {x : Msg} (w : Claims.Flock.Wit)
     rfl
   exact ⟨h1, h2, hs⟩
 
+/-- `atP` at an opened position's tree position is its value. -/
+theorem atP_sP (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest) (j : Fin (jOf x))
+    (r : Fin 2) {α : Type} (d : α) (f : Fin (tabC P x j).z.nQ → α) (a : Fin (tabC P x j).z.nQ) :
+    atP P x cz j r d f (((tabC P x j).T (cz j)).sP r (.inl a)).val = f a := by
+  unfold atP
+  simp only [Fin.isLt, ↓reduceDIte, Fin.eta, Equiv.symm_apply_apply]
+
+/-- **The views' pads columns and salt at an opened position are the session's pads'**: at the tree position of opened
+position `a`, table `i`'s rep `r` source from the views reads the codes of `h ‖ pad_h` and `μ ‖ pad_μ` and the tape's
+pads salt fitted to 192 bytes (`colPAt_exe`). -/
+theorem srcV_pads (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) {i r : ℕ}
+    (hi : i < jOf x) (hr : r < 2) (a : Fin (tabC PE x ⟨i, hi⟩).z.nQ) :
+    ((srcV x c w τ i).rep r).ch (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val =
+        _root_.Flock.Zk.codeAt ((FlockComplete.padsOf (UE.tapeZk τ) i r
+            (_root_.Flock.Zk.PadLayout.new (stAt x ⟨i, hi⟩).m (stAt x ⟨i, hi⟩).c.kLog (zkTab x ⟨i, hi⟩).sch.k0)).h ++
+          (FlockComplete.padsOf (UE.tapeZk τ) i r
+            (_root_.Flock.Zk.PadLayout.new (stAt x ⟨i, hi⟩).m (stAt x ⟨i, hi⟩).c.kLog (zkTab x ⟨i, hi⟩).sch.k0)).padH)
+          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val ∧
+      ((srcV x c w τ i).rep r).cm (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val =
+        _root_.Flock.Zk.codeAt ((FlockComplete.padsOf (UE.tapeZk τ) i r
+            (_root_.Flock.Zk.PadLayout.new (stAt x ⟨i, hi⟩).m (stAt x ⟨i, hi⟩).c.kLog (zkTab x ⟨i, hi⟩).sch.k0)).mu ++
+          (FlockComplete.padsOf (UE.tapeZk τ) i r
+            (_root_.Flock.Zk.PadLayout.new (stAt x ⟨i, hi⟩).m (stAt x ⟨i, hi⟩).c.kLog (zkTab x ⟨i, hi⟩).sch.k0)).padMu)
+          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val ∧
+      ((srcV x c w τ i).rep r).padSalt (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val =
+        FlockComplete.fitBytes 192 ((UE.tapeZk τ).innerSalt i r
+          (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)).val) := by
+  obtain ⟨h1, h2, h3⟩ := colPAt_exe PE w τ (czExe PE x c) ⟨i, hi⟩ ⟨r, hr⟩
+    (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a))
+  have e : (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).colPAt (wtOf PE x w ⟨i, hi⟩) ((UE.tape x τ).1 ⟨i, hi⟩)
+      ⟨r, hr⟩ (((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a))) =
+      ((viewsE x c w τ ⟨i, hi⟩).ch ⟨r, hr⟩ a, (viewsE x c w τ ⟨i, hi⟩).cm ⟨r, hr⟩ a) := by
+    unfold ZkView.Coined.colPAt
+    simp only [Equiv.symm_apply_apply]
+    rfl
+  rw [e] at h1 h2
+  have es : (viewsE x c w τ ⟨i, hi⟩).saltsP ⟨r, hr⟩ a = (UE.tape x τ).2.1
+      ⟨⟨i, hi⟩, .inr (.inl (⟨r, hr⟩, ((tabC PE x ⟨i, hi⟩).T (czExe PE x c ⟨i, hi⟩)).sP ⟨r, hr⟩ (.inl a)))⟩ := by
+    set_option maxRecDepth 8000 in rfl
+  rw [← es] at h3
+  show ((tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).rep r).ch _ = _ ∧
+    ((tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).rep r).cm _ = _ ∧
+    ((tabSrcView PE x (czExe PE x c) (viewsE x c w τ) i).rep r).padSalt _ = _
+  unfold tabSrcView
+  rw [dite_eq_left hi]
+  dsimp only
+  rw [dite_eq_left hr]
+  dsimp only
+  rw [atP_sP, atP_sP, atP_sP]
+  refine ⟨?_, ?_, ?_⟩
+  · exact congrArg FlockLevel3.GF128.val h1
+  · exact congrArg FlockLevel3.GF128.val h2
+  · exact h3
+
 end Claims.ZKMal.Masked
