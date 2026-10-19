@@ -50,6 +50,8 @@ src/cluster/
 │               unreplayed bundles (release.py's rule), read over SSH; read-only
 ├── policy.py   the policy a description declares ([policy]: each key and its owner) and every key where a node's live
 │               value differs, read over SSH; read-only
+├── policy_apply.py  the change that converges each key that differs, as a plan, and with --apply written on the node over
+│               SSH, logged in its override log and read back
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026, and their policy
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
@@ -95,6 +97,8 @@ python3 -m cluster kueue-shadow loop --out RECORD.jsonl --hours H   # on vy-nebi
 uv run cluster policy show [--on nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
 uv run cluster policy diff [--on nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread
 uv run cluster policy override KEY VALUE --until 2026-10-04T10:30:00Z --by WHO --reason R [--apply]   # on KEY's node
+uv run cluster policy apply [--on nebius-1|nebius-2|all] [--key K] [--json]   # the plan: each change that converges a key
+uv run cluster policy apply --on nebius-2 [--key K] --apply --as WHO --reason R   # write it over SSH, log it, read it back
 ~~~
 
 Policy is what node services read from outside git: node 1's lease pools (the `n1-lease` panes' environment), Kueue's
@@ -104,7 +108,19 @@ change; `cluster policy diff` names every key whose live value differs or that t
 couldn't read unknown, never as declared (node 2's are all unknown while a timed window is on: it reads nothing else then).
 A change that should end on its own is an override: `cluster policy override`, run on the key's node, records the value, who,
 why and until when in that node's hash-chained log (`/workspace/research/policy/overrides.jsonl`; a dry run without
-`--apply`), and `show` and `diff` use it until then. Nothing applies an override yet but `n1_lease.py`, which takes its pool's
-`max`, `borrow` and `borrow-until` from `cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when
-`$VY_POOL_POLICY` names that command; it writes the three in force to `n1-lease.limits` in its lease directory, and `diff`
-reads them there for such a loop, not from its environment.
+`--apply`), and `show` and `diff` use it until then. `n1_lease.py` takes its pool's `max`, `borrow` and `borrow-until` from
+`cluster policy show --key vy-nebius-1.lease-pool.<pool> --json` when `$VY_POOL_POLICY` names that command; it writes the
+three in force to `n1-lease.limits` in its lease directory, and `diff` reads them there for such a loop, not from its
+environment.
+
+`cluster policy apply` (`policy_apply.py`) converges the rest where it can. For each key `diff` calls drift it plans the
+exact change, as a diff of each file, and with `--apply --as WHO --reason R` writes it over the same SSH path, appends one
+`apply` record per key (key, value, was, who, why, the file's sha256 before and after) to the node's log, and reads the node
+again to confirm each key reads as in force. Its appliers: the check and Lean slot files and `fill/cpu-sets` (the key's line,
+the old one kept as a comment), `gpu-lease`'s direct-run maps (written whole: `gpu-lease` reads them whole), and the cpuset
+drop-in's `Delegate=` line (then `daemon-reload`, never `systemctl revert`, and `user.slice` must keep its AllowedCPUs). On
+vy-nebius-2 the drop-in is planned only, since `vy-device-cores` owns its cpusets. Lease pools, Kueue's queues, a node's
+`pools` and booked windows have no applier and are skipped, saying so; an unknown key is never applied, nor an undeclared
+one. The write is one command: on node 2 it starts with node 2's gate, so nothing is written while a timed window is on or
+near, and under the log's lock it writes nothing unless every file and the log are byte for byte what it planned from. Exit
+0 nothing left to change, 1 a change planned or a key skipped, 3 a key unknown, 4 an apply that failed or didn't read back.
