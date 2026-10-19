@@ -22,6 +22,7 @@ import Proofs.Accounting.PerRunPriced
 import Proofs.Accounting.PerRunStop
 import Proofs.Accounting.Remote
 import Proofs.Accounting.Requirement
+import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
