@@ -144,3 +144,13 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])
     extra = 3 * p["lag_s"] / (p["years"] * T.YEAR)
     assert lag["residual"] - no_lag["residual"] == pytest.approx(extra, rel=1e-6)
+
+
+def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
+    """Dark fragments of monitored capacity are counted at peak and unmonitored compute trains like the unconstrained
+    developer, so D = 1 / (s + rest / mfu) (audience red team: against a real run at MFU 0.4, D at the defaults is 6.6)."""
+    p = T.DEFAULTS | {"unmonitored": 0.01}
+    r = T.evaluate(p, T.TIERS["T4"])
+    rest = r["residual"] + r["declared"] + r["cheat"]
+    assert r["dampener"] == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
+    assert T.evaluate(T.DEFAULTS | {"residual": 1.0}, T.TIERS["T1"])["dampener"] == 1.0

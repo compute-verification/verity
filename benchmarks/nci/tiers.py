@@ -33,8 +33,10 @@ proved.
   bits plus the choice of where, worth at most the chord slope of the per-inference-block thread bound per bit.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
-multiplications per unit of loss is a compute amplifier, multiplying eta by g; the compute dampener is D = g / eta's
-four-term sum, so g = 1 is the claim against the best known recipe.
+multiplications per unit of loss is a compute amplifier, multiplying eta by g. The compute dampener D is a hardware
+multiple: how many times more hardware-time the developer needs than an unconstrained developer with the same recipe on
+the same hardware, who reaches model-FLOP utilization mfu. Unmonitored compute trains like the unconstrained developer;
+the other terms are counted at peak, so 1/D <= s + (min(r + nu, mu) + chi) / mfu, and D is at least 1.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -71,7 +73,7 @@ DEFAULTS = {
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 400.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
-    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0,
+    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 2048.0, "e": 4e4, "kappa": 0.655,
     "kappa_chain": 0.075, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
@@ -109,6 +111,7 @@ SPEC = [
     {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
     {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
     {"key": "lag_s", "label": "Verdict lag: from a first faulty proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
@@ -327,8 +330,10 @@ def evaluate(p: dict, mech: dict) -> dict:
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
         largest = "declared (thread bound)" if declared >= cap_T * (1 - 1e-9) else "declared (partial-sum law)"
+    inverse = terms["unmonitored"] / p["g"] + (terms["residual"] + terms["declared"] + terms["cheat"]) / p["g"] / p["mfu"]
     return {
         "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_residual": capped,
+        "dampener": max(1.0, 1 / inverse) if inverse > 0 else math.inf,
         "rho_T": rho_T, "crossing_bits": B, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
         "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }
