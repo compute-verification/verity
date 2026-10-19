@@ -55,12 +55,12 @@ struct H1OStep {
   int parity, m, pad, flags;
 };
 
-template <bool PL, bool BD = false>
+template <bool PL, int BD = 0>
 struct OutEpiT {
   static constexpr bool ON = true;
   static constexpr bool PEEL = PL;  // z = A Bᵀ from O (h1r.cu's E::PEEL)
   static constexpr bool SEEDS = true;
-  static constexpr bool BAND = BD;  // J10 banded (h1o_band_launch): the rows from bws, band leader (ri, (cj / g) g)'s
+  static constexpr int BAND = BD;  // J10 banded (h1o_band_launch; NoEpi::BAND): the rows from bws, band leader (ri, (cj / g) g)'s
   int* z;
   int* zo;  // [M, N] s32: the op's z output (rows < M of the slot's z), what the credit gate reads beside y
   __nv_bfloat16* y;
@@ -177,7 +177,7 @@ __global__ void __launch_bounds__(32 * NW, 2) h1o_units_k(const H1O* __restrict_
 
 // the block form: a unit a block (`h1b_unit<OutEpi>`), the same values as h1o_units_k's (PL: peeled, z = A Bᵀ from O;
 // OCC: 2 for the instantiation `h1o_init` gives the maximum carveout, else 1, the same code)
-template <bool PL, int OCC, bool BD = false>
+template <bool PL, int OCC, int BD = 0>
 __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                        const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
@@ -199,7 +199,7 @@ __global__ void __launch_bounds__(BTH, 2) h1o_unitsb_k(const H1O* __restrict__ F
 }
 
 // the split form: a unit a block of six warps (`h1s_unit<OutEpi>`), the same values again
-template <bool PL, int OCC, bool BD = false>
+template <bool PL, int OCC, int BD = 0>
 __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F, const H1OStep* __restrict__ S,
                                                        const int8_t* __restrict__ xq, const float* __restrict__ sa, int M,
                                                        const float* __restrict__ sw, __nv_bfloat16* __restrict__ y,
@@ -393,8 +393,9 @@ H1O_UNITS_EXPORT(h1o_unitss2_launch, unitss, false, 2)
 H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
 
 // J10 banded, peeled (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean): bws holds
-// h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2), 1 split, 2 split2, 3 block; mode 0 the
-// band-rows pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone
+// h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2) and 3 block with the rows read in the
+// segment loop (NoEpi::BAND 1), 1 split and 2 split2 (staged), 4 block2 and 5 block staged (BAND 2); mode 0 the band-rows
+// pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone
 static int band_J(int units, int ncb, int k, int g) {
   const long long nrb = units / ncb, nl = (ncb + g - 1) / g, RB = (k >> 9) + 1;
   int J = 1;
@@ -407,11 +408,27 @@ extern "C" unsigned long long h1o_band_bytes(int units, int n, int k, int g) {
   return 64ull * (unsigned long long)(units / ncb) * ((ncb + g - 1) / g) * 32 * ((k >> 9) + 1);
 }
 
+using BandUnitsK = void (*)(const H1O*, const H1OStep*, const int8_t*, const float*, int, const float*, __nv_bfloat16*,
+                            int*, const u64*, const u64*, u64, u64, u64, u64, u64, u64, u64, u64, u64, const u32*, int);
+static BandUnitsK band_kernel(int form) {
+  switch (form) {
+    case 0: return h1o_unitsb_k<true, 2, 1>;
+    case 1: return h1o_unitss_k<true, 1, 2>;
+    case 2: return h1o_unitss_k<true, 2, 2>;
+    case 3: return h1o_unitsb_k<true, 1, 1>;
+    case 4: return h1o_unitsb_k<true, 2, 2>;
+    case 5: return h1o_unitsb_k<true, 1, 2>;
+    default: return nullptr;
+  }
+}
+static bool band_split(int form) { return form == 1 || form == 2; }
+
 extern "C" int h1o_band_launch(int form, int mode, const H1O* F, const H1OStep* S, int units, int n, int k,
                                const int8_t* xq, const float* sa, int M, const float* sw, void* y, int* zo, const u64* salt,
                                const u64* step_base, u32* bws, int g, cudaStream_t stream) {
-  if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base || !bws || g < 1 || form < 0 || form > 3
-      || mode < 0 || mode > 2 || (form == 1 || form == 2) && k > 16384)
+  const BandUnitsK kf = band_kernel(form);
+  if (M <= 0 || n % 32 || k % 512 || k < 512 || units <= 0 || !salt || !step_base || !bws || g < 1 || !kf || mode < 0
+      || mode > 2 || band_split(form) && k > 16384)
     return 1;
   u64 nt[3], st[3], rt[3];
   tag3("verity/pouw/noise/v1", nt);
@@ -424,27 +441,16 @@ extern "C" int h1o_band_launch(int form, int mode, const H1O* F, const H1OStep* 
                                                                             nt[2], st[0], st[1], st[2]);
   }
   if (mode == 2) return (int)cudaGetLastError();
-  const auto yb = (__nv_bfloat16*)y;
-  if (form == 0)
-    h1o_unitsb_k<true, 2, true><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
-                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
-  else if (form == 3)
-    h1o_unitsb_k<true, 1, true><<<(unsigned)units, BTH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
-                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
-  else if (form == 1)
-    h1o_unitss_k<true, 1, true><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
-                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
-  else
-    h1o_unitss_k<true, 2, true><<<(unsigned)units, STH, 0, stream>>>(F, S, xq, sa, M, sw, yb, zo, salt, step_base, nt[0], nt[1],
-                                                                     nt[2], st[0], st[1], st[2], rt[0], rt[1], rt[2], bws, g);
+  kf<<<(unsigned)units, band_split(form) ? STH : BTH, 0, stream>>>(F, S, xq, sa, M, sw, (__nv_bfloat16*)y, zo, salt,
+                                                                    step_base, nt[0], nt[1], nt[2], st[0], st[1], st[2],
+                                                                    rt[0], rt[1], rt[2], bws, g);
   return (int)cudaGetLastError();
 }
 
-// h1o_init for the banded kernels (the OCC = 2 ones' carveout), and their blocks an SM: which 0..3 as h1o_band_launch's form
+// h1o_init for the banded kernels (the OCC = 2 ones' carveout), and their blocks an SM by h1o_band_launch's form
 extern "C" int h1o_band_init() {
-  const void* fs[] = {(const void*)h1o_unitsb_k<true, 2, true>, (const void*)h1o_unitss_k<true, 2, true>};
-  for (const void* f : fs) {
-    const cudaError_t e = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout,
+  for (int f : {0, 2, 4}) {
+    const cudaError_t e = cudaFuncSetAttribute((const void*)band_kernel(f), cudaFuncAttributePreferredSharedMemoryCarveout,
                                                (int)cudaSharedmemCarveoutMaxShared);
     if (e != cudaSuccess) return (int)e;
   }
@@ -452,11 +458,9 @@ extern "C" int h1o_band_init() {
 }
 
 extern "C" int h1o_band_occupancy(int form) {
-  const void* fs[] = {(const void*)h1o_unitsb_k<true, 2, true>, (const void*)h1o_unitss_k<true, 1, true>,
-                      (const void*)h1o_unitss_k<true, 2, true>, (const void*)h1o_unitsb_k<true, 1, true>};
-  if (form < 0 || form > 3) return -1;
+  const BandUnitsK kf = band_kernel(form);
   int nb = 0;
-  if (cudaOccupancyMaxActiveBlocksPerMultiprocessor(&nb, fs[form], (form == 1 || form == 2) ? STH : BTH, 0) != cudaSuccess)
+  if (!kf || cudaOccupancyMaxActiveBlocksPerMultiprocessor(&nb, (const void*)kf, band_split(form) ? STH : BTH, 0) != cudaSuccess)
     return -1;
   return nb;
 }

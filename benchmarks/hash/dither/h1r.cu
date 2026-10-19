@@ -237,6 +237,21 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
   asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;\n" ::"l"(p), "r"(bytes) : "memory");
 }
 
+// a band workspace's noise block (16 words, 64-byte aligned) into registers, and from them to a lane's noise row
+__device__ __forceinline__ void band_load(const u32* src, uint4 (&v)[4]) {
+#pragma unroll
+  for (int i = 0; i < 4; ++i) v[i] = __ldg(reinterpret_cast<const uint4*>(src) + i);
+}
+__device__ __forceinline__ void band_store(const uint4 (&v)[4], u32* d) {
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    d[4 * i] = v[i].x;
+    d[4 * i + 1] = v[i].y;
+    d[4 * i + 2] = v[i].z;
+    d[4 * i + 3] = v[i].w;
+  }
+}
+
 // The unit's served output (h1o.cu): with E::ON the lane's accumulators become O = O' - sum_d 128^d D_d as the tail
 // absorbs O' and each D_d, plus the exact wrap correction 256 X (wb⁺ - wb⁻)^T (H1V3's PouwWrapSeg): each segment's wb
 // from the B, c and U bytes its W' is made of, as an s8 {-1, 0, 1} operand in E's shared buffer (E::wbs, 32 * XS bytes),
@@ -253,8 +268,10 @@ struct NoEpi {
   static constexpr bool PEEL = false;
   static constexpr bool SEEDS = false;  // with SEEDS, lanes 0 and 1 derive the unit's seed_j and σ_R (E::seed), not read them
   // with BAND (J10 banded, h1o.cu's h1o_band_launch; measured only), a unit's rows are its band leader's, read from the
-  // band workspace E::band_rows gives (row l's block c at + 16 (l RB + c)), and only its columns are hashed in the body
-  static constexpr bool BAND = false;
+  // band workspace E::band_rows gives (row l's block c at + 16 (l RB + c)), and only its columns are hashed in the body:
+  // BAND 1 (block form: groups of 4 chunks, the rows read from the workspace in the segment loop) or 2 (staged: each row
+  // block copied into the noise buffer where the per-unit form hashes it); the split form stages under either
+  static constexpr int BAND = 0;
   __device__ const u32* band_rows(const H1Call&, int, int, int) const { return nullptr; }
   __device__ bool a_ok(int) const { return true; }
   __device__ void dead(int, int, int) const {}
@@ -722,9 +739,11 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
   u64 mid[8];
   noise_mid(sj, nt0, nt1, nt2, mid);
   auto noise = [&](u64 t, u32 h[16]) { nblock_mid(mid, sj, t, nt0, nt1, nt2, h); };
-  // E::BAND: the rows from the band workspace (never staged), so a group past group 0 is GW = 4 chunks, each operand warp
-  // hashing one column block of it, chunk c0 + i's column block in nz[buf][i >> 1][i & 1]
-  constexpr int GW = E::BAND ? 4 : 2;
+  // E::BAND 1 (LDG): the rows read from the band workspace in the segment loop, so a group past group 0 is GW = 4 chunks,
+  // each operand warp hashing one column block of it, chunk c0 + i's column block in nz[buf][i >> 1][i & 1].  E::BAND 2:
+  // the per-unit schedule, each row block copied from the workspace where it would be hashed
+  constexpr bool LDG = E::BAND == 1;
+  constexpr int GW = LDG ? 4 : 2;
   const u32* rwp = E::BAND ? ep.band_rows(C, ri, cj, RB) : nullptr;
 
   // round 0, a compression a thread: chunk 0's row (warp 0) and column (warp 1) blocks, U (warp 2), σ_R's blocks (warp
@@ -742,9 +761,15 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
         for (int d = 0; d < 3; ++d) zc[d] = h[d];
       }
     } else if (wid < 2) {
-      if (!E::BAND || wid == 1) {
+      if (E::BAND && wid == 0) {
+        if constexpr (!LDG) {
+          uint4 v[4];
+          band_load(rwp + 16 * lane * RB, v);
+          band_store(v, sh.nz[0][0][0] + lane * NZ);
+        }
+      } else {
         noise(wid ? colb : rowb, h);
-        u32* d = (E::BAND ? sh.nz[0][0][0] : sh.nz[0][0][wid]) + lane * NZ;
+        u32* d = (LDG ? sh.nz[0][0][0] : sh.nz[0][0][wid]) + lane * NZ;
 #pragma unroll
         for (int j = 0; j < 16; ++j) d[j] = h[j];
       }
@@ -795,11 +820,11 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
     uint8_t* Bs = sh.op[w][2];
     uint8_t* Rs = sh.op[w][3];
     // group 0 is chunk 0, group gi >= 1 chunks GW (gi - 1) + 1 .. GW gi (< nb)
-    const int ng = E::BAND ? 1 + (nb + 2) / 4 : 1 + nb / 2;
+    const int ng = LDG ? 1 + (nb + 2) / 4 : 1 + nb / 2;
     for (int gi = 0; gi < ng; ++gi) {
       const int c0 = gi == 0 ? 0 : GW * (gi - 1) + 1, nch = gi == 0 ? 1 : min(GW, nb - c0), buf = gi & 1;
       if (gi > 0) {
-        if constexpr (E::BAND) {
+        if constexpr (LDG) {
           if (w < nch) {
             u32 h[16];
             noise(colb + c0 + w, h);
@@ -808,16 +833,22 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
             for (int j = 0; j < 16; ++j) d[j] = h[j];
           }
         } else if ((w >> 1) < nch) {
-          u32 h[16];
-          noise(((w & 1) ? colb : rowb) + c0 + (w >> 1), h);
           u32* d = sh.nz[buf][w >> 1][w & 1] + lane * NZ;
+          if (E::BAND && !(w & 1)) {
+            uint4 v[4];
+            band_load(rwp + 16 * (lane * RB + c0 + (w >> 1)), v);
+            band_store(v, d);
+          } else {
+            u32 h[16];
+            noise(((w & 1) ? colb : rowb) + c0 + (w >> 1), h);
 #pragma unroll
-          for (int j = 0; j < 16; ++j) d[j] = h[j];
+            for (int j = 0; j < 16; ++j) d[j] = h[j];
+          }
         }
         nbar1<IMM, NB_OPS>(32 * BOW);
       }
       if (gi + 1 < ng) {
-        if constexpr (E::BAND) {
+        if constexpr (LDG) {
           const int cn = GW * gi + 1 + w;
           if (cn < nb) {
             prefetch_l2(brow + 512 * cn, 512);
@@ -848,8 +879,8 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
           pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + BOW) + 16);
         }
         const int ci = (s >> 4) - c0, s16 = s & 15;
-        const u32* ncol = E::BAND ? sh.nz[buf][ci >> 1][ci & 1] : sh.nz[buf][ci][1];
-        const u32 nr = E::BAND ? __ldg(rwp + 16 * (lane * RB + (s >> 4)) + s16) : sh.nz[buf][ci][0][lane * NZ + s16];
+        const u32* ncol = LDG ? sh.nz[buf][ci >> 1][ci & 1] : sh.nz[buf][ci][1];
+        const u32 nr = LDG ? __ldg(rwp + 16 * (lane * RB + (s >> 4)) + s16) : sh.nz[buf][ci][0][lane * NZ + s16];
         const u32 nc = ncol[lane * NZ + s16];
         const u32 av[8] = {a0.x, a0.y, a0.z, a0.w, a1.x, a1.y, a1.z, a1.w};
         const u32 bv[8] = {b0.x, b0.y, b0.z, b0.w, b1.x, b1.y, b1.z, b1.w};
@@ -870,8 +901,8 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
         if constexpr (E::PEEL) {
 #pragma unroll
           for (int j = 0; j < 4; ++j) {
-            nb4[j] = E::BAND ? __ldg(rwp + 16 * ((g + 8 * j) * RB + (s >> 4)) + s16)
-                             : sh.nz[buf][ci][0][(g + 8 * j) * NZ + s16];
+            nb4[j] = LDG ? __ldg(rwp + 16 * ((g + 8 * j) * RB + (s >> 4)) + s16)
+                         : sh.nz[buf][ci][0][(g + 8 * j) * NZ + s16];
             nc4[j] = ncol[(8 * j + g) * NZ + s16];
           }
         }
@@ -1325,8 +1356,9 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
   u64 mid[8];
   noise_mid(sj, nt0, nt1, nt2, mid);
   auto noise = [&](u64 t, u32 h[16]) { nblock_mid(mid, sj, t, nt0, nt1, nt2, h); };
-  // E::BAND: the rows from the band workspace (never staged), and the two hashers take the column blocks of alternate
-  // chunks (chunk c's by hasher c & 1), so each noise buffer's barriers are one hasher's and the builders' (96 threads)
+  // E::BAND: the two hashers take alternate chunks (chunk c's by hasher c & 1), each hashing its chunk's column block and
+  // copying its row block from the band workspace into nz[c & 1], so each noise buffer's barriers are one hasher's and
+  // the builders' (96 threads)
   const u32* rwp = E::BAND ? ep.band_rows(C, ri, cj, RB) : nullptr;
   constexpr int NZT = E::BAND ? 96 : 128;
 
@@ -1345,9 +1377,13 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
         for (int d = 0; d < 3; ++d) zc[d] = h[d];
       }
     } else if (wid >= 2) {
-      if (!E::BAND || wid == 3) {
+      u32* d = sh.nz[0][wid - 2] + lane * NZ;
+      if (E::BAND && wid == 2) {
+        uint4 v[4];
+        band_load(rwp + 16 * lane * RB, v);
+        band_store(v, d);
+      } else {
         noise(wid == 3 ? colb : rowb, h);
-        u32* d = sh.nz[0][wid - 2] + lane * NZ;
 #pragma unroll
         for (int j = 0; j < 16; ++j) d[j] = h[j];
       }
@@ -1379,8 +1415,11 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
     if constexpr (E::BAND) {
       for (int c = side ? 1 : 2; c < nb; c += 2) {
         u32 h[16];
+        uint4 v[4];
+        band_load(rwp + 16 * (lane * RB + c), v);
         noise(colb + c, h);
         if (c >= 2) nbar_sync(SN_NZE + (c & 1), NZT);
+        band_store(v, sh.nz[c & 1][0] + lane * NZ);
         u32* d = sh.nz[c & 1][1] + lane * NZ;
 #pragma unroll
         for (int j = 0; j < 16; ++j) d[j] = h[j];
@@ -1444,13 +1483,13 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
       pb0 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 2));
       pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 2) + 16);
     }
-    const u32 nr = E::BAND ? __ldg(rwp + 16 * (lane * RB + c) + s16) : sh.nz[c & 1][0][lane * NZ + s16];
+    const u32 nr = sh.nz[c & 1][0][lane * NZ + s16];
     const u32 nc = sh.nz[c & 1][1][lane * NZ + s16];
     u32 nb4[4], nc4[4];
     if constexpr (E::PEEL) {
 #pragma unroll
       for (int j = 0; j < 4; ++j) {
-        nb4[j] = E::BAND ? __ldg(rwp + 16 * ((g + 8 * j) * RB + c) + s16) : sh.nz[c & 1][0][(g + 8 * j) * NZ + s16];
+        nb4[j] = sh.nz[c & 1][0][(g + 8 * j) * NZ + s16];
         nc4[j] = sh.nz[c & 1][1][(8 * j + g) * NZ + s16];
       }
     }

@@ -4,9 +4,11 @@ noise (h1o.cu's h1o_band_launch: a band-rows pass, then units that hash only the
 until CA's reference lands. Measured only: nothing here is served or credited.
 
     arms  mix-cpeel        per-unit noise, h1o.cu's served kernels (the baseline)
-          mix-cpeel-b1     the banded kernels at g = 1: every unit its own leader, so per-unit noise with the rows hashed
+          mix-cpeel-b1s    the banded kernels at g = 1: every unit its own leader, so per-unit noise with the rows hashed
                            by the pass (what the rows cost inside the unit: the noise share, one way)
-          mix-cpeel-bG     g = G column tiles a band (G in --gs, 64 and 16 by default)
+          mix-cpeel-bG     g = G column tiles a band (G in --gs, 64 and 16 by default), block2's rows read from the
+                           workspace in its segment loop (groups of 4 chunks, h1o.cu's forms 0 and 3)
+          mix-cpeel-bGs    the same with block2's rows staged in its noise buffers (forms 4 and 5); split always stages
     gate  per arm and window, as h1ogate.py: a dither_one.Window over NL layers with the served shapes, a step of m rows
           captured per Window.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
@@ -53,7 +55,9 @@ from h1r import H1R  # noqa: E402
 from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
-FORM_ID = {"block2": 0, "split": 1, "split2": 2, "block": 3}  # h1o_band_launch's forms
+FORM_ID = {"block2": 0, "split": 1, "split2": 2, "block": 3}  # h1o_band_launch's forms: block rows read in the loop
+FORM_STAGED = {"block2": 4, "split": 1, "split2": 2, "block": 5}  # every form's rows staged in its noise buffers
+FORM_NAMES = ("block2", "split", "split2", "block", "block2-staged", "block-staged")
 A5 = -1515870811
 NLS = {64: 4, 256: 2, 2048: 1, 8192: 1}  # layers a window, by T
 
@@ -62,7 +66,7 @@ class BandWindow(DO.Window):
     """dither_one's window whose units_call is h1o_band_launch at g (mode 0 the pass and the units, 1 the units, 2 the
     pass), each call with its own band workspace (poisoned with the window's buffers at a captured step)."""
 
-    def __init__(self, t: int, key: bytes, h1c: str, h1o: str, gate: bool, dev, g: int):
+    def __init__(self, t: int, key: bytes, h1c: str, h1o: str, gate: bool, dev, g: int, staged: bool):
         super().__init__(t, key, h1c, h1o, gate, dev)
         if not self.peel:
             raise RuntimeError("the banded kernels are peeled only (DITHER_PEEL=1)")
@@ -73,7 +77,8 @@ class BandWindow(DO.Window):
         if o.h1o_band_init():
             raise RuntimeError("h1o_band_init refused")
         self.g, self.mode = g, 0
-        self.form_id = [FORM_ID[f] for f in self.call_forms]
+        self.staged = staged
+        self.form_id = [(FORM_STAGED if staged else FORM_ID)[f] for f in self.call_forms]
         self.bws = [torch.empty(int(o.h1o_band_bytes(self.units[w], n, k, g)), dtype=torch.uint8, device=dev)
                     for w, (n, k) in enumerate(self.nk)]
         self.bws_gate: list | None = None
@@ -211,9 +216,10 @@ def gate(arm: str, t: int, ms: list[int], dev, rng: random.Random) -> tuple:
     os.environ[DO.UNITS_ENV] = "mix"
     os.environ[DO.PEEL_ENV] = "1"
     h1c, h1o = os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV]
-    g = None if arm == "mix-cpeel" else int(arm.rsplit("-b", 1)[1])
+    tail = None if arm == "mix-cpeel" else arm.rsplit("-b", 1)[1]
+    g = None if tail is None else int(tail.rstrip("s"))
     win = DO.Window(t, os.urandom(64), h1c, h1o, True, dev) if g is None else BandWindow(t, os.urandom(64), h1c, h1o,
-                                                                                         True, dev, g)
+                                                                                         True, dev, g, tail.endswith("s"))
     res = {}
     for m in ms:
         outs = [(torch.empty(m, n, dtype=torch.bfloat16, device=dev), torch.empty(m, n, dtype=torch.int32, device=dev))
@@ -290,13 +296,17 @@ def main() -> int:
     ap.add_argument("--gs", default="64,16")
     ap.add_argument("--reps", type=int, default=15)
     ap.add_argument("--no-b1", action="store_true", help="skip the g = 1 banded arm")
+    ap.add_argument("--variants", default="ldg,staged", help="the banded block forms: ldg (rows read in the segment "
+                    "loop, groups of 4 chunks), staged (rows copied into the noise buffers); split always stages")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     rng = random.Random(0x4A10B)
     ms = [int(x) for x in a.ms.split(",")]
-    arms = ["mix-cpeel"] + ([] if a.no_b1 else ["mix-cpeel-b1"]) + [f"mix-cpeel-b{g}" for g in a.gs.split(",")]
+    vs = [{"ldg": "", "staged": "s"}[v] for v in a.variants.split(",")]
+    arms = (["mix-cpeel"] + ([] if a.no_b1 else ["mix-cpeel-b1s"])
+            + [f"mix-cpeel-b{g}{v}" for g in a.gs.split(",") for v in vs])
     by_t: dict[int, list[int]] = {}
     for m in ms:
         t = 64 if m <= 64 else m
@@ -339,7 +349,7 @@ def main() -> int:
             continue
         if any(isinstance(w, BandWindow) for w in wins.values()):
             occ = next(w for w in wins.values() if isinstance(w, BandWindow)).o
-            wd["band_occupancy_blocks_per_sm"] = {f: occ.h1o_band_occupancy(i) for f, i in FORM_ID.items()}
+            wd["band_occupancy_blocks_per_sm"] = {f: occ.h1o_band_occupancy(i) for i, f in enumerate(FORM_NAMES)}
         for m in tms:
             gs = {arm: graphs(win, m) for arm, win in wins.items()}
             for d in gs.values():
