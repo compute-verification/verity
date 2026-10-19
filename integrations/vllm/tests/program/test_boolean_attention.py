@@ -14,42 +14,45 @@ from verity.ml.circuits.evaluation.batch import type_shape
 from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import Coll, concat, tuple_of
+from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program import boolean as SW
 from verity_vllm.program.registry import boolean_attention as BAt
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "AttnBlock_v6{D=16,NVIS=5,FIRST=True,BN=16}":
-        (207368, 401776, 20609, "8bf294c4e2261155f51d7813250f7ce10876b4ba2dc45d58fc8eedd422f7d5e2e1226a96a6039074f60b551f4d9415a593f67ba2f223c300a83293b8ce0c9952"),
+        (207368, 401776, 20609, "d200254a7d3ce46a14ce23ef8ad8e061efffec62a75cc24413fcfd7c224b00ebe4d674a394488d52c1fe387ec0c3cd02b023bdcbb898894ddd78386cdac39010"),
     "AttnBlock_v6{D=16,NVIS=16,FIRST=False,BN=16}":
         (435868, 848195, 39421, "19a68a87889fefbf58241be6573f710721c42fb4a6b318f86259f38e6a722f37e57d587ce00c4cee995f47162edde9c3aa632d6e4d47bc62d23137e7784034cb"),
     "AttentionHead_v6{T=20,D=16,BN=16}":
-        (673779, 1306610, 61173, "967e5dd8d1832716dc26c8b6f66fbffb012fb2914f20f3791fe22b64f19e1f7806863cc9b7e74c67a0738d78d12c7a1664fa0b9a3393e98ab9d3defbd646ae33"),
+        (673779, 1306610, 61173, "2d3c6e7d7750e1ce895a04951b38e734add21cdb92ac97bf79d3bbff7e6b4db9a968d657a049bfa3438217a43005cb5db87a8804793471fd2fdd7f2d24f8bc29"),
     "Attention_v6{T=20,NH=4,KVH=2,D=16,BN=16}":
-        (2695116, 5226440, 244692, "27a8d84292ec0b928a4e06cb6390aa8416d97a5ce73cf01a5a4245b62fbb3324bb3b62902616a04d97bd3c2ed7ab378ba3f55753605c1633072f701cfd619094"),
+        (2695116, 5226440, 244692, "e897a26225993d378d3b6716689831bdf2a4a814fd8b608c841737f5672c55530743eb8cf098ae6e5338c6eefeb2450042a1fe3c60067a761333eed7d6b34a49"),
     "Fa3InvSum_v2": (947, 4866, 102, "017c77eb48a6d4ed9be9ddaa291fa4c3ae280333540ed06045fef47238963ed59268c32fb069f62910b83e099df8eded6bba977ae659d6b42280ca8d8d653c5d"),
     "AttnBlock_v7{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2}":
         (423452, 826819, 36253, "d92cfd5e65517fc26f16b0a3b6bb7299cfc03700d6779850414fe1c6d74af9429b77fddb36bdd7f2ae7d1f2ffb9fcf65d894404b4e4ae4c7ab0b1a0f25f93373"),
     "AttentionHead_v7{T=20,D=16,BN=16,DOT=AmpereBF16TcDot16_v3,INV=Fa2InvSum_v2}":
-        (673779, 1306610, 61173, "fd36c8a200873698b9e36b1e397f4325e89fc06a730d1d7a1ae04a69cb2cf135d81ea2d26f0234197c1750a3c345cacf3cebbe9bb31f85053071ef07ef4e493d"),
+        (673779, 1306610, 61173, "fcbc60bd4cefea7e51f103ecef4c26b869a5c78a3e9094ea46036d7f9fcb3e12d7034328b8b67bcbeeb411f111984d40c5c3b2923ceb2b75788f59dd9df353ed"),
     "AttentionHead_v7{T=20,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (653603, 1271874, 56018, "6f6c1e3b711a9a9c8945f177798a73a507bb950dc7a944e2a57c5c18f7bedf5109d8d4b8991242eb5f172499ea35f24fcf9b210ba2986d0c5a0860aec1aca844"),
+        (653603, 1271874, 56018, "67396264d34ac43bff7968b0d2d50322c3f54dc5445c19c62237f5238039fac575c5f9d2067d02637e32aa0f325040f92ef1d70f073443aea91337c15b1976c9"),
     "Attention_v7{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2}":
-        (2614412, 5087496, 224072, "ffe2f2a05f7fe9100bfd69fcc393c1862f370134702fb1bdd967c4f2310ba33502fc588754b56145b4602099ccef5230b1aa90f24b029bfc152caa1e545857d1"),
+        (2614412, 5087496, 224072, "9a049e528ed3f28990a103a3260f363def50eab4aca79959dedc8b5922e7b16cacb242f3e6ed42fb8f58ea74ca81f37da518638174ddc72bb1055455d602e7e2"),
     "AttnBlock_v8{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
         (423452, 826819, 36253, "f1ecfec2525794dd9755b9e409d764c99402dd1778d8cdfedaadf4cb06fa23b045c894204bedea2313090e499c2b3b534762ea316dc93d3d5430c18cea9a2ec9"),
     "AttentionHead_v8{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=1}":
-        (1134159, 2213423, 97356, "07eaeb2ecd4ff38c7865ba7946c083432363e8a04e681c67fe22dfa456cca6c108e94e70d36363929227c17bb352cac6282028f3e8164b11609bb20ad756f643"),
+        (1134159, 2213423, 97356, "7868216e8d38841a82216f6fb67f608397b70d32fe9cf0e49e587b56d9127feecc1b458f3936d9951ba8927950191fd6f785db3c059c077f61a02ce9d066d419"),
     "Attention_v8{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa2InvSum_v2,MASKED_FROM=0}":
-        (2614412, 5087496, 224100, "881930b20185c6ead14b5b25f3b383315371b79526e6d356ad1813add166397515e4f0d503f6d1fc5e6a29f33d4e4231af2a0a9ea24248f4767214a4b6e0f3f2"),
+        (2614412, 5087496, 224100, "087dea9d4ce903e8337db1f85cbb6769183fc623c108572fd04ad85eb21b1c61bc772e40fc2930869cbd989358cb1f14fa1baddf158880ea89e02bb46fc3dec3"),
     "AttnBlock_v9{D=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,CHECK=False}":
         (423389, 826819, 36229, "983b119dad8d4fa90b1eb2c2426dca506af42694a2b22b83009a7241b925b6fff0645d436669de29ceedec9a3c0b77845a30c1b8c5b82cccb219d95c65ad74ae"),
     "AttentionHead_v9{T=40,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=2}":
-        (1134033, 2213423, 97301, "71d4680190e38a0736b8a2ab86b97c0cf501fc65ad5508c36bd6d57376250bbbbff785ceac056c7153e9fced9ba01a712d887d698d28ffcbfeda9f06f30d99cb"),
+        (1134033, 2213423, 97301, "11358d42c31bb8333d9b8cccfb18dd2f401501292b4bb867ca4699bbf7ef780365967ea69bc9c9a38c7ffebd2ebcc6589d3d103946d8c588dfbee5a2c3c676ac"),
     "Attention_v9{T=20,NH=4,KVH=2,D=16,BN=16,DOT=HopperBF16WgmmaDot16_v2,INV=Fa3InvSum_v2,MASKED_FROM=1}":
-        (2614160, 5087496, 223976, "d9481cd9ea4938b7941f85c0b993ec08241739f47a661f8257362f9d772c7075ca18f83c6390fae02c19470eec60bcc61bbcebf2d6362c16c7354c5f2e06f0e9"),
+        (2614160, 5087496, 223976, "86e91c2b83eafa2ccb6c95c7660d6b3ecbe6c07f20124a3cd426666531d8a075362018c80240d548e8ad19157cde722475a6b935cb4f0a601fbe0fe3a4f9395f"),
 }
 
 FA2, FA3 = BAt.ATTENTION_FA2, BAt.ATTENTION_FA3
@@ -117,6 +120,68 @@ def test_pinned_counts_and_digests(target) -> None:
     assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
     prog, _ = standalone_call(target)
     assert codec.program_digest(codec.encode_program(prog)) == digest
+
+
+def _program(*fns) -> Program:
+    """One Program calling each of ``fns`` once, on parameters of its own."""
+    sigs = [fn.signature() for fn in fns]
+    params = tuple((f"a{i}_{n}", t) for i, (ps, _r) in enumerate(sigs) for n, t in ps)
+
+    def body(B, S, *args):
+        outs, k = [], 0
+        for fn, (ps, _r) in zip(fns, sigs):
+            outs.append(B.call(fn, *args[k:k + len(ps)]))
+            k += len(ps)
+        return tuple_of(*outs)
+
+    return Program(bind(CompositeDefinition("Probe", 1, (), lambda S: (params, Tuple(*[r for _p, r in sigs])), body, register=False)))
+
+
+@pytest.mark.slow
+def test_zero_padding_is_the_zero_bit_broadcast(monkeypatch) -> None:
+    """A partial block's padded keys and values, and the first block's zero state, are the zero bit broadcast: a head's description
+    does not grow with its padding, as a word head's does not.  It is the circuit an explicit zero word per padded word writes."""
+    from verity_vllm.program.descriptor_equivalence import compare
+    heads = {T: bind(BAt.AttentionHeadV8, T=T, D=16, BN=16, MASKED_FROM=0, **FA2_CHECK) for T in (17, 31)}
+    size = {T: len(codec.canonical_json(codec.definition_entry(h))) for T, h in heads.items()}
+    assert abs(size[17] - size[31]) < 16, size
+    new = codec.encode_program(_program(heads[17]))                 # every body built before the patch below
+
+    def explicit(self, t):
+        w = t
+        while isinstance(w.elem, Array):
+            w = w.elem
+        return Coll(t, concat([self.word(0, w.n).refs] * (t.leaves // w.n)))
+
+    monkeypatch.setattr(BAt._Bits, "zeros", explicit)
+    for d in (BAt.AttentionHeadV8, BAt.AttnBlockV8):
+        monkeypatch.setattr(d, "_cache", {})
+    old_head = bind(BAt.AttentionHeadV8, T=17, D=16, BN=16, MASKED_FROM=0, **FA2_CHECK)
+    old = codec.encode_program(_program(old_head))
+    assert codec.program_digest(old) != codec.program_digest(new)
+    rep = compare(*(codec.decode_program(d, REGISTRY) for d in (new, old)), gate_samples=64, call_samples=2, depth=1, eval_samples=0)
+    assert rep["verdict"] == "equivalent" and rep["reference_runs"] > 0
+    assert len(codec.canonical_json(codec.definition_entry(old_head))) > 20 * size[17]
+
+
+@pytest.mark.slow
+def test_a_key_length_adds_no_more_to_the_boolean_descriptor_than_twice_the_word_one() -> None:
+    """At Qwen3-0.6B's served statics (`benchmarks/bool_build_cost`'s small case: D = 128, BN = 64, rows of 1 and 65 keys), the
+    Definitions a row has one of per key length (`Attention`, `AttentionHead`) or per block width (`AttnBlock`) take at most twice
+    the word Build's descriptor bytes.  The Boolean primitives' bit circuits, written once per Program whatever the row, are not
+    counted."""
+    bits = [bind(BAt.AttentionV8, T=T, NH=16, KVH=8, D=128, BN=64, MASKED_FROM=0, **FA2_CHECK) for T in (1, 65)]
+
+    def by_family(fns) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for k, v in codec.encode_program(_program(*fns))["definitions"].items():
+            fam = k.split("{")[0].rsplit("_v", 1)[0]
+            out[fam] = out.get(fam, 0) + len(codec.canonical_json(v))
+        return out
+
+    w, b = by_family([TR.word_of(f) for f in bits]), by_family(bits)
+    for fam in ("Attention", "AttentionHead", "AttnBlock"):
+        assert b[fam] <= 2 * w[fam], (fam, b[fam], w[fam])
 
 
 def test_fa3_inv_sum_agrees_with_fa3_inv_sum_v1() -> None:

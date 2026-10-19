@@ -75,14 +75,14 @@ def _block(B, S, q, k, v, m_prev, l_prev, o_prev, softcap_mul: Coll | None = Non
     lanes: list[Coll] = []
     for ln in range(4):
         cols = [j for j in range(NVIS) if _lane(j) == ln]
-        first = p[cols[0]] if cols else c.word(0, 32)
+        first = p[cols[0]] if cols else c.zeros(F32)
         acc = first if FIRST else B.call(BA.F32FmaFtz, scores_scale, l_prev[ln], first)
         for j in cols[1:]:
             acc = B.call(BA.F32AddFtz, acc, p[j])
         lanes.append(acc)
     pb = [B.call(BG.F2fpBf16, x) for x in p]
-    zero16 = c.word(0, 16) if NVIS < BN else None
-    o = [c.word(0, 32) for _ in range(D)] if FIRST else [B.call(BA.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
+    zero16 = c.zeros(BF16) if NVIS < BN else None
+    o = [c.zeros(F32) for _ in range(D)] if FIRST else [B.call(BA.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
     for ks in range(BN // 16):
         k0 = 16 * ks
         if k0 >= NVIS:
@@ -112,17 +112,14 @@ def _head(B, S, q, k, v, *extra):
         raise ValueError(f"AttentionHeadSoftcap_v{6 if extra else 3}: MASKED_FROM {MF} outside blocks 0..{nb - 1}")
     c = _Bits(B)
     m = l = o = None
-    zero_row = None
     for b in range(nb - 1, -1, -1):
         lo, hi = b * BN, min(T, (b + 1) * BN)
         nvis = hi - lo
         kb, vb = k[lo:hi], v[lo:hi]
         if nvis < BN:
-            if zero_row is None:
-                zero_row = Coll(Array(D, BF16), concat([c.word(0, 16).refs] * D))
-            pad = [zero_row.refs] * (BN - nvis)
-            kb = Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
-            vb = Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
+            pad = c.zeros(Array(BN - nvis, Array(D, BF16))).refs
+            kb = Coll(Array(BN, Array(D, BF16)), concat([kb.refs, pad]))
+            vb = Coll(Array(BN, Array(D, BF16)), concat([vb.refs, pad]))
         first = b == nb - 1
         if extra:
             blk = bind(AttnBlockSoftcapIn, D=D, NVIS=nvis, FIRST=first, BN=BN, DOT=S.DOT, CHECK=b >= MF, TANH=S.TANH, EX2=S.EX2)
@@ -130,9 +127,7 @@ def _head(B, S, q, k, v, *extra):
             blk = bind(AttnBlockSoftcap, D=D, NVIS=nvis, FIRST=first, BN=BN, CAP=S.CAP, DOT=S.DOT, CHECK=b >= MF, TANH=S.TANH,
                        EX2=S.EX2)
         if first:
-            z = c.word(0, 32)
-            st = B.call(blk, q, kb, vb, z, Coll(Array(4, F32), concat([z.refs] * 4)), Coll(Array(D, F32), concat([z.refs] * D)),
-                        *extra)
+            st = B.call(blk, q, kb, vb, c.zeros(F32), c.zeros(Array(4, F32)), c.zeros(Array(D, F32)), *extra)
         else:
             st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]

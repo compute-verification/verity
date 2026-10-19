@@ -21,7 +21,7 @@ from verity.ml.circuits import boolean as BL
 from collections.abc import Callable
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.refs import Coll, Explicit, array_of, concat, strided_view, tuple_of
+from verity.ml.circuits.refs import Coll, Explicit, array_of, broadcast, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -50,14 +50,18 @@ class _Bits:
     def __init__(self, B):
         self.B, self.refs = B, {}
 
+    def bit(self, b: int) -> tuple[str, int, int]:
+        if b not in self.refs:
+            self.refs[b] = self.B.call(BL.constant(b)).refs[0]
+        return self.refs[b]
+
     def word(self, value: int, width: int) -> Coll:
-        bits = []
-        for i in range(width):
-            b = (value >> i) & 1
-            if b not in self.refs:
-                self.refs[b] = self.B.call(BL.constant(b)).refs[0]
-            bits.append(self.refs[b])
-        return Coll(Array(width, BL.BIT), Explicit(tuple(bits)))
+        return Coll(Array(width, BL.BIT), Explicit(tuple(self.bit((value >> i) & 1) for i in range(width))))
+
+    def zeros(self, t) -> Coll:
+        """A zero of type ``t`` (bits in any shape): the zero bit, broadcast, so the description of padding or of a zero state is
+        O(1) however many words it fills, as a word zero's is."""
+        return Coll(t, broadcast(*self.bit(0), t.leaves))
 
 
 def _transpose(vblk: Coll, D: int) -> Coll:
@@ -107,14 +111,14 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     lanes: list[Coll] = []
     for ln in range(4):
         cols = [j for j in range(NVIS) if _lane(j) == ln]
-        first = p[cols[0]] if cols else c.word(0, 32)
+        first = p[cols[0]] if cols else c.zeros(F32)
         acc = first if FIRST else B.call(BA.F32FmaFtz, scores_scale, l_prev[ln], first)
         for j in cols[1:]:
             acc = B.call(BA.F32AddFtz, acc, p[j])
         lanes.append(acc)
     pb = [B.call(BG.F2fpBf16, x) for x in p]
-    zero16 = c.word(0, 16) if NVIS < BN else None
-    o = [c.word(0, 32) for _ in range(D)] if FIRST else [B.call(BA.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
+    zero16 = c.zeros(BF16) if NVIS < BN else None
+    o = [c.zeros(F32) for _ in range(D)] if FIRST else [B.call(BA.F32MulFtz, o_prev[d], scores_scale) for d in range(D)]
     for ks in range(BN // 16):
         k0 = 16 * ks
         if k0 >= NVIS:
@@ -131,23 +135,18 @@ def _head(B, T: int, D: int, BN: int, block_of, INV, q, k, v, *extra):
     c = _Bits(B)
     nb = (T + BN - 1) // BN
     m = l = o = None
-    zero_row = None
     for b in range(nb - 1, -1, -1):
         lo, hi = b * BN, min(T, (b + 1) * BN)
         nvis = hi - lo
         kb, vb = k[lo:hi], v[lo:hi]
         if nvis < BN:
-            if zero_row is None:
-                zero_row = Coll(Array(D, BF16), concat([c.word(0, 16).refs] * D))
-            pad = [zero_row.refs] * (BN - nvis)
-            kb = Coll(Array(BN, Array(D, BF16)), concat([kb.refs] + pad))
-            vb = Coll(Array(BN, Array(D, BF16)), concat([vb.refs] + pad))
+            pad = c.zeros(Array(BN - nvis, Array(D, BF16))).refs
+            kb = Coll(Array(BN, Array(D, BF16)), concat([kb.refs, pad]))
+            vb = Coll(Array(BN, Array(D, BF16)), concat([vb.refs, pad]))
         first = b == nb - 1
         blk = block_of(b, nvis, first)
         if first:
-            z = c.word(0, 32)
-            st = B.call(blk, q, kb, vb, z, Coll(Array(4, F32), concat([z.refs] * 4)), Coll(Array(D, F32), concat([z.refs] * D)),
-                        *extra)
+            st = B.call(blk, q, kb, vb, c.zeros(F32), c.zeros(Array(4, F32)), c.zeros(Array(D, F32)), *extra)
         else:
             st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
