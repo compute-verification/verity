@@ -3,6 +3,7 @@ import Models.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS
 import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.SplitRateMerged
+import Proofs.Accounting.Compose.BindingOfECR
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -229,7 +230,7 @@ theorem ServiceCovers : Accounting.Guarantees.Compose.ServiceCovers := by
   exact CoversProof.serviceCovers
 
 theorem BindingOfECR : Accounting.Guarantees.Compose.BindingOfECR := by
-  sorry
+  exact Binding.bindingOfECR
 
 theorem WholeLuckOfEntropy : Accounting.Guarantees.Compose.WholeLuckOfEntropy := by
   sorry
