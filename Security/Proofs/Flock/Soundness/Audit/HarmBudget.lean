@@ -203,7 +203,7 @@ the rounds played. -/
 noncomputable def prEv (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) : {N : ℕ} → Play n N → ℝ → ℝ≥0∞
   | _, .stop acc, a => if Ev acc a then 1 else 0
   | _, @Play.coin _ _ _ _ _ k, a => avg fun c => prEv h Ev (k c) a
-  | _, .round L B k, a => avg fun ω => prEv h Ev (k ω) (a + ∑ u ∈ B, h u)
+  | _, .round _ B k, a => avg fun ω => prEv h Ev (k ω) (a + ∑ u ∈ B, h u)
 
 /-- The probability that the current round passes: the session accepts or reaches the next round. -/
 noncomputable def pass : {N : ℕ} → Play n N → ℝ≥0∞
@@ -266,8 +266,9 @@ theorem prEv_le_pass (h : Fin n → ℝ) (Ev : Bool → ℝ → Prop) (hEv : ∀
   | _, .stop acc, a => by
       rw [prEv_stop, pass_stop]
       by_cases hE : Ev acc a
-      · simp [hE, hEv acc a hE]
-      · simp [hE]
+      · exact (ite_eq_left hE).trans_le (ite_eq_left (hEv acc a hE)).symm.le
+      · rw [ite_eq_right hE]
+        exact zero_le
   | _, @Play.coin _ _ _ _ _ k, a => by
       rw [prEv_coin, pass_coin]
       exact avg_mono fun c => prEv_le_pass h Ev hEv (k c) a
@@ -316,10 +317,10 @@ theorem prEv_le_exp {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞
             (if Disjoint (L.draw ω) B then 0 else (k ω).pass)) + ∑ m ∈ range N, err m := by
         intro ω
         by_cases hd : Disjoint (L.draw ω) B
-        · rw [if_pos hd, if_pos hd, add_zero, ← ENNReal.ofReal_mul (Real.exp_pos _).le, ← Real.exp_add,
+        · rw [ite_eq_left hd, ite_eq_left hd, add_zero, ← ENNReal.ofReal_mul (Real.exp_pos _).le, ← Real.exp_add,
             show lam * (a - H) + lam * ∑ u ∈ B, h u = lam * (a + ∑ u ∈ B, h u - H) by ring]
           exact prEv_le_exp H hlam0 hlam (k ω) _ (hLk ω) (hDk ω)
-        · rw [if_neg hd, if_neg hd, zero_add]
+        · rw [ite_eq_right hd, ite_eq_right hd, zero_add]
           exact (prEv_le_pass h (fun acc x => acc = true ∧ H ≤ x) (fun _ _ hE => hE.1) (k ω) _).trans
             le_self_add
       rw [prEv_round, Finset.sum_range_succ]
@@ -371,7 +372,7 @@ theorem harmRate_mul_le {π h : Fin n → ℝ} (hπ : ∀ u, 0 ≤ π u) (hh : �
   rcases (hh u).lt_or_eq with hu | hu
   · have hmem : u ∈ univ.filter fun u => 0 < h u := Finset.mem_filter.2 ⟨Finset.mem_univ u, hu⟩
     have hne : (univ.filter fun u => 0 < h u).Nonempty := ⟨u, hmem⟩
-    rw [harmRate, dif_pos hne]
+    rw [harmRate, dite_eq_left hne]
     exact (le_div_iff₀ hu).1 (Finset.inf'_le _ hmem)
   · rw [← hu, mul_zero]
     exact hπ u
@@ -441,10 +442,10 @@ theorem oneShot_prEv (L : Law n) (B : Finset (Fin n)) :
   by_cases hd : Disjoint (L.draw ω) B
   · have hE : decide (Disjoint (L.draw ω) B) = true ∧ (B.card : ℝ) ≤ 0 + ∑ u ∈ B, (1 : ℝ) :=
       ⟨decide_eq_true hd, by simp⟩
-    rw [prEv_stop, if_pos hE, if_pos hd]
+    rw [prEv_stop, ite_eq_left hE, ite_eq_left hd]
   · have hE : ¬ (decide (Disjoint (L.draw ω) B) = true ∧ (B.card : ℝ) ≤ 0 + ∑ u ∈ B, (1 : ℝ)) :=
       fun hE => hd (of_decide_eq_true hE.1)
-    rw [prEv_stop, if_neg hE, if_neg hd]
+    rw [prEv_stop, ite_eq_right hE, ite_eq_right hd]
 
 /-- **The count budget is tight**: a single Bernoulli round over `B` with no drawn-unit error
 accepts with `|B|` wrong steps with probability exactly `(1 − q)^{|B|}`. -/
