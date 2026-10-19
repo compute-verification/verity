@@ -15,6 +15,8 @@
 //   imma_s8_k32 / _k16    mma.sync alone on sm_100 (M4c)
 //   syncmma_k32 / _k16    thread 0 tcgen05.mma beside 8 warps of mma.sync (M4c: does mma.sync share the tcgen05 pipe?)
 //   tclane_<lane>_r<R>    thread 0 tcgen05.mma beside 12 warps of lane ops (the scalar pipes beside a saturated MMA)
+//   tclaneU_<lane>        the same roles, exact on both sides (the lanes OP_UNTIL): a tclane_ point's tensor rate is
+//                         the MMA's fixed work over the lanes' longer block time, a lower bound, not a joint's edge
 // dc/analyze.py turns rows.jsonl into words a cycle and the joint facets.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
@@ -643,6 +645,7 @@ OP_KERNEL(tclaneU_imad, 512) { lane_until_mma<L_IMAD, 64>(a); }
 OP_KERNEL(tclaneU_redux, 512) { lane_until_mma<L_REDUX, 64>(a); }
 OP_KERNEL(tclaneU_reduce, 512) { lane_until_mma<L_REDUCE, 8>(a); }
 OP_KERNEL(tclaneU_duo, 512) { lane_until_mma<L_DUO, 48>(a); }
+OP_KERNEL(tclaneU_lop3, 512) { lane_until_mma<L_LOP3, 128>(a); }
 OP_KERNEL(tcliU_base, 384) { tcli_until_mma<0, 8>(a); }
 OP_KERNEL(tcliU_redux, 384) { tcli_until_mma<1, 8>(a); }
 OP_KERNEL(tcliU_reduce, 384) { tcli_until_mma<2, 8>(a); }
@@ -707,6 +710,7 @@ static const OpProbe PROBES[] = {
     {.name = "tclaneU_imad", .kernel = (const void*)tclaneU_imad, .tpb = 512, .expect = UI ";IMAD=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_redux", .kernel = (const void*)tclaneU_redux, .tpb = 512, .expect = UI ";REDUX*=64", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tclaneU_reduce", .kernel = (const void*)tclaneU_reduce, .tpb = 512, .expect = UI ";SHFL.BFLY=40,LOP3.LUT=40", .warps = "1;12", .iters = 2048, .until = 2},
+    {.name = "tclaneU_lop3", .kernel = (const void*)tclaneU_lop3, .tpb = 512, .expect = UI ";LOP3.LUT=128", .warps = "1;12", .iters = 2048, .until = 2},
     {.name = "tcbulk_cp", .kernel = (const void*)tcbulk_cp, .tpb = 256, .expect = UI ";UBLKCP*=8", .counted = "UBLKCP*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
     {.name = "tcbulk_red", .kernel = (const void*)tcbulk_red, .tpb = 256, .expect = UI ";UBLKRED*=8", .counted = "UBLKRED*", .warps = "1;1", .words = 1024, .iters = 4096, .until = 2},
     {.name = "bulkcp", .kernel = (const void*)bulkcp, .tpb = 32, .expect = "UBLKCP*=8", .words = 1024, .iters = 1024},
