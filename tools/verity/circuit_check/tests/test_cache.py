@@ -1099,7 +1099,8 @@ CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, 
 def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (17 Oct: `PousSha512Head_v1`'s 161.8 GiB peak was left out
-    of it because adding it made `circuit-check --all` run cold), while an edit to the checker's code still reruns them all."""
+    of it because adding it made `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
+    which decide only the summary), while an edit to the checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1109,6 +1110,10 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
     assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
     (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    for p in (checker / "known.py", *sorted((checker / "known").rglob("*.toml"))):
+        p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
     (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
