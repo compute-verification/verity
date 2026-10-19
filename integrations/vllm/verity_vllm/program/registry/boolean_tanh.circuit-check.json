@@ -1,0 +1,10 @@
+{
+ "definitions": {
+  "GeluTanhMulBf16_v4": {
+   "and": 15616
+  },
+  "TanhF32Rn_v3": {
+   "and": 15719
+  }
+ }
+}
