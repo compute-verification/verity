@@ -2319,7 +2319,7 @@ section Slots
 variable {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
   (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
 
-theorem stsOf_half : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
+theorem cxStsOf_half : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
   rw [show (2 * j.val + r.val) / 2 = j.val by omega]
   exact getElem!_pos (stsOf x) j.val (lt_of_jOf j)
 
@@ -2327,7 +2327,7 @@ theorem repStart_next : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.v
     FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (stAt x j) +
       innerOff 0 (zkTab x j).sch + 4 := by
   have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
-  rw [FlockComplete.ZkTables.repStart_succ, stsOf_half]
+  rw [FlockComplete.ZkTables.repStart_succ, cxStsOf_half]
   unfold FlockDeploy.repRounds FlockComplete.piopRoundsZk innerOff
   simp only [↓reduceIte, (zkTab x j).hz]
   omega
@@ -2370,7 +2370,7 @@ theorem repSlot_at (f : _root_.Flock.Schedule → ℕ) :
     repSlot x (2 * j.val + r.val) f = FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
       FlockComplete.piopRoundsZk spec (stAt x j) + f (zkTab x j).sch := by
   rw [repSlot_eq hsx (sch := (zkTab x j).sch) (tPad := (zkTab x j).tPad)
-    (by rw [stsOf_half]; exact (zkTab x j).hz) f, stsOf_half]
+    (by rw [cxStsOf_half]; exact (zkTab x j).hz) f, cxStsOf_half]
 
 include hsx in
 theorem outerSlot_at : outerSlot x j.val r.val = FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + 1 := by
