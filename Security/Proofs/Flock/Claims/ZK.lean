@@ -68,6 +68,7 @@ import Proofs.Flock.Claims.ZK.SimPiop
 import Proofs.Flock.Claims.ZK.SimLig
 import Proofs.Flock.Claims.ZK.FinExe
 import Proofs.Flock.Claims.ZK.FinPads
+import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.LiveEnd
 import Proofs.Flock.Claims.ZK.FinTau
 import Proofs.Flock.Claims.ZK.Worker
@@ -342,12 +343,13 @@ import Proofs.Flock.Claims.ZK.Stop
 * `LiveEnd`: `Masked.liveEnd`, the session answered by the openings ends as the one answered by the opened coins.
 * `FinTau`: `Masked.repTau_of`, `FinExe`'s `RepTau` from `InnerTauVal`: the session's rep's `τ` is `innerP`'s after the
   shared phases, at the rep's `ε` slot's coins.
+* `CausalExe`: `Masked.causalExe`, `CausalExe`: every executable send reads only coins drawn before it.
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from
-  `InnerTauVal`'s `TauLig`, `CausalExe`, and `FinExe`'s `RepOpenRest`: `hstep` from `Masked.prefixLive` and
-  `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and
-  `SimInner` (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value by
-  `Masked.innerTauVal_of_tauLig`), the last message from `Masked.liveEnd` and `Masked.repTau_of`
-  (`Masked.finExe_of_rest`).
+  `RepOpenRest`'s level-0 half `Masked.RepOpen0`: `hstep` from `Masked.prefixLive` and `SimSession`
+  (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit`, `Masked.simPiop`, `Masked.simLig` and `SimInner`
+  (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`, `τ`'s value `Masked.innerTauVal`),
+  `Causal` by `Masked.causalExe`, the last message from `Masked.liveEnd`, `Masked.repTau_of` and
+  `Masked.repOpenRest_pads` (`Masked.finExe_of_rest`, `Masked.repOpenRest_of`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
