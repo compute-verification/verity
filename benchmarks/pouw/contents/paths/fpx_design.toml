@@ -1,0 +1,4 @@
+order = 91
+path = "`fpx_design/`"
+runs_on = "CPU (the machine model's environment)"
+what = "FPX-DESIGN's candidate FP8 and FP4 designs on the machine model: each device's int8 record design with what an FP route adds (C1's limb products, the peel designs' served GEMM, the FP32 word's extraction), priced with `machine-model eps --table` on sm_120, sm_90 and sm_100 (`fpx_eps.py OUT`)"
