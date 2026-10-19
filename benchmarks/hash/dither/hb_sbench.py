@@ -67,7 +67,7 @@ def build(arm: str, scratch, gpu_mem: float):
         return _build(arm, scratch, gpu_mem)
     from vllm import LLM
     os.environ.pop("VLLM_DISABLED_KERNELS", None)
-    return LLM(model=str(sbench.stock_checkpoint(sbench.PIN, scratch)), **sbench.engine_args(gpu_mem))
+    return LLM(model=str(sbench.stock_checkpoint(sbench.PIN, scratch)), **sbench.stock_args(gpu_mem))
 
 
 def clean_gate_tokens(llm) -> None:

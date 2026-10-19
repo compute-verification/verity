@@ -6,7 +6,8 @@ Measures, per arm and rep:
     tpot_b32_ms      decode at batch 32: 32 requests, greedy, ignore_eos; (t(N2) - t(N1)) / (N2 - N1) over two generate calls
                      of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel
     tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
-                     in the scheduler throughout), output tokens over wall time
+                     in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
+                     run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm)
 and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
 
 Arms:
@@ -127,14 +128,34 @@ def stock_checkpoint(pin: str, scratch: Path) -> Path:
     return d
 
 
-def engine_args(gpu_mem: float) -> dict:
+def engine_args(gpu_mem: float, own_batch: bool = False) -> dict:
     # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
-    # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same cap
+    # vLLM refuses max_num_seqs above max_num_batched_tokens; every arm of a run gets the same cap, but a stock arm under
+    # --stock-own-batch, which keeps vLLM's own max_num_seqs and max_num_batched_tokens
     t = int(os.environ.get("SBENCH_T", MAX_TOKENS_STEP))
-    return {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
-            "gpu_memory_utilization": gpu_mem,
-            "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
-            "kernel_config": {"enable_flashinfer_autotune": False}}
+    a = {"max_num_seqs": min(MAX_SEQS, t), "max_num_batched_tokens": t,
+         "gpu_memory_utilization": gpu_mem,
+         "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
+         "kernel_config": {"enable_flashinfer_autotune": False}}
+    if own_batch:
+        del a["max_num_seqs"], a["max_num_batched_tokens"]
+    return a
+
+
+OWN_BATCH_ENV = "SBENCH_STOCK_OWN_BATCH"
+
+
+def stock_args(gpu_mem: float) -> dict:
+    return engine_args(gpu_mem, own_batch=os.environ.get(OWN_BATCH_ENV) == "1")
+
+
+def scheduler_of(llm) -> dict | None:
+    """The engine's resolved batch: what a stock arm under --stock-own-batch really ran at."""
+    try:
+        sc = llm.llm_engine.vllm_config.scheduler_config
+        return {"max_num_seqs": sc.max_num_seqs, "max_num_batched_tokens": sc.max_num_batched_tokens}
+    except AttributeError:
+        return None
 
 
 DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "CutlassInt8ScaledMMLinearKernel",
@@ -179,12 +200,12 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     if arm == "stock-cutlass":
         os.environ.pop("VLLM_DISABLED_KERNELS", None)
     if arm in ("stock", "stock-humming", "stock-cutlass"):
-        return LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
+        return LLM(model=str(stock_checkpoint(PIN, scratch)), **stock_args(gpu_mem))
     if arm == "stock-percall":
         sys.path.insert(0, str(HERE.parent / "exactlin"))
         import percall
         percall.install()
-        llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
+        llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **stock_args(gpu_mem))
         llm.dither_stats = percall.summary
         return llm
     if arm == "exact-eager":
@@ -288,7 +309,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         conn.send({"error": f"{type(e).__name__}: {e}"})
         return
     conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
-               "disabled": os.environ.get("VLLM_DISABLED_KERNELS")})
+               "disabled": os.environ.get("VLLM_DISABLED_KERNELS"), "scheduler": scheduler_of(llm)})
     ps = prompts(B)
 
     def gen(reqs: list[str], n: int):
@@ -415,8 +436,12 @@ def main() -> int:
     ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither window's T")
     ap.add_argument("--ops", default="decode,sat")
     ap.add_argument("--gate", action="store_true")
+    ap.add_argument("--stock-own-batch", action="store_true",
+                    help="stock arms at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's")
     a = ap.parse_args()
     os.environ["SBENCH_T"] = str(a.t)
+    if a.stock_own_batch:
+        os.environ[OWN_BATCH_ENV] = "1"
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     import tempfile
@@ -508,7 +533,8 @@ def main() -> int:
                "decode_tokens_vs_rep0": vs_rep0, "ref_of": REF_OF, "n1": N1, "n2": N2, "b": B,
                "gate": {arm: {k: v for k, v in d.items() if k != "tokens"} for arm, d in gate_doc.items()},
                "saturation": {"requests": SAT_REQS, "tokens": SAT_TOKENS, "max_num_seqs": min(MAX_SEQS, a.t),
-                              "max_num_batched_tokens": a.t}, "per_arm": {}}
+                              "max_num_batched_tokens": a.t, "stock_own_batch": a.stock_own_batch,
+                              "scheduler_by_arm": {arm: info[arm].get("scheduler") for arm in arms}}, "per_arm": {}}
     for arm in arms:
         tp = [x["tpot_b32_ms"] for x in reps if x["arm"] == arm and x["op"] == "decode"]
         th = [x["tokens_per_s"] for x in reps if x["arm"] == arm and x["op"] == "sat"]
