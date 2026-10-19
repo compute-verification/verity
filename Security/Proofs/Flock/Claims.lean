@@ -42,6 +42,7 @@ import Proofs.Flock.Claims.Recursion.BoundDeploy
 import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
 import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
 import Proofs.Flock.Claims.Recursion.BindsDeployed
+import Proofs.Flock.Claims.Recursion.LastBindsE
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
