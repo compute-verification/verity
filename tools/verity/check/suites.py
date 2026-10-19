@@ -212,15 +212,18 @@ def cpus() -> int:
 TEST_PROCESS_GB = 9
 
 
-def default_jobs(meminfo: Path = Path("/proc/meminfo")) -> int:
+def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
     """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
-    processes at `TEST_PROCESS_GB` each."""
+    processes at `TEST_PROCESS_GB` each. The memory is the machine's MemAvailable or this run's own limit (``limit_gb``, by
+    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (19 Oct, r20261019-045749-398f:
+    an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB free started 32 test processes and was OOM-killed)."""
     n = cpus()
-    try:
+    limit_gb = slot_mem_gb() if limit_gb is None else limit_gb
+    limits = [] if limit_gb is None else [limit_gb]
+    with contextlib.suppress(OSError, StopIteration, ValueError, IndexError):
         kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
-    except (OSError, StopIteration, ValueError, IndexError):
-        return n
-    return min(n, max(1, kb // (TEST_PROCESS_GB << 20)))
+        limits.append(kb / 2**20)
+    return min(n, max(1, int(min(limits) // TEST_PROCESS_GB))) if limits else n
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
