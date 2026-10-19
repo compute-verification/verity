@@ -4,11 +4,12 @@ whose selection rule `Select.Rule` reads: what the challenger holds once a deliv
 check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the boundary values (`Service.checkPublic`), the population (a positive integer),
-  then R1–R7 (`Registration.check`) against the challenger's copies under the law the rule names over that population
+  the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
+  (`Registration.check`) against the challenger's copies under the law the rule names over that population
   (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`countVaries`: `shapes`), and
   the receipt (`registration.receipt`);
-* `select`: the draw of record on the bytes of the challenger's coins (`Select.select`), held to the registration and
-  the expanded law (`Draw.checkDraw`);
+* `select`: the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
+  population, `Select.resolve`), held to the registration and the expanded law (`Draw.checkDraw`);
 * `interior` (`Stream.register_interiors`, two-stage only): the drawn RUs' interiors, after the draw and before any proof:
   a two-stage rule that drew some RU, the public-items rule on the interior values, a population of the K proved RUs (an
   integer), R1–R7 against the interiors' own copies under the run's query and `subset:K` over them, and the receipt;
@@ -106,14 +107,16 @@ def run (i : Input) : V Json := do
   if !pub.codes.isEmpty then return refused "register" pub.codes
   let some n := nat? (getD i.record "population") | return refused "register" #["population"]
   if n == 0 then return refused "register" #["population"]
-  let law ← i.rule.lawOver n
+  let some rule := i.rule.over n | return refused "register" #["rate"]
+  let law ← rule.lawOver n
   let v := { v with law }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
   if countVaries law then return refused "register" #["shapes"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable
-  let (draw, _, read) ← Select.select i.rule v.program v.query v.workTable i.closure i.source
+  let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
+    i.closure i.source
   let codes := Draw.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes
   let drawn := Draw.proved draw

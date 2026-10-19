@@ -7,6 +7,7 @@ import SampledProofs.Bound
 import SampledProofs.PyJson
 import SampledProofs.Record
 import SampledProofs.OneStage
+import SampledProofs.Rate
 import SampledProofs.Select
 import SampledProofs.Slots
 import SampledProofs.Service
