@@ -11,6 +11,7 @@ import Proofs.Accounting.Actual.Bridges
 import Proofs.Accounting.Actual.Transducer
 import Proofs.Accounting.Actual.Ticks
 import Proofs.Accounting.Actual.Source
+import Proofs.Accounting.Actual.WipePool
 
 /-!
 # The actual circuit's guarantees
@@ -64,4 +65,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   and it admits one (`tick_holding`).
 * `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
   `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
+* `Actual/WipePool.lean`: `WipePool`, the memory cap's lifetime pool, by Ville's inequality over the run tree of a
+  prover's wipes: under timed-round soundness, every wipe passes with the un-held fractions summing to at least `H`
+  with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at `H = ln(1/δ)/k`, at most `δ`.
 -/
