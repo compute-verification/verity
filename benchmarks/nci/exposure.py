@@ -103,19 +103,21 @@ SPECS = {s["key"]: s for s in T.SPEC}
 
 SERVED_4GB = SCENARIOS["served today, R_wipe 4 GB"]
 WIPE_2GB = {"pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
+#: the threading ReferenceThreaded gives under its conjecture, at which the closed-form memory cap binds
+KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
 #: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
-    ("2 GB streamed-label wipes", WIPE_2GB, "T4", "mu", "the floor credit's residual is above the cap"),
+    ("2 GB streamed-label wipes", WIPE_2GB | KEYED, "T4", "mu", "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
     ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
     ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
     ("intake at line rate", {"residual": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
-    ("served, R_wipe 4 GB", SERVED_4GB, "T3", "mu", "memory caps the residual"),
-    ("served, R_wipe 4 GB", SERVED_4GB, "T4", "mu", "hourly wipes inside a 3.6 h window"),
-    ("side channels 3e5", WIPE_2GB | {"residual": 0.9, "sigma": 3e5, "unfilled_gb": 0.83}, "T4", "mu",
+    ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps the residual"),
+    ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T4", "mu", "hourly wipes inside a 3.6 h window"),
+    ("side channels 3e5", WIPE_2GB | KEYED | {"residual": 0.9, "sigma": 3e5, "unfilled_gb": 0.83}, "T4", "mu",
      "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
     ("K 1e6", {"K": 1e6}, "T1", "nu", "Lambda(K) = e"),
@@ -128,7 +130,7 @@ CHECKS = [
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
                               "wipe_s": 1.0, "d": 65536.0}, "T3", "mu",
      "breaks: R_wipe < d b_w e, the cap floors at nu"),
-    ("whole embedding table", {"thread_bits": 2.94e9}, "T5", "chi",
+    ("whole embedding table", KEYED | {"thread_bits": 2.94e9}, "T5", "chi",
      "breaks: threading certified past S_1, the chord ends at thread_bits"),
     ("proofs nearly free", {"overhead": 1.0, "replay": 1.0}, "T5", "chi", "breaks: the pool can't fill one block"),
 ]

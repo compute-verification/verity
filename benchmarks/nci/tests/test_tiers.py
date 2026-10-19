@@ -15,6 +15,9 @@ import tiers as T  # noqa: E402
 ROOT = HERE.parents[2]
 
 
+#: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
+KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
     effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
     assert all(b <= a * (1 + 1e-12) for a, b in zip(effs, effs[1:]))
@@ -77,7 +80,7 @@ def test_absorbed_partial_sums_weaken_the_law_as_ps_prime_says():
 
 def test_the_wipe_floor_is_the_closed_form():
     """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
-    p = T.DEFAULTS | {"residual": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
+    p = KEYED | {"residual": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
     closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
@@ -86,8 +89,8 @@ def test_the_wipe_floor_is_the_closed_form():
 
 
 def test_memory_caps_the_residual_below_the_state_threshold():
-    threshold = T.state_threshold(T.DEFAULTS, T.TIERS["T3"]) / T.GB
-    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0}
+    threshold = T.state_threshold(KEYED, T.TIERS["T3"]) / T.GB
+    tight = KEYED | {"pous_rounds": 1e6, "pous_floor": 0.0}
     below = T.evaluate(tight | {"unfilled_gb": threshold / 2}, T.TIERS["T3"])
     above = T.evaluate(tight | {"unfilled_gb": threshold * 2}, T.TIERS["T3"])
     assert below["memory_caps_residual"] and not above["memory_caps_residual"]
@@ -113,7 +116,7 @@ def test_unbounded_ingress_makes_wipes_cap_nothing():
 
 def test_disks_left_in_place_count_as_state():
     """An unwiped disk is state a wipe leaves (dark-compute red team, 19 Oct: 8 TB of NVMe undoes the memory cap)."""
-    p = T.DEFAULTS | {"residual": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
+    p = KEYED | {"residual": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
     assert T.evaluate(p, T.TIERS["T3"])["memory_caps_residual"]
     assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["efficiency"] > T.evaluate(p, T.TIERS["T3"])["efficiency"]
 
@@ -171,7 +174,7 @@ def test_an_injected_bit_buys_a_full_block_at_s_1():
     """At the defaults (d, e)-threading stops at thread_bits, below S_1 = sqrt(2 b_w b_a Gamma), where (1, 0)-threading
     first lets one block hold all its gates; with (d, e) to any reads and kappa Gamma / 2 a block, the chord is the
     secant to the (d, e) bound's full reads."""
-    p = T.DEFAULTS
+    p = KEYED
     s_1 = math.sqrt(2 * p["b_w"] * p["b_a"] * p["Gamma"])
     assert T.chord(p) == pytest.approx((p["Gamma"] - T.region_cap(p, p["K"])) / (s_1 - p["K"]))
     old = p | {"thread_bits": math.inf, "block_mults": p["kappa"] / 2}
@@ -210,7 +213,7 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
     """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = KEYED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
     assert amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
@@ -248,7 +251,7 @@ def test_reference_layered_at_kimi_k2():
     b, e_lk = m["vocab"] * bf16, 0
     E = int(T.DEFAULTS["K"] // b)
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
-    assert (T.DEFAULTS["d"], T.DEFAULTS["e"]) == (d0 - E, step * (e + E * e_lk))
+    assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
     nci = ROOT / "Security" / "Models" / "Nci"
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()

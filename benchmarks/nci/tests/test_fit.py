@@ -73,11 +73,11 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
 
 
 def test_the_table_against_the_red_teams_closed_form():
-    """The closed form caps nothing from 4 GB (kappa 0.60, the certified d = 10), leaving the residual's D = 1.25, and
-    gives 2.4 at 1 GB; at central boundary bits the fit bound is stronger there, and void from 50 GB, where a server holds
-    N* weights at b_w."""
+    """At the structural d = 1 the closed form caps nothing at any of the table's residuals, leaving the residual's
+    D = 1.25; at central boundary bits the fit bound is stronger there, and void from 50 GB, where a server holds N*
+    weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}
-    assert rows[1.0]["D_closed"] == pytest.approx(2.39, rel=0.01)
+    assert rows[1.0]["D_closed"] == pytest.approx(1.25, rel=0.01)
     assert rows[6.0]["D_closed"] == rows[13.0]["D_closed"] == pytest.approx(1.25, rel=0.01)
     assert rows[6.0]["D_fit"] > rows[6.0]["D_closed"] and rows[13.0]["D_fit"] > rows[13.0]["D_closed"]
     assert rows[50.0]["periods"] == 0 and rows[166.0]["periods"] == 0
