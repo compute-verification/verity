@@ -73,7 +73,8 @@ elements (`multimem_owners`) and ``multimem.st``s the result to every rank. The 
 order no source states; `AllReduceMultimem_v1` takes it per owner as TREES, binary trees over the ranks whose nodes are f32 adds
 (IEEE, or FTZ when FTZ), the 8-GPU capture's probes reading each tree off the switch (`tree_from_clusters`), then RN to bf16. Each
 ``ld_reduce`` reduces one 16-byte vector, `MULTIMEM_VECTOR` elements, and an owner's slice is whole vectors, so the Definition is a
-batch of `AllReduceMultimemVector_v1` per run of one tree, no vector reading another's words.
+batch of `AllReduceMultimemVector_v1` per run of one tree, no vector reading another's words. The capture's kept words replay on
+this form bit for bit (`MULTIMEM_REPLAY_RUN`, tests/properties/glm53_multimem_replay.py: 20 all-reduces, 17,063,936 elements).
 
 Under vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``) none of those routes is on: `ParallelConfig` disables the custom
 all-reduce, `override_envs_for_invariance` sets ``VLLM_ALLREDUCE_USE_SYMM_MEM=0`` and `CudaCommunicator` leaves FlashInfer's
@@ -109,8 +110,8 @@ from verity_vllm.program.registry.prims import BF16
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
            "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES", "CUSTOM_SYMM_MAX_BYTES",
-           "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_VECTOR", "NCCL_TREE_RUNS", "RTX_PRO_6000", "SETTINGS",
-           "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
+           "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR", "NCCL_TREE_RUNS",
+           "RTX_PRO_6000", "SETTINGS", "SYMM_MEM_MAX_BYTES", "WARP", "chain", "covered",
            "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "mnnvl_grid", "mnnvl_shot",
            "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain", "offset_free", "ranks",
            "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters", "tree_leaves"]
@@ -130,6 +131,8 @@ SYMM_MEM_MAX_BYTES = 64 * 1024 * 1024
 MULTIMEM_ALIGN_BYTES = 16
 #: the bf16 elements of one 16-byte vector, what one ``multimem.ld_reduce.v4.bf16x2`` reduces
 MULTIMEM_VECTOR = MULTIMEM_ALIGN_BYTES // 2
+#: `CAPTURE_RUNS`' kept multimem words replayed on `AllReduceMultimemVector_v1`'s batch (tests/properties/glm53_multimem_replay.py)
+MULTIMEM_REPLAY_RUN = "r20261019-023101-2f28"
 H200_SMS = 132
 _NEG_ZERO32 = const(32, 0x80000000)
 
@@ -591,7 +594,8 @@ def AllReduceMultimemVector(B, S, parts):
            lambda S: ((("parts", Array(int(S.WORLD), Array(S.SIZE, BF16))),), Array(S.SIZE, BF16)),
            conformance="exact-model-tested: TP8 on 8 cc 9.0 GPUs (132 SMs) at vLLM's defaults and with the custom all-reduce off, the tree "
                        "read off the switch with IEEE adds: GLM-5.3 at N=6144, 43-2048 tokens, and N=7168, "
-                       "37-2048 tokens (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py)")
+                       "37-2048 tokens (`CAPTURED`, tests/properties/glm53_tp8_allreduce_capture_gpu.py), its kept words replayed "
+                       "on the vector batch (`MULTIMEM_REPLAY_RUN`, tests/properties/glm53_multimem_replay.py)")
 def AllReduceMultimem(B, S, parts):
     """torch's `multimem_all_reduce_` of WORLD ranks' SIZE bf16 (the whole flattened tensor, whose slices name each element's
     owner): each run of `multimem_runs` one `AllReduceMultimemVector_v1{TREE=TREES[owner]}` per 16-byte vector."""
