@@ -2,6 +2,7 @@ import Proofs.Accounting.Actual.Split
 import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Windows
 import Proofs.Accounting.Actual.Runtime
+import Proofs.Accounting.Actual.Threaded
 import Proofs.Accounting.Actual.Localization
 import Proofs.Accounting.Actual.Device
 import Proofs.Accounting.Actual.Confidence
@@ -23,6 +24,10 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
 * `Actual/Windows.lean`: `Windows`, the capacity form: the windows divide the developer's region into IUs of at most
   `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
+* `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
+  contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start plus
+  its ingress, from `Windows` pulled back through the containment and NCI's `ThreadedReads` per window; `ThreadedRate`,
+  at the window `ω = R/r` in the quadratic regime, at most `reuse · n R r / (d b_w b_a)` counted multiplications a tick.
 * `Actual/Localization.lean`: `Localization`, over strategies causal from every tick: with what the rest can tell at
   the window's start and what it hears from the verifier fixed, what the rest does is a prefix-causal table keyed by
   what `X` sent it, of at most `2^e` entries; `localization_wires`, the per-run lemma on wires; memory per run on the
