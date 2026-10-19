@@ -3,7 +3,8 @@
 # cache publisher, the merge mirror, research runs at nice 19) goes to vy-nebius-cpu-4/5, and its GPU and Kueue services retire.
 #
 #   n1_replacement.sh [plan] [PATH]     print every live step in order, each command as it is to be run; runs nothing
-#   n1_replacement.sh preflight [PATH]  run the read-only checks: each node's region quota and preset, launch.sh --dry-run, the
+#   n1_replacement.sh preflight [PATH]  run the read-only checks: each node's region quota, its project's rights (the launcher's
+#                                       editor, the VM account's power role) and preset, launch.sh --dry-run, the
 #                                       deploy install each node would get (no --apply, read against a live node of its kind),
 #                                       n1's custody backlog and the data on n1 nothing else holds
 #
@@ -147,6 +148,20 @@ for q in json.load(sys.stdin).get("items", []):
         scale = 2**30 if "disk" in n else 1
         region, unit = s["region"], " GiB" if scale > 1 else ""
         print(f"  {region:12} {n:46} {use // scale:>6} of {lim // scale:>6}{unit}  free {(lim - use) // scale}")' "$regions"
+  echo "== rights in each node's project: the launcher needs editor (its VPC writes come first), the VM's account a power role (its lease)"
+  projects=$(printf '%s\n' "$NODES" | cut -d' ' -f3 | sort -u | tr '\n' ' ')
+  bash -c ". '$here/common.sh' && nebius_auth && ids='import json, sys; [print(x[\"metadata\"][\"id\"]) for x in json.load(sys.stdin).get(\"items\", [])]'
+    permits='import json, sys; [print(sys.argv[1], p[\"spec\"].get(\"resource_id\"), p[\"spec\"].get(\"role\")) for p in json.load(sys.stdin).get(\"items\", [])]'
+    for who in launcher:\$NEBIUS_SA_ID vm:\${NEBIUS_VM_SA_ID:-\$NEBIUS_SA_ID}; do
+      for g in \$(nb iam group-membership list-member-of --subject-id \${who#*:} --page-size 100 | python3 -c \"\$ids\"); do
+        nb iam access-permit list --parent-id \$g --page-size 200 | python3 -c \"\$permits\" \${who%%:*}; done; done" | python3 -c '
+import sys
+have = {tuple(line.split()) for line in sys.stdin if len(line.split()) == 3}
+for p in sys.argv[1].split():
+    ed = ("launcher", p, "editor") in have
+    pw = any(("vm", p, r) in have for r in ("editor", "compute.instance-power-operator"))
+    print(f"  {p}: launcher", "editor" if ed else "NOT EDITOR (its creates are refused)", "; VM account",
+          "can stop the VM" if pw else "CANNOT STOP THE VM (no power role: launch.sh stops it at the probe)")' "$projects"
   echo "== presets and launch.sh --dry-run"
   while read -r n r p pre rate gib typ disk; do
     bash -c ". '$here/common.sh' && nebius_auth && nb compute platform list --parent-id $p" | python3 -c '

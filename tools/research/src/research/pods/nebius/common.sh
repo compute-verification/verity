@@ -13,7 +13,7 @@
 # with `bash -x`.
 
 NEBIUS_REGION=${NEBIUS_REGION:-uk-south2}
-NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the service account is editor there only
+NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the launcher is editor in uk-south2, us-central1, us-north1 and eu-north1 only
 NEBIUS_PROJECT_NAME=${NEBIUS_PROJECT_NAME:-vy-nebius}                    # only when NEBIUS_PROJECT_ID is set empty
 VM_NAME=${NEBIUS_VM_NAME:-vy-nebius-1}
 PRESET=${NEBIUS_PRESET:-8gpu-192vcpu-1744gb}
