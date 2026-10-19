@@ -31,7 +31,8 @@ def passing_artifacts() -> dict[str, dict]:
     ni = {"PASS": True, "hash_comparisons": 4 * NL, "hash_equal": 4 * NL, "tokens_equal_accepted": True, "steps": steps, "layers": NL,
           "expected_steps": MAX_TOKENS, "expected_layers": NL, "problems": [], "mismatches": [],
           "tokens": {"a_observer": _ni_tokens(CONTROL), "b_hooks": _ni_tokens(CONTROL), "c_bare": _ni_tokens(CONTROL)}}
-    cr = {"totals": {"census_kernels": 400, "distinct_kernel_names": 20, "residue_kernels": 0, "residue_names": [], "ambiguous": 0},
+    cr = {"totals": {"census_kernels": 400, "distinct_kernel_names": 20, "residue_kernels": 0, "residue_names": [], "ambiguous": 0,
+                     "count_mismatches": 0, "count_mismatch_kernels": [], "count_exempt": {}},
           "steps_aligned": True, "census_steps": MAX_TOKENS, "log_steps": MAX_TOKENS, "residue_zero": True,
           "kernels": [{"kernel": "matmul_kernel_persistent"}, {"kernel": "rms_norm_kernel"}], "steps": []}
     res = {"totals": {"steps": MAX_TOKENS, "unsupported": 0, "errors": 0, "computes": 1000, "compute_rows": 1200},
@@ -231,6 +232,17 @@ def test_G1_steps_hashes_census(tmp_path):
     arts = passing_artifacts()
     arts["nonint/noninterference.json"]["PASS"] = False
     assert "PASS is false" in gate(tmp_path, arts, "G1").reason
+
+
+def test_G1_census_launch_counts(tmp_path):
+    arts = passing_artifacts()
+    arts["census_reconcile.json"]["totals"].update(count_mismatches=1, count_mismatch_kernels=["fp8_mqa_logits"])
+    r = gate(tmp_path, arts, "G1")
+    assert r.status == "fail" and "1 launch counts differ" in r.reason and "fp8_mqa_logits" in r.reason
+    arts = passing_artifacts()
+    del arts["census_reconcile.json"]["totals"]["count_mismatches"]
+    r = gate(tmp_path, arts, "G1")
+    assert r.status == "error" and "count_mismatches" in r.reason and "census --reconcile" in r.reason
 
 
 def test_G1_missing_census_skips_with_stage_evidence(tmp_path):
