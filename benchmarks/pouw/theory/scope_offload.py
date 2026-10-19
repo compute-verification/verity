@@ -29,14 +29,16 @@ So the word-level numbers are floors on each channel's exposure, not caps. The c
   - HOST-TILES: the host CPU computing whole s8 tiles, its words on AMX and their fold and credited fillers on AVX-512,
     bounded by its cores' measured rates shared across the GPUs beside it, not by PCIe. A whole tile frees the GPU of
     each word's credited time (tensor, fold and filler), so the share is the host's words a second times the headline
-    design's credited time a word (`setup(...).baseline.T`, eps's own denominator), not a share of the tensor peak: the
-    B200's design runs its tensor pipe under 30% of peak. The machine model's per-GPU eps has no host term; LOC (decision
-    37) deducts the host at node level at its int8 peak, and the data-sheet rows price that peak (AMX's 1,024 int8 MACs a
-    cycle a core at Intel ARK's clocks).
+    design's credited time a word (`setup(...).baseline.T`, eps's own denominator), not a share of the tensor peak,
+    which understates it by the design's tensor utilization (printed per device). The machine model's per-GPU eps has
+    no host term; LOC (decision 37) deducts the host at node level at its int8 peak, and the data-sheet rows price that
+    peak (AMX's 1,024 int8 MACs a cycle a core at Intel ARK's clocks).
 
 Each fraction is read against the 1% target as counted eps, the headline's eps plus the fraction, at the sheet reading
-and at decision 89's measured one. The word-level ceilings stay shares of the tensor peak: an imported word still costs
-the GPU its fold, so they bound the time it frees from above.
+and at decision 89's measured one, and printed as a `verdict` line. Those verdicts move with whichever designs
+headline.toml names, so the checks assert only what holds for any of them: the relations between the bounds, the
+sheet-constant ceilings and the arithmetic. The word-level ceilings stay shares of the tensor peak: an imported word
+still costs the GPU its fold, so they bound the time it frees from above.
 
 The checkable arithmetic: the committed word packs exactly 32 int8*weight products into an s32 with no wrap (verified
 over Z/2^32 and the operand alphabets), and a tile digest carries more MACs a byte than a word even at H1's smallest
@@ -236,16 +238,43 @@ def main() -> int:
         checks.check("Device.lean states there is no host-RAM channel (Daniel 3 Oct)", "no host RAM" in lean,
                      "host offload rides the PCIe channel, which the docstring frames as 'from NVMe'")
 
-    # 3. The per-device, per-channel ceiling, and the headline-relevant verdicts.
+    # 3. The per-device, per-channel ceiling, and the counted eps each bound gives, against 1%.
     eps = {device: headline_eps(device) for device in DEVICES}
     words = {(device, r): credited_word(device, r) for device in DEVICES for r in READINGS}
+    sm120, h200, b200 = "sm_120 RTX PRO 6000", "H200 sm_90", "B200 sm_100"
+
+    def counted(device: str, f: float | dict[str, float]) -> tuple[float, float]:
+        at = f if isinstance(f, dict) else {r: f for r in READINGS}
+        return eps[device]["sheet"] + at["sheet"], eps[device]["measured"] + at["measured"]
+
+    def shown(pair: tuple[float, float]) -> str:
+        return f"{pair[0] * 100:.2f}% sheet / {pair[1] * 100:.2f}% measured"
+
+    def against(pair: tuple[float, float]) -> str:
+        over = [r for r, v in zip(READINGS, pair) if v > TARGET]
+        if len(over) == len(READINGS):
+            return "over 1% at both readings"
+        return f"over 1% at the {over[0]} reading only" if over else "under 1% at both readings"
+
+    def lent(device: str, host: int, mode: str, fold: bool = True) -> dict[str, float]:
+        name, cores, gpus, _, _ = HOSTS[device][host]
+        return {r: host_tile_fraction(words[device, r], cores, gpus, amx_rate(name, mode), fold) for r in READINGS}
+
+    def at_peak(device: str, host: int, clock: float) -> dict[str, float]:
+        _, cores, gpus, _, _ = HOSTS[device][host]
+        return {r: cores / gpus * words[device, r][0] / (words[device, r][1] / (AMX_MACS_PER_CYCLE * clock))
+                for r in READINGS}
+
+    def shown_lent(device: str, f: dict[str, float]) -> str:
+        return f"+{f['sheet'] * 100:.3f}% / +{f['measured'] * 100:.3f}%: {shown(counted(device, f))}"
+
     rows = []
     worst_uncounted = {}
     for device in DEVICES:
         rate = mac_rate(device)
         pcie = offload_fraction(64 * GB, rate)
-        for host, cores, gpus, _, _ in HOSTS[device]:
-            tiles = host_tile_fraction(words[device, "sheet"], cores, gpus, amx_rate(host, "resident"))
+        for i, (host, *_) in enumerate(HOSTS[device]):
+            tiles = min(lent(device, i, "resident").values())
             checks.check(f"{device}: {host} doing whole tiles, words and fold, lends more than PCIe's word-level floor",
                          tiles > pcie, f"{tiles * 100:.3f}% vs {pcie * 100:.3f}% (HOST-TILES is not link-bound)")
         for name, bw, cls in CHANNELS[device]:
@@ -262,82 +291,48 @@ def main() -> int:
         pcie = offload_fraction(64 * GB, rate)
         checks.check(f"{device}: word-level, a helper delivering every word over PCIe is under 0.12%", pcie < 0.0012,
                      f"{pcie * 100:.3f}% -- a floor: whole tiles cross as 64-byte digests")
-    checks.check("sm_120 has no NVLink, so no uncounted intra-node channel", "sm_120 RTX PRO 6000" not in worst_uncounted)
-    def counted(device: str, f: float | dict[str, float]) -> tuple[float, float]:
-        at = f if isinstance(f, dict) else {r: f for r in READINGS}
-        return eps[device]["sheet"] + at["sheet"], eps[device]["measured"] + at["measured"]
-
-    def shown(pair: tuple[float, float]) -> str:
-        return f"{pair[0] * 100:.2f}% sheet / {pair[1] * 100:.2f}% measured"
-
-    for device in ("H200 sm_90", "B200 sm_100"):
+    checks.check("sm_120 has no NVLink, so no uncounted intra-node channel", sm120 not in worst_uncounted)
+    for device in (h200, b200):
         f = worst_uncounted[device]
         checks.check(f"{device}: word-level, NVLink lends >=0.3% of credited MACs, unobserved by any certifier",
                      f >= 0.003, f"{f * 100:.3f}%")
-    nv_h200 = counted("H200 sm_90", worst_uncounted["H200 sm_90"])
-    nv_b200 = counted("B200 sm_100", worst_uncounted["B200 sm_100"])
-    checks.check("H200 sm_90: word-level NVLink alone keeps counted eps under 1% on both readings", max(nv_h200) < TARGET,
-                 shown(nv_h200) + " (a peer doing whole tiles is RT-SCOPE-1)")
-    checks.check("B200 sm_100: word-level NVLink alone stays under 1% at the sheet reading, not at the measured one",
-                 nv_b200[0] < TARGET < nv_b200[1], shown(nv_b200))
+        nv = counted(device, f)
+        checks._print(f"      verdict {device:20s} word-level NVLink alone: {shown(nv)}: {against(nv)} "
+                      "(a peer doing whole tiles is RT-SCOPE-1)")
 
-    # 5. Whole-tile: the host's measured rates, not PCIe, bound what it lends, as a share of the design's credited time.
-    #    Paying the design's own fold and fillers, it takes sm_120 over 1% counted on node 2 with resident operands, the
-    #    H200 and the B200 on a DGX, and the B200 on every host at the measured reading.
-    def lent(device: str, host: int, mode: str, fold: bool = True) -> dict[str, float]:
-        name, cores, gpus, _, _ = HOSTS[device][host]
-        return {r: host_tile_fraction(words[device, r], cores, gpus, amx_rate(name, mode), fold) for r in READINGS}
-
-    def shown_lent(device: str, f: dict[str, float]) -> str:
-        return f"+{f['sheet'] * 100:.3f}% / +{f['measured'] * 100:.3f}%: {shown(counted(device, f))}"
-
+    # 5. Whole-tile: the host's measured rates, not PCIe, bound what it lends, as a share of the design's credited time,
+    #    paying the design's own fold and fillers.
     for device in DEVICES:
         for i, (host, *_) in enumerate(HOSTS[device]):
             for mode in AMX_PER_CORE:
                 checks._print(f"      {device:20s} {host:36s} {mode:9s} {shown_lent(device, lent(device, i, mode))}")
+    for device in DEVICES:
+        cases = [(counted(device, lent(device, i, m)), host, m) for i, (host, *_) in enumerate(HOSTS[device])
+                 for m in AMX_PER_CORE]
+        most = max(cases, key=lambda c: min(c[0]))
+        least = min(cases, key=lambda c: min(c[0]))
+        checks._print(f"      verdict {device:20s} host, whole tiles: most {shown(most[0])} ({most[1]}, {most[2]}): "
+                      f"{against(most[0])}; least {shown(least[0])} ({least[1]}, {least[2]}): {against(least[0])}")
+    for device in DEVICES:
+        use = {r: words[device, r][1] / words[device, r][0] / mac_rate(device) for r in READINGS}
+        checks.check(f"{device}: the headline design's credited program runs the tensor pipe at or under its peak, so "
+                     "a share of the peak understates a whole tile's share by 1/u",
+                     all(0 < u <= 1 for u in use.values()),
+                     f"u = {use['sheet']:.3f} sheet / {use['measured']:.3f} measured")
 
-    sm120, h200, b200 = "sm_120 RTX PRO 6000", "H200 sm_90", "B200 sm_100"
-    folded, upper = lent(sm120, 0, "resident"), lent(sm120, 0, "resident", fold=False)
-    checks.check("sm_120: node 2's host (the VM's 96 cores), resident operands, words and fold, takes counted eps over 1%",
-                 min(counted(sm120, folded)) > TARGET,
-                 shown_lent(sm120, folded) + f" (AMX-only bound +{upper['sheet'] * 100:.2f}%)")
-    vm, bare = lent(sm120, 0, "streamed"), lent(sm120, 1, "streamed")
-    checks.check("sm_120: operands streamed, node 2's host stays under 1% counted on the VM's 96 cores, over on 128",
-                 max(counted(sm120, vm)) < TARGET < min(counted(sm120, bare)),
-                 f"96: {shown_lent(sm120, vm)}; 128: {shown_lent(sm120, bare)}")
-    least = min(v for i in range(len(HOSTS[sm120])) for m in AMX_PER_CORE for v in lent(sm120, i, m).values())
-    checks.check("sm_120: node 2's host is over training C7's 0.3% host target in every case", least > 0.003,
-                 f"min +{least * 100:.3f}%")
-    for device in (h200, b200):
-        dgx = lent(device, 1, "resident")
-        checks.check(f"{device}: a DGX's host, resident operands, words and fold, takes counted eps over 1%",
-                     min(counted(device, dgx)) > TARGET, shown_lent(device, dgx) + " (its host family's measured AMX rate a core)")
-    slot = lent(h200, 0, "resident")
-    checks.check("H200 sm_90: vy-dc-h200's host, resident operands, words and fold, is over 1% at the measured reading",
-                 counted(h200, slot)[1] > TARGET, shown_lent(h200, slot))
-    worst = min((counted(b200, lent(b200, i, m))[1], HOSTS[b200][i][0], m)
-                for i in range(len(HOSTS[b200])) for m in AMX_PER_CORE)
-    checks.check("B200 sm_100: every host, resident or streamed, words and fold, is over 1% counted at the measured reading",
-                 worst[0] > TARGET, f"least {worst[0] * 100:.2f}% ({worst[1]}, {worst[2]})")
-    gpu_seconds, macs, _ = words[b200, "sheet"]
-    tensor = macs / gpu_seconds / mac_rate(b200)
-    checks.check("B200 sm_100: its headline design's credited program runs the tensor pipe under 30% of peak",
-                 tensor < 0.3, f"{tensor:.3f}: a share of the tensor peak understates a whole tile {1 / tensor:.1f}x")
-
-    #    LOC's pricing, the host's AMX at its data-sheet peak (ARK cores, base clock), leaves no device under 1% counted.
-    def at_peak(device: str, host: int, clock: float) -> dict[str, float]:
-        _, cores, gpus, _, _ = HOSTS[device][host]
-        return {r: cores / gpus * words[device, r][0] / (words[device, r][1] / (AMX_MACS_PER_CYCLE * clock))
-                for r in READINGS}
-
-    least_peak = min((min(counted(d, at_peak(d, i, h[3]))), d, h[0]) for d in DEVICES for i, h in enumerate(HOSTS[d]))
-    checks.check("every device: AMX at its data-sheet peak (base clock) takes counted eps over 1% on every host",
-                 least_peak[0] > TARGET, f"least {least_peak[0] * 100:.2f}% ({least_peak[1]}, {least_peak[2]})")
+    #    LOC's pricing, the host's AMX at its data-sheet peak (ARK cores, base clock to max turbo, no fold), bounds the
+    #    measured route from above on every host.
     for d in DEVICES:
         for i, h in enumerate(HOSTS[d]):
-            lo, hi = at_peak(d, i, h[3]), at_peak(d, i, h[4])
+            lo, hi, measured = at_peak(d, i, h[3]), at_peak(d, i, h[4]), lent(d, i, "resident")
+            checks.check(f"{d}: {h[0]}: AMX at its data-sheet base clock lends at least the measured route",
+                         all(lo[r] >= measured[r] for r in READINGS),
+                         f"+{lo['sheet'] * 100:.2f}% vs +{measured['sheet'] * 100:.3f}% (sheet)")
             checks._print(f"      {d:20s} {h[0]:36s} AMX peak +{lo['sheet'] * 100:.2f}–{hi['sheet'] * 100:.2f}% "
                           f"(sheet), so {counted(d, lo)[0] * 100:.2f}–{counted(d, hi)[0] * 100:.2f}% counted")
+    least_peak = min((counted(d, at_peak(d, i, h[3])), d, h[0]) for d in DEVICES for i, h in enumerate(HOSTS[d]))
+    checks._print(f"      verdict AMX at its data-sheet peak (base clock), every device and host: least "
+                  f"{shown(least_peak[0])} ({least_peak[1]}, {least_peak[2]}): {against(least_peak[0])}")
 
     # 6. Device memory: its word stock covers under 0.2% of a 1-s window, and on main early work is counted work.
     for device in DEVICES:
@@ -364,20 +359,28 @@ def main() -> int:
         # A "digest" the size of one word over one word's MACs carries no more than a word: the density check notices.
         checks.mutation("a word-sized digest does not beat the word's density",
                         not macs_per_byte(MAC_PER_WORD, BYTES_PER_WORD) > macs_per_byte(MAC_PER_WORD, BYTES_PER_WORD))
-        # Bounding the host by PCIe at word level, the 07:00Z error, keeps sm_120 under 1% counted: it misses the finding.
-        pcie_host = offload_fraction(64 * GB, mac_rate(sm120))
-        checks.mutation("a word-level PCIe bound on the host would keep sm_120 under 1% counted",
-                        eps[sm120]["sheet"] + pcie_host < TARGET, f"{(eps[sm120]['sheet'] + pcie_host) * 100:.3f}%")
+        hosts = [(d, i) for d in DEVICES for i in range(len(HOSTS[d]))]
+        # Bounding the host by PCIe at word level, the 07:00Z error, understates the whole-tile share on every host.
+        ratio = min(min(lent(d, i, "resident").values()) / offload_fraction(64 * GB, mac_rate(d)) for d, i in hosts)
+        checks.mutation("a word-level PCIe bound on the host understates its whole-tile share on every host",
+                        ratio > 1, f"by {ratio:.1f}x at the least")
         # A fold priced at no lane work turns the folded estimate into the AMX-only bound: the fold term is not vacuous.
-        checks.mutation("dropping the fold's lane work raises node 2's estimate to the AMX-only bound",
-                        upper["sheet"] > 2 * folded["sheet"],
-                        f"{upper['sheet'] * 100:.3f}% vs {folded['sheet'] * 100:.3f}%")
-        # The host as a share of the B200's tensor peak, the 08:15Z error, keeps a DGX B200 under 1% at the sheet reading.
-        name, cores, gpus, _, _ = HOSTS[b200][1]
-        _, macs, lanes = words[b200, "sheet"]
-        peak_share = cores / gpus * macs / (macs / amx_rate(name, "resident") + lanes / LANE_PER_CORE) / mac_rate(b200)
-        checks.mutation("a share of the tensor peak, not the credited time, would keep a DGX B200 under 1% counted",
-                        eps[b200]["sheet"] + peak_share < TARGET, f"{(eps[b200]['sheet'] + peak_share) * 100:.3f}%")
+        raised = min(lent(d, i, "resident", fold=False)[r] / lent(d, i, "resident")[r]
+                     for d, i in hosts for r in READINGS)
+        checks.mutation("dropping the fold's lane work raises every host's estimate to the AMX-only bound", raised > 1,
+                        f"by {raised:.2f}x at the least")
+        # The host as a share of the tensor peak, the 08:15Z error, understates it by 1/u on the least-utilized design.
+        u, device, reading = min((words[d, r][1] / words[d, r][0] / mac_rate(d), d, r)
+                                 for d in DEVICES for r in READINGS)
+        name, cores, gpus, _, _ = HOSTS[device][-1]
+        _, macs, lanes = words[device, reading]
+        host_seconds = macs / amx_rate(name, "resident") + lanes / LANE_PER_CORE
+        peak_share = cores / gpus * macs / host_seconds / mac_rate(device)
+        share = lent(device, len(HOSTS[device]) - 1, "resident")[reading]
+        checks.mutation("a share of the tensor peak, not the credited time, understates the host where a design runs "
+                        "under peak", peak_share < share,
+                        f"{device} at the {reading} reading, {name}: +{peak_share * 100:.3f}% vs +{share * 100:.3f}% "
+                        f"(1/u = {1 / u:.1f}x)")
 
     return checks.finish()
 
