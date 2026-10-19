@@ -28,7 +28,8 @@ echo "compute_cap $CC python $PY" > "$OUT/env/node.txt"
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache TRITON_CACHE_DIR=$S/triton
 export VLLM_DISABLE_COMPILE_CACHE=1 HF_HOME=${HF_HOME:-/workspace/hf}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src
+DITHER=$ROOT/benchmarks/hash/dither; [ -d "$DITHER" ] && PYTHONPATH=$PYTHONPATH:$DITHER
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
