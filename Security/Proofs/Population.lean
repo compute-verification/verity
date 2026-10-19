@@ -15,6 +15,7 @@ import Proofs.Population.NecessityMatrix
 import Proofs.Population.Exfiltration
 import Proofs.Population.ExfiltrationBound
 import Proofs.Population.ExfiltrationExamples
+import Proofs.Population.JointPressure
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
