@@ -974,6 +974,27 @@ def _touched_run(tmp_path, test: str, trace: str):
     return d
 
 
+def test_a_train_whose_own_check_passed_pytest_lands_without_waiting_on_its_touched_suites(world, monkeypatch, tmp_path):
+    """19 Oct: a5b2d8dc's own check passed pytest at the train's commit in 6,566 s while its touched-suites run, a subset of the same
+    suites, crawled on vy-nebius-2's disk for 100 min and held the landing."""
+    from research.drive import CHECK_STEPS
+
+    h = Harness(world, monkeypatch)
+    h.d.defer = frozenset({"pytest"})
+    h.d.launch_touched = lambda repo, commit, machine, base: (["r-touched"], "")
+    h.run_state["r-touched"] = ("running", None, None)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.tick()
+    tip = _tip(world)
+    (rid,) = [r for r in h.run_state if r != "r-touched"]
+    h.evidence = [_steps_run(tmp_path, rid, {x: "passed" for x in CHECK_STEPS if x != "pytest"})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") != tip                         # pytest not passed yet: the gate holds
+    h.evidence = [_steps_run(tmp_path / "b", rid, {x: "passed" for x in CHECK_STEPS})]
+    h.tick()
+    assert _git(world.origin, "rev-parse", "main") == tip                         # its own pytest passed: it lands
+
+
 def test_with_pytest_deferred_a_train_lands_only_once_its_touched_suites_pass(world, monkeypatch, tmp_path):
     """CI-57: #2271 (17 Oct) and #2382 (18 Oct) each landed with pytest deferred and reverted a landing that a 2-minute run of
     the one suite they touched would have stopped. With pytest deferred, drive runs the suites a train's change reaches

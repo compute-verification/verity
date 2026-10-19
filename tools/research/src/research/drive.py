@@ -540,6 +540,10 @@ class Driver:
         off the chain drops it)."""
         if "pytest" not in self.defer:
             return None
+        # the train's own check already passed every suite at this commit, a superset of the touched ones (19 Oct: a5b2d8dc's
+        # check passed pytest in 6,566 s while its touched run crawled on vy-nebius-2's disk for 100 min)
+        if launch.get("ids") and not self._unrun(launch["ids"], ["pytest"]):
+            return None
         if not (ids := launch.get("touched")):
             return self._relaunch_touched(commit, base, drive, launch, "its touched suites have no run")
         states = self._states(ids)
