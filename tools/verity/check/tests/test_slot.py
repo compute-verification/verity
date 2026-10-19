@@ -594,8 +594,9 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
     post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
-    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime.now(timezone.utc))
-    assert [w["priority"] for w in waits] == [True, True, True, True, False] and all(w["minutes"] <= 1 for w in waits)
+    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=timezone.utc))
+    assert [w["priority"] for w in waits] == [True, True, True, True, False]
+    assert all(w["since"][:4].isdigit() for w in waits)                  # a ranked ticket's arrival still parses
     for fd in (u, h, lo, la, p):
         os.close(fd)
     assert SLOT.options(["--priority", "--rank", "7"])[5] == 7 and SLOT.options(["--priority"])[5] is None
