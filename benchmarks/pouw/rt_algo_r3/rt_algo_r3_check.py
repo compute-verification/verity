@@ -1,5 +1,5 @@
 """RT-ALGO round 3: J10's shared-noise forms against H1 + fx1's after-coin work, bit-exact on main's `h1tile` and
-`segment` (note:compute-accounting/20261019T0900Z-draft-rt-algo-r3).
+`segment` (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3).
 
 A call is M rows of A (committed before the coin) and N rows of B (registered), at contraction K = 32 KS. Its noise is
 per call row (K dither bits b and the digit coins z) and per call column (K coin bits c and U's 32 values), and a 32 × 32
@@ -17,7 +17,7 @@ bit, and its operations are counted: MACs with both operands reading coins (the 
 `Pouw.Assumptions.ChargeVF3j16`, Theorem K's `Slp` slots), MACs of committed data by a coin (bit-affine words, free in
 the record's model), sparse wrap adds, and one write a credited word.
 
-`collect()` returns (passed, failed) and `report()` the per-form table, at the check's shape and at served shapes.
+`collect()` returns (passed, failed) and `report()` the per-form table, at the check's shape and at model shapes.
 """
 from __future__ import annotations
 
@@ -46,8 +46,9 @@ def _bytes(rng: random.Random, n: int = 64) -> bytes:
     return bytes(rng.getrandbits(8) for _ in range(n))
 
 
-def _served_weights(rng: random.Random, n: int, k: int) -> list[list[int]]:
-    """int8-exact weights shaped as served: about 4.66% with |B| > 63 (SERVE-H1's measured share), clipped at ±127."""
+def _synthetic_weights(rng: random.Random, n: int, k: int) -> list[list[int]]:
+    """Synthetic int8 weights, Gaussian with sigma 32 clipped at ±127: about 4.7% with |B| > 63, near SERVE-H1's
+    measured 4.66% on served weights. They are not served weights, so the wrap densities below are modeled."""
     return [[max(-127, min(127, round(rng.gauss(0.0, 32.0)))) for _ in range(k)] for _ in range(n)]
 
 
@@ -326,7 +327,7 @@ def compare(form: Form, A_l, B_l, T, Op, D, K: int, units: list[tuple[int, int]]
 
 def _operands(rng, M, N, K):
     A = [[rng.randint(-127, 127) for _ in range(K)] for _ in range(M)]
-    B = _served_weights(rng, N, K)
+    B = _synthetic_weights(rng, N, K)
     return A, B
 
 
@@ -437,7 +438,7 @@ def _shares(c: dict) -> dict:
 
 
 def check_forms_verdicts(rng, M=64, N=64, K=128):
-    """At a served shape (256 × 4096, K = 4096): J10-R and mix32 keep both the record's count and the op count at the
+    """At a model shape (256 × 4096, K = 4096): J10-R and mix32 keep both the record's count and the op count at the
     honest unit's; every shared or structured form loses the record's count; only forms structured on both sides lose
     the op count; window-cols loses the record's whole count."""
     fs, _ = forms(M, N, K, rng)
@@ -468,8 +469,8 @@ def check_forms_verdicts(rng, M=64, N=64, K=128):
 
 
 def wrap_density(rng, n=1024, k=4096):
-    """W' = B + c + U wraps at |B + c + U| > 127 on served-shaped weights; X at A = 127, b = 1 on uniform A."""
-    B = np.array(_served_weights(rng, n, k), dtype=np.int64)
+    """W' = B + c + U wraps at |B + c + U| > 127 on the synthetic weights; X at A = 127, b = 1 on uniform A."""
+    B = np.array(_synthetic_weights(rng, n, k), dtype=np.int64)
     c = np.array([[rng.getrandbits(1) for _ in range(k)] for _ in range(n)], dtype=np.int64)
     U = np.array([[rng.randint(-64, 64) for _ in range(32)] for _ in range(n)], dtype=np.int64)
     BN = B + c + np.tile(U, (1, k // 32))
@@ -479,11 +480,11 @@ def wrap_density(rng, n=1024, k=4096):
 
 
 def check_wrap_does_not_rescue(rng):
-    """The wrap correction is (dX + dW) of a contraction in sparse adds: on served weights about 0.456% + 0.2%, so it
+    """The wrap correction is (dX + dW) of a contraction in sparse adds: on the synthetic weights about 0.456% + 0.2%, so it
     rescues no structured form in op count; on hardware it rescues only where a sparse add costs ~ 1/(dX + dW) MACs."""
     big, dW, dX = wrap_density(rng, n=256, k=2048)
     ok = 0.035 < big < 0.06 and 0.003 < dW < 0.007
-    return ok, f"|B| > 63 on {big:.2%} of served-shaped weights, W' wraps on {dW:.3%}, X on {dX:.3%}"
+    return ok, f"|B| > 63 on {big:.2%} of the synthetic weights, W' wraps on {dW:.3%}, X on {dX:.3%}"
 
 
 def check_luck_correlation(rng, S=96, K=128):
@@ -496,7 +497,7 @@ def check_luck_correlation(rng, S=96, K=128):
     res = {"J10-R": [], "per-unit": []}
     for _ in range(S):
         A = np.array([[rng.randint(-120, 120) for _ in range(K)] for _ in range(M)], dtype=np.int64)
-        B = np.array(_served_weights(rng, N, K), dtype=np.int64)
+        B = np.array(_synthetic_weights(rng, N, K), dtype=np.int64)
         salt, rootA, rootB = _bytes(rng), _bytes(rng), _bytes(rng)
         rows, cols = H.noise(SD.seed(salt, 3, rootA, rootB), lay)
         per_unit = [H.noise(SD.seed(salt, 3 * 64 + J, rootA, hashlib.sha512(rootB + bytes([J])).digest()),
@@ -593,7 +594,7 @@ def report(seed: int = 20261019) -> dict:
             ms = H.Layout(Ms, Ns, Ks).m
             per[f"{Ms}x{Ns}x{Ks}"] = {k: round(v, 4) for k, v in
                                        _shares(form_costs(_shape(f), Ms, Ns, Ks, ms, dX, dW)).items()}
-        rows.append({"form": f.name, "what": f.what, "structure": st, "served": per})
+        rows.append({"form": f.name, "what": f.what, "structure": st, "at_shape": per})
     gens = [gen_cost(Ms, Ns, Ks) for (Ms, Ns, Ks) in shapes + [(64, 4096, 4096), (32, 14336, 4096)]]
     return {"wrap": {"B_over_63": big, "dW": dW, "dX": dX}, "forms": rows, "generation": gens}
 
@@ -613,7 +614,7 @@ def main():
         with open(a.out, "w") as fh:
             json.dump({"passed": passed, "failed": failed, "report": rep}, fh, indent=1)
     for r in rep["forms"]:
-        s = r["served"]["256x4096x4096"]
+        s = r["at_shape"]["256x4096x4096"]
         print(f"{r['form']:>14}: ranks b/N/U {r['structure']['rank_b']}/{r['structure']['rank_N']}/{r['structure']['rank_U']}, "
               f"distinct rows/cols {r['structure']['distinct_rows']}/{r['structure']['distinct_cols']}; at 256x4096x4096 "
               f"skip ops {s['skip_ops']:.3f}, skip record {s['skip_record']:.3f}, wrap {s['wrap_share']:.4f}, "

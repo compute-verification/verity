@@ -6,7 +6,7 @@ running partials bit-exact against those words and receipts, and checks the rout
 a call column) keeps the record's products and the op count at the honest unit's, every shared or structured form loses
 the record's products, forms structured on both sides lose the op count, and window-seeded columns lose the record's
 whole count. It would fail if a change to the unit's words broke the decomposition the routes use, or if J10-R's noise
-lost rank (note:compute-accounting/20261019T0900Z-draft-rt-algo-r3)."""
+lost rank (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3)."""
 from __future__ import annotations
 
 import importlib.util
