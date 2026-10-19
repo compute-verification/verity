@@ -100,7 +100,16 @@ Like `ActivationsSupport`, wiring cannot falsify it, and `b_w` and `b_a` are rat
 entry's width by whatever the updated weights and the partial sums compress to. It is meant for a reference training
 circuit, the one a declared circuit contains (`Nci.Guarantees.ContainedMatMul`), where it is a claim about how
 compressible training is. An IU's values are functions of the values on its novel reads, so it gives
-`PartialSumsIncompressible` at the same caps (`partialSumsIncompressible_of_support`). -/
+`PartialSumsIncompressible` at the same caps (`partialSumsIncompressible_of_support`).
+
+**Falsified** (19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
+art:d2cc129951081405e9b3f465d03ecc6f2760ce4dec82768125fce5b8052c4c32) for one honest matrix multiplication, with binary
+additions and inside the caps: divide it into product IUs that fix a column over a block of rows and positions, and IUs
+that hold the adder tree over `k × k × k` blocks. Each entry's products then lie in `d` IUs, while each IU's values are
+functions of the few weight and input entries it depends on. In the exact 1-bit toy (`d = e = N = 8`, `b_w = b_a = 1`)
+the IUs can be charged at most 183 (192 bits of entries) against the 448 required, for every `Γ ≥ 448` and `K ≥ 512`.
+At `d = 7168` and the deployed `K = 2·10⁷` such a division absorbs at most 8.4% of the charge at FP4 and 17.8% at FP8
+(2.5 and 4 bits). -/
 def PartialSumsSupport (D : Declaration) (θv : D.D.Transcript) (c : Chain D.D) (Γ : ℕ) (K b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
     ∃ s : Fin n → ℕ,
