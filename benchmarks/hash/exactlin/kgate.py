@@ -78,7 +78,8 @@ def weights(n: int, k: int, seed: int) -> tuple[torch.Tensor, torch.Tensor]:
     w = torch.randint(-127, 128, (n, k), generator=g, device="cuda", dtype=torch.int8)
     w[0] = 127
     s = torch.rand(n, generator=g, device="cuda") * (1e-2 - 1e-4) + 1e-4
-    s[-8:] = 1e-36
+    s[-8:-4] = 1e-36
+    s[-4:] = 1e-41
     return w, s.reshape(n, 1).contiguous()
 
 
@@ -114,11 +115,20 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
     q_emu, s_emu = stock_quant_emulated(x)
     dq = bits(xq_st) != bits(xq_ref)
     rows = dq.any(dim=1)
+    floor = x.to(torch.float32).abs().amax(dim=1) < e.SCALE_FLOOR
+    ordinary = ~floor
+    ordinary[:min(len(SPECIAL), x.shape[0] - 1)] = False
     doc = {"quant": {"xq_diff": int(dq.sum()), "rows_with_xq_diff": int(rows.sum()), "s_diff": diff(s_st, s_ref),
+                     "floor_rows": int(floor.sum()), "xq_diff_floor_rows": int(dq[floor].sum()),
+                     "s_diff_floor_rows": int((bits(s_st) != bits(s_ref))[floor].sum()),
+                     "ordinary_rows": int(ordinary.sum()), "xq_diff_ordinary_rows": int(dq[ordinary].sum()),
+                     "ordinary_rows_with_xq_diff": int(rows[ordinary].sum()),
+                     "s_diff_ordinary_rows": int((bits(s_st) != bits(s_ref))[ordinary].sum()),
                      "xq_equals_emulation": diff(xq_st, q_emu) == 0, "s_equals_emulation": diff(s_st, s_emu) == 0,
                      "max_abs_xq_diff": int((xq_st.to(torch.int16) - xq_ref.to(torch.int16)).abs().max())}}
     if bool(dq.any()):
-        i, kk = torch.nonzero(dq)[:4].unbind(1)
+        pick = dq & ordinary[:, None] if bool((dq & ordinary[:, None]).any()) else dq
+        i, kk = torch.nonzero(pick)[:4].unbind(1)
         xf = x.to(torch.float32)
         a = xf.abs().amax(dim=1)
         t = torch.full((), 127.0, dtype=torch.float32, device=x.device)
@@ -164,12 +174,11 @@ def one(name: str, m: int, seed: int, with_stock: bool) -> dict:
     doc["control"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     g = torch.cuda.CUDAGraph()
     torch.cuda.synchronize()
-    before = torch.cuda.memory_allocated()
     with torch.cuda.graph(g):
+        before = torch.cuda.memory_allocated()
         X.quant_rows(x, xq, s)
         X.scaled_mm(xq, s, w, s_w, y)
-    torch.cuda.synchronize()
-    doc["alloc_capture_bytes"] = torch.cuda.memory_allocated() - before
+        doc["alloc_capture_bytes"] = torch.cuda.memory_allocated() - before
     poison(xq, s, y)
     g.replay()
     torch.cuda.synchronize()
