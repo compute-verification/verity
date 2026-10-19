@@ -447,10 +447,4 @@ decoding to a level-0 clash (`FlockDeploy.KS.adv₀SZ_simAtJZ_le`, through the s
 which are two accepting runs of `P` whose rows at one position differ and collide in their logs
 (`FlockDeploy.KS.zkPair₀`). So masked KS and the recursion's premise rest on the cap/`τ` and pads fork bounds and the
 pads clash (`FlockDeploy.KS.zk_KS_of_kinds`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_kinds`,
-`FlockDeploy.KS.zk_KSFlock_of_kinds`). An accepted rep opens each pads query against its inner proof's root at the
-position the query's coin gives, so two at one position with different pairs collide in its log (`ZkPadsLog`:
-`FlockDeploy.KS.zkVerifyRepWith_inner`, `FlockDeploy.KS.tiedColl_of_verifyInner`). The view's pads openings are the
-rep's, drawn at those positions (`FlockSoundness.Discharge.ZkExec.zk_qpos_of_rep`), so the pads clash is such a
-collision (`ZkClashPads`: `FlockDeploy.KS.zkViewClashQP`), and masked KS and the recursion's premise rest on the two
-fork bounds alone (`FlockDeploy.KS.zk_KS_of_forks`, `FlockDeploy.KS.zk_tableBoundJOnAccR_of_forks`,
-`FlockDeploy.KS.zk_KSFlock_of_forks`). -/
+`FlockDeploy.KS.zk_KSFlock_of_kinds`). -/
