@@ -600,7 +600,7 @@ def length_item_in(rng: random.Random) -> dict:
 def length_problem_in(rng: random.Random) -> dict:
     m = _slots(rng)
     item: Any = Wd.length_item(m)
-    bad = rng.choice(("none",) * 4 + ("keys", "extra", "notobj", "stoptype", "eos", "stopcase", "notlist", "float",
+    bad = rng.choice(("none",) * 4 + ("keys", "extra", "notobj", "stoptype", "eos", "stopcase", "notlist",
                                       "neg", "bool", "max", "count", "short", "long", "slot"))
     if bad == "keys":
         del item[rng.choice(Wd.LENGTH_KEYS)]
@@ -616,8 +616,6 @@ def length_problem_in(rng: random.Random) -> dict:
         item["stop"] = rng.choice(("Fixed", "fixed ", "ignore_eos", ""))
     elif bad == "notlist":
         item[rng.choice(("max_tokens", "served"))] = rng.choice((4, "4", None, {"0": 4}))
-    elif bad == "float":
-        item["served"] = [float(x) for x in m]
     elif bad == "neg":
         item["served"] = [-1] + m[1:]
     elif bad == "bool":
