@@ -12,19 +12,26 @@ recomputes those with the reference, so a kernel never has to be total.  ``NotIm
 (statics the kernel does not cover, e.g. an unknown ``DOT`` step).  Every registered kernel must pass `self_check`: on
 seeded random inputs every input it accepts equals the reference bit for bit, and every input the reference
 rejects is one it declined.
+
+A Boolean Definition (`verity.ml.circuits.boolean`) is evaluated by its word Definition's kernel (`trace.word_of`), through
+the word view (`boolean.word_type`: each element's bits are one word), when it has none of its own; a kernel registered
+against ``Gemm_v2`` serves ``Gemm_v3``.  What that leaves, and what a kernel declines, is evaluated bit-sliced
+(`bits.evaluate_bits`), never gate by gate.  The word Definition is held to the Boolean one by circuit-check's word view.
 """
 from __future__ import annotations
 
+import weakref
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.boolean import is_boolean
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.types import Array, Type, Value
 
-from .bits import evaluate_bits
+from .bits import _to_bits, _to_words, evaluate_bits
 from .reference import ScalarReference, Target, evaluate, key_of, refuse_registered_tables, resolve, signature_of, statics_of
 
 __all__ = [
@@ -37,6 +44,7 @@ __all__ = [
     "self_check",
     "type_dtype",
     "type_shape",
+    "word_kernel",
 ]
 
 KernelFn = Callable[..., Any]
@@ -68,10 +76,12 @@ def register_kernel(target: Target | str, fn: KernelFn, *, kernel: str = "numpy"
     if prev is not None and prev.fn is not fn:
         raise ValueError(f"kernel {kernel!r} of {key} is already registered with a different function")
     _KERNELS[key][kernel] = k
+    _WORD.clear()
     return k
 
 
 def kernels(target: Target | str) -> dict[str, Kernel]:
+    """The kernels registered against ``target`` (not those a Boolean Definition takes from its word Definition)."""
     return dict(_KERNELS.get(key_of(target), {}))
 
 
@@ -80,10 +90,48 @@ def _pick(target: Target, kernel: str) -> Kernel | None:
         return None
     ks = _KERNELS.get(key_of(target), {})
     if kernel == "auto":
-        return ks.get("numpy") or next(iter(ks.values()), None)
+        return ks.get("numpy") or next(iter(ks.values()), None) or word_kernel(target)
     if kernel not in ks:
         raise KeyError(f"no kernel {kernel!r} registered for {key_of(target)} (registered: {sorted(ks)})")
     return ks[kernel]
+
+
+_WORD: "weakref.WeakKeyDictionary[SpecializedDefinition, Kernel | None]" = weakref.WeakKeyDictionary()
+
+
+def word_kernel(target: Target) -> Kernel | None:
+    """The kernel a Boolean Definition takes from its word Definition: that Definition's ``"auto"`` kernel on the word view
+    of the inputs, its output unpacked to bits (rows it declines stay declined).  None when ``target`` is not a Boolean
+    composite, names no word Definition, has an element wider than 64 bits, or its word Definition has no kernel."""
+    if not isinstance(target, SpecializedDefinition) or getattr(target.defn, "word", None) is None:
+        return None
+    if target in _WORD:
+        return _WORD[target]
+    k = None
+    if BL.is_boolean(target):
+        word = word_of(target)
+        params, ret = signature_of(target)
+        wparams, _ = signature_of(word)
+        inner = _pick(resolve(word), "auto")
+        if inner is not None and max((w for t in (*params, ret) for w in BL.elements(t)), default=1) <= 64:
+            k = Kernel(key_of(target), inner.name, _through(inner, statics_of(word), params, wparams, BL.elements(ret)),
+                       inner.domain, inner.version)
+    _WORD[target] = k
+    return k
+
+
+def _through(inner: Kernel, statics: dict, params: Sequence[Type], wparams: Sequence[Type], ret: list[int]) -> KernelFn:
+    def fn(*arrays: np.ndarray, **_statics: Any) -> Any:
+        n = arrays[0].shape[0]
+        words = [_to_words(a.reshape(n, -1), BL.elements(t)).astype(type_dtype(wt)).reshape(n, *type_shape(wt))
+                 for a, t, wt in zip(arrays, params, wparams)]
+        res = inner.fn(*words, **statics)
+        if res is NotImplemented:
+            return res
+        vals, declined = res
+        return _to_bits(np.asarray(vals).reshape(n, -1), ret), declined
+
+    return fn
 
 
 # ---- types <-> arrays ---------------------------------------------------------------------------------------------------
@@ -158,10 +206,11 @@ def _store(out: np.ndarray, i: int, leaves: tuple[int, ...]) -> None:
 
 def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.ndarray:
     """Evaluate ``target`` on ``N`` inputs: one array per parameter with a leading batch axis, the output likewise.
-    ``kernel="auto"`` uses the ``numpy`` kernel when one is registered, ``"reference"`` forces the plain-integer
-    reference, any other name selects that kernel; with ``"auto"`` a Boolean composite without a kernel is evaluated
-    bit-sliced (`bits.evaluate_bits`).  Inputs a kernel declines are computed by the reference, whose exceptions (inputs
-    outside the function's domain) propagate.  A `RegisteredTable` input is refused by name."""
+    ``kernel="auto"`` uses the ``numpy`` kernel when one is registered (for a Boolean Definition without one, its word
+    Definition's, `word_kernel`), ``"reference"`` forces the plain-integer reference, any other name selects that kernel.
+    Inputs no kernel computes are computed by the reference, whose exceptions (inputs outside the function's domain)
+    propagate, or, for a Boolean composite, bit-sliced (`bits.evaluate_bits`).  A `RegisteredTable` input is refused
+    by name."""
     t = resolve(target)
     refuse_registered_tables(t.id, inputs, "evaluate_batch")
     params, ret = signature_of(t)
@@ -176,15 +225,17 @@ def evaluate_batch(target: Target, *inputs: Any, kernel: str = "auto") -> np.nda
     out = np.zeros((n, *type_shape(ret)), dtype=type_dtype(ret))
     todo = np.ones(n, dtype=bool)
     k = _pick(t, kernel)
-    if k is None and kernel == "auto" and n and isinstance(t, SpecializedDefinition) and is_boolean(t):
-        return evaluate_bits(t, *arrays).astype(out.dtype, copy=False)
     if k is not None and n:
         res = k.fn(*arrays, **statics_of(t))
         if res is not NotImplemented:
             vals, declined = res
             out[...] = np.asarray(vals).reshape(out.shape)
             todo = np.zeros(n, dtype=bool) if declined is None else np.asarray(declined, dtype=bool).reshape(n)
-    for i, args in _reference_rows(t, params, arrays, np.flatnonzero(todo)):
+    rows = np.flatnonzero(todo)
+    if rows.size and kernel != "reference" and isinstance(t, SpecializedDefinition) and BL.is_boolean(t):
+        out[rows] = evaluate_bits(t, *(a[rows] for a in arrays)).reshape(out[rows].shape)
+        return out
+    for i, args in _reference_rows(t, params, arrays, rows):
         _store(out, i, evaluate(t, *args))
     return out
 
