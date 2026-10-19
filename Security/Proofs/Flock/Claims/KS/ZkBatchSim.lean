@@ -13,8 +13,8 @@ on `zkStreams` (`zkLive_sched`), split at table `j` as `front_simRJ` reads them 
 count is short of both of table `j`'s reps' rounds (`zk_slot_lt`):
 
 * `simSessZV_heq`, `simAtJZ_heq`: the simulated strategy after `Commit` at table `j` is the simulation's there;
-* `deadZ_depAt`, `front_simAtJZ`, `schedC_simAtJZ`: so it follows `SchedC` wherever the live strategy follows the
-  streams;
+* `deadZ_depAt`, `front_simAtJZ`, `schedC_simAtJZ_dead`, `schedC_simAtJZ`: so it follows `SchedC` wherever the live
+  strategy follows the streams, short of runs read at table `j` alone that hold wherever it opens nothing;
 * `zkFront_eq`, `zk_slot_lt`: the tables in front's coins are `nsFrom`'s at `repRounds`, and the slot's count
   `r · repRounds + zkCapDist` is below `2 · repRounds`;
 * `zkBatchAlign`, `zkSlotAlign`: `ZkBatchAlign` holds at every message, and with it `ZkSlotAlign`.
@@ -75,14 +75,15 @@ theorem simAtJZ_heq (Pr : Strategy (liveSession dg ts.length mPts N)) (j : Fin t
 
 /-- **The simulated strategy after `Commit` at table `j` advances the tables in front by `Lock.Front`, then table `j`
 by `Lock.Sess`**, where the live strategy submits the tables in front's rounds stream by stream, then table `j`'s, then
-only later tables'. -/
+only later tables', short of runs `Dead` read at table `j` alone wherever it opens nothing. -/
 theorem front_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (Pr : Strategy (liveSession dg ts.length mPts N))
-    (j : Fin ts.length) (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ)
+    (j : Fin ts.length) {Dead : List (OutZC 𝔽 D Sl) → Prop} (hnul : ∀ outs, DeadZ j outs → Dead outs)
+    (hDep : Lock.DepAt j.val Dead) (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ)
     (hrest : ∀ p ∈ rest, 2 * j.val + 2 ≤ p) (pts : Fin 2 → Fin mPts → 𝔽)
     (hS : SchedLJ dg Pr.1 pts N (fun _ _ => [])
       (fromS Rf 0 j ++ (List.replicate R (2 * j.val) ++ (List.replicate R (2 * j.val + 1) ++ rest))) (Pr.2 pts)) :
     Lock.Front k (Lock.Sess (some k) R (Tables.KgJ (outJ Hs ts) j (capOf Pr.1 j)) (repJ A Hs ts j pts 0)
-        (repJ A Hs ts j pts 1)) (nsFrom Rf 0 j) (DeadZ j)
+        (repJ A Hs ts j pts 1)) (nsFrom Rf 0 j) Dead
       (((gamesZC A Hs ts (capOf Pr.1)).take j).map (· pts) ++ tabAfterZC A Hs (ts.get j) (capOf Pr.1 j) pts ::
         ((gamesZC A Hs ts (capOf Pr.1)).drop (j + 1)).map (· pts))
       (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec Pr.1 Pr rfl j rfl pts) := by
@@ -91,10 +92,10 @@ theorem front_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (Pr : Strateg
     (Claims.Bridge.all_simSession (outJ Hs ts) ok dfltOutZC pL opn dg dec one fin capOf N (repJ A Hs ts)
       (fun j pts r => allInh_repZCAt A Hs (ts.get j) pts r) hdec Pr.1 pts)
   refine tr_list (fun l σ => Lock.Front k (Lock.Sess (some k) R (Tables.KgJ (outJ Hs ts) j (capOf Pr.1 j))
-      (repJ A Hs ts j pts 0) (repJ A Hs ts j pts 1)) (nsFrom Rf 0 j) (DeadZ j) l σ) ?_
+      (repJ A Hs ts j pts 0) (repJ A Hs ts j pts 1)) (nsFrom Rf 0 j) Dead l σ) ?_
     (simAtJZ_heq A Hs ts ok pL opn dg dec one fin capOf N hdec Pr j pts)
-    (front_simRJ (out := outJ Hs ts) (nul := nulOpZ) (Dead := DeadZ j) hfin j dfltOutZC
-      (fun outs cap pend h => by unfold DeadZ; rw [h]; rfl) (deadZ_depAt j) Rf k R hk rest hrest N _ _ _ _
+    (front_simRJ (out := outJ Hs ts) (nul := nulOpZ) (Dead := Dead) hfin j dfltOutZC
+      (fun outs cap pend h => hnul outs (by unfold DeadZ; rw [h]; rfl)) hDep Rf k R hk rest hrest N _ _ _ _
       (Pr.2 pts) hS hA)
   have e : (gamesZC A Hs ts (capOf Pr.1)).map (· pts) =
       List.ofFn (Tables.tabG (outJ Hs ts) (capOf Pr.1) fun j => repJ A Hs ts j pts) := by
@@ -110,7 +111,29 @@ theorem front_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (Pr : Strateg
 
 /-- **The simulated strategy after `Commit` at table `j` follows `SchedC`** after the tables in front's coins, where
 at every link point the live strategy submits the tables in front's rounds stream by stream, `Rf t` on each of table
-`t`'s reps, then table `j`'s `R` on rep 0 and `R` on rep 1, then only later tables'. -/
+`t`'s reps, then table `j`'s `R` on rep 0 and `R` on rep 1, then only later tables', short of runs `Dead` read at
+table `j` alone wherever it opens nothing. -/
+theorem schedC_simAtJZ_dead (hfin : ∀ t r proofs, fin t r proofs = []) (rootB₀ : Array ByteArray)
+    (Pr : Strategy (liveSession dg ts.length mPts N)) (hP : Pr.1 = rootB₀) (j : Fin ts.length) {T : TabZK 𝔽 mPts}
+    (hT : ts.get j = T) {Dead : List (OutZC 𝔽 D Sl) → Prop} (hnul : ∀ outs, DeadZ j outs → Dead outs)
+    (hDep : Lock.DepAt j.val Dead) (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ)
+    (hrest : ∀ p ∈ rest, 2 * j.val + 2 ≤ p)
+    (hS : ∀ pts, SchedLJ dg Pr.1 pts N (fun _ _ => [])
+      (fromS Rf 0 j ++ (List.replicate R (2 * j.val) ++ (List.replicate R (2 * j.val + 1) ++ rest))) (Pr.2 pts)) :
+    SchedC A Hs T ((gamesZC A Hs ts (capOf rootB₀)).take j) ((gamesZC A Hs ts (capOf rootB₀)).drop (j + 1))
+      (capOf rootB₀ j) Dead k R (nsFrom Rf 0 j).sum
+      (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT) := by
+  subst hP hT
+  intro pts
+  refine Lock.preSched_of_front _ _ k ?_ _ (nsFrom Rf 0 j) ?_
+    (front_simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec hfin Pr j hnul hDep Rf k R hk rest hrest pts
+      (hS pts))
+  · intro Dead σ hσ
+    obtain ⟨hF, hL⟩ := hσ
+    exact ⟨_, hF.followL fun x h => h x.2, hL rfl⟩
+  · rw [length_nsFrom, List.length_map, take_gamesZC_length]
+
+/-- **`schedC_simAtJZ_dead` at the runs whose table `j` opens nothing.** -/
 theorem schedC_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (rootB₀ : Array ByteArray)
     (Pr : Strategy (liveSession dg ts.length mPts N)) (hP : Pr.1 = rootB₀) (j : Fin ts.length) {T : TabZK 𝔽 mPts}
     (hT : ts.get j = T) (Rf : ℕ → ℕ) (k R : ℕ) (hk : k < R + R) (rest : List ℕ)
@@ -119,15 +142,9 @@ theorem schedC_simAtJZ (hfin : ∀ t r proofs, fin t r proofs = []) (rootB₀ : 
       (fromS Rf 0 j ++ (List.replicate R (2 * j.val) ++ (List.replicate R (2 * j.val + 1) ++ rest))) (Pr.2 pts)) :
     SchedC A Hs T ((gamesZC A Hs ts (capOf rootB₀)).take j) ((gamesZC A Hs ts (capOf rootB₀)).drop (j + 1))
       (capOf rootB₀ j) (DeadZ j) k R (nsFrom Rf 0 j).sum
-      (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT) := by
-  subst hP hT
-  intro pts
-  refine Lock.preSched_of_front _ _ k ?_ _ (nsFrom Rf 0 j) ?_
-    (front_simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec hfin Pr j Rf k R hk rest hrest pts (hS pts))
-  · intro Dead σ hσ
-    obtain ⟨hF, hL⟩ := hσ
-    exact ⟨_, hF.followL fun x h => h x.2, hL rfl⟩
-  · rw [length_nsFrom, List.length_map, take_gamesZC_length]
+      (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT) :=
+  schedC_simAtJZ_dead A Hs ts ok pL opn dg dec one fin capOf N hdec hfin rootB₀ Pr hP j hT (fun _ h => h)
+    (deadZ_depAt j) Rf k R hk rest hrest hS
 
 end Gen
 
