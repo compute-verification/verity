@@ -20,19 +20,25 @@ from pathlib import Path
 
 PLAIN = 122.41   # the plain GEMM's SMSP-cycles a MMA on DC-90 (dc90-licpw-redux-l32's source)
 MARGIN = 0.02
-PAIRS = {"li": ("wgli_redux", "wgli_redux_rs", "wgli_redux_u8", "wgli_redux_b1"),
-         "imad": ("wgmix_imad_r256", "wgmix_imad_r256_rs", "wgmix_imad_r256_b1"),
-         "lop3": ("wgmix_lop3_r256", "wgmix_lop3_r256_rs", "wgmix_lop3_r256_b1"),
+FORMS = ("rs", "u8", "b1", "n128", "n64", "im")   # each form's loop is its SS loop's name with this suffix
+PAIRS = {"li": ("wgli_redux", *(f"wgli_redux_{f}" for f in FORMS)),
+         "imad": ("wgmix_imad_r256", *(f"wgmix_imad_r256_{f}" for f in FORMS)),
+         "lop3": ("wgmix_lop3_r256", *(f"wgmix_lop3_r256_{f}" for f in FORMS)),
          "true": ("wgli_true_w2", "wgli_true_w3", "wgli_pp_w2", "wgli_pp_w3", "wgli_pp2_w2", "wgli_pp2_w3",
                   "wgli_db_w1", "wgli_db_w2")}
 # sm_90's census, DC-90: IGMMA_S8_N256's line and the line every other warp instruction carries on each joint row
 JOINT = {"JI90_0": (62.7407638, 0.98054536), "JI90_1": (66.93849, 0.919487525), "JI90_2": (121.566, 0.0822829491)}
 LANE = ("LOP3", "IMAD", "REDUX")   # the lane instructions a facet check counts; control and fences count nothing
-GMMA = ("IGMMA", "BGMMA")           # BGMMA.64x256x256 has IGMMA_S8_N256's tensor line (census M 0.0312468)
+GMMA = ("IGMMA", "BGMMA", "IMMA.16832")   # BGMMA.64x256x256 has IGMMA_S8_N256's tensor line (census M 0.0312468)
+ALONE = ("wg_s8_n256_a1", "wg_s8_n256_rs_a1", "wg_u8s8_n256_a1", "wg_b1_n256_a1", "wg_s8_n128_a1", "wg_s8_n64_a1",
+         "imma_s8_a1")
 
 
 def n256(op: str) -> float:
-    """A wgmma opcode's N256-equivalents: IGMMA.64x128x32 is half an IGMMA.64x256x32's MACs and words."""
+    """A tensor opcode's N256-equivalents: IGMMA.64x128x32 is half an IGMMA.64x256x32's MACs and words, and a warp's
+    IMMA.16832 (m16n8k32) a 32nd of its share."""
+    if op.startswith("IMMA.16832"):
+        return 1 / 32
     return int(op.split(".")[1].split("x")[1]) / 256
 
 
@@ -68,7 +74,7 @@ def read(out: Path) -> dict:
     alone = gmma(rows["wg_s8_n256_a1"])
     res = {"alone": {n: {"rate": gmma(rows[n]), "of_ss": gmma(rows[n]) / alone, "sm_mhz": rows[n].get("sm_mhz"),
                          "tags": rows[n].get("tags")}
-                     for n in ("wg_s8_n256_a1", "wg_s8_n256_rs_a1", "wg_u8s8_n256_a1", "wg_b1_n256_a1") if n in rows}}
+                     for n in ALONE if n in rows}}
     for fam, names in PAIRS.items():
         res[fam] = {}
         for n in names:
@@ -80,12 +86,13 @@ def read(out: Path) -> dict:
     ss = li.get("wgli_redux", {}).get("cycles_a_mma")
     res["verdict"] = {n: ("escape" if v["cycles_a_mma"] < ss * (1 - MARGIN) else "no escape")
                       for n, v in li.items() if n != "wgli_redux" and ss}
-    b1 = {fam: res[fam][f"{ss_n}_b1"]["cycles_a_mma"] / res[fam][ss_n]["cycles_a_mma"]
-          for fam, ss_n in (("li", "wgli_redux"), ("imad", "wgmix_imad_r256"), ("lop3", "wgmix_lop3_r256"))
-          if f"{ss_n}_b1" in res[fam] and ss_n in res[fam]}
-    if b1:
-        res["verdict"]["b1 over SS"] = ", ".join(f"{fam} {r:.4f}" for fam, r in b1.items()) + (
-            " (cycles a MMA: at 1 BGMMA takes IGMMA's joint lines, not the lane default)")
+    for form in FORMS[2:]:
+        ratio = {fam: res[fam][f"{ss_n}_{form}"]["cycles_a_mma"] / res[fam][ss_n]["cycles_a_mma"]
+                 for fam, ss_n in (("li", "wgli_redux"), ("imad", "wgmix_imad_r256"), ("lop3", "wgmix_lop3_r256"))
+                 if f"{ss_n}_{form}" in res[fam] and ss_n in res[fam]}
+        if ratio:
+            res["verdict"][f"{form} over SS"] = ", ".join(f"{fam} {r:.4f}" for fam, r in ratio.items()) + (
+                " (cycles a MMA: at 1 the form takes IGMMA's joint lines by MACs, not the lane default)")
     best = min((v["cycles_a_mma"] for v in res["true"].values()), default=None)
     if best and ss:
         res["verdict"]["honest"] = (f"the receipt's own loop runs at {best:.2f} SMSP-cycles a MMA, "

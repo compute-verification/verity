@@ -2,7 +2,8 @@
 # RT-HOPPER-1's and RT-HOPPER-8's H200 job, in two runs so no CPU phase runs on the shared H200 node. From a pushed commit:
 #
 #   research run --on auto --project verity --campaign eps1 --source <tree> --cwd source -- bash benchmarks/pouw/rt_hopper/rs.sh build
-#       builds sm90_rs.cu for sm_90a and gates every probe's SASS (probe.py gate), and runs uni64.sh into $OUT/uni64/.
+#       builds sm90_rs.cu (or --env RS_SRC=sm90_forms.cu, the s8-exact siblings) for sm_90a and gates every probe's
+#       SASS (probe.py gate), and runs uni64.sh into $OUT/uni64/.
 #       Outputs: nvcc.txt, build.log, sass/, gate-build.{txt,json}, uni64/ (uni64.sass, uniform.txt), bins.tgz.
 #   research run --on vy-dc-h200 --project verity --campaign eps1 --source <tree> --cwd source --send bins.tgz \
 #     --custody-ttl 12h --timeout 30m --env GPU_LEASE_WHO=rt-hopper -- bash benchmarks/pouw/rt_hopper/rs.sh time [REPS]
@@ -29,7 +30,7 @@ build)
   "$NVCC" --version >"$OUT/nvcc.txt" 2>&1
   OUT="$OUT/uni64" NVCC="$NVCC" bash "$HERE/uni64.sh" >"$OUT/uni64/uni64.log" 2>&1 \
     || echo "rs.sh: uni64.sh failed (uni64/uni64.log)" >&2
-  python3 "$PROBE" build --arch sm_90a --out "$WORK/bin" "$HERE/sm90_rs.cu" >"$WORK/built" 2>"$OUT/build.log" \
+  python3 "$PROBE" build --arch sm_90a --out "$WORK/bin" "$HERE/${RS_SRC:-sm90_rs.cu}" >"$WORK/built" 2>"$OUT/build.log" \
     || { cat "$OUT/build.log" >&2; exit 1; }
   mapfile -t bins <"$WORK/built"
   for b in "${bins[@]}"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass" 2>&1; done

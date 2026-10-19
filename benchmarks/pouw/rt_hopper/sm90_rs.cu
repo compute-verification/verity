@@ -280,6 +280,7 @@ OP_KERNEL(wgmix_lop3_r256_b1, 256) { wg_mix<F_b1, L_LOP3, 256>(a); }
 #define S8H "IGMMA.64x128x32.S8.S8*=8"
 #define LI ",LOP3.LUT=272,IMAD=256,REDUX*=4"
 #define P(NAME, PAT) {.name = #NAME, .kernel = (const void*)NAME, .tpb = 256, .expect = PAT, .iters = 4096}
+#ifndef RS_NO_MAIN
 static const OpProbe PROBES[] = {
     P(wg_s8_n256_a1, S8),
     P(wg_s8_n256_rs_a1, S8),
@@ -306,3 +307,4 @@ static const OpProbe PROBES[] = {
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
+#endif

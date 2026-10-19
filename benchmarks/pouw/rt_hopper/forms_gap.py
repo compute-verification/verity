@@ -10,6 +10,7 @@ already prices, and the data-sheet vector's cliffs in A2u and the fold.
                                    and RT-HOPPER-10: each loop at the toml's 122.41 / f and on the clock, 128.01 / f
     python forms_gap.py --fan-in   RT-HOPPER-2: ε at the fold costs FoldFanIn proves (1/(f − 1) a word), without FoldOpt
     python forms_gap.py --b1-fit   RT-HOPPER-1: b1 offered at splits 8 and 64 at SS's joint lines times the H200's ratio
+    python forms_gap.py --menu     RT-HOPPER-1: each s8-exact sibling (N128, N64, mma.sync m16n8k32) offered beside it
 
 sm_90 has no data/forms.toml, so `eps` restricts the cheater's tensor route to the honest's form, IGMMA_S8_N256 (wgmma
 m64n256k32 s8, A and B from shared memory). The census also prices IGMMA_S8_N256_RS, the same shape with A from
@@ -142,6 +143,28 @@ def rs_fit() -> None:
                 print(line(f"{vector} q*={q} RS at {label}", eps(d, vector, q)))
 
 
+# The honest's s8-exact siblings on the census, each a warp instruction's share (m 16) and its MACs over a N256's: every
+# one carries the lane default on JI90, as RS does.
+SIBLINGS = {"IGMMA_S8_N128": ([16, 128, 32], 1 / 2), "IGMMA_S8_N64": ([16, 64, 32], 1 / 4),
+            "IMMA16832_S8": ([16, 8, 32], 1 / 32)}
+
+
+def menu() -> None:
+    """RT-HOPPER-1 beyond RS: each sibling offered beside the honest form, at the census's lane default and at IGMMA's
+    joint lines scaled by its MACs."""
+    with tempfile.TemporaryDirectory() as t:
+        for kind, (shape, macs) in SIBLINGS.items():
+            forms = (f'[IGMMA_S8_N256]\nshape = [16, 256, 32]\nsplit = 1\nexact = "s8.s8 into s32"\n\n'
+                     f'[{kind}]\nshape = {shape}\nsplit = 1\nexact = "s8.s8 into s32"\n')
+            for scaled in (False, True):
+                d = scratch(Path(t) / f"{kind}-{scaled}", rs=True, forms=forms)
+                if scaled:
+                    for row, u in SS_JI.items():
+                        set_line(d, kind, row, u * macs)
+                label = "IGMMA's lines by MACs" if scaled else "the census default"
+                print(line(f"DC-90-ri q*=1.22 +{kind} at {label}", eps(d, "DC-90-ri", 1.22)))
+
+
 # BGMMA_B1_N256's coefficient over SS's on each joint row, the least over the matched pairs (alone, LI, IMAD, LOP3) of
 # rs.sh at c8a1b60b12 (B1_RUN); None until that run is read.
 B1_RUN, B1_FIT = None, None
@@ -222,9 +245,10 @@ def main() -> int:
     ap.add_argument("--honest-true", action="store_true", help="γ with honest timed by the loop that folds the accumulators")
     ap.add_argument("--fan-in", action="store_true", help="ε at the fold costs FoldFanIn proves, without FoldOpt")
     ap.add_argument("--b1-fit", action="store_true", help="ε with b1 offered at its joint lines fitted from the H200")
+    ap.add_argument("--menu", action="store_true", help="ε with each of the honest's s8-exact siblings offered")
     a = ap.parse_args()
     (sheet() if a.sheet else b1_gap() if a.b1 else rs_fit() if a.rs_fit else honest_true() if a.honest_true
-     else fan_in() if a.fan_in else b1_fit() if a.b1_fit else forms_gap())
+     else fan_in() if a.fan_in else b1_fit() if a.b1_fit else menu() if a.menu else forms_gap())
     return 0
 
 
