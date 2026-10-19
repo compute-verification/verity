@@ -36,7 +36,7 @@ measured = { vector = "DC-90-ri" }
 
 [family.sm_100]
 gpu = "B200"
-design = "dither-2s-licpw-redux-heavy-l32"
+design = "dither-2s-licpw-redux-heavy-ldtm0-l32"
 conditions = ["LI-CP-W's receipt luck 0 needs every absorbed word pinned (PIN, decision 97)"]
 sheet = { vector = "DS-100" }
 measured = { vector = "DC-100-ri" }
