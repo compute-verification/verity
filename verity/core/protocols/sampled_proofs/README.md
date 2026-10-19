@@ -529,9 +529,12 @@ unchecked. Pinned by `tests/test_two_stage.py` (`test_detection_matches_the_per_
 
 ### The verifier's randomness
 
-The draw of record is `two_stage.OwnRandomness`: the operating system's generator read directly with the Lean verifier's
-samplers (`Flock.Draw`), with no hash, no derivation and no beacon, the RU draw after the boundary is registered and the
-proof-unit draw after the interiors are.
+The draw of record is `two_stage.OwnRandomness` read with the Lean verifier's samplers (`Flock.Draw`), with no hash, no
+derivation and no beacon, the RU draw after the boundary is registered and the proof-unit draw after the interiors are.
+Its bytes are the operating system's as the Lean verifier of record reads them (`one_stage.verifier.coins`, the
+`sampled-proofs-verifier`'s `coins` request: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`), the
+default coins of `service.Stream`, salt included. The Python never reads its coins from the operating system itself:
+`OwnRandomness` has no default source.
 
 - Stage 1 under a one-stage sampling design (`draw_first`) reads the bytes as `Flock.Draw.drawWith` does: `subset` and
   `bernoulli` on one stream (`bernoulli` at its `NUM/DEN` as written), `stratified` and `work` one stream per stratum,
