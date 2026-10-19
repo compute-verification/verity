@@ -5,7 +5,8 @@
 #   research run --queue --on vy-nebius-1 --gpu-host --project verity --source . --cwd clone --mem-gb 96 --cpus 32 \
 #     --max-min 240 -- bash benchmarks/one_stage/zk_cost.sh
 # (on vy-nebius-2 a guest job adds --preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
-# env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1  LEASE_MAX_MIN=120
+# env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
+#      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
 # Kept in $OUT: the records (stage, prove and verify .jsonl), the fit (fit.json, fit.md, observations.json) and the logs;
@@ -54,8 +55,9 @@ export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$RE
 Z=$S/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
 
-log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}"
-ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,14336}" --sizes "${ZK_SIZES:-1,8,64,512}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}, draws ${ZK_DRAWS:-1,8,64,c}"
+ZK stage --lean "$LEAN" --ks "${ZK_KS:-4096,14336}" --sizes "${ZK_SIZES:-1,8,64,512}" --draws "${ZK_DRAWS:-1,8,64,c}" 2>&1 \
+  | tee -a "$O/zk.log" | grep ZKCOST
 rc=${PIPESTATUS[0]}
 if [ "$rc" = 0 ]; then
   if [ -x /workspace/verity-guest/bin/gpu-lease ] && [ -e /run/gpu-lease/pool.gpus ]; then
@@ -65,11 +67,15 @@ if [ "$rc" = 0 ]; then
   fi
   export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/zk-cost/${RESEARCH_RUN_ID:-local}}
   log "prove: arms ${ZK_ARMS:-fw,nofw}, ${ZK_COLD:-2} cold, ${ZK_WARM:-1}+${ZK_RUNS:-3} warm (waiting for a GPU)"
-  # one point's sessions at a time on this node, as proof_throughput's: two would share its host CPUs and memory bandwidth
-  flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-120}" -- \
-    "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --out "$Z" --arms "${ZK_ARMS:-fw,nofw}" --cold "${ZK_COLD:-2}" \
-    --warm "${ZK_WARM:-1}" --runs "${ZK_RUNS:-3}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
-  rc=${PIPESTATUS[0]}
+  # one point's sessions at a time on this node, as proof_throughput's: two would share its host CPUs and memory bandwidth;
+  # a lease a point keeps each lease short
+  n=$("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$Z/plan.json")
+  for i in $(seq 0 $((n - 1))); do
+    flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-30}" -- \
+      "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --out "$Z" --points "$i" --arms "${ZK_ARMS:-fw,nofw}" \
+      --cold "${ZK_COLD:-2}" --warm "${ZK_WARM:-1}" --runs "${ZK_RUNS:-3}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+    [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+  done
   log "prove: exit $rc; verify"
   ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
   [ "${PIPESTATUS[0]}" = 0 ] || rc=1

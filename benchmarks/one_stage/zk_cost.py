@@ -12,8 +12,9 @@ sessions.
   `Q_template_instances` partition, and one statement staged by A6's `stage_template` bound to it (stand-in values; a
   Boolean circuit's cost doesn't depend on them). Its stage seconds exclude building the circuit, which a template pays
   once.
-* **Draws.** k in {1, 8, 64, c}, at most c, each by Lean `flock-verify draw --stratified k` over the statement's program and
-  partition, served from that file (`serve --zk --draw-file`).
+* **Draws.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
+  program and partition, served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
+  drawn units in one statement.
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover today) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
   design's path: the firewall's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
@@ -59,8 +60,9 @@ def unit_ands(K: int) -> int:
     return K // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((K + 17) / 128)) + 3 * (HM96 + SHA512)
 
 
-def draws(c: int) -> list[int]:
-    return sorted({k for k in (1, 8, 64, c) if k <= c})
+def draws(c: int, spec: str = "1,8,64,c") -> list[int]:
+    """The draw sizes of a statement of c units: ``spec``'s entries, each a count or ``c`` (every unit), those at most c."""
+    return sorted({k for k in (c if x == "c" else int(x) for x in spec.split(",")) if k <= c})
 
 
 def free_port() -> int:
@@ -116,7 +118,7 @@ def stage(a) -> int:
                    "build_s": st["seconds"]["build"], "stage_s": st["seconds"]["stage"],
                    "stage_cpu_s": round(ru1.user + ru1.system - ru0.user - ru0.system, 2)}
             jsonl(out / "records" / "stage.jsonl", rec)
-            for k in draws(c):
+            for k in draws(c, a.draws):
                 p = a0.run([a.lean, "draw", "--program", str(sd / "program.json"), "--partition", str(sd / "partition.json"),
                             "--stratified", str(k)], sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
@@ -178,6 +180,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     sessions = sorted((o / "sessions").glob("*/session.json"), key=lambda f: f.stat().st_mtime)
     served = [json.loads(f.read_text()) for f in sessions]
     rec = {"K": pt["K"], "c": c, "k": k, "arm": arm, "mode": mode, "rep": rep, "warm": warm, "runs": runs, "rc": rc,
+           "gpu_uuid": os.environ.get("GPU_LEASE_UUID"),
            **{x: round(y, 3) for x, y in usage.items()}, "built_s": built, "lives": lives, "dir": str(o),
            "sessions": [str(f.parent) for f in sessions],
            "serve_verify_s": [((r or {}).get("verdict") or {}).get("verify_s") for r in served],
@@ -191,10 +194,21 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     plan = json.loads((out / "plan.json").read_text())
+    if a.points is not None:
+        plan = [plan[int(i)] for i in a.points.split(",")]
     q = "name,uuid,driver_version,memory.total,compute_cap,clocks.max.sm,power.limit"
     (out / "records" / "gpu.csv").write_text(subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv"],
                                                              capture_output=True, text=True).stdout)
     ok, arms, tried = True, a.arms.split(","), set()
+    # an arm whose first point failed every session stays dropped across --points calls
+    earlier = read_jsonl(out / "records" / "prove.jsonl")
+    for arm in list(arms):
+        mine = [r for r in earlier if r["arm"] == arm]
+        if mine:
+            tried.add(arm)
+            first = (mine[0]["K"], mine[0]["c"], mine[0]["k"])
+            if not any(r["accepted"] for r in mine if (r["K"], r["c"], r["k"]) == first):
+                arms.remove(arm)
     for pt in plan:
         for arm in list(arms):
             recs = [session(a, pt, arm, "cold", rep, out / "points") for rep in range(a.cold)]
@@ -348,6 +362,8 @@ def main() -> int:
     ap.add_argument("--lean")
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--sizes", default="1,8,64,512")
+    ap.add_argument("--draws", default="1,8,64,c", help="stage: the draw sizes a statement is proved at, c meaning all its units")
+    ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the firewall's send check on (the design's path); nofw: off")
     ap.add_argument("--cold", type=int, default=2, help="one-session prover processes a point and arm")
     ap.add_argument("--warm", type=int, default=1)
