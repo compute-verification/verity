@@ -5,7 +5,8 @@
 // honest LI-CP-W loop (wgli_redux: 4 wgmma, LI's 256 LOP3 + 256 IMAD, 4 checkpoints of 4 LOP3 and one redux.sync.xor,
 // then wait), and the interleaved IMAD and LOP3 points. The RS form's A fragment is loop-invariant, the cheater's best
 // case (no delivery). wgli_true (RT-HOPPER-8) is the honest loop folding the wgmma's own accumulators, after each
-// wait. Built and gated by ../opcode_probe/probe.py; rs.sh runs it, rs.py reads it.
+// wait, and wgli_pp the same loop with its warpgroups ordered (ping-pong). Built and gated by
+// ../opcode_probe/probe.py; rs.sh runs it, rs.py reads it.
 #include "../opcode_probe/probe.cuh"
 #include "../dc/dc.cuh"
 #include "../dc/probes/lanes.cuh"
@@ -158,6 +159,53 @@ DC_DEV void wg_li_true(const OpArgs& a) {
   OP_SINK(fold_acc(d) ^ cp ^ y[0] ^ y[7] ^ threadIdx.x)
 }
 
+// wgli_pp: wgli_true's loop with its W warpgroups taking turns at the tensor pipe, as CUTLASS's ping-pong kernel orders
+// its consumers: warpgroup g waits on named barrier 1 + g, issues its wgmma and waits for it, arrives on the next
+// warpgroup's barrier, and folds while the others' wgmma run. Unordered (wgli_true) the warpgroups can fall into one
+// phase, MMA together and fold together. Each barrier counts 256 threads: one warpgroup's arrive and the next's sync.
+template <class F, int W>
+DC_DEV void wg_li_pp(const OpArgs& a) {
+  SETUP
+  const uint32_t k = dc_mix32(blockIdx.x * 977u + threadIdx.x);
+  uint32_t y[8], m[8];
+#pragma unroll
+  for (int c = 0; c < 8; c++) {
+    y[c] = dc_mix32(threadIdx.x * 8u + c);
+    m[c] = dc_mix32(0xA0000000u + c + (uint32_t)a.mode) | 1u;
+  }
+  uint32_t cp = 0;
+  const uint32_t g = threadIdx.x / 128, mine = 1 + g, next = 1 + (g + 1) % W;
+  if (g == W - 1) asm volatile("bar.arrive 1, 256;" ::: "memory");
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int s = 0; s < 4; s++) {
+      asm volatile("bar.sync %0, 256;" ::"r"(mine) : "memory");
+      wgmma_fence();
+      F::mma(d, t, af, 1);
+      wgmma_commit();
+      wgmma_wait<0>();
+      asm volatile("bar.arrive %0, 256;" ::"r"(next) : "memory");
+#pragma unroll
+      for (int p = 0; p < 64; p++) {
+        uint32_t x;
+        asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x) : "r"(y[p & 7]), "r"((uint32_t)d[2 * p]), "r"(k));
+        asm volatile("mad.lo.u32 %0,%1,%2,%3;" : "=r"(y[p & 7]) : "r"(x), "r"(m[p & 7]), "r"((uint32_t)d[2 * p + 1]));
+      }
+      uint32_t x0, x1, x2, x3;
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x0) : "r"(y[0]), "r"(y[1]), "r"(y[2]));
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x1) : "r"(x0), "r"(y[3]), "r"(y[4]));
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x2) : "r"(x1), "r"(y[5]), "r"(y[6]));
+      asm volatile("lop3.b32 %0,%1,%2,%3,0x96;" : "=r"(x3) : "r"(x2), "r"(y[7]), "r"(cp));
+      asm volatile("redux.sync.xor.b32 %0,%1,0xffffffff;" : "=r"(cp) : "r"(x3));
+    }
+  }
+  wgmma_hold(d);
+  OP_END
+  if (g == 0) asm volatile("bar.sync 1, 256;" ::: "memory");
+  OP_SINK(fold_acc(d) ^ cp ^ y[0] ^ y[7] ^ threadIdx.x)
+}
+
 OP_KERNEL(wg_s8_n256_a1, 256) { wg_alone<F_ss>(a); }
 OP_KERNEL(wg_s8_n256_rs_a1, 256) { wg_alone<F_rs>(a); }
 OP_KERNEL(wg_u8s8_n256_a1, 256) { wg_alone<F_u8>(a); }
@@ -170,6 +218,8 @@ OP_KERNEL(wgmix_lop3_r256, 256) { wg_mix<F_ss, L_LOP3, 256>(a); }
 OP_KERNEL(wgmix_lop3_r256_rs, 256) { wg_mix<F_rs, L_LOP3, 256>(a); }
 OP_KERNEL(wgli_true_w2, 256) { wg_li_true<F_ss>(a); }
 OP_KERNEL(wgli_true_w3, 384) { wg_li_true<F_ss>(a); }
+OP_KERNEL(wgli_pp_w2, 256) { wg_li_pp<F_ss, 2>(a); }
+OP_KERNEL(wgli_pp_w3, 384) { wg_li_pp<F_ss, 3>(a); }
 
 #define S8 "IGMMA.64x256x32.S8.S8*=4"
 #define U8 "IGMMA.64x256x32.U8.S8*=4"
@@ -188,6 +238,8 @@ static const OpProbe PROBES[] = {
     P(wgmix_lop3_r256_rs, S8 ",LOP3.LUT=256"),
     P(wgli_true_w2, S8 LI),
     {.name = "wgli_true_w3", .kernel = (const void*)wgli_true_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
+    P(wgli_pp_w2, S8 LI),
+    {.name = "wgli_pp_w3", .kernel = (const void*)wgli_pp_w3, .tpb = 384, .expect = S8 LI, .iters = 4096},
 };
 
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }

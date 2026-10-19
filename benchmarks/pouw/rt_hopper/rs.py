@@ -17,7 +17,28 @@ from pathlib import Path
 PLAIN = 122.41   # the plain GEMM's SMSP-cycles a MMA on DC-90 (dc90-licpw-redux-l32's source)
 MARGIN = 0.02
 PAIRS = {"li": ("wgli_redux", "wgli_redux_rs", "wgli_redux_u8"), "imad": ("wgmix_imad_r256", "wgmix_imad_r256_rs"),
-         "lop3": ("wgmix_lop3_r256", "wgmix_lop3_r256_rs"), "true": ("wgli_true_w2", "wgli_true_w3")}
+         "lop3": ("wgmix_lop3_r256", "wgmix_lop3_r256_rs"),
+         "true": ("wgli_true_w2", "wgli_true_w3", "wgli_pp_w2", "wgli_pp_w3")}
+# sm_90's census, DC-90: IGMMA_S8_N256's line and the line every other warp instruction carries on each joint row
+JOINT = {"JI90_0": (62.7407638, 0.98054536), "JI90_1": (66.93849, 0.919487525), "JI90_2": (121.566, 0.0822829491)}
+LANE = ("LOP3", "IMAD", "REDUX")   # the lane instructions a facet check counts; control and fences count nothing
+
+
+def facets(out: Path, rows: dict) -> dict:
+    """Each joint row's lower bound on a timed loop, SMSP-cycles a wgmma, over the loop's measured cycles: above 1, the
+    row isn't a lower bound there. Counts only the lane instructions LANE names, so a ratio is at most the row's."""
+    res = {}
+    for v in json.loads((out / "gate-build.json").read_text())["verdicts"]:
+        p, loops = v["probe"], v["verdict"].get("loops") or []
+        if p not in rows or len(loops) != 1:
+            continue
+        top = loops[0]["top"]
+        n_mma = sum(n for k, n in top.items() if k.startswith("IGMMA"))
+        n_lane = sum(n for k, n in top.items() if k.split(".")[0] in LANE)
+        cycles = 4 / gmma(rows[p])
+        res[p] = {"lane_a_mma": n_lane / n_mma, "cycles": cycles,
+                  **{r: (u + b * n_lane / n_mma) / cycles for r, (u, b) in JOINT.items()}}
+    return res
 
 
 def gmma(row: dict) -> float:
@@ -48,6 +69,10 @@ def read(out: Path) -> dict:
     if best and ss:
         res["verdict"]["honest"] = (f"the receipt's own loop runs at {best:.2f} SMSP-cycles a MMA, "
                                     f"{best / ss - 1:+.1%} on wgli_redux's {ss:.2f}")
+    if (out / "gate-build.json").is_file():
+        res["facets"] = facets(out, rows)
+        over = sorted(f"{p} {r} {f[r]:.4f}" for p, f in res["facets"].items() for r in JOINT if f[r] > 1)
+        res["verdict"]["joint rows"] = ("not a lower bound at " + ", ".join(over)) if over else "a lower bound at every loop"
     return res
 
 
@@ -62,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     for fam in PAIRS:
         for n, v in res[fam].items():
             print(f"{n:<22} tensor fraction {v['tensor_fraction']:.4f}  {v['cycles_a_mma']:7.2f} SMSP-cycles a MMA")
+    for n, f in res.get("facets", {}).items():
+        print(f"{n:<22} {f['lane_a_mma']:6.2f} lane a MMA, {f['cycles']:7.2f} SMSP-cycles a wgmma; the joint rows' bound "
+              "over it: " + "  ".join(f"{r} {f[r]:.4f}" for r in JOINT))
     for n, v in res["verdict"].items():
         print(f"VERDICT {n}: {v}")
     if a.json:
