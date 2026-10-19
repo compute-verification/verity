@@ -1922,9 +1922,9 @@ def test_tables_bound_otherwise_are_refused(server):
     assert agree(server, cases) == (0, len(cases)) == (0, 11)
 
 
-#: the lazy families on their one-call Programs: table reads of each index width and entry size up to a row, and gathers of
-#: an empty, a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
-LAZY = (TB.table_read(6, 1), TB.table_read(5, 2), TB.table_read(4, 4), TB.table_read(1, 32), TB.table_read(7, 1),
+#: the lazy families on their one-call Programs: table reads of each entry size up to a row, at a u8 index (IB <= 8) and a u16
+#: one, and gathers of an empty, a short and a wide column (past `layout.WIDE_FAN_IN`, where the Python reads operands lazily too)
+LAZY = (TB.table_read(6, 1), TB.table_read(5, 2), TB.table_read(4, 4), TB.table_read(1, 32), TB.table_read(7, 1), TB.table_read(9, 1),
         VP.gather_bf16(0), VP.gather_bf16(8), VP.gather_bf16(5000), RP.gather_f32(8), RP.gather_f32(5000))
 _TOKENS = (0, 1, 7, 8, 4999, 5000, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF, 0xFFFFFFF8)
 
@@ -1935,7 +1935,7 @@ def _lazy_rows(fn: PrimitiveDefinition, rng: random.Random) -> list[tuple]:
     while isinstance(leaf, Array):
         leaf = leaf.elem
     col = lambda: tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
-    idx = _TOKENS if fn.id.startswith("Gather") else (0, 1, 31, 32, 63, 64, 127, 0xFFFF, rng.getrandbits(ti.w))
+    idx = _TOKENS if fn.id.startswith("Gather") else (0, 1, 31, 32, 63, 64, 127, (1 << ti.w) - 1, rng.getrandbits(ti.w))
     return [(i, col()) for i in idx for _ in range(2)]
 
 

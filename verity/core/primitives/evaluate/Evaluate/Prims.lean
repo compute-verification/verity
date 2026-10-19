@@ -274,7 +274,7 @@ def lazyFamily? (id : String) : Option (Prim × Array (String × Ty) × Ty) := d
     let ib ← digits? a
     let ew ← digits? b
     guard (0 < ib && ib ≤ 32 && ew ≥ 1 && 64 % ew == 0 && (ew <<< ib) % 64 == 0)
-    return (.lazy (Act.tableRead ib ew), #[("index", .value (if ib ≤ 16 then 16 else 32)),
+    return (.lazy (Act.tableRead ib ew), #[("index", .value (if ib ≤ 8 then 8 else if ib ≤ 16 then 16 else 32)),
       ("table", .array ((ew <<< ib) / 64) (.array 64 bf16))], .value (16 * ew))
   else if s.startsWith "GatherBf16x" then
     let v ← digits? (s.drop 11).toString
