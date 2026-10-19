@@ -15,6 +15,9 @@ passes with probability at most `(1 − x_t)^k ≤ exp(−k x_t)`.
 
 Neither bound depends on the number of wipes: the run tree (`Accounting.WipePlay`) is finite, of any depth. At `k = 1`
 each wipe is one read with its own un-held set, which gives the pool per read, adaptive within a wipe as well.
+
+The pool counts what the wipes see: a block dropped after one wipe and rebuilt before the next is held at both and
+counts in no `x_t`, so the time between wipes is outside these bounds.
 -/
 
 namespace Accounting.Guarantees.Actual

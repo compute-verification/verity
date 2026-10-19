@@ -6,7 +6,8 @@ import Mathlib.Data.Fintype.Pi
 
 The memory cap's lifetime pool (the memory-cap restatement's step 7, "One delta"): over a prover's whole life, every
 wipe is `k` timed rounds, each challenging a block drawn uniformly from the wiped store `B` by the verifier's fresh
-coins. A wipe's *un-held set* `U ⊆ B` is the blocks the prover cannot serve within a round's deadline, fixed by
+coins (the deployed challenger's index stream is a PRF of its live seed, `prf/sha-512`, which the uniform draws
+idealize). A wipe's *un-held set* `U ⊆ B` is the blocks the prover cannot serve within a round's deadline, fixed by
 everything before the wipe's coins, so its *un-held fraction* `x = |U| / |B|` lies in `[0, 1]`.
 
 * `WipePlay k`: one prover strategy as a finite run tree. `wipe B U pass next` is a wipe over the store `B` whose
