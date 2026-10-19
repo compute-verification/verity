@@ -828,7 +828,8 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
     which a keyless proxy takes, is refused unless the challenger signs it. They answer a `Revealed` that verifies under
     the certifier's key over `reveal_response_message`, and under no other key, window, value, kind, registration or
     link. The once rule and the published condition are `reveal`'s. A signer that refuses spends the reveal and gives
-    nothing. A proxy takes both keys or neither; a keyless one takes no request and serves no endpoint."""
+    nothing. A proxy takes both keys or neither; a keyless one takes no request and serves no endpoint. A deployed
+    signature (`lms.DEPLOYED`), in hex, fits a request line with room for the registration."""
     challenger_key, sign = prover_signer(b"challenger")
     _, forge = prover_signer(b"someone else")
     prover_key, prove = prover_signer()
@@ -881,6 +882,7 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
     assert p.reveal(1, made_up, asks(1, made_up)).value == bytes([2]) * active.SALT_BYTES
     with pytest.raises(ValueError, match="a reveal is of"):
         active.reveal_request_message("requests", 0, reg.digest, b"other")
+    assert 2 * lms.DEPLOYED.signature_bytes() < active.REVEAL_LINE_BYTES // 8
 
     held = proxy(challenger_key=challenger_key, signer=LmsSigner(certifier.key, certifier.state))
     with pytest.raises(RuntimeError, match="signer refused"):

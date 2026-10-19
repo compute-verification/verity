@@ -486,8 +486,8 @@ them.
     challenger verifies under the certifier's key. A signer that refuses leaves p's reveal spent and gives nothing. The
     salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
     `pouw.salt` as a public input, so nothing is encrypted. A refusal (`{"refused": reason}`) isn't signed: forged on the
-    path, it costs the window as dropping the answer would, and a request replayed off the path spends the reveal on a
-    salt that is no longer secret. `serve_reveals(proxy, host, port)` serves both calls beside `run`, one JSON line per
+    path, it costs the window as dropping the answer would; so does a request copied off the path and sent first, which
+    spends the reveal on a salt that is no longer secret. `serve_reveals(proxy, host, port)` serves both calls beside `run`, one JSON line per
     request and per answer, each call off the loop; `RemoteCertifier(host, port, certifier_key, challenger_signer,
     link)` is the challenger's client, whose `reveal` and `committed` return the value they verified, as a keyless
     proxy's do in process, and raise `RuntimeError` on a refusal, an answer that doesn't verify, or no answer. t_d, the
