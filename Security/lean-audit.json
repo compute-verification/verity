@@ -71,7 +71,8 @@
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
   },
   "Accounting.Assumptions.TimedRoundSound": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "35b775f317173ee028959ca9d3c47b07ec6597e73ac13936e7181350910e93d8"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -708,10 +709,16 @@
    "type_hash": "374296d8334aa13abbb145fd7f4dc2b4bd0879828f6d5863bb10306b610fadce"
   },
   "Accounting.SecurityProofs.Actual.WipePool": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Actual.WipePool : Accounting.Guarantees.Actual.WipePool"],
+   "assumptions": [],
+   "type_hash": "81e03646978345b929dc63f50b3f5d939d70a114e023002ea49f48db931e8907"
   },
   "Accounting.SecurityProofs.Actual.WipePoolDelta": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Actual.WipePoolDelta : Accounting.Guarantees.Actual.WipePoolDelta"],
+   "assumptions": [],
+   "type_hash": "6d1788cd897b115bad02b6978826ceae7b7be7b32e0b3b26abe4736b4f3277a7"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -5579,6 +5586,24 @@
     "Bandwidth.SecurityProofs.Mbw",
     "Bandwidth.SecurityProofs.MbwCapacity"
    ]
+  },
+  "Definitions.Accounting.Actual.WipePool": {
+   "digest": "6eef17b71c9d60a389316ede112f0f67c2aa18b4ed80c605dd559e518fd87964",
+   "definitions": {
+    "Accounting.WipePlay": "f87900a958246708958d5fb12b359dae6bc4bf5cbe0040b942d0638c4ab085e5",
+    "Accounting.WipePlay.UnheldFails": "48ef14da2ef22a27e6bfae1b12d874271505054cc4fa2f3d8fc28dabb830cf4b",
+    "Accounting.WipePlay.below": "befd1fc34e4cf2e584697f9cb6ca12202e4eb025be8b352686a191d741a9fcb4",
+    "Accounting.WipePlay.brecOn": "5f347e8810558360fd5edc6067ec2d4c68d642730fda351de0f97d20b3575efb",
+    "Accounting.WipePlay.brecOn.go": "a94d42db29f6e5cd06c3bd9a5f0a4b13eccb7b1799165787ff8f1ff5d67c098a",
+    "Accounting.WipePlay.casesOn": "9c3dd37e06dd4c776f65b27e68e05d0ff43f4412d24ffc168e1edc0c4495263a",
+    "Accounting.WipePlay.coin": "e5b401a93dfc8d0bf9e56fc88b0b3ed419ad5509c81bd56b5a1f048bddf5ba25",
+    "Accounting.WipePlay.prEv": "06801eaf73feef1a24d08c8f5c00233959c874805ce9912a6fa462f12a9b5957",
+    "Accounting.WipePlay.rec": "eb9f25ad6c9dbf98896ce7201982caac7be6c755045398977821013dbeeda654",
+    "Accounting.WipePlay.stop": "968c61b670ed33aaf448368c2a74bd9e0463625ebc48452d32360a12557d2fff",
+    "Accounting.WipePlay.unheld": "1c54b46e6d33513a1c2c39b97bb46e05b10116d110a556569cb6eab4dcf62477",
+    "Accounting.WipePlay.wipe": "514fdb9b902a3c207b4fa5923b6026d399b04c589cd23a814a51f61ce47057dd"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
    "digest": "77c0e7236051b937516370d1b66cdabfd998ca6d239df4ace8f07b4195a4d0bc",
@@ -16844,6 +16869,13 @@
     "Accounting.SecurityProofs.TS.TimeBound"
    ]
   },
+  "Models.Accounting.Assumptions.WipePool": {
+   "digest": "743792b099ea890e1036fc170abfed8491f859390bb45f03386a486be9c4fc86",
+   "definitions": {
+    "Accounting.Assumptions.TimedRoundSound": "35b775f317173ee028959ca9d3c47b07ec6597e73ac13936e7181350910e93d8"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
+  },
   "Models.Accounting.Guarantees.Actual": {
    "digest": "1beac18716c243f84629c7971bed42665b32b318c9c4de68668daaea23880891",
    "definitions": {
@@ -16864,6 +16896,14 @@
     "Accounting.Guarantees.Actual.ThreadedRuntime": "0957634d1e3be4bb98d90dfae3044ac393c5fbb66218c58c2bc6be8d52fd6954"
    },
    "guarantees": ["Accounting.SecurityProofs.Actual.ThreadedRate", "Accounting.SecurityProofs.Actual.ThreadedRuntime"]
+  },
+  "Models.Accounting.Guarantees.Actual.WipePool": {
+   "digest": "d6b5e0a238a2125d1ac93438fd778241c60f37ea570db222abb216230290847a",
+   "definitions": {
+    "Accounting.Guarantees.Actual.WipePool": "bab700fb1940bfd5b4dfccebd7f00a5e511a6a16c831453f663180bc57a40ac3",
+    "Accounting.Guarantees.Actual.WipePoolDelta": "0835b482ae308e03678734a16c433a6830faa25265017d34f618005da0d1ebcf"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Actual.WipePool", "Accounting.SecurityProofs.Actual.WipePoolDelta"]
   },
   "Models.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
