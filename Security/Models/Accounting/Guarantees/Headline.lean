@@ -13,6 +13,15 @@ proof layer's pieces. A measured reading is `Models.Accounting.Guarantees.TS`'s 
 way, its machine the measured vector's rows. Each is proved as `Accounting.SecurityProofs.TS.G` in
 `Proofs.Accounting.Headline`.
 
+Each bound is per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
+least `1 − ε` of the credited work, with the device that did it left to the attribution layer. The statements bound
+the run's time against `T_cred`, the credited work priced on one device's machine, and nothing ties a committed tile
+to the GPU that computed it: the transcript commits tile digests, so a helper can supply whole tiles. A per-GPU
+reading needs LOC's host deduction (decision 37: what the host CPU can compute of the credited work is deducted) and
+the peer-GPU premise, every billable GPU on the node credited each window or the node as the unit
+(`benchmarks/pouw/machine_model/README.md`, "The headline is per node"). Counted per GPU without them, the host's AMX
+and AVX-512 (and NVLink peers) take every device over 1% on some real host (RT-SCOPE, #2681).
+
 Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins drawn after
 the commitments. The sampled path's `ε_sample` (#2466's `DrawnLayer`) and the Fiat–Shamir premium (decision 122) are
 separate lines, in none of these statements.
@@ -89,6 +98,10 @@ value (`Pins`) and E1(c) holds (`RightFixed`), then outside an event of probabil
 window's time is at least `1 − 656/100000` (`1 − 0.656%`) of the credit `T_cred = B_♭/f_max`. FILL-OPT is not a
 hypothesis: H1 + fx1 has no filler, so it holds at any run. `ε_sample` and the Fiat–Shamir premium are separate lines.
 
+Per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least
+`1 − 0.656%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
+host deduction and every billable GPU on the node credited each window (RT-SCOPE, #2681).
+
 The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
 48,000 its two branches give ε < 1% only from 9,496 rounds (Compose's live line only from 10,552: RT-INT-1), and the
 windows run so far have at most 18.
@@ -130,6 +143,10 @@ FILL-OPT are not hypotheses: the model has no side unit and no filler, so they h
 at `9/8` is what `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once
 writers create at most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside
 `ClassPSlots`. `ε_sample` and the Fiat–Shamir premium are separate lines.
+
+Per node (ASK-65 = A): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least
+`1 − 0.591%` of the credited work. Which device did it is the attribution layer's: read per GPU, it needs LOC's
+host deduction and every billable GPU on the node credited each window (RT-SCOPE, #2681).
 
 The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
 48,000 its two branches give ε < 1% only from 9,652 rounds (Compose's live line only from 10,552: RT-INT-1), and the
