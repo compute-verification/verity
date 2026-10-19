@@ -1134,23 +1134,13 @@ theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Co
         (Composed.padLenOf (zkTab x j).table (stAt x j)) b r p.val :=
   Composed.Cx.coinedOf_colPAt P (zkTab x j).table (stAt x j) c (padN_bounds x j).1 (padN_bounds x j).2 w b r p
 
-/-- **Table `j`'s rep `r` pads leaf at tree position `q`** of a cut at the coins `cz`: the cut's opened or hidden pads
-leaf the coins' tree places at `q` (`Coined.sP`), and the empty string past the tree. -/
-noncomputable def leafAtP (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (cut : ∀ j, ((tabC P x j).T (cz j)).tab.Cut) (j : Fin (jOf x)) (r : Fin 2) (q : ℕ) : ByteArray :=
-  if hq : q < (tabC P x j).z.nQ + (tabC P x j).z.nPU then
-    match (((tabC P x j).T (cz j)).sP r).symm ⟨q, hq⟩ with
-    | .inl a => ((cut j).leavesP r).1 a
-    | .inr u => ((cut j).leavesP r).2 u
-  else ByteArray.empty
-
 /-- **A cut's pads leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree. -/
-theorem leafAtP_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
     (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {q : ℕ}
     (hq : q < (tabC P x j).z.nQ + (tabC P x j).z.nPU) :
-    leafAtP P x cz (cutAt (tabC P x) cz wt ω lv) j r q = lv ⟨j, .inr (.inl (r, ⟨q, hq⟩))⟩ := by
-  unfold leafAtP
+    padLeafCut P x cz (cutAt (tabC P x) cz wt ω lv) j r q = lv ⟨j, .inr (.inl (r, ⟨q, hq⟩))⟩ := by
+  unfold padLeafCut
   rw [dite_eq_left_of_eq_true (eq_true hq)]
   show (match (((tabC P x j).T (cz j)).sP r).symm ⟨q, hq⟩ with
     | .inl a => lv ⟨j, .inr (.inl (r, ((tabC P x j).T (cz j)).sP r (.inl a)))⟩
@@ -1245,5 +1235,98 @@ theorem causalExe_of (hB : SrcAgree) : CausalExe := by
       exact sessionCut_eq _ n spec _ _ _ _ (by omega) hcm hic G hG0 hR
     · rw [srcC_dead hx, srcC_dead hx]
   rw [hrun]
+
+/-! ## The commitments read no coin -/
+
+theorem commit0Cut_congr (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level) {src src' : FlockComplete.TabSrc}
+    (h0 : src.leaf0 = src'.leaf0) (h1 : src.row0 = src'.row0) (h2 : src.salt0 = src'.salt0) :
+    FlockComplete.commit0Cut hsE ms lv src = FlockComplete.commit0Cut hsE ms lv src' := by
+  unfold FlockComplete.commit0Cut
+  rw [h0, h1, h2]
+
+theorem padsTreeCut_congr (N : ℕ) {src src' : FlockComplete.RepSrc} (h0 : src.padLeaf = src'.padLeaf)
+    (h1 : src.ch = src'.ch) (h2 : src.cm = src'.cm) (h3 : src.padSalt = src'.padSalt) :
+    FlockComplete.padsTreeCut hsE N src = FlockComplete.padsTreeCut hsE N src' := by
+  unfold FlockComplete.padsTreeCut
+  rw [h0, h1, h2, h3]
+
+section Proj
+
+variable {x : Msg} (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest) (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut)
+
+theorem tabSrcCut_live {i : ℕ} (h : i < jOf x) : tabSrcCut PE x cz cut i =
+    { leaf0 := leafAt PE x cz cut ⟨i, h⟩, row0 := fun _ => #[], salt0 := fun _ => ByteArray.empty,
+      rep := fun r => if hr : r < 2 then repSrcCut PE x cz cut ⟨i, h⟩ ⟨r, hr⟩ else default } := by
+  unfold tabSrcCut
+  rw [dif_pos h]
+
+theorem tabSrcCut_leaf0 {i : ℕ} (h : i < jOf x) : (tabSrcCut PE x cz cut i).leaf0 = leafAt PE x cz cut ⟨i, h⟩ := by
+  unfold tabSrcCut
+  rw [dif_pos h]
+
+theorem tabSrcCut_rep {i r : ℕ} (h : i < jOf x) (hr : r < 2) :
+    (tabSrcCut PE x cz cut i).rep r = repSrcCut PE x cz cut ⟨i, h⟩ ⟨r, hr⟩ := by
+  unfold tabSrcCut
+  rw [dif_pos h]
+  exact dif_pos hr
+
+theorem tabSrcCut_rep_dead {i r : ℕ} (h : i < jOf x) (hr : ¬ r < 2) : (tabSrcCut PE x cz cut i).rep r = default := by
+  unfold tabSrcCut
+  rw [dif_pos h]
+  exact dif_neg hr
+
+theorem tabSrcCut_dead {i : ℕ} (h : ¬ i < jOf x) : tabSrcCut PE x cz cut i = default := by
+  unfold tabSrcCut
+  rw [dif_neg h]
+
+theorem repSrcCut_padLeaf (j : Fin (jOf x)) (r : Fin 2) :
+    (repSrcCut PE x cz cut j r).padLeaf = padLeafCut PE x cz cut j r := by
+  simp only [repSrcCut]
+
+end Proj
+
+section Agree
+
+variable (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+  (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+  (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+
+theorem leaf0_agree (c c' : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) :
+    leafAt PE x (czExe PE x c) (cutC x wt ω p c) j = leafAt PE x (czExe PE x c') (cutC x wt ω p c') j :=
+  funext fun q => by
+    by_cases hq : q < (tabC PE x j).z.nS + (tabC PE x j).z.nU
+    · rw [leafAt_cutAt PE x _ wt ω _ j hq, leafAt_cutAt PE x _ wt ω _ j hq,
+        digOf_inl PE x (czExe PE x c) (czExe PE x c') wt ω j]
+    · simp only [leafAt, hq, ↓reduceDIte]
+
+theorem padLeaf_agree (c c' : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
+    padLeafCut PE x (czExe PE x c) (cutC x wt ω p c) j r = padLeafCut PE x (czExe PE x c') (cutC x wt ω p c') j r :=
+  funext fun q => by
+    by_cases hq : q < (tabC PE x j).z.nQ + (tabC PE x j).z.nPU
+    · rw [Cx.padLeafCut_cutAt PE x _ wt ω _ j r hq, Cx.padLeafCut_cutAt PE x _ wt ω _ j r hq,
+        Cx.digOf_pads PE x (czExe PE x c) (czExe PE x c') wt ω j r]
+    · simp only [padLeafCut, hq, ↓reduceDIte]
+
+theorem commits_agree (c c' : Fin (refK x) → FlockDeploy.Coin) :
+    (∀ ms lv i, FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c i) =
+        FlockComplete.commit0Cut hsE ms lv (srcC x wt ω p c' i)) ∧
+      (∀ N i r, FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c i).rep r) =
+        FlockComplete.padsTreeCut hsE N ((srcC x wt ω p c' i).rep r)) := by
+  refine ⟨fun ms lv i => ?_, fun N i r => ?_⟩
+  · by_cases h : i < jOf x
+    · rw [srcC, srcC, tabSrcCut_live _ _ h, tabSrcCut_live _ _ h]
+      exact commit0Cut_congr ms lv (leaf0_agree x wt ω p c c' ⟨i, h⟩) rfl rfl
+    · rw [srcC, srcC, tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
+  · by_cases h : i < jOf x
+    · by_cases hr : r < 2
+      · rw [srcC, srcC, tabSrcCut_rep _ _ h hr, tabSrcCut_rep _ _ h hr]
+        refine padsTreeCut_congr N ?_ ?_ ?_ ?_
+        · rw [repSrcCut_padLeaf, repSrcCut_padLeaf]
+          exact padLeaf_agree x wt ω p c c' ⟨i, h⟩ ⟨r, hr⟩
+        all_goals simp only [repSrcCut]
+      · rw [srcC, srcC, tabSrcCut_rep_dead _ _ h hr, tabSrcCut_rep_dead _ _ h hr]
+    · rw [srcC, srcC, tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
+
+end Agree
 
 end Claims.ZKMal.Masked
