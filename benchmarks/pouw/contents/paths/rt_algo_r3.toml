@@ -1,0 +1,4 @@
+order = 342
+path = "`rt_algo_r3/`"
+runs_on = "CPU"
+what = "RT-ALGO round 3's red-team check of J10's shared-noise forms: each form's cheapest after-coin route from the AB running partials, bit-exact against main's `segment.call_words` and fx1 receipts, with its counts of the record's products and of all operations, the wrap's share, the luck correlation J10 brings across units, and J10's SHA-512 compressions a unit (`rt_algo_r3_check.py`; RT-ALGO, note:20261019T0900Z-draft-rt-algo-r3)"
