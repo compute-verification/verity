@@ -68,6 +68,10 @@
       "build_request_LP256_T31": "7a67deae480117a825d59fbe228e5b5587b47b40dd35184942b847b36075e56afdfc2aadfe6126399931e96648c31af01ceab77d9512c925ebdf24573fe76255"
      }
     }
+   },
+   "aot": {
+    "comparison": "r20261018-222738-a095",
+    "trace": "art:826e06ff60bf5ede2823cc3a859fb5f9e6c9b867ea0ffc47be17634f7362e5a4"
    }
   },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {

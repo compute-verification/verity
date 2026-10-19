@@ -176,19 +176,17 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("rank,digest", [
-    (0, "84c39fac2fc2018712751846d53b12b077c6ba8f22b53e95ca24f4c9f541d4724264893b6a8f8b29aa917a46305c740a330f6a9779fa25938c542cc9d2027beb"),
-    (7, "f7b56f581431ed6ff565dd7be13f7cf24d3d12156fbb1b7011188d194be552f82bc3c536cb694b4103e1b9f41a831946d460fe89a00163152e1bfd6cf2765dff"),
-])
-def test_mhc_rank_step_equals_the_traced_build(rank, digest, tmp_path):
+@pytest.mark.parametrize("rank", [0, 7])
+def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected
-    decoder (`predict.dsv4`) is the Program the Build traced at 98c10539e (`records.json` has no row for it yet): the mHC pre and
-    post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and sqrtsoftplus routers,
-    the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC Definitions' bodies for
-    the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order GLM-5.3's ranks pin."""
+    decoder (`predict.dsv4`) is the rank's step Program `records.json` pins for the switched row (its traced Build art:826e06ff):
+    the mHC pre and post-pre between sublayers, the compressed-attention decode over each layer's opened window, the table and
+    sqrtsoftplus routers, the Marlin experts over the schedule's align keys.  About 25 s a rank, nearly all of it encoding the mHC
+    Definitions' bodies for the digest; no cheaper test reaches this decoder, and the ranks between differ only in the peer order
+    GLM-5.3's ranks pin."""
     r = build_program(_row_phi(DSV4, "DSV4_PRO", tmp_path, rank), "step", M=1, pos0=8)
     assert r.function.startswith("Derived[vLLMStep[DeepseekV4ForCausalLM]]_v1")
-    assert r.digest == digest
+    assert r.digest == json.loads((MANIFESTS / "records.json").read_text())["rows"][DSV4]["programs"][str(rank)]["step"]
 
 
 def test_mhc_refuses_outside_its_domain(tmp_path):
