@@ -4,8 +4,10 @@
 #
 #   bash benchmarks/hash/maxtput/launch.sh [ROW]                                   # Qwen3-8B, stock + both commit arms, all three cards
 #   MACHINES=vy-dc-b200 ARMS=stock,blake3 bash benchmarks/hash/maxtput/launch.sh   # a subset
+#   PIN_ART= PIN_ART_RTX= PIN_ART_B200= XCHECK=1 ARMS=stock CYCLES=1 MAXTPUT_ARGS="--load fixed" PUBLISH=0 \
+#     bash benchmarks/hash/maxtput/launch.sh                                       # the driver against `vllm bench throughput`
 #
-# ARMS, MODEL, REQUESTS, CYCLES, REPS, MAXTPUT_ARGS and CHECK_TESTS pass through to job.sh; EXTRA_ENV="K=V ..." to every engine;
+# ARMS, MODEL, REQUESTS, CYCLES, REPS, XCHECK, MAXTPUT_ARGS and CHECK_TESTS pass through to job.sh; EXTRA_ENV="K=V ..." to every engine;
 # TIMEOUT (s, default 7000: node 2's queue caps a run at 120 min); WORKLOAD (the `arm` label's workload, default maxtput, or
 # maxtput-<model> for another model); PUBLISH=0 skips publishing. Qwen3-8B runs pinned under each card's Build of record: the
 # loop's on the H200 and the RTX PRO 6000 (PIN_ART, PIN_ART_RTX, as iterate.sh), and on the B200 (PIN_ART_B200) circuits'
@@ -55,7 +57,7 @@ done
 for m in ${MACHINES:-vy-dc-h200 vy-dc-b200 vy-nebius-2}; do
   envs=(--env "MODEL=$MODEL")
   for kv in ${ENVS[$m]}; do envs+=(--env "$kv"); done
-  for k in ARMS REQUESTS CYCLES REPS; do [ -n "${!k:-}" ] && envs+=(--env "$k=${!k}"); done
+  for k in ARMS REQUESTS CYCLES REPS XCHECK; do [ -n "${!k:-}" ] && envs+=(--env "$k=${!k}"); done
   args="${MAXTPUT_ARGS:-}${PIN[$m]:+ ${PIN_ARGS[$m]:-}}"
   [ -n "${args// /}" ] && envs+=(--env "MAXTPUT_ARGS=${args# }")
   [ -n "${CHECK_TESTS+x}" ] && envs+=(--env "CHECK_TESTS=$CHECK_TESTS")

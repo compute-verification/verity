@@ -29,3 +29,8 @@ python3 benchmarks/hash/maxtput/row.py --table --row 11                         
 On the RTX PRO 6000 (96 GB) the full Commit doesn't fit beside stock's KV pool at 0.9, so its runs pin every engine's pool
 lower (`--kv-bytes`), and a stock-only run at vLLM's own sizing gives the native number. A pinned B200 run takes its Build's
 attention backend (`--attention-backend FLASH_ATTN`); vLLM's default there is FlashInfer.
+
+`XCHECK=1` checks the driver's stock engine against vLLM's own entry point: `vllm bench throughput` at the same engine settings
+on its random dataset at 1024/128 exactly, before and after the driver run on the same fixed load (`--load fixed`), compared over
+the whole run (`driver_vs_vllm_bench_pct` in the run's result; the launch line is in `launch.sh`). vLLM's figure samples at
+temperature 1 where the driver is greedy, and its timer starts before it adds the requests.

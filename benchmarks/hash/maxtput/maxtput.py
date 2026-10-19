@@ -61,14 +61,15 @@ ARMS = {
 MAX_NUM_SEQS = 1024
 
 
-def requests(n: int, prompt: int, output: int, vocab: int) -> list[SimpleNamespace]:
-    """served_commit's mixed rule at (prompt, output), every request at t=0, token ids as verity_bench's `_requests` draws them."""
-    point = f"maxtput-n{n}-p{prompt}-o{output}"
+def requests(n: int, prompt: int, output: int, vocab: int, load: str = "mixed") -> list[SimpleNamespace]:
+    """served_commit's mixed rule at (prompt, output), or every request at (prompt, output) for ``fixed`` (``vllm bench
+    throughput``'s random dataset at range ratio 0), every request at t=0, token ids as verity_bench's `_requests` draws them."""
+    point = f"maxtput-n{n}-p{prompt}-o{output}" + ("" if load == "mixed" else f"-{load}")
     seed = int.from_bytes(hashlib.sha256(point.encode()).digest()[:8], "big")
     out = []
     for i in range(n):
-        p = prompt if i % 2 == 0 else max(16, prompt // 4)
-        o = output if i % 3 else max(8, output // 2)
+        p = prompt if i % 2 == 0 or load == "fixed" else max(16, prompt // 4)
+        o = output if i % 3 or load == "fixed" else max(8, output // 2)
         ids = [3 + (seed + i * 1_000_003 + j * 97_409) % (vocab - 4) for j in range(p)]
         out.append(SimpleNamespace(request_id=f"{point}-{i}", prompt_token_ids=ids, max_tokens=o, seed=i))
     return out
@@ -317,7 +318,7 @@ def _child(conn: Any, arm: str, model: str, kv_bytes: int | None, a: dict[str, A
     try:
         eng = Engine(arm, model, kv_bytes, a["gpu_util"], a["max_model_len"], a.get("attention_backend"))
         out["identity"] = eng.identity
-        reqs = requests(a["requests"], a["prompt"], a["output"], eng.vocab)
+        reqs = requests(a["requests"], a["prompt"], a["output"], eng.vocab, a.get("load", "mixed"))
         for phase in phases:
             out["runs"].append(eng.run(phase, reqs))
             r = out["runs"][-1]["measures"]
@@ -380,6 +381,8 @@ def main() -> int:
     ap.add_argument("--requests", type=int, default=2048)
     ap.add_argument("--prompt", type=int, default=1024)
     ap.add_argument("--output", type=int, default=128)
+    ap.add_argument("--load", choices=("mixed", "fixed"), default="mixed",
+                    help="served_commit's mixed rule, or every request at (prompt, output) as `vllm bench throughput` --random-range-ratio 0")
     ap.add_argument("--reps", type=int, default=1, help="timed runs an engine lifetime")
     ap.add_argument("--cycles", type=int, default=2)
     ap.add_argument("--gpu-util", type=float, default=0.9)
@@ -395,11 +398,12 @@ def main() -> int:
         ap.error(f"--arms must start with stock and name arms of {sorted(ARMS)}")
     a.out.mkdir(parents=True, exist_ok=True)
     opts = {"requests": a.requests, "prompt": a.prompt, "output": a.output, "gpu_util": a.gpu_util,
-            "max_model_len": a.max_model_len, "attention_backend": a.attention_backend}
+            "max_model_len": a.max_model_len, "attention_backend": a.attention_backend, "load": a.load}
+    shape = ("served_commit mixed rule (prompts P, P/4 alternating; outputs O, O/2 every third) at P, O" if a.load == "mixed"
+             else "every request at prompt P, output O")
     doc: dict[str, Any] = {"schema": "kernels-maxtput/v1", "model": a.model, "arms": arms, "options": {**opts, "reps": a.reps,
                            "cycles": a.cycles, "max_num_seqs": MAX_NUM_SEQS},
-                           "load": "served_commit mixed rule (prompts P, P/4 alternating; outputs O, O/2 every third) at P, O; "
-                                   "all requests at t=0 (request rate inf); greedy, ignore_eos",
+                           "load": f"{shape}; all requests at t=0 (request rate inf); greedy, ignore_eos",
                            "engines": []}
     kv = a.kv_bytes
     dst = a.out / "maxtput.json"
