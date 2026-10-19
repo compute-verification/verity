@@ -1015,6 +1015,8 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
         log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the train commits over {p}/lean-audit.json")
+    for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
+        rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
                                                 "regenerated": regenerated}, indent=1) + "\n")

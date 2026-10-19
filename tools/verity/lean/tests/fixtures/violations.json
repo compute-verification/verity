@@ -34,6 +34,16 @@
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
   "fails": "escape: Control.spin (opaque"
  },
+ "escape_implemented_by": {
+  "write": {"Control/Bad.lean": "namespace Control\n\ndef slowImpl (n : Nat) : Nat := n\n\n@[implemented_by slowImpl] def slowF (n : Nat) : Nat := n\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "escape: Control.slowF (implemented_by"
+ },
+ "escape_extern": {
+  "write": {"Control/Bad.lean": "namespace Control\n\n@[extern \"c_id\"] def cId (n : Nat) : Nat := n\n\nend Control\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "escape: Control.cId (extern"
+ },
  "orphan": {
   "write": {"Control/Unused.lean": "theorem Control.unused : True := trivial\n"},
   "fails": "orphan: Control/Unused.lean"
@@ -97,6 +107,21 @@
   "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
   "not_written": ["TREE_WRITTEN"],
   "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (run_cmd)"
+ },
+ "compile_time_macro": {
+  "write": {"Control/Bad.lean": "import Lean\n\nmacro \"ctrivial\" : term => `(trivial)\n\ntheorem Control.byMacro : True := ctrivial\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (macro)"
+ },
+ "compile_time_syntax": {
+  "write": {"Control/Bad.lean": "import Lean\n\nsyntax (name := ctrlStx) \"ctrlStx\" : command\n\ntheorem Control.okStx : True := trivial\n"},
+  "replace": {"Control.lean": ["import Control.Thms", "import Control.Thms\nimport Control.Bad"]},
+  "fails": "compile-time: Control/Bad.lean:3 runs code while it compiles (syntax)"
+ },
+ "lakefile_lean": {
+  "write": {"lakefile.lean": "import Lake\nopen Lake DSL\n\npackage control\n\n@[default_target]\nlean_lib Control\n"},
+  "delete": ["lakefile.toml"],
+  "fails": "compile-time: lakefile.lean runs code"
  },
  "docstring": {
   "replace": {"Control/Thms.lean": ["theorem helper", "/-- Prose may name debug.skipKernelTC and `run_cmd`:\n#eval and initialize here are words, not commands. -/\ntheorem helper"]},

@@ -269,7 +269,11 @@ reads, with the guarantees that read it and its source now (also in `review.txt`
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
 type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
-`regenerated` names that file; a missing record or name, an owner or any other failure writes none.
+`regenerated` names that file; a missing record or name, an owner or any other failure writes none. Which failures those
+are is decided by code, not by text: every failure carries one (`check.py`'s `Failure`, such as `guarantees.signature` or
+`orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
+(`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
+`RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
 When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change

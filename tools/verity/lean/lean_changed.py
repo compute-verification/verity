@@ -48,7 +48,7 @@ build reaches it.
 
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
 only on a Lean error at a position in one of the tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
-`guarantees:` failures). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
+failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
 yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
 run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
 guarantees by name.
@@ -274,7 +274,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     finally:
         AUDIT.run, AUDIT.TOOL = plain, tool
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in cross + fails if f.startswith(("guarantees:", "assumptions:"))]
+    return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
 
 def sandboxed() -> bool:
