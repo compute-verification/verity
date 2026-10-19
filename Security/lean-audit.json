@@ -1178,7 +1178,12 @@
    "type_hash": "cae0f4a7c8d7947278f093644521a565b3ac25621c8de725cb74dba8197d5f18"
   },
   "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget : Accounting.Guarantees.ComposePeriod.PeriodBudget"
+   ],
+   "assumptions": [],
+   "type_hash": "5178cb51049d4fc076696646c8d3b1136dbf27dff64a5e9dc8dcf655da2afd2f"
   },
   "Accounting.SecurityProofs.Composition": {
    "owner": "@memory-accounting",
@@ -7900,8 +7905,26 @@
     "Accounting.SecurityProofs.Compose.SplitRateClosed",
     "Accounting.SecurityProofs.Compose.SplitRateExp",
     "Accounting.SecurityProofs.Compose.SplitRateMerged",
-    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy"
+    "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget"
    ]
+  },
+  "Definitions.Accounting.ComposePeriod": {
+   "digest": "d7cbfe4bfed7e9e9dfbacab9330b5c35c8a7b763fdcbe7b4c82dac84172dc673",
+   "definitions": {
+    "Accounting.Compose.Period": "13d14cade7896245c98de63e7b9b333a94bde2f918d0c4c727f58b320b0596bc",
+    "Accounting.Compose.Period.EveryWindow": "5d6e76b585d1416b9205a3b83c2ec16802e3327d3f6e318b60d2292e9cefc0c1",
+    "Accounting.Compose.Period.below": "dbb6156263bb9bd2893a315f2ef1d32486136d0efcfcde0a60270a88f7ccd808",
+    "Accounting.Compose.Period.brecOn": "a8477feee591807b5f8a3646a71d2585daa83333907ea7ee14a878358871011f",
+    "Accounting.Compose.Period.brecOn.go": "6980f68d9fc245f9b78a827eb1cb4efe8dca0d374562746cf997a904ac0614e3",
+    "Accounting.Compose.Period.casesOn": "61591c43a5738c8c4438e163bb0c0c3b1cec5758e0e3cd5f96472877bd0b66a7",
+    "Accounting.Compose.Period.done": "7d16ae838104b949137991d7652c34c2cf15c04446846cd71d7787d99b2330d5",
+    "Accounting.Compose.Period.rec": "4d8ae7dc96e36197d4ef7e49d3be9dc709fedc99f7920e4c9e3c4a92154aefc1",
+    "Accounting.Compose.Period.window": "f1f94966f0b6570a662d41e8b18f1e1444550b3a9731acdb7f474de074b64fff",
+    "Accounting.Compose.consGame": "c2028e515abf2a609322d707f397836d556d0ee509301d3ea18d80d0dadd2f26",
+    "Accounting.Compose.periodGame": "18ba465c5038bea0b07e6797e3b27b5ca709d880e423076ca35cb6a88a23ace0"
+   },
+   "guarantees": ["Accounting.SecurityProofs.ComposePeriod.PeriodBudget"]
   },
   "Definitions.Accounting.Confidence": {
    "digest": "8f0f17fed4f0fe12353bd5c626eef6260396dd53fa330f78c0fd405bc0b8e70f",
@@ -9301,6 +9324,7 @@
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn"
@@ -9402,6 +9426,7 @@
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
@@ -15114,6 +15139,7 @@
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.FillerBudget",
     "Accounting.SecurityProofs.FillerLuck.FillerCellLuck",
@@ -15170,7 +15196,8 @@
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
-    "Accounting.SecurityProofs.Compose.ServiceCovers"
+    "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget"
    ]
   },
   "Flock.Bytes": {
@@ -20469,6 +20496,13 @@
     "Accounting.SecurityProofs.Compose.SplitRateMerged",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy"
    ]
+  },
+  "Models.Accounting.Guarantees.ComposePeriod": {
+   "digest": "3c49a341422333a1155f0a78791bfffb1ad37b3a4f36c992d5d1f4784e1f568f",
+   "definitions": {
+    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "5b5307ee4c30161e8d6b54da77ba473fcbb4fcaeea6de35f6749bc0c7a0e9566"
+   },
+   "guarantees": ["Accounting.SecurityProofs.ComposePeriod.PeriodBudget"]
   },
   "Models.Accounting.Guarantees.Confidence": {
    "digest": "efce790a6464ea41d877ef6d1bf1c6db1c02c97c43a096e52b0936b6c9b035dc",
