@@ -35,7 +35,7 @@ def outputs(shapes: dict[str, tuple[int, int]], seed: int) -> dict:
 
 
 def test_the_table_domain_ids_are_row_tables():
-    for step, index, leaves in [(0, 0, 1), (9, 3, 32), (2**33 + 1, 127, 300)]:
+    for step, index, leaves in [(0, 0, 1), (9, 3, 32), (2**33 + 1, 127, 300), (5, 1000, 2**16 + 1)]:
         assert D.table_domain_id(CTX, step, index, leaves) == RT.table_domain(CTX, step, index, leaves).domain_id
 
 
@@ -44,6 +44,13 @@ def test_the_table_domain_ids_are_row_tables():
 def test_the_cpu_twin_is_the_cpu_reference(shapes, engine_step):
     outs = outputs(shapes, engine_step)
     assert D.host_step(CTX, engine_step, outs, KEY) == RTB.step_roots(CTX, engine_step, outs, KEY)
+
+
+def test_tables_that_share_one_rows_list_are_ranked_alike():
+    outs = outputs({"model.layers.0.self_attn.qkv_proj": (6, 4096), "model.layers.0.mlp.down_proj": (6, 14336)}, 5)
+    ids = outs["model.layers.0.mlp.down_proj"][0]
+    outs = {op: (ids, c, s) for op, (_ids, c, s) in outs.items()}
+    assert D.host_step(CTX, 9, outs, KEY) == RTB.step_roots(CTX, 9, outs, KEY)
 
 
 def test_the_plan_refuses_what_step_roots_refuses():
