@@ -9,7 +9,9 @@ token rows (the s8 codes, then the f32 scale): 128 tables of 32 rows at B32, 27.
 quantize outputs: each row's salt (ChaCha20 under the run's row key), its ``sha512/row-seg/v1`` digest, ``b || c`` and
 ``frame-v3-sha512`` leaf, each table's tree, and the step's tree over the table roots.  The first call is ``cold``; ``seconds`` is
 the median of the next ``--reps``.  ``workers`` > 1 forks a pool per call (``serving_rows.commit_ports``), so its time includes the
-pool's start.  Apart: the salts alone and the row digests alone, one thread.  Validation: the root equals
+pool's start.  Apart: the salts alone and the row digests alone, one thread; and the floor, one SHA-512 pass over every row's
+bytes on each worker count's threads of a pool that outlives the calls (hashlib releases the GIL on rows this long), what any
+SHA-512 commitment of these rows costs at least on this CPU.  Validation: the root equals
 ``verity.ml.commitments.row_table.commit_step``'s over the same rows and salts (the pure-Python reference).
 """
 
@@ -23,6 +25,7 @@ import platform
 import statistics
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +76,10 @@ def reference(ctx: bytes, step: int, outs: dict[str, Any], key: bytes) -> bytes:
     return RT.commit_step(ctx, step, tables).root
 
 
+def sha512_pass(pool: ThreadPoolExecutor, parts: list[list[bytes]]) -> None:
+    list(pool.map(lambda p: [hashlib.sha512(r).digest() for r in p], parts))
+
+
 def timed(f: Any) -> tuple[float, Any]:
     t0 = time.perf_counter()
     out = f()
@@ -99,11 +106,17 @@ def main(argv: list[str] | None = None) -> int:
     salts_s = statistics.median(timed(lambda: SR.step_salts(key, step, rows))[0] for _ in range(ns.reps))
     flat = [(x[b].tobytes() + s[b:b + 1].tobytes()) for _ids, x, s in outs.values() for b in range(len(x))]
     digest_s = statistics.median(timed(lambda: [sha512_row_seg_digest(r, 8 * len(r)) for r in flat])[0] for _ in range(ns.reps))
+    floor = {}
+    for w in ns.workers:
+        parts = [flat[i::w] for i in range(w)]
+        with ThreadPoolExecutor(w) as pool:
+            sha512_pass(pool, parts)
+            floor[w] = statistics.median(timed(lambda: sha512_pass(pool, parts))[0] for _ in range(ns.reps))
     ref_s, ref = timed(lambda: reference(ctx, step, outs, key))
     ok = ref == root
     summary = {"batch": ns.batch, "layers": ns.layers, "k_scale": ns.k_scale, "tables": tables, "rows": rows, "bytes_hashed": hashed,
                "root": root.hex(), "reference_root_equal": ok, "reference_s": ref_s, "salts_s": salts_s, "row_digests_s": digest_s,
-               "by_workers": by_workers}
+               "sha512_floor_s": floor, "by_workers": by_workers}
     print(json.dumps({k: v for k, v in summary.items() if k != "root"}, indent=1))
     out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
     if out:
@@ -124,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
                            "detail": "ok" if ok else f"reference root {ref.hex()[:16]}", "evidence": []},
             "measurements": [{"name": f"step_roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
             + [{"name": f"step_roots.w{w}.cold_seconds", "value": v["cold_s"], "unit": "s"} for w, v in by_workers.items()]
+            + [{"name": f"sha512_floor.w{w}.seconds", "value": v, "unit": "s"} for w, v in floor.items()]
             + [{"name": "salts.seconds", "value": salts_s, "unit": "s"}, {"name": "row_digests.seconds", "value": digest_s, "unit": "s"},
                {"name": "reference.seconds", "value": ref_s, "unit": "s"}, {"name": "rows", "value": rows, "unit": "count"},
                {"name": "bytes_hashed", "value": hashed, "unit": "bytes"},

@@ -77,7 +77,8 @@ def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_p
     assert check.valid, check.errors
     assert check.validation_status == "passed"
     got = json.loads((tmp_path / "step_root_cost.json").read_text())
-    assert got["tables"] == 8 and got["rows"] == 24 and got["reference_root_equal"] and set(got["by_workers"]) == {"1", "2"}
+    assert got["tables"] == 8 and got["rows"] == 24 and got["reference_root_equal"]
+    assert set(got["by_workers"]) == set(got["sha512_floor_s"]) == {"1", "2"}
 
 
 def test_commit_cost_tool_is_registered() -> None:
