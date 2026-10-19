@@ -425,6 +425,10 @@
   "Pouw.PearlC.pearlCTilesDevChainCap": {
    "owner": "@compute-accounting",
    "digest": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
+  },
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": {
+   "owner": "@proofs",
+   "digest": "e5c2a5e2cfb598e2208b5ea0627f7a747fec4562254dae7bb3aaabec8ecb9d73"
   }
  },
  "meaning": [
@@ -3281,6 +3285,75 @@
    "signature": ["Flock.SecurityProofs.ZeroKnowledgeHidden : Flock.Guarantees.ZeroKnowledgeHidden"],
    "assumptions": [],
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
+  },
+  "Flock.SecurityProofs.recursiveZK_os_gap": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.recursiveZK_os_gap {Ωa Ωp Ωos Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp]",
+    "  [Fintype Ωos] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] (nh : Nat) (msgs : Ωa → Ωp → Fin nh → ByteArray)",
+    "  {t : Ωos → Fin nh → Fin 192 → Fin 256}",
+    "  (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → FlockSoundness.Discharge.ZkView.Salt) → Ωo → V)",
+    "  (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ENNReal}",
+    "  (hOuter :",
+    "    ∀ (a : Ωa) (p : Ωp) (y : Fin nh → FlockSoundness.Discharge.ZkView.Salt) (E : V → Prop),",
+    "      ENNReal.instLE.le",
+    "        (FlockSoundness.Game.prCoin fun r =>",
+    "          E (view a (fun i => Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) p y r))",
+    "        (instHAdd.hAdd",
+    "          (FlockSoundness.Game.prCoin fun s => E (sim a (fun i => Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) s))",
+    "          εo))",
+    "  (E : Prod Ωa (Prod (Fin nh → ByteArray) V) → Prop) {η : ENNReal}",
+    "  (hA3 :",
+    "    ∀ (w : Prod (Prod Ωa Ωp) Ωo),",
+    "      FlockSoundness.Assumptions.UniformRandomBytesTest (fun x => 192) t",
+    "        (fun b =>",
+    "          E",
+    "            { fst := w.fst.fst,",
+    "              snd :=",
+    "                {",
+    "                  fst := fun i =>",
+    "                    Flock.Guarantees.firewallLeaf (msgs w.fst.fst w.fst.snd i)",
+    "                      (FlockSoundness.Discharge.ZkView.saltOfBytes (b i)),",
+    "                  snd :=",
+    "                    view w.fst.fst",
+    "                      (fun i =>",
+    "                        Flock.Guarantees.firewallLeaf (msgs w.fst.fst w.fst.snd i)",
+    "                          (FlockSoundness.Discharge.ZkView.saltOfBytes (b i)))",
+    "                      w.fst.snd (fun i => FlockSoundness.Discharge.ZkView.saltOfBytes (b i)) w.snd } })",
+    "        η) :",
+    "  ENNReal.instLE.le",
+    "    (FlockSoundness.Game.prCoin fun w =>",
+    "      E",
+    "        { fst := w.fst.fst.fst,",
+    "          snd :=",
+    "            {",
+    "              fst := fun i =>",
+    "                Flock.Guarantees.firewallLeaf (msgs w.fst.fst.fst w.fst.fst.snd i)",
+    "                  (FlockSoundness.Discharge.ZkView.saltOfBytes (t w.fst.snd i)),",
+    "              snd :=",
+    "                view w.fst.fst.fst",
+    "                  (fun i =>",
+    "                    Flock.Guarantees.firewallLeaf (msgs w.fst.fst.fst w.fst.fst.snd i)",
+    "                      (FlockSoundness.Discharge.ZkView.saltOfBytes (t w.fst.snd i)))",
+    "                  w.fst.fst.snd (fun i => FlockSoundness.Discharge.ZkView.saltOfBytes (t w.fst.snd i)) w.snd } })",
+    "    (instHAdd.hAdd",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (FlockSoundness.Game.prCoin fun w =>",
+    "            E",
+    "              { fst := w.fst.fst,",
+    "                snd :=",
+    "                  { fst := fun i => Flock.Guarantees.idealLeaf (w.fst.snd i),",
+    "                    snd := sim w.fst.fst (fun i => Flock.Guarantees.idealLeaf (w.fst.snd i)) w.snd } })",
+    "          εo)",
+    "        (instHMul.hMul nh.cast",
+    "          (ENNReal.ofReal",
+    "            (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My",
+    "              FlockSoundness.Discharge.ZkView.saltHash))))",
+    "      η)"
+   ],
+   "assumptions": [],
+   "type_hash": "fad6abda57759f92adfd9169f61dfc87716ee7ae83e2d94dd04300e65eecef54"
   },
   "FlockSoundness.Audit.Law.closure_escape": {
    "owner": "@proofs",
@@ -7357,7 +7430,8 @@
    "Accounting.SecurityProofs.TS.TileLuck": "lemma: the deployed tile's exponential moment at most M, n columns sharing coins and r units a column, each unit's dead mass q and alive luck p hypotheses (AM-GM over the columns and over each column's units); not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.TemplateCondition": "lemma: h1tile's segment (32 columns, words of at most 32 skipped products, a one-bit dither) meets TileLuck's condition with M = 1 at κ = 4 and r·θ = 1/256, from elementary bounds on exp; not a property of a Lean function.",
    "Accounting.SecurityProofs.TS.TemplateMoment": "lemma: TileLuck at h1tile's segment, the gain's moment at most 1 at θ = 1/(256·r) a product and κ = 4; not a property of a Lean function.",
-   "Accounting.SecurityProofs.TS.OneRegisterLowBit": "lemma: the barrier to a lower bound read off a fold's low bit, over every one-register fold of binding steps (a definition) whose steps' bit 0 is a function of the state's and the word's bits 0 (a hypothesis): the run's bit 0 is a parity of its words' bits 0; not a property of a Lean function."
+   "Accounting.SecurityProofs.TS.OneRegisterLowBit": "lemma: the barrier to a lower bound read off a fold's low bit, over every one-register fold of binding steps (a definition) whose steps' bit 0 is a function of the state's and the word's bits 0 (a hypothesis): the run's bit 0 is a parity of its words' bits 0; not a property of a Lean function.",
+   "Flock.SecurityProofs.recursiveZK_os_gap": "frozen (obligation,no-function,world-unlisted): RecursiveZK at the operating system's salts. It takes the outer proof's zero knowledge as an open obligation, as a simulation statement it has no acceptance of a function to take, and it takes A3 per test (UniformRandomBytesTest, slack eta) at the one event it bounds, a premise that isn't on the list."
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
@@ -14947,6 +15021,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -16112,6 +16187,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -16198,6 +16274,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -22797,7 +22874,8 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
-    "Flock.SecurityProofs.RecursiveZK"
+    "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.recursiveZK_os_gap"
    ]
   },
   "Proofs.Flock.Recursive.Target": {
@@ -23194,12 +23272,13 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions": {
-   "digest": "06f25db688d6aa158fb982fb9056a3ae5a90ab91e0ffa12bed7b07ac10b38783",
+   "digest": "0c4049e749038d24b2b648d788db3e19ce5886f2cdba2add287c13041753059d",
    "definitions": {
     "FlockSoundness.Assumptions.HmRowComputes": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae",
     "FlockSoundness.Assumptions.SHA512CRExpected": "cc74806f2a9d7c607d51ff5d06ac12d9f6b7c02c115f3393ef78c692014dbd64",
     "FlockSoundness.Assumptions.SHA512CRStrict": "23148408aa91625eb6d49ddd90e118326fcdee28e72e5a719a34c28cc9114562",
-    "FlockSoundness.Assumptions.UniformRandomBytes": "f1093a52c3a1f70ccfd20362bda6eca853c1be02ab43b7260f78ef5df8720b39"
+    "FlockSoundness.Assumptions.UniformRandomBytes": "f1093a52c3a1f70ccfd20362bda6eca853c1be02ab43b7260f78ef5df8720b39",
+    "FlockSoundness.Assumptions.UniformRandomBytesTest": "e5c2a5e2cfb598e2208b5ea0627f7a747fec4562254dae7bb3aaabec8ecb9d73"
    },
    "guarantees": [
     "Flock.SecurityProofs.EndToEnd",
@@ -23212,6 +23291,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -23836,6 +23916,7 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -25338,6 +25419,7 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockVBridge.colsHold_words",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.laid_recOpen",
@@ -27309,6 +27391,7 @@
     "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -27317,7 +27400,11 @@
    "definitions": {
     "FlockSoundness.Discharge.ZkView.saltOfBytes": "999d847a9ec4115a1a375867a871e6cf739bd6e95b6255c166d951892f193781"
    },
-   "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
+   "guarantees": [
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.recursiveZK_os_gap"
+   ]
   },
   "Proofs.Flock.Soundness.E2E": {
    "digest": "1db3a643205e932c92a6c046e63aff4d16da8216cccf4171d9a761b1200183d4",
@@ -27605,6 +27692,7 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",

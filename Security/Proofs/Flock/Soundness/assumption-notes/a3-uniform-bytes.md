@@ -43,10 +43,19 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
   generator is left on the salts or the masks.
 - **What is outside it.** A VM snapshot restored more than once repeats the kernel's CRNG state unless the kernel
-  reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support) or mixes in a hardware RNG.
-  For one-time pads a repeated state is total: two sessions under one pad reveal the XOR of their values. A
-  `seed-injection` build (the selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20: no
-  record from such a build is evidence for a theorem that takes A3.
+  reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). For one-time pads a
+  repeated state is total: two sessions under one pad reveal the XOR of their values.
+  - A hardware RNG doesn't close it. From 5.18 the kernel mixes RDSEED in only when it reseeds (`extract_entropy`),
+    about once a minute, and a read is the per-CPU key's ChaCha20 stream (`crng_make_state`).
+  - Our Nebius VMs (Linux 6.11 under KVM) expose no VM generation counter: there is no ACPI device for it, and
+    `vmgenid`, built as a module, isn't loaded (art:c30daddf7c7fc9e555c7bdb379e65a288388e8234e1f3d46b5479967cf5ddee0).
+    There, restoring a VM's memory more than once is outside A3. A boot from a disk image is a fresh kernel, seeded
+    anew.
+  - A read before the kernel's CRNG is seeded is outside it. Lean's runtime opens `/dev/urandom` and reads it to the
+    full count, retrying on `EINTR`, with no user-space buffer. Unlike `getrandom(2)`, that doesn't wait for the seeding
+    (the kernel logs `uninitialized urandom read`). The same nodes report `entropy_avail` 256 of 256: seeded.
+  - A `seed-injection` build (the selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20:
+    no record from such a build is evidence for a theorem that takes A3.
 - **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform (8 Oct ruling), and the
   lock's `shape.conjectures`, the one place a falsification test is recorded, holds mathematical conjectures only. What
   checks it is the citation of `io.cpp` and `random.c`, re-read at every toolchain bump and on any platform but Linux.
