@@ -114,6 +114,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   commitment with its LMS key and writes that record on its own host (`SampledProofs/ChallengerRecord.lean`). The
   verifier trusts only that commitment, read from the challenger's file under the verifier's key
   (`trusted_commitment`), never from the prover's bundle, and fails closed on a missing, malformed or unsigned record.
+  `remote` serves it on its host over TCP and logs each root it answers (`benchmarks/live_challenger`).
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
   draws from the challenger's own randomness as `two_stage.draw_first` does. `two_stage` is two-stage sampling and the
