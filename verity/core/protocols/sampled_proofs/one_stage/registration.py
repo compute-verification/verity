@@ -12,8 +12,25 @@
 * **Rule.** Everything a drawn unit's statement can depend on is fixed by the record, or by objects the verifier already
   holds, before the draw. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then draws.
-* **`window`** is provenance only. `kind` says whether the roots are what serving committed (`served`) or a fresh
-  commitment to values captured from serving (`stand-in`, whose link to the served root is provenance, not proof).
+* **The checks** (`check`): the record has exactly these keys, and
+  - R1: the format and protocol are these, the law is the verifier's own expanded over its program and query
+    (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
+  - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
+    object must be over the verifier's program);
+  - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
+  - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
+  - R5: the anchors are the verifier's;
+  - R6: `previous` is the digest of this prover's last record (null for the first), no earlier record has the same
+    window, and for a bound verifier the window names its stream and prover (Binding).
+* **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
+  %Y-%m-%dT%H:%M:%SZ>"}`, and the draw names it.
+* **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
+  to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
+  the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
+* **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what serving
+  committed (`served`) or a fresh commitment to values captured from serving (`stand-in`, whose link to the served root
+  is provenance, not proof).
 * **Served domains** (`served_domain`, agreed with vllm-serving-commit): each port's frame domain binds the program, the
   partition, the port, its schema, its leaf count and the run, so the roots can't be read as anything else.
 * **Registered values** (`verity/registration/v2`): the record adds `"registered": [{"value", "root", "leaves", "words",
@@ -22,10 +39,10 @@
   the log's earlier records registered, or to a root the verifier held before the record (`pinned`: weights recorded
   before the salt). A record registers values exactly when it is v2; v1's bytes are unchanged.
 * **Supplied values**: a registered value the verifier fills itself (`supplied`, `registered.supplied_root`: rows of the
-  record's roots, positions after the log's, its coin bound to the record's window and its own bytes, under public
-  salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the record's own, so no
-  earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a salt bound to it is
-  one salt a window.
+  record's roots, positions after the log's, its coin bound to its binding and the record's window and its own bytes,
+  under public salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the
+  record's own, so no earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a
+  salt bound to it is one salt a window.
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.

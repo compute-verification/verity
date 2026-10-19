@@ -62,3 +62,21 @@ def test_record_round_trips_into_the_planners_model():
     assert model.unit(c) == pytest.approx(TRUE["ands*drawn"] * 2_650_000, rel=1e-9) and model.source == "art:x"
     with pytest.raises(ValueError, match="cost-model/v1"):
         from_record({"kind": "other"})
+
+
+def test_every_feature_of_every_fit_reaches_the_model():
+    """A prover that pays for its staged units and a verifier that pays for the drawn ones: each feature's rate is the
+    prove coefficient plus the verify and stage ones at the price ratio."""
+    p = {"one": 7.0, "ands": 2e-7, "ands*staged": 3e-10, "ands*drawn": 4e-9}
+    v = {"one": 1.5, "ands*staged": 5e-9, "ands*drawn": 6e-8}
+    s = {"one": 2.0, "ands*staged": 8e-9}
+    obs = [Observation("z", f"K{ands}", ands, c, k, prove=sum(p[f] * o for f, o in zip(p, (1, ands, ands * c, ands * k))),
+                       verify=v["one"] + v["ands*staged"] * ands * c + v["ands*drawn"] * ands * k,
+                       stage=s["one"] + s["ands*staged"] * ands * c)
+           for ands in (5_132_800, 15_772_800) for c in (1, 8, 64, 512) for k in sorted({1, 8, 64, c}) if k <= c]
+    fitted = Fitted(fit(obs, "prove", list(p)), fit(obs, "verify", list(v)), fit(obs, "stage", list(s)), cpu=0.5)
+    model = fitted.model()
+    assert model.statement_fixed == pytest.approx(7.0 + (1.5 + 2.0) * 0.5, rel=1e-6)
+    assert model.statement_per_and == pytest.approx(2e-7, rel=1e-6)
+    assert model.staged_per_and == pytest.approx(3e-10 + (5e-9 + 8e-9) * 0.5, rel=1e-6)
+    assert model.per_and == pytest.approx(4e-9 + 6e-8 * 0.5, rel=1e-6)
