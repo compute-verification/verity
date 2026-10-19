@@ -1,7 +1,8 @@
 """`targets._authored`: a Definition is this tree's by the file of the module that defines it, so a package that moves to a new
 directory and import name stays in `REGISTERED`, and one whose module can't be judged fails by name.  `targets.root_functions`:
 every root function a binding file defines runs, the listed ones first.  `targets.definition`: a Definition-valued static in an
-id parses to the Definition it names, bound, recursively."""
+id parses to the Definition it names, bound, recursively, and a record static to the record a catalog root binds, without the
+catalog."""
 from __future__ import annotations
 
 import sys
@@ -127,3 +128,21 @@ def test_the_pouw_h1_tile_root_parses_from_its_id(monkeypatch):
     (root,) = roots
     assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
     assert TG.definition(root.id) is root
+
+
+def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeypatch):
+    """CIR-42: an id with a record static (``S={45bd63c5a436}``, a digest) looked the record up among the suite's Definitions,
+    building the whole catalog for one target.  Every catalog root whose id prints a record parses back to that root from the
+    roots alone (`targets.binding_roots`); only a digest no root binds is looked up in the suite."""
+    import re
+
+    TG.load_registries()
+    _no_catalog(monkeypatch)
+    monkeypatch.setattr(TG, "_RECORDS", {})
+    monkeypatch.setattr(TG, "_LOOKED", set())
+    roots = {fn.id: fn for fn in TG.binding_roots() if re.search(r"=\{[0-9a-f]{12}\}", getattr(fn, "id", ""))}
+    assert {"GfResiduals_v1", "Serve_v1", "StepBody_v1"} <= {fid.split("{")[0] for fid in roots}
+    for fid, fn in roots.items():
+        assert TG.definition(fid) is fn
+    with pytest.raises(pytest.fail.Exception, match="the catalog was built"):
+        TG.definition("GfResiduals_v1{S={000000000000}}")
