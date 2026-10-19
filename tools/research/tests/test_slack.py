@@ -2420,4 +2420,3 @@ def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writ
     assert slack.issue_taken("INF-1", "infra", {}) is False
     nodes[1:] = [{"botActor": None, "user": {"name": "Daniel Reuter"}, "body": "looking now"}]
     assert slack.issue_taken("INF-1", "infra", {}) is True
-
