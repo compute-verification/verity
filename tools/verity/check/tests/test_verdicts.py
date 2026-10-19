@@ -369,6 +369,22 @@ def test_a_failed_or_cancelled_checks_pack_is_gathered_and_a_running_ones_is_not
     assert V.import_(got) == (2, 0)
 
 
+def test_a_sigkilled_checks_pack_is_taken_from_its_run_record(tmp_path, monkeypatch, capsys):
+    """A cancel's SIGKILL (rc 137) leaves no result.json, so the attempt has no run files listed from it, only the run record
+    custody uploaded, which holds the pack `record` declares."""
+    check = _load("check")
+    r = _machine(tmp_path, monkeypatch, "killed")
+    _write(r["tests"] / "killed.json", "k")
+    V.export(pack := tmp_path / "killed.tar.gz")
+
+    class Killed(_Store):
+        def get_attempt(self, rid: str) -> dict:
+            return {"outputs": {"run_record": f"art:{rid}"}}
+
+    check.gather_verdicts(tmp_path / "out", Killed(tmp_path, {"r-killed": pack}, {"r-killed": "cancelled"}))
+    assert "1 entries gathered from 1 recorded checks (r-killed)" in capsys.readouterr().out
+
+
 def test_a_store_that_cant_be_read_gathers_nothing_and_says_why(tmp_path, capsys):
     check = _load("check")
 

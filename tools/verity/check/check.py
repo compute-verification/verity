@@ -136,7 +136,10 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
 
 Inside a recorded run it writes `$RESEARCH_RUN_DIR/result.json` (kind `check/v1`): each step's status, seconds and cache use,
 with each step's log beside it, and `verdicts.tar.gz`: the passes this run stored, which another machine imports with
-`--verdicts-in`.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs, failed and cancelled
+`--verdicts-in`, written again as each step ends, every few minutes and on SIGTERM (`Packs`), so a cancelled check's pack holds
+what its steps had passed.  `--record` declares it an output, so custody uploads it however the run ends: a cancel's SIGKILL
+leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
+where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.  `--record` without `--no-cache` sends one pack of the newest recorded checks' packs, failed and cancelled
 ones' too, since a pack holds only passes (`gather_verdicts`), with a
 `--verdicts-in` pack added to them, never in their place, so every machine reuses every pass a recorded check earned; the pack
 imported is named in the result's `verdicts`.
@@ -866,7 +869,7 @@ def record(argv: list[str]) -> int:
         need = [s for s in need if parts is not None and s in parts]
     # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "source"]
+           "--cwd", "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -959,12 +962,18 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     return d / "verdicts-gathered.tar.gz"
 
 
-def attempt_pack(store, rid: str, d: Path) -> Path | None:
-    """The verdict pack the attempt ``rid`` published (`verdicts.tar.gz` among its run files), fetched under ``d``, or None."""
-    art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-    if not art or not any(f["path"] == "verdicts.tar.gz" for f in store.listing(art)):
-        return None
-    return store.fetch(art, d / "verdicts" / rid, paths=["verdicts.tar.gz"]) / "verdicts.tar.gz"
+#: the packs a recorded check writes in its run dir, which `record` declares outputs
+PACK_FILES = ("verdicts.tar.gz",)
+
+
+def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Path | None:
+    """The verdict pack the attempt ``rid`` published (``name`` among its run files, or in its run record when a SIGKILL left it
+    no result.json to list them), fetched under ``d``, or None."""
+    out = (store.get_attempt(rid) or {}).get("outputs") or {}
+    for art in dict.fromkeys(a for a in (out.get("run_files"), out.get("run_record")) if a):
+        if any(f["path"] == name for f in store.listing(art)):
+            return store.fetch(art, d / "verdicts" / rid, paths=[name]) / name
+    return None
 
 
 def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
@@ -1409,17 +1418,75 @@ HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 AFTER = {j.name: j.after for j in JOBS if j.after}
 
 
-#: the signal that stopped this check (`_terminated`), and the runs' steps it stops
+#: the signal that stopped this check (`_terminated`), and the runs' steps it stops and the packs it has written now
 TERMINATED: list[str] = []
 _LIVE: "weakref.WeakSet[Steps]" = weakref.WeakSet()
+_PACKS: "weakref.WeakSet[Packs]" = weakref.WeakSet()
 
 
 def _terminated(signum: int, _frame) -> None:
-    """SIGTERM's handler: stop every run's steps from a thread of its own (one may hold their lock), so the run ends as stopped
-    and `main` still writes its result and its passes' pack."""
+    """SIGTERM's handler: write the run's pack now and stop every run's steps, each from a thread of its own (one may hold
+    their lock), so the run ends as stopped and `main` still writes its result and its passes' pack.  A cancel SIGKILLs what is
+    left 20 s after its SIGTERM (`research cancel`), which a step's own grace outlasts, so the pack written here is the one its
+    custody uploads."""
     TERMINATED.append(name := signal.Signals(signum).name)
+    for packs in list(_PACKS):
+        threading.Thread(target=packs.request, daemon=True).start()
     for steps in list(_LIVE):
         threading.Thread(target=steps.stop, args=(f"check got {name}", signal.SIGTERM), daemon=True).start()
+
+
+#: how often a run's pack is written again while its steps run, beside each step's end: pytest's suites store their passes one by
+#: one through a step of an hour, and a SIGTERM's write then reads only what they stored since
+PACK_EVERY_S = 300
+
+
+class Packs:
+    """A recorded run's verdict pack, `verdicts.tar.gz` in its run dir: what the run's steps stored (`verdicts.export` of what
+    changed since ``before``), written again by one thread of its own whenever a step ends, every `PACK_EVERY_S` and on
+    SIGTERM (`_terminated`), each time in place of the last (`os.replace`), so a check stopped at any moment leaves the passes it
+    had stored by then.  Custody uploads it whatever way the run ends: `record` declares it an output."""
+
+    def __init__(self, out: Path, before: dict[str, str]):
+        self.out, self.before = out, before
+        self.lock = threading.Lock()
+        self.want = threading.Event()
+        self.closed = False
+        self.written: dict[str, str] | None = None
+        self.entries = 0
+        self.thread = threading.Thread(target=self._loop, daemon=True, name="verdict-packs")
+        self.thread.start()
+        _PACKS.add(self)
+
+    def request(self) -> None:
+        self.want.set()
+
+    def _loop(self) -> None:
+        while not self.closed:
+            self.want.wait(PACK_EVERY_S)
+            self.want.clear()
+            if not self.closed:
+                self.write()
+
+    def write(self) -> int:
+        """Write the pack unless it holds what is new already; the number of entries it holds."""
+        with self.lock:
+            try:
+                new = VERDICTS.changed(self.before)
+                if {k: d for k, (d, _) in new.items()} != self.written:
+                    self.entries = VERDICTS.export(self.out, self.before, new)
+                    self.written = {k: d for k, (d, _) in new.items()}
+            except OSError as e:
+                print(f"check: verdicts: writing {self.out.name} failed ({type(e).__name__}: {e}); the last one written stands",
+                      flush=True)
+            return self.entries
+
+    def close(self) -> int:
+        """Stop the thread and write the pack a last time; the number of entries it holds."""
+        self.closed = True
+        self.want.set()
+        self.thread.join()
+        return self.write()
 
 
 class Steps:
@@ -1427,8 +1494,8 @@ class Steps:
     and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
     as it ends."""
 
-    def __init__(self, out: Path, keep_going: bool = False):
-        self.log, self.keep_going = out / STEPS_LOG, keep_going
+    def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None):
+        self.log, self.keep_going, self.packs = out / STEPS_LOG, keep_going, packs
         self.lock = threading.RLock()
         self.running: dict[str, subprocess.Popen] = {}
         self.stopped: set[str] = set()
@@ -1470,6 +1537,8 @@ class Steps:
             with open(self.log, "a") as f:
                 f.write(json.dumps(rec) + "\n")
             self.spans.step(rec)
+            if self.packs is not None:
+                self.packs.request()
             if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
                 self.halted = rec["step"]
                 self.stop(f"{rec['step']} failed")
@@ -1529,10 +1598,10 @@ PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept Imp
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
-        only: list[str] | None = None) -> tuple[bool, list[dict]]:
+        only: list[str] | None = None, packs: Packs | None = None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
-    steps = Steps(out, keep_going)
+    steps = Steps(out, keep_going, packs)
 
     ended: dict[str, threading.Event] = {}
     status: dict[str, str] = {}
@@ -1774,8 +1843,9 @@ def main(argv: list[str]) -> int:
     TERMINATED.clear()
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
+    packs = Packs(run_dir / "verdicts.tar.gz", before) if before is not None else None
     try:
-        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None)
+        ok, done = run(out, n, cache, keep_going, sharded["parts"] if sharded else None, packs)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)
@@ -1790,8 +1860,8 @@ def main(argv: list[str]) -> int:
         print(f"check: NONDETERMINISTIC in {c['suite']}: {', '.join(c['nondeterministic'][:5])} passed and failed under one key: "
               "delete each (a flaky test is deleted, not rerun or fixed)", flush=True)
     if run_dir is not None:
-        if before is not None:
-            verdicts["out"] = {"file": "verdicts.tar.gz", "entries": VERDICTS.export(run_dir / "verdicts.tar.gz", before)}
+        if packs is not None:
+            verdicts["out"] = {"file": "verdicts.tar.gz", "entries": packs.close()}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     if stopped_by:

@@ -139,7 +139,7 @@ def snapshot() -> dict[str, str]:
 
 
 def _write(out: Path, items) -> int:
-    """Write ``items`` ((pack path, bytes), in order) as a pack at `out`; the number written."""
+    """Write ``items`` ((pack path, bytes or a file), in order) as a pack at `out`; the number written."""
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.name + ".tmp")
     n = 0
@@ -150,8 +150,12 @@ def _write(out: Path, items) -> int:
             info = tarfile.TarInfo(k)
             info.mode, info.mtime = 0o644, 0
             if isinstance(data, Path):
-                info.size = data.stat().st_size
-                with open(data, "rb") as f:
+                try:
+                    f = open(data, "rb")
+                except FileNotFoundError:
+                    continue
+                with f:
+                    info.size = os.fstat(f.fileno()).st_size
                     tar.addfile(info, f)
             else:
                 info.size = len(data)
@@ -161,26 +165,32 @@ def _write(out: Path, items) -> int:
     return n
 
 
-def export(out: Path, since: dict[str, str] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None) as a pack at `out`; the number written.  With `since`,
-    only the new or changed entries are read (`_digests`), so a check's closing export costs what the run stored, not the
-    whole cache."""
+def changed(since: dict[str, str]) -> dict[str, tuple[str, Path]]:
+    """`{pack path: (sha256, file)}` of the entries new or changed since `since` (a `snapshot`)."""
     found = entries()
-    if since is None:
+    return {k: (d, found[k]) for k, d in _digests(found).items() if since.get(k) != d}
+
+
+def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
+    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given) as a pack at `out`;
+    the number written.  With `since`, only the new or changed entries are read (`_digests`), so a check's closing export costs
+    what the run stored, not the whole cache."""
+    if since is None and new is None:
+        found = entries()
+
         def items():
             for k, p in sorted(found.items()):
                 data = _read(p)
                 if data is not None:
                     yield k, data
     else:
-        digests = _digests(found)
+        new = changed(since) if new is None else new
 
         def items():
-            for k in sorted(digests):
-                if since.get(k) != digests[k]:
-                    data = _read(found[k])
-                    if data is not None:
-                        yield k, data
+            for k in sorted(new):
+                data = _read(new[k][1])
+                if data is not None:
+                    yield k, data
     return _write(out, items())
 
 

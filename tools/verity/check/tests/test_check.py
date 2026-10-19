@@ -402,6 +402,9 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     launched.clear()
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
     assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    head = launched[0][:launched[0].index("--")]
+    assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == list(CHECK.PACK_FILES), \
+        "custody uploads the packs however the run ends, never trimming them as undeclared"
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -799,6 +802,48 @@ def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(
     assert "verdicts.tar.gz" in doc["artifacts"] and doc["verdicts"]["out"]["entries"] == 1
     with tarfile.open(run_dir / "verdicts.tar.gz") as tar:
         assert tar.getnames() == ["tests/pkg/k1.json"]
+
+
+def test_a_runs_pack_is_written_as_each_step_ends_and_on_sigterm_before_any_step_stops(tmp_path, monkeypatch):
+    """A cancel SIGKILLs the run 20 s after its SIGTERM, before a stopped step's grace is out and `main` writes its last pack:
+    drive's cancels after landing (rc 137) left packs without the passes the run had stored.  So the pack holds a step's
+    passes once it ends, and `_terminated` writes what the steps stored since at once, from the pack's own thread."""
+    import queue
+    import signal
+    import tarfile
+    import weakref
+
+    cache = tmp_path / "tests-cache"
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(cache))
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "check-cache"))
+    monkeypatch.setattr(CHECK, "TERMINATED", [])
+    monkeypatch.setattr(CHECK, "_LIVE", weakref.WeakSet())
+    monkeypatch.setattr(CHECK, "_PACKS", weakref.WeakSet())
+    (cache / "pkg").mkdir(parents=True)
+    (cache / "pkg" / "old.json").write_text("{}")
+    wrote: queue.Queue = queue.Queue()
+
+    class Seen(CHECK.Packs):
+        def write(self):
+            wrote.put(n := super().write())
+            return n
+
+    pack = tmp_path / "run" / "verdicts.tar.gz"
+    packs = Seen(pack, CHECK.VERDICTS.snapshot())
+    steps = CHECK.Steps(tmp_path, packs=packs)
+    (cache / "pkg" / "k1.json").write_text("{}")
+    steps.end({"step": "passes", "status": "passed"})
+    assert wrote.get() == 1
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json"], "only what the run stored"
+    (cache / "pkg" / "k2.json").write_text("{}")
+    CHECK._terminated(signal.SIGTERM, None)
+    assert wrote.get() == 2
+    with tarfile.open(pack) as tar:
+        assert tar.getnames() == ["tests/pkg/k1.json", "tests/pkg/k2.json"]
+    stamp = pack.stat().st_mtime_ns
+    assert packs.close() == 2 and pack.stat().st_mtime_ns == stamp, "a pack holding what is new already isn't written again"
+    assert not packs.thread.is_alive()
 
 
 def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_path):
