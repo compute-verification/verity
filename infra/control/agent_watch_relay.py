@@ -4,7 +4,9 @@ cancelled and continued, a tool call running 45 minutes, a crashed run, a coordi
 (the Slack registry's `holder`) is named by its handle. What the watch leaves for a person (`TOP`: erroring, stuck, a refused
 cancel, held again within the hour, and a run unreadable for an hour; the first unreadable line is posted nowhere) leads with
 @top, and rings @top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
-own route can't ring it). The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes
+own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
+handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
+the doorbell also counts toward the coordinator's own ready-to-wake rule). The pod frees held runs whether or not this runs; it stops when infra's VM is suspended, and resumes
 from the offset it last posted.
 
 Each pass also writes /data/agent-watch/doorbells.json, which the watch's ready-to-wake rule reads: each open inbox's holder (the
@@ -46,21 +48,37 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "cancel_refused": "was held since {since} ({minutes} min), and the API refused to cancel it (409) and still reads it "
                          "going: left for a person (stop it in the dashboard)",
        "unreadable": "has a latest run the API won't read ({status}) since {since} ({minutes} min): left for a person",
-       "ready_to_wake": "is idle with nothing waking it: {reason}; the watch {action}"}
+       "ready_to_wake": "is idle with nothing waking it: {reason}; the watch {action}",
+       "worker_idle": "went idle at {at}; if it didn't report back, resume it with Task",
+       "worker_long": "has been ACTIVE since {since} ({hours} h); if it isn't working, stop it and resume it with Task"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
+WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 
 
 def log(msg: str) -> None:
     print(f"{time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
+def rung(rec: dict) -> str | None:
+    """The handle whose inbox the alert rings, if any."""
+    if rec.get("kind") in TOP:
+        return "top"
+    if rec.get("kind") in WORKER and rec.get("handle") in {h["handle"] for h in REG.get("handles") or []}:
+        return rec["handle"]
+    return None
+
+
 def text(rec: dict) -> str:
+    link = f"<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>"
+    line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
+                                                         "reason": "?", "status": "?", "at": "?", "hours": "?", **rec})
+    lead = f"{slack.tag(slack.entry(REG, to))} " if (to := rung(rec)) else ""
+    if rec.get("kind") in WORKER:
+        lane = f" of lane {rec['lane']}" if rec.get("lane") else ""
+        return f"{lead}*Agent watch:* worker {rec.get('name') or '(unnamed)'} ({link}){lane} {line}."
     handle = rec.get("handle") or HOLDERS.get(rec.get("agent"))
     who = f"@{handle}'s coordinator" if handle else (rec.get("name") or "an agent")
-    line = SAY.get(rec.get("kind"), "{kind}").format(**{"since": "?", "minutes": "?", "action": "recorded it", "restarts": "?",
-                                                         "reason": "?", "status": "?", **rec})
-    top = f"{slack.tag(slack.entry(REG, 'top'))} " if rec.get("kind") in TOP else ""
-    return (f"{top}*Agent watch:* {who} (<https://cursor.com/agents/{rec.get('agent')}|{rec.get('agent')}>, run {rec.get('run')}) {line}."
+    return (f"{lead}*Agent watch:* {who} ({link}, run {rec.get('run')}) {line}."
             + (f" New run {rec['new_run']}." if rec.get("new_run") else ""))
 
 
@@ -69,11 +87,11 @@ def pod(cmd: str, data: str | None = None) -> str:
                           check=True).stdout
 
 
-def ring(api: slack.Slack, ts: str, post: str) -> None:
-    """Ring @top's inbox thread with the alert posted at `ts`, as a doorbell its reader acts on without another read."""
-    to, r = slack.Routes().resolve("top")
+def ring(api: slack.Slack, ts: str, post: str, name: str = "top") -> None:
+    """Ring `name`'s inbox thread with the alert posted at `ts`, as a doorbell its reader acts on without another read."""
+    to, r = slack.Routes().resolve(name)
     if not r or r.get("closed"):
-        log("@top has no open inbox: the alert stands in #agent-alerts, unrung")
+        log(f"@{name} has no open inbox: the alert stands in #agent-alerts, unrung")
         return
     body = f"{post} {slack.permalink(REG, ALERTS, ts)}"
     api.call("chat.postMessage", channel=r.get("channel") or slack.channel_id_for(REG, slack.FRONT_DOOR), thread_ts=r["inbox_ts"],
@@ -117,16 +135,18 @@ def once() -> None:
             rec = {"kind": "garbled", "agent": "?", "run": "?"}
         if rec.get("kind") == "unreadable" and not rec.get("since"):   # a goal run's id, often brief: posted if it lasts
             pass
+        elif rec.get("kind") == "ready_to_wake" and "409" in str(rec.get("action", "")):
+            pass    # Cursor refuses a run on an agent waiting on background work; an hourly post of that changes nothing
         elif DRY:
-            log(f"would post: {text(rec)}" + (" and ring @top" if rec.get("kind") in TOP else ""))
+            log(f"would post: {text(rec)}" + (f" and ring @{to}" if (to := rung(rec)) else ""))
         else:
             api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"))
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
-            if rec.get("kind") in TOP:
+            if to := rung(rec):
                 try:
-                    ring(api, ts, post)
+                    ring(api, ts, post, to)
                 except slack.SlackError as e:       # the alert is posted: posting it again would post it twice
-                    log(f"posted, but @top not rung: {e}")
+                    log(f"posted, but @{to} not rung: {e}")
         done += 1
         OFFSET.parent.mkdir(parents=True, exist_ok=True)
         OFFSET.write_text(str(done))

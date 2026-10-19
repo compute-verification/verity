@@ -52,6 +52,16 @@ watch records it at most once per agent an hour, kept in `state.json`, and with 
 refused with 409 agent_busy is recorded and counts as the hour's (zombie CREATING runs kept memory-accounting busy for hours).
 `--wake` stays off by default.
 
+A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
+400 legacy workflow), so only its coordinator can resume it; on 18 Oct all 20 of proofs' workers stopped mid-step 20:06-20:47Z
+and nobody noticed until 23:08Z. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
+under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
+launched_by}`, for a coordinator that registers its workers), minus the coordinators and every agent the list has. Each sweep
+it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep; one IDLE for `WORKER_IDLE_S` only when a
+note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
+at its `updatedAt`, which moves on a status change and not during work) and **worker_long** once when it has been ACTIVE for
+`--worker-long-h` (6). It records only; the relay rings the lane's handle.
+
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
@@ -122,7 +132,12 @@ AGENT_STATUSES = ("ACTIVE", "IDLE", "ARCHIVED", "unknown")
 RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED", "ERROR", "CANCELLED", "EXPIRED", "unreadable",
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
-                "crashed", "erroring", "unreadable", "ready_to_wake")
+                "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long")
+WORKER_NOTES_S = 12 * 3600      # a note modified this recently names its author as a worker to watch
+WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only when a note of its changes
+WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-long-h)
+WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
+WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 
 
 def iso(t: float) -> str:
@@ -154,6 +169,57 @@ def holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
         m = AGENT_RE.fullmatch(str(r.get("holder") or "")) if not r.get("closed") else None
         if m := m or AGENT_RE.search(str(h.get("holder", ""))):
             out[m[0]] = h["handle"]
+    return out
+
+
+def front_matter(p: Path) -> dict[str, str]:
+    """A note's YAML front-matter, its `key: value` lines only (all a note's origin and lane need)."""
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            head = f.read(8192)
+    except OSError:
+        return {}
+    if not head.startswith("---\n") or (end := head.find("\n---", 4)) < 0:
+        return {}
+    out = {}
+    for line in head[4:end].splitlines():
+        k, sep, v = line.partition(":")
+        if sep and k.strip() and not k.startswith((" ", "-")):
+            out.setdefault(k.strip(), v.strip().strip("'\""))
+    return out
+
+
+def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
+    """agent id -> {"lane", "handle", "heard"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't list) named
+    by `workers_d/*.json` (`{agent_id, lane, launched_by}`, which a coordinator writes for the workers it launches) or by the
+    `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the coordinators (`coords`). Its
+    handle is its launcher's (`launched_by`), else its lane's when the lane is a handle, else that of a coordinator its note's
+    origin names (`started by proofs bc-...`); `heard` is the newest such file's mtime."""
+    names = {str(h.get("handle")) for h in read_json(registry).get("handles") or []}
+    out: dict[str, dict] = {}
+
+    def add(agent: str, lane: str, handle: str | None, heard: float) -> None:
+        w = out.setdefault(agent, {"lane": lane, "handle": handle, "heard": heard})
+        w["lane"], w["handle"], w["heard"] = w["lane"] or lane, w["handle"] or handle, max(w["heard"], heard)
+
+    for p in sorted(workers_d.glob("*.json")) if workers_d.is_dir() else []:
+        d = read_json(p)
+        if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
+            lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
+            add(m[0], lane, (coords.get(by[0]) if by else None) or (lane if lane in names else None), p.stat().st_mtime)
+    for p in sorted((notes / "lanes").glob("*/*.md")) if notes else []:
+        try:
+            heard = p.stat().st_mtime
+        except OSError:
+            continue
+        if t - heard >= WORKER_NOTES_S:
+            continue
+        fm = front_matter(p)
+        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
+        launcher = next((coords[i] for i in ids if i in coords), None)
+        for agent in ids:
+            if agent not in coords:
+                add(agent, lane, lane if lane in names else launcher, heard)
     return out
 
 
@@ -277,8 +343,11 @@ def lock(path: Path) -> IO | None:
 
 class Watch:
     def __init__(self, api, log: Path, clock: Callable[[], float] = time.time, registry: Path | None = None,
-                 routes: Path | None = None, wake: bool = False, publish: Callable[[bytes, float], None] | None = None):
+                 routes: Path | None = None, wake: bool = False, publish: Callable[[bytes, float], None] | None = None,
+                 notes: Path | None = None, worker_long_s: float = WORKER_LONG_S):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
+        self.notes, self.worker_long_s = notes, worker_long_s
+        self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
         self.registry, self.routes = registry, routes
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -296,6 +365,7 @@ class Watch:
         self.pending: dict[str, dict] = s.get("pending", {})      # agent -> a continue run the API refused, tried again
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
         self.woken: dict[str, float] = s.get("woken", {})         # agent -> when the watch last recorded it ready to wake
+        self.workers: dict[str, dict] = s.get("workers", {})      # worker -> lane, handle, status, updated, since, read, ...
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
 
     def save(self) -> None:
@@ -304,7 +374,8 @@ class Watch:
         self.woken = {k: v for k, v in self.woken.items() if v >= t - RECANCEL_S}
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"freed": self.freed, "errors": self.errors, "left": sorted(self.left),
-                                   "pending": self.pending, "done": self.done, "woken": self.woken}) + "\n")
+                                   "pending": self.pending, "done": self.done, "woken": self.woken,
+                                   "workers": self.workers}) + "\n")
         tmp.replace(self.state_path)
 
     def record(self, kind: str, r: Run, **detail) -> None:
@@ -548,6 +619,61 @@ class Watch:
             runs = [info]
         return runs + [x for x in listed if x.get("id") not in {y["id"] for y in runs}]
 
+    def watch_workers(self, coords: dict[str, str], listed: set[str], t: float) -> None:
+        """Read each known worker (`GET /v1/agents/{id}`, at most once a sweep): record `worker_idle` when it went from ACTIVE
+        to IDLE, and `worker_long` once when it has been ACTIVE `worker_long_s`. A worker has no runs the API lists and can't
+        be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch records, never acts."""
+        before = json.dumps(self.workers, sort_keys=True)
+        for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
+            w = self.workers.setdefault(agent, {"heard": 0.0})
+            w.update(lane=d["lane"] or w.get("lane") or "", handle=d["handle"] or w.get("handle"),
+                     heard=max(w["heard"], d["heard"]))
+        self.worker_status, new = {}, 0
+        for agent, w in sorted(self.workers.items()):
+            if agent in listed or agent in coords:              # an agent the sweep reads already, or a coordinator now
+                self.workers.pop(agent)
+                continue
+            idle_long = w.get("status") == "IDLE" and t - w.get("updated", t) >= WORKER_IDLE_S
+            if w.get("gone") or (idle_long and w["heard"] <= w.get("read", 0)):
+                continue
+            if "read" not in w:
+                if new >= WORKERS_NEW:
+                    continue
+                new += 1
+            w["read"] = t
+            try:
+                info = self.api.get(f"/v1/agents/{agent}")
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    w["gone"] = True
+                print(f"{iso(t)} worker {agent}: HTTP {e.code}" + ("; not read again" if e.code == 404 else ""),
+                      file=sys.stderr, flush=True)
+                continue
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                print(f"{iso(t)} worker {agent}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+                continue
+            status, updated, prev = str(info.get("status") or "unknown"), epoch(info.get("updatedAt")) or t, w.get("status")
+            w.update(status=status, updated=updated, name=str(info.get("name") or w.get("name") or ""))
+            self.worker_status[agent] = status
+            r = Run(agent, "", w["name"])
+            detail = {"lane": w["lane"], **({"handle": w["handle"]} if w.get("handle") else {})}
+            if status == "ACTIVE":
+                if prev != "ACTIVE":                            # updatedAt moves on a status change, not during work
+                    w["since"], w["long"] = updated, False
+                if not w["long"] and t - w["since"] >= self.worker_long_s:
+                    w["long"] = True
+                    self.record("worker_long", r, since=iso(w["since"]), hours=int((t - w["since"]) // 3600), **detail)
+            elif status == "IDLE" and prev == "ACTIVE":
+                w["idle_at"] = updated
+                self.record("worker_idle", r, at=iso(updated), since=iso(updated), **detail)
+            elif status == "ARCHIVED":
+                w["gone"] = True
+        for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
+                      and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
+            self.workers.pop(agent)
+        if json.dumps(self.workers, sort_keys=True) != before:
+            self.save()
+
     def sweep(self, start_stream: Callable[[Run], None]) -> None:
         """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
         start refused continue runs, then judge every followed run."""
@@ -607,6 +733,7 @@ class Watch:
             last = max((x for x in (epoch(info.get("updatedAt") or info.get("createdAt")), heard) if x is not None), default=None)
             if why := self.ready(info.get("status"), last, bells.get(handle), t):
                 self.wake_up(a, handle, run, why, t)
+        self.watch_workers(coords, {a["id"] for a in agents}, t)
         for run, (a, x) in current.items():
             with self.lock:
                 r = self.runs.get(run)
@@ -648,7 +775,9 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
     prompt, error text, branch or Slack identity), keyed in `live` by the run the watch judges it by (the run it follows, else
     its newest run that started or is CREATING, else its latest). `watch_state` is the last finding on that run (a long call
     only while it lasts), else `followed` or `ok`; `since` is when that finding began; `run_status` is the run's status when
-    the watch last read it. A value outside the pinned enums raises, so the last valid file stays."""
+    the watch last read it. A worker the sweep read is a row too, with no run (`run_id` "", `run_status` unknown): its
+    `watch_state` is `worker_idle` while idle after the watch saw it ACTIVE, `worker_long` while that long spell lasts, else
+    `ok`. A value outside the pinned enums raises, so the last valid file stays."""
     agents = []
     for run, a in live.items():
         agent, r = a["id"], w.runs.get(run)
@@ -664,6 +793,12 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
             raise ValueError(f"status.json: watch state {state!r} is not one of WATCH_STATES; add it there")
         agents.append({"agent_id": agent, "run_id": run, "agent_status": agent_status, "run_status": run_status,
                        "watch_state": state, "since": since, "restart_count": int(w.errors.get(agent, 0))})
+    for agent, status in w.worker_status.items():
+        k = w.workers.get(agent, {})
+        state, since = (("worker_idle", iso(k["idle_at"])) if status == "IDLE" and k.get("idle_at") is not None else
+                        ("worker_long", iso(k["since"])) if status == "ACTIVE" and k.get("long") else ("ok", None))
+        agents.append({"agent_id": agent, "run_id": "", "agent_status": status if status in AGENT_STATUSES else "unknown",
+                       "run_status": "unknown", "watch_state": state, "since": since, "restart_count": 0})
     return {"schema": SCHEMA, "t": iso(t), "poll_s": POLL_S, "agents": sorted(agents, key=lambda e: e["agent_id"])}
 
 
@@ -782,6 +917,8 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--wake", action="store_true", help="start a run on a coordinator ready to wake (default: record it only)")
     lp.add_argument("--once", action="store_true", help="one sweep, following no stream")
     lp.add_argument("--dry-run", action="store_true", help="send no POST; print each instead")
+    lp.add_argument("--notes", type=Path, default=None, help="a research-notes clone: its recent notes' origins name workers")
+    lp.add_argument("--worker-long-h", type=float, default=WORKER_LONG_S / 3600, help="hours ACTIVE before a worker is recorded")
     ns = ap.parse_args(argv)
     key = os.environ.get("CURSOR_API_KEY")
     if not key:
@@ -801,7 +938,8 @@ def main(argv: list[str] | None = None) -> int:
     if url := os.environ.get("AGENT_WATCH_PG_URL"):
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
-    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, wake=ns.wake, publish=publish)
+    watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, wake=ns.wake, publish=publish, notes=ns.notes,
+                  worker_long_s=ns.worker_long_h * 3600)
     if ns.once:
         watch.sweep(lambda r: None)
         return 0

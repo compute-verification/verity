@@ -12,11 +12,15 @@ RELAY = Path(__file__).resolve().parents[2] / "control" / "agent_watch_relay.py"
 TOP_INBOX = {"name": "top", "holder": "bc-af075d78-d5b9-590b-acbb-eb47d6f88f39", "inbox_ts": "1760000000.000100", "closed": None}
 
 
+PROOFS_INBOX = {"name": "proofs", "holder": "bc-11111111-1111-1111-1111-111111111111", "inbox_ts": "1760000000.000200",
+                "closed": None}
+
+
 class Routes:
     route = dict(TOP_INBOX)
 
     def resolve(self, name):
-        return name, (self.route if name == "top" else None)
+        return name, {"top": self.route, "proofs": PROOFS_INBOX}.get(name)
 
 
 class Api:
@@ -120,3 +124,40 @@ def test_no_open_top_inbox_rings_nothing(relay, monkeypatch):
     relay.log_text["text"] = line("run-e", "erroring", restarts=3) + "\n"
     relay.once()
     assert len(relay.posts) == 1 and rings(relay) == []
+
+
+def test_a_stopped_worker_leads_with_its_lanes_handle_and_rings_that_inbox(relay):
+    """Only the coordinator that launched a worker can resume it (Task): the watch can't start a worker's run."""
+    proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
+    w = "bc-22222222-2222-2222-2222-222222222222"
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "worker_idle", "agent": w, "name": "ZKS10", "run": "", "lane": "proofs", "handle": "proofs",
+         "at": "2026-10-18T20:06:00Z", "since": "2026-10-18T20:06:00Z"},
+        {"kind": "worker_long", "agent": w, "name": "W3", "run": "", "lane": "proofs", "handle": "proofs",
+         "since": "2026-10-18T19:31:00Z", "hours": 6}]) + "\n"
+    relay.once()
+    assert relay.posts == [
+        f"{proofs} *Agent watch:* worker ZKS10 (<https://cursor.com/agents/{w}|{w}>) of lane proofs went idle at "
+        "2026-10-18T20:06:00Z; if it didn't report back, resume it with Task.",
+        f"{proofs} *Agent watch:* worker W3 (<https://cursor.com/agents/{w}|{w}>) of lane proofs has been ACTIVE since "
+        "2026-10-18T19:31:00Z (6 h); if it isn't working, stop it and resume it with Task."]
+    ring = rings(relay)
+    assert [r["thread_ts"] for r in ring] == [PROOFS_INBOX["inbox_ts"]] * 2
+    assert relay.slack.DOORBELL_RE.match(ring[0]["text"])[1] == "infra" and "ZKS10" in ring[0]["text"]
+
+
+def test_a_worker_with_no_handle_is_posted_in_the_channel_only(relay):
+    relay.log_text["text"] = json.dumps({"kind": "worker_idle", "agent": "bc-x", "name": "H1", "run": "", "lane": "hash",
+                                         "at": "2026-10-18T20:06:00Z"}) + "\n"
+    relay.once()
+    assert relay.posts == ["*Agent watch:* worker H1 (<https://cursor.com/agents/bc-x|bc-x>) of lane hash went idle at "
+                           "2026-10-18T20:06:00Z; if it didn't report back, resume it with Task."] and rings(relay) == []
+
+
+def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
+    """Cursor answers 409 for an agent waiting on background work, every hour the watch tries; the post would say nothing new."""
+    relay.log_text["text"] = "\n".join([
+        line("run-w", "ready_to_wake", handle="vllm", reason="nothing has run for 40 min", action="refused: HTTP 409 (busy)"),
+        line("run-v", "ready_to_wake", handle="vllm", reason="nothing has run for 40 min", action="started run-z")]) + "\n"
+    relay.once()
+    assert len(relay.posts) == 1 and "run-v" in relay.posts[0] and relay.OFFSET.read_text() == "2"
