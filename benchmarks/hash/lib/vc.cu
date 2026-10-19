@@ -10,6 +10,7 @@
 //     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
 //   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit;
 //     rows take one launch with their digests in shared memory, as hash_h3.cuh's s512_rows (benchmarks/pouw/pearl_c) does.
+// The device functions and the plan's builders are vc_device.cuh's, header only, for kernels of other libraries to call.
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -17,21 +18,17 @@
 #include <vector>
 
 #include "vc.h"
-#include "../../pouw/commit_gpu/sha512.cuh"
+#include "vc_device.cuh"
 
 namespace {
 
-using u64 = uint64_t;
-using u32 = uint32_t;
+using namespace vc;
 #define DEV __device__ __forceinline__
 
 constexpr u32 MAGIC = 0x76630001u;   // "vc", ABI 1
-constexpr int MAX_NB = 4;            // positions and node indices below 2^32
-constexpr int LEVELS = 33;
 constexpr int THREADS = 256;
 constexpr int NODE_THREADS = 256;
 constexpr int T8_BYTES = 256 * 17 * 16;
-constexpr int TN_BYTES = 8192;
 constexpr int SEG = 1024;
 constexpr int MAX_SEGS = 1024;       // a row-seg row of at most 1 MiB
 constexpr int REC = 192;             // a salt record: M_key y (64), c (64), the frame leaf's first block (64)
@@ -39,28 +36,6 @@ constexpr int REC = 192;             // a salt record: M_key y (64), c (64), the
 #define VC_LEAF_MIN_BLOCKS 2
 #endif
 
-struct LeafK {
-  u64 mid_P[8];                      // after P(l) (row/v2)
-  u64 kw_xpad[80];                   // row/v2 with l a multiple of 1024: its all-padding last block, scheduled
-  u64 mid_salt[8];                   // after the salt prefix
-  u64 mid_leaf[8];                   // after leaf_prefix(key)
-  u64 ks[8];                         // PRF: the salt key
-  u64 ks_m8[8];                      // PRF: state after rounds 0..7 of a salt block (its words 0..7 are the key)
-  u32 cc_key[8];                     // ChaCha20: the key
-  u32 cc_w13, cc_w14, cc_w15, cc_ctr64;
-  u64 fl_m15[8];                     // state after rounds 0..14 of the frame leaf's first block (words 0..14 don't depend on pos)
-  u64 kw_leafpad[80];                // the hm96 leaf's padding block, scheduled
-  u64 fl_tpl[MAX_NB][32];            // the frame leaf's two blocks per nb = len(uint(pos)) (index nb - 1), pos and value zero
-  u64 pad_tpl[MAX_NB][16];           // a pad's first block per nb, rank zero
-  u32 lb;                            // row bytes (row/v2)
-  u32 salt_src;
-  u32 sx;                            // schema length - 18
-  u32 xpad;                          // kw_xpad applies (lb % 128 == 0)
-};
-struct NodeK {
-  u64 node_mid[LEVELS][8];           // per level: the chaining value after a node message's first block (it fixes only the level)
-  u64 node_tpl[MAX_NB][32];          // a node message's blocks 2 and 3 per ni = len(uint(index)), index and children zero
-};
 struct RowK {
   u64 mid_P[8];                      // row/v2: after P(l)
   u64 kw_xpad[80];                   // row/v2: the all-padding last block (lb % 128 == 0)
@@ -97,510 +72,6 @@ struct Plan {
   u32 has_seed;
 };
 
-DEV u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
-DEV u64 be64(u32 lo, u32 hi) { return (u64)bswap32(lo) << 32 | bswap32(hi); }   // 8 bytes loaded as two LE u32
-DEV int nbytes(u64 x) { int n = 1; while (x >> (8 * n) && n < 8) ++n; return n; }
-DEV uint4 ldg16(const uint8_t* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
-
-DEV void cpy8(u64* d, const u64* s) {
-#pragma unroll
-  for (int i = 0; i < 8; ++i) d[i] = s[i];
-}
-// n words from / to digest byte order
-DEV void ld_be(const uint8_t* p, u64* d, int n) {
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i) {
-    const uint4 v = ldg16(p + 16 * i);
-    d[2 * i] = be64(v.x, v.y);
-    d[2 * i + 1] = be64(v.z, v.w);
-  }
-}
-// ld_be with ordinary loads, for what this launch wrote before a barrier
-DEV void ld_be_written(const uint8_t* p, u64* d, int n) {
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i) {
-    const uint4 v = reinterpret_cast<const uint4*>(p)[i];
-    d[2 * i] = be64(v.x, v.y);
-    d[2 * i + 1] = be64(v.z, v.w);
-  }
-}
-// ld_be through L2 only, for what another CTA of this launch wrote before a fence
-DEV void ld_be_cg(const uint8_t* p, u64* d, int n) {
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i) {
-    const uint4 v = __ldcg(reinterpret_cast<const uint4*>(p) + i);
-    d[2 * i] = be64(v.x, v.y);
-    d[2 * i + 1] = be64(v.z, v.w);
-  }
-}
-DEV void st_be(uint8_t* p, const u64* d, int n) {
-  uint4* o = reinterpret_cast<uint4*>(p);
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i)
-    o[i] = make_uint4(bswap32((u32)(d[2 * i] >> 32)), bswap32((u32)d[2 * i]), bswap32((u32)(d[2 * i + 1] >> 32)), bswap32((u32)d[2 * i + 1]));
-}
-// native words (scratch): 16-byte vector loads and stores
-DEV void ld_w(const u64* p, u64* d, int n) {
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i) {
-    const ulonglong2 v = __ldg(reinterpret_cast<const ulonglong2*>(p) + i);
-    d[2 * i] = v.x;
-    d[2 * i + 1] = v.y;
-  }
-}
-DEV void st_w(u64* p, const u64* d, int n) {
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i) reinterpret_cast<ulonglong2*>(p)[i] = make_ulonglong2(d[2 * i], d[2 * i + 1]);
-}
-
-// OR the low NB bytes of v, big-endian, into the message words W at byte offset OFF.
-template <int OFF, int NB>
-DEV void or_be(u64* W, u64 v) {
-  constexpr int END = OFF + NB, K = (END - 1) / 8, SH = 8 * (7 - (END - 1) % 8);
-  W[K] |= v << SH;
-  if constexpr (OFF < 8 * K) W[K - 1] |= v >> (64 - SH);
-}
-// OR a digest (8 words) into W at byte offset OFF.
-template <int OFF>
-DEV void or_digest(u64* W, const u64* d) {
-  constexpr int K0 = OFF / 8, S = 8 * (OFF % 8);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    if constexpr (S == 0) {
-      W[K0 + i] |= d[i];
-    } else {
-      W[K0 + i] |= d[i] >> S;
-      W[K0 + i + 1] |= d[i] << (64 - S);
-    }
-  }
-}
-
-#define VC_BY_LEN(v, F, ...)          \
-  switch (nbytes(v)) {                \
-    case 1: F<1>(__VA_ARGS__); break; \
-    case 2: F<2>(__VA_ARGS__); break; \
-    case 3: F<3>(__VA_ARGS__); break; \
-    default: F<4>(__VA_ARGS__); break; \
-  }
-
-// --- the frame: leaf (its two blocks), pad, node ---------------------------------------------------------------------
-// leaf message: frame (33) || u32be(4) || "leaf" || u64be(64) || did || u64be(nb) || pos || u64be(nb) || pos || u64be(S) ||
-// schema || u64be(64) || value: pos at 121 and 129 + nb, the value at 145 + 2 nb + S, S = 18 + SX.
-template <int NB>
-DEV void frame_first_nb(const LeafK& K, u64 pos, u64* out) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[NB - 1][i];
-  or_be<121, NB>(W, pos);
-  sha::iv(out);
-  sha::compress_from<15>(out, K.fl_m15, W);
-}
-DEV void frame_first(const LeafK& K, u64 pos, u64* out) { VC_BY_LEN(pos, frame_first_nb, K, pos, out) }
-
-template <int SX, int NB>
-DEV void frame_second_nb(const LeafK& K, u64 pos, const u64* v, u64* st) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[NB - 1][16 + i];
-  or_be<1 + NB, NB>(W, pos);
-  or_digest<35 + 2 * NB + SX>(W, v);
-  sha::compress(st, W);
-}
-template <int SX>
-DEV void frame_second(const LeafK& K, u64 pos, const u64* v, u64* st) {
-  switch (nbytes(pos)) {
-    case 1: frame_second_nb<SX, 1>(K, pos, v, st); break;
-    case 2: frame_second_nb<SX, 2>(K, pos, v, st); break;
-    case 3: frame_second_nb<SX, 3>(K, pos, v, st); break;
-    default: frame_second_nb<SX, 4>(K, pos, v, st); break;
-  }
-}
-template <int SX>
-DEV void frame_leaf(const LeafK& K, u64 pos, const u64* v, u64* out) {
-  frame_first(K, pos, out);
-  frame_second<SX>(K, pos, v, out);
-}
-
-template <int NB>
-DEV void pad_nb(const LeafK& K, u64 rank, u64* out) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.pad_tpl[NB - 1][i];
-  or_be<120, NB>(W, rank);
-  sha::iv(out);
-  sha::compress(out, W);
-#pragma unroll
-  for (int i = 0; i < 15; ++i) W[i] = 0;
-  W[15] = (120 + NB) * 8;
-  sha::compress(out, W);
-}
-DEV void pad(const LeafK& K, u64 rank, u64* out) { VC_BY_LEN(rank, pad_nb, K, rank, out) }
-
-// The frame leaf's blocks and the pad with nb = len(uint(pos)) read at run time, one compression body each instead of one a
-// length (k_leaf_spec, whose two kinds of warp run different code at once). For nb <= 4 pos lands in word 15 of the leaf's
-// first block (or_be<121, nb>) and of the pad's (or_be<120, nb>), across words 0 and 1 of the leaf's second (or_be<1 + nb,
-// nb>), and the value in words 4.. or 5.. of it at a shift that is never 0 (or_digest<35 + 2 nb + SX>).
-DEV void frame_first_rt(const LeafK& K, u64 pos, u64* out) {
-  const int nb = min(nbytes(pos), MAX_NB);
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[nb - 1][i];
-  W[15] |= pos << (8 * (7 - nb));
-  sha::iv(out);
-  sha::compress_from<15>(out, K.fl_m15, W);
-}
-template <int K0>
-DEV void or_digest_s(u64* W, const u64* d, int S) {
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    W[K0 + i] |= d[i] >> S;
-    W[K0 + i + 1] |= d[i] << (64 - S);
-  }
-}
-template <int SX>
-DEV void frame_second_rt(const LeafK& K, u64 pos, const u64* v, u64* st) {
-  const int nb = min(nbytes(pos), MAX_NB), off = 35 + 2 * nb + SX, sh = 8 * (15 - 2 * nb);
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[nb - 1][16 + i];
-  if (sh >= 64) {
-    W[0] |= pos << (sh - 64);
-  } else {
-    W[0] |= pos >> (64 - sh);
-    W[1] |= pos << sh;
-  }
-  if ((off >> 3) == 4) or_digest_s<4>(W, v, 8 * (off & 7));
-  else or_digest_s<5>(W, v, 8 * (off & 7));
-  sha::compress(st, W);
-}
-DEV void pad_rt(const LeafK& K, u64 rank, u64* out) {
-  const int nb = min(nbytes(rank), MAX_NB);
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.pad_tpl[nb - 1][i];
-  W[15] |= rank << (8 * (8 - nb));
-  sha::iv(out);
-#pragma unroll 1
-  for (int k = 0; k < 2; ++k) {
-    sha::compress(out, W);
-#pragma unroll
-    for (int i = 0; i < 15; ++i) W[i] = 0;
-    W[15] = (120 + nb) * 8;
-  }
-}
-
-template <int NI>
-DEV void node_ni(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  u64 W[32];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) W[i] = N.node_tpl[NI - 1][i];
-  or_be<2, NI>(W, index);
-  or_digest<10 + NI>(W, L);
-  or_digest<82 + NI>(W, R);
-  cpy8(out, N.node_mid[level]);
-  sha::compress(out, W);
-  sha::compress(out, W + 16);
-}
-DEV void node(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  VC_BY_LEN(index, node_ni, N, level, index, L, R, out)
-}
-
-// sharaw's compress_compact: one 16-round body for all 80 rounds (rounds 0..15 take the message word where later rounds take
-// the schedule's), so a fold whose CTA has mostly idle warps waits on instruction fetch less.
-DEV void compress_compact(u64* st, const u64* m) {
-  u64 w[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = m[i];
-  u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
-#pragma unroll 1
-  for (int j = 0; j < 80; j += 16) {
-#pragma unroll
-    for (int i = 0; i < 16; ++i) {
-      const u64 sch = sha::add3(sha::add(sha::s1(w[(i - 2) & 15]), w[(i - 7) & 15]), sha::s0(w[(i - 15) & 15]), w[i]);
-      const u64 wi = j ? sch : w[i];
-      w[i] = wi;
-      const u64 t1 = sha::add3(h, sha::S1(e), sha::ch(e, f, g));
-      const u64 t1b = sha::add3(t1, sha::SHA_K_TABLE[j + i], wi);
-      const u64 mj = sha::maj(a, b, c);
-      h = g; g = f; f = e; e = sha::add(d, t1b);
-      d = c; c = b; b = a; a = sha::add3(t1b, sha::S0(b), mj);
-    }
-  }
-  st[0] = sha::add(st[0], a); st[1] = sha::add(st[1], b); st[2] = sha::add(st[2], c); st[3] = sha::add(st[3], d);
-  st[4] = sha::add(st[4], e); st[5] = sha::add(st[5], f); st[6] = sha::add(st[6], g); st[7] = sha::add(st[7], h);
-}
-// node_ni with ni read at run time (sharaw's node_rt): for ni <= 4 the index and both children land in the same words as
-// or_be<2, ni> and or_digest<10 + ni>, <82 + ni> put them, and only the shifts depend on ni, so one compression body serves
-// every length and both blocks. COMPACT: through compress_compact, else sha::compress.
-template <bool COMPACT>
-DEV void node_rt(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  const int ni = min(nbytes(index), MAX_NB), S = 8 * (2 + ni);
-  u64 W[32];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) W[i] = N.node_tpl[ni - 1][i];
-  W[0] |= index << (8 * (6 - ni));
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    W[1 + i] |= L[i] >> S;
-    W[2 + i] |= L[i] << (64 - S);
-    W[10 + i] |= R[i] >> S;
-    W[11 + i] |= R[i] << (64 - S);
-  }
-  cpy8(out, N.node_mid[level]);
-#pragma unroll 1
-  for (int k = 0; k < 2; ++k) {
-    u64 w[16];
-#pragma unroll
-    for (int i = 0; i < 16; ++i) w[i] = k ? W[16 + i] : W[i];
-    if constexpr (COMPACT) compress_compact(out, w);
-    else sha::compress(out, w);
-  }
-}
-
-// --- hashing bytes -------------------------------------------------------------------------------------------------
-
-// SHA-512 from chaining value cv after `pre` bytes (whole blocks) over lb bytes at p (16-byte aligned; the loads may run up to
-// 15 bytes past p + lb). kw: when lb % 128 == 0, the scheduled all-padding last block for pre + lb bytes, or null.
-DEV void hash_tail(const u64* cv, u64 pre, const uint8_t* p, u32 lb, u64* x, const u64* kw) {
-  cpy8(x, cv);
-  const u32 full = lb / 128;
-#pragma unroll 1
-  for (u32 b = 0; b < full; ++b) {
-    u64 W[16];
-#pragma unroll
-    for (int c = 0; c < 8; ++c) {
-      const uint4 v = ldg16(p + 128 * b + 16 * c);
-      W[2 * c] = be64(v.x, v.y);
-      W[2 * c + 1] = be64(v.z, v.w);
-    }
-    sha::compress(x, W);
-  }
-  const u32 rem = lb - 128 * full;
-  if (rem == 0 && kw) {
-    sha::compress_kw(x, kw);
-    return;
-  }
-  u64 W[16];
-  const uint8_t* q = p + 128 * full;
-#pragma unroll
-  for (int c = 0; c < 8; ++c) {
-    const u32 off = 16 * c;
-    const uint4 v = off < rem ? ldg16(q + off) : make_uint4(0, 0, 0, 0);
-    W[2 * c] = be64(v.x, v.y);
-    W[2 * c + 1] = be64(v.z, v.w);
-  }
-#pragma unroll
-  for (int i = 0; i < 16; ++i) {
-    const u32 base = 8 * i;
-    if (base + 8 > rem) {
-      if (base <= rem) {
-        const u32 j = rem - base;
-        W[i] = (j ? W[i] & (~0ull << (64 - 8 * j)) : 0) | (0x80ull << (56 - 8 * j));
-      } else {
-        W[i] = 0;
-      }
-    }
-  }
-  const u64 bits = (pre + lb) * 8;
-  if (rem + 17 <= 128) {
-    W[15] = bits;
-    sha::compress(x, W);
-  } else {
-    sha::compress(x, W);
-#pragma unroll
-    for (int i = 0; i < 15; ++i) W[i] = 0;
-    W[15] = bits;
-    sha::compress(x, W);
-  }
-}
-
-// --- salts ---------------------------------------------------------------------------------------------------------
-
-DEV void salt_prf(const LeafK& K, u64 pos, u64* Y) {
-#pragma unroll
-  for (int r = 0; r < 3; ++r) {
-    u64 w[16];
-#pragma unroll
-    for (int i = 0; i < 8; ++i) w[i] = K.ks[i];
-    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
-    w[11] = w[12] = w[13] = w[14] = 0;
-    w[15] = 80 * 8;
-    sha::iv(Y + 8 * r);
-    sha::compress_from<8>(Y + 8 * r, K.ks_m8, w);
-  }
-}
-
-DEV void chacha_qr(u32& a, u32& b, u32& c, u32& d) {
-  a += b; d ^= a; d = __funnelshift_l(d, d, 16);
-  c += d; b ^= c; b = __funnelshift_l(b, b, 12);
-  a += b; d ^= a; d = __funnelshift_l(d, d, 8);
-  c += d; b ^= c; b = __funnelshift_l(b, b, 7);
-}
-// ChaCha20 block `ctr` as 8 big-endian u64 (its 64 bytes in order)
-DEV void chacha_block(const LeafK& K, u64 ctr, u64* out) {
-  u32 s[16] = {0x61707865u, 0x3320646Eu, 0x79622D32u, 0x6B206574u, K.cc_key[0], K.cc_key[1], K.cc_key[2], K.cc_key[3],
-               K.cc_key[4], K.cc_key[5], K.cc_key[6], K.cc_key[7], (u32)ctr, K.cc_ctr64 ? (u32)(ctr >> 32) : K.cc_w13,
-               K.cc_w14, K.cc_w15};
-  u32 x[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) x[i] = s[i];
-#pragma unroll 1
-  for (int r = 0; r < 10; ++r) {
-    chacha_qr(x[0], x[4], x[8], x[12]); chacha_qr(x[1], x[5], x[9], x[13]);
-    chacha_qr(x[2], x[6], x[10], x[14]); chacha_qr(x[3], x[7], x[11], x[15]);
-    chacha_qr(x[0], x[5], x[10], x[15]); chacha_qr(x[1], x[6], x[11], x[12]);
-    chacha_qr(x[2], x[7], x[8], x[13]); chacha_qr(x[3], x[4], x[9], x[14]);
-  }
-#pragma unroll
-  for (int i = 0; i < 8; ++i) out[i] = be64(x[2 * i] + s[2 * i], x[2 * i + 1] + s[2 * i + 1]);
-}
-
-DEV void salt_of(const LeafK& K, const uint8_t* salts, u64 i, u64 pos, u64* Y) {
-  if (K.salt_src == VC_SALT_PRF) {
-    salt_prf(K, pos, Y);
-  } else if (K.salt_src == VC_SALT_GIVEN) {
-    ld_be(salts + 192 * i, Y, 24);
-  } else {
-#pragma unroll 1
-    for (int r = 0; r < 3; ++r) chacha_block(K, 3 * pos + r, Y + 8 * r);
-  }
-}
-
-// c = SHA-512(salt_prefix || y)
-DEV void salt_digest(const LeafK& K, const u64* Y, u64* c) {
-  u64 w[16];
-  cpy8(c, K.mid_salt);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = Y[i];
-  sha::compress(c, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
-  w[8] = 0x8000000000000000ull;
-#pragma unroll
-  for (int i = 9; i < 15; ++i) w[i] = 0;
-  w[15] = (128 + 192) * 8;
-  sha::compress(c, w);
-}
-
-// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]) from the nibble table through L1: T_v = T_(v & 15) ^
-// T_(v & 0xF0), chunk c of row u at 256 c + 16 u, the high nibble's rows 4 KB on (native_rows' hm96_mask).
-DEV void mask_nib(const uint8_t* T, const u64* Y, u32* m) {
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
-#pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
-#pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const int p = 16 * q + r;
-      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint8_t* lo = T + 256 * q + 16 * (v & 15u);
-      const uint8_t* hi = T + 4096 + 256 * q + 16 * (v >> 4);
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        const uint4 u = ldg16(lo + 256 * i), w = ldg16(hi + 256 * i);
-        A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
-      }
-    }
-    const int sw = r >> 2, s = 8 * (r & 3);
-#pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= s ? __funnelshift_r(A[w + sw], A[w + sw + 1], s) : A[w + sw];
-  }
-}
-
-// M_key y from the byte table in shared memory: T8[17 b + c] is chunk c of T_b (sharaw's mask8; the stride of 17 spreads the
-// lanes' random b over the banks).
-DEV void mask8(const uint4* T8, const u64* Y, u32* m) {
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll 1
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
-#pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
-    const int sh = 56 - 8 * (r & 7);
-#pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const u64 wq = r < 8 ? Y[2 * q] : Y[2 * q + 1];
-      const uint4* p = T8 + 17 * ((u32)(wq >> sh) & 0xFFu) + q;
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        const uint4 u = p[i];
-        A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
-      }
-    }
-    if (r & 4) {
-#pragma unroll
-      for (int k = 0; k < 19; ++k) A[k] = A[k + 1];
-    }
-    if (r & 8) {
-#pragma unroll
-      for (int k = 0; k < 18; ++k) A[k] = A[k + 2];
-    }
-    const u32 s = 8 * (r & 3);
-#pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
-  }
-}
-// mask_nib from the nibble table in shared memory, its loop over r rolled as mask8's (sharaw's mask_roll).
-DEV void mask_nib_s(const uint8_t* T, const u64* Y, u32* m) {
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll 1
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
-#pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
-    const int sh = 56 - 8 * (r & 7);
-#pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const u32 v = (u32)((r < 8 ? Y[2 * q] : Y[2 * q + 1]) >> sh) & 0xFFu;
-      const uint4* lo = reinterpret_cast<const uint4*>(T + 256 * q + 16 * (v & 15u));
-      const uint4* hi = reinterpret_cast<const uint4*>(T + 4096 + 256 * q + 16 * (v >> 4));
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        const uint4 u = lo[16 * i], w = hi[16 * i];
-        A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
-      }
-    }
-    if (r & 4) {
-#pragma unroll
-      for (int k = 0; k < 19; ++k) A[k] = A[k + 1];
-    }
-    if (r & 8) {
-#pragma unroll
-      for (int k = 0; k < 18; ++k) A[k] = A[k + 2];
-    }
-    const u32 s = 8 * (r & 3);
-#pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
-  }
-}
-DEV void mask_words(const u32* m, u64* my) {
-#pragma unroll
-  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
-}
-
-// h = SHA-512(leaf_prefix || (x ^ M y) || c), then the frame leaf from its first block's state f
-template <int SX, bool RT = false>
-DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, const u64* c, u64* f, uint8_t* bc, uint8_t* hs) {
-  u64 B[16], h[8];
-#pragma unroll
-  for (int w = 0; w < 8; ++w) {
-    B[w] = x[w] ^ my[w];
-    B[8 + w] = c[w];
-  }
-  if (bc) st_be(bc, B, 16);
-  cpy8(h, K.mid_leaf);
-  sha::compress(h, B);
-  sha::compress_kw(h, K.kw_leafpad);
-  if (hs) st_be(hs, h, 8);
-  if constexpr (RT) frame_second_rt<SX>(K, pos, h, f);
-  else frame_second<SX>(K, pos, h, f);
-}
-
 // --- kernels -------------------------------------------------------------------------------------------------------
 
 // The plan's tables: Tn (8 KB, the nibble table of T_v = xor of (key >> s) over the set bits s of v), then per shape the state
@@ -610,21 +81,7 @@ __constant__ uint8_t SEG_TAG[33] = {'v', 'e', 'r', 'i', 't', 'y', '/', 's', 'h',
 __global__ void k_tables(const __grid_constant__ TabK T, uint8_t* tab) {
   const u32 t = blockIdx.x * blockDim.x + threadIdx.x;
   if (t < 512) {
-    if (!T.has_key) return;
-    const u32 h = t >> 8, c = (t >> 4) & 15, u = t & 15, v = h ? 16 * u : u;
-    uint8_t out[16];
-    for (int k = 0; k < 16; ++k) {
-      const int at = 16 * c + k;
-      u32 acc = 0;
-      for (int s = 0; s < 8; ++s)
-        if (v >> s & 1) {
-          const u32 lo = T.key[at], hi = at + 1 < 256 ? T.key[at + 1] : 0;
-          acc ^= ((lo | hi << 8) >> s) & 0xFF;
-        }
-      out[k] = (uint8_t)acc;
-    }
-    uint8_t* o = tab + 4096 * h + 256 * c + 16 * u;
-    for (int k = 0; k < 16; ++k) o[k] = out[k];
+    if (T.has_key) nib_entry(T.key, t, tab);
     return;
   }
   const u32 q = t - 512;
@@ -1283,30 +740,7 @@ std::vector<uint8_t> message(const char* tag, const std::vector<std::vector<uint
   }
   return m;
 }
-// the padded message's words (len + 17 rounded up to blocks), the length in the last block
-std::vector<u64> padded_words(const std::vector<uint8_t>& msg) {
-  const size_t total = ((msg.size() + 17 + 127) / 128) * 128;
-  std::vector<uint8_t> b(total, 0);
-  memcpy(b.data(), msg.data(), msg.size());
-  b[msg.size()] = 0x80;
-  sha::put_be64(b.data() + total - 8, (u64)msg.size() * 8);
-  std::vector<u64> w(total / 8);
-  for (size_t i = 0; i < w.size(); ++i) w[i] = sha::be64(b.data() + 8 * i);
-  return w;
-}
-std::vector<uint8_t> zeros(int n) { return std::vector<uint8_t>(n, 0); }
 void words_of(const uint8_t* block, u64* w, int n) { for (int i = 0; i < n; ++i) w[i] = sha::be64(block + 8 * i); }
-void midstate(const uint8_t* block, u64* st) {
-  u64 w[16];
-  sha::iv(st);
-  words_of(block, w, 16);
-  sha::compress(st, w);
-}
-void pad_schedule(u64 bytes, u64* kw) {   // the all-padding last block of a message of `bytes` bytes (a multiple of 128)
-  u64 blk[16] = {0x8000000000000000ull};
-  blk[15] = bytes * 8;
-  sha::schedule_kw(blk, kw);
-}
 u32 le32(const uint8_t* p) { return (u32)p[0] | (u32)p[1] << 8 | (u32)p[2] << 16 | (u32)p[3] << 24; }
 
 const Plan* plan_of(const void* p) {
@@ -1334,36 +768,17 @@ int vc_plan_build(const vc_spec* sp, void* out) {
   const std::vector<uint8_t> did(sp->domain_id, sp->domain_id + 64);
   // the frame
   if (sp->schema && (sp->schema_len == 18 || sp->schema_len == 22)) {
-    c.sx = (u32)(sp->schema_len - 18);
-    const std::vector<uint8_t> sch(sp->schema, sp->schema + sp->schema_len);
-    for (int nb = 1; nb <= MAX_NB; ++nb) {
-      const auto m = padded_words(message("leaf", {did, zeros(nb), zeros(nb), sch, zeros(64)}));
-      if (m.size() != 32) { delete p; return -1; }
-      std::copy(m.begin(), m.end(), c.fl_tpl[nb - 1]);
-      for (int i = 0; i < 15; ++i)
-        if (c.fl_tpl[nb - 1][i] != c.fl_tpl[0][i]) { delete p; return -1; }
+    if (leaf_frame(sp->domain_id, reinterpret_cast<const uint8_t*>(sp->schema), sp->schema_len, c)) {
+      delete p;
+      return -1;
     }
-    u64 st[8];
-    sha::iv(st);
-    sha::rounds_prefix(st, c.fl_tpl[0], 15, c.fl_m15);
   } else if (sp->schema) {
     delete p;
     return -1;
   }
-  for (int nb = 1; nb <= MAX_NB; ++nb) {
-    const auto pm = padded_words(message("pad", {did, zeros(nb)}));
-    std::copy(pm.begin(), pm.begin() + 16, c.pad_tpl[nb - 1]);
-    const auto nm = padded_words(message("node", {did, std::vector<uint8_t>{0}, zeros(nb), zeros(64), zeros(64)}));
-    if (nm.size() != 48) { delete p; return -1; }
-    std::copy(nm.begin() + 16, nm.end(), n.node_tpl[nb - 1]);
-  }
-  for (int level = 0; level < LEVELS; ++level) {
-    const auto m = padded_words(message("node", {did, std::vector<uint8_t>{(uint8_t)level}, zeros(1), zeros(64), zeros(64)}));
-    u64 blk[16];
-    std::copy(m.begin(), m.begin() + 16, blk);
-    sha::iv(n.node_mid[level]);
-    sha::compress(n.node_mid[level], blk);
-  }
+  pad_tpls(sp->domain_id, c);
+  if (node_tpls(n.node_tpl)) { delete p; return -1; }
+  node_mids(sp->domain_id, n.node_mid, LEVELS);
   {
     const auto e = message("empty", {did});
     sha::digest(e.data(), e.size(), p->empty_root);
