@@ -1013,7 +1013,8 @@ def netCheckCmd (paths : List String) : IO UInt32 := do
   return (if all then 0 else 1)
 
 /-- `unit-cut FILE...`: the partition invariant (`Flock.Partition.validate`) on each cut, one `CUT` line per file; a cut with
-`"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
+`"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count, and one whose units' reads have a cycle
+its first (`cycle`: units and reads). -/
 def unitCutCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
@@ -1027,7 +1028,8 @@ def unitCutCmd (paths : List String) : IO UInt32 := do
           let cs := Partition.validate c
           pure (Lean.Json.mkObj ([("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
             ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str))] ++
-            if c.reportRecompute then [("recomputed_across", Lean.toJson c.recomputedAcross.size)] else []))
+            (if c.reportRecompute then [("recomputed_across", Lean.toJson c.recomputedAcross.size)] else []) ++
+            (c.cycle.map fun y => [("cycle", Partition.cycleJson y)]).getD []))
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUT {line.compress}"
   return (if all then 0 else 1)
@@ -1213,7 +1215,8 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
   return 0
 
 /-- `cut-check FILE...`: `check_cut` (the invariant on one Call's cut against its graph, and the width rule) on each case, one
-`CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count. -/
+`CUTCHECK` line per file; a case with `"recompute": "report"` (`Q_word` v2's rule) also gives its `recomputed_across` count,
+and one whose units' reads have a cycle its first (`cycle`: units and reads). -/
 def cutCheckCmd (paths : List String) : IO UInt32 := do
   let mut all := true
   for path in paths do
@@ -1227,7 +1230,8 @@ def cutCheckCmd (paths : List String) : IO UInt32 := do
         Lean.Json.mkObj ([("file", Lean.Json.str path), ("ok", Lean.Json.bool cs.isEmpty),
           ("codes", Lean.Json.arr (cs.toArray.map Lean.Json.str)),
           ("wide", Lean.Json.arr (wide.map fun (x : Nat × Nat × Nat) => Lean.Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Lean.toJson x.2.2]))] ++
-          if report && owner.size == g.n then [("recomputed_across", Lean.toJson (g.cut owner committed true).recomputedAcross.size)] else [])
+          (if report && owner.size == g.n then [("recomputed_across", Lean.toJson (g.cut owner committed true).recomputedAcross.size)] else []) ++
+          (if owner.size == g.n then ((g.cut owner committed report).cycle.map fun y => [("cycle", Partition.cycleJson y)]).getD [] else []))
     all := all && (line.getObjValAs? Bool "ok").toOption.getD false
     IO.println s!"CUTCHECK {line.compress}"
   return (if all then 0 else 1)

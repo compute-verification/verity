@@ -276,14 +276,24 @@ structure CutCheck where
   stats : Array Nat := #[]
   /-- under `Q_word` v2, the recomputed pairs whose gates two units compute (reported, not refused) -/
   across : Nat := 0
+  /-- `unit-cycle`'s witness: the first cycle of the units' reads, its units and per edge its smallest read -/
+  cycle : Option (Array Nat × Array (Nat × Nat)) := none
   deriving Inhabited
 
 def CutCheck.toJson (r : CutCheck) : Json :=
-  Json.mkObj [("codes", Lean.toJson r.codes.toArray),
-    ("wide", Json.arr ((r.wide.extract 0 64).map fun (u, b, c) => Lean.toJson #[u, b, c])), ("stats", Lean.toJson r.stats)]
+  Json.mkObj ([("codes", Lean.toJson r.codes.toArray),
+    ("wide", Json.arr ((r.wide.extract 0 64).map fun (u, b, c) => Lean.toJson #[u, b, c])), ("stats", Lean.toJson r.stats)] ++
+    (r.cycle.map fun c => [("cycle", Partition.cycleJson c)]).getD [])
+
+/-- A failing cut, as a refusal states it: its codes, its first too-wide units and its unit cycle. -/
+def CutCheck.why (r : CutCheck) : String :=
+  s!"{r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}" ++
+    (r.cycle.map fun (us, rs) => s!" (unit cycle {(us.extract 0 8).toList}, reads {(rs.extract 0 8).toList})").getD ""
 
 /-- `partition_object._verify_calls` without served commits: each Definition's cut, once, checked on its Call's whole graph
-(`check_cut` with the derived committed set and the width rule `(X, W, 0)`), in first-Call order. The graph is built without
+(`check_cut` with the derived committed set and the width rule `(X, W, 0)`), in first-Call order, with the first cycle of a cut
+whose units' reads have one (`unit-cycle`). The topological sort runs over the Call's units, never the unrolled circuit, and
+across Calls none is needed: the root's Calls read only earlier Calls and the Program's inputs. The graph is built without
 its input table: with the derived committed set, the Call's parameters (input gates) can fail none of the invariant's
 clauses, since every read of one and every returned one is committed, and their count cancels from the gate count.
 `report`: `Q_word` v2's rule (a value computed in two units reported, `across`, not refused); v1's otherwise. -/
@@ -299,7 +309,8 @@ def checkCalls (P : Prog) (calls : Array (Nat × Nat × Qword.DCut)) (X W : Nat)
       let (ob, og) := Partition.boundaryWidths gr.g c.owner
       #[gr.g.n, gr.g.recomputed.size, (Partition.derivedCommitted gr.g c.owner).size, ob.foldl max 0, og.foldl (· + ·) 0]
     let across := if report && ok then (gr.g.cut c.owner none true).recomputedAcross.size else 0
-    done := done.push (d, { codes, wide, stats, across })
+    let cycle := if ok then (gr.g.cut c.owner none report).cycle else none
+    done := done.push (d, { codes, wide, stats, across, cycle })
   return done
 
 /-- `verify`'s `cut`: every Call whose Definition's cut fails, in Call order, with that cut's codes. -/

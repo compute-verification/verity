@@ -1014,7 +1014,7 @@ def deriveQwordUnits (c : Circuit) (obj : Json) (program : ByteArray) (indices :
   let some t := circuitTemplate c | throw "partition: META program_digests does not name the circuit's one template"
   let checked ← Extract.checkCalls P calls X W (report := version == 2)
   if let some (k, r) := (Extract.cutFailures calls checked)[0]? then
-    throw s!"partition: cut: Call {k}'s cut fails {r.codes}{if r.wide.isEmpty then "" else s!" (too wide, (unit, bits, values): {(r.wide.extract 0 4).toList})"}"
+    throw s!"partition: cut: Call {k}'s cut fails {r.why}"
   let across := if version == 2 then
       s!"; values computed in two units, reported, not refused: {checked.foldl (fun n (_, r) => n + r.across) 0} pair(s) over its Definitions"
     else ""

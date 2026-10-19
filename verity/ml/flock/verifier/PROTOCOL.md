@@ -1132,8 +1132,12 @@ gate)`. The failure codes, in order, are those of `verity.ml.circuits.partition.
 | `read-uncommitted` | a cross-unit read goes only through a committed value |
 | `output-uncommitted` | a returned value is committed |
 | `committed-unread` | a committed value is read across units or returned |
+| `unit-cycle` | the units' reads of committed values across computing units have no cycle; the first is the witness (`cycle`: its units, and per edge its smallest read) |
 
-With no failure, each gate is certified by exactly one unit and the committed set is the boundary set. A read outside the
+With no failure, each gate is certified by exactly one unit, the committed set is the boundary set, and the units can be proved
+in an order where each reads only committed values of units before it, so each unit's committed values are determined by the
+Call's inputs. The cycle check is a topological sort over one Call's units, never the unrolled circuit; the witness is
+canonical (from the smallest unit Kahn's sort leaves, the smallest such predecessor, until a unit repeats). A read outside the
 circuit is malformed. Under `Q_word` v2 (a cut's `"recompute": "report"`, the reference's `recompute="report"`) a recomputed
 pair across units is no failure: it is counted (`recomputed_across`), and every other code is v1's.
 
@@ -1149,9 +1153,11 @@ or the Call returns) is at most `X + EXTRAS` bits, or one value of at most `W + 
   `CallGraph` builds it;
 - a program that is not topological, or whose root batches or scans, is inapplicable to every query;
 - the cut is core's: a flat cut packs the returned gates into runs of at most `X` bits and promotes committed units until no
-  edge crosses units that head nothing, and a separable body is its members' cuts;
+  edge crosses units that head nothing and the units' reads have no cycle (on a cycle, each gate its edges read into that is
+  not its unit's only head is promoted), and a separable body is its members' cuts;
 - `Extract.checkCalls` checks each Definition's cut once, on its Call's whole graph with the derived committed set, for the
-  partition invariant and the width rule `(X, W, 0)`, as `partition_object.verify` does.
+  partition invariant (`unit-cycle` included, with its witness) and the width rule `(X, W, 0)`, as `partition_object.verify`
+  does. Across Calls no cycle can form: the root's Calls read only earlier Calls and the program's inputs.
 - `Q_word` v2 (`qword-program --query-version 2`) has v1's units; its cut check reports a value computed in two units (each
   Definition's `recomputed_across`) instead of refusing it with `gate-recomputed`.
 

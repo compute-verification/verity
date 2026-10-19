@@ -1,7 +1,8 @@
 /-
 PROTOCOL.md §16.7: the partition invariant on one circuit (`verity.ir.partition.validate_unit_cut`): every gate, input
-gates included, is certified by exactly one unit, cross-unit reads go only through committed values, and the committed
-set is the boundary set. The verifier checks it itself, on its own copy of the cut.
+gates included, is certified by exactly one unit, cross-unit reads go only through committed values, the committed
+set is the boundary set, and the units' reads of committed values have no cycle. The verifier checks it itself, on its own
+copy of the cut.
 -/
 import Lean.Data.Json
 import Std.Data.HashSet
@@ -42,7 +43,64 @@ structure Cut where
 /-- The failure codes, in the reference's order. -/
 def codes : List String :=
   ["input-outside-input-unit", "gate-not-certified-once", "gate-recomputed", "gate-count", "read-uncommitted",
-   "output-uncommitted", "committed-unread"]
+   "output-uncommitted", "committed-unread", "unit-cycle"]
+
+/-- The first cycle of the units' read graph (`partition.unit_cycle`), or none when it has none. An edge `u → v` is a read
+`(p, q)` of a committed value (`committed p`) across two computing units (`unitOf`), `u ≠ v`. The cycle is canonical: Kahn's
+sort removes every unit no cycle leads into, and each unit it leaves has a predecessor it leaves; from the smallest, the walk
+goes to the smallest such predecessor until a unit repeats. The units on that cycle in edge order from the smallest, and per
+edge its smallest read. O(reads + units): over one Call's units, never the unrolled circuit. -/
+def unitCycle (reads : Array (Nat × Nat)) (unitOf : Nat → Option Nat) (committed : Nat → Bool) :
+    Option (Array Nat × Array (Nat × Nat)) := Id.run do
+  let lt := fun (a b : Nat × Nat) => a.1 < b.1 || (a.1 == b.1 && a.2 < b.2)
+  let mut first : Std.HashMap (Nat × Nat) (Nat × Nat) := {}
+  for (p, q) in reads do
+    if let (some u, some v) := (unitOf p, unitOf q) then
+      if u != v && committed p then
+        match first[(u, v)]? with
+        | some r => if lt (p, q) r then first := first.insert (u, v) (p, q)
+        | none => first := first.insert (u, v) (p, q)
+  if first.isEmpty then return none
+  let edges := first.toArray
+  let units := (edges.foldl (fun (s : Std.HashSet Nat) e => (s.insert e.1.1).insert e.1.2) {}).toArray.qsort (· < ·)
+  let m := units.size
+  let mut ix : Std.HashMap Nat Nat := {}
+  for i in [0:m] do ix := ix.insert units[i]! i
+  let mut succ : Array (Array Nat) := Array.replicate m #[]
+  let mut pred : Array (Array Nat) := Array.replicate m #[]
+  let mut indeg : Array Nat := Array.replicate m 0
+  for ((u, v), _) in edges do
+    let a := ix.getD u 0
+    let b := ix.getD v 0
+    succ := succ.modify a (·.push b)
+    pred := pred.modify b (·.push a)
+    indeg := indeg.modify b (· + 1)
+  let mut alive := Array.replicate m true
+  let mut ready := (Array.range m).filter (indeg[·]! == 0)
+  -- each unit enters `ready` at most once
+  for _ in [0:m] do
+    let some i := ready.back? | break
+    ready := ready.pop
+    alive := alive.set! i false
+    for j in succ[i]! do
+      indeg := indeg.modify j (· - 1)
+      if indeg[j]! == 0 then ready := ready.push j
+  let some start := (List.range m).find? (alive[·]!) | return none
+  let mut pos : Std.HashMap Nat Nat := {}
+  let mut path : Array Nat := #[]
+  let mut i := start
+  -- a unit Kahn's sort leaves has a predecessor it leaves: the walk repeats a unit within `m` steps
+  for _ in [0:m + 1] do
+    if pos.contains i then break
+    pos := pos.insert i path.size
+    path := path.push i
+    i := pred[i]!.foldl (fun a j => if alive[j]! then min a j else a) m
+    if i == m then return none
+  let cyc := (path.extract (pos.getD i 0) path.size).reverse
+  let low := cyc.foldl min m
+  let s := ((List.range cyc.size).find? (cyc[·]! == low)).getD 0
+  let cyc := (cyc.extract s cyc.size ++ cyc.extract 0 s).map (units[·]!)
+  return some (cyc, (Array.range cyc.size).map fun t => first.getD (cyc[t]!, cyc[(t + 1) % cyc.size]!) (0, 0))
 
 private def natOf (j : Json) (what : String) : V Nat := match j.getNat? with
   | .ok n => pure n
@@ -90,6 +148,16 @@ def Cut.recomputedAcross (c : Cut) : Array (Nat × Nat) :=
   let own := fun (g : Nat) => c.owner.getD g default
   c.recomputed.filter fun (a, b) => !(a < c.owner.size && b < c.owner.size) || own a != own b
 
+/-- The cut's first unit cycle (`unitCycle`): over its reads of committed values across computing units. -/
+def Cut.cycle (c : Cut) : Option (Array Nat × Array (Nat × Nat)) :=
+  let com : Std.HashSet Nat := Std.HashSet.ofArray c.committed
+  unitCycle c.reads (fun g => match c.owner.getD g default with | .unit u => some u | _ => none) com.contains
+
+/-- A unit cycle as the reference lists it (`detail["unit-cycle"]`): its first 64 units and reads. -/
+def cycleJson (cyc : Array Nat × Array (Nat × Nat)) : Json :=
+  Json.mkObj [("units", Lean.toJson (cyc.1.extract 0 64)),
+    ("reads", Json.arr ((cyc.2.extract 0 64).map fun (p, q) => Lean.toJson #[p, q]))]
+
 /-- The failing codes of `validate_unit_cut` (empty: the invariant holds). -/
 def validate (c : Cut) : List String := Id.run do
   let n := c.owner.size
@@ -106,7 +174,7 @@ def validate (c : Cut) : List String := Id.run do
   let across := !c.reportRecompute && !c.recomputedAcross.isEmpty
   let problem : List Bool := [outside, uncertified, across, certified + ins.size + c.structureGates != c.totalGates,
     crossing.any (fun (p, _) => !com.contains p), outs.toList.any (fun g => !com.contains g),
-    com.toList.any (fun g => !boundary.contains g || !(g < n))]
+    com.toList.any (fun g => !boundary.contains g || !(g < n)), c.cycle.isSome]
   return (codes.zip problem).filterMap fun (k, b) => if b then some k else none
 
 /-! ### One Call's cut against its graph (`verity.ir.cut.check_cut`, PR #111) -/
@@ -168,9 +236,10 @@ def CallGraph.cut (g : CallGraph) (owner : Array Nat) (committed : Option (Array
     inputGates := (Array.range k).map (g.n + ·),
     recomputed := g.recomputed, reportRecompute := report }
 
-/-- `check_cut`: the invariant on the Call's cut (its parameters standing for the input unit), then, unless `limits` is none,
-the width rule. The failing codes, and the too-wide units as `(unit, ob, og)`. `report`: `Q_word` v2's rule, a value computed
-in two units reported, not refused; v1's refusal otherwise. -/
+/-- `check_cut`: the invariant on the Call's cut (its parameters standing for the input unit; `unit-cycle` included, its
+witness `(g.cut owner committed report).cycle`), then, unless `limits` is none, the width rule. The failing codes, and the
+too-wide units as `(unit, ob, og)`. `report`: `Q_word` v2's rule, a value computed in two units reported, not refused; v1's
+refusal otherwise. -/
 def checkCut (g : CallGraph) (owner : Array Nat) (committed : Option (Array Nat)) (limits : Option (Nat × Nat × Nat))
     (report : Bool := false) : List String × Array (Nat × Nat × Nat) :=
   if owner.size != g.n then (["owner-length"], #[]) else

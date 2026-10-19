@@ -5,13 +5,19 @@
 
 Each cut is a small circuit with random owners, input gates, reads, outputs, committed gates and recomputes, mostly valid,
 then perturbed so that every failure code occurs, and is checked twice: by v1's rule, and by `Q_word` v2's
-(`recompute="report"`, DIR/<i>-v2.json), where the codes and the `recomputed_across` count must agree. Writes DIR/<i>.json and
-DIR/result.json; exits 1 unless the Lean verifier's codes equal the reference's on every cut.
+(`recompute="report"`, DIR/<i>-v2.json), where the codes and the `recomputed_across` count must agree. The first cut is POP1's
+(`qword_not_acyclic`), whose units' reads have a cycle. Writes DIR/<i>.json and DIR/result.json; exits 1 unless the Lean
+verifier's codes and unit cycle (`unit-cycle`'s witness) equal the reference's on every cut.
 """
 import argparse, json, random, subprocess, sys
 from pathlib import Path
 
 from verity.ml.circuits.partition import INPUT_UNIT, validate_unit_cut
+
+
+#: POP1: the chain g0 -> g1 -> g2 cut into the units {g0, g2} and {g1}, every value returned
+FIXED = [{"total_gates": 3, "structure_gates": 0, "owner": [0, 1, 0], "reads": [[0, 1], [1, 2]], "outputs": [0, 2, 1],
+          "committed": [0, 1, 2], "input_gates": [], "recomputed": []}]
 
 
 def cut(rng):
@@ -61,8 +67,8 @@ def main():
     rng = random.Random(a.seed)
     a.out.mkdir(parents=True, exist_ok=True)
     files, want = [], {}
-    for i in range(a.n):
-        c = cut(rng)
+    for i in range(len(FIXED) + a.n):
+        c = FIXED[i] if i < len(FIXED) else cut(rng)
         for rule, name in (("refuse", f"{i}.json"), ("report", f"{i}-v2.json")):
             case = c if rule == "refuse" else dict(c, recompute=rule)
             f = a.out / name
@@ -70,18 +76,22 @@ def main():
             files.append(str(f))
             v = validate_unit_cut(c["total_gates"], c["structure_gates"], c["owner"], [tuple(r) for r in c["reads"]], c["outputs"],
                                   c["committed"], c["input_gates"], [tuple(r) for r in c["recomputed"]], rule)
-            want[str(f)] = (list(v.codes), v.detail["recomputed_across"]["n"] if rule == "report" else None)
+            cy = v.detail.get("unit-cycle")
+            want[str(f)] = (list(v.codes), v.detail["recomputed_across"]["n"] if rule == "report" else None,
+                            {"units": cy["units"], "reads": cy["gates"]} if cy else None)
     p = subprocess.run([a.lean, "unit-cut", *files], capture_output=True, text=True)
     got = {}
     for line in p.stdout.splitlines():
         if line.startswith("CUT "):
             j = json.loads(line[4:])
-            got[j["file"]] = (j.get("codes", ["error: " + j.get("error", "")]), j.get("recomputed_across"))
+            got[j["file"]] = (j.get("codes", ["error: " + j.get("error", "")]), j.get("recomputed_across"), j.get("cycle"))
     bad = [f for f in files if got.get(f) != want[f]]
     seen = sorted({c for f in files for c in want[f][0]})
     v2 = [f for f in files if f.endswith("-v2.json")]
     result = {"seed": a.seed, "cuts": len(files), "agree": len(files) - len(bad), "disagree": bad[:20],
               "valid": sum(1 for f in files if not want[f][0]), "codes_seen": seen,
+              "fixed_refused": [want[str(a.out / f"{i}.json")][0] for i in range(len(FIXED))],
+              "cycles": sum(1 for f in files if want[f][2]),
               "v2": {"cuts": len(v2), "reported": sum(1 for f in v2 if want[f][1]),
                      "refused_by_v1_alone": sum(1 for f in v2 if not want[f][0] and want[f[:-8] + ".json"][0] == ["gate-recomputed"])}}
     (a.out / "result.json").write_text(json.dumps(result, indent=1))

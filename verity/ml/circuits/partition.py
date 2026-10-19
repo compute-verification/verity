@@ -51,7 +51,7 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Iterator, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Container, Iterable, Iterator, Literal, Mapping, Sequence
 
 from . import boundary
 from .defs import PrimitiveDefinition, SpecializedDefinition
@@ -1091,6 +1091,61 @@ INPUT_UNIT = "input"
 RECOMPUTE_RULES = ("refuse", "report")
 
 
+def unit_cycle(owner: Sequence[Any], reads: Iterable[tuple[int, int]],
+               committed: Container[int] | None = None) -> tuple[list[int], list[tuple[int, int]]] | None:
+    """The first cycle of the units' read graph, or None when it has none.  An edge u -> v is a read (p, q) of a committed value
+    (`committed`; None: every value) across two computing units, `owner[p] = u != v = owner[q]`; the input unit is in no edge.
+    The cycle is canonical: Kahn's sort removes every unit no cycle leads into, and each unit it leaves has a predecessor it
+    leaves; from the smallest, the walk goes to the smallest such predecessor until a unit repeats.  Returned are the units on
+    that cycle in edge order from the smallest, and per edge u -> v its smallest read.  O(reads + units): over a Call's units,
+    never the unrolled circuit."""
+    first: dict[tuple[int, int], tuple[int, int]] = {}
+    for p, q in reads:
+        u, v = owner[p], owner[q]
+        if u == v or not _computing(u) or not _computing(v) or (committed is not None and p not in committed):
+            continue
+        r = first.get((u, v))
+        if r is None or (p, q) < r:
+            first[(u, v)] = (p, q)
+    if not first:
+        return None
+    units = sorted({u for e in first for u in e})
+    ix = {u: i for i, u in enumerate(units)}
+    succ: list[list[int]] = [[] for _ in units]
+    pred: list[list[int]] = [[] for _ in units]
+    indeg = [0] * len(units)
+    for u, v in first:
+        succ[ix[u]].append(ix[v])
+        pred[ix[v]].append(ix[u])
+        indeg[ix[v]] += 1
+    alive = [True] * len(units)
+    ready = [i for i, d in enumerate(indeg) if d == 0]
+    while ready:
+        i = ready.pop()
+        alive[i] = False
+        for j in succ[i]:
+            indeg[j] -= 1
+            if indeg[j] == 0:
+                ready.append(j)
+    i = next((i for i, a in enumerate(alive) if a), None)
+    if i is None:
+        return None
+    at: dict[int, int] = {}
+    path: list[int] = []
+    while i not in at:
+        at[i] = len(path)
+        path.append(i)
+        i = min(j for j in pred[i] if alive[j])
+    cyc = path[at[i]:][::-1]
+    s = cyc.index(min(cyc))
+    cyc = [units[j] for j in cyc[s:] + cyc[:s]]
+    return cyc, [first[(u, cyc[(t + 1) % len(cyc)])] for t, u in enumerate(cyc)]
+
+
+def _computing(u: Any) -> bool:
+    return isinstance(u, int) and u >= 0
+
+
 def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads: Any, outputs: Any, committed: Any,
                       input_gates: Any = (), recomputed: Any = (), recompute: str = "refuse") -> CutVerdict:
     """The partition invariant on one circuit: every gate, input gates included, is certified by exactly one unit.  Input gates form
@@ -1114,6 +1169,8 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     * a cross-unit read goes only through a committed value                           -> "read-uncommitted"          ((producer, consumer))
     * a returned value is committed                                                   -> "output-uncommitted"        (gate ids)
     * a committed value is one a unit certifies and another unit reads, or returned   -> "committed-unread"          (gate ids)
+    * the units' reads of committed values across units have no cycle (`unit_cycle`)  -> "unit-cycle"  ((producer, consumer) per
+      edge of the first cycle, and its `units`)
     """
     if recompute not in RECOMPUTE_RULES:
         raise ValueError(f"recompute is one of {RECOMPUTE_RULES}, not {recompute!r}")
@@ -1122,27 +1179,31 @@ def validate_unit_cut(total_gates: int, structure_gates: int, owner: Any, reads:
     c = set(committed)
     n = len(owner)
     outside = sorted(g for g in ins if not 0 <= g < n or owner[g] != INPUT_UNIT)
-    uncertified = [g for g, u in enumerate(owner) if g not in ins and not (isinstance(u, int) and u >= 0)]
+    uncertified = [g for g, u in enumerate(owner) if g not in ins and not _computing(u)]
     crossing = sorted((p, q) for p, q in reads if owner[p] != owner[q])
     outs = set(outputs)
     boundary = {p for p, _q in crossing} | outs
-    certified = sum(1 for g, u in enumerate(owner) if g not in ins and isinstance(u, int) and u >= 0)
+    certified = sum(1 for g, u in enumerate(owner) if g not in ins and _computing(u))
     again = [(int(a), int(b)) for a, b in recomputed]
     across = sorted((a, b) for a, b in again if not (0 <= a < n and 0 <= b < n) or owner[a] != owner[b])
+    cycle = unit_cycle(owner, crossing, c)
     problems = {"input-outside-input-unit": outside, "gate-not-certified-once": uncertified,
                 "gate-recomputed": across if recompute == "refuse" else [],
                 "gate-count": [] if certified + len(ins) + int(structure_gates) == int(total_gates) else [certified],
                 "read-uncommitted": [(p, q) for p, q in crossing if p not in c], "output-uncommitted": sorted(outs - c),
-                "committed-unread": sorted(g for g in c if g not in boundary or not 0 <= g < n)}
+                "committed-unread": sorted(g for g in c if g not in boundary or not 0 <= g < n),
+                "unit-cycle": cycle[1] if cycle else []}
     detail: dict = {"input_gates": len(ins), "computed_gates": n - len(ins), "certified": certified, "structure_gates": int(structure_gates),
                     "total_gates": int(total_gates), "committed": len(c), "cross_unit_reads": len(crossing),
-                    "computing_units": len({u for u in owner if isinstance(u, int) and u >= 0}),
+                    "computing_units": len({u for u in owner if _computing(u)}),
                     "redundant_gates": len(again) - len(across)}
     if recompute == "report":
         detail["recomputed_across"] = {"n": len(across), "gates": [list(x) for x in across[:_MAX_LISTED]]}
     codes = tuple(k for k, v in problems.items() if v)
     for k in codes:
         detail[k] = {"n": len(problems[k]), "gates": [list(x) if isinstance(x, tuple) else x for x in problems[k][:_MAX_LISTED]]}
+    if cycle:
+        detail["unit-cycle"]["units"] = cycle[0][:_MAX_LISTED]
     return CutVerdict(not codes, codes, detail)
 
 
@@ -1176,5 +1237,5 @@ def validate_vu_partition(program: "Program", query, w_max: int = 32) -> VuVerdi
 
 __all__ = ["PartitionVerdict", "WidthVerdict", "ReadinessViolation", "ReadinessReport", "VuVerdict",
            "validate_partition", "validate_width", "gate_width_readiness", "readiness_32bit", "vu_status",
-           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "RECOMPUTE_RULES", "validate_unit_cut",
+           "validate_vu_family", "validate_vu_partition", "CutVerdict", "INPUT_UNIT", "RECOMPUTE_RULES", "unit_cycle", "validate_unit_cut",
            "Level", "Hierarchy", "RefinementVerdict", "validate_refinement", "members_per_parent"]

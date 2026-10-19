@@ -91,7 +91,9 @@ def test_unit_cut_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(VERIFIER / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
+    r = json.loads(p.stdout.strip().splitlines()[-1])
+    assert r["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
+    assert r["fixed_refused"] == [["unit-cycle"]], r       # POP1's cut, refused by both
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -604,7 +606,9 @@ def test_check_cut_agrees_with_the_reference(tmp_path):
     p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
-    assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
+    r = json.loads(p.stdout.strip().splitlines()[-1])
+    assert r["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
+    assert r["fixed_refused"] == [["unit-cycle"], ["unit-cycle"]], r       # POP1's cut and a producer join's, refused by both
 
 
 def _qword_vector_file():
