@@ -87,14 +87,16 @@ theorem eqAt_pureP {P : α × Transcript → Prop} (a : α) (t : Transcript) {l 
     (hl : l.size = N) (hN : N ≤ n) (hP : P (a, t)) :
     EqAt n N P (((pure a : TMW PS α).run t).go l) (((pure a : TMW PS α).run t).go l) :=
   eqAt_refl fun _ L h => by
-    obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
+    obtain ⟨e, rfl⟩ := Prod.mk.inj h
+    obtain rfl := Except.ok.inj e
     exact ⟨hl, hN, hP⟩
 
 theorem eqAt_purePL {P : (α × LigState) × Transcript → Prop} (a : α) (st : LigState) (t : Transcript)
     {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n) (hP : P ((a, st), t)) :
     EqAt n N P ((((pure a : LP PS α).run st).run t).go l) ((((pure a : LP PS α).run st).run t).go l) :=
   eqAt_refl fun _ L h => by
-    obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
+    obtain ⟨e, rfl⟩ := Prod.mk.inj h
+    obtain rfl := Except.ok.inj e
     exact ⟨hl, hN, hP⟩
 
 theorem eqAt_pureL (a : α) (st : LigState) (t : Transcript) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N)
@@ -219,30 +221,24 @@ theorem eqAt_forIn_array {n : ℕ} (xs : Array α) (body body' : α → σ → P
     EqAt n (g xs.size) (fun _ => True) ((forIn xs s body).go l) ((forIn xs s body').go l) := by
   rw [← Array.forIn_toList, ← Array.forIn_toList]
   suffices key : ∀ (ys : List α) (j : ℕ) (s : σ) (l : Array Claims.Msg), xs.toList.drop j = ys →
-      l.size = g j → g j ≤ n →
+      j ≤ xs.size → l.size = g j → g j ≤ n →
       EqAt n (g xs.size) (fun _ => True) ((forIn ys s body).go l) ((forIn ys s body').go l) from
-    key xs.toList 0 s l (by simp) hl hL
+    key xs.toList 0 s l (by simp) (Nat.zero_le _) hl hL
   intro ys
   induction ys with
   | nil =>
-    intro j s l hd hl hL
-    have hj : xs.size ≤ j := by
-      have := congrArg List.length hd
-      simp at this
-      omega
+    intro j s l hd hj hl hL
     have hj' : j = xs.size := by
-      by_contra hne
-      have hlt : j < xs.size := by omega
       have := congrArg List.length hd
-      simp at this
+      simp only [List.length_drop, Array.length_toList, List.length_nil] at this
       omega
     subst hj'
     refine eqAt_refl fun _ L h => ?_
-    rw [List.forIn_nil, go_pure] at h
+    rw [List.forIn_nil, JsonRT.go_pure] at h
     obtain ⟨-, rfl⟩ := Prod.mk.inj h
     exact ⟨hl, hL, trivial⟩
   | cons a ys ih =>
-    intro j s l hd hl hL
+    intro j s l hd _ hl hL
     have hget : xs.toList[j]? = some a := by rw [← List.head?_drop, hd]; rfl
     rw [Array.getElem?_toList] at hget
     obtain ⟨hjx, hxa⟩ := Array.getElem?_eq_some_iff.1 hget
@@ -251,7 +247,7 @@ theorem eqAt_forIn_array {n : ℕ} (xs : Array α) (body body' : α → σ → P
     rw [hxa] at hb'
     refine eqAt_bind hb' fun r l' _ hl' hL' hr => ?_
     obtain ⟨u, rfl⟩ := hr
-    exact ih (j + 1) u l' (by rw [← List.drop_drop, hd]; rfl) hl' hL'
+    exact ih (j + 1) u l' (by rw [← List.drop_drop, hd]; rfl) hjx hl' hL'
 
 /-! ## `asksCut`'s sends -/
 
@@ -372,7 +368,7 @@ theorem eqAt_oodIntroP (nonce : ℕ → ℕ → UInt64) (g : Array F128) {dim : 
   unfold oodIntroP
   refine eqAt_bindL (eqAt_lsampleVecP coin n hdim st t hl) fun _ st₁ t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindL (eqAt_lsilent (lsilent_modify _) st₁ t₁ h1 h2) fun _ st₂ t₂ l₂ _ h1 h2 _ => ?_
-  refine eqAt_bindL (eqAt_liftTML coin n _ st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ _ h1 h2 _ => ?_
+  refine eqAt_bindL (eqAt_liftTML n _ st₂ t₂ h1 h2) fun _ st₃ t₃ l₃ _ h1 h2 _ => ?_
   refine eqAt_bindL (eqAt_lsilent (lsilent_sendMsg _) st₃ t₃ h1 h2) fun _ st₄ t₄ l₄ _ h1 h2 _ => ?_
   refine eqAt_bindL (eqAt_lsilent (lsilent_powB nonce) st₄ t₄ h1 h2) fun _ st₅ t₅ l₅ _ h1 h2 _ => ?_
   refine eqAt_bindL (eqAt_lsampleP coin n st₅ t₅ h1) fun _ st₆ t₆ l₆ _ h1 h2 _ => ?_
@@ -397,24 +393,13 @@ section Phases
 
 variable (coin : ℕ → ℕ → F128) (n : ℕ)
 
-/-- A check that throws or returns, sending nothing. -/
-theorem eqAt_except (r : Except String α) {f g : α → TMW PS β} {Q : β × Transcript → Prop} (t : Transcript)
-    {l : Array Claims.Msg} {N M : ℕ}
-    (hfg : ∀ v t' l', r = .ok v → l'.size = N → N ≤ n → EqAt n M Q (((f v).run t').go l') (((g v).run t').go l'))
-    (hl : l.size = N) (hN : N ≤ n) :
-    EqAt n M Q ((((match r with | .ok v => pure v | .error err => throw err : TMW PS α) >>= f).run t).go l)
-      ((((match r with | .ok v => pure v | .error err => throw err : TMW PS α) >>= g).run t).go l) := by
-  cases r with
-  | ok v =>
-    refine eqAt_bindT (eqAt_pureT v t hl hN) fun a t' l' h h1 h2 _ => ?_
-    have e : ((Except.ok (v, t), l) : Except String (α × Transcript) × Array Claims.Msg) = (.ok (a, t'), l') := h
-    simp only [Prod.mk.injEq, Except.ok.injEq] at e
-    obtain ⟨⟨rfl, rfl⟩, rfl⟩ := e
-    exact hfg v t l rfl h1 h2
-  | error err =>
-    have e : ((throw err : TMW PS α).run t).go l = (.error err, l) := rfl
-    rw [bind_go_err e, bind_go_err e]
-    exact eqAt_refl fun _ _ h => by simp at h
+/-- A refusal, whatever follows it. -/
+theorem eqAt_throwT (err : String) {f g : α → TMW PS β} {Q : β × Transcript → Prop} (t : Transcript)
+    (l : Array Claims.Msg) {M : ℕ} :
+    EqAt n M Q ((((throw err : TMW PS α) >>= f).run t).go l) ((((throw err : TMW PS α) >>= g).run t).go l) := by
+  have e : ((throw err : TMW PS α).run t).go l = (.error err, l) := rfl
+  rw [bind_go_err e, bind_go_err e]
+  exact eqAt_refl fun _ _ h => by simp at h
 
 theorem eqAt_rankCheckP (m kLog : ℕ) (prior : Array (List F128)) (words : List ℕ) (t : Transcript)
     {l : Array Claims.Msg} {N : ℕ} (hl : l.size = N) (hN : N ≤ n) :
@@ -458,15 +443,13 @@ theorem zerocheckCut_eqAt {m : ℕ} (hm : 14 ≤ m) (digest cap root : ByteArray
   refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_forIn _ _ (L + 3) (fun i => i) (m - 6) (fun i hi s t l hl hL => ?_) _ t₁ l₁
-    (by simpa using h1) (by simpa using h2)) fun r t₁ l₁ _ h1 h2 _ => ?_
-  · dsimp only
-    rw [(hml i hi (by omega)).1, (hml i hi (by omega)).2]
+    (by omega) (by omega)) fun r t₁ l₁ _ h1 h2 _ => ?_
+  · rw [(hml i hi (by omega)).1, (hml i hi (by omega)).2]
     refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    exact eqAt_pureP _ t₁ (by rw [h1]) (by omega) ⟨_, rfl⟩
-  · dsimp only
-    obtain ⟨ea, eb, ec⟩ := hf (by omega)
+    exact eqAt_pureP _ t₁ (by omega) (by omega) ⟨_, rfl⟩
+  · obtain ⟨ea, eb, ec⟩ := hf (by omega)
     rw [ea, eb, ec]
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
@@ -486,22 +469,22 @@ theorem lincheckCut_eqAt (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (mk mk
   refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun alpha t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
-  refine eqAt_except n _ t₁ (fun _ t₁ l₁ _ h1 h2 => ?_) h1 h2
+  rcases hfold : c.fold alpha (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) with err | v
+  · exact eqAt_throwT n err t₁ l₁
+  refine eqAt_bindT (eqAt_pureT v t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_forIn _ _ (L + 2) (fun i => i) (c.kLog - 6) (fun i hi s t l hl hL => ?_) _ t₁ l₁
-    (by simpa using h1) (by simpa using h2)) fun r t₁ l₁ _ h1 h2 _ => ?_
-  · dsimp only
-    rw [(hlc i hi (by omega)).1, (hlc i hi (by omega)).2]
+    (by omega) (by omega)) fun r t₁ l₁ _ h1 h2 _ => ?_
+  · rw [(hlc i hi (by omega)).1, (hlc i hi (by omega)).2]
     refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    exact eqAt_pureP _ t₁ (by rw [h1]) (by omega) ⟨_, rfl⟩
-  · dsimp only
-    have e : ((Array.range 64).map fun i => mk (lay.zp i)) = (Array.range 64).map fun i => mk' (lay.zp i) :=
+    exact eqAt_pureP _ t₁ (by omega) (by omega) ⟨_, rfl⟩
+  · have e : ((Array.range 64).map fun i => mk (lay.zp i)) = (Array.range 64).map fun i => mk' (lay.zp i) :=
       Array.map_congr_left fun i hi => hzp (by omega) i (by simpa using hi)
     rw [e]
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_sampleP coin n t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    exact eqAt_pureT _ t₁ (by rw [h1]) (by omega)
+    exact eqAt_pureT _ t₁ (by omega) (by omega)
 
 /-- **The ring switch at switched vectors agreeing where sent**: claim `k`'s after `k` sends. -/
 theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) (hc : claims.size ≠ 0) (t : Transcript)
@@ -514,16 +497,47 @@ theorem ringSwitchCut_eqAt (sv sv' : ℕ → Array F128) (claims : Array Claim) 
   dsimp only
   refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
   refine eqAt_bindT (eqAt_forIn _ _ L (fun i => i) claims.size (fun i hi s t l hl hL => ?_) _ t₁ l₁
-    (by simpa using h1) (by simpa using h2)) fun r t₁ l₁ _ h1 h2 _ => ?_
-  · dsimp only
-    rw [hsv i hi (by omega)]
+    (by omega) (by omega)) fun r t₁ l₁ _ h1 h2 _ => ?_
+  · rw [hsv i hi (by omega)]
     refine eqAt_bindT (eqAt_liftTM _ t hl hL) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_liftTM _ t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
     refine eqAt_bindT (eqAt_sampleVecP coin n (by norm_num) t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
-    exact eqAt_pureP _ t₁ (by rw [h1]) (by omega) ⟨_, rfl⟩
-  · dsimp only
-    refine eqAt_bindT (eqAt_sampleVecP coin n hc t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
+    exact eqAt_pureP _ t₁ (by omega) (by omega) ⟨_, rfl⟩
+  · refine eqAt_bindT (eqAt_sampleVecP coin n hc t₁ h1) fun _ t₁ l₁ _ h1 h2 _ => ?_
     exact eqAt_pureT _ t₁ h1 h2
+
+/-- **The cut's PIOP at sources agreeing where sent**: the zerocheck's, the lincheck's and the ring switch's reads, each
+at its send count. -/
+theorem piopCut_eqAt (st : Setup) (hm : 14 ≤ st.m) (lay : Zk.PadLayout) (src src' : RepSrc) (cap root : ByteArray)
+    (extras : Array Claim) (prior : Array (List F128)) (words : List ℕ) (t : Transcript) {l : Array Claims.Msg}
+    {L : ℕ} (hl : l.size = L) (hL : L ≤ n)
+    (hab : L + 2 ≤ n → ∀ i < 64, src.masked (lay.r1ab i) = src'.masked (lay.r1ab i) ∧
+      src.masked (lay.r1c i) = src'.masked (lay.r1c i))
+    (hml : ∀ i < st.m - 6, L + 3 + i ≤ n →
+      src.masked (lay.ml i 0) = src'.masked (lay.ml i 0) ∧ src.masked (lay.ml i 1) = src'.masked (lay.ml i 1))
+    (hf : L + 3 + (st.m - 6) ≤ n → src.masked lay.fa = src'.masked lay.fa ∧ src.masked lay.fb = src'.masked lay.fb ∧
+      src.masked lay.fc = src'.masked lay.fc)
+    (hlc : ∀ j < st.fold.kLog - 6, L + 3 + (st.m - 6) + 2 + j ≤ n →
+      src.masked (lay.lc j 0) = src'.masked (lay.lc j 0) ∧ src.masked (lay.lc j 1) = src'.masked (lay.lc j 1))
+    (hzp : L + 3 + (st.m - 6) + 2 + (st.fold.kLog - 6) ≤ n → ∀ i < 64, src.masked (lay.zp i) = src'.masked (lay.zp i))
+    (hsv : ∀ k < 2 + extras.size, L + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + k ≤ n → src.sv k = src'.sv k) :
+    EqAt n (L + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) + (2 + extras.size) + 1) (fun _ => True)
+      (((piopCut (asksCut coin n) st lay src cap root extras prior words).run t).go l)
+      (((piopCut (asksCut coin n) st lay src' cap root extras prior words).run t).go l) := by
+  unfold piopCut
+  refine eqAt_bindT (zerocheckCut_eqAt coin n hm _ _ _ lay _ _ t hl hL hab hml hf) fun zz t₁ l₁ _ h1 h2 _ => ?_
+  obtain ⟨zp, zc⟩ := zz
+  dsimp only
+  refine eqAt_bindT (lincheckCut_eqAt coin n _ _ lay _ _ zc t₁ h1 h2 hlc hzp) fun ll t₁ l₁ _ h1 h2 _ => ?_
+  obtain ⟨lp, lc⟩ := ll
+  dsimp only
+  refine eqAt_bindT (eqAt_rankCheckP n _ _ prior words t₁ h1 h2) fun _ t₁ l₁ _ h1 h2 _ => ?_
+  have hsz : (abcClaims st.m st.kLog zc lc ++ extras).size = 2 + extras.size := by
+    simp [abcClaims, Nat.add_comm]
+  refine eqAt_bindT (ringSwitchCut_eqAt coin n _ _ _ (by omega) t₁ h1 h2 fun k hk hkn => hsv k (by omega)
+    (by omega)) fun rr t₁ l₁ _ h1 h2 _ => ?_
+  obtain ⟨ss, T, sws⟩ := rr
+  exact eqAt_pureT _ t₁ (by rw [h1, hsz]; omega) (by rw [← hsz]; omega)
 
 end Phases
 
