@@ -872,7 +872,8 @@ impl Record {
 
     /// [`Record::slot`], then [`Record::admit`] on the same read of the record, under one hold of `record.lock`, with the
     /// record's bytes once the slot is held and before anything of the session is recorded (`before`), and after its slot
-    /// and admission (`after`): what [`outer_session`] holds the Lean decision to.
+    /// and admission (`after`): what [`outer_session`] holds the Lean decision to. A last line without its newline reads,
+    /// but the slot's line joins it, so the admission fails as a fresh read of the record would.
     pub fn slot_admit(&self, session: &str, part: &str, waiting: impl FnOnce()) -> io::Result<Seated> {
         let held = self.take_slot(session, part, waiting)?;
         let path = self.state.join("record.jsonl");
@@ -883,6 +884,9 @@ impl Record {
         let (before, admitted, after) = self.with(&[session], &[], |ev| {
             let before = bytes(&path)?;
             slot_in(ev, session, part)?;
+            if before.last().is_some_and(|&b| b != b'\n') {
+                Events::read(&path)?;
+            }
             let admitted = admit_in(ev, session, part)?;
             Ok((before, admitted, bytes(&path)?))
         })?;
@@ -1392,6 +1396,22 @@ mod tests {
         let o = outer_session(&rec, &sid, "L0", &fake(0), || {}, || Ok(()), |_| Ok(()), |_| -> (bool, ()) { panic!("sent") },
                               Some(&same)).unwrap();
         assert_eq!(o.why.as_deref(), Some("the Lean firewall's record after the slot and the admission is not Rust's"));
+    }
+
+    /// A record whose last line has no newline reads, but the slot's line joins it, so the session fails at its admission
+    /// with nothing proved or asked of the judge, and the joined line stays.
+    #[test]
+    fn a_record_its_slot_leaves_unreadable_fails_the_session() {
+        let rec = scratch("unterminated");
+        let sid = opened(&rec, None, None);
+        let path = rec.state.join("record.jsonl");
+        let cut = text(&rec).trim_end_matches('\n').to_string();
+        std::fs::write(&path, &cut).unwrap();
+        let judge = |_: &Value| -> Result<Value, String> { panic!("the judge was asked") };
+        let e = outer_session(&rec, &sid, "L0", &fake(0), || {}, || -> Result<(), String> { panic!("proved") }, |_| Ok(()),
+                              |_| -> (bool, ()) { panic!("sent") }, Some(&judge)).err().expect("an error");
+        assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        assert!(text(&rec).starts_with(&format!("{cut}{{\"event\": \"slot\"")), "{}", text(&rec));
     }
 
     /// The Rust release side admits an outer session before its prover connects, so L0 cut
