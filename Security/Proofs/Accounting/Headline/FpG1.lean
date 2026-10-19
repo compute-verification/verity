@@ -140,7 +140,7 @@ theorem honestNword_ne {h : Head (Fin 17) Unit Empty} (hb : h ≠ .writer 6) (k 
   rcases h with t | _ | _ | _
   · have ht : t ≠ 6 := fun e => hb (by rw [e])
     show (if t = 6 then Sparse.counts Sm120.flatWords k else 0) = 0
-    rw [if_neg ht]
+    rw [ite_eq_right ht]
   · rfl
   · rfl
   · rfl
@@ -149,7 +149,7 @@ theorem honestWords_ne {h : Head (Fin 17) Unit Empty} (hb : h ≠ .writer 6) : h
   rcases h with t | _ | _ | _
   · have ht : t ≠ 6 := fun e => hb (by rw [e])
     show (if t = 6 then (128 : ℝ) else 0) = 0
-    rw [if_neg ht]
+    rw [ite_eq_right ht]
   · rfl
   · rfl
   · rfl
@@ -158,12 +158,12 @@ theorem honestNword_sum (k : Fin 122) : ∑ h, honestNword h k = Sparse.counts S
   rw [Finset.sum_eq_single (Head.writer 6) (fun _ _ hb => honestNword_ne hb k)
     (fun h => absurd (Finset.mem_univ _) h)]
   show (if (6 : Fin 17) = 6 then Sparse.counts Sm120.flatWords k else 0) = _
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
 
 theorem honestWords_sum : ∑ h, honestWords h = 128 := by
   rw [Finset.sum_eq_single (Head.writer 6) (fun _ _ hb => honestWords_ne hb) (fun h => absurd (Finset.mem_univ _) h)]
   show (if (6 : Fin 17) = 6 then (128 : ℝ) else 0) = 128
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
 
 theorem honestRun_split : honestRun.Split := by
   refine ⟨fun h k => ?_, fun k => Rat.cast_nonneg.mpr (coeff_nonneg _ _), fun _ => le_rfl, fun h => ?_, fun k => ?_⟩
@@ -207,12 +207,12 @@ theorem honestRun_clock : SheetClock Sm120.sheet honestRun.run := by
   norm_num
 
 theorem honestRun_dispatch : SheetDispatch honestRun.run := by
-  have e : Sm120.model.G.load (Sparse.counts flatAll) .issue = ∑ k, Sparse.counts flatAll k := by
+  have e : Sm120.model.G.load (Sparse.counts flatAll) .issue = ∑ k : Fin 122, Sparse.counts flatAll k := by
     unfold Machine.load
     refine Finset.sum_congr rfl fun k _ => ?_
     rw [sm120_hG]
     simp [sheetCoef]
-  show ∑ k, Sparse.counts flatAll k ≤ (Bq : ℝ)
+  show ∑ k : Fin 122, Sparse.counts flatAll k ≤ (Bq : ℝ)
   rw [← e]
   exact honest_load .issue
 
@@ -233,7 +233,8 @@ theorem honestRun_pipe : SheetPipe Sm120.sheet honestRun.run := by
     refine Finset.sum_congr rfl fun k _ => ?_
     show _ = _ * ((if Sm120.sheet.pipe k = some p then 128 / Sm120.sheet.width p else 0) * _)
     split_ifs
-    · field_simp <;> ring
+    · field_simp
+      ring
     · ring
   show ∑ k, (if Sm120.sheet.pipe k = some p then (32 : ℝ) else 0) * Sparse.counts flatAll k ≤
     Sm120.sheet.width p / 4 * (Bq : ℝ)
