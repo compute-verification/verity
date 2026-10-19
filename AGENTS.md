@@ -384,9 +384,17 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
 - **Work in a checkout no other agent uses:** your own VM, or your own `git worktree add` (with its own venv) on a shared
   VM, removed when your task ends. Never check out or switch a branch in a tree another agent uses, and push only to
   branches you created or were handed.
-- **Landing is drive's.** Push your PR, mark it ready and go back to research; you hear back only if your PR fails. A
-  lane works on at most two open PRs; one whose head is on `next` (queued or in a running check) doesn't count until
-  its check fails.
+- **Stay reachable** (Daniel, 19 Oct: silent agents cost whole nights). Push and write a one-line checkpoint in your
+  note at least every 60 minutes. No tool call blocks for more than 20 minutes: launch runs detached, and when you'd
+  otherwise wait on one, end your turn naming the run id and its ETA, so your coordinator resumes you when it ends. A
+  coordinator replaces a worker that stays silent past the agent watch's flag with a fresh agent briefed from its note,
+  and never resumes a local worker a third time.
+- **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
+  --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
+  research; you hear back only if it fails. Before marking, run the Lean check of the packages you touched and
+  `uv run tools/verity/check/suites.py --changed origin/main --quick`, and a suite's slow tier only when you changed that
+  suite's core: drive's train check runs the rest, bisects a failed train and lands its passing prefix, so a full
+  pre-mark run only duplicates it and holds a slot. Prefer small PRs, which bisection lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing

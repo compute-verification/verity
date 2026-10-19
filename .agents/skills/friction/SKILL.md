@@ -109,6 +109,8 @@ Only a repeat whose fix needs money, keys or a claim becomes a question for Dani
 
 Newest first. Each is Daniel's unless it names the coordinator.
 
+- 2026-10-19 (04:49Z, to circuits): fix landing throughput and silent agents, whatever it takes, without old CI
+  habits. Rolled out as AGENTS.md "Stay reachable" and "Landing is drive's"; the two-open-PR cap is retired.
 - 2026-10-18 (8:47 AM PDT): every ask is a short Notion page in the Asks for Daniel database (the problem explained, LaTeX
   for the math), where he comments and decides by its Status; the card only notifies him and links it. Template and
   commands: `.agents/skills/asking-daniel/SKILL.md`.
@@ -332,10 +334,8 @@ Newest first. Each is Daniel's unless it names the coordinator.
   - a lane works toward one or two outcomes a night, each with a done-condition anyone can check; its lead proposes them
     and Daniel approves or edits them in one pass. The coordinator's reports lead with which outcomes moved and what
     blocked the rest, not with landing counts;
-  - only the lander lands, restacks and reruns. A lane pushes its PR, marks it ready and goes back to research, and hears
-    back only if the PR fails. A lane holds at most two open PRs. This ends 6 Oct's trains without ready marks: a PR
-    joins a train on its owner's `ready` label, and only the quick-tier pass stays waived. Since 12 Oct, ci's
-    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses (11 Oct);
+  - a lane marks its PR ready and goes back to research, hearing back only if it fails; since 12 Oct ci's
+    `research queue drive` lands, restacks and reruns, and the lander handles what it refuses;
   - infra keeps the machines up and the checks fast, and builds nothing new unless it removes a measured research cost.
     Kueue as the only scheduler (#1460) is one, since it takes slot assignment off the coordinator;
   - the Python verifiers move into `verity/core/`, by one agent with `main` frozen, and `Security/Models/` tracks which of
