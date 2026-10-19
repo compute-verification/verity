@@ -81,7 +81,9 @@ echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 nvidia-smi --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 2 > "$OUT/smi.csv" 2>/dev/null &
 SMI=$!
 MAX_MIN=${SBENCH_MAX_MIN:-40}
-gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- bash -c '
+# SBENCH_PREEMPTIBLE=1: the lease may be taken back by a non-preemptible one (which ends the run unfinished)
+PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
       > "$0/kgate.log" 2>&1
