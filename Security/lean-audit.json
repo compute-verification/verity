@@ -653,7 +653,7 @@
    },
    "Claims.Recursion.ZKStop": {
     "fails": "Claims.Witness.Recursion.ZKStop_fails",
-    "meets": ["Claims.Witness.Recursion.ZKStop_meets"]
+    "meets": ["Claims.Witness.Recursion.ZKStop_meets", "Claims.Witness.Recursion.ZKStop_meets_ready"]
    }
   },
   "not": {
@@ -3311,6 +3311,9 @@
    ],
    "assumptions": [],
    "type_hash": "baaff1d1b49820b2b615a1099e34290d9b75cc821e2ef675561134e4437cba40"
+  },
+  "Claims.Witness.Recursion.ZKStop_meets_ready": {
+   "owner": "@proofs"
   },
   "Claims.Witness.Recursion.ZK_fails": {
    "owner": "@proofs",
