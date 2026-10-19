@@ -298,15 +298,14 @@ def main() -> int:
            "shapes": []}
     doc["anchors"] = anchors(libs, rng)
     print(json.dumps({"anchors": doc["anchors"]}), flush=True)
+    bad_libs = doc["anchor_failed"] = sorted({x["lib"] for x in doc["anchors"] if not x["ok"]})
     (out / "h1u.json").write_text(json.dumps(doc, indent=1))
-    bad_libs = sorted({x["lib"] for x in doc["anchors"] if not x["ok"]})
     if "h1u" in bad_libs:
         print("h1ubench: an anchor failed; nothing timed", file=sys.stderr)
         return 4
     for arm in bad_libs:
         print(f"h1ubench: {arm} failed an anchor; it is not timed", file=sys.stderr)
         del libs[arm]
-    doc["anchor_failed"] = bad_libs
     xs: dict = {}
     ms = [int(v) for v in args.ms.split(",")]
     for name in args.linears.split(","):
