@@ -50,7 +50,10 @@ counters from its rule over its statics instead: that is how a matmul family sta
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
-(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`. `served_macs_by_precision` splits the served MACs by the
+(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs are S8-PORT's, whose
+roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
+or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
+their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
 operand format of the steps
 performing them (`PRECISION[family]`), keyed by the accounting layer's kinds (`mac:bf16`, `mac:int8`, ...), and adds up to
 `served_macs` in every class, step and the totals; a rule's served MACs take the one precision of the steps under it.
@@ -122,7 +125,8 @@ SCHEMA = "verity/census/v1"
 #: s8 x s8 clamped to s32 and u8 x s8 wrapping, 32 products each; the s8 matmul Definitions over them name the arm in a static and
 #: count by their `FAMILY_COUNTS` rule.  A step cut into parts (vLLM's `cublas_bf16.HOPPER_STEP`: the gates that read only one
 #: operand, shared across W's rows, and the rest, once per row) names each part: the per-row part performs the k products, the
-#: shared part none
+#: shared part none.  PoUW's segment dots on bits are one wrapping s8 IMMA coordinate's k32 (their word primitives take no rule,
+#: so they are not named)
 PRODUCTS: dict[str, int] = {
     "AmpereBF16TcDot16_v1": 16, "AmpereBF16TcDot16_v2": 16, "HopperBF16WgmmaDot16_v1": 16, "HopperTf32WgmmaDot8_v1": 8,
     "HopperTf32WgmmaDot8_v2": 8,
@@ -134,10 +138,12 @@ PRODUCTS: dict[str, int] = {
     "BlackwellMxf4OmmaDot64_v2": 64,
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
     "HopperBf16Dot16StepFirst_v1": 16, "HopperBf16Dot16Step_v1": 16, "HopperBf16Dot16StepFirstX_v1": 0, "HopperBf16Dot16StepX_v1": 0,
+    "PouwSegDot_v2": 32, "PouwSegDot0_v2": 32,
 }
 
 #: the operand format of each `PRODUCTS` family's products, as the accounting layer names its multiply-add kinds (`mac:<precision>`):
-#: fp8 is E4M3 and E5M2, fp4 NVFP4 and MXFP4, and int8 the s8 and u8 x s8 IMMA arms, PoUW's u8 x s8 step and NCP's i7 step
+#: fp8 is E4M3 and E5M2, fp4 NVFP4 and MXFP4, and int8 the s8 and u8 x s8 IMMA arms, PoUW's u8 x s8 step and segment dots and
+#: NCP's i7 step
 PRECISION: dict[str, str] = {
     **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
                      "HopperBF16WgmmaDot16_v2", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
@@ -149,7 +155,7 @@ PRECISION: dict[str, str] = {
     **dict.fromkeys(("BlackwellNvf4OmmaDot64_v1", "BlackwellNvf4OmmaDot64_v2", "BlackwellMxf4OmmaDot64_v1",
                      "BlackwellMxf4OmmaDot64_v2"), "fp4"),
     **dict.fromkeys(("PouwDot16U8S8_v1", "NcpDot16I7_v1", "BlackwellS8ImmaDot32_v1", "BlackwellU8S8ImmaDot32_v1",
-                     "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2"), "int8"),
+                     "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2", "PouwSegDot_v2", "PouwSegDot0_v2"), "int8"),
 }
 
 #: a silicon model's operand format (its ``dtype``, and ``b_dtype`` where B's differs) -> the precision of the tensor-core step that
@@ -169,7 +175,17 @@ FAMILY_COUNTS: dict[str, Callable[[dict], dict[str, int]]] = {}
 #: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (the IR never imports a
 #: semantics package, and decoding a Program imports none)
 RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1": "verity.ml.circuits.ops.s8",
-                         "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8"}
+                         "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8",
+                         "GemmAccumulatorS8_v1": "verity.ml.circuits.ops.gemm",
+                         "GemmAccumulatorS8_v2": "verity.ml.circuits.ops.boolean.gemm",
+                         "PouwSegDot_v2": "verity.core.protocols.pouw.circuit.segment",
+                         "PouwSegDot0_v2": "verity.core.protocols.pouw.circuit.segment"}
+
+
+def serves_none(bindings: dict) -> dict[str, int]:
+    """The rule of an s8-family Definition whose products are no served product's main chain (Lean's `roleOf` at
+    `Site.other`): it performs them, and serves none."""
+    return {"served_macs": 0}
 
 
 def family(fn: Any) -> str:
@@ -946,4 +962,4 @@ def step_of(doc: dict) -> Callable[[int], int]:
 
 
 __all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "census", "family", "seal", "silicon_step", "step_ends", "step_of"]
+           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]

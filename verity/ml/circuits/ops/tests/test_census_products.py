@@ -1,8 +1,8 @@
 """census/v1's `PRODUCTS` names every tensor-core step these Definitions register, word primitive or Boolean Definition, with its k,
 and `PRECISION` each one's operand format; `RULED` names every family with a census rule, which a Program decoded in a process that
-never imported the rule's module refuses rather than count by `PRODUCTS`.  Every step is bound to its silicon model (`SILICON`), a
-Boolean step to its word step's, and a word GEMM counts its Boolean version's work: K/16 steps' gates as `tc:bf16`, the cast's
-`cuda:gate`."""
+never imported the rule's module refuses rather than count by `PRODUCTS`, and an s8 accumulator serves none of the products it
+performs.  Every step is bound to its silicon model (`SILICON`), a Boolean step to its word step's, and a word GEMM counts its
+Boolean version's work: K/16 steps' gates as `tc:bf16`, the cast's `cuda:gate`."""
 from __future__ import annotations
 
 import importlib
@@ -55,8 +55,22 @@ def test_every_definition_with_a_rule_is_ruled_under_its_module():
         if ".tests" not in m.name:
             importlib.import_module(m.name)
     ruled = {d.id: d for d in REGISTRY.defs.values() if hasattr(d, "counts")}
-    assert {f: d.body.__module__ for f, d in ruled.items()} == RULED
+    assert {f: d.body.__module__ for f, d in ruled.items()} == {f: m for f, m in RULED.items() if m.startswith(OPS.__name__ + ".")}
     assert all(FAMILY_COUNTS[f] is d.counts for f, d in ruled.items())
+
+
+def test_an_s8_accumulator_performs_its_products_and_serves_none():
+    """`GemmAccumulatorS8` (word and Boolean) has no committed words of its own, so Lean's `Accounting.Gates.roleOf` puts its
+    steps at `Site.other`: under a linear's coordinate its K/32 IMMA steps keep their k, and it serves none of their products."""
+    K = 64
+    for coord, steps in ((bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8), "BlackwellS8ImmaDot32_v1"),
+                         (bind(BG.ScaledMmS8Coordinate, K=K, **BG.GEMM_SM120_S8), "BlackwellS8ImmaDot32_v2")):
+        c = census(Program(coord))
+        (acc,) = [e for e in c["classes"].values() if e["family"].startswith("GemmAccumulatorS8_")]
+        (step,) = [e for e in c["classes"].values() if e["family"] == steps]
+        assert step["instances"] * PRODUCTS[steps] == K and step["served_macs"] == PRODUCTS[steps]
+        assert {k: acc[k] for k in COUNTERS} == {k: c["totals"][k] for k in COUNTERS} == dict.fromkeys(COUNTERS, 0)
+        assert acc["served_macs_by_precision"] == c["totals"]["served_macs_by_precision"] == {}
 
 
 #: a fresh process: the primitives registered (as a verifier decoding the Program has them), then `argv[2:]` imported, then the census

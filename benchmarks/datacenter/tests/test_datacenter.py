@@ -114,8 +114,9 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     """PoUW's compiler rewrites a served s8 matmul into sm_120's H1 tile unit, whose one coin is `pouw.salt`. The compiled
     Program is placed like any other, read at the census's grain without expanding a gate: the salt enters at the block's
     certifier, so it is trusted data the block consumes and the salt compute's custody counts, and the unit's work comes
-    out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its exact products as int8 multiply-adds.
-    Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
+    out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its products, `z`'s and the lanes' segment
+    dots (r·c·(2K + 32m)), as int8 multiply-adds, of which census/v1 counts none served (Lean's `Accounting.Gates.roleOf`
+    puts the tile's served role on its receipt's words, which take no MACs). Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
     proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved". Slow: compiling builds the unit's 15
     million gates (about 40 s), and no other test has a compiled Program."""
     import importlib.util
@@ -136,11 +137,11 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
               deliver="world", x="world", **{"pouw.salt": "a.cert", "pouw.positions": "world", "pouw.roots": "world"})
     assert [p.source(k) for k in range(5)] == ["outside", "registered", "trusted", "outside", "outside"]
     work = p.public(Plan(EPOCH)).work
-    assert work == {"a": {"cuda:gate": 13250921, "mac:int8": 4 * 16 * 64}, "b": {}}
+    assert work == {"a": {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}, "b": {}}
     ticks = PT.proved_block_ticks(PT.placed(work["a"]), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
                                   gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
     profile = p.public(Plan(EPOCH), ticks={"a": ticks})
-    assert census_of(compiled)["totals"]["served_macs"] == 4 * 16 * 64
+    assert census_of(compiled)["totals"]["served_macs"] == 0
     assert profile.salt["a"] == profile.forced["a"] == 512 and profile.pinned["a"] == 0
     assert {x.value.name for x in crossings(p) if x.dst == "world"} == {"pouw[0][0:2048]", "pouw[0][2048:2304]"}
     # the claim an accepted window gives, in place of `audit`'s re-execution of the unit's gates

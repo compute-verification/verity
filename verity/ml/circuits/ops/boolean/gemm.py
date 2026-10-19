@@ -35,12 +35,13 @@ int-to-float cast `fp.s32_to_f32`, and `ScaledMmS8Coordinate_v2` the accumulator
 Each names its word
 Definition (`trace.word_of`; ``DOT'`` is `DOT`'s); the tests check that the two agree, on random and special words and on the
 hardware captures. Each composite refuses at `bind` the K its word Definition refuses (its `refuse`). Each step is bound to its
-word step's silicon model (`census.silicon_step`), so the census counts its gates as `tc:<precision>`.
+word step's silicon model (`census.silicon_step`), so the census counts its gates as `tc:<precision>`, and `GemmAccumulatorS8_v2`
+serves none of its products, as its word view (`census.serves_none`).
 """
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.census import silicon_step
+from verity.ml.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
 from verity.ml.circuits.defs import bind, composite
 from verity.ml.circuits.refs import Coll, broadcast
 from verity.ml.circuits.types import Array
@@ -206,6 +207,9 @@ def GemmCoordinateMxf4(B, S, x, wrow, sx, sw):
 def GemmAccumulatorS8(B, S, x, wrow):
     """The s32 accumulator of an s8 `x @ W^T` coordinate on bits: K/32 `DOT` steps in ascending k from the zero accumulator."""
     return _steps(B, S, x, wrow, 32)
+
+
+GemmAccumulatorS8.counts = FAMILY_COUNTS["GemmAccumulatorS8_v2"] = serves_none  # type: ignore[attr-defined]
 
 
 @composite("ScaledMmS8Coordinate", 2, ["K", "DOT"],
