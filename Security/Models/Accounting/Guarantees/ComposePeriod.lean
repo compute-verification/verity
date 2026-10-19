@@ -10,9 +10,12 @@ declared circuit, each window with its own live coins and its own draw. It chang
 it is for Daniel to take or leave (the card in the note), and it is stated, not proved: the red team and the card come
 first.
 
-RT-INT-1: `CircuitWork`'s quoted live `ε` (0.744%, #2638; 0.656%, #2482) is for a window of 48,000 equal live rounds.
-Under marginal per-tile luck `ε < 1%` needs at least 10,552 equal live rounds a window, and SERVE-H1's windows have 18.
-Over a period the rounds are the period's, `n·M`, so served windows reach it by being many.
+RT-INT-1: both live lines are quoted at 48,000 equal live rounds, and each has its own round floor for `ε < 1%`. On
+Compose's line (`CircuitWork`, 0.744% at #2638, `a = 0.218`, `b = 0.998`) it is at least 10,552 equal live rounds a
+window, under marginal per-tile luck. On #2482's sm_120 bound (0.656% sheet, 0.591% measured) it is 9,496 rounds (sheet)
+and 9,652 (measured) (HEADLINE-FIX, note:compute-accounting/20261019T0730Z-draft-headline-fix). SERVE-H1's windows
+have 18. Over a period the rounds are the period's, `n·M`, so served windows reach it by being many. This statement
+is Compose's line, and every number below is on it.
 
 * `PeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
   `Λ` (`RoundGame.BudgetAt`, which `ServiceBudget` gives per window), whatever the earlier windows did, so does the
