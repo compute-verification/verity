@@ -97,15 +97,16 @@ verifier's unit draw and, per test, for zero knowledge: the commitments' salts a
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
-  bytes; the unit draw takes it. `UniformRandomBytesTest L t E η` (A3 per test, stated as A4 is) says one event `E`
-  has it within `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes
-  the operating system's reads are such a source, each call independent of every earlier one: the verifier's
-  `IO.getRandomBytes` for its units, the firewall's frame and tap, and the prover's and a registrant's salts.
+  bytes; the unit draw takes it. `UniformRandomBytesTest L t E η` (per test, as A4 is) says one event `E` has it within
+  `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes the operating
+  system's reads are such a source, each call independent of the others: the verifier's `IO.getRandomBytes`
+  (Lean v4.34.0's runtime reads `/dev/urandom`), the firewall's frame and tap, and the prover's and a registrant's
+  salts.
 - **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
   Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
   theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't stated about
   `IO.getRandomBytes`, what ties it to the verifier, its scope (the masks included), what is outside it, why no
-  falsification test runs, and where it is used, the salts among them (Daniel, 9 Oct, decisions 4(a) and 4(c)).
+  falsification runs, and where it is used, the salts among them (Daniel, 9 Oct, decisions 4(a) and 4(c)).
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
