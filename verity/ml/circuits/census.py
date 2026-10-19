@@ -179,7 +179,7 @@ FAMILY_COUNTS: dict[str, Callable[[dict], dict[str, int]]] = {}
 #: the families that count by a `FAMILY_COUNTS` rule -> the module that registers it when imported (the IR never imports a
 #: semantics package, and decoding a Program imports none)
 RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1": "verity.ml.circuits.ops.s8",
-                         "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8",
+                         "S8Dot_v2": "verity.ml.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.ml.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.ml.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.ml.circuits.ops.boolean.gemm",
                          "PouwSegDot_v2": "verity.core.protocols.pouw.circuit.segment",

@@ -95,7 +95,7 @@ S8Matmul.word = _word(S8.S8Matmul)  # type: ignore[attr-defined]
 S8Matmul.counts = S8.counts  # type: ignore[attr-defined]
 S8Dot.word = _word(S8.S8Dot)  # type: ignore[attr-defined]
 S8Dot.counts = S8.counts  # type: ignore[attr-defined]
-FAMILY_COUNTS["S8Dot_v2"] = S8.counts
+FAMILY_COUNTS["S8Dot_v2"] = FAMILY_COUNTS["S8Matmul_v2"] = S8.counts
 
 
 # -- limb splits ---------------------------------------------------------------------------------------------------------
