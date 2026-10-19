@@ -855,4 +855,112 @@ theorem repCut_eqAt (st : Setup) (sch : Schedule) (hs : SchOk st sch) (rep : ℕ
 
 end Rep
 
+/-! ## The session -/
+
+section Session
+
+open With
+
+theorem commit0Cut_quiet (h : ByteArray → ByteArray) (ms : MerkleScheme) (lv : Level) (src : TabSrc) :
+    quietS.R (commit0Cut (Hashes.ofSha512 h : Hashes V) ms lv src) (commit0Cut (Hashes.ofSha512 h : Hashes PS) ms lv src) := by
+  have ho := opsWith_sim quietS (quietS_hashes h) ms
+  unfold commit0Cut
+  sim_walk [ho.node]
+
+theorem padsTreeCut_quiet (h : ByteArray → ByteArray) (N : ℕ) (src : RepSrc) :
+    quietS.R (padsTreeCut (Hashes.ofSha512 h : Hashes V) N src) (padsTreeCut (Hashes.ofSha512 h : Hashes PS) N src) := by
+  have hh := quietS_hashes h
+  unfold padsTreeCut MerkleOps.hm96With
+  sim_walk [leafWith_sim quietS hh]
+
+theorem eqAt_quiet_bind {n M : ℕ} {Q : β → Prop} {v : V α} {x : PS α} (hq : quietS.R v x) {f g : α → PS β}
+    {l : Array Claims.Msg} (hfg : ∀ a, v = .ok a → EqAt n M Q ((f a).go l) ((g a).go l)) :
+    EqAt n M Q ((x >>= f).go l) ((x >>= g).go l) := by
+  rw [go_bind, go_bind, hq l]
+  cases v with
+  | error e => exact ⟨rfl, fun a L h => by simp at h⟩
+  | ok a => exact hfg a rfl
+
+theorem eq_quiet_bind {v : V α} {x : PS α} (hq : quietS.R v x) {f g : α → PS β} {l : Array Claims.Msg}
+    (hfg : ∀ a, v = .ok a → (f a).go l = (g a).go l) : (x >>= f).go l = (x >>= g).go l := by
+  rw [go_bind, go_bind, hq l]
+  cases v with
+  | error e => rfl
+  | ok a => exact hfg a rfl
+
+theorem eq_of_eqAt_bind {n N : ℕ} {P : α → Prop} {x y : PS α} {f g : α → PS β} {l : Array Claims.Msg}
+    (hxy : EqAt n N P (x.go l) (y.go l)) (hfg : ∀ a l', x.go l = (.ok a, l') → (f a).go l' = (g a).go l') :
+    (x >>= f).go l = (y >>= g).go l := by
+  rw [go_bind, go_bind, ← hxy.1]
+  rcases hx : x.go l with ⟨r, l'⟩
+  cases r with
+  | error err => rfl
+  | ok a => exact hfg a l' hx
+
+theorem eqAt_purePS {P : α → Prop} (a : α) {l : Array Claims.Msg} {n N : ℕ} (hl : l.size = N) (hN : N ≤ n)
+    (hP : P a) : EqAt n N P ((pure a : PS α).go l) ((pure a : PS α).go l) := by
+  refine eqAt_refl fun b L h => ?_
+  rw [JsonRT.go_pure] at h
+  obtain ⟨e, rfl⟩ := Prod.mk.inj h
+  obtain rfl := Except.ok.inj e
+  exact ⟨hl, hN, hP⟩
+
+theorem link_go (coin : ℕ → ℕ → F128) {n : ℕ} (rootB publics : Array ByteArray) (hn : 1 ≤ n) :
+    ((asksCut coin n).link rootB publics).go #[] =
+      (.ok (coin 0), #[FlockDeploy.linkBody rootB.toList publics.toList]) := by
+  show ((if n ≤ 0 then throw "past the openings" else pure (coin 0) : PS (ℕ → F128)).go _) = _
+  rw [ite_eq_right (show ¬ n ≤ 0 by omega)]
+  rfl
+
+variable (coin : ℕ → ℕ → F128) (n : ℕ)
+
+/-- The link points at the link's coin `coin 0`. -/
+abbrev ptsOf (spec : SessionSpec) : Array (Array F128) :=
+  (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j => coin 0 (p * spec.mPts + j)
+
+/-- **The session at sources that agree where read**: level 0's and the pads' commitments the same, and each rep stream
+`k`'s source agreeing where read from its first body `G k` (`G 0 = 1`, the link's). -/
+theorem sessionCut_eq (spec : SessionSpec) (tabs : Array Setup) (words : Array (List ℕ)) (src src' : ℕ → TabSrc)
+    (hn : 1 ≤ n)
+    (hcm : ∀ ms lv i, commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes PS) ms lv (src i) =
+      commit0Cut (Hashes.ofSha512 Sha512.hash) ms lv (src' i))
+    (hic : ∀ N i r, padsTreeCut (Hashes.ofSha512 Sha512.hash : Hashes PS) N ((src i).rep r) =
+      padsTreeCut (Hashes.ofSha512 Sha512.hash) N ((src' i).rep r))
+    (G : ℕ → ℕ) (hG0 : G 0 = 1)
+    (hR : ∀ schs, (tabs.mapM fun st => (monadLift (Zk.schedule st.m) : V (Schedule × ℕ))) = .ok schs →
+      ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
+        tabs[i]!.extra (ptsOf coin spec) = .ok extras →
+        SchOk tabs[i]! schs[i]!.1 ∧ G (k + 1) = G k + repSends tabs[i]! schs[i]!.1 extras ∧
+          RepAgree n (G k) tabs[i]! schs[i]!.1 extras ((src i).rep r) ((src' i).rep r)) :
+    (sessionCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) spec tabs words src).go #[] =
+      (sessionCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) spec tabs words src').go #[] := by
+  unfold sessionCut
+  simp only [hcm, hic]
+  have hq1 : quietS.R (tabs.mapM fun st => (monadLift (Zk.schedule st.m) : V (Schedule × ℕ)))
+      (tabs.mapM fun st => (monadLift (Zk.schedule st.m) : PS (Schedule × ℕ))) := by
+    sim_walk
+  refine eq_quiet_bind hq1 fun schs hschs => ?_
+  have hq2 : quietS.R ((Array.range tabs.size).mapM fun i =>
+        commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes V) tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default) (src' i))
+      ((Array.range tabs.size).mapM fun i =>
+        commit0Cut (Hashes.ofSha512 Sha512.hash : Hashes PS) tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default)
+          (src' i)) := by
+    sim_walk [commit0Cut_quiet]
+  refine eq_quiet_bind hq2 fun cms _ => ?_
+  rw [go_bind, link_go coin _ _ hn, go_bind, link_go coin _ _ hn]
+  dsimp only
+  refine eq_of_eqAt_bind (eqAt_forIn_array (n := n) spec.repStreams _ _ G ?_ _ _ (by simp [hG0]) (by omega))
+    fun _ _ _ => rfl
+  intro k hk s l hl hL
+  rcases hx : spec.repStreams[k] with ⟨i, r, w⟩
+  dsimp only
+  refine eqAt_quiet_bind (quietS.lift _) fun extras hex => ?_
+  obtain ⟨hS, hG, hA⟩ := hR schs hschs k hk i r w hx extras hex
+  refine eqAt_quiet_bind (padsTreeCut_quiet _ _ _) fun ic _ => ?_
+  refine eqAt_bind (repCut_eqAt coin n _ _ hS r _ _ extras ic _ _ _ _ _ hl hL hA) fun p l' _ h1 h2 _ => ?_
+  obtain ⟨p, t⟩ := p
+  exact eqAt_purePS _ (by omega) (by omega) ⟨_, rfl⟩
+
+end Session
+
 end FlockComplete.CutEq
