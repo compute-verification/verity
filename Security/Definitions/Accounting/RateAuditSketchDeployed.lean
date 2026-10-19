@@ -11,6 +11,10 @@ windows on one store.
 
 The model keeps the restriction proved by `RateAuditTensorSketchRank`: device memory, on-chip state, the side link and
 rebuilding deliver sectors whole and verbatim. A precomputed sketch table is not a device of this type.
+
+A session's devices may also be told an `a`-bit summary of what the prover chose (`SketchSummarySession`): one
+session for each value of the summary, a pass told `s` running the devices and the pick of session `s`. A prover that
+steers its passes' layout knows the summary it steered by, and its devices may follow it.
 -/
 
 namespace Accounting.RateSketch
@@ -107,6 +111,24 @@ def win (A : SketchDeployedSession n P N m ρ h S L q ks G d) (w : Fin n)
   A.window w (fun v => ω v.1)
 
 end SketchDeployedSession
+
+/-- **A session whose devices are told an `a`-bit summary**: a deployed session for each value `s` of the summary
+(`session s`). A pass told `s` runs the devices and the pick of `session s`, so its device may follow everything the
+summary carries. With `a = 0` it is one `SketchDeployedSession`. -/
+structure SketchSummarySession (a n P N m ρ h S L q ks G d : ℕ) where
+  session : Bits a → SketchDeployedSession n P N m ρ h S L q ks G d
+
+namespace SketchSummarySession
+
+variable {a n P N m ρ h S L q ks G d : ℕ}
+
+/-- Window `w` at the session's coins `ω`, with pass `j` told `s j`: each pass runs the device and the pick of its
+summary's session. -/
+def win (A : SketchSummarySession a n P N m ρ h S L q ks G d) (w : Fin n)
+    (ω : Fin n → SketchWindowCoins P N m ρ h ks G d) (s : Fin P → Bits a) : SketchDeployedWindow P N m ρ h S L q ks G :=
+  ⟨fun j => ((A.session (s j)).win w ω).device j, fun j => ((A.session (s j)).win w ω).pick j⟩
+
+end SketchSummarySession
 
 /-- The non-sampling shortfall of one pass, as a share of its `N·m·256` stored bits. -/
 noncomputable def gammaSketch (N m ρ S L X : ℕ) : ℝ :=

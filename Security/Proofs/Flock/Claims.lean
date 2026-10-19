@@ -45,6 +45,7 @@ import Proofs.Flock.Claims.Recursion.BoundRun
 import Proofs.Flock.Claims.Recursion.BoundForks
 import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
 import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
@@ -74,8 +75,6 @@ import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
 import Proofs.Flock.Claims.KS
-import Proofs.Flock.Claims.KS.ZkForkClash
-import Proofs.Flock.Claims.KS.ZkPadsSched
 import Proofs.Flock.Claims.RootFindGF128
 import Proofs.Flock.Claims.GS
 import Proofs.Flock.Claims.DeployRounds

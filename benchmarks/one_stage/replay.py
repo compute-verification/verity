@@ -1608,6 +1608,8 @@ SERVED_OUTSIDE = (
     (r"receive-open", "the stream's rule: one registration open at a time (`Stream.register`)"),
     (r"receive-(coin-.*|unrecorded)", "PoUW's epoch coins (`pouw.coins`), the challenger's, before one-stage's checks"),
     (r"select-again", "the service draws once per receipt and never redraws (`select`); the protocol checks the draw it is handed"),
+    (r"receive-after-draw", "the challenger's record order (`Challenger.register`, late-registration): each window is received "
+                            "before the epoch's draw coin is released"),
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
     (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
     (r"lean-.*", "the verifier of record (Lean `flock-verify verify --zk`) on one unit's session; the protocol reads its verdict"),

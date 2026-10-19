@@ -20,7 +20,7 @@ from typing import Any
 
 from . import COLLECTOR_VERSION, RESOURCES_SCHEMA
 from .cgroup import Cgroup, scope_for
-from .events import Emitter, append, stream_id, utc_now_ms
+from .events import Emitter, stream_id, utc_now_ms
 from .job import write_json_atomic
 from .procs import diskstats, gpu_sample, pss, snapshot_tree, statvfs
 

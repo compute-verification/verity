@@ -30,6 +30,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "clear"))
 
 SCHEME = "pearl-c-sm120-v1-h3"
 WEIGHTS = {0: (256, 1024), 1: (128, 2048)}
@@ -133,9 +134,9 @@ def _tiles(d: Path, jobs: int) -> dict:
     """Every tile of a pass under `Verifier.check_tile`: its openings, then its leaf recomputed by the reference."""
     import verify_run as VR
     from verity.ml.commitments import Commitment
-    from verity.core.protocols.pouw.audit import Transcript, Verifier
+    from clear_audit import Transcript, Verifier
     from verity.core.protocols.pouw.coins import CoinCommitment
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+    import clear_work as CW
     from verity_vllm.protocol_options import pouw_pearl_c_manifest as PM
 
     man = json.loads((d / "manifest.json").read_text())
@@ -143,7 +144,7 @@ def _tiles(d: Path, jobs: int) -> dict:
     epoch, _ = PM.manifest_epoch(man, CoinCommitment.from_json(man["coins"]))
     c = man["commitment"]
     transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]), ())
-    verifier = Verifier(PW._TileRuleView(s), epoch)
+    verifier = Verifier(CW._TileRuleView(s), epoch)
     _JOB.update(verifier=verifier, transcript=transcript, epoch=epoch, prover=VR.Opened(man, VR.Files(d), verifier.refs))
     ids = range(c["count"])
     if jobs > 1:

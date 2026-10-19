@@ -116,9 +116,9 @@ import Proofs.Flock.Claims.KS.ZkTauPair
 import Proofs.Flock.Claims.KS.ZkLevels
 import Proofs.Flock.Claims.KS.ZkClashL
 import Proofs.Flock.Claims.KS.ZkFork0
-import Proofs.Flock.Claims.KS.TrimBridge
 import Proofs.Flock.Claims.KS.ZkPadsLog
 import Proofs.Flock.Claims.KS.ZkClashPads
+import Proofs.Flock.Claims.KS.TrimBridge
 import Proofs.Flock.Claims.KS.ZkFork
 import Proofs.Flock.Claims.KS.ZkAlign
 import Proofs.Flock.Claims.KS.RepDistZ
@@ -130,6 +130,15 @@ import Proofs.Flock.Claims.KS.BatchProj
 import Proofs.Flock.Claims.KS.BatchSteps
 import Proofs.Flock.Claims.KS.BatchSched
 import Proofs.Flock.Claims.KS.BatchMove
+import Proofs.Flock.Claims.KS.BatchSim
+import Proofs.Flock.Claims.KS.ZkLiveSched
+import Proofs.Flock.Claims.KS.ZkBatchSim
+import Proofs.Flock.Claims.KS.ZkForkClash
+import Proofs.Flock.Claims.KS.ZkPadsSlot
+import Proofs.Flock.Claims.KS.ZkKSAlign
+import Proofs.Flock.Claims.KS.SlotDistOn
+import Proofs.Flock.Claims.KS.ZkTauSlot
+import Proofs.Flock.Claims.KS.ZkUntrim
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -579,12 +588,37 @@ accepting runs whose live outcomes decode to that collide in their logs (`FlockD
 (`ZkAlign`: `FlockDeploy.KS.ZkSlotAlign`, `FlockDeploy.KS.zkForkAlign_of_slot`, `FlockDeploy.KS.zk_KS_of_slot`), since
 pushing a table's answer does not change a fork (`FlockSoundness.Discharge.ZkLink.forkC_pushStrat`). A masked rep
 meets each cap's slot after a count fixed by the statement and the schedule (`RepDistZ`:
-`FlockSoundness.Discharge.ZkLink.dist_lockRepZ`), plain's past level 0's lane rounds and extra draws. The reps after
-it in the session are not: a rep whose opening rejects skips Ligerito (`restZC`, `PendL.reject`), so rep 1 and the
-later tables start after fewer coins on that run, where `advRSZ`'s event, which does not read acceptance, can still
-hold. `τ` has no such split either: the dead branches' `τ` opening `(0, default)` opens under some commitments, and a
-rep's own rejected opening brings its `τ` early. KS at an untrimmed instance gives it at its trimmed record
+`FlockSoundness.Discharge.ZkLink.dist_lockRepZ`; `ZkSched`: `FlockDeploy.KS.dist_lockRepZ_zkCap`,
+`FlockDeploy.KS.zkRdAt_cap`), plain's past level 0's lane rounds and extra draws. A rep whose opening rejects skips
+Ligerito (`restZC`, `PendL.reject`), so rep 1 and the later tables start after fewer coins on that run, but
+`advRSZ`'s event reads the openings only on runs accepting every table up to the session's, and is `0` past a rejected
+one (`FlockDeploy.KS.ind_conflictAcc_dead`). So the slot is counted on the simulated strategy's schedule alone: the
+tables in front of the session's advance to their sends and wait, then the session's table plays rep 0 first
+(`ZkBatch`: `FlockDeploy.KS.ZkBatchAlign`, `FlockDeploy.KS.zkFrontAlign_of_batch`). The masked simulator submits its
+rounds stream by stream, each table's rep 0 then its rep 1 (`ZkLiveSched`: `FlockDeploy.KS.zkLive_sched`,
+`FlockDeploy.KS.zkStreams_split`), so its simulated strategy follows that schedule at the deployed tables' counts, and
+`ZkSlotAlign` holds at every message (`ZkBatchSim`: `FlockDeploy.KS.schedC_simAtJZ`, `FlockDeploy.KS.zkBatchAlign`,
+`FlockDeploy.KS.zkSlotAlign`). The clash holds at every message too: at an accepting run's view each rep records its
+decoded proof's recursive caps and opens rows of them in the run's log, so a cap two runs record is one root, and two
+rows they open at one position of it collide (`ZkForkClash`: `FlockDeploy.KS.zkAccOpening`,
+`FlockDeploy.KS.zkForkClash`). The pads and `τ` split the same way, into an alignment and a clash, and both clashes
+hold at every message (`ZkPadsPair`: `FlockDeploy.KS.PadsForkEvZ`, `FlockDeploy.KS.zkPairPads`,
+`FlockDeploy.KS.zkSimForkLePads_of`; `ZkTauFork`: `FlockDeploy.KS.ZkTauAlign`, `FlockDeploy.KS.zkSimForkLeTau_of`;
+`ZkTauPair`: `FlockDeploy.KS.zkTauClash`, `FlockDeploy.KS.zkSimForkLeTau_of_align`). A rep's pads root is its first
+table node, so the pads' fork round is the caps' schedule at distance `0`, and their alignment holds at every message
+(`ZkPadsSlot`: `FlockDeploy.KS.slotPadsZ_of_batch`, `FlockDeploy.KS.zkPadsAlign`,
+`FlockDeploy.KS.zkSimForkLePads`). So masked KS rests on `τ`'s alignment alone (`ZkKSAlign`:
+`FlockDeploy.KS.zk_KS_of_tauAlign`). `τ`'s commitment is two coins into the inner proof, past the masked phase, whose
+coins are fixed only on the runs whose opening can end well; on the others the rep's Ligerito part is `PendL.reject`
+and the table's output is not accepted, so it opens no `τ`. A distance on those paths (`SlotDistOn`:
+`FlockSoundness.Game.Lock.DistOn`, `FlockSoundness.Game.Lock.SlotAtD.lead_fst_on`,
+`FlockSoundness.Game.Lock.SlotAtD.lead_snd_on`) and the schedule short of the runs whose table opens nothing or is not
+accepted (`FlockDeploy.KS.schedC_simAtJZ_dead`) give `τ`'s alignment at every message, its count `zkPre + zkLig + 2`
+coins into a rep (`ZkTauSlot`: `FlockDeploy.KS.zkTau_dist`, `FlockDeploy.KS.slotTauZ_of_batch`,
+`FlockDeploy.KS.zkTauAlign`, `FlockDeploy.KS.zkSimForkLeTau`). So masked KS holds with no premise
+(`FlockDeploy.KS.zk_KS`). KS at an untrimmed instance gives it at its trimmed record
 (`Flock.TrimBridge.KS_mapCols_of_KS`), but not conversely: an unopened position reads `[]`, the trim of every zero
 column and equal to no full-width one (`Flock.TrimBridge.hole_agree`). Both follow from the one full-width table bound,
 the untrimmed with `ExtendJ` (`Flock.TrimBridge.KS_both_of_tableBoundJR`), so from `zk_KS_of_kinds`'s premises
-(`FlockDeploy.KS.TrimBridge.zk_KS_both_of_kinds`). -/
+(`FlockDeploy.KS.TrimBridge.zk_KS_both_of_kinds`). Those hold at every message, so the untrimmed instance's KS rests
+on `ExtendJ` alone (`ZkUntrim`: `FlockDeploy.KS.zkSimForkLeCapTau`, `FlockDeploy.KS.zk_KS_untrim_of_extendJ`). -/

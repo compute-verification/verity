@@ -13,6 +13,8 @@ attests the cuteDSL gate tier only when a gate is eligible for it.
 """
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 import importlib
 import math
@@ -292,7 +294,8 @@ def test_the_cutedsl_gate_binds_the_gate_weight_root_by_the_empty_it_fills():
 @pytest.mark.parametrize("M,tier,want", [
     (1, GATE_CUTEDSL, "LlBf16DotprodGemm_v1{N=256,K=6144,BS=128,VEC=8,FMA=1}"),
     (256, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}"),
-    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (64, GATE_CUBLAS, None)])
+    (64, GATE_CUBLAS, "CublasSplitKGemmF32Out_v1{K=6144,N=256,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}"),
+    (4, GATE_CUBLAS, None), (32, GATE_CUTEDSL, None), (2049, GATE_CUBLAS, None)])
 def test_without_a_gate_spec_the_gate_is_the_builds_on_the_tier_vllm_dispatches(M, tier, want):
     got = served_gate_spec(H200, H, E, M, tier)
     assert (got[0].id if got else None) == want
