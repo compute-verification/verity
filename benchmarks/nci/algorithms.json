@@ -4140,7 +4140,7 @@
    "description_bits": null,
    "boundary_width_fraction": 1.0,
    "boundary_bits": 16.0,
-   "crossings": 1,
+   "crossings": 2,
    "flops_per_token_per_param": 6.0,
    "data_tokens_per_token": 1.0,
    "decode_flops_per_param": 0.0,
@@ -4149,7 +4149,7 @@
    "entry_fee_override": null,
    "fanout_override": null
   },
-  "notes": "m_A 0.6-0.85 by block count; halves boundary crossings. Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter. Backprop stays inside each block; block boundaries carry forward activations only.",
+  "notes": "m_A 0.6-0.85 by block count. Crossings stay 2: backprop stays inside each block and only the K - 1 block boundaries carry forward activations alone, while the construction cuts a token into thousands of slices, so crossings of 1 would need a block per slice, far past the K = 2-4 the multiplier is measured at, where the gap grows steeply with K (wang-2021-infopro/1). Traits as published (from the scaling corpus): state at its stored precision, 96 bits per updated parameter.",
   "scaling": [
    {
     "evidence": [
