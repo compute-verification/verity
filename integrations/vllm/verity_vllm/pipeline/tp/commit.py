@@ -173,6 +173,7 @@ class Options:
     replay_max: int = option("--replay-max", type=int, default=2000, help="cap on the stratified sample per rank (never below one VU per stratum)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="targeted seed (default: each rank's run root after commitment, O6)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None)
+    replay_ranks_at_once: int | None = option("--replay-ranks-at-once", type=int, default=None, metavar="K", help="at most K ranks run their sampled replay at once, each giving its heap back before the next (`pipeline.tp.rank_replay.host_slot`; a rank holds its request Programs while it replays); default: every rank at once")
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full",),
                                          help="each rank's C2 sampled replay + boundary linkage do not run in its process: every rank of every instrumented run "
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
@@ -331,11 +332,7 @@ def main(args: Options) -> int:
         if args.replay_k:
             replay_cfg["k_per_rank"] = versions["sampled_replay"]["k_per_rank"] = TPC.replay_k_per_rank(args.replay_k, world)
     SRT.require(args, replay_cfg)
-    if args.memory_map:
-        if replay_cfg is None or not Path(args.memory_map).is_file():
-            raise SystemExit("--memory-map on a TP Commit needs its request file and --required-manifest with a --build-rank per rank (each rank "
-                             "writes its map from its Programs of record, in its replay)")
-        replay_cfg["memory_map"] = str(Path(args.memory_map).resolve())
+    TPC.replay_host(replay_cfg, versions, out, ranks_at_once=args.replay_ranks_at_once, memory_map=args.memory_map)
     # [MAN-09 per rank] the weights of record: each rank composes its record from ITS rank Program + the pinned checkpoint shards
     weights_pin_cfg = None
     if args.checkpoint_dir:
