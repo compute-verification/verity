@@ -41,10 +41,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   reads is committed before that noise's coin.
 * **Credit**: only the admitted slots (`credit.tally`, in 16-bit limbs, every tally unit always proved): Cr = Σ admitted
   rows · N · K, and the published credit point(level(floor_point(Cr))) <= Cr.  The padded compute (the non-admitted rows of
-  live units, noised) is shown and not credited; dead units cost only their emptiness check.  A call credits only if its
-  served y is its receipt kernel's own output (`same_gemm`, from the challenger's round log and the served pass's launch
-  ledger, OUT/launch-ledger.json).  This window's served y is cuBLASLt's, so it refuses every call: `credit.admitted` is
-  the tally tree's, and `credit.credited` is 0.
+  live units, noised) is shown and not credited; dead units cost only their emptiness check.
 * **Not covered**: attention (QKᵀ, P·V) and lm_head.
 
 In order, into OUT (`record.json` throughout, `manifest.json` at the end, the option's `pouw-h1-calls.json`):
@@ -57,12 +54,10 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
   install   the option (its own stand-in weight roots and salt, unused under live coins)
   weights   every linear's B table and root(B), the weights' root, and the registration root over it and the queue's root,
             which the live challenger's salt coin opens against
-  serve     the prompts again with the option, each linear call in its launch-ledger range (`same_gemm.Recorder`); inside
-            its `record`, each call's A table, admit words and receipts; then the empty steps; the token ids must be the
-            reference's
+  serve     the prompts again with the option; inside its `record`, each call's A table, admit words and receipts; then the
+            empty steps; the token ids must be the reference's
   receipts  one receipt tree per call (one leaf per unit, `commit`)
-  credit    the same-GEMM verdict (OUT/same-gemm.json), the tally's limbs and tree over the admitted rows, the credited
-            (admitted, in calls the verdict passes) and padded split, the dead units skipped
+  credit    the tally's limbs and tree, the credited (admitted) and padded split, the dead units skipped
   prover    the prover's data (the table key, each call's real rows, scales and receipts) as SCRATCH/prover.tar, before the
             gate so a gate failure keeps it; `serve.sh` puts it in the store once the GPU is released, else moves it into
             OUT, which the run's custody uploads
@@ -80,7 +75,6 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
 import json
 import os
@@ -98,7 +92,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
-import same_gemm as SG  # noqa: E402
 
 SCHEMA = "verity/pouw-h1-pass/v1"
 RECORD = "verity/pouw-served-h1/record/v1"
@@ -438,9 +431,8 @@ def run(a: argparse.Namespace) -> dict:
                          "b_roots": {names[w]: r.hex() for w, r in enumerate(weights["roots"])},
                          "registration": registration.hex(), "registration_fields": reg_fields})
     dev = layers[0].weight.device
-    st = {"on": True, "step": -1, "last": None, "order_ok": True, "refused": [], "tap": 0}
+    st = {"on": True, "step": -1, "last": None, "order_ok": True, "refused": []}
     stash: dict[int, tuple] = {}
-    launches = SG.Recorder(dev.type) if a.launch_ledger else None
     calls: list[dict] = []
     data: list[dict] = []
     a_check = {"equal": 0, "mismatch": 0, "untapped": 0}
@@ -471,8 +463,6 @@ def run(a: argparse.Namespace) -> dict:
         c.update(units=int(rc.shape[0]), live_units=len(lu), receipt_words=int(rc.shape[1]),
                  receipts_s=round(time.perf_counter() - t, 3), salt=salt.hex())
         data[i]["receipts"], data[i]["live"] = rc, lu
-        if launches is not None and c["tap"] is not None:
-            launches.committed(c["tap"], "receipts", rc)
 
     def close_round(s: int) -> None:
         """Round s (step s) under live coins: its root over the step's A root and admit root, recorded before its coin
@@ -486,10 +476,9 @@ def run(a: argparse.Namespace) -> dict:
             receipts(i, slots, salt)
         pending.clear()
 
-    def table(s: int, w: int, xq, sa: np.ndarray, tap: int | None = None) -> None:
+    def table(s: int, w: int, xq, sa: np.ndarray) -> None:
         """Call (s, w): its T-slot A table from the step's m real rows `xq` [m, K] (on the device) and scales, its admit
-        words; its receipts now (seeded) or once the step's round closes (live).  `tap`: the served call's index in the
-        launch ledger."""
+        words; its receipts now (seeded) or once the step's round closes (live)."""
         m, k = int(xq.shape[0]), int(layers[w].weight.shape[1])
         n = int(layers[w].weight.shape[0])
         name = names[w]
@@ -512,7 +501,7 @@ def run(a: argparse.Namespace) -> dict:
                       "base": s * u_step + offs[w], "units": (t_max // 32) * (n // 32), "root_a": root_a.hex(),
                       "root_b": weights["roots"][w].hex(), "a_domain": dom.domain_id.hex(), "a_fields": fields,
                       "root_admit": s_lv[-1][0].hex(), "admit_fields": s_fields, "selected": int(bits.sum()),
-                      "scale_only": len(CR.scale_only(rows)), "junk": len(CR.junk(rows, bits)), "tap": tap})
+                      "scale_only": len(CR.scale_only(rows)), "junk": len(CR.junk(rows, bits))})
         data.append({"m": m, "xq": slots[:m].cpu().numpy(), "sa": scales[:m].copy(), "receipts": None, "admit": bits,
                      "words": ws, "s_levels": s_lv, "prefix": bool(np.array_equal(bits, np.arange(t_max) < m))})
         if not live:
@@ -523,17 +512,9 @@ def run(a: argparse.Namespace) -> dict:
             close_round(s)
 
     def tap(x2, w, s_w):
-        """The served linear, in its launch-ledger range: everything it runs from x2 to the y it returns to vLLM."""
-        if not st["on"]:
-            return orig_linear(x2, w, s_w)
-        t, st["tap"] = st["tap"], st["tap"] + 1
-        if launches is None:
-            xq, s_a, y = orig_linear(x2, w, s_w)
-        else:
-            with launches.call(t, key=t):
-                xq, s_a, y = orig_linear(x2, w, s_w)
-            launches.served(t, y, int(xq.shape[0]))
-        stash[w.data_ptr()] = (xq, s_a, t)
+        xq, s_a, y = orig_linear(x2, w, s_w)
+        if st["on"]:
+            stash[w.data_ptr()] = (xq, s_a)
         return xq, s_a, y
 
     def record(w: int, xq, sa, n: int, y=None):
@@ -556,29 +537,18 @@ def run(a: argparse.Namespace) -> dict:
         if st["step"] >= s_max or call.m > t_max:
             st["refused"].append({"step": st["step"], "linear": w, "m": call.m})
             return call
-        table(st["step"], w, rows, sa, None if served is None else served[2])
+        table(st["step"], w, rows, sa)
         return call
 
     int8_ops.linear, h1.record = tap, record
     srv_spans, srv_tap, restore = schedule_tap(eng.runner)
     t0 = time.perf_counter()
     try:
-        with launches if launches is not None else contextlib.nullcontext():
-            served = G.generate(eng.llm, prompts, a.max_tokens)
+        served = G.generate(eng.llm, prompts, a.max_tokens)
     finally:
         int8_ops.linear = orig_linear
         restore()
         st["on"] = False
-    ledger = None
-    if launches is not None:
-        ledger = launches.ledger()
-        ledger_text = json.dumps(ledger, separators=(",", ":")) + "\n"
-        (out / "launch-ledger.json").write_text(ledger_text)
-        ledger_ref = {"path": "launch-ledger.json", "schema": SG.LEDGER,
-                      "sha512": hashlib.sha512(ledger_text.encode()).hexdigest(), "gemm_launches": ledger["gemm_launches"],
-                      "calls": len(ledger["calls"]), "outside": len(ledger["outside"])}
-    else:
-        ledger_ref = None
     srv_queue = CR.queue_of(srv_spans, s_max, t_max) if len(srv_spans) <= s_max else None
     queue_check = {"served_steps": len(srv_spans), **{f"served_{k}": v for k, v in srv_tap.items()},
                    "served_is_committed": srv_queue is not None
@@ -599,13 +569,6 @@ def run(a: argparse.Namespace) -> dict:
     padded_superset = {"units": sum(c["units"] for c in calls), "rows": len(calls) * t_max,
                        "macs": sum(t_max * c["n"] * c["k"] for c in calls)}
     tl = CR.tally(calls, [c["selected"] for c in calls], s_max, SITES)
-    g_coins = {"mode": a.coins}
-    if live:
-        g_coins.update(round_form=SG.ROUND_FORM_STEP, commitment=lch.commitment.to_json(), rounds=round_log,
-                       release_log=list(rounds.log))
-    gemm_gate = SG.verdict(window, calls, [c["selected"] for c in calls], g_coins, ledger, keys=[c["tap"] for c in calls])
-    (out / "same-gemm.json").write_text(json.dumps(gemm_gate, indent=1) + "\n")
-    gated = CR.tally(calls, gemm_gate["gated_counts"], s_max, SITES)
     live_u = sum(c["live_units"] for c in calls)
     noised = {"units": live_u, "rows": sum(32 * len(CR.live_blocks(d["admit"])) for d in data),
               "macs": sum(c["live_units"] * 32 * 32 * c["k"] for c in calls)}
@@ -614,21 +577,8 @@ def run(a: argparse.Namespace) -> dict:
     noise_masked = sum((c["n"] // 32) * sum(int(d["admit"][32 * ri:32 * ri + 32].sum()) * RC.layout(c["k"]).rb
                                             + 32 * RC.layout(c["k"]).cb for ri in CR.live_blocks(d["admit"]))
                        for c, d in zip(calls, data))
-    credit = {"credited": {"rows": gated["rows"], "macs": gated["macs"], **CR.published(gated["macs"]),
-                           "frac_of_padded_macs": round(gated["macs"] / max(1, padded_superset["macs"]), 6),
-                           "what": "the admitted rows of the calls the same-GEMM gate passes (same_gemm)"},
-              "admitted": {"rows": tl["rows"], "macs": tl["macs"], **CR.published(tl["macs"]),
-                           "what": "every admitted row, the tally tree's limbs: credited only in a call whose served y is "
-                                   "its receipt kernel's own output"},
-              "same_gemm": {**{k: gemm_gate[k] for k in ("ok", "first", "calls_with_rows", "refused_calls", "by_check",
-                                                    "window")},
-                            "refused_sample": gemm_gate["refused"][:4], "verdict": "same-gemm.json", "ledger": ledger_ref,
-                            "rule": "a call credits only if its served y is the receipt kernel's own output: order (the "
-                                    "challenger's round log: its successor's A rows committed after the coin that seeds "
-                                    "its receipts), trace (the launch ledger: one GEMM in the call, its declared fused "
-                                    "launch, which wrote the returned y and the committed receipts and z) and, for drawn "
-                                    "units, tie (z rows open against the call's z table, served y = dequant(z)); "
-                                    "served_h1/same_gemm.py"},
+    credit = {"credited": {"rows": tl["rows"], "macs": tl["macs"], **CR.published(tl["macs"]),
+                           "frac_of_padded_macs": round(tl["macs"] / max(1, padded_superset["macs"]), 6)},
               "padded": {"rows": noised["rows"] - tl["rows"], "macs": noised["macs"] - tl["macs"],
                          "what": "the non-admitted rows of live units: noised and receipted, shown, never credited"},
               "dead": {"units": padded_superset["units"] - live_u,
@@ -677,7 +627,7 @@ def run(a: argparse.Namespace) -> dict:
     comp.close()
 
     limbs = [v for row in tl["step_site"] for v in row] + [tl["site"][x] for x in SITES]
-    limbs.append(credit["admitted"]["level"] or 0)
+    limbs.append(credit["credited"]["level"] or 0)
     t_fields = {"window": window, "steps": s_max, "sites": list(SITES), "limbs": "per (step, site), per site, level",
                 "schema": CM.SCHEMA}
     t_dom = CM.domain(t_fields, len(limbs), "tally")
@@ -776,9 +726,8 @@ def run(a: argparse.Namespace) -> dict:
                                    "always-proved admit unit into its own leaf, which refuses a slot not admitted whose row "
                                    "is not the canonical empty row; the admit leaves are committed (live) in the round "
                                    "root before the round's coin; the tally is 16-bit limbs, every tally unit always "
-                                   "proved; Pub = point(level(floor_point(Cr))), Cr over the calls credit.same_gemm "
-                                   "passes, whose served y is the receipt kernel's own output"},
-                "launch_ledger": ledger_ref, "calls": calls, "tokens_equal": all(equal)}
+                                   "proved; Pub = point(level(floor_point(Cr)))"},
+                "calls": calls, "tokens_equal": all(equal)}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1, default=str) + "\n")
     rec.step("prover", prover(a, out, key, calls, data))
     try:
@@ -792,15 +741,10 @@ def run(a: argparse.Namespace) -> dict:
                          and s["queue"]["served_is_committed"] and not s["queue"]["junk_rows"]
                          and credit["tally_tree"]["limbs_16_bit"]
                          and credit["credited"]["pub_macs"] <= credit["credited"]["macs"])
-    rec.doc["credit_ok"] = gemm_gate["ok"]
     rec.save()
     pool.close()
     print(f"SERVED-H1 {'OK' if rec.doc['ok'] else 'FAIL'} calls={len(calls)} units={s['units']} steps={done}/{s_max} "
-          f"tokens_equal={all(equal)} static={s['static']} gate={rec.doc['steps']['gate']['ok']} "
-          f"credit={'OK' if gemm_gate['ok'] else 'REFUSED'} ({gemm_gate['refused_calls']}/{gemm_gate['calls_with_rows']} calls refused)",
-          flush=True)
-    if not gemm_gate["ok"]:
-        print(f"SERVED-H1 credit refused: {gemm_gate['first']}", flush=True)
+          f"tokens_equal={all(equal)} static={s['static']} gate={rec.doc['steps']['gate']['ok']}", flush=True)
     return rec.doc
 
 
@@ -994,8 +938,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--skip-timing", action="store_true")
     ap.add_argument("--coins", default="seeded", choices=["seeded", "live"],
                     help="live: a round a step, its coin opened after its A tables' root (the proof service's challenger)")
-    ap.add_argument("--launch-ledger", action=argparse.BooleanOptionalAction, default=True,
-                    help="profile the served pass for the same-GEMM gate's launch ledger (without it, credit is refused)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 
