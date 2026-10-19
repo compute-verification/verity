@@ -29,7 +29,8 @@ instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Black
   BULKRED; UTMALDG and UTMASTG in the UTMA class of their box; UBLKCP in UBLKCP4K, any larger in BULKMAX, a multicast
   one in UTMAMC; UMEMSETS in BULKMAX.
 * tensor: UTC*MMA in `Tc05`; LDT, LDTM, STT, STTM, UTCCP and UTCSHIFT in `Tmem`; BMMA, which `class_of` puts in XU, in
-  BMMA168256; DMMA in DMMA.
+  BMMA168256; DMMA in DMMA; IMMA.1688, which `class_of` puts in IMMA8816, in IMMA16816 (no document gives its shape,
+  and an m16n8 one writes 128 words).
 * texture: SULD in SULD1 or SULD4, TXQ in TEX1, TMML in TEX2, TXD in TEX4.
 * warp and uniform: MATCH in VOTE; CREDUX in REDUX; UTCATOMSWS and every other U-prefixed opcode in UNI or UNI64
   (`class_of`).

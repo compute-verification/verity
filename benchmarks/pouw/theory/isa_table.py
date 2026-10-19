@@ -16,7 +16,8 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
     Blackwell and Rubin; last updated 12 Oct 2026) is placed in classes of its device's table (`PLACE`), read as
     writing no 32-bit word (`NO_WORD`), or named unplaced (`UNPLACED`); sm_120's is Blackwell's list without its tensor
     core memory instructions; and where `class_of` (`facet_break/loads.py`) places a bare mnemonic it agrees, but for
-    the disagreements `CLASS_OF_WRONG` names.
+    the disagreements `CLASS_OF_WRONG` names, and a dotted form it places in a class whose row may not bound it is
+    moved by the map to one that does (`FORMS_MOVED`).
 
 A placement is a words bound only: a class's rate is the data sheet's, measured for the forms its census probed.
 
@@ -229,6 +230,10 @@ CLASS_OF_WRONG = {
     **{m: "an FP32 opcode whose name holds HADD2, HFMA2 or HMUL2" for m in ("FHADD2", "FHFMA2", "FHMUL2")},
 }
 
+#: a dotted form `class_of` places in a class whose row may not bound it: its class there, the map's, and the words
+#: it may write (IMMA.1688's shape no document gives; an m16n8 one writes 128)
+FORMS_MOVED = {"IMMA.1688": ("IMMA8816", "IMMA16816", 128)}
+
 
 def opcode_list(text: str) -> dict[str, list[str]]:
     """A documented list, category to mnemonics."""
@@ -317,6 +322,13 @@ def class_of_disagrees(ops: set[str], place: dict[str, set[str]]) -> set[str]:
     return {op for op in ops if op in place and (c := class_of(op)) is not None and c not in place[op]}
 
 
+def forms_moved_ok(moved: dict[str, tuple[str, str, int]], rows: dict[str, tuple[str, int]], doc: str) -> bool:
+    """Each moved form is `class_of`'s in a class whose row writes fewer than its words, the map in `Isa/Classes.lean`
+    moves it, and its new class's row writes at least its words."""
+    return all(class_of(f) == old and rows[old][1] < w <= rows[new][1]
+               and f"{f}, which `class_of` puts in {old}, in {new}" in doc for f, (old, new, w) in moved.items())
+
+
 def main() -> int:
     checks = Checks()
     sources = {p.name: p.read_text(encoding="utf-8") for p in sorted(ISA.glob("*.lean"))}
@@ -381,6 +393,9 @@ def main() -> int:
     wrong = class_of_disagrees(every, place)
     checks.check("class_of agrees with every placement of a bare mnemonic it places, but CLASS_OF_WRONG's",
                  wrong == set(CLASS_OF_WRONG), ", ".join(sorted(wrong ^ set(CLASS_OF_WRONG))) or f"{len(wrong)} named")
+    doc = " ".join(sources["Classes.lean"].split())
+    checks.check("a form the map moves (IMMA.1688) is class_of's in a row below its words, and the map's row bounds it",
+                 forms_moved_ok(FORMS_MOVED, rows, doc), str(FORMS_MOVED))
 
     if checks.mutations:
         without = {**sources, "Classes.lean": sources["Classes.lean"].replace("| BMMA168256 | IMMAS4 | DMMA",
@@ -400,6 +415,8 @@ def main() -> int:
                         off_route(escape_classes | {"MOV64"}, rows) == {"MOV64"})
         checks.mutation("a class_of disagreement left unnamed (UBLKCP) is caught",
                         class_of_disagrees(every, place) != set(CLASS_OF_WRONG) - {"UBLKCP"})
+        checks.mutation("a moved form left in class_of's class (IMMA.1688 in IMMA8816) is caught",
+                        not forms_moved_ok({"IMMA.1688": ("IMMA8816", "IMMA8816", 128)}, rows, doc))
 
     return checks.finish()
 
