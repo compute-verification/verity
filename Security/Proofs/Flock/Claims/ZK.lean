@@ -58,6 +58,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcLc
 import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Claims.ZK.SimPiop
+import Proofs.Flock.Claims.ZK.FinExe
 import Proofs.Flock.Claims.ZK.Worker
 import Proofs.Flock.Claims.ZK.Switched
 import Proofs.Flock.Claims.ZK.Server
