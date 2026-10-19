@@ -79,12 +79,13 @@ def IsaRowsMemory (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : P
 a bulk or tensor copy or reduction writes its box's or copy's bytes. -/
 def IsaRowsBulk (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Prop := RowsOf .bulk Tb A H
 
-/-- `accounting-isa-rows-texture` (PTX ISA 9.4 §9.7.12.3 tex, §9.7.12.4 tld4, §9.7.13.1 suld, §9.7.13.3 sured). **The
-texture rows hold**: a texture or surface instruction writes its texels' or elements' words. -/
+/-- `accounting-isa-rows-texture` (PTX ISA 9.4 §9.7.12.3 tex, §9.7.12.4 tld4, §9.7.13.1 suld, §9.7.13.2 sust,
+§9.7.13.3 sured). **The texture rows hold**: a texture or surface instruction writes its texels' or elements' words. -/
 def IsaRowsTexture (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Prop := RowsOf .texture Tb A H
 
 /-- `accounting-isa-rows-warp` (PTX ISA 9.4 §9.7.10.6 shfl.sync, §9.7.15.10 vote.sync, §9.7.15.11 match.sync,
-§9.7.15.13 redux.sync). **The warp rows hold**: a shuffle writes one word a lane, a warp reduction one word. -/
+§9.7.15.13 redux.sync). **The warp rows hold**: a shuffle, vote or match writes one word a lane, a warp reduction
+one word. -/
 def IsaRowsWarp (Tb : K → Row) (A : Anatomy K T L U) (H : Heads K T L U) : Prop := RowsOf .warp Tb A H
 
 end Accounting.Assumptions.Isa

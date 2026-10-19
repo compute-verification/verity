@@ -11,8 +11,20 @@ instances there.
 The classes are DS-120's census classes (`benchmarks/pouw/facet_break/loads.py`'s `class_of`, the names of
 `machine_model/data/census/DS-120.csv` and `floors.csv`), with four that `isa_escape.py` attacks and `class_of` puts in
 no class: `BMMA168256` (mma.sync .b1), `IMMAS4` (mma.sync and mma.sp .s4), `REDUX` (redux.sync) and `VSIMD` (the SIMD
-video instructions, §9.7.20.2); and `LDCU128`, LDCU.128, which `class_of` puts in UNI though it writes four uniform
-registers.
+video instructions, §9.7.20.2); `LDCU128`, LDCU.128, which `class_of` puts in UNI though it writes four uniform
+registers; the heads the census never probed: global stores (`STG32` … `STG256`), surface stores (`SUST`) and vote
+and match (`VOTE`); and the bulk transfers past sm_120's shared memory: `BULKMAX` and `BULKRED` (a copy or reduction
+up to sm_90a's and sm_100a's 227 KB) and `UTMAMC` (a multicast tensor copy, its box into up to 16 CTAs).
+
+**An opcode's class.** `class_of` places the census's forms. Every other opcode that writes a 32-bit word is in the
+class of its unit at the next width up (a class's `words` bounds every form in it): LD and LDL in the LDG class of their
+width, ST and STL in the STG class, STS.32 and STS.64 in STS128, RED.E in RED32 or RED64, mbarrier operations (SYNCS) in
+ATOMS64, SULD in SULD1 or SULD4; the U-prefixed bulk and tensor-memory opcodes, which `class_of`'s uniform rule puts in
+UNI, in their bulk, tcgen05 or tensor-memory class (UBLKRED and UTMAREDG in TMAred512, UTMALDG in the UTMA class of its
+box, UBLKCP in UBLKCP4K, any larger in BULKMAX or BULKRED and a multicast one in UTMAMC, UTC*MMA in `Tc05`, UTCCP and
+UTCSHIFT in `Tmem`); BMMA, which it puts in XU, in BMMA168256; and every other lane instruction that writes at most two
+words a lane and multiplies nothing (P2R, R2P, IABS, SGXT, BMSK, S2R, CS2R, MOVM, ELECT, TXQ) in NOROW. An instruction
+that writes no 32-bit word (a SETP's predicate, a branch, a barrier, a fence) heads no word and is in no class.
 
 A row's `words` is its class's widest form's: a lane class two words a lane (`Row.lane`), an atomic that returns its
 old value its memory and register words together (CAS.128: four of each a lane, 256 a warp instruction), a load or
@@ -53,12 +65,13 @@ def Sync.row : Sync → Row
   | .BMMA168256 => Row.mma .mma .b1 .b1 .s32 128
   | .IMMAS4 => Row.mma .mma .s4 .s4 .s32 128
 
-/-- **The classes outside the tensor cores**: DS-120's other classes, `REDUX`, `VSIMD` and `LDCU128`. -/
+/-- **The classes outside the tensor cores**: DS-120's other classes, `REDUX`, `VSIMD`, `LDCU128`, the global and
+surface stores and `VOTE`. -/
 inductive Base
   | UNI | UNI64 | LDCU128
   | ALU | IMAD | FFMA | HFMA2 | VIMNMX | F2FS | XU | SEL | NOROW | VSIMD
   | IMADW | ALU64 | W2 | DMUL | CVT64 | MOV64
-  | SHFL | REDUX
+  | SHFL | REDUX | VOTE
   | LDS32 | LDS64 | LDS128
   | LDG32 | LDG64 | LDG128 | LDG128CG | LDG128NA | LDG256 | LDG256CG
   | LDC64 | LDCDIV | LDCUNI | LDGSTS16
@@ -66,17 +79,18 @@ inductive Base
   | LDSM4_X1 | LDSM4_X2 | LDSM4_X4 | LDSM4T_X1 | LDSM4T_X2
   | LDSM6_X1 | LDSM6_X2 | LDSM6_X4 | LDSM6T_X1 | LDSM6T_X2
   | LDSM8T_X1 | LDSM8T_X2
-  | STS128 | DSMST4P
+  | STS128 | DSMST4P | STG32 | STG64 | STG128 | STG256
   | STSM_X1 | STSM_X2 | STSM_X4 | STSM_X1T | STSM_X2T | STSM_X4T
   | STSM8T_X1 | STSM8T_X2 | STSM8T_X4
   | ATOMG32 | ATOMG64 | ATOMS32 | ATOMS64 | ATOME32 | ATOME32P | ATOME64
   | RED32 | RED64 | REDV | REDG32 | REDG64 | REDAS32 | REDAS64
   | TMA512 | TMAred512 | UBLKCP4K
   | UTMA | UTMA8 | UTMA512 | UTMA1K | UTMA2K | UTMA4K | UTMA8K | UTMA16K | UTMA32K | UTMA48K | UTMA64K | UTMABIG
+  | BULKMAX | BULKRED | UTMAMC
   | G4_16 | G4_32 | G4_256 | G4_1K
   | TEX1 | TEX2 | TEX4 | TEXBIL
   | TLD1 | TLD2 | TLD2D1 | TLD2D4 | TLD4G | TLD4w
-  | SULD1 | SULD4 | SURED
+  | SULD1 | SULD4 | SUST | SURED
   deriving DecidableEq, Fintype, Repr
 
 /-- **The rows outside the tensor cores**, family by family (`Family` cites each family's PTX sections):
@@ -85,11 +99,14 @@ inductive Base
   loads four from a constant bank at a uniform address the program computes (a gather).
 * `lane` (§9.7.1–§9.7.9, §9.7.20): at most two words a lane. IMAD.WIDE, IADD.64, DADD/DFMA, DMUL and the 64-bit
   conversions are side units at their two words a lane; MOV.64 copies.
-* `warp`: SHFL selects a lane's word (§9.7.10.6), one word a lane; REDUX writes one uniform word (§9.7.15.13).
+* `warp`: SHFL selects a lane's word (§9.7.10.6), one word a lane; VOTE writes a ballot or match mask, one word a
+  lane (§9.7.15.10, §9.7.15.11); REDUX writes one uniform word (§9.7.15.13).
 * `memory` (ld §9.7.10.8, st §9.7.10.11, cp.async §9.7.10.28, ldmatrix §9.7.16.5.15, stmatrix §9.7.16.5.16, atom
   §9.7.15.5, red §9.7.15.6, red.async §9.7.15.7): its bytes over four, every lane.
-* `bulk` (§9.7.10.28.4–§9.7.10.28.5): its box's or copy's bytes over four.
-* `texture` (tex §9.7.12.3, tld4 §9.7.12.4, suld §9.7.13.1, sured §9.7.13.3): its texels' or elements' words. -/
+* `bulk` (§9.7.10.28.4–§9.7.10.28.5): its box's or copy's bytes over four, at most the shared memory's (99 KB on
+  sm_120, 227 KB on sm_90a and sm_100a), and a multicast copy's times its CTAs (at most 16, `.multicast::cluster`).
+* `texture` (tex §9.7.12.3, tld4 §9.7.12.4, suld §9.7.13.1, sust §9.7.13.2, sured §9.7.13.3): its texels' or
+  elements' words. -/
 def Base.row : Base → Row
   | .UNI =>
     { fam := .uniform, exec := .uniform, arith := .mul, dataAddr := true, a := .s32, b := .s32, acc := .s32,
@@ -106,7 +123,7 @@ def Base.row : Base → Row
   | .F2FS => Row.lane .lane .convert false .issue
   | .XU => Row.lane .lane .unary false .xu
   | .SEL => Row.lane .lane .move true .issue
-  | .NOROW => Row.lane .lane .move false .issue
+  | .NOROW => Row.lane .lane .logic false .issue
   | .VSIMD => Row.lane .lane .add false .issue
   | .IMADW => Row.side .lane .lane .mul false 64 (a := .s32) (b := .s32) (acc := .s64)
   | .ALU64 => Row.side .lane .lane .add false 64
@@ -116,6 +133,7 @@ def Base.row : Base → Row
   | .MOV64 => Row.copy .lane 64
   | .SHFL => Row.lane .warp .move true .shfl
   | .REDUX => Row.side .warp .warp .add false 1
+  | .VOTE => Row.lane .warp .logic true .issue
   | .LDS32 => Row.side .memory .lane .move true 32 .smem
   | .LDS64 => Row.side .memory .lane .move true 64 .smem
   | .LDS128 => Row.side .memory .lane .move true 128 .smem
@@ -150,6 +168,10 @@ def Base.row : Base → Row
   | .LDSM8T_X2 => Row.side .memory .lane .move true 128
   | .STS128 => Row.side .memory .lane .move true 128 .smem
   | .DSMST4P => Row.side .memory .lane .move true 128
+  | .STG32 => Row.side .memory .lane .move true 32
+  | .STG64 => Row.side .memory .lane .move true 64
+  | .STG128 => Row.side .memory .lane .move true 128
+  | .STG256 => Row.side .memory .lane .move true 256
   | .STSM_X1 => Row.side .memory .lane .move true 32
   | .STSM_X2 => Row.side .memory .lane .move true 64
   | .STSM_X4 => Row.side .memory .lane .move true 128
@@ -188,6 +210,9 @@ def Base.row : Base → Row
   | .UTMA48K => Row.side .bulk .async .move true 12288
   | .UTMA64K => Row.side .bulk .async .move true 16384
   | .UTMABIG => Row.side .bulk .async .move true 25344
+  | .BULKMAX => Row.side .bulk .async .move true 58112
+  | .BULKRED => Row.side .bulk .async .add true 58112
+  | .UTMAMC => Row.side .bulk .async .move true 929792
   | .G4_16 => Row.side .bulk .async .move true 16
   | .G4_32 => Row.side .bulk .async .move true 32
   | .G4_256 => Row.side .bulk .async .move true 256
@@ -204,6 +229,7 @@ def Base.row : Base → Row
   | .TLD4w => Row.side .texture .async .convert true 128
   | .SULD1 => Row.side .texture .async .convert true 32
   | .SULD4 => Row.side .texture .async .convert true 128
+  | .SUST => Row.side .texture .async .move true 128
   | .SURED => Row.side .texture .async .add true 32
 
 end Accounting.Isa
