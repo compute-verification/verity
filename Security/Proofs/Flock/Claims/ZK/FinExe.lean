@@ -954,6 +954,66 @@ theorem repMix3_eq (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockC
   rw [map_pure]
   simp only [eraseZ, eraseL_eraseL]
 
+/-! ### The cut's rep reads its final-only inputs only into the final-only data -/
+
+/-- A level's queries without the opening: the positions and the consistency coins (`queryP`'s). -/
+def queryPos (io : Asks FlockComplete.PS) (nonce : ℕ → ℕ → UInt64) (lv : _root_.Flock.Level) :
+    LP FlockComplete.PS (Array ℕ × Array _root_.Flock.F128) := do
+  powP nonce 0
+  let coins ← liftT (sampleVecP io lv.q)
+  powP nonce 1
+  let alpha ← liftT (sampleVecP io (Nat.log2 (lv.q - 1) + 1))
+  return (_root_.Flock.positions lv coins, alpha)
+
+theorem queryP_eq (io : Asks FlockComplete.PS) (nonce : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme)
+    (lv : _root_.Flock.Level) (cm : Commit) :
+    queryP io nonce ms lv cm =
+      (fun pa => (openP ms cm lv pa.1, consW lv.cols pa.1 pa.2)) <$> queryPos io nonce lv := by
+  unfold queryP queryPos
+  simp only [map_bind, map_pure]
+
+theorem eraseLP_openP {cm cm' : Commit} (h : cm.layers = cm'.layers) (ms : _root_.Flock.MerkleScheme)
+    (lv : _root_.Flock.Level) (pos : Array ℕ) : eraseLP (openP ms cm lv pos) = eraseLP (openP ms cm' lv pos) := by
+  unfold eraseLP openP
+  rw [h]
+  split_ifs <;> simp [Array.map_map, Function.comp_def]
+
+theorem eraseLP_eraseLP (op : _root_.Flock.LevelProof) : eraseLP (eraseLP op) = eraseLP op := by
+  simp only [eraseLP, Array.map_map, Function.comp_def]
+
+/-- A tuple with its fourth entry mapped. -/
+def at4 {A B C D E : Type} (f : D → D) (t : A × B × C × D × E) : A × B × C × D × E :=
+  (t.1, t.2.1, t.2.2.1, f t.2.2.2.1, t.2.2.2.2)
+
+theorem run_bind_erase {σ α β : Type} {x y : StateT σ (_root_.Flock.TMW FlockComplete.PS) α} (e : α → α) (s : σ)
+    {F : α × σ → _root_.Flock.TMW FlockComplete.PS β} (hF : ∀ a s, F (a, s) = F (e a, s)) (hxy : e <$> x = e <$> y) :
+    x.run s >>= F = y.run s >>= F := by
+  have k : ∀ z : StateT σ (_root_.Flock.TMW FlockComplete.PS) α, z.run s >>= F = (e <$> z).run s >>= F := by
+    intro z
+    rw [StateT.run_map, bind_map_left]
+    exact bind_congr fun ⟨a, s'⟩ => hF a s'
+  rw [k x, k y, hxy]
+
+/-- **The cut's Ligerito opening reads level 0's commitment only through its cap and tree**, but for the opened rows
+and salts, which only the final message reads. -/
+theorem ligeritoCut_erase (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
+    (ms : _root_.Flock.MerkleScheme) (sch : _root_.Flock.Schedule) (T : _root_.Flock.F128) {cm cm' : Commit}
+    (hcap : cm.cap = cm'.cap) (hlay : cm.layers = cm'.layers) (b : Array _root_.Flock.F128)
+    (lay : _root_.Flock.Zk.PadLayout) (src : RepSrc) :
+    (fun z => (eraseL z.1, z.2)) <$> ligeritoCut io hs ms sch T cm b lay src =
+      (fun z => (eraseL z.1, z.2)) <$> ligeritoCut io hs ms sch T cm' b lay src := by
+  unfold ligeritoCut
+  rw [hcap]
+  simp only [map_bind]
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  refine run_bind_erase (at4 eraseLP) _ ?_ ?_
+  · rintro ⟨caps, rproofs, fin, op0, zl, initCh, rho, b0, y⟩ s
+    simp only [at4, map_pure, eraseL, eraseLP_eraseLP]
+  · simp only [map_bind, map_pure, queryP_eq, bind_map_left, at4, eraseLP_openP hlay]
+
 end FinRep
 
 /-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`): at opened coins
