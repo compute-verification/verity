@@ -8,11 +8,12 @@ import Proofs.Nci.Threads
 `ThreadedThrottled`'s proof with the declared division replaced by the windows. `Windows` divides the developer's
 region over `[0, t)` into `n ⌈t/ω⌉` windows of at most `Φ_X ω ≤ Γ` gates (its memory constraint holds at any circuit's
 total width, so the bound on each window's starting state takes its place); a window reads at most its starting state
-plus `β_X ω`, so at most `K = R + r ω` (`windows_small`). Pulled back through the containment (`Nci.SecurityProofs.pull`), the windows
-divide the reference circuit into pieces no larger that read no more, each small at `(Γ, K)`, and Theorem 1
-(`Nci.SecurityProofs.ThreadedReads`) bounds each piece's counted multiplications by `K Λ(K) / b_a`; every counted
-multiplication lies in one piece (`card_M_eq_sum`). The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r`
-from `(2R)² / ω = 4 R r`.
+plus `β_X ω`, so at most `K = R + r ω` (`windows_small`). Pulled back through the containment
+(`Nci.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger that read no more, each
+small at `(Γ, K)`, and Theorem 1 (`Nci.SecurityProofs.ThreadedReads`) bounds each piece's counted multiplications by
+`K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
+
+The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r` from `(2R)² / ω = 4 R r`.
 -/
 
 namespace Accounting.SecurityProofs.Actual
