@@ -117,8 +117,8 @@ theorem CountingSel : Accounting.Guarantees.TS.CountingSel := by
     refine Or.inl ⟨hg, ?_⟩
     have h1 : pub x - P.game.deficiency x * Nw ≤ (P.run x).fixed * S := (div_le_iff₀ hSpos).mp hfix
     by_contra hcon
-    push_neg at hcon
-    have h2 : Nw * P.game.deficiency x < Nw * (Λ * Real.log (1 / δs)) := mul_lt_mul_of_pos_left hcon hNw
+    have h2 : Nw * P.game.deficiency x < Nw * (Λ * Real.log (1 / δs)) :=
+      mul_lt_mul_of_pos_left (not_le.mp hcon) hNw
     linarith
 
 end Accounting.SecurityProofs.TS
