@@ -14,6 +14,7 @@ export PATH=$CUDA/bin:$PATH
 if [ -f benchmarks/hash/dither/arm.sh ]; then bash benchmarks/hash/dither/arm.sh "$S" > "$OUT/arm-build.log" 2>&1 || { echo "sbench: ARM_BUILD_FAIL"; tail -30 "$OUT/arm-build.log"; exit 11; }; fi
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
+export PATH=$(dirname "$PY"):$PATH
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/hash/dither
 export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f DITHER_BUILD=$S
 echo "sbench: asking for one GPU at $(date -u +%H:%M:%SZ)"

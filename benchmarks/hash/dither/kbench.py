@@ -106,8 +106,7 @@ def bench(a) -> int:
     lib = Lib(a.lib).lib
     dev = torch.device("cuda")
     torch.manual_seed(0)
-    first = lib.kc_setup(128, 128, 256, 1)
-    stream = torch.cuda.ExternalStream(lib.kc_stream(first))
+    stream = torch.cuda.Stream()   # torch's (non-blocking): a capture on a blocking stream refuses the legacy stream's use
     out = Path(a.out)
     for name, m, n, k in shapes(a.shapes):
         mp = mpad(m)
@@ -115,7 +114,7 @@ def bench(a) -> int:
         copies = 1 if m >= 2048 else max(1, math.ceil(2 * L2_BYTES / wbytes))
         cps = [lib.kc_setup(mp, n, k, 0x5EED0000 + 17 * i + m) for i in range(copies)]
         for c in cps:
-            lib.kc_set_stream(c, lib.kc_stream(first))
+            lib.kc_set_stream(c, C.c_void_p(stream.cuda_stream))
         torch.cuda.synchronize()
         with torch.cuda.stream(stream):
             ws = [torch.randint(-127, 128, (n, k), dtype=torch.int8, device=dev) for _ in range(copies)]

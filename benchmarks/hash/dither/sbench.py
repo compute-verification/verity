@@ -70,8 +70,10 @@ def stock_checkpoint(pin: str, scratch: Path) -> Path:
 
 
 def engine_args(gpu_mem: float) -> dict:
+    # FlashInfer's autotune off, as `engine.build` sets it for the int8-exact engine (it tunes no kernel these engines run)
     return {"max_num_seqs": MAX_SEQS, "max_num_batched_tokens": MAX_TOKENS_STEP, "gpu_memory_utilization": gpu_mem,
-            "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0}
+            "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0,
+            "kernel_config": {"enable_flashinfer_autotune": False}}
 
 
 DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "dither": "CutlassInt8ScaledMMLinearKernel",
