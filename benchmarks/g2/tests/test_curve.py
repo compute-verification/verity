@@ -10,13 +10,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import curve as C  # noqa: E402
+import curve as C
 
 
-def harness_doc(*, passed: bool = True, gpu_id: str = "h200", eager: bool = False) -> dict:
+def harness_doc(*, passed: bool = True, gpu_id: str = "h200", eager: bool = False, seen: str | None = None) -> dict:
     """Qwen3-8B at B32: stock, the full rows-sha512 arm, the per-layer 4 KiB arm and vllm-v1's nativedrain arm."""
     def arm(ttft: float, p50: float, tput: float, ci: tuple[float, float] | None = None) -> dict:
-        r = lambda x: {"mean": x, "ratio_to_stock": {"mean": x, "n": 3, **({"ci95": list(ci)} if ci else {})}}  # noqa: E731
+        def r(x: float) -> dict:
+            return {"mean": x, "ratio_to_stock": {"mean": x, "n": 3, **({"ci95": list(ci)} if ci else {})}}
+
         return {"metrics": {"time_to_first_token_s": r(ttft), "inter_token_latency_p50_s": r(p50), "tokens_per_s": r(tput)},
                 "extras": {"committed_bytes": {"mean": 5.8e9}}}
 
@@ -27,8 +29,9 @@ def harness_doc(*, passed: bool = True, gpu_id: str = "h200", eager: bool = Fals
             {"id": "served-commit-rows-layer-4k", "module_spec": "served_commit.prof_arm:SERVED_COMMIT_ROWS_LAYER_4K"},
             {"id": "served-commit-nativedrain", "module_spec": "served_commit.prof_arm:SERVED_COMMIT_NATIVEDRAIN"}]
     return {"schema": "verity-bench/vllm-overhead/v1", "baseline": "stock",
-            "identity": {"arms": arms, "preset": {"model": "Qwen/Qwen3-8B", "gpu_id": gpu_id,
-                                                  "engine_settings": {"enforce_eager": eager, "serving_defaults": True}}},
+            "identity": {"arms": arms, **({"gpu": seen} if seen else {}),
+                         "preset": {"model": "Qwen/Qwen3-8B", "gpu_id": gpu_id,
+                                    "engine_settings": {"enforce_eager": eager, "serving_defaults": True}}},
             "gates": [{"kind": "tokens", "arm": "served-commit-rows", "passed": passed}],
             "points": [{"point": {"batch": 32}, "arms": {"stock": stock, "served-commit-rows": arm(2.06, 1.35, 0.6, (2.0, 2.1)),
                                                          "served-commit-rows-layer-4k": arm(1.08, 1.14, 0.88),
@@ -122,6 +125,34 @@ def test_a_compiled_measure_counts_only_pinned_and_an_eager_one_needs_no_pin():
     assert one(eager, arm="served-commit-rows", metric="ttft").counts() == (True, "")
 
 
+@pytest.mark.parametrize("seen, device, want_gpu", [
+    ("NVIDIA B200", None, "B200"),
+    (None, "B200", "B200"),
+    ("NVIDIA B200", "H200", "B200"),
+])
+def test_the_gpu_is_the_device_and_a_preset_for_another_gpu_doesnt_count(seen, device, want_gpu):
+    ms = C.harness_measures(harness_doc(seen=seen), run="r1", source="art:1", pin="pinned", device=device)
+    m = one(ms, arm="served-commit-rows", metric="ttft")
+    assert (m.gpu, m.preset_gpu) == (want_gpu, "H200")
+    assert m.counts() == (False, "H200's served preset on B200")
+    own = one(C.harness_measures(harness_doc(gpu_id="b200", seen=seen), run="r1", source="art:1", pin="pinned", device=device),
+              arm="served-commit-rows", metric="ttft")
+    assert own.counts() == (True, "")
+
+
+def test_gpu_names_from_ids_skus_and_families():
+    assert C.gpu_name("h200") == "H200"
+    assert C.gpu_name("rtxpro6000") == "RTX PRO 6000"
+    assert C.gpu_name(None, "NVIDIA RTX PRO 6000 Blackwell Server Edition") == "RTX PRO 6000"
+    assert C.gpu_name(None, "NVIDIA B200") == "B200"
+
+
+def test_a_what_if_arm_never_counts():
+    m = one(C.harness_measures(harness_doc(), run="r1", source="art:1", pin="pinned"), arm="served-commit-rows", metric="ttft")
+    what_if = C.Measure(**{**m.__dict__, "arm": "served-commit-rows-whatif-q"})
+    assert what_if.scheme == "rows-sha512" and what_if.counts() == (False, "a what-if: not a Commit")
+
+
 def test_tp_measures_gate_on_the_controls_tokens():
     ms = C.tp_measures(tp_summary(), run="r2", source="art:2", gpu="8x H200")
     decode = one(ms, metric="step")
@@ -144,7 +175,8 @@ def test_loop_measures_read_phase_steps_over_stock_prof_and_skip_what_isnt_g2():
     assert one(full, phase="prefill").ratio == pytest.approx(113.4617 / 49.915)
     assert one(full, phase="decode").ratio == pytest.approx(8.021 / 6.363)
     assert {m.row_bytes for m in full} == {4096} and {m.retain for m in full} == {"none"}
-    assert one(ms, arm="served-commit-rows-layer-4k").acquisition == "per-layer"
+    layer = one(ms, arm="served-commit-rows-layer")
+    assert (layer.acquisition, layer.row_bytes) == ("per-layer", 4096)
     assert one(ms, arm="served-commit-rows-blake3").counts() == (False, "rows-blake3: not the one hash")
     first = C.loop_measures(loop_meta(), {**LOOP_LABELS, "row": "0"}, source="art:4")
     assert {m.row_bytes for m in first if m.arm == "served-commit-rows"} == {256}
@@ -160,6 +192,26 @@ def test_loop_measures_read_phase_steps_over_stock_prof_and_skip_what_isnt_g2():
 def test_a_voided_superseded_or_failed_loop_result_doesnt_count(labels, meta):
     ms = C.loop_measures(meta, labels, source="art:4")
     assert ms and all(m.counts() == (False, "gates failed") for m in ms)
+
+
+def test_a_loop_runs_own_doc_takes_the_loops_row_size_and_verdict():
+    def doc_measures(run):
+        d = harness_doc()
+        d["identity"]["arms"][2]["id"] = "served-commit-rows-layer"
+        d["points"][0]["arms"]["served-commit-rows-layer"] = d["points"][0]["arms"].pop("served-commit-rows-layer-4k")
+        return C.harness_measures(d, run=run, source="art:1", pin="pinned")
+
+    loop = {"r-11": (11, True), "r-0": (0, True), "r-void": (11, False)}
+    ms = C.as_loop_run(doc_measures("r-11") + doc_measures("r-0") + doc_measures("r-void") + doc_measures("r-other"), loop)
+    assert {m.row_bytes for m in ms if m.run == "r-11" and m.scheme == "rows-sha512"} == {4096}
+    assert one(ms, run="r-0", arm="served-commit-rows", metric="ttft").row_bytes == 256
+    assert one(ms, run="r-0", arm="served-commit-rows-layer", metric="ttft").row_bytes == 4096
+    assert one(ms, run="r-11", arm="served-commit-rows", metric="itl_p50").iteration == 11
+    assert all(m.counts() == (False, "gates failed") for m in ms if m.run == "r-void")
+    other = one(ms, run="r-other", arm="served-commit-rows-layer", metric="ttft")
+    assert (other.row_bytes, other.iteration) == (256, None)
+    loop_own = C.loop_measures(loop_meta(), LOOP_LABELS, source="art:4")
+    assert C.as_loop_run(loop_own, {"r-loop": (0, False)}) == loop_own
 
 
 def test_an_unpinned_loop_result_doesnt_count():

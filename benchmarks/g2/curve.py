@@ -8,7 +8,8 @@ Where the numbers come from:
   (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's row of record).
 - The hash loop's results (campaign=hash-loop, kind bench-result/v1, `benchmarks/hash/loop/collect.py`'s): Qwen3-8B B32
   compiled, one result per iteration and GPU, from the loop branch. Only workload qwen3-8b is read: the loop's glm-5.3 rows
-  are copies of campaign=g2 runs, and its other workloads aren't G2's models.
+  are copies of campaign=g2 runs, and its other workloads aren't G2's models. Each result's run is read too, for its TTFT
+  and ITL, with the loop's row size for that iteration and the loop's verdict on it.
 
 Each measure is a Commit arm's ratio to stock in the same run, with the harness's 95% interval over its interleaved reps,
 tp_decode's min and max over its pairs, or the loop's interval where it has one:
@@ -24,11 +25,13 @@ vllm-v1 (served-commit, served-commit-prof, served-commit-nativedrain*, ...: SHA
 never counted, by the one-hash rule); rows-blake3 (the loop's research arm, never counted). `-layer` arms acquire only each
 layer's residual stream, K and V (their roots are no scheme's: the per-layer unit is PRF-62's question, not the Commit of
 record), and `-4k` arms hash 4 KiB rows; the loop's rows are 4 KiB from iteration 1 on (PRF-64), and every other rows arm
-labeled so far is 256 B. A compiled measure counts only under its Build of record's compile artifact (`pin` pinned, from the
-run's served-pin check): an unpinned one is mechanism evidence. A measure counts when its comparison's gates passed (the
-harness's: every arm's tokens equal stock's; tp_decode's: tokens equal the control's, every rank's root, no collector error;
-the loop's validation), its scheme is rows-sha512, and it is pinned or eager. The best per (model, GPU, mode, batch, phase,
-metric) is the lowest counting ratio, at full acquisition and, apart, per layer.
+labeled so far is 256 B. A what-if arm (`whatif` in its name) commits less than the Commit and never counts. A compiled
+measure counts only under its Build of record's compile artifact (`pin` pinned, from the run's served-pin check), on the GPU
+its served preset is for (the GPU is the one the doc saw, else the attempt's hardware): an unpinned one, or a preset for
+another GPU, is mechanism evidence. A measure counts when its comparison's gates passed (the harness's: every arm's tokens
+equal stock's; tp_decode's: tokens equal the control's, every rank's root, no collector error; the loop's validation and
+verdict), its scheme is rows-sha512, and it is pinned or eager. The best per (model, GPU, mode, batch, phase, metric) is the
+lowest counting ratio, at full acquisition and, apart, per layer.
 
     uv run --with matplotlib python3 benchmarks/g2/curve.py [--out DIR] [--no-refresh]
 
@@ -44,17 +47,18 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 MODELS = ("Llama-3.2-1B", "Qwen3-8B", "Qwen3-30B-A3B", "GLM-5.3")   # G2's models, narrowest first
-GPUS = {"h200": "H200", "b200": "B200", "h100": "H100", "rtx-pro-6000": "RTX PRO 6000", "rtx6000": "RTX PRO 6000"}
+GPUS = {"h200": "H200", "b200": "B200", "h100": "H100", "rtx-pro-6000": "RTX PRO 6000", "rtx6000": "RTX PRO 6000",
+        "rtxpro6000": "RTX PRO 6000"}
 PHASES = {"prefill": ("ttft", "step"), "decode": ("itl_p50", "itl_p99", "step"), "run": ("tpot", "tput")}
 CURVE_METRICS = {"prefill": ("ttft", "step"), "decode": ("itl_p50", "step"), "run": ("tpot",)}
 HARNESS = {"time_to_first_token_s": ("prefill", "ttft"), "inter_token_latency_p50_s": ("decode", "itl_p50"),
            "inter_token_latency_p99_s": ("decode", "itl_p99"), "time_per_output_token_s": ("run", "tpot"),
            "tokens_per_s": ("run", "tput")}
-LOOP_ARMS = {"sha512": "served-commit-rows", "sha512-layer": "served-commit-rows-layer-4k", "blake3": "served-commit-rows-blake3"}
+LOOP_ARMS = {"sha512": "served-commit-rows", "sha512-layer": "served-commit-rows-layer", "blake3": "served-commit-rows-blake3"}
 LOOP_4K_FROM = 1   # the loop's iteration 1 set rows-sha512's rows to 4 KiB (PRF-64)
 SCHEME_ROWS, SCHEME_V1, SCHEME_B3 = "rows-sha512", "vllm-v1", "rows-blake3"
 CAMPAIGN = "g2"
@@ -83,6 +87,7 @@ class Measure:
     gates: bool
     committed_gb: float | None = None
     iteration: int | None = None
+    preset_gpu: str | None = None   # the GPU the served preset (and its Build) is for, when it names one
 
     @property
     def sha256(self) -> bool:
@@ -96,6 +101,10 @@ class Measure:
             return False, "SHA-256 (vllm-v1): not the one hash"
         if self.scheme != SCHEME_ROWS:
             return False, f"{self.scheme}: not the one hash"
+        if "whatif" in self.arm:
+            return False, "a what-if: not a Commit"
+        if self.mode == "compiled" and self.preset_gpu and self.preset_gpu != self.gpu:
+            return False, f"{self.preset_gpu}'s served preset on {self.gpu}"
         if self.mode == "compiled" and self.pin != "pinned":
             return False, f"{self.pin}: not the Build of record's kernels"
         return True, ""
@@ -112,7 +121,8 @@ def model_name(repo: str) -> str:
 def gpu_name(gpu_id: str | None, sku: str | None = None) -> str:
     if gpu_id:
         return GPUS.get(gpu_id.lower(), gpu_id.upper())
-    return (sku or "?").removeprefix("NVIDIA ").strip()
+    name = (sku or "?").removeprefix("NVIDIA ").strip()
+    return "RTX PRO 6000" if name.startswith("RTX PRO 6000") else name
 
 
 def classify(arm: str, committer: str = "") -> tuple[str, str, int | None]:
@@ -132,7 +142,7 @@ def classify(arm: str, committer: str = "") -> tuple[str, str, int | None]:
 def retain_of(arm: str, module_spec: str | None) -> str | None:
     """The arm's retention: served_commit's prof_arm arms all retain none; arm.py's served-commit retains on the host."""
     spec = module_spec or ""
-    if spec.startswith("served_commit.prof_arm:") or spec.startswith("hash.loop.arms:"):
+    if spec.startswith(("served_commit.prof_arm:", "hash.loop.arms:")):
         return "none"
     if spec.startswith("served_commit.arm:"):
         return "none" if arm.endswith("noretain") else "host"
@@ -151,8 +161,9 @@ def _interval(r: dict) -> tuple[float | None, float | None]:
     return (float(ci[0]), float(ci[1])) if len(ci) == 2 else (None, None)
 
 
-def harness_measures(doc: dict, *, run: str, source: str, pin: str) -> list[Measure]:
-    """Every Commit arm's measures in one verity-bench result doc (verity-bench/vllm-overhead/v1)."""
+def harness_measures(doc: dict, *, run: str, source: str, pin: str, device: str | None = None) -> list[Measure]:
+    """Every Commit arm's measures in one verity-bench result doc (verity-bench/vllm-overhead/v1). The GPU is the one the doc
+    saw (`identity.gpu`), else `device` (the attempt's hardware), else the preset's."""
     ident = doc["identity"]
     preset = ident["preset"]
     eng = preset.get("engine_settings") or {}
@@ -160,8 +171,10 @@ def harness_measures(doc: dict, *, run: str, source: str, pin: str) -> list[Meas
     gates = bool(doc.get("gates")) and all(g.get("passed") for g in doc["gates"]) and bool(doc.get("points"))
     base = doc.get("baseline", "stock")
     specs = {a["id"]: a.get("module_spec") for a in ident.get("arms", [])}
-    common = dict(model=model_name(preset["model"]), gpu=gpu_name(preset.get("gpu_id"), ident.get("gpu")), mode=mode, run=run,
-                  source=source, pin=pin if mode == "compiled" else "eager", gates=gates)
+    preset_gpu = gpu_name(preset["gpu_id"]) if preset.get("gpu_id") else None
+    gpu = gpu_name(None, ident["gpu"]) if ident.get("gpu") else device or preset_gpu or "?"
+    common = {"model": model_name(preset["model"]), "gpu": gpu, "mode": mode, "run": run, "source": source,
+              "pin": pin if mode == "compiled" else "eager", "gates": gates, "preset_gpu": preset_gpu}
     out = []
     for point in doc.get("points", ()):
         batch = int(point["point"]["batch"])
@@ -210,6 +223,13 @@ def tp_measures(summary: dict, *, run: str, source: str, gpu: str, model: str = 
     return out
 
 
+def loop_row_bytes(scheme: str, acquisition: str, iteration: int) -> int | None:
+    """A loop arm's row size: 4 KiB from LOOP_4K_FROM on, and always for the per-layer arm."""
+    if scheme != SCHEME_ROWS:
+        return None
+    return 4096 if iteration >= LOOP_4K_FROM or acquisition == "per-layer" else 256
+
+
 def loop_measures(meta: dict, labels: dict[str, str], *, source: str) -> list[Measure]:
     """One hash-loop result's measures (Qwen3-8B B32, compiled): run TPOT and throughput from the harness's interleaved ratios,
     and each phase's step from the arm's step time over stock-prof's."""
@@ -224,14 +244,14 @@ def loop_measures(meta: dict, labels: dict[str, str], *, source: str) -> list[Me
         and not labels.get("superseded_by")
     by: dict[tuple[str, str], dict] = {(m.get("arm") or "", m["name"]): m for m in meta.get("measurements", ())
                                        if m.get("value") is not None}
-    common = dict(model="Qwen3-8B", gpu=labels.get("hardware", "?"), mode="compiled", batch=32, run=str(meta.get("run_id")),
-                  source=source, pin=(fp.get("pin") or {}).get("state", "unpinned"), gates=gates, iteration=iteration)
+    common = {"model": "Qwen3-8B", "gpu": labels.get("hardware", "?"), "mode": "compiled", "batch": 32,
+              "run": str(meta.get("run_id")), "source": source, "pin": (fp.get("pin") or {}).get("state", "unpinned"),
+              "gates": gates, "iteration": iteration}
     out = []
     for loop_arm, arm in LOOP_ARMS.items():
         scheme, acq, _ = classify(loop_arm)
-        rows = 4096 if scheme == SCHEME_ROWS and (iteration >= LOOP_4K_FROM or acq == "per-layer") else (256 if scheme == SCHEME_ROWS else None)
         retain = (fp.get("retain") or {}).get(arm)
-        kw = dict(common, arm=arm, scheme=scheme, acquisition=acq, row_bytes=rows, retain=retain)
+        kw = dict(common, arm=arm, scheme=scheme, acquisition=acq, row_bytes=loop_row_bytes(scheme, acq, iteration), retain=retain)
         for name, metric, sign in (("tpot_overhead_pct", "tpot", 1), ("throughput_overhead_pct", "tput", -1)):
             m = by.get((loop_arm, name))
             if m is None:
@@ -247,6 +267,18 @@ def loop_measures(meta: dict, labels: dict[str, str], *, source: str) -> list[Me
             if x and s and s["value"]:
                 out.append(Measure(**kw, phase=phase, metric="step", ratio=x["value"] / s["value"], lo=None, hi=None,
                                    stock_ms=s["value"]))
+    return out
+
+
+def as_loop_run(measures: list[Measure], loop: dict[str, tuple[int, bool]]) -> list[Measure]:
+    """Measures read from a hash-loop run's own result doc (its TTFT and ITL), under the loop's facts about that run: its
+    iteration's row size (the doc doesn't record it) and its verdict (`loop`: run -> (iteration, gates))."""
+    out = []
+    for m in measures:
+        if m.run in loop and m.iteration is None:
+            it, ok = loop[m.run]
+            m = replace(m, row_bytes=loop_row_bytes(m.scheme, m.acquisition, it), iteration=it, gates=m.gates and ok)
+        out.append(m)
     return out
 
 
@@ -326,11 +358,11 @@ def report(measures: list[Measure]) -> str:
     counted = sorted({m.run for m in measures if m.counts()[0]})
     return "\n\n".join([
         "# G2: the served Commit's overhead over stock (rendered by benchmarks/g2/curve.py from the evidence store)",
-        "Ratios are the Commit arm over stock in the same run (1.00x is no overhead); brackets are the 95% interval over "
-        "interleaved reps, or the min and max over tp_decode's pairs. prefill ttft is time to first token; decode itl_p50 is "
-        "per-token latency p50, and decode step the mean decode step; run tpot is the run's wall per output token, prefill "
-        "included. Full Commit commits every value; per-layer commits each layer's residual stream, K and V only (PRF-62's "
-        "unit, whose roots are no scheme's). A compiled measure counts only pinned to its Build of record.",
+        ("Ratios are the Commit arm over stock in the same run (1.00x is no overhead); brackets are the 95% interval over "
+         "interleaved reps, or the min and max over tp_decode's pairs. prefill ttft is time to first token; decode itl_p50 is "
+         "per-token latency p50, and decode step the mean decode step; run tpot is the run's wall per output token, prefill "
+         "included. Full Commit commits every value; per-layer commits each layer's residual stream, K and V only (PRF-62's "
+         "unit, whose roots are no scheme's). A compiled measure counts only pinned to its Build of record."),
         "## The curve: best counting measure per model, GPU, mode, batch and phase", curve_table(measures),
         f"Runs on the curve: {', '.join(counted) or 'none'}.",
         "## Every measure", measures_table(measures)])
@@ -406,10 +438,11 @@ def run_measures(run: str, scratch: Path) -> list[Measure]:
     research("data", "fetch", rec, "--to", str(to), "--path", "*bench/result.json", "--path", "*pin_check.txt",
              "--path", "out/*/summary.json")
     cond = att.get("conditions") or {}
+    device = gpu_name(cond.get("hw.family"), cond.get("hw.sku")) if cond.get("hw.family") or cond.get("hw.sku") else None
     out: list[Measure] = []
     for doc in sorted(to.rglob("bench/result.json")):
         pin_txt = doc.parent.parent / "pin_check.txt"
-        out += harness_measures(json.loads(doc.read_text()), run=run, source=rec,
+        out += harness_measures(json.loads(doc.read_text()), run=run, source=rec, device=device,
                                 pin=pin_state(pin_txt.read_text() if pin_txt.is_file() else None))
     for summ in sorted(to.glob("out/*/summary.json")):
         s = json.loads(summ.read_text())
@@ -422,17 +455,21 @@ def run_measures(run: str, scratch: Path) -> list[Measure]:
 
 def load(refresh: bool = True) -> list[Measure]:
     if refresh:
-        rc = subprocess.run(["research", "data", "refresh"], stdout=sys.stderr).returncode
+        rc = subprocess.run(["research", "data", "refresh"], stdout=sys.stderr, check=False).returncode
         if rc:
             print(f"curve.py: research data refresh exited {rc}; rendering what the catalog has", file=sys.stderr)
     out: list[Measure] = []
-    with tempfile.TemporaryDirectory(prefix="g2-curve-") as tmp:
-        for run in _labeled_runs("campaign", CAMPAIGN):
-            out += run_measures(run, Path(tmp))
+    loop: dict[str, tuple[int, bool]] = {}
     for art in research("data", "select", "--label", "campaign=hash-loop", "--kind", "bench-result/v1", "--ids").split():
         man = json.loads(research("data", "show", art, "--json"))
-        out += loop_measures((man.get("manifest") or man).get("meta") or {}, _labels(art), source=art)
-    return dedupe(out)
+        ms = loop_measures((man.get("manifest") or man).get("meta") or {}, _labels(art), source=art)
+        out += ms
+        if ms and ms[0].run.startswith("r"):
+            loop[ms[0].run] = (ms[0].iteration, ms[0].gates)
+    with tempfile.TemporaryDirectory(prefix="g2-curve-") as tmp:
+        for run in sorted(set(_labeled_runs("campaign", CAMPAIGN)) | set(loop)):
+            out += run_measures(run, Path(tmp))
+    return dedupe(as_loop_run(out, loop))
 
 
 def main() -> int:
