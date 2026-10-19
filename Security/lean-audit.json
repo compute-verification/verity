@@ -150,6 +150,9 @@
    "owner": "@compute-accounting",
    "digest": "8d999550f4e64e7c8e339dc7bd9c4dc714395133afc90c62cee82aca2a19204b"
   },
+  "Nci.Assumptions.WeightsSupportFmt": {
+   "owner": "@lean"
+  },
   "NetTiming.Allocated": {
    "owner": "@network-accounting",
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
@@ -3534,11 +3537,17 @@
    "assumptions": [],
    "type_hash": "8381b224ed7e6895c5a477180f9e5b38f1557563376852e67628d1e84beb1006"
   },
+  "Nci.SecurityProofs.ThreadedContainedInfoFmt": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ThreadedOfState": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.ThreadedOfState : Nci.Guarantees.ThreadedOfState"],
    "assumptions": [],
    "type_hash": "ba69e692dec99e4727f2e6376fffefd4a580e1a6d289e09b83aaf9a00047c2b7"
+  },
+  "Nci.SecurityProofs.ThreadedOfStateFmt": {
+   "owner": "@lean"
   },
   "Nci.SecurityProofs.ThreadedReads": {
    "owner": "@lean",
@@ -3551,6 +3560,9 @@
    "signature": ["Nci.SecurityProofs.ThreadedReadsInfo : Nci.Guarantees.ThreadedReadsInfo"],
    "assumptions": [],
    "type_hash": "4d90082db7cce0fe88a068deb85c0d77bf55ac4572b744ea7bf03e84487b53b7"
+  },
+  "Nci.SecurityProofs.ThreadedReadsInfoFmt": {
+   "owner": "@lean"
   },
   "Nci.SecurityProofs.ThreadedThrottled": {
    "owner": "@lean",
@@ -5268,6 +5280,9 @@
    "Nci.SecurityProofs.ThreadedReadsInfo": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit and a threading of it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedContainedInfo": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ThreadedOfState": "falsified (no-function): It rests on WeightsSupport, false at FP4 (shape.conjectures, 19 Oct 2026, note:compute-accounting/20261019T0725Z-finding-nci-falsify); it is also about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupport (Security/Models/Nci/Assumptions/Info.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedReadsInfoFmt": "frozen (no-function): It is about an arbitrary reference circuit and a threading of it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedContainedInfoFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
+   "Nci.SecurityProofs.ThreadedOfStateFmt": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and a declaration that contains it, under the named WeightsSupportFmt (Security/Models/Nci/Assumptions/Fmt.lean), a restatement of the falsified WeightsSupport not yet signed off, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.InfoOfState": "frozen (no-function): It is about an arbitrary declaration and a set of its gates whose novel reads are a state and an ingress, not about any verifier's code; a physical premise on a node's windows (Accounting.Guarantees.Actual.Windows) is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedMatMul": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ContainedTraining": "frozen (no-function): It is about an arbitrary reference circuit, a chain it runs and a declaration that contains it, under the named ActivationsSupport and PartialSumsSupport on the reference circuit (Security/Models/Nci/Assumptions.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
