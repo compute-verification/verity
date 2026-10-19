@@ -1468,6 +1468,32 @@ theorem eqw_congr (q) (h : pointsOf c.rest q = pointsOf c'.rest q) :
     fOf (eqWord (pointsOf c'.rest q) ((maskWordsOf st).getD y.val 0))
   rw [h]
 
+theorem nu_congr (w) (q : Fin (coinedOf P Tz st).z.nC) (h : pointsOf c.rest q = pointsOf c'.rest q) :
+    ((coinedOf P Tz st).T c).nu w q = ((coinedOf P Tz st).T c').nu w q := by
+  funext v
+  show (∑ y : Fin (2 ^ (Tz.S.m - 7)), if y.val ∈ maskWordsOf st then 0
+      else fOf (eqWord (pointsOf c.rest q) y.val) * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val)) =
+    ∑ y : Fin (2 ^ (Tz.S.m - 7)), if y.val ∈ maskWordsOf st then 0
+      else fOf (eqWord (pointsOf c'.rest q) y.val) * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val)
+  rw [h]
+
+theorem sReg_congr (w) (q : Fin (coinedOf P Tz st).z.nR) (h : c.rest.link = c'.rest.link) :
+    ((coinedOf P Tz st).T c).sReg w q = ((coinedOf P Tz st).T c').sReg w q := by
+  funext v
+  show (∑ y : Fin (2 ^ (Tz.S.m - 7)),
+      fOf (eqWord (regionPtOf st c.rest.link q) y.val) * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val)) =
+    ∑ y : Fin (2 ^ (Tz.S.m - 7)),
+      fOf (eqWord (regionPtOf st c'.rest.link q) y.val) * ZK.Table.castF (F := 𝔽) (wordBit w y.val v.val)
+  rw [h]
+
+theorem coined_val_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkView.Coined K W Hi VL z) (w : W)
+    (q : Fin z.nC) (u : Fin z.nMask → Fin 128 → ZMod 2) (h1 : T.nu w q = T'.nu w q) (h2 : T.eqw q = T'.eqw q) :
+    (fun v => T.tab.nu w q v + ∑ y, T.tab.eqw q y * ZK.Table.castF (F := 𝔽) (u y v)) =
+      fun v => T'.tab.nu w q v + ∑ y, T'.tab.eqw q y * ZK.Table.castF (F := 𝔽) (u y v) := by
+  show (fun v => T.nu w q v + ∑ y, T.eqw q y * ZK.Table.castF (F := 𝔽) (u y v)) =
+    fun v => T'.nu w q v + ∑ y, T'.eqw q y * ZK.Table.castF (F := 𝔽) (u y v)
+  rw [h1, h2]
+
 /-- **The rank check reads its claims' points** (of the reps up to `r`). -/
 theorem rankOn_congr (r : Fin 2)
     (h : ∀ k, ((coinedOf P Tz st).T c).rep k ≤ r → pointsOf c.rest k = pointsOf c'.rest k) :
@@ -1870,6 +1896,23 @@ end Masked
 
 /-! ## Each coin at its round -/
 
+/-- **The rounds a check reads below**: table `j`'s rep `r`'s rank check, after its lincheck's last coin; its restart,
+after the lane phase's pair; its inner check, after `β`. -/
+noncomputable def gateAt (spec : _root_.Flock.SessionSpec) (x : Msg) (j : Fin (jOf x)) (r : Fin 2) :
+    FlockSoundness.ZK.Session.Phase → ℕ
+  | .opening => FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + 6 + ((stAt x j).m - 6) +
+      ((stAt x j).c.kLog - 6)
+  | .restart => FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+      FlockComplete.piopRoundsZk spec (stAt x j) + (zkTab x j).sch.k0 + 4
+  | .inner => FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+      FlockComplete.piopRoundsZk spec (stAt x j) + innerOff 2 (zkTab x j).sch + 1
+
+theorem rep_two (r : Fin 2) {k : ℕ} (hk : k < 2) : (if 2 * r.val + k < 2 then (0 : Fin 2) else 1) = r := by
+  rcases r with ⟨_ | _ | _, hr⟩
+  · simp only [Nat.mul_zero, Nat.zero_add, ite_eq_left hk]; rfl
+  · simp only [ite_eq_right (show ¬ 2 + k < 2 by omega)]; rfl
+  · omega
+
 section Slots
 
 variable {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
@@ -1878,6 +1921,48 @@ variable {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
 theorem stsOf_half : (stsOf x)[(2 * j.val + r.val) / 2]! = stAt x j := by
   rw [show (2 * j.val + r.val) / 2 = j.val by omega]
   exact getElem!_pos (stsOf x) j.val (lt_of_jOf j)
+
+theorem repStart_next : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val + 1) =
+    FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (stAt x j) +
+      innerOff 0 (zkTab x j).sch + 4 := by
+  have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
+  rw [FlockComplete.ZkTables.repStart_succ, stsOf_half]
+  unfold FlockDeploy.repRounds FlockComplete.piopRoundsZk innerOff
+  simp only [↓reduceIte, (zkTab x j).hz]
+  omega
+
+theorem gate_le_next (p : FlockSoundness.ZK.Session.Phase) :
+    gateAt spec x j r p ≤ FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val + 1) := by
+  have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
+  have hm : 14 ≤ (stAt x j).m := (schOk_of (zkTab x j)).m
+  rw [repStart_next]
+  cases p <;> simp only [gateAt] <;> unfold FlockComplete.piopRoundsZk innerOff <;> omega
+
+theorem gate_le_start (p : FlockSoundness.ZK.Session.Phase) :
+    FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) ≤ gateAt spec x j r p := by
+  cases p <;> simp only [gateAt] <;> omega
+
+theorem gate_mono {j' : Fin (jOf x)} {r' : Fin 2} {p p' : FlockSoundness.ZK.Session.Phase}
+    (h : FlockSoundness.ZK.Session.pos j' r' p' ≤ FlockSoundness.ZK.Session.pos j r p) :
+    gateAt spec x j' r' p' ≤ gateAt spec x j r p := by
+  unfold FlockSoundness.ZK.Session.pos at h
+  have hi : ∀ p : FlockSoundness.ZK.Session.Phase, p.idx ≤ 2 := fun p => by
+    cases p <;> simp only [FlockSoundness.ZK.Session.Phase.idx] <;> omega
+  by_cases hq : 2 * j'.val + r'.val < 2 * j.val + r.val
+  · calc gateAt spec x j' r' p' ≤ FlockComplete.repStartZk spec (stsOf x) (2 * j'.val + r'.val + 1) :=
+          gate_le_next j' r' p'
+      _ ≤ FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) :=
+          FlockComplete.ZkTables.repStart_mono spec (stsOf x) (by omega)
+      _ ≤ gateAt spec x j r p := gate_le_start j r p
+  · have h1 := hi p
+    have h2 := hi p'
+    have hj : j' = j := Fin.ext (by omega)
+    have hr : r' = r := Fin.ext (by omega)
+    subst hj hr
+    have hk6 : 6 ≤ (stAt x j').c.kLog := (zkTab x j').wf.1.hk6
+    have hm : 14 ≤ (stAt x j').m := (schOk_of (zkTab x j')).m
+    cases p <;> cases p' <;> simp only [FlockSoundness.ZK.Session.Phase.idx] at h <;>
+      simp only [gateAt, FlockComplete.piopRoundsZk, innerOff] <;> omega
 
 include hsx in
 theorem repSlot_at (f : _root_.Flock.Schedule → ℕ) :
@@ -2014,6 +2099,66 @@ theorem beta_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.v
     FlockComplete.piopRoundsZk spec (stAt x j) + innerOff 2 (zkTab x j).sch < n) :
     (czExe PE x c j).beta r = (czExe PE x c' j).beta r :=
   slotAt_congr hcc (by unfold betaSlot; rw [repSlot_at hsx]; unfold innerOff at h; omega) _
+
+theorem claims_agree (h : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) + 6 + ((stAt x j).m - 6) +
+      ((stAt x j).c.kLog - 6) ≤ n) :
+    Composed.claimsOf ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) r =
+      Composed.claimsOf ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) r := by
+  have hb := repBase_eq hsx (2 * j.val + r.val)
+  have ho := outerSlot_at hsx j r
+  exact Composed.Cx.claimsOf_congr (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
+    (zc_agree j r hcc (by omega)) (rho_agree j r hcc (by omega)) (rOuter_agree j r hcc (by omega))
+    (rPrime_agree j r hcc (by omega)) (ts_agree j r hcc (by omega))
+
+theorem points_agree (k : Fin _root_.Flock.Zk.RANK_POINTS) (hk : (if k.val < 2 then (0 : Fin 2) else 1) ≤ r)
+    (h : gateAt spec x j r .opening ≤ n) :
+    Composed.pointsOf ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) k =
+      Composed.pointsOf ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) k := by
+  have hle : (if k.val < 2 then (0 : Fin 2) else 1).val ≤ r.val := hk
+  have hm := FlockComplete.ZkTables.repStart_mono spec (stsOf x)
+    (show 2 * j.val + (if k.val < 2 then (0 : Fin 2) else 1).val ≤ 2 * j.val + r.val by omega)
+  simp only [gateAt] at h
+  unfold Composed.pointsOf
+  rw [claims_agree hsx j _ hcc (by omega)]
+
+theorem guard_agree (p : Session.Phase) (h : gateAt spec x j r p ≤ n) :
+    famGuard (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
+        j r p ↔
+      famGuard (fun j => ((tabC PE x j).T (czExe PE x c' j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c' j)).rep)
+        j r p := by
+  cases p with
+  | opening =>
+    exact Composed.Cx.rankOn_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
+      fun k hk => points_agree hsx j r hcc k hk h
+  | restart =>
+    simp only [gateAt] at h
+    exact Composed.Cx.wr_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
+      (rhoPair_agree hsx j r hcc (by omega))
+  | inner =>
+    simp only [gateAt] at h
+    exact Composed.Cx.beta_congr PE (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r
+      (beta_agree hsx j r hcc (by omega))
+
+/-- **Whether the session reaches a check reads only the coins below its gate.** -/
+theorem passes_agree (p : Session.Phase) (h : gateAt spec x j r p ≤ n) :
+    famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
+        j r p ↔
+      famPasses (fun j => ((tabC PE x j).T (czExe PE x c' j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c' j)).rep)
+        j r p :=
+  forall_congr' fun j' => forall_congr' fun r' => forall_congr' fun p' => imp_congr_right fun hp =>
+    guard_agree hsx j' r' hcc p' (le_trans (gate_mono j r hp) h)
+
+theorem cl_agree (q : Fin (tabC PE x j).z.nC) (hq : (if q.val < 2 then (0 : Fin 2) else 1) = r)
+    (h : gateAt spec x j r .opening ≤ n) :
+    (famSent (fun j => ((tabC PE x j).T (czExe PE x c j)).tab) (fun j => ((tabC PE x j).T (czExe PE x c j)).rep)
+        j).cl q ↔
+      (famSent (fun j => ((tabC PE x j).T (czExe PE x c' j)).tab)
+        (fun j => ((tabC PE x j).T (czExe PE x c' j)).rep) j).cl q :=
+  (Iff.of_eq (congrArg (fun r' => famPasses (fun j => ((tabC PE x j).T (czExe PE x c j)).tab)
+      (fun j => ((tabC PE x j).T (czExe PE x c j)).rep) j r' .opening) hq)).trans
+    ((passes_agree hsx j r hcc .opening h).trans
+      (Iff.of_eq (congrArg (fun r' => famPasses (fun j => ((tabC PE x j).T (czExe PE x c' j)).tab)
+        (fun j => ((tabC PE x j).T (czExe PE x c' j)).rep) j r' .opening) hq)).symm)
 
 end Slots
 
