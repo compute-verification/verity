@@ -4,6 +4,7 @@ reads (`test_derive.fanout_case`).
 
     python benchmarks/verifier_cost/flock_rows.py --out DIR --bin LABEL=PATH [--bin LABEL=PATH ...] [--target NAME ...]
         [--fanout M,..] [--modes rows,unit,delta,logical,check] [--cap SECONDS]
+    python benchmarks/verifier_cost/flock_rows.py --table FLOCK_ROWS_JSON     # its before/after table, as Markdown
 
 Each target's classes (`partition_units` under Q_word, `lower_class`) are written as a flat circuit type and as a one-layout
 archive, and every binary runs every mode on them: `rows` is the default path (`CircuitType.check`, then `Flock.Derive.derive`,
@@ -208,16 +209,53 @@ def measure(u: dict, label: str, binp: str, mode: str, scratch: Path, cap: float
             "stderr": err.decode(errors="replace")[-300:]}
 
 
+def table(doc: dict, cols: tuple[str, ...] = ("rows", "check")) -> str:
+    """`doc`'s wall seconds as Markdown, one line per unit and a column per mode in `cols` and binary: the MoE units by size,
+    then the fan-out units' `check`."""
+    def cell(r: dict | None) -> str:
+        if r is None:
+            return "-"
+        if r["rc"] is None:
+            return f"> {r['seconds']:,.0f} (cap)"
+        return f"{r['seconds']:,.2f}" if r["seconds"] < 10 else f"{r['seconds']:,.1f}"
+
+    bins = list(doc["bins"])
+    units: dict[str, dict] = {}
+    for r in doc["rows"]:
+        units.setdefault(r["unit"], {"row": r})[(r["bin"], r["mode"])] = r
+    head = [f"{m}, {b}" for m in cols for b in bins]
+    lines = ["| unit | ANDs | input ports | " + " | ".join(head) + " | peak RSS |",
+             "| --- | ---: | ---: | " + " | ".join("---:" for _ in head) + " | ---: |"]
+    for name, u in units.items():
+        if u["row"]["ands"] is None:
+            continue
+        rss = max(r["peak_rss_mib"] for k, r in u.items() if k != "row" and k[0] == bins[-1])
+        lines.append(f"| {u['row']['definition']} | {u['row']['ands']:,} | {u['row']['in_ports']:,} | "
+                     + " | ".join(cell(u.get((b, m))) for m in cols for b in bins) + f" | {rss / 1024:.1f} GiB |")
+    fan = [(u["row"]["calls"], u) for u in units.values() if u["row"]["ands"] is None]
+    if fan:
+        lines += ["", "| placed calls and reads | " + " | ".join(f"check, {b}" for b in bins) + " |",
+                  "| ---: | " + " | ".join("---:" for _ in bins) + " |"]
+        lines += [f"| {m:,} | " + " | ".join(cell(u.get((b, "check"))) for b in bins) + " |" for m, u in sorted(fan)]
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--bin", action="append", required=True, help="LABEL=PATH of a flock-rows binary")
+    ap.add_argument("--out", type=Path)
+    ap.add_argument("--bin", action="append", help="LABEL=PATH of a flock-rows binary")
     ap.add_argument("--target", action="append", choices=sorted(TARGETS), help="default: every target")
     ap.add_argument("--fanout", default="", help="M,..: the fan-out unit at each M")
     ap.add_argument("--modes", default=",".join(MODES))
     ap.add_argument("--cap", type=float, help="seconds per run; a run past it is killed and recorded with rc null")
     ap.add_argument("--cap-bin", action="append", default=[], help="LABEL=SECONDS: a cap for one binary's runs")
+    ap.add_argument("--table", type=Path, metavar="FLOCK_ROWS_JSON", help="print a flock_rows.json as Markdown, and run nothing")
     a = ap.parse_args(argv)
+    if a.table:
+        print(table(json.loads(a.table.read_text())))
+        return 0
+    if not (a.out and a.bin):
+        ap.error("--out and --bin are required to measure")
     bins = [b.split("=", 1) for b in a.bin]
     caps = {k: float(v) for k, v in (c.split("=", 1) for c in a.cap_bin)}
     modes = a.modes.split(",")
