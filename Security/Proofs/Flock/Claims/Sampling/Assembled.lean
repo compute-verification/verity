@@ -41,7 +41,7 @@ import Proofs.Flock.SamplingBoundary
 * `DrawFixed`, `SessionRuns`, `InnerNumbers` (`Sampling.Session`): the checked units' sessions are in the second stage
   and the draw doesn't read them; a checked unit's session is a Flock run on its own rounds that decides the run, with
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
-  sampled-proofs verifier, held to the Python by difftest.
+  sampled-proofs verifier, the verifier of record, with the Python held to it by difftest.
 * `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
   design are the verifier's own layout and the design `Slots.select` draws, from uniform bytes of the coins, every slot
   checked where it is refused; the Lean sampled-proofs verifier's run, which builds `D`.
@@ -99,8 +99,9 @@ theorem sampling_assembled (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
   have hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ os, (D.flock.dec os).2 ≤ FlockDeploy.zkStepPoly.eval (Claims.Flock.wordLen os) := by
     rw [hflock]
-    exact ⟨by rw [show (FlockDeploy.deployZk rel).decode = _ from FlockDeploy.decode_zk rel]; exact FlockDeploy.listWithin_zk rel,
-      (FlockDeploy.efficient_zk H rel).2.2.1⟩
+    refine ⟨?_, (FlockDeploy.efficient_zk H rel).2.2.1⟩
+    rw [show (FlockDeploy.deployZk rel).decode = Claims.GS.zkDecodeRD from FlockDeploy.decode_zk rel]
+    exact FlockDeploy.listWithin_zk rel
   exact ⟨hscope, hbind, Universal_of huniv, faultyBoundary, hks, KSCount_of_KS hks,
     Bits_of_KS hks (E_runs_exp H D hfixed) (E_own_le hopen) hε,
     ⟨E_runs_le H D _, E_runs_exp H D hfixed _, E_own_le hopen _, hdec.1, hdec.2⟩, hComplete, hZK⟩

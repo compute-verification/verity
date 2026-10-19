@@ -19,4 +19,6 @@ pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-inputs = []
+# The compiled PoUW Program's test credits PoUW's proved bound, benchmarks/pouw/proved_ticks.py, imported by path (no
+# installed package), with the ε budget and machine model it prices ♭ by.
+inputs = ["benchmarks/pouw/proved_ticks.py", "benchmarks/pouw/eps_budget.py", "benchmarks/pouw/machine_model"]

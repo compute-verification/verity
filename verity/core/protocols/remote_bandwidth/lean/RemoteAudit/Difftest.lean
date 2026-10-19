@@ -4,10 +4,11 @@ import RemoteAudit.Session
 /-!
 # The difftest's Lean half
 
-The functions `tests/` holds to `audit.py`, `receipts.py` and `codec.py` through `verity_difftest.Port`, over JSON (byte
+The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through `verity_difftest.Port`, over JSON (byte
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
-opening, a leaf's receipt, a window's draws and a registration's digest). `remote-audit-difftest` serves them.
+opening, a leaf's receipt, a window's draws and a registration's digest), and the registration `audit.register` makes
+with its codec seed. `remote-audit-difftest` serves them.
 -/
 
 namespace RemoteAudit.Difftest
@@ -143,6 +144,14 @@ def sessionFn (j : Json) : V Json := do
 
 def registrationDigestFn (j : Json) : V Json := do pure (hexJ (← registrationOf j).digest)
 
+/-- `audit.register` on a given source and nonce: the registration's codec seed and digest. -/
+def registerFn (j : Json) : V Json := do
+  let some kind := Kind.ofName? (← J.str j "receipt" "input") | throw "a receipt kind is sketch-sha512 or block-sha512"
+  let r ← Registration.register (← hex j "source") (← hex j "node") (← nat j "blocks") (← hex j "payload_root")
+    (← codecOf (← J.get j "codec" "input")) kind (← J.bool j "bind" "input") (← J.str j "layout" "input") (← nat j "rows")
+    (← hex j "nonce")
+  pure (Json.mkObj [("codec_seed", hexJ r.codecSeed), ("digest", hexJ r.digest)])
+
 def codecDecodeFn (j : Json) : V Json := do
   let codec ← codecOf (← J.get j "codec" "input")
   let seed ← hex j "seed"
@@ -204,7 +213,8 @@ def drawsFn (j : Json) : V Json := do
   pure (.arr (ds.map pairJ))
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("session", sessionFn), ("registration_digest", registrationDigestFn), ("codec_decode", codecDecodeFn),
+  ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
+  ("codec_decode", codecDecodeFn),
   ("plan", planFn), ("plan_changed", planChangedFn), ("receipt", receiptFn), ("verify_opening", verifyOpeningFn),
   ("leaf_receipt", leafReceiptFn), ("draws", drawsFn)]
 

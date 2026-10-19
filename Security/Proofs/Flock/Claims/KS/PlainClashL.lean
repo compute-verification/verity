@@ -20,8 +20,7 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness FlockSoundness.Discharge.Tables Claims.Bridge.Live
 
-/-- **Two openings of one position to different rows, against one root, in one log**, under a scheme `ms` at a level
-`lv`. -/
+/-- **Two openings of one position to different rows, against one root, in one log**, under `ms` at a level `lv`. -/
 def PlainLevelClash (ms : MerkleScheme) (lv : Flock.Level) (lanes : ℕ) (L : List (Claims.Msg × Claims.Msg)) : Prop :=
   ∃ (root : ByteArray) (q : ℕ) (row row' : Array F128), row ≠ row' ∧ Opening ms lv lanes root L q row ∧
     Opening ms lv lanes root L q row'
