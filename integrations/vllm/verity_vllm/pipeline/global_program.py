@@ -7,6 +7,8 @@ block) and derive_step request artifacts (`descriptor.json.gz` + `construction_m
 distinct (prompt_len, cap-1) shape, exactly the shapes X-09's Build derives. Nothing from an execution record is read. Exit 4 lists
 the shapes still to derive.  [R17-1] `LAG` (the declared scheduler's post-EOS rows, `TargetProfile.lag()` of the manifest's target) is a
 REQUIRED static of the workload Program (`Workload_v1{requests, shared, lag}`): the digest differs per value and GM-01 G6 consumes it.
+A row of record whose manifest is not done only at its public cap (`config.done_source_refusal`: no `sampling.ignore_eos`, a stop id,
+a request without a `max_tokens`) is refused first (`reason: done_source`); the stop rule records the done source either way.
 
 Writes: `workload_program.json` (artifact: digest, components, address map, chronology), `descriptor.json.gz` (the workload
 Program's descriptor, decodable with verity.ml.circuits.codec), `address_map.json`, `chronology.json`.
@@ -29,7 +31,7 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
-from verity_vllm.config import RowEngine, option
+from verity_vllm.config import RowEngine, done_source, done_source_refusal, option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
 from verity_vllm.program.registry.catalog import load as _load_registry
@@ -627,6 +629,8 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     need = sorted({shape_of(r) for r in reqs})
     missing = [s for s in need if s not in shapes]
     os.makedirs(out, exist_ok=True)
+    if why := done_source_refusal(m):
+        return _refused(out, {"schema": W.SCHEMA + "/result", "ok": False, "reason": "done_source", "message": why, "manifest_sha256": mdigest})
     if missing:
         res = {"schema": W.SCHEMA + "/result", "ok": False, "reason": "missing_derived", "missing_derived": missing,
                "hint": "derive_step --wrapper request --LP <lp> --T <t> --workload <manifest> for each"}
@@ -727,6 +731,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     # [R17-1 / DP-pad-02 (b)] the rows the declared scheduler computes AFTER an EOS stop are the Program's `lag` static (above); the stop
     # rule carries the same value under both names (eos_lag_rows: the ruling-21 reader's key; lag: R17-1's) -- one source, and GM-01 G6
     # consumes THIS declaration (never the record's attestation as the rule; G1 checks the record attests the same resolved value)
+    art["stop_rule"]["done_source"] = done_source(m)
     art["stop_rule"]["eos_lag_rows"] = wl.lag
     art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "

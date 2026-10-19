@@ -54,7 +54,8 @@
  "sampling": {
   "variant": "stoch-t0.8-p0.95",
   "seed": null,
-  "n": 1
+  "n": 1,
+  "ignore_eos": true
  },
  "serving_profile": "sweep-B8-staggered",
  "context_class": "I256-O32",
@@ -1233,5 +1234,5 @@
   "tp": 8,
   "execution": "eager"
  },
- "note": "R12 sweep glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager: B=8 I<=256 O<=32 stoch-t0.8-p0.95 arrivals=staggered; prompt lens [256, 25, 245, 91, 175, 8, 13, 103], caps [2, 7, 23, 3, 11, 29, 32, 13], arrive steps [0, 9, 13, 13, 15, 16, 18, 18]; every request to max_tokens => 50 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
+ "note": "R12 sweep glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager: B=8 I<=256 O<=32 stoch-t0.8-p0.95 arrivals=staggered; prompt lens [256, 25, 245, 91, 175, 8, 13, 103], caps [2, 7, 23, 3, 11, 29, 32, 13], arrive steps [0, 9, 13, 13, 15, 16, 18, 18]; every request to max_tokens => 50 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  A row of record: sampling.ignore_eos, every request done only at its public cap."
 }

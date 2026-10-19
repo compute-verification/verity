@@ -40,7 +40,8 @@
  "sampling": {
   "variant": "greedy",
   "seed": null,
-  "n": 1
+  "n": 1,
+  "ignore_eos": true
  },
  "serving_profile": "sweep-B32-staggered",
  "context_class": "I256-O32",
@@ -3502,5 +3503,5 @@
   "tp": 8,
   "execution": "eager"
  },
- "note": "R12 sweep glm53__fp8__h200__tp8__b32__i256__o32__mixed-arrivals__greedy__eager: B=32 I<=256 O<=32 greedy arrivals=staggered; prompt lens [55, 19, 31, 11, 17, 105, 117, 8, 9, 65, 256, 29, 103, 81, 91, 23, 13, 59, 69, 21, 25, 151, 41, 15, 237, 177, 171, 201, 225, 37, 61, 149], caps [21, 19, 7, 25, 23, 3, 5, 19, 19, 31, 9, 13, 27, 11, 27, 9, 17, 19, 25, 17, 25, 15, 2, 9, 27, 29, 10, 32, 22, 3, 3, 15], arrive steps [0, 5, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 10, 11, 11, 13, 13, 13, 14, 14, 14, 15, 15, 16, 16, 16, 16, 18, 18, 18, 18, 19]; every request to max_tokens => 50 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  EOS untouched."
+ "note": "R12 sweep glm53__fp8__h200__tp8__b32__i256__o32__mixed-arrivals__greedy__eager: B=32 I<=256 O<=32 greedy arrivals=staggered; prompt lens [55, 19, 31, 11, 17, 105, 117, 8, 9, 65, 256, 29, 103, 81, 91, 23, 13, 59, 69, 21, 25, 151, 41, 15, 237, 177, 171, 201, 225, 37, 61, 149], caps [21, 19, 7, 25, 23, 3, 5, 19, 19, 31, 9, 13, 27, 11, 27, 9, 17, 19, 25, 17, 25, 15, 2, 9, 27, 29, 10, 32, 22, 3, 3, 15], arrive steps [0, 5, 6, 7, 7, 7, 7, 8, 8, 8, 9, 9, 10, 11, 11, 13, 13, 13, 14, 14, 14, 15, 15, 16, 16, 16, 16, 18, 18, 18, 18, 19]; every request to max_tokens => 50 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  A row of record: sampling.ignore_eos, every request done only at its public cap."
 }

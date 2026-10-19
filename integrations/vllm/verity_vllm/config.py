@@ -2,9 +2,10 @@
 
 * **Run definitions.**  ``manifests/`` (checkpoint pins, semantic profiles) and ``workloads/`` (row workloads) sit beside
   the package in the source tree; they are run definitions, not package data.  Library code locates them, and the source
-  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS`` and ``CHECKPOINTS``.
+  tree itself, through ``ROOT``, ``MANIFESTS``, ``WORKLOADS``, ``CHECKPOINTS`` and ``RECORDS``.
 * **What runs.**  :class:`RowConfig`, a row's one config (its file ``workloads/<row>.json``: the workload and the pinned
-  :class:`RowEngine`), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
+  :class:`RowEngine`), the done source a row of record must declare (``DONE_SOURCES``, :func:`done_source_refusal`: its public
+  cap), the row-id grammar (:class:`RowId`), the dtype vocabulary (``DTYPES``), the target table
   (``TARGETS``), the protocol-set grammar (``PROTOCOLS``, :func:`parse_protocols`), and :class:`EnginePin`, the pinned
   engine record every engine is built from: model, full revision and checkpoint role, checked against
   ``manifests/checkpoints.json``.
@@ -33,6 +34,8 @@ ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
 WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
+#: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
+RECORDS = MANIFESTS / "records.json"
 #: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 
@@ -281,6 +284,44 @@ VLLM = "d9105ea80"
 #: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`).
 WORKLOAD_SCHEMA = "verity-vllm/workload/v2"
 
+#: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
+#: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
+#: public; the EOS a request samples there is a value, which decides no step.
+DONE_SOURCES = ("public-cap", "eos-token")
+
+
+def rows_of_record() -> frozenset[str]:
+    """The row ids ``RECORDS`` lists (none without the file)."""
+    return frozenset(json.loads(RECORDS.read_text()).get("rows") or {}) if RECORDS.is_file() else frozenset()
+
+
+def done_source(workload: Mapping[str, Any]) -> str:
+    """The done source (``DONE_SOURCES``) a workload doc declares."""
+    s = workload.get("sampling")
+    return "public-cap" if isinstance(s, Mapping) and s.get("ignore_eos") is True else "eos-token"
+
+
+def done_source_refusal(workload: Mapping[str, Any]) -> str | None:
+    """Why a row of record (its ``sweep.row_id`` in ``RECORDS``) is not done only at its public cap; None for a row that is, and for
+    every research row (its EOS stops are its own).  Row files (:meth:`RowConfig.of`), the row precheck and GP-01 refuse with it."""
+    sw = workload.get("sweep")
+    row = sw.get("row_id") if isinstance(sw, Mapping) else None
+    if row not in rows_of_record():
+        return None
+    s = workload.get("sampling") if isinstance(workload.get("sampling"), Mapping) else {}
+    if done_source(workload) != "public-cap":
+        why = (f"its done source is 'eos-token' (sampling.ignore_eos is {s.get('ignore_eos')!r}): declare sampling.ignore_eos: true, "
+               f"so every request runs its public max_tokens")
+    elif stops := [k for k in ("stop_token_ids", "stop") if s.get(k)]:
+        why = f"sampling.{stops[0]} {s[stops[0]]!r} stops a request before its cap: drop it"
+    elif uncapped := [str(r.get("request_id", i)) for i, r in enumerate(workload.get("requests") or [])
+                      if isinstance(r.get("max_tokens"), bool) or not isinstance(r.get("max_tokens"), int) or r["max_tokens"] < 1]:
+        why = f"request(s) {', '.join(uncapped[:4])} declare no public cap (a positive integer max_tokens)"
+    else:
+        return None
+    return f"{row}: a row of record ({RECORDS.name}) is done only at its public cap, and {why}"
+
+
 _SHA = re.compile(r"[0-9a-f]{40}")
 #: The flat v1 keys the ``engine`` block replaced, by their place in it.
 _V1_KEYS = {"engine_args_required": "args", "env_required": "env", "target": "target", "tokenizer_revision": "revision",
@@ -357,6 +398,8 @@ class RowConfig:
         if cfg.row and row_world(cfg.row) > 1 and not isinstance(cfg.engine.args.get("disable_custom_all_reduce"), bool):
             raise ValueError(f"{cfg.row}: a tensor-parallel row states engine.args.disable_custom_all_reduce (true on a SYS box, "
                              f"`engine.profiles.transport.row_custom_all_reduce_off`)")
+        if why := done_source_refusal(doc):
+            raise ValueError(why)
         return cfg
 
     @classmethod
