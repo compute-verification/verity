@@ -223,15 +223,26 @@ __device__ __forceinline__ void prefetch_l2(const void* p, u32 bytes) {
   asm volatile("cp.async.bulk.prefetch.L2.global [%0], %1;\n" ::"l"(p), "r"(bytes) : "memory");
 }
 
+// The unit's served output (h1o.cu): with E::ON the lane's accumulators become O = O' - sum_d 128^d D_d as the tail
+// absorbs O' and each D_d, and E writes them; E also says which A rows are the canonical empty row (read as zero), what a
+// dead unit writes, and may perturb a noised accumulator word (the conformance test).  NoEpi: the receipts alone.
+struct NoEpi {
+  static constexpr bool ON = false;
+  __device__ bool a_ok(int) const { return true; }
+  __device__ void dead(int, int, int) const {}
+  __device__ void fault(int, int, int, int (&)[2][4][4]) const {}
+  __device__ void out(int, int, int, const int (&)[2][4][4]) const {}
+};
+
 // V 1: the first kernel.  V 2: a column block's row blocks on adjacent warps (B's tile from L2 when T > 32); noise blocks
 // from the unit's midstate; each chunk's noise words in shared memory; the next segment's A and B words loaded a segment
 // ahead and the next chunk's rows prefetched into L2; at most 170 registers (3 blocks of 4 warps an SM).
 // unit v of call C (v in the version's unit order) on one warp, with the warp's shared buffers: Xs and Ws (32 * XS bytes
 // each), sdw (24 words) and, for V 2, nzw (2 * 32 * NZ words)
-template <int V>
+template <int V, class E = NoEpi>
 __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8_t* Xs, uint8_t* Ws, u64* sdw, u32* nzw,
                                          const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2, u32* __restrict__ out,
-                                         int nowrite) {
+                                         int nowrite, const E& ep = E()) {
   int ri, cj;
   if constexpr (V >= 2) {
     const int nrb = C.units / C.ncb;
@@ -247,6 +258,7 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
   if (!C.live[ri]) {
     if (!nowrite)
       for (int i = lane; i < 2 * sets; i += 32) o[i] = 0;
+    if constexpr (E::ON) ep.dead(ri, cj, lane);
     return;
   }
   const int g = lane >> 2, q = lane & 3;
@@ -272,8 +284,10 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
 
   const int8_t* arow = C.a + (32LL * ri + lane) * C.lda;
   const int8_t* brow = C.b + (32LL * cj + lane) * C.ldb;
+  const bool aok = ep.a_ok(32 * ri + lane);
+  const uint4 zero4 = make_uint4(0, 0, 0, 0);
   if constexpr (V >= 2) {
-    prefetch_l2(arow, 512);
+    if (aok) prefetch_l2(arow, 512);
     prefetch_l2(brow, 512);
   }
   u32 st[16];
@@ -326,8 +340,8 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
 
   uint4 pa0, pa1, pb0, pb1;
   if constexpr (V >= 2) {
-    pa0 = *reinterpret_cast<const uint4*>(arow);
-    pa1 = *reinterpret_cast<const uint4*>(arow + 16);
+    pa0 = aok ? *reinterpret_cast<const uint4*>(arow) : zero4;
+    pa1 = aok ? *reinterpret_cast<const uint4*>(arow + 16) : zero4;
     pb0 = *reinterpret_cast<const uint4*>(brow);
     pb1 = *reinterpret_cast<const uint4*>(brow + 16);
   }
@@ -337,7 +351,7 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
     u32 hr[16], hc[16];
     if constexpr (V >= 2) {
       if (ch + 1 < nb) {
-        prefetch_l2(arow + 512 * (ch + 1), 512);
+        if (aok) prefetch_l2(arow + 512 * (ch + 1), 512);
         prefetch_l2(brow + 512 * (ch + 1), 512);
       }
       noise(rowb + ch, hr);
@@ -363,8 +377,8 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
         nr = nzr[s16];
         nc = nzc[s16];
       } else {
-        a0 = *reinterpret_cast<const uint4*>(arow + 32 * s);
-        a1 = *reinterpret_cast<const uint4*>(arow + 32 * s + 16);
+        a0 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * s) : zero4;
+        a1 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * s + 16) : zero4;
         b0 = *reinterpret_cast<const uint4*>(brow + 32 * s);
         b1 = *reinterpret_cast<const uint4*>(brow + 32 * s + 16);
         nr = hr[s16];
@@ -384,8 +398,8 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
       *reinterpret_cast<uint4*>(Ws + lane * XS + 16) = make_uint4(ww[4], ww[5], ww[6], ww[7]);
       if constexpr (V >= 2) {
         if (s + 1 < KS) {
-          pa0 = *reinterpret_cast<const uint4*>(arow + 32 * (s + 1));
-          pa1 = *reinterpret_cast<const uint4*>(arow + 32 * (s + 1) + 16);
+          pa0 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * (s + 1)) : zero4;
+          pa1 = aok ? *reinterpret_cast<const uint4*>(arow + 32 * (s + 1) + 16) : zero4;
           pb0 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 1));
           pb1 = *reinterpret_cast<const uint4*>(brow + 32 * (s + 1) + 16);
         }
@@ -412,6 +426,7 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
           mma(acc[mi][ni], af[mi], bf[ni][0], bf[ni][1]);
           mma(Y[mi][ni], af[mi], IB[ni][0], IB[ni][1]);
         }
+      if constexpr (E::ON) ep.fault(u, lane, s, acc);
       absorb(st, acc, o, s, lane, nowrite);
     }
   }
@@ -474,7 +489,17 @@ __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8
           for (int e = 0; e < 4; ++e) P[mi][ni][e] = (int)((u32)acc[mi][ni][e] - (u32)P[mi][ni][e]);
     }
     absorb(st, P, o, KS + d, lane, nowrite);
+    if constexpr (E::ON) {
+#pragma unroll
+      for (int mi = 0; mi < 2; ++mi)
+#pragma unroll
+        for (int ni = 0; ni < 4; ++ni)
+#pragma unroll
+          for (int e = 0; e < 4; ++e)
+            acc[mi][ni][e] = d == 0 ? P[mi][ni][e] : (int)((u32)acc[mi][ni][e] - ((u32)P[mi][ni][e] << (7 * d)));
+    }
   }
+  if constexpr (E::ON) ep.out(ri, cj, lane, acc);
 }
 
 template <int NW, int V>
