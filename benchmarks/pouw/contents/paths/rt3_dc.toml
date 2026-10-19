@@ -1,0 +1,4 @@
+order = 76
+path = "`rt3_dc/`"
+runs_on = "H200, B200 (build on a CPU node)"
+what = "li's warp checkpoint by atomics (RT3-DC): `cpatom.cuh`'s forms (each lane's `red.shared.xor` into the segment's one shared word with a quarter LDS.128, STS.128 and STG.128 a checkpoint; the same on `red.global.xor`; 2- and 8-atomic variants) run bit for bit against the host's reference (`exact`, recomputed through `segment.py` by `ref_check.py`), timed with the lane alone, beside the saturated wgmma (`sm90_cpatom.cu`) and tcgen05.mma (`sm100_cpatom.cu`), and the atomic units alone; `sm100_cpatom.cu clock` reads the B200's SM clock in the kernel under each load; `analyze.py` turns the timings into a unit's SMSP-cycles. `run.sh build` on a CPU node, then `run.sh time` on each device under `gpu-lease 1`"

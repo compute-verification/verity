@@ -1,0 +1,73 @@
+// RT3-DC on the H200 (sm_90a): li's checkpoint by atomics beside the saturated wgmma (cpatom.cuh has the forms).
+//
+//   exact [U]       each form's checkpoints and final states against the host's reference, word for word (exact.jsonl)
+//   probe ARGS      the opcode probes below (op_main: --list, --time NAME... --reps R): gated by probe.py
+//
+// wgcp_<form>: sm90_wgmma.cu's wgli loop (2 warpgroups, each warp its group of 4 wgmma s8 m64n256k32, then its fold, then
+// wait_group 0), two trips an iteration so the checkpoint's buffers and words are static (cpatom.cuh's cp_trip): the
+// block's cycles an iteration are 8 wgmma a warpgroup and 8 units a warp. wgli_redux is main's, for the same loop with
+// LI-CP-W's 4 LOP3 + REDUX on the chains and no store. lr_* and at_* are the lane-alone loops (cpatom.cuh).
+#define main sm90_wgmma_main
+#include "../dc/probes/sm90_wgmma.cu"
+#undef main
+
+#include "cpatom.cuh"
+
+template <int CP>
+DC_DEV void wg_cp(const OpArgs& a) {
+  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
+  __shared__ __align__(16) uint32_t sh[8][8];
+  const Tiles t = fill_tiles<0>(sm, a.mode);
+  int d[128] = {};
+  Lane l(threadIdx.x);
+  const int lane = threadIdx.x & 31, wp = threadIdx.x >> 5;
+  const uint32_t zm = (uint32_t)a.mode;
+  if (lane < 8) sh[wp][lane] = 0;
+  __syncwarp();
+  const uint32_t t0 = smem_u32(&sh[wp][0]), a0 = t0 + 4u * (lane & zm);
+  uint32_t* wi = cp_words(a, 8, wp, lane);
+  auto fold = [&] {
+#pragma unroll
+    for (int c = 0; c < 64; c++) {
+      l.op<L_LOP3>(c);
+      l.op<L_IMAD>(c);
+    }
+  };
+  OP_BEGIN
+  OP_LOOP(it) {
+    group4<F_s8_n256>(d, t);
+    cp_trip<CP>(l, fold, a0, t0, wi, lane);
+    wgmma_wait<0>();
+    group4<F_s8_n256>(d, t);
+    cp_trip<CP>(l, fold, a0 + 16u, t0 + 16u, wi + 4, lane);
+    wgmma_wait<0>();
+    wi += 8;
+  }
+  wgmma_hold(d);
+  OP_END
+  OP_SINK(fold_acc(d) ^ l.fold() ^ threadIdx.x)
+}
+OP_KERNEL(wgcp_none, 256) { wg_cp<CK_NONE>(a); }
+OP_KERNEL(wgcp_seg4, 256) { wg_cp<CP_SEG4>(a); }
+OP_KERNEL(wgcp_ats, 256) { wg_cp<CP_ATS>(a); }
+OP_KERNEL(wgcp_ats2, 256) { wg_cp<CP_ATS2>(a); }
+OP_KERNEL(wgcp_ats8, 256) { wg_cp<CP_ATS8>(a); }
+OP_KERNEL(wgcp_red, 256) { wg_cp<CP_RED>(a); }
+OP_KERNEL(wgcp_red2, 256) { wg_cp<CP_RED2>(a); }
+
+#define WG8 "IGMMA.64x256x32.S8.S8*=8,"
+#define P_WGCP(F) {.name = "wgcp_" #F, .kernel = (const void*)wgcp_##F, .tpb = 256, .expect = WG8 CPA_CK_##F, .iters = 2048}
+static const OpProbe RT3[] = {
+    {.name = "wg_s8_n256_a1", .kernel = (const void*)wg_s8_n256_a1, .tpb = 256, .expect = "IGMMA.64x256x32.S8.S8*=4",
+     .iters = 4096},
+    {.name = "wgli_redux", .kernel = (const void*)wgli_redux, .tpb = 256,
+     .expect = "IGMMA.64x256x32.S8.S8*=4,LOP3.LUT=272,IMAD=256,REDUX*=4", .iters = 4096},
+    P_WGCP(none), P_WGCP(seg4), P_WGCP(ats), P_WGCP(ats2), P_WGCP(ats8), P_WGCP(red), P_WGCP(red2),
+    CPA_LR_PROBES,
+};
+
+int main(int argc, char** argv) {
+  if (argc >= 2 && !strcmp(argv[1], "exact")) return run_exact(argc >= 3 ? atoi(argv[2]) : 64);
+  if (argc >= 2 && !strcmp(argv[1], "probe")) return op_main(argc - 1, argv + 1, RT3);
+  return op_main(argc, argv, RT3);
+}
