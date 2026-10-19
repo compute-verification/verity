@@ -19,6 +19,7 @@ import Proofs.Nci.Info
 import Proofs.Nci.Fmt
 import Proofs.Nci.Training
 import Proofs.Nci.Packed
+import Proofs.Nci.PackedTraining
 
 /-!
 # Proofs of NCI's guarantees
