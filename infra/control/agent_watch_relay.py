@@ -31,7 +31,7 @@ from research.pods import budgets, connect
 EVENTS = "/data/agent-watch/events.jsonl"
 BELLS = "/data/agent-watch/doorbells.json"
 BELLS_WINDOW_S = 24 * 3600
-OFFSET = Path.home() / "agent-watch/offset"
+OFFSET = Path(os.environ.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
 EVERY_S = 5 * 60
 DRY = "--dry-run" in sys.argv
 REG = slack.load_registry(slack.registry_path())
@@ -100,8 +100,9 @@ def text(rec: dict) -> str:
 
 
 def pod(cmd: str, data: str | None = None) -> str:
-    return subprocess.run([*connect.ssh_base(budgets.GUARD_HOST), cmd], input=data, capture_output=True, text=True, timeout=120,
-                          check=True).stdout
+    """`cmd` on the control pod: over ssh, or in a local shell when $AGENT_WATCH_ON_POD is set (the watchers supervisor's loop)."""
+    argv = ["sh", "-c", cmd] if os.environ.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
+    return subprocess.run(argv, input=data, capture_output=True, text=True, timeout=120, check=True).stdout
 
 
 def ring(api: slack.Slack, ts: str, post: str, name: str = "top") -> None:

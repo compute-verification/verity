@@ -68,6 +68,17 @@ def test_a_line_still_being_written_waits_for_the_next_pass(relay):
     assert [cmd for cmd, _ in relay.wrote] == [f"cat > {relay.BELLS}.tmp && mv {relay.BELLS}.tmp {relay.BELLS}"] * 2
 
 
+def test_on_the_pod_its_reads_and_writes_run_in_a_local_shell_and_no_ssh(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("agent_watch_relay", RELAY)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    monkeypatch.setenv("AGENT_WATCH_ON_POD", "1")
+    monkeypatch.setattr(m.connect, "ssh_base", lambda host: pytest.fail("the relay on the pod reached for ssh"))
+    f = tmp_path / "bells.json"
+    m.pod(f"cat > {f}", '{"t": 1}')
+    assert f.read_text() == '{"t": 1}' and m.pod(f"cat {f}") == '{"t": 1}'
+
+
 def test_a_log_replaced_with_a_shorter_one_is_posted_from_the_top(relay):
     relay.OFFSET.write_text("5")
     relay.log_text["text"] = line("run-a") + "\n" + line("run-b") + "\n"
