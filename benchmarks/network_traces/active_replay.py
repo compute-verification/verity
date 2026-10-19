@@ -21,11 +21,13 @@ records and on the committed ones. It also checks that the proxy's records are `
 proxy saw, that its hand times are the rule's, and that the peer's digest of each window of the wire is the records'.
 
 **The salt** (`run_virtual(salt=True)`, and `mockdc.py run --salt`): the proxy's per-window salt is on, so each window's
-ingress record holds the salt's frame and the server receives the salt on a connection of its own, logging each
-window's commitment, never the salt. Once the run's records are published the proxy answers the verifier's "reveal"
-call with every window's salt (`salts.json`), and the audit's `salt` section reads each commitment against it
-(`active.check_salts`, on the raw ingress records), counts the salt frames in each ingress record and in the egress
-records, and checks that no egress frame holds a salt or its commitment and that the server received each salt.
+ingress record holds the salt frame, which carries the placeholder and never the salt, and the server receives the salt
+on a connection of its own, logging each window's SHA-512 of it (`fingerprint`), never the salt. Once the run's
+records are published the proxy answers the verifier's "reveal" call with every window's salt (`salts.json`), each
+revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof service),
+and the audit's `salt` section reads the salt frames against them (`active.check_salts`, on the raw ingress records),
+counts the salt frames in each ingress record and in the egress records, and checks that no egress frame holds a salt
+and that the server received each salt.
 
 **Maintenance** (`outage_plan`, and `mockdc.py`'s `maintenance` strategy): the block's certifier is down for one
 window. The block is drained for it, so no request is enqueued in it, and the plan is refused if anything of the
@@ -104,7 +106,6 @@ from verity.core.protocols.certifier.active import (
     HEADER,
     LAST,
     SALT,
-    SALT_FRAME_BYTES,
     Events,
     InlineExecutor,
     Proxy,
@@ -113,7 +114,6 @@ from verity.core.protocols.certifier.active import (
     decode_frame,
     encode_frame,
     fresh_salt,
-    salt_commitment,
     worker,
 )
 from verity.core.protocols.certifier.lean_audit import Audit
@@ -135,6 +135,8 @@ from verity.core.protocols.certifier.schedule import (
     handing_buckets,
     run_shaper,
 )
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.sampled_proofs.service import Registration
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
@@ -688,16 +690,20 @@ class Server:
             w.close()
 
 
+def fingerprint(salt: bytes) -> str:
+    return hashlib.sha512(salt).hexdigest()
+
+
 async def read_salts(first: bytes, reader: asyncio.StreamReader, log: dict, notify) -> None:
-    """The salt stream's connection, from its first byte: each salt frame's window and the commitment of the salt it
-    carries go to `log["salts"]`, never the salt itself."""
-    frame = first + await reader.readexactly(SALT_FRAME_BYTES - 1)
+    """The salt stream's connection, from its first byte: each salt frame (its header, then the length the header
+    gives) puts its window and the salt's `fingerprint` in `log["salts"]`, never the salt itself."""
+    head = first + await reader.readexactly(HEADER.size - 1)
     while True:
-        _, _, payload = decode_frame(frame)
-        log.setdefault("salts", []).append([int.from_bytes(payload[:8], "big"), salt_commitment(payload[8:]).hex()])
+        _, _, payload = decode_frame(head + await reader.readexactly(HEADER.unpack(head)[2]))
+        log.setdefault("salts", []).append([int.from_bytes(payload[:8], "big"), fingerprint(payload[8:])])
         notify()
         try:
-            frame = await reader.readexactly(SALT_FRAME_BYTES)
+            head = await reader.readexactly(HEADER.size)
         except asyncio.IncompleteReadError as e:
             if e.partial:
                 raise
@@ -965,9 +971,16 @@ def proxy_log(proxies: Sequence[Proxy]) -> dict:
             "prover": None if last.choices is None else last.choices.log} | salts | served_by | _usage()
 
 
+def stand_in(window: int) -> Registration:
+    """A stand-in for the proof service's registration of `window`, which the replay has none of: a record whose
+    provenance names the window (`active.served_window`), with its receipt."""
+    record = {"window": {"kind": "served", "window": window}}
+    return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)
+
+
 def revealed(proxies: Sequence[Proxy]) -> dict[str, str]:
     """Every served window's salt, as the verifier's `reveal` calls give them once the run's records are published."""
-    return {str(w): p.reveal(w).hex() for p in proxies for w in range(p.start, p.windows)}
+    return {str(w): p.reveal(w, stand_in(w)).hex() for p in proxies for w in range(p.start, p.windows)}
 
 
 def write_logs(out: Path, proxies: Sequence[Proxy] = (), server: Server | None = None,
@@ -1544,12 +1557,10 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
 
 def audit_salt(setup: Setup, salts: dict[int, bytes], in_records: Sequence[Record], out_records: Sequence[Record],
                server: dict, windows: int, audit) -> dict:
-    """The audit's read of a salted run's commitments (`check_salts`, on the raw ingress records and the salts
-    `reveal` gave), and where the salt frames went: their count in each window's ingress record and in the egress
-    records, whether any egress frame holds a salt or its commitment, and whether the server received each window's
-    salt."""
+    """The audit's read of a salted run's salt frames (`check_salts`, on the raw ingress records and the salts `reveal`
+    gave), and where the salt frames went: their count in each window's ingress record and in the egress records,
+    whether any egress frame holds a salt, and whether the server received each window's salt."""
     verdicts = check_salts(audit, setup.ingress_link, in_records, windows, salts)
-    commitments = {w: salt_commitment(s) for w, s in salts.items()}
 
     def salt_frames(r: Record) -> int:
         return sum(decode_frame(f)[0] == SALT for row in r.grid for f in row[: row_count(row)])
@@ -1559,9 +1570,9 @@ def audit_salt(setup: Setup, salts: dict[int, bytes], in_records: Sequence[Recor
             "violations": [[v.window, v.violation] for v in verdicts if not v.accepted],
             "ingress_salt_frames": [salt_frames(r) for r in sorted(in_records, key=lambda r: r.window)],
             "egress_salt_frames": sum(salt_frames(r) for r in out_records),
-            "egress_holds_salt": any(x in f for f in egress for x in (*salts.values(), *commitments.values())),
+            "egress_holds_salt": any(s in f for f in egress for s in salts.values()),
             "block_received": sorted(map(tuple, server.get("salts", []))) ==
-                              [(w, commitments[w].hex()) for w in sorted(salts)]}
+                              [(w, fingerprint(salts[w])) for w in sorted(salts)]}
 
 
 def select(traces: Sequence[Path], setup: Setup, windows: int, lo: int, hi: int) -> list[tuple[Path, str]]:

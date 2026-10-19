@@ -66,8 +66,9 @@ gate).  `--no-preflight` skips it, for the lander.
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
 order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
-merged again), and a `main` that moved outside the queue rebuilds `next` on it.  A PR whose head contains another open PR's head
-goes in after it and waits while that one waits.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
+runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
+PR whose head contains another open PR's head goes in after it and waits while that one waits.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
@@ -142,6 +143,8 @@ AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
 TRAILER_RE = re.compile(r"^(PR|Head|Owner): (.+)$", re.M)
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
+#: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
+CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
 
 
 class QueueError(Exception):
@@ -485,6 +488,12 @@ class Queue:
         self.frozen: set[int] = set()
         #: why a ready PR stays off `next` for now, or None (`Driver.warming`: a cold-forcing PR whose circuit-check is pre-warmed)
         self.warming: Callable[[PR], str | None] | None = None
+        #: why `sync` keeps `next` on its base this time (`hold`), from the queue's state; `Driver` sets its own, since its tick
+        #: asks `Driver.held` before it syncs
+        self.holding: Callable[[dict], str | None] = self._held
+        #: `research status` of run ids (`drive.run_states`), and the clock, for `_held`
+        self.run_states: Callable[[Path, list[str]], dict] | None = None
+        self.now: Callable[[], float] = time.time
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
 
@@ -691,11 +700,41 @@ class Queue:
                 return c
         return None
 
+    def _held(self, state: dict) -> str | None:
+        """`hold` with drive's launches (`drive.launched` in ``state``): a member's check runs while a run of its launch is active
+        and hasn't failed yet, or every run exited 0 within `PUBLISH_GRACE_S` (its attempt may not be in the store yet: drive
+        lands it next)."""
+        from .drive import ACTIVE, PUBLISH_GRACE_S, _utc, run_states
+
+        launched = (state.get("drive") or {}).get("launched") or {}
+        if not launched:
+            return None
+        read = self.run_states or run_states
+
+        def running(commit: str, base: str) -> bool:
+            if not (ids := (launched.get(commit) or {}).get("ids")):
+                return False
+            states = read(self.workdir, list(ids))
+            if any(len(s) > 3 and s[0] in ACTIVE and s[3] for s in states.values()):
+                return False
+            if any(s[0] in ACTIVE for s in states.values()):
+                return True
+            ended = [_utc(s[2]) if len(s) > 2 else None for s in states.values()]
+            return (bool(states) and all(s[1] == 0 for s in states.values())
+                    and self.now() - max((e for e in ended if e is not None), default=0) < PUBLISH_GRACE_S)
+
+        return hold(self.workdir, self.branch, running)
+
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
+        """Rebuild `next` (see the module's `next`), unless a running check holds it on its base (`holding`): then nothing on it
+        changes, and (its members as built, {}) is returned."""
         self._clone()
         state = self.load_state()
         prs = [p for p in self.github.open_prs() if p.base == "main"]
         prs, waiting = self.fetch_prs(prs)
+        if why := self.holding(state):
+            self.log(f"research queue: {why}")
+            return built_on(self.workdir, f"refs/remotes/origin/{self.branch}")[1], {}
         chain = self.chain()
         entries = self.entries(prs, state)
         entries.update(waiting)
@@ -909,6 +948,54 @@ def chain_of(repo: Path, base: str, ref: str) -> list[Member]:
             return []                                   # a commit the queue didn't make: rebuild from `main`
         out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
     return out
+
+
+def changed(repo: Path, base: str, commit: str) -> set[str]:
+    return set(_out(repo, "diff", "--name-only", "--no-renames", base, commit).split())
+
+
+def built_on(repo: Path, ref: str) -> tuple[str, list[Member]]:
+    """(the base ``ref`` was built on, its members oldest first), whether or not `main` has moved since; ("", []) when ``ref`` is
+    missing or none of its first-parent chain is in `main`."""
+    if _git(repo, "rev-parse", "--verify", "-q", ref, check=False).returncode:
+        return "", []
+    # not `merge-base`: a member stacked on a PR that has since landed on `main` gives a second, wrong common ancestor
+    # (12 Oct 10:53Z: #1847 on #1793, after the e2e train's merge commit, emptied the chain and cancelled a disjoint check)
+    base = next((c for c in _out(repo, "rev-list", "--first-parent", ref).split()
+                 if not _git(repo, "merge-base", "--is-ancestor", c, "origin/main", check=False).returncode), "")
+    if not base:
+        return "", []
+    out = []
+    for rec in filter(None, (x.strip() for x in _out(repo, "log", "--first-parent", "--reverse",
+                                                      "--format=%H%x00%B%x1e", f"{base}..{ref}").split("\x1e"))):
+        commit, body = rec.split("\x00", 1)
+        t = dict(TRAILER_RE.findall(body))
+        if not {"PR", "Head", "Owner"} <= set(t):
+            return base, []
+        out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
+    return base, out
+
+
+def hold(repo: Path, branch: str, running: Callable[[str, str], bool]) -> str | None:
+    """Why `branch` stays on its base, or None: a check of one of its members is running (``running(commit, base)``) and `main`
+    moved by files none of that train's members change, and by no check tooling (`CHECK_TOOLING`).  A rebuild on the new `main`
+    would waste that check, and drive lands the train onto the moved `main` once it passes.  Every sync keeps it (19 Oct 08:16Z:
+    `research queue eject 2727` rebuilt 118 PRs onto a `main` drive was holding `next` off, which would have cancelled every
+    running train)."""
+    base, chain = built_on(repo, f"refs/remotes/origin/{branch}")
+    main = _out(repo, "rev-parse", "origin/main")
+    if not chain or main == base:
+        return None
+    moved = changed(repo, base, main)
+    if any(p.startswith(CHECK_TOOLING) for p in moved):
+        return None
+    for m in reversed(chain):
+        if running(m.commit, base):
+            if moved & changed(repo, base, m.commit):
+                return None
+            return (f"`main` moved to {main[:12]} by files `{branch}` doesn't change while {m.commit[:12]}'s check runs: "
+                    f"`{branch}` stays on {base[:12]} until it ends")
+    return None
 
 
 def touched_by(repo: Path, members: list[Member], files: list[str]) -> list[str]:

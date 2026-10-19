@@ -2,8 +2,9 @@
 # declared division into isolation units, decide `Nci.Complies Γ α` for that division (`Security/Definitions/Nci.lean`).
 # It reads the Program with C-Flock's decoder (`Flock.Program`), required by path, and imports nothing else but Lean core:
 # no Mathlib and nothing of Security. The difftest holds it to the Python reference in `scripts/nci_reference.py`.
+# `nci-check` runs `NciCheck.Desc`, the check at the size of the description, and `nci-check --unrolled` the reference.
 name = "nci_check"
-defaultTargets = ["NciCheck", "nci-difftest"]
+defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-check"]
 
 [leanOptions]
 autoImplicit = false
@@ -19,3 +20,11 @@ name = "NciCheck"
 [[lean_exe]]
 name = "nci-difftest"
 root = "NciCheck.DifftestMain"
+
+[[lean_exe]]
+name = "nci-desc-difftest"
+root = "NciCheck.DescDifftestMain"
+
+[[lean_exe]]
+name = "nci-check"
+root = "NciCheck.CheckMain"

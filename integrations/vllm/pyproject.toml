@@ -64,3 +64,10 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "benchmark
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/__main__.py"]
 parallel = true
+# an xdist worker peaked at 6.2 GB, most stayed under 2 GB (19 Oct, vy-nebius-2: the full suite on 14 workers, r20261019-050410-3339;
+# 3.9 GB in the quick tier, r20261019-050331-542f); `--mem-gb`, or a job's memory cgroup, divides by this, so the default 16 GB
+# agent-test job runs 2 workers where the 9 GB default ran 1 and timed out at 60 min
+worker_gb = 8
+# the full suite took 10,187 s on 5 workers (r20261018-214339-1952), past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the
+# tests over 5 s (tests/slow_tests.json and the `slow` marks)
+timeout_s = 14400

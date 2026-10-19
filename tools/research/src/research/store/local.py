@@ -792,12 +792,6 @@ class LocalStore:
 
         return LS.push_targets(self, targets, jobs=jobs)
 
-    def labels_durable(self, targets: list[str]) -> dict:
-        """The labels leg of the durability gate (`labels_sync.verify_targets`): every local assertion of every target listed on the remote."""
-        from . import labels_sync as LS  # noqa: PLC0415
-
-        return LS.verify_targets(self, targets)
-
     def pending(self) -> dict:
         """What this store holds that the remote does not (the queue `push --pending` drains), from one listing per prefix:
         `artifacts` without a verified remote replica whose manifest the remote lacks, or whose blobs are all here to verify

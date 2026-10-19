@@ -8,7 +8,7 @@ import Proofs.Pous
 
 `lake env lean CheckAxioms.lean`. Every headline theorem of the package must depend only on `propext`,
 `Classical.choice` and `Quot.sound`. Named assumptions are hypotheses, never `axiom` declarations, so they cannot
-appear here. `tools/lean/audit.py` checks every declaration; this list is the headline subset, one line each.
+appear here. `tools/verity/lean/check.py` checks every declaration; this list is the headline subset, one line each.
 -/
 
 -- sanity: the honest prover is accepted

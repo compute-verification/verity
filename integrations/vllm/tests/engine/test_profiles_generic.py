@@ -25,7 +25,7 @@ SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("
 TP2_ROLES = ("B1", "LLAMA32_1B", "QWEN3_30B_A3B")
 ROLES = [(r, 1) for r in SHIPPED] + [(r, 2) for r in TP2_ROLES]
 #: shipped configs the constructor refuses, by the reason it states
-REFUSED = {"QWEN15_AWQ": "awq"}
+REFUSED = {"QWEN15_AWQ": "awq", "DSV4_PRO": "no κ profile constructor"}
 
 
 # ------------------------------------------------------------------------------------------------------------------- shipped configs
@@ -103,9 +103,9 @@ def test_family_facts_rules_agree_with_analytic():
     for fam, f in FF.FAMILY_FACTS.items():
         if fam in analytic.FAMILY_RULES:
             assert f["rules"] == analytic.FAMILY_RULES[fam], fam
-        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe"), fam
+        assert f["arch"] in ("dense", "dense-ln", "moe", "dsa-moe", "mhc-moe"), fam
         assert "ForCausalLM" in f["vllm_class"], fam
-        assert "vllm/model_executor/models/" in f["rules_provenance"] or "transformers" in f["rules_provenance"], fam
+        assert any(s in f["rules_provenance"] for s in ("vllm/model_executor/models/", "vllm/models/", "transformers")), fam
 
 
 def test_every_hand_fact_cites_where_vllm_hard_codes_it():
@@ -236,6 +236,19 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
         "SHARED_I": 256, "INDEX_HEADS": 32, "INDEX_HEAD_DIM": 128, "INDEX_TOPK": 2048, "INDEX_TOPK_FREQ": 4, "INDEX_SKIP_TOPK_OFFSET": 3,
         "FIRST_DENSE": 3}
     assert vals["ATTN_SCALE"] == 256 ** -0.5 and vals["ROPE_NEOX"] is False and prov["SHARED_I"] == "derived"
+
+
+def test_the_hyper_connected_family_resolves_its_rank_facts_without_a_profile():
+    """DeepSeek-V4-Pro's facts resolve over a TP8 rank (the experts' width and the heads divided, the rest whole); its profile refuses."""
+    cfg = json.loads((dg.HF_CONFIG_DIR / "DSV4_PRO.config.json").read_text())
+    assert FF.facts_for(cfg)["arch"] == "mhc-moe" and "no κ profile constructor" in G.structural_refusal(cfg)
+    vals, prov = FF.resolve_facts(G.rank_hf_config(cfg, 8), {})
+    assert {k: vals[k] for k in ("Q_LORA", "HEAD_DIM", "QK_ROPE", "O_GROUPS", "O_LORA", "WINDOW", "PADDED_HEADS", "INDEX_HEADS", "NUM_EXPERTS",
+                                 "TOPK", "HASH_LAYERS", "SCORING", "SCORE_BIAS", "SHARED_I", "EXPERT_DTYPE", "HC_MULT", "HC_REPEAT")} == {
+        "Q_LORA": 1536, "HEAD_DIM": 512, "QK_ROPE": 64, "O_GROUPS": 16, "O_LORA": 1024, "WINDOW": 128, "PADDED_HEADS": 64, "INDEX_HEADS": 64,
+        "NUM_EXPERTS": 384, "TOPK": 6, "HASH_LAYERS": 3, "SCORING": "sqrtsoftplus", "SCORE_BIAS": "noaux_tc", "SHARED_I": 384,
+        "EXPERT_DTYPE": "fp4", "HC_MULT": 4, "HC_REPEAT": 20}
+    assert vals["ATTN_SCALE"] == 512 ** -0.5 and len(vals["COMPRESS_RATIOS"]) == cfg["num_hidden_layers"] + 1 and prov["SHARED_I"] == "derived"
 
 
 def test_olmoe_rank_record_holds_the_whole_all_heads_qk_norm():

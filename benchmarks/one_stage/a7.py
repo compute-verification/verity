@@ -43,15 +43,15 @@ each registered block freed at its values' last read), one instance of each per 
   the session 1 − ε of their sum, ε the share of it the wrong units the draw allows can carry (`uncertified`), its δ
   added to the ledger's error.
 * **Check 3.** The session draws ``--samples`` receipts a window, and nothing is opened: each draw goes through the
-  remote audit's opening unit (`a7_check3`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3 and 5 as one
-  unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block at the drawn
-  position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
+  remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
+  and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
+  at the drawn position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
   registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
   unit binds the block's payload row to, and the block's sketch receipt the leaf's entry. The units are proved as a
   second statement (`check3_audit`: every unit drawn, --zk, Lean). The verifier sees the units' roots, its own public
   rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
   and each unit's verdict, and holds the one other row, the plan row, to the canonical plan row by ``b || c``. The
-  negatives' sessions decide check 3 by the unit's reference (`a7_check3.reference`).
+  negatives' sessions decide check 3 by the unit's reference (`opening.reference`).
 """
 from __future__ import annotations
 
@@ -73,8 +73,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
-import a7_check3 as C3  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, receipts  # noqa: E402
+from verity.core.protocols.remote_bandwidth import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.ml.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
@@ -94,7 +93,7 @@ NR = TB + TABLE_ROWS // RPB
 VW = RU.value_bits(SLOTS)
 REQUESTS, ACTIVE, PAUSE = 10, 4, 0.15
 WINDOWS = 4
-#: the remote session's draws a window, each proved by check 3's unit (a7_check3); at 2 the seeded run draws registered
+#: the remote session's draws a window, each proved by check 3's unit (`opening`); at 2 the seeded run draws registered
 #: blocks as well as appended ones
 SAMPLES = 2
 NODE, SOURCE = b"a7-node", b"a7 verifier's secret"
@@ -273,7 +272,7 @@ def _runs(blocks) -> tuple[tuple[int, int], ...]:
 
 def check3_inputs(canons: dict, sp, sm, samples: int = SAMPLES) -> SimpleNamespace:
     """What check 3 reads of the canonical commitments: each step's certified plan row (its words, salt and ``b || c``) and
-    the canonical payload commitment (`a7_check3.Values`, written block j at row j - NR, the row `bound_row` binds its
+    the canonical payload commitment (`opening.Values`, written block j at row j - NR, the row `bound_row` binds its
     ``pay`` row to); the unit's codec, P and depths (a receipt tree of a plan of P + 1 blocks, the registration's payload
     tree or an append of up to 2 C blocks, the payload commitment); and the draws a window it proves (``samples``), which
     every session of the run draws."""
@@ -297,7 +296,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     ``rekey`` ((step, j): block j appended again at that step, in its own slot, of the same payload at a fresh index,
     the later plans and its free naming that index). Each window draws ``c3.samples`` receipts, and check 3 decides them
     (``c3``, `check3_inputs`) in place of their openings: by its unit's reference on the prover's witness
-    (`a7_check3.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
+    (`opening.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
     Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
     each appended index's write step and each block's release step."""
     steps = req.steps
@@ -618,11 +617,11 @@ def statement_checks(m: dict, rec: dict, want: dict) -> dict:
 # --- check 3 ----------------------------------------------------------------------------------------------------------------
 
 def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
-    """The remote session's check 3 by proofs: each draw's opening unit (`a7_check3.witness`), one member a receipt-leaf
+    """The remote session's check 3 by proofs: each draw's opening unit (`opening.witness`), one member a receipt-leaf
     size, its plan row under the canonical plan's salt of the draw's step and every other row under a fresh salt,
     registered, every unit drawn by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
-    --partition --program`. The verifier opens each drawn unit's public rows to its own copy (`a7_check3.public`) and its
-    verdict row, holds its plan row to the certified one by ``b || c`` (`a7_check3.plan_link`), and decides each window of
+    --partition --program`. The verifier opens each drawn unit's public rows to its own copy (`opening.public`) and its
+    verdict row, holds its plan row to the certified one by ``b || c`` (`opening.plan_link`), and decides each window of
     the session on its draws. No block, payload, receipt leaf or plan row is opened."""
     out.mkdir(parents=True, exist_ok=True)
     sess, st_ = rs.session, rs.store
@@ -673,7 +672,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     window = {"kind": "stand-in", "of": "check 3 of the remote session's drawn receipts (a7.py, check3_audit), on the stand-in's store",
               "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]} for m in members},
-              "link": "a7_check3.plan_link: the plan row by its b || c; every other witness row inside the unit"}
+              "link": "opening.plan_link: the plan row by its b || c; every other witness row inside the unit"}
     rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
@@ -763,7 +762,7 @@ def check3_negatives(c3a: dict, rs, c3) -> dict[str, dict]:
     """Check 3's negatives, each on one drawn unit of the run (an appended block's, if one was drawn) with one witness or
     public input altered: the unit's verdict on it (the lowering's own evaluation, `_forged`) and the check it names, or,
     for a prover whose unit accepts a plan row other than the certified one, the verifier's plan link on that row's
-    ``b || c`` (`a7_check3.plan_link`)."""
+    ``b || c`` (`opening.plan_link`)."""
     neg: dict[str, dict] = {}
     members, draws, wits = c3a["members_"], c3a["draws_"], c3a["witnesses_"]
     u0 = next((u for u, d in enumerate(draws) if d.coin is not None), 0)
@@ -822,7 +821,7 @@ def check3_negatives(c3a: dict, rs, c3) -> dict[str, dict]:
     unit("plan-entry-not-the-block (receipt-path)", "receipt-path", plan=flip(a0_["plan"], pos))
     plan = flip(a0_["plan"], next(x for x in range(len(a0_["plan"])) if x != pos))
     f = _forged(m, i, dict(a0_, plan=plan))
-    why = C3.plan_link(C3.commit("plan", 16 * m["S"].P, plan, c3.plan_salts[d0.step]), c3.plan_bcs[d0.step])
+    why = C3.plan_link(C3.commit(16 * m["S"].P, plan, c3.plan_salts[d0.step]), c3.plan_bcs[d0.step])
     neg["plan-row-not-the-step's (plan link)"] = {"refused": BC.verdict(f["ok_output"]) is None and why == "plan", "unit": f,
                                                    "link": why}
     return neg
@@ -1128,7 +1127,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
     The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
     record's chain isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3 is decided by
-    its unit's reference (`a7_check3.reference`), the run's own by proofs."""
+    its unit's reference (`opening.reference`), the run's own by proofs."""
     neg: dict[str, dict] = {}
     plan_m, map_m = members
     req_steps = req.steps

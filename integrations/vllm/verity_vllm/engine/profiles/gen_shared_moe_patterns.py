@@ -37,6 +37,8 @@ next layer's fused all-reduce and RMSNorm reduce the sum).
 
 from __future__ import annotations
 
+__models__ = ("zai-org/GLM-5.3",)
+
 import dataclasses
 from dataclasses import dataclass
 from typing import Any, Callable

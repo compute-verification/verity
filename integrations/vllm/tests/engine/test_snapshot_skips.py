@@ -3,7 +3,8 @@
 * an identity alias's call (``aten.detach``, which ``torch::from_blob`` dispatches) is not snapshotted at all;
 * a CPU tensor whose storage is device memory (`pinned.device_backed`) is listed as skipped, wherever it shows up;
 * every other tensor is still copied;
-* `device_backed` answers from the CUDA runtime's pointer attributes, and False when it can't tell.
+* `device_backed` answers from the CUDA runtime's pointer attributes, and False when it can't tell;
+* a step whose copies fill the pinned arena writes them out and reuses it, the files and index those of one flush.
 """
 from __future__ import annotations
 
@@ -27,6 +28,9 @@ class _View:
 class _Arena:
     def __init__(self):
         self.taken = []
+
+    def fits(self, n):
+        return True
 
     def take(self, n):
         self.taken.append(n)
@@ -64,6 +68,23 @@ def test_other_calls_are_copied():
     cap, t = _capture(), torch.arange(4, dtype=torch.uint8)
     cap._after_call(9, "aten.mul.Tensor", (t, t), {}, t)
     assert cap._snap_index == [] and len(cap._snap_pending) == 3 and cap.errors == []
+
+
+def test_a_step_that_fills_the_arena_writes_it_out_and_reuses_it(monkeypatch, tmp_path):
+    cap, syncs = _capture(), []
+    arena = pinned.PinnedArena.__new__(pinned.PinnedArena)
+    arena.buf, arena.off, arena.overflow = torch.empty(512, dtype=torch.uint8), 0, 0
+    cap._arena, cap.cfg.snapshot_dir = arena, tmp_path
+    cap._snap_files, cap._snap_bytes, cap.timing = {}, 0, {"flush_s": 0.0, "snapshot_s": 0.0, "sync_s": 0.0}
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: syncs.append(len(cap._snap_pending)))
+    ts = [torch.full((200,), i, dtype=torch.uint8) for i in range(5)]
+    for i, t in enumerate(ts):
+        cap._after_call(10 + i, "aten.mul.Tensor", (t,), {}, None)
+    assert syncs == [2, 2] and arena.overflow == 0 and len(cap._snap_pending) == 1
+    cap._flush_snapshots(cap._cur)
+    assert [e["event"] for e in cap._snap_index] == [10, 11, 12, 13, 14] and cap.errors == []
+    assert [(tmp_path / e["file"]).read_bytes() for e in cap._snap_index] == [t.numpy().tobytes() for t in ts]
+    assert {e["file"].split("/")[1] for e in cap._snap_index} == {"3"} and cap._snap_bytes == 1000
 
 
 class _Runtime:

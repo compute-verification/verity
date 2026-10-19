@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.StrictCR
 `StrictCRL.lean` for the compiled `--zk` session. Every term of `ksBoundAccZ` is a finder's collision probability: the
 rewinding finders (`forkFinder` at each committed object the lock fixes: each rep's level caps, pads root and `τ`
 commitment; `twoRuns` at level 0) and the self-clash finder (`oneRun`) run the compiled prover, and every pair they
-count is a collision of `H` (`opRZ_conflict_collision`, `opPadsZ_conflict_collision`, `opTauZ_conflict_collision`,
+count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`,
 `op₀Z_conflict_collision`, `SelfClashZ.collision`). So:
 
 * `ksBoundAccZ_le_strict`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`, at finders that
@@ -54,8 +54,8 @@ they open to different pairs. -/
 noncomputable def advPadsSFinderZ (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) : Finder Pair :=
   forkFinder (plurSZ Hs T pre.length) r
     (fun d => conflictPick Hs.H
-      (fun outs : List (OutZC F D Sl) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
-      fun x _ h => opPadsZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+      (fun outs : List (OutZC F D Sl) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+      fun x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     none (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)
 
 /-- **`Adv^τ_r`'s finder in the session**: at the table's rep `r`'s `τ` commitment, two continuations that open it to
@@ -103,8 +103,8 @@ theorem advPadsSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfter
     (h : (advPadsSFinderZ A Hs T pre post cap₀ r σ).CR Hs.H q) :
     advPadsSZ A Hs T pre post cap₀ r σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
   (forkE_conflict_le Hs.H (plurSZ Hs T pre.length) r
-    (fun d (outs : List (OutZC F D Sl)) => opPadsZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
-    (fun _ x _ h => opPadsZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
+    (fun d (outs : List (OutZC F D Sl)) => opPadsAtZ Hs T.N T.q r d (outs.getD pre.length dfltOutZC))
+    (fun _ x _ h => opPadsAtZ_conflict_collision (x := (x.1.getD pre.length dfltOutZC, x.2.getD pre.length dfltOutZC)) h)
     (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans h.le
 
 theorem advTauSZ_le_strict (r : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) {q : ℝ}
