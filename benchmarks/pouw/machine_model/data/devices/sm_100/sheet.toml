@@ -1,0 +1,147 @@
+# DS-100 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
+# (`Accounting.TS.Sheet.machine`) reads on the B200, its value, the document that states it and its grade, and each
+# DS-100 class's tensor form or pipe. `machine-model sheet --device sm_100` derives every DS-100 line from it and checks
+# them against census/DS-100.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
+name = "B200"
+gpu = "HGX B200 (sm_100a, 180 GB, 1000 W)"
+vector = "DS-100"
+lean = "Security/Definitions/Accounting/Sheets/B200.lean"
+
+[fmax]
+mhz = 1965
+grade = "measured only (the driver's maximum)"
+source = "no NVIDIA document read states a B200 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the driver's maximum at default clocks on vy-dc-b200 is 1965 MHz (sm_100/table.toml, EPS1 DC), RT-ISA and RT-CLOCK saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz"
+
+[sms]
+value = 148
+grade = "measured only"
+source = "no NVIDIA document read gives the B200's SM count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs'); the device reports 148 (sm_100/table.toml)"
+
+[clocks.implied]
+mhz = 1854
+grade = "none (derived: no document states it)"
+source = "the clock at which every per-clock peak below reproduces the Technical Brief's dense figure to within half its last digit, which holds from 1835 to 1855 MHz, and the Lenovo guide's FP16 2.25 too from 1852 MHz; 111 MHz under f_max, as the H200's tensor clock is 150 MHz under its f_max (open premise B200-PEAK-PER-CLOCK: the per-clock peaks are measured, the clock they are quoted at is nowhere)"
+
+# Each operand type's dense MACs an SM clock (A3). `sheet` is the Technical Brief's dense figure in TOPS or TFLOPS,
+# `sparse` false (the brief states dense and sparse apart), `tol` half its last printed digit, and `clock` the clock at
+# which the per-clock peak reproduces it: 2 · macs · SMs · clock is the figure to within tol.
+[peaks.s8]
+macs = 8192
+sheet = 4500
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock measured only"
+source = "NVIDIA Blackwell Architecture Technical Brief V2.1, Table 3 'System Specifications for HGX B300 and HGX B200', Per GPU Specs, HGX B200: 'INT8 Tensor Core 4.5 | 9 petaOPS' (Dense | Sparse); Lenovo ThinkSystem NVIDIA HGX B200 180GB 1000W GPU Product Guide Table 2: '4.5 / 9 petaOPS'; measured UTCIMMA_M128_N256 512 SMSP-cycles (DC-100)"
+
+[peaks.e4m3]
+macs = 8192
+sheet = 4500
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock measured only"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS'; measured UTCQMMA_E4M3 lines (DC-100)"
+
+[peaks.e5m2]
+macs = 8192
+sheet = 4500
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock derived at the implied clock"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS', for both FP8 formats (PTX ISA 9.4 tcgen05.mma .kind::f8f6f4: e4m3, e5m2)"
+
+[peaks.fp6]
+macs = 8192
+sheet = 4500
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock derived at the implied clock; no class"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP8/FP6 Tensor Core 4.5 | 9 petaFLOPS' (PTX ISA 9.4 .kind::f8f6f4: e2m3, e3m2); the CUDA C++ Programming Guide 12.9 §18.9.1 lists no FP6"
+
+[peaks.f16]
+macs = 4096
+sheet = 2200
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock derived at the implied clock"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP16/BF16 Tensor Core 2.2 | 4.5 petaFLOPS'; Lenovo Product Guide Table 2: '2.25 / 4.5'; measured UTCHMMA_F16_M128_N256 (DC-100)"
+
+[peaks.bf16]
+macs = 4096
+sheet = 2200
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock derived at the implied clock"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP16/BF16 Tensor Core 2.2 | 4.5 petaFLOPS'"
+
+[peaks.tf32]
+macs = 2048
+sheet = 1100
+sparse = false
+tol = 50
+clock = "implied"
+grade = "data sheet per second; per clock derived at the implied clock"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'TF32 Tensor Core 1.1 | 2.2 petaFLOPS'; Lenovo Product Guide Table 2: '1.1 / 2.2'"
+
+[peaks.fp4]
+macs = 16384
+sheet = 9000
+sparse = false
+tol = 500
+clock = "implied"
+grade = "data sheet per second; per clock derived at the implied clock; no class"
+source = "Technical Brief V2.1 Table 3, HGX B200: 'FP4 Tensor Core 9 | 18 petaFLOPS'; PTX ISA 9.4 tcgen05.mma .kind::mxf4 and .kind::mxf4nvf4 take twice .kind::f8f6f4's K; the Programming Guide 12.9 §18.9.1 lists no FP4, and the census no FP4 class"
+
+# Each Nsight Compute pipe's results an SM clock (A4).
+[pipes.alu]
+width = 64
+grade = "Programming Guide and Nsight Compute"
+source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 10.0: 32-bit integer add 64, compare/minimum/maximum 64, bitwise AND/OR/XOR 64, shift 64 (results a clock a multiprocessor); Nsight Compute Kernel Profiling Guide §2.3.6: alu executes 'most bit manipulation and logic instructions ... integer instructions, excluding IMAD and IMUL'"
+
+[pipes.imad]
+width = 64
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 10.0: '32-bit integer multiply, multiply-add, extended-precision multiply-add' 64; Nsight Compute §2.3.6: IMUL and IMAD on FMA Heavy"
+
+[pipes.shfl]
+width = 32
+grade = "Programming Guide"
+source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 10.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles"
+
+# Each DS-100 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: one thread issues a
+# tcgen05.mma, so its whole m·n·k is one warp instruction's, PTX ISA 9.4 §9.7.18.10, which the device-average counts
+# A3 reads spread over the SM's four SMSPs; Nsight Compute §2.3.6: 'one issuing thread can drive work across the four
+# warp schedulers'), a pipe, or neither (issue only: FFMA at 128 results a clock is the issue ceiling, tcgen05.ld
+# (LDTM) moves TMEM to registers on no row of the sheet, UNI the uniform datapath, A2u).
+[kinds]
+ALU = { pipe = "alu" }
+FFMA = {}
+IMAD = { pipe = "imad" }
+IMMA16816_S8 = { type = "s8", m = 16, n = 8, k = 16, warps = 1 }
+IMMA16832_S8 = { type = "s8", m = 16, n = 8, k = 32, warps = 1 }
+LDTM_16X128B_X8 = {}
+LDTM_16X256B_X4 = {}
+LDTM_16X64B_X16 = {}
+LDTM_32X32B_X1 = {}
+LDTM_32X32B_X128 = {}
+LDTM_32X32B_X16 = {}
+LDTM_32X32B_X32 = {}
+LDTM_32X32B_X4 = {}
+LDTM_32X32B_X64 = {}
+SHFL = { pipe = "shfl" }
+UNI = {}
+UTCHMMA_F16_M128_N256 = { type = "f16", m = 128, n = 256, k = 16, warps = 1 }
+UTCIMMA_M128_N128 = { type = "s8", m = 128, n = 128, k = 32, warps = 1 }
+UTCIMMA_M128_N256 = { type = "s8", m = 128, n = 256, k = 32, warps = 1 }
+UTCIMMA_M128_N32 = { type = "s8", m = 128, n = 32, k = 32, warps = 1 }
+UTCIMMA_M128_N64 = { type = "s8", m = 128, n = 64, k = 32, warps = 1 }
+UTCIMMA_M64_N128 = { type = "s8", m = 64, n = 128, k = 32, warps = 1 }
+UTCIMMA_M64_N256 = { type = "s8", m = 64, n = 256, k = 32, warps = 1 }
+UTCIMMA_M64_N64 = { type = "s8", m = 64, n = 64, k = 32, warps = 1 }
+UTCQMMA_E4M3_M128_N128 = { type = "e4m3", m = 128, n = 128, k = 32, warps = 1 }
+UTCQMMA_E4M3_M128_N256 = { type = "e4m3", m = 128, n = 256, k = 32, warps = 1 }

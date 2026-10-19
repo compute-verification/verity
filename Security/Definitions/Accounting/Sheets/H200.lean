@@ -1,0 +1,320 @@
+import Definitions.Accounting.TS.Sheet
+
+/-!
+# The H200's data sheet (generated)
+
+The data-sheet machine (`Accounting.TS.Sheet.machine`) at the H200 SXM (sm_90a)'s vendor values: each constant with the
+axiom that reads it, its value, its grade and its source, and the census of the machine model's `DS-90` vector, which
+`machine_eq_census` proves the machine is, line for line. Each tensor peak has a lemma that the per-clock peak
+reproduces the document's per-second figure at the clock that figure is quoted at. A3 reads `Run.n` as device totals
+over the SMSPs, so a warpgroup's `wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's
+four SMSPs.
+
+`uv run machine-model --device sm_90 sheet --lean` prints this file from
+`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, and the machine model's tests hold it to that output. The
+grades, and where the sm_120 sheet's structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.
+-/
+
+namespace Accounting.TS.Sheets.H200
+
+noncomputable section
+
+/-- The classes of the `DS-90` census (its kinds). -/
+inductive Kind
+  | ALU
+  | BGMMA_B1_N256
+  | BMMA168256_B1
+  | FFMA
+  | HGMMA_BF16_N128
+  | HGMMA_BF16_N256
+  | HGMMA_F16_N256
+  | HGMMA_TF32_N256
+  | HMMA16816_BF16
+  | HMMA16816_F16
+  | HMMA1688_TF32
+  | IGMMA_S8_N128
+  | IGMMA_S8_N16
+  | IGMMA_S8_N192
+  | IGMMA_S8_N256
+  | IGMMA_S8_N256_RS
+  | IGMMA_S8_N32
+  | IGMMA_S8_N64
+  | IGMMA_S8_N8
+  | IGMMA_U8S8_N256
+  | IMAD
+  | IMMA16816_S8
+  | IMMA16832_S8
+  | QGMMA_E4M3_N128
+  | QGMMA_E4M3_N256
+  | QGMMA_E5M2_N256
+  | SHFL
+  | UNI
+  deriving DecidableEq, Fintype
+
+/-- The Nsight Compute pipes the `DS-90` classes issue to. -/
+inductive Pipe
+  | alu
+  | imad
+  | shfl
+  deriving DecidableEq, Fintype
+
+/-- The tensor operand types with a dense peak. -/
+inductive Ty
+  | s8
+  | e4m3
+  | e5m2
+  | f16
+  | bf16
+  | tf32
+  deriving DecidableEq
+
+/-- A1, f_max: 1980 MHz. Grade: whitepaper (H100 SXM5), and measured. Source: H100 Tensor Core GPU Architecture
+whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980
+MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's
+maximum on vy-dc-h200 is 1980 MHz (EPS1 DC, note:20261017T0452Z-draft-eps1-dc). -/
+def fmaxMHz : ℝ := 1980
+
+/-- The SMs A3's per-SM peaks multiply: 132. Grade: whitepaper (H100 SXM5), and measured. Source: H100 whitepaper V1.04,
+Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132. -/
+def smCount : ℝ := 132
+
+/-- The `tensor` clock, at which the tensor figures are quoted: 1830 MHz. Grade: whitepaper (H100 SXM5). Source: H100
+whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz'; the clock
+the tensor peaks are quoted at, 150 MHz under f_max. -/
+def tensorMHz : ℝ := 1830
+
+/-- A3, s8: 4096 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived (figure over SMs and the
+tensor clock). Source: H200 data sheet (nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8
+Tensor Core 3,958', footnote 2 'With sparsity', footnote 1 'Preliminary specifications'; H100 whitepaper V1.04 Table 3
+'Peak INT8 Tensor TOPS 1978.9/3957.8'; 'H100 SM Architecture': twice A100's MMA rate a SM on equivalent data types. -/
+def peakS8 : ℝ := 4096
+
+/-- A3, e4m3: 4096 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
+H200 SXM: 'FP8 Tensor Core 3,958' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP8 Tensor TFLOPS with FP32
+Accumulate 1978.9/3957.8'. -/
+def peakE4m3 : ℝ := 4096
+
+/-- A3, e5m2: 4096 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
+H200 SXM: 'FP8 Tensor Core 3,958' with sparsity, for both FP8 formats (CUDA C++ Programming Guide 12.9 §18.8.1: FP8 'in
+either E4M3 or E5M2'). -/
+def peakE5m2 : ℝ := 4096
+
+/-- A3, f16: 2048 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
+H200 SXM: 'FP16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP16 Tensor TFLOPS with FP32
+Accumulate 989.4/1978.9'. -/
+def peakF16 : ℝ := 2048
+
+/-- A3, bf16: 2048 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
+H200 SXM: 'BFLOAT16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak BF16 Tensor TFLOPS with FP32
+Accumulate 989.4/1978.9'. -/
+def peakBf16 : ℝ := 2048
+
+/-- A3, tf32: 1024 dense MACs an SM clock. Grade: data sheet and whitepaper; per clock derived. Source: H200 data sheet,
+H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 whitepaper V1.04 Table 3 'Peak TF32 Tensor TFLOPS 494.7/989.4'. -/
+def peakTf32 : ℝ := 1024
+
+/-- A3: each type's dense MACs an SM clock. -/
+def Ty.peak : Ty → ℝ
+  | .s8 => peakS8
+  | .e4m3 => peakE4m3
+  | .e5m2 => peakE5m2
+  | .f16 => peakF16
+  | .bf16 => peakBf16
+  | .tf32 => peakTf32
+
+/-- A4, the alu pipe: 64 results an SM clock. Grade: Programming Guide and Nsight Compute. Source: CUDA C++ Programming
+Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer add 64, compare/minimum/maximum 64, bitwise AND/OR/XOR 64, shift 64
+(results a clock a multiprocessor); Nsight Compute Kernel Profiling Guide §2.3.6: alu executes 'most bit manipulation
+and logic instructions ... integer instructions, excluding IMAD and IMUL'. -/
+def widthAlu : ℝ := 64
+
+/-- A4, the imad pipe: 64 results an SM clock. Grade: Programming Guide. Source: CUDA C++ Programming Guide 12.9 §6.4.1
+Table 7, CC 9.0: '32-bit integer multiply, multiply-add, extended-precision multiply-add' 64; Nsight Compute §2.3.6:
+IMUL and IMAD on FMA Heavy. -/
+def widthImad : ℝ := 64
+
+/-- A4, the shfl pipe: 32 results an SM clock. Grade: Programming Guide. Source: CUDA C++ Programming Guide 12.9 §6.4.1
+Table 7, CC 9.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles. -/
+def widthShfl : ℝ := 32
+
+/-- A4: each pipe's results an SM clock. -/
+def Pipe.width : Pipe → ℝ
+  | .alu => widthAlu
+  | .imad => widthImad
+  | .shfl => widthShfl
+
+/-- Each class's tensor form: its operand type and its dense MACs a warp instruction, m · n · k over the warps that
+issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread `tcgen05.mma`); `none` off the tensor
+pipe. -/
+def Kind.form : Kind → Option (Ty × ℝ)
+  | .ALU => none
+  | .BGMMA_B1_N256 => none
+  | .BMMA168256_B1 => none
+  | .FFMA => none
+  | .HGMMA_BF16_N128 => some (.bf16, 64 * 128 * 16 / 4)
+  | .HGMMA_BF16_N256 => some (.bf16, 64 * 256 * 16 / 4)
+  | .HGMMA_F16_N256 => some (.f16, 64 * 256 * 16 / 4)
+  | .HGMMA_TF32_N256 => some (.tf32, 64 * 256 * 8 / 4)
+  | .HMMA16816_BF16 => some (.bf16, 16 * 8 * 16 / 1)
+  | .HMMA16816_F16 => some (.f16, 16 * 8 * 16 / 1)
+  | .HMMA1688_TF32 => some (.tf32, 16 * 8 * 8 / 1)
+  | .IGMMA_S8_N128 => some (.s8, 64 * 128 * 32 / 4)
+  | .IGMMA_S8_N16 => some (.s8, 64 * 16 * 32 / 4)
+  | .IGMMA_S8_N192 => some (.s8, 64 * 192 * 32 / 4)
+  | .IGMMA_S8_N256 => some (.s8, 64 * 256 * 32 / 4)
+  | .IGMMA_S8_N256_RS => some (.s8, 64 * 256 * 32 / 4)
+  | .IGMMA_S8_N32 => some (.s8, 64 * 32 * 32 / 4)
+  | .IGMMA_S8_N64 => some (.s8, 64 * 64 * 32 / 4)
+  | .IGMMA_S8_N8 => some (.s8, 64 * 8 * 32 / 4)
+  | .IGMMA_U8S8_N256 => some (.s8, 64 * 256 * 32 / 4)
+  | .IMAD => none
+  | .IMMA16816_S8 => some (.s8, 16 * 8 * 16 / 1)
+  | .IMMA16832_S8 => some (.s8, 16 * 8 * 32 / 1)
+  | .QGMMA_E4M3_N128 => some (.e4m3, 64 * 128 * 32 / 4)
+  | .QGMMA_E4M3_N256 => some (.e4m3, 64 * 256 * 32 / 4)
+  | .QGMMA_E5M2_N256 => some (.e5m2, 64 * 256 * 32 / 4)
+  | .SHFL => none
+  | .UNI => none
+
+/-- The pipe each class issues to; `none` on the tensor pipe or issue only. -/
+def Kind.pipe : Kind → Option Pipe
+  | .ALU => some .alu
+  | .BGMMA_B1_N256 => none
+  | .BMMA168256_B1 => none
+  | .FFMA => none
+  | .HGMMA_BF16_N128 => none
+  | .HGMMA_BF16_N256 => none
+  | .HGMMA_F16_N256 => none
+  | .HGMMA_TF32_N256 => none
+  | .HMMA16816_BF16 => none
+  | .HMMA16816_F16 => none
+  | .HMMA1688_TF32 => none
+  | .IGMMA_S8_N128 => none
+  | .IGMMA_S8_N16 => none
+  | .IGMMA_S8_N192 => none
+  | .IGMMA_S8_N256 => none
+  | .IGMMA_S8_N256_RS => none
+  | .IGMMA_S8_N32 => none
+  | .IGMMA_S8_N64 => none
+  | .IGMMA_S8_N8 => none
+  | .IGMMA_U8S8_N256 => none
+  | .IMAD => some .imad
+  | .IMMA16816_S8 => none
+  | .IMMA16832_S8 => none
+  | .QGMMA_E4M3_N128 => none
+  | .QGMMA_E4M3_N256 => none
+  | .QGMMA_E5M2_N256 => none
+  | .SHFL => some .shfl
+  | .UNI => none
+
+/-- **The H200's data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the tensor pipe), its pipe,
+each pipe's width, and no shared-memory class (no LDS kind in the census, so A5 bounds nothing here). -/
+def sheet : Sheet Kind Pipe where
+  fmax := fmaxMHz * 10 ^ 6
+  macs k := match k.form with
+    | some (_, m) => m
+    | none => 0
+  peak k := match k.form with
+    | some (t, _) => t.peak
+    | none => 0
+  pipe := Kind.pipe
+  width := Pipe.width
+  smem _ := 0
+
+/-- `census/DS-90.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction. -/
+def tensorLine : Kind → ℝ
+  | .HGMMA_BF16_N128 => 64
+  | .HGMMA_BF16_N256 => 128
+  | .HGMMA_F16_N256 => 128
+  | .HGMMA_TF32_N256 => 128
+  | .HMMA16816_BF16 => 4
+  | .HMMA16816_F16 => 4
+  | .HMMA1688_TF32 => 4
+  | .IGMMA_S8_N128 => 64
+  | .IGMMA_S8_N16 => 8
+  | .IGMMA_S8_N192 => 96
+  | .IGMMA_S8_N256 => 128
+  | .IGMMA_S8_N256_RS => 128
+  | .IGMMA_S8_N32 => 16
+  | .IGMMA_S8_N64 => 32
+  | .IGMMA_S8_N8 => 4
+  | .IGMMA_U8S8_N256 => 128
+  | .IMMA16816_S8 => 2
+  | .IMMA16832_S8 => 4
+  | .QGMMA_E4M3_N128 => 64
+  | .QGMMA_E4M3_N256 => 128
+  | .QGMMA_E5M2_N256 => 128
+  | _ => 0
+
+/-- `census/DS-90.csv`'s pipe lines (`DS_<pipe>`), SMSP-cycles a warp instruction. -/
+def pipeLine : Pipe → Kind → ℝ
+  | .alu, .ALU => 2
+  | .imad, .IMAD => 2
+  | .shfl, .SHFL => 4
+  | _, _ => 0
+
+/-- **`DS-90`'s census** (`census/DS-90.csv`): SMSP-cycles a warp instruction of each class holds each row; every class
+holds issue for 1, and a class with no line on a row holds it not at all. -/
+def census : SheetRow Pipe → Kind → ℝ
+  | .issue, _ => 1
+  | .tensor, k => tensorLine k
+  | .pipe p, k => pipeLine p k
+  | .smem, _ => 0
+
+/-- The sheet's machine is `DS-90`'s census, line for line. -/
+theorem machine_eq_census : sheet.machine.a = census := by
+  funext r k
+  rcases r with _ | _ | p | _
+  all_goals try cases p
+  all_goals cases k <;> norm_num [Sheet.machine, sheet, census, tensorLine, pipeLine, Kind.form, Kind.pipe, Ty.peak,
+      Pipe.width, peakS8, peakE4m3, peakE5m2, peakF16, peakBf16, peakTf32, widthAlu, widthImad, widthShfl]
+
+/-- The `tensor` clock is under f_max. -/
+theorem tensorMHz_lt_fmaxMHz : tensorMHz < fmaxMHz := by
+  norm_num [tensorMHz, fmaxMHz]
+
+/-- A3's s8 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 3958
+with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
+theorem peakS8_figure :
+    (1979 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakS8 * smCount * (tensorMHz * 10 ^ 6) ∧
+      2 * peakS8 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 + 1 / 4 : ℝ) * 10 ^ 12 := by
+  norm_num [peakS8, smCount, tensorMHz]
+
+/-- A3's e4m3 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 3958
+with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
+theorem peakE4m3_figure :
+    (1979 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakE4m3 * smCount * (tensorMHz * 10 ^ 6) ∧
+      2 * peakE4m3 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 + 1 / 4 : ℝ) * 10 ^ 12 := by
+  norm_num [peakE4m3, smCount, tensorMHz]
+
+/-- A3's e5m2 peak reproduces the document: 2 · 4096 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 3958
+with sparsity, dense 1979 ± 0.25, in 10¹² a second. -/
+theorem peakE5m2_figure :
+    (1979 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakE5m2 * smCount * (tensorMHz * 10 ^ 6) ∧
+      2 * peakE5m2 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 + 1 / 4 : ℝ) * 10 ^ 12 := by
+  norm_num [peakE5m2, smCount, tensorMHz]
+
+/-- A3's f16 peak reproduces the document: 2 · 2048 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 1979
+with sparsity, dense 989.5 ± 0.25, in 10¹² a second. -/
+theorem peakF16_figure :
+    (1979 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakF16 * smCount * (tensorMHz * 10 ^ 6) ∧
+      2 * peakF16 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by
+  norm_num [peakF16, smCount, tensorMHz]
+
+/-- A3's bf16 peak reproduces the document: 2 · 2048 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 1979
+with sparsity, dense 989.5 ± 0.25, in 10¹² a second. -/
+theorem peakBf16_figure :
+    (1979 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakBf16 * smCount * (tensorMHz * 10 ^ 6) ∧
+      2 * peakBf16 * smCount * (tensorMHz * 10 ^ 6) ≤ (1979 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by
+  norm_num [peakBf16, smCount, tensorMHz]
+
+/-- A3's tf32 peak reproduces the document: 2 · 1024 MACs · 132 SMs at the `tensor` clock, 1830 MHz, is its figure, 989
+with sparsity, dense 494.5 ± 0.25, in 10¹² a second. -/
+theorem peakTf32_figure :
+    (989 / 2 - 1 / 4 : ℝ) * 10 ^ 12 ≤ 2 * peakTf32 * smCount * (tensorMHz * 10 ^ 6) ∧
+      2 * peakTf32 * smCount * (tensorMHz * 10 ^ 6) ≤ (989 / 2 + 1 / 4 : ℝ) * 10 ^ 12 := by
+  norm_num [peakTf32, smCount, tensorMHz]
+
+end
+
+end Accounting.TS.Sheets.H200

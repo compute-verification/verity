@@ -1,0 +1,336 @@
+"""A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
+reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
+form or its pipe.
+
+`lines` derives the DS lines from it, exactly: issue 1 for every class (A2), a tensor form's MACs a warp instruction over
+a quarter of its type's peak (A3), 128 over its pipe's width (A4). `differences` holds them to the census file of the DS
+epoch, `figures` holds each per-clock peak to the figure the document prints at the clock it names, and `lean` prints the
+Lean module that states it all (`lean` in sheet.toml), with `machine_eq_census`, the machine is the census line for line,
+and a lemma for each figure.
+"""
+from __future__ import annotations
+
+import csv
+import textwrap
+import tomllib
+from dataclasses import dataclass
+from fractions import Fraction
+from pathlib import Path
+
+from verity_machine_model.model import model, vector
+
+ROOT = Path(__file__).resolve().parents[4]
+SHEET = "sheet.toml"
+ROWS = ("issue", "tensor", "pipe", "smem")   # Accounting.TS.SheetRow's order
+
+
+@dataclass(frozen=True)
+class Const:
+    value: Fraction
+    grade: str
+    source: str
+
+
+@dataclass(frozen=True)
+class Peak:
+    macs: Fraction      # dense MACs an SM clock (A3)
+    sheet: Fraction     # the document's figure, TOPS or TFLOPS
+    sparse: bool        # the figure is with 2:4 sparsity, the dense one half of it
+    tol: Fraction       # half the figure's last printed digit
+    clock: str          # the clock (`[clocks.NAME]`) the figure is quoted at
+    grade: str
+    source: str
+
+    @property
+    def dense(self) -> tuple[Fraction, Fraction]:
+        """The dense figure and its tolerance, TOPS."""
+        return (self.sheet / 2, self.tol / 2) if self.sparse else (self.sheet, self.tol)
+
+
+@dataclass(frozen=True)
+class Form:
+    type: str
+    m: int
+    n: int
+    k: int
+    warps: int          # the warps whose instructions issue one MMA: a wgmma's warpgroup 4, mma.sync and tcgen05.mma 1
+
+    @property
+    def macs(self) -> Fraction:
+        """Dense MACs one warp instruction does."""
+        return Fraction(self.m * self.n * self.k, self.warps)
+
+
+@dataclass(frozen=True)
+class Kind:
+    form: Form | None
+    pipe: str | None
+
+
+@dataclass(frozen=True)
+class Sheet:
+    name: str
+    gpu: str
+    vector: str
+    lean: str
+    fmax: Const         # MHz
+    sms: Const
+    clocks: dict[str, Const]
+    peaks: dict[str, Peak]
+    pipes: dict[str, Const]
+    kinds: dict[str, Kind]
+
+
+def _const(t: dict, key: str) -> Const:
+    return Const(Fraction(t[key]), t["grade"], t["source"])
+
+
+def sheet(data: Path) -> Sheet:
+    p = data / SHEET
+    if not p.is_file():
+        raise SystemExit(f"{data}: no {SHEET}; a device with a data sheet has one (README \"Devices\")")
+    t = tomllib.loads(p.read_text())
+    kinds = {}
+    for k, v in t["kinds"].items():
+        form = Form(v["type"], v["m"], v["n"], v["k"], v["warps"]) if "type" in v else None
+        kinds[k] = Kind(form, v.get("pipe"))
+        if form and kinds[k].pipe:
+            raise SystemExit(f"{p}: {k} has a tensor form and a pipe; a class has one or neither")
+    s = Sheet(name=t["name"], gpu=t["gpu"], vector=t["vector"], lean=t["lean"], fmax=_const(t["fmax"], "mhz"),
+              sms=_const(t["sms"], "value"), clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
+              peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
+                              v["grade"], v["source"]) for ty, v in t["peaks"].items()},
+              pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds)
+    for k, v in kinds.items():
+        if v.form and v.form.type not in s.peaks:
+            raise SystemExit(f"{p}: {k}'s type {v.form.type} has no [peaks.{v.form.type}]")
+        if v.pipe and v.pipe not in s.pipes:
+            raise SystemExit(f"{p}: {k}'s pipe {v.pipe} has no [pipes.{v.pipe}]")
+    for ty, v in s.peaks.items():
+        if v.clock not in s.clocks:
+            raise SystemExit(f"{p}: [peaks.{ty}] is at clock {v.clock!r}, which has no [clocks.{v.clock}]")
+    return s
+
+
+def row(name: str) -> str:
+    """The census row of a sheet row: `DS_issue`, `DS_tensor`, `DS_<pipe>`."""
+    return f"DS_{name}"
+
+
+def lines(s: Sheet) -> dict[str, dict[str, Fraction]]:
+    """Each class's SMSP-cycles a warp instruction on each row it holds (a row it holds not at all has no line)."""
+    out = {}
+    for k, v in s.kinds.items():
+        out[k] = {row("issue"): Fraction(1)}
+        if v.form:
+            out[k][row("tensor")] = v.form.macs / (s.peaks[v.form.type].macs / 4)
+        if v.pipe:
+            out[k][row(v.pipe)] = 128 / s.pipes[v.pipe].value
+    return out
+
+
+def census_lines(s: Sheet, data: Path) -> dict[str, dict[str, Fraction]]:
+    """The DS epoch's census file (`census/EPOCH.csv`), each line's cycles exact."""
+    e = vector(s.vector, data).epoch
+    out: dict[str, dict[str, Fraction]] = {}
+    with open(data / "census" / f"{e}.csv", newline="") as f:
+        for x in csv.DictReader(f):
+            if x["cycles"] == "" or x["rate"] or x["u"]:
+                raise SystemExit(f"census/{e}.csv: {x['kind']} {x['row']} gives no cycles; a DS line is in SMSP-cycles")
+            out.setdefault(x["kind"], {})[x["row"]] = Fraction(x["cycles"])
+    return out
+
+
+def differences(s: Sheet, data: Path) -> list[str]:
+    """Where the sheet's lines and the census file differ, and any line on a row the DS vector doesn't price."""
+    v = vector(s.vector, data)
+    if v.epoch not in model(data).epochs:
+        return [f"{s.vector}'s epoch {v.epoch} isn't in model.toml"]
+    have, want = census_lines(s, data), lines(s)
+    out = [f"{k} {r}: no row of {s.vector}" for k, rs in want.items() for r in rs if r not in v.rows]
+    for k in sorted(have.keys() | want.keys()):
+        a, b = have.get(k, {}), want.get(k, {})
+        for r in sorted(a.keys() | b.keys()):
+            if a.get(r) != b.get(r):
+                out.append(f"{k} {r}: census {a.get(r, 'none')}, sheet {b.get(r, 'none')}")
+    return out
+
+
+@dataclass(frozen=True)
+class Figure:
+    type: str
+    value: Fraction     # 2 · macs · SMs · clock, TOPS
+    dense: Fraction
+    tol: Fraction
+    low: Fraction       # the clocks, MHz, at which the figure holds
+    high: Fraction
+
+    @property
+    def holds(self) -> bool:
+        return abs(self.value - self.dense) <= self.tol
+
+
+def figures(s: Sheet) -> list[Figure]:
+    """Each peak's per-second reading at its clock against the document's dense figure."""
+    out = []
+    for ty, p in s.peaks.items():
+        per_mhz = 2 * p.macs * s.sms.value / 10**6   # TOPS a MHz
+        dense, tol = p.dense
+        out.append(Figure(ty, per_mhz * s.clocks[p.clock].value, dense, tol, (dense - tol) / per_mhz,
+                          (dense + tol) / per_mhz))
+    return out
+
+
+# --- Lean -----------------------------------------------------------------------------------------------------------
+
+WIDTH = 120
+
+
+def _num(x: Fraction) -> str:
+    """A Lean literal."""
+    return str(x.numerator) if x.denominator == 1 else f"{x.numerator} / {x.denominator}"
+
+
+def _dec(x: Fraction) -> str:
+    """A number in prose: the decimal, which every value of a sheet has."""
+    return f"{float(x):g}"
+
+
+def _camel(name: str) -> str:
+    return name[:1].upper() + name[1:]
+
+
+def _wrap(text: str, first: str, rest: str = "") -> list[str]:
+    return textwrap.wrap(text, WIDTH, initial_indent=first, subsequent_indent=rest, break_long_words=False,
+                         break_on_hyphens=False)
+
+
+def _doc(text: str) -> list[str]:
+    if "-/" in text:
+        raise SystemExit(f"a docstring can't hold '-/': {text!r}")
+    return _wrap(text + " -/", "/-- ")
+
+
+def _rel(s: Sheet) -> str:
+    return f"benchmarks/pouw/machine_model/data/devices/sm_{s.vector.split('-')[1]}/{SHEET}"
+
+
+def _simp(head: str, names: list[str]) -> list[str]:
+    """`head [n₁, n₂, …]`, wrapped under the tactic's indent."""
+    return _wrap(f"{head} [{', '.join(names)}]", "  ", "      ")
+
+
+def lean(s: Sheet, data: Path) -> str:
+    """The Lean module `s.lean`: the sheet's constants with their sources, `sheet : Sheet Kind Pipe`, the DS census, the
+    theorem that the sheet's machine is that census, and the figures' lemmas."""
+    epoch = vector(s.vector, data).epoch
+    census = census_lines(s, data)
+    if not all(census.get(k, {}).get(row("issue")) == 1 for k in s.kinds):
+        raise SystemExit(f"census/{epoch}.csv: a class without DS_issue 1")
+    kinds, pipes, types = sorted(s.kinds), list(s.pipes), list(s.peaks)
+    device = f"sm_{s.vector.split('-')[1]}"
+    peak = {ty: f"peak{_camel(ty)}" for ty in types}
+    width = {q: f"width{_camel(q)}" for q in pipes}
+    clock = {c: f"{c}MHz" for c in s.clocks}
+    out = ["import Definitions.Accounting.TS.Sheet", "", "/-!", f"# The {s.name}'s data sheet (generated)", ""]
+    out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
+                 "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
+                 f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
+                 "tensor peak has a lemma that the per-clock peak reproduces the document's per-second figure at the "
+                 "clock that figure is quoted at. A3 reads `Run.n` as device totals over the SMSPs, so a warpgroup's "
+                 "`wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's four SMSPs.", "")
+    out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
+                        "the machine model's tests hold it to that output. The grades, and where the sm_120 sheet's "
+                        "structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.", "")
+    out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
+    out += [*_doc(f"The classes of the `{epoch}` census (its kinds)."), "inductive Kind", *(f"  | {k}" for k in kinds),
+            "  deriving DecidableEq, Fintype", ""]
+    out += [*_doc(f"The Nsight Compute pipes the `{epoch}` classes issue to."), "inductive Pipe",
+            *(f"  | {q}" for q in pipes), "  deriving DecidableEq, Fintype", ""]
+    out += [*_doc("The tensor operand types with a dense peak."), "inductive Ty", *(f"  | {ty}" for ty in types),
+            "  deriving DecidableEq", ""]
+    out += [*_doc(f"A1, f_max: {_dec(s.fmax.value)} MHz. Grade: {s.fmax.grade}. Source: {s.fmax.source}."),
+            f"def fmaxMHz : ℝ := {_num(s.fmax.value)}", ""]
+    out += [*_doc(f"The SMs A3's per-SM peaks multiply: {_dec(s.sms.value)}. Grade: {s.sms.grade}. Source: "
+                  f"{s.sms.source}."), f"def smCount : ℝ := {_num(s.sms.value)}", ""]
+    for c, v in s.clocks.items():
+        out += [*_doc(f"The `{c}` clock, at which the tensor figures are quoted: {_dec(v.value)} MHz. Grade: "
+                      f"{v.grade}. Source: {v.source}."), f"def {clock[c]} : ℝ := {_num(v.value)}", ""]
+    for ty, p in s.peaks.items():
+        out += [*_doc(f"A3, {ty}: {_dec(p.macs)} dense MACs an SM clock. Grade: {p.grade}. Source: {p.source}."),
+                f"def {peak[ty]} : ℝ := {_num(p.macs)}", ""]
+    out += [*_doc("A3: each type's dense MACs an SM clock."), "def Ty.peak : Ty → ℝ",
+            *(f"  | .{ty} => {peak[ty]}" for ty in types), ""]
+    for q, w in s.pipes.items():
+        out += [*_doc(f"A4, the {q} pipe: {_dec(w.value)} results an SM clock. Grade: {w.grade}. Source: {w.source}."),
+                f"def {width[q]} : ℝ := {_num(w.value)}", ""]
+    out += [*_doc("A4: each pipe's results an SM clock."), "def Pipe.width : Pipe → ℝ",
+            *(f"  | .{q} => {width[q]}" for q in pipes), ""]
+    out += [*_doc("Each class's tensor form: its operand type and its dense MACs a warp instruction, m · n · k over the "
+                  "warps that issue one MMA (a `wgmma` warpgroup's 4, 1 for `mma.sync` and the single-thread "
+                  "`tcgen05.mma`); `none` off the tensor pipe."), "def Kind.form : Kind → Option (Ty × ℝ)"]
+    for k in kinds:
+        f = s.kinds[k].form
+        out.append(f"  | .{k} => " + (f"some (.{f.type}, {f.m} * {f.n} * {f.k} / {f.warps})" if f else "none"))
+    out += ["", *_doc("The pipe each class issues to; `none` on the tensor pipe or issue only."),
+            "def Kind.pipe : Kind → Option Pipe"]
+    for k in kinds:
+        q = s.kinds[k].pipe
+        out.append(f"  | .{k} => " + (f"some .{q}" if q else "none"))
+    out += ["", *_doc(f"**The {s.name}'s data sheet**: f_max in Hz, each class's MACs and its type's peak (`0` off the "
+                      "tensor pipe), its pipe, each pipe's width, and no shared-memory class (no LDS kind in the "
+                      "census, so A5 bounds nothing here)."),
+            "def sheet : Sheet Kind Pipe where",
+            "  fmax := fmaxMHz * 10 ^ 6",
+            "  macs k := match k.form with",
+            "    | some (_, m) => m",
+            "    | none => 0",
+            "  peak k := match k.form with",
+            "    | some (t, _) => t.peak",
+            "    | none => 0",
+            "  pipe := Kind.pipe",
+            "  width := Pipe.width",
+            "  smem _ := 0",
+            ""]
+    tensor = [(k, census[k][row("tensor")]) for k in kinds if row("tensor") in census.get(k, {})]
+    out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction."),
+            "def tensorLine : Kind → ℝ", *(f"  | .{k} => {_num(c)}" for k, c in tensor), "  | _ => 0", ""]
+    piped = [(q, k, census[k][row(q)]) for q in pipes for k in kinds if row(q) in census.get(k, {})]
+    out += [*_doc(f"`census/{epoch}.csv`'s pipe lines (`DS_<pipe>`), SMSP-cycles a warp instruction."),
+            "def pipeLine : Pipe → Kind → ℝ", *(f"  | .{q}, .{k} => {_num(c)}" for q, k, c in piped), "  | _, _ => 0",
+            ""]
+    out += [*_doc(f"**`{s.vector}`'s census** (`census/{epoch}.csv`): SMSP-cycles a warp instruction of each class "
+                  "holds each row; every class holds issue for 1, and a class with no line on a row holds it not at "
+                  "all."),
+            "def census : SheetRow Pipe → Kind → ℝ",
+            "  | .issue, _ => 1",
+            "  | .tensor, k => tensorLine k",
+            "  | .pipe p, k => pipeLine p k",
+            "  | .smem, _ => 0",
+            ""]
+    defs = ["Sheet.machine", "sheet", "census", "tensorLine", "pipeLine", "Kind.form", "Kind.pipe", "Ty.peak",
+            "Pipe.width", *peak.values(), *width.values()]
+    out += [*_doc(f"The sheet's machine is `{s.vector}`'s census, line for line."),
+            "theorem machine_eq_census : sheet.machine.a = census := by",
+            "  funext r k",
+            "  rcases r with _ | _ | p | _",
+            "  all_goals try cases p",
+            *_simp("all_goals cases k <;> norm_num", defs),
+            ""]
+    for c in s.clocks:
+        out += [*_doc(f"The `{c}` clock is under f_max."), f"theorem {clock[c]}_lt_fmaxMHz : {clock[c]} < fmaxMHz := by",
+                f"  norm_num [{clock[c]}, fmaxMHz]", ""]
+    for ty, p in s.peaks.items():
+        dense, tol = p.dense
+        figure = (f"{_dec(p.sheet)} with sparsity, dense {_dec(dense)} ± {_dec(tol)}" if p.sparse
+                  else f"dense {_dec(dense)} ± {_dec(tol)}")
+        lhs = f"2 * {peak[ty]} * smCount * ({clock[p.clock]} * 10 ^ 6)"
+        out += [*_doc(f"A3's {ty} peak reproduces the document: 2 · {_dec(p.macs)} MACs · {_dec(s.sms.value)} SMs at "
+                      f"the `{p.clock}` clock, {_dec(s.clocks[p.clock].value)} MHz, is its figure, {figure}, in 10¹² "
+                      "a second."),
+                f"theorem {peak[ty]}_figure :",
+                f"    ({_num(dense)} - {_num(tol)} : ℝ) * 10 ^ 12 ≤ {lhs} ∧",
+                f"      {lhs} ≤ ({_num(dense)} + {_num(tol)} : ℝ) * 10 ^ 12 := by",
+                f"  norm_num [{peak[ty]}, smCount, {clock[p.clock]}]", ""]
+    out += ["end", "", f"end Accounting.TS.Sheets.{s.name}", ""]
+    return "\n".join(out)
