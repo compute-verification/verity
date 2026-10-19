@@ -10,9 +10,9 @@ import Proofs.Pouw.RelativeSecurity
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs (open)
 
-Proved: the three rates, `ServiceBudget` and `ServiceCovers` (steps 1–5, each in its own file under
-`Proofs/Accounting/Compose/`), `CreditOfWork` (step 7), and the two credits as compositions (steps 8 and 10, so open
-only through steps 6 and 9). Open: `CircuitWork` (step 6), `CircuitWorkSeeded` (step 9), `BindingOfECR` (step 11) and
+Proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork` and `BindingOfECR` (steps 1–6 and 11, each
+in its own file under `Proofs/Accounting/Compose/`), `CreditOfWork` (step 7), `CircuitCredit` (step 8) and
+`CircuitCreditSeeded` as a composition (step 10, so open only through step 9). Open: `CircuitWorkSeeded` (step 9) and
 `WholeLuckOfEntropy` (step 12). note:compute-accounting/20261018T1758Z-draft-compose-r6 gives the order, and this file
 doesn't land until none is a `sorry`. What the window's proofs' layer meets is proved: its static half is
 defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, which `Declared.atIR` meets),
@@ -44,8 +44,9 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    position's cut (`layer_stageCuts`, under `LayerCommitted`), so `Declared.Late` and a `Declared.UnitLate` edge; along
    `ReflTransGen` the layer's cone lies in `Declared.Reaches`, and a tile's words are `N_w` times its weight (`0` when
    `N_w = 0`: a tile's words are among the circuit's).
-6. `CircuitWork`: the luck first. At each stage, each credited tile's `tileGame … .folded` is `Pinned` (its check is
-   `same`), so `Accounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass` (Lemma B at fibre 1) on `OperandHMu` and
+6. `CircuitWork` (proved, `Compose/CircuitWork.lean`): the luck first. At each stage, each credited tile's
+   `tileGame … .folded` is `Pinned` (its check is `same`), so
+   `Accounting.SecurityProofs.TS.Headline.operandLuck_of_pointMass` (Lemma B at fibre 1) on `OperandHMu` and
    `LuckOfReceipt` with `ReceiptLuckAt` give `Pr[folded ∧ same] ≤ (μ + (1 − μ)·r_B)·Pr[folded]` (`r_B ≤ 1` by
    `Scheme.LuckProved`), and `GuessLuckAt` on `tileGame … .whole` gives `Pr[whole ∧ same] ≤ guess·Pr[whole]`; a tile of
    no credited kind is held to `1`; so `SplitStages.LuckAt (tileLuck …) (tileLuck0 …)`. Each credited tile's round is
@@ -57,19 +58,20 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass) and `budget_tail` at `t = ln(1/δ_s)` bound
    `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole shares at `shareCone`. Off both,
    `UnitFixed` (its `WriterReads` by `layer_writerReads`) at `tileMode` and step 5's `Covers` give the good tiles' words
-   at least `(1 − (c_F + c₀))·N_w` and the words not skipped whole at least `(1 − c₀)·N_w`, `c_F`, `c₀` the folded and
-   whole shares at `tileCone` (`Σ_t tileWords = N_w`, by `Declared.Wf` and `units ≤ N_p`; a tile's cone holds itself,
-   `ReflTransGen.refl`). `tileCone` and `shareCone` differ only on tiles of no words, so `c_F ≤ S_F + D_F` and
-   `c₀ ≤ S_0 + D_0'` with `D_F + D_0' ≤ D₀`. Take the zero-word excess in the cheaper share: for `a ≤ b`, `d₀ = S_0` and
-   `d_F = c_F + c₀ − S_0`, which keeps `d_F + d₀ = c_F + c₀`, `d₀ ≤ c₀` and `a·d_F + b·d₀ ≤ a·S_F + b·S_0 + a·D₀`; for
-   `b < a`, `d_F = S_F` and `d₀ = c_F + c₀ − S_F`, at `b·D₀`. So `WorkAt` at
+   at least `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped
+   whole at least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone` (a tile's cone holds
+   itself, `ReflTransGen.refl`); both read `Σ_t tileWords ≥ N_w` (each credited word is in its unit's tile, by
+   `Declared.Wf` and `units ≤ N_p`). `tileCone` and `shareCone` differ only on tiles of no words, so
+   `c_F + c₀ = S_F + S_0 + Z_F + Z_0` with `Z_F + Z_0 ≤ D₀`, the folded and whole cones of those tiles. Take them in the
+   cheaper share: for `a ≤ b`, `d_F = S_F + Z_F + Z_0` and `d₀ = S_0`; for `b < a`, `d_F = S_F` and
+   `d₀ = S_0 + Z_F + Z_0`. Either keeps `d_F + d₀ = c_F + c₀` and `d₀ ≥ S_0`, so `WorkAt` at
    `a·d_F + b·d₀ < Λ·ln(1/δ_s) + min(a, b)·D₀`.
 7. `CreditOfWork` (proved): `SheetDIdealFloor`'s reduction of (I1)–(I5) to A1–A7 on the one run
    (`facetCeilings_of_sheet`, `scalarRoute_half`), `price_of_parts` with FOLD-OPT at the folded words
    (`price_of_parts_folded`, from `FoldOptFolded`), `price_le_time`, and `identity` at `d̄ = ā = 0`; the deficit,
    `(d_F + d₀)·N_w·w* + d₀·(1 − μ_f)·N_w·φ*`, is `(a·d_F + b·d₀)·B_♭ < r·B_♭`, and `f_max > 0` (`Model.Wf`) clears
    the division.
-8. `CircuitCredit` (proved, open through step 6): step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `costs_nonneg`,
+8. `CircuitCredit` (proved): step 6 at `a = aOf`, `b = bOf` (`≥ 0` by `costs_nonneg`,
    from `stars_nonneg` and `Model.Wf`), and step 7 on each run off its event at `r = rOf`; the certificate is issued at
    `.live`.
 9. `CircuitWorkSeeded`: `SeedExtractedAt` gives one event `Off` of probability at most `ε_id(T, |J|)` off which
@@ -94,10 +96,11 @@ defined from the IR (`Declared.layer`), so `StageCuts` (under `LayerCommitted`, 
    which the `UnitFixed` premise on `Declared.atIR`'s layer can hold, as `LayerCommitted` is for the live pair.
 10. `CircuitCreditSeeded` (proved, open through step 9): step 9 at `a = aOf`, `b = bOf`, and step 7 on each
    run off its event at `r = rOfSeeded`; the certificate is issued at `.seeded`.
-11. `BindingOfECR`: `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM,
-   `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where `Claims.ExpectedCR H F` holds,
-   `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and `ofReal_add_le`; where it fails, the right side
-   is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to move).
+11. `BindingOfECR` (proved, `Compose/BindingOfECR.lean`): `Accounting.SecurityProofs.TS.DrawnBindingOfFork` gives
+   `Pr[MovedIn] ≤ |L|·√Pr[fork]`; AM–GM, `|L|·√x ≤ δ' + |L|²·x/(4δ')`; then `Pr[fork] ≤ F.Pr H + κ` and, where
+   `Claims.ExpectedCR H F` holds, `F.Pr H ≤ E[cost]/2^256`, through `ENNReal.ofReal`'s monotonicity and
+   `ofReal_add_le`; where it fails, the right side is `⊤` unless `L` is empty, where `MovedIn` can't hold (no slot to
+   move).
 12. `WholeLuckOfEntropy`: per round take `WholeEntropyAt`'s `Wh`, `Lk` and `Break`, and
    `g q a = Σ_{v ∈ Wh q a} w_v·((1 + κ₀)·[v ∈ Lk q a] − κ₀)`. Off `Break` at `sq a r = some q` the round's whole
    tiles are `Wh q a` and `same` lands in `Lk q a`, so `roundGain ≤ g q a` (`w ≥ 0`, `1 + κ₀ ≥ 0`). `Wh q` doesn't
