@@ -117,7 +117,8 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     out by kind, its SHA-512 seed, noise and receipt fold as Boolean gates and its products, `z`'s and the lanes' segment
     dots (r·c·(2K + 32m)), as int8 multiply-adds, of which census/v1 counts none served (Lean's `Accounting.Gates.roleOf`
     puts the tile's served role on its receipt's words, which take no MACs). Its salt's cone, gate by gate, is past the explicit limit, so nothing is pinned by it. The block's compute is PoUW's
-    proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved". Slow: compiling builds the unit's 15
+    proved bound for its census (benchmarks/pouw/proved_ticks.py), basis "proved", which credits its tile's `z` products,
+    r·c·K, and not the segment dots'. Slow: compiling builds the unit's 15
     million gates (about 40 s), and no other test has a compiled Program."""
     import importlib.util
     import sys
@@ -138,7 +139,9 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     assert [p.source(k) for k in range(5)] == ["outside", "registered", "trusted", "outside", "outside"]
     work = p.public(Plan(EPOCH)).work
     assert work == {"a": {"cuda:gate": 9455977, "mac:int8": 4 * 16 * (64 + 64 + 32 * 2)}, "b": {}}
-    ticks = PT.proved_block_ticks(PT.placed(work["a"]), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
+    assert PT.tiles(compiled) == {PT.Tile(4, 16, 64, 64): 1} and PT.placed(work["a"], PT.tiles(compiled)) == {
+        "mac:linears": 4 * 16 * 64}
+    ticks = PT.proved_block_ticks(PT.placed(work["a"], PT.tiles(compiled)), PT.sheet(), PT.SHEET_EPS, dc.cadence.seconds(1),
                                   gpus=sum(d.kind == "gpu" for d in dc.block("a").devices))
     profile = p.public(Plan(EPOCH), ticks={"a": ticks})
     assert census_of(compiled)["totals"]["served_macs"] == 0

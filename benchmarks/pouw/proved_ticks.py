@@ -47,7 +47,8 @@ What it rests on:
 from __future__ import annotations
 
 import sys
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -106,17 +107,76 @@ def units(census: Mapping[str, float], s: Sheet) -> float:
     return sum(n * EB.FLOOR_WORDS.get(d.noise[k[4:]], 1.0) for k, n in census.items()) / (h.words * h.depth)
 
 
-def placed(work: Mapping[str, float]) -> dict[str, float]:
+@dataclass(frozen=True)
+class Tile:
+    """One H1 + fx1 tile unit's shape: r × c at contraction K, `z` on `cells` of its grid."""
+    r: int
+    c: int
+    k: int
+    cells: int
+
+    @property
+    def linears(self) -> int:
+        """`z`'s int8 products, the served linear's: K a cell."""
+        return self.cells * self.k
+
+    @property
+    def products(self) -> int:
+        """Every int8 product census/v1 counts in the tile (Lean's `h1Rows` dotMacs, none served, no tail): `z`'s and the
+        lanes' segment dots', r·c·(K + 32m) (`PouwSegDot_v2` and `PouwSegDot0_v2`)."""
+        from verity.core.protocols.pouw.circuit import h1tile
+        return self.linears + self.r * self.c * (self.k + 32 * h1tile.Layout(self.r, self.c, self.k).m)
+
+
+def tiles(program, calls: Collection[int] | None = None) -> Counter:
+    """The H1 tile units a Program `SCHEME` compiled runs in its root Calls `calls` (all of them by default), by shape,
+    each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
+    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.circuits.program import is_input
+    memo: dict[int, Counter] = {}
+
+    def of(fn) -> Counter:
+        if id(fn) not in memo:
+            if getattr(fn, "defn", None) is h1tile.PouwH1Tile:
+                s = fn.bindings
+                memo[id(fn)] = Counter({Tile(s["R"], s["C"], s["EXACT"].signature()[0][0][1].n, len(s["PAIRS"])): 1})
+            elif getattr(fn, "body", None) is None:
+                memo[id(fn)] = Counter()
+            else:
+                total: Counter = Counter()
+                for nd in fn.body.nodes:
+                    for t, n in of(nd.fn).items():
+                        total[t] += n * (nd.n if nd.form in ("batch", "scan") else 1)
+                memo[id(fn)] = total
+        return memo[id(fn)]
+
+    if calls is None:
+        return Counter(of(program.fn))
+    out: Counter = Counter()
+    for k, nd in enumerate(program.root.body.nodes):
+        if k in calls and not is_input(nd.fn):
+            out.update(of(nd.fn))
+    return out
+
+
+def placed(work: Mapping[str, float], units: Mapping[Tile, int]) -> dict[str, float]:
     """The census of a block's work where the datacenter places a Program `SCHEME` compiled (`Profile.work[block]`, the
-    Program's Calls on the block by kind). Its int8 products (`mac:int8`) are the tile units' served products, each a
-    linear's (the unit is H1's Dither-C tile, a committed word a product). Its Boolean gates (`cuda:gate`) are the units'
-    seeds, noise and receipt folds: ♭ prices the fold a unit, and leaving the rest out only lowers the bound. Any other
-    kind isn't the scheme's, and the proved figure stands in for the block's whole compute, so it is refused."""
+    Program's Calls on the block by kind), whose tile units are `units` (`tiles` of those Calls). Its int8 products
+    (`mac:int8`) are every tile's census/v1 products, `z`'s and its lanes' segment dots' (`Tile.products`), which must be
+    the units' exactly. Credited are `z`'s alone, each a linear's at the tile's K (the unit is H1's Dither-C tile, a
+    committed word a product): the segment dots are the receipt's work, as its Boolean gates are. Its Boolean gates
+    (`cuda:gate`) are the units' seeds, noise and receipt folds: ♭ prices the fold a unit, and leaving the rest out only
+    lowers the bound. Any other kind isn't the scheme's, and the proved figure stands in for the block's whole compute, so
+    it is refused."""
     other = sorted(set(work) - {"mac:int8", "cuda:gate"})
     if other:
         raise ValueError(f"work {other} on the block isn't {SCHEME}'s, whose units are int8 products and Boolean gates: "
                          "the proved figure would leave it out of the block's compute")
-    return {"mac:linears": work.get("mac:int8", 0.0)}
+    want = sum(t.products * n for t, n in units.items())
+    if work.get("mac:int8", 0) != want:
+        raise ValueError(f"the block's {work.get('mac:int8', 0):g} int8 products aren't its H1 tiles' {want} (z's cells·K "
+                         "and the lanes' segment dots' r·c·(K + 32m) a tile): pass `tiles` of the block's Calls")
+    return {"mac:linears": float(sum(t.linears * n for t, n in units.items()))}
 
 
 def proved_block_ticks(census: Mapping[str, float], s: Sheet, eps: float, tick_seconds: float, gpus: int = 1) -> float:
