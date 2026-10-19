@@ -6,11 +6,13 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from array import array
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits import codec, cut, partition_object as PO
+from verity.ml.circuits import codec, cut, partition, partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -66,6 +68,38 @@ def test_the_width_rule_counts_bits():
     v = cut.check_cut(p, [0, 0])
     assert v.codes == ("unit-too-wide",) and v.detail["unit-too-wide"]["gates"] == [[0, 64, 2]]
     assert cut.check_cut(p, [0, 0], limits=None).ok
+
+
+def _graph(n, reads, outputs, width):
+    return SimpleNamespace(n=n, src=array("q", [p for p, _ in reads]), dst=array("q", [q for _, q in reads]), width=array("q", width),
+                           outputs=list(outputs), input_ids=[], input_reads=[], returned_inputs=[], total=n, free=0, recomputed=[])
+
+
+def test_a_cut_whose_units_read_in_a_cycle_is_refused_and_q_word_cuts_none():
+    """POP1 (`qword_not_acyclic`): the chain g0 -> g1 -> g2 of 8-bit gates, returned as [g0, g2, g1], packs at X = 16 into the
+    output units {g0, g2} and {g1}, which read each other; and a gate that joins its producer's unit without reaching its head
+    (g4 joins g0's unit, its other producer g3 in the unit that reads g1) closes a cycle too. `check_cut` refuses both with
+    the cycle, and Q_word v1 promotes the gates the cycle reads into instead."""
+    pop1 = _graph(3, [(0, 1), (1, 2)], [0, 2, 1], [8, 8, 8])
+    v = cut.check_cut(pop1, [0, 1, 0])
+    assert v.codes == ("unit-cycle",) and v.detail["unit-cycle"] == {"n": 2, "gates": [[0, 1], [1, 2]], "units": [0, 1]}
+    assert cut.cut_word(pop1, 16) == ([0, 1, 2], ["output", "output", "committed"], [0, 1, 2])
+    assert cut.check_cut(pop1, [0, 1, 2]).ok
+    join = _graph(5, [(0, 1), (0, 4), (1, 2), (2, 3), (3, 4)], [1, 3], [8] * 5)
+    v = cut.check_cut(join, [0, 0, 1, 1, 0], limits=(8, 32, 0))
+    assert v.codes == ("unit-cycle",) and v.detail["unit-cycle"] == {"n": 2, "gates": [[1, 2], [3, 4]], "units": [0, 1]}
+    own, _kinds, _head = cut.cut_word(join, 8)
+    assert partition.unit_cycle(own, zip(join.src, join.dst)) is None and cut.check_cut(join, own, limits=(8, 32, 0)).ok
+
+
+def test_unit_cycle_is_canonical():
+    """The cycle Kahn's sort leaves, walked back from its smallest unit along smallest predecessors, from the smallest unit; a
+    tail into it is no part of it, and only reads of committed values across computing units are edges."""
+    own = [0, 1, 2, 3, partition.INPUT_UNIT]
+    reads = [(2, 0), (1, 2), (0, 1), (3, 0), (4, 3), (0, 4)]
+    assert partition.unit_cycle(own, reads) == ([0, 1, 2], [(0, 1), (1, 2), (2, 0)])
+    assert partition.unit_cycle(own, reads, committed={0, 1, 3}) is None
+    assert partition.unit_cycle([0, 0, 1], [(0, 1), (1, 2), (0, 2)]) is None
 
 
 def test_the_object_names_the_query(program):

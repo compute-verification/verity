@@ -41,13 +41,20 @@ specified in `verity/ml/circuits/PROTOCOL.md` (pinned by `verity/ml/circuits/tes
    with `own[p] = -2` and `own[q] >= 0`, ascending, become new *committed* units heading themselves; if there are none, gates still
    at -1 (ascending) join the one unit their uncommitted producers are all in (exactly one producer unit, and it is live), and every
    gate still at -1 heads its own *dead* unit; producers of edges across units that head nothing, ascending, then become committed
-   units (the dead units dropped and the pass repeated), or, if there are none, the cut is final.  Units are numbered as created:
-   outputs, committed in promotion order, dead last.
+   units (the dead units dropped and the pass repeated).  If there are none, every edge across units leaves a head, and the cut is
+   final unless its units' read graph has a cycle (`partition.unit_cycle` over the edges): then each gate the first cycle's edges
+   read into that is not its unit's only head (it heads nothing, or is one of an output unit's several heads), ascending, becomes
+   a committed unit heading itself, and the pass repeats (the dead units dropped).  On a cycle each of whose edges reads into its
+   unit's only head, each edge would leave that head too, a cycle of gates; so some gate is promoted, each round adds a gate
+   heading its unit alone, and the final cut's units are acyclic.  Units are numbered as created: outputs, committed in
+   promotion order, dead last.  The cycle rule is a soundness fix to v1, not a new version: it changes no cut that had no cycle,
+   and `check_cut` refuses one that had (`unit-cycle`), so no cut it accepted changed.
 5. **Units of the Program.**  By Call, then within the Call's cut.  The input unit is not a unit.
 6. **Checks** (`check_cut`).  The committed set is derived (`derived_committed`): a value is committed exactly when a unit other
    than its producer's reads it, or the Call returns it.  `partition.validate_unit_cut` holds the invariant (the Call's parameters
-   standing for the input unit); the width rule counts **bits**: with ob the summed declared widths and og the number of a unit's
-   boundary gates (read by another unit, or returned), a unit passes when ob <= X, or og == 1 and ob <= W; code `unit-too-wide`.
+   standing for the input unit), acyclicity of the units' reads among it (`unit-cycle`, with the first cycle); the width rule
+   counts **bits**: with ob the summed declared widths and og the number of a unit's boundary gates (read by another unit, or
+   returned), a unit passes when ob <= X, or og == 1 and ob <= W; code `unit-too-wide`.
    What serving commits, when given, is held to the derived set (`committed-unread`, `read-uncommitted`, `output-uncommitted`).
 
 **Constants of the version.**  `WIRING` and `WIDE_FAN_IN` are part of Q_word v1, like the algorithm: changing either is a new version.
@@ -61,9 +68,9 @@ specified in `verity/ml/circuits/PROTOCOL.md` (pinned by `verity/ml/circuits/tes
 gate, certified by one unit from that unit's gates and committed values, so v2's units may compute a common value: a count of them
 bounds wrong work but is not distinct work.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
 
-**Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
-case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
-included, to check the cut on it.
+**Cost.**  `owners` runs one backward pass, and at its fixpoint one cycle check (`unit_cycle`, O(n + E)), per round of promotions,
+so O(n · (n + E)) for n computing gates and E edges in the worst case.  `evaluate` shortcuts separable bodies, but `verify` builds
+the flat `CallGraph` of every distinct Definition, separable ones included, to check the cut on it.
 
 **Q_call v1** (`evaluate_call`, `PROTOCOL.md` §11), a query of its own, with one parameter X (bits; 32 is the agreed value):
 
@@ -109,7 +116,7 @@ from collections import Counter
 from typing import Any, Iterable, Iterator, Sequence
 
 from .layout import resolve
-from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
+from .partition import INPUT_UNIT, CutVerdict, unit_cycle, validate_unit_cut
 from .refs import Affine, Strided
 
 #: primitives that only rearrange bits (each output bit a constant or a copy of one input bit): wiring, like constants, is
@@ -349,8 +356,9 @@ def derived_committed(graph: CallGraph, owner: Sequence[int]) -> list[int]:
 def check_cut(graph: CallGraph, owner: Sequence[int], committed: Iterable[int] | None = None,
               limits: tuple[int, int, int] | None = WIDTH_RULE, recompute: str = RECOMPUTE[1]) -> CutVerdict:
     """One Call's cut against its graph: `validate_unit_cut` (every computing gate in one unit, reads across units only of committed
-    values, returned values committed, no value computed in two units), the Call's parameters standing for the input unit, and, unless
-    `limits` is None, the width rule (`unit-too-wide`: (unit, ob, og) per failing unit).  `owner`: a unit per computing gate;
+    values, returned values committed, no value computed in two units, no cycle among the units' reads: `unit-cycle`, its first
+    cycle's units and reads in `detail`), the Call's parameters standing for the input unit, and, unless `limits` is None, the
+    width rule (`unit-too-wide`: (unit, ob, og) per failing unit).  `owner`: a unit per computing gate;
     `committed`: what serving commits, held to the derived set (`committed-unread`: served but not derived; `read-uncommitted` /
     `output-uncommitted`: derived but not served); None: the derived set (`derived_committed`).  `recompute`: v1's "refuse" unless
     the query is `Q_word` v2 (`RECOMPUTE`)."""
@@ -421,7 +429,8 @@ def targets(graph: CallGraph, X: int) -> list[list[int]]:
 
 
 def owners(graph: CallGraph, head: list[int], kinds: list[str]) -> tuple[list[int], list[int]]:
-    """Steps 2-3 (see the module docstring): owner per computing gate, and the heads, extended by the committed values."""
+    """Step 4 (ii) (see the module docstring): owner per computing gate, and the heads, extended by the committed values; the units'
+    reads have no cycle."""
     n = graph.n
     consumers: list[list[int]] = [[] for _ in range(n)]
     producers: list[list[int]] = [[] for _ in range(n)]
@@ -460,7 +469,11 @@ def owners(graph: CallGraph, head: list[int], kinds: list[str]) -> tuple[list[in
                     kinds.append("dead")
             promote = sorted({p for p, q in edges if own[p] != own[q] and head[p] < 0})
             if not promote:
-                return own, head
+                cycle = unit_cycle(own, edges)
+                if cycle is None:
+                    return own, head
+                heads = Counter(h for h in head if h >= 0)
+                promote = sorted(q for _p, q in cycle[1] if head[q] < 0 or heads[head[q]] > 1)
             del kinds[live:]
         for i, g in enumerate(promote):
             head[g] = len(kinds) + i

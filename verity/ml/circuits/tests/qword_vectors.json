@@ -1,5 +1,5 @@
 {
- "about": "Pinned vectors of Q_word v1 (verity.primitives.circuits.cut, verity.primitives.circuits.partition_object) beyond partition_vectors.json, checked by verity/primitives/circuits/tests/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and TAdd64_v1 are test primitives: n leaves of Value<32> or two Value<64>, one output).",
+ "about": "Pinned vectors of Q_word v1 (verity.ml.circuits.cut, verity.ml.circuits.partition_object) beyond partition_vectors.json, checked by verity/ml/circuits/tests/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and TAdd64_v1 are test primitives: n leaves of Value<32> or two Value<64>, one output).",
  "constants": {
   "wiring": [
    "Bf16ToF32_v1",
@@ -2578,8 +2578,8 @@
    "n": 500,
    "max_gates": 12,
    "cases_sha512": "31d1d2bd5a634f772591882f9897d1cdb18c9fe59940e7e207c7bdba4f8dfe5a16d910f97efc195655aba99adb9c5a01090a12b54a8fbcd5bcd560cb655ae678",
-   "expected_sha512": "bbd9c508f908c6c5601696554c4b39c2fc164b129a1036957b5de27f64e7f7b785cf6c4260ba3a983f5bc895eb5d8abd81e005411eee963823bb8c410a303b9f",
-   "units": 11833,
+   "expected_sha512": "ae38f6585d9964b0c546ff4a5a914d8b41380d8b7bf543a0cc7ff6cc562efaea5ea60daaa13e33285c6b72d7383c7afff0a19e8045980c7c2bd8f720fa1575e5",
+   "units": 11866,
    "unit_kinds": [
     "committed",
     "dead",
@@ -4594,8 +4594,8 @@
    "n": 3000,
    "max_gates": 40,
    "cases_sha512": "aa0581bbd0b6152c3d382fcd86a8edcd17400a559d908a62d72bc4fd125036df305fdcc5d656c7564ccce58a9466592eaee368c2ef15c21f263aa6e32ee1ac94",
-   "expected_sha512": "8fd5307ac70921b3b406587ddb8f6cf27c5f6c7cb59c31964ef51ab301834b71b3a68c60438c8766c484f20872d0b1561bd81ada6d4707547d4e7edfd1cb9672",
-   "units": 267832,
+   "expected_sha512": "2e2139a23213b9b417ba30f97ccdee099bbe29d3a6ddb83b0803c1043244a4544c6c3df93b304efed6805dffe8b96e94d908f9d87d79dd70b653e72976b52b0c",
+   "units": 268576,
    "unit_kinds": [
     "committed",
     "dead",

@@ -36,8 +36,9 @@ def targets (g : CallGraph) (X : Nat) : Array (Array Nat) := Id.run do
   return out
 
 /-- Step (ii) (core's `owners`): the owner of every computing gate and the heads, extended by the committed values; `kinds`
-grows by the committed and dead units. Each round promotes at least one gate that heads nothing to a head, so `n + 1` rounds
-suffice. -/
+grows by the committed and dead units. When every edge across units leaves a head, a cycle of the units' reads
+(`Partition.unitCycle`) promotes each gate its edges read into that is not its unit's only head; with none the cut is final.
+Each round but the last adds a gate heading its unit alone, so `n + 1` rounds suffice. -/
 def owners (g : CallGraph) (head0 : Array Int) (kinds0 : Array String) : Array Int × Array Int × Array String := Id.run do
   let n := g.n
   let mut consumers : Array (Array Nat) := Array.replicate n #[]
@@ -77,7 +78,11 @@ def owners (g : CallGraph) (head0 : Array Int) (kinds0 : Array String) : Array I
           kinds := kinds.push "dead"
       promote := ((g.reads.filter fun (p, q) => own[p]! != own[q]! && head[p]! < 0).map (·.1)).qsort (· < ·)
       promote := promote.foldl (fun a p => if a.back? == some p then a else a.push p) #[]
-      if promote.isEmpty then return (own, head, kinds)
+      if promote.isEmpty then
+        let some (_, rs) := unitCycle g.reads (fun x => if own[x]! ≥ 0 then some own[x]!.toNat else none) (fun _ => true)
+          | return (own, head, kinds)
+        let heads : Std.HashMap Int Nat := head.foldl (fun m h => if h ≥ 0 then m.insert h (m.getD h 0 + 1) else m) {}
+        promote := (rs.filterMap fun (_, q) => if head[q]! < 0 || heads.getD head[q]! 0 > 1 then some q else none).qsort (· < ·)
       kinds := kinds.extract 0 live
     for i in [0:promote.size] do head := head.set! promote[i]! (kinds.size + i)
     kinds := kinds ++ Array.replicate promote.size "committed"

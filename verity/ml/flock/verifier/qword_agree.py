@@ -7,6 +7,7 @@ Random cases, each checked against core's own objects:
 - a flat Call graph: `cut_word`'s owners, unit kinds and heads;
 - a Definition tree (primitives, separable bodies of members, flat bodies): `DefinitionCut`'s owners, units and `locate`;
 - a Program of such Calls: `Partition.locate` for every unit, and each flat Call's derived committed set.
+The first cases are `FIXED`: flat Calls whose cut had a unit cycle before the cycle rule (`owners`), which both must break alike.
 `--vectors` also checks #111's pinned vector: each Call's owners, units and committed set, the population and `locate`. Its
 separable Call's member graphs are sliced from the Call's graph at the members `locate` names (extraction's part, which the
 vector does not carry). Writes DIR/<i>.json and DIR/result.json; exits 1 unless every case agrees.
@@ -85,6 +86,16 @@ def expected(case):
     return {"calls": out, "population": pop, "locate": [core_locate(calls, i) for i in range(pop)]}
 
 
+def _flat(X, n, reads, outputs, width):
+    g = {"n": n, "src": [p for p, _ in reads], "dst": [q for _, q in reads], "width": width, "outputs": outputs, "inputs": 0,
+         "input_reads": [], "returned_inputs": [], "total": n, "free": 0, "recomputed": []}
+    return {"X": X, "calls": [{"call": 0, "def": {"flat": g}, "graph": g}]}
+
+
+#: POP1 (`qword_not_acyclic`: output packing) and a producer join, as in `cut_check_agree.FIXED`
+FIXED = [_flat(16, 3, [(0, 1), (1, 2)], [0, 2, 1], [8, 8, 8]), _flat(8, 5, [(0, 1), (0, 4), (1, 2), (2, 3), (3, 4)], [1, 3], [8] * 5)]
+
+
 def random_case(rng):
     X = rng.choice([16, 16, 32, 8, 64])
     calls = []
@@ -158,8 +169,8 @@ def main():
     rng = random.Random(a.seed)
     a.out.mkdir(parents=True, exist_ok=True)
     files, want = [], {}
-    for i in range(a.n):
-        c = random_case(rng)
+    for i in range(len(FIXED) + a.n):
+        c = FIXED[i] if i < len(FIXED) else random_case(rng)
         f = a.out / f"{i}.json"
         f.write_text(json.dumps(c))
         files.append(str(f))
