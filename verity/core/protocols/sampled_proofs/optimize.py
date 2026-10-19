@@ -15,15 +15,20 @@ whose wrong output can forfeit downstream work (a noise or form unit every dot o
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved unit, as C-Flock does: template `s` cut into statements of `c` units costs
-`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Serving commits every
-unit's outputs whatever the draw (`commit_bits`, `commit_rows`), and a replay domain re-executes each replay unit the draw
-meets from the last committed state (`ReplayDomain`).  A template's costs are measured (`TemplateCost`) or derived from the
-model's rates and its features: ANDs, and the hm96 rows a proved unit opens (`row_ands`).
+`touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
+committed at serve time whatever the draw (Daniel, 18 Oct, ASK-25): every unit's outputs (`commit_bits`, `commit_rows`),
+and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
+at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn unit's
+witness is built by re-executing its replay unit from the last committed state (`ReplayDomain`), which commits nothing.
+A template's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
+rows a proved unit opens (`row_ands`).
 
-**Sweep.**  The note's Lagrangian: one density `lam` on every template (`k_s = ceil(min(1, lam v_s) n_s)`), some templates
-at their floor only, some proved whole, and the cut per op type and the statement size each the cheapest at that `lam`.
-With no statement cost and a unit cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates,
-`q_s = min(1, ln(1/delta) w_s / C)`.
+**Sweep.**  The note's Lagrangian: one density `lam` on every template (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
+weight of the template's block kind, 1 unless the plan weighs kinds), some templates at their floor only, some proved
+whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a unit
+cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
+`weigh` chooses the kinds' weights at a target, under the same stratified certificate.
 """
 from __future__ import annotations
 
@@ -53,8 +58,9 @@ class Candidate:
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
     `out_gates` boundary gates (the width rule, `cut.fits`), and `influence`, the credited work a wrong one can forfeit
     downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits `commit_bits` in
-    `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units (m = k_log + nbl <= 35); and
-    `per_replay` units of it lie in each replay unit of domain `replay`."""
+    `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units (m = k_log + nbl <= 35);
+    `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its block kind for the draw's
+    weights (served proof units of one template, PoUW's tiles), the template itself when empty."""
 
     op: str
     template: str
@@ -71,6 +77,7 @@ class Candidate:
     cap: int = 1
     replay: str = ""
     per_replay: int = 0
+    kind: str = ""
 
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
@@ -83,6 +90,10 @@ class Candidate:
     @property
     def alternative(self) -> str:
         return self.cut or self.template
+
+    @property
+    def block(self) -> str:
+        return self.kind or self.template
 
 
 @dataclass(frozen=True)
@@ -101,10 +112,34 @@ class TemplateCost:
 @dataclass(frozen=True)
 class ReplayDomain:
     """`units` replay units (one layer of one step each, say), each re-executed from the last committed state at `cost`
-    when the draw meets any unit in it."""
+    to build the witnesses of the drawn units in it, when the draw meets any.  Replay commits nothing: every value it
+    recomputes was committed at serve time."""
 
     units: int
     cost: float
+
+
+@dataclass(frozen=True)
+class Commitment:
+    """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
+    per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
+    PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
+    scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
+    the dependent compressions its trees put on a step's critical path when its roots gate the step (a seed reads them
+    before the next call), which they do when `gates`; a copy that doesn't gate trails the step."""
+
+    scale: str
+    tensor: str
+    nbytes: float
+    cost: float | None = None
+    decode_bytes: float = 0.0
+    chain: float = 0.0
+    gates: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.scale or not self.tensor or min(self.nbytes, self.decode_bytes, self.chain) < 0 \
+                or (self.cost is not None and self.cost < 0):
+            raise ValueError(f"commitment {self.scale}/{self.tensor}: needs a scale, a tensor and non-negative sizes")
 
 
 @dataclass(frozen=True)
@@ -112,9 +147,9 @@ class CostModel:
     """Measured templates, and the rates that derive the rest from their features, `ands` being a unit's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged unit `staged_per_and * ands + staged_per_unit`, and per
-    proved unit `per_and * ands`.  Serving commits at
-    `commit_per_bit` and `commit_per_row`; `replay` names the replay domains; `sigma` is a derived cost's relative
-    uncertainty; `source` is the fit's `art:` id."""
+    proved unit `per_and * ands`.  Serving commits each unit's outputs at `commit_per_bit` and `commit_per_row`, and
+    `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
+    witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id."""
 
     templates: Mapping[str, TemplateCost] = field(default_factory=dict)
     per_and: float = 0.0
@@ -124,6 +159,7 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
+    serve: tuple[Commitment, ...] = ()
     replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
@@ -155,6 +191,13 @@ class CostModel:
 
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
+
+    def committed(self, s: Commitment) -> float:
+        return s.cost if s.cost is not None else 8 * self.commit_per_bit * s.nbytes
+
+    def serve_cost(self) -> float:
+        """Every fixed serve-time commitment, each tensor once per scale that commits it."""
+        return fsum(self.committed(s) for s in self.serve)
 
     def sigma_of(self, c: Candidate) -> float:
         return self.templates[c.template].sigma if c.template in self.templates else self.sigma
@@ -196,7 +239,8 @@ class Certificate:
 @dataclass(frozen=True)
 class Plan:
     """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per template, the templates
-    held at their floor and those proved whole, the expected cost by part, and the certificate once certified."""
+    held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
+    `total` everything), each block kind's weight on the density (1 when absent), and the certificate once certified."""
 
     lam: float
     choice: Mapping[str, str]
@@ -205,6 +249,7 @@ class Plan:
     floor_only: frozenset[str]
     full: frozenset[str]
     cost: Mapping[str, float]
+    weights: Mapping[str, float] = field(default_factory=dict)
     certificate: Certificate | None = field(default=None, compare=False)
 
 
@@ -254,7 +299,7 @@ def _statement_sizes(cap: int, units: int) -> list[int]:
 
 def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, dict[str, float]]:
     """Drawing k of the candidate's units: its expected proving cost at the cheapest statement size, that size (the larger
-    one on a tie, for fewer roots), and the cost's parts.  Commitment and replay domains are the plan's (`plan_cost`)."""
+    one on a tie, for fewer roots), and the cost's parts.  Serving's commitments and the replay domains are the plan's."""
     a0, a1 = costs.statement(c)
     units = k * (costs.unit(c) + costs.of(c).replay)
     best = None
@@ -266,8 +311,8 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
 
 
 def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: CostModel) -> float:
-    """The expected cost of the replay units the draw meets: a domain's replay unit escapes when every template's draw
-    misses its share of it, independently across strata."""
+    """The expected cost of building the drawn units' witnesses, by replaying each replay unit the draw meets: a domain's
+    replay unit escapes when every template's draw misses its share of it, independently across strata."""
     total = 0.0
     for name in sorted({c.replay for c in chosen if c.replay}):
         if name not in costs.replay:
@@ -328,25 +373,27 @@ def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective
     return Certificate(d, harm, density, work, leak)
 
 
-def _k(c: Candidate, objective: Objective, lam: float) -> int:
-    return min(c.units, max(objective.floor, ceil(min(1.0, lam * objective.harm(c)) * c.units)))
+def _k(c: Candidate, objective: Objective, lam: float, weight: float = 1.0) -> int:
+    return min(c.units, max(objective.floor, ceil(min(1.0, lam * weight * objective.harm(c)) * c.units)))
 
 
 def _plan(chosen: Sequence[Candidate], costs: CostModel, objective: Objective, lam: float,
-          floor_only: frozenset[str], full: frozenset[str]) -> Plan:
+          floor_only: frozenset[str], full: frozenset[str], weights: Mapping[str, float] | None = None) -> Plan:
+    weights = dict(weights or {})
     sizes, statement, parts = {}, {}, {"statements": 0.0, "units": 0.0, "commit": 0.0}
     for c in chosen:
         k = c.units if c.template in full else min(c.units, objective.floor) if c.template in floor_only \
-            else _k(c, objective, lam)
+            else _k(c, objective, lam, weights.get(c.block, 1.0))
         _, size, p = template_cost(c, costs, k)
         sizes[c.template], statement[c.template] = k, size
         parts["statements"] += p["statements"]
         parts["units"] += p["units"]
         parts["commit"] += costs.commit(c)
     parts["replay"] = replay_cost(sizes, chosen, costs)
-    parts["total"] = parts["statements"] + parts["units"] + parts["commit"] + parts["replay"]
+    parts["serve"] = costs.serve_cost()
+    parts["total"] = parts["statements"] + parts["units"] + parts["commit"] + parts["replay"] + parts["serve"]
     choice = {c.op: c.alternative for c in chosen}
-    return Plan(lam, choice, statement, sizes, floor_only, full, parts)
+    return Plan(lam, choice, statement, sizes, floor_only, full, parts, weights)
 
 
 def _by_op(candidates: Sequence[Candidate]) -> dict[str, dict[str, list[Candidate]]]:
@@ -359,32 +406,35 @@ def _by_op(candidates: Sequence[Candidate]) -> dict[str, dict[str, list[Candidat
 
 
 def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel, objective: Objective, lam: float,
-              promote: float) -> list[Plan]:
+              promote: float, weights: Mapping[str, float]) -> list[Plan]:
     """The plans the Lagrangian allows at one density: per op type its cheapest cut, then each prefix of the templates
     ranked by cost saved per unit of harm conceded at their floor, each with and without promoting to full the templates
     whose whole proof costs at most `promote` of the plan more."""
+    def k(c: Candidate) -> int:
+        return _k(c, objective, lam, weights.get(c.block, 1.0))
+
     def at(c: Candidate) -> float:
-        return costs.commit(c) + template_cost(c, costs, _k(c, objective, lam))[0]
+        return costs.commit(c) + template_cost(c, costs, k(c))[0]
 
     chosen = [c for alts in ops.values()
               for c in min(alts.items(), key=lambda kv: (sum(at(c) for c in kv[1]), kv[0]))[1]]
 
     def saving(c: Candidate) -> float:
-        drop = template_cost(c, costs, _k(c, objective, lam))[0] - template_cost(c, costs, min(c.units, objective.floor))[0]
+        drop = template_cost(c, costs, k(c))[0] - template_cost(c, costs, min(c.units, objective.floor))[0]
         return drop / (c.units * objective.harm(c))
 
-    ranked = sorted((c for c in chosen if objective.harm(c) > 0 and _k(c, objective, lam) > objective.floor),
+    ranked = sorted((c for c in chosen if objective.harm(c) > 0 and k(c) > objective.floor),
                     key=lambda c: (-saving(c), c.template))
     plans = []
     for i in range(len(ranked) + 1):
         skip = frozenset(c.template for c in ranked[:i])
-        base = _plan(chosen, costs, objective, lam, skip, frozenset())
+        base = _plan(chosen, costs, objective, lam, skip, frozenset(), weights)
         plans.append(base)
         whole = frozenset(c.template for c in chosen if c.template not in skip and base.sizes[c.template] < c.units
                           and template_cost(c, costs, c.units)[0] - template_cost(c, costs, base.sizes[c.template])[0]
-                          <= promote * base.cost["total"])
+                          <= promote * (base.cost["total"] - base.cost["serve"]))
         if whole:
-            plans.append(_plan(chosen, costs, objective, lam, skip, whole))
+            plans.append(_plan(chosen, costs, objective, lam, skip, whole, weights))
     return plans
 
 
@@ -402,19 +452,25 @@ def _pareto(plans: Iterable[Plan], key) -> list[Plan]:
 
 
 def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, *, by: str = "harm",
-             grid: int = 121, promote: float = 0.05, exact: bool = True) -> list[Plan]:
-    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field.  The sweep's
-    plans are screened by `density_bound` (cheap) before the survivors are certified (`certify`, `exact` or not)."""
+             grid: int = 121, promote: float = 0.05, exact: bool = True,
+             weights: Mapping[str, float] | None = None) -> list[Plan]:
+    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field, each block
+    kind's density scaled by its weight (`weights`, 1 when absent).  The sweep's plans are screened by `density_bound`
+    (cheap) before the survivors are certified (`certify`, `exact` or not)."""
+    weights = dict(weights or {})
+    if any(not w > 0 for w in weights.values()):
+        raise ValueError("a block kind's weight is positive: hold a kind at its floor by its density, not a zero weight")
     ops = _by_op(candidates)
     harms = [objective.harm(c) * c.units for c in candidates if objective.harm(c) > 0]
     if not harms:
         raise ValueError("no candidate does any harm under this objective: there is nothing to sample for")
-    lo = 1 / (10 * max(harms))
-    hi = 1 / min(objective.harm(c) for c in candidates if objective.harm(c) > 0)
+    ws = [weights.get(c.block, 1.0) for c in candidates]
+    lo = 1 / (10 * max(harms) * max(ws))
+    hi = 1 / (min(objective.harm(c) for c in candidates if objective.harm(c) > 0) * min(ws))
     lams = [lo * (hi / lo) ** (i / (grid - 1)) for i in range(grid)]
     seen: dict[tuple, Plan] = {}
     for lam in lams:
-        for p in _plans_at(ops, costs, objective, lam, promote):
+        for p in _plans_at(ops, costs, objective, lam, promote, weights):
             seen.setdefault((tuple(sorted(p.sizes.items())), tuple(sorted(p.statement_size.items()))), p)
 
     def screened(p: Plan) -> float:
@@ -431,7 +487,8 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
                exact: bool = True) -> Plan | None:
     """The frontier's least-harm plan within `budget`: its costliest affordable plan.  Given the candidates, costs and
     objective, the plans either side of the budget are moved to it by bisection on the density, each holding its cuts,
-    floor-only and full templates, and the one certifying less is taken, so the answer doesn't hang on the sweep's grid."""
+    floor-only and full templates and weights, and the one certifying less is taken, so the answer doesn't hang on the
+    sweep's grid.  The budget is the total, the serve-time commitments included."""
     affordable = [p for p in plans if p.cost["total"] <= budget]
     if not affordable:
         return None
@@ -439,7 +496,8 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
         return affordable[-1]
 
     def at(p: Plan, lam: float) -> Plan:
-        return _plan([c for c in candidates if c.template in p.sizes], costs, objective, lam, p.floor_only, p.full)
+        return _plan([c for c in candidates if c.template in p.sizes], costs, objective, lam, p.floor_only, p.full,
+                     p.weights)
 
     def fits_at(p: Plan, lam: float) -> bool:
         return at(p, lam).cost["total"] <= budget
@@ -470,8 +528,8 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
 def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *,
                by: str = "harm", plans: Sequence[Plan] | None = None, exact: bool = True, **kw) -> Plan | None:
     """The cheapest plan certifying at most `target`: the frontier's cheapest such plan (of `plans`, a frontier by `by`,
-    when given), its density then lowered by bisection, the cuts, floor-only and full templates held, to where its
-    certificate just meets the target."""
+    when given), its density then lowered by bisection, the cuts, floor-only and full templates and weights held, to
+    where its certificate just meets the target."""
     if plans is None:
         plans = frontier(candidates, costs, objective, by=by, exact=exact, **kw)
     ok = [p for p in plans if _harm(p, by) <= target]
@@ -481,7 +539,7 @@ def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Obj
     chosen = [c for c in candidates if c.template in best.sizes]
 
     def at(lam: float) -> Plan:
-        p = _plan(chosen, costs, objective, lam, best.floor_only, best.full)
+        p = _plan(chosen, costs, objective, lam, best.floor_only, best.full, best.weights)
         return replace(p, certificate=certify(p.sizes, candidates, objective, exact=exact))
 
     lo, hi = best.lam, best.lam
@@ -497,6 +555,62 @@ def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Obj
     return at(hi)
 
 
+def weigh(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *, by: str = "harm",
+          factors: Sequence[float] = (0.25, 0.5, 2.0, 4.0), rounds: int = 3, exact: bool = True, **kw) -> Plan | None:
+    """The cheapest plan certifying at most `target` when each block kind (`Candidate.block`) is drawn at its own weight
+    on the density: from equal weights, a coordinate search, each kind of the current plan in turn (costliest first) taking
+    the factor of `factors` on its weight that makes `for_target` cheapest, for at most `rounds` passes.  The certificate
+    is the same stratified one over every template, so the weights are parameters of the draw, chosen at the target, and
+    never of the guarantee; the plan carries them, and registers by its sizes (`work_law`) as any plan does."""
+    def at(weights: Mapping[str, float]) -> Plan | None:
+        return for_target(candidates, costs, objective, target, by=by, exact=exact, weights=weights, **kw)
+
+    best = at({})
+    if best is None:
+        return None
+    for _ in range(rounds):
+        moved = False
+        share: dict[str, float] = {}
+        for c in candidates:
+            if c.template in best.sizes:
+                share[c.block] = share.get(c.block, 0.0) + template_cost(c, costs, best.sizes[c.template])[0]
+        for kind in sorted(share, key=lambda b: (-share[b], b)):
+            trials = [p for f in factors
+                      if (p := at({**best.weights, kind: best.weights.get(kind, 1.0) * f})) is not None]
+            cheaper = min(trials, key=lambda p: p.cost["total"], default=None)
+            if cheaper is not None and cheaper.cost["total"] < best.cost["total"] * (1 - 1e-9):
+                best, moved = cheaper, True
+        if not moved:
+            break
+    return best
+
+
+def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
+    """Every tensor that more than one scale commits at serve time (`CostModel.serve`), ranked by what committing it once
+    would save at prefill.  Per copy: its bytes and its prefill cost (throughput-bound: its bytes at the model's rate, or
+    its measured cost), and at decode its bytes, its chain and, when it gates the step, its chain's latency at `latency`
+    a dependent compression (latency-bound).  Committed once, the cheapest copy is kept: the saving is the others' bytes
+    and prefill cost, and at decode their latency less the kept copy's chain where it has to gate in their place."""
+    by: dict[str, list[Commitment]] = {}
+    for s in costs.serve:
+        by.setdefault(s.tensor, []).append(s)
+    rows = []
+    for tensor, copies in by.items():
+        if len({s.scale for s in copies}) < 2:
+            continue
+        keep = min(copies, key=lambda s: (costs.committed(s), s.scale))
+        drop = [s for s in copies if s is not keep]
+        path = fsum(s.chain for s in copies if s.gates) * latency
+        once = keep.chain * latency if any(s.gates for s in copies) else 0.0
+        rows.append({"tensor": tensor, "kept": keep.scale,
+                     "copies": [{"scale": s.scale, "bytes": s.nbytes, "prefill": costs.committed(s),
+                                 "decode_bytes": s.decode_bytes, "chain": s.chain, "gates": s.gates,
+                                 "decode": s.chain * latency if s.gates else 0.0} for s in copies],
+                     "saving": {"bytes": fsum(s.nbytes for s in drop), "prefill": fsum(costs.committed(s) for s in drop),
+                                "decode_bytes": fsum(s.decode_bytes for s in drop), "decode": path - once}})
+    return sorted(rows, key=lambda r: (-r["saving"]["prefill"], r["tensor"]))
+
+
 def structure(p: Plan) -> tuple:
     """A plan's discrete shape: its cuts, statement sizes, and floor-only and whole templates."""
     return (tuple(sorted(p.choice.items())), tuple(sorted(p.statement_size.items())), tuple(sorted(p.floor_only)),
@@ -505,8 +619,8 @@ def structure(p: Plan) -> tuple:
 
 def perturb(costs: CostModel, what: str, factor: float, candidates: Sequence[Candidate] = ()) -> CostModel:
     """The model with one group of costs scaled by `factor`: "prove" (per proved unit), "statement" (per touched
-    statement), "commit" (serving's), "replay" (the domains' and per drawn unit), or one template's (its derived costs
-    pinned from `candidates` first)."""
+    statement), "commit" (serving's, the units' and the fixed serve-time commitments'), "replay" (the domains' and per
+    drawn unit), or one template's (its derived costs pinned from `candidates` first)."""
     t = dict(costs.templates)
     if what == "prove":
         t = {k: replace(v, unit=None if v.unit is None else v.unit * factor) for k, v in t.items()}
@@ -519,7 +633,8 @@ def perturb(costs: CostModel, what: str, factor: float, candidates: Sequence[Can
                        statement_per_and=costs.statement_per_and * factor, staged_per_and=costs.staged_per_and * factor,
                        staged_per_unit=costs.staged_per_unit * factor)
     if what == "commit":
-        return replace(costs, commit_per_bit=costs.commit_per_bit * factor, commit_per_row=costs.commit_per_row * factor)
+        return replace(costs, commit_per_bit=costs.commit_per_bit * factor, commit_per_row=costs.commit_per_row * factor,
+                       serve=tuple(replace(s, cost=None if s.cost is None else s.cost * factor) for s in costs.serve))
     if what == "replay":
         t = {k: replace(v, replay=v.replay * factor) for k, v in t.items()}
         return replace(costs, templates=t, replay={k: replace(d, cost=d.cost * factor) for k, d in costs.replay.items()})
@@ -542,7 +657,8 @@ def sensitivity(candidates: Sequence[Candidate], costs: CostModel, objective: Ob
                   "statement": costs.statement_fixed or costs.statement_per_and or costs.staged_per_and
                   or costs.staged_per_unit or any(v.statement_fixed or v.statement_per_unit
                                                   for v in costs.templates.values()),
-                  "commit": costs.commit_per_bit or costs.commit_per_row, "replay": bool(costs.replay)}
+                  "commit": costs.commit_per_bit or costs.commit_per_row or bool(costs.serve),
+                  "replay": bool(costs.replay)}
         factors = {g: (0.5, 2.0) for g, on in groups.items() if on}
     def at(model: CostModel) -> Plan | None:
         return for_budget(frontier(candidates, model, objective, by=by, **kw), budget, candidates=candidates,
@@ -581,6 +697,7 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-__all__ = ["Candidate", "Certificate", "CostModel", "HM96_ANDS", "Objective", "Plan", "ReplayDomain", "SHA512_ANDS",
-           "TemplateCost", "certify", "density_bound", "for_budget", "for_target", "frontier", "needs_benchmark", "perturb",
-           "replay_cost", "row_ands", "sensitivity", "structure", "template_cost", "touched", "work_law"]
+__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "Objective", "Plan", "ReplayDomain",
+           "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "for_budget", "for_target", "frontier",
+           "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
+           "template_cost", "touched", "weigh", "work_law"]
