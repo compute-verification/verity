@@ -142,16 +142,14 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
      "a26c43faa02a1efcdfdbf6ed346afaf2d6552bea975592369da898827fe34399d1c4a4e2ea87cf3806f292204d8c805c0481c4ef948d1d7aad5cadf51df96e01"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "b2c6fd777a06c0260b433a58fe518c8e0650db6e4627c645584a7eab355dbd54cc0f63e5586946d5d8f75caf1932c202fac503ca9e4d751fdb75a6b97ae6c6ba"),
+     "b632583a7461789d2ceec592e052a45743406dfa29427a640779ef6aab1410573f65ae6073ff810d63e016e70ba4efaf1609220d21195becd2dc21add70fdf62"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
     """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0, as the Build traced them: the B1 step at the single request's constant split
     count (r20261017-224230-de2d), and the B8 step and second request (r20261018-105843-33c0) over the derived `splits` Input, the
     select after the vocabulary's all-gather.  The second request's launch batch is its realized arrival
     (`engine.arrivals.realized_arrive_steps`): the first request ends at forward 1, so the idle engine prefills it alone at forward 2
-    and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with.  The request's multimem
-    all-reduces are `AllReduceMultimem_v1`'s batch of 16-byte vectors, which moved its digest from the trace's (b632583a…) until the
-    row is traced again."""
+    and it decodes alone, not beside the step-13 prefills its declared arrive_step 9 would put it with."""
     r = build_program(_row_phi(row, "GLM53", tmp_path), wrapper, **shape)
     assert r.digest == digest
 
