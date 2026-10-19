@@ -3,8 +3,9 @@
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  core may import ml, and what of ml it may reach is ``SOUNDNESS_PATH``;  ml
-    never imports core;  no unit imports
+    ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
+    record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
+    ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``.
 
@@ -78,15 +79,16 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: C-Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), and the Lean ports' differential test
-#: (``verity_difftest``, which their tests import, on Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is
+#: scripts, the GPU hashes (``hash_gpu``, run as ``python -m hash_gpu.bench``), the differential test of the Lean against
+#: its Python (``verity_difftest``, which their tests import, on Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is
 #: run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
 SEPARATE = ("ml/flock", "ml/kernels/hash_gpu", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")
-#: ml builds on no verifier: core may import ml, never the reverse.  The files of ``verity/ml/`` that import core anyway
+#: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
+#: ``verity/ml/`` that import core anyway
 #: (globs from ``verity/``), each with why.
 ML_IMPORTS_CORE = {
     "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against core's Python verifiers",
@@ -102,11 +104,29 @@ ML_IMPORTS_CORE = {
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",
 }
-#: The units of ``verity.ml`` core's verifiers read, directly or through one another (what ``ALLOWED`` lets core reach): a
-#: verifier's verdict rests on them, so they are on the soundness path, and AGENTS.md names each.  The rest of ml (C-Flock's
-#: prover, the private circuits) is not.
+#: A verifier imports no ``verity.ml`` code (Daniel, 18 Oct; AGENTS.md "Design rules"): Lean is the definition and the
+#: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the 8 Oct procedure,
+#: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it on 18 Oct, frozen here,
+#: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
+CORE_ML_EDGES = {
+    "core.protocols.profile": {"ml.circuits"},
+    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
+    "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
+    "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness"},
+    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments",
+                            "ml.crypto", "ml.randomness"},
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
+}
+#: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
+#: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen on 18 Oct
+#: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml
+#: (C-Flock's prover, the private circuits) is not on it.
 SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.circuits.targets", "ml.commitments", "ml.crypto",
                   "ml.kernels", "ml.randomness"}
+#: What a test that refuses a new core -> ml edge says.
+LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.md \"Design rules\", \"Lean is the definition "
+                  "and the verifier of record\"): state it in Lean and import nothing from verity.ml")
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
@@ -245,17 +265,51 @@ def test_ml_never_imports_core() -> None:
     assert not stale, f"ML_IMPORTS_CORE entries that match no importer; remove them: {stale}"
 
 
-def test_the_soundness_path_is_what_core_may_reach_in_ml() -> None:
-    reached, todo = set(), [u for u in ALLOWED if u.startswith("core.")]
+def _core_reach_in_ml(allowed: dict[str, set[str]]) -> set[str]:
+    """The ml units the core units of ``allowed`` reach, directly or through one another."""
+    reached, todo = set(), [u for u in allowed if u.startswith("core.")]
     while todo:
-        for v in ALLOWED[todo.pop()] - reached:
+        for v in allowed.get(todo.pop(), set()) - reached:
             reached.add(v)
             todo.append(v)
-    ml = {u for u in reached if u.startswith("ml.")}
-    assert ml == SOUNDNESS_PATH, f"ALLOWED lets core reach {sorted(ml)} in ml: SOUNDNESS_PATH and AGENTS.md say so"
+    return {u for u in reached if u.startswith("ml.")}
+
+
+def _core_ml_growth(allowed: dict[str, set[str]]) -> list[str]:
+    """What ``allowed`` adds to core's frozen reach into ml: each core unit's ml edges beyond ``CORE_ML_EDGES``, and ml
+    units reached off ``SOUNDNESS_PATH`` (through a new core edge, or a new edge out of a unit on the path)."""
+    grown = [f"{u} -> {v}" for u in sorted(allowed) if u.startswith("core.")
+             for v in sorted(allowed[u]) if v.startswith("ml.") and v not in CORE_ML_EDGES.get(u, set())]
+    return grown + [f"core reaches {v}, off SOUNDNESS_PATH" for v in sorted(_core_reach_in_ml(allowed) - SOUNDNESS_PATH)]
+
+
+def test_core_gains_no_edge_into_ml() -> None:
+    """No core unit gains an ml edge, and core's reach into ml doesn't grow (Daniel, 18 Oct): the edges only shrink, each
+    with its protocol's switch to Lean."""
+    grown = _core_ml_growth(ALLOWED)
+    assert not grown, f"{grown}: {LEAN_OF_RECORD}"
+
+
+def test_core_ml_growth_is_refused() -> None:
+    """The check above isn't vacuous: an added edge from a core unit, or from an ml unit on the soundness path, is growth."""
+    assert _core_ml_growth({**ALLOWED, "core.protocols.pous": ALLOWED["core.protocols.pous"] | {"ml.private_circuits"}}) == [
+        "core.protocols.pous -> ml.private_circuits", "core reaches ml.private_circuits, off SOUNDNESS_PATH"]
+    assert _core_ml_growth({**ALLOWED, "core.claims": {"ml.crypto"}}) == ["core.claims -> ml.crypto"]
+    assert _core_ml_growth({**ALLOWED, "ml.crypto": {"ml.private_circuits"}}) == [
+        "core reaches ml.private_circuits, off SOUNDNESS_PATH"]
+
+
+def test_core_ml_edges_shrink_with_allowed() -> None:
+    """``CORE_ML_EDGES`` and ``SOUNDNESS_PATH`` shrink with ``ALLOWED``, so an edge it drops can't come back.  With the
+    test above, ``SOUNDNESS_PATH`` is exactly what ``ALLOWED`` lets core reach in ml."""
+    dropped = [f"{u} -> {v}" for u, vs in sorted(CORE_ML_EDGES.items()) for v in sorted(vs - ALLOWED.get(u, set()))]
+    assert not dropped, f"ALLOWED no longer has {dropped}: remove them from CORE_ML_EDGES too"
+    ml = _core_reach_in_ml(ALLOWED)
+    assert ml >= SOUNDNESS_PATH, (f"core no longer reaches {sorted(SOUNDNESS_PATH - ml)} in ml: remove them from "
+                                  "SOUNDNESS_PATH and from AGENTS.md's list of the soundness path")
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     missing = [u for u in sorted(SOUNDNESS_PATH) if f"`{u}`" not in agents]
-    assert not missing, f"AGENTS.md doesn't name {missing}, which core's verifiers read"
+    assert not missing, f"AGENTS.md doesn't name {missing}, which core's Python verifiers read"
 
 
 def _infra_packages() -> set[str]:
@@ -297,13 +351,13 @@ def _docstrings(tree: ast.AST) -> set[int]:
     return out
 
 
-CENSUS_PATH = re.compile(r"census[/\\]|\b(hardware|networks|workloads|instance_sets)(\.schema)?\.json\b")
+CENSUS_PATH = re.compile(r"(?<!verity/)census[/\\]|\b(hardware|networks|workloads|instance_sets)(\.schema)?\.json\b")
 
 
 def test_core_never_reads_the_census() -> None:
     """The census (``benchmarks/census/``, data only) is read by the renderer, benchmarks, tools and the website, never by
     ``verity``: it takes such numbers as parameters.  No string in its code (docstrings aside) names the directory or one of
-    its files."""
+    its files; a Program's census schema (``verity/census/v1``, ``ml.circuits.census``) is not the directory."""
     offenders = []
     for path in _sources():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
