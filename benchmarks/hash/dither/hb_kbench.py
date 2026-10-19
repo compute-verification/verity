@@ -3,7 +3,7 @@ interleaved with vLLM's own int8 GEMM (cutlass_scaled_mm), torch._int_mm (cuBLAS
 call it) and cuBLASLt with its top algorithms, at Llama-3.1-8B's linears (qkv 6144 x 4096, o 4096 x 4096, gate_up 28672 x
 4096, down 4096 x 14336) and M = 1, 32, 256, 2048, 8192.
 
-    python kbench.py --lib kb.so [--pg-lib kb_pg.so] --out OUT [--reps 7] [--ms 1,32,256,2048,8192] [--linears qkv,o,...]
+    python hb_kbench.py --lib kb.so [--pg-lib kb_pg.so] --out OUT [--reps 7] [--ms 1,32,256,2048,8192] [--linears qkv,o,...]
 
 Arms (one CUDA graph of G calls each, G chosen so an item is about --item-ms of device time; the weights cycle through enough
 copies that the graph's weights exceed 2.5x the L2, as every layer's do in a served step):

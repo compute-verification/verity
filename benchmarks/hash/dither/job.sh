@@ -5,7 +5,7 @@
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
-#   kbench   kb.so (and kb_pg.so on sm_100a): kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
+#   kbench   kb.so (and kb_pg.so on sm_100a): hb_kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
 #            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
@@ -93,7 +93,7 @@ for b in ${BENCH//,/ }; do
       NEED+=(kb)
       PG=""
       [ "$ARCH" = sm_100a ] && { NEED+=(kb_pg); PG="--pg-lib $LIBS/kb_pg.so"; }
-      CMDS+=("$PY $HERE/kbench.py --lib $LIBS/kb.so $PG --out $OUT ${BENCH_ARGS:-}") ;;
+      CMDS+=("$PY $HERE/hb_kbench.py --lib $LIBS/kb.so $PG --out $OUT ${BENCH_ARGS:-}") ;;
     h1) NEED+=(h1noise); CMDS+=("$PY $HERE/h1bench.py --lib $LIBS/h1noise.so --out $OUT ${BENCH_ARGS:-}") ;;
     h1u)
       NEED+=(h1u h1noise)

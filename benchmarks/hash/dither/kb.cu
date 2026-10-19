@@ -1,6 +1,6 @@
 // kbench's device side, one shared library a family (sm_90a or sm_100a): compute accounting's honest Dither GEMM
 // (benchmarks/pouw/dc/dgemm.cu, included unchanged: dg90 on sm_90a, dg100 on sm_100a), a row reference of its receipt, and
-// cuBLASLt int8 with its top algorithms, as plain launches on a caller's stream (kbench.py captures them in CUDA graphs).
+// cuBLASLt int8 with its top algorithms, as plain launches on a caller's stream (hb_kbench.py captures them in CUDA graphs).
 //
 //   kb_init()                                    the family (90 or 100) from device 0; dgemm.cu's g_sm
 //   kb_dg_tile(&bm, &bn)                         dgemm.cu's tile: 64 x 128 (dg90), 128 x 256 (dg100)
@@ -15,7 +15,7 @@
 //                                                and pgemm (L = 32 lm, bn = 512 / NB)
 //   kb_lt_create(m, n, k, ws, wsb) / kb_lt_algos(h) / kb_lt_run(h, a, X, W, C, stream) / kb_lt_destroy(h)
 //                                                C (s32, m x n) = X W^T by cuBLASLt (s8, COMPUTE_32I), its heuristic's top
-//                                                algorithms; kbench.py times each and keeps the fastest
+//                                                algorithms; hb_kbench.py times each and keeps the fastest
 #define main dgemm_main
 #include "../../pouw/dc/dgemm.cu"
 #undef main

@@ -1,6 +1,6 @@
 // kbench's pgemm (sm_100a only): compute accounting's pipelined honest GEMM (benchmarks/pouw/dc/pgemm.cu, included
 // unchanged) as a plain launch. Its operands are resident: it reads the first 128 bytes of K of each row (ldx apart) and
-// computes the GEMM of the K-periodic inputs those bytes repeat to, so kbench.py feeds and gates it K-periodic inputs.
+// computes the GEMM of the K-periodic inputs those bytes repeat to, so hb_kbench.py feeds and gates it K-periodic inputs.
 //
 //   kb_pg_prepare()                                         dynamic shared memory for every configuration
 //   kb_pg_launch(nb, lw, mode, mi, X, W, ldx, m, n, k, lm, seed, C, R, clk, stream)

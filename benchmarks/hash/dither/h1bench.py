@@ -38,7 +38,7 @@ import torch
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2]))
-from kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
+from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 

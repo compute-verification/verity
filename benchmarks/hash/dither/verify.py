@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "pouw" / "dc"))
 sys.path.insert(0, str(HERE))
 import dgemm_ref as ref
-from kbench import MAX_M, PER, inputs, w_seed, x_seed
+from hb_kbench import MAX_M, PER, inputs, w_seed, x_seed
 
 
 def receipts_rows(X: np.ndarray, rows: list[int], W: np.ndarray, seed: int, bn: int, L: int = 32, nch: int = 16):

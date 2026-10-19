@@ -45,7 +45,7 @@ import receipts_ca as RC
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
 from h1bench import Lib as NoiseLib
 from h1bench import gate as noise_gate
-from kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
+from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
