@@ -19,7 +19,8 @@ copy, its box into up to 16 CTAs).
 
 **An opcode's class.** `class_of` places the census's forms. Every other opcode that writes a 32-bit word (the
 instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Blackwell, and the opcodes RT-ISA's SASS
-census found in 88 binaries, CUDA 13.0, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d, which
+census found in 164 binaries on two nodes, CUDA 13.0 (v3),
+art:d11bc611d0e9ed530b018e1d9b873d124b866a3545cde708022621d604d2ca3a, which
 `benchmarks/pouw/theory/isa_table.py` places one by one, failing on any it can't) is in the class of its unit at the
 next width up (a class's `words` bounds every form in it). On sm_120 the placements of the 175 Blackwell opcodes A7's
 menu didn't name agree with RT-MACHINE-2's triage by hand,
@@ -40,12 +41,14 @@ floor:
 * texture: SULD in SULD1 or SULD4, TXQ in TEX1, TMML in TEX2, TXD in TEX4.
 * conversion: F2FP, which no list names, in F2FS (`class_of`'s).
 * warp and uniform: MATCH in VOTE; CREDUX in REDUX; UTCATOMSWS and every other U-prefixed opcode in UNI or UNI64
-  (`class_of`).
-* lane: FFMA2, FADD2, FMUL2, FSWZADD and the FH forms in FFMA; FSET, HSET2, FMNMX3, VHMNMX, VIADDMNMX and VIMNMX3 in
-  VIMNMX; VIADD, IADD32I, ISCADD, SHL and SHR in ALU; IDP, IDP4A and IMUL in IMAD; VISET in VSIMD; MOV64IUR in MOV64;
-  and every other lane instruction that writes at most two words a lane and multiplies nothing (MOV, MOV32I, P2R, IABS,
-  SGXT, BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC, and Blackwell's DECOMPRESS and SPARSIFY,
-  which decompress a vector and compress one with its metadata, movers in RT-MACHINE-2's triage) in NOROW.
+  (`class_of`); USETSHMSZ, which no list names (sm_90's corpus), in UNI64.
+* lane: FFMA2, FADD2, FMUL2, FSWZADD and the FH forms in FFMA, an FFMA2 or FMUL2 counting as two of its instructions
+  (RT-ISA-6: two issue slots and two FMA-pipe cycles each, B200 r20261019-083352-2e24); FSET, HSET2, FMNMX3, VHMNMX,
+  VIADDMNMX and VIMNMX3 in VIMNMX; VIADD, IADD32I, ISCADD, SHL and SHR in ALU; IDP, IDP4A and IMUL in IMAD; VISET in
+  VSIMD; MOV64IUR in MOV64; and every other lane instruction that writes at most two words a lane and multiplies
+  nothing (MOV, MOV32I, P2R, IABS, SGXT, BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC, and
+  Blackwell's DECOMPRESS and SPARSIFY, which decompress a vector and compress one with its metadata, movers in
+  RT-MACHINE-2's triage) in NOROW.
 
 A placement bounds an opcode's words only: its rate is the data sheet's, which the census measured on the forms it
 probed. An instruction that writes no 32-bit word (a SETP's or R2P's predicate, a branch, a barrier, a fence, a
@@ -151,7 +154,7 @@ instance : Fintype Base :=
 * `lane` (§9.7.1–§9.7.9, §9.7.20): its widest form's destination, one word a lane (ALU, HFMA2 with HADD2.F32, XU,
   VSIMD) or a pair: FFMA for FFMA2, FADD2 and FMUL2 (.f32x2), VIMNMX for IMNMX.S64 and IMNMX.U64, F2FS for the .F64
   and .S64 forms `class_of` puts there, SEL for SEL.64, NOROW for CS2R, and IMAD, where `class_of` puts every IMUL
-  form (RT-ISA's corpus, art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d, has each). IMAD.WIDE,
+  form (RT-ISA's corpus, art:d11bc611d0e9ed530b018e1d9b873d124b866a3545cde708022621d604d2ca3a, has each). IMAD.WIDE,
   IADD.64, DADD/DFMA, DMUL and the 64-bit conversions are side units at their two words a lane; MOV.64 copies.
 * `warp`: SHFL selects a lane's word (§9.7.10.6), one word a lane; VOTE writes a ballot or match mask, one word a
   lane (§9.7.15.10, §9.7.15.11; MATCH.ANY.U64's mask too); REDUX writes one uniform word (§9.7.15.13).

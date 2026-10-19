@@ -24,5 +24,5 @@ def test_isa_table(tmp_path):
     assert proc.returncode == 0, proc.stdout[-4000:] + proc.stderr[-4000:]
     doc = json.loads(verdict.read_text(encoding="utf-8"))
     assert doc["ok"]
-    assert doc["counts"]["mutations"] == doc["counts"]["mutations_caught"] >= 16
-    assert doc["counts"]["checks"] == doc["counts"]["checks_ok"] >= 30
+    assert doc["counts"]["mutations"] == doc["counts"]["mutations_caught"] >= 17
+    assert doc["counts"]["checks"] == doc["counts"]["checks_ok"] >= 31

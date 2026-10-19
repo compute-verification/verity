@@ -26,9 +26,10 @@ row family and `IsaComplete`, that every head is an instance of a class. This sc
     LDSM, atomics, texture, surface and tensor-memory copies, the wide destinations among them) is in a vector class,
     whose heads A6 bounds at two words a lane, but MATCH (`ACCESS_LANE`: VOTE's row, one word a lane); Lean decides the
     same of the table's rows (`sm120_lane`, `sm90_lane`, `sm100_lane`);
-  - the same against what the libraries emit: RT-ISA's SASS census (`CORPUS_ART`, 88 binaries under CUDA 13.0,
-    derived to `machine_model/data/rt_isa_corpus.json`), every base on each device placed, read as writing no word or
-    named undocumented (`UNDOCUMENTED`: ARRIVES and F2FP), its word flag against the map's no-word reading
+  - the same against what the libraries emit: RT-ISA's SASS census (`CORPUS_ART`, v3: 164 binaries on two nodes
+    under CUDA 13.0, derived to `machine_model/data/rt_isa_corpus.json`), every base on each device placed, read as
+    writing no word or named undocumented (`UNDOCUMENTED`: ARRIVES, F2FP, sm_90's USETSHMSZ), its UNDERPRICED forms
+    `COUNT_TWO`'s (FFMA2 and FMUL2 count as two FFMA, RT-ISA-6), its word flag against the map's no-word reading
     (`WORD_DISAGREE`), its unpriced MMA forms (GAP-TENSOR: DMMA, UTCOMMA) in writer rows, and each vector class at two
     words a lane exactly where a corpus form writes a pair (`LANE_PAIR`).
 
@@ -249,14 +250,17 @@ CLASS_OF_WRONG = {
 #: it may write (IMMA.1688's shape no document gives; an m16n8 one writes 128)
 FORMS_MOVED = {"IMMA.1688": ("IMMA8816", "IMMA16816", 128)}
 
-#: RT-ISA's SASS census: every opcode the CUDA 13.0 libraries emit on sm_90, sm_100 and sm_120 (88 binaries), its
-#: store artifact, and the fixture `--write-corpus` derives from it (each dotted form: RT-ISA's word flag, its count,
-#: its bucket)
-CORPUS_ART = "art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d"
+#: RT-ISA's SASS census: every opcode the CUDA 13.0 libraries emit on sm_90, sm_100 and sm_120 (v3: both nodes'
+#: corpora, 164 binaries), its store artifact, and the fixture `--write-corpus` derives from it (each dotted form:
+#: RT-ISA's word flag, its count, its bucket)
+CORPUS_ART = "art:d11bc611d0e9ed530b018e1d9b873d124b866a3545cde708022621d604d2ca3a"
 CORPUS = DATA / "rt_isa_corpus.json"
 CORPUS_DEVICES = {"Sm90": "sm_90", "Sm100": "sm_100", "Sm120": "sm_120"}
-#: the corpus's bases no documented list names, and the class the map puts them in
-UNDOCUMENTED = {"ARRIVES": "ATOMS64", "F2FP": "F2FS"}
+#: the corpus's bases no documented list names, and the class the map puts them in: USETSHMSZ (sm_90 only, new in v3,
+#: whose destination no document gives) in the wider uniform writer class, on a priced route
+UNDOCUMENTED = {"ARRIVES": "ATOMS64", "F2FP": "F2FS", "USETSHMSZ": "UNI64"}
+#: the undocumented bases the corpus emits on some devices only (the rest on every device)
+UNDOCUMENTED_ON = {"USETSHMSZ": {"Sm90"}}
 #: the bases the corpus reads as writing a word and the map as writing none, and why none
 WORD_DISAGREE = {
     "R2P": "it writes predicates from a register's bits",
@@ -269,6 +273,10 @@ WORD_DISAGREE = {
 #: (IMAD's is the rule: `class_of` puts every IMUL form in IMAD, a .WIDE one included)
 LANE_PAIR = {"FFMA": "FFMA2", "VIMNMX": "IMNMX.U64", "F2FS": "F2F.F64.F32", "SEL": "SEL.64", "NOROW": "CS2R",
              "IMAD": None}
+#: the paired FP32 forms that count as two instructions of their class (RT-ISA-6, note:20261019T0520Z-draft-rt-isa):
+#: each takes two issue slots and two FMA-pipe cycles (B200 r20261019-083352-2e24), the corpus's UNDERPRICED bucket;
+#: either count fits the class's row, one instance at two words a lane or two at one
+COUNT_TWO = {"FFMA2": "FFMA", "FMUL2": "FFMA"}
 #: RT-MACHINE-2's triage (note:20261019T0456Z-draft-rt-machine): each Blackwell opcode no menu file named, classed by
 #: hand by what it can do to a committed word, its store artifact, and the fixture `--write-triage` derives from it
 TRIAGE_ART = "art:fac984dca8c0141d83e5f147ba04787c02b7d59bd49edcb1ffb64727eeeb7e0c"
@@ -382,7 +390,7 @@ def write_corpus(src: Path) -> None:
     """Derive the fixture from RT-ISA's artifact, fetched to `src` (`research data fetch CORPUS_ART --to src`)."""
     import json
     man = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
-    head = {"source": CORPUS_ART, **{k: man[k] for k in ("schema", "corpus_run", "toolkit", "binaries", "code")},
+    head = {"source": CORPUS_ART, **{k: man[k] for k in ("schema", "corpus_runs", "toolkit", "binaries", "code")},
             "written_by": "benchmarks/pouw/theory/isa_table.py --write-corpus"}
     lines = ["{"] + [f" {json.dumps(k)}: {json.dumps(v)}," for k, v in head.items()] + [' "devices": {']
     fams = list(CORPUS_DEVICES.values())
@@ -443,6 +451,15 @@ def access_on_lane(lists: dict[str, dict[str, list[str]]], place: dict[str, set[
     there (LDS.128 and LDSM.x4 at 4 words a lane, LDG.E.ENL2.256 at 8, LDTM.32x32b.x128 at 128) would break it."""
     return {op for by_cat in lists.values() for cat in ACCESS for op in by_cat.get(cat, [])
             if any(rows[c][0] == "lane" for c in place.get(op, ()))}
+
+
+def count_two_ok(forms: dict[str, list], place: dict[str, set[str]], rows: dict[str, tuple[str, int]],
+                 count_two: dict[str, str]) -> bool:
+    """The corpus's UNDERPRICED bases are `count_two`'s, each placed in its class alone, a vector class at two words a
+    lane."""
+    under = {op.split(".")[0] for op, (_, _, bucket) in forms.items() if bucket == "UNDERPRICED"}
+    return under == set(count_two) and all(place.get(op) == {c} and rows[c] == ("lane", 64)
+                                           for op, c in count_two.items())
 
 
 def write_triage(src: Path) -> None:
@@ -553,15 +570,17 @@ def main() -> int:
     header, corpus = corpus_forms()
     checks.check(f"the corpus fixture is RT-ISA's ({CORPUS_ART[:16]}…, {header['binaries']} binaries, "
                  f"{header['toolkit']})", header["source"] == CORPUS_ART and all(corpus.values()),
-                 header["corpus_run"])
+                 " ".join(header["corpus_runs"].values()))
     for dev in ("Sm120", "Sm90", "Sm100"):
         gaps = corpus_unplaced(corpus[dev], place, devices[dev], UNDOCUMENTED)
         bases = {op.split(".")[0] for op in corpus[dev]}
         checks.check(f"every {dev} corpus base is placed in classes of its table, read as writing no word, or named",
                      not gaps, ", ".join(gaps) or f"{len(bases)} bases, {len(corpus[dev])} forms")
     undoc = {d: {op.split(".")[0] for op in corpus[d]} - every for d in corpus}
-    checks.check("the corpus bases no documented list names are ARRIVES and F2FP on every device (UNDOCUMENTED)",
-                 all(u == set(UNDOCUMENTED) for u in undoc.values()), str({d: sorted(u) for d, u in undoc.items()}))
+    checks.check("the corpus bases no documented list names are UNDOCUMENTED's: ARRIVES and F2FP on every device, "
+                 "USETSHMSZ on sm_90",
+                 all(u == {b for b in UNDOCUMENTED if d in UNDOCUMENTED_ON.get(b, {d})} for d, u in undoc.items()),
+                 str({d: sorted(u) for d, u in undoc.items()}))
     disagree = set().union(*(word_disagree(corpus[d]) for d in corpus))
     checks.check("where the corpus reads a word and the map none, it is WORD_DISAGREE's, each with its reason",
                  disagree == set(WORD_DISAGREE), ", ".join(sorted(disagree ^ set(WORD_DISAGREE))) or
@@ -575,6 +594,9 @@ def main() -> int:
     checks.check("a vector class writes two words a lane exactly where a corpus form needs it (LANE_PAIR)",
                  lane_widths_ok(rows, all_forms, LANE_PAIR, place),
                  " ".join(f"{k}:{w}" for k, (r, w) in sorted(rows.items()) if r == "lane"))
+    checks.check("the corpus's UNDERPRICED forms are COUNT_TWO's (RT-ISA-6: FFMA2 and FMUL2 count as two FFMA), in "
+                 "FFMA alone at two words a lane", count_two_ok(all_forms, place, rows, COUNT_TWO),
+                 " ".join(sorted(op for op, (_, _, b) in all_forms.items() if b == "UNDERPRICED")))
 
     thead, tri = triage()
     blackwell = {op for ops in lists["Sm100"].values() for op in ops}
@@ -619,7 +641,8 @@ def main() -> int:
         checks.mutation("a moved form left in class_of's class (IMMA.1688 in IMMA8816) is caught",
                         not forms_moved_ok({"IMMA.1688": ("IMMA8816", "IMMA8816", 128)}, rows, doc))
         checks.mutation("a corpus base dropped from UNDOCUMENTED (ARRIVES) is unplaced",
-                        "ARRIVES" in corpus_unplaced(corpus["Sm90"], place, devices["Sm90"], {"F2FP": "F2FS"}))
+                        "ARRIVES" in corpus_unplaced(corpus["Sm90"], place, devices["Sm90"],
+                                                     {k: v for k, v in UNDOCUMENTED.items() if k != "ARRIVES"}))
         checks.mutation("a new corpus opcode on no list and in no class is unplaced",
                         corpus_unplaced({**corpus["Sm100"], "FOO.32": [1, 1, "UNKNOWN"]}, place, devices["Sm100"],
                                         UNDOCUMENTED) == ["FOO"])
@@ -638,6 +661,8 @@ def main() -> int:
         checks.mutation("a triaged lane multiply read as writing no word (FMUL32I) is caught",
                         triage_disagree(tri, {k: v for k, v in place.items() if k != "FMUL32I"}, rows,
                                         set(no_word) | {"FMUL32I"}) == {"FMUL32I"})
+        checks.mutation("a paired FP32 form left out of COUNT_TWO (FMUL2) is caught",
+                        not count_two_ok(all_forms, place, rows, {"FFMA2": "FFMA"}))
         checks.mutation("a load placed in a vector class (LDS in ALU) is caught",
                         access_on_lane(lists, {**place, "LDS": {"ALU"}}, rows) - set(ACCESS_LANE) == {"LDS"})
 

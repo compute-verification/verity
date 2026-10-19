@@ -28,8 +28,8 @@ open Accounting.TS Accounting.Isa
 variable {K R T L U F X : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U]
 
 /-- `accounting-isa-complete` (PTX ISA 9.4's instruction index; the CUDA Binary Utilities' instruction-set lists, §4.3
-Hopper and §4.4 Blackwell; the SASS opcode census, RT-ISA's corpus of 88 binaries under CUDA 13.0,
-art:042de47057dc27a3ed3bf603c26d48d60fd210a08f9ac6fe77795262f7b65a3d; on sm_120, RT-MACHINE-2's triage of the
+Hopper and §4.4 Blackwell; the SASS opcode census, RT-ISA's corpus of 164 binaries on two nodes under CUDA 13.0,
+art:d11bc611d0e9ed530b018e1d9b873d124b866a3545cde708022621d604d2ca3a; on sm_120, RT-MACHINE-2's triage of the
 Blackwell opcodes A7's menu didn't name, art:fac984dca8c0141d83e5f147ba04787c02b7d59bd49edcb1ffb64727eeeb7e0c).
 **The class list is complete**: every owned right fixed committed word has a head (§1.3, Definition 2), and that head
 is an instance of a class of the table, which the labelling puts on a route (`on`) or on none (`stray`): the run's
