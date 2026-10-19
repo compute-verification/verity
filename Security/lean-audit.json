@@ -10023,8 +10023,6 @@
     "Claims.Witness.Recursion.Nontrivial_meets",
     "Claims.Witness.Recursion.ScopeMatches_fails",
     "Claims.Witness.Recursion.ScopeMatches_meets",
-    "Claims.Witness.Recursion.ZKPrivStop_fails",
-    "Claims.Witness.Recursion.ZKPrivStop_meets",
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKPriv_meets",
     "Claims.Witness.Recursion.ZKStop_fails",
@@ -10045,7 +10043,6 @@
     "Claims.PrENNReal": "5e884d85245e6c7c79ae257dff1612fbe5d048d84926996eb79d469f11340473"
    },
    "guarantees": [
-    "Claims.Witness.Recursion.ZKPrivStop_fails",
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKStop_fails",
     "Claims.Witness.Recursion.ZK_fails",
@@ -10272,7 +10269,6 @@
     "Claims.Recursion.StopDeploy.halted": "1e4f38c4b3d499353b59de0ba385c4bd8beb13282361b0302431e2c142917bcd",
     "Claims.Recursion.StopDeploy.stops": "2601e2b71c567a44556697ba72494f24ba7ce3afee93bdde5fdfb214b06484eb",
     "Claims.Recursion.StopDeploy.toDeploy": "6384649713bd097a43639b5f59b52379c632a8d42ade3c6e7457289e7c7bc4a0",
-    "Claims.Recursion.ZKPrivStop": "ca26279f3edbba2fc00f779d950b6f7d6fb795169fbd2e7882257b99b5b037f3",
     "Claims.Recursion.ZKStop": "a284c9c208344e47ac243bc2c11fbc7a1703d3cc1e461907984edff97a6fe7a9"
    },
    "guarantees": [
@@ -10305,8 +10301,6 @@
     "Claims.Witness.Recursion.Nontrivial_fails",
     "Claims.Witness.Recursion.Nontrivial_meets",
     "Claims.Witness.Recursion.ScopeMatches_fails",
-    "Claims.Witness.Recursion.ZKPrivStop_fails",
-    "Claims.Witness.Recursion.ZKPrivStop_meets",
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKStop_fails",
     "Claims.Witness.Recursion.ZKStop_meets",
@@ -16249,7 +16243,6 @@
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_meets",
     "Claims.Witness.Recursion.ScopeMatches_meets",
-    "Claims.Witness.Recursion.ZKPrivStop_meets",
     "Claims.Witness.Recursion.ZKPriv_meets",
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
@@ -22347,7 +22340,6 @@
     "Claims.Witness.Recursion.KSPriv_meets",
     "Claims.Witness.Recursion.KS_meets",
     "Claims.Witness.Recursion.ScopeMatches_meets",
-    "Claims.Witness.Recursion.ZKPrivStop_meets",
     "Claims.Witness.Recursion.ZKPriv_meets",
     "Claims.Witness.Recursion.ZKStop_meets",
     "Claims.Witness.Recursion.ZK_meets",
