@@ -21,8 +21,9 @@ channel by whether the model charges it:
   - COUNTED-H: the channel is a modeled side channel (`Device.lean`'s `ι`: PCIe, network), signed by the inter-node
     network certifiers, so its ingress is in `help` and bounded by H.
   - UNCOUNTED-NVLINK: intra-node NVLink/NVSwitch, which the inter-node certifier does not observe and which is not in
-    `Device.lean`'s `ι`; its ingress is uncounted, and `PouwLocalOff` is proved only at H = 0, crediting "the node ... not
-    which of its GPUs did". This is RT-SCOPE's top finding: on H200/B200 it reaches ~0.3% of credited MACs.
+    `Device.lean`'s `ι`; its ingress is uncounted, and `PouwLocalOff` holds only at H = 0 and is itself conditional on the
+    open conjecture A3 (`PouwFloorOff`), crediting "the node ... not which of its GPUs did". This is RT-SCOPE's top
+    finding: on H200/B200 it reaches ~0.3% of credited MACs.
   - COIN-BLOCKED: device memory (HBM/GDDR) is fast enough (~3%) to stream precomputed words, but the committed words are
     live-coin-dependent, so this line is unreachable UNLESS the fixed-word rule fails.
   - HOST-UNCREDITED: the host CPU/AMX computes a large fraction of a GPU's int8 rate but its delivery is PCIe-capped; it
