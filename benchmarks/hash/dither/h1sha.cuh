@@ -18,10 +18,57 @@ __device__ constexpr u64 KC[80] = WT_SHA512_K;
 __device__ constexpr u64 IVC[8] = WT_SHA512_IV;
 
 __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
+
+#ifndef H1_PIPE
+#define H1_PIPE 0
+#endif
+#if H1_PIPE
+// H1_PIPE's bits move rotations off the integer ALU pipe, which takes every SHF, LOP3 and IADD3 and alone bounds the
+// compression (2,837 of its 2,967 instructions), onto the IMAD pipe, which issues beside it: 4 Sigma1's, 8 Sigma0's,
+// 16 sigma0's, 32 sigma1's (and 64, in h1u.cu, the fold's rotate-and-add). A 32-bit funnel shift becomes two IMADs by a
+// power of two read from __constant__ memory, which ptxas can't see, so it can't turn them back into a shift. (The
+// adds can't move: ptxas splits mad.wide.u32's 64-bit add into IADD3 and IMAD.X, so the low word's carry stays an IADD3.)
+__constant__ u32 PW2[32] = {1u << 0,  1u << 1,  1u << 2,  1u << 3,  1u << 4,  1u << 5,  1u << 6,  1u << 7,
+                            1u << 8,  1u << 9,  1u << 10, 1u << 11, 1u << 12, 1u << 13, 1u << 14, 1u << 15,
+                            1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22, 1u << 23,
+                            1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31};
+constexpr bool P_S1 = H1_PIPE & 4, P_S0 = H1_PIPE & 8, P_s0 = H1_PIPE & 16, P_s1 = H1_PIPE & 32;
+
+// the low word of (b:a) >> n, 0 < n < 32, as hi(a 2^(32-n)) + b 2^(32-n) (their bits are disjoint)
+__device__ __forceinline__ u32 fsr_imad(u32 a, u32 b, int n) {
+  const u32 m = PW2[32 - n];
+  u32 r;
+  asm("mad.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(m), "r"(b * m));
+  return r;
+}
+template <bool F>
+__device__ __forceinline__ u64 rotp(u64 x, int n) {
+  if (!F) return rotr(x, n);
+  u32 lo = u32(x), hi = u32(x >> 32);
+  if (n >= 32) {
+    const u32 t = lo;
+    lo = hi;
+    hi = t;
+    n -= 32;
+  }
+  return (u64(fsr_imad(hi, lo, n)) << 32) | fsr_imad(lo, hi, n);
+}
+template <bool F>
+__device__ __forceinline__ u64 shrp(u64 x, int n) {
+  if (!F) return x >> n;
+  const u32 lo = u32(x), hi = u32(x >> 32);
+  return (u64(__umulhi(hi, PW2[32 - n])) << 32) | fsr_imad(lo, hi, n);
+}
+__device__ __forceinline__ u64 S0(u64 a) { return rotp<P_S0>(a, 28) ^ rotp<P_S0>(a, 34) ^ rotp<P_S0>(a, 39); }
+__device__ __forceinline__ u64 S1(u64 e) { return rotp<P_S1>(e, 14) ^ rotp<P_S1>(e, 18) ^ rotp<P_S1>(e, 41); }
+__device__ __forceinline__ u64 s0(u64 w) { return rotp<P_s0>(w, 1) ^ rotp<P_s0>(w, 8) ^ shrp<P_s0>(w, 7); }
+__device__ __forceinline__ u64 s1(u64 w) { return rotp<P_s1>(w, 19) ^ rotp<P_s1>(w, 61) ^ shrp<P_s1>(w, 6); }
+#else
 __device__ __forceinline__ u64 S0(u64 a) { return rotr(a, 28) ^ rotr(a, 34) ^ rotr(a, 39); }
 __device__ __forceinline__ u64 S1(u64 e) { return rotr(e, 14) ^ rotr(e, 18) ^ rotr(e, 41); }
 __device__ __forceinline__ u64 s0(u64 w) { return rotr(w, 1) ^ rotr(w, 8) ^ (w >> 7); }
 __device__ __forceinline__ u64 s1(u64 w) { return rotr(w, 19) ^ rotr(w, 61) ^ (w >> 6); }
+#endif
 __device__ __forceinline__ u64 chf(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
 __device__ __forceinline__ u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
 
@@ -95,118 +142,6 @@ __device__ __forceinline__ void noise_mid(const u64* seed, NoiseMid& m) {
 }
 
 // block t of the stream: its digest's eight big-endian words; m may live in shared memory (read once a block)
-#ifndef H1_PIPE
-#define H1_PIPE 0
-#endif
-
-#if H1_PIPE
-// H1_PIPE's bits move parts of noise_block's compression off the integer ALU pipe, which takes every SHF, LOP3 and IADD3
-// and alone bounds the u64 form (2,837 of its 2,967 instructions), onto the IMAD pipe, which issues beside it: 1 the
-// rounds' adds, 2 the schedule's adds, 4 Sigma1's rotations, 8 Sigma0's, 16 sigma0's, 32 sigma1's (and 64, in h1u.cu, the
-// fold's rotate-and-add). Each IMAD multiplies by
-// a power of two read from __constant__ memory: ptxas can't see its value, so it can't turn the IMAD back into a shift or
-// an add on the ALU pipe.
-__constant__ u32 PW2[32] = {1u << 0,  1u << 1,  1u << 2,  1u << 3,  1u << 4,  1u << 5,  1u << 6,  1u << 7,
-                            1u << 8,  1u << 9,  1u << 10, 1u << 11, 1u << 12, 1u << 13, 1u << 14, 1u << 15,
-                            1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22, 1u << 23,
-                            1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31};
-constexpr bool P_RND = H1_PIPE & 1, P_SCH = H1_PIPE & 2, P_S1 = H1_PIPE & 4, P_S0 = H1_PIPE & 8, P_s0 = H1_PIPE & 16,
-               P_s1 = H1_PIPE & 32;
-
-struct H {
-  u32 lo, hi;
-};
-__device__ __forceinline__ H hs(u64 x) { return {u32(x), u32(x >> 32)}; }
-__device__ __forceinline__ u64 hj(H x) { return (u64(x.hi) << 32) | x.lo; }
-__device__ __forceinline__ H hx3(H a, H b, H c) { return {a.lo ^ b.lo ^ c.lo, a.hi ^ b.hi ^ c.hi}; }
-
-// the low word of (b:a) >> n, 0 < n < 32: one SHF, or two IMADs, hi(a 2^(32-n)) + b 2^(32-n) (their bits are disjoint)
-template <bool F>
-__device__ __forceinline__ u32 fsr(u32 a, u32 b, int n) {
-  if (!F) return __funnelshift_r(a, b, n);
-  const u32 m = PW2[32 - n];
-  u32 r;
-  asm("mad.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(a), "r"(m), "r"(b * m));
-  return r;
-}
-template <bool F>
-__device__ __forceinline__ H hrot(H x, int n) {
-  if (n >= 32) {
-    const u32 t = x.lo;
-    x.lo = x.hi;
-    x.hi = t;
-    n -= 32;
-  }
-  return {fsr<F>(x.lo, x.hi, n), fsr<F>(x.hi, x.lo, n)};
-}
-template <bool F>
-__device__ __forceinline__ H hshr(H x, int n) {
-  return {fsr<F>(x.lo, x.hi, n), F ? __umulhi(x.hi, PW2[32 - n]) : x.hi >> n};
-}
-// a + b: IADD3 and IADD3.X, or IMAD.WIDE.U32 (a + b.lo, carry included) and an IMAD (b.hi into the high word)
-template <bool F>
-__device__ __forceinline__ H hadd(H a, H b) {
-  if (!F) return hs(hj(a) + hj(b));
-  u64 r;
-  asm("mad.wide.u32 %0, %1, %2, %3;" : "=l"(r) : "r"(b.lo), "r"(PW2[0]), "l"(hj(a)));
-  H s = hs(r);
-  s.hi += b.hi * PW2[0];
-  return s;
-}
-__device__ __forceinline__ H hS0(H a) { return hx3(hrot<P_S0>(a, 28), hrot<P_S0>(a, 34), hrot<P_S0>(a, 39)); }
-__device__ __forceinline__ H hS1(H e) { return hx3(hrot<P_S1>(e, 14), hrot<P_S1>(e, 18), hrot<P_S1>(e, 41)); }
-__device__ __forceinline__ H hs0(H w) { return hx3(hrot<P_s0>(w, 1), hrot<P_s0>(w, 8), hshr<P_s0>(w, 7)); }
-__device__ __forceinline__ H hs1(H w) { return hx3(hrot<P_s1>(w, 19), hrot<P_s1>(w, 61), hshr<P_s1>(w, 6)); }
-__device__ __forceinline__ H hch(H e, H f, H g) {
-  return {g.lo ^ (e.lo & (f.lo ^ g.lo)), g.hi ^ (e.hi & (f.hi ^ g.hi))};
-}
-__device__ __forceinline__ H hmaj(H a, H b, H c) {
-  return {(a.lo & b.lo) | (c.lo & (a.lo | b.lo)), (a.hi & b.hi) | (c.hi & (a.hi | b.hi))};
-}
-
-// RND on halves; h + K + W stays on the ALU pipe, where its constant is an immediate
-#define HRND(r, wv)                                                                                   \
-  {                                                                                                   \
-    H& a = v[(8 - (r)) & 7]; H& b = v[(9 - (r)) & 7]; H& c = v[(10 - (r)) & 7];                       \
-    H& d = v[(11 - (r)) & 7]; H& e = v[(12 - (r)) & 7]; H& f = v[(13 - (r)) & 7];                     \
-    H& g = v[(14 - (r)) & 7]; H& h = v[(15 - (r)) & 7];                                               \
-    const H t1 = hadd<P_RND>(hadd<P_RND>(hs(hj(h) + KC[r] + hj(wv)), hS1(e)), hch(e, f, g));          \
-    d = hadd<P_RND>(d, t1);                                                                           \
-    h = hadd<P_RND>(hadd<P_RND>(t1, hS0(a)), hmaj(a, b, c));                                          \
-  }
-
-__device__ __forceinline__ void noise_block(const NoiseMid& m, u64 t, u64 s[8]) {
-  H v[8];
-#pragma unroll
-  for (int q = 0; q < 8; ++q) v[q] = hs(m.mid[q]);
-  H W[80];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = hs(i == 11 ? t : i == 12 ? 0x8000000000000000ULL : i == 15 ? 96 * 8 : 0);
-#pragma unroll
-  for (int i = 16; i < 80; ++i) {
-    if (!dep(i)) {
-      W[i] = hs(m.c[i - 16]);
-    } else {
-      H x = {0, 0};
-      bool any = false;
-      const auto acc = [&](H y) {
-        x = any ? hadd<P_SCH>(x, y) : y;
-        any = true;
-      };
-      if (i < NC) acc(hs(m.c[i - 16]));
-      if (dep(i - 2)) acc(hs1(W[i - 2]));
-      if (dep(i - 7)) acc(W[i - 7]);
-      if (dep(i - 15)) acc(hs0(W[i - 15]));
-      if (dep(i - 16)) acc(W[i - 16]);
-      W[i] = x;
-    }
-  }
-#pragma unroll
-  for (int r = 11; r < 80; ++r) HRND(r, W[r]);
-#pragma unroll
-  for (int q = 0; q < 8; ++q) s[q] = IVC[q] + hj(v[q]);
-}
-#else
 __device__ __forceinline__ void noise_block(const NoiseMid& m, u64 t, u64 s[8]) {
   u64 v[8];
 #pragma unroll
@@ -233,7 +168,6 @@ __device__ __forceinline__ void noise_block(const NoiseMid& m, u64 t, u64 s[8]) 
 #pragma unroll
   for (int q = 0; q < 8; ++q) s[q] = IVC[q] + v[q];
 }
-#endif
 
 // a whole message's digest from its 64-bit words (len16 x 16 of them, padding included), the rolled compression
 __device__ __forceinline__ void sha512_words(const u64* msg, int blocks, u64 s[8]) {

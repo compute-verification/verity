@@ -44,8 +44,9 @@ if [ "$BENCH" = build ]; then
     mkdir -p "$dir"
     # NAME[:FILE:FLAG]: a variant is FILE.cu built with FLAG
     builds=(kb kb_pg h1noise h1u h1u_b3:h1u:-DH1U_MINB=3)
-    for p in ${PIPES:-3 5 35 69 99}; do builds+=("h1u_p$p:h1u:-DH1_PIPE=$p"); done
-    for p in ${NOISE_PIPES:-3 5 35}; do builds+=("h1noise_p$p:h1noise:-DH1_PIPE=$p"); done
+    # H1_PIPE's bits (h1sha.cuh): 4 Sigma1, 8 Sigma0, 16 sigma0, 32 sigma1 and (h1u.cu) 64 the fold's rotations on IMAD
+    for p in ${PIPES:-4 12 36 76 100}; do builds+=("h1u_p$p:h1u:-DH1_PIPE=$p"); done
+    for p in ${NOISE_PIPES:-4 12 36}; do builds+=("h1noise_p$p:h1noise:-DH1_PIPE=$p"); done
     for b in "${builds[@]}"; do
       IFS=: read -r src file def <<< "$b"
       [ "$src" = kb_pg ] && [ "$arch" != sm_100a ] && continue

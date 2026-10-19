@@ -6,7 +6,7 @@
 //          one thread a block, codec_tensor's sha512_compress (K from constant memory, rounds rolled by 16)
 //   mid    one warp an (S, chunk) item, J blocks a lane (t = chunk 32 J + 32 j + lane): the message's words 0..10 are the
 //          seed's, so rounds 0..10 (the midstate) and every schedule term free of word 11 (t) are computed once an item,
-//          then each block runs rounds 11..79 on them; rounds unrolled with immediate constants
+//          then each block runs rounds 11..79 on them (h1sha.cuh's noise_mid and noise_block, h1u.cu's own)
 // Both write `out` as h1_noise does (S x nb x 16 big-endian halves), or with sink one word a thread: h1_noise's per-block
 // XOR of its halves; mid's per (item, lane) XOR over its J blocks.
 //
@@ -60,66 +60,18 @@ __global__ void __launch_bounds__(256) h1_noise_mid(const u64* __restrict__ seed
   const u64 item = ((u64)blockIdx.x * blockDim.x + threadIdx.x) >> 5;
   if (item >= (u64)S * chunks) return;
   const u32 u = (u32)(item / chunks), chunk = (u32)(item % chunks);
-  u64 w[NC];
-  w[0] = TAG0;
-  w[1] = TAG1;
-  w[2] = TAG2;
+  u64 seed[8];
 #pragma unroll
-  for (int j = 0; j < 8; ++j) w[3 + j] = __ldg(seeds + 8 * (u64)u + j);
-  w[11] = 0;
-  w[12] = 0x8000000000000000ULL;
-  w[13] = 0;
-  w[14] = 0;
-  w[15] = 96 * 8;
-  // c[i]: schedule word i's terms free of t (all of it where !dep(i))
-  u64 c[NC];
-#pragma unroll
-  for (int i = 16; i < NC; ++i) {
-    u64 x = 0;
-    if (!dep(i - 2)) x += s1(i - 2 < 16 ? w[i - 2] : c[i - 2]);
-    if (!dep(i - 7)) x += i - 7 < 16 ? w[i - 7] : c[i - 7];
-    if (!dep(i - 15)) x += s0(i - 15 < 16 ? w[i - 15] : c[i - 15]);
-    if (!dep(i - 16)) x += i - 16 < 16 ? w[i - 16] : c[i - 16];
-    c[i] = x;
-  }
-  u64 mid[8];
-#pragma unroll
-  for (int j = 0; j < 8; ++j) mid[j] = IVC[j];
-  {
-    u64* v = mid;
-#pragma unroll
-    for (int r = 0; r < 11; ++r) RND(r, w[r]);
-  }
+  for (int j = 0; j < 8; ++j) seed[j] = __ldg(seeds + 8 * (u64)u + j);
+  NoiseMid nm;
+  noise_mid(seed, nm);
   u32 acc = 0;
 #pragma unroll 1
   for (u32 j = 0; j < J; ++j) {
     const u32 t = chunk * per + 32 * j + lane;
     if (t >= nb) break;
-    u64 v[8];
-#pragma unroll
-    for (int q = 0; q < 8; ++q) v[q] = mid[q];
-    u64 W[80];
-#pragma unroll
-    for (int i = 0; i < 16; ++i) W[i] = i == 11 ? (u64)t : w[i];
-#pragma unroll
-    for (int i = 16; i < 80; ++i) {
-      if (!dep(i)) {
-        W[i] = c[i];
-      } else {
-        u64 x = i < NC ? c[i] : 0;
-        if (dep(i - 2)) x += s1(W[i - 2]);
-        if (dep(i - 7)) x += W[i - 7];
-        if (dep(i - 15)) x += s0(W[i - 15]);
-        if (dep(i - 16)) x += W[i - 16];
-        W[i] = x;
-      }
-    }
-#pragma unroll
-    for (int r = 11; r < 80; ++r) RND(r, W[r]);
-    // after 80 rounds the names are back in place: v[0] is a
     u64 s[8];
-#pragma unroll
-    for (int q = 0; q < 8; ++q) s[q] = IVC[q] + v[q];
+    noise_block(nm, t, s);
     if (SINK) {
 #pragma unroll
       for (int q = 0; q < 8; ++q) acc ^= (u32)(s[q] >> 32) ^ (u32)s[q];
