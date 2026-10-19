@@ -979,6 +979,7 @@
   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
@@ -3453,7 +3454,10 @@
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23"
   },
   "Flock.SecurityProofs.EndToEndRegisteredRowsStated": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.EndToEndRegisteredRowsStated : Flock.Guarantees.EndToEndRegisteredRowsStated"],
+   "assumptions": [],
+   "type_hash": "a008a3ec7f8b876753df956eefa170b2d58e4029da0d65e6e857ba60a2c3489b"
   },
   "Flock.SecurityProofs.EndToEnd_refSetup": {
    "owner": "@proofs",
@@ -7150,7 +7154,6 @@
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredRowsStated": "frozen (no-function): It states no property of the verifier: it reads Flock.Guarantees.EndToEndRegisteredRows, so the lock records its text, and it leaves the list when that statement's own proof is listed.",
-   "Flock.Guarantees.EndToEndRegisteredRows": "unstated: statement first (Daniel, 17 Oct), the rows link that PoUW's proof premise (Accounting.TS.ProofLayer.SoundAt) reads of C-Flock (PRF-98), recorded through Flock.SecurityProofs.EndToEndRegisteredRowsStated; next its red team, then the proof, Flock.SecurityProofs.EndToEndRegisteredRows in Security/Proofs/Flock/EndToEndRegisteredRows.lean, which the lock then lists under guarantees",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
    "Flock.SecurityProofs.RecursiveSound": "frozen (obligation,world-unlisted,scope): In fork form it assumes no hash, but it takes InnerSound as an open obligation; beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope).",
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
