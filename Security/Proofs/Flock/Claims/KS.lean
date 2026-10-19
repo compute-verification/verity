@@ -133,6 +133,7 @@ import Proofs.Flock.Claims.KS.BatchSim
 import Proofs.Flock.Claims.KS.ZkLiveSched
 import Proofs.Flock.Claims.KS.ZkBatchSim
 import Proofs.Flock.Claims.KS.ZkForkClash
+import Proofs.Flock.Claims.KS.ZkPadsSlot
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -595,5 +596,10 @@ rounds stream by stream, each table's rep 0 then its rep 1 (`ZkLiveSched`: `Floc
 `FlockDeploy.KS.zkSlotAlign`). The clash holds at every message too: at an accepting run's view each rep records its
 decoded proof's recursive caps and opens rows of them in the run's log, so a cap two runs record is one root, and two
 rows they open at one position of it collide (`ZkForkClash`: `FlockDeploy.KS.zkAccOpening`,
-`FlockDeploy.KS.zkForkClash`). `τ` has no such split either: the dead branches' `τ` opening `(0, default)` opens under
-some commitments, and a rep's own rejected opening brings its `τ` early. -/
+`FlockDeploy.KS.zkForkClash`). The pads and `τ` split the same way, into an alignment and a clash, and both clashes
+hold at every message (`ZkPadsPair`: `FlockDeploy.KS.PadsForkEvZ`, `FlockDeploy.KS.zkPairPads`,
+`FlockDeploy.KS.zkSimForkLePads_of`; `ZkTauFork`: `FlockDeploy.KS.ZkTauAlign`, `FlockDeploy.KS.zkSimForkLeTau_of`;
+`ZkTauPair`: `FlockDeploy.KS.zkTauClash`, `FlockDeploy.KS.zkSimForkLeTau_of_align`). A rep's pads root is its first
+table node, so the pads' fork round is the caps' schedule at distance `0`, and their alignment holds at every message
+(`ZkPadsSlot`: `FlockDeploy.KS.slotPadsZ_of_batch`, `FlockDeploy.KS.zkPadsAlign`,
+`FlockDeploy.KS.zkSimForkLePads`). -/
