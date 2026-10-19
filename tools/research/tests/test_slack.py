@@ -1936,6 +1936,16 @@ def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_target
     assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
 
 
+def test_traffic_replay_skips_a_long_posts_later_pieces(fake, registry, routes_dirs, capsys, monkeypatch):
+    """`_post`'s later pieces (`(2/3) ...`, quiet) wake nobody by design; one naming a PR read as a miss in the 19 Oct replay."""
+    inbox(fake, routes_dirs, "circuits")
+    monkeypatch.setattr(slack, "route_targets", lambda *a, **k: ["circuits"])
+    piece = fake.add(COORD, text=f"(2/2) the rest, about #12{slack._footer((slack.QUIET,))}", username="proofs", bot_id=BOT)
+    plain_post = fake.add(COORD, text="a post the rule would ring", username="proofs", bot_id=BOT)
+    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
+    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
+    assert rc == 0 and piece["ts"] not in rep and rep[plain_post["ts"]]["missed"] == ["circuits"]
+
 def test_traffic_asks_origin_main_before_dropping_an_unknown_group(fake, registry, routes_dirs, capsys, monkeypatch):
     """A stale analysis checkout must not report a fresher sender's group mentions as dropped (14 Oct: three false
     DROPPED lines for groups created that morning); a group origin/main doesn't know either still drops."""
@@ -2139,16 +2149,17 @@ def test_traffic_reads_each_asks_record_first_and_says_which_record_answered(fak
     assert f"UNANSWERED {silent['ts']} by @infra to @proofs" in out and "): Slack, no record: no reply or reaction" in out
 
 
-def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_alone(fake, registry, routes_dirs, notion,
-                                                                                                 capsys, monkeypatch):
+def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_its_issue_or_the_lanes_reply(fake, registry, routes_dirs,
+                                                                                                            notion, capsys, monkeypatch):
     """Daniel's card is answered when its page's Status leaves Waiting on Daniel, timed at the page's last edit (Notion keeps no
-    property history); a status reached after --now doesn't count.  A lane's reply under a linked ask is no answer while its
-    issue sits in Backlog.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
+    property history); a status reached after --now doesn't count.  A lane's reply under a linked ask answers it even while
+    its issue sits in Backlog (19 Oct: top answered TOP-70 in its thread).  A machine's alert asks nothing.  Without $NOTION_API_KEY the cards count unanswered, and the report says why."""
     from research import linear
     proofs = inbox(fake, routes_dirs, "proofs")
     now = T0 + 86400
     linked = ask_at(fake, proofs, 0, "infra", "@proofs the cut's error?\nLinear: <https://linear.app/x/issue/PRF-5|PRF-5>")
     reply_at(fake, linked, 60, "proofs", "on it")
+    alert = ask_at(fake, proofs, 30, "vy-monitors", "@proofs n2's disk is at 91%")       # no lane: not an ask
     approved = card_at(fake, 100, "lean", url=URL_A)
     waiting = card_at(fake, 200, "lean", url=URL_B)
     late = card_at(fake, 300, "lean", mention_url=URL_C)
@@ -2159,7 +2170,8 @@ def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}", "--json")
     rep = json.loads(out)
     by = {a["ts"]: a for a in rep["asks"]}
-    assert rc == 0 and [by[linked["ts"]][k] for k in ("lane", "record", "ref", "first")] == ["proofs", "linear", "PRF-5", None]
+    assert rc == 0 and [by[linked["ts"]][k] for k in ("lane", "record", "ref", "first", "minutes")] == ["proofs", "linear", "PRF-5", "slack-reply", 1.0]
+    assert alert["ts"] not in by
     assert {k: by[approved["ts"]][k] for k in ("lane", "by", "record", "ref", "state", "first", "minutes")} == \
         {"lane": "daniel", "by": "lean", "record": "notion", "ref": URL_A, "state": "Approved", "first": "notion-status", "minutes": 45.0}
     assert (by[waiting["ts"]]["first"], by[waiting["ts"]]["state"]) == (None, "Waiting on Daniel")
@@ -2171,7 +2183,7 @@ def test_traffic_latency_times_daniels_cards_by_their_pages_and_a_linked_ask_by_
     lines = out.splitlines()
     assert rc == 0 and lines[1].split()[:6] == ["lane", "asks", "answered", "slack", "linear", "notion"]
     assert lines[2].split() == ["@daniel", "3", "1", "0", "0", "1", "0", "45.0", "45.0", "2", "2"]
-    assert lines[3].split() == ["@proofs", "1", "0", "0", "0", "0", "0", "-", "-", "1", "1"]
+    assert lines[3].split() == ["@proofs", "1", "1", "1", "0", "0", "0", "1.0", "1.0", "0", "0"]
     monkeypatch.delenv("NOTION_API_KEY")
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "24", "--now", f"{now:.0f}")
     assert rc == 0 and out.splitlines()[2].split()[:3] == ["@daniel", "3", "0"]
