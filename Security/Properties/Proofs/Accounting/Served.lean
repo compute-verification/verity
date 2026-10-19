@@ -6,10 +6,11 @@ import Properties.Accounting.Served
 `TieCommits` goes class by class: a registered value's commit coin is `0`; an A row's or a `y` row's is its round,
 which is its first reader's, since only its own call reads it (`firstRead_cases`), or below the draw when nothing does
 (`round_lt`); an admit word's or `zTree`'s `z` word's is its round, the floor of its cut; a receipt's or `perCall`'s
-`y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut. `TieLive`: a unit with a word
-has a first gate, its round is a round of the window, and every one is live. `SeededScheduleNotLive`: `UnitsOfLayout`
-puts a read run input at the draw, `LayerCommitted` at its first reader's round, which `Wf` puts below it.
-`TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses. `Llama31Shape` is a kernel computation.
+`y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut.
+`TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
+`SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
+round, which `Wf` puts below it. `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses.
+`Llama31Shape` is a kernel computation.
 -/
 
 namespace Properties.Served
