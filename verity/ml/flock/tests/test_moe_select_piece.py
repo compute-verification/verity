@@ -6,6 +6,7 @@ E = 3, 128 and 256); and a unit that selects its expert's words inside itself lo
 the reference."""
 from __future__ import annotations
 
+import inspect
 import random
 
 import pytest
@@ -49,7 +50,7 @@ def _word(family: str, E: int) -> PrimitiveDefinition:
 def test_a_select_is_the_gather_on_every_id(family, E):
     p = _word(family, E)
     bits, _, piece = FAMILY[family]
-    assert IL.PIECES[p.id] is piece
+    assert inspect.unwrap(IL.PIECES[p.id]) is inspect.unwrap(piece)  # the Boolean export's tracer wraps every piece
     rng = random.Random(E)
     ids = list(range(E)) + [E, E + 1, 1 << 31, (1 << 31) - 1, 0xFFFFFFFF, 0xFFFFFFFF - E] + [rng.getrandbits(32) for _ in range(32)]
     lanes = [(e, [rng.getrandbits(bits) for _ in range(E)]) for e in ids]
