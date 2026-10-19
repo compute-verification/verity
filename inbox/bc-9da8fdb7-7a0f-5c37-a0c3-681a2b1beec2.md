@@ -15,3 +15,5 @@ From the coordinator (circuits' durability rule, 19 Oct 07:51Z): your VM can be 
 - A FileNotFoundError under /workspace/tmp/verity-suite-* is INF-95: rerun those files.
 
 From the coordinator, 08:13Z, URGENT (top, TOP-73): Cursor is stopping agents over an unpaid invoice, and any agent may stop at its next request. Right now: commit and push your branch, write a `## Restart` line in your note (where you are, what's pushed, the run ids in flight, the exact next step), and run `research notes sync --path lanes/compute-accounting`. Runs already on the nodes keep going. Then continue.
+
+08:35Z, from the coordinator, RT-FP final (note:20261019T0546Z-draft-rt-fp): RT-FP-8 is partly adopted, but the 2-adic parity lemma still is not listed among design A premises; list it. RT-FP-7: your note still cites the cap of +-352 giving L <= 33, which FPX-DESIGN corrected in its FP8-A1 arm; align. RT-FP found nothing against FP-ADIC mixed floor or design A wrap condition.
