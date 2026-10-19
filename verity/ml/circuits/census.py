@@ -70,7 +70,8 @@ Program, each root Call's own gates; for a word Program, each root Call through 
 `work`.  A root Call with no Boolean version, or whose Boolean body reaches a primitive other than a gate, a constant bit or an
 input, is refused by name (`NoBooleanWork`), and so is a `PRODUCTS` step bound to no silicon model (its module, which binds it,
 never imported).  A tensor-core step inlined into a traced body (a Definition compiled and traced again as one circuit) is no
-Call of its step there, and its gates are `cuda:gate`.
+Call of its step there, and its gates are `cuda:gate`.  Counting builds every Boolean body it reaches, so such a Definition is
+traced whole at its statics: at a served model's the largest take hundreds of GB.
 
 **Values.** A value is a run `[lo, hi)` of one root node's output leaves whose readers, candidacy, output status and fact are the
 same throughout. `bits` is the sum of its leaves' widths. `reads` are the Calls with a gate that takes one of its leaves as an operand
