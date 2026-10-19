@@ -226,7 +226,7 @@ def test_a_supplied_position_reads_the_whole_log():
     stream, log = _stream(), []
     for i in range(6):
         rec, _, _ = _mixed_case(base, log=log, window={**SERVED, "row": SERVED["row"] + i})
-        stream._log_record(rec, i)
+        stream._append(stream._registration(rec, i))
         log.append(rec)
     cand, check, _ = _mixed_case(base, log=log, window={**SERVED, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
