@@ -39,8 +39,9 @@
 //                 (lm.cu's ring) only while they run (OP_UNTIL): LDS bytes a SM-clock beside the wgmma's own reads.
 //   emp_lds_solo  the same LDS warpgroups alone (OP_LOOP), the LDS ceiling at this warp count.
 //   emp_reg       wg_until's split with setmaxnreg (the producer/consumer register handoff): the wgmma warpgroups raise
-//                 to 232 registers, the lane warpgroup drops to 40 and runs 64 IMAD a trip; registers are no facet of
-//                 the sheet, so its rates should be wgU_imad's.
+//                 to 232 registers, the lane warpgroup drops to 40 and runs 64 IMAD a trip (emp_reg_d64, _d96: 208 / 64
+//                 and 184 / 96); registers are no facet of the sheet, so its rates should be wgU_imad's.
+//   emp_pack3_i_r1024_k<K>  emp_pack at 3 warpgroups on the n128 form, so the filler issues nearer 1 a cycle.
 #include "../../opcode_probe/probe.cuh"
 #include "../../opcode_probe/probes/honest.cuh"
 #include "../dc.cuh"
@@ -91,19 +92,19 @@ DC_DEV uint32_t emp_fold(const int (&d)[N]) {
   return x;
 }
 
-// N4: 4 warpgroups (4 warps a SMSP, the occupancy p_ffma_lop3 needs to issue near 1 a cycle) on the n128 form, whose 64
-// accumulators fit 512 threads' 128 registers.
-template <int S, int R, int K, bool N4 = false>
+// NW warpgroups: past 2 (more warps a SMSP, which p_ffma_lop3 needs to issue near 1 a cycle) on the n128 form, whose 64
+// accumulators fit 384 threads' 168 registers.
+template <int S, int R, int K, int NW = 2>
 DC_DEV void emp_pack(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   const Tiles t = emp_tiles(sm, a.mode);
-  int d[N4 ? 64 : 128] = {};
+  int d[NW == 2 ? 128 : 64] = {};
   Honest h(a.mode);  // 8 mma.sync + duo fold: forces ptxas to keep the uniform chain on the uniform datapath
   Lane lv((uint32_t)threadIdx.x);
   UChains<K, S> u(0x5eed0000u ^ (uint32_t)a.mode);
   OP_BEGIN
   OP_LOOP(it) {
-    if constexpr (N4)
+    if constexpr (NW > 2)
       emp_group4n128(d, t);
     else
       emp_group4(d, t);
@@ -132,12 +133,12 @@ PACK(S_I, i, 1024, 0)
 PACK(S_I, i, 1024, 64)
 PACK(S_I, i, 1024, 128)
 #undef PACK
-#define PACK4(S, SN, R, K) \
-  OP_KERNEL(emp_pack4_##SN##_r##R##_k##K, 512) { emp_pack<S, R, K, true>(a); }
-PACK4(S_I, i, 1024, 0)
-PACK4(S_I, i, 1024, 64)
-PACK4(S_I, i, 1024, 128)
-#undef PACK4
+#define PACK3(S, SN, R, K) \
+  OP_KERNEL(emp_pack3_##SN##_r##R##_k##K, 384) { emp_pack<S, R, K, 3>(a); }
+PACK3(S_I, i, 1024, 0)
+PACK3(S_I, i, 1024, 64)
+PACK3(S_I, i, 1024, 128)
+#undef PACK3
 
 // ---- sparse wgmma beside its dense twin ---------------------------------------------------------------------------
 constexpr int SKB = 64;  // B's K bytes a row: k64 s8/e4m3, k32 f16 (A compressed to 32 B a row, as the dense k32 tile)
@@ -271,7 +272,8 @@ DC_DEV void emp_smem_k(const OpArgs& a) {
 OP_KERNEL(emp_smem, 512) { emp_smem_k<true>(a); }
 OP_KERNEL(emp_lds_solo, 256) { emp_smem_k<false>(a); }
 
-OP_KERNEL(emp_reg, 384) {
+template <int INC, int DEC>
+DC_DEV void emp_reg_k(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   const Tiles t = emp_tiles(sm, a.mode);
   const bool mma_role = threadIdx.x < 256;
@@ -280,9 +282,9 @@ OP_KERNEL(emp_reg, 384) {
   // before the clock starts. Each role folds its own state inside its branch: the lane role at 40 registers must not
   // hold the accumulators live.
   if (mma_role)
-    asm volatile("setmaxnreg.inc.sync.aligned.u32 232;" ::: "memory");
+    asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;" ::"n"(INC) : "memory");
   else
-    asm volatile("setmaxnreg.dec.sync.aligned.u32 40;" ::: "memory");
+    asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;" ::"n"(DEC) : "memory");
   OP_BEGIN_STOP
   if (mma_role) {
     int d[64] = {};
@@ -303,6 +305,11 @@ OP_KERNEL(emp_reg, 384) {
   OP_END_STOP
   OP_SINK(out ^ threadIdx.x)
 }
+// ptxas drops a setmaxnreg it can't honour (C7507) and the SASS then has no USETMAXREG, so three releases: 2 x 128 x INC
+// + 128 x DEC <= 65536.
+OP_KERNEL(emp_reg, 384) { emp_reg_k<232, 40>(a); }
+OP_KERNEL(emp_reg_d64, 384) { emp_reg_k<208, 64>(a); }
+OP_KERNEL(emp_reg_d96, 384) { emp_reg_k<184, 96>(a); }
 
 #define WGI "IGMMA.64x256x32.S8.S8=4,IMMA.16832.S8.S8=8,LEA.HI=32"
 #define HON WGI ",IMAD=32,LOP3.LUT=32"
@@ -327,15 +334,13 @@ static const OpProbe PROBES[] = {
     P(i, 1024, 0, HON ",FFMA=1024", "IGMMA.64x256x32.S8.S8"),
     P(i, 1024, 64, K64 ",FFMA=1024", "UIMAD"),
     P(i, 1024, 128, K128 ",FFMA=1024", "UIMAD"),
-#define P4(R, K, EX, CNT) \
-  {.name = "emp_pack4_i_r" #R "_k" #K, .kernel = (const void*)emp_pack4_i_r##R##_k##K, .tpb = 512, .expect = EX, \
-   .counted = CNT, .iters = AITERS}
-#define W4 "IGMMA.64x128x32.S8.S8=4,IMMA.16832.S8.S8=8,LEA.HI=32"
-    P4(1024, 0, W4 ",IMAD=32,LOP3.LUT=32,FFMA=1024", "IGMMA.64x128x32.S8.S8"),
-    P4(1024, 64, W4 ",IMAD=48,LOP3.LUT=48,UIMAD=16,ULOP3.LUT=16,FFMA=1024", "UIMAD"),
-    P4(1024, 128, W4 ",IMAD=64,LOP3.LUT=64,UIMAD=32,ULOP3.LUT=32,FFMA=1024", "UIMAD"),
-#undef P4
-#undef W4
+// How ptxas splits the chain between the uniform datapath and the lanes moves with occupancy, so these pin only the
+// wgmma, the honest MMAs and the filler; emp.py prices every opcode of the loop from its SASS.
+#define P3(R, K) \
+  {.name = "emp_pack3_i_r" #R "_k" #K, .kernel = (const void*)emp_pack3_i_r##R##_k##K, .tpb = 384, \
+   .expect = "IGMMA.64x128x32.S8.S8=4,IMMA.16832.S8.S8=8,FFMA=" #R, .counted = "IGMMA.64x128x32.S8.S8", .iters = AITERS}
+    P3(1024, 0), P3(1024, 64), P3(1024, 128),
+#undef P3
 #define P_SP(NM) {.name = #NM, .kernel = (const void*)NM, .tpb = ATPB, .expect = "*GMMA*=4", .iters = AITERS}
     P_SP(wgsp_s8), P_SP(wgsp_e4m3), P_SP(wgsp_f16), P_SP(wgd_s8), P_SP(wgd_e4m3), P_SP(wgd_f16), P_SP(wgsprs_s8),
     P_SP(wgdrs_s8),
@@ -346,6 +351,10 @@ static const OpProbe PROBES[] = {
     {.name = "emp_lds_solo", .kernel = (const void*)emp_lds_solo, .tpb = 256, .expect = "LDS.128=8",
      .smem_ops = "LDS.128*8", .smem = ring_off, .iters = AITERS},
     {.name = "emp_reg", .kernel = (const void*)emp_reg, .tpb = 384, .expect = "IGMMA.64x128x32.S8.S8=4;IMAD=64",
+     .warps = "8;4", .iters = AITERS, .until = 2},
+    {.name = "emp_reg_d64", .kernel = (const void*)emp_reg_d64, .tpb = 384, .expect = "IGMMA.64x128x32.S8.S8=4;IMAD=64",
+     .warps = "8;4", .iters = AITERS, .until = 2},
+    {.name = "emp_reg_d96", .kernel = (const void*)emp_reg_d96, .tpb = 384, .expect = "IGMMA.64x128x32.S8.S8=4;IMAD=64",
      .warps = "8;4", .iters = AITERS, .until = 2},
 };
 
