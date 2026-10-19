@@ -38,8 +38,9 @@ instruction-set lists of the CUDA Binary Utilities, §4.3 Hopper and §4.4 Black
   and every other lane instruction that writes at most two words a lane and multiplies nothing (MOV, MOV32I, P2R, IABS,
   SGXT, BMSK, S2R, CS2R, MOVM, ELECT, B2R, BMOV, RPCMOV, GETLMEMBASE, LEPC) in NOROW.
 
-An instruction that writes no 32-bit word (a SETP's or R2P's predicate, a branch, a barrier, a fence, a prefetch or
-cache control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no document gives, are in
+A placement bounds an opcode's words only: its rate is the data sheet's, which the census measured on the forms it
+probed. An instruction that writes no 32-bit word (a SETP's or R2P's predicate, a branch, a barrier, a fence, a
+prefetch or cache control) heads no word and is in no class. Blackwell's DECOMPRESS and SPARSIFY, whose widths no document gives, are in
 no class yet: a head of either falsifies `Accounting.Assumptions.Isa.IsaComplete`.
 
 A row's `words` is its class's widest form's: a lane class two words a lane (`Row.lane`), an atomic that returns its
