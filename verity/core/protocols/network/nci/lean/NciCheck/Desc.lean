@@ -51,7 +51,8 @@ copy). Serve_v1 meets none of them, at word level or on bits.
 In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a reference the layout can't resolve: the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`, `theta-duplicate`), then the
+(more activations than `ACTIVATIONS`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
+Definition decoded after it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve: the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`, `theta-duplicate`), then the
 owners (`owner-length`: not one per root node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
 an earlier member of itself, which this check refuses.
@@ -662,6 +663,28 @@ def inputsAtRoot (P : Prog) : Bool :=
   (List.range P.defs.size).all fun d =>
     (P.defs[d]!).body.nodes.all fun n => n.fn != P.root && (d == P.root || !isInputNode P n)
 
+/-- Every node calls a Definition decoded before its own (the decoder decodes callees first), so `activations` reads each
+callee's count. -/
+def calleesFirst (P : Prog) : Bool :=
+  (List.range P.defs.size).all fun d => (P.defs[d]!).body.nodes.all fun n => n.fn < d
+
+/-- Per Definition, the activations of one activation of it: itself and, for each composite node, its members' (a
+primitive's are none), once per Definition and multiplied through batches and scans. -/
+def activations (P : Prog) : Array Nat :=
+  (List.range P.defs.size).foldl (fun a d =>
+    let defn := P.defs[d]!
+    a.push (if defn.prim then 0 else 1 + defn.body.nodes.foldl (fun s n => s + n.members * a[n.fn]!) 0)) #[]
+
+/-- The most activations a Program this check gives a verdict on has. `Prog.gate` locates an operand in one walk of at
+most `Flock.Steps.FUEL` steps, each into or out of one activation, and a Program of more activations can need more:
+a gate reading the carry of a scan of `2^32` iterations, each a scan of `2^32` identity steps, takes `2^64`, from a
+descriptor of a few hundred bytes. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
+summarizes each Definition once, would give a verdict. -/
+def ACTIVATIONS : Nat := 2 ^ 60
+
+/-- The root's activations are at most `ACTIVATIONS`, counted callees first. -/
+def walkable (P : Prog) : Bool := calleesFirst P && (activations P)[P.root]! ≤ ACTIVATIONS
+
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
 def sizes (offs : Array Nat) (own : Array (Option Nat)) (n : Nat) : Array Nat :=
@@ -707,6 +730,7 @@ def evaluate (j : Json) : Except String Json := do
     | .error _ => throw "program"
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
+  if !walkable P then throw "program"
   let reads ← match analyze P with
     | .ok r => pure r
     | .error _ => throw "program"

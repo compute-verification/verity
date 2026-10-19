@@ -7,7 +7,8 @@ import Properties.Proofs.Nci
 each a named `Prop` here, open:
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
-  root laid out, its input nodes the root's, and `Desc.analyze` resolving its references), every gate of the canonical
+  root laid out, its input nodes the root's, at most `Desc.ACTIVATIONS` activations, and `Desc.analyze` resolving its
+  references), every gate of the canonical
   layout is located and reads only earlier gates (`GateOk`), so `NciCheck.circuitOf` lays it out.
 * `NovelExact`: on such a Program, for a division whose IUs are unions of root nodes, the novel reads `Desc.novelWidth`
   counts per IU, from what `Desc.analyze` resolves each root node to read, are `NciCheck.ius`'s, gate by gate.
@@ -43,7 +44,7 @@ def nodeOwnerFold (P : Prog) (owner : Array Json) : Except String (Array (Option
 
 theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
     ∃ i P reads mask own, parse j = .ok i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧
-      P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧
+      P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧
       Desc.analyze P = .ok reads ∧ nodeThetaFold P i.theta = .ok mask ∧ i.owner.size = nodeCount P ∧
       nodeOwnerFold P i.owner = .ok own ∧ iuCount own ≤ nodeCount P ∧ (∀ u < iuCount own, u ∈ usedOf own) ∧
       out = verdict (P.defs[P.root]!).gates
@@ -64,6 +65,9 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   by_cases h4 : (!(Desc.rootLaidOut P && Desc.inputsAtRoot P)) = true
   · simp only [h4, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
   simp only [h4, Bool.false_eq_true, ite_false] at h
+  by_cases h4w : (!Desc.walkable P) = true
+  · simp only [h4w, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
+  simp only [h4w, Bool.false_eq_true, ite_false] at h
   rcases h5 : Desc.analyze P with e | reads <;> simp only [h5] at h
   · cases h
   rcases h6 : nodeThetaFold P i.theta with e | mask <;> simp only [nodeThetaFold, inputs, rootBody, nodeCount] at h6 <;> simp only [h6] at h
@@ -81,7 +85,7 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   by_cases h10 : (!(List.range (iuCount own)).all (usedOf own).contains) = true
   · simp only [h10, ite_true, throw, throwThe, MonadExceptOf.throw] at h; cases h
   simp only [h10, Bool.false_eq_true, ite_false, Except.ok.injEq] at h
-  refine ⟨i, P, reads, mask, own, rfl, h2, ?_, ?_, ?_, h5, h6, ?_, h8, by simp [nodeCount, rootBody]; omega, ?_, h.symm⟩
+  refine ⟨i, P, reads, mask, own, rfl, h2, ?_, ?_, ?_, by simpa using h4w, h5, h6, ?_, h8, by simp [nodeCount, rootBody]; omega, ?_, h.symm⟩
   · simpa using h3
   · simp at h4; exact h4.1
   · simp at h4; exact h4.2
@@ -485,12 +489,13 @@ open Flock.Program (Prog)
 /-! ## The open statements -/
 
 /-- **Open: the layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
-laid out, its input nodes the root's, and its references resolved by `Desc.analyze`), every gate of the canonical layout
-is located and reads only earlier gates. -/
+laid out, its input nodes the root's, its activations at most `Desc.ACTIVATIONS`, and its references resolved by
+`Desc.analyze`), every gate of the canonical layout is located and reads only earlier gates. Without the bound on
+activations it is false: `Prog.gate` walks one step per activation it enters or leaves, at most `Flock.Steps.FUEL`. -/
 def GatesLocated : Prop :=
   ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
-    Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → (∃ reads, Desc.analyze P = .ok reads) →
-    ∀ g < gates P, GateOk P g
+    Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
+    (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, GateOk P g
 
 /-- **Open: the novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
@@ -534,10 +539,10 @@ theorem ius_fst (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c
 /-- **`Desc.evaluate` agrees with `evaluate`, given the open statements.** -/
 theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgrees := by
   intro j out hev
-  obtain ⟨i, P, reads, mask, own, hpar, hdec, hov, hlo, hin, han, hθ, hos, hof, hn, hused, rfl⟩ :=
+  obtain ⟨i, P, reads, mask, own, hpar, hdec, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
     descEvaluate_ok j out hev
   have hi : Parses j i := (parse_ok j i).1 hpar
-  have hgl := hG _ P hdec hov hlo hin ⟨reads, han⟩
+  have hgl := hG _ P hdec hov hlo hin hwk ⟨reads, han⟩
   obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hgl
   obtain ⟨hsz, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
   obtain ⟨hms, hθt, hθm⟩ := nodeThetaFold_ok P i.theta mask hθ

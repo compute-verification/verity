@@ -196,11 +196,47 @@ def decoys() -> list[dict]:
     return out
 
 
+def walk(n: int) -> str:
+    """A declaration whose one gate reads the carry of a scan of `n` iterations, each a scan of `n` identity steps: no
+    other gate, and about `n²` activations, so as many steps to locate the gate's operand. At `n = 2^32` that is past
+    what `Prog.gate` walks (`Steps.FUEL`), and `NciCheck.Desc` refuses it (`ACTIVATIONS`)."""
+    w = 8
+    op = vectors.prim((w,), w)
+    ret = Tuple(Value(w), Tuple())
+    Step = bind(CompositeDefinition(f"NciWalkStep{n}", 1, (), lambda S: ((("c", Value(w)),), ret),
+                                    lambda B, S, c: tuple_of(c, tuple_of()), register=False))
+    Mid = bind(CompositeDefinition(f"NciWalkMid{n}", 1, (), lambda S: ((("c", Value(w)),), ret),
+                                   lambda B, S, c: tuple_of(B.scan(Step, c, n=n)[0], tuple_of()), register=False))
+    fn = bind(CompositeDefinition(f"NciWalk{n}", 1, (), lambda S: ((("x", Value(w)),), Value(w)),
+                                  lambda B, S, x: B.call(op, B.scan(Mid, x, n=n)[0]), register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=()))).decode()
+
+
+WALKS = (3, 2 ** 32)
+
+
+def walks() -> list[dict]:
+    """Instances on `walk`'s declarations, the input in θ and the Call in IU 0: one `NciCheck.Desc` gives a verdict on,
+    and one past `ACTIVATIONS`, which it refuses."""
+    out = []
+    for n in WALKS:
+        text = walk(n)
+        inp, spans = reference.root_nodes(text)
+        out.append({"program": text, "theta": [k for k in range(len(inp)) if inp[k]],
+                    "owner": ["input" if inp[k] else 0 for k in range(len(inp))], "gamma": spans[-1][1],
+                    "alpha": [16, 1]})
+    return out
+
+
 def instance(seed: int) -> dict:
     """Instance `seed`, with what it was made from (`shape`, `theta_kind`, `division`, `malformed`): below `COUNT` a random
-    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`."""
+    declaration, then `PER_FIXTURE` instances on each of `fixtures()`, then `decoys()`, then `walks()`."""
     rng = random.Random(seed)
     first_decoy = COUNT + PER_FIXTURE * len(fixtures())
+    first_walk = first_decoy + len(decoys())
+    if seed >= first_walk:
+        return {"instance": walks()[seed - first_walk], "shape": "walk", "theta_kind": None, "division": None,
+                "malformed": None}
     if seed >= first_decoy:
         return {"instance": decoys()[seed - first_decoy], "shape": "decoy", "theta_kind": None, "division": None,
                 "malformed": None}
@@ -287,8 +323,8 @@ NAMES = ("instances", "expanded", "python")
 
 
 def total() -> int:
-    """How many instances the audit's data has: the random ones, every fixture's and the decoys."""
-    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys())
+    """How many instances the audit's data has: the random ones, every fixture's, the decoys and the walks."""
+    return COUNT + PER_FIXTURE * len(fixtures()) + len(decoys()) + len(walks())
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
