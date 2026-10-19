@@ -288,14 +288,14 @@ def substitutes() -> list[dict]:
 
 
 def floor() -> list[dict]:
-    """The floor's limits as the verdict lag goes to 0, with ε′ and as ε′ goes to 0 too, and what evaluate gives at zero
-    lag and ε′, where with no residual to relay through the partial-sum law binds below nu."""
+    """The floor's limits as the verdict lag goes to 0, with ε′ and as ε′ goes to 0 too, and what evaluate would give at
+    zero lag and ε′ if the partial-sum law held, where with no residual to relay through it binds below nu."""
     p = T.DEFAULTS
     return rows([
         ("MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0", p["mfu"] / (X.nu(p) + p["eps_agg"])),
         ("MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
-        ("D at zero lag and ε′, r̂ = 0, T3 (the partial-sum law binds)",
-         dampener(p | FLOOR | {"lag_s": 0.0, "eps_agg": 0.0}, "T3")),
+        ("D at zero lag and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
+         dampener(p | FLOOR | {"lag_s": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
     ])
 
 

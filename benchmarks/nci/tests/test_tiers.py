@@ -49,7 +49,7 @@ def test_without_dark_compute_the_declared_side_is_the_chain_bound():
     """At zero residual and zero unmonitored compute nothing absorbs partial sums, so efficiency is the inverse of the
     calculator's chain bound for pretrain-full."""
     p = T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "unmonitored": 0.0,
-                      "lag_s": 0.0}
+                      "lag_s": 0.0, "kappa_chain": 0.0695}
     r = T.evaluate(p, T.TIERS["T4"])
     alpha = p["K"] / p["Gamma"]
     chain = p["kappa_chain"] * S.read_factor(p["K"], p["b_w"], p["b_a"], p["d_chain"]) / (2 * alpha)
@@ -61,7 +61,7 @@ def test_the_adversary_relays_partial_sums_only_when_it_pays():
     """With width-1 blocks the partial-sum law never reaches the thread bound, and relaying the whole residual into the
     declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
     partial sums that pay, and the residual still trains at full efficiency."""
-    p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0}
+    p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0, "kappa_chain": 0.0695}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["largest"] == "residual" and 0 < r["declared"] < r["residual"]
     assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-6)

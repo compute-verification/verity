@@ -71,7 +71,7 @@ RANGES = {
     "thread_bits": (2.1e8, 2.94e9, "ThreadedOfLayered at 2.5-bit embedding columns for any reference circuit C1 "
                                    "allows; the whole embedding table at 2.5 bits, under a refined layered theorem"),
     "block_mults": (0.3, 1.0, "kappa / 2 if each block's counted share were the recipe's; 1, every gate countable"),
-    "kappa_chain": (0.03, 0.3, "guess, around Kimi K2's dense path 7%"),
+    "kappa_chain": (0.0, 0.3, "0 while the partial-sum law's support premises are falsified (NCI-FALSIFY); Kimi K2's dense path 7%; 0.3 a guess"),
     "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
     "e_chain": (4096.0, 49152.0, "guess"),
     "b_p": (8.25, 64.0, "b_a.activation/tp-partial-sums-training central; 32; high a guess"),
@@ -123,7 +123,7 @@ CHECKS = [
     ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),
     ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
-    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "lag_s": 0.0}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
+    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,

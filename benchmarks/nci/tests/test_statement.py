@@ -59,7 +59,8 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     fl = quantities(S.floor())
     assert fl["MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0"] == P["mfu"] / (X.nu(P) + EPS)
     assert fl["MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)
-    assert fl["D at zero lag and ε′, r̂ = 0, T3 (the partial-sum law binds)"] > P["mfu"] / X.nu(P)
+    assert fl["D at zero lag and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)"] > (
+        P["mfu"] / X.nu(P))
 
 
 def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():
