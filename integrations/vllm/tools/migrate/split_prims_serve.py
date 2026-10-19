@@ -1394,7 +1394,8 @@ def family_ids() -> dict[str, str]:
 
 def snapshot() -> dict:
     """circuit-check's task list on this tree (kind and label of every target, in order), the registered ids, the root errors,
-    pins.json's digest, every target's descriptor digest and family, and the family's own Definition ids."""
+    the pins' digest (`pins/` and every sidecar's), every target's descriptor digest and family, and the family's own Definition
+    ids."""
     from circuit_check import checks as CK
     from circuit_check import cli
     from circuit_check import targets as TG
@@ -1411,7 +1412,7 @@ def snapshot() -> dict:
             "registered": list(TG.REGISTERED),
             "root_errors": [list(e) for e in TG.ROOT_ERRORS],
             "templates": [[label, sts] for label, _sub, sts in TG.templates()],
-            "pins_sha256": hashlib.sha256(CK.PINS.read_bytes()).hexdigest() if CK.PINS.exists() else None,
+            "pins_sha256": hashlib.sha256(json.dumps(CK.load_pins(), sort_keys=True).encode()).hexdigest(),
             "digests": {fid: _digest(fn) for fid, fn in suite.items()},
             "families": {fid: TG.family(fn) for fid, fn in suite.items()},
             "family_ids": family_ids()}
