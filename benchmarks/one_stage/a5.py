@@ -18,9 +18,17 @@ the rank's claim, not proved (the profile makes no claim that they are, `pipelin
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--delta 0.5]
 
-* **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: `registration.json` (core's
-  v1 record), `window.json`, and per member k `m<k>-public.bin` and `m<k>-private.bin` (prover only). The prover wraps each member's
-  bodies under the circuit for its template (`serving_rows.flock_input_files`).
+A deferred Commit's run takes its window in the other form too, `served` (`a5.sh` with `WINDOW=served`): the in-Commit hook's
+(`commit --serving-rows`, `serving_rows.readers`), serving's own commitment, made before any draw. A5 takes it only over a
+SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
+window is refused by name (`source`: `sha512`). The summary reports the form (`source`) and the commitment it names
+(`commitment`).
+
+* **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
+  what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
+  `deferred_rows.stand_in`'s) or what the in-Commit hook wrote (`served`, its run the Commit's run root, no stand-in link). Each
+  holds `registration.json` (core's v1 record), `window.json`, and per member k `m<k>-public.bin` and `m<k>-private.bin` (prover
+  only). The prover wraps each member's bodies under the circuit for its template (`serving_rows.flock_input_files`).
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
   the verifier derives its window from them alone (`deferred_rows.window_of_record`). A TP Commit: `--tp-commit` is its record (its
   `--out`: `runs.jsonl`, `versions.json`), `--build-root` holds each rank's Programs of record in `rank<r>/`, and `--workload` is the
@@ -30,9 +38,10 @@ the rank's claim, not proved (the profile makes no claim that they are, `pipelin
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`: a stand-in whose run, `of` and `link` are
-  `deferred_rows.stand_in` over the run root of record and the digest of the bundle's manifest it opened; a TP rank's, `served`, its
-  run, `tp` and served Programs the record's, `tp.serving_rows.source`).
+  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`: a
+  stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the run root of record and the digest of the bundle's
+  manifest it opened, or a served window whose run is the run root of record, a SHA-512 root, naming the commitment that root
+  names, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, its run, `tp` and served Programs the record's.
 * **One draw per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol), because Lean accepts a subset draw only under `--zk` (verifier
@@ -156,8 +165,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer).to_json()
-    checks["source"] = source(rec.get("window", {}))
-    summary["source"] = rec.get("window", {}).get("kind")
+    w = rec.get("window", {})
+    checks["source"] = source(w)
+    summary["source"], summary["commitment"] = w.get("kind"), w.get("commitment")
     receipt = R.receipt(rec, "one-stage-e2e verifier (a5.py)")
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
@@ -241,20 +251,20 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and all(summary["negatives"].values())
-    print("A5 " + json.dumps({x: summary[x] for x in ("source", "audit", "draw", "draw_counts", "negatives")}, sort_keys=True, default=str))
+    print("A5 " + json.dumps({x: summary[x] for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}, sort_keys=True,
+                             default=str))
     return summary, ok
 
 
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     t0 = time.time()
     mine = DRW.window_of_record(a.bundle, a.row_dir, a.partition)
-    mine_link = DRW.stand_in(mine.run, hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest())
+    manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
 
     def source(w: dict) -> dict:
-        src = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == mine_link["of"],
-               "link": w.get("link") == mine_link["link"]}
+        src = DRW.source(w, mine.run, manifest)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
-                "detail": {"kind": w.get("kind"), "run": w.get("run"), "of": w.get("of")}}
+                "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 
     _summary, ok = audit(a, sets, out, mine, Path(a.window), source, a.port, {"verifier_window_s": round(time.time() - t0, 2)})
     return ok
