@@ -17,8 +17,8 @@ It prices, at the floor credit with operands free:
     beside kind::mxf4nvf4 at k64 (`fp4`), priced an instruction as the s8 form (the sheet's FP4 at twice s8).
 H200 has no FP4 kind, and its FP8 kind runs at the s8 rate, so it isn't priced.
 
-Run: `uv run --project benchmarks/pouw/machine_model python benchmarks/pouw/rt_fp/smallalpha.py OUT`. Writes
-OUT/results.jsonl and prints one line a reading.
+Run: `uv run --project benchmarks/pouw/machine_model python benchmarks/pouw/rt_fp/smallalpha.py OUT`. It builds the
+data copies in a temporary directory and writes only OUT/results.jsonl and OUT/table.txt, one line a reading.
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 MM = Path(__file__).resolve().parents[1] / "machine_model"
@@ -130,21 +131,26 @@ def eps(data: Path, design: str, vector: str, q: float) -> dict:
 
 
 def main(out: Path) -> int:
-    if out.exists():
-        shutil.rmtree(out)
-    runs = [(d, design, v) for d in sm120(out) for design in ("dither-2s", "fpx-g1s-fx1", "dither-c-peel-fx1")
-            for v in ("DS-120", "VF3r-16")]
-    runs += [(d, "dither-2s-licpw-redux-heavy-l32", v) for d in sm100(out) for v in ("DS-100", "DC-100-ri")]
-    rows = []
-    for d, design, vector in runs:
-        for q in (0.5, 1.22):
-            e = eps(d, design, vector, q)
-            row = {"device": d.parent.name, "data": d.name, "design": design, "vector": vector, "q": q, **e}
-            rows.append(row)
-            forms = ", ".join(f"{k} {v:.3f}" for k, v in e["forms"].items())
-            print(f"{row['device']:6} {d.name:4} {design:32} {vector:9} q*={q:<4} core {100 * e['core']:7.3f}%  "
-                  f"{forms}  [{', '.join(e['binding'])}]")
+    out.mkdir(parents=True, exist_ok=True)
+    scratch = Path(tempfile.mkdtemp())
+    try:
+        runs = [(d, design, v) for d in sm120(scratch) for design in ("dither-2s", "fpx-g1s-fx1", "dither-c-peel-fx1")
+                for v in ("DS-120", "VF3r-16")]
+        runs += [(d, "dither-2s-licpw-redux-heavy-l32", v) for d in sm100(scratch) for v in ("DS-100", "DC-100-ri")]
+        rows, table = [], []
+        for d, design, vector in runs:
+            for q in (0.5, 1.22):
+                e = eps(d, design, vector, q)
+                row = {"device": d.parent.name, "data": d.name, "design": design, "vector": vector, "q": q, **e}
+                rows.append(row)
+                forms = ", ".join(f"{k} {v:.3f}" for k, v in e["forms"].items())
+                table.append(f"{row['device']:6} {d.name:4} {design:32} {vector:9} q*={q:<4} core "
+                             f"{100 * e['core']:7.3f}%  {forms}  [{', '.join(e['binding'])}]")
+                print(table[-1])
+    finally:
+        shutil.rmtree(scratch)
     (out / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (out / "table.txt").write_text("\n".join(table) + "\n")
     return 0
 
 
