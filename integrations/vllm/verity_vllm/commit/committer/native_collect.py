@@ -1061,6 +1061,44 @@ class NativeCollectCommitter(NativeHostCommitter):
         state.clear()
         return levels, mr, tree_ms
 
+    def _retain_from_transient(self, job: _StepJob, tblocks: list[tuple[int, Any, Any, int]], keep_set: Any, chunk_parts: Any,
+                               ranges: list[tuple[int, int, Any]], side: Any) -> int:
+        """Retention of a bounded LEARNING step, carved out of its transient copies (`tblocks`) now that the metas are known (retain=host:
+        every chunk outside the excluded families' interiors; retain=sample: the challenged windows, or with `chunk_parts` only their
+        challenged chunks), pinned -> pinned into `ranges`; then the transient blocks go back to the pool, so the step's host footprint
+        returns to its retained bytes.  -> the bytes the exclusions kept off host"""
+        W, C = self.win_bytes, self.chunk
+        excl_bytes = 0
+        with torch.inference_mode(), torch.cuda.stream(side):
+            if self.retain == "host":
+                excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
+                for kk, _hb, hv, n in tblocks:
+                    base = kk * W
+                    kept_b = 0
+                    for a, b in outside(excl, base, base + n):
+                        rv = self.pool.take(b - a)
+                        rv.copy_(hv[a - base:b - base], non_blocking=True)
+                        ranges.append((a, b, rv))
+                        kept_b += b - a
+                    excl_bytes += n - kept_b
+            elif keep_set is not None:
+                for kk, _hb, hv, n in tblocks:
+                    if (job.step, kk) in keep_set:
+                        if chunk_parts is not None:
+                            base = kk * W
+                            for a, b in chunk_parts(job.step, base, base + n):
+                                rv = self.pool.take(b - a)
+                                rv.copy_(hv[a - base:b - base], non_blocking=True)
+                                ranges.append((a, b, rv))
+                        else:
+                            rv = self.pool.take(n)
+                            rv.copy_(hv[:n], non_blocking=True)
+                            ranges.append((kk * W, kk * W + n, rv))
+            side.synchronize()
+        for _kk, hb, _hv, _n in tblocks:
+            self.pool.give_back(hb)
+        return excl_bytes
+
     def _commit_step_windowed(self, job: _StepJob) -> None:
         """Worker: absorb the step WINDOW BY WINDOW while the serving thread is still filling later windows.  Per window: wait for the
         serving thread's complete-event, D2H the raw bytes to pinned host (retention / re-upload source), hash its leaves in place when the
@@ -1438,37 +1476,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         levels, mr, tree_ms = self._window_root(job.step, state, padded, side)
         nc.finish_step(job.step)
         if bounded and learning:
-            # retention of a bounded LEARNING step is carved out of the transient copies now that the metas are known (retain=host:
-            # every chunk outside the excluded families' interiors; retain=sample: the challenged windows), pinned -> pinned; then the
-            # transient blocks go back to the pool -- the step's host footprint returns to its retained bytes
-            with torch.inference_mode(), torch.cuda.stream(side):
-                if self.retain == "host":
-                    excl = _excluded_chunk_ranges(job.metas, self.retain_exclude, C) if self.retain_exclude else []
-                    for kk, _hb, hv, n in tblocks:
-                        base = kk * W
-                        kept_b = 0
-                        for a, b in outside(excl, base, base + n):
-                            rv = self.pool.take(b - a)
-                            rv.copy_(hv[a - base:b - base], non_blocking=True)
-                            ranges.append((a, b, rv))
-                            kept_b += b - a
-                        excl_bytes += n - kept_b
-                elif keep_set is not None:
-                    for kk, _hb, hv, n in tblocks:
-                        if (job.step, kk) in keep_set:
-                            if chunk_picks is not None:
-                                base = kk * W
-                                for a, b in chunk_parts(job.step, base, base + n):
-                                    rv = self.pool.take(b - a)
-                                    rv.copy_(hv[a - base:b - base], non_blocking=True)
-                                    ranges.append((a, b, rv))
-                            else:
-                                rv = self.pool.take(n)
-                                rv.copy_(hv[:n], non_blocking=True)
-                                ranges.append((kk * W, kk * W + n, rv))
-                side.synchronize()
-            for _kk, hb, _hv, _n in tblocks:
-                self.pool.give_back(hb)
+            excl_bytes += self._retain_from_transient(job, tblocks, keep_set, chunk_parts if chunk_picks is not None else None, ranges, side)
             tblocks = []
             host_wins = []
         if bounded and self.retain in ("host", "sample"):
