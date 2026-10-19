@@ -20,16 +20,22 @@ certifier on `X`'s boundary saw nothing cross into `X` during the deadline but t
 Each premise is to hold of every strategy, given where the auditor's devices sit and what their code does: a premise a
 cheating server can break by cheating keeps that cheat out of the theorem instead of catching it.
 
-* `LiveReads`: read `j`'s index is a live coin, released at its read. With `arrive r j` the earliest tick the index
-  can reach `X` (the challenger's send tick plus the least latency of any path to `X`), this follows from causality.
+* `LiveReads`: read `j`'s index is a live coin, released at its read. With `arrive r j` at or before the earliest tick
+  the index can reach `X` (the challenger's send tick plus the least latency of any path to `X`, less the slack
+  `VerdictBinds` needs), this follows from causality.
 * `LiveVerdicts`: read `j`'s verdict is fixed by the coins up to read `j` (the challenger draws read `j + 1`'s index
   after read `j`'s verdict).
 * `QuietReads`: on every read the challenger accepts, what crossed into `X` during the deadline is what the
-  challenger's code allows for that read, arrival tick and index (`quiet`).
+  challenger's code allows for that read, arrival tick and index, and the auditor's devices' own coins `ζ` (`quiet`).
 * `VerdictBinds`: the challenger accepts each answer from `X` for at most one label.
-* `UniformLabels`: the labels of a read's wipe are uniform `b`-bit values, independent across blocks. A model: the
-  deployed labels are a PRF of a 32-byte key (PR #2726), for which it is false, and the step to them is the PRF's
-  advantage, outside this.
+* `UniformLabels`: the labels of a read's wipe are uniform `b`-bit values, independent across blocks, given the
+  devices' coins `ζ`. A model: the deployed labels are a PRF of a 32-byte key (PR #2726), for which it is false, and
+  the step to them is the PRF's advantage, outside this.
+
+`QuietReads`, `VerdictBinds` and `LiveVerdicts` are what the challenger's code checks or does, stated on a verdict
+`acc` read off the coins; once the challenger has a Lean function they are its refusals, proved of it, and the world
+facts left are the certifier's coverage and records (`Accounting.Covered`, `Accounting.TrustedUnits`) and a bound on
+the latency of `X`'s certified links (note:20261019T2210Z-report-timed-round-redteam-3).
 -/
 
 namespace Accounting.Assumptions
@@ -38,9 +44,9 @@ open Finset
 
 /-- **Live reads**: read `j`'s index is the challenger's live coin, released at the read. In runs whose coins agree on
 `ω₀` and on the indices of the reads before `j`, read `j` arrives at `X` at the same tick and finds the same content
-of `X`'s state there. With `arrive r j` the challenger's send tick plus the least latency of any path into `X`, a run
-can't break it: nothing in `X` before then depends on read `j`'s index. With `arrive r j` the tick `X` reads the index,
-a prover's box on the path that reads it first and sends `X` a hint breaks it. -/
+of `X`'s state there. With `arrive r j` the challenger's send tick plus the least latency of any path into `X`, or any
+tick before it, a run can't break it: nothing in `X` before then depends on read `j`'s index. With `arrive r j` the
+tick `X` reads the index, a prover's box on the path that reads it first and sends `X` a hint breaks it. -/
 def LiveReads {Ω₀ B L : Type*} [LinearOrder L] {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X : Finset L)
     (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) : Prop :=
   ∀ (j : Fin n) (r r' : Ω₀ × (Fin n → B)), r.1 = r'.1 → (∀ i : Fin n, i < j → r.2 i = r'.2 i) →
@@ -54,23 +60,39 @@ def LiveVerdicts {Ω₀ B : Type*} {n : ℕ} (acc : Ω₀ × (Fin n → B) → F
 
 /-- **Quiet reads** (the network side of a timed read): on every read the challenger accepts, what crossed into `X`
 during the deadline `[arrive r j, arrive r j + D)` (`Actual.Run.crossing`, with arrival ticks and sources as seen) is
-`quiet j t i`, fixed by the read, its arrival tick `t` and its index `i`: the challenger's index and nothing that varies
-otherwise, so no label came in from outside `X` while the read was open. It is the challenger's check of the network
-certifier's report together with the certifier's coverage: the certifier on `X`'s boundary links sees every such
-crossing (`Accounting.Covered`) and reports it as it is. A server that fetches during a deadline fails the read; it
-doesn't break this. -/
-def QuietReads {Ω₀ B L : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X : Finset L)
-    (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (D : ℕ) (acc : Ω₀ × (Fin n → B) → Fin n → Prop)
-    (quiet : Fin n → ℕ → B → Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)) : Prop :=
+`quiet j t i z`, fixed by the read, its arrival tick `t`, its index `i` and the auditor's devices' own coins
+`z = ζ ω₀` (the certifier's and the challenger's jitter): the challenger's index and nothing that varies otherwise, so
+no label came in from outside `X` while the read was open. It is the challenger's check of the network certifier's
+report together with the certifier's coverage: the certifier on `X`'s boundary links sees every such crossing
+(`Accounting.Covered`) and reports it as it is. A server that fetches during a deadline fails the read; it doesn't
+break this.
+
+The coins `ζ` are what lets an honest deployment meet it: the index's arrival tick, the certifier's cells and anything
+it forwards vary run to run, and an equality with no `ζ` holds of no jittery hardware. They must be the devices' own,
+independent of the labels (`UniformLabels` at the same `ζ`): the certifier re-clocks the index into `X` at a fixed
+offset from the challenger's send and holds every other ingress of `X` until the window closes, so nothing upstream of
+it sets what `X` sees. Allowing `Q` crossings a read instead costs `log₂ Q` bits a block, and a switch upstream that
+copied the fill gets them, by delaying each index by bits of its label. -/
+def QuietReads {Ω₀ B L Z : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X : Finset L)
+    (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (D : ℕ) (acc : Ω₀ × (Fin n → B) → Fin n → Prop) (ζ : Ω₀ → Z)
+    (quiet : Fin n → ℕ → B → Z → Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ)) : Prop :=
   ∀ (j : Fin n) (r : Ω₀ × (Fin n → B)), acc r j →
-    (S r).crossing (↑X)ᶜ ↑X (Set.Ico (arrive r j) (arrive r j + D)) = quiet j (arrive r j) (r.2 j)
+    (S r).crossing (↑X)ᶜ ↑X (Set.Ico (arrive r j) (arrive r j + D)) = quiet j (arrive r j) (r.2 j) (ζ r.1)
 
 /-- **The verdict binds one label** (the challenger's code and placement): two runs in which the challenger accepts
 read `j`, with the same index and arrival tick and the same sends of `X` from the gates it placed during the deadline
 (`Actual.Run.sent`), have the same label for the challenged block. It holds of every strategy when the challenger
-compares the exact label and reads its answer only from what `X` sent: its input links all end in `X`, or it reads the
-network certifier's record of `X`'s egress. A challenger that reads whatever reaches it is broken by a relay, a
-machine outside `X` that holds the labels and answers for it. -/
+compares the exact label and reads its answer only from what `X` sent from the window's start: its input links all end
+in `X`, or it reads the network certifier's record of `X`'s egress. A challenger that reads whatever reaches it is
+broken by a relay, a machine outside `X` that holds the labels and answers for it.
+
+It is also broken by a pre-send: `X` sends a label before the window and the challenger reads it inside, so two
+accepted runs whose index is that block, with nothing sent during the window, differ in its label. One such send voids
+every statement that takes this premise for that server. `sent` is keyed by the sender's tick, which no device sees,
+and `Placed.Causal` bounds latency only from below, so this holds of every strategy only when `X`'s certified links have
+a latency of at most `ℓ⁺`, the challenger accepts only answers the certifier saw leave `X` at least `ℓ⁺` after
+`arrive r j`, and `arrive r j` is taken early enough that an answer sent before it can't be seen then. The deployed
+challenger (`streamed_wipe.Challenger.receive`) compares whatever 64 bytes reach it. -/
 def VerdictBinds {Ω₀ B L : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X : Finset L)
     (lab : Ω₀ → Fin n → B → ℕ) (arrive : Ω₀ × (Fin n → B) → Fin n → ℕ) (D : ℕ)
     (acc : Ω₀ × (Fin n → B) → Fin n → Prop) : Prop :=
@@ -78,12 +100,16 @@ def VerdictBinds {Ω₀ B L : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → A
     (S r).sent ↑X (Set.Ico (arrive r j) (arrive r j + D)) = (S r').sent ↑X (Set.Ico (arrive r' j) (arrive r' j + D)) →
     lab r.1 j (r.2 j) = lab r'.1 j (r'.2 j)
 
-/-- **Uniform labels** (a model of the labels): for each read `j`, any set `A` of blocks and any values `v`, the labels
-of `A` at read `j` are `v` on at most a `2^{-|A| b}` share of `ω₀`. The deployed labels are SHA-512 of a 32-byte key and
-the index (PR #2726), on which one label fixes the rest; this is their ideal, and the step to them is the PRF's
-advantage. -/
-def UniformLabels {Ω₀ B : Type*} [Fintype Ω₀] {n : ℕ} (lab : Ω₀ → Fin n → B → ℕ) (b : ℕ) : Prop :=
-  ∀ (j : Fin n) (A : Finset B) (v : B → ℕ),
-    ((univ.filter fun ω => ∀ i ∈ A, lab ω j i = v i).card : ℝ) * 2 ^ (A.card * b) ≤ Fintype.card Ω₀
+open Classical in
+/-- **Uniform labels** (a model of the labels): for each read `j`, any set `A` of blocks, any values `v` and any value
+`z` of the auditor's devices' own coins `ζ`, the labels of `A` at read `j` are `v` on at most a `2^{-|A| b}` share of
+the `ω₀` with `ζ ω₀ = z`: uniform, and independent of the devices' jitter. With `ζ` constant it is the labels' marginal.
+The deployed labels are SHA-512 of a 32-byte key and the index (PR #2726), on which one label fixes the rest; this is
+their ideal, and the step to them is the PRF's advantage, which a distinguisher decides by running the system once on
+`Accounting.Guarantees.Actual.WipeReadHeld`'s event. -/
+def UniformLabels {Ω₀ B Z : Type*} [Fintype Ω₀] {n : ℕ} (lab : Ω₀ → Fin n → B → ℕ) (b : ℕ) (ζ : Ω₀ → Z) : Prop :=
+  ∀ (j : Fin n) (A : Finset B) (v : B → ℕ) (z : Z),
+    ((univ.filter fun ω => ζ ω = z ∧ ∀ i ∈ A, lab ω j i = v i).card : ℝ) * 2 ^ (A.card * b) ≤
+      (univ.filter fun ω => ζ ω = z).card
 
 end Accounting.Assumptions
