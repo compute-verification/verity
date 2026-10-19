@@ -1,5 +1,5 @@
 """Dither's kernel-level standard number on one GPU: c_fx1 (cgemm.cu, compute accounting's honest H1 + fx1 linear) against
-vLLM's own int8 GEMM (cutlass_scaled_mm) and cuBLASLt int8, interleaved rep by rep in one process on one stream, at
+vLLM's own int8 GEMM and cuBLASLt int8, interleaved rep by rep in one process on one stream, at
 Llama-3.1-8B's served linears (qkv 6144 x 4096, o 4096 x 4096, gate_up 28672 x 4096, down 4096 x 14336) and decode M = 1, 32,
 256, prefill M = 2048, 8192.
 
@@ -18,8 +18,11 @@ Arms (M is the served rows; Mp = M rounded up to 128):
     c_fx1_lin    cquant + cwedit + c_fx1 under one key at Mp: the honest linear (dithered quantizer, W' = W + c + U, GEMM)
     cquant       the dithered quantizer alone; cwedit, the weight editor alone
     lt           egemm.cu's cuBLASLt s8 -> s32 at Mp (autotuned over its top 16 heuristic algorithms)
-    cutlass      vLLM's ops.cutlass_scaled_mm(x_q, W^T, s_a, s_w, bf16) at M
-    vllm_lin     vLLM's served int8 linear at M: ops.scaled_int8_quant(x) then cutlass_scaled_mm
+    triton       vLLM's triton_scaled_mm(x_q, W^T, s_a, s_w, bf16) at M: what compressed-tensors W8A8 int8 serves on sm_120,
+                 where vLLM's first choice (CutlassInt8ScaledMMLinearKernel, ops.cutlass_scaled_mm) refuses int8 ("Int8 not
+                 supported on SM120"; tried once a shape and recorded as `cutlass_refused`) and its selector falls through to
+                 TritonInt8ScaledMMLinearKernel
+    vllm_lin     vLLM's served int8 linear at M: ops.scaled_int8_quant(x) then triton_scaled_mm
     lt_torch     torch._int_mm at max(M, 17) (the int8-exact profile's GEMM: cuBLASLt, M padded to 17)
 
     python kbench.py gate --lib libkcapi.so --dir D --out OUT [--shapes ...]
@@ -42,7 +45,7 @@ L2_BYTES = 128 << 20
 ITEM_MS = 20.0
 C_ARMS = ("c_fx1", "c_fx1_lin", "cquant", "cwedit", "lt")
 CGEMM_ARM = {"c_fx1": "c_fx1", "c_fx1_lin": "cedited:c_fx1", "cquant": "cquant", "cwedit": "cwedit", "lt": "plain"}
-T_ARMS = ("cutlass", "vllm_lin", "lt_torch")
+T_ARMS = ("triton", "vllm_lin", "lt_torch")
 
 
 def shapes(spec: str | None) -> list[tuple[str, int, int, int]]:
@@ -98,6 +101,7 @@ def gate(a) -> int:
 def bench(a) -> int:
     import torch
     from vllm import _custom_ops as ops
+    from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import triton_scaled_mm
 
     lib = Lib(a.lib).lib
     dev = torch.device("cuda")
@@ -120,15 +124,21 @@ def bench(a) -> int:
             xq, sx, _ = ops.scaled_int8_quant(x, scale=None, azp=None, symmetric=True)
             xq17 = torch.cat([xq, xq.new_zeros(max(0, 17 - m), k)]) if m < 17 else xq
         torch.cuda.synchronize()
-        # the baselines' own sanity: torch's s32 product against int64 on the CPU on 4 rows, cutlass against it scaled
+        # the baselines' own sanity: torch's s32 product against int64 on the CPU on 4 rows, triton against it scaled
         r4 = min(4, m)
         ref = (xq[:r4].cpu().to(torch.int64) @ ws[0][:256].cpu().to(torch.int64).t())
         got = torch._int_mm(xq17, ws[0].t())[:r4, :256].cpu().to(torch.int64)
-        cut = ops.cutlass_scaled_mm(xq, ws[0].t(), sx, sws[0], torch.bfloat16)[:r4, :256].float().cpu()
+        tri = triton_scaled_mm(xq, ws[0].t(), sx, sws[0], torch.bfloat16)[:r4, :256].float().cpu()
         want = (ref.double() * sx[:r4].cpu().double() * sws[0][:256].cpu().double().reshape(1, -1)).float()
         sane = {"lt_torch_exact": bool(torch.equal(ref, got)),
-                "cutlass_rel_err": float(((cut - want).abs().max() / want.abs().max().clamp(min=1e-30)).item())}
-        if not sane["lt_torch_exact"] or sane["cutlass_rel_err"] > 2e-2:
+                "triton_rel_err": float(((tri - want).abs().max() / want.abs().max().clamp(min=1e-30)).item())}
+        try:
+            ops.cutlass_scaled_mm(xq, ws[0].t(), sx, sws[0], torch.bfloat16)
+            torch.cuda.synchronize()
+            sane["cutlass_refused"] = None
+        except RuntimeError as e:
+            sane["cutlass_refused"] = str(e).splitlines()[0][-160:]
+        if not sane["lt_torch_exact"] or sane["triton_rel_err"] > 2e-2:
             print(json.dumps({"shape": name, "baseline_sanity_failed": sane}), flush=True)
             return 3
 
@@ -140,11 +150,11 @@ def bench(a) -> int:
         def t_call(arm):
             def f(i):
                 w, sw = ws[i % copies], sws[i % copies]
-                if arm == "cutlass":
-                    ops.cutlass_scaled_mm(xq, w.t(), sx, sw, torch.bfloat16)
+                if arm == "triton":
+                    triton_scaled_mm(xq, w.t(), sx, sw, torch.bfloat16)
                 elif arm == "vllm_lin":
                     q, s, _ = ops.scaled_int8_quant(x, scale=None, azp=None, symmetric=True)
-                    ops.cutlass_scaled_mm(q, w.t(), s, sw, torch.bfloat16)
+                    triton_scaled_mm(q, w.t(), s, sw, torch.bfloat16)
                 else:
                     torch._int_mm(xq17, w.t())
             return f
@@ -197,8 +207,8 @@ def bench(a) -> int:
                     arm: {"us": round(1e3 * statistics.median(ms[arm]), 3), "calls": ncalls[arm],
                           "us_all": [round(1e3 * v, 3) for v in ms[arm]], "mhz": statistics.median(mhz[arm]),
                           "mhz_all": mhz[arm]} for arm in arms}}
-        base = min(line["arms"]["cutlass"]["us"], line["arms"]["lt"]["us"], line["arms"]["lt_torch"]["us"])
-        line["ratios"] = {"c_fx1_over_cutlass": round(line["arms"]["c_fx1"]["us"] / line["arms"]["cutlass"]["us"], 4),
+        base = min(line["arms"]["triton"]["us"], line["arms"]["lt"]["us"], line["arms"]["lt_torch"]["us"])
+        line["ratios"] = {"c_fx1_over_triton": round(line["arms"]["c_fx1"]["us"] / line["arms"]["triton"]["us"], 4),
                           "c_fx1_over_lt": round(line["arms"]["c_fx1"]["us"] / min(line["arms"]["lt"]["us"],
                                                                                  line["arms"]["lt_torch"]["us"]), 4),
                           "c_fx1_over_fastest": round(line["arms"]["c_fx1"]["us"] / base, 4),
@@ -231,7 +241,7 @@ def summary(a) -> int:
     by_m: dict[int, list] = {}
     for r in rows:
         by_m.setdefault(r["m"], []).append(r)
-    table = ["| M | linear | c_fx1 us | c_fx1_lin us | cutlass us | vllm_lin us | lt us | lt_torch us | c_fx1/fastest | lin/vllm_lin |",
+    table = ["| M | linear | c_fx1 us | c_fx1_lin us | triton us | vllm_lin us | lt us | lt_torch us | c_fx1/fastest | lin/vllm_lin |",
              "|---|---|---|---|---|---|---|---|---|---|"]
     for m in sorted(by_m):
         gm = math.exp(statistics.mean(math.log(r["ratios"]["c_fx1_over_fastest"]) for r in by_m[m]))
@@ -240,7 +250,7 @@ def summary(a) -> int:
         meas.append({"name": f"m{m}.c_fx1_lin_over_vllm_lin_geomean", "arm": "c_fx1", "value": round(gl, 4), "unit": "x"})
         for r in by_m[m]:
             u = {k: v["us"] for k, v in r["arms"].items()}
-            table.append(f"| {m} | {r['shape'].split('_m')[0]} | {u['c_fx1']} | {u['c_fx1_lin']} | {u['cutlass']} | {u['vllm_lin']} | "
+            table.append(f"| {m} | {r['shape'].split('_m')[0]} | {u['c_fx1']} | {u['c_fx1_lin']} | {u['triton']} | {u['vllm_lin']} | "
                          f"{u['lt']} | {u['lt_torch']} | {r['ratios']['c_fx1_over_fastest']} | {r['ratios']['c_fx1_lin_over_vllm_lin']} |")
         table.append(f"| {m} | geomean | | | | | | | {gm:.3f} | {gl:.3f} |")
     gates_ok = bool(gates) and all(g["rc"] == 0 for g in gates)

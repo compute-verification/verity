@@ -11,8 +11,11 @@ and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an
 
 Arms:
     stock        native vLLM int8: the pin's weights and scales under a compressed-tensors W8A8 config (int8 channel weights,
-                 dynamic per-token int8 activations), so vLLM serves them with its own kernels (scaled_int8_quant +
-                 cutlass_scaled_mm), compiled with CUDA graphs (vLLM's defaults)
+                 dynamic per-token int8 activations), so vLLM serves them with its own kernels, compiled with CUDA graphs
+                 (vLLM's defaults).  On sm_120 vLLM's first int8 choice, CutlassInt8ScaledMMLinearKernel, refuses at its first
+                 call ("Int8 not supported on SM120"), so the arm disables it (VLLM_DISABLED_KERNELS) and vLLM's selector takes
+                 its next, TritonInt8ScaledMMLinearKernel (scaled_int8_quant + triton_scaled_mm)
+    stock-humming  the same with Triton disabled too: vLLM's third choice, HummingInt8ScaledMMLinearKernel
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
                  as SERVE-H1 runs it (eager, batch-invariant)
     dither       stock with Dither's served H1 + fx1 path (`dither_arm.install`), when given
@@ -71,9 +74,28 @@ def engine_args(gpu_mem: float) -> dict:
             "enable_prefix_caching": False, "max_model_len": 2048, "seed": 0}
 
 
+DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "dither": "CutlassInt8ScaledMMLinearKernel",
+            "stock-humming": "CutlassInt8ScaledMMLinearKernel,TritonInt8ScaledMMLinearKernel"}
+
+
+def kernels_of(llm) -> dict:
+    """The linear kernels the engine's layers really run: class name -> layers."""
+    from verity_vllm.engine import engine_profile as prof
+    seen: dict = {}
+    for _, mod in prof.get_model_runner(llm).get_model().named_modules():
+        k = getattr(getattr(mod, "scheme", None), "kernel", None)
+        q = getattr(mod, "quant_method", None)
+        name = type(k).__name__ if k is not None else (type(q).__name__ if q is not None and hasattr(mod, "weight") else None)
+        if name:
+            seen[name] = seen.get(name, 0) + 1
+    return seen
+
+
 def build(arm: str, scratch: Path, gpu_mem: float):
     from vllm import LLM
-    if arm in ("stock", "dither"):
+    if arm in DISABLED:
+        os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
+    if arm in ("stock", "stock-humming", "dither"):
         llm = LLM(model=str(stock_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
         if arm == "dither":
             sys.path.insert(0, str(HERE))
@@ -107,7 +129,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
     except Exception as e:  # noqa: BLE001
         conn.send({"error": f"{type(e).__name__}: {e}"})
         return
-    conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1)})
+    conn.send({"ready": True, "build_s": round(time.perf_counter() - t0, 1), "kernels": kernels_of(llm),
+               "disabled": os.environ.get("VLLM_DISABLED_KERNELS")})
     ps = prompts(B)
 
     def gen(reqs: list[str], n: int):
