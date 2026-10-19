@@ -6,10 +6,11 @@
 f32. They carry exactly their builders' live ANDs, are pinned by gate count and program digest, hold no data, and are what a
 Program on bits calls for their word Definitions.
 
-Two opt-in checks run every input (`VERITY_VLLM_TANH_EXHAUSTIVE=1`: all 2^32 f32 words against `TanhF32Rn_v1`, the region's
-positive results assembled into `tanh_rn` and hashed against its pin; `VERITY_VLLM_GELU_EXHAUSTIVE=1`: all 2^32 (g, u) pairs
-against `GeluTanhMulBf16_v1`), over every core the process may use, against vectorized references the tests here tie to the
-word Definitions."""
+An opt-in check runs every f32 word (`VERITY_VLLM_TANH_EXHAUSTIVE=1`: all 2^32 against `TanhF32Rn_v1`, the region's positive
+results assembled into `tanh_rn` and hashed against its pin), over every core the process may use, against a vectorized
+reference a test here ties to the word Definition. The 2^32 (g, u) pairs need none: past their activations `GeluTanhMulBf16_v4`
+and `GeluTanhMulBf16_v2` are the same code on (activation word, u), and both activations are `gelu_tanh_bf16` at every g, so v4
+is v2 on every pair."""
 from __future__ import annotations
 
 import hashlib
@@ -121,17 +122,6 @@ def _tanh_ref(words: np.ndarray) -> np.ndarray:
     return out.astype(np.uint64)
 
 
-def _gelu_ref(g: np.ndarray, u: np.ndarray, act: np.ndarray) -> np.ndarray:
-    """`GeluTanhMulBf16_v1` vectorized over the activation words ``act`` (by g): ``bf16_rn(f32(act[g]) * (f32(u) + 0.0f))``, NaN
-    0x7FFF."""
-    a = (act[g.astype(np.int64)].astype(np.uint32) << 16).view(np.float32)
-    uf = (u.astype(np.uint32) << 16).view(np.float32)
-    with np.errstate(all="ignore"):
-        p = (a * (uf + np.float32(0))).view(np.uint32)
-    r = (p + np.uint32(0x7FFF) + ((p >> 16) & 1)) >> 16
-    return np.where((p & 0x7FFFFFFF) > 0x7F800000, 0x7FFF, r).astype(np.uint64)
-
-
 def _act() -> np.ndarray:
     return np.array(T.gelu_tanh_bf16_words(), np.uint32)
 
@@ -145,14 +135,11 @@ def test_tanh_is_the_word_definition_at_the_edges_every_exponent_and_random_word
     assert all(int(t) == T.tanh_rn_entry(int(w) & 0x7FFFFFF) for w, t in zip(words[region], got[region]))
 
 
-def test_the_vectorized_references_are_the_word_definitions() -> None:
-    """What the exhaustive checks compare against: `_tanh_ref` is `TanhF32Rn_v1` (subnormals and both signs included), and
-    `_gelu_ref` is `GeluTanhMulBf16_v1` on special, random and edge-product pairs, the products' f32 subnormals and overflow."""
+def test_the_vectorized_reference_is_the_word_definition() -> None:
+    """What the exhaustive check compares against: `_tanh_ref` is `TanhF32Rn_v1`, subnormals and both signs included."""
     rng = np.random.default_rng(22)
     words = np.concatenate([_tanh_words(rng), rng.integers(0, 1 << 23, 512).astype(np.uint64) | np.uint64(1 << 31)])
     assert _tanh_ref(words).tolist() == [D.tanh_f32_bits(int(w)) for w in words]
-    g, u = _pairs(rng)
-    assert _gelu_ref(g, u, _act()).tolist() == [D.GeluTanhMulBf16.evaluate(int(a), int(b)) for a, b in zip(g, u)]
 
 
 def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
@@ -164,7 +151,9 @@ def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
 
 
 def test_the_activation_is_the_table_on_every_word() -> None:
-    """`gelu_tanh_bf16(g)` at all 65,536 g: `gelu_tanh_bf16`'s words, which hash to its pin."""
+    """`gelu_tanh_bf16(g)` at all 65,536 g: `gelu_tanh_bf16`'s words, which hash to its pin. `boolean_dense`'s activation is
+    these words too (its `test_the_activation_on_every_word`), and past the activation `GeluTanhMulBf16_v4` and `_v2` are the same
+    code on (activation word, u), so the two agree on all 2^32 (g, u) pairs and v2's pair checks hold for v4."""
     act = TR.definition("GeluTanhBf16ArithCheck", 1, lambda C, g: BT.gelu_tanh_bf16(C, g), (("g", BT.BF16),), BT.BF16,
                         register=False)
     got = _bits(act, np.arange(1 << 16, dtype=np.uint64))
@@ -192,7 +181,7 @@ def test_gelu_tanh_mul_rows() -> None:
     _agree(bind(BT.GeluTanhMul, I=8), rows)
 
 
-# ---- the exhaustive checks: every core this process may use, one chunk of inputs per task ----------------------------------
+# ---- the exhaustive check: every core this process may use, one chunk of words per task -------------------------------------
 
 CHUNK = 1 << 22
 
@@ -209,15 +198,6 @@ def _tanh_chunk(c0: int):
     return bad.size, [(int(words[i]), int(got[i]), int(want[i])) for i in bad[:5]], (words[region] & 0x7FFFFFF), got[region]
 
 
-def _gelu_chunk(g0: int):
-    n = CHUNK >> 16
-    g = np.repeat(np.arange(g0, g0 + n, dtype=np.uint64), 1 << 16)
-    u = np.tile(np.arange(1 << 16, dtype=np.uint64), n)
-    got, want = _bits(bind(BT.GeluTanhMulBf16), g, u), _gelu_ref(g, u, _act())
-    bad = np.flatnonzero(got != want)
-    return bad.size, [(int(g[i]), int(u[i]), int(got[i]), int(want[i])) for i in bad[:5]]
-
-
 @pytest.mark.slow
 @pytest.mark.skipif(os.environ.get("VERITY_VLLM_TANH_EXHAUSTIVE") != "1",
                     reason="VERITY_VLLM_TANH_EXHAUSTIVE=1: all 2^32 f32 words, about 3 core-hours (minutes on a pod's cores)")
@@ -232,17 +212,3 @@ def test_tanh_on_every_f32_word() -> None:
             table[idx.astype(np.int64)] = vals.astype(np.uint32)
     assert bad == 0, f"{bad} words differ, first (x, got, want) {[tuple(map(hex, f)) for f in first[:5]]}"
     assert hashlib.sha256(table.astype("<u4").tobytes()).hexdigest() == TABLE_SHA256["tanh_rn"]
-
-
-@pytest.mark.slow
-@pytest.mark.skipif(os.environ.get("VERITY_VLLM_GELU_EXHAUSTIVE") != "1",
-                    reason="VERITY_VLLM_GELU_EXHAUSTIVE=1: all 2^32 (g, u) pairs, about 5 core-hours (minutes on a pod's cores)")
-def test_gelu_on_every_pair() -> None:
-    """`GeluTanhMulBf16_v4` is `GeluTanhMulBf16_v1` on all 2^32 (g, u) pairs."""
-    BS.compile(bind(BT.GeluTanhMulBf16))
-    _act()
-    bad, first = 0, []
-    with mp.get_context("fork").Pool(_procs()) as pool:
-        for n, few in pool.imap_unordered(_gelu_chunk, range(0, 1 << 16, CHUNK >> 16)):
-            bad, first = bad + n, first + few
-    assert bad == 0, f"{bad} pairs differ, first (g, u, got, want) {[tuple(map(hex, f)) for f in first[:5]]}"
