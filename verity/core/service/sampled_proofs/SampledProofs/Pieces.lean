@@ -26,8 +26,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`TwoStage.selectReplayUnits`, `TwoStage.selectProofUnits`);
 * `two_stage_profile`, `check_probability`: the two-stage law's profile over a class's RUs and one proof unit's marginal
   probability of being checked (`TwoStage.profile`, `TwoStage.checkProbability`);
-* `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`);
-* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`).
+* `stream`: the proof service stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
+* `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -39,8 +39,8 @@ import SampledProofs.Slots
 import SampledProofs.Service
 import SampledProofs.Run
 import SampledProofs.TwoStage
-import SampledProofs.Hello
 import SampledProofs.Stream
+import SampledProofs.Hello
 
 namespace SampledProofs.Pieces
 
