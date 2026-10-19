@@ -117,16 +117,19 @@ theorem honestPR_err (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claim
 session on the mask witness (`maskWOf`) stopped having sent at most `|bs|`. -/
 theorem honestPR_stops (H : Claims.Msg → Claims.Msg) (x : Claims.Msg) (w : Claims.Flock.Wit) (ω : TapeZk)
     {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} (hs : setupOf true x = some (s, spec, sts))
-    (hist : List (Claims.Msg × Claims.Msg)) (bs : List Claims.Msg) (hh : hist.map Prod.snd = bs) {e : String}
-    {L : Array Claims.Msg}
-    (hrun : (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
-      (MaskRank.masksOf sts) (traces sts (maskWOf x w ω.mask)) ω).go #[] = (.error e, L)) (hl : L.size ≤ bs.length) :
+    (hist : List (Claims.Msg × Claims.Msg)) (bs : List Claims.Msg) (hh : hist.map Prod.snd = bs)
+    (hstop : ∀ R L, (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
+      (MaskRank.masksOf sts) (traces sts (maskWOf x w ω.mask)) ω).go #[] = (R, L) →
+      (∃ e, R = .error e) ∧ L.size ≤ bs.length) :
     (((honestPR w).next x hist ω).eval H).1 = [] := by
+  rcases hY : (sessionPZk (asksS fun k => bs.getD k []) (Hashes.ofSha512 (Claims.hOf H)) spec (tabsOf sts)
+    (MaskRank.masksOf sts) (traces sts (maskWOf x w ω.mask)) ω).go #[] with ⟨R, L⟩
+  obtain ⟨⟨e, rfl⟩, hl⟩ := hstop R L hY
   cases ho : outerHit x (hist.map Prod.snd)
   · rw [honestPR_next ho]
     show ((feed (prog x (maskWOf x w ω.mask) ω) (hist.map Prod.snd)).eval H).1 = []
     rw [hh]
-    exact honestP_stops H x _ ω hs bs hrun hl
+    exact honestP_stops H x _ ω hs bs hY hl
   · rw [honestPR_stop ho]
     rfl
 
