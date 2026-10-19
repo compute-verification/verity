@@ -73,7 +73,8 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
 
 /-- **The deployed route with (P3) discharged**: `ksBoundRoute` at the deployed bound record (`bdCover`), wherever
 `DE`'s weight is at most the deployed plain record's (the intended choice among them), with (P3) from
-`weightCovers_bdCover`. The other premises are `KSBoundRoute`'s, at `bdCover`. -/
+`weightCovers_bdCover`. The other premises are `KSBoundRoute`'s, at `bdCover`. Its level (`Claims.Recursion.lam`) is
+about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target (ASK-73). -/
 theorem ksBoundRoute_cover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

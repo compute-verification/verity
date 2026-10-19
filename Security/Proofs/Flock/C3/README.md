@@ -8,6 +8,11 @@ them. V*'s statements are indexed by the verifier's own list (`vstarCount ish`),
 circuits' gap 2's (#1847, merged here at `100c17932`): eleven statements in the writer's order, 0–3 `rec-open`, 4–5
 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's `stacked` shape.
 
+Its soundness (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`
+(`Security/Definitions/Claims/Recursion.lean`), is at its level `Claims.Recursion.lam`: about 65 bits per SHA-512 call at
+the deployed shape (one inner table at `m = 35`, the deployed bound record's weight at `IVStar` at `coverW`), below the
+100-bit floor and the 2^-128 target under every weight (Daniel, 19 Oct, ASK-73).
+
 What stays open is the hypotheses the discharge takes, `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
 at the honest source, `hbr_honest_src`'s) and `srcOK_holo_rs`'s (`C3/Compose/AtHolo.lean`, `SrcOK` at the checked
 family), and what the event's bridge and the bound still need: Open now, next.

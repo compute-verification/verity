@@ -65,7 +65,11 @@ eight items:
    representation. The bridge is proved at every bound record whose answers a decoder inverts
    (`Bound.bridge_of_dec`), the deployed one among them, so the deployment's ∀-form holds from its premises
    (`RecDeploy.ksBoundRoute`). `Bound.WeightCovers`' constant is what the bridge's proof pays: `N_I · √(k_I/32)` over
-   `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`.
+   `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`. The deployed bound record takes `γ`'s weight at `IVStar` at that floor,
+   `coverW` of the deployed plain record's weight (`RecDeploy.bdCover`, ASK-72), where (P3) holds
+   (`RecDeploy.ksBoundRoute_cover`). **The recursion's security level** there (`lam`) is about 65 bits per SHA-512
+   call at the deployed shape (one inner table at `m = 35`; 69.4 at `C_DE`'s weight), below the 100-bit floor and the
+   `2^-128` target under every weight (ASK-73): its KS is stated and proved at that level, not at the floor.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -646,7 +650,10 @@ noncomputable def γe (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
 noncomputable def cBe (D : Deploy Coin) (x : Msg) : ℕ :=
   4 + 2 * ∑ s : Fin (D.nS x), (D.nums x s).waits * (D.nums x s).k
 
-/-- **The recursion's bits**: `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ, 128 − ½ log₂(γ_e · c_Be)) − 2`. -/
+/-- **The recursion's bits**: `λ = min(log₂(1/κ), 255.5 − ½ log₂ γ, 128 − ½ log₂(γ_e · c_Be)) − 2`. At the deployment
+it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s weight at `IVStar` at
+`coverW`, ASK-72; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
+under every weight (ASK-73). -/
 noncomputable def lam (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
   min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
     (128 - Real.logb 2 (γe D I x * cBe D x) / 2) - 2
@@ -698,7 +705,9 @@ noncomputable def γzk (D : Deploy Coin) (t : ℕ) (x : Msg) : ℝ := D.nS x * (
 /-! ### The claims -/
 
 /-- **The recursion: KS**, at `E*` and every outer decoder that meets the list-decoding spec: on every prover,
-`Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x) · Pr[B]) + √(γ_e(x) · Pr[Be]) + √(γ_e(x) · Pr[Br])`. -/
+`Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x) · Pr[B]) + √(γ_e(x) · Pr[Be]) + √(γ_e(x) · Pr[Br])`. Its level (`lam`) is
+about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the
+`2^-128` target under every weight (ASK-73). -/
 def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (R D I) (E H D I DO decO) x P ≤
@@ -707,7 +716,8 @@ def KS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : F
 
 /-- **The recursion: bits**, at every outer decoder that meets the spec: every prover making at most `t ≥ 1` SHA-512
 calls per run (both parties') has `Pr[acc ∧ ¬R] ≤ t · 2^{−λ(x)}`, where `B` and `Br` obey the strict birthday bound and
-`Be` the linear expected-time bound. -/
+`Be` the linear expected-time bound. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
+table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). -/
 def Bits [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P D.V x ω r).pLog.length + (run H P D.V x ω r).vLog.length ≤ t) →
@@ -751,7 +761,9 @@ verifier accepts. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin) (recs : List (Recorded D.V)) : Prop :=
   Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true
 
-/-- **The private variant: KS**, at `E*` and the same errors. -/
+/-- **The private variant: KS**, at `E*` and the same errors, so at the same level (`lam`): about 65 bits per SHA-512
+call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every
+weight (ASK-73). -/
 def KSPriv [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (RPriv D I) (E H D I DO decO) x P ≤
@@ -829,13 +841,16 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   [DecidableEq Col']
 
 /-- **KS of the recursion over Flock**, at every inner and outer decoder that meets the spec: the inner Flock `DI` and
-the outer `DO` each on its own columns and traces (the deployed inner session is plain, the V* sessions masked). -/
+the outer `DO` each on its own columns and traces (the deployed inner session is plain, the V* sessions masked). Its
+level (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit
+floor and the `2^-128` target under every weight (ASK-73). -/
 def KSFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → KS H D (Inner.ofFlock DI decI) DO
 
 /-- **Bits of the recursion over Flock**, at every inner decoder that meets the spec, the inner and outer Flock each on
-its own columns and traces. -/
+its own columns and traces. `λ` (`lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at
+`m = 35`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). -/
 def BitsFlock [Zero Col] [Zero Col'] (H : Msg → Msg) (D : Deploy Coin) (DI : Flock.Deploy Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK DI decI → Bits H D (Inner.ofFlock DI decI) DO
@@ -1098,14 +1113,19 @@ spec. `E*`'s inner views are what the compiled verifier reads off the outer witn
 round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
 `IVStar` is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
 `deployRec · ivScope b` at V*'s bound layout and the guarantee is `RecDeploy.KSBoundDeployed`, in its ∀-form
-`RecDeploy.KSBoundRoute`. `KSFlock` at the deployed framed Flock is false at the deployed record (counterexample B: an
-honest view's held rounds are free-element rows, never its framed bytes). -/
+`RecDeploy.KSBoundRoute`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`,
+ASK-72), where (P3) holds (`RecDeploy.ksBoundRoute_cover`). Its level (`lam`) is about 65 bits per SHA-512 call at the
+deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight
+(ASK-73). `KSFlock` at the deployed framed Flock is false at the deployed record (counterexample B: an honest view's
+held rounds are free-element rows, never its framed bytes). -/
 def KSBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   KSFlock H (D.record Bd.IVStar) Bd.deploy DO
 
 /-- **The private variant: KS at the representation V\* binds**, at the compiled record whose inner view runs `IVStar`,
-over the bound record, at every inner and outer decoder that meets the spec. -/
+over the bound record, at every inner and outer decoder that meets the spec. Its level (`lam`) is about 65 bits per
+SHA-512 call at the deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under
+every weight (ASK-73). -/
 def KSPrivBound [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI, decOK Bd.DE decI → KSPriv H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO
