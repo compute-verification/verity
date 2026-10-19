@@ -70,9 +70,9 @@ def pytest_configure(config) -> None:
     torch.exp(torch.zeros(1))
 
 
-#: Tests whose setup and call took over 5 s in a full run, which `slow` marks (with the seconds taken), so `--quick` and drive's
-#: gate leave them to the full suite: in run r20261018-214339-1952 they were 714 of its 766 minutes of test time. Refresh it from
-#: the runner's report of tests over 5 s without the mark, or mark the test itself.
+#: Tests whose setup and call took over 5 s (the seconds beside each), which `slow` marks so that `--quick` leaves them to the
+#: full suite: those of the full run r20261018-214339-1952, and those of the quick tier r20261019-050331-542f (7 workers on 8
+#: CPUs). Add what the runner reports as over 5 s without the mark, or mark the test itself.
 SLOW = Path(__file__).with_name("slow_tests.json")
 
 
