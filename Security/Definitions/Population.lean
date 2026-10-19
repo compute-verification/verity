@@ -6,6 +6,7 @@ import Definitions.Population.AddressMap
 import Definitions.Population.Necessity
 import Definitions.Population.Exfiltration
 import Definitions.Population.DrawPressure
+import Definitions.Population.ChiPool
 
 /-! Populations' vocabulary: units over committed value slots with public read and write sets (`Dataflow`), unit
 functions and correctness, what a checker confirms of the dataflow (single assignment, acyclicity), cones and egress,
@@ -21,4 +22,5 @@ what each policy's damage is (integrity's damaged egress, control at the public 
 `Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first
 detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent draw, and deviations from
 the honest egress. `DrawPressure`: the deployed draw, `k` of the `n` units uniformly without replacement, and the draws
-that miss a wrong set. -/
+that miss a wrong set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
+through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). -/

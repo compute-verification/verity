@@ -17,6 +17,7 @@ import Proofs.Population.ExfiltrationBound
 import Proofs.Population.ExfiltrationExamples
 import Proofs.Population.DrawPressure
 import Proofs.Population.JointPressure
+import Proofs.Population.ChiPool
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -78,4 +79,8 @@ of at most one per wrong unit, and with probability at least `1 - δ` what leave
 every claim its detection pressure, the union bound holds every claim's bound through the first detection at once
 except with probability `Σ_i δ_i` (a claim whose count waits for the verdict without the per-window term), and a
 uniform `k`-subset of `N` units escapes `b` wrong ones with probability at most `(1 - k/N)^b`.
+`ChiPool`: the cheating pool with the verdict lag. With the halt `Δ` windows after the first caught window's
+commitment, what leaves through the halt is at most `cum + Δ ℓ`, so under the deployed draw it is below
+`(1 + Δ) ℓ + (n/k) ln (1/δ)` with probability at least `1 - δ`, and at most `j (ℓ + n/k) + Δ ℓ` on average through the
+halt the `j`-th detection triggers.
 -/
