@@ -717,9 +717,9 @@
    "why": "a guarantee is a Prop over the protocol and the assumptions, never a proof"
   },
   "Models.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Models.Pouw.Assumptions"],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof"
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do"
   },
   "Models.Pouw.Guarantees": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw", "Models.Pouw.Assumptions", "Models.Pouw.Guarantees"],
@@ -727,9 +727,9 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof"
   },
   "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
    "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
   },
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Pouw.Basic"],
@@ -7459,7 +7459,11 @@
    "Accounting.SecurityProofs.RequirementUnplanned": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan is W's (PlanMatches) and the values the step reads from incomplete blocks lie in one block per group (OneBlockEach), the bits W reads exceed those it reads from complete blocks by at most b per group holding one; about no function of the code.",
    "Accounting.SecurityProofs.TS.DrawnRightOff": "lemma: the crypto half of (I8) for a sampled window over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding of every committed position before the coin that follows its commitment at delta_bind and the proofs' soundness jointly over a round's draws at delta_ks as probability hypotheses, and each unit's pinning (DrawnLayer.Pins) as a definitional hypothesis, give the drawn units right at their committed values outside S(delta_bind + delta_ks); ProofsSoundOfDrawn and a composition's folded credit, which take the drawn units right, are what it is for.",
    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "lemma: (I8) ProofsSound of EPS1-SPEC at n_pi = 1, delta_ZK = delta_ks, from its pieces over every sampled play and its drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: DrawnRightOff's hypotheses, the play being its drawn units' proofs' (DrawnLayer.Of), each position's writer reading it (DrawnLayer.WriterReads), the unit weights summing to the window's words and the share covering every unit that isn't good, good being the run having computed the unit's late cone at the run's modes, drawn at each unit's coin (DrawnLayer.Covers, proved for each game) as definitional hypotheses, and E1(c) per unit with its fold clause as the named assumption UnitFixed, not on the premises list; CompilerC and the composed credit, which take ProofsSound, are what it is for.",
-   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "lemma: the rewinding step behind a sampled window's delta_bind over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding's failure in a round, squared, is at most |L|^2 times its fork form at its positions' cuts, L the positions its units read (two runs sharing every value committed before a position's cut, opening it differently in accepted proofs of drawn units), so a bound on the fork form is binding at |L| times its square root; DrawnRightOff and ProofsSoundOfDrawn, which take binding at delta_bind, are what it is for."
+   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "lemma: the rewinding step behind a sampled window's delta_bind over every window of drawn units' proofs (Accounting.TS.DrawnLayer), not a Lean function: binding's failure in a round, squared, is at most |L|^2 times its fork form at its positions' cuts, L the positions its units read (two runs sharing every value committed before a position's cut, opening it differently in accepted proofs of drawn units), so a bound on the fork form is binding at |L| times its square root; DrawnRightOff and ProofsSoundOfDrawn, which take binding at delta_bind, are what it is for.",
+   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedPerProver": "unstated: OverlapFloorKOneSided restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.OverlapFloorKPerProver": "unstated: OverlapFloorK restated on ServiceSoundOverlapPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver": "unstated: StagedFloorKOneSided restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)",
+   "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "unstated: StagedFloorK restated on ServiceSoundStagedPerProver, each adversary's error its own (breakBound, ecr/sha-512 at its collision finders within budgets computed from its time); stated for compute-accounting's review (CMP-33), not proved yet (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover)"
   },
   "conjectures": {
    "Nci.Assumptions.ActivationsIncompressible": {
