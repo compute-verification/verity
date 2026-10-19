@@ -3,8 +3,9 @@
 //
 // Lane B200-FP8.  The question is the bit-exact step of `tcgen05.mma.cta_group::1.kind::f8f6f4` (E4M3 / E5M2 operands, F32
 // accumulator, K = 32 an instruction) and of `kind::mxf8f6f4.block_scale.scale_vec::1X` (the same with one UE8M0 scale a row of A
-// and a column of B for each K = 32 block), which no lane had measured (registry: sm100.tcgen05.mma.e4m3 `unprobed`).  It is
-// tcgen05_fp4.cu's kernel with 8-bit elements, distinct rows (no replicas) and N = 32:
+// and a column of B for each K = 32 block); run r20261019-081000-ad35 found sm_120's QMMA step (silicon.models
+// BLACKWELL_SM100_E4M3 / _E5M2, f8_model.py for the mixed and scaled kinds).  It is tcgen05_fp4.cu's kernel with 8-bit
+// elements, distinct rows (no replicas) and N = 32:
 //
 // Per tile (one 128-thread CTA), M = 128 rows, N = 32 columns, K = 32 * steps:
 //   1. warp 0 allocates 128 TMEM columns; thread 0 initialises an mbarrier.
