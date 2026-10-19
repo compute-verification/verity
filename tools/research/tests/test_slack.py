@@ -1021,10 +1021,28 @@ def test_wait_polls_with_the_injected_sleeper_until_decided(route, registry, cap
 def test_wait_gives_up_after_the_deadline_and_its_grace(route, registry, capsys, monkeypatch):
     slept: list[float] = []
     monkeypatch.setattr(slack, "_sleep", slept.append)
+    monkeypatch.setattr(slack, "_clock", lambda: sum(slept))
     route.statuses = [{"status": "pending"}]
-    rc, out, _ = run(capsys, *card_argv("--wait", "--every", "600", kind="blocking", deadline="2:45 PM"))
+    rc, out, _ = run(capsys, *card_argv("--wait", "--every", "300", kind="blocking", deadline="1:55 PM"))
     assert rc == 1 and out.splitlines()[1].startswith("pending")
-    assert len(slept) == 6 and sum(r[0] == "GET" for r in route.requests) == 7                   # (60 + 5) min in 10-minute polls
+    assert len(slept) == 2 and sum(r[0] == "GET" for r in route.requests) == 3                   # (10 + 5) min in 5-minute polls
+
+
+@pytest.mark.parametrize("argv", [card_argv("--wait", "--every", "600", kind="blocking", deadline="2:45 PM"),
+                                  ["ask-daniel", "status", "42", "--wait", "--every", "600"]], ids=["post", "status"])
+def test_wait_stops_at_twenty_minutes_with_the_card_pending_and_says_how_to_check_back(route, registry, capsys, monkeypatch, argv):
+    """No tool call may block more than 20 minutes (Daniel, 19 Oct); a card's deadline can be a week away."""
+    from research import waitcap
+
+    slept: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", slept.append)
+    monkeypatch.setattr(slack, "_clock", lambda: sum(slept))
+    route.statuses = [{"status": "pending"}]
+    rc, out, err = run(capsys, *argv)
+    assert rc == waitcap.STILL_GOING and out.splitlines()[-1].startswith("pending")
+    assert slept == [600, 600] and sum(r[0] == "GET" for r in route.requests) == 3
+    assert "card 42 (pending) is still going" in err and "Check back with `research msg ask-daniel status 42`" in err
+    assert "End your turn now" in err and "Nothing was cancelled" in err
 
 
 def test_status_reads_the_decision_and_exits_0_only_once_decided(route, registry, capsys):
@@ -1805,6 +1823,18 @@ def test_slack_py_runs_as_a_single_file_from_any_checkout(tmp_path, registry):
                          cwd=tmp_path, env={**os.environ, "PYTHONPATH": ""})
     assert out.returncode == 0, out.stderr
     assert "@circuits" in out.stdout
+
+
+def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
+    import importlib.util
+
+    from research import waitcap
+
+    spec = importlib.util.spec_from_file_location("vslack_single", slack.__file__)
+    single = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(single)
+    assert single.waitcap is not waitcap
+    assert (single.waitcap.WAIT_CAP_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_CAP_S, waitcap.STILL_GOING)
 
 
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])

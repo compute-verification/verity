@@ -1443,13 +1443,39 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
         clock[0] += 900
         return {}
 
-    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, poll_s=30, fetch=hung_fetch, sleep=advance,
-                             clock=lambda: clock[0])
+    bound = 1800 + 3600 + Q.REMOTE_GRACE_S
+    tier = Q.RemoteQuickTier(tmp_path, "origin", "vy-test", timeout_s=3600, wait_s=1800, max_wait_s=bound + 1, poll_s=30,
+                             fetch=hung_fetch, sleep=advance, clock=lambda: clock[0])
     (d := tmp_path / "runs" / "r1").mkdir(parents=True)
     _, why = tier._wait(d, "vy-test")
-    bound = 1800 + 3600 + Q.REMOTE_GRACE_S
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
+    clock[0] = 0.0
+    tier.max_wait_s = Q.waitcap.WAIT_CAP_S
+    _, why = tier._wait(d, "vy-test")
+    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_CAP_S <= clock[0] <= Q.waitcap.WAIT_CAP_S + 900
+
+
+def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):
+    """No tool call may block more than 20 minutes (Daniel, 19 Oct), and a quick tier may wait hours for a check slot: `ready --on`
+    leaves its run going, marks nothing, names `judge RUN`, and exits STILL_GOING; `judge` marks the PR once the run passed."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports())
+    tier, sleeps = _remote_tier(world, monkeypatch, machine, max_wait_s=60)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    fetched = []
+    tier.fetch = lambda d: fetched.append(d) or {}
+    capsys.readouterr()
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == Q.waitcap.STILL_GOING
+    assert sum(sleeps) == 60 and len(fetched) == 2
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
+    rid = (flags := machine.launched[-1])[flags.index("--id") + 1]
+    err = capsys.readouterr().err
+    assert f"#1 is not marked ready at {h1[:12]} yet" in err and f"the quick tier's run {rid} on vy-test" in err
+    assert f"Check back with `research queue judge {rid} --by lane-1`" in err and "Nothing was cancelled" in err
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 0
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 
 def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does(world, monkeypatch):

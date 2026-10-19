@@ -1932,15 +1932,18 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers)})" if answers else " (no ssh machine is registered)"))
 
 
-def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
+def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:
     """Why a run whose status isn't terminal has no runner on its machine, or None while it may have one: the machine rebooted
     since the runner started (job.json's boot id), or the pid is gone where the runner ran in the machine's own pid namespace
     (job.json's hostname is the machine's; a Kubernetes pod's runner isn't visible from the host). Unreadable is None."""
     env = (_read_json(local_dir / "job.json") or {}).get("environment") or {}
     if not env.get("boot_id"):
         return None
-    probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
-                                      "|| echo gone"], timeout=120)
+    try:
+        probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
+                                          "|| echo gone"], timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
     lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
     if len(lines) != 3:
         return None
@@ -1952,10 +1955,15 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int) -> str | None:
     return None
 
 
-def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = ()) -> dict[str, Any]:
+def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = (), timeout: float | None = None) -> dict[str, Any]:
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
-    unchanged, reason recorded."""
+    unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
+    time left under its cap (research.waitcap)."""
+
+    def within(s: float) -> float:
+        return s if timeout is None else max(1.0, min(s, timeout))
+
     if bad := [n for n in also if not n or n.startswith("/") or any(p in ("", "..") or p.startswith(".") for p in n.split("/"))]:
         raise Refused(f"--also takes paths of files under the run dir, not {', '.join(map(repr, bad))}")
     rec = _read_json(local_dir / "remote.json")
@@ -1978,7 +1986,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
                 tf.extract(m, local_dir, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
 
     try:
-        r = ssh_read(ssh, remote_cmd, extract, timeout=900)
+        r = ssh_read(ssh, remote_cmd, extract, timeout=within(900))
     except (tarfile.TarError, OSError) as e:
         r = subprocess.CompletedProcess(remote_cmd, -1, b"", f"reading the run's tar stream: {type(e).__name__}: {e}".encode())
     if r.returncode != 0:
@@ -1993,14 +2001,17 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     rec.pop("launcher_exited", None)
     rec.pop("runner_gone", None)
     if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
-        if why := _runner_gone(ssh, local_dir, st["pid"]):
+        if why := _runner_gone(ssh, local_dir, st["pid"], timeout=within(120)):
             rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)
-        probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
-                                          f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=120)
-        lines = probe.stdout.decode(errors="replace").splitlines() if probe.returncode == 0 else []
+        try:
+            probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
+                                              f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=within(120))
+        except subprocess.TimeoutExpired:
+            probe = None
+        lines = probe.stdout.decode(errors="replace").splitlines() if probe and probe.returncode == 0 else []
         if lines and lines[0] == "exited":
             rec["launcher_exited"] = {"at_utc": rec["observed_utc"], "runner_pid": pid, "last_line": (lines[1] if len(lines) > 1 else "")[-300:]}
     if everything:

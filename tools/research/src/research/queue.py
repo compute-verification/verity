@@ -12,7 +12,9 @@ order they were admitted; `main` fast-forwards to the newest commit on `next` th
                                                    the owner's word that the PR is ready at its current head (a new push needs it again),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
-                                                   (`QuickTier`); exit 3 when it never started (no slot within its wait); or, with
+                                                   (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
+                                                   --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
+                                                   once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First, in about a minute, the
                                                    preflight (`Preflight`) refuses, with the fix, a head that conflicts with a
                                                    fresh `next` (naming the paths), contains an open PR that isn't admitted
@@ -116,7 +118,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import quick_tier
+from . import quick_tier, waitcap
 from .gates import git_env
 from .store import ids, vocab
 
@@ -1025,6 +1027,11 @@ class NotStarted(str):
     """Why a quick tier never ran (no check slot within its wait, no machine to run it on): not a failure of the PR's head."""
 
 
+class StillGoing(str):
+    """`ready --on`'s caller stopped waiting at research.waitcap's cap with the tier's run still going: nothing failed or was
+    cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
+
+
 def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None) -> tuple[str | None, str]:
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
     each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none;
@@ -1056,18 +1063,19 @@ class RemoteQuickTier(QuickTier):
     or head, or other than `done` with exit 0, is a failure.  A run that waited `wait_s` for a slot and gave up never started
     (`NotStarted`), and neither did one with no machine to run on.  The tier has `timeout_s` from taking its slot (`--run-max`), so
     the run on the machine is bounded by the two together (`--timeout`), and the caller's wait by that plus REMOTE_GRACE_S of
-    ``clock`` time (a fetch can take its ssh's own timeout, so polls are not counted), past which it ends with the poll under way."""
+    ``clock`` time (a fetch can take its ssh's own timeout, so polls are not counted), past which it ends with the poll under way.
+    The caller waits at most ``max_wait_s`` (research.waitcap's cap) of that: then the run goes on and the wait ends `StillGoing`."""
 
     WORKTREE_SUFFIX = "-ship"
 
     def __init__(self, repo: Path, remote: str, on: str, *, by: str = "", project: str = "verity", root: Path | None = None,
-                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S,
+                 timeout_s: float = REMOTE_TIMEOUT_S, wait_s: float = REMOTE_WAIT_S, max_wait_s: float = waitcap.WAIT_CAP_S,
                  poll_s: float = REMOTE_POLL_S, launch: Callable[[list[str], Path], subprocess.CompletedProcess] = _launch,
                  fetch: Callable[[Path], dict] | None = None, sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, place: Callable[[str, Path], tuple[str | None, str]] = place):
         super().__init__(repo, remote, root)
         self.on, self.by, self.project, self.poll_s = on, by, project, poll_s
-        self.timeout_s, self.wait_s = timeout_s, wait_s
+        self.timeout_s, self.wait_s, self.max_wait_s = timeout_s, wait_s, max_wait_s
         self.launch, self.fetch, self.sleep, self.clock, self.place = launch, fetch, sleep, clock, place
 
     def __call__(self, pr: PR) -> str | None:
@@ -1106,12 +1114,13 @@ class RemoteQuickTier(QuickTier):
         from . import remote
         from . import runs as R
 
-        fetch = self.fetch or remote.fetch
         status: dict = {}
         bound = self.wait_s + self.timeout_s + REMOTE_GRACE_S
-        deadline = self.clock() + bound
+        limit = min(bound, self.max_wait_s)
+        deadline = self.clock() + limit
+        fetch = self.fetch or (lambda d: remote.fetch(d, timeout=deadline - self.clock()))
         while self.clock() < deadline:
-            self.sleep(self.poll_s)
+            self.sleep(min(self.poll_s, deadline - self.clock()))
             try:
                 rec = fetch(d)
             except Exception as e:  # noqa: BLE001  (a fetch that fails is a poll that saw nothing)
@@ -1133,6 +1142,10 @@ class RemoteQuickTier(QuickTier):
                 return status, f"run {d.name}'s runner on {on} exited before the run ended ({gone.get('last_line') or 'no log line'})"
             if gone := rec.get("runner_gone"):
                 return status, f"run {d.name} on {on} ended without recording it: {gone['why']}"
+        if limit < bound:
+            return status, StillGoing(waitcap.still_going(
+                f"the quick tier's run {d.name} on {on} ({status.get('state') or 'without a status'})",
+                f"research queue judge {d.name} --by {self.by or 'LANE'}", limit))
         return status, (f"run {d.name} on {on} didn't end within {bound:g} s (last seen "
                         f"{status.get('state') or 'without a status'}): `research inspect {d.name}`")
 
@@ -1607,6 +1620,9 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
     """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal)."""
     from .store.cli import _label_write_through
 
+    if isinstance(failed, StillGoing):
+        print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]} yet. {failed}", file=sys.stderr)
+        return waitcap.STILL_GOING
     if isinstance(failed, NotStarted):
         print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: the quick tier never started: {failed}. "
               f"Nothing failed: run it again (`--on auto` takes the machine with a free check slot)", file=sys.stderr)
@@ -1675,7 +1691,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
     ap.add_argument("--json", action="store_true", help="status: as JSON")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
-                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks); judge: look "
+                                                    "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
+                                                    f"{waitcap.WAIT_CAP_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
+                                                    "on: `judge RUN` marks the PR once it ends); judge: look "
                                                     "for a run another VM launched there only")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
