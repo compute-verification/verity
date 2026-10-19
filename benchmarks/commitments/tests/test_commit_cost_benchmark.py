@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
 from research import result as research_result
 from research.store import tools_registry
 
@@ -68,6 +69,7 @@ def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
     assert tool.resolve_params(["--rows", "64"], ROOT)[1] == {"row_bytes": "4,256,1536,3072,4096,8192", "rows": 64}
 
 
+@pytest.mark.slow  # the suite's first import of verity_vllm: 8-9 s on the shared pod, a fraction of a second warm
 def test_step_root_cost_writes_a_valid_result_whose_root_is_the_references(tmp_path: Path) -> None:
     spec = importlib.util.spec_from_file_location("step_root_cost", ROOT / "benchmarks" / "commitments" / "step_root_cost.py")
     mod = importlib.util.module_from_spec(spec)
