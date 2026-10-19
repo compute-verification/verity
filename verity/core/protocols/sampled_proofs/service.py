@@ -175,13 +175,21 @@ class All:
 
 @dataclass(frozen=True)
 class Law:
-    """A one-stage law, in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or
-    `work:K`."""
+    """A one-stage law: the rate law `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
+    one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
+    draws `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
+    units each registration brings, so every unit is drawn with probability at least NUM/DEN however large the prover
+    makes N; a fixed `subset:K` draws each with K/N."""
 
     text: str
 
     def __post_init__(self) -> None:
-        D.parse_law(self.text)
+        if D.parse_rate(self.text) is None:
+            try:
+                D.parse_law(self.text)
+            except ValueError:
+                raise ValueError("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), subset:K, stratified:K, "
+                                 f"work:K or bernoulli:NUM/DEN, not {self.text!r}") from None
 
     def to_json(self) -> dict[str, Any]:
         return {"rule": "law", "law": self.text}
@@ -527,16 +535,26 @@ def _window_key(window: Any) -> bytes | None:
 
 def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
-    query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs)."""
+    query: `subset:n` for `All`, a `Law`'s own, and a two-stage rule's `replay` (over its RUs). A rate law is
+    `subset:K` at K = `draw.rate_count` over `n`, and raises `Refused` (`rate`) unless 1 <= K <= n. The Lean verifier's
+    `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
-    return D.parse_law((rule.replay if isinstance(rule, TwoStage) else rule).text)
+    text = (rule.replay if isinstance(rule, TwoStage) else rule).text
+    rate = D.parse_rate(text)
+    if rate is None:
+        return D.parse_law(text)
+    k = D.rate_count(*rate, n)
+    if not 1 <= k <= n:
+        raise _refuse("rate", {"law": text, "population": n, "k": k})
+    return {"law": "subset", "k": k}
 
 
 def count_varies(law: Mapping[str, Any]) -> bool:
     """Whether `law` (a `selection_law`) draws a count that varies from draw to draw, so the sessions of one registration
     set up tables of different shapes: `bernoulli` at 0 < p < 1. A work law's closure varies too, but the work draw with
-    a producer closure is a planned design, so it is not refused. The Lean verifier's `Run.countVaries` is this."""
+    a producer closure is a planned design, so it is not refused. The Lean verifier's `Run.countVaries` is this. A Spec
+    that wants Bernoulli's public rate at a fixed count states the rate law, `rate:NUM/DEN[:T]`."""
     if law.get("law") != "bernoulli":
         return False
     num, _, den = str(law.get("p")).partition("/")
@@ -750,8 +768,9 @@ class Stream:
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
         (`Registration.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or its epoch ended (`epoch-ended`), while it holds as many registrations
-        without a final outcome as it may (`open`, `ready`), when it is late, when either check fails, or, after both,
-        when the law draws a count that varies (`shapes`, `count_varies`)."""
+        without a final outcome as it may (`open`, `ready`), when it is late, when the rule's rate law draws none or more
+        than N units (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both, when the law
+        draws a count that varies (`shapes`, `count_varies`)."""
         self.ready()
         d = self.spec.check.registration_deadline
         received_at = None
