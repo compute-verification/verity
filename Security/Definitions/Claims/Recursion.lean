@@ -62,8 +62,8 @@ eight items:
    per string (`εzkStop`). Option (d)'s section is a statement for review, with no proof: `KSBound` and `KSPrivBound`
    are `KS` and `KSPriv` at the compiled record whose inner view runs the verifier at the representation V* binds
    (`Bound.IVStar`: the inner session's commit strings and their openings), and `Bridge` states the inner claim they
-   rest on, from Flock's at that representation. `Bound.WeightCovers`' constant is the draft's, fixed by the bridge's
-   proof before freezing (its docstring states the loss that proof is expected to pay, about `N_I · k_I · √Pr[B]`).
+   rest on, from Flock's at that representation. `Bound.WeightCovers`' constant is what the bridge's proof pays:
+   `N_I · √(k_I/32)` over `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`.
 
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
@@ -999,26 +999,25 @@ other number are `DE`'s, so its `κ` is `DE`'s. -/
 def Bound.deploy (Bd : Bound Coin Col T) : Flock.Deploy Coin Col T :=
   { Bd.DE with V := Bd.IVStar, cols := fun v => Bd.DE.cols (Bd.openView v), weight := Bd.weight }
 
-/-- The commit strings a run at `x` opens: the schedule's, at each round before the last. -/
-def Bound.nOpen (Bd : Bound Coin Col T) (x : Msg) : ℕ := ((List.range (Bd.DE.V.k x - 1)).map (Bd.nAt x)).sum
-
 /-- **(P2) The commit strings bind**: a row's digest input is injective (the deployed `rowIn`'s first block fixes the
 row's length), so two openings of one commit string to different rows give a SHA-512 collision among their calls
 (`Bound.opens`). -/
 def Bound.Binds (Bd : Bound Coin Col T) : Prop := Function.Injective Bd.rowIn
 
-/-- **(P3) `γ`'s weight covers the openings**: at each statement, `√C_IVStar ≥ √C_DE + √(2·n_open)`. So `B`'s fork at
-`IVStar` charges two kinds of collision: the element-level Flock's, and those of two runs that open one of the
-`n_open` commit strings two ways, two calls each. A draft constant, which the bridge's proof fixes before the statement
-freezes.
+/-- **(P3) `γ`'s weight covers the bridge's loss**: at each statement, `√C_IVStar ≥ √C_DE + N_I · √(k_I/32)`, with
+`N_I = 1 + m′·k` `E^rep`'s expected reruns (`m′` its waits, `k` the accepted reruns each waits for) and `k_I` `DE`'s
+rounds.
 
-The loss the bridge's proof is expected to pay is about `N_I · k_I · √Pr[B]`, with `N_I = 1 + m′·k` `E^rep`'s expected
-reruns. At each rerun, the run departs from the one `DE`'s prover sends at some round with probability at most
-`√Pr[a fork there opens one commit string two ways]`, and those roots sum over the `k_I` rounds to at most
-`k_I · √Pr[B]` (Cauchy–Schwarz, `B`'s guess being uniform). In `γ = 16·(√(2·k_I·C) + k_I)²` that asks
-`√C_IVStar − √C_DE ≥ N_I · √k_I / (4√2)`, which `√(2·n_open)` covers only where `2·n_open ≥ N_I² · k_I / 32`. -/
+The bridge's proof turns a prover against `IVStar` into one against `DE` that sends, at each round, the plurality of
+what `IVStar`'s accepted continuations open there, and aborts where a run opens otherwise. That costs at most
+`N_I · k_I · √Pr[B]`. At each rerun, the run departs from the plurality at some round with probability at most
+`√Pr[a fork there opens one commit string two ways]`, which is a collision `B`'s fork at `IVStar` finds. Those roots
+sum over the `k_I` rounds to at most `k_I · √Pr[B]` (Cauchy–Schwarz, `B`'s guess being uniform). In
+`γ = 16·(√(2·k_I·C) + k_I)²`, `√γ_IVStar − √γ_DE = 4·√(2·k_I)·(√C_IVStar − √C_DE)`, which this makes at least
+`N_I · k_I`. The openings' collisions are paid in that loss, so the count of commit strings is not in the constant. -/
 def Bound.WeightCovers (Bd : Bound Coin Col T) : Prop :=
-  ∀ x, Real.sqrt (Bd.DE.weight x) + Real.sqrt (2 * Bd.nOpen x) ≤ Real.sqrt (Bd.weight x)
+  ∀ x, Real.sqrt (Bd.DE.weight x) + (1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) * Real.sqrt (Bd.DE.V.k x / 32) ≤
+    Real.sqrt (Bd.weight x)
 
 /-- **(P4) The last message, as `final` reads it, is bound by the rounds before it.** Take two decisions `IVStar` accepts
 at one statement, on messages and coins that agree before the last round, whose last messages `final` reads
@@ -1059,7 +1058,7 @@ def Bound.PlainKSAbort [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) : Pr
 * (P1) the element-level Flock's KS against aborting provers at plain leaves (`Inner.KSAbort` at `DE`,
   `Bound.PlainKSAbort` at one decoder), which Flock's KS proof is to give through its table bound at `DE`;
 * (P2) the commit strings bind (`Binds`);
-* (P3) `γ`'s weight covers their openings (`WeightCovers`).
+* (P3) `γ`'s weight covers the bridge's loss (`WeightCovers`).
 
 The recursion's KS at the bound record (`KSBound`) rests on the bridge and on (P1) to (P3), and also on (P4), the last
 message's binding (`LastBinds`), which the recursion's proof reads and the bridge doesn't.
