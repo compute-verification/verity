@@ -50,6 +50,7 @@ from dataclasses import dataclass
 
 from verity_vllm.check import derived_weights, fp8_moe_scales, fp8_ue8m0
 from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # noqa: F401  (sha256_file: the record's shard hash)
+from verity_vllm.check.component_programs import component_program_dirs, load_program_head
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
 
@@ -745,35 +746,6 @@ def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = 
         return None
 
 
-class StoredRows:
-    """The rows of an `instances.json.gz`, decoded from the file on each iteration in the form it stores them (a v2 row's argument
-    progressions are not expanded): for readers of row names and specs, never of per-leaf argument runs."""
-
-    def __init__(self, path: str):
-        self.path = path
-
-    def __iter__(self):
-        from verity_vllm.query.program_view import iter_instance_rows
-        return iter_instance_rows(self.path, expand=False)
-
-
-def load_program_head(program_dir: str) -> dict[str, Any]:
-    """`format.load_program` with the instance file's header (schema, digest, params) in memory and its rows `StoredRows`.  A document
-    whose params or digest follow its rows (not `derive_step`'s order) is read whole, its rows as stored."""
-    import gzip
-    from verity_vllm.query.program_view import _read_instance_header
-    path = os.path.join(program_dir, "instances.json.gz")
-    inst = _read_instance_header(path)
-    if {"params", "digest"} <= inst.keys():
-        inst["rows"] = StoredRows(path)
-    else:
-        with gzip.open(path, "rt") as f:
-            inst = json.load(f)
-    p = os.path.join(program_dir, "artifact.json")
-    return {"instances": inst, "result": json.load(open(os.path.join(program_dir, "result.json"))),
-            "artifact": json.load(open(p)) if os.path.exists(p) else None, "dir": program_dir}
-
-
 def build_record(program_dir: str, checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
                  revision: str | None = None, verify_shards: bool = True, kv_cache_dtype: str = "auto",
                  shard_pin: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -816,27 +788,6 @@ def weights_struct(program: dict[str, Any]) -> list[list[Any]]:
     """The weights STRUCT of a Program -- [field, shape, bits] in declaration order -- the model-level object the record is a function of
     (no checkpoint read).  Two Programs of one model at different sequence shapes have the same struct."""
     return [[f, list(shape), int(bits)] for f, shape, bits in program_weight_fields(program["instances"])]
-
-
-def component_program_dirs(programs_root: str) -> list[str]:
-    """Every component Program dir under a row dir: build_request_LP*_T* + the default-shape build_request (with an instances.json.gz)."""
-    root = Path(programs_root)
-    out = sorted(str(p) for p in root.glob("build_request_LP*_T*") if (p / "instances.json.gz").exists())
-    if (root / "build_request" / "instances.json.gz").exists():
-        out.append(str(root / "build_request"))
-    return out
-
-
-def post_load_tensors(builds: dict[int, str]) -> dict[str, list[str]]:
-    """Per rank, the names its Build registered as Parameters from the loader's post-load hook (`result.json` `post_load_tensors`, over
-    every component Program of the rank's Build): what `tp2_commit_make` registers on the served model before reading its weights."""
-    out = {}
-    for r, b in builds.items():
-        names: set[str] = set()
-        for d in component_program_dirs(str(b)):
-            names |= set((json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors") or {}).get("parameters") or {})
-        out[str(r)] = sorted(names)
-    return out
 
 
 def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest: str | None = None) -> dict[str, Any]:

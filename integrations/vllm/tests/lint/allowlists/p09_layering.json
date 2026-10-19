@@ -48,6 +48,7 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.committer_api"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.fa2_plane_classes"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.sources.hidden_source"},
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.sources.moe_source"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.source_identity"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.spans"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "repo-path", "symbol": "NativeHostCommitter._gpu_ext_load", "detail": "_tree"},

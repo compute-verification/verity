@@ -15,7 +15,7 @@ torch = pytest.importorskip("torch")
 from verity_vllm.engine.capture import Capture, ObserverConfig
 from verity_vllm.engine.rank_worker import register_post_load_tensors
 from verity_vllm.pipeline.row_driver import Stop
-from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.component_programs import post_load_tensors
 
 NAME = "model.layers.0.hc_attn_fn_broadcast"
 
@@ -43,7 +43,7 @@ def test_a_rank_registers_its_builds_post_load_tensors_as_parameters(tmp_path):
         d.mkdir(parents=True)
         (d / "instances.json.gz").write_bytes(b"")
         (d / "result.json").write_text(json.dumps({"post_load_tensors": made}))
-    names = WR.post_load_tensors({0: str(tmp_path / "rank0"), 1: str(tmp_path / "rank1")})
+    names = post_load_tensors({0: str(tmp_path / "rank0"), 1: str(tmp_path / "rank1")})
     assert names == {"0": [NAME], "1": []}
     m = _model()
     served, x = m.model.layers[0].hc_attn_fn_broadcast, torch.ones(1, 2)
