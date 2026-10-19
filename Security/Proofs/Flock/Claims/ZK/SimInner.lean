@@ -18,10 +18,12 @@ round's coin.
   - `Y` once `β` is, where `β ≠ 0`.
 * **`simInner_of`**: `SimInner` from `InnerSrcE`, the deployed instance of `InnerSrc` at the cut's source, wherever the
   shared phases reach the inner proof.
-* **`innerSlotE`**: where they do, the inner proof begins at `repSlot … (innerOff 0)`, the round the cut reads `ε` at:
-  `innerPre_size` counts the shared phases' sends at `asksCut` through the exact counts at `asksS` (`okS`).
+* **`innerPre_slot`**: where they do, the inner proof begins at `repSlot … (innerOff 0)`, the round the cut reads `ε`
+  at: `innerPre_size` counts the shared phases' sends at `asksCut` through the exact counts at `asksS` (`okS`).
 * **`innerSrcE_triple`**: `InnerSrcE`'s `triple` there: the cut's `inner r` is the session's `ρ_in`, `σ_in` at the
   honest pads (`innerTripleE`).
+* **`innerYE`**: wherever the cut sent `Y₁`, its `Y` read in `yAt`'s order is the session's `h ‖ pad_h + β·(μ ‖ pad_μ)`
+  at the honest pads, `β` the coin two rounds after `ε`'s.
 -/
 
 namespace FlockComplete.SimInner
@@ -478,7 +480,7 @@ theorem coinOf_respE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (k : ℕ)
 /-- **Where the shared phases leave table `j`'s rep `r`**: begun at the rep's base, a run of `innerPreE` that returns
 has sent the rep's PIOP and Ligerito, so its inner proof begins at `repSlot … (innerOff 0)`, the round of `ε` the cut
 reads. -/
-theorem innerSlotE {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+theorem innerPre_slot {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (j : Fin (jOf x)) (r : Fin 2)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
     (extras : Array _root_.Flock.Claim)
@@ -535,8 +537,8 @@ theorem tapeH_eq (τ : UE.Tape) {i : ℕ} (hc : i < Claims.Flock.zkTableCap) (r 
   exact fAt_lt _ _ k.isLt
 
 /-- **The cut's triple openings are the session's** at the honest pads, `ε` the coin at round `L` where the inner proof
-begins (`innerSlotE`): the cut's `inner r` is `ζ·h_fa + h_tx`, `h_fb + h_ty` at the tape's free pads (`innerMsg`), `ζ`
-read at that round, and the tape's free pads are the executable's (`exeTape`). -/
+begins (`innerPre_slot`): the cut's `inner r` is `ζ·h_fa + h_tx`, `h_fb + h_ty` at the tape's free pads (`innerMsg`),
+`ζ` read at that round, and the tape's free pads are the executable's (`exeTape`). -/
 theorem innerTripleE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) {L : ℕ} (hL : L = repSlot x (2 * j.val + r.val) (innerOff 0)) :
     ((srcE x c w τ j.val).rep r.val).rhoIn =
@@ -600,8 +602,218 @@ theorem innerTripleE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     rw [hin, e2, e4, hlay, ← hget Ly.fb (by omega) (by omega) (by omega) (by omega),
       ← hget Ly.ty (by omega) (by omega) (by omega) (by omega), val_add_of]
 
+theorem val_add_mul (a b d : _root_.Flock.F128) :
+    FlockLevel3.GF128.val (FlockSoundness.Refine.fOf a + FlockSoundness.Refine.fOf b * FlockSoundness.Refine.fOf d) =
+      a + b * d := by
+  rw [FlockLevel3.GF128.mul_eq, FlockLevel3.GF128.add_eq]
+  rfl
+
+theorem val_mul_add_mul (a b d e : _root_.Flock.F128) :
+    FlockLevel3.GF128.val (FlockSoundness.Refine.fOf a * FlockSoundness.Refine.fOf b +
+      FlockSoundness.Refine.fOf d * FlockSoundness.Refine.fOf e) = a * b + d * e := by
+  rw [FlockLevel3.GF128.mul_eq, FlockLevel3.GF128.mul_eq, FlockLevel3.GF128.add_eq]
+  rfl
+
+theorem tapeMu_eq (τ : UE.Tape) {i : ℕ} (hc : i < Claims.Flock.zkTableCap) (r : Fin 2) (k : Fin (2 ^ 64 + 4)) :
+    FlockSoundness.Refine.fOf ((UE.tapeZk τ).mu i r.val k.val) = (τ ⟨i, hc⟩).1.2.2.2.2.2.1 r k := by
+  show FlockSoundness.Refine.fOf (fAt 0 (fun r => fAt 0 ((cellAt τ i).1.2.2.2.2.2.1 r) k.val) r.val) = _
+  rw [cellAt_lt τ hc, fAt_lt _ _ r.isLt]
+  exact fAt_lt _ _ k.isLt
+
+theorem tapePadH_eq (τ : UE.Tape) {i : ℕ} (hc : i < Claims.Flock.zkTableCap) (r : Fin 2)
+    (k : Fin _root_.Flock.Zk.K_PAD) :
+    FlockSoundness.Refine.fOf ((UE.tapeZk τ).padH i r.val k.val) = (τ ⟨i, hc⟩).1.2.2.2.1 r k := by
+  show FlockSoundness.Refine.fOf (fAt 0 (fun r => fAt 0 ((cellAt τ i).1.2.2.2.1 r) k.val) r.val) = _
+  rw [cellAt_lt τ hc, fAt_lt _ _ r.isLt]
+  exact fAt_lt _ _ k.isLt
+
+theorem tapePadMu_eq (τ : UE.Tape) {i : ℕ} (hc : i < Claims.Flock.zkTableCap) (r : Fin 2)
+    (k : Fin _root_.Flock.Zk.K_PAD) :
+    FlockSoundness.Refine.fOf ((UE.tapeZk τ).padMu i r.val k.val) = (τ ⟨i, hc⟩).1.2.2.2.2.1 r k := by
+  show FlockSoundness.Refine.fOf (fAt 0 (fun r => fAt 0 ((cellAt τ i).1.2.2.2.2.1 r) k.val) r.val) = _
+  rw [cellAt_lt τ hc, fAt_lt _ _ r.isLt]
+  exact fAt_lt _ _ k.isLt
+
+private theorem get_append_right' (a b : Array _root_.Flock.F128) {k : ℕ} (hk : k < b.size) :
+    (a ++ b)[a.size + k]! = b[k]! := by
+  rw [getElem!_pos (a ++ b) _ (by simp; omega), getElem!_pos b k hk, Array.getElem_append_right (by omega)]
+  simp
+
+/-- A cut's `Y` that was sent is the view's. -/
+theorem cut_Y1_of_ne {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
+    {T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL} {S : T.Sent} {v : T.PreView} {r : Fin 2}
+    (h : (T.cut S v).Y1 r ≠ none) : (T.cut S v).Y1 r = some (v.Y1 r) := by
+  by_cases hf : S.fin r
+  · simp [FlockSoundness.ZK.Table.cut, hf]
+  · exact absurd (by simp [FlockSoundness.ZK.Table.cut, hf]) h
+
+/-- **`yAt` entry by entry**: where each exposed pad, each of the four tail pads in `yAt`'s order and each padding entry
+reads as `g` at its index, so does every entry. -/
+theorem yAt_of {nE nPad : ℕ} (Y1 : FlockSoundness.ZK.PadIdx nE → FlockLevel3.GF128) (Y2 : Fin nPad → FlockLevel3.GF128)
+    (i : Fin (nE + 4 + nPad)) (g : ℕ → _root_.Flock.F128)
+    (hlo : ∀ k (hk : k < nE), FlockLevel3.GF128.val (Y1 (.inl ⟨k, hk⟩)) = g k)
+    (hmid : ∀ o : Fin 4, FlockLevel3.GF128.val (Y1 (.inr ((![2, 0, 1, 3] : Fin 4 → Fin 4) o))) = g (nE + o.val))
+    (hhi : ∀ k : Fin nPad, FlockLevel3.GF128.val (Y2 k) = g (nE + 4 + k.val)) :
+    yAt Y1 Y2 i = g i.val := by
+  unfold yAt
+  split_ifs with h1 h2
+  · exact hlo _ h1
+  · have key := hmid ⟨i.val - nE, by omega⟩
+    rw [show nE + (i.val - nE) = i.val by omega] at key
+    exact key
+  · have key := hhi ⟨i.val - (nE + 4), by have := i.isLt; omega⟩
+    rw [show nE + 4 + (i.val - (nE + 4)) = i.val by omega] at key
+    exact key
+
+/-- **The cut's `Y` is the session's** at the honest pads, `β` the coin two rounds after the inner proof begins
+(`betaSlot`), wherever the cut sent it: the cut's `Y₁ = h + β·μ` and `Y₂ = pad_h + β·pad_μ` (`ZK.Table.view`) read in
+`yAt`'s order are `h ‖ pad_h + β·(μ ‖ pad_μ)` at the tape's pads, `h_ab` and `h_tw` the products `padsOf` sets. -/
+theorem innerYE {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
+    {L : ℕ} (hL : L = repSlot x (2 * j.val + r.val) (innerOff 0)) (hY : (cutE x c w τ j).Y1 r ≠ none) :
+    ((srcE x c w τ j.val).rep r.val).y =
+      FlockComplete.Replay.InZ.y (innerPadsE x τ j r)
+        (FlockComplete.SimInner.cutCoins (fun k i => slotAt c k i) L) := by
+  have hj := lt_of_jOf j
+  have hr := r.isLt
+  have hc : j.val < Claims.Flock.zkTableCap := lt_of_lt_of_le j.isLt (jOf_le_cap x)
+  have hst : (stsOf x)[j.val]! = stAt x j := getElem!_pos (stsOf x) j.val hj
+  have htab : (FlockDeploy.tabsOf (stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (stAt x j) := by
+    rw [getElem!_pos (FlockDeploy.tabsOf (stsOf x)) j.val (by simpa [FlockDeploy.tabsOf] using hj)]
+    simp [FlockDeploy.tabsOf]
+    rfl
+  set Ly := _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0 with hLy
+  have hpd : innerPadsE x τ j r = FlockComplete.padsOf (UE.tapeZk τ) j.val r.val Ly := by
+    show FlockComplete.padsOf _ _ _ (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
+      (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0) = _
+    rw [htab]
+    rfl
+  have hsrc : (srcE x c w τ j.val).rep r.val = repSrcCut PE x (czExe PE x c) (cutE x c w τ) j r := by
+    simp only [srcE, tabSrcCut, j.isLt, r.isLt, ↓reduceDIte]
+  have hz := fits_zkTab PE (zkTab x j)
+  have hE : (tabC PE x j).z.nE = Ly.hab := by
+    show Ly.len - 4 = Ly.hab
+    simp only [_root_.Flock.Zk.PadLayout.len, _root_.Flock.Zk.PadLayout.tw]
+    omega
+  have hTE : ((tabC PE x j).T (czExe PE x c j)).tab.nE = Ly.hab := hE
+  have hE64 : (tabC PE x j).z.nE ≤ 2 ^ 64 := hz.nE
+  have hfa : Ly.fa < Ly.fb := Composed.ZerocheckMasked.fa_lt_fb Ly
+  have hfb : Ly.fb < Ly.hab := Composed.ZerocheckMasked.fb_lt_hab Ly
+  have htx : Ly.tx = Ly.hab + 1 := rfl
+  have hty : Ly.ty = Ly.hab + 2 := rfl
+  have htw : Ly.tw = Ly.hab + 3 := rfl
+  have hlen : Ly.len = Ly.hab + 4 := rfl
+  have hfaE : Ly.fa < (tabC PE x j).z.nE := by omega
+  have hfbE : Ly.fb < (tabC PE x j).z.nE := by omega
+  have hbs : betaSlot x j.val r.val = L + 2 := by
+    subst hL
+    unfold betaSlot repSlot innerOff
+    rw [hs]
+    simp only [show (2 * j.val + r.val) / 2 = j.val by omega, hst, (zkTab x j).hz]
+    omega
+  have hβ : betaAt c j.val r.val = slotAt c (L + 2) 0 := by unfold betaAt; rw [hbs]
+  set P := FlockComplete.padsOf (UE.tapeZk τ) j.val r.val Ly with hP
+  have hhs : P.h.size = Ly.len := FlockComplete.padsOf_size _ _ _ _
+  have hpH : P.padH.size = _root_.Flock.Zk.K_PAD := by simp [hP, FlockComplete.padsOf]
+  have hms : P.mu.size = Ly.len := by simp [hP, FlockComplete.padsOf]
+  have hpM : P.padMu.size = _root_.Flock.Zk.K_PAD := by simp [hP, FlockComplete.padsOf]
+  have hRh : ∀ k (hk : k < 2 ^ 64 + 4), k < Ly.len → k ≠ Ly.hab → k ≠ Ly.tw →
+      FlockSoundness.Refine.fOf (P.h ++ P.padH)[k]! = (τ ⟨j.val, hc⟩).1.2.2.1 r ⟨k, hk⟩ := by
+    intro k hk h1 h2 h3
+    rw [FlockComplete.get_append_left _ _ (by rw [hhs]; exact h1), hP, FlockComplete.padsOf_get _ _ _ Ly k h1 h2 h3]
+    exact tapeH_eq τ hc r ⟨k, hk⟩
+  have hRm : ∀ k (hk : k < 2 ^ 64 + 4), k < Ly.len →
+      FlockSoundness.Refine.fOf (P.mu ++ P.padMu)[k]! = (τ ⟨j.val, hc⟩).1.2.2.2.2.2.1 r ⟨k, hk⟩ := by
+    intro k hk h1
+    rw [FlockComplete.get_append_left _ _ (by rw [hms]; exact h1), ← tapeMu_eq τ hc r ⟨k, hk⟩,
+      getElem!_pos P.mu k (by rw [hms]; exact h1)]
+    simp [hP, FlockComplete.padsOf]
+  have hRpH : ∀ k : Fin _root_.Flock.Zk.K_PAD,
+      FlockSoundness.Refine.fOf (P.h ++ P.padH)[Ly.len + k.val]! = (τ ⟨j.val, hc⟩).1.2.2.2.1 r k := by
+    intro k
+    rw [← hhs, get_append_right' _ _ (by rw [hpH]; exact k.isLt), ← tapePadH_eq τ hc r k,
+      getElem!_pos P.padH k.val (by rw [hpH]; exact k.isLt)]
+    simp [hP, FlockComplete.padsOf]
+  have hRpM : ∀ k : Fin _root_.Flock.Zk.K_PAD,
+      FlockSoundness.Refine.fOf (P.mu ++ P.padMu)[Ly.len + k.val]! = (τ ⟨j.val, hc⟩).1.2.2.2.2.1 r k := by
+    intro k
+    rw [← hms, get_append_right' _ _ (by rw [hpM]; exact k.isLt), ← tapePadMu_eq τ hc r k,
+      getElem!_pos P.padMu k.val (by rw [hpM]; exact k.isLt)]
+    simp [hP, FlockComplete.padsOf]
+  have hRab : (P.h ++ P.padH)[Ly.hab]! = (UE.tapeZk τ).h j.val r.val Ly.fa * (UE.tapeZk τ).h j.val r.val Ly.fb := by
+    rw [FlockComplete.get_append_left _ _ (by rw [hhs]; omega), hP, FlockComplete.padsOf_hab,
+      FlockComplete.padsOf_get _ _ _ Ly Ly.fa (by omega) (by omega) (by omega),
+      FlockComplete.padsOf_get _ _ _ Ly Ly.fb (by omega) (by omega) (by omega)]
+  have hRtw : (P.h ++ P.padH)[Ly.tw]! = (UE.tapeZk τ).h j.val r.val Ly.tx * (UE.tapeZk τ).h j.val r.val Ly.ty := by
+    rw [FlockComplete.get_append_left _ _ (by rw [hhs]; omega), hP, FlockComplete.padsOf_tw,
+      FlockComplete.padsOf_get _ _ _ Ly Ly.tx (by omega) (by omega) (by omega),
+      FlockComplete.padsOf_get _ _ _ Ly Ly.ty (by omega) (by omega) (by omega)]
+  have hY1 : (cutE x c w τ j).Y1 r = some _ := cut_Y1_of_ne hY
+  have hyi : ∀ i (h2 : i < (FlockComplete.Replay.InZ.y P
+      (FlockComplete.SimInner.cutCoins (fun k i => slotAt c k i) L)).size),
+      (FlockComplete.Replay.InZ.y P (FlockComplete.SimInner.cutCoins (fun k i => slotAt c k i) L))[i] =
+        (P.h ++ P.padH)[i]! + slotAt c (L + 2) 0 * (P.mu ++ P.padMu)[i]! := by
+    intro i h2
+    simp only [FlockComplete.Replay.InZ.y, Array.getElem_map, Array.getElem_range]
+    rfl
+  rw [hsrc, hpd]
+  simp only [repSrcCut, hY1]
+  apply Array.ext
+  · rw [Array.size_ofFn]
+    simp only [FlockComplete.Replay.InZ.y, Array.size_map, Array.size_range, Array.size_append, hhs, hpH, hlen, ← hTE]
+    rfl
+  · intro i h1 h2
+    rw [Array.getElem_ofFn]
+    rw [hyi]
+    refine yAt_of _ _ _ (fun k => (P.h ++ P.padH)[k]! + slotAt c (L + 2) 0 * (P.mu ++ P.padMu)[k]!) ?_ ?_ ?_
+    · intro k hk
+      have hk' : k < (tabC PE x j).z.nE := hk
+      show FlockLevel3.GF128.val ((τ ⟨j.val, hc⟩).1.2.2.1 r ⟨k, by omega⟩ +
+        FlockSoundness.Refine.fOf (betaAt c j.val r.val) * (τ ⟨j.val, hc⟩).1.2.2.2.2.2.1 r ⟨k, by omega⟩) = _
+      rw [← hRh k (by omega) (by omega) (by omega) (by omega), ← hRm k (by omega) (by omega), val_add_mul, hβ]
+    · intro o
+      fin_cases o
+      · show FlockLevel3.GF128.val ((τ ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨Ly.fa, hfaE⟩)) *
+            (τ ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inl ⟨Ly.fb, hfbE⟩)) +
+          FlockSoundness.Refine.fOf (betaAt c j.val r.val) * (τ ⟨j.val, hc⟩).1.2.2.2.2.2.1 r (padEmb' hz (.inr 2))) = _
+        rw [show hEmb hz (.inl ⟨Ly.fa, hfaE⟩) = ⟨Ly.fa, by omega⟩ from rfl,
+          show hEmb hz (.inl ⟨Ly.fb, hfbE⟩) = ⟨Ly.fb, by omega⟩ from rfl,
+          show padEmb' hz (.inr 2) = ⟨Ly.hab, by omega⟩ from Fin.ext (by simp [padEmb', Composed.padIdx]; exact hE),
+          ← tapeH_eq τ hc r ⟨Ly.fa, by omega⟩, ← tapeH_eq τ hc r ⟨Ly.fb, by omega⟩,
+          ← hRm Ly.hab (by omega) (by omega), val_mul_add_mul, hβ]
+        simp only [Nat.add_zero, hTE, hRab]
+      · show FlockLevel3.GF128.val ((τ ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 0)) +
+          FlockSoundness.Refine.fOf (betaAt c j.val r.val) * (τ ⟨j.val, hc⟩).1.2.2.2.2.2.1 r (padEmb' hz (.inr 0))) = _
+        rw [show hEmb hz (.inr 0) = ⟨Ly.tx, by omega⟩ from Fin.ext (by show (tabC PE x j).z.nE + 1 + 0 = Ly.tx; omega),
+          show padEmb' hz (.inr 0) = ⟨Ly.tx, by omega⟩ from Fin.ext (by simp [padEmb', Composed.padIdx, htx]; exact hE),
+          ← hRh Ly.tx (by omega) (by omega) (by omega) (by omega), ← hRm Ly.tx (by omega) (by omega), val_add_mul, hβ]
+        simp only [hTE, htx]
+      · show FlockLevel3.GF128.val ((τ ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 1)) +
+          FlockSoundness.Refine.fOf (betaAt c j.val r.val) * (τ ⟨j.val, hc⟩).1.2.2.2.2.2.1 r (padEmb' hz (.inr 1))) = _
+        rw [show hEmb hz (.inr 1) = ⟨Ly.ty, by omega⟩ from Fin.ext (by show (tabC PE x j).z.nE + 1 + 1 = Ly.ty; omega),
+          show padEmb' hz (.inr 1) = ⟨Ly.ty, by omega⟩ from Fin.ext (by simp [padEmb', Composed.padIdx, hty]; exact hE),
+          ← hRh Ly.ty (by omega) (by omega) (by omega) (by omega), ← hRm Ly.ty (by omega) (by omega), val_add_mul, hβ]
+        simp only [hTE, hty]
+      · show FlockLevel3.GF128.val ((τ ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 0)) *
+            (τ ⟨j.val, hc⟩).1.2.2.1 r (hEmb hz (.inr 1)) +
+          FlockSoundness.Refine.fOf (betaAt c j.val r.val) * (τ ⟨j.val, hc⟩).1.2.2.2.2.2.1 r (padEmb' hz (.inr 3))) = _
+        rw [show hEmb hz (.inr 0) = ⟨Ly.tx, by omega⟩ from Fin.ext (by show (tabC PE x j).z.nE + 1 + 0 = Ly.tx; omega),
+          show hEmb hz (.inr 1) = ⟨Ly.ty, by omega⟩ from Fin.ext (by show (tabC PE x j).z.nE + 1 + 1 = Ly.ty; omega),
+          show padEmb' hz (.inr 3) = ⟨Ly.tw, by omega⟩ from Fin.ext (by simp [padEmb', Composed.padIdx, htw]; exact hE),
+          ← tapeH_eq τ hc r ⟨Ly.tx, by omega⟩, ← tapeH_eq τ hc r ⟨Ly.ty, by omega⟩,
+          ← hRm Ly.tw (by omega) (by omega), val_mul_add_mul, hβ]
+        simp only [hTE, htw]
+        rw [show Ly.hab + 3 = Ly.tw from rfl, hRtw]
+    · intro k
+      have hk : k.val < _root_.Flock.Zk.K_PAD := k.isLt
+      show FlockLevel3.GF128.val ((τ ⟨j.val, hc⟩).1.2.2.2.1 r (Fin.castLE hz.nPad k) +
+        FlockSoundness.Refine.fOf (betaAt c j.val r.val) * (τ ⟨j.val, hc⟩).1.2.2.2.2.1 r (Fin.castLE hz.nPad k)) = _
+      rw [← hRpH (Fin.castLE hz.nPad k), ← hRpM (Fin.castLE hz.nPad k), val_add_mul, hβ]
+      simp only [hTE, hlen]
+      rfl
+
 /-- **`InnerSrcE`'s `triple`**: wherever the shared phases reach table `j`'s rep `r` inner proof, the cut's source
-carries the session's `ρ_in`, `σ_in` at round `l'.size`'s coin (`innerSlotE`, `innerTripleE`). -/
+carries the session's `ρ_in`, `σ_in` at round `l'.size`'s coin (`innerPre_slot`, `innerTripleE`). -/
 theorem innerSrcE_triple {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (w : Claims.Flock.Wit) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (j : Fin (jOf x)) (r : Fin 2)
     (dom : ByteArray) (cm0 : FlockComplete.Commit) (ic : FlockComplete.InnerCommit)
@@ -616,7 +828,7 @@ theorem innerSrcE_triple {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = s
             (FlockComplete.SimInner.cutCoins (fun k i => slotAt c k i) l'.size) ∧
         ((srcE x c w τ j.val).rep r.val).sigmaIn =
           FlockComplete.Replay.InZ.sigma (innerLayE x j) (innerPadsE x τ j r) :=
-  fun _ => innerTripleE x c w τ j r (innerSlotE hs w τ c n j r dom cm0 ic extras he hl ho)
+  fun _ => innerTripleE x c w τ j r (innerPre_slot hs w τ c n j r dom cm0 ic extras he hl ho)
 
 /-- **What hybrid 2's inner proof reads from the cut** (`SimInner`'s open content): at a live statement and a witness in
 the deployed relation, at any opened coins `c` and stop `n` at which no refusal is seen, wherever the phases hybrids 2
