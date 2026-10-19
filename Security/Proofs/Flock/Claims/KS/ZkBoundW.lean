@@ -116,7 +116,8 @@ theorem mean_epsSZ_le_rawJ {F K : Type} [Field F] [Fintype F] [DecidableEq F] [F
 open Classical in
 /-- **The masked bound at one tape and table, off the table on a witness lane, at the fork bound's slack**:
 `zk_le_sessionsJ` where the mixture `σ` bounds the deployed runs accepting with no column of table `j` off `C` by its
-acceptance with no level-0 opening off `C` on a witness lane unless it self-clashes, each fork term's mean `Adv` at
+acceptance at table `j` and every table before it (`AccUpTo`) with no level-0 opening off `C` on a witness lane unless
+it self-clashes, each fork term's mean `Adv` at
 table `j` (level 0's `Adv₀` among them) is at most its fork event's probability and the slack of the fork at its round
 (`Claims.Flock.forkSlack`), and the mean self-clash at most the one-run event's. Each session's acceptance there is at
 most its `ε_c⁻` and level-0 term (`session_sound_of_table_accZ_w`), whose mean is at most `ε_table`, table `j`'s old
@@ -151,7 +152,7 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
           Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
             u ≠ C p) ≤
       (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-          (outs.getD pre.length dfltOutZC).accepted = true ∧
+          AccUpTo pre.length outs ∧
             ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
               ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
         (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ)
@@ -188,28 +189,28 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
   set c₀ : ℝ := 2 ^ (lvOf (T j).sch 0).logLen * (2 * (lvOf (T j).sch 0).queries) with hc₀
   have hc₀0 : 0 ≤ c₀ := by positivity
   have hper : ∀ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        (outs.getD pre.length dfltOutZC).accepted = true ∧
+        AccUpTo pre.length outs ∧
           ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t) ≤
         epsSZ A Hs (T j) pre post cap₀ (σ t) + Real.sqrt (c₀ * adv₀SZ A Hs (T j) pre post cap₀ (σ t)) := by
     intro t
     have hs := session_sound_of_table_accZ_w A hA Hs (T j) pre post cap₀
-      (fun outs => (outs.getD pre.length dfltOutZC).accepted = true ∧
+      (fun outs => AccUpTo pre.length outs ∧
         ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
           ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
       (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
     have e : (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        ((outs.getD pre.length dfltOutZC).accepted = true ∧
+        (AccUpTo pre.length outs ∧
           ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ (T j).Committed A (Claims.Flock.oracleOf C)) = ind fun outs =>
-        (outs.getD pre.length dfltOutZC).accepted = true ∧
+        AccUpTo pre.length outs ∧
           ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)) :=
       congrArg ind (funext fun _ => propext (and_iff_left hTc))
     have e₀ : (ind fun outs : List (OutZC 𝔽 D Sl) =>
-        ((outs.getD pre.length dfltOutZC).accepted = true ∧
+        (AccUpTo pre.length outs ∧
           ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
             ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC))) ∧
           ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC) ∧
@@ -266,8 +267,8 @@ theorem zk_le_sessionsJW {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
 
 /-- **The masked tables' sessions after `Commit`, off the table on a witness lane, with events on accepted runs**:
 `ZkSessJ` with level 0's fork event at each table (`IZW`), every event on accepted deployed runs, and the mixture
-bounding the deployed runs by its acceptance with no level-0 opening off `C` on a witness lane unless it
-self-clashes. Each fork term's mean `Adv` is at most its fork event's probability and the slack of the fork at its
+bounding the deployed runs by its acceptance up to table `j` with no level-0 opening off `C` on a witness lane unless
+it self-clashes. Each fork term's mean `Adv` is at most its fork event's probability and the slack of the fork at its
 round (`Claims.Flock.forkSlack` at `δ ≥ 0`), only level 0's event of a table is at round `0`, and the slack fits the
 masked weight's room (`Claims.Flock.SlackFitW`). -/
 def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
@@ -297,7 +298,7 @@ def ZkSessWJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
                 Claims.Flock.lookCol (cols true (Claims.run sha512 P (V true) x ω r).seen j) p.val = some u ∧
                   u ≠ C p) ≤
             (∑ t, expect (ind fun outs : List (OutZC 𝔽 D Sl) =>
-                (outs.getD pre.length dfltOutZC).accepted = true ∧
+                AccUpTo pre.length outs ∧
                   ¬ (OffW₀Z Hs (T j) cap₀ (Claims.Flock.oracleOf C) (outs.getD pre.length dfltOutZC) ∧
                     ¬ SelfClashZ Hs (T j) (outs.getD pre.length dfltOutZC)))
               (sessAtZ pre post (tabAfterZC A Hs (T j) cap₀)) (σ t)) / Fintype.card τ ∧

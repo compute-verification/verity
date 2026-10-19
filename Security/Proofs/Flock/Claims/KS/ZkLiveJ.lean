@@ -12,8 +12,8 @@ tables are `T 0, …, T (n - 1)` (`tabsJ`), and the strategy after `Commit` is a
 
 `ZkLiveAtJ` is `ZkLiveAt` at every table: the escapes at injective fork rounds of every table, and at each tape, table
 `j` and table `C` of its word, live strategies with common roots whose verdict bounds the deployed runs accepting with
-no column of table `j` off `C`, a verdict on each table's output the decoder is right for, table `j`'s implying
-acceptance with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bounding its `Adv`s and
+no column of table `j` off `C`, a verdict on each table's output the decoder is right for, each implying acceptance
+and table `j`'s no level-0 opening off `C` unless it self-clashes, and table `j`'s events bounding its `Adv`s and
 self-clash. It gives `ZkSessJ` (`zkSessJ_of_liveJ`), so every table's bound (`zk_tableBoundJAt_of_liveJ`).
 
 At the deployed masked record, `T j` is C-Flock ZK's padded table of the statement's table `j` (`zkTabs`, `zkTab` at
@@ -57,15 +57,21 @@ variable [Inhabited D] [Inhabited Sl]
 
 open Classical in
 omit [Fintype K] in
-/-- **Every table passing its verdict** is no likelier than table `j` passing its own after `Commit`. -/
+/-- **Every table passing its verdict** has the same probability after `Commit`, read at table `j`. -/
 theorem prob_sessionZC_leJ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (τ : Strategy (sessionZC A Hs ts))
     {caps : Fin ts.length → Model.Cap D} (hc : τ.1 = caps) (j : Fin ts.length) {T : TabZK 𝔽 mPts}
     (hT : ts.get j = T) :
     (prob (fun outs => ∀ i : Fin ts.length, ok i (outs.getD i dfltOutZC)) (sessionZC A Hs ts) τ).toReal ≤
-      expect (ind fun outs => ok j (outs.getD j dfltOutZC)) _ (afterJZ A Hs ts τ hc j hT) := by
+      expect (ind fun outs => ∀ i : Fin ts.length, ok i (outs.getD i dfltOutZC)) _ (afterJZ A Hs ts τ hc j hT) := by
   rw [prob_toReal, expect_afterJZ]
-  exact expect_mono (ind_mono fun _ h => h j) (sessAfterZC (gamesZC A Hs ts τ.1)) τ.2
+  exact le_rfl
+
+/-- **Verdicts that imply acceptance, passed at every table, accept every table up to `j`.** -/
+theorem accUpTo_of_okAll {n : ℕ} (ok : Fin n → OutZC 𝔽 D Sl → Prop)
+    (hacc : ∀ i o, ok i o → o.accepted = true) {j : ℕ} (hj : j < n) {outs : List (OutZC 𝔽 D Sl)}
+    (h : ∀ i : Fin n, ok i (outs.getD i dfltOutZC)) : AccUpTo j outs :=
+  fun i hi => hacc _ _ (h ⟨i, by omega⟩)
 
 /-- The simulated strategy of the masked session (`simSessZG`) at a verdict `ok i` on each table `i`'s output, its
 dead branches sending empty openings (`nulOpZ`). -/
@@ -125,8 +131,8 @@ noncomputable def simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts :
   afterJZ A Hs ts (simSessZV A Hs ts ok pL opn dg dec one fin capOf N hdec Pr) (by rw [simSessZV_fst, hP]) j hT
 
 open Classical in
-/-- **A live verdict is no likelier than table `j`'s verdict after `Commit`** at the caps the prover's roots decode
-to. -/
+/-- **A live verdict is no likelier than every table's verdict after `Commit`**, read at table `j`, at the caps the
+prover's roots decode to. -/
 theorem live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -136,7 +142,7 @@ theorem live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : L
     (rootB₀ : Array ByteArray) (Pr : Strategy (liveSession dg ts.length mPts N)) (hP : Pr.1 = rootB₀)
     (j : Fin ts.length) {T : TabZK 𝔽 mPts} (hT : ts.get j = T) :
     (prob pL (liveSession dg ts.length mPts N) Pr).toReal ≤
-      expect (ind fun outs => ok j (outs.getD j dfltOutZC)) _
+      expect (ind fun outs => ∀ i : Fin ts.length, ok i (outs.getD i dfltOutZC)) _
         (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP j hT) :=
   le_trans (ENNReal.toReal_mono (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _))
     (live_le_sessionZV A Hs ts ok pL opn dg dec one fin capOf N hdec Pr))
@@ -144,7 +150,8 @@ theorem live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : L
 
 open Classical in
 /-- **Over a mixture of live strategies with common roots `rootB₀`**: the mean live verdict is at most the mean
-probability of table `j`'s verdict after `Commit`, over the simulated strategies at the caps the roots decode to. -/
+probability of every table's verdict after `Commit` at table `j`, over the simulated strategies at the caps the roots
+decode to. -/
 theorem mean_live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (ts : List (TabZK 𝔽 mPts))
     (ok : Fin ts.length → OutZC 𝔽 D Sl → Prop) (pL : LiveOutJ ts.length mPts → Prop)
     (opn : Array ByteArray → Fin ts.length → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
@@ -154,7 +161,7 @@ theorem mean_live_le_simAtJZ (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (t
     (rootB₀ : Array ByteArray) {τ : Type} [Fintype τ] (σL : τ → Strategy (liveSession dg ts.length mPts N))
     (hσ : ∀ u, (σL u).1 = rootB₀) (j : Fin ts.length) {T : TabZK 𝔽 mPts} (hT : ts.get j = T) :
     (∑ u, (prob pL (liveSession dg ts.length mPts N) (σL u)).toReal) / Fintype.card τ ≤
-      (∑ u, expect (ind fun outs => ok j (outs.getD j dfltOutZC)) _
+      (∑ u, expect (ind fun outs => ∀ i : Fin ts.length, ok i (outs.getD i dfltOutZC)) _
         (simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) j hT)) / Fintype.card τ :=
   div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ =>
     live_le_simAtJZ A Hs ts ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) j hT) (Nat.cast_nonneg _)
@@ -184,7 +191,7 @@ hypothesis on the deployed prover, the masked session's tables `T 0, …` up to 
 prover has escapes at every table `j`'s fork rounds `rd j`, no two one, such that, at each tape, each table `j` and
 each table `C` of its word `Ok` allows, live strategies `σL` whose roots agree bound the deployed runs accepting with
 no column of table `j` off `C` by their verdict `pL`, the decoder is right for a verdict `ok` on each table's output,
-table `j`'s implying it accepted with no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound
+each implying its table accepted and table `j`'s also no level-0 opening off `C` unless it self-clashes, and table `j`'s events bound
 the simulated strategies' `Adv`s and self-clash after `Commit` at table `j` (`simAtJZ`). -/
 def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (Ok : Claims.Msg → ℕ → List 𝔽 → Prop) (x : Claims.Msg) {mPts : ℕ}
@@ -211,6 +218,7 @@ def ZkLiveAtJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D
           (rootB₀ : Array ByteArray)
           (_hok : ∀ o, ok (finJ T hj) o → o.accepted = true ∧
             ¬ (Off₀Z Hs (T j) (capOf rootB₀ (finJ T hj)) (Claims.Flock.oracleOf C) o ∧ ¬ SelfClashZ Hs (T j) o))
+          (_hacc : ∀ i o, ok i o → o.accepted = true)
           (hdec : ∀ i, DecodesTable (outJ Hs (tabsJ (tables true x).length T)) ok pL opn dec one fin capOf
             (repJ A Hs (tabsJ (tables true x).length T)) i)
           (τ : Type) (_ : Fintype τ) (_ : Nonempty τ)
@@ -249,8 +257,8 @@ theorem zkSessJ_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
   intro Ω _ _ P
   obtain ⟨rd, hrd, ev, ev₁, tied, tied₁, hω⟩ := hl Ω P
   refine ⟨rd, hrd, ev, ev₁, tied, tied₁, fun ω j hj C hok => ?_⟩
-  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau, hsc⟩ :=
-    hω ω j hj C hok
+  obtain ⟨ok, pL, opn, dg, dec, one, fin, capOf, N, rootB₀, hok', hacc', hdec, τ, _, _, σL, hσ, htr, hadv, hP, hTau,
+    hsc⟩ := hω ω j hj C hok
   have hlen := take_gamesZC_length A Hs (tabsJ (tables true x).length T) (capOf rootB₀) (finJ T hj)
   refine ⟨τ, inferInstance, inferInstance, _, _, capOf rootB₀ (finJ T hj),
     fun u => simAtJZ A Hs _ ok pL opn dg dec one fin capOf N hdec rootB₀ (σL u) (hσ u) (finJ T hj)
@@ -259,7 +267,8 @@ theorem zkSessJ_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [
       (finJ T hj) (tabsJ_get _ T _)) ?_)
     rw [hlen]
     exact div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ =>
-      expect_mono (ind_mono fun outs h => hok' _ h) _ _) (Nat.cast_nonneg _)
+      expect_mono (ind_mono fun outs h =>
+        ⟨accUpTo_of_okAll ok hacc' (finJ T hj).isLt h, (hok' _ (h _)).2⟩) _ _) (Nat.cast_nonneg _)
   · rw [hlen]
     exact hsc
 

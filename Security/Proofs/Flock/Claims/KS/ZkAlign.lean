@@ -11,7 +11,9 @@ session's leaves record the cap of the entry they hold:
 
 * `opRZ_mem`, `capAtZ_of_sessRelZ`, `sessForkZ_le`: an outcome the session's leaf relation relates to an index holding
   rep `r`'s level-`ℓ + 1` entry with cap `d`, and which opens a position at `d` there, records `d` as that rep's
-  level-`ℓ + 1` cap (`RecStruct`), so at that entry the session's fork event at the slot (`advRSZ`'s) is `ForkEvZ`'s;
+  level-`ℓ + 1` cap (`RecStruct`), so at that entry the session's unfiltered fork event at the slot is `ForkEvZ`'s.
+  `advRSZ`'s event reads the openings only on runs accepting every table up to the session's (`opRAccZ`, `AccUpTo`),
+  so its fork is at most the unfiltered one (`forkE_capAcc_le`);
 * `forkC_push`, `forkC_pushStrat`: the primed prover, sending the constant cap at every digest, forks as the compiled
   one after any number of coins;
 * `SlotRSZ`, `advRSZ_le_forkC`: where the primed prover reaches the slot's node after `t` coins (`Lock.SlotAt` at
@@ -213,9 +215,11 @@ theorem advRSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
     advRSZ A Hs T pre post cap₀ r.val (ℓ + 1) σ ≤
       forkC (fun a a' => ind (fun p : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) =>
         ForkEvZ Hs T.sch pre.length r.val ℓ p.1 p.2) (a, a')) t _ σ :=
-  (Lock.forkE_le_forkC _ _ (fun _ _ => ind_nonneg _ _)
-    (fun t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂ =>
-      sessForkZ_le A Hs T default cap₀ pre.length r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂) h).trans
+  ((forkE_capAcc_le Hs T (plurSZ Hs T pre.length) (slotOf r.val (ℓ + 1) + 4) pre.length r.val (ℓ + 1)
+      (lockSessZ A Hs T pre post default cap₀) (pushStrat A Hs T cap₀ pre post σ)).trans
+    (Lock.forkE_le_forkC _ _ (fun _ _ => ind_nonneg _ _)
+      (fun t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂ =>
+        sessForkZ_le A Hs T default cap₀ pre.length r ℓ t d i₁ a₁ b₁ i₂ a₂ b₂ h₁ h₂ hg₁ hg₂) h)).trans
     (le_of_eq (forkC_pushStrat A Hs T cap₀ pre post _ t σ))
 
 end Session
