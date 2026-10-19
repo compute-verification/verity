@@ -170,7 +170,7 @@ def deployedFix (i : Fin 4) (t : Fin 10) : Option GF128 :=
 
 /-- **The deployed rank bound**: at most `2^-122 = 64·2^-128` of the coins refuse, the part of a table's `4·m·2^-128`
 the ten coordinates the bridge chooses take (`rankBoundAt_of_deployed`, in `Zk.RankBridge`; the other `m − 17` take
-`4·(m − 17)·2^-128`). Open: the note's argument, not yet in Lean. -/
+`4·(m − 17)·2^-128`). Proved: `deployedRankBound`, in `Zk.RankDeployed`. -/
 def DeployedRankBound : Prop := RankBound 4 10 deployedFix 122
 
 /-! ## The prover's check -/
@@ -323,8 +323,8 @@ def MaskRankAt (st : Flock.Stmt) {k : ℕ} (r : Fin k → Coin) (n₀ n₁ : ℕ
   maskRankOk (claimsAt st r n₀ ++ claimsAt st r n₁) (maskWordsOf st) = true
 
 /-- **What the rank bound reads of a table**, which every table of a masked session in scope has
-(`layoutOk_of_scope`): it passes `Zk.shapeOk` (`25 ≤ m ≤ 35`, a mask slot of `N ≥ 576` words), its `m` is
-`k_log + nbl`, and its mask slot is at least a word and inside the block. -/
+(`layoutOk_of_scope`): it passes `Zk.shapeOk` (`25 ≤ m ≤ 35`, a mask slot of `2^13` bits or more and `N ≥ 576`
+words), its `m` is `k_log + nbl`, and its mask slot is at least a word and inside the block. -/
 def LayoutOk (st : Flock.Stmt) : Prop :=
   Flock.Zk.shapeOk st = .ok () ∧ st.m = st.c.kLog + st.nbl ∧
     ∀ r ∈ st.c.ranges.toList, r.kind = Flock.Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog
@@ -336,7 +336,8 @@ def RankBoundAt (st : Flock.Stmt) : Prop :=
     Claims.Pr (fun r : Fin k → Coin => n₁ + (st.m + st.c.kLog) ≤ k ∧ ¬ MaskRankAt st r n₀ n₁) ≤ 4 * st.m / 2 ^ 128
 
 /-- **The rank bound at the verifier's coins**: `RankBoundAt` at every table of the layout the setup admits. It follows
-from the open `DeployedRankBound` and `SmallSlotBound` (`maskRankBound_of`, in `Zk.RankBridge`). -/
+from `DeployedRankBound` and `SmallSlotBound` (`maskRankBound_of`, in `Zk.RankBridge`), both proved, so it holds
+(`maskRankBound`, in `Zk.RankDeployed`). -/
 def MaskRankBound : Prop := ∀ st : Flock.Stmt, LayoutOk st → RankBoundAt st
 
 /-! ## The slot's size -/

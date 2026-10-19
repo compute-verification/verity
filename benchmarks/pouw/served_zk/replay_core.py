@@ -57,6 +57,7 @@ import of_record as OR  # noqa: E402
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/core/protocols/pouw/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
+V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
 REGISTRATION_RULES = ("window", "public-items", "level", "public-value", "population", "law", "query", "scheme")
 V1_PASS = "verity-vllm/pouw-pearl-c-run/v1"
 #: The evidence a registration control is paired with in a window stopped before its outcome: a registration rule
@@ -75,13 +76,19 @@ def research(*args: str) -> str:
 
 
 def store_runs(into: Path) -> list[Path]:
-    """Every served_zk `job.sh` attempt's run record ``out/``, fetched under `into`."""
+    """Every served_zk `job.sh` attempt's run record ``out/``, fetched under `into` (empty for a record without one, a job
+    that failed before writing it)."""
     rows = research("data", "sql", "select a.id, o.artifact from attempts a join attempt_outputs o on o.attempt = a.id "
                     "where a.manifest_json like '%served_zk/job.sh%' and o.name = 'run_record' order by a.start_utc")
     runs = []
     for line in rows.splitlines()[1:]:
         run, art = line.split("\t")
-        research("data", "fetch", art, "--to", str(into / run), "--path", "out/*")
+        try:
+            research("data", "fetch", art, "--to", str(into / run), "--path", "out/*")
+        except SystemExit as e:
+            if "no file matches" not in str(e):
+                raise
+            (into / run).mkdir(parents=True, exist_ok=True)
         runs.append(into / run)
     return runs
 
@@ -346,13 +353,14 @@ def replay_run(sides: Sides, out: Path, passes: dict[str, Path]) -> dict:
 
 
 def replay_v2(sides: Sides, root: Path) -> list[dict]:
-    """A4's v2 registrations, each through both sides: none is a PoUW window (no served window), and its
-    `registered` values wait on R7."""
+    """A4's v2 registrations, each through both sides under the served path's pinned check item (`V2_TILE`), so each
+    reaches the registration rules: none is a PoUW window (no served window), and its `registered` values wait on R7."""
+    tile = CC.TILES[V2_TILE]
     rows = []
     for p in sorted(root.rglob("registration.json")):
         reg = load(p)
-        case = {"params": {"check": {"entries": 2, "scheme": CC.SCHEME, "template": "v2", "tile_work": 1},
-                           "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "query": reg["query"],
+        case = {"params": {"check": {"entries": 2, "scheme": CC.SCHEME, "template": V2_TILE, "tile_work": tile.tile_work},
+                           "context": "v2", "delta": "1/10", "eps": "1/2", "grid_bits": 3, "query": tile.query,
                            "range": [1, 1 << 40]},
                 "commitment": hexed(reg), "evidence": hexed({"protocol": CC.ONE_STAGE, "verdict": "reject",
                                                             "reason": "v2", "commitment": None, "public": None,

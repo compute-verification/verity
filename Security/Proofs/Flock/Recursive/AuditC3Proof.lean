@@ -200,16 +200,16 @@ typing's protocol or against the statement's literals, so `holoAt` never needs u
 any accidental two-typings crossing (which would delta-unfold `holoTableCL`'s body) fail fast. -/
 attribute [local irreducible] holoAt
 
-/-- **The recursive audit at candidate 3's soundness half, at every coin types `CT` and record map `im`.** -/
-theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
+/-- **The recursive audit at candidate 3's soundness half with no A3**, at every coin types `CT` and record map `im`. -/
+theorem recursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
     [∀ st hp k, Inhabited (CT st hp k)]
     (im : (st : Flock.Stmt) → (hp : HoloParams) → (Cm : Type) → Flock.RecVStar.Inner → String →
       (Cm → String → Nat → List UInt8) →
         FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
-    Flock.Guarantees.RecursiveAuditC3At CT im := by
+    Flock.Guarantees.RecursiveAuditC3AtNoA3 CT im := by
   intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st ish hp reg wr coins cap salt bcs' hstk Vs zr hCust _hRC _tbl _bc
-    _hIC _htbl bind rows hob hF dg N σ wmsg Sk cmt msg hA3 k Rw M hk hRw hM ρ hρ hr hbr
+    _hIC _htbl bind rows hob hF dg N σ wmsg Sk cmt msg k Rw M hk hRw hM ρ hρ hr hbr
   by_cases hT : Typed zr
   swap
   · left
@@ -242,7 +242,7 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     · rw [zsOf_neg zr _ hT R ω t R₂ j hx']
       exact hr _ _ _ _ j _ _ _ S' R'
   rcases zk_sessions_recursive_fork_regVτ (Flock.Guarantees.holoTys st hp) (CT st hp) hp hp.τ
-    (classOk_of_accepts hacc.acceptsStmt) hA3
+    (classOk_of_accepts hacc.acceptsStmt)
     (Flock.Guarantees.checkedC3 (I := holoInnerAtτ (Flock.Guarantees.holoTys st hp) (CT st hp) st hp hp.τ) ish
       (Flock.Guarantees.innerHeld wr st reg) (fun t => coins (wr t).2) bind rows zr hCust hT)
     (valueSrcAll (fun t => coins (wr t).2) fun t => Flock.Guarantees.c3Of ish (Flock.Guarantees.innerHeld wr st reg t))
@@ -277,6 +277,26 @@ theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
           (cs := Flock.Guarantees.innerHeld wr st reg) (coins := fun t => coins (wr t).2) hlen.ge hall hw
           (verifies_zsOf zr _ hT o.1 o.2.1 o.2.2.1 o.2.2.2 hall (acceptsVR_of_V ho.2.1.1) ho.2.1.2).1 ho.2.2.1,
           fun hh => ho.2.2.2 (holoSatSome_of_holds hh)⟩)) hb))))))))
+
+/-- **The recursive audit at candidate 3's soundness half, at every coin types `CT` and record map `im`.** -/
+theorem recursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
+    (CT : (st : Flock.Stmt) → (hp : HoloParams) → Fin (r st hp) → Type) [∀ st hp k, Fintype (CT st hp k)]
+    [∀ st hp k, Inhabited (CT st hp k)]
+    (im : (st : Flock.Stmt) → (hp : HoloParams) → (Cm : Type) → Flock.RecVStar.Inner → String →
+      (Cm → String → Nat → List UInt8) →
+        FlockSoundness.Assumptions.InnerRecordMap Cm ((k : Fin (r st hp)) → CT st hp k)) :
+    Flock.Guarantees.RecursiveAuditC3At CT im := by
+  intro n Ω _ _ draw Reg Cm Reg' Reg₂ obj prog st ish hp reg wr coins cap salt bcs' hstk Vs zr hCust hRC tbl bc hIC htbl
+    bind rows hob hF dg N σ wmsg Sk cmt msg _hA3 k Rw M hk hRw hM ρ hρ hr hbr
+  exact recursiveAuditC3AtNoA3 CT im obj prog st ish reg wr coins cap salt bcs' hstk zr hCust hRC tbl bc hIC htbl bind
+    rows hob hF dg N σ wmsg Sk cmt msg hk hRw hM hρ hr hbr
+
+/-- **The recursive audit at candidate 3, as the verifier of record runs it, with no A3.** -/
+theorem RecursiveAuditC3NoA3 : Flock.Guarantees.RecursiveAuditC3NoA3 := by
+  refine And.intro ?_ ?_
+  swap
+  · exact RecursiveFirewallPrivate
+  exact recursiveAuditC3AtNoA3 Flock.Guarantees.holoCTs Flock.Guarantees.holoMap
 
 /-- **The recursive audit at candidate 3, as the verifier of record runs it.** -/
 theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 := by

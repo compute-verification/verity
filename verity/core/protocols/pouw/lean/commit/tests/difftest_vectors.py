@@ -2,11 +2,12 @@
 
     python tests/difftest_vectors.py <verity checkout> --out DIR
 
-Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}` and, where Lean refuses by name what Python
-refuses another way or accepts, `"lean"` and `"why"`. The outcome is the checkout's `verity.core.protocols.pouw`:
-`{"ok": v}`, `{"reason": text}` for a coin `coin_reason` refuses, `{"error": type}` when it raises. The Lean audit runs
-`PouwCommit/DifftestMain.lean` on the file (`runs` in `lean-audit.json`, which pins its SHA-256), and
-`tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it and that its cases reach every refusal.
+Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}`. The outcome is the checkout's
+`verity.core.protocols.pouw`: `{"ok": v}`, `{"reason": text}` for a coin `coin_reason` refuses, `{"error": type}` when it
+raises. The Lean is PoUW's verifier of record (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
+file (`runs` in `lean-audit.json`, which pins its SHA-256), which fails on any case whose Python outcome is not the
+Lean's, and `tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
+refusal, and runs the Lean on it.
 
 The cases: `tagged` over bytes, strings (non-ASCII among them) and integers past 64 bits; the bindings and `weights_root`
 over random weight-root maps; domain ids under both frame hashes with bindings, owners and counts out of range; the roots of
@@ -51,11 +52,8 @@ def generate(seed: int = 0) -> list[dict]:
     rng = random.Random(seed)
     cases: list[dict] = []
 
-    def add(kind: str, inp: dict, python: dict, lean: dict | None = None, why: str | None = None) -> None:
-        case = {"kind": kind, "in": inp, "python": python}
-        if lean is not None:
-            case |= {"lean": lean, "why": why}
-        cases.append(case)
+    def add(kind: str, inp: dict, python: dict) -> None:
+        cases.append({"kind": kind, "in": inp, "python": python})
 
     texts = ["", "a", "verity/pouw/x/v1", "é", "中文", "🙂 tag", "line\nbreak", "q'uote\"", "\x01ctl"]
 
@@ -186,16 +184,15 @@ def generate(seed: int = 0) -> list[dict]:
                        "root": root.hex(), "position": pos, "value": value.hex(), "path": [p.hex() for p in path]},
             _outcome(check))
 
-    def coin_case(cj: dict, oj: dict, label: str, after: str, lean: dict | None = None, why: str | None = None) -> None:
+    def coin_case(cj: dict, oj: dict, label: str, after: str) -> None:
         def reason():
             r = coins.coin_reason(coins.CoinCommitment.from_json(cj), coins.CoinOpening.from_json(oj), label, bytes.fromhex(after))
             return r
         res = _outcome(reason)
         if "ok" in res and res["ok"] is not None:
             res = {"reason": res["ok"]}
-        add("coins", {"commitment": cj, "opening": oj, "label": label, "after": after}, res, lean, why)
+        add("coins", {"commitment": cj, "opening": oj, "label": label, "after": after}, res)
 
-    byname = {"error": "refused by name"}
     for _ in range(COUNTS["coins"]):
         epoch = rng.choice([0, 1, 5, rng.randrange(2**40), 2**70])
         ch = coins.Challenger(epoch, rng.randbytes)
@@ -236,14 +233,11 @@ def generate(seed: int = 0) -> list[dict]:
         coin_case(cj, oj | {"after": ah + "0"}, label, ah)
         coin_case(cj, oj | {"coin": "zz" + op.coin.hex()[2:]}, label, ah)
         coin_case(cj | {"root": 5}, oj, label, ah)
-        coin_case(cj, oj | {"label": 5}, label, ah, byname, "Lean refuses an opening whose label is not a string; Python compares it")
-        coin_case(cj, oj | {"epoch": str(epoch)}, label, ah, byname,
-                  "Lean refuses an opening whose epoch is not an integer; Python compares it")
+        coin_case(cj, oj | {"label": 5}, label, ah)
+        coin_case(cj, oj | {"epoch": str(epoch)}, label, ah)
         if epoch in (0, 1):
-            coin_case(cj, oj | {"epoch": bool(epoch)}, label, ah, byname,
-                      "Lean refuses a boolean epoch, which Python's == takes for the integer")
-            coin_case(cj, oj | {"epoch": float(epoch)}, label, ah, byname,
-                      "Lean refuses an epoch written as a float, which Python's == takes for the integer")
+            coin_case(cj, oj | {"epoch": bool(epoch)}, label, ah)
+            coin_case(cj, oj | {"epoch": float(epoch)}, label, ah)
 
     def roots_map() -> dict[int, bytes]:
         return {w: rng.randbytes(rng.choice([32, 64])) for w in rng.sample(range(10**6), rng.randrange(5))}

@@ -1,6 +1,6 @@
-"""The one-stage audit's verifier of record: its Lean port (`sampled-proofs-verifier`, the Lake package
-`verity/core/service/sampled_proofs`, built with `lake` on first use) and this package's Python, the reference, run side by
-side on every check.
+"""The one-stage audit's verifier of record, and the two-stage law's profile's: its Lean port (`sampled-proofs-verifier`,
+the Lake package `verity/core/service/sampled_proofs`, built with `lake` on first use) and this package's Python, the
+reference, run side by side on every check.
 
 `RECORD_VERDICT` names the one whose verdict is the record's: `"lean"`, or `"python"` to switch back. Either way both run on
 every call, both outcomes are recorded beside the one of record (a `Verdict`'s `verifiers`, an audit record's
@@ -13,14 +13,17 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
 * `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
   draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
+* `coins`: those bytes themselves, the challenger's coins, which only the Lean reads from the operating system
+  (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a Lean that can't answer leaves no coins;
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
+* `two_stage_profile`, `check_probability`: the two-stage law's profile over a class's RUs (`TwoStageLaw.profile`) and
+  a proof unit's marginal probability of being checked (`two_stage.check_probability`), compared whole, δ exactly;
 * `audit_record`: the whole record, equal under `canonical_json`. The registered roots the record's `registered` check
   reads are the verdicts' own on both sides, for the registration's own values (`audit.session_registered`), never an
-  argument. One field is Python's on both: `wrong_units.bound` under a Bernoulli law, a float relaxation
-  (`IntegrityProfile.worst_case`, through `math.log`) the Lean does not compute and leaves null. Python's `delta` is a
-  float, given to the Lean exactly (`str(Fraction(delta))`); the Lean writes it, and any float in the inputs, as Python's
-  `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two disagree.
+  argument. Python's `delta` is a float, given to the Lean exactly (`str(Fraction(delta))`); the Lean writes it, and any
+  float in the inputs, as Python's `repr` does. A float the Lean can't read back (`-0.0`, NaN, an infinity) makes the two
+  disagree.
 
 Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`, which `test_verifier.py` holds this one to): Lake
 builds the path requires in place, and two builds at once would rewrite one module's C under each other. This package
@@ -39,12 +42,13 @@ import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.ml.circuits import codec
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
 
+from .. import two_stage as TS
 from . import audit, draw as D, hello as H, registration as R
 from .verdict import Verdict
 
@@ -164,6 +168,25 @@ def lean(fn: str, value: Any) -> dict[str, Any]:
     return body if kind == "output" else {"refused": body}
 
 
+#: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
+COINS_MAX = 1 << 24
+
+
+def coins(n: int) -> bytes:
+    """`n` bytes of the operating system's randomness, read by the Lean verifier of record (`IO.getRandomBytes`, A3's
+    `uniform/io-getrandombytes`): the challenger's coins (`service.Stream`'s default), which the Python never reads from
+    the operating system itself. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes:
+    no coins, so no draw and no salt."""
+    if not (type(n) is int and 0 <= n <= COINS_MAX):
+        raise ValueError(f"coins are 0 to {COINS_MAX} bytes a request, not {n!r}")
+    kind, body = _server.call("coins", n)
+    if kind != "output":
+        raise LeanError(f"{EXE} refused {n} coin bytes: {body}")
+    if not (isinstance(body, str) and len(body) == 2 * n and all(c in "0123456789abcdef" for c in body)):
+        raise LeanError(f"{EXE} answered other than {n} coin bytes in hex")
+    return bytes.fromhex(body)
+
+
 def _canon(x: Any) -> str | None:
     """`x` under `canonical_json`, or None where it isn't JSON (which then equals nothing)."""
     try:
@@ -198,7 +221,8 @@ def _decide(got: Mapping[str, Any], py: Verdict, whole: bool) -> Verdict:
 def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
             ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None, anchors: Sequence[Any],
             log: Iterable[Mapping[str, Any]], partition: Mapping[str, Any] | None, work_table: Mapping[str, Any] | None,
-            registered: Mapping[str, int] | None) -> dict[str, Any]:
+            registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
+            pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -207,18 +231,28 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
          "work_table": None if work_table is None else dict(work_table)}
     if registered is not None:
         p["parameters"] = [[name, t.to_json()] for name, t in program.fn.signature()[0]]
+    if supplied:
+        p["supplied"] = {v: [[dict(s) for s in row] for row in rows] for v, rows in supplied.items()}
+    if pinned:
+        p["pinned"] = dict(pinned)
+    if binding is not None:
+        p["binding"] = dict(binding)
     return p
 
 
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
-          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None) -> Verdict:
+          work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
+          supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
+          binding: Mapping[str, str] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier of record."""
     log = list(log)
-    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered)
+    py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
+                 supplied, pinned, binding)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
-                                                  work_table, registered), "record": dict(rec)})
+                                                  work_table, registered, supplied, pinned, binding),
+                       "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
     return _decide(got, py, whole=False)
@@ -291,23 +325,23 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         outputs: Sequence[str], statement: Mapping[str, Any], delta: float, proved_units: Sequence[int] | None = None,
         instances: int | None = None, served: Sequence[int] | None = None,
         session_roots: Mapping[str, str] | None = None, *, interior_values: Iterable[tuple[str, bool]] = (),
-        interior: Mapping[str, Any] | None = None) -> Verdict:
+        interior: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
+        pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "interior", "symbol", "public", "audit"}`, each audit record
     without its `verifiers`, `interior` null or the interiors' `{"receipt", "audit"}`): on `check`'s copies,
     `check_public`'s boundary values and declared items, the receipt's challenger and place in the log, `select`'s rule,
     the bytes of the coins the draw read and the closure map, `audit_record`'s arguments with the sessions' roots whole,
     and under a two-stage rule the interior values and the interiors' registration (`{"program", "law", "ports",
-    "leaf_layer", "anchors", "log", "record", "received"}`, `register_interiors`' copies). A Bernoulli draw's
-    `wrong_units.bound` is Python's on both, as in `audit_record`. Where the two differ, or the Lean refuses a step, the
-    verdict fails with `DISAGREE` alone."""
+    "leaf_layer", "anchors", "log", "record", "received"}`, `register_interiors`' copies). Where the two differ, or the
+    Lean refuses a step, the verdict fails with `DISAGREE` alone."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     inner = None if interior is None else {
         "params": _params(interior["program"], query, interior["law"], scheme, interior["ports"], interior["leaf_layer"],
                           interior["anchors"], interior["log"], None, None, None),
         "record": dict(interior["record"]), "received": interior["received"]}
     got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered),
+                                         registered, supplied, pinned, binding),
                        "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
                        "interior_values": [{"name": n, "registered": r} for n, r in interior_values],
                        "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
@@ -323,10 +357,6 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             got = {**got, "audit": json.loads(got["audit"])}
         except ValueError:
             got = {"refused": f"{EXE} answered a run whose record is not JSON: {got['audit'][:500]}"}
-        mine, wrong = python.get("audit") or {}, (got.get("audit") or {}).get("wrong_units")
-        if got.get("draw", {}).get("law") == "bernoulli" and isinstance(wrong, dict) and wrong.get("bound") is None \
-                and mine.get("wrong_units"):
-            got["audit"] = {**got["audit"], "wrong_units": {**wrong, "bound": mine["wrong_units"]["bound"]}}
     if isinstance(got.get("interior"), dict) and isinstance(got["interior"].get("audit"), str):
         try:
             got = {**got, "interior": {**got["interior"], "audit": json.loads(got["interior"]["audit"])}}
@@ -354,6 +384,77 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
     py = D.check_proved(draw, proved_units, instances)
     got = lean("check_proved", {"draw": dict(draw), "proved_units": list(proved_units), "instances": instances})
     return _decide(got, py, whole=True)
+
+
+def _valued(fn: str, value: Any, python: Callable[[], Any], write: Callable[[Any], Any]) -> tuple[Any, Verdict]:
+    """A value by the verifier of record: the Lean's `fn` on `value` beside `python()`, compared as the Lean writes it
+    (`write`). Where both give the same, that value (Python's object) with an accepting verdict; where both refuse, None
+    and the verdict `refused` with both reasons; otherwise None and `DISAGREE` alone, whichever is of record."""
+    got = lean(fn, value)
+    try:
+        mine, err = python(), None
+    except (ValueError, KeyError) as e:
+        mine, err = None, str(e)
+    shown = {"refused": err} if err is not None else write(mine)
+    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else {"ok": True},
+                 "python": {"refused": err} if err is not None else {"ok": True}}
+    if "refused" in got and err is not None:
+        return None, Verdict(False, ("refused",), {"refused": {"lean": got["refused"], "python": err}}, verifiers)
+    if "refused" in got or err is not None or not _same(got, shown):
+        return None, Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": shown}}, verifiers)
+    return mine, Verdict(True, (), {}, verifiers)
+
+
+#: The facts `IntegrityProfile` takes beside its levels.
+FACTS = ("programs", "prescribed", "linked", "covered", "drawn")
+
+
+def two_stage_profile(law: TS.TwoStageLaw, cls: str, units: Iterable[TS.ReplayUnit] | None = None, *,
+                      n_r: int | None = None, n_v: int | None = None, delta: float,
+                      **facts: Any) -> tuple[Any, Verdict]:
+    """`TwoStageLaw.profile` by the verifier of record: the Lean's `TwoStage.profile` on the same law, class, RUs,
+    counts, δ (exactly, `str(Fraction(delta))`) and facts, compared on the profile's `to_json` with δ as that ratio. The
+    profile returned is Python's `IntegrityProfile`, equal to the Lean's where the verdict accepts, and None otherwise
+    (`_valued`)."""
+    if set(facts) - set(FACTS):
+        raise TypeError(f"two_stage_profile takes the facts {FACTS}, not {sorted(set(facts) - set(FACTS))}")
+    units = None if units is None else list(units)
+    value = {"law": law.to_json(), "class": cls,
+             "units": None if units is None else [[u.index, u.cls, u.n_v] for u in units], "n_r": n_r, "n_v": n_v,
+             "delta": str(Fraction(delta)),
+             "facts": {"programs": list(facts.get("programs", ())), "prescribed": list(facts.get("prescribed", ())),
+                       "linked": facts.get("linked", False), "covered": list(facts.get("covered", ())),
+                       "drawn": dict(facts.get("drawn", {}))}}
+    return _valued("two_stage_profile", value,
+                   lambda: law.profile(cls, units, n_r=n_r, n_v=n_v, delta=delta, **facts),
+                   lambda p: {**p.to_json(), "delta": str(Fraction(delta))})
+
+
+def check_probability(law: TS.TwoStageLaw, cls: str, n_v: int) -> tuple[Fraction | None, Verdict]:
+    """`two_stage.check_probability` by the verifier of record (the Lean's `TwoStage.checkProbability`), compared exactly;
+    the probability, or None where the verdict doesn't accept (`_valued`)."""
+    return _valued("check_probability", {"law": law.to_json(), "class": cls, "n_v": n_v},
+                   lambda: TS.check_probability(law, cls, n_v), lambda p: {"p": str(p)})
+
+
+def stream(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any], decision: Mapping[str, Any],
+           after: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Verdict]:
+    """A proof service stream's rules on `op` (the Lean's `Stream.run` on `state`) against Python's `decision` and the
+    state `after` it (`service._step`'s), compared without Python's `detail`, which the decision of record keeps: the
+    decision and the state of record, and the verdict, `disagree` where the two differ."""
+    got = lean("stream", {"params": dict(params), "state": dict(state), "op": dict(op)})
+    try:
+        theirs = {"decision": got["decision"], "state": json.loads(got["state"])}
+    except (KeyError, TypeError, ValueError):
+        theirs = {"error": got.get("refused")}
+    mine = {"decision": {k: v for k, v in decision.items() if k != "detail"}, "state": dict(after)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": theirs, "python": mine}
+    if not _same(theirs, mine):
+        return dict(decision), dict(after), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": theirs, "python": mine}},
+                                                    verifiers)
+    rec = theirs if RECORD_VERDICT == "lean" else mine
+    d = {**rec["decision"], **({"detail": decision["detail"]} if "detail" in decision else {})}
+    return d, rec["state"], Verdict(True, (), {}, verifiers)
 
 
 def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
@@ -384,9 +485,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
             got = json.loads(got)
         except ValueError:
             got = {"refused": f"{EXE} answered a record that is not JSON: {got[:500]}"}
-        wrong = got.get("wrong_units") if isinstance(got, dict) else None
-        if draw.get("law") == "bernoulli" and isinstance(wrong, dict) and wrong.get("bound") is None and py["wrong_units"]:
-            got["wrong_units"] = {**wrong, "bound": py["wrong_units"]["bound"]}
     if not isinstance(got, dict) or not ("refused" in got or isinstance(got.get("checks"), dict)):
         got = {"refused": f"{EXE} answered a record that is not one: {str(got)[:500]}"}
     agree = "refused" not in got and _same(got, py)
@@ -402,5 +500,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record", "check", "check_draw",
-           "check_proved", "check_public", "check_verdicts", "executable", "lean", "matches_public", "run", "select"]
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "lean",
+           "matches_public", "run", "select"]

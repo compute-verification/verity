@@ -301,7 +301,8 @@ noncomputable def γeA (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : ℝ :=
 def KSA [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) : Prop :=
   ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
     PrBad H D.V (R D I) (E H D I DO decO) x P ≤
-      κ D I x + Real.sqrt (γA D I x * PrB H D.V P x) + Real.sqrt (γeA D I x * PrBe H D I DO decO P x)
+      κ D I x + Real.sqrt (γA D I x * PrB H D.V P x) + Real.sqrt (γeA D I x * PrBe H D I DO decO P x) +
+        Real.sqrt (γeA D I x * PrBr H D I DO decO P x)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- The draft's `γ` is `γ_A`'s with a `+1` to spare. -/
@@ -315,7 +316,8 @@ theorem Nums.γ_nonneg (n : Nums) : 0 ≤ n.γ := by unfold Nums.γ; positivity
 
 /-- **The recursion's KS**, at a general inner protocol: from the outer `--zk` Flock's KS at each session (`OuterKS`),
 the inner protocol's KS at the served runs (`InnerKS`), and the code facts `Refuses` and `InnerRounds`, `E*` fails on
-an accepted run with probability at most `κ(x) + √(γ_A(x)·Pr[B]) + √(γ_eA(x)·Pr[Be])`. -/
+an accepted run with probability at most `κ(x) + √(γ_A(x)·Pr[B]) + √(γ_eA(x)·Pr[Be])`, under `KSA`'s bound with no
+`Br` term. -/
 theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (hRef : Refuses H D) (hRounds : InnerRounds D I) (hO : OuterKS H D I DO) (hI : InnerKS H D I DO) :
     KSA H D I DO := by
@@ -382,7 +384,7 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
     (fun x => I.check (xI D x))) x P ≤ _
   rw [served_eq, hκ]
   have hmul := mul_le_mul_of_nonneg_left hEO hA0
-  nlinarith [hsplit, hgood, hin, hmul, hB, hBI, hBe]
+  nlinarith [hsplit, hgood, hin, hmul, hB, hBI, hBe, Real.sqrt_nonneg (γeA D I x * PrBr H D I DO decO P x)]
 
 end KS
 
