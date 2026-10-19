@@ -147,6 +147,7 @@ def test_merge_reads_through_the_swap():
     subs = [{"ops": f"{S.label(seq)} /{S.fix_label(g)}", "result": "unsat"} for g in S.mod_splits(seq, cases[0])]
     m = S.merge(1, rest + recs + subs[1:])
     assert m["unsat"] == 25 and m["open"][0] == f"{S.label(seq)} /{S.fix_label(cases[0])}"
+    assert subs[0]["ops"] in m["subs"] and len(m["subs"]) == 2
     m = S.merge(1, rest + recs + subs)
     assert m["unsat"] == 27 and not m["open"], m["open"]
 

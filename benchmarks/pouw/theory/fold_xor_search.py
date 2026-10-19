@@ -311,12 +311,13 @@ def swap_fix(ops: tuple, fix: tuple) -> tuple:
 def merge(k: int, records: list[dict]) -> dict:
     """k's verdict from search records (whole sequences, `splits` cases and `mod_splits` sub-cases, from any runs): a
     sequence is unsat when it or its `swap` image is, or when each of its cases is, a case when it or its image is or
-    when each of its sub-cases is. -> the tally and the cases still open."""
+    when each of its sub-cases is. -> the tally, the cases still open, and of those searched as sub-cases, the sub-cases
+    still open (`subs`)."""
     res: dict[str, set] = {}
     for r in records:
         res.setdefault(r["ops"], set()).add(r["result"])
     ok = lambda *names: any("unsat" in res.get(n, ()) for n in names)
-    seqs, unsat, still = sequences(k, True), 0, []
+    seqs, unsat, still, subs = sequences(k, True), 0, [], []
     for s in seqs:
         t = swap(s)
         if ok(label(s), label(t)):
@@ -326,10 +327,14 @@ def merge(k: int, records: list[dict]) -> dict:
             still.append(label(s))
             continue
         case = lambda g: (f"{label(s)} /{fix_label(g)}", f"{label(t)} /{fix_label(swap_fix(s, g))}")
-        left = [case(f)[0] for f in splits(s) if not ok(*case(f)) and not all(ok(*case(g)) for g in mod_splits(s, f))]
+        left = [f for f in splits(s) if not ok(*case(f)) and not all(ok(*case(g)) for g in mod_splits(s, f))]
         unsat += not left
-        still += left
-    return {"k": k, "sequences": len(seqs), "unsat": unsat, "open": still,
+        still += [case(f)[0] for f in left]
+        for f in left:
+            gs = [case(g) for g in mod_splits(s, f)]
+            if any(n in res for g in gs for n in g):
+                subs += [g[0] for g in gs if not ok(*g)]
+    return {"k": k, "sequences": len(seqs), "unsat": unsat, "open": still, "subs": subs,
             "found": sorted(n for n, v in res.items() if "FOUND" in v)}
 
 
@@ -575,8 +580,9 @@ def main() -> int:
     if a.merge:
         recs = [json.loads(line) for p in a.merge for line in open(p, encoding="utf-8") if line.strip()]
         m = merge(a.k, recs)
-        print(f"k = {a.k}: {m['sequences']} sequences, {m['unsat']} unsat, {len(m['open'])} cases open, "
-              f"FOUND {m['found']}" + ("  -- proved" if m["unsat"] == m["sequences"] else ""))
+        print(f"k = {a.k}: {m['sequences']} sequences, {m['unsat']} unsat, {len(m['open'])} cases open "
+              f"({len(m['subs'])} sub-cases open), FOUND {m['found']}"
+              + ("  -- proved" if m["unsat"] == m["sequences"] else ""))
         for c in m["open"]:
             print(f"  open: {c}")
         if a.json:
