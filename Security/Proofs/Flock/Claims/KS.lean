@@ -123,6 +123,7 @@ import Proofs.Flock.Claims.KS.ZkPadsLog
 import Proofs.Flock.Claims.KS.ZkClashPads
 import Proofs.Flock.Claims.KS.ZkSched
 import Proofs.Flock.Claims.KS.SlotBatch
+import Proofs.Flock.Claims.KS.PushSched
 import Proofs.Flock.Claims.KS.ZkBatch
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
