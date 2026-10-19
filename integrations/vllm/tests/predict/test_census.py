@@ -19,7 +19,7 @@ import pytest
 from tests.predict.test_predict import FIX, TINY, _phi
 from tests.program import test_derive_neutrality as GLM
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.ml.circuits.census import PRODUCTS, census, family, step_ends
+from verity.ml.circuits.census import PRODUCTS, SILICON, census, family, step_ends
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
@@ -213,15 +213,20 @@ def test_a_cublas_gemm_counts_its_k16_step_parts_as_tc():
 @pytest.mark.slow
 def test_glm53_fp8_expert_gemms_are_their_steps_and_the_rest():
     """GLM-5.3's routed-expert stand-in through its Boolean versions (about 30 s, its expert GEMMs, quantizers and router traced
-    on bits): an expert GEMM's `tc:fp8` gates are its served MACs' FP8 steps (served MACs / 32 of them), and the dequantization
-    and epilogue around them `cuda:gate`; nothing but the expert GEMMs has `tc:fp8`."""
+    on bits): an expert GEMM's tensor-core gates are its served MACs' FP8 steps (served MACs / 32 of them), `tc:fp8` on QGMMA and
+    `tc:f16` on MMAv2 (Triton's e4m3 dot on sm_90 runs as f16 HMMA), and the dequantization and epilogue around them `cuda:gate`;
+    nothing but the expert GEMMs has either."""
     program = GLM._moe().program
     moe = census(program, boolean=boolean_version)
     experts = {cid: fn for cid, fn in _calls(program).items() if family(fn) in ("MoeExpertFp8Gemm_v1", "MoeExpertFp8GemmW_v1")}
     assert len(experts) == 2
+    facet = {}
     for cid, fn in experts.items():
         e, dot = moe["classes"][cid], boolean_version(fn).bindings["DOT"]
-        assert set(e["work"]) == {"tc:fp8", "cuda:gate"} and e["work"]["cuda:gate"]["gates"] > 0
-        assert e["work"]["tc:fp8"] == _times(e["served_macs"] // PRODUCTS[family(dot)], _gates(dot)), cid
-    assert moe["totals"]["work"]["tc:fp8"] == {k: sum(moe["classes"][cid]["instances"] * moe["classes"][cid]["work"]["tc:fp8"][k]
-                                                       for cid in experts) for k in ("gates", "and")}
+        facet[cid] = tc = f"tc:{SILICON[family(dot)]}"
+        assert tc in ("tc:fp8", "tc:f16") and set(e["work"]) == {tc, "cuda:gate"} and e["work"]["cuda:gate"]["gates"] > 0
+        assert e["work"][tc] == _times(e["served_macs"] // PRODUCTS[family(dot)], _gates(dot)), cid
+    for tc in ("tc:fp8", "tc:f16"):
+        assert moe["totals"]["work"].get(tc, {"gates": 0, "and": 0}) == {
+            k: sum(moe["classes"][cid]["instances"] * moe["classes"][cid]["work"][tc][k] for cid in experts if facet[cid] == tc)
+            for k in ("gates", "and")}

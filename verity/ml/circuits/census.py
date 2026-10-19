@@ -65,8 +65,10 @@ word Program's Boolean version does the work its shapes say) a premise.  Credite
 **Work.**  `work` is the Boolean work, read bottom-up from Boolean bodies' own primitives: per class and instance, per step and in
 the totals, the two-input gates (`gates`: an n-input And or Xor counts n - 1, a Not 1, a constant bit or an input 0, as
 `evaluation.bits.Compiled.counts`) and among them the ANDs (`and`), by facet.  A tensor-core step's gates are `tc:<precision>`:
-a step is a Definition its module binds to the silicon model it computes (`silicon_step`), and the precision is that model's
-operand format (`DTYPE_PRECISION`), which `SILICON` keeps by family.  Every other gate is `cuda:gate`.  A class's work includes
+a step is a Definition its module binds to the silicon model it computes (`silicon_step`), and the precision is the operand
+format that model's instruction multiplies in (`DTYPE_PRECISION` of its `executes`, else of its operands), which `SILICON` keeps
+by family: Triton's MMAv2 e4m3 dot on sm_90 (`HopperE4m3MmaV2Dot32`) runs as f16 HMMA, so its gates are `tc:f16` and its MACs
+`mac:fp8`.  Every other gate is `cuda:gate`.  A class's work includes
 its callees'.  The census counts work only when asked (`census(..., boolean=...)`; without it there is no `work`): for a Boolean
 Program, each root Call's own gates; for a word Program, each root Call through the Boolean version a resolver gives
 (`verity_vllm.program.boolean.boolean_version`), named in its class's `boolean_version`, so a class under a word Call has no
@@ -158,13 +160,15 @@ PRECISION: dict[str, str] = {
                      "BlackwellS8ImmaDot32_v2", "BlackwellU8S8ImmaDot32_v2", "PouwSegDot_v2", "PouwSegDot0_v2"), "int8"),
 }
 
-#: a silicon model's operand format (its ``dtype``, and ``b_dtype`` where B's differs) -> the precision of the tensor-core step that
-#: computes it, as the accounting layer names its kinds (`tc:<precision>`, `mac:<precision>`)
-DTYPE_PRECISION: dict[str, str] = {"bf16": "bf16", "tf32": "tf32", "e4m3": "fp8", "e5m2": "fp8", "e2m1": "fp4", "s8": "int8",
-                                   "u8": "int8"}
+#: a silicon model's operand format (its ``dtype``, and ``b_dtype`` where B's differs, or the ``executes`` its instruction
+#: multiplies in) -> the precision of the tensor-core step that computes it, as the accounting layer names its kinds
+#: (`tc:<precision>`, `mac:<precision>`)
+DTYPE_PRECISION: dict[str, str] = {"bf16": "bf16", "f16": "f16", "tf32": "tf32", "e4m3": "fp8", "e5m2": "fp8", "e2m1": "fp4",
+                                   "s8": "int8", "u8": "int8"}
 
-#: tensor-core step family -> the precision of the silicon model it computes: registered by `silicon_step` when the module
-#: defining the step is imported (decoding a Program keeps no Definition's attributes, so the census reads this table)
+#: tensor-core step family -> the precision its silicon model's instruction multiplies in (its `tc:` facet): registered by
+#: `silicon_step` when the module defining the step is imported (decoding a Program keeps no Definition's attributes, so the
+#: census reads this table)
 SILICON: dict[str, str] = {}
 
 COUNTERS = ("served_macs", "tail_atoms", "receipt_folds")
@@ -196,21 +200,26 @@ def family(fn: Any) -> str:
 def silicon_step(fn: Any, model: Any) -> Any:
     """Bind the tensor-core step `fn` (a word primitive, or the Boolean Definition computing one) to the silicon model it computes
     (a `verity.ml.circuits.silicon` `GroupSum`, `Pipeline`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
-    `SILICON` gives its family the precision of `model`'s operands (`DTYPE_PRECISION`).  Refused unless `PRODUCTS` counts the
-    family and `PRECISION` gives it that precision.  Returns `fn`."""
+    `SILICON` gives its family the precision `model`'s instruction multiplies in (`DTYPE_PRECISION` of its ``executes``, else of
+    its operands).  Refused unless `PRODUCTS` counts the family and `PRECISION` gives it its operands' precision.  Returns `fn`."""
     fam = f"{fn.name}_v{fn.version}"
     dtypes = (model.dtype, getattr(model, "b_dtype", model.dtype))
     precs = {DTYPE_PRECISION.get(d) for d in dtypes}
     if None in precs or len(precs) != 1:
         raise ValueError(f"{fam}: its silicon model's operands {dtypes} are not one precision of census.DTYPE_PRECISION")
     (prec,) = precs
+    executes = getattr(model, "executes", None)
+    facet = DTYPE_PRECISION.get(executes) if executes else prec
+    if facet is None:
+        raise ValueError(f"{fam}: its silicon model executes {executes}, which census.DTYPE_PRECISION doesn't name")
     if fam not in PRODUCTS:
         raise ValueError(f"{fam} is bound as a tensor-core step, and census.PRODUCTS has no k for it: add it")
-    if PRECISION.get(fam) != prec or SILICON.get(fam, prec) != prec:
-        raise ValueError(f"{fam}'s silicon model computes {prec} products; census.PRECISION gives {PRECISION.get(fam)} and "
+    if PRECISION.get(fam) != prec or SILICON.get(fam, facet) != facet:
+        on = f" on {facet} tensor cores" if facet != prec else ""
+        raise ValueError(f"{fam}'s silicon model computes {prec} products{on}; census.PRECISION gives {PRECISION.get(fam)} and "
                          f"census.SILICON {SILICON.get(fam)}")
     fn.silicon = model
-    SILICON[fam] = prec
+    SILICON[fam] = facet
     return fn
 
 

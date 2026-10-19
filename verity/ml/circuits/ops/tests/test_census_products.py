@@ -109,10 +109,12 @@ def test_a_program_decoded_without_its_rules_module_refuses_its_census(tmp_path)
 
 
 def test_every_tensor_core_step_is_bound_to_its_silicon_model():
-    """Each registered step's family has its silicon model's precision, `PRECISION`'s; a Boolean step is bound to the model of
-    the word step it computes."""
+    """Each registered step's family has its silicon model's precision, `PRECISION`'s, but Triton's MMAv2 e4m3 dot on sm_90,
+    whose f16 HMMA multiplies in f16; a Boolean step is bound to the model of the word step it computes."""
     steps = {fid: d for fid, d in REGISTRY.defs.items() if DOT.search(fid)}
-    assert {fid: SILICON.get(fid) for fid in steps} == {fid: PRECISION[fid] for fid in steps}
+    f16 = {"HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2"}
+    assert {fid: SILICON.get(fid) for fid in steps} == {fid: "f16" if fid in f16 else PRECISION[fid] for fid in steps}
+    assert f16 <= set(steps) and {PRECISION[fid] for fid in f16} == {"fp8"}
     boolean = {fid: d for fid, d in steps.items() if getattr(d, "word", None) is not None}
     assert len(boolean) == 10 and all(d.silicon is word_of(d).silicon for d in boolean.values()), sorted(boolean)
     assert {d.silicon.dtype for d in steps.values()} == {"bf16", "e4m3", "e5m2", "e2m1", "s8", "u8"}

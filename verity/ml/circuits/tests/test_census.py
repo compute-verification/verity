@@ -462,11 +462,30 @@ def test_silicon_step_refusals(monkeypatch):
         census(P, boolean=True)
     for model, why in ((SimpleNamespace(dtype="bf16"), "computes bf16 products; census.PRECISION gives fp8"),
                        (SimpleNamespace(dtype="u8", b_dtype="e4m3"), r"operands \('u8', 'e4m3'\) are not one precision"),
-                       (SimpleNamespace(dtype="f16"), "are not one precision")):
+                       (SimpleNamespace(dtype="e3m2"), "are not one precision"),
+                       (SimpleNamespace(dtype="e4m3", executes="e3m2"), "executes e3m2, which census.DTYPE_PRECISION doesn't")):
         with pytest.raises(ValueError, match=why):
             silicon_step(BStep, model)
     _bstep_bound(monkeypatch)
     assert CE.SILICON == {"TBStep_v1": "fp8"} and BStep.silicon.dtype == "e4m3"
+    with pytest.raises(ValueError, match="computes fp8 products on f16 tensor cores; census.PRECISION gives fp8 and census.SILICON fp8"):
+        silicon_step(BStep, SimpleNamespace(dtype="e4m3", executes="f16"))
+
+
+def test_a_steps_gates_are_credited_where_it_executes(monkeypatch):
+    """A step whose instruction multiplies in a format other than its operands' (`executes`: Triton's MMAv2 e4m3 dot on sm_90
+    runs as f16 HMMA) has that format's facet, and its MACs keep its operands' precision."""
+    monkeypatch.setitem(CE.PRODUCTS, "TBStep_v1", 2)
+    monkeypatch.setitem(CE.PRECISION, "TBStep_v1", "fp8")
+    monkeypatch.setattr(CE, "SILICON", {})
+    monkeypatch.setattr(BStep, "silicon", None, raising=False)
+    silicon_step(BStep, SimpleNamespace(dtype="e4m3", executes="f16"))
+    assert CE.SILICON == {"TBStep_v1": "f16"}
+    P = Program(BRoot)
+    c = census(P, boolean=True)
+    assert c["classes"]["TBStep_v1"]["work"] == {"tc:f16": {"gates": 8, "and": 3}}
+    assert c["totals"]["work"] == _as_work(_walk(P.root, {"TBStep_v1": "f16"}))
+    assert c["totals"]["served_macs_by_precision"] == {"mac:fp8": 24}
 
 
 #: a word Program over a word step, and its Boolean twin (`TBCoord_v1`) as a resolver's Boolean version
