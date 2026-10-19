@@ -6,7 +6,7 @@ are proven.
 
 | field | here |
 | --- | --- |
-| `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the window's `context`, the check query's SHA-512 |
+| `Params` | the verifier's own: the check item (`entries`, `scheme`, `template`, `tile_work`), `eps` and `delta` as ratio strings, `grid_bits`, the declared `range` of tile counts, the window's `context`, the check query's SHA-512, and its `registration_deadline` (a positive ratio string, seconds from the epoch's salt coin's release: the service's `Check.registration_deadline`), without which the parameters are refused (`deadlineMissing`, naming the fix) |
 | `Commitment` | the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window `{kind, context, public}` holding `window.REGISTERED` |
 | `digest` | the record's own: SHA-512(format ‖ 0 ‖ the canonical record), `registration.digest` |
 | `Evidence` | the proof service's answer for a registration, read by `Core.Answer.ofJson` (protocol one-stage's): on acceptance the profile, read by `Core.Integrity.ofJson`, and the public outputs `{"draw": d}`, `d` the verifier's draw as one-stage's `draw.py` writes it (`subset`, `bernoulli`, `stratified` or `work`, with exactly `check_draw`'s keys) |

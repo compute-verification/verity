@@ -8,7 +8,10 @@ must show, and publishes `window.PUBLIC` from it.  This is that composition in o
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme and
   the public bound on entries), ε and δ as ratio strings, the grid's bits, the declared range of tile counts, the
-  window's context and the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query).
+  window's context, the check query's SHA-512 (one-stage's `query_digest` of the tile template's instance query) and
+  the registration deadline (`registration_deadline`, a positive ratio string: seconds on the challenger's clock from
+  the epoch's salt coin's release, the service's `Check.registration_deadline`).  Parameters without one are refused
+  (`DEADLINE_MISSING`), so no window is checked under a service that doesn't refuse a late one.
 * **Commitment**: the window's registration, one-stage's record (`registration.record`) as canonical JSON, its window
   ``{"kind": "served", "context", "public"}`` holding exactly `window.REGISTERED`.  Its digest is the record's own,
   `registration.digest`, the one the service's receipt, draw and outcome cite.
@@ -58,7 +61,12 @@ ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
 LEVEL = "unit"
-PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range")
+PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "query", "range", "registration_deadline")
+#: the refusal of parameters with no registration deadline, and its fix (Lean's `deadlineMissing`)
+DEADLINE_MISSING = ("registration_deadline is missing: give the window's parameters its registration deadline, the "
+                    "seconds from the epoch's salt coin's release within which the service must receive the window, as "
+                    "a positive ratio string (600, say); the service refuses a window received later as "
+                    "late-registration")
 CHECK_KEYS = ("entries", "scheme", "template", "tile_work")
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 VERDICTS = ("accept", "reject", "undecided")
@@ -142,6 +150,8 @@ def _str(x: Any) -> bool:
 
 def params(j: Any) -> dict:
     """The verifier's own parameters of the window."""
+    if isinstance(j, dict) and "registration_deadline" not in j:
+        raise Refused(DEADLINE_MISSING)
     if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
         raise Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
     c = j["check"]
@@ -172,7 +182,12 @@ def params(j: Any) -> dict:
     rg = j["range"]
     if not (isinstance(rg, list) and len(rg) == 2 and all(_nat(x) for x in rg) and 1 <= rg[0] <= rg[1]):
         raise Refused("range is not [lo, hi] with 1 <= lo <= hi")
-    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg)}
+    if not _str(j["registration_deadline"]):
+        raise Refused("registration_deadline is not a string")
+    deadline = ratio(j["registration_deadline"], "registration_deadline")
+    if not deadline > 0:
+        raise Refused("registration_deadline is not in (0, inf)")
+    return {**out, "grid_bits": j["grid_bits"], "query": j["query"], "range": tuple(rg), "registration_deadline": deadline}
 
 
 def _root(r: Any) -> dict | None:
@@ -952,6 +967,6 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
+__all__ = ["ANSWER_KEYS", "DEADLINE_MISSING", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
            "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
            "opening", "params", "pass_epoch", "ratio", "registered", "unit_draw", "verify_path", "window_domain"]

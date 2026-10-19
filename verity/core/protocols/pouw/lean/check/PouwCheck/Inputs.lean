@@ -7,7 +7,8 @@ import PouwCheck.Json
 # The check's three inputs (`core_check.py`, "the three inputs")
 
 * `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
-  of tile counts, the window's context and the check query's SHA-512.
+  of tile counts, the window's context, the check query's SHA-512 and the registration deadline. Parameters without a
+  deadline are refused (`deadlineMissing`), so no window is checked under a service that doesn't refuse a late one.
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
 * `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
@@ -24,7 +25,8 @@ open Flock (V)
 
 def scheme : String := "frame-v3-sha512/hm96-sha512"
 def formats : List String := ["verity/registration/v1", "verity/registration/v2"]
-def paramsKeys : List String := ["check", "context", "delta", "eps", "grid_bits", "query", "range"]
+def paramsKeys : List String :=
+  ["check", "context", "delta", "eps", "grid_bits", "query", "range", "registration_deadline"]
 def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme and the public bound on entries. -/
@@ -48,7 +50,16 @@ structure Params where
   query : String
   lo : Nat
   hi : Nat
+  /-- Seconds on the challenger's clock from the epoch's salt coin's release, positive: the service's
+  `Check.registration_deadline`, past which it refuses the window (`late-registration`). -/
+  registrationDeadline : Core.Ratio
   deriving DecidableEq, Repr
+
+/-- The refusal of parameters with no registration deadline, and its fix. -/
+def deadlineMissing : String :=
+  "registration_deadline is missing: give the window's parameters its registration deadline, the seconds from the " ++
+  "epoch's salt coin's release within which the service must receive the window, as a positive ratio string " ++
+  "(600, say); the service refuses a window received later as late-registration"
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
 
@@ -60,6 +71,8 @@ def ratioField (j : Json) (k : String) (ok : Core.Ratio → Bool) (what : String
   pure r
 
 def paramsOf (j : Json) : V Params := do
+  if let some ks := keys j then
+    unless ks.contains "registration_deadline" do throw deadlineMissing
   unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
   let c := get j "check"
   unless keys c == some checkKeys do throw s!"check's keys are not {", ".intercalate checkKeys}"
@@ -81,7 +94,9 @@ def paramsOf (j : Json) : V Params := do
       if 1 ≤ lo ∧ lo ≤ hi then some (lo, hi) else none
     | _ => none
   let some (lo, hi) := range | throw "range is not [lo, hi] with 1 <= lo <= hi"
-  pure { check := ⟨entries, scheme, template, tileWork⟩, context, delta, eps, gridBits, query, lo, hi }
+  let registrationDeadline ← ratioField j "registration_deadline" (fun r => 0 < r.num) "(0, inf)"
+  pure { check := ⟨entries, scheme, template, tileWork⟩, context, delta, eps, gridBits, query, lo, hi,
+         registrationDeadline }
 
 /-- One of the record's roots. -/
 structure Root where

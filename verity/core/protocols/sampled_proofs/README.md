@@ -451,7 +451,7 @@ Pinned by `verity/core/protocols/sampled_proofs/tests/test_consumers.py` and
   Neither the receipt nor an outcome's record carries a clock reading, and the interiors' registration is not held to
   the deadline. This is PoUW's `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`): `ts` is `salted_at`,
   `tr` is `received_at`, and `td` is `ts` plus the deadline. With no registration deadline, `register` reads no clock
-  and logs nothing to the epoch log.
+  and logs nothing to the epoch log; PoUW's check refuses a window's parameters without one, so PoUW never runs so.
 - **No retries.** A second salt (`salt` or `salt_released`), `select`, `register_interiors`, `deliver` or `outcome` is refused. A proof delivered more than
   `Check.proof_deadline` seconds after the draw, or none by then, is the symbol `late`; a stream refuses a check with no
   proof deadline, so every draw ends. An outcome is pending until every
