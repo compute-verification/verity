@@ -2398,7 +2398,7 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of proves it from GatesLocated and NovelExact (Properties.Proofs.Nci.DescAgree), which are open: that every gate of a Program Desc.evaluate reads is located, reading earlier gates, and that Desc.novelWidth counts the unrolled novel reads of a division by root node",
+   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_gaps proves it from four open statements (Properties.Proofs.Nci.Walk, Properties.Proofs.Nci.DescAgree): DecodeLaidOut, OperandsResolve and GateReads, from which gatesLocated_of proves GatesLocated (every gate of a Program Desc.evaluate reads is located, reading earlier gates), and NovelExact (Desc.novelWidth counts the unrolled novel reads of a division by root node)",
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two"
   },
   "conjectures": {

@@ -12,7 +12,12 @@ sequence holds names a leaf (`parsePartsIn_valid`). A composite's nodes' members
 less deep (`activations_child`, `depths_child`), which is what the walk's potential lowers. On bodies laid out as the
 decoder lays them (`LaidOut`), `Prog.gate`'s descent goes one level down a step to the activation holding a primitive
 (`gateStep_holds`), so it locates every gate of the root's within `Desc.walkable`'s fuel wherever the operands it reaches
-resolve (`gate_ok_of`, `depth_lt_fuel`).
+resolve in the activations it visits (`Reach`; `gate_ok_of`, `depth_lt_fuel`).
+
+So `GatesLocated` holds wherever three smaller statements do, each a named `Prop` here, open (`gatesLocated_of`):
+`DecodeLaidOut` (the decoder lays every body out, the root a composite), `OperandsResolve` (operands resolve in every
+activation the walk visits) and `GateReads` (the primitive it locates returns one value, an input's reads nothing, and
+every operand is an earlier gate). `descAgrees_of_gaps` gives `DescAgrees` from those three and `NovelExact`.
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Walk
@@ -816,22 +821,30 @@ theorem gateStep_holds (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d
        rw [Array.find?_eq_none] at hnone
        exact hnone k0 (Array.mem_range.2 hk0) (by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact hb0))
 
+/-- The activations `Prog.gate P g`'s walk visits: the root's, and each one a step of it moves to. -/
+inductive Reach (P : Prog) (g : ℕ) : Flock.Program.Scope → Prop
+  | root : Reach P g P.rootScope
+  | step {sc sc' : Flock.Program.Scope} : Reach P g sc → Flock.Program.gateStep P g sc = .ok (.inr sc') → Reach P g sc'
+
 /-- **`Prog.gate`'s walk goes down to a primitive**: on a Program its decoder laid out, every gate of the root's is located
-within the root's depth of steps, where the operands of each primitive node's member it reaches resolve. -/
+within the root's depth of steps, where the operands of each primitive node's member resolve in the activations the walk
+visits (`Reach`). -/
 theorem gate_ok_of (P : Prog) (hc : Desc.calleesFirst P = true) (hlo : ∀ d < P.defs.size, LaidOut P d)
     (hr : P.root < P.defs.size) (hrp : (P.defs[P.root]!).prim = false)
     (hfuel : (Desc.depths P)[P.root]! < Flock.Steps.FUEL) {g : ℕ} (hg : g < (P.defs[P.root]!).gates)
-    (hops : ∀ sc, Holds P g sc → ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members,
-      ∀ e, Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e) :
+    (hops : ∀ sc, Reach P g sc → Holds P g sc → ∀ k < (P.defs[sc.d]!).body.nodes.size,
+      ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
+        Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e) :
     ∃ x, P.gate g = .ok x := by
-  obtain ⟨b, hb, -⟩ := run_of_potential (what := "gate location") (step := Flock.Program.gateStep P g) (Holds P g)
-    (fun sc => (Desc.depths P)[sc.d]!)
-    (fun _ => True)
-    (fun sc hs => by
-      rcases gateStep_holds P hc hlo hs (hops sc hs) with ⟨x, hx⟩ | ⟨sc', h1, h2, h3⟩
+  obtain ⟨b, hb, -⟩ := run_of_potential (what := "gate location") (step := Flock.Program.gateStep P g)
+    (fun sc => Reach P g sc ∧ Holds P g sc) (fun sc => (Desc.depths P)[sc.d]!) (fun _ => True)
+    (fun sc hsc => by
+      obtain ⟨hR, hs⟩ := hsc
+      rcases gateStep_holds P hc hlo hs (hops sc hR hs) with ⟨x, hx⟩ | ⟨sc', h1, h2, h3⟩
       · exact Or.inl ⟨x, hx, trivial⟩
-      · exact Or.inr ⟨sc', h1, h2, h3⟩)
-    Flock.Steps.FUEL P.rootScope ⟨hr, hrp, Nat.zero_le _, by show g - 0 < (P.defs[P.root]!).gates; omega⟩ hfuel
+      · exact Or.inr ⟨sc', h1, ⟨Reach.step hR h1, h2⟩, h3⟩)
+    Flock.Steps.FUEL P.rootScope
+    ⟨Reach.root, ⟨hr, hrp, Nat.zero_le _, (by show g - 0 < (P.defs[P.root]!).gates; omega)⟩⟩ hfuel
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   refine ⟨b, ?_⟩
   simp only [Flock.Program.Prog.gate, hng, ite_false, bind, Except.bind]
@@ -846,5 +859,55 @@ theorem depth_lt_fuel (P : Prog) (h : Desc.walkable P = true) : (Desc.depths P)[
       ((Desc.activations P)[P.root]! + 1) * ((Desc.depths P)[P.root]! + 2) := by
     exact Nat.le_mul_of_pos_left _ (by omega)
   omega
+
+/-- **Open: the decoder lays every body out**, as `LaidOut` states, and the root is a composite. -/
+def DecodeLaidOut : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P →
+    (P.defs[P.root]!).prim = false ∧ ∀ d < P.defs.size, LaidOut P d
+
+/-- **Open: operands resolve on the walk.** On a Program `Desc.evaluate` reads, in every activation `Prog.gate`'s walk
+visits, every primitive node's members' operands resolve (`Flock.Program.resolve` within its fuel, past no scan of no
+iterations). -/
+def OperandsResolve : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
+    Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
+    (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, ∀ sc, Reach P g sc → Holds P g sc →
+      ∀ k < (P.defs[sc.d]!).body.nodes.size, ∀ m < ((P.defs[sc.d]!).body.nodes[k]!).members, ∀ e,
+        Flock.Program.operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m ≠ .error e
+
+/-- **Open: what the walk locates is as the circuit needs.** On such a Program, the primitive `Prog.gate` locates a gate
+at returns one `Value<w>`, an input primitive's gate reads nothing, and every operand is an earlier gate. -/
+def GateReads : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog), Flock.Program.decode bytes = .ok P → P.orderViolation = none →
+    Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
+    (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, ∀ p ops sc, P.gate g = .ok (p, ops, sc) →
+      (∃ w, (P.defs[p]!).ret = .value w) ∧ (Flock.Program.isInputId (P.defs[p]!).key = true → ops = #[]) ∧
+        ∀ a ∈ ops, a < g
+
+/-- **`GatesLocated`, from the decoder's layout, resolution on the walk and what the walk locates**: `Desc.walkable` gives
+the walk its fuel (`depth_lt_fuel`), so with bodies laid out and operands resolving it ends at a primitive
+(`gate_ok_of`). -/
+theorem gatesLocated_of (hD : DecodeLaidOut) (hO : OperandsResolve) (hR : GateReads) : GatesLocated := by
+  intro bytes P hdec hov hlo hin hwk han g hg
+  obtain ⟨hrp, hlay⟩ := hD bytes P hdec
+  have hc : Desc.calleesFirst P = true := by
+    unfold Desc.walkable at hwk
+    simp only [Bool.and_eq_true] at hwk
+    exact hwk.1
+  have hr : P.root < P.defs.size := by
+    by_contra hn
+    have hg' : g < (P.defs[P.root]!).gates := hg
+    rw [getElem!_neg P.defs P.root hn] at hg'
+    have h0 : (default : Flock.Program.Defn).gates = 0 := rfl
+    omega
+  obtain ⟨⟨p, ops, sc⟩, hx⟩ := gate_ok_of P hc hlay hr hrp (depth_lt_fuel P hwk) hg
+    (hO bytes P hdec hov hlo hin hwk han g hg)
+  obtain ⟨⟨w, hw⟩, hinp, hlt⟩ := hR bytes P hdec hov hlo hin hwk han g hg p ops sc hx
+  exact ⟨p, ops, w, ⟨⟨sc, hx⟩, hw, hinp⟩, hlt⟩
+
+/-- **`DescAgrees`, from the four open statements**: `GatesLocated` through `gatesLocated_of`, and `NovelExact`. -/
+theorem descAgrees_of_gaps (hD : DecodeLaidOut) (hO : OperandsResolve) (hR : GateReads) (hN : NovelExact) :
+    Properties.DescAgrees :=
+  descAgrees_of (gatesLocated_of hD hO hR) hN
 
 end NciCheck.Properties.SecurityProofs.Walk
