@@ -639,12 +639,15 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = _ret_ports(tail.stages[-1]) if U.tail_rets else []
     programs = program_digests(sub, statics)
+    unit = _expanded(low.layout, low.name)
+    unit_sha256 = low.sha256_of(unit)
+    stage_texts = [_expanded(lay, f"{low.name}/tail/stage{i}") for i, lay in enumerate(stages)]
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
-             "params": {"unit_sha256": low.sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
-                        "stages": [digest(_expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)], "lookups": lk}}
+             "params": {"unit_sha256": unit_sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
+                        "stages": [digest(t) for t in stage_texts], "lookups": lk}}
     row_schema = {"row_schemas": [[p.schema, p.bits] for p in ports]} if port_bits else {"row_schema": ROW_SCHEMA}
     meta = {"format": FORMAT, "statement": STATEMENT, "scheme": SCHEME, **row_schema, "template": sub.template.id,
-            "subcircuit": sub.id, "unit": low.name, "unit_sha256": low.sha256, "vus_per_block": G, "k_log": k_log,
+            "subcircuit": sub.id, "unit": low.name, "unit_sha256": unit_sha256, "vus_per_block": G, "k_log": k_log,
             "ports": [[p.name, p.words, p.comps] for p in ports], "input_ports": len(ins), "out_ports": outs, "ranges": ranges,
             "rows": [_row_consts(p) for p in ports], "units_per_vu": U.n, "unit_log": ul, "leaves_in": leaves_in, "leaves_out": lv["out"],
             **({"public_inputs": pins, "leaves_public": leaves_public} if pins else {}),
@@ -663,10 +666,10 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
     head = f"{FORMAT} {low.name}\nMETA {json.dumps(meta, sort_keys=True, separators=(',', ':'))}\n"
-    texts = [("unit", _expanded(low.layout, low.name)),
+    texts = [("unit", unit),
              (SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
              (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
-    texts += [(f"stage{i}", _expanded(lay, f"{low.name}/tail/stage{i}")) for i, lay in enumerate(stages)]
+    texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
     return head + "".join(f"CIRCUIT {nm} {t.count(chr(10))}\n{t}" for nm, t in texts)
 
 

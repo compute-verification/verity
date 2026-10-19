@@ -420,7 +420,10 @@ def cache_slot_circuits() -> None:
 
     def cached_expanded(lay, name):
         if any(lay is v for v in lays.values()):
-            return texts.setdefault((id(lay), name), expanded(lay, name))
+            key = (id(lay), name)
+            if key not in texts:
+                texts[key] = expanded(lay, name)
+            return texts[key]
         return expanded(lay, name)
 
     S.compression3, S.hm96_row = (lambda: c3), (lambda: hm)
