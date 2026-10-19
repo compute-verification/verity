@@ -930,9 +930,10 @@ CO, LANE, OLD, NEW = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "c
 FINISHED = {"status": "FINISHED", "createdAt": "2026-10-18T19:10:00Z", "updatedAt": "2026-10-18T19:20:00Z"}
 
 
-def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None, workers=None, **kw):
+def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None, workers=None, timers=..., **kw):
     """The registry: CO holds @circuits (its lane LANE posts as it), and @vllm still names OLD, though NEW holds vllm's inbox
-    (routes.d), as on 18 Oct. The watch over `agents` (`older` as in FakeApi)."""
+    (routes.d), as on 18 Oct. Both declare a 15-minute duty timer (`timers`; None writes no file). The watch over `agents`
+    (`older` as in FakeApi)."""
     reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
     reg.write_text(json.dumps({"handles": [
         {"handle": "circuits", "holder": f"the circuits coordinator ({CO}); its lane ({LANE}) posts as it too"},
@@ -944,8 +945,11 @@ def coordinators(tmp_path, agents, runs, wake=False, bells=None, older=None, wor
     (routes / "kernels.json").write_text(json.dumps({"name": "kernels", "holder": LANE, "closed": None}))
     if bells is not None:
         (tmp_path / "doorbells.json").write_text(json.dumps(bells))
+    if timers is not None:
+        (tmp_path / "timers.json").write_text(json.dumps({"circuits": 900, "vllm": 900} if timers is ... else timers))
     api, clock = FakeApi(agents, runs, older, workers), Clock(T0)
-    return api, clock, W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes, wake=wake, **kw)
+    return api, clock, W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes, wake=wake,
+                               timers=tmp_path / "timers.json", **kw)
 
 
 def test_a_handle_is_held_by_its_open_inbox_else_by_the_registry(tmp_path):
@@ -965,7 +969,8 @@ def test_a_coordinator_with_no_run_for_30_min_is_recorded_ready_to_wake_once_an_
     w.sweep(lambda r: None)
     (rec,) = records(tmp_path)
     assert (rec["kind"], rec["agent"], rec["handle"], rec["run"]) == ("ready_to_wake", CO, "circuits", "run-f")
-    assert rec["reason"] == "nothing has run for 40 min since its latest run went FINISHED at 2026-10-18T19:20:00Z"
+    assert rec["reason"] == ("nothing has run for 40 min since its latest run went FINISHED at 2026-10-18T19:20:00Z "
+                             "(its timer is every 15 min)")
     assert rec["action"] == "recorded (--wake is off)" and api.posts == [], "the flag is off: recorded, never a POST"
     assert status(tmp_path)[CO]["watch_state"] == "ready_to_wake"
     clock.t += 60
@@ -1011,14 +1016,15 @@ def test_a_coordinator_left_in_background_work_is_ready_to_wake(tmp_path):
     assert [r.run for r in started] == ["run-b"] and records(tmp_path) == [], "20 min since it went to background work"
     clock.t += 5 * 60
     w.on_event("run-b", "assistant", {"text": "a background shell said something"})
-    clock.t += W.WAKE_S - 60
+    clock.t += 2 * 900 - 60
     w.sweep(started.append)
     assert records(tmp_path) == [], "an event 29 min ago: counted from it, not from updatedAt"
     clock.t += 60
     w.sweep(started.append)
     (rec,) = records(tmp_path)
     assert (rec["handle"], rec["agent"], rec["run"]) == ("vllm", NEW, "run-b")
-    assert rec["reason"] == "nothing has run for 30 min since its latest run went WAITING_FOR_BACKGROUND_WORK at 2026-10-18T20:05:00Z"
+    assert rec["reason"] == ("nothing has run for 30 min since its latest run went WAITING_FOR_BACKGROUND_WORK at "
+                             "2026-10-18T20:05:00Z (its timer is every 15 min)")
 
 
 def test_a_background_run_a_wake_resumed_is_not_ready(tmp_path):
@@ -1074,7 +1080,7 @@ def test_wake_starts_one_run_an_hour(tmp_path):
     clock.t += 60
     w.sweep(lambda r: None)
     ((path, body),) = api.posts
-    assert path == f"/v1/agents/{CO}/runs" and "duty timer" in body["prompt"]["text"]
+    assert path == f"/v1/agents/{CO}/runs" and "seems not to have fired" in body["prompt"]["text"]
     assert "research msg read --as circuits" in body["prompt"]["text"]
     (rec,) = records(tmp_path)
     assert (rec["kind"], rec["action"], rec["new_run"]) == ("ready_to_wake", "started a run", "run-new")
@@ -1132,7 +1138,7 @@ def test_a_restarted_watch_remembers_the_hours_wakes(tmp_path):
     w.sweep(lambda r: None)
     clock.t += 10 * 60
     again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
-                    wake=True)
+                    wake=True, timers=tmp_path / "timers.json")
     again.sweep(lambda r: None)
     assert len(api.posts) == 1, "woken again 10 min later by the restarted watch"
     clock.t += W.RECANCEL_S
@@ -1307,3 +1313,46 @@ def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_not
     before = len(api.gets)
     w.sweep(lambda r: None)
     assert api.gets[before:] == [], "read once for the note"
+
+
+def test_idle_time_wakes_only_a_handle_that_declares_a_timer_and_a_doorbell_wakes_any(tmp_path):
+    """INF-90, 00:06Z 19 Oct: the watch woke comms for 'nothing has run for 31 min', but comms has no recurring timer by design
+    (it wakes on its inbox, COMM issue events and one-shot timers) and every doorbell had been handled. Here vllm plays comms
+    (no timer declared) and circuits plays infra (900 s)."""
+    finished = {"status": "FINISHED", "createdAt": "2026-10-18T18:55:00Z", "updatedAt": "2026-10-18T19:00:00Z"}
+    agents = [{"id": NEW, "status": "IDLE", "latestRunId": "run-v"}, {"id": CO, "status": "IDLE", "latestRunId": "run-c"}]
+    runs = {"run-v": dict(finished), "run-c": {**finished, "updatedAt": "2026-10-18T19:29:00Z"}}
+    api, clock, w = coordinators(tmp_path, agents, runs, timers={"circuits": 900})
+    w.sweep(lambda r: None)
+    assert [(r["handle"], r["reason"]) for r in records(tmp_path)] == [
+        ("circuits", "nothing has run for 31 min since its latest run went FINISHED at 2026-10-18T19:29:00Z "
+                     "(its timer is every 15 min)")], "vllm idle 60 min, with no timer and no doorbell: nothing"
+    rang = W.epoch("2026-10-18T19:40:00Z")
+    (tmp_path / "doorbells.json").write_text(json.dumps({"t": W.iso(T0 - 60), "inboxes": {"vllm": {"agent": NEW, "last": rang}}}))
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [(r["handle"], r["reason"]) for r in records(tmp_path)][1:] == [
+        ("vllm", "a doorbell rang at 2026-10-18T19:40:00Z and nothing has run since")], "a doorbell newer than its last run"
+
+
+def test_with_no_timers_file_only_doorbells_wake(tmp_path):
+    agents = [{"id": NEW, "status": "IDLE", "latestRunId": "run-v"}, {"id": CO, "status": "IDLE", "latestRunId": "run-c"}]
+    bells = {"t": W.iso(T0 - 60), "inboxes": {"circuits": {"agent": CO, "last": W.epoch("2026-10-18T19:40:00Z")}}}
+    api, clock, w = coordinators(tmp_path, agents, {"run-v": dict(FINISHED), "run-c": dict(FINISHED)}, bells=bells, timers=None)
+    for _ in range(10):
+        w.sweep(lambda r: None)
+        clock.t += 60
+    assert [(r["handle"], r["reason"][:16]) for r in records(tmp_path)] == [("circuits", "a doorbell rang ")], \
+        "both idle 40-50 min: only the doorbell wakes"
+    (tmp_path / "timers.json").write_text('{"vllm": "900", "circuits": -1, "infra": true}')
+    assert W.timers(tmp_path / "timers.json") == {} and W.timers(None) == {}, "only positive numbers declare a timer"
+
+
+def test_every_declared_timer_is_a_registry_handle_with_a_positive_interval():
+    """A lane opts in to the idle rule by adding `{handle: interval_s}` to infra/control/agent_watch_timers.json."""
+    root = W.Path(__file__).resolve().parents[3]
+    raw = json.loads((root / "infra/control/agent_watch_timers.json").read_text())
+    handles = {h["handle"] for h in json.loads((root / ".agents/skills/using-slack/registry.json").read_text())["handles"]}
+    assert raw and set(raw) <= handles, f"not registry handles: {sorted(set(raw) - handles)}"
+    assert W.timers(root / "infra/control/agent_watch_timers.json") == {h: float(v) for h, v in raw.items()}, \
+        "each interval a positive number of seconds"
