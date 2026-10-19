@@ -22,9 +22,25 @@ that reads row `r` commits it with the registration's salt, so its `b || c` is t
 registered root and each instance's position against its own read map (`reads_file`, the Lean verifier's `--registered`,
 all from its own program but the root); a statement that commits a registered row under fresh salts has no path and is
 refused.
+
+A *supplied value* is a registered value the verifier fills itself, from what it holds before the draw: each row is the
+bytes of its sources in order, each source a root the record names (`{"port": P}`, the `roots` entry of port P;
+`{"value": V}`, the `registered` entry of value V, never a supplied value's), bytes of its own (`{"bytes": hex}`), a
+position (`{"position": "K"}`: K, a decimal below the record's population, after every unit of the log's earlier
+records, `log_base`, as a u64 big-endian, so no two records of one log share a position) or its coin bound to the
+record's window (`{"window": hex}`: `window_salt`, SHA-512 of `WINDOW_SALT`, the coin and the window's canonical JSON, a
+salt per window, as R6 takes one record a window). A row's bytes are read as the parameter's leaves of `w` bits
+(`bytes_leaves`: each big-endian 32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32
+bits or 512 of one). Its rows are
+committed as any registered value's, under public salts (`supplied_salts`, row i's from the program's digest, the value's
+name and i alone), so its root is a function of the record and the verifier's bytes: R7 recomputes it
+(`supplied_root`) and refuses a record whose entry names another (`R7-supplied`). PoUW's seed inputs are such values: a
+unit's seed then reads the roots its operands are committed under, which the prover can't choose.
 """
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -33,6 +49,7 @@ from verity.ml.commitments.identity import identity_digest
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, row_leaf, sha512_row_digest
+from verity.ml.circuits.codec import canonical_json, jcs_domain_error
 from verity.ml.circuits.partition_object import TemplatePartition
 from verity.ml.circuits.program import Program
 
@@ -50,7 +67,14 @@ OWNER = -2
 ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
 #: the entry key a value of another width than `WORD_BITS` adds
 WIDTH_KEY = "word_bits"
+SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+WINDOW_SALT = "verity/one-stage/window-salt/v0"
+#: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
+#: after the log's, the verifier's coin bound to the record's window
+SOURCES = ("port", "value", "bytes", "position", "window")
 _INST = hm96.SHA512
+_HEX = re.compile(r"[0-9a-f]+")
+_DEC = re.compile(r"0|[1-9][0-9]*")
 
 
 def _width(word_bits: int) -> int:
@@ -265,6 +289,133 @@ def registered_entries(program: Program, values: Mapping[str, int]) -> dict[str,
     return out
 
 
+def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
+    """Row i's public salt of a supplied value: SHAKE256 of `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and
+    i (u32 little-endian), NUL between them, 192 bytes. They hide nothing the record doesn't show: the reads need only the
+    commitment's binding."""
+    head = SUPPLIED_SALT.encode() + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
+    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(_INST.salt_bytes) for i in range(n)]
+
+
+def sources(supplied: Any) -> dict[str, list[list[tuple[str, str]]]]:
+    """The verifier's supplied values, `{value: [[source, ...], ...]}` (a row a list of sources, each one of `SOURCES`
+    naming a string), as `{value: [[(kind, name), ...], ...]}`; ValueError on any other form, which the Lean verifier
+    refuses too (`OneStage.paramsOfJson`)."""
+    if not isinstance(supplied, Mapping):
+        raise ValueError(f"supplied values are an object of rows, not {supplied!r}")
+    out: dict[str, list[list[tuple[str, str]]]] = {}
+    for v, rows in supplied.items():
+        if not (isinstance(v, str) and isinstance(rows, (list, tuple)) and all(isinstance(r, (list, tuple)) for r in rows)):
+            raise ValueError(f"supplied value {v!r}: its rows are not lists of sources")
+        out[v] = []
+        for r in rows:
+            if not all(isinstance(s, Mapping) and len(s) == 1 and set(s) <= set(SOURCES) and isinstance(*s.values(), str)
+                       for s in r):
+                raise ValueError(f"supplied value {v!r}: a source is not one of {SOURCES} naming a string: {r!r}")
+            out[v].append([next(iter(s.items())) for s in r])
+    return out
+
+
+def bytes_leaves(data: bytes, bits: int) -> list[int]:
+    """`data` as leaves of `bits` bits: each big-endian 32-bit half, its `32 / bits` leaves least significant first (a
+    digest is 16 leaves of 32 bits, or 512 of one, as PoUW's `seeds.leaves` reads it)."""
+    if not (0 < bits <= 32 and 32 % bits == 0):
+        raise ValueError(f"leaves of {bits} bits hold no whole 32-bit halves")
+    if len(data) % 4:
+        raise ValueError(f"{len(data)} bytes are no whole 32-bit halves")
+    mask = (1 << bits) - 1
+    return [(h >> (bits * j)) & mask for i in range(0, len(data), 4) for h in (int.from_bytes(data[i:i + 4], "big"),)
+            for j in range(32 // bits)]
+
+
+def log_base(log: Sequence[Any]) -> int:
+    """The first position after the log's records: the sum of their populations, every unit of each one position."""
+    base = 0
+    for e in log:
+        n = e.get("population") if isinstance(e, Mapping) else None
+        if type(n) is not int or n < 0:
+            raise ValueError(f"a record of the log has no population: {n!r}")
+        base += n
+    return base
+
+
+def window_salt(coin: bytes, window: Any) -> bytes:
+    """The salt of `window` (a record's) under the verifier's coin: SHA-512 of `WINDOW_SALT`, the coin and the window's
+    canonical JSON, NUL between them; ValueError for a window that is no object of the canonical domain."""
+    if not isinstance(window, Mapping) or jcs_domain_error(dict(window)) is not None:
+        raise ValueError(f"the record's window is no canonical JSON object: {window!r}")
+    return hashlib.sha512(WINDOW_SALT.encode() + b"\0" + coin + b"\0" + canonical_json(dict(window))).digest()
+
+
+def _hex_bytes(value: str, kind: str, name: str, text: Any) -> bytes:
+    if not (isinstance(text, str) and _HEX.fullmatch(text) and len(text) % 2 == 0):
+        raise ValueError(f"supplied value {value!r}: {kind} {name!r} is not lowercase hex bytes")
+    return bytes.fromhex(text)
+
+
+def _source_bytes(rec: Any, value: str, kind: str, name: str, supplied: Sequence[str], log: Sequence[Any]) -> bytes:
+    """A source's bytes: the root the record names for it (its last entry, as R3 and R7 read a name twice), the verifier's
+    own, a position after the log's, or the verifier's coin bound to the record's window; ValueError where there is none."""
+    rec = rec if isinstance(rec, Mapping) else {}
+    if kind == "bytes":
+        return _hex_bytes(value, kind, name, name)
+    if kind == "window":
+        return window_salt(_hex_bytes(value, kind, name, name), rec.get("window"))
+    if kind == "position":
+        n = rec.get("population")
+        if not (_DEC.fullmatch(name) and type(n) is int and int(name) < n):
+            raise ValueError(f"supplied value {value!r}: position {name!r} is no unit of a population of {n!r}")
+        p = log_base(log) + int(name)
+        if p >= 1 << 64:
+            raise ValueError(f"supplied value {value!r}: position {p} is no u64")
+        return p.to_bytes(8, "big")
+    field, key = ("roots", "port") if kind == "port" else ("registered", "value")
+    if kind == "value" and name in supplied:
+        raise ValueError(f"supplied value {value!r} reads supplied value {name!r}'s root")
+    es = rec.get(field)
+    found = [e for e in (es if isinstance(es, list) else ()) if isinstance(e, Mapping) and e.get(key) == name]
+    if not found:
+        raise ValueError(f"supplied value {value!r}: the record names no {key} {name!r}")
+    return _hex_bytes(value, kind, name, found[-1].get("root"))
+
+
+def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
+                  supplied: Sequence[str] = (), log: Sequence[Any] = ()) -> list[list[int]]:
+    """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records and its own
+    bytes: each row its sources' bytes, read as the parameter's leaves (`bytes_leaves` at its leaf width). `supplied`:
+    every supplied value's name, whose roots no row reads. ValueError where a source names nothing the record holds, or
+    the leaves are not one width dividing 32."""
+    t = dict(program.fn.signature()[0]).get(value)
+    w = None if t is None else t.homogeneous_width()
+    if w is None:
+        raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
+    return [bytes_leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log) for k, n in row), w) for row in rows]
+
+
+def supplied_root(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
+                  want: Mapping[str, Any], supplied: Sequence[str] = (), log: Sequence[Any] = (),
+                  prog: str | None = None) -> str:
+    """The root R7 holds a supplied value's entry to: its rows (`supplied_rows`), as many as the verifier's own entry's
+    `leaves` (`registered_entries`), each of its `words` leaves, committed under `supplied_salts` at its `word_bits`.
+    `prog`: `program`'s digest (`P.program_digest`), when the caller holds it."""
+    got = supplied_rows(program, value, rows, rec, supplied, log)
+    if len(got) != want["leaves"] or any(len(r) != want["words"] for r in got):
+        raise ValueError(f"supplied value {value!r}: rows of {[len(r) for r in got]} leaves, not {want['leaves']} of "
+                         f"{want['words']}")
+    prog = prog or P.program_digest(program)
+    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), want["word_bits"]).root.hex()
+
+
+def supplied_value(program: Program, value: str, rows: Sequence[Sequence[tuple[str, str]]], rec: Any,
+                   supplied: Sequence[str] = (), log: Sequence[Any] = (), prog: str | None = None) -> Registered:
+    """The prover's side of a supplied value: the rows the verifier fills from `rec` (a record without this value's own
+    entry will do: no row reads it) and the log under the public salts, whose `entry()` the record registers and whose
+    `statement` opens a unit's reads like any registered value's."""
+    got = supplied_rows(program, value, rows, rec, supplied, log)
+    prog = prog or P.program_digest(program)
+    return Registered.commit(prog, value, got, supplied_salts(prog, value, len(got)), width(program, value))
+
+
 def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, int], roots: Mapping[str, str],
                ports: Mapping[str, str] | None = None) -> dict[str, Any]:
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
@@ -283,6 +434,8 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "WIDTHS", "WIDTH_KEY",
-           "WORD_BITS", "domain", "leaf", "parameter_gates", "reads", "reads_file", "registered_entries", "row_digest",
-           "row_words", "shape", "table", "verify_read", "width", "width_entry"]
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SOURCES", "SUPPLIED_SALT",
+           "WIDTHS", "WIDTH_KEY", "WINDOW_SALT", "WORD_BITS", "bytes_leaves", "domain", "leaf", "log_base",
+           "parameter_gates", "reads", "reads_file", "registered_entries", "row_digest", "row_words", "shape", "sources",
+           "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
+           "width_entry", "window_salt"]
