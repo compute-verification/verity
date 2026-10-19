@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # session.cu before and after libvc's device functions (`../lib/vc_device.cuh`) on one leased GPU (cwd = the source tree):
-# both built for this node's GPU outside the lease (the before's text shipped as inputs/session_base.cu, origin/main's),
-# then under one lease memory accounting's pass gate on the after (`inplace_gate.py --no-timing`: every receipt, root,
+# both, and libvc, built for this node's GPU outside the lease (the before's text shipped as inputs/session_base.cu,
+# origin/main's), then under one lease libvc's conformance (`../lib/conformance.py`), memory accounting's pass gate on the
+# after (`inplace_gate.py --no-timing`: every receipt, root,
 # kept level and opening against the driver's reference), the in-place pass of both interleaved at 8B (`ab_pass.py`), and
 # the served pass (`pass_bench.py`: rs_pass and the chained passes, each root against reader.cu's unfused tree) after,
 # before, after. A gate that fails ends the lease before anything is timed. Results go to $OUT.
@@ -37,20 +38,29 @@ CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader -i 0 | head -1 | t
 FLAGS=(-O3 -gencode "arch=compute_${CC}a,code=sm_${CC}a" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -I "$RS")
 nvcc "${FLAGS[@]}" -o "$B/after.so" $RS/session.cu > "$O/after.ptxas" 2>&1 & A=$!
 nvcc "${FLAGS[@]}" -o "$B/before.so" "$IN/session_base.cu" > "$O/before.ptxas" 2>&1 & Z=$!
+ARCHS=$CC CUDA=$CUDA_HOME bash benchmarks/hash/lib/build.sh "$B/vc" > "$O/vc.ptxas" 2>&1 & V=$!
 wait $A; ra=$?
 wait $Z; rz=$?
-echo "build after rc $ra before rc $rz" | tee "$O/rc.txt"
+wait $V; rv=$?
+echo "build after rc $ra before rc $rz libvc rc $rv" | tee "$O/rc.txt"
+grep -E "Compiling entry|registers|spill" "$O/vc.ptxas" > "$O/vc.regs.txt" 2>/dev/null
 for k in after before; do
   grep -E "Compiling entry|registers|spill" "$O/$k.ptxas" > "$O/$k.regs.txt" 2>/dev/null
 done
-[ "$ra" = 0 ] && [ "$rz" = 0 ] || { tail -30 "$O/after.ptxas" "$O/before.ptxas"; exit 4; }
-export STEPS=${STEPS:-gate ab pb} ROUNDS=${ROUNDS:-12} REPS=${REPS:-5}
+export STEPS=${STEPS:-conf gate ab pb} ROUNDS=${ROUNDS:-12} REPS=${REPS:-5}
+if [ "$ra" != 0 ] || [ "$rz" != 0 ]; then
+  tail -30 "$O/after.ptxas" "$O/before.ptxas"
+  STEPS=conf
+fi
 # shellcheck disable=SC2016,SC2086
 gpu-lease 1 --wait --max-min "${MAXMIN:-40}" ${LEASE_ARGS:-} -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv \
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   for s in $STEPS; do
     case $s in
+      conf) [ -f "$B/vc/libvc.so" ] && uv run python benchmarks/hash/lib/conformance.py --lib "$B/vc/libvc.so" \
+              > "$O/conformance.jsonl" 2> "$O/conformance.err"
+            echo "conf rc $?" >> "$O/rc.txt" ;;
       gate) "$PY" $RS/inplace_gate.py --lib "$B/after.so" --out "$O/gate" --no-timing > "$O/gate.log" 2>&1
             rc=$?; echo "gate rc $rc" >> "$O/rc.txt"; [ $rc = 0 ] || exit 1 ;;
       ab) "$PY" benchmarks/hash/bwkernels/ab_pass.py --before "$B/before.so" --after "$B/after.so" --out "$O" \
@@ -67,6 +77,7 @@ gpu-lease 1 --wait --max-min "${MAXMIN:-40}" ${LEASE_ARGS:-} -- bash -c '
   done'
 echo "lease rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
+tail -1 "$O/conformance.jsonl" 2>/dev/null | cut -c1-300
 tail -2 "$O/gate.log" 2>/dev/null
 tail -1 "$O/ab.log" 2>/dev/null
 grep -h '"root_ok"' "$O"/pb_*.log 2>/dev/null | cut -c1-400
