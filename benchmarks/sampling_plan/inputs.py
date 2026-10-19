@@ -93,22 +93,21 @@ OPENING_ANDS = 29_617_630
 
 #: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the firewall's send check, per run
 #: and (staged units, drawn units): the GPU-seconds its cold prover process held the lease (its wall less the lease's
-#: wait; the mean of two where it ran two) and its statement's staging (s). Their device phase is 79 ms an opening at a
-#: full statement, 16 ms without the send check, the GPU's own algebra about 1 ms of it (note:memory-accounting/
-#: 20261018T1937Z-report-zk-openings). They give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify
-#: lean-4e521bba8e1bc519), not CPU.
-OPENING_SESSIONS: dict[str, dict[tuple[int, int], tuple[float, float]]] = {
-    "r20261018-195718-d00b": {(64, 1): (139.5, 138.4), (64, 8): (138.0, 138.4), (64, 32): (161.0, 138.4),
-                              (64, 64): (163.5, 138.4)},
-    "r20261018-211523-93ec": {(512, 64): (156.0, 130.8), (512, 128): (161.0, 130.8), (512, 256): (197.0, 130.8),
-                              (512, 512): (234.0, 130.8)}}
+#: wait; the mean of two where it ran two). Their device phase is 79 ms an opening at a full statement, 16 ms without the
+#: send check, the GPU's own algebra about 1 ms of it (note:memory-accounting/20261018T1937Z-report-zk-openings). They
+#: give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify lean-4e521bba8e1bc519), not CPU. Nor `stage`:
+#: A8's staging is about 130 s at 64 staged units and at 512, a fixed cost a statement of this template pays that the stage
+#: fit's terms, shared with the s8 coordinates, don't carry (PRF-77).
+OPENING_SESSIONS: dict[str, dict[tuple[int, int], float]] = {
+    "r20261018-195718-d00b": {(64, 1): 139.5, (64, 8): 138.0, (64, 32): 161.0, (64, 64): 163.5},
+    "r20261018-211523-93ec": {(512, 64): 156.0, (512, 128): 161.0, (512, 256): 197.0, (512, 512): 234.0}}
 
 
 def observations() -> list[Observation]:
     return [Observation(ZK_RUN, f"ScaledMmS8Coordinate_v1{{K={k}}}", s8_coord_ands(k), c, d, prove=p, verify=v, stage=s)
             for (k, c, d), (p, v, s) in ZK.items()] + \
-        [Observation(run, OPENING, OPENING_ANDS, c, d, prove=p, stage=s)
-         for run, points in OPENING_SESSIONS.items() for (c, d), (p, s) in points.items()]
+        [Observation(run, OPENING, OPENING_ANDS, c, d, prove=p)
+         for run, points in OPENING_SESSIONS.items() for (c, d), p in points.items()]
 
 
 KEY = {"prover": "flock-circuit bin-dec484d021e461a0-g1-sm120 (binary 21944fa201b5, CUDA 13.3.1), --zk --gpu, "
