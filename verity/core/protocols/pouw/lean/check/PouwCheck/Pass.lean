@@ -2,6 +2,7 @@ import Flock.Draw
 import PouwCommit.Draws
 import PouwWindow.Rounds
 import PouwCheck.Inputs
+import SampledProofs.ChallengerRecord
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -291,17 +292,30 @@ def receiptDigest (kvs : List (String × String)) : String :=
   let body := "{" ++ ",".intercalate (sorted.map fun (k, v) => s!"\"{k}\":\"{v}\"") ++ "}"
   Flock.hexOf (Flock.Sha512.hash body.toUTF8)
 
+/-- `core_check.SIGNED_LIVE`. -/
+def SIGNED_LIVE : String :=
+  "a live window's coins are its challenger's signed record and the verifier's key for it, {key, record} " ++
+    "(`challenger.trusted_commitment`), not a bare commitment"
+
 /-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
-`draw` coin; live ones (`PouwWindow.LIVE_SCHEME`, a certified window's, read from the challenger's signed record) their
-`pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
+`draw` coin; live ones (`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from the challenger's signed
+record with the verifier's key for it, `{key, record}`, which this check verifies
+(`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and have their `pouw/draw`
+coin 0 (`SampledProofs.Challenger.liveReason`). -/
 def drawCheck (coins : Json) (recorded : Bool) (opening stream registration receipt k population units : Json) :
     R Unit := do
-  let live := match PouwWindow.field? coins "scheme" with
+  let liveScheme := match PouwWindow.field? coins "scheme" with
     | some (.str s) => s == PouwWindow.LIVE_SCHEME
     | _ => false
+  let live := (PouwWindow.field? coins "record").isSome || liveScheme
   let malformed := fun (e : String) => ("coin", s!"the verifier's coins are malformed: {e}")
   let c : Coins ⊕ LiveCommitment ← if live then do
-      let c ← (LiveCommitment.ofJson coins).mapError malformed
+      unless SampledProofs.keys? coins == some #["key", "record"] do coin SIGNED_LIVE
+      let key ← (SampledProofs.Challenger.ChallengerKey.ofJson (SampledProofs.getD coins "key")).mapError
+        fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
+      let record := SampledProofs.getD coins "record"
+      if let some why ← port (SampledProofs.Challenger.recordReason key record) then coin why
+      let c := (← port (SampledProofs.Challenger.ChallengerRecord.ofJson record)).commitment
       if let some why := PouwWindow.liveEpochReason c then coin why
       pure (.inr c)
     else .inl <$> (coinsOf coins recorded).mapError malformed

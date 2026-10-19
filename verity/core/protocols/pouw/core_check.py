@@ -61,6 +61,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import row_leaf
+from verity.ml.crypto import lms
 from verity.ml.randomness import derive, frame
 
 ID = "verity/pouw/v1"
@@ -1002,22 +1003,55 @@ def draw_key_context(stream: str, registration: str, receipt: dict) -> dict:
     return {"stream": stream, "registration": registration, "receipt": hashlib.sha512(body.encode()).hexdigest()}
 
 
+def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.ml.crypto.lms`).
+    A signature that doesn't decode raises `ValueError`, which `challenger.record_reason` reads as one that doesn't
+    verify."""
+    p = lms.Params(64, key.W, key.H)
+    return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+
+
+#: a live window's coins as the draw's check of record reads them
+SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the verifier's key for it, {key, record} "
+               "(`challenger.trusted_commitment`), not a bare commitment")
+
+
+def _live_coins(coins: dict) -> tuple[Ch.LiveCommitment | None, str | None]:
+    """A live window's commitment from `coins`, ``{"key", "record"}``: the record must be signed under the key
+    (`challenger.record_reason`) and its commitment a live epoch's; else None and why."""
+    if sorted(coins) != ["key", "record"]:
+        return None, SIGNED_LIVE
+    try:
+        key = Ch.ChallengerKey.from_json(coins["key"])
+    except Ch.CoinError as e:
+        return None, f"the verifier's challenger key is malformed: {e}"
+    why = Ch.record_reason(key, coins["record"], lms_verify)
+    if why is not None:
+        return None, why
+    c = Ch.ChallengerRecord.from_json(coins["record"]).commitment
+    return (None, why) if (why := Wd.live_epoch_reason(c)) is not None else (c, None)
+
+
 def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
          units: Any) -> tuple[str, str] | None:
     """None when `units` are the window's draw: the epoch's draw coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
     `k` over `population` on the stream ``"draw"`` of the key the coin derives under the stream's digest `stream`, the
     registration and its `receipt`; else the refusal (``coin``, ``draw`` or ``sampler``, and why). A seeded commitment
-    (`coins_of`) has its ``draw`` coin; a live one (`window.LIVE_SCHEME`, a certified window's, whose verifier reads it
-    from the challenger's signed record, `challenger.trusted_commitment`) has its ``pouw/draw`` coin 0
+    (`coins_of`) has its ``draw`` coin; a live one (`window.LIVE_SCHEME`, a certified window's) is read only from its
+    challenger's signed record with the verifier's key for it, ``{"key", "record"}``, which this check verifies
+    (`challenger.record_reason`; a bare live commitment is refused, `SIGNED_LIVE`), and has its ``pouw/draw`` coin 0
     (`challenger.live_reason`)."""
-    live = isinstance(coins, dict) and coins.get("scheme") == Wd.LIVE_SCHEME
-    try:
-        c = Ch.LiveCommitment.from_json(coins) if live else coins_of(coins, recorded)
-    except (Refused, Ch.CoinError) as e:
-        return "coin", f"the verifier's coins are malformed: {e}"
-    if live and (why := Wd.live_epoch_reason(c)) is not None:
-        return "coin", why
+    live = isinstance(coins, dict) and ("record" in coins or coins.get("scheme") == Wd.LIVE_SCHEME)
+    if live:
+        c, why = _live_coins(coins)
+        if c is None:
+            return "coin", why
+    else:
+        try:
+            c = coins_of(coins, recorded)
+        except (Refused, Ch.CoinError) as e:
+            return "coin", f"the verifier's coins are malformed: {e}"
     if not (_str(registration) and _DIGEST.fullmatch(registration)) or not _str(stream):
         return "draw", "the registration is not a SHA-512 digest, or the stream's digest not a string"
     if not (isinstance(receipt, dict) and all(_plain(x) and _plain(v) for x, v in receipt.items())):
@@ -1110,7 +1144,7 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "answer", "answer_of", "canonical",
-           "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json", "law_name", "line",
-           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "unit_draw", "verify_path",
-           "window_domain"]
+__all__ = ["ANSWER_KEYS", "FORMATS", "ID", "LEVEL", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE", "answer", "answer_of",
+           "canonical", "case", "check", "commitment", "digest", "draw", "evidence", "integrity", "integrity_json",
+           "law_name", "line", "lms_verify", "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered",
+           "rounds", "unit_draw", "verify_path", "window_domain"]
