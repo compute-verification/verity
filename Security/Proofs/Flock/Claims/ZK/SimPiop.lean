@@ -51,15 +51,15 @@ namespace Masked
 
 /-- **The deployed source at the opened coins**: at a live statement, a witness in the deployed relation, any tape `τ`,
 opened coins `c` and stop `n` at which no refusal is seen, table `j` has at least `14` variables, and its rep `r` source
-from the cut is at the opened coins from the rep's first round on (`FlockComplete.PiopSrc`), at the session's pads,
-trace and the statement's extra claims. -/
+from the cut is at the opened coins from the rep's first round on (`FlockComplete.PiopSrc`, its switched vectors where
+the rep sends them before the stop), at the session's pads, trace and the statement's extra claims. -/
 def PiopSrcE : Prop :=
   ∀ x, Live x → ∀ w, RZk x w → ∀ (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), ¬ Refused x c n →
     ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) →
     ∀ (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim),
       (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras →
       14 ≤ (FlockDeploy.tabsOf (stsOf x))[j.val]!.m ∧
-      FlockComplete.PiopSrc (fun k i => slotAt c k i) (FlockDeploy.tabsOf (stsOf x))[j.val]!
+      FlockComplete.PiopSrc (fun k i => slotAt c k i) n (FlockDeploy.tabsOf (stsOf x))[j.val]!
         (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
           (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0)
         (FlockComplete.padsOf (UE.tapeZk τ) j.val r.val
