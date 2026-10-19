@@ -49,7 +49,9 @@ its no-write control (a later B32 step whose kernels write none of them), and it
 `dither_one.check` on its gate, control, fault and fault_wb steps, tokens reported), under a CUDA
 profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
 kernels inside the range only).  The decode gate compares each arm's
-tokens with its reference arm's (dither: exact; any other: the first arm).  A failed gate times nothing (exit 4); a worker
+tokens with its reference arm's (dither: exact; any other: the first arm); a dither arm's are a second GATE_TOKENS
+generation after its checks with nothing armed, since its fault steps move served values on purpose (fault_wb moves
+column 0 of every call's y at one step), the capture run's kept as tokens_capture.  A failed gate times nothing (exit 4); a worker
 that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
 checked, so N arms need N engines' memory plus one arm's captures.
 
@@ -277,6 +279,10 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 # the captures sit outside vLLM's memory budget; released, the next arm's gate has their room
                 win.caps = {}
                 torch.cuda.empty_cache()
+                # the fault steps move served values on purpose, so the token gate reads a generation with none armed
+                res["tokens_capture"] = res["tokens"]
+                _, outs = gen(ps, GATE_TOKENS)
+                res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
             conn.send(res)
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -357,10 +363,16 @@ def main() -> int:
             ref = REF_OF.get(arm, arms[0])
             if ref in gate_doc and ref != arm:
                 gate_doc[arm]["tokens_equal_" + ref] = gate_doc[arm]["tokens"] == gate_doc[ref]["tokens"]
+                if "tokens_capture" in gate_doc[arm]:
+                    gate_doc[arm]["tokens_capture_requests_equal_" + ref] = sum(
+                        x == y for x, y in zip(gate_doc[arm]["tokens_capture"], gate_doc[ref]["tokens"]))
             if "stock" in gate_doc and arm != "stock":
                 gate_doc[arm]["tokens_equal_stock"] = gate_doc[arm]["tokens"] == gate_doc["stock"]["tokens"]
+                gate_doc[arm]["tokens_requests_equal_stock"] = sum(
+                    x == y for x, y in zip(gate_doc[arm]["tokens"], gate_doc["stock"]["tokens"]))
         for arm in arms:
-            print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items() if k != "tokens"}}), flush=True)
+            print(json.dumps({"gate": arm, **{k: v for k, v in gate_doc[arm].items()
+                                               if k not in ("tokens", "tokens_capture")}}), flush=True)
         (out / "gate.json").write_text(json.dumps(gate_doc, indent=1) + "\n")
         failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
             gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
