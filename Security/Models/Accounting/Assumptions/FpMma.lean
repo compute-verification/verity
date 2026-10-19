@@ -17,8 +17,9 @@ Definition, so a device that breaks one fails the honest proof visibly and no ch
 elementwise routes reads only the code widths, A3 and A7 (`benchmarks/pouw/theory/isa_escape_fp.py`).
 
 - (a) Exact-integer designs read `Fp8GridExact` and `Fp4GridExact`, the weakest form: exactness inside one grid
-  `2^g`, nothing about the window, rounding or order outside it. `p = 24` on sm_120 and B200, `p = 14` on H200. Every
-  measured exact route (k3, k4, k3z, k4s, k3h, e4r, the ±16 grid, the FP4 grids) lives inside it.
+  `2^g`, nothing about the window, rounding or order outside it. `p = 24` on sm_120 and B200, `p = 14` on H200. H200's
+  exact routes, k3h and e4r, live inside it (at most 7,200 and 8,192 a k32 step from `+0`); the binade routes (k3, k4,
+  k3z, k4s) do while their restarts keep the accumulator below `2^24`.
 - (b) FP-native designs read `Fp8Model` and `Fp4Model`, the whole bit-exact step, and `FpZeroPositive`. Lean has the
   models for sm_120 (`Pouw.PearlC.sm120E4m3`, `Pouw.PearlC.Fp4.sm120Nvf4`, `sm120Mxf4`) and for Hopper's H100 captures
   (`Pouw.Fp8Atom.hopperE4m3K32`); B200 has no FP8 model of record.
