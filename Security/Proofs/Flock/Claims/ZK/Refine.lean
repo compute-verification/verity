@@ -50,9 +50,11 @@ opening that fails (`strat_eval_cons`).
   (`stopsCausal_rfOf`) and is the frame's refusals (`StopsAt`).
 * **At the deployed coin layer** (`Flock.zk_server_lean_coinLayer`): `S` is `CoinLayer.session nr T`, whose `Hello`,
   opening check and coin reading are `coin-tree/hm96-sha512/v2`'s and whose tables are `T`'s. There `OpeningsRefused`
-  reads the keyed coin-tree walk itself, and what is left of `ItemsRefine` is the stop link, that the server's `Hello`
-  is the coin layer's, and that `T`'s round encoding gives the firewall's link and `Finish` and, without a rep's
-  leading domain frame, the frame's bytes.
+  reads the keyed coin-tree walk itself, which keys every hash with the nonce while the frame's refusal reads no tape, so
+  it holds there only at a release with no live frame round (`LeanRelease.openingsRefused_live`): the release must read
+  the transport's check at the tape's nonce before it can be discharged. What is left of `ItemsRefine` is the stop
+  link, that the server's `Hello` is the coin layer's, and that `T`'s round encoding gives the firewall's link and
+  `Finish` and, without a rep's leading domain frame, the frame's bytes.
 -/
 
 namespace Claims.ZKMal
@@ -430,12 +432,32 @@ theorem stopRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
 
 /-- **The transport refuses a failed opening** at `x`: after every history past `Hello` some opening of which fails the
 coin-tree check, the frame refuses the last coins. The frame checks no opening itself; today it is Rust's
-`coin_tree::check` in `flock-circuit`'s checked transport that ends the session there. -/
+`coin_tree::check` in `flock-circuit`'s checked transport that ends the session there. Its histories are at every
+nonce while the frame's refusal reads no tape, so with a live frame round it holds only at a check that passes the
+round's openings under every nonce (`openingsRefused_live`), which the coin layer's keyed walk never does. -/
 def OpeningsRefused (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg)
     (x : Msg) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)),
     ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = false →
     L.refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = true
+
+/-- **Under `OpeningsRefused`, a live frame round's openings pass under every nonce**: the frame's refusal reads no
+tape (`refusesCoins_tape`), so where the openings fail under some nonce it refuses on every tape, and a live run's coins
+were all taken (`refusesCoins_of_live`). A session whose check keys every hash with the nonce (`CoinLayer.session`'s
+coin-tree walk) passes an opening under its own nonce only, so there `OpeningsRefused` leaves no live frame round: the
+transport's refusal must read the nonce the frame doesn't. -/
+theorem openingsRefused_live (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hO : OpeningsRefused S L H x)
+    (ρ : S.refP.Nonce × S.refP.Rand) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
+    (hk : L.kindAt x ((m₀, ρ₀) :: ops).length = .masked)
+    (hl : L.toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true) (ν : S.Nonce) :
+    ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true := by
+  cases hp : ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 with
+  | true => rfl
+  | false =>
+    have h1 := (L.refusesCoins_tape x ρ (ν, ρ.2) ((m₀, ρ₀) :: ops)).trans (hO ν ρ.2 m₀ ρ₀ ops hp)
+    rw [L.refusesCoins_of_live wk x w ρ κ _ hk hl] at h1
+    cases h1
 
 /-- **The live frame rounds' bytes**, the per-round byte equality at the worker's frame rounds: after every history of
 `0 < ops.length < refK x` openings, past the link and before the last coin, whose rounds all passed, whose openings
