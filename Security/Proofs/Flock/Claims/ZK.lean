@@ -40,6 +40,8 @@ import Proofs.Flock.Claims.ZK.Split
 import Proofs.Flock.Claims.ZK.SimCommit
 import Proofs.Flock.Claims.ZK.PrefixLive
 import Proofs.Flock.Claims.ZK.SimSession
+import Proofs.Flock.Claims.ZK.SimInner
+import Proofs.Flock.Claims.ZK.SplitInner
 import Proofs.Flock.Claims.ZK.Assemble
 import Proofs.Flock.Claims.ZK.Sent
 import Proofs.Flock.Claims.ZK.Round1
@@ -288,9 +290,16 @@ import Proofs.Flock.Claims.ZK.Stop
 * `SimCommit`: `Masked.simCommit`, the commitments from the cut's leaves (`Masked.SimCommit`).
 * `PrefixLive`: `Masked.prefixLive`, the session answered by the openings against the one stopped after the round.
 * `SimSession`: `Masked.simSession_of`, `SimSession` from `SimCommit` and the three hybrids.
+* `SimInner`: `Masked.simInner_of`, `SimInner` from what the cut's source carries for the inner proof
+  (`Masked.InnerSrcE`).
+* `SplitInner`: `InnerSrcE` as statements at its hypotheses (`Masked.InnerAt`): the slot count, the triple's openings,
+  the batched constraint, `τ`'s value and leaf, and `Y` (`Masked.InnerSlot`, `Masked.InnerTriple`,
+  `Masked.InnerBatched`, `Masked.InnerTauVal`, `Masked.InnerTauLeaf`, `Masked.InnerY`), and `SimInner` from them
+  (`Masked.simInner_of_split`).
 * `Assemble`: `Flock.zk_deployZk_masked_exe_split`, Flock's zero knowledge at the deployed masked session from the
-  hybrids `SimPiop`, `SimLig` and `SimInner`, `CausalExe` and `FinExe`: `hstep` from `Masked.prefixLive` and
-  `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit` and the hybrids (`Masked.simSession_of`).
+  hybrids `SimPiop` and `SimLig`, `SplitInner`'s statements, `CausalExe` and `FinExe`: `hstep` from
+  `Masked.prefixLive` and `SimSession` (`Masked.hstep_exe`), `SimSession` from `Masked.simCommit` and the hybrids
+  (`Masked.simSession_of`), `SimInner` from `SplitInner` (`Masked.simInner_of_split`).
 * `Worker`: Lemma B at any clear values a worker supplies, which never read the pads: the switched prover (`p`'s view
   where its rows hold, else the honest prover's on the pads Lemma A moves) has `S_shvzk`'s distribution on the honest
   `InnerHolds` alone (`sw_shvzk`, `worker_shvzk`), and differs from `p`'s view only in `Y₁`, `C_h` and the pads tree
