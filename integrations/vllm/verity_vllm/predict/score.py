@@ -167,23 +167,31 @@ def _workload_task(task: dict) -> dict:
     return out
 
 
-def predict_workload(phi: Phi, built: dict | None = None) -> dict:
-    """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
-    lag the declared target resolves (`TargetProfile.lag()`); `built` holds request Programs already predicted, by (LP, T)."""
+def request_component(r, canon: dict):
+    """A predicted request Program as GP-01's component (`program.workload.request_component`), its definitions shared through
+    `canon` (one dict a composition)."""
     from verity.ml.circuits.defs import REGISTRY
-    from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
     from verity_vllm.program.registry.catalog import load as load_registry
     load_registry()
+    params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
+    return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+
+
+def predict_workload(phi: Phi, comps: dict | None = None, canon: dict | None = None) -> dict:
+    """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
+    lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built under `canon`
+    (`request_component`), by (LP, T), so a caller that has each request's Program need not hold them all."""
+    from verity_vllm.pipeline.global_program import request_id_of
+    from verity_vllm.program import workload as W
     reqs = phi.requests
     if any(int(r.get("n") or 1) != 1 for r in reqs):
         raise Unexpressible("a request with n > 1 (parallel sampling) in the workload")
-    canon: dict = {}
-    comps = {}
+    canon = {} if canon is None else canon
+    comps = dict(comps or {})
     for LP, T in phi.request_shapes():
-        r = (built or {}).get((LP, T)) or build_program(phi, "request", LP=LP, T=T)
-        params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
-        comps[(LP, T)] = W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
+        if (LP, T) not in comps:
+            comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T), canon)
     wreqs = []
     for i, q in enumerate(reqs):
         lp, cap = int(q["prompt_len"]), int(q["max_tokens"])

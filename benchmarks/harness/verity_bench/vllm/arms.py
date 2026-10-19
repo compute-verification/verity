@@ -32,9 +32,10 @@ class Target:
     """What an experimental arm may inspect and patch.
 
     Every patch belongs to ``hooks``. The runner checks this after ``install``
-    and always uninstalls the set when the engine closes. ``phase`` and
-    ``point`` name the run ``begin_run`` opens: ``gate``, ``warmup`` or
-    ``measure``, at that sweep point's id.
+    and always uninstalls the set when the engine closes. ``phase``,
+    ``point`` and ``tokens`` describe the run ``begin_run`` opens: ``gate``,
+    ``warmup`` or ``measure``, at that sweep point's id, serving that many
+    prompt and output tokens.
     """
 
     arm: Arm
@@ -43,6 +44,7 @@ class Target:
     hooks: Hooks
     phase: str = ""
     point: str = ""
+    tokens: int = 0
 
 
 BUILTINS = {

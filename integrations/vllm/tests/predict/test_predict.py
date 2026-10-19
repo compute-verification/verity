@@ -225,22 +225,22 @@ def test_sampling_follows_the_builds_policy():
 def test_weights_record_follows_the_module_order():
     C = model_shape(TINY)
     names = [n for n, _ in weight_leaves(C)]
-    assert names[:3] == ["model.model.embed_tokens.weight", "model.model.layers.0.self_attn.qkv_proj.weight",
-                         "model.model.layers.0.self_attn.o_proj.weight"]
-    assert "model.lm_head.weight" not in names  # tied: the embedding's leaf
+    assert names[:3] == ["model.embed_tokens.weight", "model.layers.0.self_attn.qkv_proj.weight",
+                         "model.layers.0.self_attn.o_proj.weight"]
+    assert "lm_head.weight" not in names  # tied: the embedding's leaf
     assert len(names) == 1 + 6 * 2 + 1 + 1 + 4 * 2
     shards = [(n.split("layers.0.")[-1], t) for n, t in weight_leaves(C, 2)[:7]]
     assert [(n, t.leaves) for n, t in shards] == [
-        ("model.model.embed_tokens.weight", 128 * 64), ("self_attn.qkv_proj.weight", (2 + 2 * 1) * 16 * 64), ("self_attn.o_proj.weight", 64 * 32),
+        ("model.embed_tokens.weight", 128 * 64), ("self_attn.qkv_proj.weight", (2 + 2 * 1) * 16 * 64), ("self_attn.o_proj.weight", 64 * 32),
         ("mlp.gate_up_proj.weight", 128 * 64), ("mlp.down_proj.weight", 64 * 64), ("input_layernorm.weight", 64), ("post_attention_layernorm.weight", 64)]
     untied = [n for n, _ in weight_leaves(model_shape({**TINY, "tie_word_embeddings": False}))]
-    assert untied.index("model.lm_head.weight") == untied.index("model.model.norm.weight") + 1
+    assert untied.index("lm_head.weight") == untied.index("model.norm.weight") + 1
     biased = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen2", "use_sliding_window": False, "sliding_window": 32}))]
-    assert biased[1:4] == ["model.model.layers.0.self_attn.qkv_proj.weight", "model.model.layers.0.self_attn.qkv_proj.bias",
-                           "model.model.layers.0.self_attn.o_proj.weight"]
+    assert biased[1:4] == ["model.layers.0.self_attn.qkv_proj.weight", "model.layers.0.self_attn.qkv_proj.bias",
+                           "model.layers.0.self_attn.o_proj.weight"]
     normed = [n for n, _ in weight_leaves(model_shape({**TINY, "model_type": "qwen3"}))]
-    assert normed[2:5] == ["model.model.layers.0.self_attn.o_proj.weight", "model.model.layers.0.self_attn.q_norm.weight",
-                           "model.model.layers.0.self_attn.k_norm.weight"]
+    assert normed[2:5] == ["model.layers.0.self_attn.o_proj.weight", "model.layers.0.self_attn.q_norm.weight",
+                           "model.layers.0.self_attn.k_norm.weight"]
     moe = weight_leaves(model_shape(json.loads((FIX / "olmoe-1b-7b.config.json").read_text())))
     assert [n.split("layers.0.")[-1] for n, _ in moe[1:10]] == [
         "self_attn.qkv_proj.weight", "self_attn.q_norm.weight", "self_attn.k_norm.weight", "self_attn.o_proj.weight", "mlp.gate.weight",
@@ -249,8 +249,8 @@ def test_weights_record_follows_the_module_order():
     assert [n.split("layers.0.")[-1] for n in gemma[1:9]] == [
         "self_attn.qkv_proj.weight", "self_attn.o_proj.weight", "mlp.gate_up_proj.weight", "mlp.down_proj.weight", "input_layernorm.weight",
         "post_attention_layernorm.weight", "pre_feedforward_layernorm.weight", "post_feedforward_layernorm.weight"]
-    assert gemma.index("model.model.normalizer") == gemma.index("model.model.norm.weight") + 1 == \
-        gemma.index("model.model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
+    assert gemma.index("model.normalizer") == gemma.index("model.norm.weight") + 1 == \
+        gemma.index("model.layers.0.self_attn.rotary_emb.cos_sin_cache") - 1
 
 
 @pytest.mark.parametrize("target,kind", [({"compute_capability": [8, 0], "num_sms": 108}, "GemmBias_v1"), (RTXPRO6000, "GemmBias_v2")])

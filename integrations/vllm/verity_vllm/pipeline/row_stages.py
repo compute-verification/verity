@@ -54,6 +54,9 @@ from verity_vllm.program import prefix_plan as PP
 
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
+#: a derive on ir="boolean" lifts every word Definition to bits after the word derive: 2.6x the word derive's wall on Qwen3-0.6B,
+#: and over 900 s against 357 s on the int8 Llama-3.1-8B row (VLLM-27)
+BOOLEAN_DERIVE_SCALE = 4
 
 
 def _tail(path: str, n: int = 300) -> str:
@@ -77,6 +80,7 @@ class SingleRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
+        self.tgt, self.tgt_args = "", []      # the declared target (`shape`)
 
     def run(self) -> int:
         try:
@@ -311,9 +315,14 @@ class SingleRow(Row):
         """B >= 2: the workload Program's compose and the manifest beside the derives (`row_build.follow_compose`)."""
         return RB.follow_compose(self, to)
 
+    def derive_timeout(self, lp: int, t: int) -> int:
+        """One derive's limit: `--build-timeout`, else 900 s per (256 positions x 31 tokens), times `BOOLEAN_DERIVE_SCALE` on ir="boolean"."""
+        ir = json.loads(self.tgt or "{}").get("ir")
+        scale = max(1, (max(lp, 256) // 256) * (max(t, 31) // 31)) * (BOOLEAN_DERIVE_SCALE if ir == "boolean" else 1)
+        return self.cb.build_timeout or min(CAP, 900 * scale)
+
     def build(self) -> None:
-        scale = max(1, (max(self.LP, 256) // 256) * (max(self.T, 31) // 31))
-        to = self.cb.build_timeout or min(CAP, 900 * scale)
+        to = self.derive_timeout(self.LP, self.T)
         t0 = int(time.time())
         self.tl("stage.build", "start")
         self.gpu_exclusive("build")
@@ -377,7 +386,7 @@ class SingleRow(Row):
         for s in R.missing_derived(self.d):
             self.log(f"{label}: deriving request Program {PP.shape_name(s)}")
             out = f"{self.d}/build_request_{PP.shape_name(s)}"
-            self.run_to(self.cb.build_timeout or 900, f"{out}.log", self.request_cmd(s[0], s[1], out, C=PP.cached_rows(s)))
+            self.run_to(self.derive_timeout(256, 31), f"{out}.log", self.request_cmd(s[0], s[1], out, C=PP.cached_rows(s)))
             derived += ["--derived", out]
 
     def compare(self, to_c: int) -> tuple[int, int | None, bool]:
@@ -416,8 +425,7 @@ class SingleRow(Row):
                          quiet=True)
             if not os.path.isfile(f"{req_dir}/result.json"):
                 self.log(f"early EOS: served T_r={t_r} != cap-1={self.T} -> deriving request Program LP={self.LP} T={t_r}")
-                scale = max(1, (max(self.LP, 256) // 256) * (max(t_r, 31) // 31))
-                self.run_to(self.cb.build_timeout or min(CAP, 900 * scale), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
+                self.run_to(self.derive_timeout(self.LP, t_r), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
         open(f"{d}/match_shape.json", "w").write(f'{{"LP": {self.LP}, "T": {t_r}, "cap_T": {self.T}, "derived": "{req_dir}"}}\n')
         return self.run_to(to_c, f"{d}/match_compare.log",
                            self.cli("program-compare", "--a", req_dir, "--b", f"{d}/match", "--out", f"{d}/match_compare.json", py=self.py312)), None, False
