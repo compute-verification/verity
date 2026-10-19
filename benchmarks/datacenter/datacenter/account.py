@@ -4,13 +4,14 @@
 placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
 concludes:
 
-- `credited`: the work the claims prove was spent on the declared circuit there, each kind at its weight (W_ref);
+- `credited`: the work the claims prove was spent on the declared Program there, each kind at its weight (W_ref);
 - `busy` and `headroom`: the share of the epoch that work needs on the block's devices, each kind at their declared
-  rate for it (multiply-adds at a precision, Boolean gates), and the share the audits leave unaccounted;
+  rate for it (multiply-adds at a precision, word operations, Boolean gates), and the share the audits leave
+  unaccounted;
 - `outsourceable` and `local_at_least`: the work a helper off the block could have done for it, and so the credited
   work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
-  block receives, a trusted device's fresh data (`Input(source="trusted")`), which a helper could get only through the
+  block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
   block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
   under the premise `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
   on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
@@ -25,6 +26,15 @@ For the whole datacenter it gives where each held store could have been (`locate
 answered its sample by the deadline, and none when the prover could rebuild the sample in time), the covert budget (the profile's
 advice, timing advice, inputs, every refused port-window charged at its link's full capacity, so it fails closed, and
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas).
+
+Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, the
+least time over every route) as `compute` on the whole block where the scheme gives one, else the honest routing's
+time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
+the rest on the whole datacenter, since PoUW credits the prover system (decision 111); a store's device the bits read from it and the
+bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
+declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
+test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
+across them (`joint`): one device's time, bandwidth and memory are credited once.
 """
 from __future__ import annotations
 
@@ -45,11 +55,19 @@ FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 
 
+def facet(kind: str) -> str:
+    """The part of a device a kind of work runs on: a kind is `<facet>:<detail>`, so `mac:fp8` and `mac:bf16` share
+    the tensor cores and add up, as `cuda:op` and `cuda:gate` share the CUDA cores, while kinds on different facets (the
+    CUDA cores' roundings beside the tensor cores' products) run at once."""
+    return kind.split(":")[0]
+
+
 @dataclass
 class BlockAccount:
     block: str
     credited: float
-    #: the share of the epoch the credited work needs on the block's devices, at their declared rates for each kind
+    #: the share of the epoch the credited work needs on the block's devices: each facet's kinds at their declared rates
+    #: added up, and the busiest facet's share (`loads` has each)
     busy: float
     outsourceable: float
     carried: float
@@ -59,6 +77,10 @@ class BlockAccount:
     assumptions: list[str] = field(default_factory=list)
     #: for a block with a salt in its certifier's custody, k: the bits that could carry it out before registration
     custody: float | None = None
+    #: each facet's share of the epoch
+    loads: dict[str, float] = field(default_factory=dict)
+    #: what places the work on the block: "fleet-closed", "salt-custody" or "forced" (the tightest bound), or None
+    anchor: str | None = None
 
     @property
     def headroom(self) -> float:
@@ -83,10 +105,18 @@ class Account:
     delta: float = 0.0
     #: each block out for maintenance: the bits its devices hold, which may leave with whoever services it
     serviced: dict[str, float] = field(default_factory=dict)
+    #: what the claims credit each unit, by resource and interval, and what each unit can give a tick (`capacity`)
+    credits: list[Credit] = field(default_factory=list)
+    capacity: dict[tuple[str, str], float] = field(default_factory=dict)
+
+    @property
+    def overcredited(self) -> list[tuple[str, str, Interval, float, float]]:
+        """Every interval where the claims credit a unit more than the declaration says it can do (`double_credit`)."""
+        return double_credit(self.credits, self.capacity)
 
     @property
     def sound(self) -> bool:
-        return not self.refused
+        return not self.refused and not self.overcredited
 
     @property
     def covert_bits(self) -> float:
@@ -115,6 +145,7 @@ class Account:
         if self.delta:
             lines.append(f"fails with probability at most {self.delta:.3g}")
         lines += [f"REFUSED {r.on!r}: {r.why}" for r in self.refused]
+        lines += [f"OVERCREDITED {u} {r} in {i}: {w:.3g} credited, {c:.3g} possible" for u, r, i, w, c in self.overcredited]
         return "\n".join(lines)
 
 
@@ -182,27 +213,31 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
     for b in dc.blocks:
         work = profile.work[b.name] if credited[b.name] else {}
         rates = {k: sum(float(d.rate[k]) for d in b.devices if k in d.rate) for k in work}
-        busy = sum(n / rates[k] if rates[k] else float("inf") for k, n in work.items()) / seconds
+        loads: dict[str, float] = defaultdict(float)
+        for k, n in work.items():
+            loads[facet(k)] += (n / rates[k] if rates[k] else float("inf")) / seconds
+        busy = profile.ticks[b.name] / epoch.length if b.name in profile.ticks and work else max(loads.values(), default=0.0)
         carried = sum(max(float(d.residual) if d.residual else 0.0, float(d.memory) - filled[d.name])
                       for d in b.devices if d.memory is not None)
         names = [a.name for d in b.devices for a in [*(d.rate.get(k) for k in work), d.memory, d.residual, d.bandwidth,
                                                      d.on_chip] if a is not None]
-        bounds = [float("inf")]
+        bounds: dict[str | None, float] = {None: float("inf")}
         if FLEET_CLOSED.name in premises:
-            bounds.append(0.0)
+            bounds[FLEET_CLOSED.name] = 0.0
             names.append(FLEET_CLOSED.name)
         if profile.forced[b.name]:
-            bounds.append(min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name]))
+            bounds["forced"] = min(credited[b.name], _boundary_rate(dc, b.name) * seconds * credited[b.name] / profile.forced[b.name])
         k = None
         if profile.salt.get(b.name):
             k = profile.salt_out[b.name] + sum(c.bits for c in claims if isinstance(c, Scheduled)) + sum(
                 c.bits for c in claims if isinstance(c, Carried) and c.port.direction == "egress"
                 and dc.watched(c.port).name == b.name and c.during.start < profile.plan.registration)
             if SALT_CUSTODY.name in premises and k <= float(SALT_CUSTODY) and b.name not in refused_blocks:
-                bounds.append(max(credited[b.name] - profile.pinned[b.name], 0.0))
+                bounds[SALT_CUSTODY.name] = max(credited[b.name] - profile.pinned[b.name], 0.0)
                 names.append(SALT_CUSTODY.name)
-        blocks.append(BlockAccount(b.name, credited[b.name], busy, min(bounds), carried, reads[b.name],
-                                   reads_local[b.name], profile.forced[b.name], names, k))
+        anchor = min(bounds, key=lambda a: bounds[a])
+        blocks.append(BlockAccount(b.name, credited[b.name], busy, bounds[anchor], carried, reads[b.name],
+                                   reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor))
 
     links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
@@ -215,14 +250,42 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    sum(c.bits for c in claims if isinstance(c, Scheduled)),
                    refused_bits,
                    sum(c.delta for c in claims if isinstance(c, (Computed, Held, Read))),
-                   {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back})
+                   {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
+                   _credits(claims, profile, blocks, inside, refused_stores), capacity(dc))
+
+
+def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
+    """What the claims credit each unit. PoUW credits the prover system, so a block's busy share is the block's only as
+    far as attribution places it there (`local_at_least`, graded by its anchor), and the rest is the whole datacenter's.
+    A store's device is credited the bits read from it and the bit-ticks it held."""
+    epoch, stores, fleet = profile.plan.epoch, profile.stores, profile.datacenter.name
+    out = []
+    for b in blocks:
+        if not b.credited:
+            continue
+        local = b.local_at_least / b.credited
+        proved = b.block in profile.ticks
+        timed = {"compute": profile.ticks[b.block]} if proved else {
+            f"compute:{f}": share * epoch.length for f, share in b.loads.items()}
+        basis = "proved" if proved else "honest-routing"
+        for resource, ticks in timed.items():
+            if local:
+                out.append(Credit(b.block, resource, epoch, ticks * local, b.anchor, basis))
+            if local < 1:
+                out.append(Credit(fleet, resource, epoch, ticks * (1 - local), None, basis))
+    for c in claims:
+        if isinstance(c, (Read, Held)) and inside(c) and c.store not in refused_stores:
+            out.append(Credit(stores[c.store].device, "read", c.during, c.bits) if isinstance(c, Read) else
+                       Credit(stores[c.store].device, "held", c.during, c.bits * c.during.length))
+    return out
 
 
 @dataclass
 class Ledger:
-    """Accounts of successive epochs (nights, say), joined. Covert bits and failure probabilities add up across epochs,
-    since an adversary with a long horizon can save them up and break out at the end; what each epoch could carry in is
-    per epoch, and nightly wipes keep it down to the devices' residuals."""
+    """The joint ledger: accounts of successive epochs (nights, say) or of audits that overlap, joined. Covert bits and
+    failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end; what
+    each epoch could carry in is per epoch, and nightly wipes keep it down to the devices' residuals; and each unit's
+    time, bandwidth and memory are credited once across all of them (`joint`)."""
 
     epochs: list[Account] = field(default_factory=list)
 
@@ -230,9 +293,25 @@ class Ledger:
         self.epochs.append(acc)
         return self
 
+    def joint(self) -> list[tuple[str, str, Interval, float, float]]:
+        """The joint rule across the ledger's accounts: every interval where they credit a unit's resource more than the
+        declaration says it can do. Two audits of one device in overlapping windows can't both have its whole time. And
+        two PoUW windows (`compute` timed by its proved bound) that overlap on one block are refused outright: their
+        bounds don't add, since an honest pair may have run on different facets at once, and the sound joint credit
+        would be PoUW's bound over the union of their work."""
+        cap = {k: v for a in self.epochs for k, v in a.capacity.items()}
+        out = double_credit([c for a in self.epochs for c in a.credits], cap)
+        timed = [(i, c) for i, a in enumerate(self.epochs) for c in a.credits if c.resource == "compute" and c.grade]
+        for n, (i, x) in enumerate(timed):
+            for j, y in timed[n + 1:]:
+                lo, hi = max(x.during.start, y.during.start), min(x.during.end, y.during.end)
+                if i != j and x.unit == y.unit and lo < hi:
+                    out.append((x.unit, "compute", Interval(lo, hi), x.work + y.work, 0.0))
+        return out
+
     @property
     def sound(self) -> bool:
-        return all(a.sound for a in self.epochs)
+        return all(a.sound for a in self.epochs) and not self.joint()
 
     @property
     def covert_bits(self) -> float:
@@ -254,17 +333,38 @@ class Ledger:
 
 @dataclass(frozen=True)
 class Credit:
-    """Work `work` of `resource` (compute, held, read) an audit credits to `unit` (a device or a block) within `during`."""
+    """Work `work` of `resource` an audit credits to `unit` within `during`: a block's `compute` (PoUW's proved bound) or
+    `compute:<facet>` in block-ticks,
+    a device's `read` in bits and its `held` in bit-ticks over the interval the claim proves (`capacity` gives each per
+    tick; a unit with no capacity for a resource can give it nothing)."""
 
     unit: str
     resource: str
     during: Interval
     work: float
+    #: what places it on the unit, for a block's compute (its attribution anchor)
+    grade: str | None = None
+    #: for compute, what the time rests on: "proved" (PoUW's bound over every route) or "honest-routing" (each kind on
+    #: its named facet at the declared rates, which no audit proves)
+    basis: str | None = None
 
 
-def credits(acc: Account, epoch: Interval) -> list[Credit]:
-    """The account's compute credit as `Credit`s, one per block, for the joint rule (`double_credit`)."""
-    return [Credit(b.block, "compute", epoch, b.credited) for b in acc.blocks if b.credited]
+def capacity(dc: Datacenter) -> dict[tuple[str, str], float]:
+    """What each unit can give each resource in one tick, by the declaration: a block one tick of each facet of its
+    devices (`compute:<facet>`, in block-ticks), and the datacenter its blocks' together, for the compute no anchor
+    places on a block; a device its read bandwidth (`read`, in bits) and its memory (`held`, in bits, so bit-ticks a
+    tick)."""
+    tick = dc.cadence.seconds(1)
+    out = {(b.name, f"compute:{f}"): 1.0 for b in dc.blocks for f in {facet(k) for d in b.devices for k in d.rate}}
+    out.update({(b.name, "compute"): 1.0 for b in dc.blocks})
+    for (b, r) in list(out):
+        out[dc.name, r] = out.get((dc.name, r), 0.0) + 1.0
+    for d in dc.devices.values():
+        if d.bandwidth is not None:
+            out[d.name, "read"] = float(d.bandwidth) * tick
+        if d.memory is not None:
+            out[d.name, "held"] = float(d.memory)
+    return out
 
 
 def double_credit(credits: list[Credit], capacity: dict[tuple[str, str], float]) -> list[tuple[str, str, Interval, float, float]]:
@@ -283,6 +383,7 @@ def double_credit(credits: list[Credit], capacity: dict[tuple[str, str], float])
                 if b <= a:
                     continue
                 inside = sum(c.work for c in cs if a <= c.during.start and c.during.end <= b)
-                if inside > capacity[u, r] * (b - a):
-                    out.append((u, r, Interval(a, b), inside, capacity[u, r] * (b - a)))
+                possible = capacity.get((u, r), 0.0) * (b - a)
+                if inside > possible:
+                    out.append((u, r, Interval(a, b), inside, possible))
     return out
