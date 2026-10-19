@@ -26,8 +26,8 @@ first descriptor: the port's index times the port's capacity, plus the frames th
 (less their salt frames), all public occupancy. `record` is the root of N2's commitment to the link-window's certified
 records (`LinkWindows`, `verity.core.protocols.certifier.service`), `record_domain` its domain id (one-stage's served
 domain of the run, the link and the window) and `direction` the port's end of the link (0 egress, 1 ingress). `roots`
-and `domains` are the units' outbox commitments and domain ids, `salt` the window number (u64, big-endian) and the
-revealed salt commitment.
+and `domains` are the units' outbox commitments and domain ids, `salt` the salt frame's payload: the window number
+(u64, big-endian) and the 64 bytes after it, which the live certifier fills with `active.PLACEHOLDER`.
 
 **Witness.** The frames, the n descriptors (the layout's rows at at, at + 1, ...) with their hiding salts and paths, for
 each descriptor's segment g < G the outbox row it reads with its salt and path, the record head's bytes before its
@@ -133,10 +133,10 @@ SALT, SALT_STREAM = 3, 0xFFFF_FFFF
 SALT_PAYLOAD = 72
 
 
-def salt_frame(window: int, commitment: bytes, frame_bytes: int) -> bytes:
+def salt_frame(window: int, value: bytes, frame_bytes: int) -> bytes:
     """Window `window`'s salt frame as the ingress certifier records it: kind `SALT` on `SALT_STREAM`, its payload the
-    window (u64, big-endian) and the salt's 64-byte commitment, which is public once the salt is revealed."""
-    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + commitment, frame_bytes)
+    window (u64, big-endian) and 64 public bytes, the live certifier's `active.PLACEHOLDER`."""
+    return encode_frame(SALT, SALT_STREAM, window.to_bytes(8, "big") + value, frame_bytes)
 
 
 def _is_salt(frame: bytes) -> bool:
@@ -776,7 +776,7 @@ def _build_salteq(C, S, frame, *salt):
 
 
 N3SaltEq = _part("N3SaltEq", ("B",), _sig_salteq, _build_salteq,
-                 "1 iff the frame is the salt frame of the payload salt (the window and the salt's commitment)")
+                 "1 iff the frame is the salt frame of the payload salt (the window and its 64 public bytes)")
 
 
 N3IsZero = _part("N3IsZero", ("W",), lambda S: ((("x", Array(S.W, BIT)),), BIT),
@@ -1563,7 +1563,7 @@ EMPTY = "nothing recorded"
 
 @dataclass
 class Window:
-    """One port-window: the frames the record holds, its public counts and status, the revealed salt commitment of a
+    """One port-window: the frames the record holds, its public counts and status, the salt frame's payload of a
     salted window, the record's grid (when not the frames filled by the counts), and the unit's instance; `why` says
     why no unit runs (refused from public data alone, or `EMPTY`)."""
 
@@ -1733,9 +1733,9 @@ def lab_windows(public: dict, witness: dict, published: dict[str, Sequence],
                 grids: tuple[GridParams, GridParams] | None = None,
                 sync_set: SyncSet | None = None) -> tuple[Setup, list[Window]]:
     """The lab's windows: per block and link (`lab.EGRESS`, `lab.INGRESS`), each record's released frames, against the
-    layout of the declared frames. With `salts`, each salted ingress window's revealed salt commitment by (block,
-    window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared frames.
-    `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
+    layout of the declared frames. With `salts`, each salted ingress window's 64 public bytes of its salt frame by
+    (block, window): one of its frames is then the certifier's salt frame, and the rest are the port's next declared
+    frames. `grids` are the egress and ingress grids (default: each link's first record's shape) and `sync_set` the egress
     Σ_sync, as the calibration report gives them. A block's two links share one N2 commitment a window, named for the
     block, its egress record at leaf 0 and its ingress record at leaf 1."""
     from verity.core.protocols.certifier.grid import occupancy

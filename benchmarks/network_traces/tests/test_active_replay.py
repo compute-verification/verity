@@ -123,9 +123,10 @@ def test_an_honest_run_is_accepted_and_is_run_shapers(runs):
 
 
 def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path):
-    """With the certifier's salt on, each window's ingress record holds one salt frame and no egress record holds
-    any, nor any salt or commitment; the server receives every window's salt, the audit reads each commitment
-    against the salt `reveal` gave, and every verdict and comparison is the unsalted run's."""
+    """With the certifier's salt on, each window's ingress record holds one salt frame, the placeholder's, and no
+    egress record holds any, nor any salt; the server receives every window's salt, the audit reads each salt frame
+    and the width of the salt `reveal` gave, and every verdict and comparison is the unsalted run's. No record binds the
+    salt, so another salt of the width passes the salt check, and only the server's log tells it apart."""
     _, report, _ = setup
     plan, results = runs
     assert ar.run_virtual(plan, report, tmp_path, salt=True) == {"server": 0, "proxy": 0, "peer": 0}
@@ -140,11 +141,11 @@ def test_a_salted_run_puts_the_salt_frame_on_ingress_only(setup, runs, tmp_path)
     assert ar.against_honest(tmp_path, results["honest"][0])["wire_is_honests"]
     assert "salt" not in honest
 
-    wrong = dict(salts, **{"1": bytes(64).hex()})
-    (tmp_path / "salts.json").write_text(json.dumps(wrong))
-    audit = ar.audit_configuration(plan, report, tmp_path)
-    assert audit["salt"]["accepted"] is False and audit["salt"]["violations"] == [[1, "salt"]]
-    assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
+    for other, accepted in ((bytes(64), True), (bytes(32), False)):
+        (tmp_path / "salts.json").write_text(json.dumps(dict(salts, **{"1": other.hex()})))
+        audit = ar.audit_configuration(plan, report, tmp_path)
+        assert audit["salt"]["accepted"] is accepted and audit["salt"]["violations"] == ([] if accepted else [[1, "salt"]])
+        assert audit["salt"]["block_received"] is False and audit["rows"] == honest["rows"]
 
 
 def test_a_certifier_down_for_a_window_publishes_nothing_for_it_and_the_rest_as_if_never_down(setup, tmp_path):

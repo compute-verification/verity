@@ -36,11 +36,11 @@ records together, over the declaration's ports (a fleet's merged ones), with the
 non-honest block's wire is compared with an honest block's of the same run (`active_replay.against_honest`).
 
 With `--salt`, each certifier's per-window salt is on (`Proxy(salt=active.fresh_salt)`): its ingress side puts one salt
-frame a window in the block's ingress record and sends the salt to the block's server on a connection of its own. Once
-a block's run is over, `run` makes the verifier's "reveal" call to its proxy and keeps the salts in `<block>/salts.json`.
-The record check declares the ingress records with them, and the certifier's audit reads each salt's commitment
-against them and says where the salt frames went (`active_replay.audit_salt`): one in each ingress window, none in
-egress.
+frame a window in the block's ingress record, carrying the placeholder and never the salt, and sends the salt to the
+block's server on a connection of its own. Once a block's run is over, `run` makes the verifier's "reveal" call to its
+proxy and keeps the salts in `<block>/salts.json`. The record check declares the ingress records of the windows it has
+salts for, and the certifier's audit reads each window's salt frame and the salt's width and says where the salt frames
+went (`active_replay.audit_salt`): one in each ingress window, none in egress.
 
 Under `maintenance` the block is drained for window 1 (`active_replay.outage_plan`), and its proxy serves window 0,
 closes the link and stops listening, then comes back for window 2 (`Proxy(start=2, position=p)`), and the peer
@@ -419,8 +419,8 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
           salt: bool = False) -> dict:
     """Each block's audit by the certifier's verifier and by the accounting layer's record check, its timing, and its
     wire against an honest block's. With `salt`, each block's records are declared with the salts its proxy revealed
-    (none if it revealed none, which the record check then refuses), and the certifier's audit reads each salt's
-    commitment (`active_replay.audit_salt`).
+    (none if it revealed none, which the record check then refuses), and the certifier's audit reads each window's salt
+    frame (`active_replay.audit_salt`).
 
     A block's records are declared from the honest plan, or, for a block down for maintenance, from its own drained
     plan, and checked against the verifier's plan (`verifier_plan`), which has that block out for its outage window, so
@@ -492,7 +492,7 @@ def audit(out: Path, dc: Datacenter, honest_plan: dict, plans: dict, report: dic
         if salt:
             s = entry["salt"]
             line += "; salt: none revealed" if s is None else (
-                f"; salt frames ingress {s['ingress_salt_frames']} egress {s['egress_salt_frames']}, commitments "
+                f"; salt frames ingress {s['ingress_salt_frames']} egress {s['egress_salt_frames']}, salt check "
                 f"{'ACCEPTED' if s['accepted'] else 'REFUSED'}, block received {s['block_received']}")
         print(line)
     claims = check_records(every_published, every_declared, dc.cadence)
