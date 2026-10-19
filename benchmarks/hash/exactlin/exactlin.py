@@ -33,7 +33,7 @@ def _rni_s32(v):
 
 
 @triton.jit
-def quant_rows_k(x_ptr, q_ptr, s_ptr, K, stride_x, stride_q, BLOCK_K: tl.constexpr):
+def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, K, stride_x, stride_q, BLOCK_K: tl.constexpr):
     row = tl.program_id(0).to(tl.int64)
     offs = tl.arange(0, BLOCK_K)
     mask = offs < K
@@ -47,7 +47,7 @@ def quant_rows_k(x_ptr, q_ptr, s_ptr, K, stride_x, stride_q, BLOCK_K: tl.constex
 
 
 @triton.jit
-def scaled_mm_k(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, M, N, K, stride_am, stride_bn, stride_cm,
+def exactlin_scaled_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, M, N, K, stride_am, stride_bn, stride_cm,
                 BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr):
     pid = tl.program_id(0)
     num_pid_n = tl.cdiv(N, BLOCK_N)
@@ -99,7 +99,7 @@ def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor):
     assert x.dtype == torch.bfloat16 and x.stride(1) == 1, (x.dtype, x.stride())
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    return quant_rows_k[(m,)](x, xq, s, k, x.stride(0), xq.stride(0), BLOCK_K=triton.next_power_of_2(k),
+    return exactlin_quant_rows[(m,)](x, xq, s, k, x.stride(0), xq.stride(0), BLOCK_K=triton.next_power_of_2(k),
                               num_warps=quant_warps(k), **OPTS)
 
 
@@ -113,7 +113,7 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
     assert y.dtype == torch.bfloat16 and y.shape == (m, n) and y.stride(1) == 1
     bm, bn, bk = tiles(m, n)
     grid = (triton.cdiv(m, bm) * triton.cdiv(n, bn),)
-    return scaled_mm_k[grid](xq, w, s_a, s_w, y, m, n, k, xq.stride(0), w.stride(0), y.stride(0),
+    return exactlin_scaled_mm[grid](xq, w, s_a, s_w, y, m, n, k, xq.stride(0), w.stride(0), y.stride(0),
                              BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, **OPTS)
 
 
@@ -132,7 +132,7 @@ def ptx_check(compiled) -> dict:
            "fma_f32": sum(ptx.count(f) for f in ("fma.rn.f32", "fma.rn.ftz.f32", "mad.f32", "mad.rn.f32")),
            "cvt_rn_f32_s32": ptx.count("cvt.rn.f32.s32"), "cvt_rn_bf16": ptx.count("cvt.rn.bf16"),
            "mma_s8": ptx.count(".s8.s8.s32"), "global_scratch": int(getattr(compiled.metadata, "global_scratch_size", 0) or 0)}
-    if name.startswith("quant_rows_k"):
+    if name.startswith("exactlin_quant_rows"):
         doc["ok"] = (doc["ftz"] == 0 and doc["div_rn_f32"] >= 2 and doc["div_approx_or_full"] == 0
                      and doc["cvt_rni_s32_f32"] >= 1 and doc["fma_f32"] == 0 and doc["global_scratch"] == 0)
     else:

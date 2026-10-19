@@ -74,6 +74,9 @@ if [ -f "$S/gate.nsys-rep" ]; then
   "$CUDA/bin/nsys" stats --report cuda_gpu_kern_sum --format csv -o "$OUT/gate" "$S/gate.nsys-rep" > "$OUT/nsys-stats.log" 2>&1 \
     || echo "sbench: nsys stats rc $?"
   "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
+  # the prof op's ranges: each arm's kernels a decode step (exactlin/steps.py); the report kept when under 200 MB
+  "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
+  [ "$(stat -c %s "$S/gate.nsys-rep")" -lt 209715200 ] && cp "$S/gate.nsys-rep" "$OUT/"
 fi
 if [ -f "$OUT/ncu.ncu-rep" ]; then
   "$CUDA/bin/ncu" --import "$OUT/ncu.ncu-rep" --csv --page details > "$OUT/ncu.csv" 2> "$OUT/ncu-import.log" \

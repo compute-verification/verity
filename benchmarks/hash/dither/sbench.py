@@ -21,6 +21,8 @@ Arms:
     exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, torch._int_mm) compiled with
                  CUDA graphs, attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`,
                  which runs int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
+    exact-fused  exact with both ops' CUDA bodies `benchmarks/hash/exactlin`'s two Triton kernels (`exactlin.install`): the
+                 same values, so its tokens must equal exact's (gated)
     dither       exact with every linear's y from Dither's fused GEMM (`dither_fused`: z = xq W^T and its dequantization in
                  one kernel that also computes the previous step's receipts; A, admit and z tables, the round, the live
                  coin and the seeds between steps)
@@ -60,6 +62,11 @@ generation after its checks with nothing armed, since its fault steps move serve
 column 0 of every call's y at one step), the capture run's kept as tokens_capture.  A failed gate times nothing (exit 4); a worker
 that errs or dies ends the run (exit 5, its gates so far in gate.json).  Each dither arm's gate captures are freed once
 checked, so N arms need N engines' memory plus one arm's captures.
+
+`prof` (an op, for any arm; under DITHER_NSYS=1): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests inside
+one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time a
+decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`).  nsys's capture range ends at
+the first profiler stop, so a run profiles one arm.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate]
 """
@@ -158,11 +165,17 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         a = engine_args(gpu_mem)
         eng = build_engine(ckpts, case=ns.role, target=target, max_num_seqs=a.pop("max_num_seqs"), engine_args=a)
         return eng.llm
-    if arm in ("exact", "dither", "dither-side"):
+    if arm in ("exact", "exact-fused", "dither", "dither-side"):
         sys.path.insert(0, str(HERE))
         import dither_fused as DF
         from verity_vllm.engine import int8_vllm
         int8_vllm.register()
+        if arm == "exact-fused":
+            sys.path.insert(0, str(HERE.parent / "exactlin"))
+            import exactlin
+            exactlin.install()
+            llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **engine_args(gpu_mem))
+            return llm
         a = engine_args(gpu_mem)
         if arm != "exact":
             DF.patch(t=a["max_num_batched_tokens"], h1c=os.environ["DITHER_H1C"], h1f=os.environ["DITHER_H1F"], gate=True,
@@ -206,7 +219,12 @@ def build(arm: str, scratch: Path, gpu_mem: float):
 REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dither-1s-credit": "exact",
           "dither-1s-warp": "exact", "dither-1s-split": "exact", "dither-1s-percall0": "exact",
           "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
-          "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact"}
+          "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
+          "exact-fused": "exact"}
+# an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
+TOKENS_ONLY = {"exact-fused"}
+PROF_N = (8, 24)
+PROF_RANGE = "verity/exactlin/prof"
 # an arm that serves another value: its tokens are compared, not required equal (an arm not listed: required)
 TOKENS_GATED = {"dither-1s": False, "dither-1s-credit": False, "dither-1s-warp": False, "dither-1s-split": False,
                 "dither-1s-percall0": False, "dither-1s-percall-rtt": False}
@@ -292,6 +310,24 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 res["tokens_capture"] = res["tokens"]
                 _, outs = gen(ps, GATE_TOKENS)
                 res["tokens"] = [list(o.outputs[0].token_ids) for o in outs]
+            conn.send(res)
+        elif cmd["op"] == "prof":
+            prof = os.environ.get("DITHER_NSYS") == "1"
+            torch.cuda.synchronize()
+            if prof:
+                torch.cuda.profiler.start()
+            res = {"prof_n": list(PROF_N), "profiled": prof}
+            for n in PROF_N:
+                if prof:
+                    torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
+                t, outs = gen(ps, n)
+                torch.cuda.synchronize()
+                if prof:
+                    torch.cuda.nvtx.range_pop()
+                res[f"gen_n{n}_s"] = round(t, 4)
+            if prof:
+                torch.cuda.profiler.stop()
+            res["tpot_b32_ms"] = round(1e3 * (res[f"gen_n{PROF_N[1]}_s"] - res[f"gen_n{PROF_N[0]}_s"]) / (PROF_N[1] - PROF_N[0]), 4)
             conn.send(res)
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
@@ -386,6 +422,7 @@ def main() -> int:
         failed = [arm for arm in arms if "verdict" in gate_doc[arm] and not (
             gate_doc[arm]["verdict"]["ok"] and (gate_doc[arm].get("tokens_equal_" + REF_OF.get(arm, arms[0]))
                                                 or not TOKENS_GATED.get(arm, True)))]
+        failed += [arm for arm in arms if arm in TOKENS_ONLY and gate_doc[arm].get("tokens_equal_" + REF_OF[arm]) is not True]
         if failed:
             print(json.dumps({"gate_failed": failed, "timed": False}), flush=True)
             for arm in arms:
