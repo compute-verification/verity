@@ -52,8 +52,10 @@ Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, the 8 Oct rulin
 
 The unfolded branch binds on sm_120's sheet (`0.656%`); on sm_120's measured vector the folded branch binds
 (`0.591%`). The proof service's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness
-(`ProofSoundAt`) and the Definitions' pinning (`ProofsPin`, met by main's circuit Definitions since PIN, #2417), beside
-`RightFixed`. `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/` (RT2-LOGIC-2).
+(`ProofSoundAt`, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning
+(`ProofsPin`, which no Lean checks of the served relations: `PouwSegCheck_v2` lacks it, PIN's checks of #2417 recompute
+every word they absorb), beside `RightFixed` (RT3-LOGIC-3). `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses
+over `Definitions/` (RT2-LOGIC-2).
 
 The statements:
 
@@ -62,7 +64,8 @@ The statements:
   equal live rounds runs at least `1 − 0.656%` of its credit.
 * `Sm120MeasuredHeadline`: sm_120 on its measured vector (VF3s-16), H1 + fx1 at SCALAR-ROUTE's `9/8` floors: under its
   premises, outside an event of probability at most `2^-40` every accepted window of 48,000 equal live rounds runs at
-  least `1 − 0.591%` of its credit.
+  least `1 − 0.591%` of its credit. The `9/8` floors are assumed, not proved: at A6's proved `½` floor the same bound
+  is 7.791% (RT3-LOGIC-2, below).
 
 The window is in the statements' type: `Sm120.checks = 48,000` equal live rounds, one check a round, so neither says
 anything about a window of another shape. The ε needs that many rounds. The same two branches with `S` rounds in place
@@ -168,6 +171,11 @@ FILL-OPT are not hypotheses: the model has no side unit and no filler, so they h
 at `9/8` is what `ClassPSlots` gives (`1 + (32 − w)/130` slots a word, FLOORS, note:20261018T0230Z-draft-floors) once
 writers create at most `w = 15` incidences, a cap nothing proves yet; on the table route it is SCALAR-ROUTE's, outside
 `ClassPSlots`. `ε_sample` and the Fiat–Shamir premium are separate lines.
+
+So the 0.591% rests on (I3) at `9/8`, an assumed premise, not on proved ones. At A6's `½` floor, which Lean proves from
+A6 (`SheetScalarRouteHalf`, the floor the sheet headline reads), the same bound on the same vector is 7.791%: π* moves
+to issue 0.645 + JI3t_0 0.355 and the vector route binds (10.24% on VF3r-16; the exporter's instance at `q = ½`,
+r20261019-172339-a93b, RT3-LOGIC-2). The 0.591% reads `9/8` until `ClassPSlots`' cap is proved.
 
 The window's shape is the statement's: 48,000 equal live rounds, one check a round. With `S` rounds in place of
 48,000 its two branches give ε < 1% only from 8,320 rounds (Compose's live line only from 10,552: RT-INT-1), and the
