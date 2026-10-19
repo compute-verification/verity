@@ -1014,6 +1014,93 @@ theorem ligeritoCut_erase (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes
     simp only [at4, map_pure, eraseL, eraseLP_eraseLP]
   · simp only [map_bind, map_pure, queryP_eq, bind_map_left, at4, eraseLP_openP hlay]
 
+/-- **The cut's inner proof reads the pads commitment's columns and salts, `τ` and its salt only into the final-only
+data**: it reads the commitment's size, root and tree, and the source's `(ρ_in, σ_in)`, `τ`'s commitment and `Y`. -/
+theorem innerCut_erase (io : Asks FlockComplete.PS) (lay : _root_.Flock.Zk.PadLayout) {ic ic' : InnerCommit}
+    (hn : ic.ch.size = ic'.ch.size) (hroot : ic.root = ic'.root) (hlay : ic.layers = ic'.layers)
+    (finalC : _root_.Flock.F128) {src src' : RepSrc} (hs : eraseS src = eraseS src')
+    (cons : Array (String × _root_.Flock.Zk.Lin)) :
+    eraseIP <$> innerCut io lay ic finalC src cons = eraseIP <$> innerCut io lay ic' finalC src' cons := by
+  have h1 : src.rhoIn = src'.rhoIn := by
+    have e := congrArg RepSrc.rhoIn hs
+    exact e
+  have h2 : src.sigmaIn = src'.sigmaIn := by
+    have e := congrArg RepSrc.sigmaIn hs
+    exact e
+  have h3 : src.tauCom = src'.tauCom := by
+    have e := congrArg RepSrc.tauCom hs
+    exact e
+  have h4 : src.y = src'.y := by
+    have e := congrArg RepSrc.y hs
+    exact e
+  unfold innerCut
+  simp only [map_bind, map_pure, apply_ite (Functor.map (f := _root_.Flock.TMW FlockComplete.PS) eraseIP),
+    eraseIP, Array.map_map, Function.comp_def, hn, hroot, hlay, h1, h2, h3, h4]
+
+theorem bind_erase {α β : Type} {x y : _root_.Flock.TMW FlockComplete.PS α} (e : α → α)
+    {F : α → _root_.Flock.TMW FlockComplete.PS β} (he : e <$> x = e <$> y) (hF : ∀ a, F a = F (e a)) :
+    x >>= F = y >>= F := by
+  have k : ∀ z : _root_.Flock.TMW FlockComplete.PS α, z >>= F = (e <$> z) >>= F := fun z => by
+    rw [bind_map_left]
+    exact bind_congr hF
+  rw [k x, k y, he]
+
+/-- **The cut's rep reads its pads commitment and source only into the final-only data** (`innerCut_erase`). -/
+theorem repCut_eraseIS (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
+    (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) (cm : Commit)
+    (extras : Array _root_.Flock.Claim) {ic ic' : InnerCommit} (hn : ic.ch.size = ic'.ch.size)
+    (hroot : ic.root = ic'.root) (hlay : ic.layers = ic'.layers) {src src' : RepSrc} (hsrc : eraseS src = eraseS src')
+    (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    eraseZ <$> repCut io hs st sch rep dom cm extras ic src prior words =
+      eraseZ <$> repCut io hs st sch rep dom cm extras ic' src' prior words := by
+  have hm : src.masked = src'.masked := by
+    have e := congrArg RepSrc.masked hsrc
+    exact e
+  have hsv : src.sv = src'.sv := by
+    have e := congrArg RepSrc.sv hsrc
+    exact e
+  have hhi : src.hiSalt = src'.hiSalt := by
+    have e := congrArg RepSrc.hiSalt hsrc
+    exact e
+  have hy1 : src.y1 = src'.y1 := by
+    have e := congrArg RepSrc.y1 hsrc
+    exact e
+  have hyb : src.ybar = src'.ybar := by
+    have e := congrArg RepSrc.ybar hsrc
+    exact e
+  have hp : ∀ lay cap root, piopCut io st lay src cap root extras prior words =
+      piopCut io st lay src' cap root extras prior words := fun _ _ _ => by
+    unfold piopCut
+    rw [hm, hsv]
+  have hl : ∀ T b lay, ligeritoCut io hs st.merkle sch T cm b lay src =
+      ligeritoCut io hs st.merkle sch T cm b lay src' := fun _ _ _ => by
+    unfold ligeritoCut
+    rw [hm, hhi, hy1, hyb]
+  unfold repCut
+  simp only [hroot, hp, hl, map_bind, map_pure]
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  refine bind_congr fun _ => ?_
+  exact bind_eraseZ (innerCut_erase _ _ hn hroot hlay _ hsrc _) _ _
+
+/-- **The cut's rep reads level 0's commitment only through its cap and tree** but for the final-only data
+(`ligeritoCut_erase`; the replay and the constraints read no opened row, `replay_eraseL`, `ligeritoConstraints_eraseL`). -/
+theorem repCut_eraseC (io : Asks FlockComplete.PS) (hs : _root_.Flock.Hashes FlockComplete.PS)
+    (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (rep : ℕ) (dom : ByteArray) {cm cm' : Commit}
+    (hcap : cm.cap = cm'.cap) (hlay : cm.layers = cm'.layers) (extras : Array _root_.Flock.Claim) (ic : InnerCommit)
+    (src : RepSrc) (prior : Array (List _root_.Flock.F128)) (words : List ℕ) :
+    eraseZ <$> repCut io hs st sch rep dom cm extras ic src prior words =
+      eraseZ <$> repCut io hs st sch rep dom cm' extras ic src prior words := by
+  unfold repCut
+  rw [hcap]
+  simp only [map_bind, map_pure]
+  refine bind_congr fun _ => ?_
+  refine bind_erase (fun z => (eraseL z.1, z.2)) (ligeritoCut_erase _ _ _ _ _ hcap hlay _ _ _) ?_
+  rintro ⟨lg, zl, rec⟩
+  simp only [replay_eraseL, ligeritoConstraints_eraseL, eraseZ, eraseL_eraseL]
+
 end FinRep
 
 /-- **Table `j`'s rep `r` from the cut is the session's rep, its final-only data forgotten** (`eraseZ`): at opened coins
