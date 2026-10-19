@@ -2,7 +2,8 @@
 
 - (c) The prefix barrier in the compiled unit. The unit's receipt is 2 (KS + m) words over KS + m sets; T_0 .. T_(KS-2)
   are running partials, while T_(KS-1), O' and D_1 .. D_(m-1) are final-only (invariant under a reordering of the
-  segments). The credit rule counts K = 32 KS MACs a cell, the prefix sets' worth: T_(KS-1), 1/KS of it, is credited and
+  segments). The unit's gates, not only its reference, checkpoint every set, with T_s extending T_(s-1) on segment s.
+  The credit rule counts K = 32 KS MACs a cell, the prefix sets' worth: T_(KS-1), 1/KS of it, is credited and
   final-only, and the m digit sets carry none. A tile of all-zero A rows still does real noised work (X = b), which a
   dead-tile gate that reads A's bytes zeroes.
 - (a) Attention. The H1 scheme has no unit for attention's `DotBf16`. On a near-zero P row the residue identity collapses
@@ -92,6 +93,56 @@ def check_credit_is_prefix_worth():
     macs = {s: k * n for s, (k, n) in linears.items()}
     weighted = sum(macs[s] * last[linears[s][0]] for s in linears) / sum(macs.values())
     return True, "; ".join(rows) + f"; Llama-3.1-8B linears by MACs {weighted:.2%}"
+
+
+def check_compiled_unit_is_cp_w():
+    """On the compiled unit's own gates (`PouwH1Tile`'s body at one lane, 4 x 8, K = 128: KS = 4, m = 2), not its
+    reference: the lane absorbs KS + m sets in one fx1 chain, each read by two `PouwXinFinal` halves (a checkpoint after
+    every set); set s < KS is `PouwSegDot0` (s = 0) or `PouwSegDot` extending set s - 1's partials, reading byte segment s
+    of its X row; O' extends T_(KS-1); every digit set is a fresh `PouwSegDot0`."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.ml.circuits.refs import runs
+    K, ks = 128, 4
+    m = SG.n_digits(ks)
+    grid = C.Tile(4, 8, tuple((i, j) for i in range(4) for j in range(8)))
+    body = bind(h1tile.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=K, **BG.GEMM_SM120_S8), R=4, C=8,
+                PAIRS=grid.pairs).body
+    defn = [getattr(nd.fn, "defn", nd.fn) for nd in body.nodes]
+
+    def srcs(k, arg):
+        return [r[1] for r in runs(body.nodes[k].args[arg].refs)]
+
+    finals = [k for k, d in enumerate(defn) if d is SG.PouwXinFinal]
+
+    def cp_w(absorbs):
+        if len(absorbs) != ks + m or any(srcs(b, 0) != [a] for a, b in zip(absorbs, absorbs[1:])):
+            return f"{len(absorbs)} absorbs, not one chain of KS + m = {ks + m}"
+        for s, a in enumerate(absorbs):
+            halves = sorted(runs(body.nodes[k].args[0].refs)[0][2:] for k in finals if srcs(k, 0) == [a])
+            if halves != [(0, 256), (256, 512)]:
+                return f"set {s}: checkpoint halves {halves}"
+        sets = [srcs(a, 1) for a in absorbs]
+        for s, words in enumerate(sets):
+            want = SG.PouwSegDot0 if s == 0 or s > ks else SG.PouwSegDot
+            if len(words) != 32 or any(defn[w] is not want for w in words):
+                return f"set {s}: not 32 {want.name}"
+            if 0 < s <= ks and any(srcs(w, 0)[0] not in set(sets[s - 1]) for w in words):
+                return f"set {s}: a word does not extend set {s - 1}"
+            if s < ks:
+                x = 0 if s == 0 else 1
+                if any(runs(body.nodes[w].args[x].refs)[0][2:] != (256 * s, 256 * s + 256) for w in words):
+                    return f"set {s}: a word reads X off segment {s}"
+        return None
+
+    absorbs = [k for k, d in enumerate(defn) if d is SG.PouwFx1Absorb]
+    if why := cp_w(absorbs):
+        return False, why
+    if cp_w([absorbs[0], absorbs[2], absorbs[1], *absorbs[3:]]) is None:
+        return False, "the check passes with sets 1 and 2 swapped"
+    digits = ", ".join(f"D_{d}" for d in range(1, m))
+    return True, (f"one lane, KS={ks}, m={m}: {ks + m} sets, a checkpoint after each; T_s extends T_(s-1) on segment s; "
+                  f"O' extends T_{ks - 1}; {digits} fresh; refused with sets 1 and 2 swapped")
 
 
 def check_zero_rows_do_noised_work(rng):
@@ -278,7 +329,8 @@ def check_design_a_prop_q():
     return True, "; ".join(out)
 
 
-def collect(seed: int = 20261019):
+def collect(seed: int = 20261019, gates: bool = True):
+    """Every check; `gates` adds c5, which builds the unit's body (about 30 s)."""
     rng = random.Random(seed)
     checks = [
         ("c1 receipt is 2 (KS + m)", lambda: check_receipt_is_2_sets(rng)),
@@ -294,6 +346,8 @@ def collect(seed: int = 20261019):
         ("b5 FP4 design A admissible at s32", check_fp4_design_a_admissible),
         ("b6 design A pairs under a shift", check_design_a_prop_q),
     ]
+    if gates:
+        checks.insert(4, ("c5 the compiled unit's gates are CP-W", check_compiled_unit_is_cp_w))
     passed, failed = [], []
     for name, fn in checks:
         ok, detail = fn()
