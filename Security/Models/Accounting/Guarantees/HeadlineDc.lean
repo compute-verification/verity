@@ -2,7 +2,7 @@ import Definitions.Accounting.HeadlineDc
 import Models.Accounting.Assumptions.Sheet
 
 /-!
-# The data-centre families' headline statements (trusted; statements, unproved)
+# The data-centre families' headline guarantees (trusted)
 
 The H200's and B200's headlines in `Models.Accounting.Guarantees.Headline`'s form: one statement per device and
 reading, the family's credited work at least `1 − ε` of its credit, on one device's machine, one design's TS model on it
@@ -85,8 +85,8 @@ The statements:
   (unfolded).
 * `Sm100MeasuredHeadline`: the B200 on DC-100-ri, at π* = issue: at least `1 − 0.888%` (unfolded).
 
-None is proved yet: `lean-audit.json` lists them under `shape.frozen` as `unstated` until their proofs land. With
-`χ* = 0` each is an instance of `headline_of_branches` as #2482 proves it.
+Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.HeadlineDc`: with `χ* = 0` it is an instance
+of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
 -/
 
 namespace Accounting.Guarantees.TS
